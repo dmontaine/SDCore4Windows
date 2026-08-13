@@ -42,7 +42,8 @@
  */
 
 
-#include <linux/limits.h>
+/* 13 Aug 26 Windows port - PATH_MAX comes from <limits.h> here */
+#include <limits.h>
 #include <sodium.h>
 
 #include "sd.h"

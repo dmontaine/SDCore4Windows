@@ -50,7 +50,10 @@
 #include "revstamp.h"
 
 #include <unistd.h>
-#include <sys/shm.h>
+/* 13 Aug 26 Windows port - POSIX shared memory in place of System V */
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define Seek(fu, offset, whence) lseek(fu, offset, whence)
 
@@ -641,24 +644,43 @@ bool make_path(char *tgt) {
 /* ======================================================================
    Attach to shared memory segment                                        */
 
-bool attach_shared_memory() {
-  int shmid;
+static size_t sysseg_bytes = 0; /* Mapped size, needed by munmap() */
 
-  if ((shmid = shmget(SD_SHM_KEY, 0, 0666)) != -1) {
-    if ((sysseg = (SYSSEG *)shmat(shmid, NULL, 0)) == (void *)(-1)) {
-      printf("Error %d attaching to shared segment\n", errno);
-      return FALSE;
-    }
-    return TRUE;
+bool attach_shared_memory() {
+  int fd;
+  struct stat statbuf;
+
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDWR, 0666)) == -1)
+    return FALSE; /* Not started */
+
+  if (fstat(fd, &statbuf) || statbuf.st_size == 0) {
+    close(fd);
+    return FALSE;
   }
 
-  return FALSE;
+  sysseg = (SYSSEG *)mmap(NULL, (size_t)statbuf.st_size,
+                          PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  close(fd);
+
+  if (sysseg == MAP_FAILED) {
+    sysseg = NULL;
+    printf("Error %d attaching to shared segment\n", errno);
+    return FALSE;
+  }
+
+  sysseg_bytes = (size_t)statbuf.st_size;
+
+  return TRUE;
 }
 
 /* ====================================================================== */
 
 void unbind_sysseg() {
-  shmdt((void *)sysseg);
+  if (sysseg != NULL) {
+    munmap((void *)sysseg, sysseg_bytes);
+    sysseg = NULL;
+    sysseg_bytes = 0;
+  }
 }
 
 /* ======================================================================

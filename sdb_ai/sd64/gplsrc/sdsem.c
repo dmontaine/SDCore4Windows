@@ -6,22 +6,31 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- * 
+ *
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 d-chou add IPC_NOWAIT and RelinquishTimeslice (sched_yield) to LockSemaphore
+ * 13 Aug 26 Windows port - System V semaphores replaced by POSIX named
+ *           semaphores.  The MSYS2 runtime declares semget()/semop() but the
+ *           implementations return ENOSYS, and native Windows has no System V
+ *           IPC at all.  sem_open() works on both.
  * END-HISTORY
  *
  * START-DESCRIPTION:
+ *
+ * The semaphore set is a group of NUM_SEMAPHORES binary semaphores, each
+ * created with a value of one.  Under System V these lived in a single set
+ * addressed by one id; as POSIX named semaphores each is a separate kernel
+ * object, so the id is replaced by an array of handles held in this module.
  *
  * END-DESCRIPTION
  *
@@ -29,34 +38,69 @@
  */
 
 #include "sd.h"
-#include <sys/sem.h>
+#include <semaphore.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <sched.h>
+
+Private sem_t* sd_sem[NUM_SEMAPHORES];
+
+Private void semaphore_name(char* buff, int semno) {
+  sprintf(buff, SD_POSIX_SEM_FMT, semno);
+}
+
+/* ======================================================================
+   close_semaphores()  -  Release our handles, leaving the objects intact   */
+
+Private void close_semaphores() {
+  int16_t i;
+
+  for (i = 0; i < NUM_SEMAPHORES; i++) {
+    if (sd_sem[i] != NULL) {
+      sem_close(sd_sem[i]);
+      sd_sem[i] = NULL;
+    }
+  }
+}
 
 /* ======================================================================
    get_semaphores()  -  Get inter-process semaphores                      */
 
 bool get_semaphores(bool create, char* errmsg) {
-/* Linux only - Create rather than attach to existing? */
-
   int16_t i;
+  char name[MAX_PATHNAME_LEN + 1];
+  sem_t* sem;
 
-  union semun {
-    int val;                   /* Value for SETVAL */
-    struct semid_ds* buf;      /* Buffer for IPC_STAT, IPC_SET */
-    u_int16_t* array; /* Array for GETALL, SETALL */
-    struct seminfo* __buf;     /* Buffer for IPC_INFO */
-  } seminit;
+  /* Probe for an existing set.  Opening without O_CREAT fails with ENOENT if
+     the semaphores have not been created, which is the test that semget()
+     with a zero count used to perform.                                     */
 
-  seminit.val = 1;
-
-  if ((semid = semget(SD_SEM_KEY, 0, 0666)) != -1) {
+  semaphore_name(name, 0);
+  sem = sem_open(name, 0);
+  if (sem != SEM_FAILED) {
     /* Semaphores already exist */
 
-    if (!create)
-      return TRUE;
+    sem_close(sem);
 
-    strcpy(errmsg, "SD is already started");
-    return FALSE;
+    if (create) {
+      strcpy(errmsg, "SD is already started");
+      return FALSE;
+    }
+
+    /* Attach to the existing set */
+
+    for (i = 0; i < NUM_SEMAPHORES; i++) {
+      semaphore_name(name, i);
+      sd_sem[i] = sem_open(name, 0);
+      if (sd_sem[i] == SEM_FAILED) {
+        sd_sem[i] = NULL;
+        sprintf(errmsg, "Error %d attaching to semaphores", errno);
+        close_semaphores();
+        return FALSE;
+      }
+    }
+
+    return TRUE;
   }
 
   if (errno != ENOENT) {
@@ -71,17 +115,28 @@ bool get_semaphores(bool create, char* errmsg) {
     return FALSE;
   }
 
-  /* Create new semaphores */
+  /* Create new semaphores, each initialised to one.  O_EXCL closes the race
+     with another process starting SD at the same moment.                   */
 
-  if ((semid = semget(SD_SEM_KEY, NUM_SEMAPHORES,
-                      IPC_CREAT | IPC_EXCL | 0666)) != -1) {
-    /* Initialise the semaphores */
+  for (i = 0; i < NUM_SEMAPHORES; i++) {
+    semaphore_name(name, i);
+    sd_sem[i] = sem_open(name, O_CREAT | O_EXCL, 0666, 1);
+    if (sd_sem[i] == SEM_FAILED) {
+      sd_sem[i] = NULL;
+      sprintf(errmsg, "Error %d allocating semaphores", errno);
 
-    for (i = 0; i < NUM_SEMAPHORES; i++)
-      semctl(semid, i, SETVAL, seminit);
-  } else {
-    sprintf(errmsg, "Error %d allocating semaphores", errno);
-    return FALSE;
+      /* Unwind the ones we did create so a failed start leaves nothing
+         behind to make the next attempt report "already started".         */
+
+      while (--i >= 0) {
+        semaphore_name(name, i);
+        sem_close(sd_sem[i]);
+        sd_sem[i] = NULL;
+        sem_unlink(name);
+      }
+
+      return FALSE;
+    }
   }
 
   return TRUE;
@@ -90,8 +145,20 @@ bool get_semaphores(bool create, char* errmsg) {
 /* ====================================================================== */
 
 void delete_semaphores() {
-  if ((semid = semget(SD_SEM_KEY, 0, 0666)) != -1) {
-    semctl(semid, 0, IPC_RMID);
+  int16_t i;
+  char name[MAX_PATHNAME_LEN + 1];
+
+  /* sem_unlink() removes the name whether or not this process holds a handle,
+     matching the old semctl(IPC_RMID) behaviour.                            */
+
+  for (i = 0; i < NUM_SEMAPHORES; i++) {
+    if (sd_sem[i] != NULL) {
+      sem_close(sd_sem[i]);
+      sd_sem[i] = NULL;
+    }
+
+    semaphore_name(name, i);
+    sem_unlink(name);
   }
 }
 
@@ -99,19 +166,15 @@ void delete_semaphores() {
    Variants on StartExclusive and EndExclusive for use with no shared mem */
 
 void LockSemaphore(int semno) {
-// rev 0.9.0  
-  static struct sembuf sem_lock = {0, -1, IPC_NOWAIT};
-  sem_lock.sem_num = semno;
-  while (semop(semid, &sem_lock, 1)) {
-// rev 0.9.0     
+// rev 0.9.0
+  while (sem_trywait(sd_sem[semno]) != 0) {
+// rev 0.9.0
   	RelinquishTimeslice;
   }
 }
 
 void UnlockSemaphore(int semno) {
-  static struct sembuf sem_unlock = {0, 1, 0};
-  sem_unlock.sem_num = semno;
-  semop(semid, &sem_unlock, 1);
+  sem_post(sd_sem[semno]);
 }
 
 /* ====================================================================== */

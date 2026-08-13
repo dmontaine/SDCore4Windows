@@ -40,13 +40,16 @@ VPATH    := $(GPLOBJ):$(GPLBIN):$(GPLSRC)
 PY_HDRS   := $(shell python3-config --includes)
 PY_LDFLAGS := $(shell python3-config --ldflags --embed)
 
-SODIUM   := /usr/include/sodium
-LIBSODIUM := /usr/lib/x86_64-linux-gnu/
+# 13 Aug 26 Windows port - libsodium is not packaged for the MSYS2 runtime and
+#           is built from source into /usr/local.
+SODIUM   := /usr/local/include
+LIBSODIUM := /usr/local/lib
 
 COMP     := gcc
 # rev 0.9.0 python
-L_FLAGS    := -Wl,--no-as-needed -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium $(PY_LDFLAGS)
-SONAME_OPT := -soname
+# 13 Aug 26 Windows port - dropped -Wl,--no-as-needed, which is ELF only and
+#           is rejected by the PE/COFF linker.
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium $(PY_LDFLAGS)
 
 RM       := rm
 
@@ -63,16 +66,26 @@ DIROBJS  := $(addprefix $(GPLOBJ),$(OBJS))
 sd: ARCH :=
 sd: BITSIZE := 64
 # rev 0.9.0 python
-sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -DLINUX -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) $(PY_HDRS) -DEMBED_PYTHON -DGPL -g $(ARCH) -fPIE
+# 13 Aug 26 Windows port - dropped -DLINUX (never tested for in the source) and
+#           -fPIE (position independent code is the default and the flag is
+#           ignored with a warning on this target).  Added the libsodium
+#           include path now that it lives under /usr/local.
+sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) $(PY_HDRS) -DEMBED_PYTHON -DGPL -g $(ARCH)
 sd: $(SDOBJS) sdclilib.so sdtic sdfix sdconv sdidx sdlnxd terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
-	@$(COMP) $(ARCH) $(L_FLAGS) $(SDOBJSD) -o $(GPLBIN)sd	
+# 13 Aug 26 Windows port - libraries must follow the objects that reference
+#           them.  The PE/COFF linker resolves strictly left to right, so the
+#           original order left every libpython and libsodium symbol undefined.
+#           On ELF this was masked by -Wl,--no-as-needed.
+	@$(COMP) $(ARCH) $(SDOBJSD) $(L_FLAGS) -o $(GPLBIN)sd
 
+# 13 Aug 26 Windows port - -soname is an ELF concept with no PE/COFF
+#           equivalent; the import library takes its place.
 sdclilib.so: sdclilib.o
 	@echo Linking $@
-	@$(COMP) -shared -Wl,$(SONAME_OPT),sdclilib.so -lc $(ARCH) $(GPLOBJ)sdclilib.o $(GPLOBJ)linuxlb.o -o $(GPLBIN)sdclilib.so
-	@$(COMP) -shared -Wl,$(SONAME_OPT),libsdcli.so -lc $(ARCH) $(GPLOBJ)sdclilib.o $(GPLOBJ)linuxlb.o -o $(GPLBIN)libsdcli.so
+	@$(COMP) -shared $(ARCH) $(GPLOBJ)sdclilib.o $(GPLOBJ)linuxlb.o -o $(GPLBIN)sdclilib.so -Wl,--out-implib,$(GPLBIN)libsdclilib.dll.a
+	@$(COMP) -shared $(ARCH) $(GPLOBJ)sdclilib.o $(GPLOBJ)linuxlb.o -o $(GPLBIN)libsdcli.so -Wl,--out-implib,$(GPLBIN)libsdcli.dll.a
 
 sdtic: sdtic.o inipath.o
 	@echo Linking $@

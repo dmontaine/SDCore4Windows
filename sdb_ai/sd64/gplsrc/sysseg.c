@@ -45,14 +45,24 @@ void UnlockSemaphore(int semno);
 #define SYSSEG_REVSTAMP \
   (((u_int32_t)MAJOR_REV << 16) | ((u_int32_t)MINOR_REV << 8) | BUILD)
 
-#include <sys/ipc.h>
-#include <sys/shm.h>
+/* 13 Aug 26 Windows port - POSIX shared memory (shm_open/mmap) replaces the
+   System V segment.  The MSYS2 runtime stubs shmget()/shmat() out with ENOSYS
+   and native Windows has no System V IPC.                                  */
+
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 void dump_config(void);
 
 Private bool create_shared_segment(int32_t bytes,
                                    struct CONFIG* cfg,
                                    char* errmsg);
+
+/* Size of the current mapping.  shmdt() could find this from the address
+   alone; munmap() must be told, so it is recorded at attach time.          */
+
+Private size_t sysseg_bytes = 0;
 
 /* ====================================================================== */
 
@@ -293,17 +303,35 @@ exit_bind_sysseg:
 Private bool create_shared_segment(int32_t bytes,
                                    struct CONFIG* cfg,
                                    char* errmsg) {
-  int shmid;
+  int fd;
 
-  if ((shmid = shmget(SD_SHM_KEY, bytes, IPC_CREAT | 0666)) == -1) {
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_CREAT | O_RDWR, 0666)) == -1) {
     sprintf(errmsg, "Error %d creating shared segment.", errno);
     return FALSE;
   }
 
-  if ((sysseg = (SYSSEG*)shmat(shmid, NULL, 0)) == (void*)(-1)) {
-    sprintf(errmsg, "Error %d attaching to new shared segment.", errno);
+  /* Unlike shmget(), shm_open() always creates a zero length object, so the
+     size has to be set explicitly before it can be mapped.                 */
+
+  if (ftruncate(fd, (off_t)bytes)) {
+    sprintf(errmsg, "Error %d sizing shared segment.", errno);
+    close(fd);
+    shm_unlink(SD_POSIX_SHM_NAME);
     return FALSE;
   }
+
+  sysseg = (SYSSEG*)mmap(NULL, (size_t)bytes, PROT_READ | PROT_WRITE,
+                         MAP_SHARED, fd, 0);
+  close(fd); /* The mapping outlives the descriptor */
+
+  if (sysseg == MAP_FAILED) {
+    sysseg = NULL;
+    sprintf(errmsg, "Error %d attaching to new shared segment.", errno);
+    shm_unlink(SD_POSIX_SHM_NAME);
+    return FALSE;
+  }
+
+  sysseg_bytes = (size_t)bytes;
 
   return TRUE;
 }
@@ -312,23 +340,43 @@ Private bool create_shared_segment(int32_t bytes,
    Attach to shared memory segment                                        */
 
 bool attach_shared_memory() {
-  int shmid;
+  int fd;
+  struct stat statbuf;
 
-  if ((shmid = shmget(SD_SHM_KEY, 0, 0666)) != -1) {
-    if ((sysseg = (SYSSEG*)shmat(shmid, NULL, 0)) == (void*)(-1)) {
-      fprintf(stderr, "Error %d attaching to shared segment.\n", errno);
-      return FALSE;
-    }
-    return TRUE;
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDWR, 0666)) == -1)
+    return FALSE; /* Not started */
+
+  /* The creator sizes the object in a separate step from creating it.  A zero
+     length here means we looked in that window and it is not usable yet.    */
+
+  if (fstat(fd, &statbuf) || statbuf.st_size == 0) {
+    close(fd);
+    return FALSE;
   }
 
-  return FALSE;
+  sysseg = (SYSSEG*)mmap(NULL, (size_t)statbuf.st_size, PROT_READ | PROT_WRITE,
+                         MAP_SHARED, fd, 0);
+  close(fd);
+
+  if (sysseg == MAP_FAILED) {
+    sysseg = NULL;
+    fprintf(stderr, "Error %d attaching to shared segment.\n", errno);
+    return FALSE;
+  }
+
+  sysseg_bytes = (size_t)statbuf.st_size;
+
+  return TRUE;
 }
 
 /* ====================================================================== */
 
 void unbind_sysseg() {
-  shmdt((void*)sysseg);
+  if (sysseg != NULL) {
+    munmap((void*)sysseg, sysseg_bytes);
+    sysseg = NULL;
+    sysseg_bytes = 0;
+  }
 }
 
 /* ======================================================================
@@ -390,58 +438,64 @@ bool start_sd() {
    stop_sd()                                                              */
 
 bool stop_sd() {
-  int shmid;
-  struct shmid_ds shm;
   int16_t i;
   USER_ENTRY* uptr;
+  int16_t retry;
+  int active;
 
-  if ((shmid = shmget(SD_SHM_KEY, 0, 0666)) != -1) {
-    if (shmctl(shmid, IPC_STAT, &shm)) {
- /* 20240126 mab add syslog */
-      syslog (LOG_INFO, "Error %d getting shm status, id :%d", errno, shmid);
-      fprintf(stderr, "Error %d getting shm status\n", errno);
-      return FALSE;
-    }
+  /* We may already hold a mapping if we were called from the bind_sysseg
+     error path.  Re-attaching would leak a second one.                     */
 
-    if (shm.shm_nattch) {
-      if ((sysseg = (SYSSEG*)shmat(shmid, NULL, 0)) != (void*)(-1)) {
-        /* Send all SD processes the SIGTERM signal */
+  if (sysseg != NULL || attach_shared_memory()) {
+    /* Send all SD processes the SIGTERM signal */
 
-        for (i = 1; i <= sysseg->max_users; i++) {
-          uptr = UPtr(i);
-          if (uptr->uid) {
-            kill(uptr->pid, SIGTERM);
-          }
-        }
-
-        /* Shutdown the sdlnxd daemon if it is running */
-
-        if (sysseg->sdlnxd_pid)
-          kill(sysseg->sdlnxd_pid, SIGTERM);
-
-        /* Dettach the shared memory */
-
-        shmdt((void*)sysseg);
-        sysseg = NULL;
-      }
-
-      for (i = 10; i; i--) {
-        if (shmctl(shmid, IPC_STAT, &shm))
-          break; /* Error getting data */
-        if (shm.shm_nattch == 0)
-          break; /* Everyone has gone */
-        sleep(1);
+    for (i = 1; i <= sysseg->max_users; i++) {
+      uptr = UPtr(i);
+      if (uptr->uid) {
+        kill(uptr->pid, SIGTERM);
       }
     }
+
+    /* Shutdown the sdlnxd daemon if it is running */
+
+    if (sysseg->sdlnxd_pid)
+      kill(sysseg->sdlnxd_pid, SIGTERM);
+
+    /* Wait for everyone to go.  System V exposed an attach count that fell to
+       zero as processes detached; POSIX shared memory has no equivalent, so
+       poll the user table for processes that still exist instead.  kill()
+       with signal zero performs the permission and existence checks without
+       delivering anything, and so reports whether a pid is still live even if
+       the process died without clearing its own table entry.               */
+
+    for (retry = 10; retry; retry--) {
+      active = 0;
+
+      for (i = 1; i <= sysseg->max_users; i++) {
+        uptr = UPtr(i);
+        if (uptr->uid && uptr->pid > 0 && kill(uptr->pid, 0) == 0)
+          active++;
+      }
+
+      if (active == 0)
+        break; /* Everyone has gone */
+
+      sleep(1);
+    }
+
+    /* Dettach the shared memory */
+
+    unbind_sysseg();
   }
 
-  if (shmid != -1) {
-    if (shmctl(shmid, IPC_RMID, &shm)) {
-/* 20240126 mab add syslog */      
-      syslog (LOG_INFO, "Error %d deleting shared memory, id :%d", errno, shmid);
-      fprintf(stderr, "Error %d deleting shared memory\n", errno);
-      return FALSE;
-    }
+  /* Remove the name.  As with IPC_RMID, any mapping a straggler still holds
+     stays valid until that process exits.                                  */
+
+  if (shm_unlink(SD_POSIX_SHM_NAME) && (errno != ENOENT)) {
+/* 20240126 mab add syslog */
+    syslog (LOG_INFO, "Error %d deleting shared memory", errno);
+    fprintf(stderr, "Error %d deleting shared memory\n", errno);
+    return FALSE;
   }
 
   delete_semaphores();

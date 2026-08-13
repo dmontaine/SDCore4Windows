@@ -33,12 +33,13 @@
 
 #include <time.h>
 #include <ctype.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+/* 13 Aug 26 Windows port - POSIX shared memory in place of System V */
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <signal.h>
 #include <sched.h>
-
-int shmid; /* Shared memory id */
 
 bool terminate = FALSE;
 
@@ -51,6 +52,8 @@ void signal_handler(int signum);
 int main() {
   char errmsg[80];
   int timer = 0;
+  int fd;
+  struct stat statbuf;
 
   process.user_no = -2; /* Mark as sdlnxd for semaphore table */
 
@@ -58,8 +61,20 @@ int main() {
 
   /* Attach the shared memory segment */
 
-  if (((shmid = shmget(SD_SHM_KEY, 0, 0666)) == -1) ||
-      (((sysseg = (SYSSEG*)shmat(shmid, NULL, 0))) == (void*)(-1))) {
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDWR, 0666)) == -1)
+    exit(1);
+
+  if (fstat(fd, &statbuf) || (statbuf.st_size == 0)) {
+    close(fd);
+    exit(1);
+  }
+
+  sysseg = (SYSSEG*)mmap(NULL, (size_t)statbuf.st_size, PROT_READ | PROT_WRITE,
+                         MAP_SHARED, fd, 0);
+  close(fd);
+
+  if (sysseg == MAP_FAILED) {
+    sysseg = NULL;
     exit(1);
   }
 
@@ -90,7 +105,7 @@ int main() {
 
   /* Tidy up on our way out */
 
-  shmdt((void*)sysseg); /* Dettach shared memory */
+  munmap((void*)sysseg, (size_t)statbuf.st_size); /* Dettach shared memory */
 
   return 0;
 }

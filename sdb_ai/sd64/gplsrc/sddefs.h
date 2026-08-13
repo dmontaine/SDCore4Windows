@@ -51,7 +51,9 @@
 #define BIG_ENDIAN_SYSTEM
 #endif
 
-#define environ __environ
+/* 13 Aug 26 Windows port - __environ is a glibc internal alias.  <unistd.h>
+ * declares environ directly here, so the remapping is dropped.
+ */
 
 
 #define Seek(fu, offset, whence) lseek(fu, offset, whence)
@@ -64,8 +66,31 @@
 #define NewlineBytes 1
 
 #define default_access 0666
+
+/* 13 Aug 26 Windows port - these were unconditionally zero because Linux draws
+ * no distinction between text and binary streams.  Windows does, and <fcntl.h>
+ * defines both with real values.  Overriding them with zero would open every
+ * DH data file in text mode and apply CRLF translation to binary content, so
+ * define them only as a fallback for a platform that supplies neither.
+ */
+
+#ifndef O_BINARY
 #define O_BINARY 0
+#endif
+#ifndef O_TEXT
 #define O_TEXT 0
+#endif
+
+/* 13 Aug 26 Windows port - O_ASYNC requests SIGIO on input arrival and has no
+ * equivalent here.  linuxio.c uses it only to let io_handler() fill the type
+ * ahead ring buffer early; keyin() and keyboard_pending() independently test
+ * stdin with sdpoll() before reading, so input still works without it.  Defined
+ * as zero so the fcntl() call still applies O_NONBLOCK.
+ */
+
+#ifndef O_ASYNC
+#define O_ASYNC 0
+#endif
 #define FOPEN_READ_MODE "r"
 #define FOPEN_WRITE_MODE "w"
 #define NULL_DEVICE "/dev/null"
@@ -76,9 +101,19 @@
 
 #define SD_SHM_KEY 0x716d0301
 #define SD_SEM_KEY 0x716d0302
-/* To allow the SD  and other versions based on the same code 
- * base tocoexist, SD has changed the third byte from 01 to 03          
+/* To allow the SD  and other versions based on the same code
+ * base tocoexist, SD has changed the third byte from 01 to 03
  */
+
+/* System V IPC (shmget/semget) is not implemented by the MSYS2 runtime and
+ * does not exist on native Windows, so this Windows port uses POSIX named
+ * shared memory and named semaphores throughout.  The keys above are retained
+ * only to derive the object names below and to keep on-disk formats identical
+ * to the Linux build.
+ */
+
+#define SD_POSIX_SHM_NAME "/sd_shm_716d0301"
+#define SD_POSIX_SEM_FMT  "/sd_sem_716d0302_%d"
 
 #define RelinquishTimeslice sched_yield()
 
