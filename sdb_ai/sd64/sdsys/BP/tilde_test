@@ -1,0 +1,138 @@
+program tilde_test
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* test fix for:
+* sselect / op_sort.c segfault
+* op_dio3.c map_t1_id() mapping
+* assumes test_file already created as directory file
+
+
+***$define IS_QM 
+* open with mapping off to create test file item
+$ifdef IS_QM
+  open "test_file" NO.MAP to tf.fv else abort "cannot open test_file"
+$else
+  $internal
+  $define K$MAP.DIR.IDS     51       ;* Enable/disable dir file id mapping from INT$KEYS.H
+  i = kernel(K$MAP.DIR.IDS, @false)   ;* system default mapping on, trun off
+  open "test_file" to tf.fv else abort "cannot open test_file"
+$endif
+
+* define the records and ids
+
+tst_rec = ''
+tst_rec<-1> = '%t' :@vm: '%t record'
+tst_rec<-1> = '%T' :@vm: '%T (~) record'
+tst_rec<-1> = '%F' :@vm: '%F record'
+tst_rec<-1> = 'file%Ftxt' :@vm: 'file%Ftxt record'
+tst_rec<-1> = '%L' :@vm: '%L (<) record'
+tst_rec<-1> = 'file%Atxt' :@vm: 'file%Atxt (file*txt) record'
+tst_rec<-1> = '%P' :@vm: '%P (%) record'
+tst_rec<-1> = '%Z' :@vm: '%Z (?) record'
+tst_rec<-1> = '~'  :@vm: '~ record'
+tst_rec<-1> = '~temp'  :@vm: '~temp record'
+tst_rec<-1> = '%Ttemp'  :@vm: '%Ttemp record'
+tst_rec<-1> = 'temp~file'  :@vm: 'temp~file record'
+
+my_id_cnt = dcount(tst_rec,@fm)
+crt '-------------------------------'
+crt '-------------------------------'
+
+crt my_id_cnt : ' records to add' 
+crt
+
+for i = 1 to my_id_cnt
+  id  = tst_rec<i,1>
+  rec = tst_rec<i,2> 
+  crt 'adding id / rec: ' :id:'  ':rec
+  write rec on tf.fv, id on error crt 'write error status: ' : status()
+next i     
+
+close tf.fv
+
+crt '-------------------------------'
+crt '-------------------------------'
+crt 'with mapping turned on'
+crt '-------------------------------'
+* open with mapping on to create test file item
+$ifdef IS_QM
+  open "test_file" to tf.fv else abort "cannot open test_file"
+$else
+  i = kernel(K$MAP.DIR.IDS, @true)   ;* mapping on
+  open "test_file" to tf.fv else abort "cannot open test_file"
+$endif
+
+gosub test_it
+close tf.fv
+crt '-------------------------------'
+crt '-------------------------------'
+
+crt 'with mapping turned off'
+crt '-------------------------------'
+* open with mapping off to run test
+$ifdef IS_QM
+  open "test_file" NO.MAP to tf.fv else abort "cannot open test_file"
+$else
+  i = kernel(K$MAP.DIR.IDS, @false)   ;* system default mapping on, trun off
+  open "test_file" to tf.fv else abort "cannot open test_file"
+$endif 
+
+gosub test_it
+
+close tf.fv
+
+goto all_done
+
+test_it:
+*
+	sselect tf.fv to 2
+	readlist ids from 2 else
+	crt 'no items selected'
+	end
+	*
+	crt 'listing of ids from sselect'
+crt '-------------------------------'
+	id_count = dcount(ids,@FM)
+	crt id_count : ' items selected'
+	for i = 1 to id_count
+	crt 'id: ':ids<i>
+	next i
+	*
+	
+	
+	for i = 1 to id_count
+	id = ids<i>
+	crt 'Attempt read of id: ':id
+	read rec from tf.fv, id then
+		crt '  ':id : ' found'
+		crt "       rec: " : rec
+	end else
+		crt '  error reading id: ':id
+		ern = status()
+		call !ERRTEXT(emsg,ern)	
+		crt '  ':ern:' ':emsg
+	end
+	next i
+return
+*
+all_done:
+$ifndef IS_QM
+  i = kernel(K$MAP.DIR.IDS, @true)   ;* system default
+$endif
+  
+crt "all done"
+end

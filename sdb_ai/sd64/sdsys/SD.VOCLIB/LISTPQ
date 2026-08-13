@@ -1,0 +1,4 @@
+Sentence to list PROCs
+LIST VOC @ID COL.HDG "PROC name" FMT "16L" DESC FMT "28T"_
+F2 COL.HDG "First command" FMT "30L" WITH TYPE = "PQ" BY @ID ID.SUP_
+HEADING "PROCs defined in the VOC'G'Page 'S'"

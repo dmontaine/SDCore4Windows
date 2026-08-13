@@ -1,0 +1,101 @@
+program PY_GUI_TEST
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* program shows how to use FreeSimpleGUI to create a simple gui input screen in sd
+* Notes - You cannot run this from root, you will get:
+*  Authorization required, but no authorization protocol specified 
+* This is because root does not have X windows configuration available (it a security thing)
+*
+* Instead run from your user account!
+*
+*
+* must create the following script file and edit the following to point to it's location
+* FreeSimpleGUI must be installed in python site packages or in the folder containing sdguitest.py
+*
+
+script_file = "/home/xyz/python_stuff/sdguitest.py"
+
+**************************************************************************
+*# sdguitest.py
+*import sys
+*sys.path.append('/home/xyz/python_stuff')   <=== directory that contains FreeSimpleGUI.py
+*import FreeSimpleGUI as sg
+*
+*
+*SDME_FM  = chr(254)
+*SDME_VM  = chr(253)
+*SDME_SVM = chr(252)
+*#
+*
+*layout = [ 
+*            [sg.Text('User Name', size=(12)), sg.Input(key='-UNAME-', size=(25))],
+*            [sg.Text('DOB', size=(12)), sg.Input(key='-DOB-', size=(25))],
+*            [ sg.Text('Account', size=(12)), sg.Input(key='-ACCOUNT-', size=(25))],
+*            [sg.Button('Ok')]
+*            ]
+*
+*window = sg.Window('Simple Inputs', layout, element_justification='r')
+*
+*while True:
+*    event, values = window.read()
+*    if event == sg.WIN_CLOSED:
+*        break
+*    elif event == 'Ok':
+*        break
+*# rem  values['-UNAME-'] to access info
+*window.close()
+*
+*****************************************************************************
+$include SDPYFUNC.H
+*
+print 'embedded python test, hit <enter> to start':
+input ok
+* rem to set script_file = "/home/xyz/python_stuff/sdguitest.py"
+print 'attempt to run script: ' : script_file
+print str('=',50)
+*
+*
+crt ' check to see if python already initialized'
+rtn_stat = PY_IS_INITIALIZED()
+if rtn_stat then
+  crt 'already initialized'
+end else
+  crt 'not initialized, attempt init'
+  rtn_stat = PY_INITIALIZE()
+  crt 'status = ':status()
+end
+
+crt str('=',50)
+
+rtn_stat = PY_RUNFILE(script_file)
+crt 'status = ':status()
+if rtn_stat <> 0 then goto 999
+
+crt str('=',50)
+crt 'attempt to access python object: values'
+rtn_string = PY_GETATTR("values")
+crt "values:"
+crt rtn_string
+crt 'status = ':status()
+*
+crt str('=',50)
+*
+999: crt 'complete'
+* note we do not finilize here, test in sd.c and finialze there!
+*call !PY_FINALIZE(rtn)
+end

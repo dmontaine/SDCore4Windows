@@ -1,0 +1,53 @@
+* SPOPEN
+* SP.OPEN & SP.CLOSE commands.
+* Copyright (c) 2006 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program spopen
+$catalog $spopen
+
+$include keys.h
+
+   flags = getpu(pu$spoolflags, 0)
+   begin case
+      case @option = 0
+         flags = bitand(flags, bitnot(PU$FLG.KEEP.OPEN))
+         setpu pu$spoolflags, 0, flags
+      case @option = 1
+         flags = bitor(flags, PU$FLG.KEEP.OPEN)
+         setpu pu$spoolflags, 0, flags
+         printer close on 0
+      case 1
+         stop "Internal error: Invalid dispatch information"
+   end case
+
+   @system.return.code = 0
+end
+
+* END-CODE

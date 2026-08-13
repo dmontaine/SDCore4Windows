@@ -1,0 +1,56 @@
+PROGRAM SD_EXT
+* note SDEXT is an internal function!!
+$internal
+
+$include KEYS.H
+$include ERR.H
+
+crt '*************************************************'
+crt 'attempt sdext call'
+crt '*************************************************'
+
+arglist = 'apple':@fm:'banana':@fm:'pear'
+crt 'arglist: ':arglist
+
+rsp = sdext(arglist,@TRUE,SDEXT_TestIt)
+*
+crt 'status: ':status()
+crt 'response:'
+crt rsp
+
+crt '*************************************************'
+crt 'null args'
+crt '*************************************************'
+
+rsp = sdext('',@false,SDEXT_TestIt)
+*
+crt 'status: ':status()
+crt 'response:'
+crt rsp
+
+
+crt '*************************************************'
+crt 'too many args (max is 10)'
+crt '*************************************************'
+for i = 1 to 11
+ arglist<i> = i
+next i
+
+rsp = sdext(arglist,@true,SDEXT_TestIt)
+*
+crt 'status: ':status()
+crt 'response:'
+crt rsp
+
+crt
+crt '*************************************************'
+crt ' bad key'
+crt '*************************************************'
+rsp = sdext(arglist,@TRUE,-99)
+crt 'status: ':status()
+crt 'response:'
+crt rsp
+
+*
+alldone:
+END

@@ -1,0 +1,841 @@
+Version 1.0-2
+-------------
+(mab)  Add back LISTPQ - sentence to list procs (SD.VOCLIB, VOC_TEMPLATE, NEWVOC)
+       Add ACCOUNT.SAVE, FILE.SAVE, T-DUMP (ACCSVE program) to TAPE install
+       Add back the ability to set "PICK" compatibility options via the OPTION program:
+       PICK.BREAKPOINT    : Pick syntax for BREAK.ON and BREAK.SUP
+       PICK.BREAKPOINT.U  : Handle U breakpoint option in Pick manner
+       PICK.EXPLODE       : Pick style processing of single value item in BY.EXP
+       PICK.GRAND.TOTAL   : GRAND.TOTAL text on same line as values
+       PICK.IMPLIED.EQ    : Implied EQ between field and literal in query
+       PICK.NULL          : Return null for null data in ML, MR and FMT()
+       PICK.WILDCARD      : Allow use of Pick style wildcards in queries
+       QUALIFIED.DISPLAY  : Allow Pick style qualified display clauses
+
+
+Version 1.0-1
+-------------
+(mab)  Add back basic statements PROCREAD and PROCWRITE. Changes to BCOMP, op_misc.c opcodes.h (both versions)
+       CREATE-ACCOUNT GROUP now creates linux group name lower case with "sdg_" prefix to group name (like user group names)
+	     Warn user if case inversion is on prior to creating new user 
+	   DELETE-ACCOUNT (gpl.bp/DELACC) replace deluser with userdel when deleting linux user at account deletion, not available on all Linux distros
+       Add PTERM CASE NOINVERT to the LOGIN paragraph in SDSYS,VOC_TEMPLATE (VOC) and SDSYS,NEWVOC
+
+Version 1.0
+-------------	   
+(mab) Add PROG-INFO to GPL.BP
+      Remove install and delete scripts from repo (now in their own github repo)	   
+	   
+
+Version 0.9-3
+-------------
+
+(mab) Move VOC back to dynamic file. This file is constantly being accessed by SD.  Having it as a Directory file results constant file opens.
+      With having it as a Dynamic file the hope is most of the file is already buffered.
+      Note: Existing Accounts with VOC defined as a Directory file type will still work, just have more overhead.
+      * Add program VOC_TO_DYN to move VOC from Directory to Dynamic file type to sdsys/BP -to be added
+      
+      Mods to directory file name mapping (%char)  Now consistent with other versions of this code base?
+      
+      On SELECT of directory type files, if file name mapping results in empty name, don't add to list (op_dio4.c / dir_select)
+      
+      Update #define _XOPEN_SOURCE  to #define _XOPEN_SOURCE 700 in sddefs.h (mult define errors when compiling)
+ 
+      Add correction to handle SIGPIPE Error in op_writeskt() (WRITE.SOCKET)  issue #89 / ScarletDME 
+  
+      sdnet.h:
+	    replace termio.h (is obsolete) with termios.h  sys/ioctl.h
+
+      installsd.sh - always set ownership (these could get messed up if sdsys and sdusers group gets deleted during deletesd.sh script)
+
+      Add subroutine PROG_INFO to GPL.BP, global catalog as !PROG_INFO, pulls date and time program was compiled from object header.	  
+
+Version 0.9-2
+
+-------------
+(mab) Mods to embedded python:
+      Add python functions:
+        
+      PY_LENGTH(objectname)
+       return python object’s length (size)
+
+      PY_TYPE(objectname)
+       return python object’s type 
+
+      PY_CREATEDICT(dictname)
+       create python dictionary object
+
+      PY_CLEARDICT(dictname) 
+       clear python dictionary object via api call PyDict_Clear().
+
+      PY_DICTVALGETS(dictname,key)
+       get dictionary value for item key, returned as string
+
+      PY_DICTVALSETS(dictname,key,value)
+       set (update) or create dictionary value for key.
+
+      PY_DICTIDEL(dictname,key)
+       delete dictionary key / value 
+
+      PY_DICTGETKEYS(dictname)
+       return list of dictionary keys / value 
+
+      PY_DICTGETVALUES(dictname)
+       return list of dictionary values 
+
+      PY_STRSET(strname,value)
+       set (update) or create string object strname with string value.
+
+      PY_STRGET(strname)
+       get string value of string strname
+
+      PY_LISTGETS(listname)
+       return list of list items
+
+      PY_LISTAPPEND(listname,objectname)
+       append objectname to list listname  
+       
+      Add sample programs to BP:
+      
+      PY_TERM - simple python interpreter terminal 
+      
+      PY_JSON - sample json file parser using python's json module and BASIC functions to access python objects.
+       
+         
+
+Version 0.9-1
+
+-------------
+(mab) Add PROC back to GPL.BP. Users have requested it and CPROC will abort if it finds a 
+        paragraph of type "PQ"
+        
+      Add TAPE and ACCOUNT.RESTORE subsystem as optionally installed software.
+
+      Rework revision methodology.  Original release introduced two revision tracks,
+       one for the VM another for the SD mods to commands, ideas on user / accounts etc.
+       The thought was that very few changes would be made to the VM and we would maintain
+       compatibility with QM/ScarletDME at revision 2.6-6.  With some of the recent changes
+       (addition of Sodium, Embedded Python and more importantly the dynamic file prefix change from ~ to %),
+       SD is no longer completely compatible with 2.6-6 version systems.
+       Roll back to single revision track and start at rev 0.9-1 .
+       *** As a result you MUST shutdown and restart the OS on delete and install of SD  ***
+       If you have user / group accounts saved from previous installs, a prompt for upgrading the accounts
+       will occur at login.
+       
+      Correct handling of embedded newlines in MESSAGES, Display of SYSMSG(msg_nbr) should now inlcude the 
+        necessary new line and return characters.
+        
+      Correct the "HELP" command in ED(itor), now displays all of HELP if no additional command text given.
+        Remove call to kernel(K$HELP,'') not avail on SD.
+		
+      Makefile - prep for gcc-15, need to add -std=gnu17 to compile flags see  https://gcc.gnu.org/gcc-15/porting_to.html
+	  
+      Create generic install script - installsd.sh. This should work for all debian / fedora based distros
+
+
+
+Version 0.9.0
+
+-------------
+
+(d-chou) Change to sdsem.c - LockSemaphore() add IPC_NOWAIT and RelinquishTimeslice
+
+      Semaphores can be used to create exclusive locks, preventing multiple processes
+
+      from accessing a  shared resource at the same time.  However, if the IPC_NOWAIT
+
+      constant is not specified, a process trying to acquire the lock will block and
+
+      wait if the semaphore is already held by another process.This can lead to unintended
+
+      synchronization between processes. To avoid this, IPC_NOWAIT should be specified
+
+      which will cause the process to return immediately with an error if the lock cannot
+
+      be acquired.
+
+
+(mab) Convert sd dynamic file blobs prefix from '~' to '%'
+
+     
+
+      Turn function "process_file" back on in sdfix. For some reason it was commented out
+
+      (sdfix did nothing).
+
+
+      Fix directory file name mapping of '~' and '%t'
+
+ 
+
+      The BASIC command SSELECT is processed by pcode routine _SSELCT, when it attempts to
+
+      sort the NULL id, the wheels come off (seg fault).
+
+      Correct op_sort.c  / op_sortdata() to test for a NULL id before processing (prevent
+
+      segfault on strlen() function.
+
+ 
+
+      Add SYS$ keys in KEYS.H (see op_sys.c) for BASIC function system() (preparation for
+
+      qmExplorer)
+
+   
+
+      Add subroutines EUID_SET and EUID_RESTORE to set and restore the euid and egid of
+
+      the process running sd. If a process is started with sudo sd, the process will be
+
+      dropped to runing as sdsys and only run as root (euid = 0)when necessary.  This
+
+      switch is all performed in CPROC with the dynamic array privileged_commands defining
+
+      the commands that require root privileges.
+
+     
+
+      Special note: At install time we cannot reduce running privialges to sdsys, none of
+
+      the groups are effective casuing all sorts of access issues.  To get around this
+
+      CPROC must be complied with IS_INSTALL defined.  This define statement is found
+
+      in the GPL.BP file "define_install.h". The install script overwrites this file with
+
+      IS_INSTALL commented out, and CPROC will be recomplied.
+
+       
+
+      Modify how group accounts are setup / handled (CREATE.ACCOUNT). Group accounts now
+
+      have their parent directory ownership starting as sdsys : group.  To access a group
+
+      account, a user must belong to the linux group of the same name (LOGIN / LOGTO)
+
+
+      CREATE.ACCOUNT will create the linux group (if it does not exist) and add "sdsys" 
+
+      and "root" to members.
+
+      CREATE.ACCOUNT sets the setgid bit on the account's parent directory.   This allows
+
+      the directories / files to be modified by all the users who are part of the group of
+
+      the parent directory.
+
+      CREATE,ACCOUNT saves group name in fld 3 of ACCOUNTS record (for both CREATE.ACCOUNT
+
+      USER and GROUP)
+
+      LOGIN and LOGTO(CPROC) now checks to confirm user is a member of sdusers group and
+
+      ACCOUNT group modification to function is_grp_member(user,group) to return true if
+
+      group found or if group = user
+
+
+      Add command MODIFY.ACCOUNT to add users as members to the SD account.
+
+ 
+
+      Add command WHO.AM.I to display information on the current user and process.
+
+
+      Tighten up sdsys file permissions (only allow group to have write access on
+
+      necessary directories / files).
+
+      Install script sets  /usr/local/sdsys owner : group  sdsys : sduser with
+
+      permissions 755 except:
+
+      775 /usr/local/sdsys/errlog
+
+      654 /usr/local/sdsys/ACCOUNTS/SDSYS
+
+
+      Remove the ability to set "PICK" compatibility options via the OPTION program:
+
+      PICK.BREAKPOINT    : Off   Pick syntax for BREAK.ON and BREAK.SUP
+
+      PICK.BREAKPOINT.U  : Off   Handle U breakpoint option in Pick manner
+
+      PICK.EXPLODE       : Off   Pick style processing of single value item in BY.EXP
+
+      PICK.GRAND.TOTAL   : Off   GRAND.TOTAL text on same line as values
+
+      PICK.IMPLIED.EQ    : Off   Implied EQ between field and literal in query
+
+      PICK.NULL          : Off   Return null for null data in ML, MR and FMT()
+
+      PICK.WILDCARD      : Off   Allow use of Pick style wildcards in queries
+
+      QUALIFIED.DISPLAY  : Off   Allow Pick style qualified display clauses
+
+
+      Note: at this time the source still contains the code to implement these options,
+
+      but the intent is to not continue supporting "PICK" compatibility.
+
+
+     Modify the GPL.BP/CATALOG program to:
+
+        require admin priviliges for global catalog  
+
+        set owner : group to sdsys : sdusers on write to gcat
+
+
+     Install script:
+
+        - If make fails, exit script
+
+        - If modify script to use whatever version of python is installed.
+
+        - add root to sdsys group.
+
+        - update install ACCOUNTS/SDSYS record to include group name sdsys
+
+     Delete Script:
+
+        - Remove group sdsys on sd delete
+
+
+     MakeFile:
+
+        - Builds embedded python
+
+        - Move "Embedded Python" code from examples to gplsrc and GPL.BP
+
+        - BCOMP - allow @FILE.NAME on left side of assignment.
+
+        - VOC / NEWVOC add SD.ACCOUNTS q pointer to SDSYS/ACCOUNTS
+
+
+(dsm) The Fedora install script was removed because of lack of a long term support
+
+      version of Fedora. Time required to test installer every six months is too
+
+      much for small development team.
+
+
+      Replace LibreOffice documents with PDFs as github complains that the LibreOffice
+
+      documents are binary files.
+
+
+Version 0.8.2
+
+-------------
+
+(dsm) This minor point release includes some changes to the system C and Basic code to
+
+      better support the SD default terminal size of 120x36.  Also some changes were
+
+      made to the install and uninstall scripts. 
+
+
+Version 0.8.1
+
+-------------
+
+(mab) Correct c function op_dtx / BASIC function DTX(), using wrong format code.
+
+(mab) Add GPL.BP subs !SD_GET_SALT and !SD_KEY_FROM_PW. Routines use SDEXT to create SALT
+
+      and Key from Password (Phrase) via Libsodium. 
+      See SD Encryption chapter in the SD Documentation file.
+
+(mab) Add embedded python build to examples folder (../examples/python/embedded_python).
+
+      See SD Embedded Python in the SD Documentation file.   
+
+
+Version 0.7.1
+
+-------------
+
+(mab) Add BASIC Functions / Statements:
+
+      SDENCRYPT / SDDECRYPT
+
+SDEXT – Generic function for extending SD / BASIC to interface with C Functions.
+
+      Remove unsupported BASIC Functions / Statements:
+
+         ABORTE, ABORTM
+
+         CONNECT.PORT, ERRMSG, TTYGET, TTYSET, STOPE, STOPM
+
+         ENCRYPT, DECRYPT - replace with SDENCRYTP, SDDECRYPT
+
+         ENTER.PACKAGE, EXIT.PACKAGE, PACKAGE, PROCREAD, PROCWRITE,
+
+   TRACE, PICK.ERRMSG compiler mode
+
+      Remove associated references from gplsrc/opcodes.h
+
+      Remove code from gplsrc as necessary
+
+
+      Introduce max string error checking in SD.
+
+      History: The original QM code that SD is based on was (is?) a 32 bit virtual
+
+      machine. As such strings are limited in size to just under 2 GB.  The issue is
+
+      there is no size checking and a user could attempt to create or load a string at or
+
+      above this limit, causing SD to crash (segfault).
+
+Changes to date:
+
+    sdclilib client will not allow user to write a record > MAX_STRING_SIZE
+
+    Directory read of a file (record) > MAX_STRING_SIZE not allowed.
+
+          Functions: append (':='), CHANGE(), concatenate (':'), INSERT(), REPLACE(),
+
+          STR() will not allow a string > MAX_STRING_SIZE to be created.
+
+
+(dsm) Removed compiled code in fld 16 of I type dictionary items that are copied from
+
+      FILES_DICTS. Create a Record in VOC, THIRD.COMPILE that recompiles them after they
+
+      are copied.  Updated install scripts to call THIRD.COMPILE.
+
+
+      Added SED and UPDATE.RECORD back after modifying them to not call tty routines as
+
+      the tty functionality has been removed.
+
+     
+
+      Documentation:
+
+         Added a LibreOffice spreadsheet showing the VOC items that have
+
+         been retained and removed compared to ScarletDME
+
+         Added a LibreOffice document regarding installation.
+
+    
+
+      Removed Depreciated folder and contents
+
+ 
+
+      Started modifying @ dictionary records and related dictionary items so that
+
+      default LIST reports are formatted for 120x36 terminal size.
+
+ 
+
+
+(dsm) Change max string size to 1 GB
+
+
+
+Version 0.7.0
+
+-------------
+
+(mab) Created a BASIC compiler (written in Python) for SD, we now have a version of SD
+
+      that has no binary elements required for installation.  Everything is source and
+
+      auditable. 
+
+
+      During installation the Python basic compiler compiles the necessary source code in
+
+      GPL.BP that in the past prevented the system from being binary element free.
+
+      Also, any required dynamic dictionaries are created during installation.
+
+
+Version 0.6.4
+
+-------------
+
+(mab) sd command as privileged user (sudo sd) will start out in account SDSYS 
+
+     
+
+      Only allow non privileged user to LOGIN or LOGTO:
+
+         Their own account.
+
+         Group account which they have access to.
+
+         A list of allowed users is found in ACCOUNTS record, field <ACC$USERS>
+
+CREATE-ACCOUNT USER adds user to their own account list.
+
+Use the MODIFY command ie) "MODIFY ACCOUNTS <account name>" to edit user list
+
+      Change install script template of ACCOUNTS / SDSYS file to ownership from 
+
+        -rwxrwxr-x 1 sdsys sdusers To -rw-rw-r-- 1 root  root
+
+      (LIST-USERS now reports for user: Last Login Account, Time and Date       
+
+(dsm) Removed MED from GPL.BP, GPL.BP.OUT, gcat, NEWVOC & VOC
+
+      Moved GPL.BP/MED source code to Depreciated
+
+      Removed SED from GPL.BP, GPL.BP.OUT, gcat, NEWVOC & VOC
+
+      Moved GPL.BP/SED source code to Depreciated
+
+      Removed SCRB from GPL.BP, GPL.BP.OUT, gcat, NEWVOC & VOC
+
+      Moved GPL.BP/SCRB source code to Depreciated
+
+      Removed SCREEN$STOP.SCR from GPL.BP
+
+      Removed SCREEN from GPL.BP and BPL.BP.OUT
+
+      Moved GPL.BP/SCREEN source code to Depreciated
+
+      Removed ADMUSER/ADMIN.USER from GPL.BP, GPL.BP.OUT, gcat, NEWVOC & VOC
+
+      Moved GPL.BP/ADMUSER source code to Depreciated
+
+      Removed GPL.BP/$ADMUSER.SCR
+
+      Removed files $FORMS, $SCREENS, $SCREENS.DIC, ERRMSG, ERRMSG.DIC
+
+      Remove ERRMSG in VOC and NEWVOC
+
+      Remove SP.ASSIGN & SET.QUEUE progrrams from GPL.BP, GPL.BP.OUT, gcat, NEWVOC and VOC
+
+      Move GPL.BP/SP.ASSIGN and SET.QUEUE to Depreceiated
+
+      Delete all records in MESSAGES starting with PL (Polish)
+
+      Removed system verbs ADMSRVR CREATE-USER, DELETE-USER, LIST-USERS, RECOVER-USERS and
+
+      related files if VOC, NEWVOC, GPL.BP, GPL.BP.OUT and gcat
+
+
+
+Version 0.6.3
+
+-------------
+
+(mab) mods date tagged in source as 20240219 and 20240225 mab
+
+      Remove the ability to run the system in "insecure mode".
+
+      Remove SECURITY program from GPL.BP and $secure from  gcat
+
+      Do not allow kernel(K$SECURE, >=0) to reset security flag.
+
+   
+
+      VM - Add CHOWN function to OSPATH.
+
+           Example:   CALL ospath(chown_parm,OS$CHOWN)
+
+           where chown_parm is a VM separated string <owner_name> VM <group_name> VM
+
+           <file_path>
+
+      Note in version 2.6.6 OSPATH is an internal function (requires -internal at login
+
+      to compile). Also for most OS$CHOWN operations to work, user will need to be root.
+
+
+    GPL.BP/LOGIN
+
+        No longer allow NETWORK or SERIAL connections.
+
+        Always run in secure mode.
+
+        Do not auto create missing user account.
+
+        System admin will need to add user to sdusers group and create user default
+
+        account ("create-account USER <username>" , see below) prior user login.
+
+   
+
+      Change login behavior to:
+
+         on command:
+
+            sd -a<account> - if account exists, login otherwise terminate connection.
+
+                        
+
+            sd - if /home/sd/user_accounts/<username> exists, log to user account
+
+            else display "Account <user> not in register" and terminate connection
+
+
+         User must be member of sdusers group, if not terminate connection.     
+
+
+         Note -  This changes the current behavior of logging into the account found at
+
+         the current directory.
+
+    
+
+      Remove option to create account.
+
+               
+
+    Mod CREATE-ACCOUNT
+
+      Rem was
+
+         CREATE.ACCOUNT acc.name pathname {NO.QUERY}
+
+      Now
+
+         CREATE.ACCOUNT USER <username>  {NO.QUERY} - account created in 
+
+         /home/sd/user_accounts/<username>, 
+
+         owner:group set to <username>:<username>
+
+         <username> must be found in sdusers group!
+
+         CREATE.ACCOUNT GROUP acc.name  {NO.QUERY} - account created in
+
+         /home/sd/group_accounts/<acc.name>, owner:group set to root:sdusers
+
+         CREATE.ACCOUNT OTHER acc.name pathname {NO.QUERY} - account created in pathname,
+
+         owner:group set to root:sdusers
+
+       
+
+         User must be privileged (root) to use CREATE-ACCOUNT verb. 
+
+  
+
+    DELETE-ACCOUNT  User must be privileged (root) to use DELETE-ACCOUNT verb.
+
+     
+
+    Add to install script:
+
+      Create  directories /home/sd/user_accounts and  /home/sd/group_accounts
+
+      Add command to create user account in  /home/sd/user_accounts/<$tuser>  
+
+ 
+
+    Implementing AF_UNIX sockets (and removing AF_INET). All remote connections will
+
+     only be allowed via a tunnel (ssh tunnel).
+
+
+      API changes:  
+
+          Rebrand the GPL.BP/VBSRVR to APISRVR and associated notation.
+
+ 
+
+          SDConnectlocal(Account) - No Change. This connection method only works on the
+
+          local system. It creates a forked process of sd and communicates via pipes,
+
+          no network involved.
+
+
+          SDConnectUDS(Account) - New connection method mostly for testing. This is still
+
+          a local system connection only, but connects via the Unix Domain Socket
+
+          /tmp/sdsys/sdclient.socket. Connection method connects as initiating local
+
+          (the peer).
+
+
+          SDConnect(Host,Port,UserName,Password,Account) - Connect from remote via ssh
+
+          tunnel.
+
+
+          If configuration file has APILOGIN=1 or not found:  User and Password are
+
+          validated, API server process runs with usr_id and grp_id as UserName
+
+          (remember all server connections start out as root).
+
+
+          If APILOGIN=0:  UserName and Password are NOT validated, API server process runs
+
+          with usr_id and grp_id as the User creating the ssh tunnel (peer.
+
+          User still must be a valid linux user.
+
+
+          Regardless of connection method, User MUST be member of sdusers group!
+
+   
+
+         Update MESSAGES file, change references from SCARLETDME  to String Database (sd)
+
+
+         Remove hold over users in $LOGINS
+
+   
+
+         NOTE!! In order for this rev to build, libbsd-dev must be installed (sudo apt-get
+
+         install libbsd-dev) - Added to install script
+
+   
+
+         Create separate revision numbers for both the Virtual Machine and SD (defined in
+
+         gplsrc/revstamp.h). Add to SYSLOG sd command line.
+
+
+(dsm) Created Depreciated directory for features that have been removed or modified from
+
+      original function.
+
+      GPL.BP.zip contains code fore removed features. 
+
+      SD.VOCLIB.zip contains LISTxx code for 80x24 screen size.
+
+
+Version 0.6.2 1/21/2024
+
+-----------------------
+
+(mab) Corrected issues with C code that were generating errors during make
+
+      Replaced hard coded hex valuss in GPL.BP with @VM and other hex alternatives
+
+      Fixed possible endless loop in DELETE-FILE
+
+(dsm) Updated GPL.BP CONFIG to use 'less' to display the licence file
+
+      Updated all sentences in SD.VOCLIB for larger terminal display
+
+      Added a globally cataloged shell for the micro console based editor
+
+
+Version 0.6.1 1/19/2024
+
+-----------------------
+
+- Removed COPYP and PROC functionality
+
+- Removed reference to the openqm website which no longer exists
+
+  in all code.
+
+- Removed history entries from parent databases
+
+- Changed the install scripts to
+
+  - wait until after installation to /usr/local/sdsys to recompile c code
+
+  - avoid starting SD during installation or compile Basic code
+
+- Modified SD.VOCLIB to be a directory file
+
+- Set up a pcloud directory to hold zip file of each release
+
+
+Prior to 1/19/2024
+
+------------------
+
+SD, the String Database is based on code originally released under the
+
+GPL license in 2007 as a GPL release of the OpenQM database. Later
+
+on, that code was forked and modified. The result became the ScarletDME
+
+database.  It was a 32 bit only database until 2022 when the first
+
+iteration of the 64 bit version was released.
+
+
+SD is based on the 64 bit code in the geneb/ScarletDME github repository
+
+as of the end of 2023.
+
+
+2024-01-15 In creating SD the following changes have been made:
+
+
+Some features have been removed. These include :
+
+1 the Big Letter capability for large print titles on printed reports
+
+  and terminal displays.
+
+2 The package capability that allowed for installation of third party
+
+  packages in the original commercial product.
+
+3 TAPE related packages that included the account and file save and
+
+  restore features.
+
+4  PROC capability
+
+5 COPYP functionality (COPY using Pick syntax).
+
+
+The SD_SHM_KEY and SD_SEM_KEY offsets have been changed so that SD
+
+can be run in parallel with commercial and open source databases that
+
+use the same underlying architecture.
+
+
+The sockets used for the API and telnet access have been changed:
+
+The telnet socket from 4242 to 4244
+
+The API socket from 4243 to 4245
+
+
+The original database was called OpenQM and is still available as a
+
+commercial product from Rocket Software.  For SD, the original QM
+
+branding has been entirely removed.  Even internal variables and program
+
+and file names have been changed to reflect the SD branding.
+
+
+Some references to ScarletDME and Ladybridge Software have been
+
+removed.  Copyright statements have been retained.
+
+
+The default location of the database has been changed to
+
+/usr/local/sdsys.
+
+
+The default terminal type is Linux and the default terminal size is 120x36.
+
+
+The C and Basic object code is included in the download.  To install without
+
+recompiling everything, comment out the Make -B command and the two
+
+lines  containing FIRST.COMPILE and SECOND.COMPILE respectively.
+
+
+This database is in development. So far everything I have tested seems to
+
+work as expected. However, I'm sure there are things that need to
+
+be found and corrected. Other testers are appreciated.
+

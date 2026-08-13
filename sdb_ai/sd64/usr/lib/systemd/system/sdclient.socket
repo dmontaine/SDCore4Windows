@@ -1,0 +1,10 @@
+[Unit]
+Description=String Database (SD)  Per-Connection client Server
+
+[Socket]
+SocketGroup=sdusers
+ListenStream=/tmp/sdsys/sdclient.socket
+Accept=true
+
+[Install]
+WantedBy=sockets.target

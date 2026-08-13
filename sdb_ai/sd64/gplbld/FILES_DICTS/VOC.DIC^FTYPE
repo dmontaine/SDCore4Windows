@@ -1,0 +1,16 @@
+I
+IF DATA.NAME # '' THEN SUBR("!FTYPE",DATA.NAME) ELSE ''
+
+FType
+8L
+S
+
+
+
+
+
+
+
+
+   2059806019
+

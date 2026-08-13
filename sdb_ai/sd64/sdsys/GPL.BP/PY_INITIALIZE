@@ -1,0 +1,45 @@
+* PY_INITIALIZE(rtnstat)
+* initialized the python interpreter
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+$internal
+$no.symbols
+$no.xref
+function py_initialize()
+$catalog !py_initialize
+
+$include KEYS.H
+
+deffun PY_IS_INITIALIZED() calling '!PY_IS_INITIALIZED'
+deffun PY_RUNSTRING(py_script) calling '!PY_RUNSTRING'
+
+* skip initialize if already so
+if py_is_initialized() then
+  rtnstat = 0
+end else
+  rtnstat = SDEXT('',@FALSE,SD_PyInit)
+  if rtnstat = 0 then ;* success, setup stderr and stdout to include carriage return
+    lf = char(10)
+    script  = "import sys":lf
+    script := "sys.stderr.reconfigure(newline='\r\n')":lf
+    script := "sys.stdout.reconfigure(newline='\r\n')":lf
+    rtnstat = PY_RUNSTRING(script)
+  end
+end
+return rtnstat
+
+end

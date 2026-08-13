@@ -1,0 +1,1 @@
+Warning: Device/file '%1' does not exist (or invalid file permission).\nIf file permissions allow, writing to this device will create a new file.

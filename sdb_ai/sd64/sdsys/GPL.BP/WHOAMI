@@ -1,0 +1,62 @@
+* WHOAMI
+* WHO.AM.I verb
+* Displays current user information via system() call
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+*
+* START-HISTORY:
+* rev 0.9.0 Jan 25 mab initial release
+* END-HISTORY
+*
+* START-DESCRIPTION:
+* WHO.AM.I - Displays current user information via system() call
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+
+program $who.am.i
+$catalog $WHOAMI
+
+$include keys.h
+$include int$keys.h
+
+*
+crt str("=",25):'Who Am I':str('=',25)
+
+crt 'User        : ':@user
+crt 'Account     : ':@who
+crt 'User Number : ':system(SYS$USER_NBR)
+crt 'Process UID : ':system(SYS$UNX_UID)
+crt 'Process EUID: ':system(SYS$UNX_EUID)
+crt 'Process GID : ':system(SYS$UNX_GID)
+crt 'Process EGID: ':system(SYS$UNX_EGID)
+if kernel(K$ADMINISTRATOR, -1) then
+   adm = 'Yes'
+end else
+  adm = 'No'
+end
+crt 'Admin?      : ':adm
+crt 'PID         : ':system(SYS$OS_PID)
+crt 'Sys Path    : ':system(SYS$SDSYS_PATH)
+crt 'Host Name   : ':@hostname
+crt 'umask       : ':oconv(umask(-1),'MO')
+
+crt str("=",58)
+END

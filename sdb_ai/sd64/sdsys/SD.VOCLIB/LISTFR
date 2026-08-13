@@ -1,0 +1,9 @@
+Sentence to list remote files
+LIST VOC @ID COL.HDG "File name" FMT "18L"_
+FTYPE FMT "5L"_
+DESC FMT "41L"_
+DATA.NAME FMT "23L"_
+DICT.NAME FMT "23L"_
+WITH TYPE = "F" AND IS.REMOTE_
+BY @ID ID.SUP_
+HEADER "Remote files referenced by the VOC'G'Page 'SL'"

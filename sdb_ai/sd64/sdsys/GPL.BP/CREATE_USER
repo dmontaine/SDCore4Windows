@@ -1,0 +1,74 @@
+* CREATE_USER(USERNAME)
+* Create new os user
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+*
+* START-HISTORY:
+* rev 0.9.0 Jan 25 mab initial commit
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    x = !create_user(username)
+*
+*    create linux user
+*
+*    This function sets the STATUS() value to 0 if successful and returns true
+*    Otherwise sets status to the os status and returns false
+*
+* 0 success
+* 1 can't update password file
+* 2 invalid command syntax
+* 3 invalid argument to option
+* 4 UID already in use (and no -o)
+* 6 specified group doesn't exist
+* 9 username already in use
+* 10 can't update group file
+* 12 can't create home directory
+* 14 can't update SELinux user mapping
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function create_user(username)
+$catalog !create_user
+
+deffun valid_os_name(name) calling '!valid_os_name'
+
+user_created = @false
+set.status 0
+* Modified by Composer AI - 2026/06/10.
+* Use shared !valid_os_name before OS.EXECUTE (phase 2).
+* os.name.chars = '...'
+* if username = '' or convert(os.name.chars, '', username) # '' or len(username) > 32 then
+if not(valid_os_name(username)) then
+   set.status 2
+   return user_created
+end
+OS.EXECUTE "sudo useradd -m " : username
+* --------------------
+stat = OS.ERROR()
+if stat = 0 then
+  user_created = @TRUE 
+end else
+  set.status stat    
+end 
+
+return user_created
+end

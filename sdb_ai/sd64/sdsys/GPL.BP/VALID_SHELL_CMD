@@ -1,0 +1,31 @@
+* VALID_SHELL_CMD(cmd)
+* Return @true if cmd has no shell metacharacters unsafe for OS.EXECUTE.
+* Copyright (c) String Database
+*
+* START-DESCRIPTION:
+*
+*    x = !valid_shell_cmd(cmd)
+*
+*    Allows spaces for normal commands (e.g. "ls -la") but rejects command
+*    chaining/substitution characters and embedded newlines.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function valid_shell_cmd(cmd)
+$catalog !valid_shell_cmd
+
+   * Modified by Composer AI - 2026/06/10.
+   * Reject empty commands and shell chaining/substitution metacharacters.
+   if cmd = '' then return @false
+   if index(char(10), cmd, 1) or index(char(13), cmd, 1) then return @false
+   shell.meta = ';|&$`<>'
+   if convert(shell.meta, '', cmd) # cmd then return @false
+   * --------------------
+   return @true
+
+end
+
+* END-CODE

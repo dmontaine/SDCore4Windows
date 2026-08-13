@@ -1,0 +1,16 @@
+I Test if data path is a remote file
+if data.name matches "'":@ds:"'...":@vm:"1A':":@ds:"'..." or upcase(data.name[1,6]) = '@QMSYS' then 1 else ''
+
+Rem
+1L
+S
+
+
+
+
+
+
+
+
+ -79401359
+

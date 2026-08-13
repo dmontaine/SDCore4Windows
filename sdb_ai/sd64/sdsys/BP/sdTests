@@ -1,0 +1,143 @@
+
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+ Program sdTests
+ *
+ * program to test revisions to sd code (minimal testing that is)
+ *
+ $internal
+ include GPL.BP INT$KEYS.H
+ *
+ deffun is_grp_member(user,group) calling "!is_grp_member"
+ *
+ crt 'minimal test of hardcoded value mark removal:'
+ crt 'The current time and date is: ':TIMEDATE()
+ crt
+ *
+ *
+ crt 'rev updates:'
+ crt 'VM rev level (1012) is: ':system(1012)
+ crt 'MESSAGE 3061: ':sysmsg(3061)
+ crt
+ * new config options
+ crt 'new config options:'
+ crt 'APILOGIN: ':config('APILOGIN')
+ crt 'USRDIR: ':config('USRDIR')
+ crt 'GRPDIR:' :config('GRPDIR')
+ crt
+ *
+ crt 'testing is_grp_member fucntion'
+ crt 'is ':@user:' a member of sdusers? ':is_grp_member(@user,'sdusers')
+ crt 'is joeblow a member of sdusers? ':is_grp_member('joeblow','sdusers')
+ crt
+ *
+ * new ospath function OSPATH(OS$CHOWN)
+ * rem this most likely will only work if we are running as root
+ * 
+ crt "testing ospath function OSPATH(param,S$$CHOWN)"
+ if system(27) = 0 then
+   crt 'running as root!'
+ end else
+   crt 'not running as root, OSPATH(OS$CHOWN,param) should fail with permission issue!'
+ end
+ crt
+* 
+ mypath = '/home/sd/testdir'
+ if ospath(mypath,OS$EXISTS) then
+   crt mypath: ' exists, delete it'
+    result = ospath(mypath,OS$DELETE)
+    if result then
+      crt 'delete successful'
+    end else
+      crt 'delete failed?'
+    end
+ end
+ crt
+ *
+ crt 'create: ': mypath
+ result = ospath(mypath,OS$MKDIR)
+ if result then
+   crt 'create successful'
+ end else
+   crt 'create failed?'
+ end
+ crt
+ *
+ crt 'create should have created test directory with owner root:root'
+ crt 'pause to check, <enter>':
+ input ok
+ crt
+ *
+ crt 'attempt change to sdsys:sdusers'
+ chown_parm = 'sdsys':@vm:'sdusers':@vm:mypath
+ result = ospath(chown_parm,OS$CHOWN)
+ crt 'result: ':result
+ crt 'status(): ':status()
+ crt
+ crt 'throw some junk at ospath(chown_parm,OS$CHOWN)'
+ crt 'unkown owner "xyz"'
+ chown_parm = 'xyz':@vm:'sdusers':@vm:mypath
+ result = ospath(chown_parm,OS$CHOWN)
+ crt 'result: ':result
+ crt 'status(): ':status()
+ crt
+ crt 'empty chown_parm'
+ chown_parm = ''
+ result = ospath(chown_parm,OS$CHOWN)
+ crt 'result: ':result
+ crt 'status(): ':status()
+ crt
+ crt 'not enough params'
+ chown_parm = 'xyz':'sdusers':@vm:mypath
+ result = ospath(chown_parm,OS$CHOWN)
+ crt 'result: ':result
+ crt 'status(): ':status()
+ crt
+ crt 'too many params'
+ chown_parm = 'xyz':@vm:'sdusers':@vm:mypath:@vm:mypath
+ result = ospath(chown_parm,OS$CHOWN)
+ crt 'result: ':result
+ crt 'status(): ':status()
+ crt
+ crt 'attempt buffer overflow'
+ chown_parm = 'sdsys':@vm:'sdusers':@vm:str('a',321)
+ result = ospath(chown_parm,OS$CHOWN)
+ crt 'result: ':result
+ crt 'status(): ':status()
+ crt
+ *
+ * try out prog_info
+ *
+ crt 'PROG_INFO subroutine on: '
+ prg_dir = "/usr/local/sdsys/BP.OUT"
+ prg_name = "sdTests"
+ crt '   ':prg_dir
+ crt '   ':prg_name
+ *
+
+ call !prog_info(prg_dir,prg_name,prog_name,prog_obj_sz,prog_comp_time,prog_comp_date,error_msg)
+ if error_msg = '' then
+   crt 'Prog Name:    ':prog_name
+   crt 'Prog obj sz:  ':prog_obj_sz
+   crt 'comp date:    ':prog_comp_date
+   crt 'comp time:    ':prog_comp_time
+ end else
+   crt 'prog_info failed: ': error_msg
+ end
+ *
+ crt 'thats all folks!'
+ End

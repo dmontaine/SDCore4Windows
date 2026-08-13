@@ -1,0 +1,67 @@
+  Very minimal test program for sdclilib.
+   
+  Upper Memo will display responses and status codes, lower Memo is used for read / write actions.
+  
+  Enter Address, User Name, Password and Account (next to login button) in associated fields, click login to connect.
+  
+  You will hopefully see something like:
+  
+    Attempting to connect
+    Connection stat: 1
+    Connected
+
+  In the upper memo.
+
+  Enter a known file name in the field next to the Open button (in my test case the file name is TESTDATA).
+  Click the Open button.
+   
+  Response in the upper memo:
+  
+	Open successful: TESTDATA FileNbr: 1
+	
+  Note: Open populates the File Number file for both the Close and Read / Write test.
+  
+  Enter a known Record Id in the field Record Id and click Read.
+  
+  Response in upper memo is a bunch of debug info, Response in lower memo should be the actual record with field markers converted to line endings.
+  
+  Using the lower memo change the record, and click Write.
+  
+  The record should be updated, verify via terminal logged into sd.
+
+  The Execute button will execute the command selected from the drop down list.
+  
+  Response should show up in upper memo.
+  
+  The Call button test callx, and GetArg by executing the BASIC subroutine found in BP TESTSUB, code below.
+  This subroutine must be compiled and cataloged in the account.
+  
+  Response in upper memo:
+  
+    Attempt to call TEST
+    Attempt retrieve arg 2
+    arg 2: and arg2 Plus we added TIMEDATE 09:30:55 19 DEC 2023
+
+  BP TESTSUB 
+ 
+ * very simple test of QMCallx
+ *  open TESTDATA
+ *  create a record made up of passed values
+ *  add a field with a time date stamp
+ *  write the record as TESTSUB
+ *  return the field with the time date stamp to the caller
+ 01: subroutine TESTSUB(a1, a2, a3)
+ 02: open 'TESTDATA' to TS ELSE ABORT
+ 03: a2rtn = a2:  ' Plus we added TIMEDATE ':TIMEDATE()
+ 04: rec = ''
+ 05: rec = a1
+ 06: rec<2> = a2
+ 07: rec<3> = a3
+ 08: rec<4> = a2rtn
+ 09: write rec on TS, "TESTSUB"
+ 10: a2 = a2rtn
+ 11: Return
+ 12: End
+ 
+   Click Logout to disconnect.
+   

@@ -1,0 +1,163 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* PROGRAM SD_ENCRYPT
+
+$include KEYS.H
+$include ERR.H
+
+$define key_sz   32 ;* size in bytes of libsodium key
+$define tag_sz   16 ;* size in bytes of libsodium tag
+$define nonce_sz 24 ;* size in bytes of libsodium nonce
+ 
+PRINT "Testing Encrypt / Decrypt "
+
+pltext = 'Two things are infinite, the universe and human stupidity, and I am not yet completely sure about the universe. - Albert Einstein'
+
+PRINT 'Our Text: ':pltext
+
+* define a key in hex format
+* rem key lenght is 32 bytes or 64 Hex characters
+* NOT the way to do this, but its a test
+mykey  = '0102030405060708'
+mykey := '2FEFEFEFEFEFEFEF'
+mykey := '3023456789ABCDEF'
+mykey := '4102030405060708'
+
+
+PRINT '==============================================='
+PRINT ' Encrypt Test / Hex Encoding'
+PRINT '==============================================='
+
+RtnVal = SDENCRYPT(pltext,mykey,SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+*
+print 'Size of Return Value: ' : len(RtnVal)
+* rem hx encoding results in  2X sized encoded, encrypted text
+Print 'Encoded Encrypted Text: ':len(pltext)*2
+PRINT RtnVal[1,len(pltext)*2]
+PRINT
+PRINT 'TAG: ' : tag_sz*2
+PRINT RtnVal[len(pltext)*2+1,tag_sz*2]
+PRINT
+PRINT 'NONCE: ': nonce_sz*2
+PRINT RTNVAL[(len(pltext)*2+(tag_sz*2))+1, nonce_sz*2] 
+
+PRINT '==============================================='
+PRINT ' Decrypt Test / Hex Encoded'
+PRINT '==============================================='
+*
+
+DcryptVal = SDDECRYPT(RTNVAL,mykey,SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+PRINT 'Decrypted Text: ':DcryptVal
+*
+If DcryptVal = pltext then
+  Print 'Success!'
+END ELSE
+  PRINT 'Oops, Back to the drawing board!'
+END
+
+PRINT '==============================================='
+PRINT ' Decrypt Test / Hex Encoded / wrong key        '
+PRINT '==============================================='
+*
+mykey  = '0102030405060708'
+mykey := '2FEFEFEFEFEFEFEF'
+mykey := '3023456789ABCDEF'
+mykey := '2FEFEFEFEFEFEFEF'
+*
+DcryptVal = SDDECRYPT(RTNVAL,mykey,SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+PRINT 'Decrypted Text: ':DcryptVal
+*
+If DcryptVal = pltext then
+  Print 'Success!'
+END ELSE
+  PRINT 'Oops, Back to the drawing board!'
+END
+
+*******************************************************************************************************************
+
+PRINT '==============================================='
+PRINT ' Encrypt Test with no text'
+PRINT '==============================================='
+RtnVal = SDENCRYPT('',mykey,SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+
+PRINT '==============================================='
+PRINT ' Encrypt Test with no key'
+PRINT '==============================================='
+RtnVal = SDENCRYPT(pltext,'',SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+
+PRINT '==============================================='
+PRINT ' Encrypt Test with invalid encoding'
+PRINT '==============================================='
+
+RtnVal = SDENCRYPT(pltext,mykey,0)
+STAT = STATUS()
+PRINT 'Status: ':STAT
+
+*
+PRINT '==============================================='
+PRINT ' Decrypt Test with no text'
+PRINT '==============================================='
+RtnVal = SDDECRYPT('',mykey,SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+
+PRINT '==============================================='
+PRINT ' Decrypt Test with no key'
+PRINT '==============================================='
+RtnVal = SDDECRYPT(pltext,'',SD_ENCODEHX)
+STAT = STATUS()
+*
+PRINT 'Status: ':STAT
+
+
+PRINT '==============================================='
+PRINT ' Decrypt Test with invalid encoding'
+PRINT '==============================================='
+
+RtnVal = SDDECRYPT(pltext,mykey,0)
+STAT = STATUS()
+PRINT 'Status: ':STAT
+
+goto alldone:
+***********************************************
+prtseq:
+* prtchars - string to conver to seq number
+for i = 1 to len(prtchars)
+  crt seq(prtchars[i]):' ':
+next i
+crt
+return
+
+
+alldone:
+END

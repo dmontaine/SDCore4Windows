@@ -1,0 +1,69 @@
+*
+* program creates file info listing for FILES_LIST
+*
+*
+$INTERNAL
+$INCLUDE KEYS.H
+*
+* HARD CODED LOCATION FOR BUILD PROCESS (NEED TO CHANGE TO USER INPUT / SELECTED FIELD?)
+*
+SOURCE_DATA_PATH ="/usr/local/sdsys/"
+*
+* THIS IS THE PATH TO WHERE WE SAVE DATA FROM THE BUILD PROCESS AND THE FILE NAME WE WILL USE
+*
+*
+*
+CRT @(-1):
+
+crt 'program creates file info listing for FILES_LIST'
+*
+CRT 'OK':
+INPUT OK
+IF UPCASE(OK) # 'Y' THEN STOP 'Process Aborted'
+*
+*
+* list of files to copy dictionaries 
+*
+FILES_LIST = ''
+*
+*  list of files to "create" (add ~0 and ~1)
+*
+*                  file      create dict
+FILES_LIST<-1> = "ACCOUNTS"  :@VM:'Y'
+FILES_LIST<-1> = "$HOLD"     :@VM:'Y' 
+FILES_LIST<-1> = "$MAP"      :@VM:'Y'
+FILES_LIST<-1> = "$IPC"      :@VM:'N' 
+FILES_LIST<-1> = "DICT.DIC"  :@VM:'N'  
+FILES_LIST<-1> = "DIR_DICT"  :@VM:'N' 
+FILES_LIST<-1> = "VOC.DIC"   :@VM:'N'  
+*
+FILE_CT = DCOUNT(FILES_LIST,@FM)
+crt 'filename'"l#10" :'type'"l#5" : 'mod'"l#5" : 'mnmod'"l#8" : 'grpsz'"l#8" : 'lrgrec'
+   For i = 1 to FILE_CT   
+ 
+	   DICT_FILE_NAME  = FILES_LIST<I,1>
+  
+	   *
+       OPENPATH  SOURCE_DATA_PATH:@DS:DICT_FILE_NAME TO DICT.FILE.VAR THEN
+       * get the info
+       type = fileinfo(DICT.FILE.VAR,   FL$TYPE)
+       mod  = fileinfo(DICT.FILE.VAR,   FL$MODULUS)
+       mnmod  = fileinfo(DICT.FILE.VAR, FL$MINMOD)
+       grpsz  = fileinfo(DICT.FILE.VAR, FL$GRPSIZE)
+       lrgrec = fileinfo(DICT.FILE.VAR, FL$LARGEREC) 
+		   
+       CLOSE DICT.FILE.VAR  
+	 	   
+	   crt DICT_FILE_NAME"l#10" : type"l#5" : mod"l#5" : mnmod"l#8" : grpsz"l#8" : lrgrec	   
+
+
+      END ELSE
+         ERR.LN =  'Could Not Open: ':SOURCE_DATA_PATH:@DS:DICT_FILE_NAME
+         CRT ERR.LN
+      END
+
+
+   NEXT I
+
+
+END

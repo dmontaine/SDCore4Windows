@@ -1,0 +1,55 @@
+* PY_DICTVALGETS
+* Get Python Dictionary Value for Key, return as string
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* rev 0.9-2 Mar 25 mab 
+* END-HISTORY
+* START-DESCRIPTION:
+*
+* returned_string = PY_DICTVALGETS(dictname,key)
+*
+* dictname - name of python dictionary to access
+* key      - dictionary key to access
+* returned_string - on success returned string or empty string on failure
+*                   status() - 0 on success, error code as defined in ERR.H
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+function py_dictvalgets(dictname,key)
+$catalog !py_dictvalgets
+
+$include KEYS.H
+$include ERR.H
+
+* Modified by Composer AI - 2026/06/10.
+* Reject empty Python object name(s) before SDPYOBJ/SDEXT call.
+if dictname = '' or key = '' then
+   set.status 1
+   return ''
+end
+* --------------------
+string = SDPYOBJ("",key,dictname,SD_PyDictVget)
+*
+return string
+
+end

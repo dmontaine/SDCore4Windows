@@ -1,0 +1,123 @@
+* _TRANS
+* TRANS() function recursive code
+* Copyright (c) 2006 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+* For an I-type reference, field.no is the object code of the I-type.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+$recursive
+
+subroutine trans(file.name, ids, field.no, code, lower.marks)
+$include dictdict.h
+$include syscom.h
+
+   is.itype = not(num(field.no))
+
+   locate file.name in trans.files<1> setting pos then
+      file = trans.fvars(pos)
+   end else
+      if file.name[1,5] = 'DICT ' then
+         open "DICT", file.name[6,999] to file else
+            display "Cannot open 'DICT " : file.name : "'"
+            return value ""
+         end
+      end else
+         open file.name to file else
+            display "Cannot open '" : file.name : "'"
+            return value ""
+         end
+      end
+
+      if pos <= TRANS.FILE.CACHE.SIZE then
+         trans.files<pos> = file.name
+         trans.fvars(pos) = file
+      end
+   end
+
+   result = ""
+   id.list = ids
+   loop
+      remove id from id.list setting delim
+
+      * 0282 Restructured what follows
+
+      partial.result = ''
+
+      if len(id) then
+         read rec from file, id then
+            if is.itype then
+               stacked.id = @id ; @id = id               ;* 0332
+               stacked.record = @record ; @record = rec  ;* 0332
+               partial.result = itype(field.no)          ;* 0242
+               @id = stacked.id                          ;* 0332
+               @record = stacked.record                  ;* 0332
+            end else
+               begin case
+                  case field.no > 0
+                     if lower.marks then
+                        partial.result = lower(rec<field.no>)
+                     end else
+                        partial.result = rec<field.no>
+                     end
+
+                  case field.no = 0
+                     partial.result = id
+
+                  case 1
+                     if lower.marks then
+                        partial.result = lower(rec)
+                     end else
+                        partial.result = rec
+                     end
+               end case
+            end
+         end
+      end
+
+      if partial.result = '' then
+         begin case
+            case code = "C"
+               partial.result = id
+
+            case code = "V"
+               display "TRANS record '" : id : "' not found"
+         end case
+      end
+
+      result := partial.result
+   while delim
+      result := char(256 - delim)        ;* 0457
+   repeat
+
+   return value result
+end
+
+* END-CODE

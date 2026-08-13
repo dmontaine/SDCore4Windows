@@ -1,0 +1,70 @@
+* _ITYPE
+* ITYPE() recursive for non-compiled items.
+* Copyright (c) 2006 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+$recursive
+
+subroutine itype(dict.rec)
+
+$include dictdict.h
+$include err.h
+
+   type = upcase(dict.rec[1,1])
+   begin case
+      case type = 'D'
+         fno = dict.rec<DICT.LOC>
+      case type = 'A' or type = 'S'
+         if dict.rec<DICT.A.CORRELATIVE> # '' then goto invalid
+         fno = dict.rec<DICT.A.LOC>
+      case 1
+         goto invalid
+   end case
+
+   if not(fno matches '1N0N') then goto invalid
+
+   begin case
+      case fno = 0
+         return value @id
+      case fno = 9998
+         return value dcount(@record, @fm)
+      case fno = 9999
+         return value len(@record)
+      case 1
+         return value @record<fno>
+   end case
+
+invalid:
+   set.status ER$INVA.ITYPE
+   return value ''
+end
+
+* END-CODE

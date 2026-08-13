@@ -1,0 +1,31 @@
+* VALID_OS_PATH(path)
+* Return @true if path is safe to embed in OS.EXECUTE chmod-style commands.
+* Copyright (c) String Database
+*
+* START-DESCRIPTION:
+*
+*    x = !valid_os_path(path)
+*
+*    Rejects empty paths, excessive length, and shell metacharacters (spaces,
+*    semicolons, quotes, etc.) while allowing directory separators.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function valid_os_path(path)
+$catalog !valid_os_path
+
+   * Modified by Composer AI - 2026/06/10.
+   * Shared pathname validation for OS.EXECUTE (phase 2).
+   path.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-/:'
+   if path = '' then return @false
+   if len(path) > 255 then return @false
+   if convert(path.chars, '', path) # '' then return @false
+   * --------------------
+   return @true
+
+end
+
+* END-CODE

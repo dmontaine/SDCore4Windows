@@ -1,0 +1,16 @@
+I
+RAISE(TRANS(NEWVOC,@ID,-1,'X'));IF @1 = '' THEN @RECORD ELSE @1;IF FIELD(F1,' ',2) # '' THEN F1 ELSE @1<1>;IF F1[1,1] = 'K' AND F3 # '' THEN (@VM : '& ' : (IF FIELD(F3,' ',2) # '' THEN F3 ELSE @1<3>)) ELSE '';@3:@4;IF @ = '' THEN F1 ELSE @
+
+Description
+19T
+M
+
+
+
+
+
+
+
+
+ 163441898
+

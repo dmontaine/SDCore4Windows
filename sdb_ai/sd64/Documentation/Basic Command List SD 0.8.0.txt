@@ -1,0 +1,520 @@
+RETAINED AND NEW BASIC COMMANDS
+(usage the same as OpenQM 2.6.6)
+* = new command, unique to SD
+--------------------------------
+
+@(mode {, arg})
+ABORT {msg}
+ABS(expr)
+ABSS(expr)
+ACCEPT.SOCKET.CONNECTION(srvr.skt, timeout)
+ALPHA(string)
+ANDS(expr1, expr2)
+ARG.COUNT()
+ARG(n)
+ASCII(expr)
+ASIN(expr)
+ASSIGNED(var)
+ATAN(expr)
+BEGIN CASE
+   CASE expr statement(s)
+END CASE
+BEGIN TRANSACTION
+  COMMIT / ROLLBACK
+END TRANSACTION
+BINDKEY(key.string, action)
+BITAND(expr1, expr2)
+BITNOT(expr)
+BITOR(expr1, expr2)
+BITRESET(expr, bit)
+BITSET(expr, bit)
+BITTEST(expr, bit)
+BITXOR(expr1, expr2)
+BREAK {KEY} {OFF | ON}
+BREAK {KEY} CLEAR
+BREAK {KEY} expr
+CALL @var {(arg.list)}
+CALL name {(arg.list)}
+CATALOGUED(name)
+CATS(string1, string2)
+CHAIN expr
+CHANGE(string, old, new{, occurrence{, start}})
+CHAR(seq)
+CLEAR
+CLEARCOMMON or CLEAR COMMON
+CLEARDATA
+CLEARFILE file.var {ON ERROR statement(s)}
+CLEARINPUT or CLEAR INPUT
+CLEARSELECT {list.no}
+CLEARSELECT ALL
+CLOSE file.var 
+  {ON ERROR statement(s)}
+CLOSE.SOCKET skt
+CLOSESEQ file.var 
+  {ON ERROR statement(s)}
+COL1()
+COL2()
+COMMIT
+COMMON {/name/} var1 {,var2...}
+COMPARE(string1, string2 {, justification})
+CONFIG(param)
+CONTINUE
+CONVERT from.string TO to.string IN source.string
+CONVERT(from.string, to.string, source.string)
+COS(expr)
+COUNT(string, substring)
+COUNTS(string, substring)
+CREATE file.var {ON ERROR statement(s)} 
+  {THEN statement(s)} {ELSE statement(s)}
+CREATE.FILE path {DIRECTORY | DYNAMIC} 
+  {GROUP.SIZE grpsz} {BIG.REC.SIZE bigrec}
+  {MIN.MODULUS minmod} {SPLIT.LOAD split} 
+  {MERGE.LOAD merge} {VERSION ver}
+  {ONERROR statement(s)}
+CREATE.SERVER.SOCKET(addr, port)
+CROP(string)
+CRT {print.list}
+CSVDQ(string {, delimiter})
+DATA expr{, expr...}
+DATE()
+DCOUNT(string, delimiter)
+DEBUG
+DEFFUN name {(arg1 {,arg2 ...})} 
+  {CALLING "subr" | LOCAL} 
+  {VAR.ARGS} {KEY key}
+DEL dyn.array<field {, value {, subvalue}}>
+DELETE file.var, record.id 
+  {ON ERROR statement(s)}
+DELETE(dyn.array, field {, value {, subvalue}})
+DELETELIST name
+DELETESEQ file.name, id 
+  {ON ERROR statement(s)} 
+  {THEN statement(s)} {ELSE statement(s)}
+DELETESEQ pathname 
+  {ON ERROR statement(s)} 
+  {THEN statement(s)} {ELSE statement(s)}
+DELETEU file.var, record.id 
+  {ON ERROR statement(s)}
+DIM mat(rows {, cols})
+DIMENSION mat(rows {, cols})
+DIR(pathname)
+DISINHERIT object
+DISPLAY {print.list}
+DIV(dividend, divisor)
+DOWNCASE(string)
+DPARSE string, delimiter, var1, var2,...
+DPARSE.CSV string, delimiter, var1, var2,...
+DQUOTE(expr)
+DTX(expr {, min.width})
+EBCDIC(expr)
+ECHO OFF
+ECHO ON
+ECHO expr
+END
+ENTER @var
+ENTER @var {(arg.list)}
+ENTER name
+ENTER name {(arg.list)}
+ENV(var.name)
+EQS(expr1, expr2)
+EQUATE name TO CHAR(seq)
+EQUATE name TO value
+EQUATE name TO variable
+EXECUTE expr 
+  {TRAPPING ABORTS} {CAPTURING var} {PASSLIST {var}}
+  {RTNLIST var} {SETTING status.var} or {RETURNING status.var}
+EXIT
+EXP(expr)
+EXTRACT(dyn.array, field {, value {, subvalue}})
+FIELD(string, delimiter, occurrence {, count})
+FIELDS(string, delimiter, occurrence {, count})
+FIELDSTORE(string, delimiter, i, n, rep.string)
+FILE name, ...
+FILEINFO(file.var, key)
+FILELOCK file.var 
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+FILEUNLOCK file.var 
+ {ON ERROR statement(s)}
+FIND string IN dyn.array {, occurrence} 
+  SETTING field{, value {, subvalue}}
+  {THEN statement(s)} {ELSE statement(s)}
+FIND string IN dyn.array {, occurrence} 
+  SETTING field{, value {, subvalue}}
+  {THEN statement(s)} {ELSE statement(s)}
+FLUSH file.var 
+  {THEN statement(s)} {ELSE statement(s)}
+FMT(expr, fmt.spec)
+FMTS(expr, fmt.spec)
+FOLD(string, width {, delim})
+FOLDS(string, width {, delim})
+FOOTING {ON print.unit} text
+FOR var = start.expr TO limit.expr 
+  {STEP step.expr} NEXT {var}
+FORMLIST dyn.array {TO list.no}
+FUNCTION name{(arg1 {, arg2...}) {VAR.ARGS}}
+GES(expr1, expr2)
+GET name{(args)} {VAR.ARGS}
+GET.MESSAGES()
+GET.PORT.PARAMS(fvar)
+GETLIST name {TO list.no} 
+  {THEN statement(s)} {ELSE statement(s)}
+GETNLS(key)
+GETPU(key, unit)
+GETREM(string)
+GOSUB label{:}
+GOSUB label{:}(args)
+GOTO label{:} or GO {TO} label{:}
+GTS(expr1, expr2)
+HEADING { NO.EJECT } { ON print.unit } text
+ICONV(expr, conv.spec)
+ICONVS(dynarray, conv.spec)
+IDIV(dividend, divisor)
+IF expr THEN {END ELSE} END
+IF expr THEN statement {ELSE statement}
+IFS(control.array, true.array, false.array)
+IN var {FOR timeout} 
+  {THEN statement(s)} {ELSE statement(s)}
+INDEX(string, substring, occurrence)
+INDEXS(string, substring, occurrence)
+INDICES(file.var, index.name)
+INDICES(file.var)
+INHERIT object
+INMAT()
+INMAT()
+INMAT({mat})
+INPUT @(col,row) {:} var {, length} {_} {:} 
+  {APPEND} {EDIT} {HIDDEN} {OVERLAY}
+  {PANNING} {TIMEOUT wait} {UPCASE} 
+  {THEN statements} { ELSE statements}
+INPUT var {, length} {_} {:} 
+  {TIMEOUT wait} {HIDDEN} {UPCASE} 
+  {THEN statements} { ELSE statements}
+INPUTCLEAR
+INPUTCSV var1, var2, ...
+INPUTERR expr
+INPUTFIELD @(x, y) {,} {:} var, length {_} {:} {format} 
+  {APPEND} {EDIT} {HIDDEN}
+  {OVERLAY} {PANNING} {TIMEOUT wait} {UPCASE} 
+  {THEN statements} { ELSE statements}
+INS string BEFORE dyn.array<field {, value {, subvalue}}>
+INSERT(dyn.array, field {, value {, subvalue}} , string)
+INT(expr)
+ITYPE(itype)
+KEYCODE({timeout})
+KEYEDIT (action, key), (action, key), ...
+KEYEXIT (action, key), (action, key), ...
+KEYIN({timeout})
+KEYINC({timeout})
+KEYINR({timeout})
+KEYREADY()
+KEYTRAP (action, key), (action, key), ...
+LEN(string)
+LENS(string)
+LES(expr1, expr2)
+LISTINDEX(list, delimiter, item)
+LN(expr)
+LOCAL FUNCTION name{(args)}
+LOCAL SUBROUTINE name{(args)}
+LOCATE string IN dyn.array<field {,value {, subvalue}}> 
+  {BY order} SETTING var
+  {THEN statement(s)} {ELSE statement(s)}
+LOCATE string IN dyn.array<field {,value }> {, start}
+  {BY order} SETTING var
+  {THEN statement(s)} {ELSE statement(s)}
+LOCATE(string, dyn.array, field {,value {, subvalue}} {; order})
+LOCATE(string, dyn.array{,field {,value }}; var {; order}) 
+  {THEN statement(s)} {ELSE statement(s)}
+LOCK lock.num 
+  {THEN statement(s)} {ELSE statement(s)}
+LOGMSG text
+LOOP
+  REPEAT
+  UNTIL and EXIT.
+LOWER(string)
+LTS(expr1, expr2)
+MARK.MAPPING file.var, OFF
+MARK.MAPPING file.var, ON
+MARK.MAPPING file.var, expr
+MAT matrix = expr
+MAT matrix = MAT src.matrix
+MATBUILD var FROM mat {, start.expr {, end.expr} {USING delimiter}
+MATCHFIELD(string, pattern, element)
+MATPARSE
+MATPARSE mat FROM string, delimiter
+MATREAD
+MATREAD{L|U} mat FROM file.var, record.id 
+  {ON ERROR statement(s)} {LOCKED statement(s)} 
+  {THEN statement(s)} {ELSE statement(s)}
+MATREADCSV matrix FROM file.var 
+  {THEN statement(s)} {ELSE statement(s)}
+MATREADL
+MATREADU
+MATWRITE{U} mat TO file.var, record.id {ON ERROR statement(s)}
+MAX (a, b)
+MAXIMUM(dyn.array)
+MIN (a, b)
+MINIMUM(dyn.array)
+MOD(dividend, divisor)
+MODS(dividend, divisor)
+NAP time
+NEG(expr)
+NEGS(dynarray)
+NES(expr1, expr2)
+NOBUF file.var 
+  {THEN statement(s)} {ELSE statement(s)}
+NOT(expr)
+NOTS(dynarray)
+NULL
+NUM(string)
+NUMS(dynarray)
+OBJECT(cat.name {, args})
+OBJINFO(var , key)
+OCONV(expr, conv.spec)
+OCONVS(dynarray, conv.spec)
+ON expr GO {TO} label1{:}, label2{:}, label3{:}
+ON expr GOSUB label1{:}, label2{:}, label3{:}
+ON expr GOTO label1{:}, label2{:}, label3{:}
+OPEN
+OPEN {dict.expr,} filename.expr {READONLY} TO file.var
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+OPEN.SOCKET(addr, port, flags)
+OPENPATH pathname {READONLY} TO file.var 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+OPENSEQ file.name, id {APPEND | OVERWRITE | READONLY} TO file.var
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+OPENSEQ pathname {APPEND | OVERWRITE | READONLY} TO file.var
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+ORS(expr1, expr2)
+OS.ERROR()
+OS.EXECUTE expr {CAPTURING var}
+OUTERJOIN({DICT} file.name, field.name, value)
+PAGE {ON print.unit} {page.no}
+PAUSE {timeout}
+PRECISION expr
+PRINT {ON print.unit} {print.list}
+PRINTCSV {ON print.unit} var1, var2, ... {:}
+PRINTER CLOSE {ON print.unit}
+PRINTER DISPLAY {ON print.unit} {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+PRINTER FILE {ON print.unit} file.name, record.name 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+PRINTER NAME {ON print.unit} printer.name 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+PRINTER ON
+PRINTER OFF
+PRINTER RESET
+PRINTERR expr
+PRIVATE var, ...
+PROGRAM name
+PROMPT expr
+PUBLIC FUNCTION name{(args)} {VAR.ARGS}
+PUBLIC SUBROUTINE name{(args)} {VAR.ARGS}
+PUBLIC var {READONLY}, ...
+PWR(expr, pwr.expr)
+QMBasic Statements and Functions
+QUOTE(expr)
+RAISE(string)
+RANDOMIZE expr
+RDIV(dividend, divisor)
+READ var FROM file.var, record.id 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READ.SOCKET(skt, max.len, flags, timeout)
+READBLK var FROM file.var, bytes 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READCSV FROM file.var TO var1, var2, ...
+  {THEN statement(s)} {ELSE statement(s)}
+READL var FROM file.var, record.id 
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READLIST var {FROM list.no} 
+  {THEN statement(s)} {ELSE statement(s)}
+READNEXT var {FROM list.no} {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READNEXT var, valpos, subvalpos {FROM list.no} 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READSEQ var FROM file.var {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READU var FROM file.var, record.id 
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READV var FROM file.var, record.id, field.expr 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READVL var FROM file.var, record.id, field.expr
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+READVU var FROM file.var, record.id, field.expr
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+RECORDLOCKED(file.var, record.id)
+RECORDLOCKL file.var, record.id 
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+RECORDLOCKU file.var, record.id 
+  {ON ERROR statement(s)} {LOCKED statement(s)}
+RELEASE {file.var{, record.id}} {ON ERROR statement(s)}
+REM(dividend, divisor)
+REMARK text or REM text
+REMOVE string FROM dyn.array SETTING var
+REMOVE(dyn.array, var)
+REPLACE(dyn.array, field {, value {, subvalue}} , string)
+RESTORE.SCREEN image, restore.state
+RETURN
+RETURN expr
+RETURN TO label{:}
+REUSE(num.array)
+RND(expr)
+ROLLBACK
+RQM {time}
+RTRANS({DICT} file.name, record.id, field, action)
+SAVE.SCREEN().
+SAVE.SCREEN(col, line, width, height)
+SAVELIST name {FROM list.no}
+* SDEXT(Arg, IsArgMV, Function_id)
+SEEK file.var {, offset{, relto }}
+  {THEN statement(s)} {ELSE statement(s)}
+SELECT file.var {TO list.no} {ON ERROR statement(s)}
+SELECTE TO list.var
+SELECTINDEX index.name {, value} FROM file.var {TO list.no}
+SELECTINFO(list.no, key)
+SELECTLEFT index.name FROM file.var 
+  {SETTING key} {TO list.no}
+SELECTN file.var {TO list.no} 
+  {ON ERROR statement(s)}
+SELECTRIGHT index.name FROM file.var 
+  {SETTING key} {TO list.no}
+SELECTV file.var TO list.no 
+  {ON ERROR statement(s)}
+SENTENCE()
+SEQ(char)
+SERVER.ADDR(server.name)
+SET name{(args)} {VAR.ARGS}
+SET.EXIT.STATUS value
+SET.PORT.PARAMS(fvar, params)
+SET.SOCKET.MODE(skt, key, value)
+SETLEFT index.name FROM file.var
+SETNLS key, value
+SETREM offset ON string
+SETRIGHT index.name FROM file.var
+SHIFT(value, shift.len)
+SIN(expr)
+SLEEP {time}
+SOCKET.INFO(skt, key)
+SOUNDEX(string)
+SOUNDEXS(string)
+SPACE(count)
+SPACES(dynarray)
+SPLICE(array1, string, array2)
+SQRT(expr)
+SQUOTE(expr)
+SSELECT file.var {TO list.no} 
+  {ON ERROR statement(s)}
+STATUS var FROM file.var 
+  {THEN statement(s)} {ELSE statement(s)}
+STATUS()
+STOP {expr}
+STR(string, count)
+STRS(dynarray, count)
+SUBR(name {,arg1 {, arg2...})
+SUBROUTINE name{(arg1 {, arg2...}) {VAR.ARGS}}
+SUBSTITUTE(dyn.array, old.list, new.list {, delimiter})
+SUBSTRINGS(dyn.array, start, length)
+SUM(expr)
+SUMMATION(expr)
+SWAP(string, old, new{, occurrence{, start}})
+SWAPCASE(string)
+SYSTEM(key)
+TAN(expr)
+TCLREAD var
+TERMINFO()
+TERMINFO(cap.name)
+TIME()
+TIMEDATE()
+TIMEOUT fvar, interval
+TOTAL(expr)
+TRANS({DICT} file.name, record.id, field, action)
+TRANSACTION ABORT
+TRANSACTION COMMIT 
+  {THEN statements} {ELSE statements}
+TRANSACTION START 
+  {THEN statements} {ELSE statements}
+TRIM(string)
+TRIMB(string)
+TRIMBS(dynarray)
+TRIMF(string)
+TRIMFS(dynarray)
+TRIMS(dynarray)
+UNASSIGNED(var)
+UNLOCK lock.num 
+  {THEN statement(s)} {ELSE statement(s)}
+UNTIL expr
+UPCASE(string)
+VOID expr
+VSLICE(string, value)
+WAKE user.no
+WEOFSEQ file.var 
+  {ON ERROR statement(s)}
+WHILE expr
+WRITE var TO file.var, record.id 
+  {ON ERROR statement(s)}
+WRITE.SOCKET(skt, data, flags, timeout)
+WRITEBLK var TO file.var 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+WRITECSV var1, var2, ... TO file.var 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+WRITESEQ var TO file.var 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+WRITESEQF var TO file.var 
+  {ON ERROR statement(s)}
+  {THEN statement(s)} {ELSE statement(s)}
+WRITEU var TO file.var, record.id 
+  {ON ERROR statement(s)}
+WRITEV var TO file.var, record.id, field.expr 
+  {ON ERROR statement(s)}
+WRITEVU var TO file.var, record.id, field.expr 
+  {ON ERROR statement(s)}
+XLATE({DICT} file.name, record.id, field, action)
+XTD(expr)
+
+
+ADDED BASIC COMMANDS (as of SD version 0.8.0)
+---------------------------------------------
+
+SDDECRYPT  (uses libsodium)
+SDEXT      (interface to C libraries)
+SDENCRYPT  (uses libsodium)
+
+
+REMOVED BASIC COMMANDS
+(some not supported in GPL version of OpenQM)
+(in SD 0.8.0, unused op codes removed)
+---------------------------------------------
+
+ABORTE {error #}
+ABORTM {msg.text}
+CONNECT.PORT(port, baud, parity, bits, stop)
+DECRYPT(data, key)
+ENCRYPT(data, key)
+ENTER.PACKAGE
+EXIT.PACKAGE
+ERRMSG msg.id {, arg...}
+PACKAGE
+PICK.ERRMSG option
+PROCREAD var {THEN statement(s)} {ELSE statement(s)}
+PROCWRITE expr
+TRACE
+TTYGET()
+TTYSET var
+STOPE {expr}
+STOPM {print.list}

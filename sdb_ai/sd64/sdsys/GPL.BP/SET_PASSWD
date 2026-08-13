@@ -1,0 +1,125 @@
+* SET_PASSWD(USERNAME)
+* set os user password
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+*
+* START-HISTORY:
+* rev 0.9.0 Jan 25 mab initial commit
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    x = !set_passwd(username)
+*
+*    set os user password
+*
+*    This function sets the STATUS() value to 0 if successful and returns true
+*    Otherwise sets status to the os status and returns false
+*
+* os error numbers for passwd found in linux source include/security/_pam_types.h
+* ----------------- The Linux-PAM return values ------------------ */
+*
+*   PAM_SUCCESS 0       /* Successful function return */
+*   PAM_OPEN_ERR 1      /* dlopen() failure when dynamically */
+*               /* loading a service module */
+*   PAM_SYMBOL_ERR 2    /* Symbol not found */
+*   PAM_SERVICE_ERR 3   /* Error in service module */
+*   PAM_SYSTEM_ERR 4    /* System error */
+*   PAM_BUF_ERR 5       /* Memory buffer error */
+*   PAM_PERM_DENIED 6   /* Permission denied */
+*   PAM_AUTH_ERR 7      /* Authentication failure */
+*   PAM_CRED_INSUFFICIENT 8 /* Can not access authentication data */
+*               /* due to insufficient credentials */
+*   PAM_AUTHINFO_UNAVAIL 9  /* Underlying authentication service */
+*               /* can not retrieve authentication */
+*               /* information  */
+*   PAM_USER_UNKNOWN 10 /* User not known to the underlying */
+*               /* authenticaiton module */
+*   PAM_MAXTRIES 11     /* An authentication service has */
+*               /* maintained a retry count which has */
+*               /* been reached.  No further retries */
+*               /* should be attempted */
+*   PAM_NEW_AUTHTOK_REQD 12 /* New authentication token required. */
+*               /* This is normally returned if the */
+*               /* machine security policies require */
+*               /* that the password should be changed */
+*               /* beccause the password is NULL or it */
+*               /* has aged */
+*   PAM_ACCT_EXPIRED 13 /* User account has expired */
+*   PAM_SESSION_ERR 14  /* Can not make/remove an entry for */
+*               /* the specified session */
+*   PAM_CRED_UNAVAIL 15 /* Underlying authentication service */
+*               /* can not retrieve user credentials */
+*                                /* unavailable */
+*   PAM_CRED_EXPIRED 16 /* User credentials expired */
+*   PAM_CRED_ERR 17     /* Failure setting user credentials */
+*   PAM_NO_MODULE_DATA 18   /* No module specific data is present */
+*   PAM_CONV_ERR 19     /* Conversation error */
+*   PAM_AUTHTOK_ERR 20  /* Authentication token manipulation error */
+*   PAM_AUTHTOK_RECOVERY_ERR 21 /* Authentication information */
+*                   /* cannot be recovered */
+*   PAM_AUTHTOK_LOCK_BUSY 22   /* Authentication token lock busy */
+*   PAM_AUTHTOK_DISABLE_AGING 23 /* Authentication token aging disabled */
+*   PAM_TRY_AGAIN 24    /* Preliminary check by password service */
+*   PAM_IGNORE 25       /* Ignore underlying account module */
+*               /* regardless of whether the control */
+*               /* flag is required, optional, or sufficient */
+*   PAM_ABORT 26            /* Critical error (?module fail now request) */
+*   PAM_AUTHTOK_EXPIRED  27 /* user's authentication token has expired */
+*   PAM_MODULE_UNKNOWN   28 /* module is not known */
+*
+*   PAM_BAD_ITEM         29 /* Bad item passed to pam_*_item() */
+*   PAM_CONV_AGAIN       30 /* conversation function is event driven
+*                    and data is not available yet */
+*   PAM_INCOMPLETE       31 /* please call this function again to
+*                  complete authentication stack. Before
+*                  calling again, verify that conversation
+*                  is completed */
+
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function set_passwd(username)
+$catalog !set_passwd
+
+deffun valid_os_name(name) calling '!valid_os_name'
+
+pass_set = @false
+set.status 0
+*
+* Modified by Composer AI - 2026/06/10.
+* Use shared !valid_os_name before OS.EXECUTE (phase 2).
+* os.name.chars = '...'
+* if username = '' or convert(os.name.chars, '', username) # '' or len(username) > 32 then
+if not(valid_os_name(username)) then
+   set.status 2
+   return pass_set
+end
+OS.EXECUTE "sudo passwd " : username
+* --------------------
+stat = OS.ERROR() 
+if stat = 0 then
+  pass_set = @TRUE 
+end else
+  set.status stat
+end
+
+return pass_set
+end

@@ -1,0 +1,8 @@
+Sentence to list files
+LIST VOC @ID FMT "18L" COL.HDG "File name"_
+FTYPE FMT "6L"_
+DESC FMT "37L"_
+DATA.NAME FMT "23L"_
+DICT.NAME FMT "23L"_
+WITH TYPE = "F"_
+BY @ID ID.SUP HEADER "Files referenced by the VOC'G'Page 'SL'"

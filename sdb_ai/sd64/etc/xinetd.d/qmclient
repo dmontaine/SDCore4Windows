@@ -1,0 +1,24 @@
+# This service supports connections SDClient connections
+# to the SD database server.
+# If your SD binary is located in a place other
+# than /usr/local/sdsys/bin, you'll need to update the server
+# entry below to reflect that new path.
+#
+# Port #4243 is normally used for this.
+
+service qmclient
+{
+        protocol        = tcp
+        flags           = REUSE
+        socket_type     = stream
+        wait            = no
+        groups          = yes
+        user            = root
+        group           = sdusers
+        umask           = 002
+        server          = /usr/local/sdsys/bin/sd
+        server_args     = -n -q
+        log_on_failure  += USERID
+        disable         = no
+}
+

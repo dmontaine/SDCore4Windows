@@ -1,0 +1,119 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+PROGRAM SD_ENCRYPT_EXT
+*
+* sample program to test and show:
+* using !SD_GET_SALT to create a salt
+* using !SD_KEY_FROM_PW to create a key
+* using SDENCRYPT to encrypt text (returned encrypted and base64 encoded)
+* using SDDECRYPT to decode  text
+
+$include KEYS.H
+$include ERR.H
+ 
+crt "Testing Encrypt / Decrypt using sdext functions to create salt and key "
+
+pltext = 'Two things are infinite, the universe and human stupidity, and I am not yet completely sure about the universe. - Albert Einstein'
+
+crt 'Our Text: ':pltext
+
+* my secret password (should be atleast > 16 characters per libsodium doc)
+mypw = "This That and The Other Things$$"
+
+* first lets get the salt (returned encoded base64)
+
+crt "!SD_GET_SALT(mysalt)"
+
+call !SD_GET_SALT(mysalt)
+
+crt 'status = ':status()
+crt 'My Salt = ':mysalt
+
+* now get the key (returned encoded base64)
+crt "!SD_KEY_FROM_PW(mypw,mysalt,myB64key)"
+
+call !SD_KEY_FROM_PW(mypw,mysalt,myB64key)
+crt 'status = ':status()
+crt 'My Key = ':myB64key
+
+crt '==============================================='
+crt ' Encrypt Test / B64 Encoding'
+crt '==============================================='
+
+RtnVal = SDENCRYPT(pltext,myB64key,SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+*
+crt 'Size of Return Value: ' : len(RtnVal)
+
+crt RtnVal
+
+crt '==============================================='
+crt ' Decrypt Test / B64 Encoded'
+crt '==============================================='
+*
+* recalc the key 
+crt 'recalc the key'
+call !SD_KEY_FROM_PW(mypw,mysalt,myrecalKey)
+crt 'Status: ':STATUS()
+*
+IF myrecalkey # myB64key THEN
+  crt 'Keys do not match?'
+END ELSE
+  crt 'decrypt'
+  DcryptVal = SDDECRYPT(RTNVAL,myrecalKey,SD_ENCODE64)
+  STAT = STATUS()
+*
+  crt 'Status: ':STAT
+  crt 'Decrypted Text: ':DcryptVal
+*
+  If DcryptVal = pltext then
+    crt 'Success!'
+  END ELSE
+    crt 'Oops, Back to the drawing board!'
+  END
+END
+
+
+crt '==============================================='
+crt ' SD_KEY_FROM_PW with wrong password'
+crt '==============================================='
+wrongpw = mypw:'Not Right!'
+crt 'wrong pw = ':wrongpw
+call !SD_KEY_FROM_PW(wrongpw,mysalt,myrecalKey)
+crt 'Status: ':STATUS()
+crt 'old key: ':myB64key
+crt 'new key: ':myrecalKey
+*
+
+crt '==============================================='
+crt ' SD_KEY_FROM_PW with wrong salt'
+crt '==============================================='
+call !SD_GET_SALT(newsalt)
+call!SD_KEY_FROM_PW(mypw,newsalt,myrecalKey)
+crt 'Status: ':STATUS()
+crt 'old key: ':myB64key
+crt 'new key: ':myrecalKey
+
+crt 'attempt decrypt with new key (same pw wrong salt)'
+DcryptVal = SDDECRYPT(RTNVAL,myrecalKey,SD_ENCODE64)
+crt 'Status: ':STATUS()
+
+alldone:
+END
+

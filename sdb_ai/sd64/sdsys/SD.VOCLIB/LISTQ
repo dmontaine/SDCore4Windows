@@ -1,0 +1,7 @@
+Sentence to list indirect file pointers
+LIST VOC @ID COL.HDG "Name" FMT "25L"_
+DESC FMT "45T"_
+F2 COL.HDG "Account" FMT "20L"_
+F3 COL.HDG "File" FMT "26L"_
+WITH TYPE = "Q" BY @ID ID.SUP_
+HEADER "Indirect file pointers in the VOC'G'Page 'SL'"

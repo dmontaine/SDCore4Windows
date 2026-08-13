@@ -1,0 +1,33 @@
+* VALID_OS_NAME(name)
+* Return @true if name is a safe Linux user/group identifier for OS.EXECUTE.
+* Copyright (c) String Database
+*
+* START-DESCRIPTION:
+*
+*    x = !valid_os_name(name)
+*
+*    Validates non-empty name, length <= MAX.USERNAME.LEN, and character set
+*    aligned with SETSRVR user.name.chars (no shell metacharacters).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function valid_os_name(name)
+$catalog !valid_os_name
+
+$include int$keys.h
+
+   * Modified by Composer AI - 2026/06/10.
+   * Shared validation for OS.EXECUTE name arguments (phase 2).
+   os.name.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-'
+   if name = '' then return @false
+   if len(name) > MAX.USERNAME.LEN then return @false
+   if convert(os.name.chars, '', name) # '' then return @false
+   * --------------------
+   return @true
+
+end
+
+* END-CODE

@@ -1,0 +1,131 @@
+* BUILDI
+* BUILD.INDEX verb
+* Copyright (c) 2006 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* END-HISTORY* 
+* 
+* START-HISTORY:
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* BUILD.INDEX filename field... | ALL
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program buildi
+$catalog $BUILDI
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include dictdict.h
+$include ak_info.h
+
+
+   parser = "!PARSER"
+
+
+   @system.return.code = -ER$ARGS     ;* Preset for argument errors
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   * Get and process file name
+
+   dict.flag = ''
+   call @parser(PARSER$MFILE, token.type, filename, keyword)
+   if keyword = KW$DICT then
+      dict.flag = 'DICT'
+      call @parser(PARSER$MFILE, token.type, filename, keyword)
+   end
+   if token.type = PARSER$END then
+      stop sysmsg(2102)  ;* File name required
+   end
+
+   * Check file exists and is a dynamic file
+
+   open dict.flag, filename to data.f else
+      open dict.flag, upcase(filename) to data.f else
+         stop sysmsg(2019)  ;* File not found
+      end
+      filename = upcase(filename)
+   end
+
+   if fileinfo(data.f, FL$TYPE) # FL$TYPE.DH then
+      stop sysmsg(2010)  ;* Inappropriate file type
+   end
+
+   * Collect field names and options
+
+   build.all = @false
+   ak.list = ''
+   loop
+      call @parser(parser$get.token, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$ALL
+            if ak.list # '' then stop sysmsg(2600)
+            build.all = @true
+
+         case 1
+            ak.list<-1> = token
+      end case
+   repeat
+
+
+   if not(build.all) and ak.list = '' then
+      prompt ''
+      display sysmsg(2601) :    ;* Index name:
+      input ak.list
+      if ak.list = '' then
+         @system.return.code = 0
+         goto exit.build.index
+      end
+
+      read voc.rec from @voc, ak.list else
+         read voc.rec from @voc, upcase(ak.list) else
+            goto not.all.keyword
+         end
+      end
+      if upcase(voc.rec[1,1]) = 'K' and voc.rec<2> = KW$ALL then
+         ak.list = ''
+         build.all = @true
+      end
+   end
+not.all.keyword:
+
+   data.path = fileinfo(data.f, FL$PATH)
+   close data.f    ;* MKINDX needs exclusive access
+   call $mkindx(data.path, '', '', ak.list, MKI$BUILD, err)
+
+   @system.return.code = err
+
+exit.build.index:
+   return
+
+end
+
+* END-CODE

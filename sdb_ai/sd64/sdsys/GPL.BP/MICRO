@@ -1,0 +1,249 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+PROGRAM MICRO
+
+$internal
+$catalog $MICRO
+
+*************************************************************
+* Main Program                                              *
+*************************************************************
+
+True			= @true
+False			= @false
+
+* flag variables
+CompiledDict	= False
+DeleteError		= False
+FilesOpened		= False
+RecordSaved		= False
+WriteError		= False
+
+Cmd			= convert(" ",@FM,trim(@COMMAND," ","C"))
+Editor			= "micro"
+ErrorText		= ""
+InputRecord		= ""
+Response		= ""
+TempRecord 		= ""
+
+if trim(cmd<2>," ","B") = "DICT" then
+	InFileName	= cmd<3>
+	InRecordName	= cmd<4>
+	DictText	= "DICT"
+end else
+	InFileName	= cmd<2>
+	InRecordName	= cmd<3>
+	DictText	= ""
+end 
+
+if trim(InFileName) = "" then
+	ErrorText = "No File Name Specified"
+	goto End_Program
+end
+	
+TempFileName	= "$HOLD"
+
+if DictText = "DICT" then
+	TempRecordName	= "DICT." : InRecordName : ".editing"
+end else
+	TempRecordName	= InRecordName : ".editing"
+end
+
+*************************************************************
+* Main Program                                              *
+*************************************************************
+crt @(-1) :
+
+gosub open_files
+
+if FilesOpened = True then
+
+	loop
+		gosub process_record
+		if trim(TempRecord," ","B") <> "" then			
+			crt
+			if TempRecord <> InputRecord then
+				gosub save_record_query	
+			end else
+				crt @(0,5) : @(-3) : "Record is unchanged"
+				RecordSaved = True
+			end
+			if RecordSaved =  True then
+				gosub compile_record_query
+				Response = ""
+				loop
+					crt @(0,22) : @(-3) : "<E>xit or <R>e-edit : " :
+					input @(22,22) : Response,1 :
+					crt
+					Response = upcase(Response)
+				until index("ER",Response,1) > 0 repeat		
+				if Response = "E" then	
+					delete TempFile,TempRecordName on error DeleteError = True
+					if DeleteError = True then
+						ErrorText = "Warning: Temporary record " : Tempfilename : " " : TempRecordName : "was not  deleted."
+					end
+					goto End_Program		
+				end			
+			end		
+		end else
+			ErrorText = "Record is empty - not saved"
+			goto End_Program
+		end	
+	repeat
+end else
+	ErrorText = "Error: Could not open files"
+end
+
+End_Program:
+	if ErrorText = "" then
+		crt @(0,25) : "Micro Ended Normally"
+	end else
+		crt @(0,25) : ErrorText
+	end
+	crt @(0,27) :
+	Stop
+
+
+*****************************************************
+* SUBROUTINES: Alphabetical                         *
+*****************************************************
+
+compile_record_query:
+	if CompiledDict = True then
+		execute "CD " : InfileName : " " : InRecordName
+	end else
+        if DictText <> "DICT" then
+		    prompt ""
+		    response = ""
+		    if InfileName[-2,2] = "BP" then
+ 		       loop
+ 			       crt @(0,8) : @(-3) : "Compile " : InfileName : " " : InRecordName
+			       crt @(3,9) : "<Y>es, <N>o : " :
+			       input @(17,9), Response,1 :
+			       Response = upcase(Response)
+		       until index("YN",Response,1) > 0 repeat
+		       if Response = "Y" then
+		           crt @(0,12) :  @(-3):
+			       execute "BASIC " : InFileName : " " : InRecordName
+			       crt
+			       loop
+				       crt @(0,20) : @(-3) : "Catalog? <L>ocal, <P>rivate, <G>lobal, <N>o : " :
+				       input @(46,20), Response,1 :
+				       Response = Upcase(Response)
+			       until index("LPGN",Response,1) > 0 repeat
+			       crt @(0,22) : @(-3) :
+			       begin case
+				       case Response = "L"
+					       execute "CATALOG " : InFileName : " " : InRecordName : " LOCAL"
+				       case Response = "P"
+					       execute "CATALOG " : InFileName : " " : InRecordName 
+				       case Response = "G"
+					      execute "CATALOG " : InFileName : " " : InRecordName : " GLOBAL"
+				       case Response = "N"
+					      crt InfileName : " " : InRecordName : " Not Cataloged"
+			       end case
+			       crt
+			   end
+		    end
+        end
+	end			
+return
+
+open_files:
+	open DictText,InFileName to InputFile THEN
+		open TempFileName to TempFile then	
+			FilesOpened = True
+		end else
+			ErrorText = "File Error: " : TempFileName : " could not be opened."	
+			goto End_Program	
+		end	
+	end else
+		ErrorText = "File Error: " : DictText : " " : InFileName : " could not be opened."
+		goto End_Program
+	end
+return
+
+process_record:
+    if trim(InRecordName," ","B") <> "" then
+		crt @(-1) : "Editing " : InFileName : "," : InRecordName :
+    	read InputRecord from InputFile,InRecordName then
+    		TempRecord = InputRecord
+    		if DictText = "DICT" then
+				TempStr = field(TempRecord,@FM,1)
+				TempStr = trim(TempStr," ","B")
+				TempStr = TempStr[1,1]
+				if index("CI",TempStr,1) > 0 then
+					CompiledDict = True
+					TempRecord = field(TempRecord,@FM,1,15)
+				end
+			end 		
+			Write TempRecord to Tempfile,TempRecordName on error WriteError = True
+			if WriteError = True then
+				ErrorText = "Write Error: Temporary Record Could Not Be Created"
+				goto End_Program
+			end
+		end
+		
+	   	execute "!" : editor : " '" : TempFileName : "/" :  TempRecordName : "'"
+	   		
+		Read TempRecord from TempFile,TempRecordName then
+			*null
+		end else
+			ErrorText =  "Record was not saved: Micro =  <Ctrl+s>"
+			goto End_Program
+		end
+	end else
+		ErrorText =  "Error: No Record Name Provided"
+		goto End_Program
+	end
+return
+
+
+save_record_query:
+	if DictText <> "DICT" then
+		prompt ""
+		Response = ""
+		loop
+		    crt @(0,5) : @(-3) : DictText : " " : InfileName : " " : InRecordName : " has been updated"
+		    crt @(5,6) : "Save <Y>es, <N>o : " :
+		    input @(24,6) : Response,1 :
+		    crt
+		    Response = upcase(Response)
+		until index("YN",Response,1) > 0 repeat
+		crt
+	end else
+		* always save dicts
+		Response = "Y"
+	end	
+	if Response = "Y" then
+		gosub update_record
+		RecordSaved = True			
+	end else
+		ErrorText = "Record Not Saved"
+		goto End_Program
+	end
+return
+
+update_record:
+	Write TempRecord to InputFile,InRecordName on error WriteError = True
+	if WriteError = True then
+		ErrorText = "Write Error: Original Record " : DictText : " " : InFileName : " " : InRecordName : " Could Not Be Updated."
+		goto End_Program
+	end
+return
+
+end

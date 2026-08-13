@@ -1,0 +1,115 @@
+PROGRAM WRITE_INSTALL_DICTS
+*
+* PROGRAM WRITES FILE DEFINING DICTIONARY ITEMS
+*
+* THIS IS THE PATH TO WHERE WE SAVED DATA FROM THE BUILD PROCESS AND THE FILE NAME WE WILL USE
+DATA_PATH =  @sdsys: "/gplbld/FILES_DICTS"
+*
+DESTINATION_PATH = @sdsys
+*
+CRT @(-1):
+
+CRT
+CRT '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+CRT ' PROGRAM TRANSFERS DICTIONARY ENTRIES CREATED VIA CREATE_INSTALL_DICT_FILE'
+CRT ' TO APPROPRIATE DICT FILE '
+CRT '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+CRT
+*
+*CRT 'OK':
+*INPUT OK
+*IF UPCASE(OK) # 'Y' THEN STOP 'Process Aborted'
+
+IF SYSTEM(27) # 0 THEN
+      stop 'Command requires administrator privileges'
+END
+
+OPENPATH DATA_PATH TO DP.FILEVAR ELSE
+   CRT 'ERROR OPENING FILE: ':DATA_PATH
+   CRT 'PROCESS ABORTED'
+   STOP
+END
+
+SSELECT DP.FILEVAR TO 3
+READLIST IDS FROM 3 ELSE
+  CRT 'READLIST EMPTY, ABORT'
+  STOP
+END
+
+ID_CNT = DCOUNT(IDS,@FM)
+IF ID_CNT LE 0 THEN
+  CRT 'NO DIRECTORY RECORDS FOUND, ABORT'
+  STOP
+END
+
+OPEN_FILE_NAME = ''
+FILES.PROCESSED.LIST = ''
+* Modified by Composer AI - 2026/06/10.
+* Track dictionary file handle open state for safe CLOSE.
+* (no flag previously)
+DICT.FILE.OPEN = @FALSE
+* --------------------
+
+FOR I = 1 TO ID_CNT
+
+  REC_ID = IDS<I>
+  NEW_FILE_NAME = FIELD(REC_ID,'^',1)
+  FILE_REC_NAME = FIELD(REC_ID,'^',2)
+
+  * Modified by Composer AI - 2026/06/10.
+  * Skip malformed transfer records.
+  IF NEW_FILE_NAME = '' OR FILE_REC_NAME = '' THEN CONTINUE
+  * --------------------
+  
+  IF NEW_FILE_NAME # OPEN_FILE_NAME THEN
+  
+* DICTIONARY ENTRIES FOR NEW FILE, OPEN IT
+    
+    * Modified by Composer AI - 2026/06/10.
+    * CLOSE only when a dictionary file is actually open.
+    * IF OPEN_FILE_NAME # '' THEN
+    *   CLOSE DICT.FILE.VAR
+    IF OPEN_FILE_NAME # '' AND DICT.FILE.OPEN THEN
+      CLOSE DICT.FILE.VAR
+      DICT.FILE.OPEN = @FALSE
+      * --------------------
+      *
+      *
+      FILES.PROCESSED.LIST<-1> = OPEN_FILE_NAME 
+    END
+      *
+      * OPEN FILE AND COPY  DICTIONARY ITEMS
+      *
+    OPEN_FILE_NAME = NEW_FILE_NAME 
+    OPENPATH  DESTINATION_PATH:@DS:OPEN_FILE_NAME TO DICT.FILE.VAR ELSE
+       CRT 'ERROR CANNOT OPEN: ' :DESTINATION_PATH:@DS:OPEN_FILE_NAME:', THIS SHOULD NOT HAPPEN!'
+       CRT 'Garbage in ':DESTINATION_PATH:'??'
+       OPEN_FILE_NAME = ''
+       DICT.FILE.OPEN = @FALSE
+       CONTINUE
+    END
+    DICT.FILE.OPEN = @TRUE
+  END   
+    
+  CRT 'DICTIONARY: ':NEW_FILE_NAME:' ':FILE_REC_NAME 
+    
+  
+  READ DICT.REC FROM DP.FILEVAR, REC_ID ELSE
+    CRT 'CANNOT READ TRANSFER_FILE: ':REC_ID: ' - ABORT'
+    STOP
+  END
+    
+  WRITE DICT.REC ON DICT.FILE.VAR, FILE_REC_NAME
+
+NEXT I
+
+* Modified by Composer AI - 2026/06/10.
+* Close the last open dictionary file on normal completion.
+IF DICT.FILE.OPEN THEN
+   CLOSE DICT.FILE.VAR
+   DICT.FILE.OPEN = @FALSE
+END
+* --------------------
+
+CRT 'COMPLETE'
+END

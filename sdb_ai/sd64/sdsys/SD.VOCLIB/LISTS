@@ -1,0 +1,6 @@
+Sentence to list sentences
+LIST VOC @ID COL.HDG "Sentence name" FMT "23L"_
+DESC FMT "50T"_
+F2 COL.HDG "Expansion" FMT "40T"_
+WITH TYPE = "S" BY @ID_
+ID.SUP HEADER "Sentences defined in the VOC'G'Page 'SL'"

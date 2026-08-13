@@ -1,0 +1,6 @@
+Sentence to list keywords
+LIST VOC @ID COL.HDG "Keyword" FMT "25L"_
+DESC FMT "70T"_
+F2 COL.HDG "Value" FMT "5R" AS KEY.VALUE_
+WITH TYPE = "K" BY KEY.VALUE ID.SUP_
+HEADER "Keywords defined in the VOC'G'Page 'SL'"

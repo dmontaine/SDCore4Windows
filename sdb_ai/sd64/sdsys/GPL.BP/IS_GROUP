@@ -1,0 +1,73 @@
+* IS_GROUP(group)
+* Is group defined in /etc/group
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+*
+* START-HISTORY:
+* rev 0.9.0 Jan 25 mab initial commit
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    x = !is_group(group)
+*
+*    is group found in linux group (found in /etc/group)
+*
+*    This function sets the STATUS() value to 0 if successful, 1 if the
+*    specified group does not exist.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function is_group(group)
+$catalog !is_group
+
+group_found = @false
+set.status 0
+* Modified by Composer AI - 2026/06/10.
+* Empty group name cannot match /etc/group; avoid pointless file scan.
+* read the /etc/group file
+if group = '' then
+   set.status 1
+   return group_found
+end
+* --------------------
+* read the /etc/group file
+openpath "/etc" to etc then 
+  read rec from etc, "group" then 
+    lns = dcount(rec, @FM)
+
+    for i = 1 to lns
+      grpname = field(rec<i>,':',1)
+      if grpname = group then
+        group_found = @true
+        exit 
+      end
+    next i
+  end else
+  * cannot read /etc/group
+    set.status 1
+  end
+end else
+* cannot open /etc
+  set.status 1
+end
+
+return group_found
+end

@@ -1,0 +1,362 @@
+* BBPROC
+* BootStrap Build process.
+*
+* This program serves as a mini command processor.
+* The only thing it does is compile from source the basic programs needed by sd to running
+* The assumption is it is called from the install script, followed by a command to execute 
+* SECOND.COMPILE (BASIC GPL.BP *)
+*
+* based on VBSRVR
+* Copyright (c) 2007 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* rev 0.9-3 Nov 25 move voc back to dynamic file
+* 06 Aug 24 comment out "<cr> to install" prompt 
+* 02 Jul 24 add check for install already complete
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program bbproc
+$catalog $BBPROC
+
+$flags cproc
+$flags trusted
+$include GPL.BP revstamp.h
+
+$include GPL.BP syscom.h
+$include GPL.BP int$keys.h
+$include GPL.BP header.h
+
+$include err.h
+$include keys.h
+
+$define BCOMP.NO.XREF.TABLES    4  ;* Suppress cross-reference tables
+
+* If this is the first time through, initialise various things in
+* the SYSCOM common block.
+
+if not(kernel(K$CPROC.LEVEL,0)) then
+   abort.message = ""
+
+   parser = "!PARSER"          ;* Command parser subroutine
+
+   * Attach to SDSYS directory
+
+   if not(ospath(@sdsys, OS$CD)) then
+      crt 'Cannot attach to SDSYS'
+      goto abort.bbproc
+   end
+
+   clearselect all
+   i = high.select
+   loop
+   while i > high.user.select
+      clearselect i
+      i -= 1
+   repeat
+
+   i = kernel(K$CPROC.LEVEL,1)
+   xeq.command = ""
+   data.queue = ""
+   command.stack = ""
+   at.sentence = ""
+   last.command = ""
+   sys.bell = char(7)
+   user.return.code = 0
+   aliased.commands = ''
+   alias.targets = ''
+   default.style.rec = ''
+   logname = kernel(K$USERNAME, 0)
+   mat qproc.breakpoint.value = ''
+   user.var.names = ''
+   user.var.values = ''
+   itype.mode = 0                  ;* Standard I-type
+   trigger.return.code = 0
+   dir.separator = '/'
+
+   * mab *echo on
+
+   account.path = ospath("", os$cwd)     ;* @PATH
+   initial.account.path = account.path
+   who = upcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999]) ;* 0414
+
+
+end else   ;* Abort
+   abort.code = abort.cause()
+   clearselect
+
+   if abort.code = K$LOGOUT then goto abort.bbproc
+
+end
+
+gosub reset.environment
+
+* we log the execution of BBPROC
+logging = @true
+openseq '/tmp/bbproc.log' overwrite to log.f then
+   writeseq 'BBPROC started at: ': timedate() to log.f else null
+end else
+   if status() then
+    crt 'unable to log to /tmp/bbproc.log ':status()
+    logging = @false
+   end 
+end
+
+* Main processing loop
+
+if system(27) # 0 then
+  crt 'Command requires administrator privileges'
+  goto abort.bbproc
+end
+
+if ospath(@sdsys:@ds:'GPL.BP.OUT/LOGIN',OS$EXISTS) then
+   crt 'System Already Installed?'
+   goto abort.bbproc
+end
+
+unload.object               ;* Unload inactive object code
+
+   * Fetch new command
+* 20240806 mab comment out prompt   
+*   crt '"<cr>" to INSTALL  "Q" to exit'
+*   gosub inp_sub     ;* returns command line in inp_ln
+*   cmnd = inp_ln
+*
+*
+*   if upcase(cmnd[1,1]) = 'Q' then goto abort.bbproc
+
+* need VOC to exist for BCOMP to work 
+   
+filename = @sdsys:@ds:'VOC' 
+crt 'creating: ':filename
+create.file filename  DYNAMIC on error crt 'cannot create VOC'; goto abort.bbproc
+   
+* and it must be open
+openpath filename to voc else
+  crt 'Cannot open VOC'
+  goto abort.bbproc
+end
+   
+crt 'populate VOC'
+* 
+* move items in voc_template to voc
+*
+crt 'populating VOC from VOC_TEMPLATE'
+openpath @sdsys:@ds:'VOC_TEMPLATE' to voc_t.f else
+  crt 'Cannot open VOC_TEMPLATE directory! ABORT'
+  if logging then writeseq 'Cannot open VOC_TEMPLATE directory! ABORT' to log.f else null
+  goto abort.bbproc
+end
+*
+select voc_t.f to 2
+voc_nxt:
+readnext id from 2 then
+  read voc_item from voc_t.f, id then
+    write voc_item on voc, id 
+  end
+  goto voc_nxt
+end
+   
+*  note all files must be opend via openpath, open depends on pcode!
+
+openpath @sdsys:@ds:'gcat' to gcat.f else
+  crt 'Cannot open global catalogue directory! ABORT'
+  if logging then writeseq 'Cannot open global catalogue directory! ABORT' to log.f else null
+  goto abort.bbproc
+end
+   
+mark.mapping gcat.f, off
+   
+source.file.name = 'GPL.BP'
+openpath @sdsys:@ds:source.file.name to src.f else
+  crt 'Cannot open ':source.file.name:'!, ABORT'
+  if logging then writeseq 'Cannot open ':source.file.name:'!, ABORT' to log.f else null
+  goto abort.bbproc
+end
+   
+output.file.name = source.file.name:'.OUT' 
+   
+output.file.name = 'GPL.BP.OUT'
+openpath @sdsys:@ds:output.file.name to out.f else
+  crt 'Cannot open ':output.file.name:'!, ABORT'
+  if logging then writeseq 'Cannot open ':output.file.name:'!, ABORT' to log.f else null
+  goto abort.bbproc
+end
+   
+mark.mapping out.f, off
+   
+compiler.flags = 0
+compiler.flags = bitor(compiler.flags, BCOMP.NO.XREF.TABLES)
+catalogue.mode = 'GLOBAL'
+*
+* common knowledge seem to indicate that when compiling GPL.BP
+* order is important, I am not 100% sure this is necessary in our case
+* CPROC is not running, pcode is empty.  But we will stick with convention.
+
+src.list = ''
+src.list<-1> = 'CPROC'
+src.list<-1> = 'LOGIN'
+src.list<-1> = 'BASIC'
+src.list<-1> = 'BCOMP'
+src.list<-1> = 'PTERM'
+src.list<-1> = 'CATALOG'
+src.list<-1> = 'PARSER'
+src.list<-1> = 'IS_GRP_MEMBER'
+src.list<-1> = 'TERM'
+
+src.cnt = dcount(src.list,@FM) 
+    
+for pi = 1 to src.cnt
+		prg.name = src.list<pi>
+		
+		crt 'compile: ':prg.name
+		if logging then writeseq 'Compile: ': prg.name to log.f else null
+		
+		read prog.source from src.f, prg.name else
+		  crt 'Cannot find: ': prg.name :', ABORT!' 
+          goto abort.bbproc
+        end
+        
+        listing.record.name = prg.name:'.LIS'
+       
+       
+        call $bcomp(source.file.name, src.f, prg.name, @false, prog.source,output.file.name, listing.record.name,compiler.flags, 1,catalogue.name, catalogue.mode,object.code, errors) 
+        
+        if errors = 0 then
+           write object.code to out.f, prg.name
+
+             if catalogue.name # '' then
+               write object.code to gcat.f, catalogue.name
+             end else
+               crt 'No Catalog Name for ':prg.name:', ABORT!'
+               if logging then writeseq 'No Catalog Name for ':prg.name:', ABORT!' to log.f else null
+               goto abort.bbproc
+             end 
+ 
+        end else
+           crt 'Errors in compile of ':prg.name:', ABORT!'
+           if logging then writeseq 'Errors in compile of ':prg.name:', ABORT!' to log.f else null
+           goto abort.bbproc
+        end
+        
+next pi    
+*
+* list of files we need to create
+*
+FILES_LIST = ''
+*
+*  list of files dicts to "create" (add ~0 and ~1)
+*
+* file info on old systems via BP INSTALL_FILE_INFO FILEINFO()
+*
+*filename  type mod  mnmod   grpsz   lrgrec
+*ACCOUNTS  4    0    0       0       0
+*$HOLD     4    0    0       0       0
+*$MAP      3    1    1       1       819
+*$IPC      3    1    1       1       819
+*DICT.DIC  3    4    1       1       819
+*DIR_DICT  3    1    1       1       819
+*VOC.DIC   3    4    1       1       819
+*         (3) - Dynamic file, including data collections
+*         (4) - Directory file
+*
+*                  file      create file  create dict
+FILES_LIST<-1> = "ACCOUNTS"  :@VM:'N'      :@VM:'Y'
+FILES_LIST<-1> = "$HOLD"     :@VM:'N'      :@VM:'Y' 
+FILES_LIST<-1> = "$MAP"      :@VM:'Y'      :@VM:'Y' 
+FILES_LIST<-1> = "$IPC"      :@VM:'Y'      :@VM:'N' 
+FILES_LIST<-1> = "DICT.DIC"  :@VM:'Y'      :@VM:'N'  
+FILES_LIST<-1> = "DIR_DICT"  :@VM:'Y'      :@VM:'N'
+FILES_LIST<-1> = "VOC.DIC"   :@VM:'Y'      :@VM:'N'
+*
+files.cnt = dcount(FILES_LIST,@FM)
+
+for i = 1 to files.cnt
+  * create file? 
+  if FILES_LIST<i,2> = "Y" then
+     filename = @sdsys:@ds:FILES_LIST<i,1> 
+     crt 'creating: ':filename
+     create.file filename  DYNAMIC
+  end
+  * create dictionary? 
+  if FILES_LIST<i,3> = "Y" then
+     filename = @sdsys:@ds:FILES_LIST<i,1>:'.DIC' 
+     crt 'creating: ':filename
+     create.file filename  DYNAMIC
+  end
+
+next i
+
+*
+abort.bbproc: 
+return to abort.bbproc
+
+
+* ======================================================================
+
+reset.environment:
+i = ospath("", os$flush.cache)
+
+cleardata               ;* Clear any unused DATA queue entries
+
+* mab *
+* mab *printer close on -3     ;* Close all printers at this or higher level
+* mab *printer off
+* mab *heading ""              ;* Ensure no heading or...
+* mab *footing ""              ;* ...footing on default print unit
+
+inline.prompts = ""     ;* Cast off inline prompts...
+inline.responses = ""   ;* ...and responses
+
+i = kernel(K$CPROC.LEVEL,0)
+delete.common '$':i   ;* Delete unnamed common
+
+return
+
+inp_sub:
+* simple keyboard input routine using keyin (because we do not have pcode _input available)
+bcksp = char(8)
+cr    = char(13)
+in_str = ''
+crt '> ':
+loop
+  key_char = keyin()
+  if  key_char = bcksp then      ;* back space 
+    bs_len = len(in_str) -1 
+    in_str = in_str[1,bs_len]
+    crt @(0):@(-4):'< ':in_str:
+    continue
+  end  
+until key_char = cr    ;* enter key
+  if seq(key_char) >= 32 and seq(key_char) <= 126 then
+    in_str := key_char
+    crt @(0):@(-4):'> ':in_str:
+  end
+repeat
+crt ''
+inp_ln = in_str
+return
+
+end

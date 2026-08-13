@@ -1,0 +1,104 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+program pcode_parse
+*
+* program lists all program objects that make up the pcode file
+* Note paths are hardcode below
+*
+* Header field offsets (from 1)
+ hdr.magic             =     1
+ hdr.rev               =     2
+ hdr.id                =     3    ;* Used after loading to memory
+ hdr.start.offset      =     7
+ hdr.args              =    11
+ hdr.no.vars           =    13
+ hdr.stack.depth       =    15
+ hdr.sym.tab.offset    =    17
+ hdr.lin.tab.offset    =    21
+ hdr.object.size       =    25
+ hdr.flags             =    29
+ hdr.compile.time      =    31    ;* 4 bytes: = SYSTEM(1005)
+ 
+* Programs and subroutines
+ hdr.refs              =    35
+ hdr.program.name      =    37
+ hdr.program.name.len  =   128
+ object.header.size    =   165
+ 
+crt '1 for pcode file in /bin'
+crt '2 for pcode file in /PCODE.OUT'
+input fn
+begin case
+case fn = 1 
+  dir_name = @sdsys:'/bin'
+case fn = 2
+  dir_name = @sdsys:'/PCODE.OUT'
+case 1
+  crt 'invalid response, quit'
+  stop
+end case
+
+file_name = 'pcode'
+
+crt 'Openning File: ':file_name: ' in Directory: ': dir_name
+
+ 
+openpath dir_name to dir_path else
+   crt 'Openning Directory: ': dir_name : ' failed, abort'
+   stop
+end
+
+mark.mapping dir_path, off
+
+
+read pcode from dir_path, file_name else
+   crt 'Reading: ': file_name : ' failed, abort'
+   stop
+end
+
+
+
+pgc = 0
+i = 0
+loop
+   s = field(pcode[i+HDR.PROGRAM.NAME, 999], char(0), 1)
+   j = bitand(oconv(pcode[i+HDR.OBJECT.SIZE, 4], 'IL') + 3, bitnot(3))  ;* objext starts on word boundry
+   
+   info = 'prog: ' : s"l#10" 
+   info := ' size: ' :  oconv(pcode[i+HDR.OBJECT.SIZE, 4], 'IL')"r#6"
+   
+   pgc +=1
+ 
+* 
+   c_date = oconv(pcode[i+HDR.COMPILE.TIME, 4], 'IL')
+   
+   c_time = rem(c_date , 86400)
+   
+   c_date = div(c_date , 86400)
+   
+   info := ' c date: ': oconv(c_date, 'D2/') :' ': oconv(c_time, 'MTH')
+   
+   print info
+
+   i += j
+   
+while i < len(pcode)
+repeat
+
+print pgc : ' programs found'
+
+end

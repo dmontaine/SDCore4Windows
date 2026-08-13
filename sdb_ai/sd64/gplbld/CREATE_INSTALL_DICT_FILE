@@ -1,0 +1,134 @@
+*
+* PROGRAM CREATES INSTALL TEMPLATE FILE FOR NO BINARY INSTALL
+* PROCESS STEPS
+* 1) TAKES DYNAMIC FILES DEFINED IN FILES_LIST AND CREATES FILE DEFINING DICTIONARY ITEMS
+* 2)
+*
+*
+$INTERNAL
+$INCLUDE GPL.BP INT$KEYS.H
+*
+* HARD CODED LOCATION FOR BUILD PROCESS (NEED TO CHANGE TO USER INPUT / SELECTED FIELD?)
+*
+SOURCE_DATA_PATH ="/usr/local/sdsys/"
+*
+* THIS IS THE PATH TO WHERE WE SAVE DATA FROM THE BUILD PROCESS AND THE FILE NAME WE WILL USE
+DATA_PATH ="/usr/local/sdsys/gplbld/FILES_DICTS"
+*
+*
+*
+CRT @(-1):
+
+CRT
+CRT '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+CRT ' PROGRAM CREATES FILE DEFINING DICTIONARY ITEMS - ENTER OK TO CONTINUE                                              '
+CRT '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
+CRT
+*
+CRT 'OK':
+INPUT OK
+IF UPCASE(OK) # 'Y' THEN STOP 'Process Aborted'
+*
+DISPLAY.ALL = @TRUE  ;* DISPLAY RESULTS FOR ALL TEST (@TRUE) OR ONLY ERRORS (@FALSE)
+*
+* list of files to copy dictionaries 
+*
+FILES_LIST = ''
+*
+*  list of files to "create" (add ~0 and ~1)
+*
+*                  file      create dict
+FILES_LIST<-1> = "ACCOUNTS"  :@VM:'Y'
+FILES_LIST<-1> = "$HOLD"     :@VM:'Y' 
+FILES_LIST<-1> = "$MAP"      :@VM:'Y'
+FILES_LIST<-1> = "$IPC"      :@VM:'N' 
+FILES_LIST<-1> = "DICT.DIC"  :@VM:'N'  
+FILES_LIST<-1> = "DIR_DICT"  :@VM:'N' 
+FILES_LIST<-1> = "VOC.DIC"   :@VM:'N'  
+*
+FILE_CT = DCOUNT(FILES_LIST,@FM)
+
+
+CRT "RUN CODE TO GENERATE FILE DEFINING DICTIONARY ITEMS AND SAVE IN ":DATA_PATH:' <Y/N>':
+INPUT RUN.CREATE.DICT.DATA
+IF RUN.CREATE.DICT.DATA = 'Y' THEN
+   *
+   *
+   *
+   * REMOVE OLD BUILD DATA
+   *
+   IF OSPATH(DATA_PATH,OS$EXISTS) THEN
+      NULL
+   END ELSE
+      IF OSPATH(DATA_PATH,OS$MKDIR)ELSE
+         CRT 'ERROR CREATING DIRECTORY : ':DATA_PATH
+         CRT 'PROCESS ABORTED'
+         STOP
+      END
+   END
+   *
+   *
+   * WE SHOULD NOW HAVE THE DIRECTORY NEEDED TO SAVE THE DICTIONARY ITEMS TO, OPEN IT
+   *
+   *
+ 
+   OPENPATH DATA_PATH TO DP.FILEVAR ELSE
+      CRT 'ERROR OPENING FILE: ':DATA_PATH
+      CRT 'PROCESS ABORTED'
+      STOP
+   END
+   *
+   CRT 'Building Dict Files and saving to ':DATA_PATH
+   *
+   *
+   FOR I = 1 TO FILE_CT
+   *
+
+******      OPEN "DICT", FILES_LIST<I,1> TO DICT.FILE.VAR THEN
+       *
+	   * determine actual name
+	   *
+	   IF FILES_LIST<I,2> = 'Y' THEN
+	     DICT_FILE_NAME  = FILES_LIST<I,1> : '.DIC'
+       END ELSE
+	     DICT_FILE_NAME  = FILES_LIST<I,1>
+	   END
+	   *
+       OPENPATH  SOURCE_DATA_PATH:@DS:DICT_FILE_NAME TO DICT.FILE.VAR THEN
+         *
+         * NOW GET THE ACTUAL DICTIONARY ITEMS FOR THE FILE
+         *
+         SELECT DICT.FILE.VAR TO 2
+		 READLIST DICT_IDS FROM 2 THEN
+
+         *
+           LIST.CT = DCOUNT(DICT_IDS,@FM)
+           FOR X = 1 TO LIST.CT
+              READ.ID = DICT_IDS<X>
+              IF DISPLAY.ALL THEN CRT 'Reading: ': DICT_FILE_NAME :' ':READ.ID
+
+              READ DIC.ITEM FROM DICT.FILE.VAR, READ.ID  THEN
+
+                WRITE DIC.ITEM ON DP.FILEVAR, DICT_FILE_NAME:'^':READ.ID
+
+              END
+           NEXT X
+           
+         END
+		   
+		   CLOSE DICT.FILE.VAR  
+
+
+      END ELSE
+         ERR.LN =  'Could Not Open: ':SOURCE_DATA_PATH:@DS:DICT_FILE_NAME
+         CRT ERR.LN
+      END
+
+
+   NEXT I
+
+   CLOSE DP.FILEVAR
+
+END
+CRT 'DICT BUILD COMPLETE'
+END

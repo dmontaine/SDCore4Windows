@@ -1,0 +1,252 @@
+* DELACC
+* DELETE.ACCOUNT verb
+* Copyright (c) 2007 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* rev 0.9.0 delete-account requires admin priv, are we admin?
+*           on user account, delete os user if configured
+* rev 1.0-1 use userdel not deluser (deluser not on all Linux version)
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* DELETE.ACCOUNT account.name
+*
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $delete.account
+$catalog $DELACC
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+* REV 0.9.0
+deffun is_group(group) calling '!is_group'
+deffun valid_os_name(name) calling '!valid_os_name'
+   prompt ''
+
+   parser = "!PARSER"
+
+* rev 0.9.0 delete-account requires admin priv, are we admin?
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+     stop sysmsg(2001)  ;* Command requires administrator privileges
+   end   
+
+   @system.return.code = -ER$ARGS            ;* Preset for argument errors
+
+
+   call @parser(parser$reset, 0, @sentence, 0)
+   call @parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   * Get and process account name
+
+   call @parser(parser$get.token, token.type, acc.name, keyword)
+   if token.type = PARSER$END then
+      display sysmsg(6001) :  ;* Account name:
+      input acc.name
+      acc.name = trim(acc.name)
+      if acc.name = '' then stop
+   end
+
+   * Validate account name
+
+   acc.name = upcase(acc.name)
+
+   * Check no further command arguments
+
+   call @parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END then
+      stop sysmsg(2018, token) ;* Unexpected token (xx)
+   end
+
+   if acc.name = 'SDSYS' then
+      stop sysmsg(6025) ;* Cannot delete SDSYS account
+   end
+
+   if acc.name = @who then
+      stop sysmsg(6026) ;* Cannot delete own account
+   end
+
+   * Check account exists in ACCOUNTS file
+
+   openpath @sdsys:@ds:'ACCOUNTS' to acc.f else
+      stop sysmsg(6000) ;* Cannot open ACCOUNTS file in SDSYS account
+   end
+
+   readu acc.rec from acc.f, acc.name locked
+      stop sysmsg(6006, status()) ;* ACCOUNTS file record locked by user xx
+   end else
+      @system.return.code = -status()
+      stop sysmsg(6027) ;* Account not registered in ACCOUNTS file
+   end
+* rev 0.9.0   
+   group_name = acc.rec<ACC$GROUP>
+
+   pathname = parse.pathname.tokens(acc.rec<ACC$PATH>)
+
+   * Check  account directory exists
+
+   if not(ospath(pathname, OS$EXISTS)) then
+      display sysmsg(6028) ;* WARNING: Account directory does not exist
+   end else
+      * Check for cross-references from other accounts
+      * ie Files in this account are referenced from other accounts
+
+      xref.found = @false
+      select acc.f to 11
+      loop
+         readnext xacc from 11 else exit
+         if xacc # acc.name then
+            read xacc.rec from acc.f, xacc then
+               xacc.path = parse.pathname.tokens(xacc.rec<ACC$PATH>)
+               openpath xacc.path:@ds:'VOC' to xvoc.f then
+                  select xvoc.f to 12
+                  loop
+                     readnext xid from 12 else exit
+                     read xvoc.rec from xvoc.f, xid then
+                        xvoc.rec = upcase(xvoc.rec)
+                        type = upcase(xvoc.rec[1,1])
+                        begin case
+                           case type = 'F'
+                              num.components = dcount(xvoc.rec<2>, @vm)
+                              for comp = 1 to num.components
+                                 fpath = ospath(xvoc.rec<2,comp>, OS$FULLPATH)
+                                 if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then
+                                    gosub report.xref
+                                 end
+                              next comp
+
+                              fpath = ospath(xvoc.rec<3>, OS$FULLPATH)
+                              if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then
+                                 gosub report.xref
+                              end
+
+                           case type = 'Q'
+                              if xvoc.rec<2> = acc.name or xvoc.rec<2> = pathname then
+                                 gosub report.xref
+                              end
+                        end case
+                     end
+                  repeat
+               end
+            end
+         end
+      repeat
+
+      if xref.found then
+         loop
+            display sysmsg(6029) : ;* Continue with account deletion (Y/N)?
+            input yn
+            yn = upcase(yn)
+            if yn = 'N' then
+               @system.return.code = -ER$STOPPED
+               stop sysmsg(6030) ;* Account deletion abandoned
+            end
+         until yn = 'Y'
+         repeat
+      end
+
+      * Ask if to delete directory
+
+      loop
+         display sysmsg(6031, pathname) :  ;* Delete directory xx (Y/N)?
+         input yn
+         yn = upcase(yn)
+         until yn = 'Y' or yn = 'N'
+      repeat
+
+      if yn = 'Y' then
+         yn = ospath(pathname, OS$DELETE)
+      end
+   end
+
+   * Delete ACCOUNTS entry
+
+   delete acc.f, acc.name
+   
+   * rev 0.9.0 remove group. os user?
+   if is_group(group_name) then
+      * Modified by Composer AI - 2026/06/10.
+      * Use shared !valid_os_name before OS.EXECUTE (phase 2).
+      * os.name.chars = '...'
+      * if convert(os.name.chars, '', group_name) # '' or len(group_name) > 32 then
+      if not(valid_os_name(group_name)) then
+         crt sysmsg(10026,group_name, 2) ;* Warning unable to delete group: %1 error: %2
+      end else
+      OS.EXECUTE "sudo groupdel ": group_name 
+      stat = OS.ERROR()
+      if stat = 0 then
+         crt sysmsg(10025,group_name) ;* group: %1 Deleted
+      end else
+         crt sysmsg(10026,group_name, stat) ;* Warning unable to delete group: %1 error: %2
+      end
+      end
+      * --------------------
+   end
+   
+   * delete os user? (if configured to do so)
+   If config('CREATUSR') then
+      * is this a user account ?
+      FINDSTR 'sdu_' in group_name setting yn then
+         * remove sdu_ prefix
+         username = change(group_name,'sdu_','')
+         crt sysmsg(10027,username): ;* Delete OS user %1 (Y/N)?
+         input yn
+         if upcase(yn) = 'Y' then
+            * Modified by Composer AI - 2026/06/10.
+            * Use shared !valid_os_name before OS.EXECUTE (phase 2).
+            * if username = '' or convert(os.name.chars, '', username) # '' ...
+            if not(valid_os_name(username)) then
+               crt sysmsg(10029,username, 2) ;* Warning unable to delete OS User: %1 error: %2
+            end else
+            OS.EXECUTE "sudo userdel ":username 
+            stat = OS.ERROR()
+            if stat = 0 then
+               crt sysmsg(10028,username) ;* OS User: %1 Deleted
+            end else
+               crt sysmsg(10029,username, stat) ;* Warning unable to delete OS User: %1 error: %2
+            end
+            end
+            * --------------------
+         end
+      end
+   end
+   
+   @system.return.code = 0
+   return
+
+* ======================================================================
+
+report.xref:
+   if not(xref.found) then
+      crt sysmsg(6032) ;* Files in this account are referenced from other accounts
+      crt sysmsg(6033) ;* Account           VOC entry
+      xref.found = @true
+   end
+
+   crt fmt(xacc, '16L') : '  ' : xid
+   return
+end
+
+* END-CODE

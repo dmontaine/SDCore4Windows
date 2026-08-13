@@ -1,0 +1,5 @@
+# This tree is a Linux distribution package (shell scripts, ELF binaries, and
+# SD database files) that happens to be stored from a Windows host.
+# Disable all end-of-line conversion so every file round-trips byte-for-byte
+# regardless of the cloning machine's core.autocrlf setting.
+* -text

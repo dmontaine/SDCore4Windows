@@ -1,0 +1,94 @@
+program py_test2
+* Test embedded python functions 
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+$include SDPYFUNC.H
+$include keys.h
+
+deffun typetxt(inx) LOCAL
+
+crt 'embedded python test, hit <enter> to start':
+
+input ok
+crt str('=',50)
+*
+crt 'attempt init'
+rtn_stat = PY_INITIALIZE()
+crt 'rtn_stat = ':rtn_stat
+crt 'status()   = ':status()
+crt str('=',50)
+if rtn_stat # 0 then 
+  crt 'python init failure, about'
+  stop
+end
+*
+* use var to name test files and records
+*
+fn = '/home/sd/user_accounts/xxxx/EXAMPLES_DATA'
+rec_id = 'xrate.csv'
+str_id = 'xrate_csv'
+
+crt 'Get file: ':fn
+openpath fn to fnv else
+  crt 'Cannot open: ':fn:' , stop'
+  goto 999
+end
+*
+crt 'Get record: ':rec_id
+read rec from fnv, rec_id then
+  crt 'Size of ':rec_id: ' = ': len(rec)
+  crt 'save rec as string item: ':str_id
+  rtn_status = PY_STRSET(str_id,rec)
+  crt 'rtn_status = ':rtn_status
+  crt 'status()   = ':status()
+  *
+  crt 'Get rec: ':str_id:' from python'
+  prec = PY_STRGET(str_id)
+  crt 'status()   = ':status()
+  crt 'Size of ':str_id: ' = ': len(prec)
+  *
+  if rec = prec then
+    crt 'Match'
+  end else
+    crt 'Do Not Match!'
+  end
+  
+end else
+  crt 'could not read: ':rec_id: ', stop'
+end  
+
+*
+* don't finalize, we will check when sd closes
+999: crt 'complete'
+stop
+
+local function typetxt(id)
+
+  begin case
+  case id = SD_Obj_Unkn ;*   0  /* Unknown python object type */
+    return 'unknown'
+  case id = SD_Obj_Str  ;*   1  /* String (Unicode) python object type */
+    return 'String'
+  case id = SD_Obj_List ;*   2  /* List python object type */
+    return 'List'
+  case id =  SD_Obj_Dict ;*  3  /* Dictionary  python object type */
+    return 'Dict'
+  case 1
+    return 'Unknown index'
+  end case
+end
+end

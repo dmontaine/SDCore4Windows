@@ -1,0 +1,144 @@
+PROGRAM COMP_PCODE
+*COMP_PCODE
+* compile all recursive files (pcode)
+$internal
+
+$include GPL.BP revstamp.h
+
+$include GPL.BP syscom.h
+$include GPL.BP int$keys.h
+$include GPL.BP header.h
+
+$include err.h
+$include keys.h
+
+$define BCOMP.NO.XREF.TABLES    4  ;* Suppress cross-reference tables
+
+* Main processing loop
+
+crt 'enter "c" to compile pcode'
+input ok
+
+
+if upcase(ok) # "C" then goto abort.bbproc
+   
+*  note all files must be opend via openpath, open depends on pcode!
+   
+   source.file.name = 'GPL.BP'
+   openpath @sdsys:@ds:source.file.name to src.f else
+     crt 'Cannot open ':source.file.name:'!, ABORT'
+
+     goto abort.bbproc
+   end
+   
+   output.file.name = source.file.name:'.OUT' 
+   
+   output.file.name = 'GPL.BP.OUT'
+   openpath @sdsys:@ds:output.file.name to out.f else
+     crt 'Cannot open ':output.file.name:'!, ABORT'
+
+     goto abort.bbproc
+   end
+   
+   mark.mapping out.f, off
+   
+   compiler.flags = 0
+   compiler.flags = bitor(compiler.flags, BCOMP.NO.XREF.TABLES)
+   catalogue.mode = 'GLOBAL'
+
+* list of recursive programs that go into pcode
+
+pcode_fs = ''
+*
+pcode_fs<-1> = "_AK"
+pcode_fs<-1> = "_BINDKEY"
+pcode_fs<-1> = "_BREAK"
+pcode_fs<-1> = "_CCONV"
+pcode_fs<-1> = "_CHAIN"
+pcode_fs<-1> = "_DATA"
+pcode_fs<-1> = "_DELLIST"
+pcode_fs<-1> = "_EXTENDLIST"
+pcode_fs<-1> = "_FMTS"
+pcode_fs<-1> = "_FOLD"
+pcode_fs<-1> = "_FORMCSV"
+pcode_fs<-1> = "_FORMLST"
+pcode_fs<-1> = "_GETLIST"
+pcode_fs<-1> = "_GETMSG"
+pcode_fs<-1> = "_HF"
+pcode_fs<-1> = "_ICONV"
+pcode_fs<-1> = "_ICONVS"
+pcode_fs<-1> = "_IN"
+pcode_fs<-1> = "_INDICES"
+pcode_fs<-1> = "_INPUT"
+pcode_fs<-1> = "_INPUTAT"
+pcode_fs<-1> = "_ITYPE"
+pcode_fs<-1> = "_KEYCODE"
+pcode_fs<-1> = "_KEYEDIT"
+pcode_fs<-1> = "_LOGIN"
+pcode_fs<-1> = "_MAXIMUM"
+pcode_fs<-1> = "_MESSAGE"
+pcode_fs<-1> = "_MINIMUM"
+pcode_fs<-1> = "_MSGARGS"
+pcode_fs<-1> = "_NEXTPTR"
+pcode_fs<-1> = "_OCONV"
+pcode_fs<-1> = "_OCONVS"
+pcode_fs<-1> = "_OJOIN"
+pcode_fs<-1> = "_OVERLAY"
+pcode_fs<-1> = "_PCLSTART"
+pcode_fs<-1> = "_PREFIX"
+pcode_fs<-1> = "_PRFILE"
+pcode_fs<-1> = "_READLST"
+pcode_fs<-1> = "_READV"
+pcode_fs<-1> = "_REPADD"
+pcode_fs<-1> = "_REPCAT"
+pcode_fs<-1> = "_REPDIV"
+pcode_fs<-1> = "_REPMUL"
+pcode_fs<-1> = "_REPSUB"
+pcode_fs<-1> = "_REPSUBST"
+pcode_fs<-1> = "_SAVELST"
+pcode_fs<-1> = "_SSELCT"
+pcode_fs<-1> = "_SUBST"
+pcode_fs<-1> = "_SUBSTRN"
+pcode_fs<-1> = "_SUM"
+pcode_fs<-1> = "_SUMALL"
+pcode_fs<-1> = "_SYSTEM"
+pcode_fs<-1> = "_TCONV"
+pcode_fs<-1> = "_TRANS"
+pcode_fs<-1> = "_TTYGET"
+pcode_fs<-1> = "_TTYSET"
+pcode_fs<-1> = "_VOC_CAT"
+pcode_fs<-1> = "_VOC_REF"
+pcode_fs<-1> = "_WRITEV"
+
+src.cnt = dcount(pcode_fs,@FM)   
+    
+for pi = 1 to src.cnt
+		prg.name = pcode_fs<pi>
+		
+		crt 'compile: ':prg.name
+
+		
+		read prog.source from src.f, prg.name else
+		  crt 'Cannot find: ': prg.name :', ABORT!' 
+          goto abort.bbproc
+        end
+        
+        listing.record.name = prg.name:'.LIS'
+       
+       
+        call $bcomp(source.file.name, src.f, prg.name, @false, prog.source,output.file.name, listing.record.name,compiler.flags, 1,catalogue.name, catalogue.mode,object.code, errors) 
+        
+        if errors = 0 then
+           write object.code to out.f, prg.name
+        end else
+           crt 'Errors in compile of ':prg.name:', ABORT!'
+
+           goto abort.bbproc
+        end
+        
+next pi         
+
+abort.bbproc: 
+end
+
+

@@ -1,0 +1,38 @@
+* PY_RUNSTRING(py_script,rtnstat)
+* run the python script in py_script in the interperter
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+$internal
+$no.symbols
+$no.xref
+function py_runstring(py_script)
+$catalog !py_runstring
+
+$include KEYS.H
+
+* Modified by Composer AI - 2026/06/10.
+* Reject empty script before calling Python interpreter.
+* rtnstat = SDEXT(py_script,@FALSE,SD_PyRunStr)
+if py_script = '' then
+   set.status 1
+   return 1
+end
+* --------------------
+rtnstat = SDEXT(py_script,@FALSE,SD_PyRunStr)
+return rtnstat
+
+end

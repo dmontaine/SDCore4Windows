@@ -1,0 +1,11 @@
+[Unit]
+Description=SD service start
+
+[Service]
+Type=forking
+ExecStart=/usr/local/sdsys/bin/sd -start
+# This should be here but currently seems to crash things ...
+ExecStop=/usr/local/sdsys/bin/sd -stop
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,147 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+PROGRAM SD_ENCRYPT_b64
+
+$include KEYS.H
+$include ERR.H
+
+$define key_sz   32 ;* size in bytes of libsodium key
+$define tag_sz   16 ;* size in bytes of libsodium tag
+$define nonce_sz 24 ;* size in bytes of libsodium nonce
+ 
+crt "Testing Encrypt / Decrypt "
+
+pltext = 'Two things are infinite, the universe and human stupidity, and I am not yet completely sure about the universe. - Albert Einstein'
+
+crt 'Our Text: ':pltext
+
+*A 256-bit (32 byte) key can be expressed as a hexadecimal string with 64 characters.
+*    It will require 44 characters in base64.
+* sodium_base64_VARIANT_ORIGINAL for standard (A-Za-z0-9/\+) Base64 encoding. 
+* so mykey:
+mykey_txt  = '1234567890'
+mykey_txt := 'abcdefghij'
+mykey_txt := 'klnopqrstu'
+mykey_txt := 'AB'
+*
+* myB64key = 'MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG5vcHFyc3R1QUI='
+*
+myB64key = oconv(mykey_txt,'B64')
+
+crt 'B64key = ':myB64key
+
+crt '==============================================='
+crt ' Encrypt Test / B64 Encoding'
+crt '==============================================='
+
+RtnVal = SDENCRYPT(pltext,myB64key,SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+*
+crt 'Size of Return Value: ' : len(RtnVal)
+
+crt RtnVal
+
+crt '==============================================='
+crt ' Decrypt Test / B64 Encoded'
+crt '==============================================='
+*
+
+DcryptVal = SDDECRYPT(RTNVAL,myB64key,SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+crt 'Decrypted Text: ':DcryptVal
+*
+If DcryptVal = pltext then
+  crt 'Success!'
+END ELSE
+  crt 'Oops, Back to the drawing board!'
+END
+
+
+*******************************************************************************************************************
+
+
+crt '==============================================='
+crt ' Decrypt Test /  wrong key        '
+crt '==============================================='
+
+mykey = myB64key
+mykey[1,1] = "X"
+crt myb64key
+crt mykey
+DcryptVal = SDDECRYPT(RTNVAL,mykey,SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+
+crt '==============================================='
+crt ' Encrypt Test with no text'
+crt '==============================================='
+RtnVal = SDENCRYPT('',myB64key,SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+
+crt '==============================================='
+crt ' Encrypt Test with no key'
+crt '==============================================='
+RtnVal = SDENCRYPT(pltext,'',SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+
+crt '==============================================='
+crt ' Encrypt Test with invalid encoding'
+crt '==============================================='
+
+
+RtnVal = SDENCRYPT(pltext,mykey,0)
+STAT = STATUS()
+crt 'Status: ':STAT
+
+*
+crt '==============================================='
+crt ' Decrypt Test with no text'
+crt '==============================================='
+RtnVal = SDDECRYPT('',mykey,SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+
+crt '==============================================='
+crt ' Decrypt Test with no key'
+crt '==============================================='
+RtnVal = SDDECRYPT(pltext,'',SD_ENCODE64)
+STAT = STATUS()
+*
+crt 'Status: ':STAT
+
+
+crt '==============================================='
+crt ' Decrypt Test with invalid decoding'
+crt '==============================================='
+
+RtnVal = SDDECRYPT(pltext,mykey,0)
+STAT = STATUS()
+crt 'Status: ':STAT
+
+alldone:
+END
+

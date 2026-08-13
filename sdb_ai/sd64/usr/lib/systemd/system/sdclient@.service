@@ -1,0 +1,7 @@
+[Unit]
+Description=String Database (SD)  Per-Connection clinet Server
+
+[Service]
+ExecStart=/usr/local/sdsys/bin/sd -n -q
+StandardInput=socket
+

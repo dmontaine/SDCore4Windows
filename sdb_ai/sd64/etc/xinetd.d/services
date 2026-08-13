@@ -1,0 +1,3 @@
+# entries for your /etc/services file.
+sdserver	4244/tcp	# SDServer
+sdclient	4245/tcp	# SDClient
