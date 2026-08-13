@@ -31,6 +31,8 @@
 #include "sd.h"
 
 #include <pwd.h>
+#include <grp.h>
+#include <stdlib.h>
 #include <time.h>
 
 #ifndef __APPLE__
@@ -49,10 +51,57 @@ int64 filelength64(fd) int fd;
 }
 
 /* ======================================================================
-   IsAdmin()  -  Is this user an administrator at the o/s level?          */
+   IsAdmin()  -  Is this user an administrator at the o/s level?
+
+   13 Aug 26 Windows port - this used to be getuid() == 0.  Windows has no uid
+   zero; the account database is derived from security identifiers and even an
+   elevated process keeps its own uid, so that test could never be true and
+   every privilege check in the BASIC layer answered "no" permanently.
+
+   SD administrator rights now come from membership of the SD_ADMIN_GROUP local
+   group.  That deliberately separates SD administration from Windows
+   administration: granting it does not require handing out machine admin, it
+   needs no elevation prompt, and it works for a service or other
+   non-interactive process.  If the group does not exist, nobody is an
+   administrator, which fails closed.                                       */
 
 bool IsAdmin(void) {
-  return (getuid() == 0);
+  struct group* grp;
+  gid_t* list;
+  int count;
+  int i;
+  bool status = FALSE;
+
+  grp = getgrnam(SD_ADMIN_GROUP);
+  if (grp == NULL)
+    return FALSE; /* Group not defined - nobody qualifies */
+
+  /* The group may be our primary one, in which case it need not appear in the
+     supplementary list.                                                     */
+
+  if ((getgid() == grp->gr_gid) || (getegid() == grp->gr_gid))
+    return TRUE;
+
+  count = getgroups(0, NULL);
+  if (count <= 0)
+    return FALSE;
+
+  list = (gid_t*)malloc(count * sizeof(gid_t));
+  if (list == NULL)
+    return FALSE;
+
+  if (getgroups(count, list) == count) {
+    for (i = 0; i < count; i++) {
+      if (list[i] == grp->gr_gid) {
+        status = TRUE;
+        break;
+      }
+    }
+  }
+
+  free(list);
+
+  return status;
 }
 
 /* ======================================================================

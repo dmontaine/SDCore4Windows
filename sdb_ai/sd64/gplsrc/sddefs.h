@@ -120,6 +120,15 @@
 #define SD_POSIX_SHM_NAME "/sd_shm_716d0301"
 #define SD_POSIX_SEM_FMT  "/sd_sem_716d0302_%d"
 
+/* 13 Aug 26 Windows port - SD administrator rights come from membership of
+ * this local group rather than from uid zero, which does not exist on Windows.
+ * Keeping SD administration separate from Windows administration means it can
+ * be granted without handing out machine admin rights and needs no elevation.
+ * See IsAdmin() in linuxlb.c.
+ */
+
+#define SD_ADMIN_GROUP "sdadmins"
+
 #define RelinquishTimeslice sched_yield()
 
 /* WINFS denotes use of the Windows file system interface (PDA only so far) */
