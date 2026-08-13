@@ -127,7 +127,9 @@
  * See IsAdmin() in linuxlb.c.
  */
 
+#ifndef SD_ADMIN_GROUP
 #define SD_ADMIN_GROUP "sdadmins"
+#endif
 
 #define RelinquishTimeslice sched_yield()
 

@@ -584,9 +584,15 @@ void dump(u_char *addr, int32_t bytes) {
    check_admin()  -  Check user has admin rights                          */
 
 void check_admin() {
-  int16_t in_group(char *group_name);
+  bool IsAdmin(void);
 
-  if ((geteuid() != 0) && !in_group("admin")) {
+  /* 13 Aug 26 Windows port - was (geteuid() != 0) && !in_group("admin").
+     Neither half means anything here: there is no uid zero on Windows, and
+     "admin" is a Linux group name.  Deferring to IsAdmin() keeps one
+     definition of what an SD administrator is, which is membership of
+     SD_ADMIN_GROUP.  See linuxlb.c.                                        */
+
+  if (!IsAdmin()) {
     fprintf(stderr, "Command requires administrator privileges\n");
     exit(1);
   }
