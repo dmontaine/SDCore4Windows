@@ -8,6 +8,12 @@ sdb_ai/sd64/gplobj/*.o
 # terminfo.src is the real source and stays tracked.
 sdb_ai/sd64/terminfo/
 
+# Build products of the vendored client library. The copies installed into
+# sdb_ai/sd64/bin by `make sdclilib` are the tracked ones.
+sdb_ai/sd64/gplsrc/sdclilib/*.dll
+sdb_ai/sd64/gplsrc/sdclilib/*.dll.a
+sdb_ai/sd64/gplsrc/sdclilib/*.exe
+
 # Scratch output from the pcode build (gplbld/bbcmp.py, gplbld/pcode_bld.py).
 sdb_ai/sd64/pcode_bld.log
 sdb_ai/sd64/pass1

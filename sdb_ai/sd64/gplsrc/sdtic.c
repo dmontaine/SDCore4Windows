@@ -109,7 +109,17 @@
 #include <unistd.h>
 #define MakeDirectory(name) mkdir(name, 0777)
 #define stricmp(a, b) strcasecmp(a, b)
+/* 13 Aug 26 Windows port - sdtic does not include sddefs.h, so it carries its
+ * own copy of this definition and needs the same correction.  The terminfo
+ * files written below are binary, and forcing O_BINARY to zero discards the
+ * real value.  The MSYS2 runtime opens files in binary mode by default, so
+ * output is unaffected there and is byte for byte identical either way; a
+ * native Windows CRT defaults to text mode, where the lost flag would mean
+ * every LF in the compiled terminfo was translated.
+ */
+#ifndef O_BINARY
 #define O_BINARY 0
+#endif
 #define TEXTREAD "r"
 #define default_access 0777
 #define DS '/'

@@ -71,7 +71,7 @@ sd: BITSIZE := 64
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) $(PY_HDRS) -DEMBED_PYTHON -DGPL -g $(ARCH)
-sd: $(SDOBJS) sdclilib.so sdtic sdfix sdconv sdidx sdlnxd terminfo
+sd: $(SDOBJS) sdclilib sdtic sdfix sdconv sdidx sdlnxd terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -80,12 +80,25 @@ sd: $(SDOBJS) sdclilib.so sdtic sdfix sdconv sdidx sdlnxd terminfo
 #           On ELF this was masked by -Wl,--no-as-needed.
 	@$(COMP) $(ARCH) $(SDOBJSD) $(L_FLAGS) -o $(GPLBIN)sd
 
-# 13 Aug 26 Windows port - -soname is an ELF concept with no PE/COFF
-#           equivalent; the import library takes its place.
-sdclilib.so: sdclilib.o
-	@echo Linking $@
-	@$(COMP) -shared $(ARCH) $(GPLOBJ)sdclilib.o $(GPLOBJ)linuxlb.o -o $(GPLBIN)sdclilib.so -Wl,--out-implib,$(GPLBIN)libsdclilib.dll.a
-	@$(COMP) -shared $(ARCH) $(GPLOBJ)sdclilib.o $(GPLOBJ)linuxlb.o -o $(GPLBIN)libsdcli.so -Wl,--out-implib,$(GPLBIN)libsdcli.dll.a
+# 13 Aug 26 Windows port - the client library is now the native Win32 DLL in
+#           gplsrc/sdclilib, which has its own makefile and is compiled with
+#           the UCRT64 toolchain rather than the MSYS2 runtime one used for
+#           the server.  It talks to the server over a socket or a named pipe,
+#           so the two never share an address space and the differing runtimes
+#           do not meet.  Override UCRT_CC to build it with another compiler.
+UCRT_CC  ?= /c/msys64/ucrt64/bin/gcc.exe
+CLILIBDIR := $(GPLSRC)sdclilib
+
+# Neither target names a file that make should test for.  Without this, VPATH
+# finds the gplsrc/sdclilib directory (and the generated terminfo directory)
+# and decides the target is already satisfied.
+.PHONY: sdclilib terminfo
+
+sdclilib:
+	@echo Building native client DLL
+	@$(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
+	@cp $(CLILIBDIR)/sdclilib.dll $(GPLBIN)
+	@cp $(CLILIBDIR)/libsdclilib.dll.a $(GPLBIN)
 
 sdtic: sdtic.o inipath.o
 	@echo Linking $@
@@ -113,9 +126,6 @@ terminfo:
 	@mkdir $(TERMINFO)
 	@$(GPLBIN)sdtic -pterminfo $(MAIN)terminfo.src
 
-sdclilib.o: sdclilib.c revstamp.h
-	@echo Compiling $@ with -fPIC
-	@$(COMP) $(C_FLAGS) -fPIC -c $(GPLSRC)sdclilib.c -o $(GPLOBJ)sdclilib.o
 
 # We need to make sure that anything that includes revstamp.h gets built if revstamp.h
 # changes.

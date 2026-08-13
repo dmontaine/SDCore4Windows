@@ -69,9 +69,14 @@
 
 /* 13 Aug 26 Windows port - these were unconditionally zero because Linux draws
  * no distinction between text and binary streams.  Windows does, and <fcntl.h>
- * defines both with real values.  Overriding them with zero would open every
- * DH data file in text mode and apply CRLF translation to binary content, so
- * define them only as a fallback for a platform that supplies neither.
+ * defines both with real values, so define them only as a fallback for a
+ * platform that supplies neither.
+ *
+ * This is protective rather than a fix for observed damage: the MSYS2 runtime
+ * opens files in binary mode by default, so discarding the flag changes
+ * nothing today.  A native Windows CRT defaults to text mode, where losing it
+ * would open every DH data file in text mode and translate line endings in
+ * binary records.
  */
 
 #ifndef O_BINARY

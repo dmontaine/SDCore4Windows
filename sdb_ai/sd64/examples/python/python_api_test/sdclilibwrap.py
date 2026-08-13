@@ -84,7 +84,10 @@ def sdmeInitialize():
 
     if __sdClilib is None:
         if os.name == 'nt':
-            LIBRARY_PATH = '.\\winsdclilib.dll'
+            # 13 Aug 26 Windows port - the client library is now built from
+            # gplsrc/sdclilib and installed as sdclilib.dll.  It was called
+            # winsdclilib.dll while it was a separate Visual Studio project.
+            LIBRARY_PATH = 'sdclilib.dll'
         else:
             LIBRARY_PATH = os.getcwd() +"/sdclilib.so"
     __sdClilib = ctypes.cdll.LoadLibrary(LIBRARY_PATH)
