@@ -48,10 +48,15 @@ Entries are newest first, by date, until there is a version to attach them to.
            * If OpenSSH has just been installed and asked you to restart, there
              is no configuration file to edit yet and the installer will say
              so, with the one command to run after restarting.
-           * NOT YET CONFIRMED BY A REAL SSH CONNECTION.  The editing is
-             tested; that the group names match the right people is not.  If
-             you use this, keep a way in that is not ssh until you have checked
-             you can still connect.
+           * CONFIRMED BY REAL SSH CONNECTIONS on 14 Aug 26.  An account in
+             the allowed groups still got in; an account in neither was
+             refused, with the reason written to the ssh server's log.  The
+             machine's own administrator kept ssh throughout, which was the
+             risk worth checking.
+           * If you turn this on, be aware the person refused sees the same
+             "Permission denied" as somebody who simply typed the wrong
+             password.  The ssh server's log is the only place that says which
+             it was.
 
 14 Aug 26  The installer now tells you how accounts are really made.
            * Its closing message used to end with "net localgroup sdusers
