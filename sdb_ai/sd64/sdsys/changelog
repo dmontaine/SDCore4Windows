@@ -5,6 +5,35 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  Creating an SD account creates a Windows account again, as it
+           created a Linux one before.  Deleting one deletes it.
+           * CREATE.ACCOUNT USER makes the Windows local user, adds it to
+             sdusers, and creates the account's own local group.  It asks for
+             the new user's Windows password itself and sets it; the account
+             is created disabled and is enabled only once the password is
+             set, so it is never briefly usable with no password.
+           * DELETE.ACCOUNT offers to delete the Windows user, and removes
+             the account's group.  The user's profile directory under
+             C:\Users is left alone.
+           * MODIFY.ACCOUNT ADD and DELETE add and remove Windows local group
+             members.
+           * THESE NEED AN ELEVATED SESSION.  Windows will not let an
+             ordinary process create a user or change a local group, so
+             account creation reports "OS Error: 5" unless SD was started
+             elevated.  Everything that does not touch a Windows account
+             works normally either way.
+           * The Windows password is never placed on a command line, where
+             any local user could read it.
+           * Group membership is read from Windows directly.  It used to be
+             read from /etc/group, which does not exist on this platform, so
+             every membership test answered "no" - which, among other things,
+             refused every login with "This user is not registered for SD
+             use".
+
+14 Aug 26  Pathnames containing spaces and backslashes are accepted where a
+           pathname is checked before being passed to the operating system,
+           so C:\Program Files\... no longer fails validation.
+
 13 Aug 26  Embedded Python is removed.  SD for Windows is a back end data
            store reached through the API, and the interpreter was not part of
            that.

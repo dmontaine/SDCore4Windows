@@ -1,0 +1,118 @@
+* OS_GROUP(action, group, member)
+* Create and delete Windows local groups, and add and remove their members.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 14 Aug 26 Windows port - replaces groupadd, groupdel, usermod -aG, deluser
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    rc = !os_group(action, group, member)
+*
+*    action  ADD     create the group           member ignored
+*            DEL     delete the group           member ignored
+*            ADDMEM  add member to the group
+*            DELMEM  remove member from the group
+*
+*    returns 0 success
+*            1 the operation failed
+*            2 a name is not valid, or the action is not one of the above
+*            5 access denied: SD is not running elevated
+*
+*    WHY ONE SUBROUTINE RATHER THAN FOUR OS.EXECUTE LINES.  These four
+*    operations appear at five call sites across CREATEA, DELACC and MODIFYA,
+*    and every one of them needs the same elevation check and the same
+*    quoting.  Section 5.14 asks for administrative capability to go in a
+*    subroutine with something over it rather than in the caller, so that a
+*    form can call the same code later instead of reimplementing it.
+*
+*    ADD and ADDMEM are idempotent: a group that already exists, or a member
+*    already in it, is success rather than failure.  Account creation is
+*    re-runnable that way, which matters because it can fail half finished -
+*    the SD account and the Windows account are not created in one
+*    transaction and nothing can make them so.
+*
+*    The Linux original passed "groupadd -U root,sdsys,<user>" to seed the
+*    group's membership.  root and sdsys are Linux accounts with no Windows
+*    counterpart, so only the SD user is added, by a separate ADDMEM call.
+*
+*    ELEVATION.  Local group changes need an elevated token; an ordinary SD
+*    session has a UAC-filtered one and gets "System error 5, access is
+*    denied".  Measured 14 Aug 2026.  The check is made explicitly rather
+*    than read out of a failure message, because those are localised.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function os_group(action, group, member)
+$catalog !os_group
+
+deffun valid_os_name(name) calling '!valid_os_name'
+
+   rc = 2
+   set.status 0
+
+   if not(valid_os_name(group)) then return rc
+
+   act = upcase(action)
+
+   if act = 'ADDMEM' or act = 'DELMEM' then
+      if not(valid_os_name(member)) then return rc
+   end
+
+   q = char(39)
+
+*  Both names have been through !valid_os_name - letters, digits, dot,
+*  underscore and hyphen only - so neither can escape the quoting below.
+*  The script is single quoted for bash, making every $ in it literal, and
+*  uses double quotes for its own strings.
+
+   ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+   ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+   ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+
+   begin case
+      case act = 'ADD'
+         ps := 'if (Get-LocalGroup -Name "' : group : '" -ErrorAction SilentlyContinue) { exit 0 }; '
+         ps := 'try { New-LocalGroup -Name "' : group : '" -Description "SD account group" -ErrorAction Stop | Out-Null } catch { exit 1 }; exit 0'
+
+      case act = 'DEL'
+         ps := 'try { Remove-LocalGroup -Name "' : group : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
+
+      case act = 'ADDMEM'
+         ps := 'try { Add-LocalGroupMember -Group "' : group : '" -Member "' : member : '" -ErrorAction Stop } '
+         ps := 'catch [Microsoft.PowerShell.Commands.MemberExistsException] { exit 0 } catch { exit 1 }; exit 0'
+
+      case act = 'DELMEM'
+         ps := 'try { Remove-LocalGroupMember -Group "' : group : '" -Member "' : member : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
+
+      case 1
+         return rc
+   end case
+
+   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+
+   rc = os.error()
+   if rc # 0 then set.status rc
+
+return rc
+end
+
+* END-CODE

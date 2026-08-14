@@ -6,18 +6,20 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation; either version 3, or (at your option)
 * any later version.
-* 
+*
 * This program is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with this program; if not, write to the Free Software Foundation,
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-* 
+*
 *
 * START-HISTORY:
+* 14 Aug 26 Windows port - New-LocalUser replaces useradd.  The account is
+*           created disabled and SET_PASSWD enables it.
 * rev 0.9.0 Jan 25 mab initial commit
 * END-HISTORY
 *
@@ -25,21 +27,35 @@
 *
 *    x = !create_user(username)
 *
-*    create linux user
+*    Create a Windows local user.
 *
 *    This function sets the STATUS() value to 0 if successful and returns true
 *    Otherwise sets status to the os status and returns false
 *
 * 0 success
-* 1 can't update password file
-* 2 invalid command syntax
-* 3 invalid argument to option
-* 4 UID already in use (and no -o)
-* 6 specified group doesn't exist
-* 9 username already in use
-* 10 can't update group file
-* 12 can't create home directory
-* 14 can't update SELinux user mapping
+* 1 the account could not be created - it probably already exists
+* 2 the name is not a valid OS user name
+* 5 access denied: SD is not running elevated.  This is the usual failure.
+*
+*    THE ACCOUNT IS CREATED DISABLED AND WITH NO PASSWORD, and SET_PASSWD
+*    turns it on.  Windows will not create an account without either a
+*    password or -NoPassword, and an enabled account with a blank password
+*    would be a real hole for as long as it lasted.  Disabled cannot be logged
+*    in to at all, so the window is closed instead of being made short.  If
+*    SET_PASSWD is never run, what is left behind is unusable rather than
+*    open, which is the right way round.
+*
+*    ELEVATION.  Creating a local user requires an elevated token.  An
+*    ordinary SD session does not have one - a UAC-filtered token carries
+*    Administrators as "deny only" - so this returns status 5 and the caller
+*    reports it.  Measured on 14 Aug 2026: net localgroup ... /add answers
+*    "System error 5 has occurred.  Access is denied."  Section 5.7's service
+*    model is the real answer; until then SD has to be started elevated for
+*    account creation to work.
+*
+*    The elevation test is made explicitly rather than inferred from a failure
+*    message, because failure messages are localised and exit codes from
+*    New-LocalUser are not specific.
 *
 * END-DESCRIPTION
 *
@@ -61,14 +77,31 @@ if not(valid_os_name(username)) then
    set.status 2
    return user_created
 end
-OS.EXECUTE "sudo useradd -m " : username
+
+* 14 Aug 26 Windows port - was: OS.EXECUTE "sudo useradd -m " : username
+*   The script is wrapped in single quotes for bash, so every $ and backslash
+*   in it is literal, and it uses double quotes for its own strings.  The name
+*   has been through !valid_os_name, which permits letters, digits, dot,
+*   underscore and hyphen only, so it cannot escape the quoting.
+   q = char(39)
+
+   ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+   ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+   ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+   ps := 'try { New-LocalUser -Name "' : username : '" -NoPassword -Disabled '
+   ps := '-Description "SD account" -ErrorAction Stop | Out-Null } '
+   ps := 'catch { exit 1 }; exit 0'
+
+   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
 * --------------------
 stat = OS.ERROR()
 if stat = 0 then
-  user_created = @TRUE 
+  user_created = @TRUE
 end else
-  set.status stat    
-end 
+  set.status stat
+end
 
 return user_created
 end
+
+* END-CODE

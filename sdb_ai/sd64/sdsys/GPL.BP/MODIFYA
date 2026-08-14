@@ -39,6 +39,7 @@ $include parser.h
 $include err.h
 * 
 deffun is_grp_member(user,group) calling '!is_grp_member'
+deffun os_group(action,group,member) calling '!os_group'
 deffun is_group(group) calling '!is_group'
 deffun valid_os_name(name) calling '!valid_os_name'
 
@@ -105,9 +106,9 @@ deffun valid_os_name(name) calling '!valid_os_name'
                   if not(valid_os_name(user.name)) or not(valid_os_name(group.name)) then
                      crt sysmsg(10019,user.name,group.name,2) ;* Unable to add user %1 to group %s status: %2
                   end else
-                  os.execute "sudo usermod -aG ":group.name:" ":user.name
+* 14 Aug 26 Windows port - was: os.execute "sudo usermod -aG ..."
+                  stat = os_group("ADDMEM", group.name, user.name)
                   * --------------------
-                  stat = OS.ERROR()
                   if stat = 0 then
                      crt sysmsg(10018,user.name,group.name)  ;* %1 added to group %2
                   end else
@@ -128,9 +129,9 @@ deffun valid_os_name(name) calling '!valid_os_name'
                if not(valid_os_name(user.name)) or not(valid_os_name(group.name)) then
                   crt sysmsg(10022,user.name,group.name,2) ;* Unable to remove user %1 from group %s status: %2
                end else
-               os.execute "sudo deluser ":user.name:" ":group.name
+* 14 Aug 26 Windows port - was: os.execute "sudo deluser ..."
+               stat = os_group("DELMEM", group.name, user.name)
                * --------------------
-               stat = OS.ERROR()
                   if stat = 0 then
                      crt sysmsg(10021,user.name,group.name) ;*  %1 removed from group %2
                   end else

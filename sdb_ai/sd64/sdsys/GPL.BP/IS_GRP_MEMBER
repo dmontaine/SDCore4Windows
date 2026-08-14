@@ -6,18 +6,20 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation; either version 3, or (at your option)
 * any later version.
-* 
+*
 * This program is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with this program; if not, write to the Free Software Foundation,
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-* 
+*
 *
 * START-HISTORY:
+* 14 Aug 26 Windows port - ask Windows instead of reading /etc/group, which
+*           does not exist on the MSYS2 runtime.  See the description.
 * rev 0.9.0 Jan 25 mab with the change in ownership of group ACCOUNTS, we need this routine to return true if a user is looking up their own group account.
 * 20240219 mab initial commit
 * END-HISTORY
@@ -26,10 +28,35 @@
 *
 *    x = !is_grp_member(user,group)
 *
-*    user - linux user name to test if member of linux group (found in /etc/group)
+*    user - Windows user name to test for membership of a Windows local group
 *
 *    This function sets the STATUS() value to 0 if successful, 1 if the
 *    specified group does not exist.
+*
+*    WHY THIS NO LONGER READS /etc/group.  It used to open /etc and read
+*    "group" as a text file.  MSYS2 and Cygwin dropped /etc/passwd and
+*    /etc/group in favour of direct SAM lookups, so the open failed, the
+*    routine set status 1 and returned false for EVERYONE, and the sdusers
+*    test at LOGIN terminated every connection with "This user is not
+*    registered for SD use".  Nothing about it looked like a missing file.
+*    See PROJECT_STATUS.md section 6.
+*
+*    Get-LocalGroupMember is asked instead, and it distinguishes the three
+*    answers the caller needs, which parsing "net localgroup" output does not
+*    do without depending on the language Windows is installed in:
+*
+*       exit 0   a member          -> @true,  status 0
+*       exit 1   not a member      -> @false, status 0
+*       exit 2   no such group     -> @false, status 1
+*
+*    Membership is compared on the last backslash-delimited component, so
+*    MACHINE\don and don both match don.
+*
+*    COST TO KNOW ABOUT: this spawns bash and then PowerShell, which is slow
+*    enough to notice on a path that runs at every login.  The fast answer is
+*    getgrnam() behind a KERNEL key - it is already known to resolve Windows
+*    local groups correctly (PROJECT_STATUS.md section 4) - but that is new C
+*    code and this is not.
 *
 * END-DESCRIPTION
 *
@@ -39,57 +66,58 @@ $internal
 function is_grp_member(user,group)
 $catalog !is_grp_member
 
+deffun valid_os_name(name) calling '!valid_os_name'
+
 user_found = @false
 set.status 0
+
 * Modified by Composer AI - 2026/06/10.
-* Empty user or group cannot match membership; skip file scan.
-* read the /etc/group file
+* Empty user or group cannot match membership; skip the lookup.
 if user = '' or group = '' then
    set.status 1
    return user_found
 end
 * --------------------
-* read the /etc/group file
-openpath "/etc" to etc then 
-  read rec from etc, "group" then 
-    lns = dcount(rec, @FM)
 
-    for i = 1 to lns
-      grpname = field(rec<i>,':',1)
-      if grpname = group then
-* rev 0.9.0  is this the user's group?
-        if user = grpname then
-          user_found = @true
-          exit
-        end
-* not the user's group, see if user is a member                
-        members = field(rec<i>,':',4)
-        * Modified by Composer AI - 2026/06/10.
-        * No supplementary members when field 4 is empty.
-        * usr.ct = dcount(members,',')
-        if members = '' then
-           usr.ct = 0
-        end else
-           usr.ct = dcount(members,',')
-        end
-        * --------------------
-        for u = 1 to usr.ct
-          if user = field(members,',',u) then
-            user_found = @true
-            exit 
-          end
-        next u
-      end
-      if user_found then exit
-    next i
-  end else
-  * cannot read /etc/group
-    set.status 1
-  end
-end else
-* cannot open /etc
-  set.status 1
+* rev 0.9.0  is this the user's own group account?
+if upcase(user) = upcase(group) then return @true
+
+* 14 Aug 26 Windows port - both names are interpolated into a shell command
+*   below, so they are validated first.  !valid_os_name permits letters,
+*   digits, dot, underscore and hyphen only, which is what makes the quoting
+*   below sufficient rather than merely tidy.
+if not(valid_os_name(user)) or not(valid_os_name(group)) then
+   set.status 1
+   return user_found
 end
+
+   q = char(39)   ;* apostrophe - bash quoting, see below
+
+* The script is wrapped in single quotes for bash, which makes every $ and
+* backslash in it literal, and uses double quotes for its own strings.  An
+* apostrophe cannot appear in either name, so the quoting cannot be escaped.
+* Output is discarded: this runs at login and PowerShell's error text is not
+* the user's business.
+   ps = 'try { $ms = Get-LocalGroupMember -Group "' : group
+   ps := '" -ErrorAction Stop } catch { exit 2 }; '
+   ps := 'foreach ($m in $ms) { if ((($m.Name -split "\\")[-1]) -ieq "'
+   ps := user : '") { exit 0 } }; exit 1'
+
+   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+
+   stat = os.error()
+
+   begin case
+      case stat = 0
+         user_found = @true
+      case stat = 1
+         user_found = @false
+      case 1
+         * no such group, or PowerShell could not be run at all
+         set.status 1
+   end case
 
 return user_found
 end
+
+* END-CODE

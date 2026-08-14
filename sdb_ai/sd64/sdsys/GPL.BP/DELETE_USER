@@ -1,0 +1,78 @@
+* DELETE_USER(USERNAME)
+* Delete an OS user
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 14 Aug 26 Windows port - Remove-LocalUser replaces userdel
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    x = !delete_user(username)
+*
+*    Delete a Windows local user.  Returns true on success; on failure sets
+*    STATUS() and returns false.
+*
+*      0 success
+*      1 the account could not be removed
+*      2 the name is not a valid OS user name
+*      5 access denied: SD is not running elevated
+*
+*    THE USER PROFILE DIRECTORY IS LEFT ALONE, which is what "userdel"
+*    without -r did on Linux, and is the safer default: C:\Users\<name> is the
+*    person's own data and removing an SD account is not a reason to destroy
+*    it.  Windows leaves the directory and its ProfileList registry entry
+*    behind; deleting those is a deliberate act for an administrator.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function delete_user(username)
+$catalog !delete_user
+
+deffun valid_os_name(name) calling '!valid_os_name'
+
+   user_deleted = @false
+   set.status 0
+
+   if not(valid_os_name(username)) then
+      set.status 2
+      return user_deleted
+   end
+
+   q = char(39)
+
+   ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+   ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+   ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+   ps := 'try { Remove-LocalUser -Name "' : username : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
+
+   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+
+   stat = os.error()
+   if stat = 0 then
+      user_deleted = @true
+   end else
+      set.status stat
+   end
+
+return user_deleted
+end
+
+* END-CODE

@@ -1,0 +1,104 @@
+* PS_SCRIPT(script)
+* Run a PowerShell script that carries a secret, without putting it on a
+* command line.  Returns the script's exit status, or -1 if it could not be
+* run at all.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 14 Aug 26 Windows port - written for the OS account commands
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    rc = !ps_script(script)
+*
+*    script - PowerShell text.  Lines are field marks.
+*
+*    WHY THIS EXISTS.  Creating a Windows account needs a password, and the
+*    obvious "net user <name> <password> /add" puts that password in a process
+*    command line, where any local user can read it through Task Manager,
+*    Get-CimInstance Win32_Process or ETW.  PROJECT_STATUS.md section 8
+*    rejected exactly that pattern for batch login and the same reasoning
+*    applies here.  Decision from the repository owner, 14 Aug 2026: write the
+*    script to a file instead, run it, delete it.
+*
+*    The file is written inside the SDSYS directory deliberately.  The
+*    installer breaks ACL inheritance on C:\ProgramData\SD and grants
+*    narrowly (section 5.7), and anything created underneath inherits that
+*    restricted ACL - NTFS applies inheritance in the kernel at creation time,
+*    below the MSYS2 runtime, which is why it still works even though the
+*    mount is noacl and chmod is a no-op.  So the temporary script is
+*    protected by work already done, with no icacls call of its own.
+*
+*    It is piped rather than passed by name because PowerShell is a Windows
+*    program and would need a Windows pathname, and BASIC has no way to make
+*    one - OS$FULLPATH returns a POSIX path despite what its comment claims.
+*    bash opens the file, PowerShell reads the script from stdin, and the
+*    exit status carries back through both.  Backslashes are folded to
+*    forward slashes so this works whether SDSYS is a POSIX path or a Windows
+*    one, which matters while the layout move in section 5.8 is half done.
+*
+*    THE FILE IS DELETED WHETHER THE SCRIPT SUCCEEDED OR NOT.  If SD dies
+*    between the write and the delete, a script holding a password is left in
+*    the SDSYS directory; it is named $PS.TMP.<user number> so it is
+*    recognisable, and the ACL is what is protecting it in the meantime.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function ps_script(script)
+$catalog !ps_script
+
+$include syscom keys.h
+
+   set.status 0
+   rc = -1
+
+   if script = '' then
+      set.status 1
+      return rc
+   end
+
+   id = '$PS.TMP.' : @userno
+
+   openpath @sdsys to sys.f else
+      set.status 1
+      return rc
+   end
+
+   write script to sys.f, id on error
+      set.status 1
+      return rc
+   end
+
+*  bash reads the file, PowerShell reads the script.  Forward slashes so that
+*  both a POSIX SDSYS and a Windows one work - MSYS2's bash accepts C:/x/y.
+   p = convert('\', '/', @sdsys : @ds : id)
+   q = char(39)
+
+   os.execute 'cat ' : q : p : q : ' | powershell.exe -NoProfile -NonInteractive -Command - >/dev/null 2>&1'
+   rc = os.error()
+
+   delete sys.f, id
+   close sys.f
+
+return rc
+end
+
+* END-CODE

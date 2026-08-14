@@ -43,6 +43,8 @@ $include parser.h
 $include err.h
 * REV 0.9.0
 deffun is_group(group) calling '!is_group'
+deffun os_group(action,group,member) calling '!os_group'
+deffun delete_user(username) calling '!delete_user'
 deffun valid_os_name(name) calling '!valid_os_name'
    prompt ''
 
@@ -194,8 +196,8 @@ deffun valid_os_name(name) calling '!valid_os_name'
       if not(valid_os_name(group_name)) then
          crt sysmsg(10026,group_name, 2) ;* Warning unable to delete group: %1 error: %2
       end else
-      OS.EXECUTE "sudo groupdel ": group_name 
-      stat = OS.ERROR()
+* 14 Aug 26 Windows port - was: OS.EXECUTE "sudo groupdel ": group_name
+      stat = os_group("DEL", group_name, "")
       if stat = 0 then
          crt sysmsg(10025,group_name) ;* group: %1 Deleted
       end else
@@ -220,8 +222,9 @@ deffun valid_os_name(name) calling '!valid_os_name'
             if not(valid_os_name(username)) then
                crt sysmsg(10029,username, 2) ;* Warning unable to delete OS User: %1 error: %2
             end else
-            OS.EXECUTE "sudo userdel ":username 
-            stat = OS.ERROR()
+* 14 Aug 26 Windows port - was: OS.EXECUTE "sudo userdel ":username
+            void delete_user(username)
+            stat = status()
             if stat = 0 then
                crt sysmsg(10028,username) ;* OS User: %1 Deleted
             end else

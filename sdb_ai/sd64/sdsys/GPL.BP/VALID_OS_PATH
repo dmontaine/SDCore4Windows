@@ -2,12 +2,35 @@
 * Return @true if path is safe to embed in OS.EXECUTE chmod-style commands.
 * Copyright (c) String Database
 *
+* START-HISTORY:
+* 14 Aug 26 Windows port - accept backslashes and spaces, so that native
+*                      Windows paths pass.  The caller quotes.
+* END-HISTORY
+*
 * START-DESCRIPTION:
 *
 *    x = !valid_os_path(path)
 *
-*    Rejects empty paths, excessive length, and shell metacharacters (spaces,
-*    semicolons, quotes, etc.) while allowing directory separators.
+*    Rejects empty paths, excessive length, and shell metacharacters while
+*    allowing directory separators - both of them - and spaces.
+*
+*    THE CALLER MUST SINGLE QUOTE THE PATH.  OS.EXECUTE runs the command
+*    through "/bin/bash -c" (op_sh.c), so a path containing a space is two
+*    words unless it is quoted.  Single quotes, not double: inside double
+*    quotes bash still treats a backslash as an escape, so a path ending in a
+*    separator would escape the closing quote.  Inside single quotes nothing
+*    is special, and the apostrophe that would end the quoting is not in the
+*    permitted set, so it cannot be reached.
+*
+*    That is the whole reason spaces are now allowed.  The rejection was
+*    deliberate - unquoted, a space is a shell metacharacter - but it also
+*    rejected every path under C:\Program Files, which is where SD's binaries
+*    go (PROJECT_STATUS.md section 5.8).  Quoting at the call site is the
+*    protection; the character set is what is left over.
+*
+*    Still rejected, and these are the ones doing the work: ; & | < > $ `
+*    quotes of either kind, brackets and braces, * ? ~ ! # and whitespace
+*    other than a plain space.
 *
 * END-DESCRIPTION
 *
@@ -19,7 +42,8 @@ $catalog !valid_os_path
 
    * Modified by Composer AI - 2026/06/10.
    * Shared pathname validation for OS.EXECUTE (phase 2).
-   path.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-/:'
+* 14 Aug 26 Windows port - backslash and space added.  See the description.
+   path.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-/:\ '
    if path = '' then return @false
    if len(path) > 255 then return @false
    if convert(path.chars, '', path) # '' then return @false

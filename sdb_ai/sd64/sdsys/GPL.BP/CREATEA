@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Aug 26 Windows port - single quote the pathname passed to OS.EXECUTE,
+*           now that !valid_os_path permits spaces
 * rev 1.0-1 Jan 26 group account now have linux group name written as lower case
 *           with "sdg_" prefix
 *           use "adduser" -p parameter when creating linux user account
@@ -64,6 +66,7 @@ $include parser.h
 $include err.h
 * 20240219 mab user must be member of sdusers  
 deffun is_grp_member(user,group) calling '!is_grp_member'
+deffun os_group(action,group,member) calling '!os_group'
 * rev 0.9.0 *
 deffun is_group(group) calling '!is_group'
 deffun is_user(uname) calling '!is_user'
@@ -303,7 +306,12 @@ PW.TRY.AGAIN:
         if not(valid_os_path(pathname)) then
           crt sysmsg(10011,2) ;* 'Warning unable to setgid bit on Group Folder, status: %1
         end else
-        OS.EXECUTE "sudo chmod g+s ":pathname
+* 14 Aug 26 Windows port - single quote the path.  !valid_os_path now permits
+*   spaces and backslashes so that native Windows paths pass at all, which
+*   means the quoting here is what stops a space splitting the command into
+*   two words.  Single quotes because bash still reads a backslash as an
+*   escape inside double ones.  See GPL.BP/VALID_OS_PATH.
+        OS.EXECUTE "sudo chmod g+s '":pathname:"'"
         * -------------------- 
         stat = OS.ERROR()
         if stat = 0 then
@@ -328,7 +336,8 @@ PW.TRY.AGAIN:
           if not(valid_os_name(acc.uname)) then
              crt sysmsg(10012,acc.uname,2) ;* Warning unable to add user to sdusers, user: %1 status: %2
           end else
-          os.execute "sudo usermod -aG sdusers ":acc.uname
+* 14 Aug 26 Windows port - was: os.execute "sudo usermod -aG sdusers ":acc.uname
+          void os_group("ADDMEM", "sdusers", acc.uname)
           * --------------------
           stat = OS.ERROR()
           if stat = 0 then
@@ -630,12 +639,14 @@ end
 *
 * no, attempt to create it
 *
-      if upcase(acc.type) = 'USER' then
-        OS.EXECUTE "sudo groupadd -U root,sdsys,":acc.uname :" ": group_name
-      end else
-        OS.EXECUTE "sudo groupadd -U root,sdsys ": group_name
+* 14 Aug 26 Windows port - was "sudo groupadd -U root,sdsys,<user> <group>".
+*   Windows has no root or sdsys account to seed the group with, and
+*   New-LocalGroup takes no member list, so the group is created and the SD
+*   user added to it as a second step.
+      group_stat = os_group("ADD", group_name, "")
+      if group_stat = 0 and upcase(acc.type) = 'USER' then
+        group_stat = os_group("ADDMEM", group_name, acc.uname)
       end
-      group_stat = OS.ERROR()
       if group_stat = 0 then
         crt sysmsg(10014,group_name)   ;* Group -  %1 created
       end else
