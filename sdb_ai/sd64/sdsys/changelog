@@ -1,3 +1,53 @@
+Windows port - unreleased
+-------------
+This section covers the conversion from Linux to Windows.  It is the record of
+what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
+repository root carry the reasoning, the state of the work and the traps.
+Entries are newest first, by date, until there is a version to attach them to.
+
+13 Aug 26  Identity: accounts have their own passwords, and SD no longer
+           consults operating system users or groups at all.
+           * Every account carries a password.  Entry is by prompt, whether
+             from "sd -Aname" at the shell or LOGTO inside SD.
+           * New $CRED register in SDSYS holds a salt and an Argon2 verifier
+             per account.  The password itself is never stored.
+           * New verb SET.PASSWORD [account] sets one.
+           * New ACCOUNTS field 4, ACC$USERS: the list of accounts allowed to
+             LOGTO into that account.  Grants are recorded on the account
+             being entered, so withdrawing one is a single edit.  Visible as
+             "Granted to" in LIST ACCOUNTS, editable with MODIFY ACCOUNTS.
+           * LOGTO SDSYS asks for your own password again, not an SDSYS one.
+           * SDSYS reaches every account without exception.
+           * LOGTO takes a registered account name only.  It used to accept a
+             pathname, which reached an account directory without consulting
+             its grant list.  APISRVR's account switch is name-only for the
+             same reason.
+           * @LOGNAME does not change on LOGTO, so what is done in another
+             account stays attributed to whoever logged in.
+           * The sdusers group test at login and the ACC$GROUP group test on
+             LOGTO are gone, along with the sdadmins group requirement for
+             ordinary use.  Knowing the SDSYS password is what confers
+             administrator rights now.
+           * New messages 10030 and 10031.
+
+13 Aug 26  Accounts move to C:\ProgramData\SD\user_accounts and
+           C:\ProgramData\SD\group_accounts (USRDIR and GRPDIR in sd.conf).
+           /home/sd made sense while an SD account was an operating system
+           user, which it no longer is.
+
+13 Aug 26  Paths may now be written the Windows way.  A drive letter is
+           understood as an absolute root and a backslash as a separator, so
+           C:\ProgramData\SD, C:/ProgramData/SD and /c/ProgramData/SD all
+           reach the same place (sdrealpath in linuxlb.c).  Every drive-letter
+           spelling previously failed with "file not found".
+
+13 Aug 26  Windows build.  Shared memory and semaphores use the POSIX calls
+           rather than System V, which Windows does not have.  The client
+           library is a native Win32 DLL and needs no MSYS2 runtime.
+
+13 Aug 26  No binaries are kept in the repository.  Everything is built from
+           source, so installing means building.
+
 Version 1.0-2
 -------------
 (mab)  Add back LISTPQ - sentence to list procs (SD.VOCLIB, VOC_TEMPLATE, NEWVOC)

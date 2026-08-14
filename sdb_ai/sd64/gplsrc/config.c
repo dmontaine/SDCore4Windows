@@ -102,8 +102,14 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.fltdiff = 0.0000000000291; /* FLTDIFF: Wide zero for float eq test */
   pcfg.fsync = 0;                 /* FSYNC:    Controls when to do fsync() */
   pcfg.gdi = 0;                   /* GDI:      Default GDI spool API? */
- /* 20240219 mab create-account based on type (user / group / other) */   
-  strncpy(pcfg.grpdir,"/home/sd/group_accounts",MAX_PATHNAME_LEN+1);  /* GRPDIR: group accounts parent dir */
+ /* 20240219 mab create-account based on type (user / group / other) */
+ /* 13 Aug 26 Windows port - accounts live beside the rest of SD's data under
+    C:\ProgramData\SD.  /home/sd was the right place while an SD account was
+    an operating system user; under the credential model it is not one, so
+    the Linux location decides nothing.  See PROJECT_STATUS.md section 5.8.
+    Drive letters and backslashes only became usable when sdrealpath() was
+    taught to accept them - see the note there.                            */
+  strncpy(pcfg.grpdir,"C:\\ProgramData\\SD\\group_accounts",MAX_PATHNAME_LEN+1);  /* GRPDIR: group accounts parent dir */
   pcfg.grpsize = 1;               /* GRPSIZE:  Default group size */
   pcfg.intprec = 13;              /* INTPREC:  Precision for INT() etc */
   pcfg.lptrhigh = 66;             /* LPTRHIGH: Default printer lines */
@@ -127,8 +133,9 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.spooler[0] = '\0';     /* SPOOLER:  Default spooler name */
   pcfg.terminfodir[0] = '\0'; /* TERMINFO: Use default location */
   pcfg.txchar = TRUE;         /* TXCHAR:   Enable ansi/oem translation */
-/* 20240219 mab create-account based on type (user / group / other) */   
-  strncpy(pcfg.usrdir,"/home/sd/user_accounts",MAX_PATHNAME_LEN+1);  /* USRDIR: user accounts parent dir */
+/* 20240219 mab create-account based on type (user / group / other) */
+/* 13 Aug 26 Windows port - see the note on grpdir above.                   */
+  strncpy(pcfg.usrdir,"C:\\ProgramData\\SD\\user_accounts",MAX_PATHNAME_LEN+1);  /* USRDIR: user accounts parent dir */
   pcfg.yearbase = 1930;       /* YEARBASE: Two digit year base */
 
   /* Set any non-zero defaults for shared configuration parameters */

@@ -174,23 +174,67 @@ char* sdrealpath(char* inpath,  /* Supplied path */
   int n;
   int link_depth = 0;
   char link_buf[PATH_MAX + 1];
+/* 13 Aug 26 Windows port - see the note below */
+  char path[PATH_MAX + 1];
+  int root_len;
 
-  switch (inpath[0]) {
-    case '/': /* Absolute pathname */
-      outpath[0] = '/';
-      tgt = outpath + 1;
-      break;
+  /* 13 Aug 26 Windows port - accept the Windows spellings of a path.
 
-    case '\0': /* Null pathname - error */
+     This function was the only reason a drive letter did not work anywhere
+     in SD.  Nothing else objects to one: the MSYS2 runtime stats both
+     C:\ProgramData\... and C:/ProgramData/... quite happily.  But here,
+     anything not beginning with '/' was taken for a relative path and had
+     the working directory glued in front of it, and a backslash was never
+     a separator - so C:\ProgramData\SD resolved to
+     /usr/local/sdsys/C:\ProgramData\SD and every open of it failed with
+     ER_FNF, "file not found", pointing nowhere near the cause.
+
+     Backslashes are now folded to '/' and a leading drive letter is treated
+     as the root, so C:\ProgramData\SD resolves to C:/ProgramData/SD.  DS is
+     still '/' and this does not change what SD produces (see
+     PROJECT_STATUS.md section 6) - only what it will accept.              */
+
+  n = 0;
+  for (p = inpath, q = path; *p != '\0'; p++) {
+    if (++n > PATH_MAX)
       return NULL;
+    *(q++) = (*p == '\\') ? '/' : *p;
+  }
+  *q = '\0';
+  inpath = path;
 
-    default: /* Relative pathname - get current directory */
-      getcwd(outpath, PATH_MAX);
-      tgt = strchr(outpath, '\0');
-      break;
+  if (((((inpath[0] >= 'A') && (inpath[0] <= 'Z')) ||
+        ((inpath[0] >= 'a') && (inpath[0] <= 'z')))) &&
+      (inpath[1] == ':')) /* Drive letter - absolute, the drive is the root */
+  {
+    outpath[0] = inpath[0];
+    outpath[1] = ':';
+    outpath[2] = '/';
+    outpath[3] = '\0';
+    tgt = outpath + 3;
+    root_len = 3;
+    p = inpath + 2;
+  } else {
+    root_len = 1;
+
+    switch (inpath[0]) {
+      case '/': /* Absolute pathname */
+        outpath[0] = '/';
+        tgt = outpath + 1;
+        break;
+
+      case '\0': /* Null pathname - error */
+        return NULL;
+
+      default: /* Relative pathname - get current directory */
+        getcwd(outpath, PATH_MAX);
+        tgt = strchr(outpath, '\0');
+        break;
+    }
+
+    p = inpath; /* Source pointer */
   }
 
-  p = inpath; /* Source pointer */
   while (*p != '\0') {
     /* Skip over multiple delimiters */
     while (*p == '/')
@@ -208,7 +252,7 @@ char* sdrealpath(char* inpath,  /* Supplied path */
     } else if ((*p == '.') && (*(p + 1) == '.') && (n == 2)) /* .. reference */
     {
       /* Revert one level unless already at root */
-      if (tgt > outpath + 1) {
+      if (tgt > outpath + root_len) {
         while (*((--tgt) - 1) != '/') {
         }
       }
@@ -266,9 +310,10 @@ char* sdrealpath(char* inpath,  /* Supplied path */
         {
           strcpy(outpath, link_buf);
           tgt = outpath + n;
+          root_len = 1; /* 13 Aug 26 - back to a POSIX root */
         } else {
           /* Back up one level unless already at root directory */
-          if (tgt > outpath + 1)
+          if (tgt > outpath + root_len)
             while (*((--tgt) - 1) != '/') {
             }
 
@@ -286,7 +331,7 @@ char* sdrealpath(char* inpath,  /* Supplied path */
 
   /* Remove trailing / if present unless root directory reference */
 
-  if (tgt > outpath + 1 && *(tgt - 1) == '/')
+  if (tgt > outpath + root_len && *(tgt - 1) == '/')
     tgt--;
   *tgt = '\0';
 
