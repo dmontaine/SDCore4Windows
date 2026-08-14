@@ -33,6 +33,9 @@
 * 20240330 mab restrict logto account to allowed users
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 13 Aug 26 Windows port - LOGTO SDSYS tests K$ADMINISTRATOR; ACC$GROUP test removed
+* 13 Aug 26 Windows port - LOGTO authorised by the target's ACC$USERS grant
+*                      list, and LOGTO SDSYS re-authenticates against the
+*                      caller's own password
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2459,13 +2462,12 @@ int.logto:
       return
    end
 * 20240330 mab only root can logto sdsys
-* 13 Aug 26 Windows port - was system(27) > 0, ie "uid is not root".  Always
-*   true on Windows, so LOGTO SDSYS was refused unconditionally.
-   if (upcase(new.account) = "SDSYS") and not(kernel(K$ADMINISTRATOR, -1)) then
-      display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-      unwinding = 2
-      return    
-   end 
+* 13 Aug 26 Windows port - the test that stood here asked whether the caller
+*   was already privileged, first as system(27) = 0 and then as
+*   K$ADMINISTRATOR.  Both ask the wrong question: entering SDSYS is what
+*   confers administrator rights, not something they are needed for.  All
+*   authorisation now happens in logto.authorised, below the ACCOUNTS read,
+*   where the target account is known.  See PROJECT_STATUS.md section 5.6.
 
    * Look for options
 
@@ -2507,9 +2509,16 @@ int.logto:
    * acc.record contains the full ACCOUNT record 
 
 * rev 0.9.0 * is user member of account?
-* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group; LOGTO will
-*   be gated by the target account's own credentials instead.
+* 13 Aug 26 Windows port - was a linux group test on ACC$GROUP.  The grant
+*   list on the target account replaces it, and entering SDSYS additionally
+*   asks the caller for their own password.  See PROJECT_STATUS.md section 5.6.
 
+   gosub logto.authorised
+   if not(logto.ok) then
+      if ospath(account.path, OS$CD) then return
+      display sysmsg(5162) ;* Fatal error : Cannot return to previous account
+      return to abort.cproc
+   end
 
    if not(ospath(acc.rec, OS$CD)) then
       display sysmsg(5161) ;* Unable to change to new directory
@@ -3429,6 +3438,138 @@ get.voc.parser.rec:
    end
    voc.parser.rec.keys = dcount(voc.parser.rec<2>, @vm)
 
+   return
+
+* ======================================================================
+* logto.authorised  -  May @logname enter the account LOGTO named?
+*
+* 13 Aug 26 Windows port.  Sets logto.ok.  See PROJECT_STATUS.md section 5.6.
+*
+* new.account holds the target account name, or null when LOGTO was given a
+* bare pathname, and acc.record holds the target's ACCOUNTS record.
+*
+* You may enter your own account, or one whose ACC$USERS list names you.  The
+* grant is recorded on the target, so withdrawing it is one edit in one place
+* and no password ever has to be shared or rotated.  @logname does not change
+* on the way in, so what is done there stays attributed to whoever logged in.
+
+logto.authorised:
+   logto.ok = @false
+
+* An administrator running an internal command is the install and maintenance
+* path, as it is at LOGIN.  The bootstrap has no terminal to type a password
+* at, so it cannot be made to prove anything.
+
+   if kernel(K$INTERNAL,-1) and kernel(K$ADMINISTRATOR,-1) then
+      logto.ok = @true
+      return
+   end
+
+   if new.account = '' then
+* A bare pathname is not an account and has no record to carry a grant, so
+* there is nothing to check.  Leave it to administrators rather than either
+* trusting it to everyone or withdrawing a way of reaching a directory that
+* has not been registered yet.
+      if kernel(K$ADMINISTRATOR,-1) then
+         logto.ok = @true
+      end else
+         display sysmsg(10003) ;* User not allowed in requested account
+      end
+      return
+   end
+
+   if new.account = upcase(@logname) then
+      logto.ok = @true
+   end else
+      grant.list = upcase(acc.record<ACC$USERS>)
+      locate upcase(@logname) in grant.list<1,1> setting grant.pos then
+         logto.ok = @true
+      end
+   end
+
+   if not(logto.ok) then
+      display sysmsg(10003) ;* User not allowed in requested account
+      return
+   end
+
+* Entering SDSYS is entering administration, which deserves a deliberate act
+* rather than an unattended session becoming an administrative one.
+
+   if new.account = 'SDSYS' then gosub logto.step.up
+
+   return
+
+* ======================================================================
+* logto.step.up  -  Re-authenticate before entering SDSYS
+*
+* 13 Aug 26 Windows port.  Sets logto.ok.  See PROJECT_STATUS.md section 5.6.
+*
+* The password asked for is the caller's own, not an SDSYS one.  Re-entering
+* your own credential confirms the person at the keyboard is still the one who
+* logged in; it introduces no new secret and changes nothing about who the
+* session is attributed to.  An SDSYS password would be a second shared secret
+* held by every administrator, unrotatable without telling all of them, which
+* is the weakness this identity model exists to remove.
+
+logto.step.up:
+   logto.ok = @false
+   my.name = upcase(@logname)
+
+* Is there a credential to re-enter?  If not, an administrator got in without
+* one and there is nothing to check against.  Warn rather than refuse: this is
+* a half configured system, and refusing would shut the only way into it.
+
+   cred.set = @false
+   openpath @sdsys:@ds:'$CRED' to cred.f then
+      read cred.rec from cred.f, my.name then
+         if cred.rec<CRED$VERIFIER> # '' then cred.set = @true
+      end
+      close cred.f
+   end
+
+   if not(cred.set) then
+      if kernel(K$ADMINISTRATOR,-1) then
+         display 'Warning: account ' : my.name : ' has no password set.'
+         logto.ok = @true
+      end else
+         display sysmsg(10003) ;* User not allowed in requested account
+      end
+      return
+   end
+
+* Case inversion silently upcases input, passwords included, so a password
+* typed correctly fails here with nothing to show why.  Clear it around the
+* read and put it back afterwards.
+
+   was.inverted = pterm(PT$INVERT, @false)
+
+* The main command loop sets the input prompt character to '?' before every
+* command, so clear it here as the menu code does.  There is nothing to put
+* back: the loop sets it again on its next pass.
+
+   prompt ''
+
+   display sysmsg(10030) ;* Entering SDSYS requires your own password
+
+   for try = 1 to 3
+      display 'Password: ' :
+      input pw HIDDEN
+      display
+
+      call !CRED_VERIFY(my.name, pw, logto.ok)
+      if logto.ok then
+         pw = ''
+         void pterm(PT$INVERT, was.inverted)
+         return
+      end
+
+      display sysmsg(10031) ;* Incorrect password
+      sleep 2
+   next try
+
+   pw = ''
+   void pterm(PT$INVERT, was.inverted)
+   logto.ok = @false
    return
 
 end

@@ -10,6 +10,7 @@
       * 09 Aug 24 mab add SDEXT embedded python key codes
       * 06 Aug 24 mab add SDEXT key codes
       * 30 Jul 24 mab define SD_ENCRYPT_SODIUM encode types 
+      * 13 Aug 26 Windows port - define ACC$USERS, the LOGTO grant list
       * 20240330 mab add ACC$USERS
       * 30Mar09 gwb Added missing defines, SKT$STREAM, SKT$DGRAM, SKT$TCP,
       *             SKT$UDP, SKT$ICMP
@@ -258,6 +259,13 @@
       $define ACC$DESCR        2     ;* Account description
       * REV 0.9.0
       $define ACC$GROUP        3     ;* lINUX group for this Account
+      * 13 Aug 26 Windows port - ACC$GROUP is dead; SD no longer consults
+      *   operating system groups.  Grants are recorded on the target account
+      *   instead: ACC$USERS is the multivalued list of accounts that may LOGTO
+      *   here, so revoking access is one edit in one place.  The 20240330
+      *   history line above claims this define, which had never been made.
+      *   See PROJECT_STATUS.md section 5.6.
+      $define ACC$USERS        4     ;* Accounts permitted to LOGTO here
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *
