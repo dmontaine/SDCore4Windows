@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Aug 26 Windows port - the daemon is sdwind, not sdlnxd, and start_sd()
+ *                      finds it beside the running executable rather than
+ *                      under <sysdir>/bin, which no longer holds binaries
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -387,30 +390,54 @@ bool start_sd() {
   int cpid;
   int i;
   char path[MAX_PATHNAME_LEN + 1];
+  char bindir[MAX_PATHNAME_LEN + 1];
 
   if (!bind_sysseg(TRUE, errmsg)) {
     fprintf(stderr, "%s\n", errmsg);
     return FALSE;
   }
 
-  /* Start sdlnxd dameon */
+  /* Start sdwind daemon */
 
-  sysseg->sdlnxd_pid = -1; /* Stays -ve if fails to start */
+  sysseg->sdwind_pid = -1; /* Stays -ve if fails to start */
   cpid = fork();
   if (cpid == 0) { /* Child process */
     for (i = 3; i < 1024; i++)
       close(i);
     daemon(1, 1);
+
+    /* 14 Aug 26 Windows port - this built "<sysdir>/bin/sdlnxd", which was
+       right while the Linux install kept the executables and the pcode
+       composite library in the same directory.  The Windows layout splits
+       them (PROJECT_STATUS.md 5.8), so <sysdir>/bin holds only pcode and
+       pcode.old and the daemon was never found - silently, because this is a
+       forked child that has already daemon()ed.  See exepath.c.            */
+
+    if (!exe_directory(bindir, sizeof(bindir))) {
+      fprintf(stderr, "Cannot locate the SD program directory - %s not started\n",
+              SDWIND_NAME);
+      _exit(1);
+    }
+
     /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s/bin/sdlnxd", sysseg->sysdir) >=
-        (MAX_PATHNAME_LEN + 1)) {
+    if (snprintf(path, sizeof(path), "%s/%s", bindir, SDWIND_NAME) >=
+        (int)sizeof(path)) {
       fprintf(stderr, "Overflowed file/pathname length in start_sd()!\n");
-      return FALSE;
-    } else
-      execl(path, path, NULL);
+      _exit(1);
+    }
+
+    execl(path, path, NULL);
+
+    /* execl() returns only on failure.  This child has already detached, so
+       it must not fall back into the caller's code - which is what used to
+       happen, and is why a missing daemon produced no symptom at all.      */
+
+    fprintf(stderr, "Cannot start %s from %s - %s\n", SDWIND_NAME, path,
+            strerror(errno));
+    _exit(1);
   } else /* Parent process */
       // {
-      // Moved to sdlnxd:   sysseg->sdlnxd_pid = cpid;   /* -ve if failed to start */
+      // Moved to sdwind:   sysseg->sdwind_pid = cpid;   /* -ve if failed to start */
       // }
 
       /* Run startup command, if defined */
@@ -468,13 +495,13 @@ bool stop_sd() {
       }
     }
 
-    /* Shutdown the sdlnxd daemon if it is running */
+    /* Shutdown the sdwind daemon if it is running */
 
     /* > 0 rather than merely non-zero, for the reason above: a negative pid
        signals a process group.  Zero was already excluded here. */
 
-    if (sysseg->sdlnxd_pid > 0)
-      kill(sysseg->sdlnxd_pid, SIGTERM);
+    if (sysseg->sdwind_pid > 0)
+      kill(sysseg->sdwind_pid, SIGTERM);
 
     /* Wait for everyone to go.  System V exposed an attach count that fell to
        zero as processes detached; POSIX shared memory has no equivalent, so

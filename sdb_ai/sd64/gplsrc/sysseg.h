@@ -45,7 +45,7 @@ struct SYSSEG {
    int16_t last_user;          /* Last user number allocated (cyclic) */
    int16_t hi_user_no;         /* Highest valid user number... */
      #define MIN_HI_USER_NO 1023 /* ...and its minimum value */
-   int sdlnxd_pid;               /* PID of sdlnxd daemon */
+   int sdwind_pid;               /* PID of sdwind daemon */
    char sysdir[MAX_PATHNAME_LEN+1];
    int16_t cmdstack;           /* CMDSTACK: Command stack depth */
    bool deadlock;                /* DEADLOCK: Trap deadlocks? */

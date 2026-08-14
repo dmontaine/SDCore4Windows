@@ -71,7 +71,7 @@ sd: BITSIZE := 64
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(ARCH)
-sd: $(SDOBJS) sdclilib sdtic sdfix sdconv sdidx sdlnxd terminfo
+sd: $(SDOBJS) sdclilib sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -125,9 +125,12 @@ sdidx: sdidx.o
 	@echo Linking $@
 	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdidx.o -o $(GPLBIN)sdidx
 
-sdlnxd: sdlnxd.o sdsem.o
+# 14 Aug 26 Windows port - renamed from sdlnxd, and exepath.o added: the daemon
+#           launches "sd -cleanup" and has to find it beside itself rather than
+#           under <sysdir>/bin, which holds no executables.
+sdwind: sdwind.o sdsem.o exepath.o
 	@echo Linking $@
-	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdlnxd.o $(GPLOBJ)sdsem.o -o $(GPLBIN)sdlnxd	
+	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)exepath.o -o $(GPLBIN)sdwind
 
 terminfo:
 	@echo Compiling terminfo library

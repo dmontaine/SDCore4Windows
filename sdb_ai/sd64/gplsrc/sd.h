@@ -83,6 +83,7 @@ typedef struct OBJDATA OBJDATA;
 #include "kernel.h"
 #include "sdsem.h"
 #include "linuxlb.h"
+#include "exepath.h"
 
 /* ======================================================================
    Command line items                                                     */

@@ -1,5 +1,5 @@
-/* SDLNXD.C
- * SD Linux daemon.
+/* SDWIND.C
+ * SD Windows daemon.
  * Copyright (c) 2007 Ladybridge Systems, All Rights Reserved
  *
  * This program is free software; you can redistribute it and/or modify
@@ -17,10 +17,17 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Aug 26 Windows port - renamed from sdlnxd, and the cleanup session is
+ *                      launched from beside the running executable rather
+ *                      than from <sysdir>/bin, which holds no binaries
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
  * START-DESCRIPTION:
+ *
+ * The background daemon.  It was sdlnxd, "SD Linux daemon", which is the
+ * wrong name in a Windows-only repository; the name now lives in one place,
+ * SDWIND_NAME in sddefs.h, which start_sd() also uses to launch it.
  *
  * END-DESCRIPTION
  *
@@ -55,7 +62,7 @@ int main() {
   int fd;
   struct stat statbuf;
 
-  process.user_no = -2; /* Mark as sdlnxd for semaphore table */
+  process.user_no = -2; /* Mark as sdwind for semaphore table */
 
   signal(SIGTERM, signal_handler);
 
@@ -85,7 +92,7 @@ int main() {
 
   /* Set process id into shared memory */
 
-  sysseg->sdlnxd_pid = getpid();
+  sysseg->sdwind_pid = getpid();
 
   /* ========================= Main loop ========================= */
 
@@ -119,7 +126,9 @@ void check_lost_users() {
   int16_t u;
   int16_t num_checked = 0;
   bool lost_user_detected = FALSE;
-  char cmd[MAX_PATHNAME_LEN + 10];
+  char bindir[MAX_PATHNAME_LEN + 1];
+  /* Room for the directory plus "'/sd' -cleanup" and its terminator. */
+  char cmd[MAX_PATHNAME_LEN + 20];
 
   StartExclusive(SHORT_CODE, 69);
 
@@ -149,7 +158,7 @@ void check_lost_users() {
   if (lost_user_detected) {
     /* Fire off a SD session to clear down the users. Although it would be
       nice to do the whole job here, there are so many dependencies that
-      sdlnxd ends up carrying around most of SD.                          */
+      sdwind ends up carrying around most of SD.                          */
     // converted to snprintf() -gwb 25Feb20
     /* Modified by Composer AI - 2026/06/10.
        Single-quote the executable path so spaces or shell metacharacters
@@ -163,11 +172,15 @@ void check_lost_users() {
             sysseg->sysdir);
       }
     system(cmd); */
-    if (snprintf(cmd, sizeof(cmd), "'%s/bin/sd' -cleanup", sysseg->sysdir) >= (int)sizeof(cmd)) {
-        printf(
-            "Overflowed path/filename buffer. Cleanup not run for:\n%s/bin/sd "
-            "-cleanup",
-            sysseg->sysdir);
+    /* 14 Aug 26 Windows port - this named "<sysdir>/bin/sd", the same wrong
+       location start_sd() used for the daemon: <sysdir>/bin holds pcode and
+       pcode.old, not executables (PROJECT_STATUS.md 5.8).  sd lives beside
+       this daemon, so ask where that is.  A daemon has no useful stdout, so
+       failures go to the error log rather than to printf.                 */
+    if (!exe_directory(bindir, sizeof(bindir))) {
+        log_message("Cleanup not run: cannot locate the SD program directory");
+      } else if (snprintf(cmd, sizeof(cmd), "'%s/sd' -cleanup", bindir) >= (int)sizeof(cmd)) {
+        log_message("Cleanup not run: overflowed path/filename buffer");
       } else {
         system(cmd);
       }
@@ -233,7 +246,8 @@ void log_message(char* msg) {
       timenow = time(NULL);
       ltime = localtime(&timenow);
 
-      bytes = sprintf(buff, "%02d %.3s %02d %02d:%02d:%02d [sdlnxd]:%s   %s%s",
+      bytes = sprintf(buff,
+                      "%02d %.3s %02d %02d:%02d:%02d [" SDWIND_NAME "]:%s   %s%s",
                       ltime->tm_mday, month_names[ltime->tm_mon],
                       ltime->tm_year % 100, ltime->tm_hour, ltime->tm_min,
                       ltime->tm_sec, Newline, msg, Newline);

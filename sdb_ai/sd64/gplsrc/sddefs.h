@@ -120,6 +120,15 @@
 #define SD_POSIX_SHM_NAME "/sd_shm_716d0301"
 #define SD_POSIX_SEM_FMT  "/sd_sem_716d0302_%d"
 
+/* 14 Aug 26 Windows port - the background daemon was sdlnxd, "SD Linux
+ * daemon", which is the wrong name in a Windows-only repository.  Named once
+ * here so that start_sd() and the daemon's own errlog prefix cannot drift
+ * apart, and so a further rename is a single line.  No extension: execl() and
+ * system() both append .exe on this runtime.
+ */
+
+#define SDWIND_NAME "sdwind"
+
 /* 13 Aug 26 Windows port - SD administrator rights come from membership of
  * this local group rather than from uid zero, which does not exist on Windows.
  * Keeping SD administration separate from Windows administration means it can

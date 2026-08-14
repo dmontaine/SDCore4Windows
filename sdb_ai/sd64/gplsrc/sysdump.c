@@ -82,7 +82,7 @@ void dump_sysseg(bool dump_cfg) {
   // Sys flags : x12345678  Deadlock  : 1          Errlog    : 1234567
   // FDS limit : 123456     Max id    : 123        Netfiles  : x1234
   // Next txn  : 12345678   Prt job   : 12345678   Jnl seq   : 1234567
-  // sdlnxd pid: 12345678   sdlnxd chk: 12345678
+  // sdwind pid: 12345678   sdwind chk: 12345678
   // Sysdir: xxxxxxxxxxxxxxxxxx
 
   printf("ShMemSize : %-9d\n", sysseg->shmem_size);
@@ -92,7 +92,7 @@ void dump_sysseg(bool dump_cfg) {
          sysseg->fds_limit, sysseg->maxidlen, sysseg->netfiles);
   printf("Next txn  : %-8ld    Prt job   : %-8d   Jnl seq   : %d\n",
          sysseg->next_txn_id, sysseg->prtjob, sysseg->jnlseq);
-  printf("sdlnxd pid: %-8d\n", sysseg->sdlnxd_pid);
+  printf("sdwind pid: %-8d\n", sysseg->sdwind_pid);
   printf("Sysdir: %s\n\n", sysseg->sysdir);
 
   /* Semaphores */

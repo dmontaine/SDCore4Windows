@@ -80,7 +80,7 @@ def sd(sdexe, env, args, expect_fail=False):
     print('    $ ' + ' '.join(cmd))
     sys.stdout.flush()
 
-    # Output goes to a FILE, never a pipe.  "sd -start" spawns sdlnxd, which
+    # Output goes to a FILE, never a pipe.  "sd -start" spawns sdwind, which
     # inherits stdout and stderr, so anything capturing them through a pipe
     # blocks until the *daemon* exits rather than until sd -start does - and
     # the daemon is meant to keep running.  It looks exactly like a hang.

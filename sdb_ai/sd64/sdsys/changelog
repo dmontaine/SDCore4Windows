@@ -5,6 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  The background daemon is now called sdwind, and it starts.
+           * sdlnxd is now sdwind.  The old name meant "SD Linux daemon",
+             which is wrong for a Windows system.  If you have scripts or
+             monitoring that look for an sdlnxd process, change them.
+           * IT WAS NOT RUNNING AT ALL on an installed system.  "sd -start"
+             looked for it inside the database directory, where the Linux
+             version used to keep the programs, and on Windows the programs
+             are in C:\Program Files\SD instead - so it was never found.
+             Nothing reported this: SD started, and everything you could type
+             at it worked, because the daemon does none of that.
+           * What you were missing is the clearing up of sessions that end
+             without logging out - a machine switched off, or a connection
+             dropped.  Those left entries behind that nothing removed.
+           * "sd -start" now says so if the daemon cannot be started, instead
+             of reporting success.
+
 14 Aug 26  There is a Windows installer.
            * SD installs to C:\Program Files\SD and its database to
              C:\ProgramData\SD, and appears in Settings > Apps like any

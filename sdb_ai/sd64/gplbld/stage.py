@@ -76,7 +76,7 @@ PROGRAM_FILES_BIN = [
     'sdconv.exe',
     'sdfix.exe',
     'sdidx.exe',
-    'sdlnxd.exe',
+    'sdwind.exe',
     'sdtic.exe',
     'sdclilib.dll',             # native UCRT64, needs no MSYS2 runtime
     'libsdclilib.dll.a',        # import library, for building clients
@@ -86,7 +86,7 @@ PROGRAM_FILES_BIN = [
 # a separate toolchain (5.3) and depends on nothing but Windows system DLLs,
 # which was confirmed rather than assumed.
 DLL_SCAN = [
-    'sd.exe', 'sdconv.exe', 'sdfix.exe', 'sdidx.exe', 'sdlnxd.exe', 'sdtic.exe',
+    'sd.exe', 'sdconv.exe', 'sdfix.exe', 'sdidx.exe', 'sdwind.exe', 'sdtic.exe',
 ]
 
 # Where a DLL may legitimately come from.  Anything resolved outside these is
