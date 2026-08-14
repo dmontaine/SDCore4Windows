@@ -263,6 +263,15 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
+    { /SUPPRESSMSGBOXES DOES NOT SUPPRESS THESE.  Measured 14 Aug 2026: a
+      /VERYSILENT /SUPPRESSMSGBOXES install still stopped and waited for OK on
+      both boxes below, so an unattended deployment would hang until somebody
+      walked past.  WizardSilent is the test that actually works.  The
+      uninstaller's confirmation is guarded separately by UninstallSilent,
+      which is a different flag for the same reason. }
+    if WizardSilent then
+      Exit;
+
     { Group membership is fixed in the access token at logon, so the sdusers
       membership just granted is not in this user's token yet and the data
       tree will refuse them until they sign out and back in.  Saying so here

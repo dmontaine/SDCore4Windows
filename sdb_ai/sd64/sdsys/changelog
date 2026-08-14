@@ -5,6 +5,26 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  There is a Windows installer.
+           * SD installs to C:\Program Files\SD and its database to
+             C:\ProgramData\SD, and appears in Settings > Apps like any
+             other program.
+           * The database directory is locked down during installation, to
+             SYSTEM, Administrators and a new "sdusers" group.  Before this it
+             was readable by every account on the machine.
+           * You are added to sdusers automatically, but WINDOWS ONLY APPLIES
+             GROUP MEMBERSHIP WHEN YOU SIGN IN - so sign out and back in
+             before using SD, or it will fail with "Error 13 allocating
+             semaphores".  Add other users with
+             "net localgroup sdusers <name> /add".
+           * Optionally installs OpenSSH Server so people on your network can
+             reach SD.  Off by default, and not offered if you already have
+             one, which it will not touch.
+           * Uninstalling does NOT remove your accounts, data or sd.conf.  It
+             offers to, and the answer defaults to no.
+           * Installing over an existing database leaves it alone; upgrading
+             one in place is not yet supported.
+
 14 Aug 26  SD finds its configuration file by itself.
            * It is %ProgramData%\SD\sd.conf, normally
              C:\ProgramData\SD\sd.conf, and nothing need be set in the
