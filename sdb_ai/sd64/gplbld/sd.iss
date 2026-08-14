@@ -63,7 +63,8 @@ PrivilegesRequired=admin
 ; administrator who joins sdusers and the standard user who does not, and they
 ; will find SD cannot open its files.  There is no reliable way to ask Inno who
 ; is at the keyboard, so the final message tells the user how to add anyone
-; else: net localgroup sdusers <name> /add.
+; else - with CREATE.ACCOUNT, and with net localgroup sdusers <name> /add as the
+; fallback for somebody who already has a Windows account.
 UsedUserAreasWarning=no
 
 ; The server is PE32+ and the MSYS2 runtime is 64 bit.  There is no 32 bit build.
@@ -92,6 +93,30 @@ Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from a
 ; something else and may be managed by policy.  See PROJECT_STATUS.md 5.9.
 Name: "installssh"; Description: "Install and start OpenSSH Server (allows remote access to THIS MACHINE on port 22)"; \
     GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
+
+; THE SECOND LAYER OF 5.6.2, and a CHILD of the task above - which is the whole
+; of how 5.9 is honoured here.  Inno only enables a child task when its parent
+; is ticked, so this is unreachable unless SD is installing the ssh server
+; itself.  We do not edit the configuration of an ssh server somebody else put
+; there; it may be there for something else and may be managed by policy.
+;
+; The deny rights say where an account may NOT log in.  This says who may ssh at
+; all: two independent controls rather than one.  Off by default like its
+; parent, because it writes to a file outside SD's own tree.
+;
+; THE LIST INCLUDES ADMINISTRATORS.  Without that the machine's own
+; administrator loses ssh the moment this is applied - the caution in 5.6.2, and
+; the reason this is offered rather than done silently.  allow-ssh-groups.ps1
+; resolves the name from S-1-5-32-544 rather than writing "Administrators",
+; which would be wrong on a localised Windows.
+;
+; The Check is repeated rather than inherited.  A subtask carries no
+; GroupDescription - it sits under its parent's - but it does get its own Check,
+; and without one it would still be created on a machine whose parent task was
+; filtered out for already having an ssh server.  That is precisely the machine
+; this must never appear on.
+Name: "installssh\allowgroups"; Description: "Also limit ssh to SD users and administrators (writes AllowGroups to sshd_config)"; \
+    Flags: unchecked; Check: SshServerAbsent
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -331,10 +356,64 @@ begin
     Exec(Exe, '-stop', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+{ Applies the AllowGroups block and returns what to tell the user, or '' if the
+  task was not selected.  PROJECT_STATUS.md 5.6.2.
+
+  RUN FROM [Code] AND NOT AS A [Run] ENTRY, because the exit code is the whole
+  point.  allow-ssh-groups.ps1 has THREE outcomes, not two, and the middle one
+  is the likely one on a fresh machine: 2 means "refused, and here is why" -
+  usually that OpenSSH needs a restart before sshd has ever run, so there is no
+  sshd_config to edit yet.  A [Run] entry would discard that and the user would
+  tick a box and silently get nothing, which is exactly the failure the OpenSSH
+  step made for its whole life.
+
+  It runs even in a silent install; only the reporting is skipped. }
+function ApplyAllowGroups: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  if not WizardIsTaskSelected('installssh\allowgroups') then
+    Exit;
+
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'ssh could NOT be limited to SD users and administrators: the script did not run.';
+    Exit;
+  end;
+
+  if Code = 0 then
+    Result := 'ssh is now limited to members of "sdusers" and the administrators group. ' +
+              'The original sshd_config was kept as sshd_config.before-sd.'
+  else if Code = 2 then
+    { The common case on a machine that has just been told to restart: sshd
+      writes its config on first start, so there is nothing to edit yet. }
+    Result := 'ssh was NOT limited, and nothing was changed. The most likely reason is ' +
+              'that OpenSSH has not started yet and has no configuration file - restart, ' +
+              'then run this from an elevated prompt:' + #13#10#13#10 +
+              '    powershell -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed' + #13#10#13#10 +
+              'It also refuses if sshd_config already says who may connect, in which case ' +
+              'that setting is somebody else''s and has been left alone.'
+  else
+    Result := 'Limiting ssh FAILED and sshd_config was left as it was. Run this from an ' +
+              'elevated prompt to see why:' + #13#10#13#10 +
+              '    powershell -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  SshLimit: String;
 begin
   if CurStep = ssPostInstall then
   begin
+    { Before the silent-install exit below: the work happens either way, and it
+      is only the message about it that a silent install skips. }
+    SshLimit := ApplyAllowGroups;
+
     { /SUPPRESSMSGBOXES DOES NOT SUPPRESS THESE.  Measured 14 Aug 2026: a
       /VERYSILENT /SUPPRESSMSGBOXES install still stopped and waited for OK on
       both boxes below, so an unattended deployment would hang until somebody
@@ -349,16 +428,42 @@ begin
       tree will refuse them until they sign out and back in.  Saying so here
       is the difference between "SD is broken" and "sign out and back in".
       PROJECT_STATUS.md 6. }
+    { LEAD WITH THE VERB.  This box used to offer only "net localgroup sdusers
+      <name> /add", which is the fallback and not the answer: CREATE.ACCOUNT
+      creates the Windows user, sets its password, joins it to sdusers and
+      makes the SD account, and the dialog never mentioned it existed.  SD has
+      accounts rather than accounts and users (docs/TCL_VERBS.md), so the verb
+      IS the account-creation interface and the net command only covers the one
+      case it cannot: somebody who already has a Windows account. }
     MsgBox('SD is installed.' + #13#10#13#10 +
            'You have been added to the "sdusers" group, which is what grants ' +
            'access to the SD database.' + #13#10#13#10 +
            'Windows only applies group membership when you sign in, so you must ' +
            'SIGN OUT AND BACK IN (or restart) before SD will run. Until then it ' +
            'will report that it cannot open its files.' + #13#10#13#10 +
-           'To give other people access, add each of them to that group:' + #13#10 +
+           'TO GIVE SOMEBODY ELSE ACCESS, use SD''s own verb. From an ELEVATED ' +
+           'command prompt, with SD started:' + #13#10#13#10 +
+           '    sd -start' + #13#10 +
+           '    sd -ASDSYS' + #13#10 +
+           '    CREATE.ACCOUNT USER <name>' + #13#10#13#10 +
+           'That makes the Windows account and the SD account together and asks ' +
+           'you for the new password. It needs an elevated session because ' +
+           'creating a Windows user does.' + #13#10#13#10 +
+           'Accounts made that way sign in OVER SSH ONLY - not at the console ' +
+           'and not over Remote Desktop. For an unrestricted account that can ' +
+           'also administer SD, add the ADMINISTRATOR keyword:' + #13#10#13#10 +
+           '    CREATE.ACCOUNT USER <name> ADMINISTRATOR' + #13#10#13#10 +
+           'If the person already has a Windows account, add it to the group by ' +
+           'hand instead:' + #13#10 +
            '    net localgroup sdusers <name> /add' + #13#10 +
            'They must sign out and back in as well.',
            mbInformation, MB_OK);
+
+    { Its own box rather than a paragraph in the one above: this one reports
+      what happened to a file outside SD's tree, and it can say "nothing was
+      changed", which must not be buried under six paragraphs about accounts. }
+    if SshLimit <> '' then
+      MsgBox(SshLimit, mbInformation, MB_OK);
 
     if not DataTreeAbsent then
       { Said out loud, because silently keeping the old data would look like
@@ -418,12 +523,41 @@ begin
   RegWriteExpandStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', Rebuilt);
 end;
 
+(* Take SD's AllowGroups block back out of sshd_config.
+
+   BECAUSE IT IS THE ONE THING SD WROTE OUTSIDE ITS OWN TREE.  Everything else
+   the uninstaller leaves behind is either the user's data or a group their data
+   is ACL'd to; this is a line in somebody else's configuration file, and
+   leaving it would keep restricting who may ssh into a machine that no longer
+   has SD on it.  The script removes only what is between its own markers and
+   is a no-op if the block is not there, so this is safe on a machine where the
+   task was never ticked.
+
+   AT usUninstall, NOT usPostUninstall: by the latter the script it runs has
+   already been deleted along with the rest of {app}.
+
+   Not brace-delimited, for the reason RemoveFromPath gives above - and this
+   comment is how that trap was hit a second time. *)
+procedure RemoveAllowGroups;
+var
+  Ps, Script: String;
+  Code: Integer;
+begin
+  Script := ExpandConstant('{app}\allow-ssh-groups.ps1');
+  if not FileExists(Script) then
+    Exit;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '" -Remove',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath: String;
 begin
   if CurUninstallStep = usUninstall then
   begin
+    RemoveAllowGroups;
     RemoveFromPath;
     Exit;
   end;

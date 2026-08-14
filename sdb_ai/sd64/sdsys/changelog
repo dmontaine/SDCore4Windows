@@ -5,6 +5,38 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  The installer can also limit who may ssh in at all.
+           * A new tick box, under the OpenSSH one: "Also limit ssh to SD users
+             and administrators".  It writes an AllowGroups line into
+             sshd_config naming "sdusers" and your administrators group, so
+             nobody else on the machine can ssh in even if they have a Windows
+             account.  Off by default.
+           * It is only offered when SD is installing OpenSSH itself.  If you
+             already had an ssh server, SD does not touch its configuration -
+             it may be there for something else.
+           * Your original sshd_config is kept as sshd_config.before-sd, and
+             uninstalling SD takes the line back out again.
+           * If OpenSSH has just been installed and asked you to restart, there
+             is no configuration file to edit yet and the installer will say
+             so, with the one command to run after restarting.
+           * NOT YET CONFIRMED BY A REAL SSH CONNECTION.  The editing is
+             tested; that the group names match the right people is not.  If
+             you use this, keep a way in that is not ssh until you have checked
+             you can still connect.
+
+14 Aug 26  The installer now tells you how accounts are really made.
+           * Its closing message used to end with "net localgroup sdusers
+             <name> /add", as though adding people to a group were the way to
+             give them SD.  It is not, and it never made the Windows account.
+           * It now leads with CREATE.ACCOUNT USER <name>, which makes the
+             Windows account and the SD account together and asks for the new
+             password; says that this needs an elevated window, because
+             creating a Windows user does; says that accounts made that way
+             sign in over ssh only; and gives the ADMINISTRATOR keyword for an
+             unrestricted one.
+           * The net command is still there, as what it always was - the way to
+             give SD to somebody who already has a Windows account.
+
 14 Aug 26  The ssh-only restriction is confirmed working.
            * An account in "sdsshonly" was signed in over ssh, with a password
              and with a key, and ran a command - while being refused a local
