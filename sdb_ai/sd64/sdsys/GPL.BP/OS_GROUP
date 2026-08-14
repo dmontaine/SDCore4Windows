@@ -77,12 +77,10 @@ deffun valid_os_name(name) calling '!valid_os_name'
       if not(valid_os_name(member)) then return rc
    end
 
-   q = char(39)
-
-*  Both names have been through !valid_os_name - letters, digits, dot,
-*  underscore and hyphen only - so neither can escape the quoting below.
-*  The script is single quoted for bash, making every $ in it literal, and
-*  uses double quotes for its own strings.
+*  14 Aug 26 Windows port - SH1 names PowerShell, so the command IS the
+*  script and there is no bash layer to quote against.  Both names have been
+*  through !valid_os_name - letters, digits, dot, underscore and hyphen only -
+*  so neither can carry a quote out of the strings below.
 
    ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
    ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
@@ -107,7 +105,7 @@ deffun valid_os_name(name) calling '!valid_os_name'
          return rc
    end case
 
-   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+   os.execute ps
 
    rc = os.error()
    if rc # 0 then set.status rc

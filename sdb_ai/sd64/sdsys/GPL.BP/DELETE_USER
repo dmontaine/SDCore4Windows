@@ -56,14 +56,12 @@ deffun valid_os_name(name) calling '!valid_os_name'
       return user_deleted
    end
 
-   q = char(39)
-
    ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
    ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
    ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
    ps := 'try { Remove-LocalUser -Name "' : username : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
 
-   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+   os.execute ps
 
    stat = os.error()
    if stat = 0 then

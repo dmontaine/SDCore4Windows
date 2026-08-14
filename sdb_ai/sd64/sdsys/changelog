@@ -5,6 +5,18 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  SH, ! and OS.EXECUTE now run PowerShell instead of bash.
+           * SD used to shell out through /bin/bash, which is not present on
+             a Windows machine and is not part of an SD install, so anything
+             that shelled out worked only where MSYS2 happened to be
+             installed.  PowerShell ships with Windows, so this works
+             everywhere.
+           * Commands passed to OS.EXECUTE are PowerShell, not shell script.
+             Existing programs that shell out will need their command text
+             changed.
+           * SH and SH1 in sd.conf name the shell and can be set to something
+             else.  The path must not contain spaces.
+
 14 Aug 26  Creating an SD account creates a Windows account again, as it
            created a Linux one before.  Deleting one deletes it.
            * CREATE.ACCOUNT USER makes the Windows local user, adds it to

@@ -44,13 +44,21 @@
 *    mount is noacl and chmod is a no-op.  So the temporary script is
 *    protected by work already done, with no icacls call of its own.
 *
-*    It is piped rather than passed by name because PowerShell is a Windows
-*    program and would need a Windows pathname, and BASIC has no way to make
-*    one - OS$FULLPATH returns a POSIX path despite what its comment claims.
-*    bash opens the file, PowerShell reads the script from stdin, and the
-*    exit status carries back through both.  Backslashes are folded to
-*    forward slashes so this works whether SDSYS is a POSIX path or a Windows
-*    one, which matters while the layout move in section 5.8 is half done.
+*    IT IS WRITTEN TO THE CURRENT DIRECTORY AND NAMED RELATIVELY, and that is
+*    not fussiness.  PowerShell is a Windows program and cannot open
+*    /usr/local/sdsys/...; BASIC has no way to make a Windows pathname, since
+*    OS$FULLPATH returns a POSIX one despite what its comment claims.  A
+*    relative name sidesteps the whole problem: the child inherits SD's
+*    working directory, which LOGIN set to the account directory, so a bare
+*    record name means the same file to both.  It works whether SDSYS is at a
+*    POSIX path or a Windows one, which matters while the layout move in
+*    section 5.8 is half done.
+*
+*    Invoke-Expression rather than "& .\script.ps1", for two reasons measured
+*    on 14 Aug 2026: the ampersand form does not propagate the script's exit
+*    status - a script ending "exit 7" gave 1 - and running a .ps1 file is
+*    subject to the execution policy, while running text is not.  So this
+*    needs no -ExecutionPolicy Bypass anywhere.
 *
 *    THE FILE IS DELETED WHETHER THE SCRIPT SUCCEEDED OR NOT.  If SD dies
 *    between the write and the delete, a script holding a password is left in
@@ -65,8 +73,6 @@ $internal
 function ps_script(script)
 $catalog !ps_script
 
-$include syscom keys.h
-
    set.status 0
    rc = -1
 
@@ -77,7 +83,7 @@ $include syscom keys.h
 
    id = '$PS.TMP.' : @userno
 
-   openpath @sdsys to sys.f else
+   openpath '.' to sys.f else
       set.status 1
       return rc
    end
@@ -87,12 +93,12 @@ $include syscom keys.h
       return rc
    end
 
-*  bash reads the file, PowerShell reads the script.  Forward slashes so that
-*  both a POSIX SDSYS and a Windows one work - MSYS2's bash accepts C:/x/y.
-   p = convert('\', '/', @sdsys : @ds : id)
+*  SH1 names PowerShell, so the command IS PowerShell.  The file is named
+*  relative to the working directory the child inherits - see the description.
+*  Single quotes, so the leading $ of the name is literal to PowerShell.
    q = char(39)
 
-   os.execute 'cat ' : q : p : q : ' | powershell.exe -NoProfile -NonInteractive -Command - >/dev/null 2>&1'
+   os.execute 'Get-Content -LiteralPath ' : q : id : q : ' -Raw | Invoke-Expression'
    rc = os.error()
 
    delete sys.f, id

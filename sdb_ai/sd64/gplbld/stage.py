@@ -160,6 +160,8 @@ ERRLOG=50
 APILOGIN=1
 USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts
+SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo
+SH1=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command
 """
 
 

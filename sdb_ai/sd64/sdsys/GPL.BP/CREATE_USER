@@ -79,12 +79,10 @@ if not(valid_os_name(username)) then
 end
 
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo useradd -m " : username
-*   The script is wrapped in single quotes for bash, so every $ and backslash
-*   in it is literal, and it uses double quotes for its own strings.  The name
-*   has been through !valid_os_name, which permits letters, digits, dot,
-*   underscore and hyphen only, so it cannot escape the quoting.
-   q = char(39)
-
+*   SH1 names PowerShell, so the command IS the script - there is no bash
+*   layer to quote against.  The name has been through !valid_os_name, which
+*   permits letters, digits, dot, underscore and hyphen only, so it cannot
+*   carry a quote out of the string below.
    ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
    ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
    ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
@@ -92,7 +90,7 @@ end
    ps := '-Description "SD account" -ErrorAction Stop | Out-Null } '
    ps := 'catch { exit 1 }; exit 0'
 
-   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+   os.execute ps
 * --------------------
 stat = OS.ERROR()
 if stat = 0 then

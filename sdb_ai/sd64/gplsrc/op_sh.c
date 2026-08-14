@@ -175,8 +175,48 @@ Private void sh_execute(char *command) {
   int bytes;
   int child_status;
 
-  char dflt_sh[] = "/bin/bash -i";
-  char dflt_sh1[] = "/bin/bash -c";
+  /* 14 Aug 26 Windows port - the shell is PowerShell, not bash.
+
+     These were "/bin/bash -i" and "/bin/bash -c".  That is a Linux-ism twice
+     over: bash is not on a Windows machine, and an installed SD does not ship
+     one - gplbld/stage.py stages the SD executables and the MSYS2 DLLs, and no
+     shell at all.  So /bin/bash resolved inside C:\Program Files\SD\ and every
+     OS.EXECUTE failed on an installed system while working perfectly in a
+     development tree, where MSYS2's own bash happens to exist.
+
+     The path is derived from SystemRoot rather than written as C:\Windows,
+     because the system drive is not guaranteed.  It must contain no spaces:
+     clparse() splits on them and does not honour quotes, which is why
+     PowerShell is named by its real location rather than through a wrapper.
+
+     Note these are copies, not string literals - clparse() calls strtok() on
+     whatever it is given and writes into it.                                */
+
+  char dflt_sh[MAX_PATHNAME_LEN + 64];
+  char dflt_sh1[MAX_PATHNAME_LEN + 64];
+  char psh[MAX_PATHNAME_LEN + 1];
+  const char *sysroot;
+  char *pp;
+
+  sysroot = getenv("SystemRoot");
+  if ((sysroot == NULL) || (*sysroot == '\0'))
+    sysroot = "C:/Windows";
+
+  snprintf(psh, sizeof(psh),
+           "%s/System32/WindowsPowerShell/v1.0/powershell.exe", sysroot);
+
+  /* SystemRoot arrives as C:\WINDOWS.  Fold the separators so the whole path
+     is one spelling; sdrealpath() accepts either, but consistency here keeps
+     the value that gets logged and reported readable.                       */
+
+  for (pp = psh; *pp != '\0'; pp++) {
+    if (*pp == '\\')
+      *pp = '/';
+  }
+
+  snprintf(dflt_sh, sizeof(dflt_sh), "%s -NoProfile -NoLogo", psh);
+  snprintf(dflt_sh1, sizeof(dflt_sh1), "%s -NoProfile -NonInteractive -Command",
+           psh);
 
   saved_trap_break_char = trap_break_char;
   saved_pagination = (tio.dsp.flags & PU_PAGINATE) != 0;

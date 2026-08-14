@@ -52,8 +52,8 @@
 *    Membership is compared on the last backslash-delimited component, so
 *    MACHINE\don and don both match don.
 *
-*    COST TO KNOW ABOUT: this spawns bash and then PowerShell, which is slow
-*    enough to notice on a path that runs at every login.  The fast answer is
+*    COST TO KNOW ABOUT: this starts PowerShell, which is slow enough to
+*    notice on a path that runs at every login.  The fast answer is
 *    getgrnam() behind a KERNEL key - it is already known to resolve Windows
 *    local groups correctly (PROJECT_STATUS.md section 4) - but that is new C
 *    code and this is not.
@@ -91,19 +91,17 @@ if not(valid_os_name(user)) or not(valid_os_name(group)) then
    return user_found
 end
 
-   q = char(39)   ;* apostrophe - bash quoting, see below
-
-* The script is wrapped in single quotes for bash, which makes every $ and
-* backslash in it literal, and uses double quotes for its own strings.  An
-* apostrophe cannot appear in either name, so the quoting cannot be escaped.
-* Output is discarded: this runs at login and PowerShell's error text is not
-* the user's business.
+* 14 Aug 26 Windows port - SH1 now names PowerShell, so the command IS the
+*   script.  There is no bash layer to quote against any more; what is written
+*   here is what PowerShell reads.  Both names have been through
+*   !valid_os_name, so neither can carry a quote.  Output is discarded: this
+*   runs at login and PowerShell's error text is not the user's business.
    ps = 'try { $ms = Get-LocalGroupMember -Group "' : group
    ps := '" -ErrorAction Stop } catch { exit 2 }; '
    ps := 'foreach ($m in $ms) { if ((($m.Name -split "\\")[-1]) -ieq "'
    ps := user : '") { exit 0 } }; exit 1'
 
-   os.execute 'powershell.exe -NoProfile -NonInteractive -Command ' : q : ps : q : ' >/dev/null 2>&1'
+   os.execute ps
 
    stat = os.error()
 
