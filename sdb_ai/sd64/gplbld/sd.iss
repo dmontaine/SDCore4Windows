@@ -314,12 +314,54 @@ end;
   Uninstall
   --------------------------------------------------------------------------- }
 
+procedure RemoveFromPath;
+var
+  Path, Dir, Lower, LowerDir, Rebuilt: String;
+  P: Integer;
+begin
+  (* INNO DOES NOT UNDO AN APPENDED PATH.  The [Registry] entry appends to the
+     existing value with the olddata constant, and the uninstaller has no way
+     to know which part it contributed - so by default it leaves a dead
+     directory on the system PATH for ever.  Measured 14 Aug 2026: after a
+     clean uninstall the SD directory was still on PATH.  Strip it by name.
+
+     This comment is not brace-delimited on purpose: a brace comment cannot
+     mention a brace-delimited Inno constant, because the first closing brace
+     ends the comment and everything after it is parsed as code. *)
+  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', Path) then
+    Exit;
+
+  Dir := ExpandConstant('{app}\usr\bin');
+  Lower := ';' + Lowercase(Path) + ';';
+  LowerDir := ';' + Lowercase(Dir) + ';';
+  P := Pos(LowerDir, Lower);
+  if P = 0 then
+    Exit;
+
+  { Rebuilt from the original text, so surviving entries keep their case. }
+  Rebuilt := Copy(Path, 1, P - 1) + Copy(Path, P + Length(Dir) + 1, MaxInt);
+  if (Length(Rebuilt) > 0) and (Rebuilt[1] = ';') then
+    Delete(Rebuilt, 1, 1);
+
+  RegWriteExpandStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', Rebuilt);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath: String;
 begin
+  if CurUninstallStep = usUninstall then
+  begin
+    RemoveFromPath;
+    Exit;
+  end;
+
   if CurUninstallStep <> usPostUninstall then
     Exit;
+
+  { The sdusers group is deliberately NOT removed.  CREATE.ACCOUNT adds every
+    SD user to it, and a data tree the user chose to keep is ACL'd to it, so
+    deleting the group would orphan the permissions on their own database. }
 
   DataPath := ExpandConstant('{#DataDir}');
   if not DirExists(DataPath) then
