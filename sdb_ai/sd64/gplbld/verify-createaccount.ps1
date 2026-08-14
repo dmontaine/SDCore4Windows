@@ -65,8 +65,39 @@ function Note($step, $expected, $got, $decisive) {
     Write-Output ("  [{0}] {1}: expected {2}, got {3}" -f $(if ($pass) { 'PASS' } else { 'FAIL' }), $step, $expected, $got)
 }
 
+# STARTING SD IS NOT A JOB FOR Invoke-Native, AND THIS HUNG THE WHOLE SCRIPT.
+#
+# Measured 14 Aug 2026, fourth session: the script printed "SD is not running,
+# starting it" and never came back.  sd -start had already succeeded - sdwind
+# was up and the sd process had exited - but Invoke-Native was still waiting.
+#
+# sd -start spawns sdwind, which INHERITS the redirected stdout and stderr
+# handles.  Start-Process -Wait with -RedirectStandardOutput does not return
+# until those handles are released, so it waits for the DAEMON, which is meant
+# to run for ever.  PROJECT_STATUS.md section 6 recorded the trap but gave
+# "redirect to a file when starting from a script" as the remedy, which is what
+# Invoke-Native does; redirecting to a file is not enough, because the wait is
+# on the handle and not on the destination.  Corrected there and in HISTORY.md.
+#
+# So do what that trap's other sentence says: do not wait on the process at
+# all, and look for sdwind instead.
+function Start-SD {
+    $null = Start-Process -FilePath $sdExe -ArgumentList '-start' -NoNewWindow
+    for ($i = 0; $i -lt 30; $i++) {
+        if ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+            Write-Output "  sdwind is up"
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    Write-Output "  sdwind did not appear within 15 seconds"
+    return $false
+}
+
 # See the header: no inline "2>&1" anywhere, because PowerShell 5.1 turns a
 # native program's stderr into a terminating error under 'Stop'.
+#
+# DO NOT USE THIS FOR sd -start.  See Start-SD above.
 function Invoke-Native {
     param([string]$Exe, [string[]]$CmdArgs)
     $so = Join-Path $workdir 'native.out'
@@ -190,7 +221,10 @@ try {
 
     if ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0) {
         Write-Output "  SD is not running, starting it"
-        $null = Invoke-Native $sdExe @('-start')
+        if (-not (Start-SD)) {
+            Write-Output "verify-createaccount: SD would not start"
+            exit 2
+        }
     }
 
     # Same alphabet as verify-sshonly.ps1: no ambiguous glyphs, and nothing
