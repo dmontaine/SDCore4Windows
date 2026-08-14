@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  CREATE.ACCOUNT is confirmed working, ssh restriction and all.
+           * An account created with CREATE.ACCOUNT USER was signed in over
+             ssh with the password SD set for it, and refused a local sign-in
+             at the same moment.  So the account you get from the verb really
+             is the ssh-only account it says it is.
+           * Everything else it makes was checked too: the Windows account is
+             created and enabled, it joins sdusers and sdsshonly and its own
+             sdu_ group, it is NOT an administrator unless you say
+             ADMINISTRATOR, and the account directory, VOC, BP and the
+             register entry are all there.
+           * You will see "Warning unable to setgid bit on Group Folder,
+             status: 1" every time.  It is harmless and can be ignored - it is
+             a leftover of the Linux version and does nothing on Windows.
+           * Remote Desktop is still the one part nobody has watched refuse.
+
 14 Aug 26  Reinstalling does not update your database, and it never did.
            * Worth knowing before you report a bug that is already fixed.  The
              installer deliberately leaves an existing database alone, so
