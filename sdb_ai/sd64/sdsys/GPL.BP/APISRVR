@@ -25,6 +25,7 @@
 * 28 Jul 24 mab remove enter.package / exit.package (commands not supported)
 * rev 0.9.0 Jan 25 mab test for user member of account on logto
 * 13 Aug 26 Windows port - removed the sdusers and ACC$GROUP membership tests
+* 13 Aug 26 Windows port - SrvrAccount takes an account name only, no pathnames
 * END-HISTORY
 *
 *
@@ -328,7 +329,7 @@ return
 
 * ======================================================================
 * SrvrAccount  -  Logto named account
-* In:  account name or path
+* In:  account name
 
 vb.account:
 * Run the ON.LOGTO paragraph, if it exists
@@ -346,19 +347,30 @@ if len(new.account) < 1 or len(new.account) > MAX.ACCOUNT.NAME.LEN then
    goto revert.to.old.account
 end
 
-account.path = new.account
-if index(new.account, @ds, 1) = 0 then
-   openpath @sdsys:@ds:'ACCOUNTS' to acc.f then
-      read acc.rec from acc.f, new.account then
-         account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-      end
-      close acc.f
+* 13 Aug 26 Windows port - this took an account name or a pathname, and a
+*   pathname reached a directory without going through the register at all.
+*   Accounts are reached by name, as they are at LOGTO.  See PROJECT_STATUS.md
+*   section 5.6.
+
+account.path = ''
+openpath @sdsys:@ds:'ACCOUNTS' to acc.f then
+   read acc.rec from acc.f, new.account then
+      account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
    end
+   close acc.f
+end
+
+if account.path = '' then
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   goto revert.to.old.account
 end
 
 * rev 0.9.0 * is user member of account?
-* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group; account
-*   access is becoming a matter of the account's own credentials.
+* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group.  Nothing
+*   has replaced it here: the API server has no credential model yet, so any
+*   session it accepts can still reach any account by name.  The LOGTO grant
+*   check in CPROC does not apply to this path.  See PROJECT_STATUS.md 5.6.
 
 if not(ospath(account.path, OS$CD)) then
    server.error = SV$ERROR
@@ -402,6 +414,12 @@ if not(ospath(old.account.path, OS$CD)) then
    error.msg = sysmsg(5162) ;* Fatal error : Cannot return to previous account
    return to abort.vbsrvr
 end
+
+* 13 Aug 26 Windows port - put @PATH back with the directory.  This restored
+*   the one and not the other, so a refused account switch left @PATH holding
+*   the path it had failed to reach.
+
+account.path = old.account.path
 
 return
 

@@ -36,6 +36,8 @@
 * 13 Aug 26 Windows port - LOGTO authorised by the target's ACC$USERS grant
 *                      list, and LOGTO SDSYS re-authenticates against the
 *                      caller's own password
+* 13 Aug 26 Windows port - LOGTO takes an account name only, no pathnames;
+*                      SDSYS reaches every account
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2492,21 +2494,34 @@ int.logto:
 
    @system.return.code = -ER$ARGS
 
+   acc.rec = ''
+   acc.record = ''
    openpath @sdsys:@ds:'ACCOUNTS' to acc.f then
 *      readv acc.rec from acc.f, upcase(new.account), ACC$PATH then
       read acc.record from acc.f, upcase(new.account) then
          acc.rec = parse.pathname.tokens(acc.record<ACC$PATH>)
          new.account = upcase(new.account)
-      end else
-         acc.rec = new.account
-         new.account = ''
       end
       close acc.f
    end
 
-   * new.account contains the account name, null if attaching by path
+   * new.account contains the account name
    * acc.rec contains the pathname of the account (other fields removed)
-   * acc.record contains the full ACCOUNT record 
+   * acc.record contains the full ACCOUNT record
+
+* 13 Aug 26 Windows port - LOGTO takes an account name and nothing else.
+*   Anything absent from ACCOUNTS used to be treated as a pathname to change
+*   directory to, which reached an account's directory without ever consulting
+*   its grant list.  An unregistered directory is not an account.  The refusal
+*   is the one an ungranted account gives, so the register cannot be probed to
+*   find out which account names exist.  See PROJECT_STATUS.md section 5.6.
+
+   if acc.rec = '' then
+      display sysmsg(10003) ;* User not allowed in requested account
+      if ospath(account.path, OS$CD) then return
+      display sysmsg(5162) ;* Fatal error : Cannot return to previous account
+      return to abort.cproc
+   end
 
 * rev 0.9.0 * is user member of account?
 * 13 Aug 26 Windows port - was a linux group test on ACC$GROUP.  The grant
@@ -2537,9 +2552,9 @@ int.logto:
    i = ospath("", os$flush.cache)
    account.path = ospath("", os$cwd)     ;* @PATH
 
-   if new.account = '' then
-      new.account = upcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999])
-   end
+* 13 Aug 26 Windows port - the account name used to be derived from the last
+*   element of the pathname when LOGTO was given a path.  It cannot be reached
+*   that way now, so new.account always holds the registered name.
 
    who = new.account
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
@@ -3445,8 +3460,8 @@ get.voc.parser.rec:
 *
 * 13 Aug 26 Windows port.  Sets logto.ok.  See PROJECT_STATUS.md section 5.6.
 *
-* new.account holds the target account name, or null when LOGTO was given a
-* bare pathname, and acc.record holds the target's ACCOUNTS record.
+* new.account holds the target account name, which is always a registered one,
+* and acc.record holds its ACCOUNTS record.
 *
 * You may enter your own account, or one whose ACC$USERS list names you.  The
 * grant is recorded on the target, so withdrawing it is one edit in one place
@@ -3465,16 +3480,15 @@ logto.authorised:
       return
    end
 
-   if new.account = '' then
-* A bare pathname is not an account and has no record to carry a grant, so
-* there is nothing to check.  Leave it to administrators rather than either
-* trusting it to everyone or withdrawing a way of reaching a directory that
-* has not been registered yet.
-      if kernel(K$ADMINISTRATOR,-1) then
-         logto.ok = @true
-      end else
-         display sysmsg(10003) ;* User not allowed in requested account
-      end
+* SDSYS reaches every account without exception.  It is the administration
+* account, and administration that cannot enter an account cannot repair one.
+* The test is the account you are standing in, not the one you logged in as,
+* so it holds whether you entered SDSYS directly or stepped up into it - and
+* either way @logname still names the person, so the audit trail is what
+* accounts for the access rather than a refusal.
+
+   if who = 'SDSYS' then
+      logto.ok = @true
       return
    end
 
