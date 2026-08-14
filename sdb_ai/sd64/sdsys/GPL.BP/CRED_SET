@@ -1,0 +1,94 @@
+* CRED_SET
+* Set the credential for an SD account.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 13 Aug 26 Windows port - written for the account credential model
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !CRED_SET(account, password, ok)
+*
+*    Writes a fresh salt and verifier for the named account into the $CRED
+*    register.  The password itself is never stored; the verifier is an Argon2
+*    key derived from the password and the salt, so setting the same password
+*    twice produces different stored values.
+*
+*    Returns ok = @true on success.  Sets STATUS() to a non-zero value and
+*    returns @false if the register cannot be opened or written.
+*
+*    See PROJECT_STATUS.md section 5.6 for the identity model this belongs to.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine CRED_SET(account, password, ok)
+$catalog !CRED_SET
+
+$include int$keys.h
+$include err.h
+
+   ok = @false
+   set.status 0
+
+   account = upcase(trim(account))
+   if account = '' or password = '' then
+      set.status ER$ARGS
+      return
+   end
+
+   openpath @sdsys:@ds:'$CRED' to cred.f else
+      set.status ER$NVR
+      return
+   end
+
+   salt = ''
+   call !SD_GET_SALT(salt)
+   if salt = '' then
+      close cred.f
+      set.status ER$ARGS
+      return
+   end
+
+   verifier = ''
+   call !SD_KEY_FROM_PW(password, salt, verifier)
+   if verifier = '' then
+      close cred.f
+      set.status ER$ARGS
+      return
+   end
+
+   cred.rec = ''
+   cred.rec<CRED$SALT> = salt
+   cred.rec<CRED$VERIFIER> = verifier
+
+   write cred.rec to cred.f, account on error
+      close cred.f
+      return
+   end
+
+   ok = @true
+   close cred.f
+
+   return
+end
+
+* END-CODE

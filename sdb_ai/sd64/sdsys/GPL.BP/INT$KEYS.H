@@ -253,6 +253,14 @@
       $define LGN$VALID.ACCOUNTS   9    ;* Valid accounts, blank = unrestricted
       $define LGN$BANNED.ACCOUNTS 10    ;* Banned accounts
 
+      * $CRED file - account credentials.  13 Aug 26 Windows port.
+      * Id = uppercase account name.  Replaces the password fields of the
+      * $LOGINS register, which was removed on 20240612.  The password is
+      * never stored: CRED$VERIFIER is an Argon2 key derived from the password
+      * and CRED$SALT by !SD_KEY_FROM_PW.  See PROJECT_STATUS.md section 5.6.
+      $define CRED$SALT            1    ;* Salt, base64
+      $define CRED$VERIFIER        2    ;* Derived key, base64
+
       * ID = $SECURE
       *    F1 = Secure system? (boolean)
 
