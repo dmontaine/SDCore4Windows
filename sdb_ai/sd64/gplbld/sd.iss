@@ -170,6 +170,41 @@ Filename: "{sys}\net.exe"; Parameters: "localgroup sdusers /add /comment:""SD us
 Filename: "{sys}\net.exe"; Parameters: "localgroup sdusers ""{username}"" /add"; \
     Flags: runhidden skipifdoesntexist; StatusMsg: "Adding {username} to sdusers..."
 
+; sdsshonly is the group that confines an account to ssh (PROJECT_STATUS.md
+; 5.6.2).  CREATE.ACCOUNT puts every NON-administrator account it creates into
+; it; the deny rights below are what the membership actually means.
+;
+; IT IS DELIBERATELY NOT sdusers.  That grants access to the data files and
+; administrators are in it too, so denying console logon there would lock the
+; machine's administrators out of their own console.
+Filename: "{sys}\net.exe"; Parameters: "localgroup sdsshonly /add /comment:""SD accounts restricted to ssh"""; \
+    Flags: runhidden skipifdoesntexist; StatusMsg: "Creating the sdsshonly group..."
+
+; AND THIS IS WHAT MAKES THAT GROUP MEAN ANYTHING.  Applied ONCE, here, rather
+; than per account: Windows has no cmdlet for user rights assignment, so doing
+; it per account would need an LsaAddAccountRights P/Invoke or a secedit
+; rewrite on every account creation.
+;
+; TWO RIGHTS, AND DELIBERATELY NOT A THIRD.  SeDenyInteractiveLogonRight blocks
+; the console and SeDenyRemoteInteractiveLogonRight blocks Remote Desktop.
+; SeDenyNetworkLogonRight IS NOT SET AND MUST NOT BE: Win32-OpenSSH
+; authenticates with a network logon - cleartext network for passwords, S4U for
+; keys - so denying it would remove the one route this is meant to preserve.
+;
+; LsaAddAccountRights rather than secedit, because secedit is a read-modify-
+; write of the ENTIRE USER_RIGHTS area: it would rewrite unrelated machine
+; policy and race anything else editing it.  This adds one right to one SID.
+; Both calls are idempotent - adding a right an account already holds succeeds.
+;
+; Failure is reported and not fatal, on the same reasoning as the ssh install:
+; a machine where this cannot be applied should still get a working SD, with
+; the restriction absent rather than the install broken.  It is checked at the
+; end by CurStepChanged so it cannot fail silently, which is the mistake the
+; OpenSSH step made.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\deny-logon.ps1"" sdsshonly"; \
+    Flags: runhidden; StatusMsg: "Restricting SD accounts to ssh..."
+
 ; THIS IS THE STEP THAT MAKES THE DATA PRIVATE.  Nothing SD does at runtime
 ; substitutes for it.  C:\ProgramData grants BUILTIN\Users:(I)(OI)(CI)(RX) by
 ; inheritance, so without this the whole database is world readable and

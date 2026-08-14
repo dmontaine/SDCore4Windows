@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  Accounts SD creates can sign in over ssh only.
+           * CREATE.ACCOUNT USER <name> now makes an account that can reach
+             this machine ONLY over ssh.  It cannot sign in at the screen in
+             front of you, and it cannot use Remote Desktop.
+           * CREATE.ACCOUNT USER <name> ADMINISTRATOR is unchanged and is not
+             restricted: administrators get an ordinary Windows account and
+             can sign in locally as usual.
+           * This works by putting the account in a new "sdsshonly" group.
+             The installer denies that group the two local sign-in rights, so
+             you can see who is restricted by looking at who is in the group.
+             Removing someone from it lifts the restriction.
+           * "sdusers" is unchanged and is a different thing - it grants
+             access to the database files, and administrators are in it too.
+           * NOT YET TESTED THROUGH SSH.  The restriction is known to be
+             applied correctly, but nobody has yet signed in over ssh to a
+             machine where it is in force.
+
 14 Aug 26  The installer's "install OpenSSH Server" option now works.
            * It never did.  The command it ran had a syntax error, so ticking
              the box installed nothing and reported nothing - no ssh server,

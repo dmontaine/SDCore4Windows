@@ -377,6 +377,34 @@ PW.TRY.AGAIN:
             @system.return.code = -ER$FAILED
             stop sysmsg(10033,acc.uname,stat) ;* Unable to make %1 an administrator, status: %2
           end
+        end else
+
+* 14 Aug 26 Windows port - ACCOUNTS SD CREATES REACH THE MACHINE OVER SSH ONLY.
+*   Decision from the repository owner, PROJECT_STATUS.md 5.6.2.  The console
+*   and Remote Desktop belong to administrators, who get ordinary unrestricted
+*   Windows accounts - which is why this is the "else" of the branch above.
+*
+*   THE DENY RIGHTS ARE NOT SET HERE.  They are applied ONCE, by the installer,
+*   to the group named below; joining the group is the whole of what account
+*   creation has to do.  Windows has no cmdlet for user rights assignment, so
+*   granting them per account would mean an LsaAddAccountRights P/Invoke or a
+*   secedit rewrite of the entire USER_RIGHTS area on the hot path of every
+*   account creation.  A group is also inspectable: "who is confined to ssh?"
+*   is one membership list rather than a walk through secpol.
+*
+*   IT CANNOT BE sdusers.  That grants access to the data FILES and
+*   administrators are in it too, so denying console logon there would lock
+*   administrators out of their own machine.
+*   Named literally, as 'sdusers' is above.  The installer has to know the same
+*   name and it is an Inno script, so a $define here would keep nothing in sync.
+          void os_group("ADDMEM", "sdsshonly", acc.uname)
+          stat = OS.ERROR()
+          if stat = 0 then
+            crt sysmsg(10034,acc.uname)   ;* %1 may sign in over ssh only
+          end else
+            @system.return.code = -ER$FAILED
+            stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
+          end
         end
 
       *
