@@ -21,6 +21,7 @@
  * 11 Jun 24 mab overwrite op_errmsg (pick error message) and op_pabort (pick abort) as illegal op code
  * 15 Jun 24 mab overwrite op_ttyset op_ttyget as illegal op code
  * 28 Jul 24 mab remove op code overwrites (removed from opcodes.h)
+ * 13 Aug 26 Windows port - seed USR_ADMIN from IsAdmin() at process start
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -51,6 +52,10 @@
 #include <sys/wait.h>
 
 Private void init_program(void);
+
+/* 13 Aug 26 Windows port - declared here as op_kernel.c does, rather than in a
+   header, because linuxlb.c has none of its own.                            */
+bool IsAdmin(void);
 
 jmp_buf k_exit;
 
@@ -165,6 +170,19 @@ bool init_kernel() {
 /* 20240219 mab rebrand VBSRVR to APISRVR */
     if (is_sdApiSrvr)
       my_uptr->flags |= USR_SDAPISRVR;
+
+    /* 13 Aug 26 Windows port - seed the administrator flag from the operating
+       system.  On Linux the BASIC layer set this itself: CPROC tested
+       SYSTEM(27) for uid zero and called KERNEL(K$ADMINISTRATOR, 1) after
+       dropping to sdsys.  Neither half of that works here - there is no uid
+       zero on Windows - so nothing set the flag and K$ADMINISTRATOR answered
+       "no" for everybody, permanently.  Seeding it here gives the BASIC layer
+       a truthful answer to ask for, and means a process started by a member of
+       SD_ADMIN_GROUP is an SD administrator.  IsAdmin() fails closed if the
+       group does not exist.  See linuxlb.c and PROJECT_STATUS.md section 5.6. */
+
+    if (IsAdmin())
+      my_uptr->flags |= USR_ADMIN;
 
     /* Phantom processes have the user name entered by the parent when the
       user table entry is reserved.  For other users, initialise this now. */

@@ -2458,7 +2458,9 @@ int.logto:
       return
    end
 * 20240330 mab only root can logto sdsys
-   if (upcase(new.account) = "SDSYS") and (system(27) > 0) then
+* 13 Aug 26 Windows port - was system(27) > 0, ie "uid is not root".  Always
+*   true on Windows, so LOGTO SDSYS was refused unconditionally.
+   if (upcase(new.account) = "SDSYS") and not(kernel(K$ADMINISTRATOR, -1)) then
       display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
       unwinding = 2
       return    

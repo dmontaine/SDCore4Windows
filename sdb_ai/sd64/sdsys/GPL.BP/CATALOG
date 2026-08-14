@@ -102,9 +102,11 @@ $define CAT_PCODE  3
             option.seen = @true
             mode = CAT_GLOBAL
             * rev 0.9.0 must be admin for Global
-            if system(27) # 0 then
+            * 13 Aug 26 Windows port - was system(27) # 0.  There is no uid zero
+            *   on Windows, so CATALOG GLOBAL was always refused.
+            if not(kernel(K$ADMINISTRATOR, -1)) then
               stop sysmsg(2001)  ;* Command requires administrator privileges
-            end 
+            end
 
          case keyword = KW$PCODE
             if mode and mode # CAT_PCODE then stop sysmsg(3021) ;* Incompatible cataloguing modes specified

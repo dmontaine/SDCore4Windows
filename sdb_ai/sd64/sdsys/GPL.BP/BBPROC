@@ -126,7 +126,10 @@ end
 
 * Main processing loop
 
-if system(27) # 0 then
+* 13 Aug 26 Windows port - was system(27) # 0, ie "uid is not root".  There is
+*   no uid zero on Windows, so that test was always true and the bootstrap
+*   always refused.  K$ADMINISTRATOR is the platform neutral question.
+if not(kernel(K$ADMINISTRATOR, -1)) then
   crt 'Command requires administrator privileges'
   goto abort.bbproc
 end
