@@ -639,8 +639,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    int.intrinsics<-1> = "SCAN"            ; int.intrinsic.opcodes<-1> = OP.BTSCAN
    * 20240806 mab add SDEXT function
    int.intrinsics<-1> = "SDEXT"           ; int.intrinsic.opcodes<-1> = OP.SDEXT
-   * rev 0.9-2 mab add SDPYOBJ
-   int.intrinsics<-1> = "SDPYOBJ"         ; int.intrinsic.opcodes<-1> = OP.SDPYOBJ
+   * 13 Aug 26 Windows port - SDPYOBJ removed with embedded Python (5.15).  Its
+   *   entry in the "on i goto" list below went with it: that list is
+   *   positional and must stay aligned with this one.
    int.intrinsics<-1> = "SORTDATA"        ; int.intrinsic.opcodes<-1> = OP.SORTDATA
    int.intrinsics<-1> = "SORTNEXT"        ; int.intrinsic.opcodes<-1> = OP.SORTNEXT
    int.intrinsics<-1> = "TESTLOCK"        ; int.intrinsic.opcodes<-1> = OP.TESTLOCK
@@ -3804,7 +3805,6 @@ end
                                in.removef,    ;* REMOVEF
                                in.scan,       ;* SCAN
                                in.three,      ;* SDEXT
-                               in.four,       ;* SDPYOBJ
                                in.none,       ;* SORTDATA
                                in.sortnext,   ;* SORTNEXT
                                in.one         ;* TESTLOCK

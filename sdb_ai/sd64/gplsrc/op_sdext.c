@@ -58,10 +58,7 @@ extern char* sd_salt();
 extern char* sd_KeyFromPW(char* mypassword, char* mysalt);
 extern void sdext_eguid_set(int key, char* Arg); 
 
-/* 20240808 mab embedding python? */
-#ifdef EMBED_PYTHON
-extern void sdext_py(int key, char* Arg, char* Arg2, char* Arg3 );
-#endif
+/* 13 Aug 26 Windows port - embedded Python removed, see PROJECT_STATUS.md 5.15 */
 
 char* SDMEArgArray[SD_MAX_ARGS];          /* create an array of pointers, for string arguments (for SDEXT call ) not sure if this is correct */
 char* NullString(void); 
@@ -245,19 +242,9 @@ void op_sdext() {
       sdext_eguid_set(key, SDMEArgArray[0]);
       break;
 
-    /* 20240808 mab embedding python? */
-    #ifdef EMBED_PYTHON
-    case SD_PyInit:  
-    case SD_PyFinal:  
-    case SD_IsPyInit: 
-    case SD_PyRunStr:  
-    case SD_PyRunFile: 
-    case SD_PyGetAtt :
-  /* embedding Python functions*/
-      sdext_py(key, SDMEArgArray[0], NULL, NULL);
-      break;
-    #endif  
-
+    /* 13 Aug 26 Windows port - the SD_Py* keys were handled here.  Embedded
+       Python is gone (PROJECT_STATUS.md 5.15), so they now fall through to
+       the unknown-key response below, which is what they are. */
 
     default:
       /* unknown key */

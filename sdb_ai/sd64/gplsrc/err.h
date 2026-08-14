@@ -302,34 +302,6 @@
 #define SD_EUID_RST_Err  -10402  /* Couldn't return proess to uid / gid of caller */
 #define SD_EUID_NSET_Err -10403  /* SD_EUID_RESTORE called before SD_EUID_SET */
 
-/* Embedded Python Error codes   */
-#define SD_PyEr_NotInit    -12001    /* interperter not initiialized */
-#define SD_PyEr_Dict       -12002    /* PyDict_New() failed */
-#define SD_PyEr_Builtin    -12003    /* failed to set __builtins__ link to the built-in scope */
-#define SD_PyEr_Excpt      -12004    /* exception on PyRun_String */
-#define SD_PyEr_FinalEr    -12005    /*  error reported by GPL.BP Program PY_FINALIZE */
-#define SD_PyEr_NOF        -12006    /* could not open script file */
-#define SD_PyEr_Key        -12007    /* failed to find key in dictionary */
-#define SD_PyEr_ObToStr    -12008    /* failed to convert python object to string */
-#define SD_PyErr_UniToStr  -12009    /* error encoding unicode python string to to Latin */
-
-#define SD_PyErr_MainMod   -12010    /* cannot import __main__ */
-#define SD_PyErr_GlobDict  -12011    /* could get __main__ dictionary  */
-#define SD_PyErr_DictExsts -12012    /* dictionary already exists  */
-#define SD_PyErr_NamSpcErr -12013    /* Failed to add to namespace  */
-#define SD_PyErr_ObjNOF    -12014    /* requested object does not exist  */
-#define SD_PyErr_DictSet   -12015    /* failed to set dictionary key / value */
-#define SD_PyErr_DictDel   -12016    /* failed to Delete dictionary key / value */
-#define SD_PyErr_NotDict   -12017    /* Object not a dictionary  */
-#define SD_PyErr_EnLatin   -12018    /* error encoding latin string to unicode      */
-#define SD_PyErr_NotStr    -12019    /* Object not a String (unicode)  */
-#define SD_PyErr_DelObj    -12020    /* Failed to remove Object from global dictionary */
-
-#define SD_PyErr_NoItems   -12030    /* Python Object contains no items (List?) */
-#define SD_PyErr_CreStr    -12031    /* Failed to create Python String Object   */
-#define SD_PyErr_ConCat    -12032    /* Failed to concatinate Python String Objects   */
-#define SD_PyErr_LstItem   -12033    /* Failed to access List Objects Item  */
-#define SD_PyErr_NotList   -12034    /* Object not a list  */
-#define SD_PyErr_LstAppdEr -12035    /* List append failed */
-#define SD_PyErr_LstClrEr  -12036    /* list clear failed  */
+/* 13 Aug 26 Windows port - the embedded Python error codes, -12001 to
+   -12036, were removed with the interpreter.  PROJECT_STATUS.md 5.15. */
 /* END-CODE */

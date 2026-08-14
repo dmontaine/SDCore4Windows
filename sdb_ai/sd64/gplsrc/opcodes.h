@@ -614,7 +614,12 @@ _opc_(0xCFFA, OP_CFFA,     "OPCFFA",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFFB, OP_CFFB,     "OPCFFB",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFFC, OP_CFFC,     "OPCFFC",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFFD, OP_CFFD,     "OPCFFD",     op_illegal2,  OPCODE_BYTE,         0)
-_opc_(0xCFFE, OP_SDPYOBJ,  "SDPYOBJ",    op_sdpyobj,   OPCODE_BYTE,        -3)
+/* 13 Aug 26 Windows port - was OP_SDPYOBJ / op_sdpyobj, the embedded Python
+   object opcode (PROJECT_STATUS.md 5.15).  Retired in place rather than
+   deleted: removing the line would renumber every opcode after it and
+   invalidate all compiled pcode.  op_illegal is how this file retires an
+   opcode - see OP_09, OP_9E, OP_BB. */
+_opc_(0xCFFE, OP_CFFE,     "OPCFFE",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCFFF, OP_SDEXT,    "SDEXT",      op_sdext,     OPCODE_BYTE,        -2)
 
 /* Secondary opcodes with private dispatch systems

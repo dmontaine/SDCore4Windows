@@ -34,11 +34,11 @@ GPLBIN   := $(MAIN)bin/
 TERMINFO := $(MAIN)terminfo/
 VPATH    := $(GPLOBJ):$(GPLBIN):$(GPLSRC)
 
-# rev 0.9.0 python header and libsodium headers 
-# using python3-config to hopefully make building python version independent
-
-PY_HDRS   := $(shell python3-config --includes)
-PY_LDFLAGS := $(shell python3-config --ldflags --embed)
+# rev 0.9.0 libsodium headers
+# 13 Aug 26 Windows port - PY_HDRS and PY_LDFLAGS removed with embedded Python
+#           (PROJECT_STATUS.md 5.15).  Dropping them also removes the
+#           python-devel and gettext-devel build dependencies: gettext was only
+#           needed because "python3-config --ldflags --embed" emits -lintl.
 
 # 13 Aug 26 Windows port - libsodium is not packaged for the MSYS2 runtime and
 #           is built from source into /usr/local.
@@ -49,7 +49,7 @@ COMP     := gcc
 # rev 0.9.0 python
 # 13 Aug 26 Windows port - dropped -Wl,--no-as-needed, which is ELF only and
 #           is rejected by the PE/COFF linker.
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium $(PY_LDFLAGS)
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium
 
 RM       := rm
 
@@ -70,7 +70,7 @@ sd: BITSIZE := 64
 #           -fPIE (position independent code is the default and the flag is
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
-sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) $(PY_HDRS) -DEMBED_PYTHON -DGPL -g $(ARCH)
+sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(ARCH)
 sd: $(SDOBJS) sdclilib sdtic sdfix sdconv sdidx sdlnxd terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)

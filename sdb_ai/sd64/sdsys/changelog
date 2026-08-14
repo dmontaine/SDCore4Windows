@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+13 Aug 26  Embedded Python is removed.  SD for Windows is a back end data
+           store reached through the API, and the interpreter was not part of
+           that.
+           * The SDEXT python keys, the SDPYOBJ function, and the PY_*
+             subroutines in GPL.BP are all gone, along with SYSCOM/SDPYFUNC.H
+             and the PY_* examples in the SDSYS BP file.  A program calling
+             any of them will no longer compile.
+           * Error codes -12001 to -12036 no longer exist.
+           * The SDPYOBJ opcode is retired rather than reused, so existing
+             compiled programs are unaffected unless they called it.
+           * An installed system is about 40% smaller and needs three fewer
+             support libraries.  Building no longer needs python-devel or
+             gettext-devel.
+
 13 Aug 26  An installed system no longer contains a copy of the C source, and
            does not need one to compile BASIC.
            * GPL.BP/APISRVR and GPL.BP/ERRTEXT each ran a build tool during

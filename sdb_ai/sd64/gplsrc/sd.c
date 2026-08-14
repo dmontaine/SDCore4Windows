@@ -94,10 +94,7 @@
 
 extern char *x_option; /* -x option */
 
-/* 20240808 mab embedding python? */
-#ifdef EMBED_PYTHON
-extern void sdext_py(int key, char* Arg);
-#endif
+/* 13 Aug 26 Windows port - embedded Python removed, see PROJECT_STATUS.md 5.15 */
 
 bool bind_sysseg(bool create, char *errmsg);
 void unbind_sysseg(void);
@@ -246,11 +243,8 @@ int main(int argc, char *argv[]) {
   //   unbind_sysseg();
   //   shut_console();
 
-  /* 20240808 mab embedding python? */
-  #ifdef EMBED_PYTHON
-  char py_shutdown[] = "shutdown";
-  sdext_py(SD_PyFinal, py_shutdown);   /* if python was used, shut it down */
-  #endif
+  /* 13 Aug 26 Windows port - the embedded Python interpreter was shut down
+     here.  Removed with the rest of it (PROJECT_STATUS.md 5.15). */
 
   clean_stop();
   return status;

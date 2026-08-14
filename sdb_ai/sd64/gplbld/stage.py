@@ -334,16 +334,21 @@ def main():
 
     print('staged %s' % os.path.abspath(stage))
     print('  %d files, %.1f MB' % (len(staged.files), total / 1048576.0))
-    print('  binaries in ProgramFiles\\%s, so the POSIX root is the SD '
-          'directory' % PF_BIN_SUBDIR)
+    print('  binaries in %s, so the POSIX root is the SD directory'
+          % os.path.join('ProgramFiles', PF_BIN_SUBDIR))
     print('  MSYS2 DLLs copied: %s'
           % ' '.join(sorted(os.path.basename(p) for p in dlls.values())))
     print('  supplied by Windows, not copied: %s' % ' '.join(sorted(system)))
-    if 'msys-python3.12.dll' in dlls:
-        print('  NOTE: the embedded Python DLL is staged but its standard')
-        print('        library (195 MB under usr/lib/python3.12) is not, so')
-        print('        the PY_* functions will fail on an installed system.')
-        print('        Unresolved - see PROJECT_STATUS.md section 7 step 3.')
+    # Embedded Python was dropped on 13 Aug 2026 (PROJECT_STATUS.md 5.15), which
+    # is what removed the only dependency this script could not resolve - the
+    # 195 MB standard library that msys-python3.12.dll would have needed.  If a
+    # python DLL ever reappears in the closure, that question is back.
+    python_dlls = [n for n in dlls if 'python' in n]
+    if python_dlls:
+        print('  WARNING: %s is in the closure, but embedded Python was'
+              % ' '.join(sorted(python_dlls)))
+        print('           removed in 5.15.  Something re-enabled it, and the')
+        print('           standard library is not staged.')
     return 0
 
 
