@@ -58,31 +58,49 @@ int64 filelength64(fd) int fd;
    elevated process keeps its own uid, so that test could never be true and
    every privilege check in the BASIC layer answered "no" permanently.
 
-   SD administrator rights now come from membership of the SD_ADMIN_GROUP local
-   group.  That deliberately separates SD administration from Windows
-   administration: granting it does not require handing out machine admin, it
-   needs no elevation prompt, and it works for a service or other
-   non-interactive process.  If the group does not exist, nobody is an
-   administrator, which fails closed.                                       */
+   14 Aug 26 Windows port - A WINDOWS ADMINISTRATOR IS AN SD ADMINISTRATOR.
+   Decision from the repository owner; see PROJECT_STATUS.md 5.6.1.  This used
+   to test membership of a private "sdadmins" group, which separated SD
+   administration from Windows administration.  That group is gone: the
+   installer never created it, so a machine that had never had SD development
+   on it got an install where nobody was an administrator and sd -start
+   refused - and meanwhile the BASIC layer was already treating an OS
+   administrator as an SD one, so the written decision and the behaviour had
+   drifted apart.
+
+   TWO THINGS HERE ARE DELIBERATE AND NEITHER IS OBVIOUS.
+
+   getgrouplist(), not getgroups().  getgroups() reports the PROCESS TOKEN, and
+   a UAC-filtered token carries Administrators as "deny only", which Cygwin
+   omits - so an administrator who had not elevated would not have counted, and
+   the test would really have meant "is elevated".  getgrouplist() asks what
+   groups the ACCOUNT is in, which is the question being asked.  Measured
+   14 Aug 2026 from an unelevated administrator session: getgroups() no,
+   getgrouplist() yes.
+
+   The gid 544, not the name.  Cygwin maps built-in SIDs to their RID, so
+   BUILTIN\Administrators (S-1-5-32-544) is always gid 544, exactly as Users is
+   545.  THE NAME IS RENAMED ON A LOCALISED WINDOWS and the number is not, so
+   looking it up by name would fail on a German or French machine.  sd.iss had
+   to learn the same thing for icacls, where it writes *S-1-5-32-544.        */
 
 bool IsAdmin(void) {
-  struct group* grp;
+  struct passwd* pw;
   gid_t* list;
   int count;
   int i;
   bool status = FALSE;
 
-  grp = getgrnam(SD_ADMIN_GROUP);
-  if (grp == NULL)
-    return FALSE; /* Group not defined - nobody qualifies */
+  pw = getpwuid(getuid());
+  if (pw == NULL)
+    return FALSE; /* No account to ask about - fail closed */
 
-  /* The group may be our primary one, in which case it need not appear in the
-     supplementary list.                                                     */
+  /* getgrouplist() wants the size in/out.  Ask twice: once to be told how many
+     there are, once to fetch them.  It returns -1 on the sizing call, which is
+     expected and is not an error.                                           */
 
-  if ((getgid() == grp->gr_gid) || (getegid() == grp->gr_gid))
-    return TRUE;
-
-  count = getgroups(0, NULL);
+  count = 0;
+  getgrouplist(pw->pw_name, pw->pw_gid, NULL, &count);
   if (count <= 0)
     return FALSE;
 
@@ -90,9 +108,9 @@ bool IsAdmin(void) {
   if (list == NULL)
     return FALSE;
 
-  if (getgroups(count, list) == count) {
+  if (getgrouplist(pw->pw_name, pw->pw_gid, list, &count) >= 0) {
     for (i = 0; i < count; i++) {
-      if (list[i] == grp->gr_gid) {
+      if (list[i] == SD_ADMIN_GID) {
         status = TRUE;
         break;
       }

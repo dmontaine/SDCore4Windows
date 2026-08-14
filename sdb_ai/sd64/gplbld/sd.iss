@@ -147,6 +147,12 @@ Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 ; each new Windows user to it (PROJECT_STATUS.md 5.6).  Creating it here means
 ; a fresh machine can create accounts without a manual step.  Failure is not
 ; fatal: it already existing is the common case on a reinstall.
+;
+; NOTE IT IS NOT THE ADMINISTRATOR GROUP, and never was.  This grants access to
+; the FILES; who administers SD is Windows Administrators (5.6.1).  The two are
+; separate questions and it is worth not confusing them: an administrator who
+; has not elevated does not carry Administrators in their token either, so they
+; need sdusers to reach the data tree just as an ordinary user does.
 Filename: "{sys}\net.exe"; Parameters: "localgroup sdusers /add /comment:""SD users"""; \
     Flags: runhidden skipifdoesntexist; StatusMsg: "Creating the sdusers group..."
 
@@ -193,26 +199,28 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Flags: runhidden skipifdoesntexist; Tasks: installssh; \
     StatusMsg: "Installing OpenSSH Server..."
 
-; SET THE SDSYS PASSWORD LAST, after the whole install has succeeded.
+; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;
-; Until it is set, LOGIN admits an administrator to SDSYS with a warning, which
-; is what let the bootstrap run unattended at build time.  So the ordering is
-; not a nicety: set it earlier and every remaining step would need to know it.
+; Removed 14 Aug 2026 with the decision that a Windows administrator IS an SD
+; administrator (PROJECT_STATUS.md 5.6.1).  Whoever runs this installer is an
+; administrator - Inno requires it - so they already administer SD when it
+; finishes, and there is nothing they must set to get in.  Accounts still carry
+; passwords; what changed is that the SDSYS password is no longer what confers
+; administration, so demanding one at install time asks for a credential that
+; secures nothing the installer has not already granted.
 ;
-; The password is typed by the user into SD's own masked prompt.  It therefore
-; never touches a command line, a file, or the installer's memory, which is the
-; same reasoning that put the OS account passwords behind !ps_script.
+; It was also broken two ways over, which is how the decision came up.  Measured
+; on a real interactive install, 14 Aug 2026:
 ;
-; nowait is deliberate - this is an interactive console session, not a step the
-; installer waits on.
+;   1. sd -internal needs a running server and the installer never runs
+;      sd -start, so it failed with "SD has not been started".
+;   2. Inno logs the entry as "Run as: Original user", so it ran with the
+;      UNELEVATED token - which does not carry sdusers until the user signs out
+;      and back in, so it could not have opened the database either.
 ;
-; CAVEAT, and it is real: typing at SD from a Windows console is listed as
-; unverified in PROJECT_STATUS.md 4.  Everything so far has been driven with
-; redirected input.  If this turns out to misbehave, the fallback is to tell
-; the user to run SET.PASSWORD themselves rather than to work around it here.
-Filename: "{app}\usr\bin\sd.exe"; Parameters: "-internal SET.PASSWORD SDSYS"; \
-    WorkingDir: "{#DataDir}"; Flags: postinstall nowait unchecked; \
-    Description: "Set the SDSYS administrator password now (recommended)"
+; And "nowait" meant the console vanished before either message could be read,
+; so it looked to the user as though nothing had happened at all.  If a password
+; step is ever wanted back, all three have to be fixed together.
 
 [UninstallRun]
 ; Stop the server before removing the files it is running from.  Ignore any

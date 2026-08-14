@@ -307,7 +307,7 @@ void op_kernel() {
            argument granted the flag, so a BASIC program could make itself an
            administrator and every test of it was decorative; and the
            "|| IsAdmin()" meant an argument of zero re-granted rather than
-           cleared whenever the caller was in SD_ADMIN_GROUP, so the flag
+           cleared whenever the caller was an OS administrator, so the flag
            could not be given up at all.
 
            Only a program compiled $internal may change it now - which is

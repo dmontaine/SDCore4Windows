@@ -129,15 +129,25 @@
 
 #define SDWIND_NAME "sdwind"
 
-/* 13 Aug 26 Windows port - SD administrator rights come from membership of
- * this local group rather than from uid zero, which does not exist on Windows.
- * Keeping SD administration separate from Windows administration means it can
- * be granted without handing out machine admin rights and needs no elevation.
+/* 14 Aug 26 Windows port - A WINDOWS ADMINISTRATOR IS AN SD ADMINISTRATOR.
+ * Decision from the repository owner; see PROJECT_STATUS.md 5.6.1.  This was a
+ * private "sdadmins" group, on the reasoning that SD administration should be
+ * grantable without handing out machine admin.  The installer never created
+ * that group, so a clean machine got an install nobody could start.
+ *
+ * BUILTIN\Administrators is S-1-5-32-544, and Cygwin maps built-in SIDs to
+ * their RID - so the gid is always 544, exactly as Users is 545.  IT IS
+ * DELIBERATELY THE NUMBER AND NOT THE NAME: "Administrators" is renamed on a
+ * localised Windows, so a lookup by name fails on a German or French machine.
+ * sd.iss writes *S-1-5-32-544 to icacls for the same reason.
+ *
+ * Overridable so that the trick in PROJECT_STATUS.md 6 still works - build a
+ * probe with a gid nobody holds to see the system as an ordinary user.
  * See IsAdmin() in linuxlb.c.
  */
 
-#ifndef SD_ADMIN_GROUP
-#define SD_ADMIN_GROUP "sdadmins"
+#ifndef SD_ADMIN_GID
+#define SD_ADMIN_GID 544
 #endif
 
 #define RelinquishTimeslice sched_yield()

@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  If you are a Windows administrator, you are an SD administrator.
+           * There is no separate SD administrator group and nothing to join.
+             Whoever installs SD administers it, because installing requires
+             administrator rights in the first place.
+           * It is your ACCOUNT that counts, not whether a particular window
+             is "run as administrator".  Actions that genuinely need elevation
+             - creating a Windows user among them - still do.
+           * The installer no longer offers to set an SDSYS password.  It is
+             not what makes you an administrator any more, and the step did
+             not work: it needed a running server that the installer never
+             started.  Accounts still have passwords; SET.PASSWORD still sets
+             them.
+           * "sdusers" is unchanged and is still needed.  It grants access to
+             the database FILES, which is a different question from who
+             administers SD - and an administrator who has not elevated needs
+             it just as an ordinary user does.
+
 14 Aug 26  The background daemon is now called sdwind, and it starts.
            * sdlnxd is now sdwind.  The old name meant "SD Linux daemon",
              which is wrong for a Windows system.  If you have scripts or

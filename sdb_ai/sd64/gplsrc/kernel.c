@@ -177,9 +177,11 @@ bool init_kernel() {
        dropping to sdsys.  Neither half of that works here - there is no uid
        zero on Windows - so nothing set the flag and K$ADMINISTRATOR answered
        "no" for everybody, permanently.  Seeding it here gives the BASIC layer
-       a truthful answer to ask for, and means a process started by a member of
-       SD_ADMIN_GROUP is an SD administrator.  IsAdmin() fails closed if the
-       group does not exist.  See linuxlb.c and PROJECT_STATUS.md section 5.6. */
+       a truthful answer to ask for.
+
+       14 Aug 26 - and that answer is now "is this account a Windows
+       administrator", elevated or not.  See linuxlb.c and PROJECT_STATUS.md
+       section 5.6.1.                                                        */
 
     if (IsAdmin())
       my_uptr->flags |= USR_ADMIN;
