@@ -229,17 +229,19 @@ Filename: "{sys}\icacls.exe"; \
 ; already present.  A failure here must NOT fail the SD install: this is a
 ; Features on Demand download and policy, a metered connection or an offline
 ; machine can all block it.  Hence skipifdoesntexist and no exit code check.
-; BRACES: "{{" IS THE ESCAPE FOR A LITERAL "{", AND "}" NEEDS NO ESCAPE AT ALL.
-; This line read "try {{ ... }} catch {{ exit 1 }}", which expanded to
-; "try { ... }} catch { exit 1 }}" - single opening braces and DOUBLED closing
-; ones.  PowerShell could not parse it, so the capability was never installed;
-; and because this entry deliberately checks no exit code, it failed in total
-; silence.  Measured 14 Aug 2026 from the install log, after a real install
-; with the box ticked produced no sshd at all.  Write "}" singly.
+; MOVED OUT OF THIS FILE ON PURPOSE - see install-ssh.ps1.  It used to be an
+; inline -Command, and it carried a brace bug for its entire life: Inno escapes
+; a literal "{" as "{{" but needs no escape for "}", so "}}" reached PowerShell
+; as two closing braces and the whole script was a syntax error before it ran.
+; Ticking the box installed nothing and, because this entry deliberately checks
+; no exit code, said nothing either.  A shipped file can be read and
+; parse-checked on its own; an inline parameter cannot.
+;
+; Exit 2 means "installed, restart required", which CurStepChanged reports.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""$ErrorActionPreference='Stop'; try {{ Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null; Set-Service -Name sshd -StartupType Automatic; Start-Service sshd } catch {{ Write-Output $_; exit 1 }"""; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1"""; \
     Flags: runhidden skipifdoesntexist; Tasks: installssh; \
-    StatusMsg: "Installing OpenSSH Server..."
+    StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
 
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;

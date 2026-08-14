@@ -375,19 +375,19 @@ def main():
         f.write(FSTAB)
     staged.add(stage, fstab)
 
-    # The installer runs this once to apply the deny-logon rights that make
-    # membership of sdsshonly mean something (PROJECT_STATUS.md 5.6.2).  It
-    # ships rather than being inlined in the .iss because it carries a P/Invoke
-    # block, and because an [Run] parameter is exactly where the OpenSSH step's
-    # brace bug hid - a file is readable and can be parse-checked on its own.
-    deny = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        'deny-logon.ps1')
-    if os.path.exists(deny):
-        dst = os.path.join(pf, 'deny-logon.ps1')
-        shutil.copy2(deny, dst)
+    # Scripts the installer runs.  They ship as FILES rather than as inline
+    # [Run] parameters because an inline parameter is exactly where the OpenSSH
+    # brace bug hid for its whole life (PROJECT_STATUS.md 6) - a file can be
+    # read and parse-checked on its own.  Missing one is a build failure, not a
+    # warning: the installer would otherwise silently skip the step.
+    here = os.path.dirname(os.path.abspath(__file__))
+    for script in ('deny-logon.ps1', 'install-ssh.ps1'):
+        src = os.path.join(here, script)
+        if not os.path.exists(src):
+            raise SystemExit('missing %s - the installer needs it' % src)
+        dst = os.path.join(pf, script)
+        shutil.copy2(src, dst)
         staged.add(stage, dst)
-    else:
-        raise SystemExit('missing %s - the installer needs it' % deny)
 
     # --- C:\ProgramData\SD\ -----------------------------------------------
 

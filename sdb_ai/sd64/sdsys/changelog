@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  SD runs without "run as administrator", and starts by hand.
+           * You no longer need an elevated window to use SD.  Being an
+             administrator of the machine is what counts, not whether a
+             particular window was started as one.
+           * You DO have to sign out and back in once after installing, before
+             SD can open its files.  The installer says so.  Until you do, it
+             fails with "Error 13 allocating semaphores".
+           * SD DOES NOT START AUTOMATICALLY when Windows starts.  Run
+             "sd -start" after each restart.  Running SD as a Windows service
+             is not done yet.
+           * The installer's OpenSSH option may report that a restart is
+             needed.  That means it worked - Windows registers the ssh service
+             only after a reboot.  Restart, and ssh will be running.
+
 14 Aug 26  Accounts SD creates can sign in over ssh only.
            * CREATE.ACCOUNT USER <name> now makes an account that can reach
              this machine ONLY over ssh.  It cannot sign in at the screen in
