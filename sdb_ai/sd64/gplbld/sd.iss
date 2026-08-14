@@ -194,8 +194,15 @@ Filename: "{sys}\icacls.exe"; \
 ; already present.  A failure here must NOT fail the SD install: this is a
 ; Features on Demand download and policy, a metered connection or an offline
 ; machine can all block it.  Hence skipifdoesntexist and no exit code check.
+; BRACES: "{{" IS THE ESCAPE FOR A LITERAL "{", AND "}" NEEDS NO ESCAPE AT ALL.
+; This line read "try {{ ... }} catch {{ exit 1 }}", which expanded to
+; "try { ... }} catch { exit 1 }}" - single opening braces and DOUBLED closing
+; ones.  PowerShell could not parse it, so the capability was never installed;
+; and because this entry deliberately checks no exit code, it failed in total
+; silence.  Measured 14 Aug 2026 from the install log, after a real install
+; with the box ticked produced no sshd at all.  Write "}" singly.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""$ErrorActionPreference='Stop'; try {{ Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null; Set-Service -Name sshd -StartupType Automatic; Start-Service sshd }} catch {{ exit 1 }}"""; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ""$ErrorActionPreference='Stop'; try {{ Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null; Set-Service -Name sshd -StartupType Automatic; Start-Service sshd } catch {{ Write-Output $_; exit 1 }"""; \
     Flags: runhidden skipifdoesntexist; Tasks: installssh; \
     StatusMsg: "Installing OpenSSH Server..."
 
