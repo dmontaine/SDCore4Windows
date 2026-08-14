@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  SD finds its configuration file by itself.
+           * It is %ProgramData%\SD\sd.conf, normally
+             C:\ProgramData\SD\sd.conf, and nothing need be set in the
+             environment for an installed system to start.
+           * The environment variable that overrides it is SD_CONFIG, for the
+             server and the client library alike.  The server used to read
+             SCARLET_CONFIG and the client SD_CONFIG, so setting the one you
+             would expect configured only one of them.  SCARLET_CONFIG IS NO
+             LONGER READ - if you set it, set SD_CONFIG instead.
+           * The server no longer falls back to /etc/sd.conf, and the client
+             library no longer falls back to sd.ini in the Windows directory.
+             Writing to C:\Windows has needed administrator rights since
+             Vista.
+
 14 Aug 26  "sd -stop" no longer kills the program that ran it.
            * It sent SIGTERM to every entry in the user table without
              checking the process id was valid, and a process id of zero

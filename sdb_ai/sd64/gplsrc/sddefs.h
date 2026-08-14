@@ -156,6 +156,22 @@
 #define MAX_STRING_SIZE   1073741822   /* 1/ GB, 1FFF FFFF */ 
 
 #define MAX_PATHNAME_LEN 255    /* Changes affect file headers */
+
+/* 14 Aug 26 Windows port - where the configuration file lives.
+ *
+ * ONE VARIABLE AND ONE FILE, for the server and the client alike.  The server
+ * used to read SCARLET_CONFIG and fall back to /etc/sd.conf; the client read
+ * SD_CONFIG and fell back to sd.ini in the Windows directory, with a comment
+ * claiming the two matched.  They did not, so setting the variable you would
+ * expect fixed one and not the other.
+ *
+ * The client library is a separate toolchain and does not include this header
+ * (PROJECT_STATUS.md 5.2 - do not let the client's headers displace the
+ * server's), so it carries its own copy of these two values.  If you change
+ * them here, change gplsrc/sdclilib/sdclilib.c to match.
+ */
+#define SD_CONFIG_ENV     "SD_CONFIG"
+#define SD_CONFIG_DEFAULT "C:\\ProgramData\\SD\\sd.conf"
 #define MAX_ID_LEN 255          /* Increasing requires major file changes */
 #define MAX_CALL_NAME_LEN 63    /* Cannot exceed MAX_ID_LEN */
 #define MAX_TRIGGER_NAME_LEN 32 /* Increasing would alter file header */

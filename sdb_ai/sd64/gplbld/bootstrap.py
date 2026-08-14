@@ -104,7 +104,7 @@ def main():
     ap.add_argument('--sysdir', required=True,
                     help='the SDSYS directory to bootstrap')
     ap.add_argument('--sd', required=True, help='path to sd.exe')
-    ap.add_argument('--conf', help='configuration file; SCARLET_CONFIG is set '
+    ap.add_argument('--conf', help='configuration file; SD_CONFIG is set '
                                    'to this for every SD command')
     args = ap.parse_args()
 
@@ -119,7 +119,7 @@ def main():
 
     env = dict(os.environ)
     if args.conf:
-        env['SCARLET_CONFIG'] = os.path.abspath(args.conf)
+        env['SD_CONFIG'] = os.path.abspath(args.conf)
 
     # --- build inputs the data tree must not keep --------------------------
 

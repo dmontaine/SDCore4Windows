@@ -89,6 +89,15 @@ sd: $(SDOBJS) sdclilib sdtic sdfix sdconv sdidx sdlnxd terminfo
 UCRT_CC  ?= /c/msys64/ucrt64/bin/gcc.exe
 CLILIBDIR := $(GPLSRC)sdclilib
 
+# 14 Aug 26 - the UCRT64 compiler's own directory MUST be on PATH, even though
+# it is invoked by absolute path.  gcc.exe finds its DLLs beside itself, but
+# the subprograms it spawns - cc1.exe, in ucrt64/lib/gcc/... - do not, and
+# resolve their UCRT64 DLLs through PATH.  Without it gcc exits 1 with
+# COMPLETELY EMPTY stdout and stderr, on a one-line program, so it reads as
+# "the compiler is broken" rather than as a search-path problem.  Derived from
+# UCRT_CC so that overriding the compiler moves this with it.
+UCRT_BIN := $(dir $(UCRT_CC))
+
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
@@ -96,7 +105,7 @@ CLILIBDIR := $(GPLSRC)sdclilib
 
 sdclilib:
 	@echo Building native client DLL
-	@$(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
+	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
 	@cp $(CLILIBDIR)/sdclilib.dll $(GPLBIN)
 	@cp $(CLILIBDIR)/libsdclilib.dll.a $(GPLBIN)
 

@@ -1035,9 +1035,22 @@ exit_sdconnect:
 /* ======================================================================
    sysdir()  -  Return the SDSYS directory named by the configuration file
 
-   SD_CONFIG names the file if it is set, matching the server.  Otherwise we
-   read sd.ini from the Windows directory, which is where the native client
-   has always looked.  The answer is cached after the first successful read. */
+   SD_CONFIG names the file if it is set, and this now genuinely does match
+   the server - it did not before, whatever the comment here used to say.  The
+   server read SCARLET_CONFIG and fell back to /etc/sd.conf, so setting the
+   variable you would expect configured exactly one of the two.
+
+   The sd.ini-in-the-Windows-directory fallback is gone (14 Aug 2026).  Writing
+   to C:\Windows has needed administrator rights since Vista and it is
+   16-bit-era practice; the file now lives beside the data it describes, at
+   %ProgramData%\SD\sd.conf.  These two values are duplicated from
+   gplsrc/sddefs.h, which this toolchain deliberately does not include
+   (PROJECT_STATUS.md 5.2) - change them in both places.
+
+   The answer is cached after the first successful read. */
+
+#define SD_CONFIG_ENV     "SD_CONFIG"
+#define SD_CONFIG_DEFAULT "C:\\ProgramData\\SD\\sd.conf"
 
 Private char* sysdir(void) {
   static char sysdirpath[MAX_PATHNAME_LEN + 1] = "";
@@ -1050,18 +1063,19 @@ Private char* sysdir(void) {
   if (sysdirpath[0] != '\0')
     return sysdirpath;
 
-  p = getenv("SD_CONFIG");
-  if (p != NULL) {
+  p = getenv(SD_CONFIG_ENV);
+  if ((p != NULL) && (*p != '\0')) {
     snprintf(inipath, sizeof(inipath), "%s", p);
   } else {
-    UINT n = GetWindowsDirectoryA(inipath, MAX_PATHNAME_LEN - 8);
-    if ((n == 0) || (n > MAX_PATHNAME_LEN - 8)) {
-      snprintf(session[session_idx].sderror,
-               sizeof(session[session_idx].sderror),
-               "Error %d finding Windows directory", (int)GetLastError());
-      return NULL;
+    /* Built from %ProgramData% rather than written as C:\ProgramData,
+       because that folder can be relocated and the variable holds where it
+       actually is.  The literal is only the last resort. */
+    p = getenv("ProgramData");
+    if ((p != NULL) && (*p != '\0')) {
+      snprintf(inipath, sizeof(inipath), "%s\\SD\\sd.conf", p);
+    } else {
+      snprintf(inipath, sizeof(inipath), "%s", SD_CONFIG_DEFAULT);
     }
-    snprintf(inipath + n, sizeof(inipath) - n, "\\sd.ini");
   }
 
   fu = fopen(inipath, "rt");

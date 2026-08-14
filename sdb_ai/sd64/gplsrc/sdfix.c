@@ -2120,7 +2120,8 @@ bool delete_subfile(int16_t sf) {
    read_sdconfig()  -  Read config file                                     */
 
 bool read_sdconfig() {
-  char path[200 + 1];
+  char path[MAX_PATHNAME_LEN + 1];  /* 14 Aug 26 - was 200; GetConfigPath
+                                      writes up to MAX_PATHNAME_LEN */
   char rec[200 + 1];
   FILE *ini_file;
   char section[32 + 1];
