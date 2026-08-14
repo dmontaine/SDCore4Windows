@@ -189,87 +189,61 @@ $include keycode.h
   if system(42) or system(1027) then   ;* Network/serial connection
     logmsg sysmsg(5063, 'security test')  ;* Failed login authentication from %1
     goto terminate.connection
-  end else
-     * This user has come in from a command prompt.
-     lgn.id = @logname
-* 13 Aug 26 Windows port - removed the sdusers group test.  SD no longer
-*   consults operating system groups at all; access becomes a matter of the
-*   account's own credentials.  Until that lands, nothing gates entry here.
   end
+* 13 Aug 26 Windows port - removed the sdusers group test and the lgn.id that
+*   carried the operating system user name into it.  SD no longer consults
+*   operating system groups; entry is by the account's own password below.
 
    s = pterm(PT$INVERT, @true)
 
    * Determine account
 * 20240330 mab we no longer support forced accounts from $LOGINS
 *   forced.account = lgn.rec<LGN$FORCE.ACCOUNT>
+* 13 Aug 26 Windows port - the three cases that used to live here collapsed
+*   into one.  Entry is now by account name and the account's own password
+*   rather than by operating system identity, so there is nothing to vary:
+*   establish which account, then prove you may enter it.
+*   See PROJECT_STATUS.md section 5.6.
    initial.account = ''
+
    begin case
-      
-      case kernel(K$FORCED.ACCOUNT,0) # ''   ;* account specified on command line with "sd -Aname"
+      case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname"
          initial.account = upcase(kernel(K$FORCED.ACCOUNT,0))
 
-         read acc.rec from acc.f, initial.account else
-            display sysmsg(5018, initial.account) ;* Account %1 not in register
-            goto terminate.connection
-         end
-
-
-         * 20240330 mab must be privilaged to enter sdsys
-         IF (upcase(initial.account) = "SDSYS") and not(kernel(K$ADMINISTRATOR,-1)) then            
-            display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-            goto terminate.connection
-         end
-
-* rev 0.9.0 *  user must be a member of ACCOUNT's linux group to access ACCOUNT
-* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group, and account
-*   access is becoming a matter of the account's own credentials instead.
-*   Nothing gates entry to a named account until that is built.
-
-         acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-
-         if not(ospath(acc.path, OS$CD)) then
-            display sysmsg(5019, acc.path) ;* Unable to change to directory xx
-            goto terminate.connection
-         end
-
-         
-
-* 20240323 mab if sd command issued with sudo (K$ADMINISTRATOR set by cproc)
-*   and no account given wirh -a command, assume sdsys 
-      case kernel(K$ADMINISTRATOR,-1)  ;* user id 0, "sudo sd"
+      case kernel(K$ADMINISTRATOR,-1)        ;* administrator, no account named
          initial.account = "SDSYS"
 
-         read acc.rec from acc.f, initial.account else
-            display sysmsg(5018, initial.account) ;* Account %1 not in register
-            goto terminate.connection
-         end
-
-         acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-
-         if not(ospath(acc.path, OS$CD)) then
-            display sysmsg(5019, acc.path) ;* Unable to change to directory xx
-            goto terminate.connection
-         end
-
-      case 1                              ;* Must be console
-
-      * 20240219 mab sd command from console with no account specified, we default to 
-      *              user's account
-         initial.account = upcase(@logname)
-
-         read acc.rec from acc.f, initial.account else
-            display sysmsg(5018, initial.account) ;* Account %1 not in register
-            goto terminate.connection
-         end
-
-         acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-
-         if not(ospath(acc.path, OS$CD)) then
-            display sysmsg(5019, acc.path) ;* Unable to change to directory xx
-            goto terminate.connection
-         end
-         
+      case 1
+         display 'Account: ' :
+         input initial.account
+         initial.account = upcase(trim(initial.account))
+         if initial.account = '' then goto terminate.connection
    end case
+
+   read acc.rec from acc.f, initial.account else
+* Do not say whether it was the account name or the password that was wrong.
+      display sysmsg(5017) ;* Invalid user name or password
+      goto terminate.connection
+   end
+
+   gosub authenticate.account
+   if not(login.ok) then goto terminate.connection
+
+* The account you proved you may enter is who you are for this session, and
+* it stays that way across LOGTO so the audit trail attributes to one name.
+
+   logname = initial.account
+
+   if initial.account = 'SDSYS' then
+      void kernel(K$ADMINISTRATOR, 1)
+   end
+
+   acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+
+   if not(ospath(acc.path, OS$CD)) then
+      display sysmsg(5019, acc.path) ;* Unable to change to directory xx
+      goto terminate.connection
+   end
 
 
    * Set @PATH
@@ -404,6 +378,75 @@ terminate.connection:
    sleep 2
 abort.login:
    return to abort.login
+
+*
+* ======================================================================
+* AUTHENTICATE.ACCOUNT  -  Prove the caller may enter initial.account
+*
+* 13 Aug 26 Windows port.  Sets login.ok.  See PROJECT_STATUS.md section 5.6.
+
+authenticate.account:
+   login.ok = @false
+
+* An administrator running an internal command is the install and maintenance
+* path.  It is not a general bypass: -internal alone is unguarded, so the gate
+* here is K$ADMINISTRATOR, which comes from operating system group membership
+* via IsAdmin() and cannot be claimed by anyone who is not already in it.
+
+   if kernel(K$INTERNAL,-1) and kernel(K$ADMINISTRATOR,-1) then
+      login.ok = @true
+      return
+   end
+
+* Does this account have a password yet?
+
+   cred.set = @false
+   openpath @sdsys:@ds:'$CRED' to cred.f then
+      read cred.rec from cred.f, initial.account then
+         if cred.rec<CRED$VERIFIER> # '' then cred.set = @true
+      end
+      close cred.f
+   end
+
+   if not(cred.set) then
+* An account with no password can only be entered by an administrator, so a
+* half configured system is not an open one.  Say so, loudly - this is the
+* state the installer is meant to clear with SET.PASSWORD.
+      if kernel(K$ADMINISTRATOR,-1) then
+         display 'Warning: account ' : initial.account : ' has no password set.'
+         login.ok = @true
+      end else
+         display sysmsg(5017) ;* Invalid user name or password
+      end
+      return
+   end
+
+* Case inversion has to be off while a password is read.  LOGIN turns
+* PT$INVERT on before this point, which silently upcases the input - the
+* password verifies by hand and fails here, with nothing to show why.
+
+   was.inverted = pterm(PT$INVERT, @false)
+
+   for try = 1 to 3
+      display 'Password: ' :
+      input pw HIDDEN
+      display
+
+      call !CRED_VERIFY(initial.account, pw, login.ok)
+      if login.ok then
+         pw = ''
+         void pterm(PT$INVERT, was.inverted)
+         return
+      end
+
+      display sysmsg(5017) ;* Invalid user name or password
+      sleep 2
+   next try
+
+   pw = ''
+   void pterm(PT$INVERT, was.inverted)
+   login.ok = @false
+   return
 
 *
 * ======================================================================
