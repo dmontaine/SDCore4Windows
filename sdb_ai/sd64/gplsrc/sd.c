@@ -461,6 +461,30 @@ Private bool comlin(int argc, char *argv[]) {
     }
   }
 
+  /* 13 Aug 26 Windows port - internal mode is for SDSYS and nothing else.
+
+     Internal programs are the only ones allowed to set the administrator
+     flag, and BCOMP will only compile one for SDSYS, so an internal session
+     in an ordinary account has no business it could legitimately conduct.
+     Allowing one was how an account could build itself a program that
+     granted it administrator rights - demonstrated, and now closed at both
+     ends.  Naming any other account with -INTERNAL is refused rather than
+     quietly redirected, so nobody is left wondering where they ended up.
+
+     There is no bypass here: entering SDSYS needs the SDSYS password like
+     any other entry.  The install is not affected - "sd -i" runs $BBPROC,
+     which never goes through LOGIN, and until the installer sets a password
+     LOGIN admits an administrator to a credential-less account with a
+     warning.  See PROJECT_STATUS.md section 5.6.                           */
+
+  if (internal_mode) {
+    if ((forced_account != NULL) && stricmp(forced_account, "SDSYS")) {
+      fprintf(stderr, "sd: -INTERNAL may only be used with the SDSYS account\n");
+      exit(1);
+    }
+    forced_account = "SDSYS";
+  }
+
   /* Anything else on the command line is considered to be a command
     to be executed.                                                  */
 

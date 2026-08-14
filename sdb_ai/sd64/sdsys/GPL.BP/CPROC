@@ -38,6 +38,8 @@
 *                      caller's own password
 * 13 Aug 26 Windows port - LOGTO takes an account name only, no pathnames;
 *                      SDSYS reaches every account
+* 13 Aug 26 Windows port - administrator rights are given up on LOGTO out of
+*                      SDSYS
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2557,6 +2559,19 @@ int.logto:
 *   that way now, so new.account always holds the registered name.
 
    who = new.account
+
+* 13 Aug 26 Windows port - administrator rights belong to SDSYS and are given
+*   up on the way out of it.  Nothing cleared the flag before, so they
+*   followed you into whatever account you moved to next, which made the
+*   rights a property of the session rather than of the account you are
+*   standing in.  See PROJECT_STATUS.md section 5.6.
+
+   if new.account = 'SDSYS' then
+      void kernel(K$ADMINISTRATOR, 1)
+   end else
+      void kernel(K$ADMINISTRATOR, 0)
+   end
+
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
    gosub find.private.catalogue

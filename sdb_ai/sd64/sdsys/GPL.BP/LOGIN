@@ -30,6 +30,8 @@
 * 20240330 mab rev 064 mods to $LOGINS / ACCOUNTS
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 13 Aug 26 Windows port - removed the sdusers and ACC$GROUP membership tests
+* 13 Aug 26 Windows port - administrator rights are set on entry to SDSYS and
+*                      cleared on entry to anything else
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -206,12 +208,15 @@ $include keycode.h
 *   See PROJECT_STATUS.md section 5.6.
    initial.account = ''
 
-   begin case
-      case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname"
-         initial.account = upcase(kernel(K$FORCED.ACCOUNT,0))
+* 13 Aug 26 Windows port - the case that sent an administrator to SDSYS when
+*   no account was named has gone with the rest of the operating system group
+*   model.  Being in a Windows group is not a reason to arrive in the
+*   administration account; ask, like anybody else.  "sd -INTERNAL" names
+*   SDSYS for itself in sd.c, so it takes the first case.
 
-      case kernel(K$ADMINISTRATOR,-1)        ;* administrator, no account named
-         initial.account = "SDSYS"
+   begin case
+      case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname", or -INTERNAL
+         initial.account = upcase(kernel(K$FORCED.ACCOUNT,0))
 
       case 1
          display 'Account: ' :
@@ -234,8 +239,16 @@ $include keycode.h
 
    logname = initial.account
 
+* Administrator rights belong to SDSYS, not to the person and not to their
+* Windows account.  Set here and cleared everywhere else, so being in the
+* operating system group decides only whether the bootstrap can get in
+* without a password - it no longer confers any standing privilege.
+* 13 Aug 26 Windows port.  See PROJECT_STATUS.md section 5.6.
+
    if initial.account = 'SDSYS' then
       void kernel(K$ADMINISTRATOR, 1)
+   end else
+      void kernel(K$ADMINISTRATOR, 0)
    end
 
    acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
@@ -388,15 +401,16 @@ abort.login:
 authenticate.account:
    login.ok = @false
 
-* An administrator running an internal command is the install and maintenance
-* path.  It is not a general bypass: -internal alone is unguarded, so the gate
-* here is K$ADMINISTRATOR, which comes from operating system group membership
-* via IsAdmin() and cannot be claimed by anyone who is not already in it.
-
-   if kernel(K$INTERNAL,-1) and kernel(K$ADMINISTRATOR,-1) then
-      login.ok = @true
-      return
-   end
+* 13 Aug 26 Windows port - the internal-mode bypass that stood here is gone.
+* An internal session used to enter SDSYS with no password at all, on the
+* strength of operating system group membership, and that was the last way
+* into administration that did not involve knowing the SDSYS password.
+* "sd -INTERNAL" is now SDSYS and a password prompt, like every other entry.
+*
+* The install still works without one, through the no-credential branch
+* below: "sd -i" runs $BBPROC and never reaches LOGIN, and until the
+* installer sets a password SDSYS has no credential to check.
+* See PROJECT_STATUS.md section 5.6.
 
 * Does this account have a password yet?
 

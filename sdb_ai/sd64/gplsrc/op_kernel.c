@@ -303,10 +303,27 @@ void op_kernel() {
       GetInt(descr);
       n = descr->data.value;
       if (n >= 0) { /* Setting / clearing */
-        if ((n > 0) || IsAdmin())
-          my_uptr->flags |= USR_ADMIN;
-        else
-          my_uptr->flags &= ~USR_ADMIN;
+        /* 13 Aug 26 Windows port - this had a hole at each end.  Any positive
+           argument granted the flag, so a BASIC program could make itself an
+           administrator and every test of it was decorative; and the
+           "|| IsAdmin()" meant an argument of zero re-granted rather than
+           cleared whenever the caller was in SD_ADMIN_GROUP, so the flag
+           could not be given up at all.
+
+           Only a program compiled $internal may change it now - which is
+           LOGIN and CPROC, the two that own entry to an account.  Ordinary
+           BASIC cannot reach KERNEL at all (BCOMP rejects it), and would not
+           carry HDR_INTERNAL if it could.  A refused attempt is not an error:
+           the result below reports the flag as it actually stands, so a
+           caller that tried to grant itself rights is simply told it has
+           none.  See PROJECT_STATUS.md section 5.6.                        */
+
+        if (process.program.flags & HDR_INTERNAL) {
+          if (n > 0)
+            my_uptr->flags |= USR_ADMIN;
+          else
+            my_uptr->flags &= ~USR_ADMIN;
+        }
       }
       result.data.value = (my_uptr->flags & USR_ADMIN) != 0;
       break;

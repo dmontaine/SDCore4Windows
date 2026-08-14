@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+13 Aug 26  Administrator rights belong to the SDSYS account and to nothing
+           else.
+           * They are set on entry to SDSYS and given up on the way out, so
+             they no longer follow a session into whatever account it moves
+             to next, and being in a Windows group no longer confers them.
+           * Only a program compiled $internal may set them, and only SDSYS
+             may compile one.  Before this, any account could compile a three
+             line program that made itself an administrator.
+           * "sd -INTERNAL" now means the SDSYS account and asks for its
+             password.  Naming any other account with it is refused.  The old
+             no-password entry for an administrator running an internal
+             command is gone.
+           * "sd" with no account named asks which account you want, instead
+             of putting members of a Windows group straight into SDSYS.
+
 13 Aug 26  Identity: accounts have their own passwords, and SD no longer
            consults operating system users or groups at all.
            * Every account carries a password.  Entry is by prompt, whether
