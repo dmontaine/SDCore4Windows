@@ -44,12 +44,17 @@
 # only a real Remote Desktop connection exercises it.  The right is confirmed
 # APPLIED by the secedit dump below, but never OBSERVED refusing a session.
 #
-# DO NOT TRY IT AGAINST localhost.  It was tried on 14 Aug 2026 and fails with
-# "could not connect to another console session ... you already have a console
-# session in progress", error 0x708 - RDP refusing BEFORE authentication,
-# because a Windows client SKU allows one session and the console holds it.
-# That result says nothing about the deny right.  Run this script with -Keep on
-# the machine under test and RDP to it FROM A DIFFERENT MACHINE.
+# AGAINST localhost, GIVE THE PROBE'S CREDENTIALS AND NOT YOUR OWN.  Tried on
+# 14 Aug 2026 with the signed-in user's credentials and it fails with "could
+# not connect to another console session ... you already have a console session
+# in progress", error 0x708 - RDP refusing BEFORE authentication, because
+# connecting to a console session you are already sitting in is circular.  That
+# says nothing about the deny right.  The probe account has no session to
+# collide with, so it should reach the logon check; but if the right does NOT
+# hold, the incoming session takes the console over and disconnects you.
+#
+# The test that risks nothing is from a SECOND MACHINE: run this with -Keep on
+# the machine under test and RDP to it from another one.
 #
 # DO NOT TRY TO DIAGNOSE THIS BY RUNNING "sshd -d" YOURSELF.  It was tried on
 # 14 Aug 2026 and it cannot work: sshd must run as SYSTEM to build a user
