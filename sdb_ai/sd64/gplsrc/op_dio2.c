@@ -637,12 +637,44 @@ void op_ospath() {
 
   switch (key) {
     case OS_PATHNAME: /* Test if valid pathname */
+    {
+      char* bs;
+
+      /* 14 Aug 26 Windows port - ACCEPT NATIVE WINDOWS PATHNAMES.  This split
+         on '/' alone and ran valid_name() over each component, and
+         valid_name() rejects everything in df_restricted_chars - which
+         contains both ':' and '\'.  So "C:\ProgramData\SD\user_accounts" was
+         a single component holding two forbidden characters, and every native
+         Windows path was refused.
+
+         What that looked like: CREATE.ACCOUNT stopped with "Invalid account
+         pathname" AFTER it had already created the Windows user and set its
+         password, leaving the account half made and nothing saying why.
+         Found 14 Aug 2026 on the first run of that verb.  It is the C twin of
+         the VALID_OS_PATH trap in PROJECT_STATUS.md 6, which was fixed in the
+         BASIC layer while this was missed.
+
+         df_restricted_chars is DELIBERATELY NOT WIDENED.  op_dio3.c and
+         op_dio4.c use it to map record ids onto filenames and back, which is
+         a different job; changing it there would change how records are named
+         on disk and would not be reversible for existing files.             */
+
       p = path;
-      if (*p == '/')
+
+      /* A drive letter is the only legitimate ':' in a pathname. */
+      if (IsAlpha(p[0]) && (p[1] == ':'))
+        p += 2;
+
+      if ((*p == '/') || (*p == '\\'))
         p++;
 
       do {
+        /* Either separator, whichever comes first. */
         q = strchr(p, '/');
+        bs = strchr(p, '\\');
+        if ((q == NULL) || ((bs != NULL) && (bs < q)))
+          q = bs;
+
         if (q != NULL)
           *q = '\0';
         if (!valid_name(p))
@@ -650,6 +682,7 @@ void op_ospath() {
         p = q + 1;
       } while (q != NULL);
       status = 1;
+    }
 
       break;
 

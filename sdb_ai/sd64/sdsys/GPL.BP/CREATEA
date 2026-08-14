@@ -38,8 +38,14 @@
 *  Rem was
 *    CREATE.ACCOUNT acc.name pathname {NO.QUERY}
 *  Now 
-*    CREATE.ACCOUNT USER <user acct name>  {NO.QUERY}  - account created in  /home/sd/user_accounts/<user acct name>  owner:group set to <username>:"sdu_"+<username>
+*    CREATE.ACCOUNT USER <user acct name>  {ADMINISTRATOR} {NO.QUERY}  - account created in  /home/sd/user_accounts/<user acct name>  owner:group set to <username>:"sdu_"+<username>
 *                                                 <username> must be found in sdusers group!
+*
+*    ADMINISTRATOR (14 Aug 26, Windows port) makes the account an SD
+*    administrator by putting it in Windows Administrators - which since
+*    PROJECT_STATUS.md 5.6.1 is the whole of what being an SD administrator
+*    means.  Omit it and the account is a standard local user, which is the
+*    default and the common case.  It cannot be abbreviated; see more.args.
 *    CREATE.ACCOUNT GROUP <grp acct name>  {NO.QUERY}  - account created in  /home/sd/group_accounts/<grp acct name> owner:group set to sdsys:group_name
 *                                                        Note - users will need to be added to group with MODIFY.ACCOUNT ADD group_name username
 *    CREATE.ACCOUNT OTHER acc.name pathname {NO.QUERY} - account created in pathname, maintained for backwards compatiblilty. This will require manual editing
@@ -87,6 +93,7 @@ deffun valid_os_path(path) calling '!valid_os_path'
 
    parser = "!PARSER"
    no.query = @false
+   make.admin = @false
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -148,24 +155,28 @@ deffun valid_os_path(path) calling '!valid_os_path'
          stop sysmsg(6074)  ;*    Invalid user name 
        
      case 1
-       * not a valid os user, are we configured to auto create os user?
-       If config('CREATUSR') then
-       * yes, attempt to create os user
+* 14 Aug 26 Windows port - THE config('CREATUSR') GATE IS GONE.  Decision from
+*   the repository owner: SD has accounts, not accounts and users as QM and
+*   ScarletDME do, so creating an account IS creating the operating system
+*   account and there is nothing to opt in to.  Asking permission to do the
+*   second half of the only thing this verb does made no sense once the two
+*   were the same thing.  The parameter still parses (config.c) and CONFIG
+*   still prints it; nothing consults it here any more.
        * sd convention is os user names are lowercase, if you don't want this, pre create the os user
          acc.uname = downcase(acc.uname)
 		 * Check INVERT/NOINVERT STATUS (1=INVERT on)
          PVAL = SYSTEM(1001)
          IF PVAL = 1 THEN
-           CRT "Warning: **** Case Inversion is not active during password entry! ****"   
+           CRT "Warning: **** Case Inversion is not active during password entry! ****"
          END
          if not(create_user(acc.uname)) then
            * create user failed
            @system.return.code = ER$NOT.CREATED
            stop sysmsg(10006,STATUS()) ;* Create User Failed, OS Error: %1
          end else
-           crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created' 
+           crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created'
            * user created set passowrd
-PW.TRY.AGAIN:           
+PW.TRY.AGAIN:
            if not(set_passwd(acc.uname)) then
            *  password failed
               crt sysmsg(10008): ;* 'Warning, user created but password not set, Retry (Y/N)'
@@ -173,12 +184,6 @@ PW.TRY.AGAIN:
               if upcase(yn) = 'Y' then goto PW.TRY.AGAIN
            end
          end
-         
-       end else
-       * not configured to create user, error out
-         @system.return.code = -ER$ARGS
-         stop sysmsg(6074)  ;*    Invalid user name 
-       end
      end case
      
      
@@ -347,11 +352,35 @@ PW.TRY.AGAIN:
             stop sysmsg(10012,acc.uname,stat) ;* Unable to add user %1 to sdusers, status: %2
           end
           end
-        end 
-      
-       
+        end
+
+* 14 Aug 26 Windows port - ADMINISTRATOR was given on the command line, so make
+*   this account an SD administrator.  Since PROJECT_STATUS.md 5.6.1 that means
+*   one thing: put it in Windows Administrators.  There is no SD-side flag to
+*   set and no private group left to join.
+*
+*   BY SID, NOT BY NAME.  BUILTIN\Administrators is renamed on a localised
+*   Windows, so "Administrators" would work here and fail on a German machine.
+*   !os_group takes either; see its description.
+*
+*   Done AFTER sdusers rather than instead of it.  They answer different
+*   questions: sdusers grants access to the database files, Administrators
+*   decides who administers SD.  An administrator who has not elevated does not
+*   carry Administrators in their token, so they need sdusers to reach the data
+*   tree exactly as an ordinary user does.
+        if make.admin then
+          void os_group("ADDMEM", "S-1-5-32-544", acc.uname)
+          stat = OS.ERROR()
+          if stat = 0 then
+            crt sysmsg(10032,acc.uname)   ;* %1 is now an SD administrator
+          end else
+            @system.return.code = -ER$FAILED
+            stop sysmsg(10033,acc.uname,stat) ;* Unable to make %1 an administrator, status: %2
+          end
+        end
+
       *
-      * create user's sd group      
+      * create user's sd group
         group_name = "sdu_":acc.uname      
         gosub create.group  
         if not(group_success) then
@@ -516,10 +545,23 @@ more.args:
          case keyword = KW$NO.QUERY
             no.query = @true
 
+* 14 Aug 26 Windows port - ADMINISTRATOR makes the account an SD administrator,
+*   which since PROJECT_STATUS.md 5.6.1 means a Windows administrator.  Without
+*   it the account is a standard local user, which is the safe default and the
+*   common case.
+*
+*   Matched on the token text rather than on a KW$ constant, deliberately.  The
+*   keyword numbers in SYSCOM/PARSER.H are a positional table of 216 entries
+*   shared by every verb, and adding one to it to serve a single verb is a
+*   larger and riskier change than this is worth.  The cost is that it cannot
+*   be abbreviated, unlike NO.QUERY.
+         case upcase(token) = 'ADMINISTRATOR'
+            make.admin = @true
+
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
       end case
-   repeat   
+   repeat
 return
 * ======================================================================
 

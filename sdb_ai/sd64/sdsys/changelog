@@ -5,6 +5,26 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  CREATE.ACCOUNT works on Windows, and can make an administrator.
+           * CREATE.ACCOUNT USER <name> creates the Windows account as well
+             as the SD one, prompts you for its password, and adds it to
+             sdusers so it can reach the database.  It is a STANDARD local
+             account.
+           * CREATE.ACCOUNT USER <name> ADMINISTRATOR makes it a Windows
+             administrator instead, which is what makes it an SD
+             administrator.  Leave the keyword off unless you mean it.
+           * Run it from an elevated session.  Creating a Windows account
+             needs administrator rights that an ordinary session does not
+             carry, and without them it stops with an access denied error.
+           * The CREATUSR configuration parameter is no longer consulted when
+             creating an account.  SD has accounts, not accounts and users, so
+             creating an account is creating the operating system account and
+             there was nothing to opt in to.
+           * Accounts could not be created at all before this: the check on
+             the account pathname rejected every native Windows path, so the
+             Windows account was created and then everything else stopped with
+             "Invalid account pathname".
+
 14 Aug 26  If you are a Windows administrator, you are an SD administrator.
            * There is no separate SD administrator group and nothing to join.
              Whoever installs SD administers it, because installing requires

@@ -29,10 +29,23 @@
 *            ADDMEM  add member to the group
 *            DELMEM  remove member from the group
 *
+*    group   a local group name, OR a security identifier written as
+*            "S-1-5-32-544".  ADDMEM and DELMEM accept either; ADD and DEL
+*            take a name only, since a group cannot be created with a chosen
+*            SID.
+*
 *    returns 0 success
 *            1 the operation failed
 *            2 a name is not valid, or the action is not one of the above
 *            5 access denied: SD is not running elevated
+*
+*    WHY A SID IS ACCEPTED AT ALL.  BUILTIN\Administrators is renamed on a
+*    localised Windows - it is "Administratoren" on a German machine - so
+*    naming it would work here and fail there.  Its SID never changes, and
+*    Add-LocalGroupMember has a parameter set that takes one.  Anything
+*    built in must be addressed this way; sd.iss writes *S-1-5-32-544 to
+*    icacls for exactly the same reason.  Groups SD creates itself, sdusers
+*    and the sdu_ ones, are our own names and are safe to write out.
 *
 *    WHY ONE SUBROUTINE RATHER THAN FOUR OS.EXECUTE LINES.  These four
 *    operations appear at five call sites across CREATEA, DELACC and MODIFYA,
@@ -77,6 +90,17 @@ deffun valid_os_name(name) calling '!valid_os_name'
       if not(valid_os_name(member)) then return rc
    end
 
+*  A SID rather than a name.  !valid_os_name already passed it - letters,
+*  digits and hyphens - so it cannot carry a quote into the script below.
+*  grp.sel selects the cmdlet parameter, so the four cases stay one line each.
+   is.sid = (upcase(group)[1,4] = 'S-1-')
+   if is.sid then
+      if act = 'ADD' or act = 'DEL' then return rc  ;* cannot name a new group's SID
+      grp.sel = '-SID "' : group : '"'
+   end else
+      grp.sel = '-Group "' : group : '"'
+   end
+
 *  14 Aug 26 Windows port - SH1 names PowerShell, so the command IS the
 *  script and there is no bash layer to quote against.  Both names have been
 *  through !valid_os_name - letters, digits, dot, underscore and hyphen only -
@@ -95,11 +119,11 @@ deffun valid_os_name(name) calling '!valid_os_name'
          ps := 'try { Remove-LocalGroup -Name "' : group : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
 
       case act = 'ADDMEM'
-         ps := 'try { Add-LocalGroupMember -Group "' : group : '" -Member "' : member : '" -ErrorAction Stop } '
+         ps := 'try { Add-LocalGroupMember ' : grp.sel : ' -Member "' : member : '" -ErrorAction Stop } '
          ps := 'catch [Microsoft.PowerShell.Commands.MemberExistsException] { exit 0 } catch { exit 1 }; exit 0'
 
       case act = 'DELMEM'
-         ps := 'try { Remove-LocalGroupMember -Group "' : group : '" -Member "' : member : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
+         ps := 'try { Remove-LocalGroupMember ' : grp.sel : ' -Member "' : member : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
 
       case 1
          return rc
