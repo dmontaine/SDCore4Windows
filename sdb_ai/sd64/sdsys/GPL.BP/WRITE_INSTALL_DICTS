@@ -2,6 +2,7 @@ PROGRAM WRITE_INSTALL_DICTS
 *
 * PROGRAM WRITES FILE DEFINING DICTIONARY ITEMS
 *
+*
 * THIS IS THE PATH TO WHERE WE SAVED DATA FROM THE BUILD PROCESS AND THE FILE NAME WE WILL USE
 DATA_PATH =  @sdsys: "/gplbld/FILES_DICTS"
 *
@@ -20,7 +21,11 @@ CRT
 *INPUT OK
 *IF UPCASE(OK) # 'Y' THEN STOP 'Process Aborted'
 
-IF SYSTEM(27) # 0 THEN
+* 13 Aug 26 Windows port - was SYSTEM(27) # 0, ie "uid is not root".  There is
+*   no uid zero on Windows, so this always refused.  SYSTEM(1050) reports the
+*   same administrator flag as KERNEL(K$ADMINISTRATOR, -1) and, unlike KERNEL,
+*   is available to a program that is not $internal.
+IF NOT(SYSTEM(1050)) THEN
       stop 'Command requires administrator privileges'
 END
 

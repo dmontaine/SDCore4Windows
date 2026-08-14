@@ -28,6 +28,7 @@
 * rev 0.9-3 Nov 25 move voc back to dynamic file
 * 06 Aug 24 comment out "<cr> to install" prompt 
 * 02 Jul 24 add check for install already complete
+* 13 Aug 26 Windows port - privilege test now uses K$ADMINISTRATOR, not system(27)
 * END-HISTORY
 *
 *

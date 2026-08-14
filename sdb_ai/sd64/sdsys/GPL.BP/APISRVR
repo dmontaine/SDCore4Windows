@@ -24,6 +24,7 @@
 *               always run in secure mode
 * 28 Jul 24 mab remove enter.package / exit.package (commands not supported)
 * rev 0.9.0 Jan 25 mab test for user member of account on logto
+* 13 Aug 26 Windows port - removed the sdusers and ACC$GROUP membership tests
 * END-HISTORY
 *
 *
@@ -71,7 +72,7 @@ $include err.h
 $include keys.h
 
 * 20240219 mab user must be member of sdusers  
-deffun is_grp_member(user,group) calling '!is_grp_member'
+* 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
 
 common /$APISRVR/ logged.in,          ;* Process is logged in
@@ -355,13 +356,9 @@ if index(new.account, @ds, 1) = 0 then
    end
 end
 
-* rev 0.9.0 * is user member of account?   
-if  not(is_grp_member(@logname,acc.rec<ACC$GROUP>)) then
-    server.error = SV$ERROR
-    error.msg = sysmsg(10003) ;* User not allowed in requested account
-    abort.message = error.msg
-    goto revert.to.old.account 
-end
+* rev 0.9.0 * is user member of account?
+* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group; account
+*   access is becoming a matter of the account's own credentials.
 
 if not(ospath(account.path, OS$CD)) then
    server.error = SV$ERROR
@@ -911,12 +908,9 @@ vb.login:
                   * if logging then
                   *    writeseq '>  vb.login username: ' : username  to log.f else null
                   * end        
-                  if  not(is_grp_member(username,'sdusers')) then
-                     server.error = SV$ON.ERROR
-                     abort.message = sysmsg(5009) ;* This user is not registered for SD use
-                     goto exit.vb.login
-                  end
-                  
+* 13 Aug 26 Windows port - removed the sdusers group test; SD no longer
+*   consults operating system groups.
+
                   * dsm 20240612 lgn.rec<LGN$DATE> = date()
                   * dsm 20240612 lgn.rec<LGN$TIME> = time()
                   * dsm 20240612 recordlocku lgn.f, username
@@ -958,11 +952,8 @@ vb.local.login:
                * mab 20240219 if kernel(K$SECURE, -1) then
                * dsm 20240612 readu lgn.rec from lgn.f, username else null
                * 20240219 mab user must be member of sdusers           
-               if  not(is_grp_member(username,'sdusers')) then
-                     server.error = SV$ON.ERROR
-                     abort.message = sysmsg(5009) ;* This user is not registered for SD use
-                     goto exit.vb.local.login
-               end
+* 13 Aug 26 Windows port - removed the sdusers group test; SD no longer
+*   consults operating system groups.
 
                * dsm 20240612 lgn.rec<LGN$DATE> = date()
                * dsm 20240612 lgn.rec<LGN$TIME> = time()

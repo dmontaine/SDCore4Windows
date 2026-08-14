@@ -32,6 +32,7 @@
 * 20240615 mab  mods for bootstrap builder
 * 20240330 mab restrict logto account to allowed users
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 13 Aug 26 Windows port - LOGTO SDSYS tests K$ADMINISTRATOR; ACC$GROUP test removed
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -153,7 +154,7 @@ $include define_install.h
 
 deffun errtext(err) calling '!errtext'
 * rev 0.9.0 *
-deffun is_grp_member(user,group) calling '!is_grp_member'
+* 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
 $define max.elements 500
 
@@ -2505,13 +2506,9 @@ int.logto:
    * acc.rec contains the pathname of the account (other fields removed)
    * acc.record contains the full ACCOUNT record 
 
-* rev 0.9.0 * is user member of account?   
-   if  not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then
-      display sysmsg(10003) ;* User not allowed in requested account
-      if ospath(account.path, OS$CD) then return
-      display sysmsg(5162) ;* Fatal error : Cannot return to previous account
-      return to abort.cproc
-   end
+* rev 0.9.0 * is user member of account?
+* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group; LOGTO will
+*   be gated by the target account's own credentials instead.
 
 
    if not(ospath(acc.rec, OS$CD)) then

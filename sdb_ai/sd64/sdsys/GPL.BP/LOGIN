@@ -29,7 +29,10 @@
 * 20240612 dsm removed read/write $LOGINS
 * 20240330 mab rev 064 mods to $LOGINS / ACCOUNTS
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
-* END-HISTORYPTION:
+* 13 Aug 26 Windows port - removed the sdusers and ACC$GROUP membership tests
+* END-HISTORY
+*
+* START-DESCRIPTION:
 *
 * Mode argument:
 *   0   Interactive user
@@ -61,7 +64,7 @@ $include keys.h
 $include keyin.h
 $include keycode.h
 * 20240219 mab user must be member of sdusers  
-deffun is_grp_member(user,group) calling '!is_grp_member'
+* 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
    ok = @false
    is.phantom = kernel(K$IS.PHANTOM, 0)
@@ -189,11 +192,9 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
   end else
      * This user has come in from a command prompt.
      lgn.id = @logname
-     * 20240219 mab user must be member of sdusers     
-     if  not(is_grp_member(lgn.id,'sdusers')) then
-        display sysmsg(5009) ;* This user is not registered for SD use
-        goto terminate.connection
-     end
+* 13 Aug 26 Windows port - removed the sdusers group test.  SD no longer
+*   consults operating system groups at all; access becomes a matter of the
+*   account's own credentials.  Until that lands, nothing gates entry here.
   end
 
    s = pterm(PT$INVERT, @true)
@@ -220,11 +221,9 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
          end
 
 * rev 0.9.0 *  user must be a member of ACCOUNT's linux group to access ACCOUNT
-*
-         if  not(is_grp_member(lgn.id,acc.rec<ACC$GROUP>)) then  
-            display sysmsg(10003) ;* User not allowed in requested account
-            goto terminate.connection
-         end
+* 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group, and account
+*   access is becoming a matter of the account's own credentials instead.
+*   Nothing gates entry to a named account until that is built.
 
          acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
 
