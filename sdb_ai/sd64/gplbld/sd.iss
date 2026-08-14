@@ -235,9 +235,29 @@ begin
   Result := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
 end;
 
+var
+  DataTreeWasAbsent: Boolean;
+
+function InitializeSetup: Boolean;
+begin
+  (* ASKED ONCE, BEFORE ANY FILE IS COPIED, AND THE ANSWER CACHED.
+
+     A Check function is evaluated PER FILE.  When this tested DirExists
+     directly, the first file of the sdsys set created the directory, every
+     later evaluation therefore answered False, and the remaining ~3,260 files
+     were silently skipped - producing an install whose database contained 16
+     files and no catalogue at all.  Setup still exited 0.
+
+     It survived the first round of testing because the upgrade case skips the
+     whole set consistently and so looks identical either way.  Only a genuine
+     first install exposes it.  Measured 14 Aug 2026. *)
+  DataTreeWasAbsent := not DirExists(ExpandConstant('{#DataDir}\sdsys'));
+  Result := True;
+end;
+
 function DataTreeAbsent: Boolean;
 begin
-  Result := not DirExists(ExpandConstant('{#DataDir}\sdsys'));
+  Result := DataTreeWasAbsent;
 end;
 
 { ---------------------------------------------------------------------------
