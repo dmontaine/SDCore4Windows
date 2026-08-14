@@ -7,12 +7,22 @@
 
 import os
 import subprocess
+import sys
 import array
 import logging
 logger = logging.getLogger(__name__)
 
-# hardcoded path to sdsys, bad practice but it is what it is for now
-SDSYS = '/usr/local/sdsys'
+# 14 Aug 26 Windows port - the sdsys path is an argument, not a constant.
+#
+# It was hardcoded to '/usr/local/sdsys', which is both a Linux path and a
+# single one: pre-bootstrapping the install (PROJECT_STATUS.md 5.16) means
+# running this against the tree being staged, wherever that is, so a constant
+# cannot work.  The old value is kept only as the fallback, so running it with
+# no argument behaves as it always did.
+#
+#   python3 gplbld/pcode_bld.py [sysdir]
+
+SDSYS = sys.argv[1] if len(sys.argv) > 1 else '/usr/local/sdsys'
 
 DEBUG_DIFF = False
 
@@ -97,13 +107,14 @@ def main():
     # If $catlog directive found in source  bbcmp will also write the pcode object file to the global catalog file
     #         ie) for BCOMP,  $catalog $BCOMP is found in source.  bbcmp will write the pcode object file to
     #         sdsys/gcat/$BCOMP
-    cwd = os.getcwd()
-    bbcmp = cwd + os.sep +'gplbld' + os.sep + 'bbcmp.py'
+    # 14 Aug 26 Windows port - find bbcmp beside this script rather than under
+    # the working directory, so pcode_bld.py can be run from anywhere.
+    bbcmp = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bbcmp.py')
     logger.info('bbcmp.py path: ' + bbcmp)
     for src in pcode_fs:
         logger.info('**********************************************************************')
         result =   subprocess.run(
-            ['python3',bbcmp,SDSYS,'GPL.BP/'+src,'PCODE.OUT/'+src],
+            [sys.executable,bbcmp,SDSYS,'GPL.BP/'+src,'PCODE.OUT/'+src],
              capture_output=True,
              text = True)
         logger.info(result.stdout)

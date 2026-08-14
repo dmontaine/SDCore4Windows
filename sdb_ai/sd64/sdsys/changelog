@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  "sd -stop" no longer kills the program that ran it.
+           * It sent SIGTERM to every entry in the user table without
+             checking the process id was valid, and a process id of zero
+             means "every process in my process group" - so stopping SD from
+             a script or a terminal could terminate the script, the shell, or
+             anything else running alongside it.  No error was reported.
+
+14 Aug 26  An SD account can be installed anywhere, and the install no longer
+           needs Python or a compiler on the target machine.
+           * The system is now compiled when the install is built rather than
+             when it is installed, so installing is a file copy.
+           * New build scripts gplbld/bootstrap.py and
+             "gplbld/stage.py --bootstrap".
+
+14 Aug 26  Configuration file fixes.
+           * A CRLF sd.conf no longer corrupts every text setting.  The
+             carriage return was left on the end of the value, so SDSYS
+             pointed at a directory that did not exist.  Files written by
+             Notepad and most Windows editors were affected; numeric settings
+             were not.
+           * SH and SH1 may be up to 255 characters, was 80.  A longer value
+             used to overwrite the settings stored after them, and the error
+             named SORTMRG - a parameter the file need not even contain.
+             Over-long values are now refused with a message that names the
+             right setting.
+
 14 Aug 26  SH, ! and OS.EXECUTE now run PowerShell instead of bash.
            * SD used to shell out through /bin/bash, which is not present on
              a Windows machine and is not part of an SD install, so anything

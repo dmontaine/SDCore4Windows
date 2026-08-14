@@ -60,7 +60,15 @@ struct CONFIG {
 
 /* Config parameters loaded per process to allow local changes */
 
-#define MAX_SH_CMD_LEN 80
+/* 14 Aug 26 Windows port - was 80, which is too short for the shell now that
+   it is PowerShell.  The default SH1 value alone is 93 characters:
+   <SystemRoot>/System32/WindowsPowerShell/v1.0/powershell.exe plus its
+   switches.  config.c copied the value in with an unbounded strcpy, so an
+   over-long SH or SH1 did not fail - it overran into sortmem and sortmrg,
+   which sit immediately after these two buffers, and the symptom was
+   "Invalid value for SORTMRG configuration parameter" from a file that does
+   not mention SORTMRG.  The copy is bounds-checked now as well. */
+#define MAX_SH_CMD_LEN 255
 struct PCFG  {
 /* 20240219 mab mods to handle AF_UNIX sockets, security mode */ 
   int16_t api_login;                    /* REQUIRE API LOGIN  APILOGIN 0 = UserName and Password are NOT validated, run as peer user. 1 = UserName and Password validated */

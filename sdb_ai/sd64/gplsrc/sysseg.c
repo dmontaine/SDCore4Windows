@@ -451,14 +451,29 @@ bool stop_sd() {
 
     for (i = 1; i <= sysseg->max_users; i++) {
       uptr = UPtr(i);
-      if (uptr->uid) {
+
+      /* 14 Aug 26 Windows port - pid MUST be tested, not just uid.
+         kill(0, SIGTERM) does not mean "no process", it means EVERY PROCESS
+         IN THE CALLER'S PROCESS GROUP - so a user table entry that has been
+         claimed but not yet filled in, or left behind by a process that died
+         between the two, made "sd -stop" terminate whatever launched it.
+         Observed while building the installer: sd -stop run from a script
+         killed the Python process driving it and the shell above that, with
+         no error anywhere, so the whole build simply stopped.  A negative pid
+         is just as bad - kill(-n) signals a process group too.
+         The liveness poll below always had this test; this loop did not.   */
+
+      if (uptr->uid && uptr->pid > 0) {
         kill(uptr->pid, SIGTERM);
       }
     }
 
     /* Shutdown the sdlnxd daemon if it is running */
 
-    if (sysseg->sdlnxd_pid)
+    /* > 0 rather than merely non-zero, for the reason above: a negative pid
+       signals a process group.  Zero was already excluded here. */
+
+    if (sysseg->sdlnxd_pid > 0)
       kill(sysseg->sdlnxd_pid, SIGTERM);
 
     /* Wait for everyone to go.  System V exposed an attach count that fell to

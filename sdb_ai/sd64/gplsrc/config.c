@@ -157,6 +157,19 @@ struct CONFIG* read_config(char* errmsg) {
     if ((p = strchr(rec, '\n')) != NULL)
       *p = '\0';
 
+    /* 14 Aug 26 Windows port - strip the carriage return too.  Only '\n' was
+       removed, which is correct for a Unix file and wrong for every
+       configuration file written on Windows: gplbld/stage.py writes CRLF, as
+       Notepad and most Windows editors do.  The '\r' was left on the end of
+       every STRING parameter, so SDSYS became "C:\ProgramData\SD\sdsys\r" and
+       every path built from it was wrong, while the numeric parameters were
+       unaffected because sscanf stops at the '\r'.  A fault that appears only
+       in the shipped configuration and not in the developer's own. */
+
+    p = rec + strlen(rec);
+    while ((p > rec) && ((p[-1] == '\r') || (p[-1] == '\n')))
+      *(--p) = '\0';
+
     if ((rec[0] == '#') || (rec[0] == '\0'))
       continue;
 
@@ -255,10 +268,25 @@ struct CONFIG* read_config(char* errmsg) {
         pcfg.ringwait = (n != 0);
       else if (sscanf(rec, "SAFEDIR=%d", &n) == 1)
         pcfg.safedir = (n != 0);
-      else if (strncmp(rec, "SH=", 3) == 0)
+      /* 14 Aug 26 Windows port - bounds checked.  These were plain strcpy
+         into fixed buffers, so a long value in the configuration file
+         overran into the fields declared after them in struct config and
+         the error named an unrelated parameter.  Refuse the value instead. */
+      else if (strncmp(rec, "SH=", 3) == 0) {
+        if (strlen(rec + 3) > MAX_SH_CMD_LEN) {
+          sprintf(errmsg, "SH value is longer than %d characters.",
+                  MAX_SH_CMD_LEN);
+          goto exit_read_config;
+        }
         strcpy(pcfg.sh, rec + 3);
-      else if (strncmp(rec, "SH1=", 4) == 0)
+      } else if (strncmp(rec, "SH1=", 4) == 0) {
+        if (strlen(rec + 4) > MAX_SH_CMD_LEN) {
+          sprintf(errmsg, "SH1 value is longer than %d characters.",
+                  MAX_SH_CMD_LEN);
+          goto exit_read_config;
+        }
         strcpy(pcfg.sh1, rec + 4);
+      }
       else if (sscanf(rec, "SORTMEM=%d", &n) == 1)
         pcfg.sortmem = n * 1024L;
       else if (sscanf(rec, "SORTMRG=%d", &n) == 1)
