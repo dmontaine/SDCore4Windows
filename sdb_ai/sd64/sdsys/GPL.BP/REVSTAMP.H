@@ -18,7 +18,8 @@
 * 
 * START-HISTORY:
 * rev 1.0-2 see sdsys/changelog
-* rev 0.9-3 Nov 25 move voc back to dynamic file
+* rev 1.0-1 Add back PROCREAD PROCWRITE
+* rev 0.9-3 Nov 25 move voc back to dynamic file 
 * rev 0.9-2 Mar 25 add sdpyobj function
 * rev 0.9.1 Mar 25 return to single rev track
 * 31 Dec 23 SD launch - prior history suppressed

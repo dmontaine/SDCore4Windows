@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+13 Aug 26  An installed system no longer contains a copy of the C source, and
+           does not need one to compile BASIC.
+           * GPL.BP/APISRVR and GPL.BP/ERRTEXT each ran a build tool during
+             compilation - REVSTAMP and ERRGEN - which read ./gplsrc from the
+             account directory.  Both are now switched off, as CPROC's already
+             was.  Compiling either program on a system without the C source
+             used to fail, and in ERRGEN's case it emptied SYSCOM/ERR.H first.
+           * New build script gplbld/gen_includes.py regenerates GPL.BP/
+             REVSTAMP.H, GPL.BP/ERRTEXT.H and SYSCOM/ERR.H from the C headers.
+             Run it after changing gplsrc/err.h or gplsrc/revstamp.h;
+             "--check" reports what is out of date without writing anything.
+           * 42 error codes had no message text - the crypto, SDEXT and
+             embedded Python errors added since July 2024.  They have text
+             now, so ERRTEXT and error displays name them instead of showing
+             a bare number.
+           * Those same 42 codes were defined in SYSCOM/ERR.H with the wrong
+             sign and with C spelling.  They now match the C header:
+             SD$Mem.Err is -10100, not SD_Mem_Err 10100.  No shipped program
+             referred to them.
+           * GPL.BP/OPGEN still reads ./gplsrc and so cannot be run on an
+             installed system.  It is a developer tool for regenerating
+             OPCODES.H and nothing calls it.
+
 13 Aug 26  Administrator rights belong to the SDSYS account and to nothing
            else.
            * They are set on entry to SDSYS and given up on the way out, so

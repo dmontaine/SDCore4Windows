@@ -26,6 +26,8 @@
 * rev 0.9.0 Jan 25 mab test for user member of account on logto
 * 13 Aug 26 Windows port - removed the sdusers and ACC$GROUP membership tests
 * 13 Aug 26 Windows port - SrvrAccount takes an account name only, no pathnames
+* 13 Aug 26 Windows port - commented out the REVSTAMP $execute pair, as CPROC
+*               already has, so compiling this does not need gplsrc in the tree
 * END-HISTORY
 *
 *
@@ -61,8 +63,14 @@ $catalog $APISRVR
 $flags cproc
 $flags trusted
 * mab
-$execute 'BASIC GPL.BP REVSTAMP'
-$execute 'RUN GPL.BP REVSTAMP'
+* 13 Aug 26 Windows port - REVSTAMP is a build tool, not a compile-time step.
+* mab *  Running it here made every compile of this program need ./gplsrc in the
+* mab *  account directory, which is source in the data tree. CPROC 139-140 has
+* mab *  the identical pair already commented out for the same reason. The
+* mab *  include below is the tracked GPL.BP/REVSTAMP.H, which is regenerated
+* mab *  at build time by gplbld/gen_includes.py.
+*$execute 'BASIC GPL.BP REVSTAMP'
+*$execute 'RUN GPL.BP REVSTAMP'
 $include revstamp.h
 
 $include syscom.h

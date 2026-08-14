@@ -19,10 +19,9 @@
 * START-HISTORY:
 * 31 Dec 23 SD launch - prior history suppressed
 * 01 Jul 24 mab define max string size error ER_MAX_STRING
-* 30 Jul 24 mab encrytption decryption error codes 
-* 06 Aug 24 mab add SDEXT error codes
-* 09 Aug 24 mab add SDEXT embedded python error codes
-* rev 0.9-2 Mar 25 mab add sdpyobj
+* 30 Jul 24 mab add error codes for SD_ENCRYPT_SODIUM
+* rev 0.9.0 Jan 25 mab sdext_eguid_set error codes
+* rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -262,58 +261,59 @@ $define DHE$JNL.CTL.READ         8803 ;* Cannot read SDSYS $JNLCTRL (os.error)
 $define DHE$JNL.XCHK             8804 ;* $JNL cross-check error
 $define DHE$ECB.TYPE             8900 ;* ECB has incorrect type
 
-* SD_ENCRYPT_SODIUM error codes *
-* Generic error codes *
-$define SD_Mem_Err              10100 ;* memory allocation error 
 
-* encrytption decryption error codes 
-$define SD_SodInit_Err          10199 ;* libsodium initialization error 
-$define SD_Encrypt_Err          10200 ;* error in call to crypto_secretbox_easy 
-$define SD_Decrypt_Err          10201 ;* error in call to crypto_secretbox_easy_open
-$define SD_Encode_Err           10202 ;* error in call to bin2hex or bin2base64 
-$define SD_Decode_Err           10203 ;* error in call to hex2bin or base642bin 
-$define SD_KeyLen_Err           10204 ;* key length error 
-$define SD_EDType_Err           10205 ;* Encode Decode type error 
+* SD_ENCRYPT_SODIUM error codes
+* Generic error codes
+$define SD$Mem.Err   -10100  ;* memory allocation error
 
-* SDEXT error codes 
-$define SD_EXT_KEY_ERR          10300 ;* unknown key 
-$define SD_EXT_ARG_CNT          10301 ;* incorrect argument count for called function 
-$define SD_INT_OVERFLW          10302 ;* Result will create integer overflow  (> 32 Bit int)
+* encrytption decryption error codes
+$define SD$SodInit.Err -10199  ;* libsodium initialization error
+$define SD$Encrypt.Err -10200  ;* error in call to crypto.secretbox.easy
+$define SD$Decrypt.Err -10201  ;* error in call to crypto.secretbox.easy.open
+$define SD$Encode.Err  -10202  ;* error in call to bin2hex or bin2base64
+$define SD$Decode.Err  -10203  ;* error in call to hex2bin or base642bin
+$define SD$KeyLen.Err  -10204  ;* key length error
+$define SD$EDType.Err  -10205  ;* Encode Decode type error
+
+* SDEXT error codes
+$define SD$EXT.KEY.ERR -10300  ;* unknown key
+$define SD$EXT.ARG.CNT -10301  ;* incorrect argument count for called function
+$define SD$INT.OVERFLW -10302  ;* Result will create integer overflow  (> 32 Bit int)
 
 * sdext_eguid_set error codes
-$define SD_EUID_PWD_Err         10400 ;* Couldn't get pwd of user
-$define SD_EUID_SET_Err         10401 ;* Couldn't set proess to uid / gid of user
-$define SD_EUID_RST_Err         10402 ;* Couldn't return proess to uid / gid of caller
-$define SD_EUID_NSET_Err        10403 ;* SD_EUID_RESTORE called before SD_EUID_SET 
+$define SD$EUID.PWD.Err  -10400  ;* Couldn't get pwd of user
+$define SD$EUID.SET.Err  -10401  ;* Couldn't set proess to uid / gid of user
+$define SD$EUID.RST.Err  -10402  ;* Couldn't return proess to uid / gid of caller
+$define SD$EUID.NSET.Err -10403  ;* SD.EUID.RESTORE called before SD.EUID.SET
 
-* Embedded Python Error codes   
-$define SD_PyEr_NotInit    12001    ;* interperter not initiialized 
-$define SD_PyEr_Dict       12002    ;* PyDict_New() failed 
-$define SD_PyEr_Builtin    12003    ;* failed to set __builtins__ link to the built-in scope 
-$define SD_PyEr_Excpt      12004    ;* exception on PyRun_String 
-$define SD_PyEr_FinalEr    12005    ;*  error reported by GPL.BP Program PY_FINALIZE 
-$define SD_PyEr_NOF        12006    ;* could not open script file 
-$define SD_PyEr_Key        12007    ;* failed to find key in dictionary 
-$define SD_PyEr_ObToStr    12008    ;* failed to convert python object to string 
-$define SD_PyErr_UniToStr  12009    ;* error encoding unicode python string to to Latin 
+* Embedded Python Error codes
+$define SD$PyEr.NotInit    -12001    ;* interperter not initiialized
+$define SD$PyEr.Dict       -12002    ;* PyDict.New() failed
+$define SD$PyEr.Builtin    -12003    ;* failed to set ..builtins.. link to the built-in scope
+$define SD$PyEr.Excpt      -12004    ;* exception on PyRun.String
+$define SD$PyEr.FinalEr    -12005    ;*  error reported by GPL.BP Program PY.FINALIZE
+$define SD$PyEr.NOF        -12006    ;* could not open script file
+$define SD$PyEr.Key        -12007    ;* failed to find key in dictionary
+$define SD$PyEr.ObToStr    -12008    ;* failed to convert python object to string
+$define SD$PyErr.UniToStr  -12009    ;* error encoding unicode python string to to Latin
 
-$define SD_PyErr_MainMod   12010    ;* cannot import __main__ 
-$define SD_PyErr_GlobDict  12011    ;* could get __main__ dictionary  
-$define SD_PyErr_DictExsts 12012    ;* dictionary already exists  
-$define SD_PyErr_NamSpcErr 12013    ;* Failed to add to namespace  
-$define SD_PyErr_ObjNOF    12014    ;* requested object does not exist  
-$define SD_PyErr_DictSet   12015    ;* failed to set dictionary key / value 
-$define SD_PyErr_DictDel   12016    ;* failed to Delete dictionary key / value 
-$define SD_PyErr_NotDict   12017    ;* Object not a dictionary  
-$define SD_PyErr_EnLatin   12018    ;* error encoding latin string to unicode 
-$define SD_PyErr_NotStr    12019    ;* Object not a String (unicode)  
-$define SD_PyErr_DelObj    12020    ;* Failed to remove Object from global dictionary 
+$define SD$PyErr.MainMod   -12010    ;* cannot import ..main..
+$define SD$PyErr.GlobDict  -12011    ;* could get ..main.. dictionary
+$define SD$PyErr.DictExsts -12012    ;* dictionary already exists
+$define SD$PyErr.NamSpcErr -12013    ;* Failed to add to namespace
+$define SD$PyErr.ObjNOF    -12014    ;* requested object does not exist
+$define SD$PyErr.DictSet   -12015    ;* failed to set dictionary key / value
+$define SD$PyErr.DictDel   -12016    ;* failed to Delete dictionary key / value
+$define SD$PyErr.NotDict   -12017    ;* Object not a dictionary
+$define SD$PyErr.EnLatin   -12018    ;* error encoding latin string to unicode
+$define SD$PyErr.NotStr    -12019    ;* Object not a String (unicode)
+$define SD$PyErr.DelObj    -12020    ;* Failed to remove Object from global dictionary
 
-$define SD_PyErr_NoItems   12030    ;* Python Object contains no items (List?) 
-$define SD_PyErr_CreStr    12031    ;* Failed to create Python String Object   
-$define SD_PyErr_ConCat    12032    ;* Failed to concatinate Python String Objects   
-$define SD_PyErr_LstItem   12033    ;* Failed to access List Objects Item  
-$define SD_PyErr_NotList   12034    ;* Object not a list  
-$define SD_PyErr_LstAppdEr 12035    ;* List append failed 
-$define SD_PyErr_LstClrEr  12036    ;* list clear failed  
+$define SD$PyErr.NoItems   -12030    ;* Python Object contains no items (List?)
+$define SD$PyErr.CreStr    -12031    ;* Failed to create Python String Object
+$define SD$PyErr.ConCat    -12032    ;* Failed to concatinate Python String Objects
+$define SD$PyErr.LstItem   -12033    ;* Failed to access List Objects Item
+$define SD$PyErr.NotList   -12034    ;* Object not a list
+$define SD$PyErr.LstAppdEr -12035    ;* List append failed
+$define SD$PyErr.LstClrEr  -12036    ;* list clear failed
 * END-CODE

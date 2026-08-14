@@ -24,7 +24,22 @@ Binary Free Install process.
     pcode_bld.py (found in gplbld)- Python script to compile the pcode file bytecode object(s).
       Note the list of programs processed is hardcoded into pcode_bld.py.
       Script is executed at install time.
-      
+
+    gen_includes.py (found in gplbld) - Python script to regenerate the BASIC
+      include records that are derived from C headers:
+        gplsrc/revstamp.h -> sdsys/GPL.BP/REVSTAMP.H
+        gplsrc/err.h      -> sdsys/SYSCOM/ERR.H and sdsys/GPL.BP/ERRTEXT.H
+      Run it from sd64 after editing either C header; "--check" reports what is
+      out of date without writing.  This replaces GPL.BP/REVSTAMP and
+      GPL.BP/ERRGEN, which did the same translation from inside SD and so
+      needed the C source in the installed database.  The $execute directives
+      that ran them during compilation are commented out in GPL.BP/CPROC,
+      GPL.BP/APISRVR and GPL.BP/ERRTEXT.
+      GPL.BP/OPGEN, which generates GPL.BP/OPCODES.H from gplsrc/opcodes.h, is
+      not covered - nothing $executes it, so it remains a manual tool that has
+      to be run from a tree that still has gplsrc.
+
+
     BBPROC - BootStrap Command Processor (found in GPL.BP).
       This program is a stripped down command processor based on VBSRVR.
       It compiles the following programs (hardcoded list) using BCOMP compiled by bbcmp.py.

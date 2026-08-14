@@ -20,6 +20,9 @@
 * START-HISTORY:
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 01 Jul 24  mab correct location of ERRGEN (GPL.BP)
+* 13 Aug 26 Windows port - commented out the ERRGEN $execute, as CPROC and
+*               APISRVR already have for REVSTAMP, so compiling this does not
+*               need gplsrc in the data tree
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -30,7 +33,15 @@
 
 subroutine errtext(expansion, errno)
 $catalogue !errtext
-$execute 'RUN GPL.BP ERRGEN'
+* 13 Aug 26 Windows port - ERRGEN is a build tool.  It reads ./gplsrc/err.h and
+*   regenerates both GPL.BP/ERRTEXT.H and SYSCOM/ERR.H, so running it here made
+*   every compile of this program need C source in the data tree.  Worse, it
+*   truncates both outputs before it opens its input, so with gplsrc absent it
+*   destroyed them and left every ER$ constant undefined system wide.  Both
+*   generated files are tracked; regenerate them with gplbld/gen_includes.py,
+*   not from a compile.  Same treatment as REVSTAMP in CPROC 139-140 and in
+*   APISRVR.
+*$execute 'RUN GPL.BP ERRGEN'
 
    err = ''
    text = ''
