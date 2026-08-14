@@ -163,9 +163,33 @@ function SshPassword($pass) {
     return ('refused: ' + $why)
 }
 
-# The blank first line is the BOM sink - see the header.
+# ONE STRING WITH LF SEPARATORS, NOT AN ARRAY DOWN THE PIPELINE.
+#
+# PowerShell writes CRLF between pipeline objects, and SD treats CR and LF EACH
+# as a line terminator - so an array of n commands arrives as n commands with a
+# phantom EMPTY line after every one of them.  At the TCL prompt that is
+# harmless and invisible: an empty command just reprints the prompt.  At an
+# "input" statement it is not, and it silently destroyed this test:
+#
+#   input pw1 HIDDEN   <- the phantom after the CREATE.ACCOUNT line: EMPTY
+#   input pw2 HIDDEN   <- the real password
+#   input yn           <- the next phantom: EMPTY, so not "Y", so no retry
+#
+# pw1 # pw2, so SET_PASSWD returned "user created but password not set", the
+# account was left disabled - Enable-LocalUser runs inside that same script -
+# and all three logon measurements then failed for want of a password.  The
+# second password fell through to the TCL prompt, where it produced a stray
+# "Command not found" on stderr, which was the only visible trace.
+#
+# Measured 14 Aug 2026 rather than deduced, by piping AAA and BBB both ways and
+# counting the prompts: the array form shows an empty command between each
+# pair, the single-string form shows none.  PROJECT_STATUS.md section 6.
+#
+# The leading "`n" is the BOM sink - see the header.  It has to stay: the BOM
+# still lands on the first line whichever form is used.
 function Invoke-SD([string[]]$commands) {
-    $out = (@('') + $commands + @('OFF')) | & $sdExe -ASDSYS
+    $body = "`n" + (($commands + @('OFF')) -join "`n") + "`n"
+    $out = $body | & $sdExe -ASDSYS
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
 
@@ -215,6 +239,21 @@ try {
         exit 2
     }
 
+    # THE SD SIDE SURVIVES A RUN ON PURPOSE (see the summary at the end), which
+    # means a second run of the same name is refused by CREATE.ACCOUNT itself
+    # with "Account already exists" - long after it has made a Windows account
+    # for it.  Say so here instead, where nothing has been created yet.
+    if (Test-Path $acctDir) {
+        Write-Output "verify-createaccount: $acctDir already exists, so SD will refuse the name"
+        Write-Output "  A previous run left it deliberately - removing it is DELETE.ACCOUNT's job"
+        Write-Output "  and 7 step 1c has not settled what that should do."
+        Write-Output ""
+        Write-Output "  Use a fresh name:      -Account sdacct2"
+        Write-Output "  Or clear it by hand:   Remove-Item -Recurse -Force '$acctDir'"
+        Write-Output "                         and DELETE ACCOUNTS $($Account.ToUpper()) from inside SD"
+        exit 2
+    }
+
     Add-Type -TypeDefinition $logonSig -Language CSharp | Out-Null
     if (Test-Path $workdir) { Remove-Item -Recurse -Force $workdir }
     New-Item -ItemType Directory -Path $workdir | Out-Null
@@ -256,7 +295,11 @@ try {
     Note 'message 10034 (ssh only) shown' 'yes' $(if ($sdOut -match 'ssh only') { 'yes' } else { 'no' }) $true
 
     Note 'account directory' 'yes' $(if (Test-Path $acctDir) { 'yes' } else { 'no' }) $true
-    foreach ($f in @('VOC', '$HOLD', '$SAVEDLISTS', 'BP')) {
+    # $SVLISTS, not $SAVEDLISTS.  CREATEA prints "Creating $SAVEDLISTS..." and
+    # then creates a directory called $SVLISTS - the message is the VOC name,
+    # the directory is the DH file name.  This test asserted the message and
+    # failed against a perfectly good account on 14 Aug 2026.
+    foreach ($f in @('VOC', '$HOLD', '$SVLISTS', 'BP')) {
         Note ('  ' + $f) 'yes' $(if (Test-Path (Join-Path $acctDir $f)) { 'yes' } else { 'no' }) $true
     }
 
