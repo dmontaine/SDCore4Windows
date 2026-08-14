@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  The ssh-only restriction is confirmed working.
+           * An account in "sdsshonly" was signed in over ssh, with a password
+             and with a key, and ran a command - while being refused a local
+             sign-in at the same moment.  So the restriction closes the screen
+             in front of you without closing ssh, which is the whole point of
+             it.
+           * Remote Desktop is not yet confirmed.  The right that blocks it is
+             applied, but nobody has watched it refuse a connection.
+           * A NEW ACCOUNT MUST SIGN IN WITH ITS PASSWORD ONCE BEFORE AN SSH
+             KEY WILL WORK.  This is how Windows behaves, not something SD
+             chooses: an account that has never signed in has no profile
+             folder, and ssh looks for authorized_keys inside it.  Sign in
+             once with the password, then set up a key.
+
 14 Aug 26  SD runs without "run as administrator", and starts by hand.
            * You no longer need an elevated window to use SD.  Being an
              administrator of the machine is what counts, not whether a
@@ -32,9 +46,7 @@ Entries are newest first, by date, until there is a version to attach them to.
              Removing someone from it lifts the restriction.
            * "sdusers" is unchanged and is a different thing - it grants
              access to the database files, and administrators are in it too.
-           * NOT YET TESTED THROUGH SSH.  The restriction is known to be
-             applied correctly, but nobody has yet signed in over ssh to a
-             machine where it is in force.
+           * Tested through ssh on 14 Aug 26 - see the entry above.
 
 14 Aug 26  The installer's "install OpenSSH Server" option now works.
            * It never did.  The command it ran had a syntax error, so ticking
