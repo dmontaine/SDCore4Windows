@@ -303,7 +303,14 @@ try {
         Note ('  ' + $f) 'yes' $(if (Test-Path (Join-Path $acctDir $f)) { 'yes' } else { 'no' }) $true
     }
 
-    $accts = Invoke-SD @('LIST ACCOUNTS')
+    # NO.PAGE IS NOT OPTIONAL, AND THE REASON ONLY APPEARS WITH USE.  A piped
+    # session cannot answer "Press RETURN to continue", so once the register
+    # grows past one screen this call BLOCKS FOREVER and the script stops here
+    # with no error - measured 14 Aug 2026, on the fifth account, leaving an
+    # sd.exe waiting on stdin.  Four accounts fitted a page and three earlier
+    # runs passed, which is exactly why it was not found sooner.  bootstrap.py
+    # line 205 takes the same precaution.  PROJECT_STATUS.md section 6.
+    $accts = Invoke-SD @('LIST ACCOUNTS NO.PAGE')
     Note 'record in ACCOUNTS' 'yes' $(if ($accts -match [regex]::Escape($Account)) { 'yes' } else { 'no' }) $true
 
     Write-Output ""
