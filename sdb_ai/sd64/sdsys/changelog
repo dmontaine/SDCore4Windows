@@ -14,14 +14,18 @@ Entries are newest first, by date, until there is a version to attach them to.
            NOT affected; this is ssh only.  It does mean scp and sftp no
            longer work against this machine.
 
-15 Aug 26  Starting and stopping SD now needs an elevated session.  "sd
-           -start" and "sd -stop" used to work for anyone whose account was an
-           administrator, whether or not they had elevated; now they ask for
-           the elevation itself, as entering SDSYS already did.  The same
-           applies to -restart, -cleanup, -suspend, -resume, -internal, -k,
-           -u, -d, -m and -l.  Typing plain "sd" to use your own account is
-           unchanged.  NOTE: SD does not start at boot, so after a restart
-           somebody with administrator rights has to start it.
+15 Aug 26  Anything typed after "sd" now needs an elevated session.  That
+           covers the switches - -start, -stop, -restart, -cleanup, -suspend,
+           -resume, -internal, -k, -u, -d, -m, -l - and it also covers a
+           command: "sd LISTF" ran LISTF for anybody, and no longer does.
+           Typing plain "sd" to use your own account is unchanged, and that is
+           the whole of what an ordinary session needs: accounts SD creates
+           arrive in SD over ssh anyway.  NOTE: SD does not start at boot, so
+           after a restart somebody with administrator rights has to start it.
+
+15 Aug 26  SD will not start a second time inside itself.  If you leave SD
+           with SH and then type "sd" in that shell, it says so and returns
+           you to the session you already have.
 
 15 Aug 26  Installing SD now gives you an SD account.  Until now the person who
            installed SD was the one person who could not use it: every SD

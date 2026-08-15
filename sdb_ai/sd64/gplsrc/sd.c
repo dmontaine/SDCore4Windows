@@ -288,6 +288,22 @@ Private void sd_init(int argc, char *argv[]) {
 /* ====================================================================== */
 
 Private bool comlin(int argc, char *argv[]) {
+/* 15 Aug 26 Windows port - ONE SD PER SESSION.  Owner's rule, 15 Aug 2026:
+   somebody who shells out of SD with SH must not be able to start a second
+   one.  op_sh.c marks the shell it launches with SD_SESSION, and that is what
+   this reads; the comment there explains why it is a guard rather than a
+   boundary, and what the real boundary is.
+
+   Before everything, so it applies to every form of the command, and worded
+   for a user rather than an administrator: the way back is the shell they are
+   standing in.                                                             */
+  if (getenv("SD_SESSION") != NULL) {
+    fprintf(stderr,
+            "SD is already running in this session - type EXIT to return to "
+            "it.\n");
+    exit(1);
+  }
+
   int arg;
   int socket_handle = 0;
   char c;
@@ -506,6 +522,21 @@ Private bool comlin(int argc, char *argv[]) {
     to be executed.                                                  */
 
   if (arg < argc) {
+/* 15 Aug 26 Windows port - A COMMAND IS A PARAMETER TOO.  Owner's rule,
+   15 Aug 2026: "sd LISTF" runs LISTF just as "sd -start" started the server,
+   and an unelevated session has no business doing either from the command
+   line.  The model it completes: whoever is at the console or on Remote
+   Desktop is an administrator, because SD's own accounts are confined to ssh
+   (PROJECT_STATUS.md 5.6.2) - and an ssh session arrives at SD itself through
+   ForceCommand, with no shell to type this into.  So the only people who can
+   reach here are administrators, and they can elevate.
+
+   Plain "sd" with nothing after it is untouched: that is how a user reaches
+   their own account, and it is the whole of what an ordinary session may do.
+   Nothing SD spawns passes a command this way - a phantom carries its command
+   in the user table and gets only "-p<n>".                                 */
+    check_admin();
+
     bytes = 0;
     for (n = arg; n < argc; n++) {
       bytes += strlen(argv[n]) + 1;

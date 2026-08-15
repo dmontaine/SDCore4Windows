@@ -289,6 +289,25 @@ Private void sh_execute(char *command) {
     for (i = 3; i < 1024; i++)
       close(i);
 
+    /* 15 Aug 26 Windows port - MARK THE SHELL AS SD's CHILD, so that a second
+       sd cannot be started from inside it.  Owner's rule, 15 Aug 2026:
+       somebody who shells out of SD with SH must not be able to run sd again.
+       sd.c refuses when it sees this.
+
+       IT IS A GUARD, NOT A BOUNDARY, and the difference matters.  The variable
+       lives in the user's own shell, so the user can clear it; what stops a
+       determined one is that an SD account has no shell to begin with - ssh
+       sessions arrive at SD through ForceCommand and the console belongs to
+       administrators (PROJECT_STATUS.md 5.6.2).  This closes the accident and
+       the casual case, which is what SH actually produces.
+
+       Set in the CHILD, after the fork, so SD's own environment is untouched
+       and the phantom and client paths - which fork elsewhere - never see it. */
+    {
+      static char sd_session_env[] = "SD_SESSION=1";
+      putenv(sd_session_env);
+    }
+
     if (command[0] == '\0') /* Interactive shell */
     {
       clparse((pcfg.sh[0] != '\0') ? pcfg.sh : dflt_sh, argv, 10);
