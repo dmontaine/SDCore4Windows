@@ -4,6 +4,13 @@
 #   powershell -File verify-createaccount.ps1            create, check, clean up
 #   powershell -File verify-createaccount.ps1 -Keep      leave the account behind
 #   powershell -File verify-createaccount.ps1 -Cleanup   remove one left by -Keep
+#   powershell -File verify-createaccount.ps1 -Keep -Password 'Sd-Test-1'
+#                                                        a password you can type
+#
+# -Password is for the hand-driven case only.  The default is 24 random
+# characters, which is right for an unattended run - nothing ever types it - and
+# close to untypeable at an ssh prompt that does not echo.  It goes into shell
+# history, so use it only for throwaway accounts on a development machine.
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #
@@ -38,8 +45,9 @@
 #     commands follow untouched.
 
 param(
-    [string]$Account = 'sdacct1',
-    [string]$Group   = 'sdsshonly',
+    [string]$Account  = 'sdacct1',
+    [string]$Group    = 'sdsshonly',
+    [string]$Password = '',
     [switch]$Keep,
     [switch]$Cleanup
 )
@@ -272,6 +280,25 @@ try {
     $bytes = New-Object byte[] 20
     ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
     $plain = (-join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })) + '-Aa9'
+
+    # -Password EXISTS FOR THE HAND-DRIVEN CASE, and it is worth saying why the
+    # generated one is not simply shortened.  The unattended run never types the
+    # password - it goes to CREATE.ACCOUNT down a pipe and to LogonUser and ssh
+    # through an askpass helper - so 24 random characters cost nothing there and
+    # are the right default.  But -Keep leaves a REAL account behind for somebody
+    # to ssh into by hand, and a 24-character random string is close to untypeable
+    # at a prompt that does not echo.  Supplying one is the fix; weakening the
+    # default for everybody is not.
+    #
+    # It lands in shell history, so use it only for throwaway test accounts on a
+    # development machine - which is all this script ever makes.  It must still
+    # satisfy the Windows password policy or CREATE.ACCOUNT's SET_PASSWD leg
+    # fails, and that failure looks like a broken verb rather than a rejected
+    # password.  PROJECT_STATUS.md section 6.
+    if ($Password -ne '') {
+        $plain = $Password
+        Write-Output ("  using the -Password given rather than a generated one")
+    }
 
     Write-Output ""
     Write-Output "=== 1. CREATE.ACCOUNT USER $Account ====================================="
