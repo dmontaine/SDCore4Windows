@@ -59,10 +59,17 @@
 param(
     [switch]$Installed,
     [switch]$Check,
-    [switch]$Remove
+    [switch]$Remove,
+
+    # Where sd.exe is, for the ForceCommand block below.  Set in the body if
+    # not given - and NOT as a param default, because $PSScriptRoot comes out
+    # empty in one (gplbld/adopt-account.ps1 records what that cost).
+    [string]$SdExe = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $SdExe) { $SdExe = Join-Path $PSScriptRoot 'usr\bin\sd.exe' }
 
 $cfg     = Join-Path $env:ProgramData 'ssh\sshd_config'
 $backup  = Join-Path $env:ProgramData 'ssh\sshd_config.before-sd'
@@ -120,8 +127,38 @@ function Remove-OurBlock([string[]]$lines) {
 # 14 Aug 2026 - the round trip was not byte-identical and a second run was not
 # idempotent.  Add and Remove have to be exact inverses; the markers are
 # comments and separate the block well enough on their own.
-function Add-OurBlock([string[]]$lines, [string[]]$patterns) {
-    $block = @($begin, ('AllowGroups ' + ($patterns -join ' ')), $end)
+#
+# AND ForceCommand IN THE SAME BLOCK: EVERY ssh SESSION LANDS IN SD.
+# Owner's rule, 15 Aug 2026, in two parts - an SD account exists to use SD and
+# should not be left at a PowerShell prompt, AND an ADMINISTRATOR CONNECTING
+# REMOTELY GETS SD TOO.  So this is global rather than a "Match Group
+# sdsshonly" block: the rule is about the route in, not about who took it.
+#
+# It fits the access model rather than straining it.  An ssh session cannot be
+# elevated (PROJECT_STATUS.md 4), so an administrator arriving this way was
+# already going to land in their OWN account and not SDSYS; forcing the command
+# only removes the shell they could not have administered the machine from
+# anyway.  Local console and Remote Desktop are untouched, which is where
+# administration happens.
+#
+# NOT THE DefaultShell REGISTRY KEY.  HKLM\SOFTWARE\OpenSSH\DefaultShell would
+# do the same job and lives outside sshd_config, where this script's markers
+# cannot reverse it and -Remove could not put the machine back.  One file, one
+# marked block, exactly invertible.
+#
+# scp and sftp stop working for everyone as a consequence - the command is
+# forced, so there is no subsystem left to run.  That follows from the
+# decision; it is not a side effect that was missed.
+function Add-OurBlock([string[]]$lines, [string[]]$patterns, [string]$sdexe = '') {
+    if ($sdexe) {
+        $block = @($begin,
+                   ('AllowGroups ' + ($patterns -join ' ')),
+                   ('ForceCommand "' + $sdexe + '"'),
+                   $end)
+    }
+    else {
+        $block = @($begin, ('AllowGroups ' + ($patterns -join ' ')), $end)
+    }
     $at = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match '^\s*Match\b') { $at = $i; break }
@@ -186,7 +223,7 @@ try {
     if (-not (Test-Path $backup)) { Copy-Item -Path $cfg -Destination $backup }
     $original = $lines
 
-    $new = Add-OurBlock (Remove-OurBlock $lines) $patterns
+    $new = Add-OurBlock (Remove-OurBlock $lines) $patterns $SdExe
     Set-Content -Path $cfg -Value $new -Encoding ascii
 
     # sshd -T parses the file and exits non-zero if it cannot.  No inline

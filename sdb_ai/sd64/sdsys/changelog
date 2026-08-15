@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+15 Aug 26  Connecting over ssh puts you straight into SD.  Sessions used to
+           arrive at a Windows shell prompt, which an SD account has no use
+           for and no business with.  Now every ssh session runs SD instead -
+           including an administrator's, because an ssh session cannot be
+           elevated in any case and lands in your own account rather than
+           SDSYS.  The console, Remote Desktop and remote-control tools are
+           NOT affected; this is ssh only.  It does mean scp and sftp no
+           longer work against this machine.
+
+15 Aug 26  Starting and stopping SD now needs an elevated session.  "sd
+           -start" and "sd -stop" used to work for anyone whose account was an
+           administrator, whether or not they had elevated; now they ask for
+           the elevation itself, as entering SDSYS already did.  The same
+           applies to -restart, -cleanup, -suspend, -resume, -internal, -k,
+           -u, -d, -m and -l.  Typing plain "sd" to use your own account is
+           unchanged.  NOTE: SD does not start at boot, so after a restart
+           somebody with administrator rights has to start it.
+
 15 Aug 26  Installing SD now gives you an SD account.  Until now the person who
            installed SD was the one person who could not use it: every SD
            account brings its own Windows account, and yours already existed,

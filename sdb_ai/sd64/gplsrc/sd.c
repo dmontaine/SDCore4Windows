@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Aug 26 Windows port - the administrative switches need an ELEVATED
+ *           session, not merely an administrator's account: check_admin()
+ *           asks IsElevated(), and -CLEANUP, -D, -L, -M, -U, -SUSPEND and
+ *           -RESUME now call it as -START, -STOP, -RESTART, -K and -I did
  * 31 Dec 23 SD launch - prior history suppressed
  * 15 Jun 24 add bootstrap build option install option -I
  * 02 Jul 24 -i  typeo will hit bootstrap option
@@ -299,9 +303,22 @@ Private bool comlin(int argc, char *argv[]) {
       forced_user_no = (int)strtol(argv[arg] + 1, NULL, 10);
       /* -------------------- */
     } else if (!stricmp(argv[arg], "-CLEANUP")) {
+/* 15 Aug 26 Windows port - the administrative switches all take the elevation
+   gate now, not just the three that had it.  Each of them either changes the
+   state of the server or reports on everybody's sessions; see check_admin(). */
+      check_admin();
       cleanup();
       exit(0);
     } else if (!stricmp(argv[arg], "-INTERNAL")) {
+/* 15 Aug 26 Windows port - -INTERNAL TAKES THE GATE TOO.  It names SDSYS for
+   itself below, and LOGIN refuses SDSYS to an unelevated session anyway
+   (sysmsg 10002), so this was always going to fail - but only after starting
+   up, connecting and reaching the BASIC layer, and it failed with a message
+   about accounts rather than about elevation.  Refusing here says the true
+   reason at the door and leaves the BASIC gate as the second of two.
+   Nothing spawns sd -internal: the bootstrap, the installer's adopt step and
+   an administrator at the keyboard are all elevated already.               */
+      check_admin();
       internal_mode = TRUE;
     } else if (!stricmp(argv[arg], "-QUIET")) {
       command_options |= CMD_QUIET;
@@ -336,6 +353,7 @@ Private bool comlin(int argc, char *argv[]) {
           break;
 
         case 'D': /* Diagnostic report */
+          check_admin();
           dump_sysseg(TRUE);
           exit(0);
 
@@ -352,10 +370,12 @@ Private bool comlin(int argc, char *argv[]) {
           exit(1);
 
         case 'L': /* Apply new licence */
+          check_admin();
           command_options |= CMD_APPLY_LICENCE;
           break;
 
         case 'M': /* Dump memory */
+          check_admin();
           dump_sysseg(FALSE);
           exit(0);
 
@@ -376,6 +396,7 @@ Private bool comlin(int argc, char *argv[]) {
           break;
 
         case 'U': /* Show users */
+          check_admin();
           show_users();
           exit(0);
 
@@ -394,6 +415,7 @@ Private bool comlin(int argc, char *argv[]) {
 
         case 'R':
           if (!stricmp(argv[arg], "-RESUME")) {
+            check_admin();
             suspend_resume(FALSE);
             exit(0);
           }
@@ -411,6 +433,7 @@ Private bool comlin(int argc, char *argv[]) {
 
         case 'S':
           if (!stricmp(argv[arg], "-SUSPEND")) {
+            check_admin();
             suspend_resume(TRUE);
             exit(0);
           }
@@ -602,17 +625,36 @@ void dump(u_char *addr, int32_t bytes) {
    check_admin()  -  Check user has admin rights                          */
 
 void check_admin() {
-  bool IsAdmin(void);
+  bool IsElevated(void);
 
   /* 13 Aug 26 Windows port - was (geteuid() != 0) && !in_group("admin").
      Neither half means anything here: there is no uid zero on Windows, and
-     "admin" is a Linux group name.  Deferring to IsAdmin() keeps one
-     definition of what an SD administrator is, which since 14 Aug 26 is
-     membership of Windows Administrators.  See linuxlb.c and
-     PROJECT_STATUS.md 5.6.1.                                               */
+     "admin" is a Linux group name.
 
-  if (!IsAdmin()) {
-    fprintf(stderr, "Command requires administrator privileges\n");
+     15 Aug 26 Windows port - AND IT NOW ASKS IsElevated(), NOT IsAdmin().
+     Owner's rule, 15 Aug 2026: an unelevated session must not be able to
+     drive sd from the command line.  It could: "sd -start" and "sd -stop"
+     both worked for any administrator who had not elevated, because
+     IsAdmin() answers "is this ACCOUNT an administrator" while IsElevated()
+     answers "may this PROCESS act as one right now".  That is the same
+     distinction PROJECT_STATUS.md 5.6 draws for entry to SDSYS, applied to
+     the switches - and an ordinary user was never meant to have it either
+     way, since IsAdmin() would have refused them.
+
+     THE COST, STATED: there is no service (PROJECT_STATUS.md 5.7), so SD is
+     started by hand, and now only from an elevated window.  After a restart
+     nobody but an administrator can bring SD up.
+
+     WHAT IS DELIBERATELY NOT GATED, BECAUSE SD SPAWNS ITSELF.  op_kernel.c
+     builds "-p<n>" and forks sd for every PHANTOM, and the client, network
+     and API paths use -C, -N and -Q.  Those children inherit an ORDINARY
+     user's token, so gating them would break phantoms, the client library,
+     network logins and the API - the last of which is what this port is
+     for (PROJECT_STATUS.md 1).                                             */
+
+  if (!IsElevated()) {
+    fprintf(stderr, "This command needs an elevated session - "
+                    "start the shell with \"Run as administrator\"\n");
     exit(1);
   }
 }

@@ -379,7 +379,8 @@ begin
 
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-                  ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed',
+                  ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed' +
+                  ' -SdExe "' + ExpandConstant('{app}\usr\bin\sd.exe') + '"',
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
     Result := 'ssh could NOT be limited to SD users and administrators: the script did not run.';
@@ -423,9 +424,16 @@ var
   Ps: String;
 begin
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  { -AppDir IS PASSED, NOT LEFT TO THE SCRIPT.  Its default used to be
+    $PSScriptRoot, which comes out EMPTY in a param default when the script is
+    an advanced one with a mandatory parameter - so the step failed on a real
+    install with nothing readable.  Setup knows where it put the files; say so.
+    Do not start a line in this file with a square bracket, even in a comment:
+    ISCC scans for section tags first and answers "Invalid section tag". }
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
                   ExpandConstant('{app}\adopt-account.ps1') + '" -User "' +
-                  ExpandConstant('{username}') + '" -DataDir "' +
+                  ExpandConstant('{username}') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
                   ExpandConstant('{#DataDir}') + '"',
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin

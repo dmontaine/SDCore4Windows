@@ -52,10 +52,18 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $User,
 
-    # Where SD's program files are.  The script ships in this directory, so the
-    # default is right whenever the installer runs it, and the parameter exists
-    # for running it by hand against a build.
-    [string] $AppDir = $PSScriptRoot,
+    # Where SD's program files are.  The installer passes {app}; running it by
+    # hand, the default below works it out.
+    #
+    # NOT "= $PSScriptRoot" HERE, AND THAT COST A WHOLE INSTALL.  Measured
+    # 15 Aug 2026: in a script with [CmdletBinding()] and a mandatory parameter,
+    # $PSScriptRoot evaluates to the EMPTY STRING in a param default - the same
+    # script without them resolves it correctly.  So this ran on a real install
+    # with AppDir empty, Join-Path threw "cannot bind argument to parameter
+    # 'Path'", and PowerShell exited 1 with nothing to read.  It never showed in
+    # testing because every run by hand passed -AppDir.  It is assigned in the
+    # BODY instead, where $PSScriptRoot is populated.
+    [string] $AppDir = '',
 
     [string] $DataDir = 'C:\ProgramData\SD'
 )
@@ -75,7 +83,14 @@ function Say([string] $Message) {
     try { Add-Content -Path $LogFile -Value $Message -ErrorAction Stop } catch { }
 }
 
+if (-not $AppDir) { $AppDir = $PSScriptRoot }
+
 Say "=== adopt-account $User, AppDir=$AppDir, DataDir=$DataDir"
+
+if (-not $AppDir) {
+    Say "adopt-account: no -AppDir given and PSScriptRoot is empty; cannot find sd.exe"
+    exit 1
+}
 
 $sd = Join-Path $AppDir 'usr\bin\sd.exe'
 if (-not (Test-Path $sd)) {
