@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 14 Aug 26 Windows port - IsElevated() added beside IsAdmin()
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -109,6 +110,61 @@ bool IsAdmin(void) {
     return FALSE;
 
   if (getgrouplist(pw->pw_name, pw->pw_gid, list, &count) >= 0) {
+    for (i = 0; i < count; i++) {
+      if (list[i] == SD_ADMIN_GID) {
+        status = TRUE;
+        break;
+      }
+    }
+  }
+
+  free(list);
+
+  return status;
+}
+
+/* ======================================================================
+   IsElevated()  -  May this process act as an administrator right now?
+
+   14 Aug 26 Windows port - the companion to IsAdmin() above, and the distance
+   between the two of them is the whole of the access model in
+   PROJECT_STATUS.md section 5.6.  IsAdmin() asks whether the ACCOUNT is an
+   administrator; this asks whether THIS PROCESS may act as one.  Linux draws
+   the same line between being named in the sudoers file and having actually
+   run sudo, and SD needs both halves for the same reasons Linux does.
+
+   THE TEST IS getgroups() AGAINST THE SAME GID, AND IT IS THE DELIBERATE
+   OPPOSITE OF IsAdmin()'s getgrouplist().  getgroups() reports the process
+   token.  UAC hands an unelevated administrator a filtered token that carries
+   BUILTIN\Administrators marked "Group used for deny only" - it is there so it
+   can be denied against, never granted - and Cygwin omits a deny-only group
+   from getgroups().  So its absence is precisely the elevation question, and
+   the two calls were measured against each other in one unelevated
+   administrator session on 14 Aug 2026: getgroups() no, getgrouplist() yes.
+
+   That measurement is why no Win32 call appears here.
+   GetTokenInformation(TokenElevation) answers the same question and would drag
+   windows.h into a file built against the MSYS2 POSIX runtime, which is the
+   toolchain split PROJECT_STATUS.md section 5.4 exists to keep clean.        */
+
+bool IsElevated(void) {
+  gid_t* list;
+  int count;
+  int i;
+  bool status = FALSE;
+
+  /* getgroups() sizes the same way getgrouplist() does, but by returning the
+     count rather than writing it back through the argument.                 */
+
+  count = getgroups(0, NULL);
+  if (count <= 0)
+    return FALSE; /* No groups in the token - fail closed */
+
+  list = (gid_t*)malloc(count * sizeof(gid_t));
+  if (list == NULL)
+    return FALSE;
+
+  if (getgroups(count, list) >= 0) {
     for (i = 0; i < count; i++) {
       if (list[i] == SD_ADMIN_GID) {
         status = TRUE;

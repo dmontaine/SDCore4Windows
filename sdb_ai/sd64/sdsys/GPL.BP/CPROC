@@ -34,6 +34,10 @@
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 13 Aug 26 Windows port - LOGTO SDSYS tests K$ADMINISTRATOR; ACC$GROUP test removed
 * 13 Aug 26 Windows port - LOGTO authorised by the target's ACC$USERS grant
+* 14 Aug 26 Windows port - both reversed.  LOGTO SDSYS requires an ELEVATED
+*                      session, the ACC$GROUP test is back, the ACC$USERS grant
+*                      list no longer authorises anything, and logto.step.up
+*                      has gone with the password it re-asked for
 *                      list, and LOGTO SDSYS re-authenticates against the
 *                      caller's own password
 * 13 Aug 26 Windows port - LOGTO takes an account name only, no pathnames;
@@ -160,6 +164,10 @@ $include keycode.h
 $include define_install.h
 
 deffun errtext(err) calling '!errtext'
+
+* rev 0.9.0 *
+* 14 Aug 26 Windows port - restored with the ACC$GROUP test in logto.authorised
+deffun is_grp_member(user,group) calling '!is_grp_member'
 * rev 0.9.0 *
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
@@ -276,19 +284,22 @@ restart.cproc:
    
       if umask(002) then null
  
-*           drop to sdsys, and set K$ADMINISTRATOR)       
-      if system(27) = 0 then           ;* entered as root?
-$ifndef IS_INSTALL
-        call !EUID_SET('sdsys',rstat)  ;* yes, drop to sdsys
-        if rstat > 0 then
-          crt 'Warning: failed to resend root priviages, error: ':status()
-        end else
-          logname = kernel(K$USERNAME, 0)    ;* set the username in syscom to sdsys
-        end
-$endif
-        void kernel(K$ADMINISTRATOR, 1)   ;* set admin bit
-      end
-      
+* 14 Aug 26 Windows port - THE BLOCK THAT STOOD HERE HAS GONE AND NOTHING IN
+*   CPROC REPLACES IT.  It tested system(27) = 0 - the Linux "am I root" test -
+*   then dropped the effective user to sdsys with !EUID_SET and set the
+*   administrator bit by hand.  getuid() never returns 0 on Windows, so the
+*   test could not fire and the bit was never set: see PROJECT_STATUS.md 5.5.
+*
+*   Both halves live elsewhere now.  K$ADMINISTRATOR is seeded from
+*   IsElevated() in kernel.c before any BASIC runs, so it is already true for an
+*   elevated session and false for every other one; and turning that into an
+*   account is LOGIN's job, not CPROC's - an elevated session with no account
+*   named lands in SDSYS there.
+*
+*   There is no effective-user drop to replace !EUID_SET with, and none is
+*   wanted: every SD process opens the database under the invoking user's own
+*   token (PROJECT_STATUS.md 5.7).  See PROJECT_STATUS.md section 5.6.
+
       i = '$LOGIN'
       call @i(j,0)
       if not(j) then goto abort.cproc
@@ -2466,12 +2477,21 @@ int.logto:
       return
    end
 * 20240330 mab only root can logto sdsys
-* 13 Aug 26 Windows port - the test that stood here asked whether the caller
-*   was already privileged, first as system(27) = 0 and then as
-*   K$ADMINISTRATOR.  Both ask the wrong question: entering SDSYS is what
-*   confers administrator rights, not something they are needed for.  All
-*   authorisation now happens in logto.authorised, below the ACCOUNTS read,
-*   where the target account is known.  See PROJECT_STATUS.md section 5.6.
+* 14 Aug 26 Windows port - RESTORED, as elevation rather than as uid zero.  It
+*   was removed on 13 Aug on the reasoning that entering SDSYS is what confers
+*   administrator rights rather than something they are needed for; the
+*   reversal in PROJECT_STATUS.md 5.6 turns that back round.  Elevation is the
+*   gate and it is applied at login, so LOGTO must not be a way around it.
+*
+*   The refusal is here rather than in logto.authorised, before the ACCOUNTS
+*   read, exactly as the pre-port source had it: naming SDSYS is refused for
+*   what it is, and no register lookup happens first.
+
+   if upcase(new.account) = "SDSYS" and not(kernel(K$ADMINISTRATOR,-1)) then
+      display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+      unwinding = 2
+      return
+   end
 
    * Look for options
 
@@ -2526,9 +2546,10 @@ int.logto:
    end
 
 * rev 0.9.0 * is user member of account?
-* 13 Aug 26 Windows port - was a linux group test on ACC$GROUP.  The grant
-*   list on the target account replaces it, and entering SDSYS additionally
-*   asks the caller for their own password.  See PROJECT_STATUS.md section 5.6.
+* 14 Aug 26 Windows port - back to the group test on ACC$GROUP.  The grant list
+*   that replaced it on 13 Aug no longer authorises anything, and entering
+*   SDSYS is refused above unless the session is elevated.
+*   See PROJECT_STATUS.md section 5.6.
 
    gosub logto.authorised
    if not(logto.ok) then
@@ -3473,133 +3494,66 @@ get.voc.parser.rec:
 * ======================================================================
 * logto.authorised  -  May @logname enter the account LOGTO named?
 *
-* 13 Aug 26 Windows port.  Sets logto.ok.  See PROJECT_STATUS.md section 5.6.
+* 14 Aug 26 Windows port.  Sets logto.ok.  See PROJECT_STATUS.md section 5.6.
 *
 * new.account holds the target account name, which is always a registered one,
 * and acc.record holds its ACCOUNTS record.
 *
-* You may enter your own account, or one whose ACC$USERS list names you.  The
-* grant is recorded on the target, so withdrawing it is one edit in one place
-* and no password ever has to be shared or rotated.  @logname does not change
-* on the way in, so what is done there stays attributed to whoever logged in.
+* You may enter an account if you are a member of the Windows group named in
+* its ACC$GROUP - which CREATE.ACCOUNT writes as sdu_<name> and puts the
+* account's own user into.  Granting somebody a second account is therefore
+* adding them to that group, and it is the operating system that records the
+* grant.  @logname does not change on the way in, so what is done there stays
+* attributed to whoever logged in.
 
 logto.authorised:
    logto.ok = @false
 
 * An administrator running an internal command is the install and maintenance
-* path, as it is at LOGIN.  The bootstrap has no terminal to type a password
-* at, so it cannot be made to prove anything.
+* path, as it is at LOGIN.  The bootstrap has no terminal and cannot be made to
+* prove anything.
 
    if kernel(K$INTERNAL,-1) and kernel(K$ADMINISTRATOR,-1) then
       logto.ok = @true
       return
    end
 
-* SDSYS reaches every account without exception.  It is the administration
-* account, and administration that cannot enter an account cannot repair one.
-* The test is the account you are standing in, not the one you logged in as,
-* so it holds whether you entered SDSYS directly or stepped up into it - and
-* either way @logname still names the person, so the audit trail is what
-* accounts for the access rather than a refusal.
+* AN ELEVATED SESSION PASSES, for the same reason LOGIN gives at the same test:
+* ACCOUNTS/SDSYS names a group that does not exist on Windows, so testing the
+* group would refuse administration to everybody.  Elevation IS the
+* authorisation, and root does not pass the group test on Linux either.
+*
+* This absorbs the test for standing in SDSYS that used to be here.  You can
+* only be in SDSYS if you were elevated when you logged in - LOGIN is the only
+* thing that puts anybody there, and nothing clears the flag afterwards - so a
+* separate test on @who would now be unreachable code.
 
-   if who = 'SDSYS' then
+   if kernel(K$ADMINISTRATOR,-1) then
       logto.ok = @true
       return
    end
 
-   if new.account = upcase(@logname) then
-      logto.ok = @true
-   end else
-      grant.list = upcase(acc.record<ACC$USERS>)
-      locate upcase(@logname) in grant.list<1,1> setting grant.pos then
-         logto.ok = @true
-      end
-   end
-
-   if not(logto.ok) then
+   if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then
       display sysmsg(10003) ;* User not allowed in requested account
       return
    end
 
-* Entering SDSYS is entering administration, which deserves a deliberate act
-* rather than an unattended session becoming an administrative one.
-
-   if new.account = 'SDSYS' then gosub logto.step.up
+   logto.ok = @true
 
    return
 
 * ======================================================================
-* logto.step.up  -  Re-authenticate before entering SDSYS
+* 14 Aug 26 Windows port - LOGTO.STEP.UP HAS BEEN DELETED.  It re-asked the
+* caller for their own password before letting them into SDSYS, which was the
+* deliberate act that made an administrative session deliberate.  There is no
+* password to re-ask for now: the gate is elevation and it is applied at login,
+* so by the time LOGTO names SDSYS the caller has already been through it and
+* there is nothing to step up into.
 *
-* 13 Aug 26 Windows port.  Sets logto.ok.  See PROJECT_STATUS.md section 5.6.
-*
-* The password asked for is the caller's own, not an SDSYS one.  Re-entering
-* your own credential confirms the person at the keyboard is still the one who
-* logged in; it introduces no new secret and changes nothing about who the
-* session is attributed to.  An SDSYS password would be a second shared secret
-* held by every administrator, unrotatable without telling all of them, which
-* is the weakness this identity model exists to remove.
-
-logto.step.up:
-   logto.ok = @false
-   my.name = upcase(@logname)
-
-* Is there a credential to re-enter?  If not, an administrator got in without
-* one and there is nothing to check against.  Warn rather than refuse: this is
-* a half configured system, and refusing would shut the only way into it.
-
-   cred.set = @false
-   openpath @sdsys:@ds:'$CRED' to cred.f then
-      read cred.rec from cred.f, my.name then
-         if cred.rec<CRED$VERIFIER> # '' then cred.set = @true
-      end
-      close cred.f
-   end
-
-   if not(cred.set) then
-      if kernel(K$ADMINISTRATOR,-1) then
-         display 'Warning: account ' : my.name : ' has no password set.'
-         logto.ok = @true
-      end else
-         display sysmsg(10003) ;* User not allowed in requested account
-      end
-      return
-   end
-
-* Case inversion silently upcases input, passwords included, so a password
-* typed correctly fails here with nothing to show why.  Clear it around the
-* read and put it back afterwards.
-
-   was.inverted = pterm(PT$INVERT, @false)
-
-* The main command loop sets the input prompt character to '?' before every
-* command, so clear it here as the menu code does.  There is nothing to put
-* back: the loop sets it again on its next pass.
-
-   prompt ''
-
-   display sysmsg(10030) ;* Entering SDSYS requires your own password
-
-   for try = 1 to 3
-      display 'Password: ' :
-      input pw HIDDEN
-      display
-
-      call !CRED_VERIFY(my.name, pw, logto.ok)
-      if logto.ok then
-         pw = ''
-         void pterm(PT$INVERT, was.inverted)
-         return
-      end
-
-      display sysmsg(10031) ;* Incorrect password
-      sleep 2
-   next try
-
-   pw = ''
-   void pterm(PT$INVERT, was.inverted)
-   logto.ok = @false
-   return
+* sysmsg 10030 and 10031 lose their only callers with it.  They are left in
+* MESSAGES rather than removed - see PROJECT_STATUS.md section 5.6 for what
+* else the reversal left callerless, and section 8 for the API, which is where
+* the credential machinery goes next.
 
 end
 

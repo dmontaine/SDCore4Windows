@@ -143,7 +143,11 @@
  *
  * Overridable so that the trick in PROJECT_STATUS.md 6 still works - build a
  * probe with a gid nobody holds to see the system as an ordinary user.
- * See IsAdmin() in linuxlb.c.
+ *
+ * 14 Aug 26 - TWO functions in linuxlb.c now test against this one gid, and
+ * the difference between them is the access model: IsAdmin() asks the SAM
+ * (getgrouplist) whether the account is an administrator, IsElevated() asks
+ * the process token (getgroups) whether this session may act as one.
  */
 
 #ifndef SD_ADMIN_GID

@@ -22,6 +22,7 @@
  * 15 Jun 24 mab overwrite op_ttyset op_ttyget as illegal op code
  * 28 Jul 24 mab remove op code overwrites (removed from opcodes.h)
  * 13 Aug 26 Windows port - seed USR_ADMIN from IsAdmin() at process start
+ * 14 Aug 26 Windows port - seed it from IsElevated() instead
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -55,7 +56,7 @@ Private void init_program(void);
 
 /* 13 Aug 26 Windows port - declared here as op_kernel.c does, rather than in a
    header, because linuxlb.c has none of its own.                            */
-bool IsAdmin(void);
+bool IsElevated(void);
 
 jmp_buf k_exit;
 
@@ -179,11 +180,19 @@ bool init_kernel() {
        "no" for everybody, permanently.  Seeding it here gives the BASIC layer
        a truthful answer to ask for.
 
-       14 Aug 26 - and that answer is now "is this account a Windows
-       administrator", elevated or not.  See linuxlb.c and PROJECT_STATUS.md
-       section 5.6.1.                                                        */
+       14 Aug 26 - and that answer is now "is this session ELEVATED", which is
+       narrower than "is this account an administrator" and is the reversal in
+       PROJECT_STATUS.md section 5.6.  K$ADMINISTRATOR is what puts a session
+       into SDSYS with nothing typed, so it has to mean the deliberate act -
+       sudo, not the sudoers file.  An administrator who has not elevated is an
+       ordinary SD user, exactly as on Linux.
 
-    if (IsAdmin())
+       IsAdmin() is untouched and still answers the other question, because
+       check_admin() in sd.c gates sd -start with it: starting the server
+       should not demand elevation of somebody who is already an
+       administrator.  See linuxlb.c, where the two sit side by side.        */
+
+    if (IsElevated())
       my_uptr->flags |= USR_ADMIN;
 
     /* Phantom processes have the user name entered by the parent when the
