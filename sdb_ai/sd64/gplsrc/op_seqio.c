@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Aug 26 Windows port - op_openseq() freed the file variable it had just
+ *           returned whenever the file did not yet exist.  See the comment at
+ *           exit_op_openseq
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
  * END-HISTORY
@@ -769,11 +772,29 @@ exit_op_openseq:
   if (process.status == ER_RNF)
     process.status = 0; /* Return 0 if opening new record */
 
-  /* Modified by Composer AI - 2026/06/10. Use saved status for cleanup;
-     process.status may be cleared for ER_RNF before resources are freed. */
-  /* if (process.status) { */
-  if (status) {
-  /* -------------------- */
+  /* 15 Aug 26 Windows port - REVERTED a 2026/06/10 cleaning-cycle change that
+     freed the file variable on a SUCCESS path.  It read:
+
+         if (status) {          / * was: if (process.status) * /
+
+     on the reasoning that process.status "may be cleared for ER_RNF before
+     resources are freed".  It is cleared deliberately, and the two variables
+     mean different things:
+
+       status         goes on the e-stack and is the ELSE indicator.  ER_RNF
+                      here means "file does not exist, take the ELSE clause",
+                      which is how OPENSEQ creates a sequential file.
+       process.status is what STATUS() returns, and line 597's "Transformed to
+                      zero later" is that transformation arriving.
+
+     So on every OPENSEQ of a not-yet-existing file - the normal way to make
+     one - the cleanup below ran on a successful open: k_free(fvar) while
+     fvar_descr->data.fvar already pointed at it, plus k_free(sq_file) and its
+     pathname, and a decremented ref_ct.  A use-after-free handed straight back
+     to the BASIC programme, silent because process.status was 0 by then so the
+     k_error() at the foot of the block could not fire either.  sdb64 has
+     always had it right.  PROJECT_STATUS.md 2, the generation-2 audit.     */
+  if (process.status) {
     if (ValidFileHandle(fu))
       CloseFile(fu);
 
