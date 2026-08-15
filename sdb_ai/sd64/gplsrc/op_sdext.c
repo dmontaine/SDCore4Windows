@@ -18,6 +18,8 @@
  * 
  * 
  * START-HISTORY:
+ * 15 Aug 26 Windows port - NullString() no longer returns a STATIC buffer
+ *           when malloc fails; the release loop frees what it returns
  * 06 Aug 2024 MAB add SDEXT
  * 08 Aug 2024 mab add embedded python
  * rev 0.9.0 Jan 25 mab add sdext_eguid_set set / restore euid egid of process
@@ -272,22 +274,16 @@ void op_sdext() {
 char* NullString() {
   char* p;
 
-  /* Modified by Composer AI - 2026/06/10.
-     malloc(1) can fail; return a static empty string instead of
-     dereferencing NULL. */
-  /* p = malloc(1);
+  /* 15 Aug 26 Windows port - RETURN NULL, NOT A STATIC BUFFER.  See the same
+     fix in ctype.c's CNullString().  The result goes into SDMEArgArray[0] at
+     line 170 and the release loop below frees every non-NULL entry, so
+     returning static storage on an out-of-memory made SD free() something it
+     never allocated.  The loop already skips NULL.                        */
+  p = malloc(1);
+  if (p == NULL)
+    return NULL;
   *p = '\0';
-  return p; */
-  {
-    static char empty[1] = {'\0'};
-
-    p = malloc(1);
-    if (p == NULL)
-      return empty;
-    *p = '\0';
-    return p;
-  }
-  /* -------------------- */
+  return p;
 }
 
 /* generic error return with null response, setting process.status */

@@ -16,7 +16,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
- * START-HISTORY 
+ * START-HISTORY
+ * 15 Aug 26 Windows port - CNullString() no longer returns a STATIC buffer
+ *           when malloc fails.  Extract()'s result is freed by its caller,
+ *           so that turned an out-of-memory into a free() of static storage
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -283,19 +286,21 @@ null_result:
 
 Private char* CNullString() {
   char* p;
-  static char empty[1] = {'\0'};
 
-  /* Modified by Composer AI - 2026/06/10.
-     malloc(1) can fail; return a static empty string instead. */
-  /* p = malloc(1);
-  *p = '\0';
-  return p; */
+  /* 15 Aug 26 Windows port - RETURN NULL, NOT A STATIC BUFFER.  The
+     2026/06/10 cleaning cycle guarded this malloc and returned a
+     "static char empty[1]" on failure.  Every caller of Extract() owns what
+     it gets back and frees it - op_sdext.c line 258 frees the whole
+     SDMEArgArray in a loop - so that guard turned a NULL dereference into
+     free() of static storage.  The first is an immediate, diagnosable crash;
+     the second is heap corruption discovered somewhere else entirely, which
+     is strictly worse.  NULL is what the callers already test for.
+     PROJECT_STATUS.md 2, the generation-2 audit.                          */
   p = malloc(1);
   if (p == NULL)
-    return empty;
+    return NULL;
   *p = '\0';
   return p;
-  /* -------------------- */
 }
 
 /* END-CODE */
