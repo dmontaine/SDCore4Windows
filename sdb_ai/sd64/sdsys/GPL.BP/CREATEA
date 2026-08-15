@@ -428,6 +428,33 @@ PW.TRY.AGAIN:
 *   administrators out of their own machine.
 *   Named literally, as 'sdusers' is above.  The installer has to know the same
 *   name and it is an Inno script, so a $define here would keep nothing in sync.
+* 15 Aug 26 Windows port - AN ADOPTED ACCOUNT IS NOT RESTRICTED, AND THIS IS A
+*   LOCKOUT FIX RATHER THAN A REFINEMENT.  ADOPT attaches an SD account to an
+*   operating system account that already exists - the installer's, and only
+*   the installer's.  That person is an administrator by definition, Inno
+*   requires elevation to install, and putting them in sdsshonly denies them
+*   SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight: they
+*   keep the session they are in and cannot log on at their own console again.
+*   Observed on this machine 15 Aug 2026, the first time ADOPT ever ran.
+*
+*   The rule is wider than the bug: ADOPT CHANGES NOTHING ABOUT THE OPERATING
+*   SYSTEM ACCOUNT.  It creates no user, sets no password, and now alters no
+*   logon right.  ADMINISTRATOR still wins if it was asked for explicitly,
+*   because that is somebody typing it.
+*
+* 15 Aug 26 Windows port - AND NO ADMINISTRATOR IS EVER CONFINED TO ssh.
+*   Owner's rule, 15 Aug 2026: an SD administrator must be able to reach the
+*   machine locally, so no account that Windows already calls an administrator
+*   may be put in sdsshonly - whatever route reaches this line.  Today ADOPT is
+*   that route; the test is here rather than beside it so the next route
+*   inherits the protection instead of rediscovering the lockout.
+*
+*   BY SID.  BUILTIN\Administrators is translated on a localised Windows, and
+*   !is_grp_member learned to accept a SID on the same day, for this call - see
+*   its history.
+        if adopt or is_grp_member(acc.uname, "S-1-5-32-544") then
+          crt sysmsg(10040,acc.uname)   ;* %1 keeps the Windows sign-in rights it already had
+        end else
           void os_group("ADDMEM", "sdsshonly", acc.uname)
           stat = OS.ERROR()
           if stat = 0 then
@@ -436,7 +463,8 @@ PW.TRY.AGAIN:
             @system.return.code = -ER$FAILED
             stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
           end
-        end
+        end       ;* adopt
+        end       ;* make.admin
 
       *
       * create user's sd group

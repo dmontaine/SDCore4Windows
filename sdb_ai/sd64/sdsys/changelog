@@ -5,6 +5,26 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+15 Aug 26  Installing SD now gives you an SD account.  Until now the person who
+           installed SD was the one person who could not use it: every SD
+           account brings its own Windows account, and yours already existed,
+           so typing "sd" answered that your account was not in the register.
+           The install now attaches an SD account to your Windows login, and
+           the closing dialog says so.  Nothing to set, and no password: your
+           Windows session is what identifies you.
+
+15 Aug 26  An administrator is never confined to ssh.  Accounts SD creates
+           normally sign in over ssh only, and that restriction was being
+           applied to accounts it merely attached to an existing Windows login
+           - including the installer's.  The effect was invisible until the
+           next sign-in, and then locked the machine's own administrator out of
+           their console and Remote Desktop.  Two rules now hold: an account SD
+           only attaches to keeps exactly the Windows sign-in rights it already
+           had, and no Windows administrator is ever put in the ssh-only group,
+           whatever route created the account.  An administrator created inside
+           SD can therefore use both the computer and SD, which is the point of
+           creating one.
+
 14 Aug 26  LIST ACCOUNTS says "Windows Group", not "Linux Group".  Existing
            databases keep the old label until they are rebuilt - the wording
            lives in the dictionary, which is built when SD is installed.

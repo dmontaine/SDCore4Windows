@@ -404,7 +404,8 @@ def main():
     # read and parse-checked on its own.  Missing one is a build failure, not a
     # warning: the installer would otherwise silently skip the step.
     here = os.path.dirname(os.path.abspath(__file__))
-    for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1'):
+    for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
+                   'adopt-account.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):
             raise SystemExit('missing %s - the installer needs it' % src)

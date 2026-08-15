@@ -404,15 +404,67 @@ begin
               '    powershell -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed';
 end;
 
+{ GIVE THE INSTALLING USER AN SD ACCOUNT.  Without this SD installs perfectly
+  and then refuses the person who installed it: every SD account brings its own
+  Windows account and theirs existed first, so "sd" answers "Account DON not in
+  register" (PROJECT_STATUS.md 7 step 1f).
+
+  FROM [Code] AT ssPostInstall, NOT FROM [Run], AND THAT IS THE WHOLE TRICK.
+  The step needs an elevated token - it reaches SDSYS through sd -internal -
+  and this runs with Setup's own.  The SDSYS password step that used to live at
+  the bottom of this file was a "postinstall" checkbox, which Inno runs as the
+  ORIGINAL user, and that is one of the three reasons it never worked.  The
+  script handles the other two, starting a server and keeping its output.
+
+  Returns the script's exit code, or -1 if it could not be run at all. }
+function AdoptAccount: Integer;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\adopt-account.ps1') + '" -User "' +
+                  ExpandConstant('{username}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := -1;
+    Exit;
+  end;
+  Result := Code;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
+  AdoptCode: Integer;
+  AccountMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
     { Before the silent-install exit below: the work happens either way, and it
       is only the message about it that a silent install skips. }
     SshLimit := ApplyAllowGroups;
+
+    { Same rule - an unattended install must still end with a usable account. }
+    AdoptCode := AdoptAccount;
+    case AdoptCode of
+      0: AccountMsg := 'You also have an SD account of your own, named ' +
+                       Uppercase(ExpandConstant('{username}')) + '. Type "sd" to use it; ' +
+                       'there is no password to set, because Windows has already ' +
+                       'authenticated you.' + #13#10#13#10;
+      2: AccountMsg := 'Your SD account, ' + Uppercase(ExpandConstant('{username}')) +
+                       ', was already there and has been left alone.' + #13#10#13#10;
+    else
+      { Named rather than buried: without an account the person who just
+        installed SD cannot use it at all, and the recovery is one command. }
+      AccountMsg := 'SD could NOT give you an account automatically. Until one exists, ' +
+                    '"sd" will answer that your account is not in the register. Make it ' +
+                    'from an ELEVATED prompt:' + #13#10#13#10 +
+                    '    sd -start' + #13#10 +
+                    '    sd -internal CREATE.ACCOUNT USER ' + ExpandConstant('{username}') + ' ADOPT' + #13#10#13#10;
+    end;
 
     { /SUPPRESSMSGBOXES DOES NOT SUPPRESS THESE.  Measured 14 Aug 2026: a
       /VERYSILENT /SUPPRESSMSGBOXES install still stopped and waited for OK on
@@ -441,6 +493,7 @@ begin
            'Windows only applies group membership when you sign in, so you must ' +
            'SIGN OUT AND BACK IN (or restart) before SD will run. Until then it ' +
            'will report that it cannot open its files.' + #13#10#13#10 +
+           AccountMsg +
            'TO GIVE SOMEBODY ELSE ACCESS, use SD''s own verb. From an ELEVATED ' +
            'command prompt, with SD started:' + #13#10#13#10 +
            '    sd -start' + #13#10 +

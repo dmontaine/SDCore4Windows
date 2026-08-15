@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 15 Aug 26 Windows port - a group given as a SID is asked for with -SID.
+*           Get-LocalGroupMember -Group refuses one, so "is this user an
+*           administrator?" used to answer false for everybody.
 * 14 Aug 26 Windows port - ask Windows instead of reading /etc/group, which
 *           does not exist on the MSYS2 runtime.  See the description.
 * rev 0.9.0 Jan 25 mab with the change in ownership of group ACCOUNTS, we need this routine to return true if a user is looking up their own group account.
@@ -96,7 +99,21 @@ end
 *   here is what PowerShell reads.  Both names have been through
 *   !valid_os_name, so neither can carry a quote.  Output is discarded: this
 *   runs at login and PowerShell's error text is not the user's business.
-   ps = 'try { $ms = Get-LocalGroupMember -Group "' : group
+* 15 Aug 26 Windows port - A SID NAMES A GROUP TOO, AND -Group WILL NOT TAKE
+*   ONE.  Measured 15 Aug 2026: Get-LocalGroupMember -Group "S-1-5-32-544"
+*   answers "Group S-1-5-32-544 was not found", while -SID "S-1-5-32-544"
+*   returns its members.  Without this, asking whether somebody is a Windows
+*   administrator - which HAS to be asked by SID, because the name is
+*   translated on a localised Windows - took the "no such group" path and
+*   therefore answered FALSE, silently, for every administrator alive.
+*   !os_group already accepts either; this makes the pair consistent.
+   if group[1,2] = 'S-' or group[1,2] = 's-' then
+      sel = '-SID "'
+   end else
+      sel = '-Group "'
+   end
+
+   ps = 'try { $ms = Get-LocalGroupMember ' : sel : group
    ps := '" -ErrorAction Stop } catch { exit 2 }; '
    ps := 'foreach ($m in $ms) { if ((($m.Name -split "\\")[-1]) -ieq "'
    ps := user : '") { exit 0 } }; exit 1'
