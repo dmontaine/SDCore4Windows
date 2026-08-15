@@ -21,6 +21,8 @@
 * rev 0.9.0 Jan 25 mab require admin priviliges for global catalog
 *                       and set owner : group to sdsys : sdusers on write
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 15 Aug 26 Windows port - the chown to sdsys:sdusers on every catalogue write
+*           is gone; it failed on every one and printed a warning
 * 13 Aug 26 Windows port - CATALOG GLOBAL tests K$ADMINISTRATOR, not system(27)
 * END-HISTORY
 *
@@ -327,10 +329,14 @@ catalogue.program:
          recordlocku gcat.f, call.name
          mark.mapping gcat.f, off
          write object.code to gcat.f, call.name
-         *
-         * rev 0.9.0 set file ownership
-         set.owner.path =  @sdsys:@ds:'gcat':@ds:call.name 
-         gosub set.owner     
+* 15 Aug 26 Windows port - THE chown IS GONE.  It set every catalogue entry to
+*   sdsys:sdusers, neither of which is a Windows account, so it failed on every
+*   single write and printed "Unable change ownership of directory ... err:
+*   1000" - one line per program, on every compile, which three sessions of
+*   this file's notes have had to explain away as expected.  Access here is the
+*   inheritable ACE the installer puts on C:\ProgramData\SD (PROJECT_STATUS.md
+*   5.7): NTFS applies it in the kernel to everything created underneath, so
+*   there is nothing for the catalogue to set.
          display sysmsg(3030, call.name) ;* xx added to global catalogue
 
          gosub check.local
@@ -479,23 +485,9 @@ check.global:
    
    
 * ======================================================================
-* rev 0.9.0  mab set file ownership    
-* assumes:
-* set.owner.path - file path
+* 15 Aug 26 Windows port - the set.owner subroutine was here, and its only
+*   caller has gone with it.  See the note at the write to gcat above.
 
-set.owner:
-   uid='sdsys'
-   gid='sdusers'
-   chown_parm = uid:@VM:gid:@VM:set.owner.path
-   * print 'set.owner: ':chown_parm
-   result = ospath(chown_parm,OS$CHOWN)
-   if result <= 0 then
-     st = set.owner.path:' err: ':status()
-     display sysmsg(10000,st) ;* Unable change ownership of directory error %1 
-   end
-
-return
-   
 end
 
 * END-CODE

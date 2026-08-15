@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 15 Aug 26 Windows port - no chown and no setgid: seven set.owner calls, the
+*           subroutine and "sudo chmod g+s" all removed, and an adopted or
+*           administrator account is never confined to ssh
 * 14 Aug 26 Windows port - single quote the pathname passed to OS.EXECUTE,
 *           now that !valid_os_path permits spaces
 * rev 1.0-1 Jan 26 group account now have linux group name written as lower case
@@ -114,7 +117,6 @@ deffun valid_os_path(path) calling '!valid_os_path'
 
    call @parser(PARSER$GET.TOKEN, token.type, acc.type, keyword)
    *
-   uid = ''
    group_name = ''   ;* will be set to callers entered group name on group create, no case changes
    begin case
    case upcase(acc.type) = 'USER' 
@@ -218,9 +220,9 @@ PW.TRY.AGAIN:
      end case
      
      
-     * save uid and gid for set.owner of USER account
-     uid = acc.uname  
-     gid = "sdu_":acc.uname
+* 15 Aug 26 Windows port - uid and gid were saved here for set.owner, which has
+*   gone.  ACC$GROUP is written from "sdu_":acc.uname directly, so nothing else
+*   wanted them.
      pathname := @ds:acc.uname
      acc.name = acc.uname
      
@@ -328,37 +330,19 @@ PW.TRY.AGAIN:
          stop sysmsg(6013) ;* Unable to create account directory
       end
       
-* rev 0.9.0 *
-* for all accounts set the setgid bit
-* When the bit is set for a directory, the set of files in that directory will have the same group as the group of the parent directory,
-* and not that of the user who created those files.
-* This is used for file sharing since they can be now modified by all the users who are part of the group of the parent directory.
-*
-      if upcase(acc.type) = "GROUP"  or  upcase(acc.type) = "USER" then
-        * Modified by Composer AI - 2026/06/10.
-        * Use shared !valid_os_path before OS.EXECUTE (phase 2).
-        * path.chars = '...'
-        * if pathname = '' or convert(path.chars, '', pathname) # '' then
-        if not(valid_os_path(pathname)) then
-          crt sysmsg(10011,2) ;* 'Warning unable to setgid bit on Group Folder, status: %1
-        end else
-* 14 Aug 26 Windows port - single quote the path.  !valid_os_path now permits
-*   spaces and backslashes so that native Windows paths pass at all, which
-*   means the quoting here is what stops a space splitting the command into
-*   two words.  Single quotes because bash still reads a backslash as an
-*   escape inside double ones.  See GPL.BP/VALID_OS_PATH.
-        OS.EXECUTE "sudo chmod g+s '":pathname:"'"
-        * -------------------- 
-        stat = OS.ERROR()
-        if stat = 0 then
-          crt sysmsg(10010,pathname)  ;* setgid bit set on: %1 
-        end else
-          crt sysmsg(10011,stat) ;* 'Warning unable to setgid bit on Group Folder, status: %1
-        end
-        end
-      end
+* 15 Aug 26 Windows port - THE setgid BIT IS GONE, AND SO IS sudo.  It ran
+*   "sudo chmod g+s <dir>" on every account directory to make files inherit the
+*   directory's group, which is a POSIX mechanism Windows does not have and
+*   does not need: the installer puts one inheritable ACE on
+*   C:\ProgramData\SD and NTFS applies it in the kernel to everything created
+*   underneath, including files SD writes through the MSYS2 runtime
+*   (PROJECT_STATUS.md 5.7).  It failed on every account creation and printed
+*   "Warning unable to setgid bit on Group Folder, status: 1", which §4 had to
+*   record as expected and harmless.  There is also no sudo here, and the
+*   installer deliberately does not install one.
+*   Messages 10010 and 10011 lose their only caller with it.
 
-      
+
      * rev 0.9.0  create group for the account *   
       begin case
       case upcase(acc.type) = "USER" 
@@ -491,11 +475,6 @@ PW.TRY.AGAIN:
 *     We could end up with groups created and no acctual account
 *
       gosub make.account
-      
-
- * 20240225 mab set file ownership for account parent dir
-      set.owner.path = pathname
-      gosub set.owner
 
    end
 
@@ -532,12 +511,6 @@ make.account:
       @system.return.code = -6
       stop sysmsg(6016) ;* Unable to create VOC
    end
-   set.owner.path = pathname:@ds:'VOC'
-   gosub set.owner
-   set.owner.path = pathname:@ds:'VOC':@ds:'%0'
-   gosub set.owner
-   set.owner.path = pathname:@ds:'VOC':@ds:'%1'
-   gosub set.owner
 
    openpath pathname:@ds:'VOC' to voc.f else
       @system.return.code = -status()
@@ -610,15 +583,7 @@ make.account:
          stop sysmsg(6020) ;* Unable to create private catalogue directory
       end
 
- * 20240225 mab set file ownership for cat
-      set.owner.path = pathname:@ds:'cat'
-      gosub set.owner
    end
-
- * 20240225 mab set file ownership for VOC
-   set.owner.path = pathname:@ds:'VOC'
-   gosub set.owner
-
 
    return
    
@@ -677,9 +642,6 @@ create.dir.file:
       @system.return.code = -ER$NOT.CREATED
       stop sysmsg(6022, fn) ;* Unable to create data part of xx
    end
-* 20240225 mab set file ownership accordingly  
-   set.owner.path = pathname:@ds:os.name
-   gosub set.owner
 
    begin case
       case descr[1,1]= 'F'       ; voc.rec = descr
@@ -694,12 +656,6 @@ create.dir.file:
          @system.return.code = -ER$NOT.CREATED
          stop sysmsg(6023, fn) ;* Unable to create dictionary part of xx
       end
-* 20240302 mab set file ownership accordingly 
-* rev 0.9.0 * 
-      set.owner.path = pathname:@ds:os.name:'.DIC':@ds:'%0'
-      gosub set.owner
-      set.owner.path = pathname:@ds:os.name:'.DIC':@ds:'%1'
-      gosub set.owner            
 
       openpath pathname:@ds:os.name:'.DIC' to dict.f else
          @system.return.code = -status()
@@ -708,10 +664,6 @@ create.dir.file:
 * 20240121 mab use @VM not hard coded hex fd 
       write raise('D':@VM:'0':@VM:@VM:fn:@VM:'10L':@VM:'S') to dict.f, '@ID'
       close dict.f
-
-* 20240225 mab set file ownership accordingly  
-      set.owner.path = pathname:@ds:os.name:'.DIC'
-      gosub set.owner
 
       voc.rec<3> = os.name:'.DIC'
    end
@@ -722,31 +674,12 @@ create.dir.file:
 
 
 * ======================================================================
-* 20240225 mab set file ownership accordingly   
-* assumes:
-* set.owner.path - file path
-* acc.type - USER/GROUP/OTHER
-* acc.name - populated
-set.owner:
-
-   begin case
-      case upcase(acc.type) = 'USER'
-        null ;* uid/gid set at "case upcase(acc.type) = 'USER'" validation
-* rev 0.9.0 *        
-      case upcase(acc.type) = 'GROUP' 
-        uid='sdsys'
-        gid= group_name
-      case 1
-        uid='root'
-        gid='sdusers'
-   end case
-   chown_parm = uid:@VM:gid:@VM:set.owner.path
-   * crt 'set.owner: ':chown_parm
-   result = ospath(chown_parm,OS$CHOWN)
-   if result <= 0 then
-     st = set.owner.path:' err: ':status()
-     display sysmsg(10000,st) ;* Unable change ownership of directory error %1 
-   end
+* 15 Aug 26 Windows port - set.owner and its seven callers are gone.  It
+*   chowned every account directory, VOC, dictionary and group folder to
+*   sdsys:sdusers or root:sdusers - three accounts that do not exist on
+*   Windows - so it failed every time and said so.  Access comes from the
+*   installer's inheritable ACE instead; see the note at the setgid removal
+*   above and PROJECT_STATUS.md 5.7.
 
 return
 
