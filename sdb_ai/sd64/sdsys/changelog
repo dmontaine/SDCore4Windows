@@ -5,10 +5,12 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  LIST ACCOUNTS says "Windows Group", not "Linux Group".  Existing
+           databases keep the old label until they are rebuilt - the wording
+           lives in the dictionary, which is built when SD is installed.
+
 14 Aug 26  Accounts: DELETE.ACCOUNT is careful about your Windows accounts, and
-           CREATE.ACCOUNT says what it will not do.  NOT YET TESTED - this is
-           written down here because it changes behaviour, not because anyone
-           has watched it work.
+           CREATE.ACCOUNT says what it will not do.
            * An SD account brings its own Windows account.  CREATE.ACCOUNT
              creates one, and it now REFUSES a name that already exists in
              Windows instead of failing with "Create User Failed, OS Error: 1",
