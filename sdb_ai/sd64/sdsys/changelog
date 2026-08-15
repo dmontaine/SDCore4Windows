@@ -5,6 +5,30 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  "sd -start" and "sd -stop" no longer claim things about the sdwind
+           daemon that are not true.  Both used to answer from the shared
+           memory segment, which outlives the daemon, so both could report
+           success while doing nothing.
+           * "SD is already started" is now only said when the daemon really
+             is running, and it tells you the process id - the Windows one,
+             the number Task Manager and Stop-Process use.
+           * If the segment is there but the daemon is not, which is what a
+             killed or crashed SD leaves behind, "sd -start" says so and tells
+             you to run "sd -stop" first.  It used to say "SD is already
+             started" and do nothing, leaving the system unusable while the
+             command that fixes it reported success.  It does not clear the
+             wreckage for you: that would end any sessions still attached to
+             it, and the count of those is printed so you can decide.
+           * "sd -stop" now checks that the daemon actually stopped.  One
+             started from an elevated session cannot be stopped from an
+             ordinary one - Windows refuses the signal - and that used to be
+             silent, leaving a daemon running against a segment nothing else
+             could see.  You now get a warning naming the process id and the
+             command to stop it with.
+           * Known limit: if the segment has already gone, "sd -stop" has
+             nowhere left to read the daemon's process id from and cannot
+             report on it at all.  Check with "Get-Process sdwind".
+
 14 Aug 26  The sign-on banner now says "SD for Windows" and no longer carries
            the "(AI modified)" note.
 

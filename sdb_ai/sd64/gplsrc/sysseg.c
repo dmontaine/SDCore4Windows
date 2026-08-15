@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Aug 26 Windows port - start_sd() and stop_sd() ask the sdwind process
+ *                      whether SD is running instead of trusting the shared
+ *                      segment, which outlives it
  * 14 Aug 26 Windows port - the daemon is sdwind, not sdlnxd, and start_sd()
  *                      finds it beside the running executable rather than
  *                      under <sysdir>/bin, which no longer holds binaries
@@ -55,6 +58,10 @@ void UnlockSemaphore(int semno);
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+/* For CW_CYGWIN_PID_TO_WINPID - see win_pid() */
+
+#include <sys/cygwin.h>
 
 void dump_config(void);
 
@@ -383,6 +390,86 @@ void unbind_sysseg() {
 }
 
 /* ======================================================================
+   win_pid()  -  The Windows process id behind an MSYS2 one
+
+   14 Aug 26 Windows port.  getpid() under the MSYS2 runtime answers with the
+   runtime's own process id, which is not the number Task Manager, Get-Process
+   or Stop-Process use: the daemon that reported itself here as pid 87 was pid
+   14712 to Windows.  Printing the runtime's number in a "stop it" instruction
+   is worse than printing none, because Stop-Process -Id would then act on
+   whatever unrelated process happens to hold it.  Answers 0 if the runtime
+   cannot translate, and the caller then says nothing about a pid at all.   */
+
+Private int win_pid(int pid) {
+  return (int)cygwin_internal(CW_CYGWIN_PID_TO_WINPID, pid);
+}
+
+/* ======================================================================
+   process_exists()  -  Is this pid still a process?
+
+   kill() with signal zero performs the existence and permission checks
+   without delivering anything, so it answers for a process this session
+   could not signal.  EPERM is a yes: the process is there and belongs to a
+   more privileged session.  Same idiom as clopts.c.                       */
+
+Private bool process_exists(int pid) {
+  return (!kill(pid, 0) || (errno == EPERM));
+}
+
+/* ======================================================================
+   sd_state()  -  What is actually running behind the shared segment?
+
+   14 Aug 26 Windows port.  "SD is already started" was answered by objects
+   rather than by processes: the semaphore set in get_semaphores() and the
+   segment in bind_sysseg() both outlive the processes that made them.  So a
+   session killed while SD was up left sd -start reporting success and doing
+   nothing, with the system unusable until somebody worked out that sd -stop
+   was the way back (PROJECT_STATUS.md section 6, section 7 step 1d).  Ask
+   the daemon instead - it is the process whose life SD's really is.        */
+
+#define SD_STOPPED 0  /* No shared segment, or not one this build can read */
+#define SD_RUNNING 1  /* Segment and daemon both present */
+#define SD_WRECKAGE 2 /* Segment left behind by a daemon that has gone */
+
+Private int sd_state(int* daemon_pid, int* sessions) {
+  int state = SD_STOPPED;
+  int16_t i;
+  USER_ENTRY* uptr;
+
+  *daemon_pid = 0;
+  *sessions = 0;
+
+  if (!attach_shared_memory())
+    return SD_STOPPED;
+
+  /* Every offset past the revstamp belongs to the build that created the
+     segment.  If it is not this one, read no further and leave the report to
+     bind_sysseg(), which says so properly.                                 */
+
+  if (sysseg->revstamp == SYSSEG_REVSTAMP) {
+    state = SD_WRECKAGE;
+
+    if ((sysseg->sdwind_pid > 0) && process_exists(sysseg->sdwind_pid)) {
+      *daemon_pid = sysseg->sdwind_pid;
+      state = SD_RUNNING;
+    }
+
+    /* What an sd -stop would take with it.  The advice that follows from
+       SD_WRECKAGE is only safe when the answer is none.                    */
+
+    for (i = 1; i <= sysseg->max_users; i++) {
+      uptr = UPtr(i);
+      if (uptr->uid && (uptr->pid > 0) && process_exists(uptr->pid))
+        (*sessions)++;
+    }
+  }
+
+  unbind_sysseg();
+
+  return state;
+}
+
+/* ======================================================================
    start_sd()                                                             */
 
 bool start_sd() {
@@ -391,6 +478,45 @@ bool start_sd() {
   int i;
   char path[MAX_PATHNAME_LEN + 1];
   char bindir[MAX_PATHNAME_LEN + 1];
+  int daemon_pid;
+  int sessions;
+
+  /* 14 Aug 26 Windows port - decide what is running before touching anything.
+     Both "already started" answers below the fold are about objects and not
+     processes; see sd_state().  Neither clears the wreckage here: sd -start
+     silently discarding somebody else's shared segment is a destructive
+     default, and the session that sees this message is the one that knows
+     whether the sessions counted are worth keeping.                        */
+
+  switch (sd_state(&daemon_pid, &sessions)) {
+    case SD_RUNNING:
+      daemon_pid = win_pid(daemon_pid);
+      if (daemon_pid > 0) {
+        fprintf(stderr, "SD is already started - %s is running as pid %d.\n",
+                SDWIND_NAME, daemon_pid);
+      } else {
+        fprintf(stderr, "SD is already started - %s is running.\n",
+                SDWIND_NAME);
+      }
+      return FALSE;
+
+    case SD_WRECKAGE:
+      fprintf(stderr,
+              "SD did not shut down cleanly: the shared segment is still "
+              "here but %s is not running.\n",
+              SDWIND_NAME);
+      if (sessions) {
+        fprintf(stderr,
+                "%d SD session(s) are still attached to it, and sd -stop "
+                "will end them.\n",
+                sessions);
+      }
+      fprintf(stderr, "Run sd -stop to clear it, then sd -start again.\n");
+      return FALSE;
+
+    default: /* SD_STOPPED - nothing there, carry on and create it */
+      break;
+  }
 
   if (!bind_sysseg(TRUE, errmsg)) {
     fprintf(stderr, "%s\n", errmsg);
@@ -469,6 +595,10 @@ bool stop_sd() {
   USER_ENTRY* uptr;
   int16_t retry;
   int active;
+  int daemon_pid = 0;            /* Daemon named in the segment, 0 if none */
+  bool daemon_signalled = FALSE; /* SIGTERM was accepted, so wait for it */
+  bool daemon_refused = FALSE;   /* Alive, and not this session's to signal */
+  bool daemon_stuck = FALSE;     /* Signalled, still there when we gave up */
 
   /* We may already hold a mapping if we were called from the bind_sysseg
      error path.  Re-attaching would leak a second one.                     */
@@ -500,8 +630,22 @@ bool stop_sd() {
     /* > 0 rather than merely non-zero, for the reason above: a negative pid
        signals a process group.  Zero was already excluded here. */
 
-    if (sysseg->sdwind_pid > 0)
-      kill(sysseg->sdwind_pid, SIGTERM);
+    /* 14 Aug 26 Windows port - kill()'s return value was discarded here, so a
+       session less elevated than the one that started the daemon got EPERM,
+       left sdwind running, and printed "has been shut down" anyway
+       (PROJECT_STATUS.md section 6).  The teardown below is still right and
+       still wanted - the segment and the semaphores are this command's to
+       remove - but a daemon that outlives it has to be reported: it holds a
+       mapping of a segment nothing else can see, and the next sd -start
+       creates a second daemon beside it.                                    */
+
+    if (sysseg->sdwind_pid > 0) {
+      daemon_pid = sysseg->sdwind_pid;
+      if (!kill(daemon_pid, SIGTERM))
+        daemon_signalled = TRUE;
+      else if (errno != ESRCH) /* ESRCH: already gone, which is the aim */
+        daemon_refused = TRUE;
+    }
 
     /* Wait for everyone to go.  System V exposed an attach count that fell to
        zero as processes detached; POSIX shared memory has no equivalent, so
@@ -519,15 +663,58 @@ bool stop_sd() {
           active++;
       }
 
+      /* The daemon was never counted here, which is the other half of why
+         nothing noticed it surviving: this poll walks the user table only,
+         and sdwind is not in it.                                           */
+
+      if (daemon_signalled && !kill(daemon_pid, 0))
+        active++;
+
       if (active == 0)
         break; /* Everyone has gone */
 
       sleep(1);
     }
 
+    if (daemon_signalled && !kill(daemon_pid, 0))
+      daemon_stuck = TRUE; /* Took the signal and has not acted on it */
+
     /* Dettach the shared memory */
 
     unbind_sysseg();
+  }
+
+  /* Say so before the caller announces a shutdown.  The segment and the
+     semaphores really are going, so this is a warning and not a failure -
+     but an orphaned daemon is the one thing sd -stop cannot clear up, and
+     the next sd -start will build a second system around it.               */
+
+  if (daemon_refused || daemon_stuck) {
+    daemon_pid = win_pid(daemon_pid);
+
+    if (daemon_pid > 0) {
+      fprintf(stderr, "Warning: %s (pid %d) is still running.\n", SDWIND_NAME,
+              daemon_pid);
+    } else {
+      fprintf(stderr, "Warning: %s is still running.\n", SDWIND_NAME);
+    }
+
+    if (daemon_refused) {
+      fprintf(stderr, "It belongs to a session with more privilege than this "
+                      "one, so it could not be\nsignalled.\n");
+    } else {
+      fprintf(stderr, "It did not stop when it was asked to.\n");
+    }
+
+    if (daemon_pid > 0) {
+      fprintf(stderr, "Stop it from an elevated session with \"Stop-Process "
+                      "-Id %d -Force\" before\nstarting SD again, or the "
+                      "machine will run two daemons.\n",
+              daemon_pid);
+    } else {
+      fprintf(stderr, "Stop it from an elevated session before starting SD "
+                      "again, or the machine\nwill run two daemons.\n");
+    }
   }
 
   /* Remove the name.  As with IPC_RMID, any mapping a straggler still holds

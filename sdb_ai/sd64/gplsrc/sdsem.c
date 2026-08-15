@@ -23,6 +23,9 @@
  *           semaphores.  The MSYS2 runtime declares semget()/semop() but the
  *           implementations return ENOSYS, and native Windows has no System V
  *           IPC at all.  sem_open() works on both.
+ * 14 Aug 26 Windows port - a leftover semaphore set no longer reports "SD is
+ *           already started", which was true of the objects and not of the
+ *           system.  See sd_state() in sysseg.c.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -83,7 +86,18 @@ bool get_semaphores(bool create, char* errmsg) {
     sem_close(sem);
 
     if (create) {
-      strcpy(errmsg, "SD is already started");
+      /* 14 Aug 26 Windows port - this is the message a stale system actually
+         produced, because get_semaphores() runs before the segment is looked
+         at: "SD is already started" off a semaphore set whose SD had been
+         killed (PROJECT_STATUS.md section 6).  start_sd() now asks the sdwind
+         process before it gets here, so reaching this point means the
+         semaphores have outlived the segment - a half torn down system rather
+         than a running one.  The advice is conditional because two starts
+         racing can also land here, and sd -stop would kill the winner.      */
+
+      strcpy(errmsg,
+             "Semaphores are already present.  If SD is not running, "
+             "sd -stop clears them.");
       return FALSE;
     }
 
