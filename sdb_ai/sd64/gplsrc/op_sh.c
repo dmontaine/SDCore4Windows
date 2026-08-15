@@ -295,11 +295,16 @@ Private void sh_execute(char *command) {
        sd.c refuses when it sees this.
 
        IT IS A GUARD, NOT A BOUNDARY, and the difference matters.  The variable
-       lives in the user's own shell, so the user can clear it; what stops a
-       determined one is that an SD account has no shell to begin with - ssh
-       sessions arrive at SD through ForceCommand and the console belongs to
-       administrators (PROJECT_STATUS.md 5.6.2).  This closes the accident and
-       the casual case, which is what SH actually produces.
+       lives in the user's own shell, so the user can clear it.
+
+       AND THE SHELL IS REALLY THERE - corrected 15 Aug 2026, having first
+       claimed otherwise.  ForceCommand puts an ssh session into SD rather than
+       a prompt, but SH hands one back, so "an SD account has no shell" is
+       false and nothing here should rest on it.  What this guard buys is the
+       accident and the casual case, which is what SH actually produces.  The
+       owner's answer to the rest is at the application level: SD can lock a
+       user into a menu system, and then SH is not reachable to begin with.
+       Restricting SH itself would be the other way, and is not decided.
 
        Set in the CHILD, after the fork, so SD's own environment is untouched
        and the phantom and client paths - which fork elsewhere - never see it. */

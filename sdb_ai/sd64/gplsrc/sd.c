@@ -528,8 +528,13 @@ Private bool comlin(int argc, char *argv[]) {
    line.  The model it completes: whoever is at the console or on Remote
    Desktop is an administrator, because SD's own accounts are confined to ssh
    (PROJECT_STATUS.md 5.6.2) - and an ssh session arrives at SD itself through
-   ForceCommand, with no shell to type this into.  So the only people who can
-   reach here are administrators, and they can elevate.
+   ForceCommand rather than at a prompt.
+
+   NOT "with no shell", which this comment claimed until 15 Aug 2026: SH hands
+   one back.  It changes nothing about this gate - that shell is still
+   unelevated, so "sd LISTF" typed in it is refused like any other - but it is
+   why the SD_SESSION guard in comlin() exists at all, and the owner's answer
+   to the rest is a menu system inside SD, where SH is never reachable.
 
    Plain "sd" with nothing after it is untouched: that is how a user reaches
    their own account, and it is the whole of what an ordinary session may do.
