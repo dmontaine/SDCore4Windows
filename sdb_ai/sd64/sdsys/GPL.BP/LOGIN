@@ -36,6 +36,8 @@
 *                      tests are restored from f9edab0, login takes no password
 *                      at all, and administrator rights come from elevation at
 *                      process start rather than from the account entered
+* 14 Aug 26 Windows port - the sign-on banner names the port and drops the
+*                      "(AI modified)" suffix
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -170,7 +172,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
       * Modified by Composer AI - 2026/06/10.
       * Close version banner string; unclosed quote caused "Unrecognised statement".
       * display "SD, the Multivalue String Database, version " : SD.REV.STAMP : "(AI modified)
-      display "SD, the Multivalue String Database, version " : SD.REV.STAMP : " (AI modified)"
+      display "SD for Windows, the Multivalue String Database, version " : SD.REV.STAMP
       * --------------------
       display "(c) 2000-2026 by Ladybridge Systems and Other Contributors"
       display

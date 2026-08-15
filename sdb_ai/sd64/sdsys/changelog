@@ -5,6 +5,9 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  The sign-on banner now says "SD for Windows" and no longer carries
+           the "(AI modified)" note.
+
 14 Aug 26  Signing in asks for nothing, and administration belongs to Windows.
            This reverses the 13 Aug identity entry further down.  Built,
            installed and VERIFIED END TO END: an ordinary account signs in over
