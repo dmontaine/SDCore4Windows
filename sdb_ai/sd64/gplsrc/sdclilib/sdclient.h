@@ -103,7 +103,14 @@
 #define SV_ERROR          3    /* Action failed. Error text available     */
 #define SV_LOCKED         4    /* Action took LOCKED clause               */
 #define SV_PROMPT         5    /* Server requesting input                 */
-#define SV_ECONTXT        6    /* Client called function in wrong context */
-#define SV_EMSG_PAIR      7    /* Client request/response transport failed */
+/* 15 Aug 26 Windows port - TRANSPOSED AGAINST sdb64 AND FIXED HERE.
+   winsdclilib commit 13e4bf5 (5 Aug 2026), "Align Windows client error
+   handling with Linux", introduced these as ECONTXT=6/EMSG_PAIR=7 - the
+   opposite of the sdb64 dev commit d0647b9 it was aligning TO, which had
+   defined EMSG_PAIR=6/ECONTXT=7 seventeen days earlier.  sdb64's values
+   came first and are the shared ones.  The same fix is owed to
+   winsdclilib itself - PROJECT_STATUS.md 5.3.                          */
+#define SV_EMSG_PAIR      6    /* Client request/response transport failed */
+#define SV_ECONTXT        7    /* Client called function in wrong context */
 
 /* END-CODE */

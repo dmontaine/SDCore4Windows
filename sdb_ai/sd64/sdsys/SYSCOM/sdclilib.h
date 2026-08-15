@@ -119,11 +119,12 @@ DLLEntry void SDWriteu(int fno, char * id, char * data);
 #define SV_ERROR          3    /* Action failed. Error text available     */
 #define SV_LOCKED         4    /* Action took LOCKED clause               */
 #define SV_PROMPT         5    /* Server requesting input                 */
-/* 15 Aug 26 Windows port - SV_EMSG_PAIR AND SV_ECONTXT ARE DELIBERATELY NOT
-   HERE.  Both sdb64 dev and our vendored client define them, with the values
-   TRANSPOSED against each other, and which is right is unsettled
-   (UPSTREAM_FIXES.md).  Adding them here would commit BASIC to one of the two
-   numberings by accident.  Our BASIC therefore cannot yet tell a transport
-   failure from a context error - that is the cost, and it is the smaller one. */
+/* 15 Aug 26 Windows port - from sdb64 dev (1.0-3), numbering and all.  The C
+   client already distinguished these two states and this header did not, so
+   BASIC could not tell a transport failure from a context error.  sdb64's
+   values are the shared ones; winsdclilib had them transposed and the vendored
+   copy is corrected to match - PROJECT_STATUS.md 5.3.                       */
+#define SV_EMSG_PAIR      6    /* Server message_pair error               */
+#define SV_ECONTXT        7    /* Server context_error                    */
 
 /* END-CODE */
