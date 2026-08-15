@@ -281,6 +281,19 @@ try {
         $_ -match '\S' -and $_ -notmatch 'Ladybridge|WARRANTY|welcome to modify|conditions\.|free software|version 1\.0|is not in your VOC|^:?\s*$'
     } | ForEach-Object { Write-Output ("    " + $_.Trim()) }
 
+    # PRINT THE PASSWORD HERE, NOT AT THE END, WHEN -Keep IS GIVEN.  It used to
+    # appear only in the closing summary, which is fine right up until the run
+    # does not reach the closing summary: on 14 Aug 2026 LIST ACCOUNTS hung on
+    # the fifth account and took the password with it, leaving a real Windows
+    # account nobody could log in as.  A credential you only learn if everything
+    # succeeds is lost by any failure after it is set, and the account outlives
+    # the run.  PROJECT_STATUS.md section 6.
+    if ($Keep) {
+        Write-Output ""
+        Write-Output ("  -Keep: " + $Account + " password is  " + $plain)
+        Write-Output "  (printed now rather than at the end, so a later failure cannot lose it)"
+    }
+
     Write-Output ""
     Write-Output "=== 2. what it made ===================================================="
 
