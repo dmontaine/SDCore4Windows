@@ -59,6 +59,9 @@ BBCMP_FIRST = ['BBPROC', 'BCOMP', 'PATHTKN']
 # localised Windows.
 SD_ADMIN_GID = 544
 
+# Field mark in a stored record, as gplbld/stage.py also has it.
+FM = '\n'
+
 # Copied into the sysdir for the bootstrap and removed afterwards.  GPL.BP/
 # WRITE_INSTALL_DICTS reads its input as @sdsys:"/gplbld/FILES_DICTS", so the
 # file has to be inside the data tree while it runs - and must not still be
@@ -90,6 +93,31 @@ def is_elevated():
         import ctypes
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
     return SD_ADMIN_GID in os.getgroups()
+
+
+def check_account_record(sysdir):
+    """Refuse to bootstrap a tree whose SDSYS account points somewhere else.
+
+    Field 1 of ACCOUNTS/SDSYS is the account directory, and once a session has
+    logged in it is what GPL.BP and GPL.BP.OUT resolve to - the gcat comes from
+    the config file, the sources do not.  The tracked record ships naming
+    /usr/local/sdsys, the Linux development tree, and on 15 Aug 2026 a run
+    against it compiled 190 programs THERE and catalogued them into the staged
+    tree: a staged gcat holding 13 Aug objects, with no symptom until somebody
+    installed it.  Cheap to check, expensive to find.
+    """
+    rec = os.path.join(sysdir, 'ACCOUNTS', 'SDSYS')
+    if not os.path.isfile(rec):
+        die('no ACCOUNTS/SDSYS record in %s' % sysdir)
+    with open(rec, 'rb') as f:
+        acctdir = f.read().decode('latin-1').split(FM)[0]
+    if not os.path.isdir(acctdir) or not os.path.samefile(acctdir, sysdir):
+        die('ACCOUNTS/SDSYS names %s, but this bootstrap is for\n'
+            '  %s.  Field 1 is the SDSYS account directory, and GPL.BP and\n'
+            '  GPL.BP.OUT resolve through it, so the compile would read and\n'
+            '  write there instead.  gplbld/stage.py sets this before calling;\n'
+            '  set it yourself if you are running bootstrap.py by hand.'
+            % (acctdir or '(empty)', sysdir))
 
 
 def run(cmd, **kw):
@@ -163,6 +191,7 @@ def main():
         die('no such sysdir: %s' % sysdir)
     if not os.path.isfile(sdexe):
         die('no such sd executable: %s' % sdexe)
+    check_account_record(sysdir)
 
     env = dict(os.environ)
     if args.conf:

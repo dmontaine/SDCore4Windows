@@ -233,15 +233,23 @@ def check_no_stage_paths(stage, sdsys, allowed):
 
 
 def retarget_sdsys_account(sdsys, production):
-    """Point the SDSYS ACCOUNTS record at where the tree will actually live.
+    """Point the SDSYS ACCOUNTS record at a directory, and return the old one.
 
-    Field 1 of an ACCOUNTS record is the account directory, and the bootstrap
-    wrote the staging path into it.  Rewriting one field is the entire cost of
-    pre-bootstrapping - see PROJECT_STATUS.md 5.16.
+    Field 1 of an ACCOUNTS record is the account directory, and IT IS WHERE
+    GPL.BP AND GPL.BP.OUT RESOLVE TO once a session has logged in.  So this is
+    called TWICE: at the staged tree before the bootstrap, or the bootstrap
+    compiles somebody else's sources, and at the production path afterwards, so
+    the install does not carry a build path.  Rewriting one field is the entire
+    cost of pre-bootstrapping - see PROJECT_STATUS.md 5.16.
+
+    The tracked record ships holding /usr/local/sdsys, the Linux development
+    tree, which is what made the first call necessary: on this machine the
+    bootstrap silently compiled 190 programs there and catalogued them into the
+    staged gcat, and on a clean machine that path does not exist at all.
     """
     rec = os.path.join(sdsys, 'ACCOUNTS', 'SDSYS')
     if not os.path.isfile(rec):
-        die('the bootstrap did not leave an ACCOUNTS/SDSYS record')
+        die('there is no ACCOUNTS/SDSYS record in %s' % sdsys)
     with open(rec, 'rb') as f:
         fields = f.read().decode('latin-1').split(FM)
     was = fields[0]
@@ -446,6 +454,12 @@ def main():
         with open(bconf, 'w', encoding='latin-1', newline='\r\n') as f:
             f.write(SD_CONF.replace('SDSYS=' + PRODUCTION_SDSYS,
                                     'SDSYS=' + os.path.abspath(sdsys)))
+
+        # The account directory has to name the staged tree BEFORE the
+        # bootstrap logs in - see retarget_sdsys_account().
+        shipped = retarget_sdsys_account(sdsys, os.path.abspath(sdsys))
+        print('  ACCOUNTS/SDSYS pointed at the staged tree')
+        print('    was %s' % shipped)
 
         print('bootstrapping the staged tree')
         r = subprocess.run(
