@@ -29,6 +29,8 @@
 * 06 Aug 24 comment out "<cr> to install" prompt 
 * 02 Jul 24 add check for install already complete
 * 13 Aug 26 Windows port - privilege test now uses K$ADMINISTRATOR, not system(27)
+* 14 Aug 26 Windows port - VALID_OS_NAME added to the pass 1 compile list; the
+*                      restored sdusers gate makes LOGIN reach it at first login
 * END-HISTORY
 *
 *
@@ -227,6 +229,16 @@ src.list<-1> = 'BCOMP'
 src.list<-1> = 'PTERM'
 src.list<-1> = 'CATALOG'
 src.list<-1> = 'PARSER'
+* 14 Aug 26 Windows port - VALID_OS_NAME must be here, and before IS_GRP_MEMBER
+*   reads better than after it.  IS_GRP_MEMBER calls !valid_os_name to check the
+*   two names it interpolates into a PowerShell command, and LOGIN calls
+*   IS_GRP_MEMBER for the sdusers gate - at EVERY login, including the first one
+*   the bootstrap performs.  Without this, SECOND.COMPILE dies at
+*   "000000D7: Unable to load '!VALID_OS_NAME' object code in !IS_GRP_MEMBER"
+*   before it compiles anything, and the staged tree is not installable.
+*   VALID_OS_NAME calls nothing itself, so the chain ends here.
+*   See PROJECT_STATUS.md section 6.
+src.list<-1> = 'VALID_OS_NAME'
 src.list<-1> = 'IS_GRP_MEMBER'
 src.list<-1> = 'TERM'
 

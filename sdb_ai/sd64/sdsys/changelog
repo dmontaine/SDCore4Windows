@@ -6,8 +6,10 @@ repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
 14 Aug 26  Signing in asks for nothing, and administration belongs to Windows.
-           This reverses the 13 Aug identity entry further down.  Written and
-           built; NOT yet run - see PROJECT_STATUS.md section 4.
+           This reverses the 13 Aug identity entry further down.  Built AND
+           running: an unelevated session is now refused at both doors, and an
+           elevated one reaches SDSYS.  Landing in your own account and LOGTO
+           are the two parts still unwatched - see PROJECT_STATUS.md section 4.
            * Type "sd" and you are in your own account.  Windows has already
              signed you in, so SD asks it who you are and takes no password.
              The account is the one named after your Windows user name.

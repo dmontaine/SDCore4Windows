@@ -204,9 +204,25 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   See PROJECT_STATUS.md section 5.6.
      * This user has come in from a command prompt.
      lgn.id = @logname
-     if not(is_grp_member(lgn.id,'sdusers')) then
-        display sysmsg(5009) ;* This user is not registered for SD use
-        goto terminate.connection
+
+* 14 Aug 26 Windows port - INTERNAL MODE IS EXEMPT FROM THE sdusers GATE.
+*   Owner's decision, 14 Aug 2026, and the reason is the bootstrap: it runs
+*   "sd -internal SECOND.COMPILE", which logs in, and on a clean BUILD machine
+*   sdusers DOES NOT EXIST - only the installer creates it.  Testing it here
+*   made building the product depend on a group that only installing it
+*   produces, which is circular and would have refused the bootstrap at the
+*   door on any machine that had never had SD on it.
+*
+*   IT OPENS NO HOLE.  "sd -INTERNAL" names SDSYS for itself in sd.c, and SDSYS
+*   now requires an elevated session, so an internal caller has already passed
+*   a strictly harder test than sdusers membership before reaching this line.
+*   See PROJECT_STATUS.md section 5.6.
+
+     if not(kernel(K$INTERNAL,-1)) then
+        if not(is_grp_member(lgn.id,'sdusers')) then
+           display sysmsg(5009) ;* This user is not registered for SD use
+           goto terminate.connection
+        end
      end
   end
 
