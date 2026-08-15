@@ -114,13 +114,22 @@ function Note($step, $expected, $got, $decisive) {
 # streams in separate files and hands back a real exit code, which is what was
 # wanted in the first place.  Stdin comes from an empty file, so anything that
 # decides to prompt gets EOF and fails instead of hanging the run for ever.
+# 15 Aug 26 - $StdIn EXISTS BECAUSE OF ForceCommand.  An empty stdin file was
+# right while ssh ran a command and exited.  With the ssh-only model's global
+# ForceCommand applied, sshd DISCARDS the client's command and runs SD instead,
+# so ssh now opens an interactive SD session - and EOF at SD's ":" prompt is
+# PROJECT_STATUS.md section 6's "leave a prompt unanswered and SD spins at full
+# CPU".  Both verification scripts hung on it, 15 Aug 2026, with no timeout to
+# save them: ConnectTimeout covers the TCP connect, not the session.  Feeding
+# "OFF" logs the session off and lets ssh exit.
 function Invoke-Native {
-    param([string]$Exe, [string[]]$CmdArgs)
+    param([string]$Exe, [string[]]$CmdArgs, [string]$StdIn = '')
 
     $so = Join-Path $workdir 'native.out'
     $se = Join-Path $workdir 'native.err'
     $si = Join-Path $workdir 'native.in'
-    Set-Content -Path $si -Value $null -Encoding ascii
+    if ($StdIn -eq '') { Set-Content -Path $si -Value $null -Encoding ascii }
+    else { [IO.File]::WriteAllText($si, $StdIn) }
 
     $p = Start-Process -FilePath $Exe -ArgumentList $CmdArgs -NoNewWindow -Wait -PassThru `
              -RedirectStandardOutput $so -RedirectStandardError $se -RedirectStandardInput $si
@@ -143,8 +152,18 @@ $sshCommon = @(
     '-o', 'ConnectTimeout=20',
     '-o', 'LogLevel=ERROR')
 
+# 15 Aug 26 - TWO PROOFS OF ADMISSION, BECAUSE ForceCommand MAY OR MAY NOT BE
+# APPLIED.  Without it, ssh runs "whoami" and the account name comes back, which
+# is what this always tested.  With it, sshd runs SD instead and the account
+# name never appears - so the proof becomes SD's own login banner.  Both count
+# as admitted: the question this asks is whether the account got IN, not what it
+# landed on.  Keeping both means the script works either side of
+# allow-ssh-groups.ps1, which is a manual step (PROJECT_STATUS.md header).
+$sdBanner = 'String Database'
+
 function SshResult($r) {
     if ($r.ExitCode -eq 0 -and $r.Out -match [regex]::Escape($Account)) { return 'admitted' }
+    if ($r.Out -match $sdBanner) { return 'admitted' }
     $why = ($r.Out + ' ' + $r.Err).Trim() -replace '\s+', ' '
     if ($why -eq '') { $why = 'no output, exit ' + $r.ExitCode }
     return ('refused: ' + $why)
@@ -173,7 +192,7 @@ function SshPassword {
         $r = Invoke-Native $sshExe.Source ($sshCommon + @(
             '-o', 'PreferredAuthentications=password',
             '-o', 'NumberOfPasswordPrompts=1',
-            ($Account + '@localhost'), 'whoami'))
+            ($Account + '@localhost'), 'whoami')) -StdIn "OFF`n"
     } finally {
         Remove-Item Env:\SSH_ASKPASS, Env:\SSH_ASKPASS_REQUIRE, Env:\DISPLAY -ErrorAction SilentlyContinue
         Remove-Item $askpass -ErrorAction SilentlyContinue
@@ -199,7 +218,7 @@ function SshKey {
         '-o', 'IdentitiesOnly=yes',
         '-o', 'BatchMode=yes',
         '-o', 'PreferredAuthentications=publickey',
-        ($Account + '@localhost'), 'whoami'))
+        ($Account + '@localhost'), 'whoami')) -StdIn "OFF`n"
     return (SshResult $r)
 }
 

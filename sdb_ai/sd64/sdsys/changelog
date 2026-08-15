@@ -11,8 +11,12 @@ Entries are newest first, by date, until there is a version to attach them to.
            including an administrator's, because an ssh session cannot be
            elevated in any case and lands in your own account rather than
            SDSYS.  The console, Remote Desktop and remote-control tools are
-           NOT affected; this is ssh only.  It does mean scp and sftp no
-           longer work against this machine.
+           NOT affected; this is ssh only.  It does mean NOTHING CAN BE RUN
+           OVER ssh WITHOUT A PERSON AT IT: scp and sftp stop working, and so
+           does "ssh thismachine somecommand" - the command is discarded and
+           SD runs instead, so a script that expects output waits for ever at
+           SD's ":" prompt.  Send OFF on standard input if you need such a
+           session to end by itself.
 
 15 Aug 26  Anything typed after "sd" now needs an elevated session.  That
            covers the switches - -start, -stop, -restart, -cleanup, -suspend,
@@ -25,7 +29,9 @@ Entries are newest first, by date, until there is a version to attach them to.
 
 15 Aug 26  SD will not start a second time inside itself.  If you leave SD
            with SH and then type "sd" in that shell, it says so and returns
-           you to the session you already have.
+           you to the session you already have.  Worth knowing alongside it:
+           SH itself needs an elevated session, so an ordinary account cannot
+           leave SD this way at all, and one reached over ssh never can.
 
 15 Aug 26  Installing SD now gives you an SD account.  Until now the person who
            installed SD was the one person who could not use it: every SD

@@ -106,12 +106,19 @@ function Start-SD {
 # native program's stderr into a terminating error under 'Stop'.
 #
 # DO NOT USE THIS FOR sd -start.  See Start-SD above.
+# 15 Aug 26 - $StdIn EXISTS BECAUSE OF ForceCommand.  See the identical comment
+# in verify-sshonly.ps1: with the ssh-only model's global ForceCommand applied,
+# sshd discards "whoami" and runs SD, so ssh opens an interactive session and
+# EOF at SD's ":" prompt makes SD spin (PROJECT_STATUS.md section 6).  This
+# script is where that was found - it hung on 15 Aug 2026 having already passed
+# everything else - and ConnectTimeout does not cover it.
 function Invoke-Native {
-    param([string]$Exe, [string[]]$CmdArgs)
+    param([string]$Exe, [string[]]$CmdArgs, [string]$StdIn = '')
     $so = Join-Path $workdir 'native.out'
     $se = Join-Path $workdir 'native.err'
     $si = Join-Path $workdir 'native.in'
-    Set-Content -Path $si -Value $null -Encoding ascii
+    if ($StdIn -eq '') { Set-Content -Path $si -Value $null -Encoding ascii }
+    else { [IO.File]::WriteAllText($si, $StdIn) }
     $p = Start-Process -FilePath $Exe -ArgumentList $CmdArgs -NoNewWindow -Wait -PassThru `
              -RedirectStandardOutput $so -RedirectStandardError $se -RedirectStandardInput $si
     $o = ''; $e = ''
@@ -160,12 +167,18 @@ function SshPassword($pass) {
             '-o','StrictHostKeyChecking=no','-o','UserKnownHostsFile=NUL',
             '-o','PreferredAuthentications=password','-o','NumberOfPasswordPrompts=1',
             '-o','ConnectTimeout=20','-o','LogLevel=ERROR',
-            ($Account + '@localhost'), 'whoami')
+            ($Account + '@localhost'), 'whoami') -StdIn "OFF`n"
     } finally {
         Remove-Item Env:\SDACCTPW, Env:\SSH_ASKPASS, Env:\SSH_ASKPASS_REQUIRE, Env:\DISPLAY -ErrorAction SilentlyContinue
         Remove-Item $askpass -ErrorAction SilentlyContinue
     }
+    # 15 Aug 26 - TWO PROOFS OF ADMISSION.  Without ForceCommand, "whoami"
+    # returns the account name.  With it, sshd runs SD instead and the name
+    # never appears, so SD's own login banner is the proof.  Both mean admitted:
+    # the question is whether the account got IN.  Keeping both lets this script
+    # run either side of allow-ssh-groups.ps1, which is applied by hand.
     if ($r.ExitCode -eq 0 -and $r.Out -match [regex]::Escape($Account)) { return 'admitted' }
+    if ($r.Out -match 'String Database') { return 'admitted' }
     $why = ($r.Out + ' ' + $r.Err).Trim() -replace '\s+', ' '
     if ($why -eq '') { $why = 'no output, exit ' + $r.ExitCode }
     return ('refused: ' + $why)
