@@ -18,6 +18,8 @@
 * 
 *
 * START-HISTORY:
+* 14 Aug 26 Windows port - ask Windows instead of reading /etc/group, which
+*           does not exist on the MSYS2 runtime.  See the description.
 * rev 0.9.0 Jan 25 mab initial commit
 * END-HISTORY
 *
@@ -25,10 +27,23 @@
 *
 *    x = !is_group(group)
 *
-*    is group found in linux group (found in /etc/group)
+*    Is group a Windows local group?
 *
 *    This function sets the STATUS() value to 0 if successful, 1 if the
 *    specified group does not exist.
+*
+*    WHY THIS NO LONGER READS /etc/group - the same defect !is_grp_member and
+*    !is_user had, and the third of the three: MSYS2 dropped /etc/group, the
+*    read failed, and this answered false for every group.  Measured
+*    14 Aug 2026: no /etc/group under either root the runtime can use, while
+*    Get-LocalGroup returned sdu_sdacct5 with its SID from the same machine.
+*
+*    WHAT IT BROKE: DELACC gates the removal of an account's sdu_ group on
+*    this (line 191), so DELETE.ACCOUNT silently skipped it and left the group
+*    behind on every account it ever removed.  CREATEA's create.group asks it
+*    too.
+*
+*    LOCAL GROUPS ONLY, matching !is_grp_member and !os_group.
 *
 * END-DESCRIPTION
 *
@@ -38,36 +53,38 @@ $internal
 function is_group(group)
 $catalog !is_group
 
+deffun valid_os_name(name) calling '!valid_os_name'
+
 group_found = @false
 set.status 0
 * Modified by Composer AI - 2026/06/10.
-* Empty group name cannot match /etc/group; avoid pointless file scan.
-* read the /etc/group file
+* Empty group name cannot match; avoid a pointless lookup.
 if group = '' then
    set.status 1
    return group_found
 end
 * --------------------
-* read the /etc/group file
-openpath "/etc" to etc then 
-  read rec from etc, "group" then 
-    lns = dcount(rec, @FM)
 
-    for i = 1 to lns
-      grpname = field(rec<i>,':',1)
-      if grpname = group then
-        group_found = @true
-        exit 
-      end
-    next i
-  end else
-  * cannot read /etc/group
-    set.status 1
-  end
-end else
-* cannot open /etc
-  set.status 1
+* 14 Aug 26 Windows port - validated before being interpolated into the
+*   command below, as in !is_grp_member.
+if not(valid_os_name(group)) then
+   set.status 1
+   return group_found
 end
+
+* 14 Aug 26 Windows port - SH1 names PowerShell, so the command IS the script.
+   ps = 'if (Get-LocalGroup -Name "' : group
+   ps := '" -ErrorAction SilentlyContinue) { exit 0 }; exit 1'
+
+   os.execute ps
+
+   if os.error() = 0 then
+      group_found = @true
+   end else
+      * No such group, or PowerShell could not be run.  Reported the same way:
+      * a caller that cannot confirm a group exists should not act on it.
+      set.status 1
+   end
 
 return group_found
 end

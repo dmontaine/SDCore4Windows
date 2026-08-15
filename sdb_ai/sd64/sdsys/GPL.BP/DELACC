@@ -19,6 +19,10 @@
 * 
 * START-HISTORY:
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 14 Aug 26 Windows port - the OS account is offered for deletion only when SD
+*           created it, read back from the description CREATE_USER stamps.
+*           The CREATUSR gate is gone, and the ACCOUNTS record is deleted last
+*           so a failure leaves something the verb can be re-run against.
 * rev 0.9.0 delete-account requires admin priv, are we admin?
 *           on user account, delete os user if configured
 * rev 1.0-1 use userdel not deluser (deluser not on all Linux version)
@@ -46,6 +50,8 @@ deffun is_group(group) calling '!is_group'
 deffun os_group(action,group,member) calling '!os_group'
 deffun delete_user(username) calling '!delete_user'
 deffun valid_os_name(name) calling '!valid_os_name'
+* 14 Aug 26 Windows port - did SD create the OS account behind this account?
+deffun is_sd_user(username) calling '!is_sd_user'
    prompt ''
 
    parser = "!PARSER"
@@ -183,10 +189,14 @@ deffun valid_os_name(name) calling '!valid_os_name'
       end
    end
 
-   * Delete ACCOUNTS entry
+* 14 Aug 26 Windows port - THE ACCOUNTS RECORD IS NOW DELETED LAST, not here.
+*   It used to go first, so anything that failed afterwards - the group, the OS
+*   account - left leftovers with no register entry pointing at them, and
+*   DELETE.ACCOUNT could not be re-run against them because it starts by
+*   reading that record.  Deleting it last means a failure leaves the account
+*   still registered and the verb still able to finish the job.  The record is
+*   held with READU throughout, so nothing else can touch it in between.
 
-   delete acc.f, acc.name
-   
    * rev 0.9.0 remove group. os user?
    if is_group(group_name) then
       * Modified by Composer AI - 2026/06/10.
@@ -207,35 +217,74 @@ deffun valid_os_name(name) calling '!valid_os_name'
       * --------------------
    end
    
-   * delete os user? (if configured to do so)
-   If config('CREATUSR') then
-      * is this a user account ?
-      FINDSTR 'sdu_' in group_name setting yn then
-         * remove sdu_ prefix
-         username = change(group_name,'sdu_','')
-         crt sysmsg(10027,username): ;* Delete OS user %1 (Y/N)?
-         input yn
-         if upcase(yn) = 'Y' then
-            * Modified by Composer AI - 2026/06/10.
-            * Use shared !valid_os_name before OS.EXECUTE (phase 2).
-            * if username = '' or convert(os.name.chars, '', username) # '' ...
-            if not(valid_os_name(username)) then
-               crt sysmsg(10029,username, 2) ;* Warning unable to delete OS User: %1 error: %2
-            end else
+* 14 Aug 26 Windows port - THE config('CREATUSR') GATE IS GONE, matching
+*   CREATEA, which lost it when creating an account became creating the OS
+*   account.  Asking a configuration parameter for permission to undo the only
+*   thing the verb does made no sense on the creating side and makes none here.
+*
+*   WHAT REPLACES IT IS THE QUESTION THAT ACTUALLY MATTERS: did SD create this
+*   OS account?  CREATEA creates one for every account it makes, but the
+*   install adopts the installer's pre-existing account (CREATEA, ADOPT), and
+*   an administrator can register an account by hand.  Deleting unconditionally
+*   would eventually delete a login SD never made - an administrator's, in the
+*   case the access model makes ordinary.  !is_sd_user reads back the
+*   description CREATE_USER stamps on the accounts it creates.
+*
+*   Owner's decision, 14 Aug 2026: offer only the ones SD made.  The three
+*   answers are all different and all wanted - see !is_sd_user.
+   * is this a user account ?
+   FINDSTR 'sdu_' in group_name setting yn then
+      * remove sdu_ prefix
+      username = change(group_name,'sdu_','')
+
+      * Modified by Composer AI - 2026/06/10.
+      * Use shared !valid_os_name before OS.EXECUTE (phase 2).
+      if not(valid_os_name(username)) then
+         crt sysmsg(10029,username, 2) ;* Warning unable to delete OS User: %1 error: %2
+      end else
+         sd.made.it = is_sd_user(username)
+         lookup.stat = status()
+
+         begin case
+            case lookup.stat # 0
+               * Not there at all.  This is the half-removed account - the SD
+               * side outliving the OS side - and it is the state a failed
+               * creation reaches too, so it is reported rather than warned
+               * about: there is nothing wrong and nothing to do.
+               crt sysmsg(10037,username) ;* Windows account %1 does not exist
+
+            case sd.made.it
+               crt sysmsg(10027,username): ;* Delete OS user %1 (Y/N)?
+               input yn
+               * Anything but Y leaves it alone.  The two mistakes do not cost
+               * the same, so the quiet answer is the safe one.
+               if upcase(yn) = 'Y' then
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo userdel ":username
-            void delete_user(username)
-            stat = status()
-            if stat = 0 then
-               crt sysmsg(10028,username) ;* OS User: %1 Deleted
-            end else
-               crt sysmsg(10029,username, stat) ;* Warning unable to delete OS User: %1 error: %2
-            end
-            end
-            * --------------------
-         end
+                  void delete_user(username)
+                  stat = status()
+                  if stat = 0 then
+                     crt sysmsg(10028,username) ;* OS User: %1 Deleted
+                  end else
+                     crt sysmsg(10029,username, stat) ;* Warning unable to delete OS User: %1 error: %2
+                  end
+               end
+
+            case 1
+               * It exists and SD did not make it.  Not offered, not asked
+               * about - said plainly, so whoever wants it gone knows they are
+               * removing something SD never created.
+               crt sysmsg(10036,username) ;* %1 was not created by SD
+         end case
       end
+      * --------------------
    end
-   
+
+   * Delete ACCOUNTS entry.  Last, so that anything failing above leaves the
+   * account registered and this verb able to be run again - see the note
+   * where this used to be.
+
+   delete acc.f, acc.name
+
    @system.return.code = 0
    return
 

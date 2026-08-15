@@ -1,0 +1,115 @@
+* IS_SD_USER(USERNAME)
+* Did SD create this Windows account, or was it already there?
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 14 Aug 26 Windows port - new, for DELETE.ACCOUNT.  Owner's decision of
+*           14 Aug 2026: a Windows account is only offered for deletion if SD
+*           created it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    x = !is_sd_user(username)
+*
+*    True if the Windows account was created by SD.
+*
+*       status 0, true    created by SD
+*       status 0, false   exists, and SD did not create it
+*       status 1, false   no such Windows account
+*
+*    The caller needs all three answers and they are not the same: "SD made
+*    it" invites deletion, "somebody else made it" forbids it, and "it is not
+*    there" is neither - it is the half-removed state DELETE.ACCOUNT exists to
+*    tidy up.  Test STATUS() before believing the false.
+*
+*    WHY THIS QUESTION EXISTS.  CREATE.ACCOUNT USER x adopts an existing
+*    Windows account when it finds one and creates a new one when it does not
+*    (CREATEA lines 145-157), and it records nothing about which it did.  So
+*    DELETE.ACCOUNT cannot know whether removing the Windows account undoes
+*    SD's own work or deletes a login SD merely borrowed.  Under the access
+*    model (PROJECT_STATUS.md 5.6) an SD account is named after a Windows user
+*    who already exists, so borrowing is the ordinary case, and the borrowed
+*    account may well be an administrator's.
+*
+*    HOW IT ANSWERS, AND WHAT THAT IS WORTH.  CREATE_USER stamps every account
+*    it creates with the description "SD account".  That string is the marker
+*    and it is already being written; nothing new is recorded and existing
+*    accounts answer correctly without migration.
+*
+*    IT IS A MARKER, NOT A PROOF.  An administrator can edit a description, in
+*    either direction.  The failure is deliberately one-sided: an SD-created
+*    account whose description was changed is reported as not SD's, so it is
+*    left in place and somebody tidies it by hand.  The opposite mistake would
+*    delete a real login.  Litter is recoverable and a deleted account is not,
+*    so the marker is trusted to withhold deletion and never to compel it.
+*
+*    LOCAL ACCOUNTS ONLY, matching !is_user and CREATE_USER.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function is_sd_user(username)
+$catalog !is_sd_user
+
+deffun valid_os_name(name) calling '!valid_os_name'
+
+sd_created = @false
+set.status 0
+
+if username = '' then
+   set.status 1
+   return sd_created
+end
+
+* The name is interpolated into the command below, so it is validated first -
+* !valid_os_name permits letters, digits, dot, underscore and hyphen only.
+if not(valid_os_name(username)) then
+   set.status 1
+   return sd_created
+end
+
+* SH1 names PowerShell, so the command IS the script.  Three exit codes,
+* because the caller needs to tell "not SD's" from "not there" - see above.
+* The description is compared exactly, and -ceq rather than -eq so that a
+* description differing only in case is treated as somebody else's.
+   ps = 'try { $u = Get-LocalUser -Name "' : username
+   ps := '" -ErrorAction Stop } catch { exit 2 }; '
+   ps := 'if ($u.Description -ceq "SD account") { exit 0 }; exit 1'
+
+   os.execute ps
+
+   stat = os.error()
+
+   begin case
+      case stat = 0
+         sd_created = @true
+      case stat = 1
+         sd_created = @false
+      case 1
+         * No such account, or PowerShell could not be run at all.  Both mean
+         * the caller must not go on to delete anything.
+         set.status 1
+   end case
+
+return sd_created
+end
+
+* END-CODE

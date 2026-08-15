@@ -18,6 +18,8 @@
 * 
 *
 * START-HISTORY:
+* 14 Aug 26 Windows port - ask Windows instead of reading /etc/passwd, which
+*           does not exist on the MSYS2 runtime.  See the description.
 * rev 0.9.0 Jan 25 mab initial commit
 * END-HISTORY
 *
@@ -25,10 +27,43 @@
 *
 *    x = !is_user(username)
 *
-*    is username a valid linux user (found in /etc/passwd)
+*    Is username a Windows local user?
 *
 *    This function sets the STATUS() value to 0 if successful, 1 if the
 *    specified user does not exist.
+*
+*    WHY THIS NO LONGER READS /etc/passwd.  It opened /etc and read "passwd"
+*    as a text file.  MSYS2 and Cygwin dropped /etc/passwd and /etc/group in
+*    favour of direct SAM lookups, so the read failed and this returned false
+*    for EVERY user, including ones plainly present - measured 14 Aug 2026,
+*    with no /etc/passwd under either root the runtime can use, while
+*    "getent passwd" answered correctly from the same shell.  The capability
+*    was there; only the file was gone.  !is_grp_member had the same defect
+*    and was fixed on 14 Aug 2026; !is_group and this are its siblings, found
+*    later, and all three failed the same closed way.
+*
+*    WHAT IT DID TO CREATEA, AND WHY THE ANSWER WAS RIGHT FOR THE WRONG
+*    REASON.  CREATEA asks this to find out whether the Windows account
+*    already exists.  Answering false for everyone sent it to create_user(),
+*    which fails on an existing account, so CREATE.ACCOUNT did refuse - which
+*    is the rule (see below) - but reported it as "Create User Failed, OS
+*    Error: 1", which reads like a defect rather than a decision.  Worse, the
+*    refusal rested on a broken lookup: fixing this file alone would have
+*    turned it into a silent adoption of somebody's existing login.  So the
+*    rule was written into CREATEA in the same commit that fixed this.
+*
+*    THE RULE IT NOW SERVES, from the repository owner, 14 Aug 2026: the only
+*    pre-existing OS user that may be given an SD account is the installer's,
+*    and that is done at install time.  Every other SD account creates its own
+*    OS account from within SD.  So a true answer here means CREATE.ACCOUNT
+*    must refuse, and the one sanctioned exception is the internal-only ADOPT
+*    keyword.
+*
+*    LOCAL ACCOUNTS ONLY.  Get-LocalUser does not see domain accounts, which
+*    matches New-LocalUser in CREATE_USER and Get-LocalGroupMember in
+*    !is_grp_member - the account model is local-account-based today.  A
+*    domain user is reported as not existing, which on the refusal path is the
+*    unsafe direction; noted in PROJECT_STATUS.md section 6.
 *
 * END-DESCRIPTION
 *
@@ -38,36 +73,43 @@ $internal
 function is_user(username)
 $catalog !is_user
 
+deffun valid_os_name(name) calling '!valid_os_name'
+
 user_found = @false
 set.status 0
 * Modified by Composer AI - 2026/06/10.
-* Empty username cannot match /etc/passwd; avoid pointless file scan.
-* read the /etc/passwd file
+* Empty username cannot match; avoid a pointless lookup.
 if username = '' then
    set.status 1
    return user_found
 end
 * --------------------
-* read the /etc/passwd file
-openpath "/etc" to etc then 
-  read rec from etc, "passwd" then 
-    lns = dcount(rec, @FM)
 
-    for i = 1 to lns
-      uname = field(rec<i>,':',1)
-      if uname = username then
-        user_found = @true
-        exit 
-      end
-    next i
-  end else
-  * cannot read /etc/passwd
-    set.status 1
-  end
-end else
-* cannot open /etc
-  set.status 1
+* 14 Aug 26 Windows port - the name is interpolated into the command below, so
+*   it is validated first.  !valid_os_name permits letters, digits, dot,
+*   underscore and hyphen only, which is what makes the quoting sufficient
+*   rather than merely tidy.
+if not(valid_os_name(username)) then
+   set.status 1
+   return user_found
 end
+
+* 14 Aug 26 Windows port - SH1 names PowerShell, so the command IS the script.
+*   -ErrorAction SilentlyContinue rather than try/catch: "no such user" is an
+*   ordinary answer here, not an error.
+   ps = 'if (Get-LocalUser -Name "' : username
+   ps := '" -ErrorAction SilentlyContinue) { exit 0 }; exit 1'
+
+   os.execute ps
+
+   if os.error() = 0 then
+      user_found = @true
+   end else
+      * No such user, or PowerShell could not be run at all.  Both answer
+      * false, and the caller must treat that as "could not confirm" rather
+      * than as "definitely absent" - see the description.
+      set.status 1
+   end
 
 return user_found
 end

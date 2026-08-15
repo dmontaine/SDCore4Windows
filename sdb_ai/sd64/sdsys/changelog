@@ -5,6 +5,33 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+14 Aug 26  Accounts: DELETE.ACCOUNT is careful about your Windows accounts, and
+           CREATE.ACCOUNT says what it will not do.  NOT YET TESTED - this is
+           written down here because it changes behaviour, not because anyone
+           has watched it work.
+           * An SD account brings its own Windows account.  CREATE.ACCOUNT
+             creates one, and it now REFUSES a name that already exists in
+             Windows instead of failing with "Create User Failed, OS Error: 1",
+             which is what it used to say and which read like a fault.  The one
+             exception is the account of whoever installs SD, which the install
+             attaches to their existing Windows login.
+           * DELETE.ACCOUNT only offers to remove the Windows account if SD
+             created it.  If it was there before SD, it is left alone and the
+             verb says so - deleting an SD account can no longer take somebody's
+             Windows login with it.  If the Windows account has already gone,
+             it says that too, and cleans up the SD side.
+           * DELETE.ACCOUNT now removes the account's sdu_ group, which it
+             never actually did.  It asked Windows a question in a Linux way
+             and was told the group did not exist, every time.
+           * The same mistake made SD unable to tell whether a Windows user
+             existed.  Both are fixed.
+           * DELETE.ACCOUNT removes the register entry last.  If something
+             fails part way through, the account is still registered and you
+             can simply run the verb again.
+           * CREATE.ACCOUNT USER x NO.QUERY now explains itself: creating a
+             Windows account means setting its password, and that needs a
+             prompt, so NO.QUERY cannot work for a user account.
+
 14 Aug 26  "sd -start" and "sd -stop" no longer claim things about the sdwind
            daemon that are not true.  Both used to answer from the shared
            memory segment, which outlives the daemon, so both could report

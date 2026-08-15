@@ -94,6 +94,9 @@ deffun valid_os_path(path) calling '!valid_os_path'
    parser = "!PARSER"
    no.query = @false
    make.admin = @false
+* 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
+*   already exists, instead of creating one.  See more.args for what gates it.
+   adopt = @false
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -142,18 +145,46 @@ deffun valid_os_path(path) calling '!valid_os_path'
        @system.return.code = -ER$ARGS
        stop sysmsg(6052) ;* User name is invalid
           
-     case is_user(acc.uname)
-       null ;* user name as entered is valid
-  
-     case is_user(downcase(acc.uname))
-       * lower is a valid user, use it
-       acc.uname = downcase(acc.uname)
- 
-     case no.query
-       * we don't have a valid user name and option no query specified, this will not work!
+* 14 Aug 26 Windows port - THE TWO ADOPT BRANCHES ARE GONE.  They admitted any
+*   pre-existing OS user, which is not the model: the repository owner's rule
+*   of 14 Aug 2026 is that the ONLY pre-existing OS user that may be given an
+*   SD account is the installer's, done at install time, and every other SD
+*   account creates its own OS account from within SD.
+*
+*   The verb already refused, but by accident and with the wrong words.
+*   !is_user read /etc/passwd, which MSYS2 does not have, so it answered false
+*   for everyone, the adopt branches never ran, and control reached
+*   create_user(), which fails on an existing account with "Create User
+*   Failed, OS Error: 1".  Right outcome, unreadable reason - and it rested
+*   entirely on a broken lookup, so repairing !is_user on its own would have
+*   turned the refusal into a silent adoption of somebody's existing login.
+*   Both were changed together; see PROJECT_STATUS.md section 6.
+     case is_user(acc.uname) or is_user(downcase(acc.uname))
+       if adopt then
+         * The one sanctioned exception, and it is not reachable from a
+         * console: ADOPT is gated on K$INTERNAL below, which means sd
+         * -internal, which means the install path.  No OS account is created
+         * and no password is set - the account is already the user's.
+         if is_user(acc.uname) else acc.uname = downcase(acc.uname)
+       end else
          @system.return.code = -ER$ARGS
-         stop sysmsg(6074)  ;*    Invalid user name 
-       
+         stop sysmsg(10038, acc.uname) ;* Windows account %1 already exists
+       end
+
+     case adopt
+       * ADOPT names an OS account that is not there, so there is nothing to
+       * adopt.  Creating it instead would be the opposite of what was asked.
+       @system.return.code = -ER$ARGS
+       stop sysmsg(6074)  ;*    Invalid user name
+
+     case no.query
+* 14 Aug 26 Windows port - this branch used to be reachable only when the name
+*   was not an existing user, and said "Invalid user name", which was already
+*   the wrong reason: the name is fine, it is NO.QUERY that cannot work.
+*   Creating an OS account means setting its password, and SET_PASSWD prompts.
+         @system.return.code = -ER$ARGS
+         stop sysmsg(10039, acc.uname)  ;* Cannot create %1 with NO.QUERY
+
      case 1
 * 14 Aug 26 Windows port - THE config('CREATUSR') GATE IS GONE.  Decision from
 *   the repository owner: SD has accounts, not accounts and users as QM and
@@ -585,6 +616,24 @@ more.args:
 *   be abbreviated, unlike NO.QUERY.
          case upcase(token) = 'ADMINISTRATOR'
             make.admin = @true
+
+* 14 Aug 26 Windows port - ADOPT takes an OS account that already exists
+*   instead of creating one.  It is the single exception to the owner's rule
+*   of 14 Aug 2026 that only the installer's pre-existing OS account may be
+*   given an SD account, and it exists so that the install can do exactly
+*   that for the person installing.
+*
+*   GATED ON K$INTERNAL, not on K$ADMINISTRATOR, and the difference is the
+*   whole point.  K$ADMINISTRATOR is every elevated session, which is every
+*   administrator at a console; K$INTERNAL is set only by "sd -internal",
+*   which is how the bootstrap and the install run.  So an administrator
+*   cannot type this by hand and quietly attach an SD account to somebody
+*   else's Windows login - the rule stays a rule at the console, and the
+*   install gets its one door.  It is reported as an unrecognised token
+*   rather than as a refusal, because a keyword a console user may never use
+*   is not a keyword they need to know exists.
+         case upcase(token) = 'ADOPT' and kernel(K$INTERNAL, -1)
+            adopt = @true
 
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
