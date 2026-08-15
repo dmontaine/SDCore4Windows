@@ -259,14 +259,21 @@
       $define ACC$PATH         1     ;* Account pathname
       $define ACC$DESCR        2     ;* Account description
       * REV 0.9.0
-      $define ACC$GROUP        3     ;* lINUX group for this Account
-      * 13 Aug 26 Windows port - ACC$GROUP is dead; SD no longer consults
-      *   operating system groups.  Grants are recorded on the target account
-      *   instead: ACC$USERS is the multivalued list of accounts that may LOGTO
-      *   here, so revoking access is one edit in one place.  The 20240330
-      *   history line above claims this define, which had never been made.
-      *   See PROJECT_STATUS.md section 5.6.
-      $define ACC$USERS        4     ;* Accounts permitted to LOGTO here
+      $define ACC$GROUP        3     ;* Windows group for this Account
+      * 14 Aug 26 Windows port - ACC$GROUP IS LIVE AGAIN AND IS THE GRANT.
+      *   The comment that stood here called it dead, which was true for one
+      *   day.  LOGIN and CPROC both test it now: CREATE.ACCOUNT writes
+      *   sdu_<name>, puts the account's own user in that Windows group, and
+      *   membership of it is what permits entry.  Granting somebody a second
+      *   account means adding them to its group - the operating system holds
+      *   the grant, not this record.  See PROJECT_STATUS.md sections 5.6, 7
+      *   step 5.
+      *
+      *   ACC$USERS BELOW IS DEAD AND IS BEING REMOVED - see 7 step 5.  It was
+      *   the 13 Aug grant list and nothing consults it.  Do not write new code
+      *   against it; do not delete the define ahead of the dictionary item and
+      *   the records, or LIST ACCOUNTS breaks on the way past.
+      $define ACC$USERS        4     ;* DEAD - was accounts permitted to LOGTO
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *
