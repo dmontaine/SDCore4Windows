@@ -151,6 +151,9 @@
 
 /* 4000 - 4999   SDClient errors */
 #define ER_SRVRMEM     4000    /* Insufficient memory for packet buffer */
+/* 15 Aug 26 Windows port - from sdb64 dev (1.0-3). */
+#define ER_SRVRERR     4100    /* Undefined Server Error */
+#define ER_INV_NBR     4101    /* Invalid File Number */
 
 /* 5000 - 5999   Operating system related issues */
 #define ER_NO_DLL      5000    /* DLL not found */

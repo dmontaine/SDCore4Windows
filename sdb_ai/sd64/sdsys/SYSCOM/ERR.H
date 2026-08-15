@@ -146,6 +146,9 @@ $define ER$ENCRYPTED   3041    ;* Access denied to encrypted file
 
 * 4000 - 4999   SDClient errors
 $define ER$SRVRMEM     4000    ;* Insufficient memory for packet buffer
+* 15 Aug 26 Windows port - from sdb64 dev (1.0-3).
+$define ER$SRVRERR     4100    ;* Undefined Server Error
+$define ER$INV.NBR     4101    ;* Invalid File Number
 
 * 5000 - 5999   Operating system related issues
 $define ER$NO.DLL      5000    ;* DLL not found

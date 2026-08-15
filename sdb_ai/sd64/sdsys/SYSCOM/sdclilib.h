@@ -119,5 +119,11 @@ DLLEntry void SDWriteu(int fno, char * id, char * data);
 #define SV_ERROR          3    /* Action failed. Error text available     */
 #define SV_LOCKED         4    /* Action took LOCKED clause               */
 #define SV_PROMPT         5    /* Server requesting input                 */
+/* 15 Aug 26 Windows port - SV_EMSG_PAIR AND SV_ECONTXT ARE DELIBERATELY NOT
+   HERE.  Both sdb64 dev and our vendored client define them, with the values
+   TRANSPOSED against each other, and which is right is unsettled
+   (UPSTREAM_FIXES.md).  Adding them here would commit BASIC to one of the two
+   numberings by accident.  Our BASIC therefore cannot yet tell a transport
+   failure from a context error - that is the cost, and it is the smaller one. */
 
 /* END-CODE */
