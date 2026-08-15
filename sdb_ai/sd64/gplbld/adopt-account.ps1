@@ -62,9 +62,24 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# EVERYTHING SAID HERE IS ALSO WRITTEN TO A FILE, because the installer calls
+# this through Exec with SW_HIDE and nothing survives otherwise.  Measured
+# 15 Aug 2026: the step did not create the account on a real install and left
+# no trace at all to work from - the same silent failure as the OpenSSH brace
+# bug and the SDSYS password step before it.  A log costs nothing and is the
+# difference between "it did not work" and knowing why.
+$LogFile = Join-Path $DataDir 'adopt-account.log'
+
+function Say([string] $Message) {
+    Write-Output $Message
+    try { Add-Content -Path $LogFile -Value $Message -ErrorAction Stop } catch { }
+}
+
+Say "=== adopt-account $User, AppDir=$AppDir, DataDir=$DataDir"
+
 $sd = Join-Path $AppDir 'usr\bin\sd.exe'
 if (-not (Test-Path $sd)) {
-    Write-Output "adopt-account: no sd.exe at $sd"
+    Say "adopt-account: no sd.exe at $sd"
     exit 1
 }
 
@@ -113,7 +128,7 @@ function Test-SdRunning {
 # and touches nothing.  The verb would answer "Account already exists" anyway;
 # this way the installer never starts a server to be told so.
 if (Test-Path $record) {
-    Write-Output "adopt-account: $User already has an SD account; nothing to do"
+    Say "adopt-account: $User already has an SD account; nothing to do"
     exit 2
 }
 
@@ -123,8 +138,8 @@ $weStartedIt = $false
 if (-not (Test-SdRunning)) {
     $r = Invoke-Sd @('-start')
     if (-not (Test-SdRunning)) {
-        Write-Output "adopt-account: SD would not start, so no account was made"
-        Write-Output $r.Text
+        Say "adopt-account: SD would not start, so no account was made"
+        Say $r.Text
         exit 3
     }
     $weStartedIt = $true
@@ -143,13 +158,13 @@ try {
     # not a reliable summary of it.  The account either exists afterwards or it
     # does not.
     if (Test-Path $record) {
-        Write-Output "adopt-account: $User now has an SD account"
-        if ($r.Text) { Write-Output $r.Text }
+        Say "adopt-account: $User now has an SD account"
+        if ($r.Text) { Say $r.Text }
         $result = 0
     }
     else {
-        Write-Output "adopt-account: CREATE.ACCOUNT USER $User ADOPT did not create an account"
-        Write-Output $r.Text
+        Say "adopt-account: CREATE.ACCOUNT USER $User ADOPT did not create an account"
+        Say $r.Text
         $result = 1
     }
 }

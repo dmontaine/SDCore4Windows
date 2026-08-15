@@ -459,11 +459,13 @@ begin
     else
       { Named rather than buried: without an account the person who just
         installed SD cannot use it at all, and the recovery is one command. }
-      AccountMsg := 'SD could NOT give you an account automatically. Until one exists, ' +
-                    '"sd" will answer that your account is not in the register. Make it ' +
-                    'from an ELEVATED prompt:' + #13#10#13#10 +
+      AccountMsg := 'SD could NOT give you an account automatically (code ' +
+                    IntToStr(AdoptCode) + '). Until one exists, "sd" will answer that your ' +
+                    'account is not in the register. Make it from an ELEVATED prompt:' + #13#10#13#10 +
                     '    sd -start' + #13#10 +
-                    '    sd -internal CREATE.ACCOUNT USER ' + ExpandConstant('{username}') + ' ADOPT' + #13#10#13#10;
+                    '    sd -internal CREATE.ACCOUNT USER ' + ExpandConstant('{username}') + ' ADOPT' + #13#10#13#10 +
+                    'What went wrong is recorded in ' + ExpandConstant('{#DataDir}') +
+                    '\adopt-account.log' + #13#10#13#10;
     end;
 
     { /SUPPRESSMSGBOXES DOES NOT SUPPRESS THESE.  Measured 14 Aug 2026: a
