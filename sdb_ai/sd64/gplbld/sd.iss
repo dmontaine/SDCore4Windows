@@ -490,13 +490,16 @@ begin
       tree will refuse them until they sign out and back in.  Saying so here
       is the difference between "SD is broken" and "sign out and back in".
       PROJECT_STATUS.md 6. }
-    { LEAD WITH THE VERB.  This box used to offer only "net localgroup sdusers
-      <name> /add", which is the fallback and not the answer: CREATE.ACCOUNT
-      creates the Windows user, sets its password, joins it to sdusers and
-      makes the SD account, and the dialog never mentioned it existed.  SD has
-      accounts rather than accounts and users (docs/TCL_VERBS.md), so the verb
-      IS the account-creation interface and the net command only covers the one
-      case it cannot: somebody who already has a Windows account. }
+    { THE VERB IS THE ONLY ANSWER THIS BOX GIVES.  It used to end by offering
+      "net localgroup sdusers <name> /add" for somebody who already has a
+      Windows account.  REMOVED 15 Aug 2026 (owner's decision) BECAUSE IT DOES
+      NOT WORK: sdusers grants access to the data tree, but login needs a
+      linked SD account, so a user added that way and nothing else is refused
+      with "Account X not in register" - which is the exact symptom don himself
+      had before step 1f (PROJECT_STATUS.md 7).  The door for an existing
+      Windows account is ADOPT, and that stays undocumented deliberately.
+      SD has accounts rather than accounts and users (docs/TCL_VERBS.md), so
+      CREATE.ACCOUNT IS the account-creation interface. }
     MsgBox('SD is installed.' + #13#10#13#10 +
            'You have been added to the "sdusers" group, which is what grants ' +
            'access to the SD database.' + #13#10#13#10 +
@@ -515,11 +518,7 @@ begin
            'Accounts made that way sign in OVER SSH ONLY - not at the console ' +
            'and not over Remote Desktop. For an unrestricted account that can ' +
            'also administer SD, add the ADMINISTRATOR keyword:' + #13#10#13#10 +
-           '    CREATE.ACCOUNT USER <name> ADMINISTRATOR' + #13#10#13#10 +
-           'If the person already has a Windows account, add it to the group by ' +
-           'hand instead:' + #13#10 +
-           '    net localgroup sdusers <name> /add' + #13#10 +
-           'They must sign out and back in as well.',
+           '    CREATE.ACCOUNT USER <name> ADMINISTRATOR',
            mbInformation, MB_OK);
 
     { Its own box rather than a paragraph in the one above: this one reports

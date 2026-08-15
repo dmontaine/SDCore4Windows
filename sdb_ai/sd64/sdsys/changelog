@@ -5,6 +5,14 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+15 Aug 26  The installer no longer suggests "net localgroup sdusers <name>
+           /add" for giving somebody who already has a Windows account access
+           to SD.  It did not work: being in sdusers lets you read SD's files,
+           but signing in needs an SD account linked to your Windows one, and
+           somebody added to the group and nothing else is turned away with
+           "Account X not in register".  Use CREATE.ACCOUNT, which makes both
+           halves together.
+
 15 Aug 26  Connecting over ssh puts you straight into SD.  Sessions used to
            arrive at a Windows shell prompt, which an SD account has no use
            for and no business with.  Now every ssh session runs SD instead -
