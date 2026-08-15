@@ -30,11 +30,21 @@ Entries are newest first, by date, until there is a version to attach them to.
              account's group - the sdu_ group CREATE.ACCOUNT makes for it - so
              granting somebody a second account means adding them to that
              group.
-           * THE "Granted to" LIST NO LONGER DECIDES ANYTHING.  ACCOUNTS field
-             4 is still there and LIST ACCOUNTS still shows it, but LOGTO now
-             asks the group instead, so any grant recorded on 13 or 14 Aug
-             stops having an effect.  Add the person to the account's sdu_
-             group instead.
+           * GRANTS ARE GROUP MEMBERSHIP, and the "Granted to" list is on its
+             way out.  ACCOUNTS field 4 is still there and LIST ACCOUNTS still
+             shows it, but nothing reads it any more, so any grant recorded on
+             13 or 14 Aug has stopped having an effect.  Give somebody an
+             account by adding them to its sdu_ group instead.  The column will
+             be removed, and GRANT and REVOKE verbs will do the group edit for
+             you - neither exists yet, so for now it is Windows' own group
+             tools, from an elevated session.
+           * SOMEBODY YOU GRANT AN ACCOUNT TO MUST SIGN OUT AND BACK IN BEFORE
+             THEY CAN USE IT.  Windows fixes your group membership when you sign
+             in, so a session that was already open cannot see the change, and
+             being elevated does not help - the elevated token comes from the
+             same sign-in.  Until they sign back in, SD refuses them with "User
+             not allowed in requested account", which looks exactly like the
+             grant not having worked.
            * LOGTO SDSYS no longer asks for your password a second time.  The
              gate is applied when you sign in, so there is nothing to step up
              into, and messages 10030 and 10031 are no longer used.
