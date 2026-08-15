@@ -32,6 +32,11 @@ sdb_ai/sd64/gplsrc/sdclilib/*.dll
 sdb_ai/sd64/gplsrc/sdclilib/*.dll.a
 sdb_ai/sd64/gplsrc/sdclilib/*.exe
 
+# Python bytecode.  gplbld/stage.py imports gplbld/bootstrap.py for the shared
+# elevation test, so a build now leaves __pycache__ beside the scripts.  It is
+# generated and it is binary, so it is not tracked - see the header.
+__pycache__/
+
 # Scratch output from the pcode build (gplbld/bbcmp.py, gplbld/pcode_bld.py).
 sdb_ai/sd64/pcode_bld.log
 sdb_ai/sd64/pass1

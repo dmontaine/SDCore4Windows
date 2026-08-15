@@ -32,6 +32,14 @@
 # SDSYS password is the installer's job and must be its LAST step - see
 # PROJECT_STATUS.md 7 step 3.
 #
+# IT NEEDS AN ELEVATED WINDOW, AND IT SAYS SO BEFORE IT STARTS.  The four
+# "sd -internal" steps below name SDSYS for themselves in sd.c, and since
+# 14 Aug 2026 LOGIN refuses SDSYS to a session that is not elevated
+# (PROJECT_STATUS.md 5.6), so unelevated the run dies in the middle of a slow
+# build rather than at the door.  Note that line 195 below already records the
+# PREVIOUS login change breaking this same sequence, unnoticed for the same
+# reason: nobody re-runs the bootstrap, so it rots silently.
+#
 
 import argparse
 import os
@@ -45,6 +53,12 @@ import tempfile
 # pathname tokeniser both rely on.
 BBCMP_FIRST = ['BBPROC', 'BCOMP', 'PATHTKN']
 
+# BUILTIN\Administrators by RID, never by name - the same choice, for the same
+# reason, as SD_ADMIN_GID in gplsrc/linuxlb.c.  Cygwin maps a built-in SID to
+# its RID, so S-1-5-32-544 is always gid 544, while the NAME is translated on a
+# localised Windows.
+SD_ADMIN_GID = 544
+
 # Copied into the sysdir for the bootstrap and removed afterwards.  GPL.BP/
 # WRITE_INSTALL_DICTS reads its input as @sdsys:"/gplbld/FILES_DICTS", so the
 # file has to be inside the data tree while it runs - and must not still be
@@ -55,6 +69,27 @@ BOOTSTRAP_ONLY = [('FILES_DICTS', os.path.join('gplbld', 'FILES_DICTS'))]
 
 def die(msg):
     sys.exit('bootstrap: ' + msg)
+
+
+def is_elevated():
+    """Is this process running with an elevated token?
+
+    The same question gplsrc/linuxlb.c IsElevated() asks, asked the same way.
+    UAC hands an unelevated administrator a filtered token carrying
+    BUILTIN\\Administrators as "group used for deny only", and Cygwin omits a
+    deny-only group from getgroups(), so the gid's ABSENCE is the elevation
+    test.  Measured with this Python on 15 Aug 2026: an ordinary session
+    reports no 544.
+
+    MSYS2 Python is a Cygwin build - os.name is "posix" and there is no
+    ctypes.windll to ask Windows with - so the group route is the only one
+    available there, and it is also the one that agrees with the C.  A native
+    Windows Python has no getgroups() at all and asks Windows instead.
+    """
+    if os.name == 'nt':
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    return SD_ADMIN_GID in os.getgroups()
 
 
 def run(cmd, **kw):
@@ -107,6 +142,18 @@ def main():
     ap.add_argument('--conf', help='configuration file; SD_CONFIG is set '
                                    'to this for every SD command')
     args = ap.parse_args()
+
+    # Checked before anything is copied, compiled or started - the failure it
+    # replaces arrived several minutes in, at SECOND.COMPILE, as a compile
+    # summary that never appeared.  Do NOT answer this by letting -INTERNAL
+    # skip the elevation gate: that restores exactly the bypass the
+    # 13 Aug 2026 session removed (PROJECT_STATUS.md 5.6).
+    if not is_elevated():
+        die('this needs an ELEVATED window, and this one is not.\n'
+            '  The "sd -internal" steps name SDSYS for themselves, and SDSYS\n'
+            '  is refused to a session that is not elevated - sysmsg(10002),\n'
+            '  PROJECT_STATUS.md section 5.6.\n'
+            '  Start the shell with "Run as administrator" and run this again.')
 
     sysdir = os.path.abspath(args.sysdir)
     sdexe = os.path.abspath(args.sd)

@@ -62,6 +62,11 @@ import shutil
 import subprocess
 import sys
 
+# The bootstrap's own elevation test, imported rather than copied - gplbld is
+# sys.path[0] whenever this script is run.  One test, one place: if the way
+# elevation is measured ever changes, both callers change with it.
+from bootstrap import is_elevated
+
 # ---------------------------------------------------------------------------
 # What goes into C:\Program Files\SD\
 # ---------------------------------------------------------------------------
@@ -325,6 +330,16 @@ def main():
                     help='run the bootstrap against the staged tree, so the '
                          'install needs neither Python nor a compiler')
     args = ap.parse_args()
+
+    # bootstrap.py refuses an unelevated window, and by the time it gets the
+    # chance this script has already copied several thousand files.  Ask the
+    # same question before doing any of that work.  Staging on its own needs no
+    # elevation at all, so only --bootstrap is gated.
+    if args.bootstrap and not is_elevated():
+        die('--bootstrap needs an ELEVATED window: it ends in "sd -internal"\n'
+            '  steps that SDSYS refuses to an unelevated session\n'
+            '  (PROJECT_STATUS.md section 5.6).  Start the shell with "Run as\n'
+            '  administrator", or drop --bootstrap to stage a cold tree.')
 
     if not os.path.isdir('gplsrc') or not os.path.isdir('sdsys'):
         die('run this from sd64 - gplsrc and sdsys are not here')
