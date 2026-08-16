@@ -26,14 +26,56 @@
  * 14 Aug 26 Windows port - a leftover semaphore set no longer reports "SD is
  *           already started", which was true of the objects and not of the
  *           system.  See sd_state() in sysseg.c.
+ * 16 Aug 26 Windows port - POSIX named semaphores replaced by native Win32
+ *           ones in the Global namespace.  sem_open() cannot be used in
+ *           session 0 and SD has to run as a service.
  * END-HISTORY
  *
  * START-DESCRIPTION:
  *
  * The semaphore set is a group of NUM_SEMAPHORES binary semaphores, each
  * created with a value of one.  Under System V these lived in a single set
- * addressed by one id; as POSIX named semaphores each is a separate kernel
- * object, so the id is replaced by an array of handles held in this module.
+ * addressed by one id; as named objects each is a separate kernel object, so
+ * the id is replaced by an array of handles held in this module.
+ *
+ * THE SEMAPHORES ARE NATIVE Win32 OBJECTS, through win32sem.c.
+ *
+ * PROJECT_STATUS.md 5.4 keeps two toolchains apart on purpose - the server on
+ * the MSYS2 POSIX runtime, the client DLL and the service wrapper native - and
+ * linuxlb.c records the decision NOT to drag windows.h across that line for
+ * IsElevated(), which asks getgrouplist() instead.  That reasoning still holds
+ * everywhere else.  It does not hold here, because there is no POSIX answer:
+ *
+ *   sem_open() IN SESSION 0 BLOCKS FOR TEN SECONDS AND FAILS WITH ETIMEDOUT.
+ *
+ * Measured 16 Aug 2026, with the process that created the semaphores and the
+ * process that failed to open them BOTH running as LocalSystem in session 0 -
+ * so it is not about crossing sessions, it is that the runtime's POSIX
+ * semaphores do not work there at all.  The consequence was that SD could not
+ * be started by a Windows service, and the owner's requirement is a production
+ * system with nobody logged in, available to every user from system startup.
+ * The owner sanctioned the exception on 16 Aug 2026.
+ *
+ * THIS FILE STILL DOES NOT INCLUDE windows.h, AND CANNOT.  Tried first, and it
+ * does not compile: linuxlb.h defines GetCurrentProcessId() as a
+ * nought-argument macro while w32api declares it taking VOID, SD declares its
+ * own Sleep with a different prototype, and SD's "Private" macro expands inside
+ * the w32api headers.  So the Win32 half is in win32sem.c, which includes
+ * windows.h and no SD header at all, and this file talks to it through void*
+ * handles and ordinary C strings.
+ *
+ * WHAT CHANGES IN BEHAVIOUR, AND IT IS AN IMPROVEMENT.  A POSIX named
+ * semaphore is a file in /dev/shm and outlives every process that used it,
+ * which is how this port kept producing sets with no SD behind them - the
+ * "Error 116 getting semaphores" wreckage that broke installs all morning on
+ * 16 Aug 2026.  A Win32 semaphore is reference counted: when the last handle
+ * closes, the object is gone.  So a set that EXISTS now means a process is
+ * holding it, and orphaned sets cannot happen.
+ *
+ * THE PRICE OF THAT, AND WHERE IT IS PAID.  Because the objects die with the
+ * last handle, "sd -start" may not create them and exit before sdwind has
+ * attached, or the set would evaporate in between.  start_sd() in sysseg.c
+ * waits for the daemon to attach before it returns - see the comment there.
  *
  * END-DESCRIPTION
  *
@@ -41,26 +83,32 @@
  */
 
 #include "sd.h"
-#include <semaphore.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <sched.h>
 
-Private sem_t* sd_sem[NUM_SEMAPHORES];
+#include "win32sem.h"
+
+/* void*, not HANDLE: see the header comment - windows.h cannot be included
+   here, so the handles stay opaque on this side of the line.                */
+
+Private void* sd_sem[NUM_SEMAPHORES];
 
 Private void semaphore_name(char* buff, int semno) {
-  sprintf(buff, SD_POSIX_SEM_FMT, semno);
+  sprintf(buff, SD_WIN32_SEM_FMT, semno);
 }
 
 /* ======================================================================
-   close_semaphores()  -  Release our handles, leaving the objects intact   */
+   close_semaphores()  -  Release our handles.
+
+   With Win32 objects this is also what destroys them, once no process is left
+   holding one.  There is no unlink and none is wanted.                      */
 
 Private void close_semaphores() {
   int16_t i;
 
   for (i = 0; i < NUM_SEMAPHORES; i++) {
     if (sd_sem[i] != NULL) {
-      sem_close(sd_sem[i]);
+      w32sem_close(sd_sem[i]);
       sd_sem[i] = NULL;
     }
   }
@@ -72,28 +120,24 @@ Private void close_semaphores() {
 bool get_semaphores(bool create, char* errmsg) {
   int16_t i;
   char name[MAX_PATHNAME_LEN + 1];
-  sem_t* sem;
+  void* h;
+  int already;
+  unsigned long err;
 
-  /* Probe for an existing set.  Opening without O_CREAT fails with ENOENT if
-     the semaphores have not been created, which is the test that semget()
-     with a zero count used to perform.                                     */
+  /* Probe for an existing set, exactly as the POSIX version did: opening
+     without creating tells us whether SD is up.                             */
 
   semaphore_name(name, 0);
-  sem = sem_open(name, 0);
-  if (sem != SEM_FAILED) {
-    /* Semaphores already exist */
-
-    sem_close(sem);
+  h = w32sem_open(name);
+  if (h != NULL) {
+    w32sem_close(h);
 
     if (create) {
-      /* 14 Aug 26 Windows port - this is the message a stale system actually
-         produced, because get_semaphores() runs before the segment is looked
-         at: "SD is already started" off a semaphore set whose SD had been
-         killed (PROJECT_STATUS.md section 6).  start_sd() now asks the sdwind
-         process before it gets here, so reaching this point means the
-         semaphores have outlived the segment - a half torn down system rather
-         than a running one.  The advice is conditional because two starts
-         racing can also land here, and sd -stop would kill the winner.      */
+      /* Unchanged from the POSIX version, and still conditional for the same
+         reason: two starts racing land here too, and sd -stop would kill the
+         winner.  What HAS changed is that this can no longer be a set left by
+         a dead SD - a Win32 semaphore does not outlive its last handle - so
+         reaching this really does mean something is holding it.             */
 
       strcpy(errmsg,
              "Semaphores are already present.  If SD is not running, "
@@ -105,10 +149,10 @@ bool get_semaphores(bool create, char* errmsg) {
 
     for (i = 0; i < NUM_SEMAPHORES; i++) {
       semaphore_name(name, i);
-      sd_sem[i] = sem_open(name, 0);
-      if (sd_sem[i] == SEM_FAILED) {
-        sd_sem[i] = NULL;
-        sprintf(errmsg, "Error %d attaching to semaphores", errno);
+      sd_sem[i] = w32sem_open(name);
+      if (sd_sem[i] == NULL) {
+        sprintf(errmsg, "Error %lu attaching to semaphores",
+                w32sem_last_error());
         close_semaphores();
         return FALSE;
       }
@@ -117,8 +161,9 @@ bool get_semaphores(bool create, char* errmsg) {
     return TRUE;
   }
 
-  if (errno != ENOENT) {
-    sprintf(errmsg, "Error %d getting semaphores", errno);
+  err = w32sem_last_error();
+  if (!w32sem_absent(err)) {
+    sprintf(errmsg, "Error %lu getting semaphores", err);
     return FALSE;
   }
 
@@ -129,26 +174,30 @@ bool get_semaphores(bool create, char* errmsg) {
     return FALSE;
   }
 
-  /* Create new semaphores, each initialised to one.  O_EXCL closes the race
-     with another process starting SD at the same moment.                   */
+  /* Create new semaphores, each initialised to one.  ERROR_ALREADY_EXISTS
+     closes the race with another process starting SD at the same moment,
+     which is what O_EXCL did before.                                        */
 
   for (i = 0; i < NUM_SEMAPHORES; i++) {
     semaphore_name(name, i);
-    sd_sem[i] = sem_open(name, O_CREAT | O_EXCL, 0666, 1);
-    if (sd_sem[i] == SEM_FAILED) {
-      sd_sem[i] = NULL;
-      sprintf(errmsg, "Error %d allocating semaphores", errno);
+    sd_sem[i] = w32sem_create(name, SD_USERS_GROUP, &already);
 
-      /* Unwind the ones we did create so a failed start leaves nothing
-         behind to make the next attempt report "already started".         */
+    if (sd_sem[i] != NULL && already) {
+      strcpy(errmsg, "Another process started SD while this one was starting");
+      close_semaphores(); /* includes the one just opened */
+      return FALSE;
+    }
 
-      while (--i >= 0) {
-        semaphore_name(name, i);
-        sem_close(sd_sem[i]);
-        sd_sem[i] = NULL;
-        sem_unlink(name);
-      }
+    if (sd_sem[i] == NULL) {
+      sprintf(errmsg, "Error %lu allocating semaphores", w32sem_last_error());
 
+      /* Unwind the ones we did create.  Closing them is enough - the objects
+         go with the last handle, so nothing is left for the next start to
+         trip over.  That is the whole difference from the POSIX set this
+         replaced, which needed sem_unlink() and left wreckage when it did not
+         get it.                                                             */
+
+      close_semaphores();
       return FALSE;
     }
   }
@@ -156,24 +205,13 @@ bool get_semaphores(bool create, char* errmsg) {
   return TRUE;
 }
 
-/* ====================================================================== */
+/* ======================================================================
+   delete_semaphores()  -  Give up our handles, destroying the set if we hold
+   the last ones.  There is nothing else to remove: unlike a POSIX named
+   semaphore there is no name left in a filesystem afterwards.              */
 
 void delete_semaphores() {
-  int16_t i;
-  char name[MAX_PATHNAME_LEN + 1];
-
-  /* sem_unlink() removes the name whether or not this process holds a handle,
-     matching the old semctl(IPC_RMID) behaviour.                            */
-
-  for (i = 0; i < NUM_SEMAPHORES; i++) {
-    if (sd_sem[i] != NULL) {
-      sem_close(sd_sem[i]);
-      sd_sem[i] = NULL;
-    }
-
-    semaphore_name(name, i);
-    sem_unlink(name);
-  }
+  close_semaphores();
 }
 
 /* ======================================================================
@@ -181,14 +219,14 @@ void delete_semaphores() {
 
 void LockSemaphore(int semno) {
 // rev 0.9.0
-  while (sem_trywait(sd_sem[semno]) != 0) {
+  while (!w32sem_trywait(sd_sem[semno])) {
 // rev 0.9.0
   	RelinquishTimeslice;
   }
 }
 
 void UnlockSemaphore(int semno) {
-  sem_post(sd_sem[semno]);
+  w32sem_post(sd_sem[semno]);
 }
 
 /* ====================================================================== */

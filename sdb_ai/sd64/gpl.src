@@ -74,6 +74,7 @@ reccache
 sd_encrypt_sodium
 sdlib
 sdsem
+win32sem
 sdtermlb
 strings
 sysdump

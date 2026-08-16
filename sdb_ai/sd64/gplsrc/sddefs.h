@@ -120,6 +120,29 @@
 #define SD_POSIX_SHM_NAME "/sd_shm_716d0301"
 #define SD_POSIX_SEM_FMT  "/sd_sem_716d0302_%d"
 
+/* 16 Aug 26 Windows port - THE SEMAPHORES ARE NATIVE Win32 OBJECTS NOW, and
+ * the POSIX name above is kept only for removing sets left by older builds.
+ *
+ * WHY.  POSIX sem_open() on the MSYS2 runtime does not work in session 0: as
+ * LocalSystem it BLOCKS FOR TEN SECONDS AND FAILS WITH ETIMEDOUT, measured
+ * 16 Aug 2026 with the creator and the opener both SYSTEM in session 0, so it
+ * is not a cross-session problem.  SD could therefore never run as a Windows
+ * service, which the owner requires: a production system with nobody logged
+ * in, available to every user from startup.  PROJECT_STATUS.md header item 1.
+ *
+ * "Global\" is the point of the exercise.  A service lives in session 0 and
+ * its users in sessions 1 and up, and the Global namespace is what Windows
+ * provides for exactly that.  A bare name would be session-local and would
+ * reproduce the problem in a different form.
+ *
+ * The shared SEGMENT is deliberately left on POSIX shm_open(), which works
+ * here: sdwind reached get_semaphores() in session 0, so it had already
+ * mapped the segment.  Replacing what is not broken would widen the change
+ * for nothing.
+ */
+
+#define SD_WIN32_SEM_FMT  "Global\\sd_sem_716d0302_%d"
+
 /* 14 Aug 26 Windows port - the background daemon was sdlnxd, "SD Linux
  * daemon", which is the wrong name in a Windows-only repository.  Named once
  * here so that start_sd() and the daemon's own errlog prefix cannot drift
@@ -149,6 +172,21 @@
  * (getgrouplist) whether the account is an administrator, IsElevated() asks
  * the process token (getgroups) whether this session may act as one.
  */
+
+/* 16 Aug 26 Windows port - the group that may USE SD, as opposed to the one
+ * that administers it.  sd.iss creates it, CREATE.ACCOUNT adds every account
+ * to it, and the ACL on C:\ProgramData\SD grants it (PROJECT_STATUS.md 5.6).
+ * sdsem.c needs the name in C for the first time, to put the same group in the
+ * security descriptor on the semaphores - otherwise SD starts as a service and
+ * then refuses every user on the machine.
+ *
+ * BY NAME, WHERE SD_ADMIN_GID BELOW IS BY NUMBER, and the difference is not an
+ * inconsistency: 544 is a well-known SID whose NAME is localised, whereas
+ * sdusers is a name this port creates itself and is therefore the same on
+ * every machine.
+ */
+
+#define SD_USERS_GROUP "sdusers"
 
 #ifndef SD_ADMIN_GID
 #define SD_ADMIN_GID 544

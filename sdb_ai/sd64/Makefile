@@ -49,7 +49,11 @@ COMP     := gcc
 # rev 0.9.0 python
 # 13 Aug 26 Windows port - dropped -Wl,--no-as-needed, which is ELF only and
 #           is rejected by the PE/COFF linker.
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium
+# 16 Aug 26 - -ladvapi32 is for sdsem.c, the one server file that includes
+# windows.h (its header says why).  LookupAccountName, ConvertSidToStringSid
+# and ConvertStringSecurityDescriptorToSecurityDescriptor all live there; the
+# semaphore calls themselves are in kernel32, which mingw links by default.
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32
 
 RM       := rm
 
@@ -143,9 +147,9 @@ sdidx: sdidx.o
 # 14 Aug 26 Windows port - renamed from sdlnxd, and exepath.o added: the daemon
 #           launches "sd -cleanup" and has to find it beside itself rather than
 #           under <sysdir>/bin, which holds no executables.
-sdwind: sdwind.o sdsem.o exepath.o
+sdwind: sdwind.o sdsem.o win32sem.o exepath.o
 	@echo Linking $@
-	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)exepath.o -o $(GPLBIN)sdwind
+	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)win32sem.o $(GPLOBJ)exepath.o -ladvapi32 -o $(GPLBIN)sdwind
 
 terminfo:
 	@echo Compiling terminfo library

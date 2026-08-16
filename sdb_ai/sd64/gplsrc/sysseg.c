@@ -590,6 +590,44 @@ bool start_sd() {
       // Moved to sdwind:   sysseg->sdwind_pid = cpid;   /* -ve if failed to start */
       // }
 
+      /* 16 Aug 26 Windows port - WAIT FOR THE DAEMON BEFORE LETTING GO.
+         Two things depend on this and the first one is new:
+
+         THE SEMAPHORES DIE WITH THE LAST HANDLE.  They are Win32 objects now
+         (sdsem.c) rather than files in /dev/shm, so if this process created
+         them and exited before sdwind had opened them, the set would simply
+         evaporate and the daemon would find nothing.  Holding on until sdwind
+         has attached closes that window.
+
+         AND "sd -start" STOPS LYING.  It used to fork and return TRUE without
+         ever looking, so it reported success when the daemon had failed to
+         start at all - which is how a Windows service came to report RUNNING
+         over a machine with no SD on 16 Aug 2026, twice.  sdwind publishes its
+         pid into the segment once it is up (sdwind.c), so that is what to
+         wait for.
+
+         Ten seconds is generous: sdwind attaches immediately or not at all.
+         Failing here does NOT tear the segment down - sd -stop is what clears
+         a half-started system, and it says so.                              */
+
+      {
+        int waited;
+
+        for (waited = 0; waited < 100; waited++) {
+          if (sysseg->sdwind_pid > 0)
+            break;
+          usleep(100000); /* 100ms */
+        }
+
+        if (sysseg->sdwind_pid <= 0) {
+          fprintf(stderr,
+                  "%s did not start within 10 seconds, so SD is not running.\n",
+                  SDWIND_NAME);
+          fprintf(stderr, "Run sd -stop to clear what this left behind.\n");
+          return FALSE;
+        }
+      }
+
       /* Run startup command, if defined */
 
       if (sysseg->startup[0] != '\0') {
