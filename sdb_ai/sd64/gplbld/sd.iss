@@ -556,8 +556,16 @@ begin
            { Said here because it changes what the reader has to do, and because
              the previous version of this box told them to run "sd -start". }
            'SD runs as a Windows service and is running now. It starts again by ' +
-           'itself after every restart, so there is nothing to start by hand.' +
-           #13#10#13#10 +
+           { NEVER START A LINE WITH #13#10.  ISPP reads any line whose first
+             non-blank character is "#" as a preprocessor directive, so a
+             wrapped Pascal string constant becomes "Unknown preprocessor
+             directive" and the compile aborts - line number and all, with
+             nothing to say it is about string continuation.  Mid-line is fine,
+             which is why every other #13#10 in this box works.  Cost the
+             eleventh session an ISCC run, 16 Aug 2026: the service message
+             above was added on 15 Aug and pushed this constant onto its own
+             line, and sd.iss was never compiled again before the handoff. }
+           'itself after every restart, so there is nothing to start by hand.' + #13#10#13#10 +
            AccountMsg +
            { CORRECTED 15 Aug 2026, owner, on two counts.
 
