@@ -44,6 +44,8 @@
 *                      SDSYS reaches every account
 * 13 Aug 26 Windows port - administrator rights are given up on LOGTO out of
 *                      SDSYS
+* 16 Aug 26 Windows port - every LOGTO and every refused LOGTO is written to
+*                      the audit trail.  PROJECT_STATUS.md 7 step 4
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2489,6 +2491,11 @@ int.logto:
 
    if upcase(new.account) = "SDSYS" and not(kernel(K$ADMINISTRATOR,-1)) then
       display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+* 16 Aug 26 Windows port - THE FAILED STEP-UP, and PROJECT_STATUS.md 7 step 4
+*   calls it the single most interesting line in the trail: somebody who is not
+*   elevated asking for SDSYS by name.  Recorded before the return, because the
+*   return unwinds and there is no later point that knows this happened.
+      void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=session is not elevated')
       unwinding = 2
       return
    end
@@ -2540,6 +2547,11 @@ int.logto:
 
    if acc.rec = '' then
       display sysmsg(10003) ;* User not allowed in requested account
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The message deliberately
+*   does not say whether the account exists, so that the register cannot be
+*   probed - but the TRAIL may say, and should: somebody working through account
+*   names is the pattern this exists to make visible.
+      void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not in the register')
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2553,6 +2565,10 @@ int.logto:
 
    gosub logto.authorised
    if not(logto.ok) then
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The account exists and
+*   the caller is not in its ACC$GROUP - a refused grant, which is the other
+*   half of "who used the access" and the one an investigation starts from.
+      void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not granted')
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2592,6 +2608,14 @@ int.logto:
    end else
       void kernel(K$ADMINISTRATOR, 0)
    end
+
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Written after the move
+*   has actually happened - the directory change and the VOC open above can
+*   still fail - and after the administrator flag is set, so the record and the
+*   rights it describes cannot disagree.  @logname is NOT used: it is reassigned
+*   further down when CPROC drops to sdsys (5.6), and audit_message() takes the
+*   identity from the user table instead.
+   void kernel(K$AUDIT, 'LOGTO account=' : new.account)
 
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 

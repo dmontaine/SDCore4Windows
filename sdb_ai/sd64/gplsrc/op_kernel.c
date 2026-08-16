@@ -103,6 +103,7 @@ void op_kernel() {
      K$EXIT.STATUS        Set exit status
      K$AUTOLOGOUT         Set/retrieve autologout period
      K$MAP.DIR.IDS        Enable/disable dir file id mapping
+     K$AUDIT              Append a record to the audit trail
  */
 
   DESCRIPTOR *descr;
@@ -506,6 +507,17 @@ void op_kernel() {
         *(p++) = '\0';
       }
       result.data.value = run_exe(s, p);
+      break;
+
+    /* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The caller passes
+       what happened and NOT who did it: audit_message() stamps the identity
+       from my_uptr, which no BASIC program can reach.  Returns 0 always -
+       there is no failure a caller could sensibly act on, and the login path
+       must not be stopped by an unwritable audit file.                     */
+
+    case K_AUDIT:
+      k_get_c_string(descr, s, sizeof(s) - 1);
+      audit_message(s);
       break;
 
     default:

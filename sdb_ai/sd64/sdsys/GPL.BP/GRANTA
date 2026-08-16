@@ -18,6 +18,8 @@
 *
 * START-HISTORY:
 * 15 Aug 26 Windows port - written.  PROJECT_STATUS.md 7 step 5.
+* 16 Aug 26 Windows port - step 5f: GRANT and REVOKE write the audit record,
+*                      now that step 4 has given them a file to write to
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -49,11 +51,12 @@
 * this disagree with the Windows group it is reporting, and quietly disagreeing
 * with the operating system is worse than a line that needs a moment's thought.
 *
-* NOT DONE HERE: the audit record.  Step 5f wants who ran GRANT written to the
-* audit file, attributed to @logname.  That file is step 4 and does not exist
-* yet; when it does, this is one of its first callers.  Windows records the
-* group edit in its own security log meanwhile, so the change is not unrecorded
-* - only SD's half of it is.
+* THE AUDIT RECORD IS WRITTEN, step 5f, 16 Aug 2026 - the file it was waiting
+* for is step 4 and now exists.  kernel(K$AUDIT, ...) after each successful
+* group edit; the identity is stamped by audit_message() in k_error.c and is
+* not passed from here, so it cannot be got wrong or forged by a caller.
+* Windows still records the group edit in its own security log, and the two are
+* independent records of the same act, which is the point of having both.
 *
 * END-DESCRIPTION
 *
@@ -198,6 +201,11 @@ do.grant:
    rc = os_group('ADDMEM', grp, user)
    if rc # 0 then gosub group.failed
 
+* 16 Aug 26 Windows port - step 5f, written once step 4 gave it a file.  After
+*   the group edit, so this records what happened and not what was attempted;
+*   a failed ADDMEM leaves through group.failed and never reaches here.
+   void kernel(K$AUDIT, 'GRANT account=' : acc.name : ' to=' : user)
+
    crt sysmsg(10041, user, acc.name) ;* %1 may now use account %2
    gosub say.sign.out
 
@@ -219,6 +227,9 @@ do.revoke:
 
    rc = os_group('DELMEM', grp, user)
    if rc # 0 then gosub group.failed
+
+* 16 Aug 26 Windows port - step 5f.  See do.grant above.
+   void kernel(K$AUDIT, 'REVOKE account=' : acc.name : ' from=' : user)
 
    crt sysmsg(10042, user, acc.name) ;* %1 no longer has account %2
    gosub say.sign.out

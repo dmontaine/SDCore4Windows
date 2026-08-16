@@ -38,6 +38,8 @@
 *                      process start rather than from the account entered
 * 14 Aug 26 Windows port - the sign-on banner names the port and drops the
 *                      "(AI modified)" suffix
+* 16 Aug 26 Windows port - every login and every refused login is written to
+*                      the audit trail.  PROJECT_STATUS.md 7 step 4
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -77,6 +79,15 @@ $include keycode.h
 deffun is_grp_member(user,group) calling '!is_grp_member'
 
    ok = @false
+
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Every refusal below
+*   leaves through terminate.connection, so the audit record is written there
+*   once rather than at each goto, and this says why.  IT IS SET HERE SO THAT A
+*   REFUSAL ADDED LATER AND NOT GIVEN A REASON STILL PRODUCES A RECORD - a
+*   vague line in the trail is recoverable, a missing one is not.
+   audit.reason = 'unspecified'
+   audit.account = ''
+
    is.phantom = kernel(K$IS.PHANTOM, 0)
 
    * If the terminal type has not yet been set, work out what it is
@@ -223,6 +234,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
      if not(kernel(K$INTERNAL,-1)) then
         if not(is_grp_member(lgn.id,'sdusers')) then
            display sysmsg(5009) ;* This user is not registered for SD use
+           audit.reason = 'not a member of sdusers'
            goto terminate.connection
         end
      end
@@ -247,6 +259,8 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
+            audit.account = initial.account
+            audit.reason = 'no such account in the register'
             goto terminate.connection
          end
 
@@ -277,11 +291,13 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
          if kernel(K$INTERNAL,-1) then
             if initial.account = 'SDSYS' and not(kernel(K$ADMINISTRATOR,-1)) then
                display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+               audit.reason = 'SDSYS requires an elevated session'
                goto terminate.connection
             end
          end else
             if initial.account # upcase(@logname) then
                display sysmsg(10051) ;* You can only log in to your own account
+               audit.reason = 'not the caller own account'
                goto terminate.connection
             end
          end
@@ -301,9 +317,13 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
+            audit.account = initial.account
+            audit.reason = 'no such account in the register'
             goto terminate.connection
          end
    end case
+
+   audit.account = initial.account
 
    acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
 
@@ -437,10 +457,22 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
       end
    end
 
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The single point at
+*   which a login has succeeded, which is why the record is written here and
+*   not at the account tests: everything above can still refuse.  The identity
+*   is NOT passed - audit_message() stamps it from the user table, because
+*   CPROC reassigns logname when it drops to sdsys (5.6).
+   void kernel(K$AUDIT, 'LOGIN account=' : audit.account)
+
    ok = @true
    return
 
 terminate.connection:
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  EVERY refused login
+*   leaves through here, so one record covers all of them and a refusal added
+*   later is recorded whether or not whoever adds it thinks about the trail.
+   void kernel(K$AUDIT, 'LOGIN REFUSED account=' : audit.account : ' reason=' : audit.reason)
+
    display sysmsg(5024) ;* Connection terminated
    sleep 2
 abort.login:

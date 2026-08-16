@@ -136,6 +136,7 @@
       $define K$SETUID          54       ;* NIX authorisation
       $define K$SETGID          55       ;* NIX authorisation
       $define K$RUNEXE          56       ;* Run executable
+      $define K$AUDIT           57       ;* Append a record to the audit trail
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

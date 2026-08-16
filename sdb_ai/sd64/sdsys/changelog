@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  SD now keeps an audit trail, in the file "audit" beside the
+           database in C:\ProgramData\SD\sdsys.  It records every login,
+           every login that was refused, every LOGTO, every LOGTO that was
+           refused, and every GRANT and REVOKE, each with the date, the time
+           and the Windows user it belonged to.  A line looks like
+
+              2026-08-16 11:42:07 user=don uid=1 pid=8624 LOGTO account=SDSYS
+
+           The refusals are the interesting half.  An entry saying somebody
+           who is not an administrator asked for SDSYS by name, or asked for
+           an account they have not been granted, is the thing worth seeing.
+
+           This file is NOT the error log and does not behave like it.  The
+           error log throws away its oldest half when it fills up; the audit
+           file is renamed with the date and time and a new one started, so
+           nothing is ever discarded.  Removing the old ones is your decision
+           - SD will not do it for you, and they will accumulate.
+
+           Note that anyone who can use SD can also edit or delete this file,
+           because the database directory has to be writable by them.  Windows
+           keeps its own record of account and group changes in the Security
+           event log, which SD users cannot touch; treat the two together.
+
 16 Aug 26  SD now starts after a restart even if the last shutdown was not a
            clean one.  If SD is stopped abruptly - the power goes, or the
            process is killed - it leaves a shared memory segment behind, and

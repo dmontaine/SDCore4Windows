@@ -165,6 +165,7 @@
 #define K_SETUID             54
 #define K_SETGID             55
 #define K_RUNEXE             56
+#define K_AUDIT              57
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 16 Aug 26 Windows port - audit_message() writes the audit trail.  Separate
+ *                      from log_message() because errlog DISCARDS its oldest
+ *                      half and an audit trail may not lose records
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -38,6 +41,8 @@
  * k_txn_error()           Report "File operation not allowed in transaction"
  * k_illegal_call_name()   Report "Illegal call name"
  * k_error()               Report error using supplied text and abort
+ * log_message()           Add a message to the error log
+ * audit_message()         Add a record to the audit trail
  *
  * END-DESCRIPTION
  *
@@ -623,6 +628,119 @@ void log_message(char* msg) {
 
     EndExclusive(ERRLOG_SEM);
   }
+}
+
+/* ======================================================================
+   audit_message()  -  Append a record to the audit trail
+
+   16 Aug 26 Windows port.  PROJECT_STATUS.md 7 step 4, and the missing half
+   of the identity model in 5.6: access is controlled, and until this existed
+   nothing recorded who used it.
+
+   WHY NOT log_message().  errlog TRIMS ITS OLDEST HALF when it reaches the
+   configured ERRLOG size (above, and config.c requires 10kb for that to work).
+   That is right for diagnostics and disqualifying for an audit trail, where
+   the record an investigator wants is exactly the old one somebody would like
+   discarded.  This file therefore ROTATES: at AUDIT_ROTATE_BYTES the current
+   file is renamed with a timestamp and a new one started, so nothing is ever
+   deleted by SD.  Pruning the old ones is a site decision, deliberately not
+   ours to make.
+
+   THE CALLER DOES NOT SUPPLY THE IDENTITY, and that is the point rather than
+   an economy.  The timestamp, user number, pid and username are stamped here
+   from my_uptr; the caller passes only what happened.  5.6 warns that CPROC
+   reassigns logname when it drops to sdsys, so a trail that believed a BASIC
+   caller's idea of who it was would attribute a step-up to the account being
+   stepped into.  my_uptr->username is the OS identity that authenticated and
+   no BASIC program can change it.
+
+   ERRLOG_SEM rather than a seventh semaphore.  Both are log writes held for
+   the length of one append, contention between them is not a real scenario,
+   and NUM_SEMAPHORES is part of the shared segment layout - see sysseg.h.
+
+   Silent on failure, like log_message().  This is called from the login path
+   and an audit file that cannot be written must not be what stops somebody
+   logging in; the missing records are themselves the evidence.               */
+
+#define AUDIT_ROTATE_BYTES 1048576L /* 1MB, then rename and start a new one */
+#define AUDIT_BUFF_SIZE    2048     /* One record.  op_kernel caps msg well
+                                       below this; the stamp adds ~70.      */
+
+void audit_message(char* msg) {
+  OSFILE audit;
+  time_t timenow;
+  struct tm* ltime;
+  int bytes;
+  char path[MAX_PATHNAME_LEN + 1];
+  char rotated[MAX_PATHNAME_LEN + 1];
+  char buff[AUDIT_BUFF_SIZE];
+
+  if (sysseg == NULL)
+    return;
+
+  timenow = time(NULL);
+  ltime = localtime(&timenow);
+
+  StartExclusive(ERRLOG_SEM, 67);
+
+  if (snprintf(path, sizeof(path), "%s%caudit", sysseg->sysdir, DS) <
+      (int)sizeof(path)) {
+    audit = dio_open(path, DIO_OVERWRITE);
+
+    if (ValidFileHandle(audit)) {
+      /* Rotate before appending, so a record is never split across two
+         files and the new file always opens with a whole one.             */
+
+      if (filelength64(audit) >= AUDIT_ROTATE_BYTES) {
+        CloseFile(audit);
+
+        if (snprintf(rotated, sizeof(rotated), "%s.%04d%02d%02d-%02d%02d%02d",
+                     path, ltime->tm_year + 1900, ltime->tm_mon + 1,
+                     ltime->tm_mday, ltime->tm_hour, ltime->tm_min,
+                     ltime->tm_sec) < (int)sizeof(rotated)) {
+          rename(path, rotated);
+        }
+
+        audit = dio_open(path, DIO_OVERWRITE);
+      }
+    }
+
+    if (ValidFileHandle(audit)) {
+      Seek(audit, 0, SEEK_END);
+
+      /* Newline rather than \n for the reason log_message() gives above -
+         the file is opened in binary mode.                                */
+
+      if (my_uptr != NULL) {
+        bytes = snprintf(buff, sizeof(buff),
+                         "%04d-%02d-%02d %02d:%02d:%02d user=%s uid=%d "
+                         "pid=%d %s%s",
+                         ltime->tm_year + 1900, ltime->tm_mon + 1,
+                         ltime->tm_mday, ltime->tm_hour, ltime->tm_min,
+                         ltime->tm_sec, my_uptr->username, my_uptr->uid,
+                         my_uptr->pid, msg, Newline);
+      } else {
+        bytes = snprintf(buff, sizeof(buff),
+                         "%04d-%02d-%02d %02d:%02d:%02d user=? uid=? pid=? "
+                         "%s%s",
+                         ltime->tm_year + 1900, ltime->tm_mon + 1,
+                         ltime->tm_mday, ltime->tm_hour, ltime->tm_min,
+                         ltime->tm_sec, msg, Newline);
+      }
+
+      /* snprintf reports the length it WANTED, not what it wrote, so a long
+         record would otherwise write past the terminator.                  */
+
+      if (bytes > (int)sizeof(buff) - 1)
+        bytes = (int)sizeof(buff) - 1;
+
+      Write(audit, buff, bytes);
+
+      CloseFile(audit);
+    }
+  }
+
+  EndExclusive(ERRLOG_SEM);
 }
 
 /* ======================================================================
