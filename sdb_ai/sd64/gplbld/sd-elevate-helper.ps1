@@ -117,12 +117,31 @@ try {
             continue
         }
 
+        # RUN IT THE WAY !ps_script RUNS IT LOCALLY, WHICH IS NOT -File.
+        # Measured 16 Aug 2026: -File REFUSES a file that is not named *.ps1 -
+        # "Processing -File '...' failed because the file does not have a
+        # '.ps1' extension" - and exits -196608 without running a line of it.
+        # SD names these files "$PS.TMP.<userno>", so -File could never have
+        # run a single one; CREATE.ACCOUNT reported "Create User Failed, OS
+        # Error: 127" from the far end of that.
+        #
+        # !ps_script uses "Get-Content | Invoke-Expression" for exactly this
+        # reason, and the two paths must not differ in how they execute - only
+        # in what privilege they execute with.  Single quotes round the path
+        # keep the leading $ of the name literal to the child, as they do
+        # there.
+        #
+        # STILL A CHILD PROCESS, NOT Invoke-Expression IN HERE.  The scripts
+        # end in "exit 0" / "exit 1" / "exit 5", and run in-process that would
+        # terminate the helper itself and take the session's privilege with it.
+        # The child's exit code is the script's own answer.
         $code = 1
         try {
             $p = Start-Process powershell -Wait -PassThru -WindowStyle Hidden `
                 -ArgumentList @('-NoProfile', '-NonInteractive',
                                 '-ExecutionPolicy', 'Bypass',
-                                '-File', "`"$req`"")
+                                '-Command',
+                                "Get-Content -LiteralPath '$req' -Raw | Invoke-Expression")
             $code = $p.ExitCode
         } catch {
             Say "run failed: $($_.Exception.Message)"
