@@ -137,6 +137,32 @@ function Test-SdRunning {
     return $null -ne (Get-Process sdwind -ErrorAction SilentlyContinue)
 }
 
+function Wait-SdRunning {
+    <#
+      WAIT FOR sdwind RATHER THAN LOOKING ONCE.
+
+      "sd -start" forks the daemon and returns as soon as it has done so, so
+      sdwind appears in the process table a moment AFTER sd.exe exits.  Looking
+      immediately wins that race on an idle machine and loses it on a busy one.
+
+      Measured 15 Aug 2026 with a VirtualBox guest running on the same host:
+      sd -start printed "SD (64 Bit) has been started" and exited 0, this
+      script reported "SD would not start", and the install finished leaving
+      the installing user with no SD account - which is the one thing 7 step 1f
+      exists to provide.  The failure was silent apart from a line in
+      adopt-account.log, and the closing dialog then told the user to run the
+      verb by hand.
+    #>
+    param([int] $TimeoutSeconds = 20)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-SdRunning) { return $true }
+        Start-Sleep -Milliseconds 500
+    }
+    return (Test-SdRunning)
+}
+
 # --- the reinstall case, answered before anything is started ----------------
 #
 # Checked on disk rather than by running the verb, so a reinstall costs nothing
@@ -152,9 +178,9 @@ if (Test-Path $record) {
 $weStartedIt = $false
 if (-not (Test-SdRunning)) {
     $r = Invoke-Sd @('-start')
-    if (-not (Test-SdRunning)) {
+    if (-not (Wait-SdRunning)) {
         Say "adopt-account: SD would not start, so no account was made"
-        Say $r.Text
+        Say ("  sd -start exited {0}: {1}" -f $r.Code, $r.Text)
         exit 3
     }
     $weStartedIt = $true

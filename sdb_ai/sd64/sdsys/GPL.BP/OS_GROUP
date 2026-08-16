@@ -18,6 +18,7 @@
 *
 * START-HISTORY:
 * 14 Aug 26 Windows port - replaces groupadd, groupdel, usermod -aG, deluser
+* 15 Aug 26 Windows port - LISTMEM added for GRANT/REVOKE, 7 step 5e
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -28,6 +29,19 @@
 *            DEL     delete the group           member ignored
 *            ADDMEM  add member to the group
 *            DELMEM  remove member from the group
+*            LISTMEM list the group's members   member is an OUTPUT
+*
+*    LISTMEM RETURNS THROUGH "member", which is the only argument that can
+*    carry a list back, and is why it is not validated on the way in - a
+*    caller quite properly passes an empty variable.  The result is a field
+*    mark delimited list of bare account names with any MACHINE\ prefix
+*    stripped, so a name that comes out of LISTMEM can go straight back into
+*    DELMEM.  An empty list and a group with no members are the same answer.
+*
+*    It exists because GRANT is Windows group membership (7 step 5): once the
+*    grant stopped being a field in the ACCOUNTS record, "who may enter this
+*    account" stopped being a question a dictionary item could answer, and an
+*    account whose grants cannot be listed cannot be audited by eye.
 *
 *    group   a local group name, OR a security identifier written as
 *            "S-1-5-32-544".  ADDMEM and DELMEM accept either; ADD and DEL
@@ -86,6 +100,9 @@ deffun valid_os_name(name) calling '!valid_os_name'
 
    act = upcase(action)
 
+* 15 Aug 26 Windows port - LISTMEM is deliberately absent from this test.
+*   Its "member" is an output, and validating it would reject the empty
+*   variable the caller is supposed to pass.
    if act = 'ADDMEM' or act = 'DELMEM' then
       if not(valid_os_name(member)) then return rc
    end
@@ -125,14 +142,50 @@ deffun valid_os_name(name) calling '!valid_os_name'
       case act = 'DELMEM'
          ps := 'try { Remove-LocalGroupMember ' : grp.sel : ' -Member "' : member : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
 
+*     15 Aug 26 Windows port - the split is done in PowerShell rather than in
+*     BASIC, following !is_grp_member, which compares on the last
+*     backslash-delimited component the same way.  It keeps a backslash out of
+*     BASIC source, where it is also a string delimiter.
+      case act = 'LISTMEM'
+         ps := 'try { $ms = Get-LocalGroupMember ' : grp.sel : ' -ErrorAction Stop } catch { exit 1 }; '
+         ps := 'foreach ($m in $ms) { ($m.Name -split "\\")[-1] }; exit 0'
+
       case 1
          return rc
    end case
 
-   os.execute ps
+   if act = 'LISTMEM' then
+      os.execute ps capturing grp.out
+   end else
+      os.execute ps
+   end
 
    rc = os.error()
    if rc # 0 then set.status rc
+
+*  THE CARRIAGE RETURN HAS TO COME OFF, and TRIM does not take it - it removes
+*  spaces.  PowerShell ends every line CRLF, the capture splits on the LF, and
+*  each name arrives with a CR still on it.  Measured 15 Aug 2026: LIST.GRANTS
+*  printed a blank line after every member, which looked like display untidiness
+*  and was not.  A name carrying a CR fails !valid_os_name - letters, digits,
+*  dot, underscore and hyphen only - so it comes back as status 2 from DELMEM,
+*  and this routine's own promise that a LISTMEM name can be fed straight back
+*  to DELMEM would have been false.
+*
+*  Blank lines are dropped rather than passed on: PowerShell emits a trailing
+*  one, and a caller counting members with DCOUNT would count it.
+   if act = 'LISTMEM' then
+      member = ''
+      if rc = 0 then
+         lines = dcount(grp.out, @fm)
+         for ln = 1 to lines
+            nm = grp.out<ln>
+            convert char(13) : char(10) to '' in nm
+            nm = trim(nm)
+            if nm # '' then member<-1> = nm
+         next ln
+      end
+   end
 
 return rc
 end

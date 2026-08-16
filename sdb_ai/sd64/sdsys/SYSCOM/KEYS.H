@@ -269,11 +269,15 @@
       *   the grant, not this record.  See PROJECT_STATUS.md sections 5.6, 7
       *   step 5.
       *
-      *   ACC$USERS BELOW IS DEAD AND IS BEING REMOVED - see 7 step 5.  It was
-      *   the 13 Aug grant list and nothing consults it.  Do not write new code
-      *   against it; do not delete the define ahead of the dictionary item and
-      *   the records, or LIST ACCOUNTS breaks on the way past.
-      $define ACC$USERS        4     ;* DEAD - was accounts permitted to LOGTO
+      * 15 Aug 26 Windows port - ACC$USERS IS GONE, field 4 with it.  It was
+      *   the 13 Aug grant list, dead from 14 Aug when the grant became group
+      *   membership.  Removed in the order 7 step 5d gives: the USERS entry in
+      *   ACCOUNTS.DIC^@'s default listing first, then the dictionary item,
+      *   then this define - the other way round breaks LIST ACCOUNTS on the
+      *   way past.  FIELD 4 IS NOT REUSED: records written between 13 and
+      *   14 Aug still carry a grant list there, and an installed tree is never
+      *   upgraded (section 6), so a new meaning for field 4 would read those
+      *   as data of the new kind.  Start at field 5.
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

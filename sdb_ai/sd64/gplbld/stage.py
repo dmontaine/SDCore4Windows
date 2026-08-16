@@ -111,8 +111,17 @@ DLL_SEARCH = [
 SDSYS_SHIP = [
     ('GPL.BP',        'BASIC source; SECOND.COMPILE compiles the lot of it'),
     ('SYSCOM',        'include records the compile needs'),
-    ('NEWVOC',        "SDSYS's own VOC, written during the bootstrap"),
-    ('VOC_TEMPLATE',  'the VOC a newly created account is given'),
+    # 15 Aug 26 - THESE TWO DESCRIPTIONS WERE THE WRONG WAY ROUND, and they are
+    # the first thing read by anyone adding a verb.  VOC_TEMPLATE is the
+    # ADMINISTRATIVE superset that becomes SDSYS's own VOC; NEWVOC is the
+    # smaller set CREATEA copies into each new account (CREATEA:520).  The
+    # difference is deliberate access control - CREATE.ACCOUNT, DELETE.ACCOUNT,
+    # ACCOUNTS and FIRST.COMPILE are in VOC_TEMPLATE and NOT in NEWVOC, so an
+    # ordinary account cannot reach them at all.  A new administrative verb
+    # therefore goes in VOC_TEMPLATE ONLY; putting it in NEWVOC hands it to
+    # every account SD creates.
+    ('NEWVOC',        'the VOC a newly created account is given'),
+    ('VOC_TEMPLATE',  "the administrative superset; becomes SDSYS's own VOC"),
     ('MESSAGES',      'sysmsg() text'),
     ('SD.VOCLIB',     'library routines'),
     ('ACCOUNTS',      'holds the SDSYS record; the bootstrap adds to it'),
@@ -168,9 +177,9 @@ PRODUCTION_SDSYS = r'C:\ProgramData\SD\sdsys'
 # ACCOUNTS is a DIRECTORY-type SD file, so each record is a plain text file and
 # its field marks are NEWLINES, not the \xfe field mark used inside a DH file.
 # Splitting on \xfe finds nothing, leaves the whole record as field 1, and
-# rewriting it then flattens the record to one line - silently discarding the
-# account name and the ACC$USERS grant list.  Verified against the bytes on
-# disk rather than assumed, after doing exactly that once.
+# rewriting it then flattens the record to one line - silently discarding every
+# field after the path, the account's Windows group among them.  Verified
+# against the bytes on disk rather than assumed, after doing exactly that once.
 FM = '\n'
 
 # /dev/shm must be writable by every SD user, so it cannot live under Program

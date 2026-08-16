@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+15 Aug 26  Three new verbs let you share an account with somebody else:
+
+              GRANT <account> TO <user>
+              REVOKE <account> FROM <user>
+              LIST.GRANTS <account>
+
+           All three need an elevated session, and they say so rather than
+           failing obscurely.  There is one thing about them worth reading
+           twice, because it is the most confusing part of how SD controls
+           access: WINDOWS FIXES GROUP MEMBERSHIP WHEN YOU SIGN IN, so a
+           grant does not reach the person until they sign out of Windows
+           and back in - and, more importantly, SOMEBODY YOU HAVE JUST
+           REVOKED KEEPS THE ACCOUNT UNTIL THEY DO THE SAME.  Both verbs
+           print that reminder every time.
+
+           "LIST.GRANTS" also shows the account's own user, which is always
+           there and is not a grant.  It is listed anyway so that what you
+           see matches the Windows group it is reporting.
+
+           Behind this: entry to an account is membership of the Windows
+           group named in the account's record, so these verbs edit that
+           group and change nothing inside SD.  The old field 4 of an
+           ACCOUNTS record, a list of accounts allowed in, has been removed -
+           nothing had consulted it since 14 Aug.  "LIST ACCOUNTS" no longer
+           shows a "Granted to" column; LIST.GRANTS answers that now.
+
 15 Aug 26  The installer no longer suggests "net localgroup sdusers <name>
            /add" for giving somebody who already has a Windows account access
            to SD.  It did not work: being in sdusers lets you read SD's files,
@@ -27,9 +53,9 @@ Entries are newest first, by date, until there is a version to attach them to.
            session to end by itself.
 
 15 Aug 26  Anything typed after "sd" now needs an elevated session.  That
-           covers the switches - -start, -stop, -restart, -cleanup, -suspend,
-           -resume, -internal, -k, -u, -d, -m, -l - and it also covers a
-           command: "sd LISTF" ran LISTF for anybody, and no longer does.
+           covers the switches you would type at a prompt - -start, -stop,
+           -k, -l and -u among them - and it also covers a command:
+           "sd LISTF" ran LISTF for anybody, and no longer does.
            Typing plain "sd" to use your own account is unchanged, and that is
            the whole of what an ordinary session needs: accounts SD creates
            arrive in SD over ssh anyway.  NOTE: SD does not start at boot, so

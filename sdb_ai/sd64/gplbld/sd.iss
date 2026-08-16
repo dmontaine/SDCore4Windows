@@ -468,12 +468,24 @@ begin
                        ', was already there and has been left alone.' + #13#10#13#10;
     else
       { Named rather than buried: without an account the person who just
-        installed SD cannot use it at all, and the recovery is one command. }
+        installed SD cannot use it at all, and the recovery is one command.
+
+        THE RECOVERY IS THE SCRIPT, NOT THE VERB.  Owner's instruction,
+        15 Aug 2026: ADOPT is not public.  This branch used to print
+        "sd -internal CREATE.ACCOUNT USER <name> ADOPT", which is the one
+        place in the product that documented it - contradicting the decision
+        recorded in PROJECT_STATUS.md 7 step 1f, that K$INTERNAL is not a wall
+        but stays undocumented, not in the changelog and not in this dialog.
+
+        adopt-account.ps1 ships beside sd.exe and is what the installer itself
+        ran, so naming it gives the user the SAME code path rather than a
+        second, hand-driven one - and it keeps the verb out of sight. }
       AccountMsg := 'SD could NOT give you an account automatically (code ' +
                     IntToStr(AdoptCode) + '). Until one exists, "sd" will answer that your ' +
-                    'account is not in the register. Make it from an ELEVATED prompt:' + #13#10#13#10 +
-                    '    sd -start' + #13#10 +
-                    '    sd -internal CREATE.ACCOUNT USER ' + ExpandConstant('{username}') + ' ADOPT' + #13#10#13#10 +
+                    'account is not in the register. Put it right from an ELEVATED ' +
+                    'PowerShell prompt:' + #13#10#13#10 +
+                    '    powershell -File "' + ExpandConstant('{app}') + '\adopt-account.ps1" -User ' +
+                    ExpandConstant('{username}') + #13#10#13#10 +
                     'What went wrong is recorded in ' + ExpandConstant('{#DataDir}') +
                     '\adopt-account.log' + #13#10#13#10;
     end;
