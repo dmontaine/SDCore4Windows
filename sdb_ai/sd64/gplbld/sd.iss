@@ -521,10 +521,21 @@ begin
            'SIGN OUT AND BACK IN (or restart) before SD will run. Until then it ' +
            'will report that it cannot open its files.' + #13#10#13#10 +
            AccountMsg +
+           { CORRECTED 15 Aug 2026, owner, on two counts.
+
+             "with SD started: sd -start" was wrong twice over - SD is started
+             by the installer and again at every Windows startup, so there is
+             nothing for the user to start, and telling them to do it invites
+             them to start a second one.
+
+             "sd -ASDSYS" was wrong because NOBODY LOGS IN TO AN ACCOUNT BUT
+             THEIR OWN.  You arrive in your own account and move with LOGTO,
+             which is where the grant is checked.  The installer's own account
+             step does the same thing. }
            'TO GIVE SOMEBODY ELSE ACCESS, use SD''s own verb. From an ELEVATED ' +
-           'command prompt, with SD started:' + #13#10#13#10 +
-           '    sd -start' + #13#10 +
-           '    sd -ASDSYS' + #13#10 +
+           'command prompt:' + #13#10#13#10 +
+           '    sd' + #13#10 +
+           '    LOGTO SDSYS' + #13#10 +
            '    CREATE.ACCOUNT USER <name>' + #13#10#13#10 +
            'That makes the Windows account and the SD account together and asks ' +
            'you for the new password. It needs an elevated session because ' +

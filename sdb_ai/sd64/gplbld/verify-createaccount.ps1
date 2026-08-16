@@ -54,6 +54,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 15 Aug 26 - REFUSE A STALE TREE BEFORE DOING ANYTHING, and before -Cleanup
+# too: cleaning up after a run whose results were void is fine, but starting a
+# new one is not.  CLAUDE.md requires a test cycle to begin with a fresh
+# install; assert-current.ps1 is what makes that enforceable rather than
+# remembered, and its header records the two ways the rule alone was got round
+# on 15 Aug 2026.  Exit 2 is this script's own "the test could not be run".
+& (Join-Path $PSScriptRoot 'assert-current.ps1')
+if ($LASTEXITCODE -ne 0) {
+    Write-Output ''
+    Write-Output 'verify-createaccount: refusing - see above'
+    exit 2
+}
+
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $Account)
 $workdir = Join-Path $env:TEMP 'sd-createaccount-probe'
@@ -209,8 +222,13 @@ function SshPassword($pass) {
 # The leading "`n" is the BOM sink - see the header.  It has to stay: the BOM
 # still lands on the first line whichever form is used.
 function Invoke-SD([string[]]$commands) {
-    $body = "`n" + (($commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe -ASDSYS
+    # 15 Aug 26 - "sd -ASDSYS" IS REFUSED NOW, and this is the whole change on
+    # this side.  Nobody logs in to an account but their own (GPL.BP/LOGIN,
+    # owner's rule 15 Aug 2026); an administrator arrives in their own account
+    # and reaches SDSYS with LOGTO, which is where the elevated bypass lives.
+    # The elevation this script already requires is what makes the LOGTO pass.
+    $body = "`n" + ((@('LOGTO SDSYS') + $commands + @('OFF')) -join "`n") + "`n"
+    $out = $body | & $sdExe
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
 

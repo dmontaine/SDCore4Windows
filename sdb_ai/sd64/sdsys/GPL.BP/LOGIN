@@ -254,48 +254,47 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 * 14 Aug 26 Windows port - "privileged" means ELEVATED.  K$ADMINISTRATOR is
 *   seeded from IsElevated() at process start, so being an administrator in the
 *   SAM is not enough: you have to have used it.
+* 15 Aug 26 Windows port - NOBODY LOGS IN TO AN ACCOUNT BUT THEIR OWN.
+*
+*   Owner's rule, 15 Aug 2026, and it covers administrators: "an administrator
+*   has access to all accounts, ONCE THEY HAVE LOGGED INTO SD, NOT BEFORE".
+*   So entry is always your own account, and LOGTO is what moves you - which is
+*   where the grant is tested, and where an elevated session gets its access to
+*   everything (CPROC, logto.authorised).  One door, one place the decision is
+*   made, instead of two that had drifted apart.
+*
+*   WHAT THIS REPLACED, both of which let somebody stand in an account without
+*   ever standing in their own: an elevated session skipped the ACC$GROUP test
+*   here entirely, so "sd -ASOMEBODYELSE" admitted an administrator straight
+*   into anybody's account; and "sd" elevated with no account named went to
+*   SDSYS.  The second case is deleted outright, below.
+*
+*   -INTERNAL IS THE EXCEPTION AND HAS TO BE.  sd.c forces it to SDSYS, and it
+*   is the install and bootstrap door: during a bootstrap no account exists for
+*   anybody to land in and there is nothing to LOGTO from.  It is unpublished
+*   and comes from a command line rather than a session.
 
-         if initial.account = 'SDSYS' and not(kernel(K$ADMINISTRATOR,-1)) then
-            display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-            goto terminate.connection
-         end
-
-* rev 0.9.0 * user must be a member of the ACCOUNT's group to access ACCOUNT
-* 14 Aug 26 Windows port - AN ELEVATED SESSION SKIPS THIS TEST, and that is not
-*   a convenience.  ACCOUNTS/SDSYS carries ACC$GROUP "sdsys", and no such group
-*   exists on Windows - the installer creates sdusers and CREATE.ACCOUNT
-*   creates sdu_<name>.  On Linux "sudo sd" dropped the effective user to sdsys
-*   before this point, so !is_grp_member's "your own group account" shortcut
-*   matched and let root through; Windows has no such drop, so testing the group
-*   here would refuse SDSYS to everybody, elevated or not.  Elevation passing
-*   everything is the Linux behaviour in any case - root is not in the group
-*   either.  See PROJECT_STATUS.md section 5.6.
-
-         if not(kernel(K$ADMINISTRATOR,-1)) then
-            if not(is_grp_member(lgn.id,acc.rec<ACC$GROUP>)) then
-               display sysmsg(10003) ;* User not allowed in requested account
+         if kernel(K$INTERNAL,-1) then
+            if initial.account = 'SDSYS' and not(kernel(K$ADMINISTRATOR,-1)) then
+               display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
                goto terminate.connection
             end
-         end
-
-* 20240323 mab if sd command issued with sudo (K$ADMINISTRATOR set by cproc)
-*   and no account given with -A, assume sdsys
-* 14 Aug 26 Windows port - K$ADMINISTRATOR is seeded in kernel.c now rather
-*   than set here by CPROC, and it means elevated.  "Run as administrator" is
-*   this system's sudo, and it is the only route into SDSYS.
-
-      case kernel(K$ADMINISTRATOR,-1)   ;* elevated session, no account named
-         initial.account = "SDSYS"
-
-         read acc.rec from acc.f, initial.account else
-            display sysmsg(5018, initial.account) ;* Account %1 not in register
-            goto terminate.connection
+         end else
+            if initial.account # upcase(@logname) then
+               display sysmsg(10051) ;* You can only log in to your own account
+               goto terminate.connection
+            end
          end
 
 * 20240219 mab sd command from console with no account specified, we default to
 *              user's account
 * 14 Aug 26 Windows port - and no account of that name is a refusal, not a
 *   prompt.  No linked SD account means no login.
+* 15 Aug 26 Windows port - AND IT IS NOW THE ONLY CASE THERE IS for a person.
+*   The elevated-session case that stood here put an administrator into SDSYS
+*   without their having logged in anywhere first; it is gone with the rule
+*   above.  An administrator arrives in their own account like everybody else
+*   and types LOGTO SDSYS.
 
       case 1
          initial.account = upcase(@logname)
