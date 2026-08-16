@@ -85,11 +85,14 @@ PROGRAM_FILES_BIN = [
     'sdtic.exe',
     'sdclilib.dll',             # native UCRT64, needs no MSYS2 runtime
     'libsdclilib.dll.a',        # import library, for building clients
+    'sdsvc.exe',                # native UCRT64, the service that starts SD
 ]
 
-# Scanned for imports.  The client DLL is deliberately not in this list: it is
-# a separate toolchain (5.3) and depends on nothing but Windows system DLLs,
-# which was confirmed rather than assumed.
+# Scanned for imports.  The client DLL and the service are deliberately not in
+# this list: both are the separate native toolchain (5.3) and depend on nothing
+# but Windows system DLLs, which was confirmed rather than assumed - objdump on
+# sdsvc.exe, 15 Aug 2026, names only ADVAPI32, KERNEL32 and the UCRT
+# api-ms-win-crt-* set, and no msys-2.0.dll.
 DLL_SCAN = [
     'sd.exe', 'sdconv.exe', 'sdfix.exe', 'sdidx.exe', 'sdwind.exe', 'sdtic.exe',
 ]
@@ -414,7 +417,7 @@ def main():
     # warning: the installer would otherwise silently skip the step.
     here = os.path.dirname(os.path.abspath(__file__))
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
-                   'adopt-account.ps1'):
+                   'adopt-account.ps1', 'install-service.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):
             raise SystemExit('missing %s - the installer needs it' % src)

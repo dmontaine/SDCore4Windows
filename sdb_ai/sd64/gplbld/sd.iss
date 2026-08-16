@@ -270,6 +270,25 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Flags: runhidden skipifdoesntexist; Tasks: installssh; \
     StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
 
+; THE SERVICE, AND IT IS NOT A TASK - owner's decision, 15 Aug 2026.  SD must
+; be running when the installer finishes and after every Windows startup, so
+; this is not offered, it is done.  Until now there was no service at all and
+; "sd -start" had to be typed after every restart.
+;
+; BEFORE the account step in [Code], which is why it is here rather than at
+; ssPostInstall: adopt-account.ps1 starts SD itself if it has to, and having
+; the service already running means it does not have to - one less thing to
+; race, and that race cost an install earlier the same day.
+;
+; No Tasks: condition and no Check:.  A shipped .ps1 rather than inline sc.exe
+; for the reason above the ssh entry - sc.exe binPath quoting inside an Inno
+; parameter is exactly the sort of thing that silently produces a broken
+; service, and a shipped file can be read and parse-checked on its own.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-service.ps1"" -Install -AppDir ""{app}"""; \
+    Flags: runhidden skipifdoesntexist; \
+    StatusMsg: "Creating and starting the SD service..."
+
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;
 ; Removed 14 Aug 2026 with the decision that a Windows administrator IS an SD
@@ -294,8 +313,22 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; step is ever wanted back, all three have to be fixed together.
 
 [UninstallRun]
+; THE SERVICE GOES FIRST, and the order is load-bearing.  Removing it stops it,
+; which stops SD; doing it the other way round lets the service notice the
+; daemon has gone and, with the restart action configured, start it again from
+; files that are being deleted underneath it.
+;
+; It is also why this is not left to "sd -stop" alone below - that would end
+; the daemon while leaving a service pointing at an executable about to vanish,
+; which is how a machine ends up with a permanently failing service after an
+; uninstall.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-service.ps1"" -Remove"; \
+    Flags: runhidden skipifdoesntexist; RunOnceId: "RemoveSDService"
+
 ; Stop the server before removing the files it is running from.  Ignore any
-; failure: not running is the normal case.
+; failure: not running is the normal case, and after the service has gone it
+; is the usual one.
 Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
     RunOnceId: "StopSD"
 
@@ -520,6 +553,11 @@ begin
            'Windows only applies group membership when you sign in, so you must ' +
            'SIGN OUT AND BACK IN (or restart) before SD will run. Until then it ' +
            'will report that it cannot open its files.' + #13#10#13#10 +
+           { Said here because it changes what the reader has to do, and because
+             the previous version of this box told them to run "sd -start". }
+           'SD runs as a Windows service and is running now. It starts again by ' +
+           'itself after every restart, so there is nothing to start by hand.' +
+           #13#10#13#10 +
            AccountMsg +
            { CORRECTED 15 Aug 2026, owner, on two counts.
 

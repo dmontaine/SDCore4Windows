@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+15 Aug 26  SD now runs as a Windows service, called "String Database (SD)".
+           The installer creates it and starts it, and Windows starts it
+           again after every restart - so SD is simply up, and nobody has to
+           type "sd -start" any more.  Stopping the service stops SD and ends
+           every session on the machine, which is the same thing "sd -stop"
+           has always done.  Uninstalling removes the service.
+
+15 Aug 26  You now always log in to your OWN account, and move with LOGTO.
+           Before, an elevated session that typed plain "sd" went straight
+           into SDSYS, and "sd -Asomebodyelse" let an administrator open
+           anyone's account without ever being in their own.  Now everybody
+           arrives in the account named after their Windows login, including
+           administrators, and reaches other accounts with
+
+              LOGTO <account>
+
+           which is where SD checks whether you are allowed in.  An
+           administrator still reaches every account - just afterwards
+           rather than instead.  "sd -A<name>" is refused unless <name> is
+           your own account.
+
 15 Aug 26  Three new verbs let you share an account with somebody else:
 
               GRANT <account> TO <user>

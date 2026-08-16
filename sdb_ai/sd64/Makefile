@@ -71,7 +71,7 @@ sd: BITSIZE := 64
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(ARCH)
-sd: $(SDOBJS) sdclilib sdtic sdfix sdconv sdidx sdwind terminfo
+sd: $(SDOBJS) sdclilib sdsvc sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -101,13 +101,28 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib terminfo
+.PHONY: sdclilib sdsvc terminfo
 
 sdclilib:
 	@echo Building native client DLL
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
 	@cp $(CLILIBDIR)/sdclilib.dll $(GPLBIN)
 	@cp $(CLILIBDIR)/libsdclilib.dll.a $(GPLBIN)
+
+# 15 Aug 26 - THE SERVICE IS NATIVE, AND ON PURPOSE.  A Windows service has to
+# call StartServiceCtrlDispatcher, and sd.exe is built against the MSYS2 POSIX
+# runtime where linuxlb.c records the decision to keep windows.h out.  So the
+# service wrapper is built with the UCRT64 compiler like the client DLL, and
+# never sees the POSIX runtime.  See gplsrc/sdsvc/sdsvc.c and 5.3.
+#
+# It lives in its own directory because SRCS is $(wildcard *.c) over gplsrc,
+# which would otherwise compile this with the POSIX flags and fail.
+SVCDIR   := $(GPLSRC)sdsvc
+
+sdsvc:
+	@echo Building native service wrapper
+	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
+	    $(SVCDIR)/sdsvc.c -ladvapi32 -o $(GPLBIN)sdsvc.exe
 
 sdtic: sdtic.o inipath.o
 	@echo Linking $@
