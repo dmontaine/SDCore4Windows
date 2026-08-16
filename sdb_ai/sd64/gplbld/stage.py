@@ -426,8 +426,8 @@ def main():
     # to PowerShell, which cannot open the first.
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
-                   'secure-audit.ps1', 'secure-log.ps1', 'sd-elevate.ps1',
-                   'sd-elevate-helper.ps1'):
+                   'secure-audit.ps1', 'secure-log.ps1', 'secure-psdir.ps1',
+                   'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):
             raise SystemExit('missing %s - the installer needs it' % src)

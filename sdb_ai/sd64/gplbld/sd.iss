@@ -295,6 +295,28 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-log.ps1"" -Path ""{#DataDir}\sd-elevate.log"""; \
     Flags: runhidden; StatusMsg: "Securing the elevation log..."
 
+; WHERE !ps_script PUTS A SCRIPT THAT MAY CARRY A PASSWORD.  It used to write
+; them into the account directory, which the grant above leaves writable by
+; every SD user - so one user could read another's new Windows password, and,
+; worse, rewrite a pending script before the elevated helper ran it.  This
+; creates SDSYS\PSTMP with a per-creator ACL; secure-psdir.ps1 has the detail.
+;
+; ORDER: after the icacls, as above, AND BEFORE adopt-account.ps1, which runs
+; at ssPostInstall and is the install's own first caller of !ps_script.  [Run]
+; finishes before ssPostInstall, so being in this section is enough.
+;
+; NOT A [Dirs] ENTRY, deliberately.  Creating anything under {#DataDir}\sdsys
+; before [Files] runs risks the installer's own "a database is already here"
+; test seeing a directory it did not put there - PROJECT_STATUS.md section 6.
+; The script creates it, which keeps that test looking at an untouched tree.
+;
+; !ps_script FAILS CLOSED if this directory is absent, so a failure here stops
+; account creation rather than quietly writing privileged scripts somewhere
+; every SD user can edit them.  That is the intended trade.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-psdir.ps1"" -Path ""{#DataDir}\sdsys\PSTMP"""; \
+    Flags: runhidden; StatusMsg: "Securing the script directory..."
+
 ; Optional, and only reachable if the task was ticked and no ssh server was
 ; already present.  A failure here must NOT fail the SD install: this is a
 ; Features on Demand download and policy, a metered connection or an offline

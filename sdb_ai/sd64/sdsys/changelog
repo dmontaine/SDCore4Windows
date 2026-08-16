@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  SECURITY.  When SD does privileged work for you - creating an
+           account, setting a password, editing a group - it writes a short
+           script to a file and runs it, rather than putting a password on a
+           command line where anyone could read it.  Those files were being
+           written into the database directory, which every SD user can write
+           to.  Two things followed, and the second is the serious one:
+
+             * Another SD user could read a new Windows password out of the
+               file in the moment before it was deleted.
+
+             * Another SD user could REPLACE the script between SD writing it
+               and SD running it, and their version would run with full
+               administrator privilege.
+
+           The scripts now go in a directory of their own, PSTMP inside the
+           database directory, where each file belongs to the session that
+           wrote it.  Other SD users cannot read those files or change them;
+           administrators still can.  The installer creates the directory and
+           empties it, so a script left behind by an interrupted session does
+           not survive an upgrade.
+
+           If that directory is missing, SD refuses to do the privileged work
+           rather than falling back to the old location.  You would see the
+           command fail rather than quietly running unprotected.
+
 16 Aug 26  SD now keeps a log of the elevation helper's work, in the file
            "sd-elevate.log" in C:\ProgramData\SD, beside the service log.  It
            records when a helper started for a session, each script it was
