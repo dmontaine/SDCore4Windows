@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 16 Aug 26 Windows port - start_sd() checks whether fork() actually worked.
+ *                      A -1 return was falling into the parent branch, so a
+ *                      failed start reported success and left a segment behind
  * 14 Aug 26 Windows port - start_sd() and stop_sd() ask the sdwind process
  *                      whether SD is running instead of trusting the shared
  *                      segment, which outlives it
@@ -527,6 +530,27 @@ bool start_sd() {
 
   sysseg->sdwind_pid = -1; /* Stays -ve if fails to start */
   cpid = fork();
+
+  /* 16 Aug 26 Windows port - A FAILED fork() USED TO LOOK LIKE SUCCESS.
+     fork() returns -1 on failure, and -1 is not 0, so it fell into the "Parent
+     process" branch below: the daemon was never started, nothing said so, and
+     start_sd() went on to report "SD has been started".  That is exactly what
+     the service produced on 16 Aug 2026 - Running, no sdwind, and a segment
+     plus six semaphores left behind that broke every later session with
+     "Error 116 getting semaphores" (PROJECT_STATUS.md header item 1).
+
+     The segment is deliberately NOT torn down here.  Removing it is sd -stop's
+     job and the SD_WRECKAGE path above already says so in those words; undoing
+     bind_sysseg() from this point would duplicate that badly.  What matters is
+     that the caller now hears about it instead of being told it worked.      */
+
+  if (cpid < 0) {
+    fprintf(stderr, "Cannot start %s - fork() failed: %s\n", SDWIND_NAME,
+            strerror(errno));
+    fprintf(stderr, "Run sd -stop to clear what this left behind.\n");
+    return FALSE;
+  }
+
   if (cpid == 0) { /* Child process */
     for (i = 3; i < 1024; i++)
       close(i);

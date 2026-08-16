@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 16 Aug 26 Windows port - do not report RUNNING without checking that sdwind
+ *           is actually up; log to ProgramData\SD\sdsvc.log; clear the segment
+ *           behind a failed start; drop CREATE_NO_WINDOW
  * 15 Aug 26 Windows port - written.  Owner's decision: SD runs as a service,
  *           started by the installer, so it is up after every restart.
  * END-HISTORY
@@ -54,13 +57,108 @@
  */
 
 #include <windows.h>
+#include <tlhelp32.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
 
 #define SVC_NAME "SD"
+#define SDWIND_EXE "sdwind.exe"
+
+/* How long to wait for sdwind after "sd -start" returns.  sd -start forks the
+   daemon and exits, so the daemon appears a moment later, not instantly.     */
+#define SDWIND_WAIT_TRIES 20
+#define SDWIND_WAIT_MS 500
+
+/* AND HOW LONG TO WAIT BEFORE BELIEVING IT.  16 Aug 26 Windows port: the first
+   version of this check asked whether sdwind EXISTED and was satisfied by the
+   first poll, 500ms in.  sdwind did exist - it starts, fails to attach, and
+   exits - so the service reported RUNNING off a process that was already on
+   its way out, and, far worse, skipped the cleanup below and left the segment
+   for the installer to trip over.  Existence is not survival.               */
+#define SDWIND_SETTLE_MS 5000
 
 static SERVICE_STATUS_HANDLE svc_status_handle = NULL;
 static SERVICE_STATUS svc_status;
 static HANDLE svc_stop_event = NULL;
+
+/* ======================================================================
+   Saying anything at all.
+
+   16 Aug 26 Windows port.  A service has no console, no standard output that
+   goes anywhere, and no user to read one.  On 16 Aug 2026 this service started
+   nothing, reported RUNNING, and left NO record of any kind - the failure had
+   to be reconstructed afterwards from file ownership in the shm directory.
+
+   ProgramData\SD is the right home for it: the service runs as LocalSystem and
+   can write there, adopt-account.log is already beside it, and Program Files
+   is the wrong place for something that changes.  Best effort throughout - a
+   service that cannot open its log must still try to run SD.                */
+
+static void svc_log(const char* fmt, ...) {
+  char path[MAX_PATH];
+  DWORD n;
+  SYSTEMTIME st;
+  FILE* f;
+  va_list ap;
+
+  n = GetEnvironmentVariableA("ProgramData", path, sizeof(path));
+  if (n == 0 || n >= sizeof(path))
+    strcpy(path, "C:\\ProgramData");
+
+  if (strlen(path) + strlen("\\SD\\sdsvc.log") + 1 > sizeof(path))
+    return;
+  strcat(path, "\\SD\\sdsvc.log");
+
+  f = fopen(path, "a");
+  if (f == NULL)
+    return;
+
+  GetLocalTime(&st);
+  fprintf(f, "%04d-%02d-%02d %02d:%02d:%02d  ", st.wYear, st.wMonth, st.wDay,
+          st.wHour, st.wMinute, st.wSecond);
+
+  va_start(ap, fmt);
+  vfprintf(f, fmt, ap);
+  va_end(ap);
+
+  fputc('\n', f);
+  fclose(f);
+}
+
+/* ======================================================================
+   Is the daemon actually there?
+
+   16 Aug 26 Windows port - THE ONLY HONEST TEST THAT SD STARTED, and the
+   reason this function exists rather than a check of the exit code: on
+   16 Aug 2026 "sd -start" exited reporting SUCCESS while starting nothing, so
+   a service that trusted its child's status reported a healthy SD on a machine
+   where SD was not running.  Every other caller in this project already looks
+   for sdwind instead - verify-createaccount.ps1 does, and PROJECT_STATUS.md 6
+   says to.  This is that check, in C.                                       */
+
+static BOOL sdwind_running(void) {
+  HANDLE snap;
+  PROCESSENTRY32 pe;
+  BOOL found = FALSE;
+
+  snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snap == INVALID_HANDLE_VALUE)
+    return FALSE;
+
+  pe.dwSize = sizeof(pe);
+  if (Process32First(snap, &pe)) {
+    do {
+      if (_stricmp(pe.szExeFile, SDWIND_EXE) == 0) {
+        found = TRUE;
+        break;
+      }
+    } while (Process32Next(snap, &pe));
+  }
+
+  CloseHandle(snap);
+  return found;
+}
 
 /* ======================================================================
    Where sd.exe is.
@@ -100,11 +198,48 @@ static BOOL sd_exe_path(char *buf, DWORD len) {
    other callers, and recorded in PROJECT_STATUS.md 6.  Nothing is
    redirected here, so there are no handles to wait on.                   */
 
+/* Where the child's own words go.  Separate from sdsvc.log because this one is
+   written by sd and sdwind rather than by us, and because sdwind inherits the
+   handle and keeps it open for as long as it runs.                          */
+
+static HANDLE open_child_log(void) {
+  char path[MAX_PATH];
+  DWORD n;
+  SECURITY_ATTRIBUTES sa;
+  HANDLE h;
+
+  n = GetEnvironmentVariableA("ProgramData", path, sizeof(path));
+  if (n == 0 || n >= sizeof(path))
+    strcpy(path, "C:\\ProgramData");
+  if (strlen(path) + strlen("\\SD\\sdsvc-sd.log") + 1 > sizeof(path))
+    return INVALID_HANDLE_VALUE;
+  strcat(path, "\\SD\\sdsvc-sd.log");
+
+  ZeroMemory(&sa, sizeof(sa));
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+
+  /* FULL SHARING IS NOT OPTIONAL.  sdwind inherits this handle and holds it
+     for its whole life, and "sd -stop" is later given a handle to the same
+     file - without sharing, the second open fails and the log goes quiet at
+     exactly the point it matters.                                           */
+
+  h = CreateFileA(path, FILE_APPEND_DATA,
+                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa,
+                  OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+  return h;
+}
+
 static BOOL run_sd(const char *arg, DWORD *exit_code) {
   char exe[MAX_PATH];
   char cmd[MAX_PATH + 32];
   STARTUPINFOA si;
   PROCESS_INFORMATION pi;
+  SECURITY_ATTRIBUTES sa;
+  HANDLE log;
+  HANDLE nul;
+  BOOL ok;
 
   if (!sd_exe_path(exe, sizeof(exe)))
     return FALSE;
@@ -116,8 +251,63 @@ static BOOL run_sd(const char *arg, DWORD *exit_code) {
   si.cb = sizeof(si);
   ZeroMemory(&pi, sizeof(pi));
 
-  if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE,
-                      CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
+  /* 16 Aug 26 Windows port - CAPTURE WHAT THE CHILD SAYS.  Until now nothing
+     did, and on 16 Aug 2026 that cost two runs: sd -start printed that SD had
+     started, sdwind then died saying whatever it says, and NONE of it reached
+     any log, console or event.  sdwind.c now reports its startup failures on
+     stderr precisely so that something can read them - this is that something.
+
+     REDIRECTING IS SAFE HERE, and PROJECT_STATUS.md 6's warning does not
+     apply: the trap is waiting on the child's STREAMS, because sdwind inherits
+     them and outlives sd.  This waits on the PROCESS HANDLE only, so an
+     inherited handle blocks nobody.  A file, never a pipe, for the same
+     reason.                                                                 */
+
+  /* 16 Aug 26 Windows port - EVERY ONE OF THESE THREE HANDLES MUST BE
+     INHERITABLE, and the first attempt got NUL wrong: it was opened with NULL
+     security attributes, so bInheritHandle defaulted to FALSE and the child was
+     handed a stdin it could not have.  STARTF_USESTDHANDLES is all-or-nothing -
+     one bad handle and the child's whole stdio is unusable - so sdsvc-sd.log
+     was created and stayed EMPTY through two runs while sd and sdwind wrote
+     into nothing.  An empty log read exactly like a silent program, which is
+     the failure this logging existed to end.                                 */
+
+  ZeroMemory(&sa, sizeof(sa));
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+
+  log = open_child_log();
+  nul = CreateFileA("NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    &sa, OPEN_EXISTING, 0, NULL);
+
+  if (log != INVALID_HANDLE_VALUE && nul != INVALID_HANDLE_VALUE) {
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = nul;   /* not NULL: a child handed no stdin can misread EOF */
+    si.hStdOutput = log;
+    si.hStdError = log;
+  }
+
+  /* 16 Aug 26 Windows port - CREATE_NO_WINDOW REMOVED, and it is a candidate
+     cause rather than tidying.  sd -start reaches the daemon through fork() and
+     daemon() on the MSYS2 runtime (sysseg.c), and those care about the console
+     and session the process finds itself in.  The same "sd -start", as the same
+     LocalSystem in the same session 0, started SD when launched from PowerShell
+     with an inherited console and did NOT when launched by this service with
+     CREATE_NO_WINDOW.  There is no window to suppress in session 0 anyway - no
+     user can see one - so the flag was buying nothing.  If the service now
+     works, this is why; if it does not, sdsvc.log says how far it got.       */
+
+  ok = CreateProcessA(NULL, cmd, NULL, NULL, TRUE, /* inherit the log handle */
+                      0, NULL, NULL, &si, &pi);
+
+  /* Ours to close either way.  sdwind keeps its own inherited copies, which is
+     what lets it go on writing after we have let go.                        */
+  if (log != INVALID_HANDLE_VALUE)
+    CloseHandle(log);
+  if (nul != INVALID_HANDLE_VALUE)
+    CloseHandle(nul);
+
+  if (!ok)
     return FALSE;
 
   WaitForSingleObject(pi.hProcess, INFINITE);
@@ -167,9 +357,13 @@ static void WINAPI svc_ctrl(DWORD ctrl) {
 
 static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   DWORD rc = 0;
+  int i;
+  int alive = 0;
 
   (void)argc;
   (void)argv;
+
+  svc_log("service starting");
 
   svc_status_handle = RegisterServiceCtrlHandlerA(SVC_NAME, svc_ctrl);
   if (svc_status_handle == NULL)
@@ -194,19 +388,99 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
      leave a red service on a working system.  A start that could not run at
      all is the real failure, and that is what CreateProcess reports.       */
   if (!run_sd("-start", &rc)) {
+    svc_log("could not run \"sd -start\" at all - CreateProcess error %lu",
+            (unsigned long)GetLastError());
+    report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
+    return;
+  }
+  svc_log("\"sd -start\" exited with %lu", (unsigned long)rc);
+
+  /* 16 Aug 26 Windows port - AND NEITHER IS A ZERO EXIT A SUCCESS, which is
+     the whole lesson of 16 Aug 2026: "sd -start" reported success, started
+     nothing, and this service reported RUNNING on the strength of it.  So ask
+     the question that actually matters.                                     */
+
+  for (i = 0; i < SDWIND_WAIT_TRIES; i++) {
+    if (sdwind_running())
+      break;
+    report(SERVICE_START_PENDING, NO_ERROR, 30000); /* keep the SCM patient */
+    Sleep(SDWIND_WAIT_MS);
+  }
+
+  /* AND THEN CHECK IT IS STILL THERE.  See SDWIND_SETTLE_MS - a daemon that
+     starts and immediately exits satisfies "is it running?" for a moment, and
+     that moment was enough to make this service lie on 16 Aug 2026.         */
+
+  if (sdwind_running()) {
+    svc_log("%s appeared; waiting %d seconds to see whether it stays",
+            SDWIND_EXE, SDWIND_SETTLE_MS / 1000);
+    report(SERVICE_START_PENDING, NO_ERROR, 30000);
+    Sleep(SDWIND_SETTLE_MS);
+  }
+
+  if (!sdwind_running()) {
+    svc_log("SD did not start: %s is not running (see sdsvc-sd.log for what "
+            "sd -start and %s said)", SDWIND_EXE, SDWIND_EXE);
+
+    /* DO NOT LEAVE THE WRECKAGE.  A failed "sd -start" has already created the
+       shared segment and the semaphores, and under LocalSystem they belong to
+       SYSTEM - after which every ordinary session dies "Error 116 getting
+       semaphores" rather than "SD has not been started".  That is what broke
+       the installer's own account step on 16 Aug 2026 and left the installing
+       user with no SD account.  A service that cannot start SD must at least
+       leave the machine as it found it.                                     */
+
+    run_sd("-stop", &rc);
+    svc_log("cleared the half-started segment: \"sd -stop\" exited with %lu",
+            (unsigned long)rc);
+
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
 
+  svc_log("SD is running (%s is up); service reporting RUNNING", SDWIND_EXE);
   report(SERVICE_RUNNING, NO_ERROR, 0);
 
-  WaitForSingleObject(svc_stop_event, INFINITE);
+  /* 16 Aug 26 Windows port - WATCH IT, DO NOT JUST WAIT.  This used to be a
+     bare WaitForSingleObject(INFINITE), so when the daemon died the service sat
+     reporting RUNNING for ever over a machine with no SD - which is what
+     "Get-Service SD: Running / sdwind: 0" was, twice, on 16 Aug 2026.
+
+     It also pins the failure in time.  sdwind was seen alive at 5 seconds old
+     and gone a second or two later on two separate installs, with nothing
+     watching in between; now the service says exactly how long it lasted, in
+     its own log, with no test harness anywhere near it.                     */
+
+  for (;;) {
+    if (WaitForSingleObject(svc_stop_event, 1000) == WAIT_OBJECT_0)
+      break; /* asked to stop - the normal path, below */
+
+    alive++;
+
+    if (!sdwind_running()) {
+      svc_log("%s has GONE after %d seconds - SD is not running any more",
+              SDWIND_EXE, alive);
+
+      /* Same reason as the start-up failure above: do not leave a segment
+         nobody can use, or the next ordinary session meets "Error 116 getting
+         semaphores" instead of a machine it can start SD on.                */
+      run_sd("-stop", &rc);
+      svc_log("cleared up after it: \"sd -stop\" exited with %lu",
+              (unsigned long)rc);
+
+      report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
+      CloseHandle(svc_stop_event);
+      svc_stop_event = NULL;
+      return;
+    }
+  }
 
   /* Stopping the service stops SD.  Sessions attached to the shared segment
      are ended by this, which is why "sd -stop" prints what it prints - see
      PROJECT_STATUS.md 7 step 1d.  At shutdown that is what is wanted; the
      alternative, leaving the daemon behind, orphans the segment.          */
   run_sd("-stop", &rc);
+  svc_log("service stopping: \"sd -stop\" exited with %lu", (unsigned long)rc);
 
   CloseHandle(svc_stop_event);
   svc_stop_event = NULL;

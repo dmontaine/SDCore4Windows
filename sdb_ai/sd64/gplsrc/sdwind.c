@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 16 Aug 26 Windows port - report why startup failed instead of exiting
+ *                      silently; the errmsg from get_semaphores() was being
+ *                      filled in and then discarded
  * 14 Aug 26 Windows port - renamed from sdlnxd, and the cleanup session is
  *                      launched from beside the running executable rather
  *                      than from <sysdir>/bin, which holds no binaries
@@ -68,10 +71,28 @@ int main() {
 
   /* Attach the shared memory segment */
 
-  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDWR, 0666)) == -1)
+  /* 16 Aug 26 Windows port - SAY WHY, RATHER THAN JUST DYING.  Every failure
+     below used to be a bare exit(1) or exit(2), and the exit(2) threw away the
+     errmsg get_semaphores() had just filled in.  On 16 Aug 2026 the service
+     started nothing and there was NOTHING to read anywhere - the fault had to
+     be narrowed by running this program by hand and looking at its exit code.
+
+     log_message() is not available here and cannot be: it takes ERRLOG_SEM,
+     and the whole point of these branches is that the segment or the
+     semaphores are not attached yet.  So stderr is all there is - which is
+     enough when the daemon is run by hand, and is the first thing to try when
+     it will not start.  The exit codes are unchanged and still discriminate:
+     1 the shared memory segment, 2 the semaphores.                          */
+
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDWR, 0666)) == -1) {
+    fprintf(stderr, "%s: cannot open shared memory %s - %s\n", SDWIND_NAME,
+            SD_POSIX_SHM_NAME, strerror(errno));
     exit(1);
+  }
 
   if (fstat(fd, &statbuf) || (statbuf.st_size == 0)) {
+    fprintf(stderr, "%s: shared memory %s is unreadable or empty - %s\n",
+            SDWIND_NAME, SD_POSIX_SHM_NAME, strerror(errno));
     close(fd);
     exit(1);
   }
@@ -81,14 +102,18 @@ int main() {
   close(fd);
 
   if (sysseg == MAP_FAILED) {
+    fprintf(stderr, "%s: cannot map shared memory - %s\n", SDWIND_NAME,
+            strerror(errno));
     sysseg = NULL;
     exit(1);
   }
 
   /* Get access to semaphores */
 
-  if (!get_semaphores(FALSE, errmsg))
+  if (!get_semaphores(FALSE, errmsg)) {
+    fprintf(stderr, "%s: %s\n", SDWIND_NAME, errmsg);
     exit(2);
+  }
 
   /* Set process id into shared memory */
 
