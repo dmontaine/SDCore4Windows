@@ -92,6 +92,9 @@ function os_group(action, group, member)
 $catalog !os_group
 
 deffun valid_os_name(name) calling '!valid_os_name'
+* 16 Aug 26 Windows port - the writing actions run through here, so that an
+* unelevated SDSYS session performs them through its elevated helper.
+deffun ps_script(script) calling '!ps_script'
 
    rc = 2
    set.status 0
@@ -154,13 +157,23 @@ deffun valid_os_name(name) calling '!valid_os_name'
          return rc
    end case
 
+* 16 Aug 26 Windows port - THE WRITING ACTIONS GO THROUGH !ps_script, WHICH IS
+*   WHAT LETS AN UNELEVATED SDSYS SESSION PERFORM THEM.  PROJECT_STATUS.md 7
+*   step 4: entering SDSYS obtains privilege for the session and !ps_script
+*   hands the script to that session's elevated helper.  Run here instead, as
+*   this did until today, they would fail with 5 for anybody who had not opened
+*   an elevated terminal - which is the whole thing being removed.
+*
+*   LISTMEM IS DELIBERATELY LEFT ALONE, for two reasons.  It needs the script's
+*   OUTPUT and !ps_script returns only an exit code; and it is a read, which
+*   Get-LocalGroupMember performs without privilege, so it has nothing to gain.
    if act = 'LISTMEM' then
       os.execute ps capturing grp.out
+      rc = os.error()
    end else
-      os.execute ps
+      rc = ps_script(ps)
    end
 
-   rc = os.error()
    if rc # 0 then set.status rc
 
 *  THE CARRIAGE RETURN HAS TO COME OFF, and TRIM does not take it - it removes

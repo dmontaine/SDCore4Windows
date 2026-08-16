@@ -66,6 +66,9 @@ function create_user(username)
 $catalog !create_user
 
 deffun valid_os_name(name) calling '!valid_os_name'
+* 16 Aug 26 Windows port - so an unelevated SDSYS session creates the account
+* through its elevated helper.
+deffun ps_script(script) calling '!ps_script'
 
 user_created = @false
 set.status 0
@@ -90,9 +93,16 @@ end
    ps := '-Description "SD account" -ErrorAction Stop | Out-Null } '
    ps := 'catch { exit 1 }; exit 0'
 
-   os.execute ps
+* 16 Aug 26 Windows port - THROUGH !ps_script, NOT os.execute.
+*   PROJECT_STATUS.md 7 step 4.  Entering SDSYS obtains privilege for the
+*   session, and !ps_script is what hands the script to that session's
+*   elevated helper; run here it would fail with 5 for every administrator who
+*   had not opened an elevated terminal, which is what this removes.  The
+*   IsInRole test above is kept and still does its job - the helper is
+*   elevated, so it passes there, and it still catches the case of no helper
+*   and no elevation, which is the answer the caller has always acted on.
+   stat = ps_script(ps)
 * --------------------
-stat = OS.ERROR()
 if stat = 0 then
   user_created = @TRUE
 end else

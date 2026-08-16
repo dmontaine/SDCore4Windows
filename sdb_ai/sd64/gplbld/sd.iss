@@ -601,14 +601,31 @@ begin
              THEIR OWN.  You arrive in your own account and move with LOGTO,
              which is where the grant is checked.  The installer's own account
              step does the same thing. }
-           'TO GIVE SOMEBODY ELSE ACCESS, use SD''s own verb. From an ELEVATED ' +
+           { CORRECTED 16 Aug 2026, owner.  This used to say "From an ELEVATED
+             command prompt", which was never the intent and was not what the
+             underlying gate required either - that one is rev 0.9.0 and
+             predates the port.  Windows does need an elevated token to create
+             a user, so SD now obtains one for the session when you enter
+             SDSYS, and asks Windows for your consent at that moment.  An
+             ordinary command prompt is all that is needed.
+             PROJECT_STATUS.md 7 step 4. }
+           'TO GIVE SOMEBODY ELSE ACCESS, use SD''s own verb, from an ordinary ' +
            'command prompt:' + #13#10#13#10 +
            '    sd' + #13#10 +
            '    LOGTO SDSYS' + #13#10 +
            '    CREATE.ACCOUNT USER <name>' + #13#10#13#10 +
-           'That makes the Windows account and the SD account together and asks ' +
-           'you for the new password. It needs an elevated session because ' +
-           'creating a Windows user does.' + #13#10#13#10 +
+           'Windows will ask you to confirm when you type LOGTO SDSYS, because ' +
+           'administering SD needs the same permission as creating a Windows ' +
+           'user does. That permission lasts until you leave SDSYS, and no ' +
+           'longer. CREATE.ACCOUNT then makes the Windows account and the SD ' +
+           'account together and asks you for the new password.' + #13#10#13#10 +
+           { Said because the alternative is a black screen and no explanation.
+             UAC draws its prompt on the secure desktop, which a per-user
+             remote-control install cannot show. }
+           'This has to be done AT THE MACHINE - not over ssh, which cannot ' +
+           'show you that confirmation. A remote-control tool works if it is ' +
+           'installed as a Windows service; installed just for your own ' +
+           'account it will show you a frozen screen instead.' + #13#10#13#10 +
            'Accounts made that way sign in OVER SSH ONLY - not at the console ' +
            'and not over Remote Desktop. For an unrestricted account that can ' +
            'also administer SD, add the ADMINISTRATOR keyword:' + #13#10#13#10 +

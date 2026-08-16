@@ -170,6 +170,10 @@ deffun errtext(err) calling '!errtext'
 * rev 0.9.0 *
 * 14 Aug 26 Windows port - restored with the ACC$GROUP test in logto.authorised
 deffun is_grp_member(user,group) calling '!is_grp_member'
+* 16 Aug 26 Windows port - entering SDSYS obtains OS privilege for the session
+* and leaving it gives that privilege up.  This is !elevate's only caller, and
+* there is deliberately no verb: PROJECT_STATUS.md 7 step 4.
+deffun elevate(action,arg) calling '!elevate'
 * rev 0.9.0 *
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
@@ -2489,15 +2493,43 @@ int.logto:
 *   read, exactly as the pre-port source had it: naming SDSYS is refused for
 *   what it is, and no register lookup happens first.
 
-   if upcase(new.account) = "SDSYS" and not(kernel(K$ADMINISTRATOR,-1)) then
-      display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-* 16 Aug 26 Windows port - THE FAILED STEP-UP, and PROJECT_STATUS.md 7 step 4
-*   calls it the single most interesting line in the trail: somebody who is not
-*   elevated asking for SDSYS by name.  Recorded before the return, because the
-*   return unwinds and there is no later point that knows this happened.
-      void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=session is not elevated')
-      unwinding = 2
-      return
+* 16 Aug 26 Windows port - ENTERING SDSYS IS WHAT OBTAINS PRIVILEGE, AND THE
+*   ONLY THING THAT DOES.  Owner's rule and owner's design, 16 Aug 2026: there
+*   is no ELEVATE verb, because "there should never be an elevation from within
+*   a normal session".  PROJECT_STATUS.md 7 step 4.
+*
+*   WHAT THIS REPLACED: a bare test of K$ADMINISTRATOR, which refused anybody
+*   who had not opened an ELEVATED TERMINAL.  That was never the intent - the
+*   installer's own dialog told administrators to do it and the owner did not
+*   ask for it - and it is not what the underlying gate on CREATE.ACCOUNT is,
+*   which is rev 0.9.0 and predates this port.  Windows still requires an
+*   elevated token to create a user; it is obtained here, for this session,
+*   rather than by elevating the terminal the administrator is sitting at.
+*
+*   !elevate ASKS UAC, so this is where the consent prompt appears.  It answers
+*   0 when the session is already elevated - the installer's account step, a
+*   bootstrap, "sd -internal" - and then nothing prompts and nothing changes.
+*
+*   AND IT IS WHAT KEEPS ADMINISTRATOR WORK OFF ssh (5.6.2).  UAC draws its
+*   dialog on the interactive desktop, an ssh session has none, so !elevate
+*   fails there and this refuses - enforced by Windows rather than by a test
+*   here that could drift out of step with the rule.
+   if upcase(new.account) = "SDSYS" then
+      elev.rc = elevate('START', '')
+      if elev.rc = 0 then
+*        The security-relevant half of the trail: privilege was obtained, by
+*        whom, and when.  The LOGTO itself is recorded further down.
+         void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
+      end
+      if elev.rc # 0 then
+         display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+*        THE FAILED STEP-UP, which PROJECT_STATUS.md 7 step 4 calls the single
+*        most interesting line in the trail.  Recorded before the return,
+*        because the return unwinds and no later point knows this happened.
+         void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=elevation refused or unavailable')
+         unwinding = 2
+         return
+      end
    end
 
    * Look for options
@@ -2606,7 +2638,22 @@ int.logto:
    if new.account = 'SDSYS' then
       void kernel(K$ADMINISTRATOR, 1)
    end else
+* 16 Aug 26 Windows port - AND THE PRIVILEGE GOES WITH THEM.  PROJECT_STATUS.md
+*   7 step 4.  The line below gives up SD's administrator rights; without the
+*   rest the elevated helper would outlive them, leaving the session able to do
+*   privileged work from an ordinary account - the opposite of what that line
+*   is for.  Owner's instruction, 16 Aug 2026: LOGTO ends the elevated session.
+*
+*   Asked before the flag is cleared, so this is quiet for the ordinary case:
+*   a session moving between two ordinary accounts never had privilege and
+*   writes nothing to the trail.
+      was.admin = kernel(K$ADMINISTRATOR, -1)
       void kernel(K$ADMINISTRATOR, 0)
+
+      if was.admin then
+         void elevate('STOP', '')
+         void kernel(K$AUDIT, 'ELEVATION RELEASED account=' : new.account)
+      end
    end
 
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Written after the move
