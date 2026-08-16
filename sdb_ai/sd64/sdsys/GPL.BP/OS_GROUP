@@ -19,6 +19,11 @@
 * START-HISTORY:
 * 14 Aug 26 Windows port - replaces groupadd, groupdel, usermod -aG, deluser
 * 15 Aug 26 Windows port - LISTMEM added for GRANT/REVOKE, 7 step 5e
+* 16 Aug 26 Windows port - the writing actions go through !ps_script so an
+*                      unelevated SDSYS session can perform them
+* 16 Aug 26 Windows port - and LISTMEM no longer carries the elevation guard
+*                      it could never satisfy, which made LIST.GRANTS answer
+*                      "status: 5" every time
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -126,9 +131,34 @@ deffun ps_script(script) calling '!ps_script'
 *  through !valid_os_name - letters, digits, dot, underscore and hyphen only -
 *  so neither can carry a quote out of the strings below.
 
-   ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
-   ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
-   ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+* 16 Aug 26 Windows port - THE GUARD IS NOT PREPENDED FOR LISTMEM, AND LEAVING
+*   IT THERE MADE LIST.GRANTS IMPOSSIBLE.  Measured 16 Aug 2026: every
+*   LIST.GRANTS answered "Cannot read the members of group <g>, status: 5",
+*   and 5 is this guard firing - the script exited before reaching
+*   Get-LocalGroupMember at all.
+*
+*   WHY IT COULD NEVER HAVE WORKED.  The writing actions pass the guard because
+*   !ps_script hands them to the session's ELEVATED helper.  LISTMEM is
+*   deliberately not sent there - see the note below - so it runs in sd.exe,
+*   which stays unelevated for its whole life by design.  The one action that
+*   cannot satisfy the guard was the one action still carrying it.
+*
+*   It is a seam left by the 16 Aug change rather than a new mistake: the guard
+*   is older than the split, and when LISTMEM was carved out to stay local the
+*   guard was not carved out with it.  The valid_os_name test above was
+*   excluded for LISTMEM at the same time, so the exclusions were being
+*   thought about; this one was missed.
+*
+*   NOTHING IS LOST BY DROPPING IT HERE.  Get-LocalGroupMember is a read and
+*   needs no privilege - measured, unelevated, on this machine.  An unprivileged
+*   caller that cannot read the group still gets the catch below and exit 1.
+   if act = 'LISTMEM' then
+      ps = ''
+   end else
+      ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+      ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+      ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+   end
 
    begin case
       case act = 'ADD'

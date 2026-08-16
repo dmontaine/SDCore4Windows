@@ -5,6 +5,12 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  LIST.GRANTS works again.  It had been answering "Cannot read the
+           members of group <name>, status: 5" for every account, whoever
+           asked.  Reading a group's membership needs no special privilege and
+           never did; the check that was refusing it should not have been on
+           that command at all.  GRANT and REVOKE were unaffected.
+
 16 Aug 26  Entering SDSYS no longer needs an elevated window.  Type "sd" at an
            ordinary command prompt, then "LOGTO SDSYS", and Windows asks you to
            confirm - the usual "Do you want to allow this app to make changes?"
