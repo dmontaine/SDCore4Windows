@@ -627,6 +627,14 @@ bool start_sd() {
     return FALSE;
   }
 
+  /* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Here because this is
+     the one moment that is both elevated and has no session running: ordinary
+     users hold AppendData on the audit file and cannot rename it, and rotating
+     it while somebody is appending is the other thing to avoid.  After
+     bind_sysseg(), which is what makes sysseg->sysdir readable.             */
+
+  audit_rotate();
+
   /* Start sdwind daemon */
 
   sysseg->sdwind_pid = -1; /* Stays -ve if fails to start */

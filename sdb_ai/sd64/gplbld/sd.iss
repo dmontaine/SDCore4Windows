@@ -252,6 +252,29 @@ Filename: "{sys}\icacls.exe"; \
     Parameters: """{#DataDir}"" /inheritance:r /grant ""*S-1-5-18:(OI)(CI)F"" /grant ""*S-1-5-32-544:(OI)(CI)F"" /grant ""sdusers:(OI)(CI)M"""; \
     Flags: runhidden; StatusMsg: "Securing the data directory..."
 
+; AND THEN TAKE MOST OF THAT BACK ON ONE FILE.  The grant above is what every
+; SD user needs to use the database; inherited onto the audit trail it would
+; also let them read, rewrite and delete the record of what they did.  This
+; step breaks inheritance on that one file and leaves sdusers with AppendData
+; and nothing else - measured 16 Aug 2026: appending works, reading,
+; truncating, overwriting, renaming and deleting are all refused.
+;
+; IT MUST COME AFTER THE icacls ABOVE.  Run it before and inheritance puts the
+; directory's Modify straight back on the file.
+;
+; A SHIPPED SCRIPT RATHER THAN AN INLINE COMMAND, for the reason the OpenSSH
+; entry below gives at length: an inline parameter is where a brace bug hid for
+; its whole life, and a file can be parse-checked on its own.
+;
+; No exit code check here, deliberately.  secure-audit.ps1 never truncates an
+; existing trail and SD falls back to creating the file itself if this step did
+; not run - the trail is then inherited-Modify rather than append-only, which
+; is the pre-16-Aug behaviour and not a broken install.  PROJECT_STATUS.md 7
+; step 4 names this as the thing to check if a trail turns out to be editable.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-audit.ps1"" -Path ""{#DataDir}\sdsys\audit"""; \
+    Flags: runhidden; StatusMsg: "Making the audit trail append-only..."
+
 ; Optional, and only reachable if the task was ticked and no ssh server was
 ; already present.  A failure here must NOT fail the SD install: this is a
 ; Features on Demand download and policy, a metered connection or an offline

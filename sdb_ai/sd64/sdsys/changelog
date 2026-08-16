@@ -23,10 +23,16 @@ Entries are newest first, by date, until there is a version to attach them to.
            nothing is ever discarded.  Removing the old ones is your decision
            - SD will not do it for you, and they will accumulate.
 
-           Note that anyone who can use SD can also edit or delete this file,
-           because the database directory has to be writable by them.  Windows
-           keeps its own record of account and group changes in the Security
-           event log, which SD users cannot touch; treat the two together.
+           SD users can ADD to this file and can do nothing else to it.  They
+           cannot read it, cannot change a record already in it, cannot empty
+           it, and cannot rename or delete it - Windows itself refuses, not SD.
+           So a user cannot quietly remove the line that records what they
+           did.  Administrators can read it, and can do anything else to it
+           as well: this raises the floor against ordinary users rather than
+           trying to constrain somebody who owns the machine.
+
+           Windows keeps its own separate record of account and group changes
+           in the Security event log.  Read the two together.
 
 16 Aug 26  SD now starts after a restart even if the last shutdown was not a
            clean one.  If SD is stopped abruptly - the power goes, or the

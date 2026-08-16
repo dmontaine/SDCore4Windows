@@ -55,6 +55,10 @@
 #include "options.h"
 #include "tio.h"
 #include "sdtermlb.h"
+/* 16 Aug 26 Windows port - the audit trail's append.  Declares no Windows
+   type, so it is safe to include here; win32audit.h says why it has to be a
+   separate translation unit.                                              */
+#include "win32audit.h"
 
 #include <setjmp.h>
 #include <stdarg.h>
@@ -658,6 +662,25 @@ void log_message(char* msg) {
    the length of one append, contention between them is not a real scenario,
    and NUM_SEMAPHORES is part of the shared segment layout - see sysseg.h.
 
+   APPEND ONLY, AND THROUGH win32audit.c RATHER THAN dio_open().  The
+   installer grants sdusers AppendData on this file and withholds WriteData,
+   so that the people it records can add to it and cannot rewrite it.  The
+   POSIX runtime cannot open a file that way: O_WRONLY becomes GENERIC_WRITE,
+   which contains FILE_WRITE_DATA, and the open fails with errno 13.  Measured
+   16 Aug 2026, along with what granting WriteData to make it work costs -
+   with it an ordinary user CAN truncate the trail to nothing and CAN
+   overwrite earlier records in place.  win32audit.h has both measurements.
+
+   So the write goes through one CreateFile asking for FILE_APPEND_DATA alone.
+   The kernel then puts every record at the end, and the ACL can withhold
+   everything else.  Owner's decision, 16 Aug 2026: administrators are trusted,
+   so this raises the floor rather than trying to be proof against the people
+   holding the keys - Administrators and SYSTEM keep full control.
+
+   The semaphore is kept even though appends are atomic: it stops a record
+   interleaving with a log_message(), and it is what audit_rotate() locks
+   against.
+
    Silent on failure, like log_message().  This is called from the login path
    and an audit file that cannot be written must not be what stops somebody
    logging in; the missing records are themselves the evidence.               */
@@ -666,13 +689,16 @@ void log_message(char* msg) {
 #define AUDIT_BUFF_SIZE    2048     /* One record.  op_kernel caps msg well
                                        below this; the stamp adds ~70.      */
 
+Private void audit_pathname(char* path, int len) {
+  if (snprintf(path, len, "%s%caudit", sysseg->sysdir, DS) >= len)
+    *path = '\0';
+}
+
 void audit_message(char* msg) {
-  OSFILE audit;
   time_t timenow;
   struct tm* ltime;
   int bytes;
   char path[MAX_PATHNAME_LEN + 1];
-  char rotated[MAX_PATHNAME_LEN + 1];
   char buff[AUDIT_BUFF_SIZE];
 
   if (sysseg == NULL)
@@ -683,60 +709,99 @@ void audit_message(char* msg) {
 
   StartExclusive(ERRLOG_SEM, 67);
 
-  if (snprintf(path, sizeof(path), "%s%caudit", sysseg->sysdir, DS) <
-      (int)sizeof(path)) {
-    audit = dio_open(path, DIO_OVERWRITE);
+  audit_pathname(path, sizeof(path));
 
-    if (ValidFileHandle(audit)) {
-      /* Rotate before appending, so a record is never split across two
-         files and the new file always opens with a whole one.             */
+  if (*path != '\0') {
+    /* Newline rather than \n for the reason log_message() gives above - this
+       is a byte count handed to WriteFile, not a text-mode stream.        */
 
-      if (filelength64(audit) >= AUDIT_ROTATE_BYTES) {
-        CloseFile(audit);
-
-        if (snprintf(rotated, sizeof(rotated), "%s.%04d%02d%02d-%02d%02d%02d",
-                     path, ltime->tm_year + 1900, ltime->tm_mon + 1,
-                     ltime->tm_mday, ltime->tm_hour, ltime->tm_min,
-                     ltime->tm_sec) < (int)sizeof(rotated)) {
-          rename(path, rotated);
-        }
-
-        audit = dio_open(path, DIO_OVERWRITE);
-      }
+    if (my_uptr != NULL) {
+      bytes = snprintf(buff, sizeof(buff),
+                       "%04d-%02d-%02d %02d:%02d:%02d user=%s uid=%d "
+                       "pid=%d %s%s",
+                       ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday,
+                       ltime->tm_hour, ltime->tm_min, ltime->tm_sec,
+                       my_uptr->username, my_uptr->uid, my_uptr->pid, msg,
+                       Newline);
+    } else {
+      bytes = snprintf(buff, sizeof(buff),
+                       "%04d-%02d-%02d %02d:%02d:%02d user=? uid=? pid=? "
+                       "%s%s",
+                       ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday,
+                       ltime->tm_hour, ltime->tm_min, ltime->tm_sec, msg,
+                       Newline);
     }
 
-    if (ValidFileHandle(audit)) {
-      Seek(audit, 0, SEEK_END);
+    /* snprintf reports the length it WANTED, not what it wrote, so a long
+       record would otherwise send WriteFile past the end of the buffer.   */
 
-      /* Newline rather than \n for the reason log_message() gives above -
-         the file is opened in binary mode.                                */
+    if (bytes > (int)sizeof(buff) - 1)
+      bytes = (int)sizeof(buff) - 1;
 
-      if (my_uptr != NULL) {
-        bytes = snprintf(buff, sizeof(buff),
-                         "%04d-%02d-%02d %02d:%02d:%02d user=%s uid=%d "
-                         "pid=%d %s%s",
-                         ltime->tm_year + 1900, ltime->tm_mon + 1,
-                         ltime->tm_mday, ltime->tm_hour, ltime->tm_min,
-                         ltime->tm_sec, my_uptr->username, my_uptr->uid,
-                         my_uptr->pid, msg, Newline);
-      } else {
-        bytes = snprintf(buff, sizeof(buff),
-                         "%04d-%02d-%02d %02d:%02d:%02d user=? uid=? pid=? "
-                         "%s%s",
-                         ltime->tm_year + 1900, ltime->tm_mon + 1,
-                         ltime->tm_mday, ltime->tm_hour, ltime->tm_min,
-                         ltime->tm_sec, msg, Newline);
-      }
+    if (bytes > 0)
+      (void)win32_audit_append(path, buff, bytes);
+  }
 
-      /* snprintf reports the length it WANTED, not what it wrote, so a long
-         record would otherwise write past the terminator.                  */
+  EndExclusive(ERRLOG_SEM);
+}
 
-      if (bytes > (int)sizeof(buff) - 1)
-        bytes = (int)sizeof(buff) - 1;
+/* ======================================================================
+   audit_rotate()  -  Start a new audit file if the current one is large
 
-      Write(audit, buff, bytes);
+   16 Aug 26 Windows port.  PROJECT_STATUS.md 7 step 4.  SEPARATE FROM
+   audit_message() BECAUSE ORDINARY USERS CANNOT DO IT: renaming needs Delete
+   on the file and write on the directory, and the whole point of the ACL the
+   installer sets is that sdusers has neither.  A rotation attempted on every
+   record would therefore fail on every record written by the people this
+   trail exists to record.
 
-      CloseFile(audit);
+   So it is called from start_sd(), which is elevated and runs before any
+   session exists - which also means nothing can be mid-append while the
+   rename happens.  It takes ERRLOG_SEM anyway, because "nothing else is
+   running" is an assumption about the caller and not a property of this
+   function.
+
+   THE CONSEQUENCE, AND IT IS ACCEPTED: a machine that never restarts never
+   rotates, and the file grows without limit.  SD is a service that starts at
+   boot, so in practice it rotates whenever the machine does.  If that stops
+   being good enough, sdwind's five-minute slot (sdwind.c) is the right home -
+   it is privileged and long-lived - but sdwind links four objects and not the
+   kernel, so this would have to move to its own file first.
+
+   Renaming rather than deleting: nothing here discards a record.  Pruning the
+   old files is left to the site, deliberately.                              */
+
+void audit_rotate(void) {
+  time_t timenow;
+  struct tm* ltime;
+  char path[MAX_PATHNAME_LEN + 1];
+  char rotated[MAX_PATHNAME_LEN + 1];
+  struct stat statbuf;
+
+  if (sysseg == NULL)
+    return;
+
+  StartExclusive(ERRLOG_SEM, 68);
+
+  audit_pathname(path, sizeof(path));
+
+  /* stat() rather than opening it - this needs the size and no more, and
+     asking for a handle it does not need is how the append path went wrong. */
+
+  if ((*path != '\0') && !stat(path, &statbuf) &&
+      (statbuf.st_size >= AUDIT_ROTATE_BYTES)) {
+    timenow = time(NULL);
+    ltime = localtime(&timenow);
+
+    if (snprintf(rotated, sizeof(rotated), "%s.%04d%02d%02d-%02d%02d%02d", path,
+                 ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday,
+                 ltime->tm_hour, ltime->tm_min, ltime->tm_sec) <
+        (int)sizeof(rotated)) {
+      /* NOT rename() - the new file has to carry the old one's ACL, or the
+         trail silently becomes editable by the users it records from the
+         first rotation onwards.  win32audit.h explains.                   */
+
+      (void)win32_audit_rotate(path, rotated);
     }
   }
 

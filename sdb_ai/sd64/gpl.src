@@ -75,6 +75,7 @@ sd_encrypt_sodium
 sdlib
 sdsem
 win32sem
+win32audit
 sdtermlb
 strings
 sysdump
