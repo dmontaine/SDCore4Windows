@@ -46,6 +46,11 @@
 *                      SDSYS
 * 16 Aug 26 Windows port - every LOGTO and every refused LOGTO is written to
 *                      the audit trail.  PROJECT_STATUS.md 7 step 4
+* 16 Aug 26 Windows port - LOGTO SDSYS obtains OS privilege rather than
+*                      requiring an elevated terminal
+* 16 Aug 26 Windows port - and logto.authorised accepts the privilege it just
+*                      obtained, without which the LOGTO refused itself; the
+*                      four failure exits between the two give it back up
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2482,6 +2487,15 @@ int.logto:
       unwinding = 2
       return
    end
+
+* 16 Aug 26 Windows port - CLEARED ON EVERY LOGTO, AND THAT IS THE POINT OF
+*   SETTING IT HERE RATHER THAN WHERE IT IS READ.  elev.obtained says that THIS
+*   LOGTO obtained OS privilege a few lines below, and logto.authorised admits
+*   the caller on the strength of it.  Held in a session flag instead it would
+*   carry from one LOGTO to the next, and an account the caller had just been
+*   refused would be granted on the second attempt.
+   elev.obtained = @false
+
 * 20240330 mab only root can logto sdsys
 * 14 Aug 26 Windows port - RESTORED, as elevation rather than as uid zero.  It
 *   was removed on 13 Aug on the reasoning that entering SDSYS is what confers
@@ -2517,6 +2531,7 @@ int.logto:
    if upcase(new.account) = "SDSYS" then
       elev.rc = elevate('START', '')
       if elev.rc = 0 then
+         elev.obtained = @true
 *        The security-relevant half of the trail: privilege was obtained, by
 *        whom, and when.  The LOGTO itself is recorded further down.
          void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
@@ -2584,6 +2599,7 @@ int.logto:
 *   probed - but the TRAIL may say, and should: somebody working through account
 *   names is the pattern this exists to make visible.
       void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not in the register')
+      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2601,6 +2617,7 @@ int.logto:
 *   the caller is not in its ACC$GROUP - a refused grant, which is the other
 *   half of "who used the access" and the one an investigation starts from.
       void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not granted')
+      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2608,6 +2625,7 @@ int.logto:
 
    if not(ospath(acc.rec, OS$CD)) then
       display sysmsg(5161) ;* Unable to change to new directory
+      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2615,6 +2633,7 @@ int.logto:
 
    openpath "VOC" to new.voc else
       display sysmsg(5163) ;* Directory is not a SD account
+      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -3604,12 +3623,69 @@ logto.authorised:
       return
    end
 
+* 16 Aug 26 Windows port - AND SO DOES A SESSION THAT HAS JUST OBTAINED
+*   PRIVILEGE.  This is what was missing when elevation was built on 16 Aug
+*   2026: LOGTO SDSYS asked UAC, the administrator consented, the helper
+*   started - and then this routine refused the very LOGTO that had just
+*   obtained the privilege.  Measured, and the trail said it plainly:
+*   "ELEVATION GRANTED account=SDSYS" and "LOGTO REFUSED account=SDSYS
+*   reason=not granted" in the same second, twice.
+*
+*   K$ADMINISTRATOR CANNOT ANSWER THIS QUESTION, WHICH IS WHY A SECOND TEST IS
+*   NEEDED RATHER THAN A CHANGE TO THAT ONE.  It reads USR_ADMIN, seeded once
+*   from IsElevated() when the process starts (kernel.c) and settable only by
+*   an $internal program.  SD stays unelevated for its whole life BY DESIGN -
+*   a Windows token is fixed at process creation, so the privilege belongs to
+*   the helper process and never to sd.exe - so that seed is false here and
+*   always will be.  The flag is set further down, once the move into SDSYS has
+*   succeeded, which is the right moment for it and far too late for this.
+*
+*   The two tests are not redundant: K$ADMINISTRATOR is the session that was
+*   ALREADY elevated - a bootstrap, "sd -internal", the installer's account
+*   step - and asks UAC for nothing.
+   if elev.obtained then
+      logto.ok = @true
+      return
+   end
+
    if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then
       display sysmsg(10003) ;* User not allowed in requested account
       return
    end
 
    logto.ok = @true
+
+   return
+
+* ======================================================================
+* logto.privilege.undo  -  give up privilege this LOGTO obtained and did not use
+*
+* 16 Aug 26 Windows port - EVERY WAY OUT OF LOGTO AFTER THE ELEVATION AND
+*   BEFORE THE MOVE HAS TO COME THROUGH HERE.  The privilege is obtained early,
+*   because logto.authorised needs it; the flag that gives it up on the way out
+*   of SDSYS is set late, once the move has actually happened.  Between the two
+*   are four ways to fail - SDSYS missing from the register, an unauthorised
+*   caller, a directory that cannot be entered, an account with no VOC - and on
+*   every one of them the helper is running, nothing has cleared it, and the
+*   session is back at an ordinary account with privilege still available to it.
+*   That is precisely what the owner's instruction of 16 Aug 2026 forbids:
+*   LOGTO ends the elevated session.
+*
+*   Three of the four mean a broken installation rather than a routine refusal,
+*   which is an argument for handling them and not for assuming they cannot
+*   happen: a session left privileged by a fault is worth less noise than one
+*   left privileged silently.
+*
+*   K$ADMINISTRATOR IS DELIBERATELY NOT CLEARED HERE.  It has not been set at
+*   any point this routine can be reached from - that happens after the move -
+*   so clearing it would give up a privilege the caller had when LOGTO started,
+*   which is not this routine's business.
+logto.privilege.undo:
+   if elev.obtained then
+      void elevate('STOP', '')
+      void kernel(K$AUDIT, 'ELEVATION RELEASED account=' : upcase(new.account) : ' reason=logto did not complete')
+      elev.obtained = @false
+   end
 
    return
 

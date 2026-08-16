@@ -5,6 +5,35 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  Entering SDSYS no longer needs an elevated window.  Type "sd" at an
+           ordinary command prompt, then "LOGTO SDSYS", and Windows asks you to
+           confirm - the usual "Do you want to allow this app to make changes?"
+           box.  Say yes and you are in SDSYS and can do the work that needs
+           privilege, such as CREATE.ACCOUNT.  Say no and the LOGTO is refused.
+           Leaving SDSYS with another LOGTO gives the privilege up again.
+
+           This reverses the 14 Aug entry below, which said an elevated window
+           was the only route into SDSYS.  That was never the intention.  An
+           elevated window makes EVERYTHING you type privileged; this way, only
+           what SD does on your behalf is privileged, and only while you are
+           in SDSYS.
+
+           There is no ELEVATE command and there will not be one.  Entering
+           SDSYS is the only thing that asks Windows for privilege.
+
+           IT STILL DOES NOT WORK OVER ssh, AND THAT IS DELIBERATE.  Windows
+           draws that confirmation box on the desktop and an ssh session has
+           no desktop, so the LOGTO is refused there.  Administering SD means
+           being at the machine, or using a remote-control tool that gives you
+           a real desktop session - and such a tool must be INSTALLED AS A
+           SERVICE, or it cannot show you the box and your screen will appear
+           to freeze instead.
+
+           The audit trail records this: "ELEVATION GRANTED" when you consent,
+           "ELEVATION RELEASED" when you leave SDSYS, and a refused LOGTO
+           giving "elevation refused or unavailable" as the reason when you say
+           no or when there is no desktop to ask on.
+
 16 Aug 26  SD now keeps an audit trail, in the file "audit" beside the
            database in C:\ProgramData\SD\sdsys.  It records every login,
            every login that was refused, every LOGTO, every LOGTO that was
