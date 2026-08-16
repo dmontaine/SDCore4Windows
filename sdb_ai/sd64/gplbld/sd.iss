@@ -63,8 +63,10 @@ PrivilegesRequired=admin
 ; administrator who joins sdusers and the standard user who does not, and they
 ; will find SD cannot open its files.  There is no reliable way to ask Inno who
 ; is at the keyboard, so the final message tells the user how to add anyone
-; else - with CREATE.ACCOUNT, and with net localgroup sdusers <name> /add as the
-; fallback for somebody who already has a Windows account.
+; else - with CREATE.ACCOUNT, which is the only answer it gives.  It used to
+; offer "net localgroup sdusers <name> /add" as a fallback for somebody who
+; already has a Windows account; that was dropped on 15 Aug 2026 because it does
+; not work.  See the comment on the MsgBox itself.
 UsedUserAreasWarning=no
 
 ; The server is PE32+ and the MSYS2 runtime is 64 bit.  There is no 32 bit build.
