@@ -5,6 +5,28 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  SD now keeps a log of the elevation helper's work, in the file
+           "sd-elevate.log" in C:\ProgramData\SD, beside the service log.  It
+           records when a helper started for a session, each script it was
+           asked to run and the exit code that came back, and when it stopped.
+
+           ONLY ADMINISTRATORS CAN READ OR WRITE IT.  Ordinary SD users are not
+           on its permissions at all - they cannot read it, add to it, change
+           it or delete it.  That is different from the audit trail, which SD
+           users CAN add to because SD writes it as them; nothing unelevated
+           ever writes this one.
+
+           It is a diagnostic, not the audit trail.  If you want to know who
+           obtained privilege and when, read "audit".  This file is for the
+           question "the account was not created - what actually happened",
+           which previously had no answer at all.
+
+           If the file is missing, nothing is logged and SD does not create
+           one.  That is deliberate: a log created on the fly would inherit
+           permissions letting every SD user rewrite it, and a record of
+           privileged work that its own subjects can edit is worse than none.
+           A reinstall keeps whatever is already there.
+
 16 Aug 26  LIST.GRANTS works again.  It had been answering "Cannot read the
            members of group <name>, status: 5" for every account, whoever
            asked.  Reading a group's membership needs no special privilege and

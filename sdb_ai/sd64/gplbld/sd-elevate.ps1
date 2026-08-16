@@ -43,6 +43,33 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 16 Aug 26 - WHERE THE HELPER LOGS, AND WHY SD DOES NOT PASS IT.  Nothing in
+# BASIC can name this file: the installed tree maps only /dev/shm, so "/" is
+# C:\Program Files\SD and there is no POSIX path for the data tree at all.
+# Deriving it here from %ProgramData% is how the INSTALLER names it too - its
+# DataDir is {commonappdata}\SD - so the two cannot drift, and !elevate needs
+# no change.
+#
+# ONLY IF IT ALREADY EXISTS, which is the load-bearing half.  The installer
+# creates it through secure-log.ps1 with an ACL that keeps every SD user out.
+# Creating it here instead would inherit the data tree's Modify for all of
+# sdusers, and a log of privileged work that its own subjects can rewrite is
+# worse than no log.  So: no file, no logging.
+#
+# WHY IT LOGS BY DEFAULT AT ALL.  Two defects on 16 Aug 2026 - the helper
+# unable to run any script it was sent, and LIST.GRANTS refusing itself - were
+# both diagnosed only because -LogFile was passed BY HAND during the
+# investigation.  A user meeting either of them had nothing to look at.  The
+# volume is a few lines per SDSYS entry.
+#
+# IT MUST NEVER LOG SCRIPT CONTENTS - only the path and the exit code, as the
+# helper does.  !set_passwd travels this same path and its script carries a new
+# Windows password in clear.
+if ($LogFile -eq '') {
+    $default = Join-Path $env:ProgramData 'SD\sd-elevate.log'
+    if (Test-Path -LiteralPath $default) { $LogFile = $default }
+}
+
 function Send-Request([string]$message, [int]$timeoutMs = 10000) {
     # Returns the reply line, or $null if no helper answered.
     try {

@@ -275,6 +275,26 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-audit.ps1"" -Path ""{#DataDir}\sdsys\audit"""; \
     Flags: runhidden; StatusMsg: "Making the audit trail append-only..."
 
+; THE ELEVATION HELPER'S LOG, and it must exist before the helper ever runs.
+; sd-elevate.ps1 logs only if this file is already there, precisely so that a
+; missing one means "no logging" rather than "a log created with the data
+; tree's Modify for every SD user" - see the note at the top of that script.
+;
+; SAME ORDERING RULE AS THE AUDIT TRAIL ABOVE: after the icacls, never before.
+;
+; NOT IN sdsys, and not in the user's AppData either.  sdsys is the database;
+; the operational logs an administrator goes looking for - sdsvc.log,
+; adopt-account.log - live here.  AppData was considered and rejected on
+; 16 Aug 2026: the user owns their own profile, so the person the log is about
+; could reset its ACL and rewrite it.  secure-log.ps1's header has the full
+; reasoning.
+;
+; No exit code check, as above.  If this step does not run, sd-elevate.ps1
+; finds no file and logs nothing, which is exactly the pre-16-Aug behaviour.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-log.ps1"" -Path ""{#DataDir}\sd-elevate.log"""; \
+    Flags: runhidden; StatusMsg: "Securing the elevation log..."
+
 ; Optional, and only reachable if the task was ticked and no ssh server was
 ; already present.  A failure here must NOT fail the SD install: this is a
 ; Features on Demand download and policy, a metered connection or an offline
