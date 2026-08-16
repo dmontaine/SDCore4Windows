@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 16 Aug 26 Windows port - a segment left by a previous boot is SD_STOPPED and
+ *                      not SD_WRECKAGE.  /dev/shm is NTFS here, so it survives
+ *                      a reboot and the service could not start after one
  * 16 Aug 26 Windows port - start_sd() checks whether fork() actually worked.
  *                      A -1 return was falling into the parent branch, so a
  *                      failed start reported success and left a segment behind
@@ -420,6 +423,71 @@ Private bool process_exists(int pid) {
 }
 
 /* ======================================================================
+   boot_time()  -  When did this machine last start?
+
+   16 Aug 26 Windows port.  /proc/uptime is seconds since boot and the MSYS2
+   runtime supplies it, so this costs no windows.h in a file that must not
+   include one (sdsem.c records why).  Answers 0 if it cannot be read, and the
+   caller then changes nothing.                                             */
+
+Private time_t boot_time(void) {
+  FILE* fu;
+  double uptime;
+  int got;
+
+  if ((fu = fopen("/proc/uptime", "r")) == NULL)
+    return (time_t)0;
+
+  got = fscanf(fu, "%lf", &uptime);
+  fclose(fu);
+
+  if (got != 1)
+    return (time_t)0;
+
+  return time(NULL) - (time_t)uptime;
+}
+
+/* ======================================================================
+   segment_predates_boot()  -  Was this segment left behind by a previous boot?
+
+   16 Aug 26 Windows port.  THIS CANNOT HAPPEN ON LINUX AND SO HAS NO UPSTREAM
+   EQUIVALENT: /dev/shm is tmpfs there and empties at every boot.  Here it is a
+   bind mount onto a real NTFS directory, C:\ProgramData\SD\shm (stage.py), so
+   a segment left by an unclean stop OUTLIVES THE MACHINE.  Measured 16 Aug
+   2026: sd -stop failed to unlink at shutdown, and the next boot's sd -start
+   refused the survivor as SD_WRECKAGE - the service came up Stopped and no
+   user could reach SD until somebody ran sd -stop by hand.
+
+   No process from before a reboot is still running, so a segment older than
+   the boot cannot be in use, whatever the recorded pids say.  That makes
+   SD_STOPPED the truthful answer and restores the Linux behaviour exactly.
+
+   ASKED ONLY ONCE THE DAEMON IS KNOWN TO BE GONE, which is what makes a clock
+   corrected after boot harmless - a live segment is never tested, so the worst
+   a wrong answer can do is leave real wreckage still looking like wreckage.  */
+
+Private bool segment_predates_boot(void) {
+  int fd;
+  int got;
+  struct stat statbuf;
+  time_t booted;
+
+  if ((booted = boot_time()) == (time_t)0)
+    return FALSE;
+
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDONLY, 0666)) == -1)
+    return FALSE;
+
+  got = fstat(fd, &statbuf);
+  close(fd);
+
+  if (got)
+    return FALSE;
+
+  return (statbuf.st_mtime < booted);
+}
+
+/* ======================================================================
    sd_state()  -  What is actually running behind the shared segment?
 
    14 Aug 26 Windows port.  "SD is already started" was answered by objects
@@ -438,6 +506,7 @@ Private int sd_state(int* daemon_pid, int* sessions) {
   int state = SD_STOPPED;
   int16_t i;
   USER_ENTRY* uptr;
+  bool stale = FALSE;
 
   *daemon_pid = 0;
   *sessions = 0;
@@ -465,9 +534,36 @@ Private int sd_state(int* daemon_pid, int* sessions) {
       if (uptr->uid && (uptr->pid > 0) && process_exists(uptr->pid))
         (*sessions)++;
     }
+
+    /* 16 Aug 26 Windows port - and wreckage from before the last boot is not
+       wreckage.  The pids just counted are from that boot too, so whatever
+       they matched this time round is coincidence and not a session.        */
+
+    if ((state == SD_WRECKAGE) && segment_predates_boot()) {
+      state = SD_STOPPED;
+      *sessions = 0;
+      stale = TRUE;
+    }
   }
 
   unbind_sysseg();
+
+  /* Reporting it gone is not enough - it has to BE gone.  bind_sysseg() looks
+     for the segment before it creates one, so a survivor left in place would
+     be attached to and answered with "SD is already started" (line 132), and
+     sd -start would fail a second way instead of the first.                 */
+
+  /* And it says so.  An unclean stop is worth knowing about even though this
+     recovers from it, and a silent recovery is indistinguishable from the
+     check never having run - which matters here, because sdsvc-sd.log has
+     captured nothing on three attempts (PROJECT_STATUS.md).                */
+
+  if (stale) {
+    shm_unlink(SD_POSIX_SHM_NAME);
+    fprintf(stderr,
+            "Discarding the shared segment left by the previous boot - SD did "
+            "not shut down cleanly.\n");
+  }
 
   return state;
 }
@@ -489,7 +585,12 @@ bool start_sd() {
      processes; see sd_state().  Neither clears the wreckage here: sd -start
      silently discarding somebody else's shared segment is a destructive
      default, and the session that sees this message is the one that knows
-     whether the sessions counted are worth keeping.                        */
+     whether the sessions counted are worth keeping.
+
+     16 Aug 26 - ONE EXCEPTION, and it is not that default: a segment from
+     before the last boot belongs to nobody, because no process that could
+     have held it survived the reboot.  sd_state() answers SD_STOPPED for it
+     and removes it.  See segment_predates_boot().                          */
 
   switch (sd_state(&daemon_pid, &sessions)) {
     case SD_RUNNING:

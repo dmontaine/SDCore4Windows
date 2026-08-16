@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  SD now starts after a restart even if the last shutdown was not a
+           clean one.  If SD is stopped abruptly - the power goes, or the
+           process is killed - it leaves a shared memory segment behind, and
+           on Windows that survives a reboot where on Linux it would not.
+           SD used to refuse to start on the next boot and say "Run sd -stop
+           to clear it", which meant the machine came up with SD unavailable
+           to everybody until somebody logged in and typed it by hand.
+           Nothing from before a restart can still be using that segment, so
+           SD now discards it and starts normally, printing
+
+              Discarding the shared segment left by the previous boot -
+              SD did not shut down cleanly.
+
+           This changes nothing while the machine is running: a segment that
+           belongs to a live SD is still never touched, and "sd -start" still
+           refuses to disturb a system that is already up.
+
 15 Aug 26  SD now runs as a Windows service, called "String Database (SD)".
            The installer creates it and starts it, and Windows starts it
            again after every restart - so SD is simply up, and nobody has to
