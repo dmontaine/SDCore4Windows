@@ -166,6 +166,8 @@
 #define K_SETGID             55
 #define K_RUNEXE             56
 #define K_AUDIT              57
+#define K_WINPATH            58
+#define K_WINPID             59
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

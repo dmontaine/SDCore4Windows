@@ -137,6 +137,8 @@
       $define K$SETGID          55       ;* NIX authorisation
       $define K$RUNEXE          56       ;* Run executable
       $define K$AUDIT           57       ;* Append a record to the audit trail
+      $define K$WINPATH         58       ;* POSIX pathname as a Windows one
+      $define K$WINPID          59       ;* This session pid as Windows counts it
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

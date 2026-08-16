@@ -41,6 +41,9 @@
 #include "locks.h"
 
 #include <sys/wait.h>
+/* 16 Aug 26 Windows port - cygwin_conv_path(), for K_WINPATH.  sysseg.c
+   includes this too, for CW_CYGWIN_PID_TO_WINPID.                        */
+#include <sys/cygwin.h>
 
 Public bool case_sensitive;
 
@@ -518,6 +521,42 @@ void op_kernel() {
     case K_AUDIT:
       k_get_c_string(descr, s, sizeof(s) - 1);
       audit_message(s);
+      break;
+
+    /* 16 Aug 26 Windows port - the POSIX name of a file as Windows spells it.
+       BASIC has had no way to make one: OS$FULLPATH returns a POSIX path
+       whatever its comment claims, and !ps_script works around the lack by
+       naming its file relative to a working directory both sides share
+       (PROJECT_STATUS.md 5.8).  That trick does not stretch to handing a
+       pathname to Start-Process, which is a Windows program and cannot open
+       /usr/bin/....  Answers an empty string rather than a guess if the
+       runtime cannot convert - a wrong pathname here launches the wrong
+       thing, and exepath.c makes the same choice for the same reason.     */
+
+    case K_WINPATH:
+      k_get_c_string(descr, s, sizeof(s) - 1);
+      {
+        char win[MAX_PATHNAME_LEN + 1];
+
+        if (cygwin_conv_path(CCP_POSIX_TO_WIN_A, s, win, sizeof(win)) == 0)
+          k_put_c_string(win, &result);
+        else
+          k_put_c_string("", &result);
+      }
+      break;
+
+    /* 16 Aug 26 Windows port - this session's pid AS WINDOWS COUNTS IT.
+       getpid() answers with the MSYS2 runtime's own number, which is not what
+       Get-Process or Task Manager use - the daemon that called itself pid 87
+       was 14712 to Windows (sysseg.c, win_pid()).  The elevated helper watches
+       its owning session with Get-Process, so it needs the Windows number;
+       given the runtime's, it would decide the session had gone at once, or
+       worse, watch an unrelated process that happened to hold it.
+       Answers 0 if the runtime cannot translate.                          */
+
+    case K_WINPID:
+      result.data.value =
+          (int32_t)cygwin_internal(CW_CYGWIN_PID_TO_WINPID, getpid());
       break;
 
     default:

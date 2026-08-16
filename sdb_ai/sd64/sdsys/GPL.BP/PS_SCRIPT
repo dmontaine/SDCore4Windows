@@ -73,6 +73,11 @@ $internal
 function ps_script(script)
 $catalog !ps_script
 
+$include int$keys.h
+
+* 16 Aug 26 Windows port - the session's elevated helper, when it has one.
+deffun elevate(action, arg) calling '!elevate'
+
    set.status 0
    rc = -1
 
@@ -97,6 +102,39 @@ $catalog !ps_script
 *  relative to the working directory the child inherits - see the description.
 *  Single quotes, so the leading $ of the name is literal to PowerShell.
    q = char(39)
+
+* 16 Aug 26 Windows port - AN ELEVATED SESSION SENDS THE SCRIPT TO ITS HELPER
+*   INSTEAD OF RUNNING IT HERE.  PROJECT_STATUS.md 7 step 4.  Entering SDSYS
+*   obtains privilege for the session (CPROC, !elevate) and this is where the
+*   privileged half of CREATE.ACCOUNT actually uses it - !create_user,
+*   !set_passwd and !os_group all arrive through here.
+*
+*   ASKED ONLY WHEN THE SESSION HAS ADMINISTRATOR RIGHTS, so an ordinary
+*   session pays nothing: the test is a flag read, not a process.  A session
+*   that is genuinely elevated already - the installer's own account step, a
+*   bootstrap, "sd -internal" - has no helper, gets 9 back and runs the script
+*   itself, which is the behaviour this file has always had.
+*
+*   THE HELPER NEEDS A WINDOWS PATHNAME.  It is a separate process and does
+*   not inherit this working directory, so the relative name that works below
+*   means nothing to it.
+   if kernel(K$ADMINISTRATOR, -1) then
+      here = ospath('', OS$CWD)
+      if here # '' then
+         win = kernel(K$WINPATH, here : '/' : id)
+         if win # '' then
+            rc = elevate('RUN', win)
+*           9 is "no helper for this session", and is the only answer that
+*           means "not handled" rather than a result.  Anything else, success
+*           or failure, is the script's own and is returned as it stands.
+            if rc # 9 then
+               delete sys.f, id
+               close sys.f
+               return rc
+            end
+         end
+      end
+   end
 
    os.execute 'Get-Content -LiteralPath ' : q : id : q : ' -Raw | Invoke-Expression'
    rc = os.error()

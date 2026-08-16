@@ -1,0 +1,132 @@
+# sd-elevate.ps1 - the unelevated half of an SD administrator session
+#
+# Called by SD (GPL.BP/ELEVATE) in three modes:
+#
+#   -Start   launch the elevated helper.  THIS IS WHERE UAC PROMPTS.
+#   -Run     hand a script to the helper and return its exit code
+#   -Stop    tell the helper to exit
+#
+# Exit codes, chosen to match the convention !create_user and !os_group
+# already use so callers need learn nothing new:
+#
+#   0  done
+#   1  the operation failed
+#   5  not elevated / elevation refused or unavailable
+#   9  no helper is running for this session
+#
+# PROJECT_STATUS.md 7 step 4.  Owner's decisions, 16 Aug 2026: elevation comes
+# from entering SDSYS and nowhere else, and admins are highly trusted - this
+# raises the floor rather than trying to constrain the machine's owner.
+#
+# WHY -Start CANNOT WORK OVER ssh, AND WHY THAT IS THE POINT.  UAC renders its
+# consent dialog on the interactive desktop and an ssh session has none, so
+# Start-Process -Verb RunAs fails there.  That keeps administrator work off ssh
+# exactly as 5.6.2 requires, enforced by Windows rather than by a test in SD
+# that could drift.  A remote-control tool (AnyDesk, RDP) works, but only if it
+# is installed as a SERVICE - a per-user install cannot show the secure desktop
+# and the operator sees a frozen screen.
+#
+# WHY -Run VERIFIES THE HELPER FIRST.  The reply to a request is an exit code,
+# and an exit code from something that is not elevated would tell SD an account
+# was created when nothing happened.  PING answers "ELEVATED" or the connection
+# is not trusted.
+
+param(
+    [switch]$Start,
+    [switch]$Run,
+    [switch]$Stop,
+    [Parameter(Mandatory = $true)][string]$PipeName,
+    [int]$OwnerPid = 0,
+    [string]$Script = '',
+    [string]$LogFile = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Send-Request([string]$message, [int]$timeoutMs = 10000) {
+    # Returns the reply line, or $null if no helper answered.
+    try {
+        $c = New-Object System.IO.Pipes.NamedPipeClientStream(
+            '.', $PipeName, 'InOut')
+        $c.Connect($timeoutMs)
+        $w = New-Object IO.StreamWriter($c)
+        $w.AutoFlush = $true
+        $r = New-Object IO.StreamReader($c)
+        $w.WriteLine($message)
+        $reply = $r.ReadLine()
+        $c.Dispose()
+        return $reply
+    } catch {
+        return $null
+    }
+}
+
+function Test-Helper {
+    # Short timeout: this asks "is one there", not "wait for one".
+    return ((Send-Request 'PING' 1500) -eq 'ELEVATED')
+}
+
+try {
+    if ($Start) {
+        # Already elevated - the installer's own account step, a bootstrap, or
+        # an administrator who deliberately opened an elevated terminal.  There
+        # is nothing to launch and nothing to prompt for, and saying so lets
+        # !ps_script run the script itself as it always has.
+        $elevated = ([Security.Principal.WindowsPrincipal](
+            [Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
+        if ($elevated) { exit 0 }
+
+        if (Test-Helper) { exit 0 }   # one is already serving this session
+
+        if ($OwnerPid -le 0) { exit 1 }
+
+        $helper = Join-Path $PSScriptRoot 'sd-elevate-helper.ps1'
+        if (-not (Test-Path -LiteralPath $helper)) { exit 1 }
+
+        $args = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                  '-File', "`"$helper`"", '-PipeName', $PipeName,
+                  '-OwnerPid', $OwnerPid)
+        if ($LogFile -ne '') { $args += @('-LogFile', "`"$LogFile`"") }
+
+        try {
+            Start-Process powershell -Verb RunAs -WindowStyle Hidden `
+                -ArgumentList $args | Out-Null
+        } catch {
+            # Declined at the UAC prompt, or no interactive desktop to show it
+            # on.  Both are "not elevated", which is what the caller acts on.
+            exit 5
+        }
+
+        # Wait for it to come up.  It has a UAC prompt to get past first, so
+        # this is generous; the loop exits as soon as PING is answered.
+        for ($i = 0; $i -lt 40; $i++) {
+            if (Test-Helper) { exit 0 }
+            Start-Sleep -Milliseconds 500
+        }
+        exit 5
+    }
+
+    if ($Run) {
+        if ($Script -eq '') { exit 1 }
+        if (-not (Test-Helper)) { exit 9 }
+
+        $reply = Send-Request $Script 300000
+        if ($null -eq $reply) { exit 1 }
+
+        $code = 0
+        if ([int]::TryParse($reply, [ref]$code)) { exit $code }
+        exit 1
+    }
+
+    if ($Stop) {
+        if (-not (Test-Helper)) { exit 0 }   # nothing to stop is success
+        Send-Request 'STOP' 5000 | Out-Null
+        exit 0
+    }
+
+    exit 1
+}
+catch {
+    exit 1
+}

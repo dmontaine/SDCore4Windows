@@ -416,9 +416,18 @@ def main():
     # read and parse-checked on its own.  Missing one is a build failure, not a
     # warning: the installer would otherwise silently skip the step.
     here = os.path.dirname(os.path.abspath(__file__))
+    # sd-elevate.ps1 and its helper are the exception to "scripts the INSTALLER
+    # runs": SD runs these, at every entry to SDSYS.  They ship here rather
+    # than in the data tree on purpose - the helper is executed with full
+    # privilege, and the data tree is writable by every member of sdusers, so
+    # shipping it there would let one SD user rewrite what another user's
+    # elevated helper runs.  GPL.BP/ELEVATE reaches them with
+    # kernel(K$WINPATH), because they are "/" to SD and "C:\Program Files\SD"
+    # to PowerShell, which cannot open the first.
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
-                   'secure-audit.ps1'):
+                   'secure-audit.ps1', 'sd-elevate.ps1',
+                   'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):
             raise SystemExit('missing %s - the installer needs it' % src)
