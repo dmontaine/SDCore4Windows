@@ -735,6 +735,27 @@ begin
   if (Length(Rebuilt) > 0) and (Rebuilt[1] = ';') then
     Delete(Rebuilt, 1, 1);
 
+  (* AND THE SAME AT THE OTHER END, WHICH WAS MISSING AND LEFT AN EMPTY PATH
+     ENTRY BEHIND ON EVERY UNINSTALL.  Reported by the owner on 16 Aug 2026,
+     who read the system PATH and found 23 empty entries in 30 - the visible
+     symptom being a long run of semicolons that makes it look as though SD
+     was never added at all.
+
+     The cause is an asymmetry two lines up: the head copy KEEPS the separator
+     that preceded our directory, while the tail copy starts AFTER the one that
+     followed it.  With an entry in the middle that is exactly right - "a;" and
+     "b" rejoin as "a;b".  With our entry LAST, and Inno always appends so it
+     always is, the tail is empty and the kept separator dangles.  The next
+     install then appends after it, so the run grows by one every cycle.
+
+     A LOOP, NOT A SINGLE STRIP, AND THAT IS THE USEFUL PART: after our entry
+     is removed, every empty slot this bug ever left is trailing, so this
+     clears the whole accumulated run on the next uninstall rather than only
+     the one just created.  It can only ever delete separators, never a real
+     entry, which is what makes it safe to apply to a PATH we do not own. *)
+  while (Length(Rebuilt) > 0) and (Rebuilt[Length(Rebuilt)] = ';') do
+    Delete(Rebuilt, Length(Rebuilt), 1);
+
   RegWriteExpandStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', Rebuilt);
 end;
 

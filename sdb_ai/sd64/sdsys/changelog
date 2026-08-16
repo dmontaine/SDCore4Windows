@@ -5,6 +5,18 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  Uninstalling SD no longer leaves an empty entry on the system PATH.
+           It had been removing the SD directory but leaving the separator
+           behind, so every install-and-uninstall cycle added one more empty
+           slot - visible as a run of semicolons in the PATH, which looks
+           alarmingly as though SD was never added at all.  The next uninstall
+           clears the whole accumulated run, not just the one it creates.
+
+           If SD looks absent from your PATH just after installing, check a
+           NEW command prompt first.  Windows tells running programs the PATH
+           has changed, but a shell that is already open keeps the copy it
+           started with.
+
 16 Aug 26  SECURITY.  When SD does privileged work for you - creating an
            account, setting a password, editing a group - it writes a short
            script to a file and runs it, rather than putting a password on a
