@@ -159,16 +159,58 @@ bool start_connection(int unused) {
         
         break;
 
-      case PF_INET:
-/*        struct sockaddr_in* s = (struct sockaddr_in*)&sa;
-          port_no  = ntohs(s->sin_port);
-          if (inet_ntop(AF_INET, &s->sin_addr, ip_addr, MAX_IP_ADDR_STR_LEN) ==  NULL) {
-            process.status = ER_BADADDR;
+/* 17 Aug 26 Windows port - PF_INET IS ACCEPTED AGAIN ON THIS PLATFORM, AND
+   THAT IS A DELIBERATE REVERSAL OF THE 2024 NARROWING ABOVE.  Read this
+   before undoing it.
+
+   Upstream restricted this to AF_UNIX and took the peer identity from
+   getpeereid() - the kernel telling it which local user is on the other end.
+   THAT CANNOT WORK HERE AT ALL, and it was measured rather than assumed: a
+   socket MSYS2 binds at /tmp/x.sock is, seen from native Windows, a 54-byte
+   REGULAR FILE holding the Cygwin emulation's handshake cookie, so native
+   sshd cannot reach it and "ssh -L port:/tmp/sdsys/sdclient.socket" - the
+   contract the Linux client uses - has no Windows equivalent.  Section 8.
+
+   The alternative of a native listener passing the accepted socket to this
+   process was measured too, and is worse: the descriptor arrives valid enough
+   for getsockname() and send() and CANNOT BE READ, because a Windows socket's
+   receive path stays bound to the process that created it.  Section 7 step 6.
+
+   SO THE IDENTITY IS NOT LOST, IT MOVED.  getpeereid() bought "which local
+   user is this"; APISRVR now establishes that with $CRED (!CRED_VERIFY plus
+   K$SET.USERNAME, step 6a) and confirms the account with the ACC$GROUP test
+   (step 6c).  peer_usr_id and peer_grp_id are therefore LEFT UNASSIGNED here
+   rather than filled in with something plausible - nothing downstream may
+   treat a TCP peer as an authenticated OS user, and an unassigned value is
+   what says so.
+
+   The listener binds 127.0.0.1 only and APIPORT defaults to off, so this
+   opens nothing by itself.                                                 */
+      case PF_INET: {
+          struct sockaddr_storage pa;
+          socklen_t palen = sizeof(pa);
+
+          /* The PEER address, not our own - getsockname() above answered the
+             family, and what is worth logging is who connected. */
+          if (getpeername(0, (struct sockaddr *)&pa, &palen) == 0) {
+            struct sockaddr_in* s = (struct sockaddr_in*)&pa;
+            port_no = ntohs(s->sin_port);
+            /* MAX_SOCKET_ADDR_STR_LEN, not the MAX_IP_ADDR_STR_LEN the dead
+               code above names - that constant is defined nowhere in the
+               tree, so the commented-out original could never have compiled
+               even if it had been enabled. */
+            if (inet_ntop(AF_INET, &s->sin_addr, ip_addr,
+                          MAX_SOCKET_ADDR_STR_LEN) == NULL) {
+              process.status = ER_BADADDR;
+              strcpy(ip_addr, "?");
+            }
+          } else {
+            strcpy(ip_addr, "?");
           }
-*/         
-          syslog (LOG_INFO,"Invalid Network Socket Type PF_INET");
-          return FALSE; /* Error */ 
-          break;
+          syslog(LOG_INFO, "API connection from %s port %d", ip_addr,
+                 (int)port_no);
+        }
+        break;
 
       case PF_INET6:
 /*        struct sockaddr_in6* s6 = (struct sockaddr_in6*)&sa;

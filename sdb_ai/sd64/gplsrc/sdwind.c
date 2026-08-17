@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Aug 26 Windows port - the API listener.  Windows has neither xinetd nor
+ *                      systemd socket activation, so the listener and the
+ *                      per-connection spawn that the Linux build gets from
+ *                      the operating system have to live somewhere; this is
+ *                      the only process SD already keeps running.
  * 16 Aug 26 Windows port - report why startup failed instead of exiting
  *                      silently; the errmsg from get_semaphores() was being
  *                      filled in and then discarded
@@ -50,10 +55,22 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sched.h>
+/* 17 Aug 26 Windows port - for the API listener */
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 bool terminate = FALSE;
 
+/* 17 Aug 26 Windows port - the API listener, -1 when APIPORT is not set,
+   which is the default and the shipped state. */
+static int api_listener = -1;
+
 void check_lost_users(void);
+static int open_api_listener(int port);
+static void accept_api_session(void);
 
 void signal_handler(int signum);
 
@@ -64,6 +81,7 @@ int main() {
   int timer = 0;
   int fd;
   struct stat statbuf;
+  time_t next_tick;
 
   process.user_no = -2; /* Mark as sdwind for semaphore table */
 
@@ -121,19 +139,66 @@ int main() {
 
   /* ========================= Main loop ========================= */
 
+  /* 17 Aug 26 Windows port - THE LOOP NOW WAITS ON A SOCKET RATHER THAN
+     SLEEPING, and the minute timer is driven by the CLOCK instead of by the
+     iteration count.  It has to be: select() returns as soon as a connection
+     arrives, so counting iterations would run check_lost_users() once per
+     API connection rather than once every five minutes.  With APIPORT unset
+     there is no descriptor to watch and select() is just the old sleep.    */
+  api_listener = open_api_listener((int)sysseg->api_port);
+
+  next_tick = time(NULL) + 60;
+
   while (!terminate) {
-    timer++;
+    fd_set rd;
+    struct timeval tv;
+    long wait_secs;
+    int nfds;
 
-    /* One minute actions */
+    wait_secs = (long)(next_tick - time(NULL));
+    if (wait_secs < 0)
+      wait_secs = 0;
+    tv.tv_sec = wait_secs;
+    tv.tv_usec = 0;
 
-    if ((timer % 5) == 0) {
-      /* Five minute actions */
-
-      check_lost_users();
+    FD_ZERO(&rd);
+    nfds = 0;
+    if (api_listener >= 0) {
+      FD_SET(api_listener, &rd);
+      nfds = api_listener + 1;
     }
 
-    sleep(60);
+    /* EINTR is expected here - SIGTERM arrives this way - and is handled by
+       falling through to the while test rather than by retrying. */
+    if (select(nfds, (nfds > 0) ? &rd : NULL, NULL, NULL, &tv) > 0) {
+      if ((api_listener >= 0) && FD_ISSET(api_listener, &rd))
+        accept_api_session();
+    }
+
+    /* REAPED HERE RATHER THAN IN A SIGCHLD HANDLER, deliberately.  SIG_IGN
+       would auto-reap but then make system() in check_lost_users() fail with
+       ECHILD, and a handler would have to be reasoned about against the
+       SIGCHLD system() blocks around itself.  A zombie living until the next
+       loop pass costs nothing.                                             */
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+      ;
+
+    if (time(NULL) >= next_tick) {
+      next_tick += 60;
+      timer++;
+
+      /* One minute actions */
+
+      if ((timer % 5) == 0) {
+        /* Five minute actions */
+
+        check_lost_users();
+      }
+    }
   }
+
+  if (api_listener >= 0)
+    close(api_listener);
 
   /* Tidy up on our way out */
 
@@ -211,6 +276,122 @@ void check_lost_users() {
       }
     /* -------------------- */
   }
+}
+
+/* ======================================================================
+   open_api_listener()  -  Bind the API port, if there is one
+
+   17 Aug 26 Windows port.  Returns -1 for "no listener", which is not an
+   error: APIPORT defaults to zero and a shipped system opens no port at all.
+   Enabling it is an act by an administrator, because the port is reachable by
+   every local process on the machine - what answers that is $CRED and the
+   ACC$GROUP check inside APISRVR, not the transport.  section 7 step 6.      */
+
+static int open_api_listener(int port) {
+  int fd;
+  int on = 1;
+  struct sockaddr_in addr;
+  char msg[128];
+
+  if (port <= 0)
+    return -1; /* APIPORT not set - the default, and not a failure */
+
+  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    log_message("API listener not started: cannot create socket");
+    return -1;
+  }
+
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char*)&on, sizeof(on));
+
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  /* LOOPBACK ONLY, AND NOT CONFIGURABLE.  Posture B (section 8): nothing of
+     SD's own faces the network, ssh carries the traffic.  A bind address in
+     the configuration file would be a way to get that wrong by accident.   */
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = htons((u_int16_t)port);
+
+  if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    snprintf(msg, sizeof(msg),
+             "API listener not started: cannot bind 127.0.0.1 port %d", port);
+    log_message(msg);
+    close(fd);
+    return -1;
+  }
+
+  if (listen(fd, 5) < 0) {
+    snprintf(msg, sizeof(msg),
+             "API listener not started: cannot listen on port %d", port);
+    log_message(msg);
+    close(fd);
+    return -1;
+  }
+
+  snprintf(msg, sizeof(msg), "API listener on 127.0.0.1 port %d", port);
+  log_message(msg);
+  return fd;
+}
+
+/* ======================================================================
+   accept_api_session()  -  One connection, one sd process
+
+   17 Aug 26 Windows port.  This is the half of xinetd that Windows does not
+   provide: accept, then fork and exec "sd -n -q" with the socket as
+   descriptors 0 and 1, which is exactly the contract etc/xinetd.d/qmclient
+   describes and what start_connection() reads.
+
+   The socket is handed over by INHERITING IT ACROSS fork(), which is why this
+   lives in an MSYS2 program rather than in the native service.  A native
+   listener passing the accepted socket to a Cygwin child was measured on
+   17 Aug 2026 and does not work: the descriptor arrives valid enough for
+   getsockname() and send() and cannot be read at all, because a Windows
+   socket's receive path stays bound to the process that created it.  Both
+   halves of this fork are Cygwin, so none of that applies.                  */
+
+static void accept_api_session(void) {
+  int conn;
+  pid_t pid;
+  char bindir[MAX_PATHNAME_LEN + 1];
+  char sdpath[MAX_PATHNAME_LEN + 20];
+
+  if ((conn = accept(api_listener, NULL, NULL)) < 0)
+    return; /* EINTR, or a client that gave up between select and accept */
+
+  /* sd lives beside this daemon, not under <sysdir>/bin, which holds pcode -
+     the same correction check_lost_users() carries. */
+  if (!exe_directory(bindir, sizeof(bindir))) {
+    log_message("API connection refused: cannot locate the SD program directory");
+    close(conn);
+    return;
+  }
+
+  if (snprintf(sdpath, sizeof(sdpath), "%s/sd", bindir) >= (int)sizeof(sdpath)) {
+    log_message("API connection refused: overflowed path/filename buffer");
+    close(conn);
+    return;
+  }
+
+  if ((pid = fork()) < 0) {
+    log_message("API connection refused: fork failed");
+    close(conn);
+    return;
+  }
+
+  if (pid == 0) {
+    /* Child.  The listening socket must not survive into the session, or a
+       dead sdwind would leave the port held open by whatever is still
+       running. */
+    close(api_listener);
+    if ((dup2(conn, 0) < 0) || (dup2(conn, 1) < 0))
+      _exit(126);
+    if (conn > 1)
+      close(conn);
+    execl(sdpath, "sd", "-n", "-q", (char*)NULL);
+    _exit(127); /* Only reached if exec failed */
+  }
+
+  /* Parent.  Close our copy, or the client never sees the session end. */
+  close(conn);
 }
 
 /* ======================================================================

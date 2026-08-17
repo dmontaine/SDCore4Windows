@@ -121,6 +121,27 @@ check-select-probe:
 	@echo '--- child results ---'
 	@cat localtest/probe-result.txt
 
+# 17 Aug 26 - THE SOCKET PROBE, which settled the remote transport (section 7
+# step 6).  It answers whether a NATIVE listener can hand an accepted socket to
+# an MSYS2 child as its standard input: it cannot, and the four cells below are
+# why.  The pipe rows are the control - same descriptor number, same spawn
+# path - and without them the socket rows would prove nothing.
+#
+# Expected, and it is a FAILURE that is being recorded rather than a pass:
+#   pipe empty  select=0        pipe data  select=1, read OK    <- control
+#   sock empty  select=0        sock data  select=0, EAGAIN     <- the finding
+check-sock-probe:
+	mkdir -p localtest
+	$(MSYS_CC) -std=gnu11 -Wall -Wextra -o localtest/sock-probe-child.exe \
+	  tests/sock_probe_child.c
+	PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu11 -Wall -Wextra \
+	  -o localtest/sock-probe-parent.exe tests/sock_probe_parent.c -lws2_32
+	@cd localtest && for kind in pipe sock; do \
+	  for mode in empty data; do \
+	    ./sock-probe-parent.exe ./sock-probe-child.exe $$kind $$mode; \
+	  done; \
+	done
+
 clean:
 	$(RM) $(DLL) $(IMPLIB) smoke-test.exe internal-state-test.exe
 	$(RM) -r localtest

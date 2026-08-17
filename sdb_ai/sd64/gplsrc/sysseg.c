@@ -239,6 +239,7 @@ bool bind_sysseg(bool create, char* errmsg) {
   sysseg->portmap_base_port = cfg->portmap_base_port; /* PORTMAP */
   sysseg->portmap_base_user = cfg->portmap_base_user; /* PORTMAP */
   sysseg->portmap_range = cfg->portmap_range;         /* PORTMAP */
+  sysseg->api_port = cfg->api_port;                   /* APIPORT */
   strcpy((char*)(sysseg->sysdir), cfg->sysdir);       /* SDSYS */
   strcpy((char*)(sysseg->startup), cfg->startup);     /* STARTUP */
 

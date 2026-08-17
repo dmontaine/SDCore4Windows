@@ -61,6 +61,17 @@ struct SYSSEG {
    int16_t portmap_base_port;  /* PORTMAP: First port number ... */
    int16_t portmap_base_user;  /*          ...First user number... */
    int16_t portmap_range;      /*          ...Number of ports/users */
+   /* 17 Aug 26 Windows port - APIPORT.  It lives here rather than in PCFG
+      because sdwind is what reads it, and sdwind has the segment but runs no
+      BASIC and loads no per-process config.
+
+      THIS CHANGES THE SHARED SEGMENT LAYOUT, and SYSSEG_REVSTAMP DOES NOT
+      CATCH THAT - it is MAJOR_REV/MINOR_REV/BUILD, i.e. release identity, and
+      this release did not change.  Harmless as shipped, because an install
+      replaces every binary at once; the hazard is copying one rebuilt binary
+      onto a running system.  Same trap as the PCFG change of 16 Aug 26 -
+      PROJECT_STATUS.md section 7 step 1a and section 6.                     */
+   int16_t api_port;           /* APIPORT: API listener port, 0 = off */
    u_int32_t flags;
      #define SSF_SECURE     0x00000001   /* Secure mode? */
      #define SSF_SUSPEND    0x00000020   /* Suspend writes */

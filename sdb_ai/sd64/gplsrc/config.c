@@ -267,9 +267,17 @@ struct CONFIG* read_config(char* errmsg) {
       } 
       else if (sscanf(rec, "SDCLIENT=%d", &n) == 1)
         pcfg.sdclient_mode |= n;
-/* 20240219 mab mods to handle AF_UNIX sockets, security mode */        
+/* 20240219 mab mods to handle AF_UNIX sockets, security mode */
       else if (sscanf(rec, "APILOGIN=%d", &n) == 1)
-        pcfg.api_login = n; 
+        pcfg.api_login = n;
+/* 17 Aug 26 Windows port - APIPORT, the loopback port sdwind listens on for
+   API connections.  There is no default and no fallback to 4243: the struct
+   is memset to zero above, zero means no listener, and a port has to be asked
+   for.  Opening one is a decision - it is reachable by every local process on
+   the machine, which is what $CRED and the ACC$GROUP check in APISRVR are
+   there to answer (PROJECT_STATUS.md section 7 step 6).                     */
+      else if (sscanf(rec, "APIPORT=%d", &n) == 1)
+        cfg->api_port = n;
       else if (strncmp(rec, "SDSYS=", 6) == 0) {
         if (!(command_options & CMD_FLASH))
           strcpy(cfg->sysdir, rec + 6);

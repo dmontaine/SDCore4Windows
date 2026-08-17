@@ -138,9 +138,15 @@ void op_config() {
   } 
   else if (!strcmp(param, "SDCLIENT"))
     result.data.value = pcfg.sdclient_mode;
-/* 20240219 mab mods to handle AF_UNIX sockets, security mode */  
+/* 20240219 mab mods to handle AF_UNIX sockets, security mode */
   else if (!strcmp(param, "APILOGIN"))
-    result.data.value = pcfg.api_login;  
+    result.data.value = pcfg.api_login;
+/* 17 Aug 26 Windows port - APIPORT.  Read only, and from the SEGMENT rather
+   than from pcfg: it is a system-wide setting that sdwind acts on at startup,
+   so a per-process override would report a port nothing is listening on.
+   PORTMAP above is read the same way and for the same reason.              */
+  else if (!strcmp(param, "APIPORT"))
+    result.data.value = sysseg->api_port;
   else if (!strcmp(param, "RECCACHE"))
     result.data.value = pcfg.reccache;
   else if (!strcmp(param, "RINGWAIT"))

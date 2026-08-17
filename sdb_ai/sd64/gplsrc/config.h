@@ -21,6 +21,9 @@
  * rev 0.9.0 Jan 25 mab add create_user
  * 16 Aug 26 Windows port - create_user removed.  Nothing read it after the
  *           CREATUSR gate went from CREATEA and DELACC on 14 Aug 26.
+ * 17 Aug 26 Windows port - APIPORT added, for the API listener sdwind runs.
+ *           Windows has no xinetd and no systemd socket activation, so the
+ *           listener and the per-connection spawn are ours to provide.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -56,6 +59,11 @@ struct CONFIG {
   int16_t portmap_base_port;       /* PORTMAP: First port number ... */
   int16_t portmap_base_user;       /*          ...First user number... */
   int16_t portmap_range;           /*          ...Number of ports/users */
+  /* 17 Aug 26 Windows port - APIPORT: loopback port for API (SDClient)
+     connections, 0 = no listener.  DEFAULTS TO OFF DELIBERATELY: enabling it
+     opens a TCP port every local process can reach, so it is an act, not a
+     side effect of installing.  The Linux convention is 4243.               */
+  int16_t api_port;                /* APIPORT:  API listener port, 0 = off */
   char startup[80+1];              /* STARTUP: Startup command */
  };
 

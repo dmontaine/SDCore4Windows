@@ -5,6 +5,28 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  A program on another computer can reach SD again, over ssh.
+           * SD can now listen for API (SDClient) connections.  It is OFF
+             until you turn it on: put APIPORT=4243 in sd.conf and restart SD.
+             Nothing is opened on a system that does not ask for it.
+           * The port is bound to this machine only.  Reach it from elsewhere
+             by forwarding it over ssh, which is how SD is meant to be used
+             from off the machine:
+                 ssh -L 4243:127.0.0.1:4243 <user>@<host>
+             then point your client at 127.0.0.1 port 4243 on your own end.
+           * Your program still signs in with an account name and password,
+             and can only enter accounts it has been granted, exactly as a
+             person at a terminal can.  Opening the port does not hand
+             anybody your data.
+           * ON LINUX THIS JOB WAS DONE BY xinetd OR systemd.  Windows has
+             neither, so SD now does it itself; you do not install or
+             configure anything else.
+           * SAY CONFIG('APIPORT') to see the port SD is listening on.
+           * Note for anyone moving a configuration file from a Linux
+             installation: the Linux build reaches SD through a socket file
+             under /tmp, which does not exist here and cannot be forwarded on
+             Windows.  APIPORT replaces it.
+
 17 Aug 26  Connecting a program to SD on the same machine now actually works.
            * SDConnectLocal() in the client library opens a session on this
              computer with no network and no password: SD takes your identity

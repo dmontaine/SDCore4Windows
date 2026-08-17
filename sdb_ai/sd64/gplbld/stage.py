@@ -210,6 +210,19 @@ NUMUSERS=20
 SORTMEM=4096
 ERRLOG=50
 APILOGIN=1
+# 17 Aug 26 Windows port - APIPORT is the loopback port SD listens on for API
+# (SDClient) connections.  IT IS COMMENTED OUT ON PURPOSE, and leaving it that
+# way means no port is opened at all.
+#
+# Set it only if you intend to use the API.  The port is bound to 127.0.0.1
+# and never to a network interface - remote clients reach it by forwarding it
+# over ssh, "ssh -L 4243:127.0.0.1:4243 <user>@<host>" - but any process
+# already on this machine can connect to it, and what stands between such a
+# process and your data is the account password APILOGIN=1 demands, plus
+# membership of the account's group.  4243 is the number the Linux build uses.
+#
+# Changing it takes effect when SD is next started, not when a session begins.
+#APIPORT=4243
 USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts
 SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo
