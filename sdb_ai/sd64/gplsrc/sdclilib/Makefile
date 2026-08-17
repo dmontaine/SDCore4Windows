@@ -1,4 +1,12 @@
-CC ?= gcc
+# 17 Aug 26 - "CC ?= gcc" DID NOTHING, and that is a GNU make trap rather than a
+# typo.  "?=" is "set this if the variable is UNDEFINED", and make has a
+# built-in CC whose origin is "default" - which is defined - so the assignment
+# never fired and CC stayed "cc".  Nobody noticed because the top-level Makefile
+# passes CC= explicitly for the DLL; it surfaced on "make check-local", which
+# built a native test with the MSYS2 compiler and failed to run.
+ifeq ($(origin CC),default)
+CC := gcc
+endif
 CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Wpedantic -Wno-unknown-pragmas
 CPPFLAGS += -DBUILDING_SDCLILIB
 LDLIBS += -lws2_32
@@ -62,11 +70,27 @@ check: $(DLL)
 # here still loads this directory's sdclilib.dll.  Measured 17 Aug 2026 - the
 # symptom is "Failed to create child process. Error 2", because the library
 # then looks for sd.exe beside the BUILD dll, where there is none.
+# 17 Aug 26 - THE RUN NEEDS A PATH, and without it this target reported
+# "Error 127" and looked exactly like a broken transport.  Two things are
+# missing from a plain MSYS2 login shell:
+#
+#   * the INSTALLED bin, which is the whole point - the loader is meant to fall
+#     through to PATH and pick up the installed sdclilib.dll and sd.exe as a
+#     pair.  With nothing there it finds no library at all.
+#   * the Windows system directory.  This test is a NATIVE UCRT64 binary and
+#     resolves api-ms-win-crt-*.dll through the OS; an MSYS2 login shell rebuilds
+#     PATH without System32, and the failure names an api-ms-win-crt DLL, which
+#     reads as a broken toolchain rather than a missing search path.
+#
+# Override SDBIN if SD is installed somewhere else.
+SDBIN   ?= /c/Program Files/SD/usr/bin
+WINSYS  ?= /c/WINDOWS/System32
+
 check-local: $(DLL)
 	mkdir -p localtest
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/local-connect-test.exe \
 	  tests/local_connect_test.c -I. -L. -lsdclilib
-	cd localtest && ./local-connect-test.exe
+	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./local-connect-test.exe
 
 # 17 Aug 26 - THE SELECT PROBE, PROJECT_STATUS.md 7 step 11.  It needs no
 # server, no install and no SD at all: it is two throwaway binaries that answer

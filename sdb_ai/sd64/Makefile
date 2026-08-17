@@ -105,13 +105,26 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc terminfo
+.PHONY: sdclilib sdsvc terminfo check-local
 
 sdclilib:
 	@echo Building native client DLL
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
 	@cp $(CLILIBDIR)/sdclilib.dll $(GPLBIN)
 	@cp $(CLILIBDIR)/libsdclilib.dll.a $(GPLBIN)
+
+# 17 Aug 26 - REACHABLE FROM HERE, because reaching it the other way built the
+# wrong thing.  "cd gplsrc/sdclilib && make check-local" was what this file's
+# section 7 step 11 told people to run, and it compiles a NATIVE test with
+# whatever CC that directory defaults to - which is the MSYS2 "cc", not the
+# UCRT64 compiler the DLL is built with.  It failed to run and read as a broken
+# transport.  Going through here passes CC the same way the sdclilib target
+# does, so the test and the library are built by the same compiler.
+#
+# It measures the INSTALLED tree, so it is not part of "check" and it is subject
+# to the test-cycle rule: run gplbld/assert-current.ps1 first, and UNELEVATED.
+check-local:
+	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) check-local
 
 # 15 Aug 26 - THE SERVICE IS NATIVE, AND ON PURPOSE.  A Windows service has to
 # call StartServiceCtrlDispatcher, and sd.exe is built against the MSYS2 POSIX

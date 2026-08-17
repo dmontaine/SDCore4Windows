@@ -57,6 +57,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 17 Aug 26 - A TRANSCRIPT, for the same reason verify-tiers.ps1 has one: this
+# runs elevated, which usually means a window nobody is going to copy back, and
+# a cycle that failed at step 3 looks exactly like one that failed at step 7
+# once the window has gone.  Start-Transcript flushes as it goes, so the file is
+# readable even on the Fail paths below, which exit without stopping it.
+#
+# NOT UNDER C:\ProgramData\SD, WHICH STEP 6 DELETES.  The first version of this
+# put it there and the transcript would have erased itself half way through its
+# own run.  LOCALAPPDATA is the same directory whether or not the shell is
+# elevated - elevation does not change which user this is - so an unelevated
+# session afterwards can find what an elevated one wrote.
+$logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
+if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+$script:CycleLog = Join-Path $logDir ('cycle-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+try { Start-Transcript -Path $script:CycleLog -Force | Out-Null } catch { }
+Write-Host "transcript: $script:CycleLog"
+
 # gplbld\ -> sd64\.  Every path below is absolute and derived from this script's
 # own location, which is the whole point: the hand-run sequence broke on a
 # relative path resolved against C:\WINDOWS\system32.
@@ -250,25 +267,60 @@ $installArgs = @()
 if ($Silent) { $installArgs += '/VERYSILENT' }
 & $setup.FullName @installArgs
 
-# The installer, like the uninstaller, hands off and returns.  Judge on the
-# tree, not on the exit status - the same rule adopt-account.ps1 follows.
+# THE WAIT IS FOR THE TREE TO MATCH THE STAGE, NOT FOR ONE FILE TO EXIST.  This
+# waited for gcat\$CPROC and then counted immediately, and $CPROC is nowhere near
+# the last thing written: the first run of this script reported
+# "GPL.BP.OUT 5" on an install that was fine and finished with 193.  A number
+# read off a half-copied tree is the exact failure mode step 3 exists to catch,
+# and here it was being printed as the result.
+#
+# So it waits until the installed counts REACH the staged ones - which are known,
+# having just been measured - and only then reports.  A tree that never gets
+# there is a real fault and says so, instead of being reported as a small number
+# nobody can interpret.  The installer, like the uninstaller, hands off and
+# returns, so judging on the tree rather than the exit status is the same rule
+# adopt-account.ps1 follows.
+$igcatDir = Join-Path $PdTree 'sdsys\gcat'
+$ioutDir  = Join-Path $PdTree 'sdsys\GPL.BP.OUT'
+function InstalledCount($d) {
+    if (Test-Path -LiteralPath $d) { (Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue).Count } else { 0 }
+}
+
 $deadline = (Get-Date).AddSeconds(300)
-while (-not (Test-Path -LiteralPath (Join-Path $PdTree 'sdsys\gcat\$CPROC')) -and (Get-Date) -lt $deadline) {
+while ((Get-Date) -lt $deadline) {
+    if (((InstalledCount $igcatDir) -ge $nGcat) -and ((InstalledCount $ioutDir) -ge $nOut)) { break }
     Start-Sleep -Seconds 1
+}
+
+# One more pass: the counts can reach target while the last file is still being
+# written, and a settled tree costs two seconds to confirm.
+$before = -1
+$deadline = (Get-Date).AddSeconds(60)
+while ((Get-Date) -lt $deadline) {
+    $now = (InstalledCount $igcatDir) + (InstalledCount $ioutDir)
+    if ($now -eq $before) { break }
+    $before = $now
+    Start-Sleep -Seconds 2
 }
 
 # ---------------------------------------------------------------------------
 Step 8 "What was installed"
 
-$igcat = Join-Path $PdTree 'sdsys\gcat'
-if (Test-Path -LiteralPath $igcat) {
-    Write-Host ("   gcat {0}   GPL.BP.OUT {1}" -f
-        (Get-ChildItem -LiteralPath $igcat -File).Count,
-        (Get-ChildItem -LiteralPath (Join-Path $PdTree 'sdsys\GPL.BP.OUT') -File -ErrorAction SilentlyContinue).Count)
-    $b = Get-Item -LiteralPath (Join-Path $igcat '$BCOMP') -ErrorAction SilentlyContinue
-    if ($b) { Write-Host ("   `$BCOMP {0:N0} bytes" -f $b.Length) }
-} else {
-    Fail "no $igcat after the install - it did not complete"
+if (-not (Test-Path -LiteralPath $igcatDir)) {
+    Fail "no $igcatDir after the install - it did not complete"
+}
+
+$iGcat = InstalledCount $igcatDir
+$iOut  = InstalledCount $ioutDir
+Write-Host ("   gcat {0} (staged {1})   GPL.BP.OUT {2} (staged {3})" -f $iGcat, $nGcat, $iOut, $nOut)
+$b = Get-Item -LiteralPath (Join-Path $igcatDir '$BCOMP') -ErrorAction SilentlyContinue
+if ($b) { Write-Host ("   `$BCOMP {0:N0} bytes" -f $b.Length) }
+
+# Reported against the stage rather than against a remembered constant, so this
+# stays true when the counts legitimately change.
+if (($iGcat -lt $nGcat) -or ($iOut -lt $nOut)) {
+    Fail ("the install is SHORT of the staged tree - gcat {0}/{1}, GPL.BP.OUT {2}/{3}.`n" +
+          "  Nothing measured on this tree means anything." -f $iGcat, $nGcat, $iOut, $nOut)
 }
 
 Write-Host ""

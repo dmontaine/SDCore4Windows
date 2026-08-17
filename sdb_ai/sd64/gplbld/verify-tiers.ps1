@@ -64,7 +64,10 @@ $ErrorActionPreference = 'Stop'
 # -Keep IS THE STRONGER RUN AND IS WORTH PREFERRING: it leaves the three
 # accounts, so the VOCs can be read back independently rather than the script's
 # own summary being taken on trust.  A verifier with a bug in it reports a pass.
-$logDir = Join-Path $env:ProgramData 'SD\verify'
+# 17 Aug 26 - NOT UNDER C:\ProgramData\SD: cycle.ps1 deletes that tree, so a
+# transcript kept there survives only until the next cycle - which is exactly
+# when somebody would want to compare before and after.
+$logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
 $logPath = Join-Path $logDir ('verify-tiers-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
 try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
