@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  The API only lets you into accounts you have been granted.
+           * Connecting to an account through the API now applies the same
+             rule LOGTO applies inside SD: you may enter an account if you
+             are a member of the Windows group SD created for it.  GRANT and
+             REVOKE are how that membership is given and taken away.
+           * Until now an API session that authenticated could switch to ANY
+             account by name.  The check existed before the Windows port and
+             was lost in it, because it tested a Linux group.
+           * A refusal reads "User not allowed in requested account", which
+             is also what you get for an account that does not exist.  That
+             is deliberate: it stops the API being used to find out which
+             accounts are there.
+           * SDSYS is not reachable through the API, by design.  Administra-
+             tion needs elevation and an API session cannot have it.
+
 17 Aug 26  The API checks the SD account password, not a Windows one.
            * Set it with SET.PASSWORD, from inside SD.  An account that has
              never had one set cannot be reached through the API at all.

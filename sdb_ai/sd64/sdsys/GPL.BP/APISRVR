@@ -30,6 +30,9 @@
 *               already has, so compiling this does not need gplsrc in the tree
 * 17 Aug 26 Windows port - vb.login authenticates against $CRED instead of
 *           the OS, and sets the session identity with K$SET.USERNAME.
+* 17 Aug 26 Windows port - vb.account applies the ACC$GROUP grant check that
+*           LOGTO applies, which step 6a's credential model made meaningful.
+*           Only the group test transfers from logto.authorised; see there.
 * END-HISTORY
 *
 *
@@ -362,10 +365,20 @@ end
 *   Accounts are reached by name, as they are at LOGTO.  See PROJECT_STATUS.md
 *   section 5.6.
 
+* 17 Aug 26 Windows port - acc.group is read HERE, inside the block where
+*   acc.rec is known to be assigned, and initialised to '' beside account.path
+*   above it.  Reading it after the close would be reachable with acc.rec
+*   never set - an unassigned reference is a compile-time WARNING and a
+*   run-time abort in a program that may not run until much later, which is
+*   the ERRGEN trap in PROJECT_STATUS.md section 6 and what bootstrap.py
+*   line 229 refuses a build for.
+
 account.path = ''
+acc.group = ''
 openpath @sdsys:@ds:'ACCOUNTS' to acc.f then
    read acc.rec from acc.f, new.account then
       account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+      acc.group = acc.rec<ACC$GROUP>
    end
    close acc.f
 end
@@ -381,6 +394,63 @@ end
 *   has replaced it here: the API server has no credential model yet, so any
 *   session it accepts can still reach any account by name.  The LOGTO grant
 *   check in CPROC does not apply to this path.  See PROJECT_STATUS.md 5.6.
+* 17 Aug 26 Windows port - AND NOW IT IS BACK, section 7 step 6c.  The comment
+*   above is left standing because its reason was right: the check waited on a
+*   credential model, and step 6a built one.  Entry to an account is membership
+*   of the Windows group named in its ACC$GROUP, which CREATE.ACCOUNT writes as
+*   sdu_<name> - the same rule CPROC's logto.authorised applies at LOGTO, and
+*   the operating system rather than SD records the grant.
+*
+*   ONLY THE GROUP TEST TRANSFERS from logto.authorised, and its other three
+*   gates are dead weight here rather than a hazard: K$INTERNAL and
+*   K$ADMINISTRATOR both describe session state an API session cannot have,
+*   and elev.obtained is a CPROC local with no meaning in this program.
+*
+*   BEWARE THE TWO "INTERNAL"S WHILE READING THAT ROUTINE, because they are
+*   different things with almost the same name and both are in play in this
+*   file.  K$INTERNAL reads internal_mode (op_kernel.c:140), a SESSION flag
+*   set only by "sd -internal" or "sd -I" (sd.c:338, sd.c:349) - both behind
+*   check_admin(), so it already implies elevation, and an API session, which
+*   is spawned with -C/-N/-Q, never has it.  The $internal on line 64 of this
+*   program is a different flag entirely: HDR_INTERNAL in the program header,
+*   which is what BCOMP checks to allow KERNEL at all and what gates
+*   K$SET.USERNAME above (op_kernel.c).  A program can be $internal in a
+*   session that is not internal_mode, which is exactly this one.
+*
+*   THE IDENTITY IS kernel(K$USERNAME,0), NOT the local logname, which holds
+*   the same value today by both routes above.  K$USERNAME reads
+*   process.username - what K$SET.USERNAME wrote after !CRED_VERIFY, and what
+*   audit_message() stamps every record with in C (section 7 step 4).  A grant
+*   check able to disagree with the audit trail about who acted would make the
+*   trail worthless, so the two read one source deliberately.
+*
+*   AN ACCOUNT WITH NO ACC$GROUP IS REFUSED rather than having sdu_<name>
+*   guessed for it.  That is the rule section 7 step 5a sets for GRANT: an
+*   empty field means a record older than CREATE.ACCOUNT's group work, and
+*   inventing the name would test a group nothing else uses.
+*
+*   AND IT REFUSES SDSYS THROUGH THE API, which is intended and not a side
+*   effect to be fixed later.  ACCOUNTS/SDSYS carries ACC$GROUP = sdsys, which
+*   is not a Windows group and never has been (section 6), so is_grp_member
+*   answers false with status 1.  Administration needs elevation and an API
+*   session cannot have it, so there is nothing to admit.
+*
+*   THE REFUSAL REUSES sysmsg(10003), the message the missing-account branch
+*   above already gives.  A caller therefore cannot tell "no such account" from
+*   "not granted", so the API does not enumerate accounts for an attacker.
+deffun is_grp_member(user,group) calling '!is_grp_member'
+
+if acc.group = '' then
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   goto revert.to.old.account
+end
+
+if not(is_grp_member(kernel(K$USERNAME, 0), acc.group)) then
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   goto revert.to.old.account
+end
 
 if not(ospath(account.path, OS$CD)) then
    server.error = SV$ERROR
