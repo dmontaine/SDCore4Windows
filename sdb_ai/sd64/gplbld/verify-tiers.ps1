@@ -13,9 +13,9 @@
 # The controls are the other two tiers, and the decisive comparisons are
 # BETWEEN accounts:
 #
-#   STANDARD       has neither the 18 withheld capabilities nor the 9
+#   STANDARD       has neither the 18 withheld capabilities nor the 10
 #                  administration verbs
-#   PROGRAMMER     has the 18 and NOT the 9        <- controls the add list
+#   PROGRAMMER     has the 18 and NOT the 10       <- controls the add list
 #   ADMINISTRATOR  has both                        <- controls the omit list
 #
 # COUNT VOC IS THE PRIMARY INSTRUMENT, because it is exact and arithmetic
@@ -25,7 +25,7 @@
 # reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $HOLD,
 # $SAVEDLISTS, BP).  That gives:
 #
-#   ADMINISTRATOR  407 + 9 + 4 = 420      (measured on DON, 17 Aug 2026)
+#   ADMINISTRATOR  407 + 10 + 4 = 421     (9 until SET.PASSWORD joined them)
 #   PROGRAMMER     407     + 4 = 411
 #   STANDARD       407 - 18 + 4 = 393
 #
@@ -95,7 +95,7 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $Tiers = @(
     [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 393 }
     [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 411 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 420 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 421 }
 )
 
 # The 18 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
@@ -105,9 +105,13 @@ $Withheld = @('BASIC','CATALOG','CATALOGUE','RUN','ED','EDIT','SED','COPY','COPY
               'DELETE.CATALOG','DELETE.CATALOGUE','MODIFY','COMPILE.DICT','CD',
               'GENERATE','PHANTOM','SH','!')
 
-# The 9 only an administrator gets.
+# The 10 only an administrator gets.  SET.PASSWORD joined on 17 Aug 2026 -
+# owner's ruling, and an administrator can add it to a user's VOC if they want
+# users setting their own.  The program already tells the two cases apart:
+# your own password needs the current one, anyone else's needs admin rights.
 $AdminVerbs = @('CREATE.ACCOUNT','DELETE.ACCOUNT','MODIFY.ACCOUNT','UPDATE.ACCOUNT',
-                'GRANT','REVOKE','LIST.GRANTS','UNLOCK','ENCRYPT.FIELD')
+                'GRANT','REVOKE','LIST.GRANTS','UNLOCK','ENCRYPT.FIELD',
+                'SET.PASSWORD')
 
 # Neither list record may ever land in a VOC.
 $ListRecs = @('TIER.OMIT.STANDARD','TIER.ADD.ADMINISTRATOR')
@@ -193,7 +197,20 @@ $shipped  = @(Get-Content -LiteralPath $omitRec | Select-Object -Skip 1)
 $diff     = (Compare-Object $shipped $Withheld -SyncWindow 100)
 Note 'shipped TIER.OMIT.STANDARD matches this test' 0 ($diff | Measure-Object).Count
 if ($diff) { $diff | ForEach-Object { Write-Output ("    {0} {1}" -f $_.SideIndicator, $_.InputObject) } }
-Note 'omit list length' 18 $shipped.Count
+Note 'omit list length' $Withheld.Count $shipped.Count
+
+# 17 Aug 26 - AND THE SAME FOR THE ADD LIST, which was NOT cross-checked and
+# should always have been: the reasoning above - "a test that carries its own
+# stale copy of the thing under test is no test" - is not specific to the omit
+# list.  It went unnoticed while the add list never changed; SET.PASSWORD
+# joining it on 17 Aug 2026 is exactly the edit that would have slipped
+# through, updating the record and not the test, or the other way about.
+$addRec    = Join-Path $env:ProgramData 'SD\sdsys\NEWVOC\TIER.ADD.ADMINISTRATOR'
+$shippedAd = @(Get-Content -LiteralPath $addRec | Select-Object -Skip 1)
+$diffAd    = (Compare-Object $shippedAd $AdminVerbs -SyncWindow 100)
+Note 'shipped TIER.ADD.ADMINISTRATOR matches this test' 0 ($diffAd | Measure-Object).Count
+if ($diffAd) { $diffAd | ForEach-Object { Write-Output ("    {0} {1}" -f $_.SideIndicator, $_.InputObject) } }
+Note 'add list length' $AdminVerbs.Count $shippedAd.Count
 
 # ---------------------------------------------------------------------------
 Write-Output ''
@@ -258,7 +275,7 @@ foreach ($t in $Tiers) {
 
     # The 18: absent for STANDARD, present for the other two.
     $missWithheld = Get-Missing $text $Withheld
-    $wantWithheld = $(if ($t.Tier -eq 'STANDARD') { 18 } else { 0 })
+    $wantWithheld = $(if ($t.Tier -eq 'STANDARD') { $Withheld.Count } else { 0 })
     Note ($t.Name + ' withheld capabilities MISSING') $wantWithheld ($missWithheld | Measure-Object).Count
     if ($missWithheld -and $t.Tier -ne 'STANDARD') {
         Write-Output ('    missing: ' + ($missWithheld -join ' '))
@@ -267,7 +284,7 @@ foreach ($t in $Tiers) {
     # The 9: present for ADMINISTRATOR only.  This is the control that stops a
     # broken add list looking like a working one.
     $missAdmin = Get-Missing $text $AdminVerbs
-    $wantAdmin = $(if ($t.Tier -eq 'ADMINISTRATOR') { 0 } else { 9 })
+    $wantAdmin = $(if ($t.Tier -eq 'ADMINISTRATOR') { 0 } else { $AdminVerbs.Count })
     Note ($t.Name + ' administration verbs MISSING') $wantAdmin ($missAdmin | Measure-Object).Count
 
     # Neither list record, in any tier.
@@ -283,7 +300,7 @@ $std  = $Tiers[0]
 $text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNT', 'COUNT VOC',
                     ("LIST VOC " + (($Withheld | ForEach-Object { "'" + $_ + "'" }) -join ' ')))
 Note 'standard COUNT VOC after UPDATE.ACCOUNT' $std.Count (Get-VocCount $text)
-Note 'standard withheld still MISSING after UPDATE.ACCOUNT' 18 ((Get-Missing $text $Withheld) | Measure-Object).Count
+Note 'standard withheld still MISSING after UPDATE.ACCOUNT' $Withheld.Count ((Get-Missing $text $Withheld) | Measure-Object).Count
 
 # ---------------------------------------------------------------------------
 Write-Output ''

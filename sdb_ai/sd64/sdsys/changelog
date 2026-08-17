@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  SET.PASSWORD can be reached at last, and administrators have it.
+           * An SD account can now be given a password.  The command existed
+             and no VOC pointed at it, so there was no way to type it.
+           * SET.PASSWORD <account> sets somebody else's and needs
+             administrator rights.  SET.PASSWORD on its own sets your own, and
+             asks for your current one first.
+           * IT IS AN ADMINISTRATOR COMMAND, so only ADMINISTRATOR accounts
+             have it to begin with.  If you want your users setting their own
+             passwords, copy SET.PASSWORD into their VOC - the command already
+             knows the difference and will still ask them for the current one.
+           * You need this before the API will let anybody in: APILOGIN=1
+             means an account with no password cannot be reached at all.
+
 17 Aug 26  A program on another computer can reach SD again, over ssh.
            * SD can now listen for API (SDClient) connections.  It is OFF
              until you turn it on: put APIPORT=4243 in sd.conf and restart SD.

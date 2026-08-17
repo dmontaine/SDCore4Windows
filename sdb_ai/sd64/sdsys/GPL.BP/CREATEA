@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 17 Aug 26 Windows port - SET.PASSWORD joins the administration verbs an
+*           ADMINISTRATOR account is given.  Owner's ruling; the escape
+*           hatch is that an administrator can add it to a user's VOC.
 * 17 Aug 26 Windows port - an ADMINISTRATOR account gets the administration
 *           verbs too, copied from VOC_TEMPLATE by NEWVOC's
 *           TIER.ADD.ADMINISTRATOR; the tier is written to ACCOUNTS field 5 so
@@ -72,7 +75,7 @@
 *      PROGRAMMER     NEWVOC entire
 *      ADMINISTRATOR  NEWVOC entire, plus the records named in
 *                     TIER.ADD.ADMINISTRATOR, read from VOC_TEMPLATE
-*    Owner's ruling, 17 Aug 2026: "administrators get the whole voc".  The nine
+*    Owner's ruling, 17 Aug 2026: "administrators get the whole voc".  The ten
 *    administration verbs live in VOC_TEMPLATE alone, so before this an SD
 *    administrator had to LOGTO SDSYS to reach any of them.
 *
@@ -662,7 +665,7 @@ make.account:
    repeat
 
 * 17 Aug 26 Windows port - THE ADMINISTRATION VERBS, section 8.  Owner's ruling
-*   of 17 Aug 2026, "administrators get the whole voc".  These nine live in
+*   of 17 Aug 2026, "administrators get the whole voc".  These ten live in
 *   VOC_TEMPLATE and NOT in NEWVOC, so nothing above can reach them.
 *
 *   FROM VOC_TEMPLATE RATHER THAN BY MOVING THEM INTO NEWVOC, and that is the
@@ -673,6 +676,12 @@ make.account:
 *   make more.  The list here fails the other way: lost or empty, an
 *   administrator gets a programmer's VOC and says so the first time they type
 *   CREATE.ACCOUNT.  gplbld/stage.py's note on the two files says the same thing.
+*
+*   SET.PASSWORD joined them on 17 Aug 2026, owner's ruling.  It is an
+*   administrator verb because an administrator can add it to a user's VOC if
+*   they want users setting their own; the program itself already tells the two
+*   cases apart, your own password needing the current one and anyone else's
+*   needing administrator rights, so it must NOT be gated wholesale.
 *
 *   ONLY THE ADMINISTRATION VERBS, not the whole of VOC_TEMPLATE.  The other
 *   fourteen records it does not share with NEWVOC are SDSYS's own plumbing:
