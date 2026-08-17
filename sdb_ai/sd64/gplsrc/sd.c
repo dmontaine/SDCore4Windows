@@ -438,14 +438,32 @@ Private bool comlin(int argc, char *argv[]) {
    stops at the first argument not beginning with "-", and a pipe name does
    not, so leaving it would end option parsing and then be taken for a command
    to execute.  -TERM consumes its argument the same way.                   */
+/* 17 Aug 26 Windows port - THE DESCRIPTOR FORM IS NOW THE ONE THE CLIENT SENDS,
+   and it sends "-C1!0", which is two no-op dup2 calls: SDConnectLocal() hands
+   the pipes over as this process's STANDARD HANDLES, so they already are 0
+   and 1 before main() runs.  Note the order - tx first, rx second.
+
+   THE NAME FORM IS REFUSED RATHER THAN LEFT TO HANG.  It is kept as a branch
+   because the code behind it is correct and measured, and the flaw is not in
+   it: a descriptor built by cygwin_attach_handle_to_fd() from a raw HANDLE is
+   reported PERMANENTLY READY by select(), so sdpoll() answers "input waiting"
+   for ever and this process spins reading one byte at a time - alive, silent,
+   and never replying.  That is indistinguishable from a hung server, and a
+   caller who reaches this branch deserves to be told rather than left to
+   diagnose it again.  PROJECT_STATUS.md section 7 step 11 has the measurement
+   and gplsrc/win32pipe.c has the mechanism.                                 */
           if (sscanf(argv[arg], "-C%d!%d", &TxPipe, &RxPipe) == 2) {
             dup2(RxPipe, 0);
             dup2(TxPipe, 1);
           } else {
             if (++arg >= argc)
               exit(1);
-            if (!win32_attach_client_pipe(argv[arg]))
-              exit(1);
+            fprintf(stderr,
+                    "-C with a pipe name is not supported: a descriptor made "
+                    "from a raw HANDLE is always ready to select(), so this "
+                    "process would never answer.  Pass the pipes as standard "
+                    "handles and use -C1!0.  See PROJECT_STATUS.md 7 step 11.\n");
+            exit(1);
           }
           break;
 

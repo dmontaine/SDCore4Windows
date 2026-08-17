@@ -408,9 +408,15 @@ Private struct {
   int16_t server_error;
   int32_t sd_status;
   SOCKET sock;
-  /* A local session talks to an SD process on this machine over a named pipe
-     instead of a socket.  Exactly one of sock / hPipe is live at a time. */
-  HANDLE hPipe;
+  /* A local session talks to an SD process on this machine over a pipe instead
+     of a socket.  Exactly one of sock / the pipe pair is live at a time.
+     17 Aug 26 - TWO SIMPLEX PIPES, NOT ONE DUPLEX NAMED PIPE.  See
+     SDConnectLocal(): the child is handed these as its standard input and
+     output, and an anonymous pipe carries data one way only, so the pair is
+     what a duplex named pipe used to be on its own.  PROJECT_STATUS.md 7
+     step 11 has why the named pipe had to go. */
+  HANDLE hPipeRd; /* server -> client; the child's stdout */
+  HANDLE hPipeWr; /* client -> server; the child's stdin  */
   bool is_local;
 } session[MAX_SESSIONS];
 
@@ -1196,20 +1202,66 @@ Private int sd_exe_path(char* buff, size_t buffsize) {
 /* ======================================================================
    SDConnectLocal()  -  Open connection to local system as current user
 
-   There is no network involved: we create a named pipe, start an SD process
-   attached to it, and speak the same packet protocol over that pipe.  The
-   server authenticates us from the process owner, so no credentials are sent
-   and SrvrLocalLogin replaces the SrvrLogin exchange used by SDConnect().   */
+   There is no network involved: we make a pair of pipes, start an SD process
+   with them as its standard input and output, and speak the same packet
+   protocol over them.  The server authenticates us from the process owner, so
+   no credentials are sent and SrvrLocalLogin replaces the SrvrLogin exchange
+   used by SDConnect().
+
+   17 Aug 26 Windows port - INHERITED STANDARD HANDLES, NOT A NAMED PIPE, and
+   this is the whole of why SDConnectLocal() now works.  PROJECT_STATUS.md 7
+   step 11.
+
+   The named pipe it used before was a NATIVE object and sd.exe is an MSYS2
+   binary, so sd.exe could not reach it through open() - the Cygwin runtime does
+   not map \\.\pipe\ names at all.  It was therefore opened with CreateFile and
+   injected into the descriptor table with cygwin_attach_handle_to_fd(), and
+   THAT is what could not be made to work: a descriptor built from a raw HANDLE
+   is reported PERMANENTLY READY by select(), so SD's sdpoll() always answered
+   "input waiting" and sd.exe span reading one byte at a time, alive, silent and
+   never replying.  Six name and access combinations, O_NONBLOCK and F_SETOWN
+   were all measured; it is a property of the Cygwin file handler, not a setting.
+
+   Handing the pipes over as STANDARD HANDLES sidesteps all of it.  Cygwin builds
+   descriptors 0 and 1 itself when the process starts, sees FILE_TYPE_PIPE, and
+   installs its pipe handler - whose select() is PeekNamedPipe-based and answers
+   honestly.  Measured with its control in one run, tests/select_probe_*.c and
+   "make check-select-probe":
+
+     inherited(fd 0)  empty=0  data=1     <- honest
+     attached(fd 3)   empty=1  data=1     <- the old path, always ready
+
+   THE PEER IDENTITY IS NOT AFFECTED, because it never came from the pipe.
+   Nothing in the server ever asked a pipe who was on the other end - there is no
+   ImpersonateNamedPipeClient and no GetNamedPipeClientProcessId anywhere in
+   gplsrc.  Identity comes from sd.exe being a CHILD of this process and so
+   running under the caller's own token, which two anonymous pipes change not at
+   all.
+
+   AND THE SERVER NEEDED NO CHANGE.  sd.c has always accepted "-C<tx>!<rx>" and
+   answered it with dup2(RxPipe, 0); dup2(TxPipe, 1) - the form a Unix parent
+   doing fork-then-exec would send.  With the handles already arriving on 0 and
+   1, "-C1!0" is two no-op dup2 calls that do nothing but select CN_PIPE.
+   Note the ORDER: tx first, rx second, so it is 1!0 and not 0!1.             */
 
 DLLEntry int SDConnectLocal(char* account) {
   int status = FALSE;
   char command[MAX_PATHNAME_LEN + 128];
-  char pipe_name[64];
   int cmdlen;
   char exepath[MAX_PATHNAME_LEN + 1];
   int32_t n;
-  STARTUPINFOA startupinfo;
+  SECURITY_ATTRIBUTES sa;
+  HANDLE child_stdin = INVALID_HANDLE_VALUE;   /* child reads what we write */
+  HANDLE child_stdout = INVALID_HANDLE_VALUE;  /* child writes what we read */
+  HANDLE inherit[2];
+  SIZE_T attr_size = 0;
+  STARTUPINFOEXA startupinfo;
   PROCESS_INFORMATION process_information;
+
+  /* Zeroed HERE, before anything can jump to the exit label: that path frees
+     lpAttributeList, and freeing an uninitialised pointer is a crash rather
+     than an error report. */
+  memset(&startupinfo, 0, sizeof(startupinfo));
 
   initialise_client();
 
@@ -1236,26 +1288,25 @@ DLLEntry int SDConnectLocal(char* account) {
     goto exit_sdconnect_local;
   }
 
-  /* The name only has to be unique among the pipes this process owns */
+  /* Two pipes, because an anonymous pipe carries data one way only.  The ends
+     the child gets are inheritable; ours are not, and that second half matters:
+     if the child inherited a copy of OUR end, the pipe would never report EOF
+     when we close it and neither side would learn the other had gone.        */
 
-  snprintf(pipe_name, sizeof(pipe_name), "\\\\.\\pipe\\~SDPipe%lu-%d",
-           (unsigned long)GetCurrentProcessId(), (int)session_idx);
+  sa.nLength = sizeof(sa);
+  sa.lpSecurityDescriptor = NULL;
+  sa.bInheritHandle = TRUE;
 
-  session[session_idx].hPipe =
-      CreateNamedPipeA(pipe_name, PIPE_ACCESS_DUPLEX,
-                       PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                       1,     /* Max instances */
-                       1024,  /* Output buffer size */
-                       1024,  /* Input buffer size */
-                       0,     /* Default timeout */
-                       NULL); /* Security attributes */
-
-  if (session[session_idx].hPipe == INVALID_HANDLE_VALUE) {
+  if (!CreatePipe(&child_stdin, &session[session_idx].hPipeWr, &sa, 0) ||
+      !CreatePipe(&session[session_idx].hPipeRd, &child_stdout, &sa, 0)) {
     snprintf(session[session_idx].sderror,
              sizeof(session[session_idx].sderror), "Error %d creating pipe",
              (int)GetLastError());
     goto exit_sdconnect_local;
   }
+
+  SetHandleInformation(session[session_idx].hPipeWr, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(session[session_idx].hPipeRd, HANDLE_FLAG_INHERIT, 0);
 
   /* Launch the SD process that will serve this session */
 
@@ -1264,8 +1315,7 @@ DLLEntry int SDConnectLocal(char* account) {
      unquoted path with a space in it makes Windows try each prefix in turn -
      C:\Program.exe first.  That is a hijack, not only a bug. */
 
-  cmdlen = snprintf(command, sizeof(command), "\"%s\" -Q -C %s", exepath,
-                    pipe_name);
+  cmdlen = snprintf(command, sizeof(command), "\"%s\" -Q -C1!0", exepath);
 
   /* Truncation would launch something other than what we intended, so refuse
      rather than run a mangled command line.                                 */
@@ -1277,11 +1327,50 @@ DLLEntry int SDConnectLocal(char* account) {
     goto exit_sdconnect_local;
   }
 
-  memset(&startupinfo, 0, sizeof(startupinfo));
-  startupinfo.cb = sizeof(startupinfo);
+  /* EXACTLY TWO HANDLES ARE INHERITED, and the plain bInheritHandles = TRUE
+     would not do.  That inherits EVERY inheritable handle the process owns, and
+     this code runs inside somebody else's application: a handle it happens to
+     hold to a file, a socket or a registry key would be copied into a
+     long-lived sd.exe, which would then keep that object alive for its whole
+     session with nothing to show why.  PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+     narrows inheritance to the list; it does not grant it, which is what the
+     SECURITY_ATTRIBUTES above are still for.                                 */
 
-  if (!CreateProcessA(NULL, command, NULL, NULL, FALSE, DETACHED_PROCESS, NULL,
-                      NULL, &startupinfo, &process_information)) {
+  inherit[0] = child_stdin;
+  inherit[1] = child_stdout;
+
+  InitializeProcThreadAttributeList(NULL, 1, 0, &attr_size);
+  startupinfo.lpAttributeList =
+      (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(attr_size);
+  if ((startupinfo.lpAttributeList == NULL) ||
+      !InitializeProcThreadAttributeList(startupinfo.lpAttributeList, 1, 0,
+                                         &attr_size) ||
+      !UpdateProcThreadAttribute(startupinfo.lpAttributeList, 0,
+                                 PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit,
+                                 sizeof(inherit), NULL, NULL)) {
+    snprintf(session[session_idx].sderror,
+             sizeof(session[session_idx].sderror),
+             "Error %d preparing handle inheritance", (int)GetLastError());
+    free(startupinfo.lpAttributeList);
+    startupinfo.lpAttributeList = NULL;
+    goto exit_sdconnect_local;
+  }
+
+  /* cb is the size of the EXTENDED struct.  CreateProcess reads it to decide
+     how much to trust, and EXTENDED_STARTUPINFO_PRESENT with a plain
+     STARTUPINFO cb makes it ignore the attribute list silently.              */
+  startupinfo.StartupInfo.cb = sizeof(startupinfo);
+  startupinfo.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  startupinfo.StartupInfo.hStdInput = child_stdin;
+  startupinfo.StartupInfo.hStdOutput = child_stdout;
+  /* NOT a pipe: SD's diagnostics must not land in the protocol channel.  A GUI
+     host has no stderr of its own and the child simply gets none, which is
+     harmless - nothing depends on it.                                        */
+  startupinfo.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+
+  if (!CreateProcessA(NULL, command, NULL, NULL, TRUE,
+                      DETACHED_PROCESS | EXTENDED_STARTUPINFO_PRESENT, NULL,
+                      NULL, &startupinfo.StartupInfo, &process_information)) {
     snprintf(session[session_idx].sderror,
              sizeof(session[session_idx].sderror),
              "Failed to create child process. Error %d", (int)GetLastError());
@@ -1293,16 +1382,16 @@ DLLEntry int SDConnectLocal(char* account) {
   CloseHandle(process_information.hThread);
   CloseHandle(process_information.hProcess);
 
-  /* Wait for the child to connect.  If it got there first the call fails with
-     ERROR_PIPE_CONNECTED, which means the pipe is connected, not broken.    */
+  /* OUR COPIES OF THE CHILD'S ENDS GO NOW, and this is not tidiness.  While we
+     hold a copy of the write end of the child's stdout, that pipe can never
+     report EOF, so a child that dies would leave us reading for ever instead of
+     seeing ERROR_BROKEN_PIPE.  There is no ConnectNamedPipe step any more: an
+     anonymous pipe is connected the moment it exists.                        */
 
-  if (!ConnectNamedPipe(session[session_idx].hPipe, NULL) &&
-      (GetLastError() != ERROR_PIPE_CONNECTED)) {
-    snprintf(session[session_idx].sderror,
-             sizeof(session[session_idx].sderror), "Error %d connecting pipe",
-             (int)GetLastError());
-    goto exit_sdconnect_local;
-  }
+  CloseHandle(child_stdin);
+  child_stdin = INVALID_HANDLE_VALUE;
+  CloseHandle(child_stdout);
+  child_stdout = INVALID_HANDLE_VALUE;
 
   /* Send local login packet */
 
@@ -1344,8 +1433,25 @@ DLLEntry int SDConnectLocal(char* account) {
   status = TRUE;
 
 exit_sdconnect_local:
+  /* The attribute list is only needed until CreateProcess returns, and on every
+     path it is ours to release. */
+  if (startupinfo.lpAttributeList != NULL) {
+    DeleteProcThreadAttributeList(startupinfo.lpAttributeList);
+    free(startupinfo.lpAttributeList);
+    startupinfo.lpAttributeList = NULL;
+  }
+
+  /* Still set only if we failed before or during the spawn.  Leaking the
+     child's end of a pipe is worse than leaking an ordinary handle: it is the
+     end whose closure signals EOF, so it would hold the pipe open against a
+     reader that is entitled to see it close. */
+  if (child_stdin != INVALID_HANDLE_VALUE)
+    CloseHandle(child_stdin);
+  if (child_stdout != INVALID_HANDLE_VALUE)
+    CloseHandle(child_stdout);
+
   if (!status)
-    CloseSocket(); /* Closes the pipe and clears is_local */
+    CloseSocket(); /* Closes both pipe handles and clears is_local */
 
   return status;
 }
@@ -3739,12 +3845,18 @@ Private bool CloseSocket() {
     /* A local session holds a pipe rather than a socket.  Winsock was never
        started for it, so there is nothing else here to unwind.              */
 
-    if (session[session_idx].hPipe != INVALID_HANDLE_VALUE) {
-        DisconnectNamedPipe(session[session_idx].hPipe);
-        CloseHandle(session[session_idx].hPipe);
-        session[session_idx].hPipe = INVALID_HANDLE_VALUE;
-        session[session_idx].is_local = FALSE;
+    /* 17 Aug 26 - NO DisconnectNamedPipe.  These are anonymous pipes now and
+       there is no server end to disconnect; closing our handles is what tells
+       the child its stdin is at EOF, which is how it learns to exit. */
+    if (session[session_idx].hPipeWr != INVALID_HANDLE_VALUE) {
+        CloseHandle(session[session_idx].hPipeWr);
+        session[session_idx].hPipeWr = INVALID_HANDLE_VALUE;
     }
+    if (session[session_idx].hPipeRd != INVALID_HANDLE_VALUE) {
+        CloseHandle(session[session_idx].hPipeRd);
+        session[session_idx].hPipeRd = INVALID_HANDLE_VALUE;
+    }
+    session[session_idx].is_local = FALSE;
 
     if (session[session_idx].sock != INVALID_SOCKET) {
         if (closesocket(session[session_idx].sock) == SOCKET_ERROR) {
@@ -3792,7 +3904,7 @@ Private int transport_recv(char* p, int len) {
     if (!session[session_idx].is_local)
         return recv(session[session_idx].sock, p, len, 0);
 
-    if (!ReadFile(session[session_idx].hPipe, p, (DWORD)len, &n, NULL)) {
+    if (!ReadFile(session[session_idx].hPipeRd, p, (DWORD)len, &n, NULL)) {
         DWORD err = GetLastError();
 
         if (err == ERROR_BROKEN_PIPE)
@@ -3834,7 +3946,7 @@ Private bool transport_send(const char* data, int32_t bytes) {
         return send_all(session[session_idx].sock, data, bytes);
 
     while (sent < bytes) {
-        if (!WriteFile(session[session_idx].hPipe, data + sent,
+        if (!WriteFile(session[session_idx].hPipeWr, data + sent,
                        (DWORD)(bytes - sent), &n, NULL)) {
             snprintf(session[session_idx].sderror,
                      sizeof(session[session_idx].sderror),
@@ -3859,8 +3971,11 @@ Private bool transport_send(const char* data, int32_t bytes) {
    transport_live()  -  Is there a usable connection to abandon or use?     */
 
 Private bool transport_live(void) {
+    /* Both halves, because either one dying makes the session useless and a
+       half-live pair would be reported as usable. */
     if (session[session_idx].is_local)
-        return session[session_idx].hPipe != INVALID_HANDLE_VALUE;
+        return (session[session_idx].hPipeRd != INVALID_HANDLE_VALUE) &&
+               (session[session_idx].hPipeWr != INVALID_HANDLE_VALUE);
 
     return session[session_idx].sock != INVALID_SOCKET;
 }
@@ -4093,7 +4208,8 @@ Private void initialise_client() {
 	  session[i].winsock_started = FALSE;
 	  session[i].sderror[0] = '\0';
 	  session[i].sock = INVALID_SOCKET;
-	  session[i].hPipe = INVALID_HANDLE_VALUE;
+	  session[i].hPipeRd = INVALID_HANDLE_VALUE;
+	  session[i].hPipeWr = INVALID_HANDLE_VALUE;
 	  session[i].is_local = FALSE;
 	}
 	  /* initialize the arg pointer array for EngCall */

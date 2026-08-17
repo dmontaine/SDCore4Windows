@@ -5,6 +5,16 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  Connecting a program to SD on the same machine now actually works.
+           * SDConnectLocal() in the client library opens a session on this
+             computer with no network and no password: SD takes your identity
+             from the account your program is running as.
+           * It was reported as built once before and did not work.  It does
+             now - a session opens, commands run, and an account you have not
+             been granted is refused.
+           * If you wrote anything against it in the last day, no change is
+             needed on your side; the fix is inside the library.
+
 17 Aug 26  An SD administrator's account now holds the administration verbs,
            and the tier an account was given is remembered.
            * CREATE.ACCOUNT USER <name> ADMINISTRATOR now puts CREATE.ACCOUNT,
