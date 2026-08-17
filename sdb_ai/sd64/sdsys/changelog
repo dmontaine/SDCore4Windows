@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  An SD administrator's account now holds the administration verbs,
+           and the tier an account was given is remembered.
+           * CREATE.ACCOUNT USER <name> ADMINISTRATOR now puts CREATE.ACCOUNT,
+             DELETE.ACCOUNT, MODIFY.ACCOUNT, UPDATE.ACCOUNT, GRANT, REVOKE,
+             LIST.GRANTS, UNLOCK and ENCRYPT.FIELD into the account's own VOC.
+             Until now they were in SDSYS alone, so an administrator had to
+             LOGTO SDSYS before they could administer anything.
+           * The verbs still check for themselves that you are an
+             administrator, so having them in a VOC is not what permits them.
+           * MODIFY, COMPILE.DICT, CD, GENERATE and PHANTOM have joined the
+             list a standard account does not get.  They edit records, compile
+             dictionaries or start background programs, which is work for a
+             programmer.
+           * WHICH TIER AN ACCOUNT WAS CREATED AS IS NOW RECORDED, in field 5
+             of its record in the ACCOUNTS file.  Say UPDATE.ACCOUNT, or
+             answer Yes when a new release offers to update your VOC, and a
+             standard account no longer gets the withheld verbs back.  That
+             was a way round the whole thing and needed no privilege.
+           * Accounts created before this have nothing in field 5, and are
+             treated as they always were - a VOC update gives them every verb.
+           * The account of the person who installs SD is created as an
+             administrator, so their VOC is complete.
+
 17 Aug 26  CREATE.ACCOUNT has a PROGRAMMER keyword, and a plain account is
            now smaller than it was.
            * CREATE.ACCOUNT USER <name> PROGRAMMER gives the account the full

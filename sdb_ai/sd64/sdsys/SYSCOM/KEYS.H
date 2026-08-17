@@ -278,6 +278,27 @@
       *   14 Aug still carry a grant list there, and an installed tree is never
       *   upgraded (section 6), so a new meaning for field 4 would read those
       *   as data of the new kind.  Start at field 5.
+      $define ACC$TIER         5     ;* STANDARD, PROGRAMMER or ADMINISTRATOR
+      * 17 Aug 26 Windows port - THE TIER IS RECORDED BECAUSE IT HAS TO OUTLIVE
+      *   CREATE.ACCOUNT.  Section 8's VOC tiers were a create-time decision with
+      *   nothing persisting them, and LOGIN's update.voc re-copies the whole of
+      *   NEWVOC - so a standard account got its compiler and its editors back
+      *   the first time the release stamp moved and the user answered Y to
+      *   "Update VOC to new release?" (LOGIN, the $RELEASE test).  That prompt
+      *   needs no privilege, and the verb reaching the same routine deliberately,
+      *   UPDATE.ACCOUNT, is CPROC internal verb 15 and is ungated.  LOGIN now
+      *   reads this field and applies the omit list CREATEA applied.
+      *
+      *   FIELD 5 BECAUSE FIELD 4 IS POISONED, per the note above.  This is the
+      *   first use of the "start at field 5" that note reserved.
+      *
+      *   A BLANK FIELD MEANS THE FULL VOC - the pre-tier behaviour - and that is
+      *   the safe way round twice over.  Blank can only occur on an account
+      *   created before this change, and such an account already holds a full
+      *   VOC: reading blank as STANDARD would take nothing away from it (an
+      *   update only writes, never deletes) but would stop a release update
+      *   refreshing records it is entitled to.  It is also the same direction as
+      *   a missing TIER.OMIT.STANDARD, which CREATEA reads as "no policy".
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

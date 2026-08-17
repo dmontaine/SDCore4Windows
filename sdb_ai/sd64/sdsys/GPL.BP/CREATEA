@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 17 Aug 26 Windows port - an ADMINISTRATOR account gets the administration
+*           verbs too, copied from VOC_TEMPLATE by NEWVOC's
+*           TIER.ADD.ADMINISTRATOR; the tier is written to ACCOUNTS field 5 so
+*           LOGIN cannot undo it; ADOPT defaults to the administrator tier
 * 17 Aug 26 Windows port - PROGRAMMER keyword, and the VOC a new account gets
 *           now depends on the tier: standard accounts get NEWVOC less the
 *           verbs in NEWVOC's TIER.OMIT.STANDARD.  Before this, every account
@@ -62,6 +66,20 @@
 *    the verbs named in NEWVOC's TIER.OMIT.STANDARD record: it can run an
 *    application but not build one.  ADMINISTRATOR implies PROGRAMMER.
 *    PROJECT_STATUS.md section 8.
+*
+*    THE THREE TIERS AND WHERE EACH VOC COMES FROM (17 Aug 26, Windows port):
+*      STANDARD       NEWVOC less TIER.OMIT.STANDARD
+*      PROGRAMMER     NEWVOC entire
+*      ADMINISTRATOR  NEWVOC entire, plus the records named in
+*                     TIER.ADD.ADMINISTRATOR, read from VOC_TEMPLATE
+*    Owner's ruling, 17 Aug 2026: "administrators get the whole voc".  The nine
+*    administration verbs live in VOC_TEMPLATE alone, so before this an SD
+*    administrator had to LOGTO SDSYS to reach any of them.
+*
+*    THE TIER IS WRITTEN TO ACCOUNTS FIELD 5 (ACC$TIER) and LOGIN reads it back.
+*    Without that record the reduction lasted only until the release stamp moved:
+*    LOGIN's update.voc re-copies the whole of NEWVOC, and it is reached from an
+*    ordinary login by a prompt anybody can answer Y to.
 *
 *    NONE OF THE THREE IS A WALL.  An administrator can copy any verb into any
 *    account's VOC afterwards (owner, 17 Aug 2026), so the reduced VOC is the
@@ -116,11 +134,18 @@ deffun valid_os_path(path) calling '!valid_os_path'
    parser = "!PARSER"
    no.query = @false
    make.admin = @false
-* 17 Aug 26 Windows port - PROGRAMMER, PROJECT_STATUS.md section 8.  full.voc
-*   decides whether the new account gets the whole of NEWVOC or NEWVOC less the
-*   capabilities a standard account has no business with.  ADMINISTRATOR sets it
-*   too: an administrator is a programmer and more.
-   full.voc = @false
+* 17 Aug 26 Windows port - PROGRAMMER, PROJECT_STATUS.md section 8.  tier is one
+*   of STANDARD, PROGRAMMER and ADMINISTRATOR, and it decides the VOC: STANDARD
+*   gets NEWVOC less the capabilities in TIER.OMIT.STANDARD, PROGRAMMER gets all
+*   of NEWVOC, ADMINISTRATOR gets that plus the administration verbs named in
+*   TIER.ADD.ADMINISTRATOR.  An administrator is a programmer and more.
+*
+*   A STRING RATHER THAN A FLAG, and not for taste: it is written to the
+*   ACCOUNTS record (ACC$TIER) and read back by LOGIN, so a person running
+*   LIST ACCOUNTS should be able to see which tier an account is without a
+*   lookup table.  It replaced a boolean full.voc, which could not tell
+*   PROGRAMMER from ADMINISTRATOR at all.
+   tier = 'STANDARD'
 * 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
 *   already exists, instead of creating one.  See more.args for what gates it.
    adopt = @false
@@ -517,7 +542,19 @@ PW.TRY.AGAIN:
      acc.rec<ACC$GROUP> = "sdu_":acc.uname
    case upcase(acc.type) = "GROUP"
      acc.rec<ACC$GROUP> = group_name
-   end case  
+   end case
+* 17 Aug 26 Windows port - RECORD THE TIER, PROJECT_STATUS.md section 8.  The VOC
+*   above is a create-time decision and nothing kept it: LOGIN's update.voc
+*   re-copies the whole of NEWVOC, so without this a standard account got its
+*   compiler and editors back the first time the release stamp moved and the user
+*   answered Y to "Update VOC to new release?".  LOGIN reads this field.
+*
+*   ON EVERY PATH, INCLUDING ADOPT.  This write is outside the USER/GROUP case
+*   above and outside the branch that calls make.account, so an adopted account
+*   is recorded like any other - which matters, because ADOPT is how the
+*   installer's own account is created and it takes no tier keyword, so it lands
+*   STANDARD.  See SYSCOM/KEYS.H for what a blank field means.
+   acc.rec<ACC$TIER> = tier
    write acc.rec to acc.f, acc.name
    close acc.f
 
@@ -578,7 +615,7 @@ make.account:
 *     A copy.it flag round the write says the same thing in constructs this
 *     file already uses.
    omit.rec = ''
-   if not(full.voc) then
+   if tier = 'STANDARD' then
       read omit.rec from newvoc.f, 'TIER.OMIT.STANDARD' else omit.rec = ''
    end
    omit.count = dcount(omit.rec, @fm)
@@ -589,8 +626,9 @@ make.account:
 
       copy.it = @true
 
-*     The list record is never itself a VOC entry, whichever tier this is.
+*     The list records are never themselves VOC entries, whichever tier this is.
       if id = 'TIER.OMIT.STANDARD' then copy.it = @false
+      if id = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
 
 * 17 Aug 26 Windows port - an explicit comparison rather than LOCATE, and not
 *   from taste: CPROC has two LOCATE precedents and NEITHER can be copied
@@ -622,6 +660,61 @@ make.account:
          end
       end
    repeat
+
+* 17 Aug 26 Windows port - THE ADMINISTRATION VERBS, section 8.  Owner's ruling
+*   of 17 Aug 2026, "administrators get the whole voc".  These nine live in
+*   VOC_TEMPLATE and NOT in NEWVOC, so nothing above can reach them.
+*
+*   FROM VOC_TEMPLATE RATHER THAN BY MOVING THEM INTO NEWVOC, and that is the
+*   whole design.  Moving them would invert the fallback: a lost or empty
+*   TIER.OMIT.STANDARD is read above as "no policy" and gives the full VOC, which
+*   is safe only while NEWVOC holds nothing administrative.  Put CREATE.ACCOUNT
+*   in NEWVOC and one missing record hands every account SD creates the power to
+*   make more.  The list here fails the other way: lost or empty, an
+*   administrator gets a programmer's VOC and says so the first time they type
+*   CREATE.ACCOUNT.  gplbld/stage.py's note on the two files says the same thing.
+*
+*   ONLY THE ADMINISTRATION VERBS, not the whole of VOC_TEMPLATE.  The other
+*   fourteen records it does not share with NEWVOC are SDSYS's own plumbing:
+*   ACCOUNTS, BP.OUT, GPL.BP, GPL.BP.OUT and QFILE are RELATIVE file pointers, so
+*   copied here they would name files that do not exist in a user account and
+*   LIST ACCOUNTS would fail to open rather than list; FIRST, SECOND and
+*   THIRD.COMPILE are bootstrap paragraphs that compile the whole of GPL.BP;
+*   $HOLD and BP are already created per-account by create.dir.file below.
+*
+*   THE SAME TYPE NORMALISATION AS THE LOOP ABOVE, and it earns its place here:
+*   VOC_TEMPLATE's UNLOCK is one of the five malformed records section 8 records,
+*   carrying its description where the type letter belongs.  Normalising turns
+*   "Verb to unlock records" into "V", so the copy works even though the record
+*   it came from does not.  SDSYS's own UNLOCK is still broken; fixing that is a
+*   data change to VOC_TEMPLATE and is not this.
+   if tier = 'ADMINISTRATOR' then
+      read add.rec from newvoc.f, 'TIER.ADD.ADMINISTRATOR' else add.rec = ''
+      add.count = dcount(add.rec, @fm)
+
+      if add.count > 1 then
+         openpath @sdsys:@ds:'VOC_TEMPLATE' to voctmpl.f else
+            @system.return.code = -status()
+            stop sysmsg(10052) ;* Cannot open SDSYS VOC_TEMPLATE
+         end
+
+         for add.i = 2 to add.count       ;* field 1 is the description
+            add.id = add.rec<add.i>
+            read rec from voctmpl.f, add.id then
+               rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
+
+               if upcase(rec<1>) = 'K' and rec<3> # '' then
+                  s = rec<3>
+                  rec<3> = if upcase(s[1,1]) = 'P' then s<1>[1,2] else s[1,1]
+               end
+
+               write rec to voc.f, add.id
+            end
+         next add.i
+
+         close voctmpl.f
+      end
+   end
 
    close newvoc.f
 
@@ -693,12 +786,24 @@ more.args:
 *   be abbreviated, unlike NO.QUERY.
          case upcase(token) = 'ADMINISTRATOR'
             make.admin = @true
-* 17 Aug 26 Windows port - AND AN ADMINISTRATOR GETS THE FULL VOC.  Before
+* 17 Aug 26 Windows port - AND AN ADMINISTRATOR GETS THE WHOLE VOC.  Before
 *   section 8 this line was the ONLY thing ADMINISTRATOR did, and it touched
 *   Windows group membership alone - every account got a byte-identical NEWVOC
 *   whatever keyword was given.  That is the mechanical root of the finding in
 *   section 8 that the two tiers which exist have identical real power.
-            full.voc = @true
+*
+*   OWNER'S RULING, 17 Aug 2026: "administrators get the whole voc".  It is not
+*   a no-op and never was - NEWVOC has never held CREATE.ACCOUNT, DELETE.ACCOUNT
+*   or the other seven, so before this an SD administrator had to LOGTO SDSYS to
+*   administer anything.  They are safe to hand out because the programs behind
+*   them gate themselves: $CREATEA (line 109 of this file), $DELACC, $MODIFYA,
+*   $GRANTA and $UNLOCK each open with kernel(K$ADMINISTRATOR, -1) and stop with
+*   sysmsg(2001).  TWO OF THE NINE DO NOT, and are on the list anyway because
+*   they are part of the administrative set the ruling names: UPDATE.ACCOUNT is
+*   CPROC internal verb 15 and tests nothing, and ENCRYPT.FIELD points at
+*   $CRYPTO, which does not exist in this tree at all - it is as broken in
+*   SDSYS's own VOC as it will be here.
+            tier = 'ADMINISTRATOR'
 
 * 17 Aug 26 Windows port - PROGRAMMER, section 8.  A programmer works at the
 *   prompt and builds things: compiler, cataloguer, editors, and the shell
@@ -715,8 +820,13 @@ more.args:
 *   an administrator can copy any verb into any account's VOC afterwards
 *   (owner, 17 Aug 2026), which is why this is a starting posture rather than
 *   an enforcement boundary.
+* 17 Aug 26 Windows port - AND IT MUST NOT DOWNGRADE.  Both keywords are
+*   accepted on one command line and in either order, so PROGRAMMER given after
+*   ADMINISTRATOR would otherwise take the administration verbs away again -
+*   silently, because the account would still be a Windows administrator and
+*   would still look right everywhere except its VOC.
          case upcase(token) = 'PROGRAMMER'
-            full.voc = @true
+            if tier # 'ADMINISTRATOR' then tier = 'PROGRAMMER'
 
 * 14 Aug 26 Windows port - ADOPT takes an OS account that already exists
 *   instead of creating one.  It is the single exception to the owner's rule
@@ -740,6 +850,25 @@ more.args:
             stop sysmsg(2018, token) ;* Unexpected token (xx)
       end case
    repeat
+
+* 17 Aug 26 Windows port - AN ADOPTED ACCOUNT IS AN ADMINISTRATOR'S, section 8.
+*   ADOPT is reachable only from sd -internal, which today means one caller:
+*   gplbld/adopt-account.ps1 giving the install's own user an SD account (step
+*   1f).  That person is a Windows administrator by definition - Inno requires
+*   elevation to install - and PROJECT_STATUS.md 5.6.1 settled that a Windows
+*   administrator is an SD administrator.  So their SD account gets an
+*   administrator's VOC.
+*
+*   WITHOUT THIS THE INSTALLING USER LANDS STANDARD, with no BASIC, no ED and no
+*   CATALOG, because adopt-account.ps1 passes no tier keyword and never had one
+*   to pass.  That is a regression the tier work itself would have introduced,
+*   and it would have shown up as "SD is broken after installing it".
+*
+*   A DEFAULT, NOT AN OVERRIDE.  It applies only when no keyword was given, so
+*   an explicit PROGRAMMER on the same line still wins.  make.admin is
+*   deliberately untouched: ADOPT changes nothing about the Windows account, and
+*   the person is already in Administrators.
+   if adopt and tier = 'STANDARD' then tier = 'ADMINISTRATOR'
 return
 * ======================================================================
 

@@ -1,0 +1,305 @@
+# verify-tiers.ps1 - prove the three VOC tiers, and that they survive a VOC
+# update.  PROJECT_STATUS.md section 8.
+#
+#   powershell -File verify-tiers.ps1            create, check, clean up
+#   powershell -File verify-tiers.ps1 -Keep      leave the three accounts behind
+#   powershell -File verify-tiers.ps1 -Cleanup   remove ones left by -Keep
+#
+# Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
+#
+# WHY THREE ACCOUNTS AND NOT ONE.  Checking that a standard account lacks the
+# withheld verbs proves nothing on its own - a copy loop that skipped
+# everything, or one that silently omitted nothing, would each pass half of it.
+# The controls are the other two tiers, and the decisive comparisons are
+# BETWEEN accounts:
+#
+#   STANDARD       has neither the 18 withheld capabilities nor the 9
+#                  administration verbs
+#   PROGRAMMER     has the 18 and NOT the 9        <- controls the add list
+#   ADMINISTRATOR  has both                        <- controls the omit list
+#
+# COUNT VOC IS THE PRIMARY INSTRUMENT, because it is exact and arithmetic
+# rather than a spot check.  Installed NEWVOC holds 410 names, of which "%t" is
+# a dynamic-file artefact and not a record, and TIER.OMIT.STANDARD and
+# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 407 records
+# reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $HOLD,
+# $SAVEDLISTS, BP).  That gives:
+#
+#   ADMINISTRATOR  407 + 9 + 4 = 420      (measured on DON, 17 Aug 2026)
+#   PROGRAMMER     407     + 4 = 411
+#   STANDARD       407 - 18 + 4 = 393
+#
+# Three different numbers, each derived rather than observed-and-blessed, so a
+# fault in either list moves one of them.  The targeted LIST VOC checks below
+# then say WHICH records moved, which a count cannot.
+#
+# THE LAST CHECK IS THE ONE THE TIER RECORD EXISTS FOR.  UPDATE.ACCOUNT re-runs
+# LOGIN's update.voc, which before 17 Aug 2026 re-copied the whole of NEWVOC and
+# handed a standard account its compiler and editors back.  It is ungated, and
+# the same routine is reached from an ordinary login by the $RELEASE prompt, so
+# this is the half that has to hold.
+#
+# DRIVING SD FROM POWERSHELL has two traps, both from verify-createaccount.ps1
+# and both in PROJECT_STATUS.md section 6: input must be PIPED, not redirected,
+# and the pipe prepends a BOM to the first line, so a blank sacrificial line
+# absorbs it.
+
+param(
+    [string]$Prefix = 'sdtier',
+    [switch]$Keep,
+    [switch]$Cleanup
+)
+
+$ErrorActionPreference = 'Stop'
+
+# 17 Aug 26 - IT WRITES A TRANSCRIPT, because the first run of this script
+# proved nothing.  The default cleanup deletes the account directories, and the
+# VOCs are IN them, so the run destroyed the very evidence it had gathered -
+# leaving three ACCOUNTS records, no VOC to count, and a PASS/FAIL table that
+# existed only in a console window.  In this project the person running an
+# elevated script does not paste its output back (CLAUDE.md's testing section is
+# written around exactly that), so a verifier whose result lives only on screen
+# has not reported anything.
+#
+# -Keep IS THE STRONGER RUN AND IS WORTH PREFERRING: it leaves the three
+# accounts, so the VOCs can be read back independently rather than the script's
+# own summary being taken on trust.  A verifier with a bug in it reports a pass.
+$logDir = Join-Path $env:ProgramData 'SD\verify'
+if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+$logPath = Join-Path $logDir ('verify-tiers-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
+Write-Output ("transcript: " + $logPath)
+
+# Same gate as verify-createaccount.ps1, and for the same reason: CLAUDE.md
+# requires a test cycle to begin with a fresh install, and this is what makes
+# that enforceable rather than remembered.
+& (Join-Path $PSScriptRoot 'assert-current.ps1')
+if ($LASTEXITCODE -ne 0) {
+    Write-Output ''
+    Write-Output 'verify-tiers: refusing - see above'
+    exit 2
+}
+
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+        ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Output 'verify-tiers: this needs an ELEVATED PowerShell - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
+    exit 2
+}
+
+$sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
+
+# The tiers, and what each account is expected to come out as.
+$Tiers = @(
+    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 393 }
+    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 411 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 420 }
+)
+
+# The 18 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
+# authority; this list is checked against it below rather than trusted, because
+# a test that carries its own stale copy of the thing under test is no test.
+$Withheld = @('BASIC','CATALOG','CATALOGUE','RUN','ED','EDIT','SED','COPY','COPYP',
+              'DELETE.CATALOG','DELETE.CATALOGUE','MODIFY','COMPILE.DICT','CD',
+              'GENERATE','PHANTOM','SH','!')
+
+# The 9 only an administrator gets.
+$AdminVerbs = @('CREATE.ACCOUNT','DELETE.ACCOUNT','MODIFY.ACCOUNT','UPDATE.ACCOUNT',
+                'GRANT','REVOKE','LIST.GRANTS','UNLOCK','ENCRYPT.FIELD')
+
+# Neither list record may ever land in a VOC.
+$ListRecs = @('TIER.OMIT.STANDARD','TIER.ADD.ADMINISTRATOR')
+
+$results = New-Object System.Collections.ArrayList
+$failed  = $false
+
+function Note($check, $expected, $got) {
+    $pass = ($expected -eq $got)
+    if (-not $pass) { $script:failed = $true }
+    $null = $results.Add([pscustomobject]@{
+        Check = $check; Expected = $expected; Observed = $got
+        Result = $(if ($pass) { 'PASS' } else { 'FAIL' })
+    })
+    Write-Output ("  [{0}] {1}: expected {2}, got {3}" -f
+        $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
+}
+
+# DO NOT USE THIS FOR "sd -start" - see verify-createaccount.ps1's Start-SD and
+# PROJECT_STATUS.md section 6.  Nothing here starts SD; cycle.ps1 leaves the
+# service running.
+function Invoke-SD([string[]]$commands) {
+    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    $out = $body | & $sdExe
+    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+}
+
+function Get-VocCount($text) {
+    if ($text -match '(\d+)\s+record\(s\) counted') { return [int]$Matches[1] }
+    return -1
+}
+
+# LIST VOC prints found records in a table and missing ones as
+#   'NAME' not found
+# so absence is read from the message and presence from its absence.  Ids are
+# quoted going in, which is what keeps "!" and dotted names intact.
+function Get-Missing($text, [string[]]$ids) {
+    $missing = @()
+    foreach ($id in $ids) {
+        if ($text -match ("'" + [regex]::Escape($id) + "' not found")) { $missing += $id }
+    }
+    return $missing
+}
+
+function Get-AccountTier($name) {
+    $rec = Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $name.ToUpper())
+    if (-not (Test-Path -LiteralPath $rec)) { return '<no ACCOUNTS record>' }
+    $f = Get-Content -LiteralPath $rec
+    if ($f.Count -lt 5) { return '<blank>' }
+    if ([string]::IsNullOrEmpty($f[4])) { return '<blank>' }
+    return $f[4]
+}
+
+function Remove-Made {
+    foreach ($t in $Tiers) {
+        if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) {
+            Remove-LocalUser -Name $t.Name
+            Write-Output ("  removed Windows account " + $t.Name)
+        }
+        $d = Join-Path $env:ProgramData ('SD\user_accounts\' + $t.Name)
+        if (Test-Path -LiteralPath $d) {
+            Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        $g = 'sdu_' + $t.Name
+        if (Get-LocalGroup -Name $g -ErrorAction SilentlyContinue) { Remove-LocalGroup -Name $g }
+    }
+    # The SD half is left deliberately: DELETE.ACCOUNT is its own subject and
+    # removing the register records here would hide a CREATE.ACCOUNT that had
+    # half failed.  A rerun is refused by CREATE.ACCOUNT itself, which is the
+    # right way round.
+    Write-Output '  ACCOUNTS register records left in place - remove with DELETE.ACCOUNT'
+}
+
+if ($Cleanup) { Remove-Made; exit 0 }
+
+# ---------------------------------------------------------------------------
+Write-Output '=== 0. The omit list this test asserts against ============================'
+
+# Read the shipped list and compare it with $Withheld.  If they disagree the
+# test is out of date, and saying so is worth more than failing obscurely.
+$omitRec  = Join-Path $env:ProgramData 'SD\sdsys\NEWVOC\TIER.OMIT.STANDARD'
+$shipped  = @(Get-Content -LiteralPath $omitRec | Select-Object -Skip 1)
+$diff     = (Compare-Object $shipped $Withheld -SyncWindow 100)
+Note 'shipped TIER.OMIT.STANDARD matches this test' 0 ($diff | Measure-Object).Count
+if ($diff) { $diff | ForEach-Object { Write-Output ("    {0} {1}" -f $_.SideIndicator, $_.InputObject) } }
+Note 'omit list length' 18 $shipped.Count
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 1. Creating one account per tier ======================================'
+
+Add-Type -AssemblyName System.Web
+foreach ($t in $Tiers) {
+    if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) {
+        Write-Output ("  " + $t.Name + " already exists - run with -Cleanup first")
+        exit 2
+    }
+    # 17 Aug 26 - AND CHECK THE REGISTER, NOT JUST WINDOWS.  Remove-Made
+    # deliberately leaves the ACCOUNTS record behind (see its comment), so after
+    # one run the Windows account is gone and the SD account is not.
+    # CREATE.ACCOUNT then refuses the name for a reason that has nothing to do
+    # with the tiers, several steps further on, and reads like a tier fault.
+    # Give it a fresh prefix instead: -Prefix sdtierb.
+    if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $t.Name.ToUpper()))) {
+        Write-Output ("  " + $t.Name.ToUpper() + " is still in the ACCOUNTS register from an earlier run.")
+        Write-Output ("  CREATE.ACCOUNT would refuse it.  Use a fresh set of names, e.g.:")
+        Write-Output ("      " + $PSCommandPath + " -Keep -Prefix sdtierb")
+        exit 2
+    }
+    $pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+    $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword).Trim()
+    Write-Output ("  " + $cmd)
+    $out = Invoke-SD @($cmd, $pw, $pw)
+    if ($out -notmatch [regex]::Escape($t.Name)) {
+        Write-Output '  --- SD said: ---'
+        Write-Output $out
+        Write-Output ('  CREATE.ACCOUNT for ' + $t.Name + ' produced nothing recognisable')
+        exit 2
+    }
+}
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 2. The recorded tier (ACCOUNTS field 5) ==============================='
+
+foreach ($t in $Tiers) { Note ($t.Name + ' ACC$TIER') $t.Tier (Get-AccountTier $t.Name) }
+Note 'DON ACC$TIER (the ADOPT default)' 'ADMINISTRATOR' (Get-AccountTier 'DON')
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 3. COUNT VOC per tier ================================================='
+
+$vocText = @{}
+foreach ($t in $Tiers) {
+    $text = Invoke-SD @(('LOGTO ' + $t.Name.ToUpper()), 'COUNT VOC',
+                        ("LIST VOC " + (($Withheld + $AdminVerbs + $ListRecs |
+                            ForEach-Object { "'" + $_ + "'" }) -join ' ')))
+    $vocText[$t.Name] = $text
+    Note ($t.Name + ' COUNT VOC') $t.Count (Get-VocCount $text)
+}
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 4. Which records, per tier ============================================'
+
+foreach ($t in $Tiers) {
+    $text = $vocText[$t.Name]
+
+    # The 18: absent for STANDARD, present for the other two.
+    $missWithheld = Get-Missing $text $Withheld
+    $wantWithheld = $(if ($t.Tier -eq 'STANDARD') { 18 } else { 0 })
+    Note ($t.Name + ' withheld capabilities MISSING') $wantWithheld ($missWithheld | Measure-Object).Count
+    if ($missWithheld -and $t.Tier -ne 'STANDARD') {
+        Write-Output ('    missing: ' + ($missWithheld -join ' '))
+    }
+
+    # The 9: present for ADMINISTRATOR only.  This is the control that stops a
+    # broken add list looking like a working one.
+    $missAdmin = Get-Missing $text $AdminVerbs
+    $wantAdmin = $(if ($t.Tier -eq 'ADMINISTRATOR') { 0 } else { 9 })
+    Note ($t.Name + ' administration verbs MISSING') $wantAdmin ($missAdmin | Measure-Object).Count
+
+    # Neither list record, in any tier.
+    Note ($t.Name + ' TIER.* list records MISSING') 2 ((Get-Missing $text $ListRecs) | Measure-Object).Count
+}
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 5. UPDATE.ACCOUNT must not give the standard account its verbs back ==='
+
+# The whole reason ACC$TIER exists.  Before 17 Aug 2026 this restored all 18.
+$std  = $Tiers[0]
+$text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNT', 'COUNT VOC',
+                    ("LIST VOC " + (($Withheld | ForEach-Object { "'" + $_ + "'" }) -join ' ')))
+Note 'standard COUNT VOC after UPDATE.ACCOUNT' $std.Count (Get-VocCount $text)
+Note 'standard withheld still MISSING after UPDATE.ACCOUNT' 18 ((Get-Missing $text $Withheld) | Measure-Object).Count
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== Summary ==============================================================='
+$results | Format-Table -AutoSize | Out-String | Write-Output
+
+if (-not $Keep) {
+    Write-Output '=== Cleanup ==============================================================='
+    Remove-Made
+} else {
+    Write-Output ('-Keep: the three accounts are still there.  Remove with -Cleanup.')
+}
+
+# The verdict goes in BEFORE the transcript is stopped, or the one line anybody
+# would look for is the one line the file does not have.
+if ($failed) { Write-Output 'VERIFY-TIERS: FAILED - see the table.' }
+else         { Write-Output 'VERIFY-TIERS: all checks passed.' }
+Write-Output ("transcript: " + $logPath)
+try { Stop-Transcript | Out-Null } catch { }
+
+if ($failed) { exit 1 }
+exit 0

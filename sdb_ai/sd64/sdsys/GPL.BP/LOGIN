@@ -40,6 +40,10 @@
 *                      "(AI modified)" suffix
 * 16 Aug 26 Windows port - every login and every refused login is written to
 *                      the audit trail.  PROJECT_STATUS.md 7 step 4
+* 17 Aug 26 Windows port - update.voc applies the account's VOC tier instead of
+*                      re-copying the whole of NEWVOC, which was handing a
+*                      standard account back everything CREATE.ACCOUNT withheld.
+*                      PROJECT_STATUS.md section 8
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -88,6 +92,16 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    audit.reason = 'unspecified'
    audit.account = ''
 
+* 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Set here, at the top,
+*   rather than left to the three call sites that do set them, because BCOMP's
+*   "is not assigned a value" is what bootstrap.py line 229 fails the whole
+*   bootstrap on, and both are read in update.voc - textually far above the
+*   get.acc.tier that assigns them.  '' is also the value that means "full VOC",
+*   so if a call site added later forgets, the behaviour is the pre-tier one
+*   rather than a silently reduced account.
+   update.voc.tier = ''
+   tier.acc.name = ''
+
    is.phantom = kernel(K$IS.PHANTOM, 0)
 
    * If the terminal type has not yet been set, work out what it is
@@ -131,6 +145,11 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 
    if mode = 2 or mode = 3 then     ;* Just doing a VOC upgrade or install
       if mode = 2 then              ;* VOC update
+* 17 Aug 26 Windows port - this is UPDATE.ACCOUNT (CPROC internal verb 15), which
+*   is ungated, so the account's own tier decides what it may copy back in.
+*   PROJECT_STATUS.md section 8.
+         tier.acc.name = @who
+         gosub get.acc.tier
          update.voc.f = voc
          gosub update.voc
          close update.voc.f
@@ -157,6 +176,10 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
                         s = acc.path:@ds:'VOC'
                         openpath s to update.voc.f then
                            display sysmsg(5004, s) ;* Updating xx
+* 17 Aug 26 Windows port - the register record is already read, so the tier comes
+*   straight off it rather than through get.acc.tier - which would reopen
+*   ACCOUNTS underneath this very walk.  PROJECT_STATUS.md section 8.
+                           update.voc.tier = acc.rec<ACC$TIER>
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
@@ -416,6 +439,12 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
                   case s = "N"
                      exit
                   case s = "Y"
+* 17 Aug 26 Windows port - THIS IS THE ONE THAT NEEDED NO VERB.  Any user gets
+*   this prompt whenever their VOC's release level differs from SD.REV.STAMP, and
+*   before the tier was recorded, answering Y restored every capability
+*   CREATE.ACCOUNT had withheld.  PROJECT_STATUS.md section 8.
+                     tier.acc.name = @who
+                     gosub get.acc.tier
                      update.voc.f = voc
                      gosub update.voc
                      close update.voc.f
@@ -506,14 +535,89 @@ update.voc:
       goto abort.login
    end
 
+* 17 Aug 26 Windows port - THE TIER FILTER, PROJECT_STATUS.md section 8.  THIS
+*   ROUTINE WAS THE HOLE IN THE VOC TIERS.  CREATEA gives a standard account
+*   NEWVOC less the capabilities in TIER.OMIT.STANDARD; this routine then
+*   re-copied the whole of NEWVOC and handed them straight back - the compiler,
+*   the cataloguer, both editors, COPY and DELETE.CATALOG.
+*
+*   AND IT IS REACHED WITHOUT ANY PRIVILEGE.  Two ways: UPDATE.ACCOUNT, which is
+*   CPROC internal verb 15 and tests nothing, and - worse, because it needs no
+*   verb at all - the $RELEASE test below, which asks any user "Update VOC to new
+*   release?" whenever the account's release level differs from SD.REV.STAMP.
+*   One Y and the tier was gone.  So the tiers survived exactly until the next
+*   release stamp, which is not a boundary anybody would have noticed moving.
+*
+*   THE TIER COMES FROM THE ACCOUNTS RECORD, field 5, written by CREATEA.  The
+*   caller sets update.voc.tier, because the three call sites know the account by
+*   two different routes: two of them are the current account (@who) and the
+*   third is walking the whole register with the record already in hand.
+*
+*   BLANK MEANS THE FULL VOC - the pre-tier behaviour.  See SYSCOM/KEYS.H for
+*   why that is the safe way round rather than reading blank as STANDARD.
+   omit.rec = ''
+   omit.tier = upcase(update.voc.tier)
+   if omit.tier # '' and omit.tier # 'PROGRAMMER' and omit.tier # 'ADMINISTRATOR' then
+      read omit.rec from sdsys.file, 'TIER.OMIT.STANDARD' else omit.rec = ''
+   end
+   omit.count = dcount(omit.rec, @fm)
+
    select sdsys.file to 11
    loop
       readnext id from 11 else exit
+
+      copy.it = @true
+
+*     The list records are never themselves VOC entries, whichever tier this is.
+*     Before this they were copied in like any other record, so any account that
+*     ran UPDATE.ACCOUNT acquired a TIER.OMIT.STANDARD entry in its VOC.  Inert -
+*     their descriptions start with T, which is not a VOC type letter - but it
+*     had no business being there.
+      if id = 'TIER.OMIT.STANDARD' then copy.it = @false
+      if id = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
+
+*     An explicit comparison rather than LOCATE, for the reason CREATEA gives at
+*     the matching loop: CPROC's two LOCATE precedents each search a structure
+*     built the other way up from what they appear to search, and a membership
+*     test that silently matched nothing would omit nothing here and look
+*     exactly like a filter that had worked.
+      if copy.it and omit.count > 1 then
+         for omit.i = 2 to omit.count       ;* field 1 is the description
+            if omit.rec<omit.i> = id then
+               copy.it = @false
+               omit.i = omit.count          ;* stop looking
+            end
+         next omit.i
+      end
+
+* 17 Aug 26 Windows port - CONTINUE, and it is demonstrated 30 lines below in
+*   this same loop, where a declined type change skips the write.  CREATEA's
+*   matching loop says CONTINUE's behaviour inside LOOP ... REPEAT "is not
+*   demonstrated anywhere here" and uses a flag round the write instead - that
+*   note was wrong about this file, and is left standing there because the flag
+*   it chose is not worth a second uncompiled change to correct.
+      if not(copy.it) then continue
 
       read rec from sdsys.file,id then
          new.type = upcase(rec[1,1])
          if new.type = 'P' then new.type = upcase(rec[1,2])
 
+* 17 Aug 26 Windows port - old.rec IS CLEARED FIRST, and it never was.  A failed
+*   READ leaves its target variable untouched (op_dio3.c:1254 takes the ELSE
+*   clause without writing str_descr), so for a record the account's VOC does not
+*   yet hold, old.rec still held the PREVIOUS id's record - and the compare()
+*   below decides on that whether to write.
+*
+*   USUALLY HARMLESS AND OCCASIONALLY NOT: when two adjacent ids normalise to
+*   byte-identical records the missing one is silently skipped.  NEWVOC has
+*   several pairs that do - CATALOG and CATALOGUE are both V|CA|$CATALOG, CD and
+*   COMPILE.DICT are both V|CA|$CD - and a directory select on NTFS comes back in
+*   name order, so they arrive adjacent.  An account holding CATALOG and lacking
+*   CATALOGUE never got CATALOGUE.
+*
+*   UPSTREAM TOO - ../sdb64 sd64/sdsys/GPL.BP/LOGIN has no initialisation either.
+*   See UPSTREAM_FIXES.md.
+         old.rec = ''
          readu old.rec from update.voc.f, id then
             old.type = upcase(old.rec[1,1])
             if old.type = 'P' then old.type = upcase(old.rec[1,2])
@@ -561,6 +665,33 @@ accept.without.query:
    display 
 
    close sdsys.file
+
+   return
+
+*
+* ======================================================================
+* GET.ACC.TIER  -  Read an account's VOC tier from the ACCOUNTS register
+*
+* 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Takes tier.acc.name and
+*   sets update.voc.tier for the routine above.  A missing register, a missing
+*   record or a record written before tiers existed all give '', which
+*   update.voc reads as the full VOC - see SYSCOM/KEYS.H.
+*
+*   ITS OWN FILE VARIABLE, deliberately.  update.voc is called from inside a loop
+*   that has ACCOUNTS open on acc.f with a select list active on channel 12, and
+*   reusing either would end that walk part way through with no error and no sign
+*   of it.  That call site does not come through here - it has the record already
+*   - but the next one might.
+
+get.acc.tier:
+   update.voc.tier = ''
+
+   openpath @sdsys:@ds:'ACCOUNTS' to tier.acc.f then
+      read tier.acc.rec from tier.acc.f, upcase(tier.acc.name) then
+         update.voc.tier = tier.acc.rec<ACC$TIER>
+      end
+      close tier.acc.f
+   end
 
    return
 end

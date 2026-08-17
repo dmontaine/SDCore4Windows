@@ -123,6 +123,14 @@ SDSYS_SHIP = [
     # ordinary account cannot reach them at all.  A new administrative verb
     # therefore goes in VOC_TEMPLATE ONLY; putting it in NEWVOC hands it to
     # every account SD creates.
+    # 17 Aug 26 - AND THAT RULE STILL HOLDS AFTER THE VOC TIERS, which is why
+    # CREATEA gives an ADMINISTRATOR account its nine administration verbs by
+    # reading them OUT of VOC_TEMPLATE rather than by moving them into NEWVOC.
+    # The tier lists in NEWVOC (TIER.OMIT.STANDARD, TIER.ADD.ADMINISTRATOR) fail
+    # safe only in that direction: a lost or empty omit list is read as "no
+    # policy" and gives the full VOC, which is harmless while NEWVOC holds
+    # nothing administrative and hands out CREATE.ACCOUNT the moment it does.
+    # PROJECT_STATUS.md section 8.
     ('NEWVOC',        'the VOC a newly created account is given'),
     ('VOC_TEMPLATE',  "the administrative superset; becomes SDSYS's own VOC"),
     ('MESSAGES',      'sysmsg() text'),

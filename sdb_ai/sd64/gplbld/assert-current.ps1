@@ -67,6 +67,47 @@ if ($hi -ne $hb) {
 $installed = (Get-Item $instTree).CreationTime
 Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 
+# 17 Aug 26 - THE TEST SCRIPTS DO NOT MAKE AN INSTALL STALE, and leaving them in
+# cost a run.  verify-tiers.ps1 was written after an install, and the first thing
+# it does is call this script, which then refused BECAUSE of verify-tiers.ps1 -
+# a verification script blocking itself.  Worse, the advice printed below said
+# "stage.py --force --bootstrap", so the response was to hand-run the sequence
+# that cycle.ps1 exists to replace, and that failed on semaphores.
+#
+# THE RULE IS THE SAME ONE localtest\ AND __pycache__ ALREADY USE: a file that is
+# neither compiled into sd.exe nor staged into the install cannot make the
+# installed tree differ from source.  These drive and measure an install; they
+# never enter one.
+#
+# AND IT IS SELF-POLICING, because an exclusion list is exactly the sort of thing
+# that rots into a false "current".  Each name is checked against stage.py and
+# sd.iss below, and one that turns up in either is NOT excluded - so wiring a
+# script into the install silently puts it back under the guard rather than
+# silently leaving it out.  That keeps the bias in the header: a false stale
+# costs one install, a false current costs an investigation.
+$neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
+                  'verify-createaccount.ps1', 'verify-sshonly.ps1',
+                  'verify-allowgroups.ps1')
+
+$shipEvidence = ''
+foreach ($f in @('stage.py', 'sd.iss')) {
+    $p = Join-Path $PSScriptRoot $f
+    if (Test-Path $p) { $shipEvidence += (Get-Content -LiteralPath $p -Raw) }
+}
+# QUOTED OR PATH-PREFIXED, not merely mentioned.  The first version of this
+# matched the bare name and immediately reinstated assert-current.ps1, because
+# stage.py line 268 discusses it in a COMMENT.  A file that actually ships is
+# named the way a ship list names one - 'deny-logon.ps1' in stage.py's tuple, or
+# ...\deny-logon.ps1" in sd.iss's Source line - so the quote or the separator is
+# the thing that distinguishes a reference from a remark.
+$shipsAs = { param($n) $shipEvidence -match ("[""'\\/]" + [regex]::Escape($n)) }
+
+$excluded   = @($neverShipped | Where-Object { -not (& $shipsAs $_) })
+$reinstated = @($neverShipped | Where-Object {      (& $shipsAs $_) })
+if ($reinstated.Count -gt 0) {
+    Note ("  note: {0} now appears in stage.py or sd.iss, so it is watched again" -f ($reinstated -join ', '))
+}
+
 $trees = @('gplsrc', 'sdsys', 'gplbld') | ForEach-Object { Join-Path $sd64 $_ }
 $newer = @()
 foreach ($t in $trees) {
@@ -82,6 +123,7 @@ foreach ($t in $trees) {
     $newer += Get-ChildItem $t -Recurse -File -ErrorAction SilentlyContinue |
               Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
                              $_.FullName -notmatch '\\localtest\\' -and
+                             $excluded -notcontains $_.Name -and
                              $_.LastWriteTime -gt $installed }
 }
 
@@ -99,8 +141,19 @@ if ($newer.Count -gt 0) {
 if ($stale) {
     Write-Output ''
     Write-Output 'REFUSING - any measurement taken now describes a tree that no longer exists.'
-    Write-Output 'Rebuild and reinstall first:  make sd, stage.py --force --bootstrap, ISCC,'
-    Write-Output 'uninstall, delete BOTH trees, install.  CLAUDE.md has the sequence.'
+    Write-Output ''
+    Write-Output 'Run one cycle, from an ELEVATED PowerShell:'
+    Write-Output ("    " + (Join-Path $PSScriptRoot 'cycle.ps1'))
+    Write-Output ''
+    # 17 Aug 26 - IT NAMES THE SCRIPT, NOT THE STEPS.  This used to print
+    # "stage.py --force --bootstrap, ISCC, uninstall, delete BOTH trees,
+    # install", and somebody following that advice ran stage.py by hand against
+    # a machine whose SD service was still up.  sd -stop shut the daemon down,
+    # the semaphores outlived it, sd -start refused, and the staged tree was
+    # left in the seed state - which is the state that shipped a
+    # catalogue-less install on 16 Aug.  cycle.ps1 stops the service first.
+    Write-Output 'It stops the service, stages, bootstraps, builds the installer, uninstalls,'
+    Write-Output 'deletes BOTH trees and installs.  Do not hand-run the steps - CLAUDE.md.'
     exit 1
 }
 
