@@ -128,6 +128,16 @@ if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
     Fail "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
 }
 
+# AND CHECK THE REGISTER, NOT JUST WINDOWS - the same trap verify-tiers.ps1
+# documents.  The restore below deliberately leaves the ACCOUNTS record behind,
+# so after one run the Windows account is gone and the SD account is not.
+# CREATE.ACCOUNT then refuses the name several steps further on, for a reason
+# that has nothing to do with the API.
+if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $Prefix.ToUpper()))) {
+    Fail ($Prefix.ToUpper() + " is still in the ACCOUNTS register from an earlier run." +
+          "  Remove it with DELETE.ACCOUNT, or use a fresh -Prefix.")
+}
+
 $restoreNeeded = $false
 $pw = ''
 $testRc = -1
@@ -139,7 +149,27 @@ try {
     # PROGRAMMER rather than standard: a standard VOC would do for WHO, but a
     # fuller one keeps this test measuring the TRANSPORT rather than the tier
     # work, which verify-tiers.ps1 owns.
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER NO.QUERY")
+    #
+    # NO NO.QUERY, AND THAT IS NOT A TIDY-UP.  CREATE.ACCOUNT USER creates a
+    # WINDOWS account as well as an SD one, and it refuses outright with
+    # NO.QUERY - "Cannot create user X with NO.QUERY: setting its password
+    # needs a prompt".  Measured 17 Aug 2026, which is how this was found.
+    #
+    # SO THERE ARE TWO PASSWORDS HERE AND THEY ARE NOT THE SAME THING:
+    #   $winPw  the WINDOWS account's, answered to CREATE.ACCOUNT's prompts
+    #   $pw     the SD account's credential, set below by SET.PASSWORD, and the
+    #           only one the API ever sees
+    # Generated separately so neither can be mistaken for the other, and so
+    # that a change to one cannot silently satisfy the other.
+    #
+    # DIFFERENT GENERATORS, ON PURPOSE.  The Windows one may hold punctuation -
+    # it only ever travels down the pipe into SD.  The SD one is kept
+    # ALPHANUMERIC because it is passed to make through "bash -lc", where a
+    # quote or a backslash would break the command rather than the password.
+    Add-Type -AssemblyName System.Web
+    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'ACCOUNTS record created' $true $made
@@ -153,8 +183,8 @@ try {
     Step 2 'Setting its password'
 
     # GENERATED, NEVER HARDCODED, AND NEVER ON A COMMAND LINE.  It reaches SD on
-    # stdin.  The trailing characters guarantee a mix whatever the base64 came
-    # out as, since Windows may have a complexity policy on the local account.
+    # stdin.  Alphanumeric for the bash reason above; the trailing characters
+    # guarantee a mix whatever the base64 came out as.
     $bytes = New-Object byte[] 18
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
     $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
