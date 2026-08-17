@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  CREATE.ACCOUNT has a PROGRAMMER keyword, and a plain account is
+           now smaller than it was.
+           * CREATE.ACCOUNT USER <name> PROGRAMMER gives the account the full
+             set of verbs: BASIC, CATALOG, RUN, ED, EDIT, SED, COPY, COPYP,
+             DELETE.CATALOG, SH and !.  ADMINISTRATOR includes all of that.
+           * WITHOUT EITHER KEYWORD the account no longer gets those verbs.
+             It can run an application; it cannot compile, catalogue, edit or
+             shell out.  Until now every account got exactly the same verbs
+             whichever keyword you used.
+           * If somebody needs one of them, copy the verb into their VOC from
+             SDSYS - that is a normal COPY and takes a moment.  This is a
+             starting posture, not a lock.
+           * The list lives in SDSYS NEWVOC as the record TIER.OMIT.STANDARD,
+             so you can change what a standard account starts with.
+           * EXISTING ACCOUNTS ARE NOT TOUCHED.  This applies to accounts made
+             from now on.
+
 17 Aug 26  MICRO and the language verbs are gone.
            * MICRO launched an external editor, which is a way out of SD onto
              the machine underneath it.  It is removed for the same reason SH

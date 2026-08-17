@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 17 Aug 26 Windows port - PROGRAMMER keyword, and the VOC a new account gets
+*           now depends on the tier: standard accounts get NEWVOC less the
+*           verbs in NEWVOC's TIER.OMIT.STANDARD.  Before this, every account
+*           got a byte-identical VOC whatever keyword was given, which is what
+*           PROJECT_STATUS.md section 8 means by the tiers being enforced
+*           backwards.
 * 15 Aug 26 Windows port - no chown and no setgid: seven set.owner calls, the
 *           subroutine and "sudo chmod g+s" all removed, and an adopted or
 *           administrator account is never confined to ssh
@@ -49,6 +55,19 @@
 *    PROJECT_STATUS.md 5.6.1 is the whole of what being an SD administrator
 *    means.  Omit it and the account is a standard local user, which is the
 *    default and the common case.  It cannot be abbreviated; see more.args.
+*
+*    PROGRAMMER (17 Aug 26, Windows port) gives the account the FULL VOC -
+*    compiler, cataloguer, editors and the shell verbs.  Without it, and
+*    without ADMINISTRATOR, the account is a STANDARD one and gets NEWVOC less
+*    the verbs named in NEWVOC's TIER.OMIT.STANDARD record: it can run an
+*    application but not build one.  ADMINISTRATOR implies PROGRAMMER.
+*    PROJECT_STATUS.md section 8.
+*
+*    NONE OF THE THREE IS A WALL.  An administrator can copy any verb into any
+*    account's VOC afterwards (owner, 17 Aug 2026), so the reduced VOC is the
+*    posture an account starts in, not a boundary anything enforces.  The
+*    boundary that does exist is the operating system's, and section 8 records
+*    that OS.EXECUTE ... CAPTURING is ungated regardless of any of this.
 *    CREATE.ACCOUNT GROUP <grp acct name>  {NO.QUERY}  - account created in  /home/sd/group_accounts/<grp acct name> owner:group set to sdsys:group_name
 *                                                        Note - users will need to be added to group with MODIFY.ACCOUNT ADD group_name username
 *    CREATE.ACCOUNT OTHER acc.name pathname {NO.QUERY} - account created in pathname, maintained for backwards compatiblilty. This will require manual editing
@@ -97,6 +116,11 @@ deffun valid_os_path(path) calling '!valid_os_path'
    parser = "!PARSER"
    no.query = @false
    make.admin = @false
+* 17 Aug 26 Windows port - PROGRAMMER, PROJECT_STATUS.md section 8.  full.voc
+*   decides whether the new account gets the whole of NEWVOC or NEWVOC less the
+*   capabilities a standard account has no business with.  ADMINISTRATOR sets it
+*   too: an administrator is a programmer and more.
+   full.voc = @false
 * 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
 *   already exists, instead of creating one.  See more.args for what gates it.
    adopt = @false
@@ -522,20 +546,80 @@ make.account:
       stop sysmsg(6018) ;* Cannot open SDSYS NEWVOC
    end
 
+* 17 Aug 26 Windows port - THE TIER OMIT LIST, PROJECT_STATUS.md section 8.
+*   A standard account gets NEWVOC less the records named in NEWVOC's own
+*   TIER.OMIT.STANDARD; PROGRAMMER and ADMINISTRATOR get all of it.
+*
+*   HELD AS DATA RATHER THAN IN THIS SOURCE, so that changing the shipped
+*   posture does not mean recompiling CREATEA, and so that what a site ships
+*   can be read as a record.  It lives in NEWVOC rather than in a new file
+*   because NEWVOC is already open here, already shipped by gplbld/stage.py,
+*   and a second file would need its own openpath, its own error message and
+*   its own reason to exist.
+*
+*   A MISSING OR EMPTY LIST GIVES EVERY ACCOUNT THE FULL VOC, which is the old
+*   behaviour exactly.  That is the safe way round for a missing file: an
+*   install that somehow loses the record behaves as it did before section 8,
+*   rather than creating accounts that cannot do anything.  It is also why the
+*   record is not created here if absent - silence means "no policy", not
+*   "empty policy".
+* 17 Aug 26 Windows port - ONLY CONSTRUCTS ALREADY USED IN THIS TREE, and that
+*   is why this is longer than it looks like it needs to be.  None of this can
+*   be compiled until the next stage.py --bootstrap, so a novel statement that
+*   turns out not to mean what it does elsewhere costs a whole cycle:
+*
+*   * NOT delete(rec, 1) to drop the description field - delete() as a dynamic
+*     array function appears NOWHERE in GPL.BP, and SDCLIENT defines a
+*     SUBROUTINE called delete, so the name is not even unambiguous.  The loop
+*     starts at field 2 instead.
+*   * NOT CONTINUE to skip a record.  BCOMP lists it as a statement, but its
+*     behaviour inside LOOP ... REPEAT is not demonstrated anywhere here, and a
+*     skip that did not skip would copy the whole VOC and look like success.
+*     A copy.it flag round the write says the same thing in constructs this
+*     file already uses.
+   omit.rec = ''
+   if not(full.voc) then
+      read omit.rec from newvoc.f, 'TIER.OMIT.STANDARD' else omit.rec = ''
+   end
+   omit.count = dcount(omit.rec, @fm)
+
    select newvoc.f to 11
    loop
       readnext id from 11 else exit
 
-      read rec from newvoc.f, id then
-         rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
+      copy.it = @true
 
-         if upcase(rec<1>) = 'K' and rec<3> # '' then   ;* Keyword with other use
-            s = rec<3>
-            rec<3> = if upcase(s[1,1]) = 'P' then s<1>[1,2] else s[1,1]
+*     The list record is never itself a VOC entry, whichever tier this is.
+      if id = 'TIER.OMIT.STANDARD' then copy.it = @false
+
+* 17 Aug 26 Windows port - an explicit comparison rather than LOCATE, and not
+*   from taste: CPROC has two LOCATE precedents and NEITHER can be copied
+*   safely.  privileged_commands is built with <-1>, which appends FIELDS, and
+*   is then searched with "locate ... in privileged_commands<1>", which
+*   searches the VALUES of field 1; aliased.commands is set to '' and never
+*   populated at all.  A membership test that silently matched nothing would
+*   omit nothing, and this whole change would look like it had worked.
+      if copy.it and omit.count > 1 then
+         for omit.i = 2 to omit.count       ;* field 1 is the description
+            if omit.rec<omit.i> = id then
+               copy.it = @false
+               omit.i = omit.count          ;* stop looking
+            end
+         next omit.i
+      end
+
+      if copy.it then
+         read rec from newvoc.f, id then
+            rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
+
+            if upcase(rec<1>) = 'K' and rec<3> # '' then  ;* Keyword with other use
+               s = rec<3>
+               rec<3> = if upcase(s[1,1]) = 'P' then s<1>[1,2] else s[1,1]
+            end
+
+            write rec to voc.f, id
+
          end
-
-         write rec to voc.f, id
-       
       end
    repeat
 
@@ -609,6 +693,30 @@ more.args:
 *   be abbreviated, unlike NO.QUERY.
          case upcase(token) = 'ADMINISTRATOR'
             make.admin = @true
+* 17 Aug 26 Windows port - AND AN ADMINISTRATOR GETS THE FULL VOC.  Before
+*   section 8 this line was the ONLY thing ADMINISTRATOR did, and it touched
+*   Windows group membership alone - every account got a byte-identical NEWVOC
+*   whatever keyword was given.  That is the mechanical root of the finding in
+*   section 8 that the two tiers which exist have identical real power.
+            full.voc = @true
+
+* 17 Aug 26 Windows port - PROGRAMMER, section 8.  A programmer works at the
+*   prompt and builds things: compiler, cataloguer, editors, and the shell
+*   verbs.  A standard account runs an application and gets none of them.
+*
+*   Matched on the token text for the same reason ADMINISTRATOR is, above: the
+*   KW$ table in SYSCOM/PARSER.H is positional and shared by every verb, so
+*   adding an entry to serve one verb is the larger and riskier change.  It
+*   cannot be abbreviated, and that is the cost.
+*
+*   IT GRANTS RATHER THAN RESTRICTS, deliberately.  The default is the reduced
+*   VOC, so an account created by somebody who has not read any of this is the
+*   safe one; you have to ask for the capability.  And nothing here is a wall -
+*   an administrator can copy any verb into any account's VOC afterwards
+*   (owner, 17 Aug 2026), which is why this is a starting posture rather than
+*   an enforcement boundary.
+         case upcase(token) = 'PROGRAMMER'
+            full.voc = @true
 
 * 14 Aug 26 Windows port - ADOPT takes an OS account that already exists
 *   instead of creating one.  It is the single exception to the owner's rule
