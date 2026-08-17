@@ -105,7 +105,7 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc terminfo check-local
+.PHONY: sdclilib sdsvc terminfo check-local check-remote
 
 sdclilib:
 	@echo Building native client DLL
@@ -125,6 +125,21 @@ sdclilib:
 # to the test-cycle rule: run gplbld/assert-current.ps1 first, and UNELEVATED.
 check-local:
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) check-local
+
+# 17 Aug 26 - APIHOST IS DEFAULTED HERE TOO, and it has to be.  The sub-make
+# has its own "APIHOST ?= 127.0.0.1", but passing APIHOST="" on the command
+# line OVERRIDES a "?=" default rather than leaving it alone - so without this
+# the test was handed an empty host and answered "Invalid host name", which
+# reads as a broken listener.  Measured 17 Aug 2026.
+APIHOST ?= 127.0.0.1
+
+# 17 Aug 26 - AND THE REMOTE ONE, for the same reason and by the same route.
+# It needs arguments, which pass straight through; gplbld/verify-apiport.ps1
+# is the one command that sets the system up and supplies them.
+check-remote:
+	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) \
+	  APIHOST="$(APIHOST)" APIPORT="$(APIPORT)" APIUSER="$(APIUSER)" \
+	  APIPASS="$(APIPASS)" APIACCT="$(APIACCT)" check-remote
 
 # 15 Aug 26 - THE SERVICE IS NATIVE, AND ON PURPOSE.  A Windows service has to
 # call StartServiceCtrlDispatcher, and sd.exe is built against the MSYS2 POSIX

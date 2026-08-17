@@ -92,6 +92,33 @@ check-local: $(DLL)
 	  tests/local_connect_test.c -I. -L. -lsdclilib
 	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./local-connect-test.exe
 
+# 17 Aug 26 - THE REMOTE TEST, PROJECT_STATUS.md 7 step 6.  Same rule as
+# check-local: it measures the INSTALLED tree, so it is not under "check".
+#
+# IT TAKES ARGUMENTS AND HAS NO DEFAULTS ON PURPOSE.  APIPORT is off on a fresh
+# install and the account it uses must have a password set, so there is no
+# combination this could usefully guess; gplbld/verify-apiport.ps1 sets the
+# whole thing up and passes them in.  Run by hand:
+#
+#   make check-remote APIHOST=127.0.0.1 APIPORT=4243 \
+#        APIUSER=<user> APIPASS=<password> APIACCT=<ACCOUNT>
+APIHOST ?= 127.0.0.1
+APIPORT ?=
+APIUSER ?=
+APIPASS ?=
+APIACCT ?=
+
+check-remote: $(DLL)
+	@if [ -z "$(APIPORT)" ] || [ -z "$(APIUSER)" ] || [ -z "$(APIACCT)" ]; then \
+	  echo "check-remote needs APIPORT, APIUSER, APIPASS and APIACCT - see the"; \
+	  echo "comment above this target, or run gplbld/verify-apiport.ps1 which"; \
+	  echo "sets all of it up and passes them in."; exit 2; fi
+	mkdir -p localtest
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/remote-connect-test.exe \
+	  tests/remote_connect_test.c -I. -L. -lsdclilib
+	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./remote-connect-test.exe \
+	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)"
+
 # 17 Aug 26 - THE SELECT PROBE, PROJECT_STATUS.md 7 step 11.  It needs no
 # server, no install and no SD at all: it is two throwaway binaries that answer
 # one question about the Cygwin runtime, which is why it is not under "check"
