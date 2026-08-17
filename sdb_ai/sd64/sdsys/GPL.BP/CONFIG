@@ -20,6 +20,9 @@
 * START-HISTORY:
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * rev 0.9.0 Jan 25 mab add CREATUSR config parameter
+* 16 Aug 26 Windows port - CREATUSR is no longer reported.  op_config() has
+*           no branch for it, so printing it would show a blank line and set
+*           status to ER_NOT_FOUND.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -87,7 +90,6 @@ report.params:
    print 'APILOGIN  '        : config('APILOGIN')
    print 'CMDSTACK  '        : config('CMDSTACK')
    n = config('CODEPAGE') ; if n then print 'CODEPAGE  '        : n
-   print 'CREATUSR  '        : config('CREATUSR')
    print 'DEADLOCK  '        : config('DEADLOCK')
    n = config('DEBUG') ; if n then print 'DEBUG     '        : n
    print 'DUMPDIR   '        : config('DUMPDIR')

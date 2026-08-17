@@ -5,6 +5,17 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  The CREATUSR configuration parameter is gone.
+           * CONFIG no longer lists it, and config('CREATUSR') no longer
+             returns a value.  It stopped having any effect on 14 Aug 26,
+             when CREATE.ACCOUNT and DELETE.ACCOUNT stopped consulting it:
+             SD has accounts, not accounts and users, so creating an account
+             creates the operating system account and there is nothing to
+             opt in to.
+           * A CREATUSR line in sd.conf is still accepted and ignored, so a
+             configuration file carrying one - your own, or one brought from
+             a Linux install - still works.  You can delete the line.
+
 16 Aug 26  The installer now ALWAYS installs an OpenSSH server, instead of
            offering it as a choice that was off by default.
 

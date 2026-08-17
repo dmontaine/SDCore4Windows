@@ -244,6 +244,50 @@ def check_no_stage_paths(stage, sdsys, allowed):
     return offenders
 
 
+def check_bootstrap_complete(sdsys):
+    r"""Refuse a staged tree whose bootstrap stopped after the seed phase.
+
+    THIS EXISTS BECAUSE AN EXIT CODE OF 0 WAS NOT ENOUGH.  On 16 Aug 2026 an
+    installer was built from a tree in exactly this state, installed, and
+    nothing noticed until a session was tried on it a day later: every static
+    file was present and correct, so the tree looked whole, but gcat held the
+    4 objects bbcmp.py compiles to seed the bootstrap instead of 132, and
+    gcat/$CPROC was the 0-byte placeholder bootstrap.py touches so that
+    read_config()'s access() check passes before anything is catalogued.  SD
+    cannot start a session on such a tree: it dies "Unable to load '$CPROC'
+    object code" with an access violation, which reads as a corrupt binary.
+
+    assert-current.ps1 CANNOT COVER THIS.  It compares an install against
+    SOURCE, and gcat, GPL.BP.OUT and VOC are build products with no source
+    counterpart, so it exited 0 over the broken tree.  The check has to be
+    here, at the moment the tree is built, against what the bootstrap created.
+
+    Counting the whole tree is a poor instrument - the shortfall was 3,139
+    files against 3,475, which reads as rounding.  These five do not.
+    """
+    def n(sub):
+        d = os.path.join(sdsys, sub)
+        return len(os.listdir(d)) if os.path.isdir(d) else 0
+
+    cproc = os.path.join(sdsys, 'gcat', '$CPROC')
+    cproc_sz = os.path.getsize(cproc) if os.path.isfile(cproc) else -1
+
+    faults = []
+    if cproc_sz <= 0:
+        faults.append('gcat/$CPROC is %s - the bootstrap touches it empty and '
+                      'the LAST step overwrites it, so this is the decisive one'
+                      % ('absent' if cproc_sz < 0 else '0 bytes'))
+    if not os.path.isfile(os.path.join(sdsys, 'gcat', '$LOGIN')):
+        faults.append('gcat/$LOGIN is absent - nothing could log in')
+    if n('gcat') < 100:
+        faults.append('gcat holds %d entries, expected ~132' % n('gcat'))
+    if n('GPL.BP.OUT') < 150:
+        faults.append('GPL.BP.OUT holds %d objects, expected ~193' % n('GPL.BP.OUT'))
+    if not os.path.isdir(os.path.join(sdsys, 'VOC')):
+        faults.append("VOC is absent - 'sd -i' did not complete")
+    return faults
+
+
 def retarget_sdsys_account(sdsys, production):
     """Point the SDSYS ACCOUNTS record at a directory, and return the old one.
 
@@ -495,6 +539,18 @@ def main():
              '--conf', bconf])
         if r.returncode != 0:
             die('the bootstrap failed; the staged tree is not installable')
+
+        # AND JUDGE IT ON WHAT IT CREATED, not on that exit code - see
+        # check_bootstrap_complete().  A seed-only tree has been packaged and
+        # installed once already.
+        faults = check_bootstrap_complete(sdsys)
+        if faults:
+            print('  the bootstrap reported success but did not finish:')
+            for f in faults:
+                print('    %s' % f)
+            die('refusing to stage a tree no session could start in - '
+                'see check_bootstrap_complete() and PROJECT_STATUS.md 6')
+        print('  checked: the bootstrap completed')
 
         os.remove(bconf)
 

@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab add CREATUSR - allow create.account to create os user
+ * 16 Aug 26 Windows port - CREATUSR is gone.  The line is still accepted and
+ *           discarded, deliberately - see the parser below.
  * START-DESCRIPTION:
  *
  * Handles parsing of the configuration file.
@@ -95,7 +97,6 @@ struct CONFIG* read_config(char* errmsg) {
   /* !!CONFIG!! */
 
   pcfg.codepage = 0;      /* CODEPAGE: Console code page */
-  pcfg.create_user = 1;   /* allow create.account to create os user */
   pcfg.dumpdir[0] = '\0'; /* DUMPDIR:  Directory for process dump files */
   pcfg.exclrem = 0;       /* EXCLREM:  Exclude remote files in ACCOUNT.SAVE? */
   pcfg.filerule = 0;      /* FILERULE: File name rules (special forms) */
@@ -190,8 +191,19 @@ struct CONFIG* read_config(char* errmsg) {
         cfg->cmdstack = n;
       else if (sscanf(rec, "CODEPAGE=%d", &n) == 1)
         pcfg.codepage = n;
-      else if (sscanf(rec, "CREATUSR=%d", &n) == 1)
-        pcfg.create_user = (n != 0);
+      /* 16 Aug 26 Windows port - CREATUSR IS OBSOLETE AND IS ACCEPTED HERE
+         ONLY SO THAT A CONFIGURATION FILE CARRYING IT STILL LOADS.  SD has
+         accounts, not accounts and users, so CREATE.ACCOUNT creates the
+         operating system account always and there is nothing to opt in to;
+         the gate went on 14 Aug 26 and struct PCFG no longer holds a value
+         for it.  The branch is NOT simply deleted, because the chain below
+         ends in "Unrecognised configuration parameter", which aborts
+         read_config() and stops SD starting - and upstream sdb64 still
+         parses CREATUSR, so a file copied from a Linux install can have it.
+         Removing this branch would turn tidying-up into a failure to start. */
+      else if (sscanf(rec, "CREATUSR=%d", &n) == 1) {
+        /* accepted and discarded */
+      }
       else if (sscanf(rec, "DEADLOCK=%d", &n) == 1)
         cfg->deadlock = (n != 0);
       else if (sscanf(rec, "DEBUG=%d", &n) == 1)
