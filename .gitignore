@@ -41,3 +41,9 @@ __pycache__/
 sdb_ai/sd64/pcode_bld.log
 sdb_ai/sd64/pass1
 sdb_ai/sd64/pass2
+
+# The staging tree gplbld/stage.py builds - "an install, laid out".  It is
+# build output, like bin/ above: ~3,165 files including sd.exe and the MSYS2
+# DLLs, so committing it would breach the no-binaries rule in CLAUDE.md.  The
+# default location is ../../stage from sd64, which is the repository root.
+stage/

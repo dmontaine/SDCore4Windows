@@ -84,27 +84,46 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from any directory"; \
     GroupDescription: "System integration:"
 
-; OPT IN, AND OFF BY DEFAULT.  Decision from the repository owner, 14 Aug 2026.
-; The case for offering it: SD is often installed by someone with little
-; administrative knowledge who wants the handful of people on their local
-; network to reach it.  Good security is the default; the easy path exists but
-; has to be chosen deliberately.
+; THE ssh SERVER IS NO LONGER A TASK.  Owner's decision, 16 Aug 2026, reversing
+; the opt-in of 14 Aug 2026.
 ;
-; The Check hides this entirely when the machine already has an ssh server.  We
-; never reconfigure or restart one we did not install - it may be there for
-; something else and may be managed by policy.  See PROJECT_STATUS.md 5.9.
-Name: "installssh"; Description: "Install and start OpenSSH Server (allows remote access to THIS MACHINE on port 22)"; \
+; WHY IT REVERSED.  SD accounts sign in over ssh and nothing else (5.6.2) and
+; the API is carried over ssh as well (8, posture B, which already said in as
+; many words that this makes the ssh install path load-bearing).  So an install
+; without an ssh server is one that nobody but the installing user can use: every
+; account CREATE.ACCOUNT makes is denied the console and Remote Desktop, and
+; without ssh it has no way in at all.  That is true even with no network -
+; a local user reaches SD by ssh'ing to localhost, which is the case that
+; decided it.
+;
+; It is installed whenever this machine does not already have one.  If it does,
+; SD leaves it completely alone: "we never reconfigure or restart an ssh server
+; we did not install" (5.9) is a SEPARATE rule from whether ours is optional,
+; and it survives this change untouched.  SshServerAbsent is what enforces it.
+;
+; WHAT IS OPTIONAL NOW IS THE EXPOSURE, WHICH IS WHERE THE RISK ACTUALLY WAS.
+; Installing the capability creates OpenSSH-Server-In-TCP and enables it for any
+; remote address - measured on this machine, 16 Aug 2026 - so an unconditional
+; install would open port 22 to the whole local network EVERY time, including
+; for the local-only user whose case made ssh mandatory in the first place.
+; ssh-firewall.ps1 scopes the rule to loopback unless this is ticked, which
+; leaves the risk attached to the decision that carries it.
+Name: "sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
     GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
 
-; THE SECOND LAYER OF 5.6.2, and a CHILD of the task above - which is the whole
-; of how 5.9 is honoured here.  Inno only enables a child task when its parent
-; is ticked, so this is unreachable unless SD is installing the ssh server
-; itself.  We do not edit the configuration of an ssh server somebody else put
-; there; it may be there for something else and may be managed by policy.
+; THE SECOND LAYER OF 5.6.2.  PROMOTED FROM A SUBTASK on 16 Aug 2026, because
+; the parent it hung off no longer exists.
+;
+; ITS OWN Check IS NOW DOING ALL THE WORK.  As a child it was unreachable unless
+; SD was installing the ssh server itself, and that was described as structural
+; rather than remembered; with the parent gone, the Check on this line is the
+; only thing left standing between it and a machine whose ssh server belongs to
+; somebody else.  Do not remove it.  allow-ssh-groups.ps1 refuses without
+; -Installed as a second, independent backstop.
 ;
 ; The deny rights say where an account may NOT log in.  This says who may ssh at
-; all: two independent controls rather than one.  Off by default like its
-; parent, because it writes to a file outside SD's own tree.
+; all: two independent controls rather than one.  Still off by default, because
+; it writes to a file outside SD's own tree.
 ;
 ; THE LIST INCLUDES ADMINISTRATORS.  Without that the machine's own
 ; administrator loses ssh the moment this is applied - the caution in 5.6.2, and
@@ -112,13 +131,12 @@ Name: "installssh"; Description: "Install and start OpenSSH Server (allows remot
 ; resolves the name from S-1-5-32-544 rather than writing "Administrators",
 ; which would be wrong on a localised Windows.
 ;
-; The Check is repeated rather than inherited.  A subtask carries no
-; GroupDescription - it sits under its parent's - but it does get its own Check,
-; and without one it would still be created on a machine whose parent task was
-; filtered out for already having an ssh server.  That is precisely the machine
-; this must never appear on.
-Name: "installssh\allowgroups"; Description: "Also limit ssh to SD users and administrators (writes AllowGroups to sshd_config)"; \
-    Flags: unchecked; Check: SshServerAbsent
+; THE DESCRIPTION NAMES scp AND sftp because the ForceCommand half of that
+; script stops them working for everyone, which follows from the decision and is
+; not a side effect that was missed - but it is not something to discover after
+; ticking a box that only mentioned AllowGroups, which is what it used to say.
+Name: "limitssh"; Description: "Limit ssh to SD users and administrators, and put every ssh session straight into SD (disables scp and sftp)"; \
+    GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -223,11 +241,30 @@ Filename: "{sys}\net.exe"; Parameters: "localgroup sdsshonly /add /comment:""SD 
 ; policy and race anything else editing it.  This adds one right to one SID.
 ; Both calls are idempotent - adding a right an account already holds succeeds.
 ;
-; Failure is reported and not fatal, on the same reasoning as the ssh install:
-; a machine where this cannot be applied should still get a working SD, with
-; the restriction absent rather than the install broken.  It is checked at the
-; end by CurStepChanged so it cannot fail silently, which is the mistake the
-; OpenSSH step made.
+; Failure is not fatal, on the same reasoning as the ssh install: a machine
+; where this cannot be applied should still get a working SD, with the
+; restriction absent rather than the install broken.
+;
+; CORRECTED 16 Aug 2026, AND IT IS STILL A LOOSE END.  This comment used to
+; claim the step "is checked at the end by CurStepChanged so it cannot fail
+; silently, which is the mistake the OpenSSH step made".  IT IS NOT CHECKED -
+; CurStepChanged never read it, and the mistake it names as somebody else's was
+; being made here too.  Corrected in place rather than deleted, per the standing
+; rule about wrong comments.
+;
+; NOT FIXED IN THE SAME PASS, deliberately, because it is not the ssh work and
+; the fix is not a comment: unlike the OpenSSH step there is no machine state
+; Inno can read to tell whether the rights were applied - user rights
+; assignment needs LsaEnumerateAccountRights, so judging it means shelling out
+; to a script the way ApplyAllowGroups does.  Recorded in PROJECT_STATUS.md 7
+; step 3 rather than left here.
+;
+; What it costs while it stays unchecked: an account confined to sdsshonly on a
+; machine where the deny rights never landed is NOT confined at all, and the
+; install says nothing.  That is a quiet weakening, not a broken install, which
+; is why it can wait - but it is exactly the shape of the six defects of
+; 16 Aug 2026, each of which sat at a seam between two halves that were correct
+; alone.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\deny-logon.ps1"" sdsshonly"; \
     Flags: runhidden; StatusMsg: "Restricting SD accounts to ssh..."
@@ -317,10 +354,18 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-psdir.ps1"" -Path ""{#DataDir}\sdsys\PSTMP"""; \
     Flags: runhidden; StatusMsg: "Securing the script directory..."
 
-; Optional, and only reachable if the task was ticked and no ssh server was
-; already present.  A failure here must NOT fail the SD install: this is a
-; Features on Demand download and policy, a metered connection or an offline
-; machine can all block it.  Hence skipifdoesntexist and no exit code check.
+; NOT OPTIONAL SINCE 16 Aug 2026 - see the note in [Tasks].  The Check is the
+; whole of the condition now: install one if this machine has none, and never
+; touch one it already has.
+;
+; A FAILURE HERE STILL MUST NOT FAIL THE SD INSTALL.  This is a Features on
+; Demand download, and policy, a WSUS with no FoD source, a metered connection
+; or an offline machine can each block it.  That rule (5.9) has survived the
+; change - but its CONSEQUENCE has not, and this is the important part: the
+; machine can now land in the state the user used to choose, an SD with no ssh
+; server, in which NO ACCOUNT BUT THE INSTALLING USER'S CAN SIGN IN ANYWHERE.
+; It is not fatal and it is not silent either; SshReport says so at the end.
+;
 ; MOVED OUT OF THIS FILE ON PURPOSE - see install-ssh.ps1.  It used to be an
 ; inline -Command, and it carried a brace bug for its entire life: Inno escapes
 ; a literal "{" as "{{" but needs no escape for "}", so "}}" reached PowerShell
@@ -329,10 +374,24 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; no exit code, said nothing either.  A shipped file can be read and
 ; parse-checked on its own; an inline parameter cannot.
 ;
-; Exit 2 means "installed, restart required", which CurStepChanged reports.
+; IT STAYS A [Run] ENTRY RATHER THAN MOVING TO [Code] WITH THE OTHERS, and the
+; reason is the StatusMsg.  This step hands off to TiWorker and can work for
+; minutes with nothing on screen; it was reported as a hang during testing on
+; 14 Aug 2026, when it was optional and rare.  It is now on every install of a
+; machine without ssh, so the one line saying what it is doing matters more than
+; the exit code does - and the exit code is not what is judged anyway.
+;
+; CORRECTED 16 Aug 2026.  This comment used to end "Exit 2 means installed,
+; restart required, which CurStepChanged reports."  IT DID NOT.  Nothing read
+; this entry's exit code at all - a [Run] entry discards it - and CurStepChanged
+; handled only ApplyAllowGroups and AdoptAccount.  The claim is left visible
+; rather than deleted because it is the second comment in this file found
+; asserting a check that was never written.  What replaces it is better than the
+; exit code would have been: SshReport reads the MACHINE STATE afterwards, which
+; also answers correctly when the capability was already installed.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1"""; \
-    Flags: runhidden skipifdoesntexist; Tasks: installssh; \
+    Flags: runhidden skipifdoesntexist; Check: SshServerAbsent; \
     StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
 
 ; THE SERVICE, AND IT IS NOT A TASK - owner's decision, 15 Aug 2026.  SD must
@@ -403,17 +462,9 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
   Detection helpers
   --------------------------------------------------------------------------- }
 
-function SshServerAbsent: Boolean;
-begin
-  { Tested by looking for the file rather than by asking Windows.
-    Get-WindowsCapability -Online REQUIRES ELEVATION - measured 14 Aug 2026 -
-    and while Inno happens to be elevated, a file test costs nothing, cannot
-    fail for a reason unrelated to the question, and is instant. }
-  Result := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
-end;
-
 var
   DataTreeWasAbsent: Boolean;
+  SshWasAbsent: Boolean;
 
 function InitializeSetup: Boolean;
 begin
@@ -429,12 +480,160 @@ begin
      whole set consistently and so looks identical either way.  Only a genuine
      first install exposes it.  Measured 14 Aug 2026. *)
   DataTreeWasAbsent := not DirExists(ExpandConstant('{#DataDir}\sdsys'));
+
+  (* AND THE SAME TREATMENT FOR ssh AS OF 16 Aug 2026, FOR A REASON THAT ONLY
+     ARRIVED WITH THE MANDATORY INSTALL.
+
+     Tested by looking for the file rather than by asking Windows.
+     Get-WindowsCapability -Online REQUIRES ELEVATION - measured 14 Aug 2026 -
+     and while Inno happens to be elevated, a file test costs nothing, cannot
+     fail for a reason unrelated to the question, and is instant.
+
+     WHY IT IS NOW CACHED.  While ssh was a task, the live test was safe: it
+     was read before anything was installed, and the only consumer downstream
+     asked WizardIsTaskSelected, which cannot be true on a machine that already
+     had a server.  Now the installer installs one itself, so from ssPostInstall
+     onwards the live answer is False on EVERY machine and "did we put this
+     here?" becomes unanswerable - taking the firewall step and the whole ssh
+     report with it, since both must do nothing to a server SD did not install.
+     The question is about the machine as we found it, so it is asked once,
+     here, exactly as the data tree above is. *)
+  SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
   Result := True;
 end;
 
 function DataTreeAbsent: Boolean;
 begin
   Result := DataTreeWasAbsent;
+end;
+
+function SshServerAbsent: Boolean;
+begin
+  Result := SshWasAbsent;
+end;
+
+{ Registered by the OpenSSH capability, not by us.  Its absence just after an
+  install is what "a restart is outstanding" looks like from here - measured
+  14 Aug 2026, when Add-WindowsCapability completed and the service did not
+  exist until after a reboot.  Read from the registry rather than by shelling
+  out to sc.exe: it is the same fact, and it costs nothing. }
+function SshServiceRegistered: Boolean;
+begin
+  Result := RegKeyExists(HKEY_LOCAL_MACHINE, 'SYSTEM\CurrentControlSet\Services\sshd');
+end;
+
+{ ---------------------------------------------------------------------------
+  The page that says what this will do, before anything has been chosen
+  --------------------------------------------------------------------------- }
+
+var
+  SummaryPage: TOutputMsgMemoWizardPage;
+
+(* AFTER wpWelcome AND BEFORE THE TASKS PAGE, AND THAT ORDER IS THE POINT.
+
+   Inno already provides the last-chance page: Ready to Install lists the
+   destination and the ticked tasks with Cancel beside them.  What it cannot
+   show is everything this installer does that is NOT a task - two local groups,
+   a group membership, two user-rights denials, an ACL rewrite that strips
+   inherited access from the data tree, a Windows service, and the OpenSSH
+   install.  A summary at the end would come after the reader had already
+   decided; the ssh exposure checkbox in particular is a decision they were
+   being asked to take with no context at all.
+
+   IT ALSO CARRIES THE THINGS THAT USED TO BE SAID ONLY AT THE END, where they
+   were too late to act on: that Windows will not apply the sdusers membership
+   until the user signs out, and that the OpenSSH install can take minutes and
+   usually wants a restart before any account can sign in.  The closing dialog
+   still says both - somebody who has just clicked through six pages should not
+   have to remember - but saying it first is the difference between a stated
+   cost and a surprise.
+
+   A MEMO PAGE RATHER THAN InfoBeforeFile, which would mean shipping an .rtf and
+   teaching stage.py to stage it.  This needs no new file and cannot get out of
+   step with the script that does the work.
+
+   Do not start a line here with a "#" - ISPP reads it as a preprocessor
+   directive and a wrapped string constant becomes "Unknown preprocessor
+   directive".  The trap is recorded at the closing MsgBox; every #13#10 below
+   is mid-line for that reason. *)
+procedure InitializeWizard;
+var
+  M: String;
+begin
+  (* NOT WRAPPED BY HAND, AND THAT IS THE POINT.  CORRECTED 16 Aug 2026 on the
+     owner seeing it: the first version broke every line at about 50 characters
+     because the memo width was a guess the compiler cannot check, and the guess
+     was far too narrow - a thin column of text in a wide control, with most of
+     the page unused.
+
+     The control word-wraps.  So each paragraph below is ONE line and the memo
+     fills whatever width it actually has, at any DPI and any wizard style -
+     which is a property rather than another guess.  The source lines are broken
+     with "+" for readability; those breaks put nothing in the string.
+
+     THE INDENTS WENT WITH IT, and had to.  A two-space indent only survives on
+     the first line of a wrapped paragraph, so indented text under a heading
+     comes out with one line in and the rest flush left, which looks worse than
+     no indent at all.  Structure is carried by blank lines and capitalised
+     headings instead.
+
+     So: do not reintroduce a line break inside a paragraph here, and do not
+     indent one.  Both look fine in the source and wrong on screen. *)
+  M := 'WHERE THINGS GO' + #13#10#13#10 +
+       'Program files:  C:\Program Files\SD  - you can change this.' + #13#10 +
+       'Database:  C:\ProgramData\SD  - fixed, it cannot be moved.' + #13#10#13#10 +
+
+       'WINDOWS GROUPS, AND ONE THING YOU MUST DO AFTERWARDS' + #13#10#13#10 +
+       'Creates the group "sdusers" and adds you to it. That membership is what ' +
+       'grants access to the database. Windows only applies a new group when you ' +
+       'sign in, so YOU MUST SIGN OUT AND BACK IN, or restart, before SD will ' +
+       'run. Until then it reports that it cannot open its files.' + #13#10#13#10 +
+       'Creates the group "sdsshonly" and denies its members the right to sign in ' +
+       'at the console or over Remote Desktop. Accounts SD creates go in it. Your ' +
+       'own account does not.' + #13#10#13#10 +
+
+       'PERMISSIONS ON THE DATABASE' + #13#10#13#10 +
+       'Removes inherited permissions from C:\ProgramData\SD and grants access to ' +
+       'SYSTEM, administrators and sdusers only. Without this the database would ' +
+       'be readable by anyone with an account on this machine.' + #13#10#13#10 +
+
+       'SERVICE AND PATH' + #13#10#13#10 +
+       'Installs a Windows service that runs SD and starts it again after every ' +
+       'restart. There is nothing to start by hand.' + #13#10#13#10 +
+       'Adds SD to the system PATH, unless you clear that option.' + #13#10#13#10 +
+
+       'OPENSSH SERVER - INSTALLED, NOT OPTIONAL' + #13#10#13#10 +
+       'Accounts SD creates sign in over ssh and nothing else. That is true even ' +
+       'with no network: on a machine used by one person, you reach SD by ' +
+       'connecting with ssh to "localhost". So SD installs an OpenSSH server if ' +
+       'this machine has none.' + #13#10#13#10 +
+       'It is downloaded from Windows Update and CAN TAKE SEVERAL MINUTES with ' +
+       'nothing on screen. Do not stop it part way.' + #13#10#13#10 +
+       'IT USUALLY NEEDS A RESTART. Until you restart, no SD account except your ' +
+       'own can sign in at all.' + #13#10#13#10 +
+       'By default it can be reached only from this machine. The options page can ' +
+       'open it to other computers on your network.' + #13#10#13#10 +
+       'IF THIS MACHINE ALREADY HAS AN SSH SERVER, SD LEAVES IT ALONE. It ' +
+       'installs nothing, restarts nothing, and changes neither its configuration ' +
+       'nor its firewall rule.' + #13#10#13#10 +
+
+       'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10 +
+       'Your database, the ssh server, and the sdusers group. Removing the ' +
+       'database is offered separately and defaults to keeping it.' + #13#10#13#10 +
+
+       'ONE LIMIT WORTH KNOWING BEFORE YOU RELY ON IT' + #13#10#13#10 +
+       'SD users are not isolated from each other. Every SD process opens the ' +
+       'database as the person running it, so anyone who can use SD on this ' +
+       'machine can read another account''s files outside SD. Do not use SD ' +
+       'accounts as a privacy boundary between people who should not see each ' +
+       'other''s data.';
+
+  SummaryPage := CreateOutputMsgMemoPage(wpWelcome,
+      'Before you install',
+      'What SD changes on this computer',
+      'Setup changes Windows itself, not only its own folders. All of it is listed below. ' +
+      'Nothing has happened yet - Cancel stops without changing anything.',
+      M);
 end;
 
 { ---------------------------------------------------------------------------
@@ -474,7 +673,10 @@ var
   Ps: String;
 begin
   Result := '';
-  if not WizardIsTaskSelected('installssh\allowgroups') then
+  { RENAMED 16 Aug 2026 with the task itself.  It was 'installssh\allowgroups'
+    while it was a subtask; the parent is gone and a stale name here would read
+    as "the user did not tick it" for ever, silently. }
+  if not WizardIsTaskSelected('limitssh') then
     Exit;
 
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
@@ -503,6 +705,118 @@ begin
     Result := 'Limiting ssh FAILED and sshd_config was left as it was. Run this from an ' +
               'elevated prompt to see why:' + #13#10#13#10 +
               '    powershell -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed';
+end;
+
+{ Scope the OpenSSH firewall rule to match the checkbox, and return what to tell
+  the user.  PROJECT_STATUS.md 5.9.
+
+  ONLY IF SD INSTALLED THE SERVER.  The rule belongs to the ssh server, and "we
+  do not touch an ssh server we did not install" covers its firewall rule as
+  squarely as it covers sshd_config - restricting the rule of a server that
+  predates SD would break somebody's remote access just as thoroughly as
+  editing their config would.  SshWasAbsent, not SshServerAbsent evaluated now,
+  which by this point answers False on every machine.
+
+  RUN FROM [Code] LIKE ApplyAllowGroups AND FOR THE SAME REASON: the exit code
+  distinguishes three outcomes and the middle one is likely on a fresh machine.
+  It is also fast, so it needs no StatusMsg - which is what kept the OpenSSH
+  install itself in [Run]. }
+function ApplySshFirewall: String;
+var
+  Code: Integer;
+  Ps, Args: String;
+  Wanted: Boolean;
+begin
+  Result := '';
+  if not SshWasAbsent then
+    Exit;
+
+  Wanted := WizardIsTaskSelected('sshremote');
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+          ExpandConstant('{app}\ssh-firewall.ps1') + '" -Installed';
+  if Wanted then
+    Args := Args + ' -Open'
+  else
+    Args := Args + ' -Restrict';
+
+  if not Exec(Ps, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'Who may reach ssh could NOT be set: the script did not run. ' +
+              'Windows left port 22 open to your local network, which is its own default.' + #13#10#13#10;
+    Exit;
+  end;
+
+  if Code = 0 then
+  begin
+    if Wanted then
+      Result := 'Other computers on your network CAN now connect to this one over ssh, ' +
+                'because you asked for that.' + #13#10#13#10
+    else
+      Result := 'ssh can be reached FROM THIS COMPUTER ONLY. Nothing on your network can ' +
+                'connect to it. To change that later, run this from an elevated prompt:' + #13#10#13#10 +
+                '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Open' + #13#10#13#10;
+  end
+  else if Code = 2 then
+    { The likely case when a restart is outstanding: the capability has not
+      finished registering its firewall rule, so there is nothing to scope. }
+    Result := 'Who may reach ssh has NOT been set yet, because Windows has not finished ' +
+              'registering the ssh firewall rule. Restart, then run this from an elevated prompt:' + #13#10#13#10 +
+              '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10
+  else
+    Result := 'Setting who may reach ssh FAILED, and Windows'' own default is in force - ' +
+              'port 22 open to your local network. Run this from an elevated prompt to see why:' + #13#10#13#10 +
+              '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10;
+end;
+
+{ What happened to the ssh server, judged from the state of the machine rather
+  than from an exit code.
+
+  FROM STATE, DELIBERATELY.  install-ssh.ps1 is a [Run] entry and a [Run] entry
+  discards its exit code - a comment in this file claimed otherwise for months.
+  Reading the machine is better than fixing that would have been: it answers the
+  same way whether the capability was installed just now, was already there, or
+  failed, and it cannot drift from what the user will actually experience.
+
+  THE FAILURE BRANCH IS THE ONE THAT MATTERS.  While ssh was optional, no ssh
+  meant the user had declined it.  It is now the state a blocked Features on
+  Demand download leaves behind, and in it every account CREATE.ACCOUNT makes is
+  denied the console and Remote Desktop with no ssh to fall back on - so it must
+  be said in as many words rather than left to be discovered one account later. }
+function SshReport: String;
+begin
+  if not SshWasAbsent then
+  begin
+    Result := 'This machine already had an OpenSSH server. SD did not install, restart or ' +
+              'reconfigure one, and left both its configuration and its firewall rule exactly ' +
+              'as they were. SD accounts sign in over ssh, so check that yours will accept ' +
+              'them.' + #13#10#13#10;
+    Exit;
+  end;
+
+  if not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe')) then
+  begin
+    Result := 'OPENSSH SERVER COULD NOT BE INSTALLED, and SD needs it. Windows downloads it ' +
+              'on demand, so this is usually a policy that blocks optional features, a metered ' +
+              'connection, or no connection at all.' + #13#10#13#10 +
+              'SD itself is installed and works for you. But accounts created with ' +
+              'CREATE.ACCOUNT sign in over ssh and nothing else, so until there is an ssh ' +
+              'server NOBODY BUT YOU CAN USE THIS SD. Put it right from an elevated ' +
+              'PowerShell prompt:' + #13#10#13#10 +
+              '    powershell -File "' + ExpandConstant('{app}') + '\install-ssh.ps1"' + #13#10#13#10;
+    Exit;
+  end;
+
+  if not SshServiceRegistered then
+  begin
+    Result := 'OpenSSH Server was installed and NEEDS A RESTART before it will run. This is ' +
+              'normal and is Windows'' doing, not SD''s - SD itself needs no restart.' + #13#10#13#10 +
+              'Until you restart, the ssh service does not exist, so no SD account except ' +
+              'your own can sign in.' + #13#10#13#10;
+    Exit;
+  end;
+
+  Result := 'OpenSSH Server was installed and is running.' + #13#10#13#10;
 end;
 
 { GIVE THE INSTALLING USER AN SD ACCOUNT.  Without this SD installs perfectly
@@ -546,13 +860,19 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
+  SshFw: String;
+  SshMsg: String;
   AdoptCode: Integer;
   AccountMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
     { Before the silent-install exit below: the work happens either way, and it
-      is only the message about it that a silent install skips. }
+      is only the message about it that a silent install skips.  The firewall
+      goes first - it decides who can reach the server at all, and the two
+      steps are independent, so the more fundamental one is done first. }
+    SshFw := ApplySshFirewall;
+    SshMsg := SshReport;
     SshLimit := ApplyAllowGroups;
 
     { Same rule - an unattended install must still end with a usable account. }
@@ -618,19 +938,36 @@ begin
            'Windows only applies group membership when you sign in, so you must ' +
            'SIGN OUT AND BACK IN (or restart) before SD will run. Until then it ' +
            'will report that it cannot open its files.' + #13#10#13#10 +
-           { Said here because it changes what the reader has to do, and because
-             the previous version of this box told them to run "sd -start". }
-           'SD runs as a Windows service and is running now. It starts again by ' +
-           { NEVER START A LINE WITH #13#10.  ISPP reads any line whose first
+           { TRIMMED 16 Aug 2026, owner: "it is even longer".  Fair - the first
+             page was added to move things EARLIER and then three paragraphs were
+             added here as well, so the box grew rather than shrank.
+
+             THE RULE FOR WHAT STAYS: this box says what the first page could not
+             know in advance - what actually happened to ssh, to the firewall and
+             to your account - plus the one instruction that is actionable right
+             now, which is signing out.  Everything else the first page already
+             said, and repeating it here is what made this unreadable.
+
+             Removed: the "SD runs as a service and restarts itself" paragraph;
+             the explanation of what LOGTO SDSYS does and why Windows asks for
+             consent; the remote-control-tool passage; and the ADMINISTRATOR
+             keyword.  The first page carries the service and the ssh-only model;
+             the rest is reference material that belongs with the verb, not in a
+             box somebody reads once.  The bare COMMANDS stayed, because they are
+             the thing a reader comes back for.
+
+             NEVER START A LINE WITH #13#10.  ISPP reads any line whose first
              non-blank character is "#" as a preprocessor directive, so a
              wrapped Pascal string constant becomes "Unknown preprocessor
              directive" and the compile aborts - line number and all, with
              nothing to say it is about string continuation.  Mid-line is fine,
-             which is why every other #13#10 in this box works.  Cost the
-             eleventh session an ISCC run, 16 Aug 2026: the service message
-             above was added on 15 Aug and pushed this constant onto its own
-             line, and sd.iss was never compiled again before the handoff. }
-           'itself after every restart, so there is nothing to start by hand.' + #13#10#13#10 +
+             which is why every #13#10 in this box works.  Cost the eleventh
+             session an ISCC run, 16 Aug 2026. }
+           { The ssh pair goes here, above the account paragraph, because on a
+             machine where the install failed or wants a restart it changes what
+             the account advice MEANS - an account nobody can sign in to yet. }
+           SshMsg +
+           SshFw +
            AccountMsg +
            { CORRECTED 15 Aug 2026, owner, on two counts.
 
@@ -651,27 +988,23 @@ begin
              SDSYS, and asks Windows for your consent at that moment.  An
              ordinary command prompt is all that is needed.
              PROJECT_STATUS.md 7 step 4. }
-           'TO GIVE SOMEBODY ELSE ACCESS, use SD''s own verb, from an ordinary ' +
-           'command prompt:' + #13#10#13#10 +
+           { THE COMMANDS STAY AND THE PROSE ROUND THEM GOES.  What used to
+             follow was four paragraphs explaining LOGTO SDSYS, UAC, remote
+             control tools, ssh-only accounts and the ADMINISTRATOR keyword.
+             The first page carries the model; a reader who comes back to this
+             box comes back for the three lines, not the essay.  The one
+             sentence kept is the UAC-over-ssh trap, because its failure mode is
+             a frozen screen with no explanation and nothing else warns of it. }
+           'TO GIVE SOMEBODY ELSE ACCESS, at the machine itself:' + #13#10#13#10 +
            '    sd' + #13#10 +
            '    LOGTO SDSYS' + #13#10 +
            '    CREATE.ACCOUNT USER <name>' + #13#10#13#10 +
-           'Windows will ask you to confirm when you type LOGTO SDSYS, because ' +
-           'administering SD needs the same permission as creating a Windows ' +
-           'user does. That permission lasts until you leave SDSYS, and no ' +
-           'longer. CREATE.ACCOUNT then makes the Windows account and the SD ' +
-           'account together and asks you for the new password.' + #13#10#13#10 +
-           { Said because the alternative is a black screen and no explanation.
-             UAC draws its prompt on the secure desktop, which a per-user
-             remote-control install cannot show. }
-           'This has to be done AT THE MACHINE - not over ssh, which cannot ' +
-           'show you that confirmation. A remote-control tool works if it is ' +
-           'installed as a Windows service; installed just for your own ' +
-           'account it will show you a frozen screen instead.' + #13#10#13#10 +
-           'Accounts made that way sign in OVER SSH ONLY - not at the console ' +
-           'and not over Remote Desktop. For an unrestricted account that can ' +
-           'also administer SD, add the ADMINISTRATOR keyword:' + #13#10#13#10 +
-           '    CREATE.ACCOUNT USER <name> ADMINISTRATOR',
+           'Windows asks you to confirm at the LOGTO. Do it AT THE MACHINE - ' +
+           'over ssh, and under a remote-control tool not installed as a ' +
+           'service, Windows cannot show you that prompt and you get a frozen ' +
+           'screen instead.' + #13#10#13#10 +
+           'The new account signs in over ssh, on this machine as well:' + #13#10#13#10 +
+           '    ssh <name>@localhost',
            mbInformation, MB_OK);
 
     { Its own box rather than a paragraph in the one above: this one reports
@@ -695,10 +1028,20 @@ procedure CurPageChanged(CurPageID: Integer);
 begin
   if (CurPageID = wpSelectTasks) and (not SshServerAbsent) then
     { Notify rather than offer, which is what the repository owner asked for:
-      the option is not available and the reason is stated. }
+      the option is not available and the reason is stated.
+
+      REWORDED 16 Aug 2026.  It used to say "the option to install it is
+      therefore not offered", which stops making sense once installing is not
+      an option anybody is offered.  What the reader needs now is the opposite
+      reassurance: SD requires an ssh server, this machine has one, and SD is
+      going to keep its hands off it - which is also why BOTH ssh options have
+      vanished from the page they are looking at. }
     MsgBox('OpenSSH Server is already installed on this machine.' + #13#10#13#10 +
-           'The option to install it is therefore not offered, and this installer ' +
-           'will not change, restart or reconfigure your existing ssh server.',
+           'SD needs an ssh server and would install one, but it will not touch ' +
+           'the one you already have: nothing is installed, nothing is restarted, ' +
+           'and neither its configuration nor its firewall rule is changed.' + #13#10#13#10 +
+           'That is why the two ssh options are absent from this page. Accounts SD ' +
+           'creates sign in over ssh, so make sure your server accepts them.',
            mbInformation, MB_OK);
 end;
 
@@ -804,6 +1147,19 @@ begin
   { The sdusers group is deliberately NOT removed.  CREATE.ACCOUNT adds every
     SD user to it, and a data tree the user chose to keep is ACL'd to it, so
     deleting the group would orphan the permissions on their own database. }
+
+  { AND THE ssh FIREWALL RULE IS DELIBERATELY NOT PUT BACK, which is worth
+    stating because RemoveAllowGroups two procedures up sets the opposite
+    precedent - SD reverses what it wrote outside its own tree.
+
+    The asymmetry is deliberate.  Restoring that rule means WIDENING it, and an
+    uninstaller must not open a network port on a machine on its way out; a
+    server left reachable from itself is the harmless direction to fail in.  SD
+    did not create the rule either - the OpenSSH capability did, and the
+    capability stays, for the same "it may be in use by something else" reason
+    that keeps the server itself installed.
+
+    ssh-firewall.ps1 -Installed -Open is there for somebody who wants it back. }
 
   DataPath := ExpandConstant('{#DataDir}');
   if not DirExists(DataPath) then

@@ -1,11 +1,22 @@
-# install-ssh.ps1 - install and start OpenSSH Server, for the installer's opt-in
-# checkbox.  See PROJECT_STATUS.md 5.9.
+# install-ssh.ps1 - install and start OpenSSH Server.  PROJECT_STATUS.md 5.9.
 #
 #   powershell -File install-ssh.ps1
 #
 # Exit 0  installed and running
 #      2  installed, but a RESTART is needed before the service exists
 #      1  failed
+#
+# NO LONGER THE INSTALLER'S OPT-IN CHECKBOX.  Owner's decision, 16 Aug 2026: SD
+# accounts sign in over ssh and nothing else, and the API is carried over ssh
+# too, so sd.iss now runs this whenever the machine has no ssh server - a local
+# user reaches SD by ssh'ing to localhost.  What is optional is who may reach
+# the server from elsewhere, which is ssh-firewall.ps1.
+#
+# Nothing in this script changed with that decision, and nothing needed to: it
+# was already idempotent and already reported "was already installed"
+# separately from "installed it".  The caller changed, not the work.  It is also
+# still the by-hand recovery when the download is blocked, which is now a state
+# the machine can reach on its own rather than one the user chose.
 #
 # WHY THIS IS A FILE AND NOT AN INLINE [Run] PARAMETER.  It used to be inline,
 # and it carried a brace bug for its whole life: Inno escapes a literal "{" as

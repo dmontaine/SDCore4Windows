@@ -5,6 +5,71 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+16 Aug 26  The installer now ALWAYS installs an OpenSSH server, instead of
+           offering it as a choice that was off by default.
+
+           The reason is that accounts SD creates sign in over ssh and nothing
+           else - they are refused at the console and over Remote Desktop.
+           Without an ssh server on the machine those accounts had no way in
+           at all, so an install that declined ssh was one that nobody but the
+           person who installed it could use.  That is true even on a machine
+           with no network and one person at the keyboard: you reach SD by
+           connecting with ssh to "localhost", which works with no network of
+           any kind.
+
+           IF YOUR MACHINE ALREADY HAS AN SSH SERVER, SD LEAVES IT ALONE.  It
+           installs nothing, restarts nothing, and changes neither its
+           configuration nor its firewall rule.  That has not changed.
+
+           Installing it is a download from Windows Update.  It can take
+           several minutes with nothing on screen, and it usually asks for a
+           restart afterwards; until you restart, no SD account except your
+           own can sign in.  The installer says so before you start and again
+           when it finishes.  If the download is blocked - by company policy,
+           or a metered or absent connection - SD still installs and works for
+           you, and the closing message tells you plainly that nobody else can
+           use it until an ssh server exists.
+
+16 Aug 26  New option: "Let other computers on your network connect to this
+           one over ssh".  It is off by default, and off means ssh works only
+           from the machine itself.
+
+           This is stricter than what came before.  Installing the OpenSSH
+           server makes Windows open port 22 to your local network, so ticking
+           the old "install OpenSSH" box quietly did that too.  Now that the
+           server is always installed, letting other computers reach it is a
+           separate decision that you have to make deliberately.
+
+           To change your mind later, from an elevated PowerShell prompt:
+
+               powershell -File "C:\Program Files\SD\ssh-firewall.ps1" -Installed -Open
+
+           and -Restrict puts it back to this machine only.  Uninstalling SD
+           does not reopen the port.
+
+16 Aug 26  The message at the end of the installer is about half as long.  It
+           now tells you only what could not be known in advance - what
+           happened to the ssh server, to the firewall setting and to your SD
+           account - plus the one thing you have to act on, which is signing
+           out and back in.  Everything else it used to say is on the new page
+           at the start, where you can read it before deciding to install.
+
+16 Aug 26  The installer now begins with a page listing everything it changes
+           on your computer - the groups it creates, the sign-in rights it
+           denies, the permissions it rewrites on the database, the service it
+           installs, the PATH entry, and the OpenSSH install with its minutes
+           and its restart.  You can read it and click Cancel before anything
+           has happened.
+
+           It is there because most of that was previously only discoverable
+           after the fact, and because the ssh question above is one you were
+           being asked to answer with no context.
+
+16 Aug 26  The option to limit ssh to SD users and administrators has moved to
+           the main options page.  It used to be a sub-option under "install
+           OpenSSH", which no longer exists.  Its description now also says
+           that it stops scp and sftp working, which it always did.
+
 16 Aug 26  Uninstalling SD no longer leaves an empty entry on the system PATH.
            It had been removing the SD directory but leaving the separator
            behind, so every install-and-uninstall cycle added one more empty
