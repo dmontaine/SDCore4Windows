@@ -28,6 +28,8 @@
 * 13 Aug 26 Windows port - SrvrAccount takes an account name only, no pathnames
 * 13 Aug 26 Windows port - commented out the REVSTAMP $execute pair, as CPROC
 *               already has, so compiling this does not need gplsrc in the tree
+* 17 Aug 26 Windows port - vb.login authenticates against $CRED instead of
+*           the OS, and sets the session identity with K$SET.USERNAME.
 * END-HISTORY
 *
 *
@@ -914,16 +916,35 @@ vb.login:
                password = cmnd[pos+2,n]
                pos = 3 + n + bitand(n, 1)
 
-               * rem we execute login regardless of APILOGIN flag (its how we set usr and grp id) 
-               * rem basic function login calles OP_login in op_kernel.c which:
-               *   calls linuxio.c login_user()
-               *   populates uptr->username and process.username
-               if login(username, password) then
+* 17 Aug 26 Windows port - AUTHENTICATE AGAINST $CRED, not the operating
+*   system.  section 7 step 6a.  This was:
+*
+*     if login(username, password) then
+*
+*   which reached op_login() in op_kernel.c and then login_user() in
+*   linuxio.c, and that read /etc/shadow.  MSYS2 has no /etc/shadow, so with
+*   APILOGIN=1 - what sd.conf ships - it failed closed on EVERY login and the
+*   API has never worked on this platform.  login_user() is now gone.
+*
+*   !CRED_VERIFY is the same check SET.PASSWORD writes for: salt from $CRED,
+*   Argon2 derivation, compare against the stored verifier.  It fails closed
+*   on an account with no credential recorded, which is the behaviour wanted
+*   here - an account that has never had a password set cannot be reached
+*   through the API.
+*
+*   THE IDENTITY IS SET FROM WHAT WAS VERIFIED (step 6b).  op_login() used to
+*   set process.username as a side effect; nothing does that now, so this has
+*   to, and it uses the name !CRED_VERIFY was given rather than anything the
+*   client asserted separately.  K$SET.USERNAME is refused unless the caller
+*   is $internal, which this program is - see op_kernel.c.
+               call !CRED_VERIFY(username, password, login.ok)
+               if login.ok then
 
                   if config('APILOGIN') then
                   * we required user to enter a user name to connect (over and above the ssh tunnel validation)
-                  * so change the logname to reflect 
+                  * so change the logname to reflect
                       logname = username
+                      void kernel(K$SET.USERNAME, username)
                   end else
                   * we do not require a valid user name validate against user creating tunnel
                      username = kernel(K$USERNAME, 0)

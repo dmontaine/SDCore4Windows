@@ -168,6 +168,13 @@
 #define K_AUDIT              57
 #define K_WINPATH            58
 #define K_WINPID             59
+/* 17 Aug 26 Windows port - a SEPARATE key rather than making K_USERNAME
+   settable.  K_USERNAME is read as kernel(K$USERNAME, 0) in two places, and
+   k_get_c_string() renders that integer 0 as the string "0" - so overloading
+   it would have renamed the session to "0" on every read from an $internal
+   program, APISRVR:125 and CPROC:273 among them.  A new key cannot break a
+   reader.  See op_kernel.c for the HDR_INTERNAL gate.                       */
+#define K_SET_USERNAME       60
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

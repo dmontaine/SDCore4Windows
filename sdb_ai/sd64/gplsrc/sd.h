@@ -459,7 +459,8 @@ bool stop_sd(void);
 
 
 /* WIN.C / LINUXIO.C */
-bool login_user(char * username, char * password);
+/* 17 Aug 26 Windows port - login_user() is gone; the API authenticates
+   against $CRED in APISRVR.  linuxio.c has the reasoning.                */
 int64 lseek64(OSFILE handle, int64 offset, int fromwhere);
 int64 filelength64(OSFILE handle);
 int chsize64(OSFILE handle, int64 posn);

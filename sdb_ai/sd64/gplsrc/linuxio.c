@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 20240219 mab move to only allow AF_UNIX socket types
  * 31 Dec 23 SD launch - prior history suppressed
+ * 17 Aug 26 Windows port - login_user() removed; it read /etc/shadow, which
+ *           MSYS2 does not have.  The API uses $CRED now.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -691,92 +693,30 @@ char socket_byte() {
 }
 
 /* ======================================================================
-   login_user()  -  Perform checks and login as specified user            */
+   login_user()  -  REMOVED 17 Aug 26, Windows port.
 
-//
-// Message that details the change is here: https://groups.google.com/g/scarletdme/c/Xza0TPEVqb8
-//
-// Summarized:
-//  change this line: if (memcmp(p, "$1$", 3) == 0) /* MD5 algorithm */
-//  to: if ((memcmp(p, "$1$", 3) == 0) || /* MD5 algorithm */
-//         (memcmp(p, "$6$", 3) == 0)
-// 17Jan22 gwb Added above change
-// 30Nov23 mab Added (memcmp(p,"$y$", 3) == 0)) {  /* yescrypt */
-/* 20240219 mab move to only allow AF_UNIX socket types                                                           */
-/*   As part of this mod:                                                                                         */
-/*     if config APILOGIN = 0 (ignor)                                                                             */
-/*       we pull username, user id and group id from peer in start_connection                                     */
-/*       If these are populated, we ignore the passed user name (either came in as a local user using the API     */
-/*       or as a remote user using ssh and the API) Either way we have already gone through username and password */
-/*       verification                                                                                             */
-/*     if config APILOGIN = 1 (require)                                                                           */
-/*       require valid username and password from api connection                                                  */
-bool login_user(char *username, char *password) {
-  FILE *fu;
-  struct passwd *pwd;
-  char pw_rec[200 + 1];
-  int16_t len;
-  char *p = NULL;
-  char *q;
-  
-  if ((peer_usr_id == peer_unassigned) || (pcfg.api_login)){
-    /* peer unassigned or require api login set,  go through normal login process */
-    if ((fu = fopen(PASSWD_FILE_NAME, "r")) == NULL) {
-      tio_printf("%s\n", sysmsg(1007));
-      return FALSE;
-    }
+   It authenticated the API's connect-time username and password, and both of
+   its paths were broken here:
 
-    len = strlen(username);
+     APILOGIN=1, which is what sd.conf ships, read PASSWD_FILE_NAME - that is
+     "/etc/shadow", and MSYS2 has neither it nor /etc/passwd, so fopen()
+     returned NULL and EVERY API login was refused.  Fail-closed, but closed.
 
-    /* Modified by Composer AI - 2026/06/10.
-       fgets() returns a pointer; ordered comparison with zero ("> 0") is
-       invalid and only worked by accident. Compare against NULL instead. */
-    /* while (fgets(pw_rec, sizeof(pw_rec), fu) > 0) { */
-    while (fgets(pw_rec, sizeof(pw_rec), fu) != NULL) {
-    /* -------------------- */
-      if ((pw_rec[len] == ':') && (memcmp(pw_rec, username, len) == 0)) {
-        p = pw_rec + len + 1;
-        break;
-      }
-    }
-    fclose(fu);
+     APILOGIN=0 trusted getpeereid() on an AF_UNIX socket and then dropped to
+     the peer with setgid()/setuid().  MSYS2 emulates AF_UNIX over a TCP
+     loopback socket with a handshake file - measured 16 Aug 26, the socket is
+     a 54-byte regular file from Windows' point of view - so "local socket,
+     therefore local user" does not carry, and the id calls mean nothing on a
+     platform where SD accounts are not OS users (section 5.6).  Section 7
+     step 6d said to delete them; they go here.
 
-    if (p != NULL) {
-      if ((memcmp(p, "$1$", 3) == 0) || /* MD5 algorithm */
-          (memcmp(p, "$6$", 3) == 0) || /* SHA512 */
-          (memcmp(p,"$y$", 3) == 0)) {  /* yescrypt */
-        if ((q = strchr(p, ':')) != NULL)
-          *q = '\0';
-        if (strcmp((char *)crypt(password, p), p) == 0) {
+   The API authenticates against $CRED in GPL.BP/APISRVR now and sets its
+   session identity with kernel(K$SET.USERNAME, ...) - section 7 step 6a.
+   op_login() is kept as a fail-closed stub because opcodes.h is positional.
 
-            if (((pwd = getpwnam(username)) != NULL) && (setgid(pwd->pw_gid) == 0) && (setuid(pwd->pw_uid) == 0)) {
-              //         set_groups();
-              syslog (LOG_INFO, "sdApiSrvr login via Username: %s (%d) Group: %d",username,pwd->pw_uid, pwd->pw_gid);
-              return TRUE;
-            } 
-        }
-      }
-    }
-  }else{
-   /* we have a peer user assigned, and pcfg.api_login not set change process ids to reflect  */ 
-    if ((setgid(peer_grp_id) == 0) && (setuid(peer_usr_id) == 0)) {
-            //         set_groups();
-      syslog (LOG_INFO, "sdApiSrvr login via Peer User: %s (%d) Group: %d",peer_username,peer_usr_id, peer_grp_id);
-      syslog (LOG_INFO, "sdApiSrvr process.username is: %s", process.username);     
-  /* set process.username to reflect who we ended up logged in as */
-      strncpy(process.username, peer_username,MAX_USERNAME_LEN+1); 
-      return TRUE;
-    } 
-  }
-  if ((peer_usr_id == peer_unassigned) || (pcfg.api_login)){
-  /* failed username / password login */
-    syslog (LOG_INFO, "sdApiSrvr login via Username: %s  Rejected (Bad UserName or Password)",username);
-  }else{
-    syslog (LOG_INFO, "sdApiSrvr login via Peer: %s  Rejected (Unable to change uid / gid)",peer_username);
-  }
-
-  return FALSE;
-}
+   peer_username / peer_usr_id / peer_grp_id are still set by
+   start_connection() above and are left in place: they are the record of who
+   is on the other end of the socket, which the named-pipe work will want.  */
 
 /* ======================================================================
    Signal handler                                                         */

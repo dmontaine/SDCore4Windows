@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 28 Jul 24 mab remove op_cnctport() / CONNECT.PORT not supported
+ * 17 Aug 26 Windows port - K_SET_USERNAME added, gated on HDR_INTERNAL;
+ *           op_login() fails closed now that login_user() is gone.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -231,6 +233,35 @@ void op_kernel() {
       break;
 
     case K_USERNAME:
+      k_put_c_string(process.username, &result);
+      break;
+
+/* 17 Aug 26 Windows port - SET the session's user name.  APISRVR needs it:
+   the API authenticates against $CRED in BASIC now (section 7 step 6a), and
+   the identity that follows from it - process.username and my_uptr->username,
+   which is what @logname, K$USERNAME and THE AUDIT TRAIL all read - lives
+   here in C with no route from BASIC.  op_login() used to set it as a side
+   effect of checking /etc/shadow, which does not exist on this platform.
+
+   GATED ON HDR_INTERNAL, exactly as K_ADMINISTRATOR is, and for the same
+   reason: section 7 step 4 stamps the audit trail from my_uptr in C so that
+   the BASIC caller cannot claim to be somebody else.  An ungated setter would
+   hand that back.  Ordinary BASIC cannot reach KERNEL at all - BCOMP rejects
+   it - and APISRVR carries $internal (line 59).
+
+   A separate key rather than making K_USERNAME settable: see keys.h.       */
+    case K_SET_USERNAME:
+      {
+        char uname[MAX_USERNAME_LEN + 1];
+
+        if ((k_get_c_string(descr, uname, MAX_USERNAME_LEN) > 0) &&
+            (process.program.flags & HDR_INTERNAL)) {
+          strcpy(process.username, uname);
+          strcpy((char *)(my_uptr->username), uname);
+        }
+      }
+      /* Report the name as it actually stands, so a refused caller is simply
+         told what it still is rather than getting an error.                 */
       k_put_c_string(process.username, &result);
       break;
 
@@ -746,7 +777,22 @@ void op_login() {
   k_dismiss();
 
   InitDescr(e_stack, INTEGER);
-  ok = login_user(username, password);
+
+/* 17 Aug 26 Windows port - FAILS CLOSED, and the opcode is kept only because
+   opcodes.h is positional (section 6: retire in place, never delete a line -
+   and BCOMP's int.intrinsics and its "on i goto" list are matched to it by
+   position, so removing the intrinsic is a two-sided edit for no gain).
+
+   login_user() is gone.  It read /etc/shadow, which MSYS2 does not have, so
+   with APILOGIN=1 - what sd.conf ships - every API login was already refused;
+   its other path trusted getpeereid() on an AF_UNIX socket that MSYS2 emulates
+   over TCP loopback, and then called setgid()/setuid(), which mean nothing
+   here and which section 7 step 6d says to drop anyway.  The API authenticates
+   against $CRED in APISRVR now and sets its identity with K$SET.USERNAME.
+
+   Anything still calling login() is therefore using a route that was broken
+   and is now absent, so FALSE is the honest answer rather than a silent one. */
+  ok = FALSE;
 /* 20240219 mab move to only allow AF_UNIX socket types                                                           */
 /*   As part of this mod:                                                                                         */
 /*     if config APILOGIN = 0 (ignor)                                                                             */

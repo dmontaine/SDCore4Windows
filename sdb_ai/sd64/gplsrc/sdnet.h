@@ -37,7 +37,10 @@
 
 #include <netdb.h>
 #include <arpa/inet.h>
-#define PASSWD_FILE_NAME "/etc/shadow"
+/* 17 Aug 26 Windows port - PASSWD_FILE_NAME "/etc/shadow" removed with its
+   only reader, login_user().  MSYS2 has no /etc/shadow and no /etc/passwd -
+   it and Cygwin dropped both for direct SAM/AD lookups - so the API's
+   connect-time check could never succeed here.  See linuxio.c.           */
 /* removed due to conflict with unistd.h */
 /* char * crypt(char * password, char * p); */
 #define ASYNCIO

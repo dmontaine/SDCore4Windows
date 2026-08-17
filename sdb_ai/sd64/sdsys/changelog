@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  The API checks the SD account password, not a Windows one.
+           * Set it with SET.PASSWORD, from inside SD.  An account that has
+             never had one set cannot be reached through the API at all.
+           * This replaces a check against the operating system's own password
+             file, which does not exist on Windows - so the API could not
+             accept a login on this platform at any point before now.  It
+             refused everyone rather than letting anyone in, but it refused
+             everyone.
+           * The ssh tunnel is still the first gate and is unchanged.  Two
+             gates, not one: reaching the machine is not reaching SD.
+           * NOT YET USABLE END TO END.  The transport the Linux client uses -
+             ssh forwarding a local port to a UNIX socket - cannot work on
+             Windows, so this fixes the login and not yet the connection.
+
 16 Aug 26  The CREATUSR configuration parameter is gone.
            * CONFIG no longer lists it, and config('CREATUSR') no longer
              returns a value.  It stopped having any effect on 14 Aug 26,
