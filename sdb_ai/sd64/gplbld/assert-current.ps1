@@ -71,8 +71,18 @@ $trees = @('gplsrc', 'sdsys', 'gplbld') | ForEach-Object { Join-Path $sd64 $_ }
 $newer = @()
 foreach ($t in $trees) {
     if (-not (Test-Path $t)) { continue }
+    # 17 Aug 26 - localtest\ joins __pycache__ as BUILD OUTPUT that happens to
+    # sit inside a watched tree.  "make check-local" compiles the step 11 test
+    # into gplsrc\sdclilib\localtest, so without this every run of that test
+    # would leave this script reporting STALE for ever afterwards - a false
+    # stale that no reinstall clears, because the next run recreates it.
+    # This does NOT loosen the guard: nothing there is a source of sd.exe or of
+    # the installed tree, and the other sdclilib test binaries are excluded by
+    # the same reasoning if they are ever moved beside it.
     $newer += Get-ChildItem $t -Recurse -File -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and $_.LastWriteTime -gt $installed }
+              Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
+                             $_.FullName -notmatch '\\localtest\\' -and
+                             $_.LastWriteTime -gt $installed }
 }
 
 if ($newer.Count -gt 0) {

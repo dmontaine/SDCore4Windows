@@ -50,13 +50,17 @@
  * request/response, and the descriptors are handed to code that does blocking
  * read()/write().  Overlapped handles behave differently under those calls.
  *
- * NOT VERIFIED.  Nothing has called this: SDConnectLocal() could never reach
- * it before, because sd.exe's -C parsed only "-C<txfd>!<rxfd>" and rejected a
- * pipe name (sd.c, and the same defect is in sdb64 - see UPSTREAM_FIXES.md).
- * The first thing to test is whether cygwin_attach_handle_to_fd() honours a
- * REQUESTED descriptor number rather than allocating the lowest free one; if
- * it allocates instead, the returned descriptors need dup2() onto 0 and 1 and
- * this file is where that goes.
+ * WHAT IS MEASURED AND WHAT IS NOT.  The two questions this file raised have
+ * both been answered against a real named pipe with real data in it, using a
+ * standalone probe rather than a whole install cycle:
+ *
+ *   * cygwin_attach_handle_to_fd() DOES honour a requested descriptor number.
+ *     It returns the number asked for.  No dup2() is needed.
+ *   * The access argument must MATCH THE HANDLE, which is the trap - see the
+ *     comment on the calls below.  This is what made the first version fail.
+ *
+ * NOT verified: this code inside sd.exe, driven by the real client.  The probe
+ * proves the mechanism, not the integration.
  *
  * END-DESCRIPTION
  *
@@ -107,15 +111,34 @@ int win32_attach_client_pipe(char* pipe_name) {
   /* The name argument is what the descriptor reports as its path; it is
      passed rather than left NULL so that anything printing it says where the
      descriptor came from.  bin = 1: this is a byte protocol and a newline
-     translation anywhere in it would corrupt the packet length fields.     */
+     translation anywhere in it would corrupt the packet length fields.
 
-  if (cygwin_attach_handle_to_fd(pipe_name, 0, hread, 1, GENERIC_READ) < 0) {
+     THE ACCESS MUST MATCH HOW THE HANDLE WAS OPENED, NOT WHAT THE DESCRIPTOR
+     IS FOR.  Both calls pass GENERIC_READ | GENERIC_WRITE because that is how
+     CreateFile opened the handle above - NOT GENERIC_READ for descriptor 0 and
+     GENERIC_WRITE for descriptor 1, which is the obvious thing to write and is
+     wrong.
+
+     MEASURED, 17 Aug 2026, because the failure is silent and misleading.  With
+     GENERIC_READ alone on descriptor 0, the attach SUCCEEDS and returns 0,
+     poll() then reports the descriptor READABLE with POLLIN set - and read()
+     fails with EBADF.  So SD reached linuxio.c:535, passed the sdpoll() test,
+     failed the read, took the "connection lost" branch and exited 0 with
+     nothing on either stream; the client saw only "Connection closed by
+     server".  Nothing in that chain names the access flags.  Four other
+     combinations were tried against a real pipe with real data waiting - the
+     pipe name, NULL, "/dev/null", O_RDONLY, O_RDWR - and all failed the same
+     way; only matching the CreateFile access reads the bytes.              */
+
+  if (cygwin_attach_handle_to_fd(pipe_name, 0, hread, 1,
+                                 GENERIC_READ | GENERIC_WRITE) < 0) {
     CloseHandle(hread);
     CloseHandle(hwrite);
     return FALSE;
   }
 
-  if (cygwin_attach_handle_to_fd(pipe_name, 1, hwrite, 1, GENERIC_WRITE) < 0) {
+  if (cygwin_attach_handle_to_fd(pipe_name, 1, hwrite, 1,
+                                 GENERIC_READ | GENERIC_WRITE) < 0) {
     /* hread now belongs to descriptor 0 and must not be closed here. */
     CloseHandle(hwrite);
     return FALSE;

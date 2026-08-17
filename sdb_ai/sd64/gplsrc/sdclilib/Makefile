@@ -42,5 +42,32 @@ check: $(DLL)
 	  -o internal-state-test.exe tests/internal_state_test.c -lws2_32
 	./internal-state-test.exe
 
+# 17 Aug 26 - SEPARATE FROM "check" ON PURPOSE.  Everything under "check" runs
+# without a server, so it can run on any machine at any time.  This one spawns
+# sd.exe through the library and therefore measures the INSTALLED system, which
+# makes it subject to the test-cycle rule in CLAUDE.md: run gplbld/
+# assert-current.ps1 first, and run it UNELEVATED, because the identity the
+# grant check tests is the process owner's.
+#
+# IT IS BUILT INTO localtest/ AND NOT HERE, AND THAT IS LOAD-BEARING.  Windows
+# searches an executable's OWN directory for DLLs first, and this directory
+# holds a freshly built sdclilib.dll with no sd.exe beside it - so a test run
+# from here would load the BUILD library, which would then look for sd.exe next
+# to itself and not find one.  From a directory containing neither, the loader
+# falls through to PATH and picks up C:\Program Files\SD\usr\bin, where the
+# installed DLL and sd.exe sit together.  That is the pair we mean to test.
+# AND IT IS RUN FROM INSIDE localtest, WHICH IS THE OTHER HALF.  Building it
+# there is not enough: the Windows DLL search looks in the CURRENT WORKING
+# DIRECTORY before it reaches PATH, so running it as ./localtest/x.exe from
+# here still loads this directory's sdclilib.dll.  Measured 17 Aug 2026 - the
+# symptom is "Failed to create child process. Error 2", because the library
+# then looks for sd.exe beside the BUILD dll, where there is none.
+check-local: $(DLL)
+	mkdir -p localtest
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/local-connect-test.exe \
+	  tests/local_connect_test.c -I. -L. -lsdclilib
+	cd localtest && ./local-connect-test.exe
+
 clean:
 	$(RM) $(DLL) $(IMPLIB) smoke-test.exe internal-state-test.exe
+	$(RM) -r localtest
