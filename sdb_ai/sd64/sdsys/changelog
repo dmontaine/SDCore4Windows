@@ -5,6 +5,18 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  Connecting a program to SD on the same machine now works.
+           * SDConnectLocal() in the client library opens a connection to SD
+             on this computer, with no network and no password: SD identifies
+             you from the account you are running as.
+           * It could not have worked before, on this or any other version.
+             The library started SD with the name of a pipe, and SD only
+             understood a pair of file numbers, so it stopped immediately.
+             The library also looked for sd.exe inside the database folder
+             rather than where it is installed.
+           * The client library's own README and user guide said this function
+             was not provided on Windows.  They were wrong, and are corrected.
+
 17 Aug 26  The API only lets you into accounts you have been granted.
            * Connecting to an account through the API now applies the same
              rule LOGTO applies inside SD: you may enter an account if you

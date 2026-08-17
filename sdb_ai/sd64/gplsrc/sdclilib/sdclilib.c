@@ -1135,6 +1135,65 @@ Private char* sysdir(void) {
 }
 
 /* ======================================================================
+   sd_exe_path()  -  Where is sd.exe?
+
+   BESIDE THIS DLL, AND NOT UNDER SDSYS.  17 Aug 2026, PROJECT_STATUS.md
+   section 7 step 11.  SDConnectLocal() built "<sysdir>\bin\sd.exe", which is
+   inside the DATA tree - C:\ProgramData\SD\sdsys\bin - and that directory
+   exists but holds the pcode file, not an executable.  sd.exe is installed to
+   C:\Program Files\SD\usr\bin, beside this library, because gplbld/stage.py
+   ships both in PROGRAM_FILES_BIN.  The layout is load-bearing for another
+   reason too (the two-component POSIX root rule, PROJECT_STATUS.md 6), so it
+   is not going to drift.
+
+   Asking Windows where this module was loaded from is therefore both correct
+   and self-maintaining: no configuration to set, and it survives an install
+   into a different directory, which "{app}" is free to be.
+
+   GetModuleHandleEx with FROM_ADDRESS takes the address of a function in THIS
+   DLL, so it answers for the library and not for whichever executable loaded
+   it - a client .exe would otherwise get its own directory.  UNCHANGED_REFCOUNT
+   because we are not holding a reference, only asking a question.          */
+
+Private int sd_exe_path(char* buff, size_t buffsize) {
+  /* The address handed to FROM_ADDRESS only has to lie inside this module, so
+     it is a static DATUM rather than this function.  Taking a function's
+     address would mean casting a function pointer to an object pointer, which
+     ISO C forbids and -Wpedantic reports - and this tree builds without
+     warnings. */
+
+  static const char anchor = 0;
+
+  HMODULE hmod;
+  DWORD n;
+  char* p;
+
+  if (!GetModuleHandleExA(
+          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+          (LPCSTR)&anchor, &hmod))
+    return FALSE;
+
+  n = GetModuleFileNameA(hmod, buff, (DWORD)buffsize);
+
+  /* GetModuleFileNameA truncates and reports success on a short buffer in
+     some Windows versions, so the length is checked rather than trusted. */
+
+  if ((n == 0) || (n >= buffsize))
+    return FALSE;
+
+  p = strrchr(buff, '\\');
+  if (p == NULL)
+    return FALSE;
+
+  if ((size_t)(p - buff) + sizeof("\\sd.exe") > buffsize)
+    return FALSE;
+
+  strcpy(p, "\\sd.exe");
+  return TRUE;
+}
+
+/* ======================================================================
    SDConnectLocal()  -  Open connection to local system as current user
 
    There is no network involved: we create a named pipe, start an SD process
@@ -1147,7 +1206,7 @@ DLLEntry int SDConnectLocal(char* account) {
   char command[MAX_PATHNAME_LEN + 128];
   char pipe_name[64];
   int cmdlen;
-  char* dir;
+  char exepath[MAX_PATHNAME_LEN + 1];
   int32_t n;
   STARTUPINFOA startupinfo;
   PROCESS_INFORMATION process_information;
@@ -1162,8 +1221,20 @@ DLLEntry int SDConnectLocal(char* account) {
   session[session_idx].sd_status = 0;
   session[session_idx].is_local = TRUE;
 
-  if ((dir = sysdir()) == NULL)
+  /* SD must be configured for a local session to be possible at all, and
+     sysdir() writes the session error text when it is not.  The executable is
+     no longer found through it - see sd_exe_path() - but the check is worth
+     keeping ahead of spawning anything. */
+
+  if (sysdir() == NULL)
     goto exit_sdconnect_local;
+
+  if (!sd_exe_path(exepath, sizeof(exepath))) {
+    snprintf(session[session_idx].sderror,
+             sizeof(session[session_idx].sderror),
+             "Cannot determine where sd.exe is installed");
+    goto exit_sdconnect_local;
+  }
 
   /* The name only has to be unique among the pipes this process owns */
 
@@ -1188,7 +1259,12 @@ DLLEntry int SDConnectLocal(char* account) {
 
   /* Launch the SD process that will serve this session */
 
-  cmdlen = snprintf(command, sizeof(command), "%s\\bin\\sd.exe -Q -C %s", dir,
+  /* THE PATH IS QUOTED, and it has to be: sd.exe lives under C:\Program
+     Files, CreateProcessA is called with lpApplicationName NULL, and an
+     unquoted path with a space in it makes Windows try each prefix in turn -
+     C:\Program.exe first.  That is a hijack, not only a bug. */
+
+  cmdlen = snprintf(command, sizeof(command), "\"%s\" -Q -C %s", exepath,
                     pipe_name);
 
   /* Truncation would launch something other than what we intended, so refuse

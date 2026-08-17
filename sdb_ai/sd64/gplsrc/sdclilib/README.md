@@ -51,8 +51,16 @@ Outputs:
 Client programs link with `-L. -lsdclilib` and must be able to find
 `sdclilib.dll` at runtime.
 
-`SDConnectLocal`/Unix-domain-socket connection is Linux-specific and is not
-part of this Windows DLL. Use `SDConnect` for remote TCP connections.
+`SDConnectLocal` **is** part of this DLL and is exported. It connects to SD on
+the same machine over a Windows **named pipe**, starting an `sd.exe` for the
+session; there is no network and no password, because the server identifies you
+from the process owner. Corrected 17 Aug 2026 — this file previously called it
+"Linux-specific and not part of this Windows DLL", which was wrong on both
+counts.
+
+`SDConnectUDS` is the Unix-domain-socket entry point and is genuinely not here.
+
+Use `SDConnect` for servers on another computer.
 
 The smoke test exercises local string functions without requiring a server.
 

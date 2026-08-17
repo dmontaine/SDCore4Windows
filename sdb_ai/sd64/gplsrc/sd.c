@@ -91,6 +91,9 @@
 #include "tio.h"
 #include "config.h"
 #include "options.h"
+/* 17 Aug 26 Windows port - its own header rather than a prototype here, so
+   that sd.c never sees windows.h.  See win32pipe.h.                        */
+#include "win32pipe.h"
 #include "locks.h"
 #include "keys.h"
 
@@ -418,11 +421,32 @@ Private bool comlin(int argc, char *argv[]) {
 
         case 'C': /* SDLocal client connection */
           connection_type = CN_PIPE;
-          if (sscanf(argv[arg], "-C%d!%d", &TxPipe, &RxPipe) != 2) {
-            exit(1);
+/* 17 Aug 26 Windows port - A PIPE NAME IS ACCEPTED HERE, WHICH IS WHAT THE
+   CLIENT HAS ALWAYS SENT.  section 7 step 11.  This parsed only
+   "-C<txfd>!<rxfd>" and exit(1)'d on anything else, while SDConnectLocal()
+   builds "sd.exe -Q -C \\.\pipe\~SDPipe<pid>-<n>" - a pipe NAME, in the NEXT
+   argument.  The two halves have never agreed, so SDConnectLocal() could not
+   have worked on any platform, and it is the same in sdb64: see
+   UPSTREAM_FIXES.md.
+
+   The descriptor form is kept rather than replaced.  It costs one sscanf, it
+   is what a Unix parent doing fork-then-exec with inherited descriptors would
+   still send, and removing a calling convention nothing here can survey is
+   not worth the risk.
+
+   THE NAME IS A SEPARATE ARGUMENT AND MUST BE CONSUMED HERE.  The loop above
+   stops at the first argument not beginning with "-", and a pipe name does
+   not, so leaving it would end option parsing and then be taken for a command
+   to execute.  -TERM consumes its argument the same way.                   */
+          if (sscanf(argv[arg], "-C%d!%d", &TxPipe, &RxPipe) == 2) {
+            dup2(RxPipe, 0);
+            dup2(TxPipe, 1);
+          } else {
+            if (++arg >= argc)
+              exit(1);
+            if (!win32_attach_client_pipe(argv[arg]))
+              exit(1);
           }
-          dup2(RxPipe, 0);
-          dup2(TxPipe, 1);
           break;
 
         case 'N': /* Network server */

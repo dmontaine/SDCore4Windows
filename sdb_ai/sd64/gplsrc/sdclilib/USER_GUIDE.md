@@ -8,9 +8,17 @@ the Linux SD client library, including file operations, record locking,
 select lists, command execution, catalogued subroutine calls, dynamic-array
 operations, and multiple sessions.
 
-The Windows DLL does not provide `SDConnectLocal` or `SDConnectUDS`. Those
-functions depend on Linux process, pipe, and Unix-domain-socket facilities.
-Use `SDConnect` for servers running on another computer or under WSL.
+`SDConnectLocal` connects to SD on this machine and **is** provided. It creates
+a Windows named pipe, starts an `sd.exe` attached to it, and speaks the same
+protocol over it; no password is sent, because the server takes your identity
+from the process owner. Corrected 17 Aug 2026 — this guide previously said the
+Windows DLL did not provide it and that it depended on Linux facilities.
+Neither was true: the transport is a named pipe, which has no Linux equivalent
+in this library at all.
+
+`SDConnectUDS` is not provided; it needs a Unix-domain socket.
+
+Use `SDConnect` for servers running on another computer.
 
 The library is **not thread-safe**: call it from a single thread or serialize
 all calls yourself. See [Threading](#threading) under Connection and session
