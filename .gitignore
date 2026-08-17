@@ -32,6 +32,16 @@ sdb_ai/sd64/gplsrc/sdclilib/*.dll
 sdb_ai/sd64/gplsrc/sdclilib/*.dll.a
 sdb_ai/sd64/gplsrc/sdclilib/*.exe
 
+# 17 Aug 26 - localtest/ is where "make check-local" and "make
+# check-select-probe" build and RUN their binaries, deliberately (see the long
+# comment on check-local in that Makefile: the directory a test runs from
+# decides which sdclilib.dll the loader finds).  The .exe files inside it were
+# already covered by the global *.exe rule, but the results the probes write
+# were not, so the directory goes as a whole.  gplbld/assert-current.ps1
+# already skips it for the same reason - it is build output that happens to sit
+# inside a watched source tree.
+sdb_ai/sd64/gplsrc/sdclilib/localtest/
+
 # Python bytecode.  gplbld/stage.py imports gplbld/bootstrap.py for the shared
 # elevation test, so a build now leaves __pycache__ beside the scripts.  It is
 # generated and it is binary, so it is not tracked - see the header.

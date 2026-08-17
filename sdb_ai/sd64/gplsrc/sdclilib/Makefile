@@ -68,6 +68,35 @@ check-local: $(DLL)
 	  tests/local_connect_test.c -I. -L. -lsdclilib
 	cd localtest && ./local-connect-test.exe
 
+# 17 Aug 26 - THE SELECT PROBE, PROJECT_STATUS.md 7 step 11.  It needs no
+# server, no install and no SD at all: it is two throwaway binaries that answer
+# one question about the Cygwin runtime, which is why it is not under "check"
+# either - "check" is for things that must keep passing, and this is an
+# experiment that has already given its answer.
+#
+# IT NEEDS BOTH TOOLCHAINS IN ONE TARGET, which nothing else here does.  The
+# parent is NATIVE UCRT64 and the child is MSYS2/Cygwin, because that is the
+# arrangement sdclilib.dll and sd.exe are in (5.3) and the whole question is
+# what the Cygwin side sees.  Building either with the other's compiler answers
+# a question nobody asked.
+#
+# UCRT_BIN GOES ON PATH, and leaving it off costs a confusing half hour: the
+# UCRT64 gcc driver finds its own cc1.exe by a relative path but cc1 then fails
+# to load its DLLs from /ucrt64/bin, and gcc exits 1 having printed NOTHING.
+MSYS_CC  := /usr/bin/gcc
+UCRT_BIN := /ucrt64/bin
+UCRT_CC  := $(UCRT_BIN)/gcc
+
+check-select-probe:
+	mkdir -p localtest
+	$(MSYS_CC) -std=gnu11 -Wall -Wextra -o localtest/select-probe-child.exe \
+	  tests/select_probe_child.c
+	PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu11 -Wall -Wextra \
+	  -o localtest/select-probe-parent.exe tests/select_probe_parent.c
+	cd localtest && ./select-probe-parent.exe ./select-probe-child.exe ./probe-result.txt
+	@echo '--- child results ---'
+	@cat localtest/probe-result.txt
+
 clean:
 	$(RM) $(DLL) $(IMPLIB) smoke-test.exe internal-state-test.exe
 	$(RM) -r localtest
