@@ -265,7 +265,35 @@ Step 7 "Installing"
 
 $installArgs = @()
 if ($Silent) { $installArgs += '/VERYSILENT' }
-& $setup.FullName @installArgs
+
+# 17 Aug 26 - Start-Process -Wait, NOT "& $setup".  THE CALL OPERATOR DOES NOT
+# WAIT FOR A GUI-SUBSYSTEM PROCESS, and Setup.exe is one - PE subsystem 2,
+# measured on sd-setup-1.0-2.exe rather than assumed.  So the deadline below
+# used to start when the WIZARD OPENED instead of when it was dismissed, and
+# five minutes of somebody reading the wizard was indistinguishable from an
+# install that never ran.
+#
+# It cost exactly that on the cycle of 13:30:47: step 8 stopped with "no
+# C:\ProgramData\SD\sdsys\gcat after the install - it did not complete", the
+# install then finished normally at 13:43, and the tree was whole - gcat 132,
+# GPL.BP.OUT 193, and a file-by-file comparison against the stage came back
+# empty.  A FALSE FAILURE HERE IS AS EXPENSIVE AS A FALSE PASS: it reads as the
+# broken-bootstrap install of 16 Aug, which is the one thing this script exists
+# to catch, and the natural response is to spend another cycle.
+#
+# And it is aimed at the default: non-silent is deliberate, because the wizard
+# pages are part of what a cycle shows (PROJECT_STATUS.md 7 step 3), so the
+# longer the operator does what the default asks of them, the likelier the
+# failure.
+#
+# THE COUNT DEADLINE BELOW IS KEPT AS THE BACKSTOP, not replaced.  If Inno ever
+# does respawn itself for elevation this returns early again, and the tree
+# stays what decides - the same rule adopt-account.ps1 follows.
+if ($installArgs.Count -gt 0) {
+    Start-Process -FilePath $setup.FullName -ArgumentList $installArgs -Wait
+} else {
+    Start-Process -FilePath $setup.FullName -Wait
+}
 
 # THE WAIT IS FOR THE TREE TO MATCH THE STAGE, NOT FOR ONE FILE TO EXIST.  This
 # waited for gcat\$CPROC and then counted immediately, and $CPROC is nowhere near
@@ -277,9 +305,9 @@ if ($Silent) { $installArgs += '/VERYSILENT' }
 # So it waits until the installed counts REACH the staged ones - which are known,
 # having just been measured - and only then reports.  A tree that never gets
 # there is a real fault and says so, instead of being reported as a small number
-# nobody can interpret.  The installer, like the uninstaller, hands off and
-# returns, so judging on the tree rather than the exit status is the same rule
-# adopt-account.ps1 follows.
+# nobody can interpret.  This still judges on the TREE rather than on Setup's
+# exit status - the same rule adopt-account.ps1 follows - even now that the
+# wait above means the wizard has actually closed by the time it starts.
 $igcatDir = Join-Path $PdTree 'sdsys\gcat'
 $ioutDir  = Join-Path $PdTree 'sdsys\GPL.BP.OUT'
 function InstalledCount($d) {
