@@ -5,6 +5,17 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  MICRO and the language verbs are gone.
+           * MICRO launched an external editor, which is a way out of SD onto
+             the machine underneath it.  It is removed for the same reason SH
+             is restricted.
+           * NLS, SET.LANGUAGE and LOAD.LANGUAGE are removed: SD is English
+             only, and they were the only callers of the message-language
+             machinery.
+           * If you had a use for any of them, say so - an administrator can
+             put a verb back into an account's VOC, and the programs behind
+             these are still installed.
+
 17 Aug 26  Connecting a program to SD on the same machine now works.
            * SDConnectLocal() in the client library opens a connection to SD
              on this computer, with no network and no password: SD identifies
