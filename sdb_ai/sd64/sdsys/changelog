@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  Record ids in directory files are no longer case sensitive.
+           * Windows treats SUE and sue as the same file, but SD did not, so
+             for a DIRECTORY file it could believe there were two records
+             where the disk held one.  It now agrees with Windows.
+           * WHAT YOU WILL NOTICE is locking.  A program holding a record
+             lock on 'sue' now correctly blocks another one asking for
+             'SUE'; before, both could hold what they thought were separate
+             locks on the same file.  Transactions match ids the same way.
+           * FILEINFO(f, FL$NOCASE) answers 1 for a directory file, where it
+             used to answer 0.
+           * DYNAMIC FILES ARE NOT AFFECTED.  They keep the setting recorded
+             in their own file header, exactly as before, so nothing about an
+             existing file changes and there is nothing to convert.
+           * Nothing is stored differently and no file needs rebuilding.
+
 17 Aug 26  SECURITY: stored passwords are protected from other SD users.
            * On installs made before this, every SD user could WRITE to the
              file SD keeps account passwords in.  No password is stored there

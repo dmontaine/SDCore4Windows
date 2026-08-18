@@ -265,9 +265,11 @@ Filename: "{sys}\net.exe"; Parameters: "localgroup sdsshonly /add /comment:""SD 
 ; is why it can wait - but it is exactly the shape of the six defects of
 ; 16 Aug 2026, each of which sat at a seam between two halves that were correct
 ; alone.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\deny-logon.ps1"" sdsshonly"; \
-    Flags: runhidden; StatusMsg: "Restricting SD accounts to ssh..."
+; CLOSED 17 Aug 2026: THE STEP MOVED TO THE CODE SECTION, as ApplyDenyLogon,
+; called at ssPostInstall.  The loose end the comment above records was that a
+; Run entry discards the exit code, so the one thing this step could not do was
+; report having failed - and a group that is not actually denied the console is
+; a quiet weakening nobody would notice.  The reasoning is on that function.
 
 ; THIS IS THE STEP THAT MAKES THE DATA PRIVATE.  Nothing SD does at runtime
 ; substitutes for it.  C:\ProgramData grants BUILTIN\Users:(I)(OI)(CI)(RX) by
@@ -662,6 +664,54 @@ begin
     Exec(Exe, '-stop', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+{ Deny the sdsshonly group the console and Remote Desktop, and return what to
+  tell the user if it did not happen.  PROJECT_STATUS.md 5.6.2, 7 step 3.
+
+  MOVED OUT OF [Run] 17 Aug 2026, WHICH IS THE WHOLE OF THIS CHANGE.  The
+  script was always correct - it checks every NTSTATUS and throws, so its exit
+  code means something - but a [Run] entry discards the exit code, so the one
+  thing this step could not do was report having failed.  sd.iss carried a
+  comment claiming CurStepChanged checked it; that claim was corrected in place
+  on 16 Aug 2026 and the check itself is what this supplies.
+
+  WHAT IT COSTS WHEN IT FAILS, and why it is worth a paragraph in the closing
+  box: an account in sdsshonly on a machine where the deny rights never landed
+  is NOT confined to ssh at all.  It can sign in at the console like anyone
+  else.  That is a quiet weakening rather than a broken install - which is
+  precisely why nobody would notice it, and why it must say so out loud.
+
+  NOT FATAL, on the same reasoning as the OpenSSH step: a machine where user
+  rights cannot be set should still get a working SD with the restriction
+  absent, rather than a failed install.
+
+  THE READ-BACK LIVES IN verify-sshonly.ps1, NOT HERE.  Confirming the rights
+  are present afterwards needs LsaEnumerateAccountRights, and that script
+  already dumps and checks them - so repeating it here would be a second
+  implementation of the same assertion, to be kept in step with the first. }
+function ApplyDenyLogon: String;
+var
+  Code: Integer;
+  Ps, Script: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\deny-logon.ps1');
+
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '" sdsshonly',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+
+  if Code = 0 then
+    Exit;
+
+  Result := 'SD accounts were NOT confined to ssh (code ' + IntToStr(Code) + '). ' +
+            'They can sign in at the console and over Remote Desktop like any other ' +
+            'Windows account. SD itself is installed and working. To apply it, from an ' +
+            'ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" sdsshonly' + #13#10#13#10;
+end;
+
 { Applies the AllowGroups block and returns what to tell the user, or '' if the
   task was not selected.  PROJECT_STATUS.md 5.6.2.
 
@@ -948,6 +998,7 @@ var
   AdoptCode: Integer;
   AccountMsg: String;
   CredMsg: String;
+  DenyMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -958,6 +1009,14 @@ begin
       never open while an account is being made.  It needs no ordering against
       the Run section beyond being after it, which ssPostInstall guarantees. }
     CredMsg := SecureCredStore;
+
+    { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
+      accounts rather than configuring the server, and it needs nothing from
+      them - only that the sdsshonly group exists, which [Run] created.  It ran
+      from [Run] until 17 Aug 2026, earlier than this, and the move is safe for
+      the same reason: the rights are held by the GROUP, so nothing that has
+      already happened depends on when they land. }
+    DenyMsg := ApplyDenyLogon;
 
     { Before the silent-install exit below: the work happens either way, and it
       is only the message about it that a silent install skips.  The firewall
@@ -1030,6 +1089,10 @@ begin
              so it is read before the sign-out instruction rather than after
              three paragraphs the reader already skimmed on the first page. }
            CredMsg +
+           { Beside CredMsg and for the same reason: both are empty on a healthy
+             install, and both report a protection that is absent rather than a
+             setting that is present. }
+           DenyMsg +
            'You have been added to the "sdusers" group, which is what grants ' +
            'access to the SD database.' + #13#10#13#10 +
            'Windows only applies group membership when you sign in, so you must ' +
