@@ -101,9 +101,23 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
-function Invoke-SD([string[]]$commands) {
+# BOUNDED - see verify-fold.ps1's copy for why.  SD prompts from places a script
+# cannot predict, each in an unbounded "until yn = 'Y' or 'N'" loop, and a hung
+# pipe returns nothing at all, so the cause is invisible.  The job is killed at
+# the timeout and whatever SD printed is returned.
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
     $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
+    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
+                     -ArgumentList $sdExe, $body
+    if (Wait-Job $job -Timeout $TimeoutSec) {
+        $out = Receive-Job $job
+    } else {
+        Stop-Job $job
+        $out = Receive-Job $job
+        $out += ''
+        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
+    }
+    Remove-Job $job -Force
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
 

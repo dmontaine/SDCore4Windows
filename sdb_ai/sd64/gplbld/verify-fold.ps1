@@ -68,9 +68,30 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
-function Invoke-SD([string[]]$commands) {
+# BOUNDED, BECAUSE A TEST HARNESS THAT CAN HANG IS A BAD HARNESS.  SD prompts
+# from places a script cannot predict - CATALOG's "also in private catalogue.
+# Remove?", DELETEF's per-part confirmations, and DELETEF:152's "Use file 'xx'?"
+# which FORCE does NOT suppress - and every one of them sits in an unbounded
+# "until yn = 'Y' or 'N'" loop.  Piped input runs out, the loop keeps reading,
+# and the window is dead with no output at all, because this function only
+# returns when SD exits.  Three runs were lost that way on 18 Aug 2026.
+#
+# The job is killed at the timeout and WHATEVER SD PRINTED IS RETURNED, so the
+# prompt that caused it is visible instead of being trapped in a hung pipe.
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
     $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
+    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
+                     -ArgumentList $sdExe, $body
+    if (Wait-Job $job -Timeout $TimeoutSec) {
+        $out = Receive-Job $job
+    } else {
+        Stop-Job $job
+        $out = Receive-Job $job
+        $out += ''
+        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
+        $out += "*** The last line above is the prompt that stopped it."
+    }
+    Remove-Job $job -Force
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
 
@@ -96,6 +117,11 @@ function Test-Count($name) {
 function Remove-Made {
     foreach ($n in @($lc, $uc)) {
         $out = Invoke-SD @("DELETE.FILE $n FORCE")
+        if ($out -match 'waiting for input') {
+            Write-Output ("  SD would not delete " + $n + " unattended:")
+            Write-Output $out
+            Write-Output '  falling back to removing the directories only - the VOC entry stays'
+        }
     }
     foreach ($n in @($lc, $lc.ToUpper(), $uc, $uc.ToLower())) {
         foreach ($sfx in @('', '.DIC')) {
