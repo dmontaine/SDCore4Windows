@@ -24,6 +24,8 @@
 * 15 Aug 26 Windows port - the chown to sdsys:sdusers on every catalogue write
 *           is gone; it failed on every one and printed a warning
 * 13 Aug 26 Windows port - CATALOG GLOBAL tests K$ADMINISTRATOR, not system(27)
+* 18 Aug 26 Windows port - and so does an implicit global catalogue, chosen by a
+*           "*!_$" call name prefix rather than by the GLOBAL keyword
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -185,6 +187,23 @@ $define CAT_PCODE  3
             mode = CAT_GLOBAL
          end
    end case
+
+* 18 Aug 26 Windows port - THE ADMINISTRATOR TEST BELONGS HERE, NOT ONLY ON THE
+*   KEYWORD.  KW$GLOBAL above tests K$ADMINISTRATOR, but a call name beginning
+*   with one of "*!_$" sets CAT_GLOBAL implicitly in all three name cases above,
+*   and none of those routes tested anything: "CATALOG BP $LOGIN" wrote the
+*   global catalogue from any account that holds CATALOG.  gcat carries $LOGIN
+*   and $CPROC as object code and CPROC calls $LOGIN for every session, so that
+*   is code execution in everybody's session, administrators included, from a
+*   PROGRAMMER account.  Upstream has the same gap - UPSTREAM_FIXES.md.
+*
+*   TESTED ONCE, WHERE mode IS FINALLY KNOWN, so a fourth route to CAT_GLOBAL
+*   inherits the test rather than rediscovering this.  The keyword's own test is
+*   left where it is: it reports while parsing, before the object file is
+*   opened, which is the better message for the common mistake.
+   if mode = CAT_GLOBAL and not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
 
 
    * Open the object file

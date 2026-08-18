@@ -19,6 +19,8 @@
 * 
 * START-HISTORY:
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 18 Aug 26 Windows port - deleting from the global catalogue requires
+*           administrator rights.  It required nothing at all before.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -36,6 +38,7 @@ $catalog $delcat
 $include err.h
 $include parser.h
 $include syscom.h
+$include int$keys.h
 
    parser = "!PARSER"
 
@@ -81,6 +84,28 @@ $include syscom.h
 
    if local and global then
       stop sysmsg(3021) ;* Incompatible cataloguing modes specified
+   end
+
+* 18 Aug 26 Windows port - DELETING FROM THE GLOBAL CATALOGUE NEEDS ADMINISTRATOR
+*   RIGHTS.  THIS PROGRAM TESTED NOTHING - not even for the GLOBAL keyword, which
+*   is where CATALOG has always had a test.  Either route reaches gcat: the
+*   keyword, or a "*!_$" name prefix in the case below.  "DELETE.CATALOG $LOGIN"
+*   removed the program CPROC runs for every session, from any account holding
+*   the verb, which is a denial of service for the whole system rather than for
+*   the caller.  Upstream has the same gap - UPSTREAM_FIXES.md.
+*
+*   BEFORE THE LOOP, NOT INSIDE IT, so a list that mixes private and global names
+*   deletes nothing at all rather than stopping part way through with the private
+*   ones already gone.  dcount/for is the idiom used elsewhere in GPL.BP; the
+*   loop below consumes name.list with remove(), so this reads it first.
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      gbl.count = dcount(name.list, @fm)
+      for gbl.i = 1 to gbl.count
+         gbl.name = name.list<gbl.i>
+         if global or index(prefix.chars, gbl.name[1,1], 1) then
+            stop sysmsg(2001) ;* Command requires administrator privileges
+         end
+      next gbl.i
    end
 
 

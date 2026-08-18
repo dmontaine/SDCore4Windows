@@ -982,6 +982,61 @@ begin
             '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
 end;
 
+{ LOCK THE GLOBAL CATALOGUE.  PROJECT_STATUS.md 8, UPSTREAM_FIXES.md 7.
+
+  gcat holds the object code every session executes - $LOGIN among it, which
+  CPROC calls for EVERY session - and the data tree grants sdusers Modify, so
+  without this any SD user can replace a program that runs in everybody's
+  session or delete one and stop the machine signing in.
+
+  IT REUSES LockOsUsersPath, which is generic despite the name: one path, one
+  script, one exit code.  A second copy of four lines would only be a second
+  place to fix.
+
+  THE BASIC HALF IS NOT ENOUGH ON ITS OWN, which is why this exists as well.
+  CATALOG and DELCAT now test K$ADMINISTRATOR, but a gate in a program protects
+  that program; the ACL protects the directory from everything, including code
+  not yet written.  secure-gcat.ps1's header carries the consequence: global
+  cataloguing now needs a genuinely ELEVATED session. }
+function SecureGcat: String;
+var
+  Code: Integer;
+  Ps, Script, Target, Objects, Failed: String;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-gcat.ps1');
+  Target := ExpandConstant('{#DataDir}\sdsys\gcat');
+  Objects := ExpandConstant('{#DataDir}\sdsys\GPL.BP.OUT');
+
+  { GPL.BP.OUT BESIDE gcat - owner's instruction, 18 Aug 2026.  It holds the
+    compiled objects the global catalogue is loaded FROM, and it measured
+    sdusers:(I)(OI)(CI)(M) on the 11:27:32 install after gcat was already
+    locked.  On its own it is the weaker path - planting an object there does
+    nothing until an administrator re-catalogues it - but that is a delay, not
+    a barrier, and nothing writes it after an install except a GPL.BP
+    recompile, which is elevated anyway.
+
+    Called once per path, like SecureOsUsers: -File binds a comma-joined
+    argument in ways that are worth not depending on. }
+  Failed := '';
+  if not LockOsUsersPath(Ps, Script, Target, Code) then
+    Failed := Target
+  else if not LockOsUsersPath(Ps, Script, Objects, Code) then
+    Failed := Objects;
+
+  if Failed = '' then
+    Exit;
+
+  { NAMED, NOT BURIED, like the credential store and the shell list: this ACL
+    is the whole of a control and it fails silently if the step does not run. }
+  Result := 'The global catalogue was NOT locked (code ' + IntToStr(Code) + '). ' +
+            'Until it is, any SD user can replace the programs SD runs for every session. ' +
+            'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
+end;
+
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
   happen.  PROJECT_STATUS.md 7 step 6.
 
@@ -1068,6 +1123,7 @@ var
   CredMsg: String;
   DenyMsg: String;
   OsuMsg: String;
+  GcatMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -1084,6 +1140,12 @@ begin
       run.  Order between them does not matter - different files, no shared
       state - so it goes second simply because the escalation is the graver. }
     OsuMsg := SecureOsUsers;
+
+    { Third of the three ACL steps, and the same reasoning: it closes a hole
+      rather than configuring something, and it is silent if it does not run.
+      Order between the three does not matter - different paths, no shared
+      state. }
+    GcatMsg := SecureGcat;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
       accounts rather than configuring the server, and it needs nothing from
@@ -1165,6 +1227,7 @@ begin
              three paragraphs the reader already skimmed on the first page. }
            CredMsg +
            OsuMsg +
+           GcatMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a
              setting that is present. }

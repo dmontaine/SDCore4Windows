@@ -5,6 +5,36 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  Adding to or removing from the system-wide catalogue now requires
+           administrator rights, whichever way you ask for it.
+           * CATALOG already required them for the spelled-out form,
+             "CATALOG BP MYPROG GLOBAL".  It did NOT require them when the same
+             thing was asked for by putting a *, !, _ or $ in front of the
+             name - "CATALOG BP $MYPROG" - which is the form most people use.
+           * DELETE.CATALOG required nothing at all, by either route.
+           * This matters because the system-wide catalogue holds the programs
+             SD runs for everybody, $LOGIN among them.  Replacing one ran your
+             code in every session on the machine, administrators included;
+             deleting one stopped everybody signing in.
+           * NOTHING CHANGES FOR LOCAL AND PRIVATE CATALOGUING, which is what
+             programmers use day to day:
+                 CATALOG BP MYPROG          private catalogue, this account
+                 CATALOG BP MYPROG LOCAL    this account's VOC
+             Both still work, in any account you are allowed to LOGTO into.
+           * The only thing you can no longer do as an ordinary user is
+             catalogue a program whose name starts with *, !, _ or $, because
+             those characters mean "system-wide".  Name it without one.
+           * The system-wide catalogue is now locked at the Windows level as
+             well, not only inside SD: SD users may run what is in it and
+             nothing else.  So a program you did not install cannot replace
+             one that everybody runs, whichever way it is reached.
+           * TO CATALOGUE SYSTEM-WIDE YOU NOW NEED AN ELEVATED SESSION, not
+             just an administrator account.  Start SD from an elevated window
+             and LOGTO SDSYS.  Entering SDSYS from an ordinary window still
+             gives you administrator rights inside SD, but Windows itself now
+             refuses the write - so use the same elevated window you already
+             need in order to recompile the system programs.
+
 18 Aug 26  The default terminal type is now VT100, not LINUX.
            * Every account's VOC holds a LOGIN paragraph that sets the
              terminal type when you sign in.  It said LINUX, inherited from

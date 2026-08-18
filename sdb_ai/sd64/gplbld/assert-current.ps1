@@ -89,7 +89,7 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
                   'verify-credacl.ps1', 'verify-nocase.ps1',
-                  'verify-osusers.ps1')
+                  'verify-osusers.ps1', 'verify-catgate.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
