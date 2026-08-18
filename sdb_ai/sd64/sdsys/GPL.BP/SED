@@ -4959,9 +4959,13 @@ open.file:
    is.path = @false
 
    open dict.flag, file.name to file(current.buffer) else
-      open dict.flag, upcase(file.name) to file(current.buffer) then
-         file.name = upcase(file.name)
-      end else open.ok = @false
+      open dict.flag, downcase(file.name) to file(current.buffer) then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to file(current.buffer) then
+            file.name = upcase(file.name)
+         end else open.ok = @false
+      end
    end
 
    if not(open.ok) then

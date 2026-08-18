@@ -82,9 +82,11 @@ open.file:
    end
 
    open dict.flag, token to fu else
-      open dict.flag, upcase(token) to fu else
-         @system.return.code = status()
-         stop sysmsg(2021, trimf(dict.flag:' ':token)) ;* File %1 not found
+      open dict.flag, downcase(token) to fu else
+         open dict.flag, upcase(token) to fu else
+            @system.return.code = status()
+            stop sysmsg(2021, trimf(dict.flag:' ':token)) ;* File %1 not found
+         end
       end
    end
 

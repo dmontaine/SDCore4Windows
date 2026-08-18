@@ -138,13 +138,21 @@ $include int$keys.h
             file.to.open = 'DICT ' : field(file.to.open, ',', 1)
          end case
 
+* 18 Aug 26 Windows port - as typed, then lower, then upper.  PROJECT_STATUS.md
+*   5.12.  The name OPENED and the name REWRITTEN are different variables here -
+*   file.to.open may carry a "DICT " prefix - so this one is by hand rather than
+*   with its neighbours.
          open file.to.open to dict.f else
-            open upcase(file.to.open) to dict.f else
-               @system.return.code = -status()
-               stop sysmsg(2021, file.name) ;* File %1 not found
-            end
+            open downcase(file.to.open) to dict.f then
+               file.name = downcase(file.name)
+            end else
+               open upcase(file.to.open) to dict.f else
+                  @system.return.code = -status()
+                  stop sysmsg(2021, file.name) ;* File %1 not found
+               end
 
-            file.name = upcase(file.name)
+               file.name = upcase(file.name)
+            end
          end
 
          * Look for record ids

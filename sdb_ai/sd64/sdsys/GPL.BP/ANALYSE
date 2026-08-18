@@ -159,12 +159,16 @@ $include int$keys.h
    * Open the file
 
    open dict.flag, file.name to file else
-      open dict.flag, upcase(file.name) to file else
-         @system.return.code = -status()
-         call !errtext(msg, status())
-         stop msg
+      open dict.flag, downcase(file.name) to file then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to file else
+            @system.return.code = -status()
+            call !errtext(msg, status())
+            stop msg
+         end
+         file.name = upcase(file.name)
       end
-      file.name = upcase(file.name)
    end
 
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)

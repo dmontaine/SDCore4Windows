@@ -59,11 +59,15 @@ $include int$keys.h
    record = ospath(recd, os$mapped.name)
 
    open file to f else
-      open upcase(file) to f else
-         status.code = 1           ;* File not found. STATUS() set by OPEN
-         return
+      open downcase(file) to f then
+         file = downcase(file)
+      end else
+         open upcase(file) to f else
+            status.code = 1           ;* File not found. STATUS() set by OPEN
+            return
+         end
+         file = upcase(file)     
       end
-      file = upcase(file)     
    end
 
    if fileinfo(f, fl$type) = fl$type.dir then

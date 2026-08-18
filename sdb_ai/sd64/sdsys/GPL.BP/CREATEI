@@ -68,10 +68,14 @@ $include err.h
    * Check file exists and is a dynamic file
 
    open dict.flag, filename to data.f else
-      open dict.flag, upcase(filename) to data.f else
-         stop sysmsg(2019)   ;* File not found
+      open dict.flag, downcase(filename) to data.f then
+         filename = downcase(filename)
+      end else
+         open dict.flag, upcase(filename) to data.f else
+            stop sysmsg(2019)   ;* File not found
+         end
+         filename = upcase(filename)
       end
-      filename = upcase(filename)
    end
 
    if fileinfo(data.f, FL$TYPE) # FL$TYPE.DH then stop sysmsg(2010)
@@ -104,10 +108,14 @@ $include err.h
             if token = '' then stop sysmsg(2607)  ;* Illegal null field name
 
             read dict.rec from dict.f, token else
-               read dict.rec from dict.f, upcase(token) else
-                  stop sysmsg(2608, token)
+               read dict.rec from dict.f, downcase(token) then
+                  token = downcase(token)
+               end else
+                  read dict.rec from dict.f, upcase(token) else
+                     stop sysmsg(2608, token)
+                  end
+                  token = upcase(token)
                end
-               token = upcase(token)
             end
 
             locate token in new.ak.names<1> setting pos then

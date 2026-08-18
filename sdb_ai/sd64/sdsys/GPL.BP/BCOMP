@@ -3027,28 +3027,36 @@ process.include:
 
 open.include.record:
    open include.file.name to incl.file else
-      open upcase(include.file.name) to incl.file else
-         if ignore.not.found then err = @true
-         else
-            err.msg = sysmsg(2848, include.file.name) ;* Include file xx not found
-            gosub error
+      open downcase(include.file.name) to incl.file then
+         include.file.name = downcase(include.file.name)
+      end else
+         open upcase(include.file.name) to incl.file else
+            if ignore.not.found then err = @true
+            else
+               err.msg = sysmsg(2848, include.file.name) ;* Include file xx not found
+               gosub error
+            end
+            return
          end
-         return
+         include.file.name = upcase(include.file.name)
       end
-      include.file.name = upcase(include.file.name)
    end
 
    level += 1
    read include.record(level) from incl.file, include.record.name else
-      read include.record(level) from incl.file, upcase(include.record.name) else
-         level -= 1
-         if ignore.not.found then err = @true
-         else
-            err.msg = sysmsg(2849, include.error.name) ;* Include record xx not found
-            gosub error
+      read include.record(level) from incl.file, downcase(include.record.name) then
+         include.record.name = downcase(include.record.name)
+      end else
+         read include.record(level) from incl.file, upcase(include.record.name) else
+            level -= 1
+            if ignore.not.found then err = @true
+            else
+               err.msg = sysmsg(2849, include.error.name) ;* Include record xx not found
+               gosub error
+            end
          end
+         include.record.name = upcase(include.record.name)
       end
-      include.record.name = upcase(include.record.name)
    end    
 
    return
@@ -12763,11 +12771,15 @@ get.file.ref:
    err = @false
 
    read dict.rec from file.d(pos), token.string else
-      read dict.rec from file.d(pos), upcase(token.string) else
-         err.msg = sysmsg(3415, token.string)  ;* Field name %1 is not in the dictionary
-         goto error
+      read dict.rec from file.d(pos), downcase(token.string) then
+         token = downcase(token.string)
+      end else
+         read dict.rec from file.d(pos), upcase(token.string) else
+            err.msg = sysmsg(3415, token.string)  ;* Field name %1 is not in the dictionary
+            goto error
+         end
+         token = upcase(token.string)
       end
-      token = upcase(token.string)
    end
 
    s = upcase(dict.rec[1,1])

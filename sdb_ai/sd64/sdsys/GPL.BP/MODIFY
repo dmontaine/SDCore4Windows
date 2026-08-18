@@ -109,11 +109,15 @@ $include bcomp.h
    * Open file and dictionary
 
    open dict.flag, file.name to data.f else
-      open dict.flag, upcase(file.name) to data.f else
-         @system.return.code = -status()
-         stop sysmsg(1427, trimf(dict.flag : ' ' : file.name)) ;* Cannot open %1 
+      open dict.flag, downcase(file.name) to data.f then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to data.f else
+            @system.return.code = -status()
+            stop sysmsg(1427, trimf(dict.flag : ' ' : file.name)) ;* Cannot open %1 
+         end
+         file.name = upcase(file.name)
       end
-      file.name = upcase(file.name)
    end
 
    if len(dict.flag) then
@@ -298,13 +302,19 @@ process.field.list:
 
       read dict.rec from dict.f, dict.id else
          read dict.rec from @voc, dict.id else
-            read dict.rec from dict.f, upcase(dict.id) else
-               read dict.rec from @voc, upcase(dict.id) else
-                  if from.command.line then id.list<-1> = dict.id
-                  continue
+            read dict.rec from dict.f, downcase(dict.id) then
+               dict.id = downcase(dict.id)
+            end else
+               read dict.rec from dict.f, upcase(dict.id) else
+                  read dict.rec from @voc, downcase(dict.id) else
+                     read dict.rec from @voc, upcase(dict.id) else
+                        if from.command.line then id.list<-1> = dict.id
+                        continue
+                     end
+                  end
                end
+               dict.id = upcase(dict.id)
             end
-            dict.id = upcase(dict.id)
          end
       end
 

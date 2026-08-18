@@ -78,9 +78,11 @@ $include parser.h
 * ---------------  Step 2 -  Open the file
 
    open dict.flag, file.name to list.file else
-      open dict.flag, upcase(file.name) to list.file else
-         @system.return.code = -status()
-         stop sysmsg(1430, status(), trimf(dict.flag : ' ')) ;* Error xx opening xx
+      open dict.flag, downcase(file.name) to list.file else
+         open dict.flag, upcase(file.name) to list.file else
+            @system.return.code = -status()
+            stop sysmsg(1430, status(), trimf(dict.flag : ' ')) ;* Error xx opening xx
+         end
       end
    end
 

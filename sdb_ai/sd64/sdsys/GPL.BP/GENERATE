@@ -74,10 +74,14 @@ $include dictdict.h
    if token.type # PARSER$END then stop sysmsg(2018, token) ;* 'Unexpected token (xx)
 
    open 'DICT', dict.name to dict.file else
-      open 'DICT', upcase(dict.name) to dict.file else
-         stop sysmsg(2012) ;* Cannot open dictionary
+      open 'DICT', downcase(dict.name) to dict.file then
+         dict.name = downcase(dict.name)
+      end else
+         open 'DICT', upcase(dict.name) to dict.file else
+            stop sysmsg(2012) ;* Cannot open dictionary
+         end
+         dict.name = upcase(dict.name)
       end
-      dict.name = upcase(dict.name)
    end
 
    readu incl.rec from dict.file, "$INCLUDE" then

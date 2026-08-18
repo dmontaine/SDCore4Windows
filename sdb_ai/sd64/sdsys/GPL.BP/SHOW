@@ -72,10 +72,14 @@ $include dictdict.h
 * Open file and dictionary
 
    open dict.flag, file.name to fvar else
-      open dict.flag, upcase(file.name) to fvar else
-         stop 'Cannot open file ' : file.name : ', status ' : status()
+      open dict.flag, downcase(file.name) to fvar then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to fvar else
+            stop 'Cannot open file ' : file.name : ', status ' : status()
+         end
+         file.name = upcase(file.name)
       end
-      file.name = upcase(file.name)
    end
 
    if len(dict.flag) then
@@ -624,6 +628,27 @@ parse:
          end
       end         
 
+      * Try names in lower case
+* 18 Aug 26 Windows port - PROJECT_STATUS.md 5.12, before the upper-case pair
+*   below and in the same shape.  As typed, then lower, then upper.
+
+      if not(found) and dict.open then
+         read dict.rec from dict.fvar, downcase(option) then
+            option = downcase(option)
+            type = upcase(dict.rec[1,1])
+            found = @true
+         end
+      end
+
+      if not(found) then
+         read dict.rec from voc.f, downcase(option) then
+            option = downcase(option)
+            type = upcase(dict.rec[1,1])
+            if type = 'K' then keyword = dict.rec<2>
+            found = @true
+         end
+      end
+
       * Try names in upper case
 
       if not(found) and dict.open then
@@ -983,8 +1008,10 @@ append.tokens:
       look.ahead = remove(options, more)
       keyword = -1  ;* Found in VOC but not a keyword
       read look.ahead.dict.rec from voc.f, look.ahead else
-         read look.ahead.dict.rec from voc.f, upcase(look.ahead) else
-            keyword = -2   ;* Not found in VOC
+         read look.ahead.dict.rec from voc.f, downcase(look.ahead) else
+            read look.ahead.dict.rec from voc.f, upcase(look.ahead) else
+               keyword = -2   ;* Not found in VOC
+            end
          end
       end
 

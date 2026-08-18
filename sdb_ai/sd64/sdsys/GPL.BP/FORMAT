@@ -66,10 +66,14 @@ $include err.h
    if token.type # PARSER$END then
       fn = field(token, ',', 1)
       read voc.rec from @voc, fn else
-         read voc.rec from @voc, upcase(fn) then
-            token = upcase(token)
+         read voc.rec from @voc, downcase(fn) then
+            token = downcase(token)
+         end else
+            read voc.rec from @voc, upcase(fn) then
+               token = upcase(token)
+            end
          end
-      end   
+      end
 
       voc.type = upcase(voc.rec[1,1])
       if voc.type = 'F' or voc.type = 'Q' then

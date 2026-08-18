@@ -216,10 +216,14 @@ $define default.split.load 80
             end
 
             read voc.rec from voc.f, dict.name else
-               read voc.rec from voc.f, upcase(dict.name) else
-                  stop sysmsg(6114, dict.name) ;* xx is not defined in your VOC
+               read voc.rec from voc.f, downcase(dict.name) then
+                  dict.name = downcase(dict.name)
+               end else
+                  read voc.rec from voc.f, upcase(dict.name) else
+                     stop sysmsg(6114, dict.name) ;* xx is not defined in your VOC
+                  end
+                  dict.name = upcase(dict.name)
                end
-               dict.name = upcase(dict.name)
             end
 
             if upcase(voc.rec[1,1]) # 'F' then

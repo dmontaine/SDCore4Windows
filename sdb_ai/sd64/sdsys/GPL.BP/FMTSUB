@@ -582,8 +582,10 @@ process.include:
 
    if include.fn # '' then        ;* Use specific file
       open include.fn to include.f(include.depth) else
-         open upcase(include.fn) to include.f(include.depth) else
-            goto exit.process.include
+         open downcase(include.fn) to include.f(include.depth) else
+            open upcase(include.fn) to include.f(include.depth) else
+               goto exit.process.include
+            end
          end
       end
 

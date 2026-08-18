@@ -1903,9 +1903,11 @@ parse.as.dictionary.name:
                end
 
                read trans.dict.rec from trans.file.dict, token.string else
-                  read trans.dict.rec from trans.file.dict, upcase(token.string) else
-                     err.msg = sysmsg(2024, token.string)  ;* 'xx' not found in dictionary
-                     goto error
+                  read trans.dict.rec from trans.file.dict, downcase(token.string) else
+                     read trans.dict.rec from trans.file.dict, upcase(token.string) else
+                        err.msg = sysmsg(2024, token.string)  ;* 'xx' not found in dictionary
+                        goto error
+                     end
                   end
                end
 

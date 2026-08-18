@@ -1154,11 +1154,15 @@ stack.manipulation:
          end else                                     ;* .L name
             at.command = trimf(trimb(at.command))
             read voc.rec from voc, at.command else
-               read voc.rec from voc, upcase(at.command) then
-                  at.command = upcase(at.command)
+               read voc.rec from voc, downcase(at.command) then
+                  at.command = downcase(at.command)
                end else
-                  display sysmsg(5043, at.command) ;* xx not found in VOC
-                  goto exit.stack.command
+                  read voc.rec from voc, upcase(at.command) then
+                     at.command = upcase(at.command)
+                  end else
+                     display sysmsg(5043, at.command) ;* xx not found in VOC
+                     goto exit.stack.command
+                  end
                end
             end
 
@@ -1180,8 +1184,12 @@ stack.manipulation:
          end else                                     ;* .R name
             at.command = trimf(trimb(at.command))
             read voc.rec from voc, at.command else
-               read voc.rec from voc, upcase(at.command) then
-                  at.command = upcase(at.command)
+               read voc.rec from voc, downcase(at.command) then
+                  at.command = downcase(at.command)
+               end else
+                  read voc.rec from voc, upcase(at.command) then
+                     at.command = upcase(at.command)
+                  end
                end
             end
 
@@ -1266,19 +1274,25 @@ stack.manipulation:
 
             s = field(new.sentence, ' ', 1)
             open s to tmp.f else
-               open upcase(s) to tmp.f else
-                  display sysmsg(2021, s)  ;* File %1 not found
-                  goto exit.stack.command
+               open downcase(s) to tmp.f else
+                  open upcase(s) to tmp.f else
+                     display sysmsg(2021, s)  ;* File %1 not found
+                     goto exit.stack.command
+                  end
                end
             end
 
             verb = field(new.sentence, ' ', 2)
             read voc.rec from tmp.f, verb else
-               read voc.rec from tmp.f, upcase(verb) else
-                  display sysmsg(5069) ;* Command record not found
-                  goto exit.stack.command
+               read voc.rec from tmp.f, downcase(verb) then
+                  verb = downcase(verb)
+               end else
+                  read voc.rec from tmp.f, upcase(verb) else
+                     display sysmsg(5069) ;* Command record not found
+                     goto exit.stack.command
+                  end
+                  verb = upcase(verb)
                end
-               verb = upcase(verb)
             end
 
             close tmp.f
@@ -2173,49 +2187,57 @@ int.run.common:
       run.file.name.out = run.file.name : '.OUT'
    end
    open run.file.name.out to run.file else
-      open upcase(run.file.name.out) to run.file else
-         if run.record.name.seen then
-            * Perhaps we are trying to run a rehomed VOC item. Try opening
-            * the file without a .OUT suffix.
+      open downcase(run.file.name.out) to run.file then
+         run.file.name.out = downcase(run.file.name.out)
+      end else
+         open upcase(run.file.name.out) to run.file else
+            if run.record.name.seen then
+               * Perhaps we are trying to run a rehomed VOC item. Try opening
+               * the file without a .OUT suffix.
 
-            open run.file.name to run.file else
-               open upcase(run.file.name) to run.file else
-                  @system.return.code = -status()
-                  display sysmsg(2021, run.file.name.out)  ;* File xx not found
-                  return
+               open run.file.name to run.file else
+                  open downcase(run.file.name) to run.file else
+                     open upcase(run.file.name) to run.file else
+                        @system.return.code = -status()
+                        display sysmsg(2021, run.file.name.out)  ;* File xx not found
+                        return
+                     end
+                  end
                end
+
+               * Try to find the item to run
+
+               read voc.rec from run.file, run.record.name else
+                  read voc.rec from run.file, downcase(run.record.name) else
+                     read voc.rec from run.file, upcase(run.record.name) else
+                        close run.file
+                        display sysmsg(1141) ;* Cannot find item to run
+                        return
+                     end
+                  end
+               end
+
+               close run.file
+
+               * Strip the first two elements of the command. This is done as
+               * two separate steps to handle multiple spaces without impacting
+               * any later, possibly significant, multiple spacing.
+
+               new.sentence = trimf(field(@sentence, ' ', 2, 99999))
+               new.sentence = trimf(field(new.sentence, ' ', 2, 99999))
+               verb = run.file.name
+               call @parser(PARSER$RESET, 0, new.sentence, 0)
+               call @parser(PARSER$GET.TOKEN, token.type, verb, keyword) ;* Verb
+               gosub proc.command
+               return
             end
 
-            * Try to find the item to run
-
-            read voc.rec from run.file, run.record.name else
-               read voc.rec from run.file, upcase(run.record.name) else
-                  close run.file
-                  display sysmsg(1141) ;* Cannot find item to run
-                  return
-               end
-            end
-
-            close run.file
-
-            * Strip the first two elements of the command. This is done as
-            * two separate steps to handle multiple spaces without impacting
-            * any later, possibly significant, multiple spacing.
-
-            new.sentence = trimf(field(@sentence, ' ', 2, 99999))
-            new.sentence = trimf(field(new.sentence, ' ', 2, 99999))
-            verb = run.file.name
-            call @parser(PARSER$RESET, 0, new.sentence, 0)
-            call @parser(PARSER$GET.TOKEN, token.type, verb, keyword) ;* Verb
-            gosub proc.command
+            @system.return.code = -status()
+            display sysmsg(2021, run.file.name.out)  ;* File xx not found
             return
          end
-
-         @system.return.code = -status()
-         display sysmsg(2021, run.file.name.out)  ;* File xx not found
-         return
+         run.file.name.out = upcase(run.file.name.out)
       end
-      run.file.name.out = upcase(run.file.name.out)
    end
    run.file.name = run.file.name.out
 

@@ -76,11 +76,15 @@ $include int$keys.h
    * Open the file
 
    open dict.flag, file.name to src.f else
-      open dict.flag, upcase(file.name) to src.f else
-         @system.return.code = -status()
-         stop sysmsg(1430, status())  ;* Error xx opening xx
+      open dict.flag, downcase(file.name) to src.f then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to src.f else
+            @system.return.code = -status()
+            stop sysmsg(1430, status())  ;* Error xx opening xx
+         end
+          file.name = upcase(file.name)
       end
-       file.name = upcase(file.name)
    end
 
    * Open the dictionary if possible
@@ -125,8 +129,10 @@ $include int$keys.h
             end else
                if fileinfo(dict.f, FL$OPEN) then
                   read dict.rec from dict.f, token else
-                     read dict.rec from dict.f, upcase(token) else
-                        stop sysmsg(3284, token) ;* xx is not a valid field name or number'
+                     read dict.rec from dict.f, downcase(token) else
+                        read dict.rec from dict.f, upcase(token) else
+                           stop sysmsg(3284, token) ;* xx is not a valid field name or number'
+                        end
                      end
                   end
 

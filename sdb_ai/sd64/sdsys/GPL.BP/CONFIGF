@@ -101,11 +101,15 @@ $include err.h
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
    open dict.flag, file.name to old.fu else
-      open dict.flag, upcase(file.name) to old.fu else
-         @system.return.code = -status()
-         stop sysmsg(1427, trimf(dict.flag : ' ' : file.name)) ;* Cannot open xx
+      open dict.flag, downcase(file.name) to old.fu then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to old.fu else
+            @system.return.code = -status()
+            stop sysmsg(1427, trimf(dict.flag : ' ' : file.name)) ;* Cannot open xx
+         end
+         file.name = upcase(file.name)
       end
-      file.name = upcase(file.name)
    end
 
    if fileinfo(old.fu, FL$READONLY) then

@@ -81,12 +81,16 @@ equ F.BINARY to 2
    * Open the file
 
    open portion, file.name to file else
-      open portion, upcase(file.name) to file else
-         @system.return.code = -status()
-         stop sysmsg(2019) ;* File not found
-      end
+      open portion, downcase(file.name) to file then
+         file.name = downcase(file.name)
+      end else
+         open portion, upcase(file.name) to file else
+            @system.return.code = -status()
+            stop sysmsg(2019) ;* File not found
+         end
 
-      file.name = upcase(file.name)
+         file.name = upcase(file.name)
+      end
    end
 
    * Process ids and options
@@ -195,11 +199,15 @@ display.record:
    end
 
    read rec from file,record.name else
-      read rec from file, upcase(record.name) else
-         display sysmsg(2108, record.name) ;* Record 'xx' not found
-         return
+      read rec from file, downcase(record.name) then
+         record.name = downcase(record.name)
+      end else
+         read rec from file, upcase(record.name) else
+            display sysmsg(2108, record.name) ;* Record 'xx' not found
+            return
+         end
+         record.name = upcase(record.name)
       end
-      record.name = upcase(record.name)
    end
 
    if len(portion) then display portion : ' ' :

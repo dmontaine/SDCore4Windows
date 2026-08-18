@@ -73,12 +73,16 @@ $include int$keys.h
    * Open the file
 
    open portion, file.name to file else
-      open portion, upcase(file.name) to file else
-         @system.return.code = -status()
-         stop sysmsg(2019) ;* File not found
-      end
+      open portion, downcase(file.name) to file then
+         file.name = downcase(file.name)
+      end else
+         open portion, upcase(file.name) to file else
+            @system.return.code = -status()
+            stop sysmsg(2019) ;* File not found
+         end
 
-      file.name = upcase(file.name)
+         file.name = upcase(file.name)
+      end
    end
 
    if fileinfo(file, FL$READONLY) then

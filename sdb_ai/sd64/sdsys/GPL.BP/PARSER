@@ -136,20 +136,31 @@ rescan:
                      end else
                         if status() = ER$CNF or status() = ER$MFC then
                            gosub merge.multifile.component
-                        end else  ;* Try again with uppercase names
-                           open upcase(string) to temp.f then
+                        end else  ;* Try again with lower case, then upper
+                           open downcase(string) to temp.f then
                               gosub merge.multifile.component
                               close temp.f
                            end else
                               if status() = ER$CNF or status() = ER$MFC then
                                  gosub merge.multifile.component
+                              end else
+                                 open upcase(string) to temp.f then
+                                    gosub merge.multifile.component
+                                    close temp.f
+                                 end else
+                                    if status() = ER$CNF or status() = ER$MFC then
+                                       gosub merge.multifile.component
+                                    end
+                                 end
                               end
                            end
                         end
                      end
                   end else
                      read voc.rec from @voc, string else
-                        read voc.rec from @voc, upcase(string) else goto exit.parser
+                        read voc.rec from @voc, downcase(string) else
+                           read voc.rec from @voc, upcase(string) else goto exit.parser
+                        end
                      end
 
                      keyword = -2
@@ -248,7 +259,27 @@ rescan:
                keyword = -1
 
                if len(string) <= 63 then
-                  read voc.rec from @voc, upcase(string) then
+* 18 Aug 26 Windows port - AS TYPED, THEN LOWER, THEN UPPER.  PROJECT_STATUS.md
+*   5.12.  Alone among the fold sites this one had no as-typed attempt at all,
+*   so a VOC id that is not upper case could never be recognised as a keyword.
+*
+*   A FLAG RATHER THAN THREE COPIES OF THE BODY.  Every other site chains the
+*   attempts with ELSE, which works because the body sits in the innermost THEN;
+*   here the body belongs to the FIRST read, so chaining would duplicate it.
+                  fold.found = @false
+                  read voc.rec from @voc, string then
+                     fold.found = @true
+                  end else
+                     read voc.rec from @voc, downcase(string) then
+                        fold.found = @true
+                     end else
+                        read voc.rec from @voc, upcase(string) then
+                           fold.found = @true
+                        end
+                     end
+                  end
+
+                  if fold.found then
                      if upcase(voc.rec[1, 1]) = "K" THEN
                         keyword = voc.rec<2>
 !0198                   if keyword = KW$FILLER then goto rescan

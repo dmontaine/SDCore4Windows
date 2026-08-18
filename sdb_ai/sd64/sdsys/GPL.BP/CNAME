@@ -212,11 +212,15 @@ rename.file:
 
 rename.records:
    open dict.flag, old.file.name to file else
-      open dict.flag, upcase(old.file.name) to file else
-         @system.return.code = -ER$FNF
-         stop sysmsg(2019) ;* File not found
+      open dict.flag, downcase(old.file.name) to file then
+         old.file.name = downcase(old.file.name)
+      end else
+         open dict.flag, upcase(old.file.name) to file else
+            @system.return.code = -ER$FNF
+            stop sysmsg(2019) ;* File not found
+         end
+         old.file.name = upcase(old.file.name)
       end
-      old.file.name = upcase(old.file.name)
       full.name = upcase(full.name)
    end
 

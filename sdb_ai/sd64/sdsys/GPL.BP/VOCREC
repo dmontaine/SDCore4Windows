@@ -35,9 +35,11 @@ $catalogue !VOCREC
 $include err.h
 
    read rec from @voc, id else
-      read rec from @voc, upcase(id) else
-         set.status ER$NVR
-         return
+      read rec from @voc, downcase(id) else
+         read rec from @voc, upcase(id) else
+            set.status ER$NVR
+            return
+         end
       end
    end
 
@@ -46,16 +48,20 @@ $include err.h
       fn = rec<2>
       id = rec<3>
       open fn to fvar else
-         open upcase(fn) to fvar else
-            rec = ''
-            return
+         open downcase(fn) to fvar else
+            open upcase(fn) to fvar else
+               rec = ''
+               return
+            end
          end
       end
 
       read rec from fvar, id else
-         read rec from fvar, upcase(id) else
-            set.status ER$NVR
-            return
+         read rec from fvar, downcase(id) else
+            read rec from fvar, upcase(id) else
+               set.status ER$NVR
+               return
+            end
          end
       end
    repeat

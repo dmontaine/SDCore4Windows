@@ -142,9 +142,11 @@ source.file.opened:
 
       s = field(source.file.name, ',', 1)
       read voc.rec from voc, s else
-         read voc.rec from voc, upcase(s) else
-            @system.return.code = -ER$NVR
-            stop sysmsg(2801)  ;* Unable to read source file VOC entry
+         read voc.rec from voc, downcase(s) else
+            read voc.rec from voc, upcase(s) else
+               @system.return.code = -ER$NVR
+               stop sysmsg(2801)  ;* Unable to read source file VOC entry
+            end
          end
       end
 
@@ -255,11 +257,15 @@ compile:
    * Open source file record
 
    read prog.source from src.f, record.name else
-      read prog.source from src.f, upcase(record.name) else
-         display sysmsg(2810, record.name) ;* Cannot read source record xx
-         return
+      read prog.source from src.f, downcase(record.name) then
+         record.name = downcase(record.name)
+      end else
+         read prog.source from src.f, upcase(record.name) else
+            display sysmsg(2810, record.name) ;* Cannot read source record xx
+            return
+         end
+         record.name = upcase(record.name)
       end
-      record.name = upcase(record.name)
    end
 
    if compile.only.changed.records then

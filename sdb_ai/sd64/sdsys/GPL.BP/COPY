@@ -98,9 +98,11 @@ $include int$keys.h
 
 retry.source.file.open:
    open src.portion, src.file.name to src.file else
-      open src.portion, upcase(src.file.name) to src.file else
-         @system.return.code = -status()
-         stop sysmsg(6184) ;* Source file not found
+      open src.portion, downcase(src.file.name) to src.file else
+         open src.portion, upcase(src.file.name) to src.file else
+            @system.return.code = -status()
+            stop sysmsg(6184) ;* Source file not found
+         end
       end
    end
 
@@ -127,9 +129,11 @@ retry.source.file.open:
 
 retry.target.file.open:
       open tgt.portion, tgt.file.name to tgt.file else
-         open tgt.portion, upcase(tgt.file.name) to tgt.file else
-            @system.return.code = -status()
-            stop sysmsg(6186) ;* Target file not found
+         open tgt.portion, downcase(tgt.file.name) to tgt.file else
+            open tgt.portion, upcase(tgt.file.name) to tgt.file else
+               @system.return.code = -status()
+               stop sysmsg(6186) ;* Target file not found
+            end
          end
       end
 

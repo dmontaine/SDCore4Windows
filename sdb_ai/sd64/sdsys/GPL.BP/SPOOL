@@ -67,10 +67,14 @@ $include syscom keys.h
    * Open file
 
    open dict.flag, file.name to fu else
-      open dict.flag, upcase(file.name) to fu else
-         stop sysmsg(2019) ;* File not found
+      open dict.flag, downcase(file.name) to fu then
+         file.name = downcase(file.name)
+      end else
+         open dict.flag, upcase(file.name) to fu else
+            stop sysmsg(2019) ;* File not found
+         end
+         file.name = upcase(file.name)
       end
-      file.name = upcase(file.name)
    end
 
 

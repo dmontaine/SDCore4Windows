@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  A file or VOC entry whose name is not upper case can now be found
+           whatever case you type it in.
+           * SD looked for the name exactly as you typed it and then, if that
+             failed, for the UPPER-case version - and nothing else.  So a name
+             that is stored in lower case could only ever be reached by typing
+             it exactly right.
+           * CREATE.FILE testlc is the case that shows it: the file is
+             registered as "testlc", the message says "Created DATA part as
+             TESTLC", and COUNT TESTLC then answered "File not found" while
+             COUNT testlc worked.
+           * The order is now: as typed, then lower case, then upper case.
+           * NOTHING CHANGES ON AN EXISTING SYSTEM.  Every name SD ships is
+             upper case, so the new attempt never finds anything until
+             lower-case names start to appear.  This is groundwork.
+           * Account names are deliberately NOT included - they are still
+             matched in upper case, which is what makes signing in
+             case-insensitive.
+
 18 Aug 26  Adding to or removing from the system-wide catalogue now requires
            administrator rights, whichever way you ask for it.
            * CATALOG already required them for the spelled-out form,

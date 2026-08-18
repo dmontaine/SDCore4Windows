@@ -486,12 +486,16 @@ $define MAX.STRINGS     20          ;* For SEARCH command
    end
 
    open dict.flag, qproc.file.name to data.f else
-      open dict.flag, upcase(qproc.file.name) to data.f else
-         display sysmsg(2019) ;* File not found
-         goto exit.qproc
-      end
+      open dict.flag, downcase(qproc.file.name) to data.f then
+         qproc.file.name = downcase(qproc.file.name)
+      end else
+         open dict.flag, upcase(qproc.file.name) to data.f else
+            display sysmsg(2019) ;* File not found
+            goto exit.qproc
+         end
 
-      qproc.file.name = upcase(qproc.file.name)
+         qproc.file.name = upcase(qproc.file.name)
+      end
    end
 
    is.dir = (fileinfo(data.f, FL$TYPE) = FL$TYPE.DIR)
@@ -2620,9 +2624,11 @@ parse.command.options:
                end
 
                read label.template from @voc, token else
-                  read label.template from @voc, upcase(token) else
-                     display sysmsg(7236) ;* Label template record not found
-                     goto exit.qproc
+                  read label.template from @voc, downcase(token) else
+                     read label.template from @voc, upcase(token) else
+                        display sysmsg(7236) ;* Label template record not found
+                        goto exit.qproc
+                     end
                   end
                end
 label.template.found:
@@ -2758,9 +2764,11 @@ label.template.found:
                goto exit.qproc
             end
             open token to pageseq.f else
-               open upcase(token) to pageseq.f else
-                  display sysmsg(7310) ;* Page sequence control file not found
-                  goto exit.qproc
+               open downcase(token) to pageseq.f else
+                  open upcase(token) to pageseq.f else
+                     display sysmsg(7310) ;* Page sequence control file not found
+                     goto exit.qproc
+                  end
                end
             end
 
@@ -2960,11 +2968,15 @@ label.template.found:
 
             reformat.filename = token
             open reformat.filename to reformat.f else
-               open upcase(reformat.filename) to reformat.f else
-                  display sysmsg(1427, reformat.filename)  ;* Cannot open %1
-                  goto exit.qproc
+               open downcase(reformat.filename) to reformat.f then
+                  reformat.filename = downcase(reformat.filename)
+               end else
+                  open upcase(reformat.filename) to reformat.f else
+                     display sysmsg(1427, reformat.filename)  ;* Cannot open %1
+                     goto exit.qproc
+                  end
+                  reformat.filename = upcase(reformat.filename)
                end
-               reformat.filename = upcase(reformat.filename)
             end
 
 * --- TOTAL
@@ -2994,9 +3006,11 @@ label.template.found:
             end
 
             open using.dict, token to dict.file else
-               open using.dict, upcase(token) to dict.file else
-                  display sysmsg(1427, trimf(using.dict : ' ' : token)) ;* Cannot open xx
-                  goto exit.qproc
+               open using.dict, downcase(token) to dict.file else
+                  open using.dict, upcase(token) to dict.file else
+                     display sysmsg(1427, trimf(using.dict : ' ' : token)) ;* Cannot open xx
+                     goto exit.qproc
+                  end
                end
             end
 
@@ -3633,9 +3647,11 @@ check.field.modifiers:
                end
 
                read s from dict.file, token else
-                  read s from dict.file, upcase(token) else
-                     display sysmsg(7259, token) ;* Associated field xx not found in dictionary
-                     goto exit.qproc
+                  read s from dict.file, downcase(token) else
+                     read s from dict.file, upcase(token) else
+                        display sysmsg(7259, token) ;* Associated field xx not found in dictionary
+                        goto exit.qproc
+                     end
                   end
                end
 
@@ -5115,9 +5131,11 @@ add.field:
             end
 
             read link.dict.rec from link.dict.f, link.item else
-               read link.dict.rec from link.dict.f, upcase(link.item) else
-                  display sysmsg(7272, link.name) ;* Link item xx not found
-                  goto exit.qproc
+               read link.dict.rec from link.dict.f, downcase(link.item) else
+                  read link.dict.rec from link.dict.f, upcase(link.item) else
+                     display sysmsg(7272, link.name) ;* Link item xx not found
+                     goto exit.qproc
+                  end
                end
             end
 

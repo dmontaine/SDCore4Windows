@@ -62,10 +62,14 @@ $include ak_info.h
    * Check file exists and is a dynamic file
 
    open dict.flag, filename to data.f else
-      open dict.flag, upcase(filename) to data.f else
-         stop sysmsg(2019)  ;* File not found
+      open dict.flag, downcase(filename) to data.f then
+         filename = downcase(filename)
+      end else
+         open dict.flag, upcase(filename) to data.f else
+            stop sysmsg(2019)  ;* File not found
+         end
+         filename = upcase(filename)
       end
-      filename = upcase(filename)
    end
 
    if fileinfo(data.f, FL$TYPE) # FL$TYPE.DH then
@@ -114,8 +118,10 @@ $include ak_info.h
       input ak.list
       if ak.list = '' then goto exit.list.index
       read voc.rec from @voc, ak.list else
-         read voc.rec from @voc, upcase(ak.list) else
-            goto not.all.keyword
+         read voc.rec from @voc, downcase(ak.list) else
+            read voc.rec from @voc, upcase(ak.list) else
+               goto not.all.keyword
+            end
          end
       end
       if upcase(voc.rec[1, 1]) = 'K' and voc.rec<2> = KW$ALL then
