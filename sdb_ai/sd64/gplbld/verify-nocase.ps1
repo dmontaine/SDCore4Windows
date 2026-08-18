@@ -1,5 +1,8 @@
-# verify-nocase.ps1 - prove directory files open case insensitive,
-# PROJECT_STATUS.md 7 step 8.
+# verify-nocase.ps1 - prove case insensitive comparison is switched on,
+# PROJECT_STATUS.md 7 step 8.  Two halves, both of which were correct code that
+# had never been reached: DHF_NOCASE on directory files (the C layer, dh_open.c)
+# and SYSTEM(91) answering Windows (the BASIC layer, which is what lets QPROC
+# treat a directory file's ids as case insensitive).
 #
 #   powershell -File verify-nocase.ps1        run the checks
 #
@@ -38,13 +41,17 @@
 #       OPEN 'VOC' TO F.DH ELSE STOP 'cannot open VOC'
 #       CRT 'DIRFILE=':FILEINFO(F.DIR, 1008)
 #       CRT 'DHFILE=':FILEINFO(F.DH, 1008)
+#       CRT 'ISWIN=':SYSTEM(91)
 #
 # then pipe "BASIC BP SDNOCASE", "RUN BP SDNOCASE", "OFF" into sd.exe.  1008 is
 # FL$NOCASE (SYSCOM KEYS.H), written as a literal so the probe does not depend
-# on the include path from a user account.
+# on the include path from a user account.  pterm() CANNOT be used from a user
+# account - it is internal-only and compiles as an undimensioned array - which
+# is why SYSTEM() is the route to these.
 #
-# MEASURED BEFORE THE CHANGE, on the 17 Aug 2026 17:36:21 install: DIRFILE=0
-# and DHFILE=0.  That is the reading this script exists to see move.
+# MEASURED BEFORE THE CHANGES, both by hand: DIRFILE=0 and DHFILE=0 on the
+# 17:36:21 install, ISWIN=0 on the 20:10:31 one.  Those are the readings this
+# script exists to see move - and DHFILE is the one that must NOT.
 
 [CmdletBinding()]
 param()
@@ -120,6 +127,7 @@ $src = @(
     "      OPEN 'VOC' TO F.DH ELSE STOP 'cannot open VOC'"
     "      CRT 'DIRFILE=':FILEINFO(F.DIR, 1008)"
     "      CRT 'DHFILE=':FILEINFO(F.DH, 1008)"
+    "      CRT 'ISWIN=':SYSTEM(91)"
 ) -join "`n"
 
 [System.IO.File]::WriteAllText($probeSrc, $src + "`n",
@@ -165,6 +173,7 @@ if ($text -notmatch 'DIRFILE=') {
 
 $dirVal = if ($text -match 'DIRFILE=(\d+)') { $Matches[1] } else { '(none)' }
 $dhVal  = if ($text -match 'DHFILE=(\d+)')  { $Matches[1] } else { '(none)' }
+$winVal = if ($text -match 'ISWIN=(\d+)')   { $Matches[1] } else { '(none)' }
 
 Remove-Probe
 
@@ -172,6 +181,13 @@ Remove-Probe
 
 Note 'directory file (BP) reports FL$NOCASE' '1' $dirVal $true
 Note 'dynamic file (VOC) reports FL$NOCASE'  '0' $dhVal  $true
+
+# SYSTEM(91) IS WHAT UNBLOCKS QPROC, and it is decisive for the same reason the
+# rows above are: QPROC:499 is the only route by which the query processor
+# treats a directory file's ids as case insensitive, because FL$FLAGS cannot
+# answer for a directory file at all (op_dio2.c:439 gates it on dynamic).
+# It read 0 before the change - on Windows.
+Note 'SYSTEM(91) answers Windows'            '1' $winVal $true
 
 $results | Format-Table -AutoSize | Out-String | Write-Output
 

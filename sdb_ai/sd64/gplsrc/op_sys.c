@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Aug 26  SYSTEM(91) "Windows?" answers 1, not 0
  * rev 0.9.1 Mar 25 mab return to single rev track
  * 02 Jul 24 mab add 9010 and 9011 
  * 31 Dec 23 SD launch - prior history suppressed
@@ -256,7 +257,29 @@ void op_system() {
       break;
 
     case 91: /* Windows? */
-      descr->data.value = 0;
+      /* 17 Aug 26  ANSWERS 1 ON THIS PORT.  It answered 0, which was inherited
+         from sdb64 where it is correct, and left every BASIC program that asks
+         "am I on Windows" being told no - on Windows.
+
+         WHAT THAT ACTUALLY BROKE, and it is not cosmetic.  QPROC:82 reads this
+         into is.windows and QPROC:499 is
+
+             if is.windows and is.dir then is.case.insensitive = @true
+
+         which is the ONLY route by which the query processor treats a
+         directory file's ids as case insensitive - FL$FLAGS cannot supply it,
+         because op_dio2.c:439 answers FL_FLAGS only when (dynamic && internal)
+         and a directory file is neither.  So SELECT ... WITH @ID = "sue" never
+         matched record SUE, and the code to make it match has been sitting
+         there unreachable.  Same shape as CASE_INSENSITIVE_FILE_SYSTEM at
+         dh_open.c:529: correct code, already written, never switched on.
+
+         is.case.insensitive upper-cases BOTH SIDES OF A COMPARISON only
+         (QPROC 4034, 4447, 7059, 7198) and stores nothing, so this is the same
+         strategy taken there and not the upper-casing 5.12 rejected.
+
+         The only other reader is APISRVR:954, which is commented out. */
+      descr->data.value = 1;
       break;
 
     case 1000: /* CAPTURING in effect? */
