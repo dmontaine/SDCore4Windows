@@ -5,6 +5,25 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  Signing in over ssh now takes you straight into SD.
+           * An ssh session lands in SD instead of at a Windows prompt.  That
+             applies to everyone who may connect, administrators included:
+             the rule is about the route in, not about who took it.
+           * SCP AND SFTP NO LONGER WORK INTO THIS MACHINE, for anybody.  The
+             command is forced, so there is no file-transfer subsystem left
+             to run.  This is the cost of the above and is deliberate.
+           * TO COPY FILES, PULL THEM RATHER THAN PUSHING.  Sit at the machine
+             or connect with Remote Desktop, and use WinSCP or scp from there
+             to fetch what you need.  Outbound connections are not affected -
+             only sessions coming in.
+           * Remote Desktop and the local console are untouched, and are how
+             an administrator reaches the machine itself.
+           * IT IS NOT APPLIED BY THE INSTALLER on a machine that already had
+             an ssh server.  Run this once from an elevated prompt:
+                 powershell -File "C:\Program Files\SD\allow-ssh-groups.ps1" -Installed
+             It checks the result with "sshd -T" and puts the original back if
+             anything is wrong, keeping a copy as sshd_config.before-sd.
+
 17 Aug 26  Queries against a directory file now match ids case insensitively.
            * SELECT and LIST against a DIRECTORY file now match a record id
              whatever case you type it in, which is how Windows treats the
