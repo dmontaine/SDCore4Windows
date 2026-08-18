@@ -133,8 +133,13 @@ function Remove-Account {
 # in SDSYS and that is a record in a dynamic file - deleting the directory alone
 # would leave SDSYS's VOC naming a file that is not there.
 function Remove-Fixtures {
+    # FORCE, NOT A PIPED "Y".  DELETEF prompts separately for the DATA and DICT
+    # parts, each in an unbounded "until yn = 'Y' or 'N'" loop, and only when the
+    # stored path differs from the default name.  This script's fixtures are
+    # upper case so neither prompt fires today - but that is luck, not design,
+    # and the same "Y" pattern hung verify-fold.ps1 on 18 Aug 2026.
     if (Test-Path -LiteralPath $ctlDir) {
-        $null = Invoke-SD @("DELETE.FILE $ctlFile", 'Y')
+        $null = Invoke-SD @("DELETE.FILE $ctlFile FORCE")
     }
     foreach ($p in @($ctlDir, ($ctlDir + '.OUT'), ($ctlDir + '.DIC'), (Join-Path $gcat ('$' + $ctlName)))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }

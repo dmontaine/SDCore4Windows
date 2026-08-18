@@ -84,9 +84,18 @@ function Test-Count($name) {
     return 'unclear'
 }
 
+# FORCE, NOT AN ANSWER PIPED AFTER IT.  DELETEF prompts SEPARATELY for the DATA
+# and DICT parts (DELETEF:222, :296), each in an unbounded
+# "loop ... until yn = 'Y' or 'N' repeat", and each prompt appears only when the
+# stored path differs from the default name.  For zzlcfold1 it does differ -
+# CREATE.FILE upper-cases the name on disk while the VOC id keeps the case typed
+# (UPSTREAM_FIXES.md 6), which is the very defect this script tests around.  So
+# a single "Y" answered the DATA prompt, "OFF" fell into the DICT loop, was
+# neither Y nor N, and the pipe hung on the 16:35:38 run.  FORCE skips both
+# (DELETEF:220, :294) and needs no input at all.
 function Remove-Made {
     foreach ($n in @($lc, $uc)) {
-        $out = Invoke-SD @("DELETE.FILE $n", 'Y')
+        $out = Invoke-SD @("DELETE.FILE $n FORCE")
     }
     foreach ($n in @($lc, $lc.ToUpper(), $uc, $uc.ToLower())) {
         foreach ($sfx in @('', '.DIC')) {
