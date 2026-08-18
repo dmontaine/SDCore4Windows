@@ -47,35 +47,55 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Test-Path -LiteralPath $Path)) {
-    # NOT AN ERROR AND NOT SILENT.  The bootstrap creates $CRED, so its absence
-    # means the staged tree is not what this expects; say so rather than
-    # leaving a wide-open credential store behind a script that reported
-    # success.
-    Write-Output "secure-cred: $Path does not exist - nothing secured"
-    exit 2
+# THE try/catch IS NOT DECORATION, and this script was the only one of the four
+# without it until 17 Aug 2026.  Under Stop, redirecting a native command's
+# stderr - the 2>&1 below - turns each line into a NativeCommandError that
+# TERMINATES, so an icacls that says anything at all on stderr would kill this
+# script before it reached the $LASTEXITCODE test.  Uncaught, that exits with a
+# PowerShell error and no message anyone will see, because the installer runs
+# it hidden.  Caught, it is exit 1 and a line saying why.
+try {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        # NOT AN ERROR AND NOT SILENT.  The bootstrap creates $CRED, so its
+        # absence means the staged tree is not what this expects; say so rather
+        # than leaving a wide-open credential store behind a script that
+        # reported success.
+        #
+        # THIS IS THE BRANCH THAT RAN FOR THE WHOLE OF 16-17 Aug 2026, and it
+        # was telling the truth.  sd.iss single quoted the path and passed it
+        # to -File, which strips nothing, so $Path arrived as "'C:\...\$CRED'"
+        # - quotes and all - and really did not exist.  Fixed in sd.iss, where
+        # the measurement is written up; the usage line at the top of this file
+        # always showed the correct form.
+        Write-Output "secure-cred: $Path does not exist - nothing secured"
+        exit 2
+    }
+
+    # SIDS, NOT NAMES, so a localised Windows does not break the installer:
+    #   *S-1-5-18       NT AUTHORITY\SYSTEM
+    #   *S-1-5-32-544   BUILTIN\Administrators
+    #
+    # /inheritance:r in the SAME command as the grants, or the object is briefly -
+    # and on a busy machine observably - left with no ACEs at all.
+    #
+    # sdusers is granted NOTHING here.  That is the entire point, and it is the
+    # difference from secure-audit.ps1, which grants them append-only so SD can
+    # still write the trail as the user.  Nothing needs to reach this file as an
+    # ordinary user.
+    $out = & icacls.exe $Path /inheritance:r `
+        /grant '*S-1-5-18:(OI)(CI)(F)' `
+        /grant '*S-1-5-32-544:(OI)(CI)(F)' 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output "secure-cred: icacls failed with $LASTEXITCODE"
+        Write-Output ($out -join "`n")
+        exit 1
+    }
+
+    Write-Output "secure-cred: $Path locked to SYSTEM and Administrators"
+    exit 0
 }
-
-# SIDS, NOT NAMES, so a localised Windows does not break the installer:
-#   *S-1-5-18       NT AUTHORITY\SYSTEM
-#   *S-1-5-32-544   BUILTIN\Administrators
-#
-# /inheritance:r in the SAME command as the grants, or the object is briefly -
-# and on a busy machine observably - left with no ACEs at all.
-#
-# sdusers is granted NOTHING here.  That is the entire point, and it is the
-# difference from secure-audit.ps1, which grants them append-only so SD can
-# still write the trail as the user.  Nothing needs to reach this file as an
-# ordinary user.
-$out = & icacls.exe $Path /inheritance:r `
-    /grant '*S-1-5-18:(OI)(CI)(F)' `
-    /grant '*S-1-5-32-544:(OI)(CI)(F)' 2>&1
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Output "secure-cred: icacls failed with $LASTEXITCODE"
-    Write-Output $out
+catch {
+    Write-Output "secure-cred: $($_.Exception.Message)"
     exit 1
 }
-
-Write-Output "secure-cred: $Path locked to SYSTEM and Administrators"
-exit 0

@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  SECURITY: stored passwords are protected from other SD users.
+           * On installs made before this, every SD user could WRITE to the
+             file SD keeps account passwords in.  No password is stored there
+             - SD keeps a scrambled verifier, and that cannot be turned back
+             into a password - but being able to REPLACE one was enough: a
+             user could put in a verifier for a password of their own
+             choosing and then sign in as somebody else, including through
+             the API.
+           * The installer was always meant to lock that file down and never
+             did.  The step ran, reported nothing, and had no effect, because
+             of a quoting fault in how it was called.  Nothing in the install
+             looked wrong.
+           * IF YOU HAVE ALREADY INSTALLED SD, REINSTALLING IS WHAT FIXES IT.
+             You can check without reinstalling: from an ordinary (not
+             administrator) PowerShell prompt, run
+                 icacls "C:\ProgramData\SD\sdsys\$CRED"
+             If that prints permissions, the file is still open.  If it says
+             "Access is denied", it is protected, which is what you want.
+           * Nothing you use day to day changes.  SET.PASSWORD still works
+             for administrators, and API sign-in is unaffected.
+
 17 Aug 26  SET.PASSWORD can be reached at last, and administrators have it.
            * An SD account can now be given a password.  The command existed
              and no VOC pointed at it, so there was no way to type it.

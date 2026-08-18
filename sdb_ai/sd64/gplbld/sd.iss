@@ -312,31 +312,12 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-audit.ps1"" -Path ""{#DataDir}\sdsys\audit"""; \
     Flags: runhidden; StatusMsg: "Making the audit trail append-only..."
 
-; THE CREDENTIAL STORE, and it is locked HARDER than the audit trail.
-;
-; Same ordering rule as above and for the same reason - after the icacls, or
-; inheritance puts the data tree's Modify back.  The difference is who is left
-; with access: the audit trail grants sdusers append-only so SD can write it as
-; the user, and this grants sdusers NOTHING AT ALL.
-;
-; WHAT IT PREVENTS IS WRITING, NOT READING.  $CRED holds a per-account salt and
-; an Argon2 verifier, never a password.  Inherited Modify would let any SD user
-; OVERWRITE another account's verifier with one derived from a password they
-; chose, and then authenticate through the API as that account - a straight
-; privilege escalation, where reading an Argon2 verifier is worth little.
-;
-; It stays reachable by everything that needs it: API sessions are forked by
-; sdwind, which runs as LocalSystem, and SET.PASSWORD is an administration verb
-; run from an elevated session.  PROJECT_STATUS.md 7 step 6.
-;
-; THE PATH IS SINGLE QUOTED AND MUST STAY THAT WAY.  Every other entry
-; here quotes paths with doubled double-quotes; this one cannot, because
-; PowerShell EXPANDS $CRED inside a double-quoted string.  The variable is
-; undefined, so -Path would silently become ...\sdsys\ - the credential
-; store left wide open, with the step reporting success.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-cred.ps1"" -Path '{#DataDir}\sdsys\$CRED'"; \
-    Flags: runhidden; StatusMsg: "Locking the credential store..."
+; THE CREDENTIAL STORE IS NOT LOCKED HERE.  It is locked from the Code section,
+; by SecureCredStore, called at ssPostInstall.  MOVED OUT OF THIS SECTION
+; 17 Aug 2026 because a Run entry discards the exit code, and this is the one
+; step whose silent failure is a privilege escalation rather than a degraded
+; install.  The reasoning, and what the entry here got wrong for its whole
+; life, are on that function.
 
 ; THE ELEVATION HELPER'S LOG, and it must exist before the helper ever runs.
 ; sd-elevate.ps1 logs only if this file is already there, precisely so that a
@@ -883,6 +864,82 @@ begin
   Result := Code;
 end;
 
+{ LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
+  happen.  PROJECT_STATUS.md 7 step 6.
+
+  WHAT IT PREVENTS IS WRITING, NOT READING.  $CRED holds a per-account salt
+  and an Argon2 verifier, never a password.  The data tree grants sdusers
+  Modify, and inherited onto the credential store that lets any SD user
+  OVERWRITE another account's verifier with one derived from a password they
+  chose, then authenticate through the API as that account - a straight
+  privilege escalation, where reading an Argon2 verifier is worth little.
+  It stays reachable by everything that needs it: API sessions are forked by
+  sdwind, which runs as LocalSystem, and SET.PASSWORD is an administration
+  verb run from an elevated session.
+
+  IT MUST RUN AFTER THE DATA-TREE icacls, or inheritance puts that Modify
+  straight back.  ssPostInstall is after the whole Run section, so that
+  ordering is structural here rather than a rule about where to put a line.
+
+  THE PATH IS DOUBLE QUOTED, LIKE EVERY OTHER SCRIPT ARGUMENT IN THIS FILE.
+  CORRECTED 17 Aug 2026, and the comment it replaces had been wrong since the
+  step was written.  That comment said the path had to be SINGLE quoted
+  because "PowerShell EXPANDS $CRED inside a double-quoted string", leaving
+  -Path as ...\sdsys\ with the step reporting success.
+
+  THAT IS TRUE OF -Command AND FALSE OF -File, AND THIS IS -File.  Measured
+  17 Aug 2026, driving powershell.exe from a batch file so the command line
+  reaches it as raw as Inno's does, with a probe script that printed its own
+  argument:
+
+    -File    -Path '...\sdsys\$CRED'   ->  ['...\sdsys\$CRED']  151 chars
+    -File    -Path "...\sdsys\$CRED"   ->  [...\sdsys\$CRED]    149 chars
+    -Command -Path "...\sdsys\$CRED"   ->  [...\sdsys\]         144 chars
+
+  So -File never runs the argument through the expression parser: it neither
+  expands $CRED nor strips single quotes, and the shipped single quotes
+  arrived as part of the value.  Test-Path then failed and secure-cred.ps1
+  exited 2 saying "does not exist - nothing secured" - correctly, on a path
+  that really did not exist.  The escape the status file proposed instead,
+  a backtick before the $, is wrong for the same reason: -File delivers the
+  backtick literally too.
+
+  AND THE EXIT CODE IS CHECKED, which is why this is here and not in Run.
+  The step was copied from secure-audit.ps1, including its deliberate absence
+  of a check - but that rationale does not carry across.  A missed audit ACL
+  leaves an editable trail, which is the pre-16-Aug behaviour; a missed
+  credential ACL leaves an escalation open, and it did, silently, for a whole
+  session.  A Run entry discards the exit code (this file records the same
+  mistake being made about the OpenSSH entry), so checking it means Exec. }
+function SecureCredStore: String;
+var
+  Code: Integer;
+  Ps, Script, Store: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-cred.ps1');
+  Store := ExpandConstant('{#DataDir}\sdsys\$CRED');
+
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '" -Path "' + Store + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+
+  if Code = 0 then
+    Exit;
+
+  { NAMED, NOT BURIED.  Anything other than 0 means other SD users can still
+    overwrite each other's stored credentials, so the one thing this must not
+    do is finish quietly.  The recovery is the same script the installer
+    itself ran, so the user gets the same code path rather than a hand-built
+    icacls line that could grant something subtly different. }
+  Result := 'The credential store was NOT locked (code ' + IntToStr(Code) + ').  Until it is, any SD ' +
+            'user can overwrite another account''s stored password and then sign in as them. ' +
+            'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10#13#10;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
@@ -890,9 +947,18 @@ var
   SshMsg: String;
   AdoptCode: Integer;
   AccountMsg: String;
+  CredMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
+    { THE CREDENTIAL STORE GOES FIRST, ahead of even the firewall.  It is the
+      only step here that closes a hole rather than configuring something, and
+      AdoptAccount below is the install's own first writer into the data tree
+      as an elevated process - so locking before it runs means the store is
+      never open while an account is being made.  It needs no ordering against
+      the Run section beyond being after it, which ssPostInstall guarantees. }
+    CredMsg := SecureCredStore;
+
     { Before the silent-install exit below: the work happens either way, and it
       is only the message about it that a silent install skips.  The firewall
       goes first - it decides who can reach the server at all, and the two
@@ -959,6 +1025,11 @@ begin
       SD has accounts rather than accounts and users (docs/TCL_VERBS.md), so
       CREATE.ACCOUNT IS the account-creation interface. }
     MsgBox('SD is installed.' + #13#10#13#10 +
+           { EMPTY ON EVERY HEALTHY INSTALL, and first when it is not.  This is
+             the one line in the box that reports a hole rather than a setting,
+             so it is read before the sign-out instruction rather than after
+             three paragraphs the reader already skimmed on the first page. }
+           CredMsg +
            'You have been added to the "sdusers" group, which is what grants ' +
            'access to the SD database.' + #13#10#13#10 +
            'Windows only applies group membership when you sign in, so you must ' +
