@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+17 Aug 26  Queries against a directory file now match ids case insensitively.
+           * SELECT and LIST against a DIRECTORY file now match a record id
+             whatever case you type it in, which is how Windows treats the
+             file names those ids are:
+                 SELECT BP WITH @ID = "sue"      finds record SUE
+           * This never worked before.  SD asks itself whether it is running
+             on Windows, and on this port it was answering NO, so the code
+             that does case insensitive matching was never reached.
+           * DYNAMIC FILES ARE UNCHANGED and stay case sensitive unless the
+             file itself is marked otherwise, so nothing you already rely on
+             changes:
+                 SELECT VOC WITH @ID = "who"     still finds nothing
+           * SYSTEM(91) now answers 1 rather than 0.  If you have written a
+             program that asks it, it will start telling the truth.
+
 17 Aug 26  Record ids in directory files are no longer case sensitive.
            * Windows treats SUE and sue as the same file, but SD did not, so
              for a DIRECTORY file it could believe there were two records
