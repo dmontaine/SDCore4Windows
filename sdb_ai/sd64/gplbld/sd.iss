@@ -312,6 +312,32 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-audit.ps1"" -Path ""{#DataDir}\sdsys\audit"""; \
     Flags: runhidden; StatusMsg: "Making the audit trail append-only..."
 
+; THE CREDENTIAL STORE, and it is locked HARDER than the audit trail.
+;
+; Same ordering rule as above and for the same reason - after the icacls, or
+; inheritance puts the data tree's Modify back.  The difference is who is left
+; with access: the audit trail grants sdusers append-only so SD can write it as
+; the user, and this grants sdusers NOTHING AT ALL.
+;
+; WHAT IT PREVENTS IS WRITING, NOT READING.  $CRED holds a per-account salt and
+; an Argon2 verifier, never a password.  Inherited Modify would let any SD user
+; OVERWRITE another account's verifier with one derived from a password they
+; chose, and then authenticate through the API as that account - a straight
+; privilege escalation, where reading an Argon2 verifier is worth little.
+;
+; It stays reachable by everything that needs it: API sessions are forked by
+; sdwind, which runs as LocalSystem, and SET.PASSWORD is an administration verb
+; run from an elevated session.  PROJECT_STATUS.md 7 step 6.
+;
+; THE PATH IS SINGLE QUOTED AND MUST STAY THAT WAY.  Every other entry
+; here quotes paths with doubled double-quotes; this one cannot, because
+; PowerShell EXPANDS $CRED inside a double-quoted string.  The variable is
+; undefined, so -Path would silently become ...\sdsys\ - the credential
+; store left wide open, with the step reporting success.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-cred.ps1"" -Path '{#DataDir}\sdsys\$CRED'"; \
+    Flags: runhidden; StatusMsg: "Locking the credential store..."
+
 ; THE ELEVATION HELPER'S LOG, and it must exist before the helper ever runs.
 ; sd-elevate.ps1 logs only if this file is already there, precisely so that a
 ; missing one means "no logging" rather than "a log created with the data
