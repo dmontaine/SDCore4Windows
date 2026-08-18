@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Aug 26  Directory files are opened DHF_NOCASE unconditionally
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -526,9 +527,28 @@ int16_t get_file_entry(char* filename,
     {
 //     fptr->params.modulus = 0;
 //     fptr->flags = 0;
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
+
+      /* 17 Aug 26  Unconditional on Windows, where it used to sit under
+         CASE_INSENSITIVE_FILE_SYSTEM - a macro this tree never defines, and
+         nor does sdb64.  A directory file's record ids ARE file names, and
+         NTFS resolves SUE and sue to the same file, so without this SD takes
+         two record locks (op_lock.c) and two transaction cache entries
+         (txn.c) on what is one file.  The platform is not conditional here,
+         so neither is this: CLAUDE.md, no ifdef branches to keep Linux
+         building.
+
+         NOTHING IS PERSISTED BY THIS.  Directory files have no header - that
+         is what header == NULL means - so the flag lives only in the shared
+         FILE_ENTRY.  Dynamic files take theirs from disk at the bottom of
+         this if, and are untouched.
+
+         THE OTHER EIGHT SITES OF THAT MACRO ARE A DIFFERENT STRATEGY AND ARE
+         DELIBERATELY LEFT OFF - PROJECT_STATUS.md 7 step 8.  They normalise
+         paths and ids to UPPER case so that case-sensitive comparisons agree
+         with the file system; this flag instead makes the comparison itself
+         case insensitive.  Both solve the same problem and only one of them
+         can be right, and 5.12 chose lower case. */
       fptr->flags |= DHF_NOCASE;
-#endif
     } else {
       fptr->params.modulus = header->params.modulus;
       fptr->params.min_modulus = header->params.min_modulus;
