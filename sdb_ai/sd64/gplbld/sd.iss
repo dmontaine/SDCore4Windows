@@ -914,6 +914,74 @@ begin
   Result := Code;
 end;
 
+{ LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did
+  not happen.  PROJECT_STATUS.md 7 step 7.
+
+  WHAT IT PROTECTS.  SDSYS OS.USERS names the accounts allowed SH, one record
+  per account.  CPROC reads it from the USER'S OWN process when they type SH,
+  so ordinary users must be able to READ it - which is the difference from the
+  credential store, where they get nothing at all.  What they must never have
+  is WRITE: a user who can add their own name grants themselves a shell.
+
+  SO THE ACL IS THE ENTIRE CONTROL, exactly as it is for $CRED, and it fails
+  the same way if this step does not run - silently, with the list writable by
+  the people it exists to restrain.  That is why this is here and not in [Run]:
+  the exit code is checked.
+
+  TWO OBJECTS, TWO CALLS.  The dictionary is locked as well.  It enforces
+  nothing - CPROC reads the flags positionally, rec<1> and rec<2> - but an
+  administrator reads the list THROUGH that dictionary, and a user able to
+  redefine SH to point at another field could make LIST OS.USERS show
+  something other than the truth.  Called once per path rather than passing
+  both, because -File binds a comma-joined argument in ways that are worth not
+  depending on.
+
+  IT MUST RUN AFTER THE DATA-TREE icacls, like the credential store, and
+  ssPostInstall is after the whole [Run] section. }
+{ Locking one object, so SecureOsUsers can call it twice.  A separate function
+  because Inno's Pascal Script has NO NESTED FUNCTIONS - declaring one inside
+  another is "'BEGIN' expected" at the inner declaration, which does not name
+  the cause. }
+function LockOsUsersPath(Ps, Script, Target: String; var Code: Integer): Boolean;
+begin
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '" -Path "' + Target + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Result := (Code = 0);
+end;
+
+function SecureOsUsers: String;
+var
+  Code: Integer;
+  Ps, Script, Store, Dict, Failed: String;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-osusers.ps1');
+  Store := ExpandConstant('{#DataDir}\sdsys\OS.USERS');
+  Dict := ExpandConstant('{#DataDir}\sdsys\OS.USERS.DIC');
+
+  Failed := '';
+  if not LockOsUsersPath(Ps, Script, Store, Code) then
+    Failed := Store
+  else if not LockOsUsersPath(Ps, Script, Dict, Code) then
+    Failed := Dict;
+
+  if Failed = '' then
+    Exit;
+
+  { NAMED, NOT BURIED, for the same reason the credential store is: a list that
+    anyone can edit is not a permission list, and nothing else in the install
+    would reveal it. }
+  Result := 'The shell permission list was NOT locked (code ' + IntToStr(Code) + '). ' +
+            'Until it is, any SD user can add themselves to it and obtain a command shell. ' +
+            'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
+end;
+
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
   happen.  PROJECT_STATUS.md 7 step 6.
 
@@ -999,6 +1067,7 @@ var
   AccountMsg: String;
   CredMsg: String;
   DenyMsg: String;
+  OsuMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -1009,6 +1078,12 @@ begin
       never open while an account is being made.  It needs no ordering against
       the Run section beyond being after it, which ssPostInstall guarantees. }
     CredMsg := SecureCredStore;
+
+    { Beside the credential store and for the same reason: both are ACLs that
+      are the whole of a control, and both fail silently if the step does not
+      run.  Order between them does not matter - different files, no shared
+      state - so it goes second simply because the escalation is the graver. }
+    OsuMsg := SecureOsUsers;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
       accounts rather than configuring the server, and it needs nothing from
@@ -1089,6 +1164,7 @@ begin
              so it is read before the sign-out instruction rather than after
              three paragraphs the reader already skimmed on the first page. }
            CredMsg +
+           OsuMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a
              setting that is present. }

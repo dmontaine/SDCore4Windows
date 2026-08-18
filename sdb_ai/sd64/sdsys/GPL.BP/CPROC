@@ -32,6 +32,7 @@
 * 20240615 mab  mods for bootstrap builder
 * 20240330 mab restrict logto account to allowed users
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 17 Aug 26 Windows port - SH is permitted by SDSYS OS.USERS, not by elevation alone
 * 13 Aug 26 Windows port - LOGTO SDSYS tests K$ADMINISTRATOR; ACC$GROUP test removed
 * 13 Aug 26 Windows port - LOGTO authorised by the target's ACC$USERS grant
 * 14 Aug 26 Windows port - both reversed.  LOGTO SDSYS requires an ELEVATED
@@ -3408,14 +3409,59 @@ os.command:
    * Require administrator and reject shell metacharacters in OS commands.
    * os.execute os.command.text
    deffun valid_shell_cmd(cmd) calling '!valid_shell_cmd'
-   if not(kernel(K$ADMINISTRATOR, -1)) then
-      display sysmsg(2001) ;* Command requires administrator privileges
+
+* 17 Aug 26 Windows port - SDSYS OS.USERS, PROJECT_STATUS.md 7 step 7.
+*
+*   THE GATE ABOVE WAS ENFORCED BACKWARDS AND SECTION 8 SAYS SO.  It admits
+*   only K$ADMINISTRATOR, which is IsElevated(), and an ssh session can never
+*   be elevated - so the programmers who need a shell were the one group that
+*   could never have one, while OS.EXECUTE from a program stayed ungated for
+*   everybody.  The visible control was denied to the people who needed it and
+*   the capability it guards was open to those who did not.
+*
+*   OS.USERS names the accounts allowed one.  One record per account, keyed by
+*   the account name; field 1 is SH and field 2 is OS.EX, each "yes" or
+*   anything else.  An administrator edits it with ED from SDSYS, which needs
+*   elevation to enter, and the file is read-only to sdusers on disk
+*   (gplbld/secure-osusers.ps1) - so a user cannot add their own name.  THAT
+*   ACL IS THE WHOLE OF THE PROTECTION; without it this is decoration.
+*
+*   MISSING FILE OR MISSING RECORD MEANS NO, which is the behaviour before this
+*   existed and the safe direction.  It is the OPPOSITE of the tier lists in
+*   NEWVOC, where a missing record means the full VOC (CREATEA) - do not carry
+*   that convention across.
+*
+*   ELEVATION STILL PASSES ON ITS OWN, and must: an administrator at the
+*   console has to keep SH whatever the file says, or an empty OS.USERS locks
+*   the machine's own administrator out of the shell - the same lockout ADOPT
+*   caused with sdsshonly on 15 Aug 2026 (CREATEA).
+*
+*   @logname, NOT the account: the permission belongs to the person, so it does
+*   not change when they LOGTO somewhere else.
+   sh.listed = @false
+   openpath @sdsys:@ds:'OS.USERS' to sh.f then
+      read sh.rec from sh.f, @logname then
+         sh.listed = (upcase(trim(sh.rec<1>)) = 'YES')
+      end
+   end
+
+   if not(kernel(K$ADMINISTRATOR, -1)) and not(sh.listed) then
+      display sysmsg(10053, @logname) ;* %1 is not permitted to use the shell
       return
    end
-   if not(valid_shell_cmd(os.command.text)) then
-      display sysmsg(5240, 2) ;* Error xx executing operating system command
-      return
+
+* 17 Aug 26 Windows port - THE METACHARACTER BAN IS LIFTED FOR A LISTED
+*   ACCOUNT, owner's ruling.  Being in OS.USERS means a real shell: pipes,
+*   redirection and chaining, which is most of what a programmer needs one for.
+*   An ELEVATED session that is not listed keeps the ban exactly as before, so
+*   this adds capability and regresses nothing.
+   if not(sh.listed) then
+      if not(valid_shell_cmd(os.command.text)) then
+         display sysmsg(5240, 2) ;* Error xx executing operating system command
+         return
+      end
    end
+
    os.execute os.command.text
    * --------------------
    if status() then
