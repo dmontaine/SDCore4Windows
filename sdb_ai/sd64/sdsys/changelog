@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  The default terminal type is now VT100, not LINUX.
+           * Every account's VOC holds a LOGIN paragraph that sets the
+             terminal type when you sign in.  It said LINUX, inherited from
+             the Linux original; on Windows the sensible default is VT100.
+           * TERM on its own reports what you are using.  It should now say
+                 Device    : vt100
+           * You can still choose your own - "TERM WYSE60", say - and you can
+             edit the LOGIN paragraph in your VOC if you want a different
+             default for one account.
+           * EXISTING ACCOUNTS KEEP LINUX until their VOC is updated, which
+             happens when you answer Y to "Update VOC to new release?" or run
+             UPDATE.ACCOUNT.  The release number changed in this same version,
+             so you will be asked anyway on your next sign-in.
+
 18 Aug 26  The release is W1.0-0.  The login header now reads "version W1.0-0".
            * The W is for Windows.  1.0-1 and 1.0-2 were releases of SD this
              port was built from, not releases of the port itself.
