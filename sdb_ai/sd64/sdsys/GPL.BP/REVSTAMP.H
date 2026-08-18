@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * 
 * START-HISTORY:
+* rev W1.0-0 18 Aug 26 Windows port - SD release string is W1.0-0
 * rev 1.0-2 see sdsys/changelog
 * rev 1.0-1 Add back PROCREAD PROCWRITE
 * rev 0.9-3 Nov 25 move voc back to dynamic file 
@@ -40,7 +41,7 @@
 $define MAJOR.REV      1
 $define MINOR.REV      0
 $define BUILD          2
-$define SD.REV.STAMP   "1.0-2"
+$define SD.REV.STAMP   "W1.0-0"
 
 $define SD.COPYRIGHT.YEAR "2007"
 

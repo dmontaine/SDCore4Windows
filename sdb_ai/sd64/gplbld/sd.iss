@@ -27,7 +27,7 @@
   #define Stage "..\..\stage"
 #endif
 #ifndef AppVer
-  #define AppVer "1.0-2"
+  #define AppVer "W1.0-0"
 #endif
 
 #define AppName    "SD"

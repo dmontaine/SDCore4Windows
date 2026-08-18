@@ -5,6 +5,17 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  The release is W1.0-0.  The login header now reads "version W1.0-0".
+           * The W is for Windows.  1.0-1 and 1.0-2 were releases of SD this
+             port was built from, not releases of the port itself.
+           * IF YOU ALREADY HAVE AN OLDER TREE INSTALLED, signing in will ask
+             "Your VOC is at release level 1.0-2 / Update VOC to new release?"
+             Answer Y.  It compares the two for difference, not for which is
+             newer.
+           * The installer is now sd-setup-W1.0-0.exe.
+           * Nothing else moved.  The QM revision SD reports for file and
+             compatibility purposes is still 2.6-6.
+
 18 Aug 26  Who may use SH is now a list you keep, not a matter of elevation.
            * SH used to need an elevated session, and an ssh session can never
              be elevated - so programmers, the people who actually need a
