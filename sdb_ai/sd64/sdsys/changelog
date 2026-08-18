@@ -5,6 +5,33 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  Who may use SH is now a list you keep, not a matter of elevation.
+           * SH used to need an elevated session, and an ssh session can never
+             be elevated - so programmers, the people who actually need a
+             shell, were the ones who could never have one.
+           * Name them instead.  From SDSYS:
+                 ED OS.USERS don
+             one record per person, keyed by the name they sign in with, NOT
+             the account name.  Field 1 is SH and field 2 is OS.EX; put "yes"
+             in field 1 to give that person a shell.  A missing record, or a
+             missing file, means no.
+           * The name is the LOGIN name.  It follows the person, so it does
+             not change when they LOGTO somewhere else.
+           * ONLY AN ADMINISTRATOR CAN EDIT THE LIST.  It is read-only to
+             everybody else on disk, which is the whole of what stops a user
+             granting themselves a shell.  Do not loosen those permissions.
+           * A LISTED PERSON GETS A REAL SHELL - pipes, redirection and
+             chaining all work:
+                 SH dir | more
+             Anyone not on the list who reaches SH by being elevated still
+             gets the restricted form, which rejects those characters.
+           * An elevated session keeps SH whatever the list says, deliberately,
+             so an empty list cannot lock the machine's own administrator out.
+           * FIELD 2, OS.EX, IS STORED BUT NOT YET ENFORCED.  It is there for
+             a later release that will gate OS.EXECUTE from inside a program.
+             Until then, anyone who can write and run SDBasic can still reach
+             the operating system that way, whatever field 2 says.
+
 17 Aug 26  Signing in over ssh now takes you straight into SD.
            * An ssh session lands in SD instead of at a Windows prompt.  That
              applies to everyone who may connect, administrators included:
