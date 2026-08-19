@@ -104,6 +104,14 @@ $probeSrc = @'
 * ZZKEYPROBE - what the console sends for each key.
 * Written by gplbld/probe-keys.ps1.  Safe to delete.
    print @(-1) :
+* @(0,0) IS NOT A REDUNDANT CURSOR MOVE - it is what turns screen pagination
+* off.  A cursor POSITIONING call does that; a special function like @(-1) does
+* not, which is why clearing the screen above is not enough.  Without it a long
+* probe session hits "Press RETURN to continue" part way through the byte
+* listing, and the key pressed to dismiss it is itself a keystroke - so the
+* instrument would start interfering with what it is measuring.  Measured 19 Aug
+* 2026: the prompt appeared after 17 bytes in a PowerShell window.
+   print @(0,0) :
    print 'ZZKEYPROBE - raw key bytes'
    print ''
    print '   terminal type  = ' : @term.type
