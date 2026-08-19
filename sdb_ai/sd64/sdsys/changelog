@@ -5,6 +5,28 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  Backspace works inside the full-screen editors, and the arrow keys
+           no longer type themselves into your record.
+           * IN SED AND THE UPDATE.RECORD SCREENS, Backspace deleted the
+             character to the RIGHT of the cursor instead of the one to the
+             left.  Those editors read the keyboard directly and carry their
+             own key tables, so the fix that repaired Backspace at the command
+             prompt did not reach them.
+           * WHY.  The table said the DEL byte means "Delete".  On a Windows
+             console DEL is what the Backspace key sends, and the Delete key
+             sends something else entirely.  Backspace now means Backspace, and
+             the Delete key has its own entry, so both work and neither has
+             taken the other's job.
+           * WORSE, IN UPDATE.RECORD THE ARROW KEYS WERE NOT RECOGNISED AT ALL,
+             and an unrecognised key is not ignored - its characters were
+             entered into the field.  Pressing the right arrow put a "C" in
+             your data.  All four arrows now work, as do Home, End, Page Up,
+             Page Down, Insert and Delete.
+           * ED is unaffected and always was: it is the line editor and reads
+             whole lines, so it already had a working Backspace.
+           * SED reads its key assignments from a file, so a site that wants
+             the old behaviour back can still set it.
+
 19 Aug 26  The arrow keys work, and the default terminal type is now WINDOWS.
            * LEFT, RIGHT, UP and DOWN DID NOTHING in cmd, PowerShell or
              Windows Terminal.  The key was discarded and the cursor stayed

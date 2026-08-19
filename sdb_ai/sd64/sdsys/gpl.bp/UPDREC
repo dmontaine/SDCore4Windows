@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - char(127) is K$BACKSPACE, not K$DELETE, and the
+*            terminfo escape sequences are bound at last: the arrows were
+*            unbound and typed themselves into the record.
+*            PROJECT_STATUS.md 5.19.
 * 18 Aug 26 Windows port - the VOC keyword read folds as typed, then lower, then
 *            upper.  It was upcase-only, so a lower-case keyword id could
 *            never be found.  PROJECT_STATUS.md 5.12 (b).
@@ -2413,7 +2417,12 @@ set.bindings:
    n = K$EXPAND    ; c = char(24):'='      ; gosub bind  ;* Ctrl-X =
    n = K$PASTE     ; c = char(25)          ; gosub bind  ;* Ctrl-Y
    n = K$UP        ; c = char(26)          ; gosub bind  ;* Ctrl-Z
-   n = K$DELETE    ; c = char(127)         ; gosub bind  ;* Del
+* 19 Aug 26 Windows port - DEL IS BACKSPACE HERE, NOT DELETE.  Every Windows
+*   console sends DEL for the Backspace key (measured, all three hosts), so
+*   binding 127 to K$DELETE made Backspace delete FORWARDS inside every
+*   UPDATE.RECORD screen.  The real Delete key sends ESC [ 3 ~ and is bound
+*   below with the other terminfo sequences.  PROJECT_STATUS.md 5.19.
+   n = K$BACKSPACE ; c = char(127)         ; gosub bind  ;* DEL - Backspace
    n = K$MARK      ; c = char(27):'.'      ; gosub bind  ;* Esc-.
    n = K$TOP       ; c = char(27):'<'      ; gosub bind  ;* Esc-<
    n = K$BOTTOM    ; c = char(27):'>'      ; gosub bind  ;* Esc-<
@@ -2434,6 +2443,37 @@ set.bindings:
    n = K$DELETE    ; c = char(212)                           ; gosub bind
    n = K$PAGE.UP   ; c = char(207)                           ; gosub bind
    n = K$PAGE.DOWN ; c = char(208)                           ; gosub bind
+
+* 19 Aug 26 Windows port - THE ESCAPE SEQUENCES A REAL TERMINAL SENDS, which
+*   this table did not have at all.  The codes above - char(203) upwards - are
+*   an 8-bit terminal convention that nothing on this platform emits, so every
+*   arrow key here was UNBOUND.  That is worse than a dead key: get.key walks
+*   the multi-character table, fails to match, and the bytes fall through as
+*   ordinary text, so pressing Right in an UPDATE.RECORD screen TYPED "C" INTO
+*   THE RECORD.  Measured before the change: field "AB", press Right, type X,
+*   save -> "CXAB".  PROJECT_STATUS.md 5.19.
+*   BOTH SPELLINGS OF EACH ARROW, and SED:4489 already does exactly this: a
+*   terminal sends ESC [ D in its ordinary state and ESC O D only in
+*   application cursor mode.  Nothing in SD sends smkx to ask for that mode
+*   (5.18), so ESC [ is the one that arrives here - but binding both costs
+*   nothing and covers a client that arrives already in it.
+   n = K$UP        ; c = char(27):'[A'                       ; gosub bind
+   n = K$DOWN      ; c = char(27):'[B'                       ; gosub bind
+   n = K$RIGHT     ; c = char(27):'[C'                       ; gosub bind
+   n = K$LEFT      ; c = char(27):'[D'                       ; gosub bind
+   n = K$UP        ; c = char(27):'OA'                       ; gosub bind
+   n = K$DOWN      ; c = char(27):'OB'                       ; gosub bind
+   n = K$RIGHT     ; c = char(27):'OC'                       ; gosub bind
+   n = K$LEFT      ; c = char(27):'OD'                       ; gosub bind
+*   The keypad block, same fault and same cure.  Names are the terminfo ones:
+*   khome, kend, kdch1, kich1, kpp, knp.  kich1 is the Insert key, and
+*   K$OVERLAY is what char(211) - the 8-bit Insert - is bound to above.
+   n = K$HOME      ; c = char(27):'[1~'                      ; gosub bind
+   n = K$OVERLAY   ; c = char(27):'[2~'                      ; gosub bind
+   n = K$DELETE    ; c = char(27):'[3~'                      ; gosub bind
+   n = K$END       ; c = char(27):'[4~'                      ; gosub bind
+   n = K$PAGE.UP   ; c = char(27):'[5~'                      ; gosub bind
+   n = K$PAGE.DOWN ; c = char(27):'[6~'                      ; gosub bind
 
    return
 

@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - char(127) is F.BACKSPACE, not F.DELETE, and the
+*            Delete key takes its own sequence ESC [ 3 ~.  Backspace deleted
+*            forwards on every Windows console.  PROJECT_STATUS.md 5.19.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -4494,8 +4497,20 @@ set.default.bindings:
    key.rec<-1> = '@[>'              ;* F.BOTTOM
    key.rec<-1> = '@[V':@VM:char(207)   ;* F.PAGE.UP
    key.rec<-1> = '@V':@VM:char(208)    ;* F.PAGE.DOWN
-   key.rec<-1> = '@D':@VM:char(127):@VM:char(212)  ;* F.DELETE
-   key.rec<-1> = '@H'               ;* F.BACKSPACE
+* 19 Aug 26 Windows port - BACKSPACE TAKES DEL, DELETE TAKES THE DELETE KEY.
+*   char(127) was bound to F.DELETE, so on every Windows console - all three
+*   send DEL for Backspace, measured - the Backspace key deleted FORWARDS.  The
+*   real Delete key sends ESC [ 3 ~ (kdch1) and was bound to nothing at all, so
+*   it fell through the multi-character matcher and typed its own bytes into the
+*   record.  Measured before the change: "AB", type X, press Backspace, save ->
+*   "XB" rather than "AB".  PROJECT_STATUS.md 5.19.
+*   THE TWO KEYS ARE DISTINCT BYTES on this platform - 127 and ESC [ 3 ~ - so
+*   nothing has to be shared and neither key loses its function.  A terminal
+*   that genuinely sends DEL for its Delete key gets Backspace instead; these
+*   are the shipped DEFAULTS and a site can rebind them, which is what the
+*   bindings file exists for.
+   key.rec<-1> = '@D':@VM:'@[[3~':@VM:char(212)  ;* F.DELETE
+   key.rec<-1> = '@H':@VM:char(127)              ;* F.BACKSPACE
    key.rec<-1> = '@K'               ;* F.KILL.LINE
    key.rec<-1> = '@X@S':@VM:'@XS'         ;* F.SAVE.RECORD
    key.rec<-1> = '@X@C':@VM:'@XC'         ;* F.QUIT
