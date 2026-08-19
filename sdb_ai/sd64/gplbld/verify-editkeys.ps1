@@ -203,8 +203,23 @@ end
     # -----------------------------------------------------------------------
     # UPDATE.RECORD.  The field starts as AB with the cursor before the A, in
     # insert mode - measured, typing XY into a field holding AB gives XYAB.
+    # THE BLOCK FORM IS NOT OPTIONAL.  Written as a single line -
+    #   open '..' to f then write .. ; print 'SEED=OK' end else print 'SEED=FAIL'
+    # - this COMPILES CLEAN and then fails at run time with "Unassigned variable
+    # END", because the inline THEN takes statements to the end of the line and
+    # the END is read as a variable.  A green compile is not evidence here.
     function Set-Seed([string]$id) {
-        $src = "* ZZEDKREC`n   open '$FILE' to f then write 'AB' to f,'$id' ; print 'SEED=OK' end else print 'SEED=FAIL'`nend`n"
+        $src = @"
+* ZZEDKREC - seed record for verify-editkeys.ps1.
+   open '$FILE' to f then
+      write 'AB' to f,'$id'
+      print 'SEED=OK'
+   end else
+      print 'SEED=FAIL'
+   end
+end
+"@
+        $src = $src -replace "`r`n", "`n"
         [IO.File]::WriteAllText((Join-Path $bp 'ZZEDKREC'), $src, (New-Object Text.UTF8Encoding $false))
         return (Invoke-SD ("`n" + (@('TERM 200,9999', 'BASIC BP ZZEDKREC', 'RUN BP ZZEDKREC', 'OFF') -join "`n") + "`n") 90)
     }
