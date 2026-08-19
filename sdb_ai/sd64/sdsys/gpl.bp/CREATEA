@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the account's BP VOC id is now bp; the name on disk was
+*           already bp.  $COMMAND.STACK is the last of the controls.  5.12 (b).
 * 19 Aug 26 Windows port - the account's VOC file is created as voc, and the
 *           SDSYS paths read here are accounts, newvoc and voc_template.  The VOC
 *           id stays VOC; 5.12 (a) is the name on disk.  PROJECT_STATUS.md 5.12.
@@ -785,7 +787,7 @@ make.account:
 * 20240308 mab add BP when creating new account
   * Create BP
 
-   fn = 'BP'
+   fn = 'bp'
    os.name = 'bp'
    descr = 'File for BASIC programs'
    dict = @false

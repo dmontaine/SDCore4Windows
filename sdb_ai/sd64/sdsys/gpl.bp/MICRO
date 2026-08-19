@@ -14,6 +14,13 @@
 * along with this program; if not, write to the Free Software Foundation,
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
+* START-HISTORY:
+* 19 Aug 26 Windows port - THE 'is this a BP file' TEST IS A COMPARISON, NOT A LOOKUP,
+*           so no fold reached it and the Compile? offer silently stopped appearing
+*           once the file was bp.  Live since 5.12 (a) made the per-account file
+*           lower case; the typed side is upcase()d now.  PROJECT_STATUS.md 5.12.
+* END-HISTORY
+*
 PROGRAM MICRO
 
 $internal
@@ -131,7 +138,7 @@ compile_record_query:
         if DictText <> "DICT" then
 		    prompt ""
 		    response = ""
-		    if InfileName[-2,2] = "BP" then
+		    if upcase(InfileName[-2,2]) = "BP" then
  		       loop
  			       crt @(0,8) : @(-3) : "Compile " : InfileName : " " : InRecordName
 			       crt @(3,9) : "<Y>es, <N>o : " :

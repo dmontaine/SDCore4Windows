@@ -288,21 +288,25 @@ try {
     # is stored - and it says it however the query was cased.  Typing the OLD
     # name and being answered in the new one is the rename, demonstrated and not
     # inferred.  -cmatch: the whole assertion is the case of the echo.
-    $ctUc = Invoke-SD @('CT VOC $SAVEDLISTS', 'CT VOC $HOLD')
+    $ctUc = Invoke-SD @('CT VOC $SAVEDLISTS', 'CT VOC $HOLD', 'CT VOC BP')
     Note 'typing $SAVEDLISTS is answered as $savedlists' $true `
          ($ctUc -cmatch '(?m)^VOC \$savedlists\s*$')
     Note 'typing $HOLD is answered as $hold' $true `
          ($ctUc -cmatch '(?m)^VOC \$hold\s*$')
-    # THE CONTROLS, and they are what say this is one file at a time rather than
-    # a sweep: the same query shape against an id that has NOT moved must still
-    # be answered in upper case.  $HOLD was one of these until this cycle; what
-    # is left is $COMMAND.STACK and BP, and when one of those moves it takes its
-    # control with it.
-    $ctLc = Invoke-SD @('CT VOC $command.stack', 'CT VOC bp')
+    # 19 Aug 26 - BP MOVED THIS CYCLE AND TOOK ITS CONTROL WITH IT, exactly as
+    # the note below said it would.  It is an assertion now, not a control.
+    Note 'typing BP is answered as bp' $true `
+         ($ctUc -cmatch '(?m)^VOC bp\s*$')
+    # THE CONTROL, and it is what says this is one file at a time rather than a
+    # sweep: the same query shape against an id that has NOT moved must still be
+    # answered in upper case.  $HOLD was one of these until 18 Aug and BP until
+    # 19 Aug; $COMMAND.STACK IS THE LAST ONE LEFT.  When it moves, this section
+    # loses its ability to tell a rename from a sweep - so whatever moves it
+    # must bring a replacement, and the obvious candidate is a record made by
+    # the test itself rather than a shipped id.
+    $ctLc = Invoke-SD @('CT VOC $command.stack')
     Note 'control: typing $command.stack is answered as $COMMAND.STACK' $true `
          ($ctLc -cmatch '(?m)^VOC \$COMMAND\.STACK\s*$')
-    Note 'control: typing bp is answered as BP' $true `
-         ($ctLc -cmatch '(?m)^VOC BP\s*$')
 
     # -----------------------------------------------------------------------
     Write-Output ''
@@ -767,6 +771,92 @@ end
         # Both records and the program go, whether or not the checks passed.
         $null = Invoke-SD @('DELETE VOC zzprobev', 'DELETE VOC zzprobek')
         Remove-Item -LiteralPath (Join-Path $bp8[0].FullName $mkp) -Force -ErrorAction SilentlyContinue
+    }
+
+    # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 9. THE OBJECT FILE NAME, WHICH IS WHAT BP HAD TO MOVE BEHIND =========='
+    Write-Output '  BASIC used to build the object file name from the TOKEN, so "BASIC bp X"'
+    Write-Output '  asked for bp.OUT - and CREATE.FILE writes the VOC id as typed while upper'
+    Write-Output '  casing the directory.  No case of the three-case fold reaches a MIXED-case'
+    Write-Output '  id, so the next "BASIC BP Y" could never open it and never will again.'
+    Write-Output '  BASIC now names it from the VOC record that answered, suffix and all.'
+
+    # THIS SECTION HAS TO START FROM NO OBJECT FILE AT ALL.  With one already
+    # there, BASIC's open succeeds and the create branch - the only place the
+    # name is built - is never reached, so the section would pass without
+    # measuring anything.  Removing it is safe: it holds compiled objects that
+    # any BASIC re-creates, and Remove-Probes tidies the new one afterwards.
+    $null = Invoke-SD @('DELETE.FILE bp.out FORCE', 'DELETE.FILE bp.OUT FORCE',
+                        'DELETE.FILE BP.OUT FORCE')
+    $leftover = @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -ieq 'bp.out' })
+    foreach ($l in $leftover) { Remove-Item -LiteralPath $l.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+    $script:hadObjDir = $false
+    Note 'the object file was cleared, so the create branch is reached' 0 `
+         @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
+           Where-Object { $_.Name -ieq 'bp.out' }).Count
+
+    $bp9 = @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
+             Where-Object { $_.Name -ceq 'bp' })
+    if ($bp9.Count -ne 1) {
+        Note 'section 9: the account has a lower-case bp to compile into' $true $false
+    } else {
+        $rd9 = ('ZZR' + $Tag).ToUpper()
+        $up9 = ('ZZU' + $Tag).ToUpper()
+
+        # THE READER USES EXACT-MATCH READS, and that is the whole instrument.
+        # CT would fold and answer for any spelling; a read of a VOC record does
+        # not fold at all, so these three say which id is actually stored.
+        $rd9Src = @'
+program zzreadout
+   open 'VOC' to voc.f else stop
+   read r from voc.f, 'bp.out' then print 'LOWER=YES' else print 'LOWER=NO'
+   read r from voc.f, 'bp.OUT' then print 'MIXED=YES' else print 'MIXED=NO'
+   read r from voc.f, 'BP.OUT' then print 'UPPER=YES' else print 'UPPER=NO'
+end
+'@
+        [IO.File]::WriteAllText((Join-Path $bp9[0].FullName $rd9),
+                                ($rd9Src -replace "`r`n", "`n"),
+                                (New-Object Text.UTF8Encoding $false))
+
+        # Compiling it IS the measurement: this is the compile that goes through
+        # the create branch, typed in LOWER case against a VOC id that is now bp.
+        $mk9 = Invoke-SD @("BASIC bp $rd9", "RUN bp $rd9")
+        Write-Output '  --- BASIC bp / RUN bp said: ---'
+        Write-Output $mk9
+
+        Note 'BASIC bp <x> created the object file as bp.out' $true `
+             ($mk9 -match 'LOWER=YES')
+        Note 'and NOT as the unreachable mixed-case bp.OUT'   $false `
+             ($mk9 -match 'MIXED=YES')
+        Note 'and not as BP.OUT either'                       $false `
+             ($mk9 -match 'UPPER=YES')
+
+        # THE REGRESSION ITSELF, and it is a different assertion from the one
+        # above: the failure was never in the compile that made the file, it was
+        # in the NEXT one, typed the other way.  "Data pathname 'BP.OUT' already
+        # exists" is the exact message it used to stop with.
+        $upSrc = @'
+program zzupperout
+   print 'UPPERCOMPILE=OK'
+end
+'@
+        [IO.File]::WriteAllText((Join-Path $bp9[0].FullName $up9),
+                                ($upSrc -replace "`r`n", "`n"),
+                                (New-Object Text.UTF8Encoding $false))
+
+        $u9 = Invoke-SD @("BASIC BP $up9", "RUN BP $up9")
+        Write-Output '  --- BASIC BP / RUN BP said: ---'
+        Write-Output $u9
+
+        Note 'BASIC BP <y> afterwards does not hit "already exists"' $false `
+             ($u9 -match 'already exists')
+        Note 'and it compiles and runs'                              $true `
+             ($u9 -match 'UPPERCOMPILE=OK')
+
+        Remove-Item -LiteralPath (Join-Path $bp9[0].FullName $rd9) -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $bp9[0].FullName $up9) -Force -ErrorAction SilentlyContinue
     }
 
     # -----------------------------------------------------------------------

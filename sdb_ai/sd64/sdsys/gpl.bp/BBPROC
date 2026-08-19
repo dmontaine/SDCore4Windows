@@ -25,6 +25,7 @@
 *
 *
 * START-HISTORY:
+* 19 Aug 26 Windows port - $include gpl.bp, the VOC id having moved.  5.12 (b).
 * 19 Aug 26 Windows port - the bootstrap now CREATES the SDSYS files in lower
 *           case - voc, accounts.dic, $hold.dic, $map, $map.dic, $ipc, dict.dic,
 *           dir_dict, voc.dic - and reads voc_template, gpl.bp and gpl.bp.out by
@@ -53,11 +54,11 @@ $catalog $BBPROC
 
 $flags cproc
 $flags trusted
-$include GPL.BP revstamp.h
+$include gpl.bp revstamp.h
 
-$include GPL.BP syscom.h
-$include GPL.BP int$keys.h
-$include GPL.BP header.h
+$include gpl.bp syscom.h
+$include gpl.bp int$keys.h
+$include gpl.bp header.h
 
 $include err.h
 $include keys.h

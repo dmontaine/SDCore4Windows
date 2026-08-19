@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - GPL.BP is gpl.bp.  5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -35,7 +36,7 @@
 program errgen
 $include err.h
 
-   openseq 'GPL.BP', 'ERRTEXT.H' to out.f else
+   openseq 'gpl.bp', 'ERRTEXT.H' to out.f else
       if status() then abort 'Cannot open BP errtext.h'
    end
    weofseq out.f

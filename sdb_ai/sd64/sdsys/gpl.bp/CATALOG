@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
 * rev 0.9.0 Jan 25 mab require admin priviliges for global catalog
 *                       and set owner : group to sdsys : sdusers on write
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -143,18 +144,18 @@ $define CAT_PCODE  3
          if not(selectinfo(0, sl$active)) then
             stop sysmsg(3020) ;* Program name or select list required
          end
-         file.name = "BP"
+         file.name = "bp"
          using.list = @true
 
       case no.names = 1
          if name(1) = '*' then
-            file.name = "BP"
+            file.name = "bp"
             catalogue.all = @true
          end else if selectinfo(0, sl$active) then
             file.name = name(1)
             using.list = @true
          end else
-            file.name = "BP"
+            file.name = "bp"
             call.name = upcase(name(1))
             program.name = name(1)
             if mode # CAT_PCODE and index(prefix.chars, call.name[1,1], 1) then

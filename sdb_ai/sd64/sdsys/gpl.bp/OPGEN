@@ -27,6 +27,7 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - GPL.BP is gpl.bp.  5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -41,7 +42,7 @@ program opgen
 *   openseq 'CSRC', 'opcodes.h' to in.f else stop 'Cannot open CSRC opcodes.h'
 *   openseq 'BP', 'OPCODES.H' to out.f else
    openseq './gplsrc/opcodes.h' to in.f else stop 'Cannot open gplsrc opcodes.h'
-   openseq 'GPL.BP', 'OPCODES.H' to out.f else
+   openseq 'gpl.bp', 'OPCODES.H' to out.f else
       if status() then stop 'Cannot open OPCODES.H'
    end
    weofseq out.f

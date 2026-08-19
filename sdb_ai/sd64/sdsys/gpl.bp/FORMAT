@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -49,7 +50,7 @@ $include err.h
 
 * ---------------  Step 1 -  Parse command
 
-   file.name = 'BP'
+   file.name = 'bp'
    case.option = @false
    using.list = @false
 

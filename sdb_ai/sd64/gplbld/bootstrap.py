@@ -278,7 +278,7 @@ def main():
             # while SDSYS has no credential.
             print('  writing the install dictionaries')
             sd(sdexe, env,
-               ['-internal', 'RUN', 'GPL.BP', 'WRITE_INSTALL_DICTS', 'NO.PAGE'])
+               ['-internal', 'RUN', 'gpl.bp', 'WRITE_INSTALL_DICTS', 'NO.PAGE'])
 
             print('  compiling the system (THIRD.COMPILE)')
             out = sd(sdexe, env, ['-internal', 'THIRD.COMPILE'])
@@ -287,7 +287,7 @@ def main():
             check_compile(out, 'THIRD.COMPILE', require_summary=False)
 
             print('  writing the real gcat/$CPROC')
-            sd(sdexe, env, ['-internal', 'BASIC', 'GPL.BP', 'CPROC'])
+            sd(sdexe, env, ['-internal', 'BASIC', 'gpl.bp', 'CPROC'])
         finally:
             print('  stopping SD')
             sd(sdexe, env, ['-stop'], expect_fail=True)

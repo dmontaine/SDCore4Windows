@@ -5,6 +5,57 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  The Backspace key works.
+           * IT DID NOTHING AT ALL in cmd, PowerShell or Windows Terminal, and
+             in PuTTY unless you had changed its "Backspace key" setting to
+             Control-H.  Typing simply carried on and the character stayed.
+           * WHY.  A terminal sends one of two bytes for Backspace - Control-H
+             or DEL - and SD accepted only whichever one the terminal type said
+             it would.  Every Windows console sends DEL; the terminal type SD
+             assumes when TERM is not set is vt100, which says Control-H.  So
+             the two never met.
+           * Choosing a different terminal type could not have helped: of the
+             62 definitions SD ships, 51 say Control-H and only xterm and linux
+             say DEL.  That is why vt100-w made no difference.
+           * SD now accepts BOTH bytes as Backspace whatever the terminal type,
+             so it works out of the box and you need change nothing.  A
+             terminal type that deliberately uses DEL for its Delete key - the
+             AccuTerm vt100-at definition does - still gets Delete.
+           * NOT FIXED YET, and it is the same family: inside the full-screen
+             editors (ED and the UPDATE.RECORD screens) Backspace on a terminal
+             that sends DEL still deletes forwards.  Those read the keyboard
+             directly and carry their own key tables.
+
+19 Aug 26  BASIC no longer creates an object file it can never open again.
+           * COMPILING WITH A LOWER-CASE FILE NAME USED TO POISON THE ACCOUNT.
+             "BASIC bp MYPROG" built the object file name from what you typed,
+             giving bp.OUT, while the directory on disk was made as BP.OUT.  SD
+             matches a name as typed, then lower, then upper - never a mixture
+             - so nothing could reach bp.OUT afterwards, and the next
+             "BASIC BP MYPROG" stopped with "Data pathname 'BP.OUT' already
+             exists".  Permanently: nothing cleared it but deleting the file.
+           * BASIC now names the object file after the VOC entry that actually
+             answered, and the .out suffix follows its case.  A file called bp
+             gets bp.out; a file called BP still gets BP.OUT, so nothing that
+             works today changes.
+           * IF YOU ALREADY HAVE ONE, delete it: DELETE.FILE bp.OUT FORCE, then
+             compile again.  FORCE is needed because DELETE.FILE asks about the
+             data and dictionary parts separately.
+
+19 Aug 26  The BP and GPL.BP entries in your VOC are now bp and gpl.bp.
+           * They join $hold, $savedlists and the commands.  BP.OUT and
+             GPL.BP.OUT moved with them.  As always, what you type does not
+             change: BASIC BP MYPROG, RUN BP MYPROG and LIST BP all work.
+           * EXISTING ACCOUNTS KEEP THEIR OWN SPELLING and go on working.  An
+             account created now gets bp.
+           * MICRO's "Compile?" prompt is back for lower-case file names.  It
+             decided by comparing the last two characters of the file name
+             against "BP", which stopped matching once the file was called bp,
+             so the offer silently disappeared.  It compares without regard to
+             case now.
+           * Still upper case, and next: VOC, NEWVOC, ACCOUNTS, MESSAGES,
+             SYSCOM, QFILE and $COMMAND.STACK.
+
 19 Aug 26  The system files are now lower case on disk.
            * SD's own files inside C:\ProgramData\SD\sdsys are named gpl.bp,
              newvoc, voc_template, messages, syscom, sd.voclib, accounts, bp,

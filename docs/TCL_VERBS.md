@@ -21,12 +21,12 @@ Since 18 Aug 2026 the VOC ids are `list`, `create.account` and so on
 comparison against OpenQM 2.6.6, which spells them that way. **It makes no
 difference to what you type** — SD tries a name as typed, then lower, then
 upper. What it changes is what SD prints back: `CT VOC LIST` answers
-`VOC list`. The file-pointer entries (`VOC`, `BP`, `NEWVOC`, `GPL.BP`,
-`ACCOUNTS`, `MESSAGES`, `SYSCOM`, `QFILE`) are deliberately still upper case —
-they move with the file names, §5.12 (a).
+`VOC list`. The file-pointer entries moved on 19 Aug 2026 as far as `bp`,
+`bp.out`, `gpl.bp` and `gpl.bp.out`; `VOC`, `NEWVOC`, `ACCOUNTS`, `MESSAGES`,
+`SYSCOM` and `QFILE` are still upper case and are next, §5.12 (b).
 
 **Verbs use `.` as the separator, never `_`** — `CREATE.ACCOUNT`, not
-`CREATE_ACCOUNT`. Underscored names in `sdsys/GPL.BP` such as `CREATE_USER`,
+`CREATE_ACCOUNT`. Underscored names in `sdsys/gpl.bp` such as `CREATE_USER`,
 `OS_GROUP` and `SET_PASSWD` are *subroutines*, catalogued globally as
 `!create_user` and so on; they are not verbs and are not reachable from TCL.
 

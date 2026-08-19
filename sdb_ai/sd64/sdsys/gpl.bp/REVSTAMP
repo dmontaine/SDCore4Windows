@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - GPL.BP is gpl.bp.  5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -30,8 +31,8 @@
 
 program revstamp
    openseq './gplsrc/revstamp.h' to in.f else abort 'Cannot open gplsrc revstamp.h'
-   openseq 'GPL.BP', 'REVSTAMP.H' to out.f else
-      if status() then abort 'Cannot open GPL.BP REVSTAMP.H'
+   openseq 'gpl.bp', 'REVSTAMP.H' to out.f else
+      if status() then abort 'Cannot open gpl.bp REVSTAMP.H'
    end
 
    weofseq out.f

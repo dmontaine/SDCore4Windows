@@ -18,6 +18,12 @@
 * 
 *
 * START-HISTORY:
+* 19 Aug 26 Windows port - the object file is named from the VOC record that
+*           answered the open, not from the token, and the suffix follows its
+*           case: BASIC bp X now makes bp.out, not the mixed-case bp.OUT that
+*           no case of the three-case fold can ever reach again.  6, and
+*           PROJECT_STATUS.md 5.12 (b) - it is what BP had to move behind.
+* 19 Aug 26 Windows port - the default source file is bp, 5.12 (b).
 * 19 Jan 24 0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -91,7 +97,7 @@ $define max.levels   10
 
    * If the first name in program.name.list is a file, it is the source file
 
-   source.file.name = 'BP'
+   source.file.name = 'bp'
    if program.name.list # '' then
       s = program.name.list<1>
       open s to src.f else
@@ -140,14 +146,56 @@ source.file.opened:
    end else
       * The output file does not exist
 
+* 19 Aug 26 Windows port - THE OBJECT FILE IS NAMED FROM THE VOC RECORD THAT
+*   ANSWERED, NOT FROM THE TOKEN, AND THE SUFFIX FOLLOWS ITS CASE.  Both halves
+*   are needed and either alone still produces a MIXED-case name.
+*
+*   The old line 132 was output.file.name = source.file.name : '.OUT', built
+*   from the name AS TYPED.  The three case fold reaches a file whose VOC id is
+*   'bp' from any single spelling, so "BASIC bp X" opened it and then asked for
+*   bp.OUT - and CREATE.FILE below writes the VOC id AS TYPED while upper casing
+*   the directory (CREATEF:378, UPSTREAM_FIXES.md 6).  That leaves VOC id
+*   bp.OUT beside directory BP.OUT.
+*
+*   NO CASE OF THE FOLD REACHES A MIXED-CASE ID - it tries as typed, all lower,
+*   all upper - so the next "BASIC BP Y" found no VOC entry, tried to create
+*   BP.OUT, and stopped with "Data pathname 'BP.OUT' already exists".  For ever:
+*   nothing clears it but deleting the file.  Measured 18 Aug 2026, where it
+*   made two unrelated verify scripts exit 2 on a good install.
+*
+*   The read below already knew which id answered and threw the answer away.
       s = field(source.file.name, ',', 1)
-      read voc.rec from voc, s else
-         read voc.rec from voc, downcase(s) else
-            read voc.rec from voc, upcase(s) else
+      source.voc.name = s
+      read voc.rec from voc, source.voc.name else
+         source.voc.name = downcase(s)
+         read voc.rec from voc, source.voc.name else
+            source.voc.name = upcase(s)
+            read voc.rec from voc, source.voc.name else
                @system.return.code = -ER$NVR
                stop sysmsg(2801)  ;* Unable to read source file VOC entry
             end
          end
+      end
+
+*   AND THE SUFFIX, which is the half that is easy to miss: '.OUT' is a literal,
+*   so a lower-case file would give bp.OUT again even from the matched id.  A
+*   name that is entirely lower case takes '.out'; anything else keeps '.OUT',
+*   so BP is still BP.OUT and nothing that works today changes.
+*
+*   out.suffix RATHER THAN A LITERAL IN TWO PLACES, because the Q-pointer branch
+*   below appends the same suffix to the file name in the OTHER account - and
+*   what creates the object file there is this same program, deriving the suffix
+*   by this same rule from the same name.  A literal '.OUT' there would name a
+*   file BASIC would never have made.
+      if source.voc.name = downcase(source.voc.name) then
+         out.suffix = '.out'
+      end else
+         out.suffix = '.OUT'
+      end
+
+      output.file.name = source.voc.name : out.suffix
+      if index(source.file.name, ',', 1) then
+         output.file.name := ',' : field(source.file.name, ',', 2, 999)
       end
 
       voc.type = upcase(voc.rec[1,1])
@@ -164,7 +212,7 @@ source.file.opened:
          * Create a Q-pointer to the .OUT file elsewhere
 
          recordlocku voc, output.file.name
-         voc.rec<3> := '.OUT'
+         voc.rec<3> := out.suffix
          write voc.rec to voc, output.file.name
 
          open output.file.name to out.f else
