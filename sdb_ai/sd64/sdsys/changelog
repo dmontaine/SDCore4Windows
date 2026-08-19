@@ -5,6 +5,16 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  The $COMMAND.STACK VOC record is now $command.stack.
+           * This is the record that decides whether your command stack is
+             saved when you leave SD and restored when you sign in.  It is the
+             last VOC name that was still upper case.
+           * NOTHING CHANGES FOR YOU.  SD looks for the new name first and the
+             old one second, so an account made before this release keeps its
+             command stack working with no action from you, and a new one uses
+             the new name.
+           * CREATE.ACCOUNT writes the new name from this release.
+
 19 Aug 26  The system file names in your VOC are lower case.
            * VOC, NEWVOC, ACCOUNTS, MESSAGES, SYSCOM, QFILE, DICT.DICT, MD,
              SD.ACCOUNTS and OS.USERS are now voc, newvoc, accounts, messages,

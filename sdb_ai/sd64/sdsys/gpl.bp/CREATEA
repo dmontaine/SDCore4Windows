@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the $COMMAND.STACK VOC id is $command.stack; both
+*            spellings are read, so a pre-rename account keeps working.
+*            PROJECT_STATUS.md 5.12 (b).
 * 19 Aug 26 Windows port - the account's BP VOC id is now bp; the name on disk was
 *           already bp.  $COMMAND.STACK is the last of the controls.  5.12 (b).
 * 19 Aug 26 Windows port - the account's VOC file is created as voc, and the
@@ -749,7 +752,10 @@ make.account:
 
    * Set up $COMMAND,STACK VOC entry
 
-   write 'X' to voc.f, '$COMMAND.STACK'
+* 19 Aug 26 Windows port - lower case, PROJECT_STATUS.md 5.12 (b).  The two
+*   readers - CPROC and LOGIN - try this spelling first and the old one second,
+*   so an account made before the rename keeps working.
+   write 'X' to voc.f, '$command.stack'
 
 * 18 Aug 26 Windows port - LOWER CASE ON DISK, PROJECT_STATUS.md 5.12 (a).  fn is
 *   the VOC id; os.name is the directory name and the text stored in VOC fields 2

@@ -354,16 +354,52 @@ try {
     Note 'SD.ACCOUNTS field 3 names accounts' $true ($ctQ -cmatch '(?m)^\s*3:\s*accounts\s*$')
     Note 'control: SD.ACCOUNTS field 2 is still SDSYS' $true ($ctQ -cmatch '(?m)^\s*2:\s*SDSYS\s*$')
 
-    # THE CONTROL, and it is what says this is one file at a time rather than a
-    # sweep: the same query shape against an id that has NOT moved must still be
-    # answered in upper case.  $HOLD was one of these until 18 Aug and BP until
-    # 19 Aug; $COMMAND.STACK IS THE LAST ONE LEFT.  When it moves, this section
-    # loses its ability to tell a rename from a sweep - so whatever moves it
-    # must bring a replacement, and the obvious candidate is a record made by
-    # the test itself rather than a shipped id.
-    $ctLc = Invoke-SD @('CT VOC $command.stack')
-    Note 'control: typing $command.stack is answered as $COMMAND.STACK' $true `
-         ($ctLc -cmatch '(?m)^VOC \$COMMAND\.STACK\s*$')
+    # $COMMAND.STACK MOVED ON 19 AUG, so it is an assertion now, not the control.
+    $ctCs = Invoke-SD @('CT VOC $COMMAND.STACK')
+    Note 'typing $COMMAND.STACK is answered as $command.stack' $true `
+         ($ctCs -cmatch '(?m)^VOC \$command\.stack\s*$')
+
+    # THE CONTROL, AND IT IS NO LONGER A SHIPPED ID - it is a record this test
+    # makes for itself.  $HOLD was the control until 18 Aug, BP until 19 Aug and
+    # $COMMAND.STACK until later the same day; each rename ate the one before it,
+    # and the section's whole point is to tell a rename from a SWEEP - if
+    # everything in the VOC were lower-cased by accident, every assertion above
+    # would still pass.  A record the test writes in UPPER case and reads back in
+    # UPPER case cannot be eaten by the next rename, because nothing ships it.
+    $ctlBp = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+               Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
+    if ($ctlBp.Count -ne 1) {
+        Note 'control: bp directory found so the control could be written' $true $false
+    } else {
+        $ctlName = ('ZZCTL' + $Tag).ToUpper()
+        $ctlProg = ('ZZCTLP' + $Tag).ToUpper()
+        $ctlSrc = @"
+* $ctlProg - writes section 3's control record.  Safe to delete.
+   open 'voc' to vf then
+      write 'X' to vf,'$ctlName'
+      print 'CTL=OK'
+   end else
+      print 'CTL=FAIL'
+   end
+end
+"@
+        [IO.File]::WriteAllText((Join-Path $ctlBp[0].FullName $ctlProg),
+                                ($ctlSrc -replace "`r`n", "`n"),
+                                (New-Object Text.UTF8Encoding $false))
+        $ctlRun = Invoke-SD @("BASIC bp $ctlProg", "RUN bp $ctlProg")
+        Note 'control: the test wrote its own UPPER-case VOC record' $true ($ctlRun -match 'CTL=OK')
+
+    # Typed in LOWER case and answered in UPPER: the fold reaches it, and the
+    # stored id is untouched.  A sweep would have taken this with it.
+        $ctCtl = Invoke-SD @("CT VOC $($ctlName.ToLower())")
+        Note 'control: an UPPER-case id typed lower is answered UPPER' $true `
+             ($ctCtl -cmatch ('(?m)^VOC ' + [regex]::Escape($ctlName) + '\s*$'))
+        $null = Invoke-SD @("DELETE VOC $ctlName")
+        foreach ($d in @($ctlBp[0].FullName, (Join-Path $acctDir 'BP.OUT'))) {
+            $q = Join-Path $d $ctlProg
+            if (Test-Path -LiteralPath $q) { Remove-Item -LiteralPath $q -Force }
+        }
+    }
 
     # -----------------------------------------------------------------------
     Write-Output ''
@@ -653,6 +689,72 @@ end
 
     # -----------------------------------------------------------------------
     Write-Output ''
+    # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 5b. THE COMMAND STACK, WHOSE READERS HAVE NO FOLD ===================='
+    Write-Output '  $COMMAND.STACK became $command.stack on 19 Aug.  CPROC and LOGIN reach it'
+    Write-Output '  by RECORD read, and a record read matches the id exactly - _VOC_REF folds'
+    Write-Output '  a FILE name, not a record id - so both spellings are tried by hand there.'
+    Write-Output '  THE INSTRUMENT IS THE stacks FILE, not the VOC: CPROC writes it only when'
+    Write-Output '  it found the record AND the record is X type, so the file appearing is the'
+    Write-Output '  read having succeeded.'
+
+    $stkDir = Join-Path $acctDir 'stacks'
+    $csBp = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+              Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
+    if ($csBp.Count -ne 1) {
+        Note 'section 5b could run (bp directory found)' $true $false
+    } else {
+        $csTog = ('ZZCSTOG' + $Tag).ToUpper()
+        $csTogSrc = @'
+* ZZCSTOG - flip the command-stack VOC id between the two spellings.
+   open 'voc' to vf then
+      read rec from vf, '$command.stack' then
+         write rec to vf, '$COMMAND.STACK'
+         delete vf, '$command.stack'
+         print 'MOVED=UP'
+      end else
+         read rec from vf, '$COMMAND.STACK' then
+            write rec to vf, '$command.stack'
+            delete vf, '$COMMAND.STACK'
+            print 'MOVED=DOWN'
+         end else
+            print 'MOVED=NONE'
+         end
+      end
+   end
+end
+'@
+        [IO.File]::WriteAllText((Join-Path $csBp[0].FullName $csTog),
+                                ($csTogSrc -replace "`r`n", "`n"),
+                                (New-Object Text.UTF8Encoding $false))
+        $null = Invoke-SD @("BASIC bp $csTog")
+
+        # (i) as shipped - the lower-case id
+        if (Test-Path -LiteralPath $stkDir) { Remove-Item -LiteralPath $stkDir -Recurse -Force }
+        $null = Invoke-SD @('COUNT VOC')
+        Note 'the stack is saved with the shipped lower-case id' $true (Test-Path -LiteralPath $stkDir)
+
+        # (ii) an account from before the rename
+        $up = Invoke-SD @("RUN bp $csTog")
+        Note 'the id was renamed back to $COMMAND.STACK' $true ($up -match 'MOVED=UP')
+        if (Test-Path -LiteralPath $stkDir) { Remove-Item -LiteralPath $stkDir -Recurse -Force }
+        $null = Invoke-SD @('COUNT VOC')
+        Note 'a pre-rename account still saves its stack' $true (Test-Path -LiteralPath $stkDir)
+
+        # (iii) put it back, and prove the toggle really moved it both times
+        $down = Invoke-SD @("RUN bp $csTog")
+        Note 'the id was restored to $command.stack' $true ($down -match 'MOVED=DOWN')
+        $csBack = Invoke-SD @('CT VOC $COMMAND.STACK')
+        Note 'and CT answers in the lower-case spelling again' $true `
+             ($csBack -cmatch '(?m)^VOC \$command\.stack\s*$')
+
+        foreach ($d in @($csBp[0].FullName, (Join-Path $acctDir 'BP.OUT'))) {
+            $q = Join-Path $d $csTog
+            if (Test-Path -LiteralPath $q) { Remove-Item -LiteralPath $q -Force }
+        }
+    }
+
     Write-Output '=== 6. COPYP, which rides this cycle and is unrelated ===================='
     Write-Output '  VOC_TEMPLATE/COPYP field 1 held the description where the type code'
     Write-Output '  belongs.  IT WAS NOT BROKEN BY IT - measured on the pre-change 18:54:10'

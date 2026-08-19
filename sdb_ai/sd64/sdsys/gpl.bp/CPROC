@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the $COMMAND.STACK VOC id is $command.stack; both
+*            spellings are read, so a pre-rename account keeps working.
+*            PROJECT_STATUS.md 5.12 (b).
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -3611,8 +3614,23 @@ exit.actions:
          * an X type record.
 
          if not(fileinfo(voc, FL$READONLY)) then
-            readu voc.rec from voc,"$COMMAND.STACK" then
-               if voc.rec[1,1] = "X" then
+* 19 Aug 26 Windows port - THE ID IS LOWER CASE FROM THIS RELEASE AND THIS IS A
+*   RECORD READ, WHICH HAS NO FOLD.  _VOC_REF folds a FILE name; reading a
+*   record out of an already-open file matches the id exactly, so the two
+*   spellings have to be tried here by hand.  An account created before the
+*   rename still holds $COMMAND.STACK, and both must go on working - the
+*   changelog promises it.  PROJECT_STATUS.md 5.12 (b).
+*   cs.id KEEPS WHICHEVER ONE MATCHED because the release below has to name the
+*   record the readu locked; releasing the other spelling would leave the lock
+*   held for the life of the session.
+            cs.id = '$command.stack'
+            readu voc.rec from voc,cs.id else
+               cs.id = '$COMMAND.STACK'
+               readu voc.rec from voc,cs.id else
+                  voc.rec = ''
+               end
+            end
+            if voc.rec[1,1] = "X" then
 						s = initial.account.path:@ds:'stacks'
 						openpath s to stk.f else
 							create.file s directory on error null
@@ -3621,9 +3639,8 @@ exit.actions:
 							write command.stack to stk.f, @logname
 							close stk.f
 						end
-               end
             end
-            release voc, '$COMMAND.STACK'   ;* Catch all exit paths
+            release voc, cs.id   ;* Catch all exit paths
          end
 
          if not(ospath(initial.account.path, OS$CD)) then

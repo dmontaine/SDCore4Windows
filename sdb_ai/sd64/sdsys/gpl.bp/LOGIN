@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the $COMMAND.STACK VOC id is $command.stack; both
+*            spellings are read, so a pre-rename account keeps working.
+*            PROJECT_STATUS.md 5.12 (b).
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -489,15 +492,23 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 
       * Look for a saved command stack
 
-      read voc.rec from voc,"$COMMAND.STACK" then
-         if upcase(voc.rec[1,1]) = "X" THEN
-
-           openpath initial.account.path:@ds:'stacks' to stk.f then
-              read command.stack from stk.f, @logname else null
-              close stk.f
-           end
-
+* 19 Aug 26 Windows port - both spellings, and this one has no lock to release
+*   so it needs no cs.id.  A record read matches the id exactly - there is no
+*   fold on it - and an account created before the rename still holds the upper
+*   case one.  See CPROC's copy of this for the full reasoning.
+*   PROJECT_STATUS.md 5.12 (b).
+      read voc.rec from voc,'$command.stack' else
+         read voc.rec from voc,'$COMMAND.STACK' else
+            voc.rec = ''
          end
+      end
+      if upcase(voc.rec[1,1]) = "X" THEN
+
+        openpath initial.account.path:@ds:'stacks' to stk.f then
+           read command.stack from stk.f, @logname else null
+           close stk.f
+        end
+
       end
    end
 
