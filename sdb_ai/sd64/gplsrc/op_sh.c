@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 19 Aug 26 Windows port - OS.EXECUTE is gated.  It was open to every user
+ *           from a program while SH was refused at the prompt.
+ *           PROJECT_STATUS.md section 4 / section 7 step 7.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -48,6 +51,7 @@ void set_new_tty_modes(void);
 void op_capture(void);
 
 Private void sh(bool capture);
+Private bool os_permitted(void);
 Private void sh_execute(char *command);
 Private int clparse(char *p, char *argv[], int maxargs);
 
@@ -100,12 +104,110 @@ void op_shcap() {
 }
 
 /* ======================================================================
+   os_permitted()  -  May this session reach the operating system?         */
+
+/* 19 Aug 26 Windows port - PROJECT_STATUS.md section 4, and the C half of
+ * section 7 step 7.
+ *
+ * THE HOLE THIS CLOSES, measured with its control on the 15:30:36 install:
+ * from ONE unelevated session standing in DON, "SH echo ..." at the prompt
+ * answered "don is not permitted to use the operating system shell", while a
+ * program compiled in that same user's own BP running
+ * "os.execute 'cmd /c echo ...' capturing cap" captured the output and ran.
+ * Same user, same session - the visible route refused and the real one open.
+ *
+ * CPROC's os.command: gate is not on this path and cannot be.  OS.EXECUTE is
+ * its own BASIC statement - BCOMP:9643, OP.SH / OP.SHCAP, both landing in
+ * sh() - so neither kernel(K$ADMINISTRATOR,-1) nor !valid_shell_cmd is
+ * anywhere near it.  This is the one place both forms pass through.
+ *
+ * THREE WAYS IN, AND THE FIRST IS WHAT KEEPS "SH" WORKING.
+ *
+ *  1. HDR_INTERNAL.  The SH verb reaches the OS by CPROC itself doing
+ *     os.execute, so by the time control arrives here the verb and the
+ *     statement are the same code and C cannot tell them apart.  CPROC is
+ *     $internal and has ALREADY applied the finer rule - OS.USERS field 1 -
+ *     so trusting the marker here leaves SH exactly as it was.  IT CANNOT BE
+ *     FORGED: BCOMP:2864 honours $INTERNAL only for a session that is itself
+ *     internal AND elevated, so an ordinary user cannot compile a program
+ *     that carries it.
+ *  2. An elevated session, exactly as SH allows one.  An administrator at the
+ *     console has to keep this whatever the file says, or an empty OS.USERS
+ *     locks the machine's own administrator out of it.
+ *  3. OS.USERS field 2, "OS.EX".  Field 1 is SH and field 2 is this one;
+ *     until now field 2 was stored, dictionaried and read by nobody.
+ *
+ * MISSING FILE OR MISSING RECORD MEANS NO.  That is the behaviour before this
+ * existed and it is the safe direction.  It is the OPPOSITE of the tier lists
+ * in NEWVOC, where a missing record means the FULL VOC - do not carry that
+ * convention across.
+ *
+ * THE ACL ON OS.USERS IS THE WHOLE OF THE PROTECTION.  gplbld/secure-osusers.ps1
+ * makes it read-only to sdusers; without that a user grants themselves this in
+ * one line and the gate below is decoration.
+ */
+
+Private bool os_permitted(void) {
+  char path[MAX_PATHNAME_LEN + 1];
+  char buff[128];
+  int fu;
+  int n;
+  char* p;
+  char* q;
+
+  if (process.program.flags & HDR_INTERNAL)
+    return TRUE;
+
+  if (my_uptr->flags & USR_ADMIN)
+    return TRUE;
+
+  if (process.username[0] == '\0')
+    return FALSE;
+
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cos.users%c%s", sysseg->sysdir,
+               DS, DS, process.username) >= (MAX_PATHNAME_LEN + 1))
+    return FALSE;
+
+  fu = open(path, O_RDONLY);
+  if (fu < 0)
+    return FALSE;
+  n = read(fu, buff, sizeof(buff) - 1);
+  close(fu);
+  if (n <= 0)
+    return FALSE;
+  buff[n] = '\0';
+
+  /* OS.USERS is a DIRECTORY file, so a record is a file and a field mark is a
+     newline.  Field 1 is SH; field 2 is the one this reads.                */
+
+  p = strchr(buff, '\n');
+  if (p == NULL)
+    return FALSE;
+  p++;
+
+  for (q = p; (*q != '\0') && (*q != '\n') && (*q != '\r'); q++) {
+  }
+  *q = '\0';
+
+  while (*p == ' ')
+    p++;
+  while ((q > p) && (q[-1] == ' '))
+    *(--q) = '\0';
+
+  return (stricmp(p, "yes") == 0);
+}
+
+/* ======================================================================
    sh()  -  Execute shell command                                         */
 
 Private void sh(bool capture) {
   DESCRIPTOR *descr;
   STRING_CHUNK *str;
   int bytes;
+
+  /* Before the stack is touched, so a refusal leaves it as it was found. */
+  if (!os_permitted())
+    k_error(sysmsg(10054), process.username);
 
   descr = e_stack - 1;
   k_get_string(descr);

@@ -64,7 +64,7 @@
 param(
     # Internal.  The two elevated halves re-enter this script through
     # Start-Process -Verb RunAs; nobody types these.
-    [ValidateSet('', 'Grant', 'Revoke')] [string] $Phase = '',
+    [ValidateSet('', 'Grant', 'GrantOsx', 'Revoke')] [string] $Phase = '',
     [string] $LogName = '',
     [string] $ResultFile = '',
     [string] $MarkerDir = ''
@@ -191,6 +191,17 @@ if ($Phase -ne '') {
             Say ('RESULT: granted=' + $(if (Test-Path -LiteralPath $record) { 'yes' } else { 'no' }))
         }
         Say "RESULT: record=$record"
+    }
+
+    # THE OTHER WAY ROUND, and it is the control the OS.EXECUTE gate needs.  The
+    # Grant phase writes SH=yes OS.EX=no, which proves a refusal.  A gate that
+    # refuses everything would pass that just as well, so this phase writes
+    # SH=no OS.EX=yes and the caller checks the mirror image: OS.EXECUTE runs
+    # and SH is refused, in one session, from one record.
+    if ($Phase -eq 'GrantOsx') {
+        [System.IO.File]::WriteAllText($record, "no`nyes`n",
+                                       [System.Text.Encoding]::GetEncoding('iso-8859-1'))
+        Say ('RESULT: osxgranted=' + $(if (Test-Path -LiteralPath $record) { 'yes' } else { 'no' }))
     }
 
     if ($Phase -eq 'Revoke') {
@@ -331,7 +342,67 @@ $src = @(
 [System.IO.File]::WriteAllText($probeSrc, $src + "`n",
                                [System.Text.Encoding]::GetEncoding('iso-8859-1'))
 
+# THE OS.EXECUTE PROBE, and it is the whole point of the C half of step 7.
+# PROJECT_STATUS.md section 4: SH at the prompt is gated by CPROC, but
+# OS.EXECUTE is its own BASIC statement and reached sh() with no gate at all,
+# so any user with BASIC had the operating system from a program.  The gate now
+# lives in C (op_sh.c, os_permitted) and reads OS.USERS field 2, "OS.EX".
+#
+# THE MARKER IS THE INSTRUMENT, not the message: the program asks the OS to
+# create a file, so the file existing is the command having run.  A refusal
+# raises a runtime error, which aborts the program - hence no marker.
+$osxSrc = Join-Path $bp 'SDOSEXEC'
+$osxObj = Join-Path $acctDir 'bp.out\SDOSEXEC'
+$osxMarker = Join-Path $markerDir 'osexec'
+
+function Write-OsxProbe {
+    $t = @(
+        "* SDOSEXEC - written by gplbld/verify-osusers.ps1.  Safe to delete."
+        "      OS.EXECUTE 'cmd /c echo x > $osxMarker'"
+        "      CRT 'OSEXEC=ran'"
+        "   END"
+    ) -join "`n"
+    [System.IO.File]::WriteAllText($osxSrc, $t + "`n",
+                                   [System.Text.Encoding]::GetEncoding('iso-8859-1'))
+}
+
+# Returns 'ran' | 'refused' | 'other', AND WRITES NOTHING, which is the whole
+# reason it reports through a script-scope variable.  A PowerShell function
+# returns EVERYTHING it writes, so a helper that both prints and returns hands
+# its caller an array with the printed lines in front of the answer - the trap
+# Invoke-ElevatedPhase already carries a comment about further down this file,
+# and the first version of this walked straight into it: both checks compared
+# 'refused' against System.Object[] and failed on a gate that was working.
+#
+# The marker is decisive - the program asks the OS to create a file, so the file
+# existing is the command having run.  The message is corroboration, and both
+# are recorded so a disagreement between them is visible.
+$script:osxDetail = ''
+
+function Test-OsExecute {
+    Remove-Marker $osxMarker
+    Write-OsxProbe
+    $out = Invoke-SD @('BASIC BP SDOSEXEC', 'RUN BP SDOSEXEC')
+    $made = Test-Path -LiteralPath $osxMarker
+    $said = ($out -match 'not permitted to use OS.EXECUTE')
+    $script:osxDetail = ("marker={0} refusal-message={1}" -f $made, $said)
+    if (-not ($made -or $said)) {
+        $script:osxDetail += "; neither - SD said: " + ($out.TrimEnd() -replace '\s+', ' ')
+    }
+    Remove-Marker $osxMarker
+    if ($made) { return 'ran' }
+    if ($said) { return 'refused' }
+    return 'other'
+}
+
+function Remove-OsxProbe {
+    foreach ($f in @($osxSrc, $osxObj)) {
+        if (Test-Path -LiteralPath $f) { try { Remove-Item -LiteralPath $f -Force } catch { } }
+    }
+}
+
 function Remove-Probe {
+    Remove-OsxProbe
     foreach ($f in @($probeSrc, $probeObj)) {
         if (Test-Path -LiteralPath $f) {
             try { Remove-Item -LiteralPath $f -Force } catch {
@@ -453,6 +524,13 @@ Note 'the refusal names the same @logname the probe reported' $logNameValue $msg
 Remove-Marker $mBeforePlain
 Remove-Marker $mBeforePiped
 
+# THE C HALF OF STEP 7, in the same session and with SH's refusal above as its
+# control: one user, one session, and until 19 Aug 2026 one of these two routes
+# was refused and the other was wide open.
+$osxUnlisted = Test-OsExecute
+Write-Output ('  OS.EXECUTE probe: ' + $script:osxDetail)
+Note 'unlisted: OS.EXECUTE from a program is refused' 'refused' $osxUnlisted $true
+
 # ------------------------------------------------------------------ 3. grant it
 
 Write-Output ''
@@ -569,6 +647,16 @@ try {
     $recAfter = if ($probeAfter -match 'REC=(\S*)') { $Matches[1] } else { '(no line)' }
     Note 'SD reads the record back as yes' 'yes' $recAfter $false
 
+    # THE TWO FIELDS ARE INDEPENDENT, AND THIS IS WHERE THAT IS PROVED.  The
+    # record granted above is "yes" then "no" - SH yes, OS.EX no - so in this
+    # very session SH now works (checked above) and OS.EXECUTE must STILL be
+    # refused.  If this passes only because everything is refused, the SH checks
+    # above have already failed; if the gate read field 1 by mistake, this is
+    # what catches it.
+    $osxListed = Test-OsExecute
+    Write-Output ('  OS.EXECUTE probe: ' + $script:osxDetail)
+    Note 'LISTED for SH but not OS.EX: OS.EXECUTE is still refused' 'refused' $osxListed $true
+
     Remove-Marker $mAfterPlain
     Remove-Marker $mAfterPiped
 }
@@ -581,6 +669,31 @@ finally {
         Write-Output '  UAC will prompt a second time. The tree is left as it was found.'
 
         $revokeFile = Join-Path $logDir ('verify-osusers-revoke-' + $stamp + '.txt')
+        # ---------------------------------------------------- 4a. the mirror
+        Write-Output ''
+        Write-Output '=== 4a. OS.EX=yes, SH=no - the control on the OS.EXECUTE gate ==========='
+        Write-Output '  Everything above shows OS.EXECUTE being REFUSED, and a gate that'
+        Write-Output '  refused everything would pass all of it.  This flips the record to'
+        Write-Output '  SH=no OS.EX=yes and asks for the mirror image.'
+
+        $osxFile = Join-Path $logDir 'osusers-grantosx.txt'
+        Invoke-ElevatedPhase 'GrantOsx' $osxFile
+        Read-ElevResults $osxFile
+        $osxRes = $script:elevResults
+        Note 'the OS.EX record was written' 'yes' `
+             $(if ($osxRes['osxgranted']) { $osxRes['osxgranted'] } else { '(no line)' }) $false
+
+        $osxOn = Test-OsExecute
+        Write-Output ('  OS.EXECUTE probe: ' + $script:osxDetail)
+        Note 'OS.EX=yes: OS.EXECUTE now runs' 'ran' $osxOn $true
+
+        $mOsxSh = Join-Path $markerDir 'osx-sh'
+        Remove-Marker $mOsxSh
+        $shOff = Invoke-SD @((New-ProbeCmd $mOsxSh $false))
+        Note 'and SH=no: the shell is still refused' 'no' `
+             $(if (Test-Path -LiteralPath $mOsxSh) { 'yes' } else { 'no' }) $true
+        Remove-Marker $mOsxSh
+
         Invoke-ElevatedPhase 'Revoke' $revokeFile
         $rc2 = $script:elevExit
         Read-ElevResults $revokeFile

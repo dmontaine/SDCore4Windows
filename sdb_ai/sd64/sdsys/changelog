@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  OS.EXECUTE now needs permission, as SH already did.
+           * UNTIL NOW ANY ACCOUNT THAT COULD WRITE A PROGRAM HAD THE
+             OPERATING SYSTEM.  SH at the command prompt was refused unless
+             you were listed in OS.USERS or in an elevated session, but
+             OS.EXECUTE inside a program was not checked at all - so the
+             restriction could be walked around by anyone able to type BASIC.
+           * OS.USERS has always had two fields: field 1 is SH and field 2 is
+             OS.EX.  Field 2 was written down and never read.  It is now what
+             decides whether OS.EXECUTE may run.
+           * WHO IS STILL ALLOWED: an account with OS.EX set to "yes"; an
+             elevated session, exactly as with SH; and SD's own system
+             programs, so CREATE.ACCOUNT and the SH verb work as before.
+           * NO FILE AND NO RECORD BOTH MEAN NO, so an installation that has
+             never set OS.USERS up denies OS.EXECUTE to ordinary accounts.
+             If you have programs that shell out, add the accounts that run
+             them to OS.USERS with OS.EX set to yes.
+           * The refusal reads: <name> is not permitted to use OS.EXECUTE.
+
 19 Aug 26  The $COMMAND.STACK VOC record is now $command.stack.
            * This is the record that decides whether your command stack is
              saved when you leave SD and restored when you sign in.  It is the
