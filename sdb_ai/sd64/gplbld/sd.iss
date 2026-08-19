@@ -1325,6 +1325,25 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
+    in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with
+    -Silent stopped here with a modal box on screen and copied not one file
+    until somebody clicked OK.  The wizard form is created in silent mode and
+    simply not shown, so "the page was never displayed" is not the same as
+    "the page never changed".
+
+    THE GUARD IS THE ONE ALREADY USED at CurStepChanged rather than a second
+    idiom.  SuppressibleMsgBox was the obvious alternative and is the wrong
+    one here: it needs /SUPPRESSMSGBOXES, which the comment there records as
+    measured NOT to reach these boxes, and it would leave two ways of saying
+    the same thing in one file.
+
+    AND IT FIXES THE TEXT AS WELL AS THE HANG.  The box explains why two
+    options are "absent from this page" - which is incoherent read in a mode
+    that shows no pages, so there was nothing worth showing here anyway. }
+  if WizardSilent then
+    Exit;
+
   if (CurPageID = wpSelectTasks) and (not SshServerAbsent) then
     { Notify rather than offer, which is what the repository owner asked for:
       the option is not available and the reason is stated.

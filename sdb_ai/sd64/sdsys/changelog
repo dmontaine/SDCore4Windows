@@ -5,6 +5,17 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  A silent install no longer stops and waits for someone to click.
+           * Installing with /VERYSILENT put one message box on screen - the
+             one saying SD will not touch an OpenSSH Server you already have -
+             and waited there.  Nothing was copied until somebody clicked OK,
+             so an unattended install appeared to hang.
+           * The box is now skipped in silent mode, along with the others.  It
+             also no longer explains why two options are "absent from this
+             page" to somebody who was never shown a page.
+           * ONLY SILENT INSTALLS ARE AFFECTED.  A normal install shows the
+             same messages it always did.
+
 18 Aug 26  The saved select list file is now called $savedlists.
            * SAVE.LIST, GET.LIST, DELETE.LIST, MERGE.LIST, COPY.LIST,
              SAVE.STACK, CLEAN.ACCOUNT and EDIT.LIST all name it, and the
