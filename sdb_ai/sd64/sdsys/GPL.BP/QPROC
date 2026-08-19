@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 18 Aug 26 Windows port - the query processor's VOC token read folds as typed,
+*            then lower, then upper.  PROJECT_STATUS.md 5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -3832,7 +3834,28 @@ get.token:
       end
    end
 
+* 18 Aug 26 Windows port - AS TYPED, THEN LOWER, THEN UPPER, PROJECT_STATUS.md
+*   5.12 (b).  @voc is a DYNAMIC file, so this is an exact byte match, and every
+*   query keyword - WITH, BY, FMT, COL.HDG, 238 of them - is resolved through it.
+*
+*   A FLAG RATHER THAN THREE COPIES OF THE BODY, because the body carries RETURN
+*   and GOTO.  PARSER's keyword read was converted the same way for the same
+*   reason.  The DICTIONARY reads above and below are deliberately untouched:
+*   those are dictionary ids and belong with the dictionary half of 5.12.
+   voc.fold.found = @false
    read dict.rec from @voc, token then
+      voc.fold.found = @true
+   end else
+      read dict.rec from @voc, downcase(token) then
+         voc.fold.found = @true
+      end else
+         read dict.rec from @voc, upcase(token) then
+            voc.fold.found = @true
+         end
+      end
+   end
+
+   if voc.fold.found then
       from.voc = @true    ;* 0316
       type = upcase(dict.rec[1,1])
       if listindex('A,C,D,I,S', ',', type) then return
@@ -3971,11 +3994,29 @@ read.record:
 *   new.record is unchanged
 
 check.record:
+* 18 Aug 26 Windows port - AS TYPED, THEN LOWER, THEN UPPER, and id is rewritten
+*   to the spelling that MATCHED so everything downstream reads the same record.
+*   PROJECT_STATUS.md 5.12 (b).  This is the RECORD id a query names, not a file
+*   name, and it had no fold at all: measured on the 22:26:18 install,
+*   LIST VOC $hold listed 1 record and LIST VOC $HOLD answered "'$HOLD' not
+*   found", on the same record.  CT folds its record id (CT:202) and this did
+*   not, so the two verbs disagreed about the same name.
+*
+*   ADDITIVE: an exact match still wins, so nothing that works today changes.
+*   Only a lookup that fails outright gets the two extra attempts.
    record.found = @true
    readv s from data.f, id, 0 else
-      if not(absent.null) then
-         gosub record.not.found
-         record.found = @false
+      readv s from data.f, downcase(id), 0 then
+         id = downcase(id)
+      end else
+         readv s from data.f, upcase(id), 0 then
+            id = upcase(id)
+         end else
+            if not(absent.null) then
+               gosub record.not.found
+               record.found = @false
+            end
+         end
       end
    end
 

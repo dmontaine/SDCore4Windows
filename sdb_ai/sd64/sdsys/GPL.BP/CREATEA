@@ -637,8 +637,12 @@ make.account:
       copy.it = @true
 
 *     The list records are never themselves VOC entries, whichever tier this is.
-      if id = 'TIER.OMIT.STANDARD' then copy.it = @false
-      if id = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
+* 18 Aug 26 Windows port - CASE INSENSITIVE, PROJECT_STATUS.md 5.12 (b).  id
+*     comes from READNEXT over a DIRECTORY file, so it is the name as it stands
+*     on disk.  A rename of the VOC ids would make these two comparisons miss
+*     and put both list records into every account's VOC.
+      if upcase(id) = 'TIER.OMIT.STANDARD' then copy.it = @false
+      if upcase(id) = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
 
 * 17 Aug 26 Windows port - an explicit comparison rather than LOCATE, and not
 *   from taste: CPROC has two LOCATE precedents and NEITHER can be copied
@@ -649,7 +653,11 @@ make.account:
 *   omit nothing, and this whole change would look like it had worked.
       if copy.it and omit.count > 1 then
          for omit.i = 2 to omit.count       ;* field 1 is the description
-            if omit.rec<omit.i> = id then
+*           18 Aug 26 Windows port - AND SO IS THIS ONE, and it is the one that
+*           matters: the list holds verb ids and id is a verb id, so if either
+*           side is lower-cased without the other NOTHING is omitted and a
+*           standard account silently gets the full VOC.  5.12 (b).
+            if upcase(omit.rec<omit.i>) = upcase(id) then
                copy.it = @false
                omit.i = omit.count          ;* stop looking
             end

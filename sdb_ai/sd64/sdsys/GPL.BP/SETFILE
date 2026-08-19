@@ -121,8 +121,16 @@ $include int$keys.h
       end
 
       if pointer = '' then
+* 18 Aug 26 Windows port - the default pointer name folds, 5.12 (b).  @voc is a
+*        DYNAMIC file, so an exact read of 'QFILE' stops finding the shipped
+*        record once that id is lower case, and SET.FILE would then create a
+*        second upper-case QFILE beside it.  pointer keeps the id that matched.
          pointer = 'QFILE'
-         read voc.rec from @voc, pointer else exit
+         read voc.rec from @voc, pointer else
+            read voc.rec from @voc, downcase(pointer) then
+               pointer = downcase(pointer)
+            end else exit
+         end
          if voc.rec[1,1] = 'Q' then exit
          display sysmsg(6875) ;* QFILE is already in the VOC but not as a Q-pointer
          if not(prompting) then goto exit.set.file
@@ -133,7 +141,11 @@ $include int$keys.h
 
       display sysmsg(6876) ;* Pointer name is already in VOC
 
-      if pointer # 'QFILE' and voc.rec[1,1] = 'Q' then
+*     18 Aug 26 Windows port - and the test that goes with it, 5.12 (b).  Once
+*     the block above can match a lower-case id, pointer holds it, and an
+*     exact comparison here would send the default QFILE down the overwrite
+*     path instead of accepting it.
+      if upcase(pointer) # 'QFILE' and voc.rec[1,1] = 'Q' then
 prompting = @true
          loop
             display sysmsg(2060) :  ;* Overwrite (Y/N/Q)?

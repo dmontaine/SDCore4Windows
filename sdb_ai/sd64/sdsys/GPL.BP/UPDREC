@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the VOC keyword read folds as typed, then lower, then
+*            upper.  It was upcase-only, so a lower-case keyword id could
+*            never be found.  PROJECT_STATUS.md 5.12 (b).
 * 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -2582,8 +2585,22 @@ split.tokens:
             literal.tokens<num.tokens> = @false
             keyword = -1
             if len(token) then
-               read voc.rec from voc.f, upcase(token) then
+* 18 Aug 26 Windows port - AS TYPED, THEN LOWER, THEN UPPER.  This site was one
+*   of the two 5.12 left alone as "dictionary/token ids"; it is not, it reads the
+*   account VOC, which is a DYNAMIC file and therefore an exact byte match.  With
+*   upcase alone a lower-case keyword id is invisible and every token here comes
+*   back keyword = -1.  Additive today: every id is upper case, so the first two
+*   attempts miss and the third is what runs.
+               read voc.rec from voc.f, token then
                   if upcase(voc.rec[1,1]) = "K" then keyword = voc.rec<2>
+               end else
+                  read voc.rec from voc.f, downcase(token) then
+                     if upcase(voc.rec[1,1]) = "K" then keyword = voc.rec<2>
+                  end else
+                     read voc.rec from voc.f, upcase(token) then
+                        if upcase(voc.rec[1,1]) = "K" then keyword = voc.rec<2>
+                     end
+                  end
                end
             end
             keywords<num.tokens> = keyword

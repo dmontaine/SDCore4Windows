@@ -483,8 +483,19 @@ i = kernel(K$PRIVATE.CATALOGUE, private.catalogue)
 
 * Run the LOGIN paragraph, if it exists
 
-readv i from @voc,'LOGIN',0 on error null
-then execute 'LOGIN' trapping aborts capturing response
+* 18 Aug 26 Windows port - AS TYPED, THEN LOWER, PROJECT_STATUS.md 5.12 (b).
+*   @voc is a DYNAMIC file, so this is an exact byte match; without the second
+*   attempt an API session would silently stop running the LOGIN paragraph the
+*   moment the VOC id moves.  Blocked THEN/ELSE deliberately - see 5.12 trap 3.
+readv i from @voc, 'LOGIN', 0 on error null
+then
+   execute 'LOGIN' trapping aborts capturing response
+end else
+   readv i from @voc, 'login', 0 on error null
+   then
+      execute 'login' trapping aborts capturing response
+   end
+end
 
 return
 

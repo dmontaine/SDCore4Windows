@@ -5,6 +5,33 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  LIST now finds a record whatever case you type its name in.
+           * CORRECTION to the entry below, which says the old spelling still
+             works when you type it.  That was true of COUNT, CT and ED and NOT
+             true of LIST: LIST VOC $HOLD answered "'$HOLD' not found" on the
+             very record CT VOC $HOLD showed you.  The two verbs disagreed
+             about the same name.
+           * LIST, SORT, SELECT and the rest of the query language now try a
+             record name as you typed it, then in lower case, then in upper
+             case - the same order everything else uses.  A name that matches
+             exactly still wins, so nothing that works today changes.
+           * A name that exists in NO case is still reported as not found.
+
+18 Aug 26  Names are matched the same way in several more places.
+           * SD tries a name as typed, then lower case, then upper case.  A few
+             places had been missed and still demanded upper case, so they
+             would have stopped working as SD's own names move to lower case.
+           * UPDATE.RECORD now recognises its keywords whatever case they are
+             stored in; the query processor does the same for VOC entries; the
+             LOGIN paragraph is still found by an interactive session and by an
+             API session; and SET.FILE still finds the default QFILE pointer.
+           * DELETE.FILE's refusal to delete VOC and $ACC no longer depends on
+             the case you type.  It could not be got round before, because
+             those names are upper case; it could have been once they are not.
+           * NOTHING CHANGES ON AN EXISTING SYSTEM.  Every name SD ships is
+             still upper case, so the added attempts find nothing that the
+             existing ones did not already find.
+
 18 Aug 26  The hold file is now called $hold.
            * SETPTR, SP.VIEW, CLEAN.ACCOUNT, PRINTER FILE and the MICRO editor
              all name it, and the messages they print name it, so $hold is the

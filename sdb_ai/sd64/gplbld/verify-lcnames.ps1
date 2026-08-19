@@ -276,6 +276,24 @@ try {
     Note 'COUNT $hold finds it as typed'          $false `
          ((Invoke-SD @('COUNT $hold')) -match 'File not found')
 
+    # AND LIST, WHICH NAMES THE RECORD ID RATHER THAN THE FILE.  THIS SECTION
+    # SHIPPED WITHOUT IT AND THE RENAME HAD ALREADY BROKEN IT: measured on the
+    # 22:26:18 install, LIST VOC $hold listed 1 record and LIST VOC $HOLD
+    # answered "'$HOLD' not found" - on the same record that CT VOC $HOLD
+    # echoed back as $hold.  QPROC's check.record read the id exactly and had
+    # no fold at all, so CT and LIST disagreed about the same name.  COUNT and
+    # CT alone could never have shown it, which is why they did not.
+    $lstLc = Invoke-SD @('LIST VOC $hold NO.PAGE')
+    $lstUc = Invoke-SD @('LIST VOC $HOLD NO.PAGE')
+    Note 'LIST VOC $hold lists the record' $true ($lstLc -match '1 record')
+    Note 'LIST VOC $HOLD lists it too'     $true ($lstUc -match '1 record')
+    Note 'and no longer says not found'    $false ($lstUc -match "HOLD' not found")
+    # THE CONTROL: a name in no case at all must still be reported missing, or
+    # the fold above would be indistinguishable from a lookup that matches
+    # anything.  verify-fold.ps1 section 3 makes the same argument for files.
+    $lstNo = Invoke-SD @('LIST VOC ZZNOSUCHVOCID NO.PAGE')
+    Note 'control: an absent id is still not found' $true ($lstNo -match 'not found')
+
     # $hold, reached the way a print goes there rather than through the VOC:
     # SETPTR mode 3 with AS <name> makes SD build the path itself - SETPTR:334
     # prefixes "$HOLD " and start_file() turns that into a relative path.

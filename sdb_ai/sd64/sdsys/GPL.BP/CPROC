@@ -394,9 +394,20 @@ restart.cproc:
 
       * Look for a LOGIN paragraph
 
-      read voc.rec from voc,"LOGIN" then
+* 18 Aug 26 Windows port - AS TYPED, THEN LOWER.  PROJECT_STATUS.md 5.12 (b).
+*     voc is the account VOC, a DYNAMIC file, so this read is an exact byte
+*     match and would stop finding the paragraph the moment the id moves.  Two
+*     attempts, not three: the literal is already the upper-case one.
+*     new.sentence takes the id that MATCHED, because that is what gets parsed.
+      login.voc.id = "LOGIN"
+      read voc.rec from voc, login.voc.id else
+         login.voc.id = downcase(login.voc.id)
+         read voc.rec from voc, login.voc.id else login.voc.id = ""
+      end
+
+      if login.voc.id # "" then
          at.command = ""
-         new.sentence = "LOGIN"
+         new.sentence = login.voc.id
          gosub proc.sentence
       end
 
@@ -2720,9 +2731,16 @@ logto.unwind:
 
    @system.return.code = 0
 
-   read voc.rec from voc,"LOGIN" then
+* 18 Aug 26 Windows port - the same fold as the LOGIN read above.  5.12 (b).
+   login.voc.id = "LOGIN"
+   read voc.rec from voc, login.voc.id else
+      login.voc.id = downcase(login.voc.id)
+      read voc.rec from voc, login.voc.id else login.voc.id = ""
+   end
+
+   if login.voc.id # "" then
       at.command = ""
-      new.sentence = "LOGIN"
+      new.sentence = login.voc.id
       break off
       gosub proc.sentence
       break on

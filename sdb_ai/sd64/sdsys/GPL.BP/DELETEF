@@ -169,7 +169,12 @@ delete.file:
 
 delete.upcased.file:
 
-   locate file.name in banned.files<1,1> setting pos then
+* 18 Aug 26 Windows port - UPCASE BOTH SIDES, PROJECT_STATUS.md 5.12 (b).
+*   file.name arrives here as the user TYPED it whenever the exact read at the
+*   top of delete.file succeeded - the upcase() above is only in the else
+*   branch.  banned.files is upper case, so a lower-case VOC id would walk
+*   straight past this guard and take the account's VOC with it.
+   locate upcase(file.name) in banned.files<1,1> setting pos then
       @system.return.code = -ER$VNF
       stop sysmsg(6132, file.name) ;* Cannot delete system file xx
    end
