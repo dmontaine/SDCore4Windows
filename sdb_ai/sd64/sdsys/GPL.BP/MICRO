@@ -55,7 +55,9 @@ if trim(InFileName) = "" then
 	goto End_Program
 end
 	
-TempFileName	= "$HOLD"
+* 18 Aug 26 Windows port - the $HOLD VOC id is now $hold.  This file has no
+*   START-HISTORY block; PROJECT_STATUS.md 5.12 (b) has the change.
+TempFileName	= "$hold"
 
 if DictText = "DICT" then
 	TempRecordName	= "DICT." : InRecordName : ".editing"

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Aug 26 Windows port - the "$hold " prefix SETPTR puts in front of a
+ *            hold-file record name is lower case too, and is now compared
+ *            without regard to case.  PROJECT_STATUS.md 5.12 (b).
  * 18 Aug 26 Windows port - the hold file's relative path is $hold, lower case,
  *            to match the directory CREATEA now creates.  PROJECT_STATUS.md 5.12.
  * 31 Dec 23 SD launch - prior history suppressed
@@ -189,15 +192,19 @@ Private void start_file(PRINT_UNIT* pu) {
        without regard to case, so an account created before the rename - which
        still has $HOLD - is reached by either spelling and needs no migration.
 
-       THE memcmp BELOW IS NOT A PATH AND IS DELIBERATELY LEFT UPPER CASE.  It
-       tests the file name SETPTR was given for the "$HOLD recname" form, which
-       is a VOC-style name typed by the user; VOC ids are still upper case.
-       Folding it belongs with the VOC id half of 5.12, not here. */
+       THE COMPARE BELOW IS NOT A PATH.  It tests the file name SETPTR was
+       given for the "$hold recname" form.  SETPTR now writes that marker in
+       lower case, and the compare is case insensitive rather than flipped:
+       SETPTR is the only thing that writes the field, but it and this file are
+       built by different steps - a bootstrap and make sd - so neither half may
+       depend on the other having moved.  5.12 (b).  MemCompareNoCase also
+       stops at the first difference, where memcmp() could read all six bytes
+       of a file name shorter than that. */
 
     if (pu->file_name == NULL) /* Use default name */
     {
       sprintf(fn, "$hold%cP%d", DS, (int)(pu->unit));
-    } else if (memcmp(pu->file_name, "$HOLD ", 6) == 0) {
+    } else if (MemCompareNoCase(pu->file_name, "$hold ", 6) == 0) {
       sprintf(fn, "$hold%c%s", DS, pu->file_name + 6);
     } else {
       strcpy(fn, pu->file_name);

@@ -1,5 +1,5 @@
 * SPVIEW
-* SP.VIEW command - View/spool entries from $HOLD or other file.
+* SP.VIEW command - View/spool entries from $hold or other file.
 * Copyright (c) 2006 Ladybridge Systems, All Rights Reserved
 *
 * This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -87,11 +88,11 @@ $include keyin.h
 
    if file.name = '' then
       * If we have just one name, resolve whether we are looking at a single
-      * $HOLD item or whether it is a file name. We consider it as a file
+      * $hold item or whether it is a file name. We consider it as a file
       * name if it exists as an F or Q-type VOC entry and there is no item
-      * in $HOLD with this name.
+      * in $hold with this name.
 
-      file.name = '$HOLD'   ;* Assume $HOLD for now
+      file.name = '$hold'   ;* Assume $hold for now
 
       if item.name # '' then
          fn = field(item.name, ',', 1)
@@ -101,10 +102,10 @@ $include keyin.h
 
          voc.type = upcase(voc.rec[1,1])
          if voc.type = 'F' or voc.type = 'Q' then
-            * Check for $HOLD entry with this name
-            open '$HOLD' to data.f then
+            * Check for $hold entry with this name
+            open '$hold' to data.f then
                readv rec from data.f, item.name, 0 else
-                  * There is no such $HOLD item. Assume that the name we
+                  * There is no such $hold item. Assume that the name we
                   * are currently treating as an item is actually a file.
                   file.name = item.name
                   item.name = ''
@@ -342,7 +343,7 @@ show.printer:
          else destination = sysmsg(7130, name)
       case mode = 3
          if name = '' then
-            name = '$HOLD P' : lptr
+            name = '$hold P' : lptr
             if bitand(flags, PU$FLG.NEXT) then
                name := ' ' : sysmsg(7148) ;* (with sequence number)
             end

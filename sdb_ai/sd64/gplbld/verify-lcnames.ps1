@@ -12,13 +12,13 @@
 # $hold.dic, $svlists and bp instead of $HOLD, $HOLD.DIC, $SVLISTS and BP.
 # to_file.c's three hold-file paths moved with it.  That is 5.12 (a).
 #
-# AND 5.12 (b) HAS STARTED, FOR ONE FILE.  The VOC id $SAVEDLISTS is now
-# $savedlists.  $HOLD, BP and $COMMAND.STACK are NOT, deliberately, and are the
-# controls in section 3: a change that lower-cased every id would fail there
-# rather than pass.  SECTION 5 IS THE HALF THAT COULD BREAK EVERY EXISTING
-# ACCOUNT - GPL.BP opens the hard-coded literal "$savedlists" in thirteen
-# places, nothing migrates an account created before the rename, and what makes
-# those accounts keep working is _VOC_REF folding the id UP as well as down.
+# AND 5.12 (b) HAS STARTED, TWO FILES IN.  The VOC ids $SAVEDLISTS and $HOLD are
+# now $savedlists and $hold.  BP and $COMMAND.STACK are NOT, deliberately, and
+# are what is left of the controls in section 3: a change that lower-cased every
+# id would fail there rather than pass.  SECTION 5 IS THE HALF THAT COULD BREAK
+# EVERY EXISTING ACCOUNT - GPL.BP opens both names as hard-coded literals,
+# nothing migrates an account created before a rename, and what makes those
+# accounts keep working is _VOC_REF folding the id UP as well as down.
 #
 # IT NEEDS NO ACCOUNT OF ITS OWN, AND THAT IS WHY IT IS UNELEVATED.  The
 # installer creates one through adopt-account.ps1 at every install, so after a
@@ -126,6 +126,20 @@ if ($null -eq $acctDir) {
 }
 Write-Output ("account directory: " + $acctDir)
 
+$script:hadObjDir = @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
+                      Where-Object { $_.Name -ieq 'BP.OUT' }).Count -eq 1
+
+# AND THE OBJECT FILE, WHICH IS NOT OPTIONAL TIDINESS.  The probes below are
+# compiled with "BASIC bp <name>", and BASIC:132 builds the object file name
+# from the name AS TYPED - so it creates bp.OUT, and CREATE.FILE then stores the
+# VOC id as typed (bp.OUT) while upper-casing the directory (BP.OUT).  That is
+# UPSTREAM_FIXES.md 6.  The three-case fold cannot reach a MIXED-case id, so a
+# later "BASIC BP <probe>" finds no VOC entry, tries to create BP.OUT, and stops
+# with "Data pathname 'BP.OUT' already exists".  Measured 18 Aug 2026: leaving it
+# behind made verify-nocase.ps1 and verify-osusers.ps1 exit 2 on a good install.
+# DELETE.FILE takes the VOC entry and the directory together, and FORCE
+# suppresses the two prompts DELETEF asks when a stored path differs from the
+# default name.
 function Remove-Probes {
     foreach ($p in @((Join-Path $acctDir ('$hold\'    + $holdRec)),
                      (Join-Path $acctDir ('$svlists\' + $listName)))) {
@@ -134,11 +148,29 @@ function Remove-Probes {
             Write-Output ("  removed " + $p)
         }
     }
+
+    $objDir = @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -ieq 'BP.OUT' })
+    # ONLY IF THIS RUN MADE IT.  An account has no BP.OUT until something
+    # compiles in it, but verify-nocase.ps1 and verify-osusers.ps1 make one too
+    # and it is not this script's to remove.  -Cleanup clears the flag, because
+    # then removing it IS the job.
+    if ($objDir.Count -eq 1 -and -not $script:hadObjDir) {
+        $null = Invoke-SD @('DELETE.FILE bp.OUT FORCE')
+        $still = @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Name -ieq 'BP.OUT' })
+        if ($still.Count -eq 0) {
+            Write-Output '  removed the bp.OUT object file this script created'
+        } else {
+            Write-Output '  WARNING: bp.OUT is still there - a later BASIC BP <x> will fail'
+        }
+    }
 }
 
 if ($Cleanup) {
     Write-Output ''
     Write-Output '=== cleanup only ========================================================'
+    $script:hadObjDir = $false
     Remove-Probes
     try { Stop-Transcript | Out-Null } catch { }
     exit 0
@@ -176,12 +208,12 @@ try {
     # -----------------------------------------------------------------------
     Write-Output ''
     Write-Output '=== 3. the VOC records name the lower-case paths ========================='
-    Write-Output '  The VOC id is unchanged; fields 2 and 3 hold the path, and that is what'
-    Write-Output '  LISTF and CT VOC show a user.'
+    Write-Output '  Fields 2 and 3 hold the path, and that is what LISTF and CT VOC show.'
+    Write-Output '  This is 5.12 (a) and is independent of the id, which the next block tests.'
 
-    $ct = Invoke-SD @('CT VOC $HOLD', 'CT VOC $savedlists', 'CT VOC BP')
-    Note 'CT VOC $HOLD names $hold'          $true ($ct -cmatch '(?m)^\s*2:\s*\$hold\s*$')
-    Note 'CT VOC $HOLD names $hold.dic'      $true ($ct -cmatch '(?m)^\s*3:\s*\$hold\.dic\s*$')
+    $ct = Invoke-SD @('CT VOC $hold', 'CT VOC $savedlists', 'CT VOC BP')
+    Note 'CT VOC $hold names $hold'          $true ($ct -cmatch '(?m)^\s*2:\s*\$hold\s*$')
+    Note 'CT VOC $hold names $hold.dic'      $true ($ct -cmatch '(?m)^\s*3:\s*\$hold\.dic\s*$')
     Note 'CT VOC $savedlists names $svlists' $true ($ct -cmatch '(?m)^\s*2:\s*\$svlists\s*$')
     Note 'CT VOC BP names bp'                $true ($ct -cmatch '(?m)^\s*2:\s*bp\s*$')
     Write-Output '  --- CT VOC said: ---'
@@ -198,14 +230,21 @@ try {
     # is stored - and it says it however the query was cased.  Typing the OLD
     # name and being answered in the new one is the rename, demonstrated and not
     # inferred.  -cmatch: the whole assertion is the case of the echo.
-    $ctUc = Invoke-SD @('CT VOC $SAVEDLISTS')
+    $ctUc = Invoke-SD @('CT VOC $SAVEDLISTS', 'CT VOC $HOLD')
     Note 'typing $SAVEDLISTS is answered as $savedlists' $true `
          ($ctUc -cmatch '(?m)^VOC \$savedlists\s*$')
-    # THE CONTROL, and it is what says this was one file rather than a sweep:
-    # the same query shape against $HOLD must still be answered in upper case.
-    $ctLc = Invoke-SD @('CT VOC $hold')
-    Note 'control: typing $hold is answered as $HOLD' $true `
-         ($ctLc -cmatch '(?m)^VOC \$HOLD\s*$')
+    Note 'typing $HOLD is answered as $hold' $true `
+         ($ctUc -cmatch '(?m)^VOC \$hold\s*$')
+    # THE CONTROLS, and they are what say this is one file at a time rather than
+    # a sweep: the same query shape against an id that has NOT moved must still
+    # be answered in upper case.  $HOLD was one of these until this cycle; what
+    # is left is $COMMAND.STACK and BP, and when one of those moves it takes its
+    # control with it.
+    $ctLc = Invoke-SD @('CT VOC $command.stack', 'CT VOC bp')
+    Note 'control: typing $command.stack is answered as $COMMAND.STACK' $true `
+         ($ctLc -cmatch '(?m)^VOC \$COMMAND\.STACK\s*$')
+    Note 'control: typing bp is answered as BP' $true `
+         ($ctLc -cmatch '(?m)^VOC BP\s*$')
 
     # -----------------------------------------------------------------------
     Write-Output ''
@@ -232,9 +271,13 @@ try {
          ((Invoke-SD @('COUNT $SAVEDLISTS')) -match 'File not found')
     Note 'COUNT $savedlists finds it as typed'    $false `
          ((Invoke-SD @('COUNT $savedlists')) -match 'File not found')
+    Note 'COUNT $HOLD still finds the file'       $false `
+         ((Invoke-SD @('COUNT $HOLD')) -match 'File not found')
+    Note 'COUNT $hold finds it as typed'          $false `
+         ((Invoke-SD @('COUNT $hold')) -match 'File not found')
 
     # $hold, reached the way a print goes there rather than through the VOC:
-    # SETPTR mode 3 with AS <name> makes SD build the path itself - SETPTR:329
+    # SETPTR mode 3 with AS <name> makes SD build the path itself - SETPTR:334
     # prefixes "$HOLD " and start_file() turns that into a relative path.
     #
     # 18 Aug 26 - AND IT CANNOT TELL YOU WHETHER to_file.c WAS REBUILT.  An
@@ -337,6 +380,138 @@ end
 
         Remove-Item -LiteralPath (Join-Path $bp5[0].FullName $tog) -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath $oldRec) { Remove-Item -LiteralPath $oldRec -Force }
+    }
+
+    # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 5a. THE SAME CLAIM FOR $hold, WHICH MOVED THIS CYCLE ================='
+    Write-Output '  GPL.BP now opens the literal "$hold" in CLEANAC, SPVIEW, MICRO, _PRFILE'
+    Write-Output '  and _NEXTPTR.  An account created before this holds $HOLD.  Same method:'
+    Write-Output '  rename the id back, measure, restore.  A failure part-way leaves the'
+    Write-Output '  account on $HOLD, which is the state this section says works.'
+    Write-Output '  NOT the SETPTR check in section 4 - that one never touches the VOC.'
+    Write-Output '  to_file.c builds a RELATIVE path, so it reaches $hold whatever the VOC'
+    Write-Output '  says, and would pass with the record deleted altogether.'
+
+    $htog    = 'ZZHDTOGL'
+    $hprobe  = 'ZZHDOPEN'
+    $nextRec = ('ZZN' + $Tag).ToUpper()
+    $bph     = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+                 Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
+    if ($bph.Count -ne 1) {
+        Note 'section 5a could run (bp directory found)' $true $false
+    } else {
+        # Two programs, both single-quoted here-strings: every $ in them is SD
+        # source, not PowerShell.  The toggle is the same shape as section 5's.
+        $htogSrc = @'
+* ZZHDTOGL - written by verify-lcnames.ps1.  Safe to delete.
+* Moves the hold-file VOC id between its two spellings, whichever way round it
+* currently is, and says which way it went.
+   open 'VOC' to voc.f else stop
+   read rec from voc.f, '$hold' then
+      write rec to voc.f, '$HOLD'
+      delete voc.f, '$hold'
+      print 'MOVED=UP'
+   end else
+      read rec from voc.f, '$HOLD' then
+         write rec to voc.f, '$hold'
+         delete voc.f, '$HOLD'
+         print 'MOVED=DOWN'
+      end else
+         print 'MOVED=NONE'
+      end
+   end
+end
+'@
+        # THE DIRECT MEASUREMENT: the hard-coded literal all five of those
+        # programs use, on its own, with nothing else in the way.
+        $hprobeSrc = @'
+* ZZHDOPEN - written by verify-lcnames.ps1.  Safe to delete.
+* Opens the hard-coded literal GPL.BP uses, and says whether it arrived.
+   open '$hold' to f then
+      print 'OPENED=YES'
+   end else
+      print 'OPENED=NO'
+   end
+end
+'@
+        foreach ($pair in @(, @($htog, $htogSrc)) + @(, @($hprobe, $hprobeSrc))) {
+            [IO.File]::WriteAllText((Join-Path $bph[0].FullName $pair[0]),
+                                    ($pair[1] -replace "`r`n", "`n"),
+                                    (New-Object Text.UTF8Encoding $false))
+        }
+
+        $hup = Invoke-SD @("BASIC bp $htog", "BASIC bp $hprobe", "RUN bp $htog")
+        Note 'the id was renamed back to $HOLD' $true ($hup -match 'MOVED=UP')
+        if ($hup -notmatch 'MOVED=UP') {
+            Write-Output '  --- SD said: ---'
+            Write-Output $hup
+        } else {
+            $opened = Invoke-SD @("RUN bp $hprobe")
+            Note 'open "$hold" reached the upper-case id' $true ($opened -match 'OPENED=YES')
+            Write-Output '  --- the probe said: ---'
+            Write-Output $opened
+
+            # AND A REAL VERB, not only a probe.  SETPTR ... AS NEXT makes
+            # to_file.c call _NEXTPTR, which opens DICT '$hold' - the dictionary,
+            # so it needs field 3 of the record as well as the record itself.
+            # THE FAILURE IS SILENT, AND THAT IS WHY THE SUFFIX IS THE
+            # INSTRUMENT: _NEXTPTR presets seqno to '0' and only a successful
+            # open replaces it with a four-digit number, so a lookup that missed
+            # writes ZZN..._0 and a lookup that hit writes ZZN..._0001.
+            $holdDir = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+                         Where-Object { $_.Name -ieq '$hold' } | Select-Object -First 1)
+            if ($holdDir.Count -eq 1) {
+                Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
+                    Where-Object { $_.Name -like ($nextRec + '_*') } |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+            }
+
+            $nxt = Invoke-SD @(('SETPTR 1,132,60,0,0,3,AS NEXT ' + $nextRec + ',BRIEF'),
+                               'LIST VOC COPYP LPTR 1 NO.PAGE',
+                               'SP.CLOSE 1')
+
+            $suffixed = @()
+            if ($holdDir.Count -eq 1) {
+                $suffixed = @(Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
+                              Where-Object { $_.Name -like ($nextRec + '_*') } |
+                              Select-Object -ExpandProperty Name)
+            }
+            Write-Output ('  hold file now holds: ' + ($suffixed -join '  '))
+            # FOUR DIGITS, NOT THE LITERAL _0001.  $NEXT persists in $hold.dic,
+            # so the second run on one install would legitimately get _0002 and
+            # an exact match would fail on a change that is working.  The
+            # discriminator is the WIDTH: fmt(...,"4'0'R") can only produce four
+            # digits, and the preset can only produce _0.
+            $rxOk = '^' + [regex]::Escape($nextRec) + '_[0-9]{4}$'
+            Note '_NEXTPTR reached DICT $hold through the fold' 1 `
+                 @($suffixed | Where-Object { $_ -match $rxOk }).Count
+            Note 'and did not fall back to the unnumbered suffix' 0 `
+                 @($suffixed | Where-Object { $_ -ceq ($nextRec + '_0') }).Count
+            Write-Output '  --- SETPTR/LIST/SP.CLOSE said: ---'
+            Write-Output $nxt
+        }
+
+        # RESTORE, whether or not anything above passed.
+        $hdown = Invoke-SD @("RUN bp $htog")
+        Note 'the id was restored to $hold' $true ($hdown -match 'MOVED=DOWN')
+        Note 'and CT VOC $hold answers again' $false `
+             ((Invoke-SD @('CT VOC $hold')) -match 'not found')
+        if ($hdown -notmatch 'MOVED=DOWN') {
+            Write-Output '  --- SD said: ---'
+            Write-Output $hdown
+        }
+
+        foreach ($n in @($htog, $hprobe)) {
+            Remove-Item -LiteralPath (Join-Path $bph[0].FullName $n) -Force -ErrorAction SilentlyContinue
+        }
+        Get-ChildItem -LiteralPath $acctDir -Directory |
+            Where-Object { $_.Name -ieq '$hold' } |
+            ForEach-Object {
+                Get-ChildItem -LiteralPath $_.FullName -Force |
+                    Where-Object { $_.Name -like ($nextRec + '_*') } |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+            }
     }
 
     # -----------------------------------------------------------------------

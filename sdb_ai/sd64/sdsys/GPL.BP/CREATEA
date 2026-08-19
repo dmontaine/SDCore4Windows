@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $HOLD VOC id is now $hold.  5.12 (b) again;
+*           BP and $COMMAND.STACK are what is left of the controls.
 * 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists.  5.12 (b),
 *           one file at a time; $HOLD, BP and $COMMAND.STACK are the controls.
 * 18 Aug 26 Windows port - the per-account file names on disk are lower case:
@@ -694,7 +696,7 @@ make.account:
 *   copied here they would name files that do not exist in a user account and
 *   LIST ACCOUNTS would fail to open rather than list; FIRST, SECOND and
 *   THIRD.COMPILE are bootstrap paragraphs that compile the whole of GPL.BP;
-*   $HOLD and BP are already created per-account by create.dir.file below.
+*   $hold and BP are already created per-account by create.dir.file below.
 *
 *   THE SAME TYPE NORMALISATION AS THE LOOP ABOVE, and it earns its place here:
 *   VOC_TEMPLATE's UNLOCK is one of the five malformed records section 8 records,
@@ -742,19 +744,19 @@ make.account:
 *   $SAVEDLISTS had been $SVLISTS on disk since before the port - so one can move
 *   without the other.
 *
-*   18 Aug 26 Windows port - AND NOW THE VOC ID, 5.12 (b), for $savedlists only.
-*   $HOLD, BP and $COMMAND.STACK are still upper case and are the controls: they
-*   show a rename is per file rather than a sweep.
+*   18 Aug 26 Windows port - AND NOW THE VOC ID, 5.12 (b), for $savedlists and
+*   then $hold.  BP and $COMMAND.STACK are still upper case and are what is left
+*   of the controls: they show a rename is per file rather than a sweep.
 *
 *   NO MIGRATION, AND THAT IS WHY THIS COULD GO FIRST.  An account created before
 *   this keeps $HOLD and $SAVEDLISTS, and its own VOC record names the directory,
 *   so it opens as it always did: NTFS matches the path case insensitively, and
 *   _VOC_REF folds the VOC id UP as well as down, so GPL.BP's hard-coded
-*   open "$savedlists" still reaches an upper-case id.  There is no flag day and
-*   no upgrade step.
-   * Create $HOLD
+*   open "$savedlists" and open "$hold" still reach an upper-case id.  There is
+*   no flag day and no upgrade step.
+   * Create $hold
 
-   fn = '$HOLD'
+   fn = '$hold'
    os.name = '$hold'
    descr = 'File for deferred prints'
    dict = @true
@@ -920,7 +922,7 @@ create.dir.file:
 
    if dict then
 *     18 Aug 26 Windows port - '.dic' lower case with the name it follows, so a
-*     per-account dictionary is $hold.dic and not $hold.DIC.  Only $HOLD reaches
+*     per-account dictionary is $hold.dic and not $hold.DIC.  Only $hold reaches
 *     here with dict true; the shipped SDSYS dictionaries are named elsewhere.
       create.file pathname:@ds:os.name:'.dic' dynamic on error
          @system.return.code = -ER$NOT.CREATED

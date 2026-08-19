@@ -5,6 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  The hold file is now called $hold.
+           * SETPTR, SP.VIEW, CLEAN.ACCOUNT, PRINTER FILE and the MICRO editor
+             all name it, and the messages they print name it, so $hold is the
+             spelling you will see from now on.  SETPTR with no file of its own
+             now reports "Hold file: $hold P1" rather than "$HOLD P1".
+           * THE OLD SPELLING STILL WORKS WHEN YOU TYPE IT.  COUNT $HOLD,
+             CT VOC $HOLD and ED $HOLD recname all still reach the file,
+             because SD tries a name as typed, then in lower case, then in
+             upper case.  What you will notice is that SD answers in the new
+             spelling: type CT VOC $HOLD and the heading says VOC $hold.
+           * EXISTING ACCOUNTS ARE NOT TOUCHED and do not need to be.  An
+             account created before this keeps $HOLD in its VOC and goes on
+             working - the same fold reaches it upwards.  Nothing to migrate.
+           * BP and $COMMAND.STACK have NOT moved.  This is still one file at
+             a time, not a sweep.
+
 18 Aug 26  A silent install no longer stops and waits for someone to click.
            * Installing with /VERYSILENT put one message box on screen - the
              one saying SD will not touch an OpenSSH Server you already have -

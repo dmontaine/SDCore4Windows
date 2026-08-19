@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -35,7 +36,7 @@ $recursive
 
 subroutine nextptr()
    seqno = '0'
-   open 'DICT', '$HOLD' to dict.f then
+   open 'DICT', '$hold' to dict.f then
       readu rec from dict.f, '$NEXT' else null
       if not(rec<2> matches '1-4N') then rec = 'X':@fm:1
       seqno = fmt(rec<2>, "4'0'R")

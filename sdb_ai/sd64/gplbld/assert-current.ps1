@@ -91,8 +91,20 @@ if ($binaries.Count -eq 0) {
     $stale = $true
 } else {
     $oldestBuilt = ($binaries | Sort-Object LastWriteTime | Select-Object -First 1)
+    # 18 Aug 26 - THE SAME TWO EXCLUSIONS CHECK B USES BELOW, and A2 was written
+    # without them.  That produced a FALSE STALE THAT NO REINSTALL CLEARS:
+    # "make check-local" builds gplsrc\sdclilib\localtest\local-connect-test.exe,
+    # which is then newer than everything in bin\, and the next run of
+    # check-local recreates it.  The post-cycle sequence this repository
+    # documents is cycle, then check-local, then the verify scripts - so every
+    # verify script after the first refused to run.  Check B's comment below
+    # foresaw exactly this; A2 simply did not inherit it.  Nothing under
+    # localtest\ or __pycache__ is a source of sd.exe, so this does not loosen
+    # the guard.
     $uncompiled  = @(Get-ChildItem (Join-Path $sd64 'gplsrc') -Recurse -File |
-                     Where-Object { $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
+                     Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
+                                    $_.FullName -notmatch '\\localtest\\' -and
+                                    $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
     if ($uncompiled.Count -gt 0) {
         Bad ("{0} source file(s) are newer than bin\{1} ({2}) - run 'make sd':" -f
              $uncompiled.Count, $oldestBuilt.Name,

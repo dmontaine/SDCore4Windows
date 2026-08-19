@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
 * 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -28,7 +29,7 @@
 *
 * Deletes all records from
 *    $COMO
-*    $HOLD
+*    $hold
 *    $savedlists
 *
 *
@@ -69,7 +70,7 @@ $include parser.h
       file.name = "$COMO" ; gosub clean
    end
 
-   file.name = "$HOLD" ; gosub clean
+   file.name = "$hold" ; gosub clean
    file.name = "$savedlists" ; gosub clean
 
    @system.return.code = 0

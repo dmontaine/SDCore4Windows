@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -52,7 +53,7 @@ $include int$keys.h
    status.code = 0
 
    if recd = '' then
-      if file = '$HOLD' then return
+      if downcase(file) = '$hold' then return
       if file = '' then return
    end
 
