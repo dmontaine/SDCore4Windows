@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 18 Aug 26 Windows port - $svlists lower case on disk; the VOC id is unchanged
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -30,9 +31,9 @@
 *
 * new.name  = name of copied list.  Default is as source list.
 *
-* src.file  = file from which to copy. Default is $SAVEDLISTS.
+* src.file  = file from which to copy. Default is $savedlists.
 *
-* tgt.file  = file to which to copy. Default is $SAVEDLISTS.
+* tgt.file  = file to which to copy. Default is $savedlists.
 *
 * options   = CRT
 *             DELETING
@@ -90,7 +91,7 @@ $include parser.h
       end
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end
-   else src.file.name = "$SAVEDLISTS"
+   else src.file.name = "$savedlists"
 
    * Get target file if present
 
@@ -101,7 +102,7 @@ $include parser.h
       end
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end
-   else tgt.file.name = "$SAVEDLISTS"
+   else tgt.file.name = "$savedlists"
 
    * Process options
 
@@ -167,38 +168,40 @@ $include parser.h
 
 * ---------------  Step 2 -  Create the save list file if necessary
 
-   if (src.file.name = "$SAVEDLISTS") or (tgt.file.name = "$SAVEDLISTS") then
-      open "$SAVEDLISTS" to saved.lists.file else
+   if (src.file.name = "$savedlists") or (tgt.file.name = "$savedlists") then
+      open "$savedlists" to saved.lists.file else
          if status() # ER$NVR then
-            stop sysmsg(3248, status()) ;* Erorr xx opening $SAVEDLISTS
+            stop sysmsg(3248, status()) ;* Erorr xx opening $savedlists
          end
 
-         recordlocku @voc, '$SAVEDLISTS'
+         recordlocku @voc, '$savedlists'
 
 *     18 Aug 26 Windows port - $svlists lower case on disk, PROJECT_STATUS.md
-*     5.12 (a).  This is the fallback that runs when the account has no
-*     $SAVEDLISTS VOC entry; CREATEA names it the same way.  The VOC id stays
-*     $SAVEDLISTS.
+*     5.12 (a), and the VOC id is $savedlists as of 5.12 (b).  This is the
+*     fallback that runs when the account has no $savedlists VOC entry; CREATEA
+*     names it the same way.  NO MIGRATION: an account created before the rename
+*     holds $SAVEDLISTS and the open above still finds it, because _VOC_REF folds
+*     UP as well as down.
          create.file "$svlists" dynamic on error
-            release @voc, '$SAVEDLISTS'
+            release @voc, '$savedlists'
             @system.return.code = -status()
-            stop sysmsg(3249, status()) ;* Erorr xx creating $SAVEDLISTS
+            stop sysmsg(3249, status()) ;* Erorr xx creating $savedlists
          end
 
          voc.rec = "F" : @fm : "$svlists"
-         write voc.rec to @voc, "$SAVEDLISTS"
+         write voc.rec to @voc, "$savedlists"
 
-         display sysmsg(3250) ;* Created $SAVEDLISTS
+         display sysmsg(3250) ;* Created $savedlists
 
-         open "$SAVEDLISTS" to saved.lists.file else
-            stop sysmsg(3248, status()) ;* Error xx opening $SAVEDLISTS
+         open "$savedlists" to saved.lists.file else
+            stop sysmsg(3248, status()) ;* Error xx opening $savedlists
          end
       end
    end
 
 * ---------------  Step 3 -  Open files
 
-   if src.file.name = "$SAVEDLISTS" then src.file = saved.lists.file
+   if src.file.name = "$savedlists" then src.file = saved.lists.file
    else
       open src.file.name to src.file else
          open downcase(src.file.name) to src.file else
@@ -209,7 +212,7 @@ $include parser.h
       end
    end
 
-   if tgt.file.name = "$SAVEDLISTS" then tgt.file = saved.lists.file
+   if tgt.file.name = "$savedlists" then tgt.file = saved.lists.file
    else
       open tgt.file.name to tgt.file else
          open downcase(tgt.file.name) to tgt.file else

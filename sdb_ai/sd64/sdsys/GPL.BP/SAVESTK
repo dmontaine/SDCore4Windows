@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 18 Aug 26 Windows port - $svlists lower case on disk; the VOC id is unchanged
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -86,29 +87,31 @@ $include parser.h
 
 * ---------------  Step 2 -  Create the save list file if necessary
 
-   open "$SAVEDLISTS" to saved.lists.file else
+   open "$savedlists" to saved.lists.file else
       @system.return.code = -status()
 
       if status() # ER$NVR then
-         stop sysmsg(3248, status()) ;*  Error %1 opening $SAVEDLISTS
+         stop sysmsg(3248, status()) ;*  Error %1 opening $savedlists
       end
 
 *  18 Aug 26 Windows port - $svlists lower case on disk, PROJECT_STATUS.md
-*  5.12 (a).  This is the fallback that runs when the account has no
-*  $SAVEDLISTS VOC entry; CREATEA names it the same way.  The VOC id stays
-*  $SAVEDLISTS.
+*  5.12 (a), and the VOC id is $savedlists as of 5.12 (b).  This is the
+*  fallback that runs when the account has no $savedlists VOC entry; CREATEA
+*  names it the same way.  NO MIGRATION: an account created before the rename
+*  holds $SAVEDLISTS and the open above still finds it, because _VOC_REF folds
+*  UP as well as down.
       create.file "$svlists" dynamic on error
-         stop sysmsg(3249, status()) ;* Error xx creating $SAVEDLISTS
+         stop sysmsg(3249, status()) ;* Error xx creating $savedlists
       end
 
       voc.rec = "F" : @fm : "$svlists"
-      recordlocku @voc, "$SAVEDLISTS"
-      write voc.rec to @voc, "$SAVEDLISTS"
+      recordlocku @voc, "$savedlists"
+      write voc.rec to @voc, "$savedlists"
 
-      display sysmsg(3250) ;* Created $SAVEDLISTS
+      display sysmsg(3250) ;* Created $savedlists
 
-      open "$SAVEDLISTS" to saved.lists.file else
-         stop sysmsg(3248, status()) ;*  Error %1 opening $SAVEDLISTS
+      open "$savedlists" to saved.lists.file else
+         stop sysmsg(3248, status()) ;*  Error %1 opening $savedlists
       end
    end
 
@@ -121,7 +124,7 @@ $include parser.h
          stop sysmsg(6461, status()) ;* Error xx writing command stack record
       end
 
-      display sysmsg(6462, stack.name) ;* Command stack xx saved in $SAVEDLISTS
+      display sysmsg(6462, stack.name) ;* Command stack xx saved in $savedlists
    end else
       read command.stack from saved.lists.file, stack.name else
          @system.return.code = -status()

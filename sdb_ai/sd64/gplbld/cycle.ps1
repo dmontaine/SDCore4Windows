@@ -190,8 +190,12 @@ $szCproc = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')) {
 $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')) {
                (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')).Length } else { -1 }
 
-Write-Host ("   gcat {0} (want ~132)   GPL.BP.OUT {1} (want ~193)" -f $nGcat, $nOut)
-Write-Host ("   `$CPROC {0} bytes (want >0)   `$BCOMP {1} (want 87,992 - 70,697 is the seed)" -f $szCproc, $szBcomp)
+# 18 Aug 26 - 129/190, NOT 132/193.  Removing SDNet took three programs with it
+# (commit c893308), so the old figures have read three high since the 17:21
+# cycle.  The thresholds below did not move and did not need to: they are set
+# far enough back to catch a bootstrap that failed, not to police a count.
+Write-Host ("   gcat {0} (want ~129)   GPL.BP.OUT {1} (want ~190)" -f $nGcat, $nOut)
+Write-Host ("   `$CPROC {0} bytes (want >0)   `$BCOMP {1} (want ~88,000 - 70,697 is the seed)" -f $szCproc, $szBcomp)
 
 $faults = @()
 if ($szCproc -le 0)   { $faults += '$CPROC is the 0-byte placeholder - the bootstrap never reached the last step' }

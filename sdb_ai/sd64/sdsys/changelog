@@ -5,6 +5,26 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  The saved select list file is now called $savedlists.
+           * SAVE.LIST, GET.LIST, DELETE.LIST, MERGE.LIST, COPY.LIST,
+             SAVE.STACK, CLEAN.ACCOUNT and EDIT.LIST all name it, and the
+             messages they print name it, so the new spelling is what you will
+             see from now on.
+           * THE OLD SPELLING STILL WORKS WHEN YOU TYPE IT, and nothing you
+             type has to change.  ED $SAVEDLISTS, COUNT $SAVEDLISTS,
+             CT VOC $SAVEDLISTS and COPY.LIST ... FROM $SAVEDLISTS all still
+             reach the file, because SD tries a name as typed, then in lower
+             case, then in upper case - for record ids as well as file names.
+             What you will notice is that SD answers in the new spelling: type
+             CT VOC $SAVEDLISTS and the heading it prints back says
+             VOC $savedlists.
+           * EXISTING ACCOUNTS ARE NOT TOUCHED and do not need to be.  An
+             account created before this keeps $SAVEDLISTS in its VOC and goes
+             on working unchanged - the upward half of that same fold is what
+             reaches it.  There is nothing to migrate.
+           * $HOLD, BP and $COMMAND.STACK have NOT moved.  This is one file at
+             a time, not a sweep.
+
 18 Aug 26  Programs can now find a file whatever case its name is stored in.
            * A companion to the change further down this file, which fixed the
              same thing for names you TYPE.  It turns out there are two

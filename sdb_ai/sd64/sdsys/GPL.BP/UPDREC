@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -74,7 +75,7 @@ $include dictdict.h
 
    @system.return.code = -ER$ARGS
 
-   equate savedlist.file to "$SAVEDLISTS"
+   equate savedlist.file to "$savedlists"
    locked.record.list = "&LOCK." : @userno : "&"
    missing.record.list = "&MISS." : @userno : "&"
 

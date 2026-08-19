@@ -366,10 +366,11 @@ try {
     Note 'message 10034 (ssh only) shown' 'yes' $(if ($sdOut -match 'ssh only') { 'yes' } else { 'no' }) $true
 
     Note 'account directory' 'yes' $(if (Test-Path $acctDir) { 'yes' } else { 'no' }) $true
-    # $svlists, not $SAVEDLISTS.  CREATEA prints "Creating $SAVEDLISTS..." and
+    # $svlists, not $savedlists.  CREATEA prints "Creating $savedlists..." and
     # then creates a directory called $svlists - the message is the VOC name,
     # the directory is the DH file name.  This test asserted the message and
-    # failed against a perfectly good account on 14 Aug 2026.
+    # failed against a perfectly good account on 14 Aug 2026.  (The VOC name was
+    # $SAVEDLISTS until 5.12 (b) lower-cased it; the DH name never moved.)
     #
     # 18 Aug 26 - CASE EXACT, AND Test-Path CANNOT DO IT.  The names below are
     # lower case as of PROJECT_STATUS.md 5.12 (a), and Test-Path on NTFS matches

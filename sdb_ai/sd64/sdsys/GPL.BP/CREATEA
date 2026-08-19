@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists.  5.12 (b),
+*           one file at a time; $HOLD, BP and $COMMAND.STACK are the controls.
 * 18 Aug 26 Windows port - the per-account file names on disk are lower case:
 *           $hold, $hold.dic, $svlists, bp.  PROJECT_STATUS.md 5.12 (a).  The
 *           VOC ids are unchanged, so this is the path text only.
@@ -735,15 +737,20 @@ make.account:
    write 'X' to voc.f, '$COMMAND.STACK'
 
 * 18 Aug 26 Windows port - LOWER CASE ON DISK, PROJECT_STATUS.md 5.12 (a).  fn is
-*   the VOC id and stays upper case; os.name is the directory name and the text
-*   stored in VOC fields 2 and 3, which is what LISTF and CT VOC show.  The two
-*   were already allowed to differ - $SAVEDLISTS has been $SVLISTS on disk since
-*   before the port - so nothing new is coupled by moving one and not the other.
+*   the VOC id; os.name is the directory name and the text stored in VOC fields 2
+*   and 3, which is what LISTF and CT VOC show.  The two are allowed to differ -
+*   $SAVEDLISTS had been $SVLISTS on disk since before the port - so one can move
+*   without the other.
+*
+*   18 Aug 26 Windows port - AND NOW THE VOC ID, 5.12 (b), for $savedlists only.
+*   $HOLD, BP and $COMMAND.STACK are still upper case and are the controls: they
+*   show a rename is per file rather than a sweep.
 *
 *   NO MIGRATION, AND THAT IS WHY THIS COULD GO FIRST.  An account created before
-*   this keeps $HOLD, and its own VOC record names it, so it opens as it always
-*   did; NTFS matches case insensitively, so even the relative paths built in C
-*   (to_file.c, the hold file) reach either spelling.  There is no flag day and
+*   this keeps $HOLD and $SAVEDLISTS, and its own VOC record names the directory,
+*   so it opens as it always did: NTFS matches the path case insensitively, and
+*   _VOC_REF folds the VOC id UP as well as down, so GPL.BP's hard-coded
+*   open "$savedlists" still reaches an upper-case id.  There is no flag day and
 *   no upgrade step.
    * Create $HOLD
 
@@ -754,9 +761,9 @@ make.account:
    gosub create.dir.file
 
 
-   * Create $SAVEDLISTS
+   * Create $savedlists
 
-   fn = '$SAVEDLISTS'
+   fn = '$savedlists'
    os.name = '$svlists'
    descr = 'File for saved select lists'
    dict = @false

@@ -9,9 +9,16 @@
 #
 # WHAT CHANGED.  CREATEA's create.dir.file is given a VOC id (fn) and a name on
 # disk (os.name); the second is now lower case, so a new account holds $hold,
-# $hold.dic, $svlists and bp instead of $HOLD, $HOLD.DIC, $SVLISTS and BP.  The
-# VOC ids are untouched - that is the other half of 5.12 and a later step.
-# to_file.c's three hold-file paths moved with it.
+# $hold.dic, $svlists and bp instead of $HOLD, $HOLD.DIC, $SVLISTS and BP.
+# to_file.c's three hold-file paths moved with it.  That is 5.12 (a).
+#
+# AND 5.12 (b) HAS STARTED, FOR ONE FILE.  The VOC id $SAVEDLISTS is now
+# $savedlists.  $HOLD, BP and $COMMAND.STACK are NOT, deliberately, and are the
+# controls in section 3: a change that lower-cased every id would fail there
+# rather than pass.  SECTION 5 IS THE HALF THAT COULD BREAK EVERY EXISTING
+# ACCOUNT - GPL.BP opens the hard-coded literal "$savedlists" in thirteen
+# places, nothing migrates an account created before the rename, and what makes
+# those accounts keep working is _VOC_REF folding the id UP as well as down.
 #
 # IT NEEDS NO ACCOUNT OF ITS OWN, AND THAT IS WHY IT IS UNELEVATED.  The
 # installer creates one through adopt-account.ps1 at every install, so after a
@@ -172,13 +179,33 @@ try {
     Write-Output '  The VOC id is unchanged; fields 2 and 3 hold the path, and that is what'
     Write-Output '  LISTF and CT VOC show a user.'
 
-    $ct = Invoke-SD @('CT VOC $HOLD', 'CT VOC $SAVEDLISTS', 'CT VOC BP')
+    $ct = Invoke-SD @('CT VOC $HOLD', 'CT VOC $savedlists', 'CT VOC BP')
     Note 'CT VOC $HOLD names $hold'          $true ($ct -cmatch '(?m)^\s*2:\s*\$hold\s*$')
     Note 'CT VOC $HOLD names $hold.dic'      $true ($ct -cmatch '(?m)^\s*3:\s*\$hold\.dic\s*$')
-    Note 'CT VOC $SAVEDLISTS names $svlists' $true ($ct -cmatch '(?m)^\s*2:\s*\$svlists\s*$')
+    Note 'CT VOC $savedlists names $svlists' $true ($ct -cmatch '(?m)^\s*2:\s*\$svlists\s*$')
     Note 'CT VOC BP names bp'                $true ($ct -cmatch '(?m)^\s*2:\s*bp\s*$')
     Write-Output '  --- CT VOC said: ---'
     Write-Output $ct
+
+    # THE ID ITSELF, 5.12 (b), AND "NOT FOUND" CANNOT MEASURE IT.  An earlier
+    # version of these two checks asserted that CT VOC $SAVEDLISTS now answers
+    # "Record not found".  IT DOES NOT, and both checks failed on the 20:21:53
+    # install: CT folds the RECORD id as well as the file name (CT:202, one of
+    # the 74 sites), so it finds the record whichever case is typed.
+    #
+    # WHICH GIVES A BETTER INSTRUMENT THAN THE ONE INTENDED.  CT:215 prints the
+    # id it actually MATCHED, not the one typed, so the echo says which spelling
+    # is stored - and it says it however the query was cased.  Typing the OLD
+    # name and being answered in the new one is the rename, demonstrated and not
+    # inferred.  -cmatch: the whole assertion is the case of the echo.
+    $ctUc = Invoke-SD @('CT VOC $SAVEDLISTS')
+    Note 'typing $SAVEDLISTS is answered as $savedlists' $true `
+         ($ctUc -cmatch '(?m)^VOC \$savedlists\s*$')
+    # THE CONTROL, and it is what says this was one file rather than a sweep:
+    # the same query shape against $HOLD must still be answered in upper case.
+    $ctLc = Invoke-SD @('CT VOC $hold')
+    Note 'control: typing $hold is answered as $HOLD' $true `
+         ($ctLc -cmatch '(?m)^VOC \$HOLD\s*$')
 
     # -----------------------------------------------------------------------
     Write-Output ''
@@ -196,6 +223,15 @@ try {
     Note 'GET.LIST read it back' $false ($lst -match 'not found')
     Write-Output '  --- SAVE.LIST/GET.LIST said: ---'
     Write-Output $lst
+
+    # THE PROMISE MADE TO USERS IN THE CHANGELOG: the old spelling still works
+    # when it is TYPED, even though the id has moved.  That is the downward half
+    # of the fold, and it is what keeps ED $SAVEDLISTS and COPY.LIST ... FROM
+    # $SAVEDLISTS working.  Section 5 is the upward half.
+    Note 'COUNT $SAVEDLISTS still finds the file' $false `
+         ((Invoke-SD @('COUNT $SAVEDLISTS')) -match 'File not found')
+    Note 'COUNT $savedlists finds it as typed'    $false `
+         ((Invoke-SD @('COUNT $savedlists')) -match 'File not found')
 
     # $hold, reached the way a print goes there rather than through the VOC:
     # SETPTR mode 3 with AS <name> makes SD build the path itself - SETPTR:329
@@ -224,7 +260,88 @@ try {
 
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 5. COPYP, which rides this cycle and is unrelated ===================='
+    Write-Output '=== 5. AN ACCOUNT CREATED BEFORE THE RENAME STILL WORKS =================='
+    Write-Output '  The no-migration claim, and it is the one that could break every account'
+    Write-Output '  that already exists.  GPL.BP now opens the literal "$savedlists"; those'
+    Write-Output '  accounts hold $SAVEDLISTS, and nothing upgrades them.  What makes them'
+    Write-Output '  keep working is _VOC_REF folding UP.  This renames the id back to the'
+    Write-Output '  old spelling, drives SAVE.LIST/GET.LIST through it, and restores it.'
+    Write-Output '  A failure part-way leaves the account on $SAVEDLISTS - which is exactly'
+    Write-Output '  the state this section says works - so the failure mode is benign.'
+
+    $tog     = 'ZZSVTOGL'
+    $oldList = ('ZZO' + $Tag).ToUpper()
+    $oldRec  = Join-Path $acctDir ('$svlists\' + $oldList)
+    $bp5     = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+                 Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
+    if ($bp5.Count -ne 1) {
+        Note 'section 5 could run (bp directory found)' $true $false
+    } else {
+        # A PROGRAM, because no verb renames a VOC record in place.  It TOGGLES,
+        # so one file both breaks the account and puts it back and there is one
+        # thing to delete afterwards.  Single-quoted here-string: every $ in it
+        # is SD source, not PowerShell.
+        $togSrc = @'
+* ZZSVTOGL - written by verify-lcnames.ps1.  Safe to delete.
+* Moves the saved-list VOC id between its two spellings, whichever way round it
+* currently is, and says which way it went.
+   open 'VOC' to voc.f else stop
+   read rec from voc.f, '$savedlists' then
+      write rec to voc.f, '$SAVEDLISTS'
+      delete voc.f, '$savedlists'
+      print 'MOVED=UP'
+   end else
+      read rec from voc.f, '$SAVEDLISTS' then
+         write rec to voc.f, '$savedlists'
+         delete voc.f, '$SAVEDLISTS'
+         print 'MOVED=DOWN'
+      end else
+         print 'MOVED=NONE'
+      end
+   end
+end
+'@
+        [IO.File]::WriteAllText((Join-Path $bp5[0].FullName $tog),
+                                ($togSrc -replace "`r`n", "`n"),
+                                (New-Object Text.UTF8Encoding $false))
+
+        if (Test-Path -LiteralPath $oldRec) { Remove-Item -LiteralPath $oldRec -Force }
+
+        $up = Invoke-SD @("BASIC bp $tog", "RUN bp $tog")
+        Note 'the id was renamed back to $SAVEDLISTS' $true ($up -match 'MOVED=UP')
+        if ($up -notmatch 'MOVED=UP') {
+            Write-Output '  --- SD said: ---'
+            Write-Output $up
+        } else {
+            # THE MEASUREMENT.  SAVELST's open is the literal "$savedlists", so
+            # only the upward fold can reach an id spelled $SAVEDLISTS.  The
+            # record arriving on disk is what says the right file was opened.
+            $old = Invoke-SD @('SELECT VOC', ('SAVE.LIST ' + $oldList),
+                               ('GET.LIST ' + $oldList))
+            Note 'SAVE.LIST reached the upper-case id' $true (Test-Path -LiteralPath $oldRec)
+            Note 'GET.LIST read it back'               $false ($old -match 'not found')
+            Note 'no open error was reported'          $false ($old -match 'opening \$savedlists')
+            Write-Output '  --- SAVE.LIST/GET.LIST said: ---'
+            Write-Output $old
+        }
+
+        # RESTORE, whether or not anything above passed.
+        $down = Invoke-SD @("RUN bp $tog")
+        Note 'the id was restored to $savedlists' $true ($down -match 'MOVED=DOWN')
+        Note 'and CT VOC $savedlists answers again' $false `
+             ((Invoke-SD @('CT VOC $savedlists')) -match 'not found')
+        if ($down -notmatch 'MOVED=DOWN') {
+            Write-Output '  --- SD said: ---'
+            Write-Output $down
+        }
+
+        Remove-Item -LiteralPath (Join-Path $bp5[0].FullName $tog) -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $oldRec) { Remove-Item -LiteralPath $oldRec -Force }
+    }
+
+    # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 6. COPYP, which rides this cycle and is unrelated ===================='
     Write-Output '  VOC_TEMPLATE/COPYP field 1 held the description where the type code'
     Write-Output '  belongs.  IT WAS NOT BROKEN BY IT - measured on the pre-change 18:54:10'
     Write-Output '  install, COPYP already answered "File name required", because CPROC:1436'
@@ -247,7 +364,7 @@ try {
 
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 6. WHY COPYP WAS NEVER BROKEN, measured rather than argued ==========='
+    Write-Output '=== 7. WHY COPYP WAS NEVER BROKEN, measured rather than argued ==========='
     Write-Output '  CPROC:1410 says a type code MAY be followed by comment text with no'
     Write-Output '  space - the PI / PI-open / UniVerse rule - and CPROC:1433 tests only'
     Write-Output '  voc.entry.type[1,1].  So "Verb for Pick style COPY" is a V with a'
@@ -261,7 +378,7 @@ try {
     $bpDir = @(Get-ChildItem -LiteralPath $acctDir -Directory |
                Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
     if ($bpDir.Count -ne 1) {
-        Note 'section 6 could run (bp directory found)' $true $false
+        Note 'section 7 could run (bp directory found)' $true $false
     } else {
         $mkSrc = @"
 * $mk - written by verify-lcnames.ps1.  Safe to delete.

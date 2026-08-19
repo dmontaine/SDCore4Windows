@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -44,7 +45,7 @@ $include keys.h
       select.count(list.no) = 0
       select.list(list.no) = ''
       if len(list) > 0 then
-         open '$SAVEDLISTS' to sl.f then
+         open '$savedlists' to sl.f then
             write list to sl.f, name
             return value 1    ;* Take THEN clause
          end

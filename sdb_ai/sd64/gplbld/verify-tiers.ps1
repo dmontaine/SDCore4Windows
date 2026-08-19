@@ -23,7 +23,7 @@
 # a dynamic-file artefact and not a record, and TIER.OMIT.STANDARD and
 # TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 407 records
 # reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $HOLD,
-# $SAVEDLISTS, BP).  That gives:
+# $savedlists, BP).  That gives:
 #
 #   ADMINISTRATOR  407 + 10 + 4 = 421     (9 until SET.PASSWORD joined them)
 #   PROGRAMMER     407     + 4 = 411
