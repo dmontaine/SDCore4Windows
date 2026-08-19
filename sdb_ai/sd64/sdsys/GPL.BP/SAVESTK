@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Aug 26 Windows port - $svlists lower case on disk; the VOC id is unchanged
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -92,11 +93,15 @@ $include parser.h
          stop sysmsg(3248, status()) ;*  Error %1 opening $SAVEDLISTS
       end
 
-      create.file "$SVLISTS" dynamic on error
+*  18 Aug 26 Windows port - $svlists lower case on disk, PROJECT_STATUS.md
+*  5.12 (a).  This is the fallback that runs when the account has no
+*  $SAVEDLISTS VOC entry; CREATEA names it the same way.  The VOC id stays
+*  $SAVEDLISTS.
+      create.file "$svlists" dynamic on error
          stop sysmsg(3249, status()) ;* Error xx creating $SAVEDLISTS
       end
 
-      voc.rec = "F" : @fm : "$SVLISTS"
+      voc.rec = "F" : @fm : "$svlists"
       recordlocku @voc, "$SAVEDLISTS"
       write voc.rec to @voc, "$SAVEDLISTS"
 

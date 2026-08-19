@@ -5,6 +5,56 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  Programs can now find a file whatever case its name is stored in.
+           * A companion to the change further down this file, which fixed the
+             same thing for names you TYPE.  It turns out there are two
+             separate lookups, and only one of them had been fixed.
+           * Commands typed at the colon prompt found a lower-case file.  An
+             SDBasic program's OPEN statement did not, because it goes through
+             a different route that still matched the name exactly.
+           * So a program containing OPEN "$SAVEDLISTS" would have stopped
+             working the moment that file was renamed to lower case.  The order
+             for OPEN is now the same as everywhere else: as typed, then lower
+             case, then upper case.
+           * Q-pointers are included: one naming a file that has since been
+             renamed still resolves.
+           * NOTHING CHANGES ON AN EXISTING SYSTEM, for the same reason as
+             before - every name SD ships is upper case, so the new attempt
+             finds nothing until lower-case names appear.
+
+18 Aug 26  New accounts get their files with lower-case names on disk.
+           * An account you create now holds $hold, $hold.dic, $svlists and bp
+             instead of $HOLD, $HOLD.DIC, $SVLISTS and BP.  LISTF and CT VOC
+             show the new spelling.
+           * The names you TYPE are unchanged - $HOLD, $SAVEDLISTS and BP still
+             work, and are still what appears in the VOC.  Only the directory
+             name and the path stored against it have moved.
+           * EXISTING ACCOUNTS ARE NOT TOUCHED and do not need to be.  Each
+             account's VOC names its own files, and Windows matches file names
+             without regard to case, so both spellings keep working.  There is
+             nothing to migrate.
+           * This is the first step of a longer change towards lower case
+             throughout.
+
+18 Aug 26  CORRECTION to the UNLOCK entry further down, which is wrong.
+           * That entry says UNLOCK had never worked, because its VOC entry
+             carried the text "Verb to unlock records" in the field where the
+             record TYPE belongs.  The record was indeed written that way.  The
+             conclusion drawn from it was not right.
+           * SD ALLOWS THAT ON PURPOSE.  A type code may be followed by comment
+             text with no space in between - the same rule PI, PI/open and
+             UniVerse follow - and SD tests only the characters belonging to
+             the code it is looking for.  So "Verb to unlock records" reads as
+             type V with a comment after it, and UNLOCK dispatched normally.
+           * So UNLOCK was not repaired, and if you have been restarting SD to
+             clear a stuck record lock, UNLOCK would have done it.  Sorry.
+           * COPYP carried the same style of entry and was likewise working;
+             it was checked before being changed.
+           * BOTH RECORDS HAVE STILL BEEN CHANGED to a bare V, because every
+             other verb in the file is written that way, and it was the
+             inconsistency that produced the wrong conclusion.  Neither verb
+             behaves differently.
+
 18 Aug 26  SDNet, the remote file access system, has been removed.
            * SD could open a file held on another SD server by putting
              "server;file" in a VOC entry.  That is gone.  A VOC entry

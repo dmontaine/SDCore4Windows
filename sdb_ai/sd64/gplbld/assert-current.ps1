@@ -59,6 +59,57 @@ if ($hi -ne $hb) {
     Note ("  sd.exe matches: {0}" -f $hi.Substring(0,16))
 }
 
+# --- A2. the binary is only as current as the last "make sd".
+#
+# 18 Aug 26 - CHECK A COMPARES TWO BINARIES AND CANNOT SEE AN UNCOMPILED SOURCE
+# CHANGE, which is how a C edit reached a commit having never run.  to_file.c
+# was changed at 19:15, cycle.ps1 ran at 19:38 - and cycle.ps1 CONTAINS NO
+# "make".  It stages what is already in bin\.  So the installed sd.exe matched
+# bin/sd.exe (both two hours old, both equal), check B compared source mtimes
+# against the INSTALL time and to_file.c was older than that, and both checks
+# passed on a binary that did not contain the change.
+#
+# THE HEADER ABOVE REASONS ABOUT THE OPPOSITE DIRECTION - "most changes here are
+# BASIC, so hashing sd.exe is not enough" - and that is true and is why B
+# exists.  This is the other half: for the changes that ARE C, the binary is the
+# only thing that carries them, and nothing checked that it had been rebuilt.
+#
+# WHAT MADE IT COSTLY RATHER THAN OBVIOUS: the test for the change PASSED.
+# to_file.c moved the hold file's relative path from $HOLD to $hold, NTFS matches
+# either spelling against the $hold directory, so printing to the hold file
+# worked on the old binary exactly as it does on the new one.  A green run on a
+# stale binary is the failure this whole script exists to prevent.
+#
+# AGAINST THE OLDEST BINARY IN bin\, not sd.exe alone, so a change under
+# gplsrc\sdclilib or gplsrc\sdsvc counts too - those build sdclilib.dll and
+# sdsvc.exe, which ship in the same install.  A source change that rebuilds none
+# of them is still a false stale, and that is the right way round.
+$binaries = @(Get-ChildItem (Join-Path $sd64 'bin') -File |
+              Where-Object { $_.Extension -in '.exe', '.dll' })
+if ($binaries.Count -eq 0) {
+    Bad 'bin\ holds no binaries - run "make sd"'
+    $stale = $true
+} else {
+    $oldestBuilt = ($binaries | Sort-Object LastWriteTime | Select-Object -First 1)
+    $uncompiled  = @(Get-ChildItem (Join-Path $sd64 'gplsrc') -Recurse -File |
+                     Where-Object { $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
+    if ($uncompiled.Count -gt 0) {
+        Bad ("{0} source file(s) are newer than bin\{1} ({2}) - run 'make sd':" -f
+             $uncompiled.Count, $oldestBuilt.Name,
+             $oldestBuilt.LastWriteTime.ToString('dd MMM HH:mm:ss'))
+        $uncompiled | Sort-Object LastWriteTime -Descending | Select-Object -First 10 |
+            ForEach-Object {
+                Write-Output ("       {0}  {1}" -f
+                    $_.LastWriteTime.ToString('dd MMM HH:mm:ss'),
+                    $_.FullName.Substring($sd64.Length + 1))
+            }
+        $stale = $true
+    } else {
+        Note ("  bin\ built {0}, no source newer" -f
+              $oldestBuilt.LastWriteTime.ToString('dd MMM HH:mm:ss'))
+    }
+}
+
 # --- B. everything the binary cannot see.
 #
 # The install moment is when the data tree was CREATED - the files inside it
@@ -90,7 +141,8 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
                   'verify-credacl.ps1', 'verify-nocase.ps1',
                   'verify-osusers.ps1', 'verify-catgate.ps1',
-                  'verify-fold.ps1', 'verify-nonet.ps1')
+                  'verify-fold.ps1', 'verify-nonet.ps1',
+                  'verify-lcnames.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

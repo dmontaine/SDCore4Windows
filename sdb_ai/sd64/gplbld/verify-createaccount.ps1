@@ -366,12 +366,21 @@ try {
     Note 'message 10034 (ssh only) shown' 'yes' $(if ($sdOut -match 'ssh only') { 'yes' } else { 'no' }) $true
 
     Note 'account directory' 'yes' $(if (Test-Path $acctDir) { 'yes' } else { 'no' }) $true
-    # $SVLISTS, not $SAVEDLISTS.  CREATEA prints "Creating $SAVEDLISTS..." and
-    # then creates a directory called $SVLISTS - the message is the VOC name,
+    # $svlists, not $SAVEDLISTS.  CREATEA prints "Creating $SAVEDLISTS..." and
+    # then creates a directory called $svlists - the message is the VOC name,
     # the directory is the DH file name.  This test asserted the message and
     # failed against a perfectly good account on 14 Aug 2026.
-    foreach ($f in @('VOC', '$HOLD', '$SVLISTS', 'BP')) {
-        Note ('  ' + $f) 'yes' $(if (Test-Path (Join-Path $acctDir $f)) { 'yes' } else { 'no' }) $true
+    #
+    # 18 Aug 26 - CASE EXACT, AND Test-Path CANNOT DO IT.  The names below are
+    # lower case as of PROJECT_STATUS.md 5.12 (a), and Test-Path on NTFS matches
+    # $HOLD against $hold, so it would pass whichever case CREATEA wrote and
+    # assert nothing about the rename.  Compare against the directory listing
+    # with -ceq instead.  VOC and BP.OUT are deliberately still upper case; the
+    # per-account VOC rename is a later step and BP.OUT is made by BASIC.
+    $onDisk = @(Get-ChildItem -LiteralPath $acctDir -Force | Select-Object -ExpandProperty Name)
+    foreach ($f in @('VOC', '$hold', '$hold.dic', '$svlists', 'bp', 'cat')) {
+        $hit = @($onDisk | Where-Object { $_ -ceq $f }).Count
+        Note ('  ' + $f + ' (exact case)') 'yes' $(if ($hit -eq 1) { 'yes' } else { 'no' }) $true
     }
 
     # NO.PAGE IS NOT OPTIONAL, AND THE REASON ONLY APPEARS WITH USE.  A piped

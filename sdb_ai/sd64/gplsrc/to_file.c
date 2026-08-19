@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Aug 26 Windows port - the hold file's relative path is $hold, lower case,
+ *            to match the directory CREATEA now creates.  PROJECT_STATUS.md 5.12.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -173,18 +175,30 @@ Private void start_file(PRINT_UNIT* pu) {
     }
 
     if (pu->mode == PRINT_TO_AUX_PORT) {
-      sprintf(fn, "$HOLD%c__Aux%d.%d", DS, (int)process.user_no,
+      sprintf(fn, "$hold%c__Aux%d.%d", DS, (int)process.user_no,
               (int)(pu->unit));
       goto open_file;
     }
 
     /* If we get here, this is either PRINT_TO_FILE or PRINT_AND_HOLD */
 
+    /* Modified by Composer AI - 2026/08/18.
+       The three paths below are lower case because CREATEA now creates the
+       account's hold file as $hold (PROJECT_STATUS.md 5.12 (a)).  They are
+       relative names resolved against the account directory, and NTFS matches
+       without regard to case, so an account created before the rename - which
+       still has $HOLD - is reached by either spelling and needs no migration.
+
+       THE memcmp BELOW IS NOT A PATH AND IS DELIBERATELY LEFT UPPER CASE.  It
+       tests the file name SETPTR was given for the "$HOLD recname" form, which
+       is a VOC-style name typed by the user; VOC ids are still upper case.
+       Folding it belongs with the VOC id half of 5.12, not here. */
+
     if (pu->file_name == NULL) /* Use default name */
     {
-      sprintf(fn, "$HOLD%cP%d", DS, (int)(pu->unit));
+      sprintf(fn, "$hold%cP%d", DS, (int)(pu->unit));
     } else if (memcmp(pu->file_name, "$HOLD ", 6) == 0) {
-      sprintf(fn, "$HOLD%c%s", DS, pu->file_name + 6);
+      sprintf(fn, "$hold%c%s", DS, pu->file_name + 6);
     } else {
       strcpy(fn, pu->file_name);
     }

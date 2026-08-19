@@ -27,6 +27,14 @@
 # (PARSER:151) and then opens the file, which is the pair of sites this change
 # exists for.  "File not found" and "0 record(s) counted" are unambiguous.
 #
+# SECTION 4 IS A SECOND LOOKUP, ADDED 18 Aug 2026, AND COUNT CANNOT REACH IT.
+# The 74 folded sites all try the name in three cases themselves and hand each
+# one to _VOC_REF, which matched EXACTLY and had no fold of its own - it was not
+# among the 36 files the fold commit changed.  So every verb passed while every
+# hard-coded open "$SAVEDLISTS" in GPL.BP would have broken the moment a VOC id
+# was renamed.  Only a BASIC program with a literal in it can show the
+# difference, which is why section 4 compiles one.
+#
 # DRIVING SD FROM POWERSHELL: input must be PIPED, not redirected, and the pipe
 # prepends a BOM to the first line, so a blank sacrificial line absorbs it.
 # PROJECT_STATUS.md section 6, and verify-catgate.ps1's header for the prompt
@@ -53,6 +61,10 @@ $sdsys = Join-Path $env:ProgramData 'SD\sdsys'
 # earlier run created and deleted is a variable this test does not need.
 $lc = 'zzlc' + $Tag        # created in lower case
 $uc = ('zzuc' + $Tag).ToUpper()
+
+# Fixed, not per-run like $lc/$uc: it is a program, not a file, so a leftover
+# from an earlier run is overwritten rather than refused.
+$probeName = 'ZZFOLDOPEN'
 
 $results = New-Object System.Collections.ArrayList
 $failed  = $false
@@ -136,6 +148,12 @@ function Remove-Made {
             if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
         }
     }
+    # Section 4's probe: the source record in BP and the object in BP.OUT.  Both
+    # are plain files - BP and BP.OUT are directory files.
+    foreach ($p in @((Join-Path (Join-Path $sdsys 'BP') $probeName),
+                     (Join-Path (Join-Path $sdsys 'BP.OUT') $probeName))) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
+    }
 }
 
 # BEFORE THE assert-current GATE.  Clearing up after an earlier run must not
@@ -209,6 +227,73 @@ Write-Output '=== 3. A name that is in no case at all is still refused =========
 # Without this the suite would pass on a fold that answered "counted" to
 # everything, which is the failure mode that matters most here.
 Note 'COUNT zznosuchfile' 'not found' (Test-Count 'zznosuchfile')
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 4. THE BASIC "OPEN" STATEMENT, which is a different lookup ============'
+Write-Output '  COUNT above goes through the parser.  OPEN goes through _VOC_REF, which'
+Write-Output '  the 74-site fold never touched.  MEASURED on the 18:54:10 install, before'
+Write-Output '  the change: A and D were FAIL, while COUNT found both files.'
+
+# BP is a directory file, so a record is just a file on disk.  That is what makes
+# this cheap - no editor driven down a pipe, and section 7 step 8 records the
+# same trick.  LF endings and no BOM, like every other record in GPL.BP.
+$probeSrc = @"
+* $probeName - written by verify-fold.ps1.  Safe to delete.
+   open '$($lc.ToUpper())' to f1 then
+      print 'A=OK'
+   end else
+      print 'A=FAIL'
+   end
+   open '$lc' to f2 then
+      print 'B=OK'
+   end else
+      print 'B=FAIL'
+   end
+   open '$uc' to f3 then
+      print 'C=OK'
+   end else
+      print 'C=FAIL'
+   end
+   open '$($uc.ToLower())' to f4 then
+      print 'D=OK'
+   end else
+      print 'D=FAIL'
+   end
+   open 'zznosuchfileatall' to f5 then
+      print 'E=OK'
+   end else
+      print 'E=FAIL'
+   end
+end
+"@
+[IO.File]::WriteAllText((Join-Path (Join-Path $sdsys 'BP') $probeName),
+                        ($probeSrc -replace "`r`n", "`n"),
+                        (New-Object Text.UTF8Encoding $false))
+
+function Get-Probe($out, $tag) {
+    if ($out -match ('(?m)^' + $tag + '=(OK|FAIL)\s*$')) { return $matches[1] }
+    return 'unclear'
+}
+
+$run = Invoke-SD @("BASIC BP $probeName", "RUN BP $probeName")
+if ($run -notmatch '0 error\(s\)') {
+    Write-Output '  --- SD said: ---'
+    Write-Output $run
+    Write-Output "  $probeName did not compile - section 4 could not be read"
+    $failed = $true
+} else {
+    # A and D are the change.  B and C are the regression guard: they worked
+    # before and an exact-match read is still what serves them.
+    Note 'OPEN a lower-case id typed UPPER' 'OK'   (Get-Probe $run 'A')
+    Note 'OPEN a lower-case id as typed'    'OK'   (Get-Probe $run 'B')
+    Note 'OPEN an upper-case id as typed'   'OK'   (Get-Probe $run 'C')
+    Note 'OPEN an upper-case id typed LOWER' 'OK'  (Get-Probe $run 'D')
+    # Without this the section would pass on a fold that opened anything at all.
+    Note 'OPEN a name in no case at all'    'FAIL' (Get-Probe $run 'E')
+    Write-Output '  --- RUN said: ---'
+    Write-Output $run
+}
 
 # ---------------------------------------------------------------------------
 Write-Output ''
