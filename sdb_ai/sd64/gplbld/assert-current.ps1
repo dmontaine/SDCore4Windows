@@ -155,7 +155,7 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-osusers.ps1', 'verify-catgate.ps1',
                   'verify-fold.ps1', 'verify-nonet.ps1',
                   'verify-lcnames.ps1', 'post-cycle-elevated.ps1',
-                  'verify-keys.ps1')
+                  'verify-keys.ps1', 'probe-keys.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
