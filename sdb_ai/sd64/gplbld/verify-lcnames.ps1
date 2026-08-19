@@ -164,14 +164,25 @@ function Remove-Probes {
     # compiles in it, but verify-nocase.ps1 and verify-osusers.ps1 make one too
     # and it is not this script's to remove.  -Cleanup clears the flag, because
     # then removing it IS the job.
+    # 19 Aug 26 - bp.out, NOT bp.OUT.  BASIC names the object file from the VOC
+    # record that answered and the suffix follows its case, so the id it creates
+    # is now bp.out.  The old mixed-case spelling here left the file behind and
+    # printed the warning below on a perfectly good install: measured on the
+    # 09:10:45 install, "DELETE.FILE bp.OUT FORCE" removed nothing while
+    # "DELETE.FILE bp.out FORCE" answered "DATA portion 'BP.OUT' deleted /
+    # VOC entry 'bp.out' deleted".  WHY THE MIXED SPELLING IS NOT FOLDED TO THE
+    # LOWER ONE IS NOT ESTABLISHED - see PROJECT_STATUS.md 8, open questions.
     if ($objDir.Count -eq 1 -and -not $script:hadObjDir) {
-        $null = Invoke-SD @('DELETE.FILE bp.OUT FORCE')
+        $null = Invoke-SD @('DELETE.FILE bp.out FORCE')
         $still = @(Get-ChildItem -LiteralPath $acctDir -Directory -ErrorAction SilentlyContinue |
                    Where-Object { $_.Name -ieq 'BP.OUT' })
         if ($still.Count -eq 0) {
-            Write-Output '  removed the bp.OUT object file this script created'
+            Write-Output '  removed the bp.out object file this script created'
         } else {
-            Write-Output '  WARNING: bp.OUT is still there - a later BASIC BP <x> will fail'
+            # NOT the old "a later BASIC BP <x> will fail" - that failure was the
+            # mixed-case id, and it is fixed.  A left-behind object file is now
+            # just an object file, and section 9 clears it as its first act.
+            Write-Output '  note: the bp.out object file is still there; section 9 clears it next run'
         }
     }
 }
