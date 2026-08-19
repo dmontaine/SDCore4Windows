@@ -8,7 +8,7 @@
 # run, and this is the one part of the install nobody had exercised (section 4).
 #
 # WHY IT IS RUN AT BUILD TIME.  gplbld/stage.py used to stage gcat, cat,
-# GPL.BP.OUT, BP.OUT and PCODE.OUT empty, which left the end user to run all of
+# gpl.bp.out, bp.out and pcode.out empty, which left the end user to run all of
 # this on their own machine - needing Python, and needing gplbld/ in the data
 # tree, which the data-tree-holds-data-only decision forbids.  So the bootstrap
 # happens here, on the build machine, and the installer ships the result.  The
@@ -62,7 +62,7 @@ SD_ADMIN_GID = 544
 # Field mark in a stored record, as gplbld/stage.py also has it.
 FM = '\n'
 
-# Copied into the sysdir for the bootstrap and removed afterwards.  GPL.BP/
+# Copied into the sysdir for the bootstrap and removed afterwards.  gpl.bp/
 # WRITE_INSTALL_DICTS reads its input as @sdsys:"/gplbld/FILES_DICTS", so the
 # file has to be inside the data tree while it runs - and must not still be
 # there when the tree ships.  This is the whole of the "gplbld in the data
@@ -98,23 +98,23 @@ def is_elevated():
 def check_account_record(sysdir):
     """Refuse to bootstrap a tree whose SDSYS account points somewhere else.
 
-    Field 1 of ACCOUNTS/SDSYS is the account directory, and once a session has
-    logged in it is what GPL.BP and GPL.BP.OUT resolve to - the gcat comes from
+    Field 1 of accounts/SDSYS is the account directory, and once a session has
+    logged in it is what gpl.bp and gpl.bp.out resolve to - the gcat comes from
     the config file, the sources do not.  The tracked record ships naming
     /usr/local/sdsys, the Linux development tree, and on 15 Aug 2026 a run
     against it compiled 190 programs THERE and catalogued them into the staged
     tree: a staged gcat holding 13 Aug objects, with no symptom until somebody
     installed it.  Cheap to check, expensive to find.
     """
-    rec = os.path.join(sysdir, 'ACCOUNTS', 'SDSYS')
+    rec = os.path.join(sysdir, 'accounts', 'SDSYS')
     if not os.path.isfile(rec):
-        die('no ACCOUNTS/SDSYS record in %s' % sysdir)
+        die('no accounts/SDSYS record in %s' % sysdir)
     with open(rec, 'rb') as f:
         acctdir = f.read().decode('latin-1').split(FM)[0]
     if not os.path.isdir(acctdir) or not os.path.samefile(acctdir, sysdir):
-        die('ACCOUNTS/SDSYS names %s, but this bootstrap is for\n'
-            '  %s.  Field 1 is the SDSYS account directory, and GPL.BP and\n'
-            '  GPL.BP.OUT resolve through it, so the compile would read and\n'
+        die('accounts/SDSYS names %s, but this bootstrap is for\n'
+            '  %s.  Field 1 is the SDSYS account directory, and gpl.bp and\n'
+            '  gpl.bp.out resolve through it, so the compile would read and\n'
             '  write there instead.  gplbld/stage.py sets this before calling;\n'
             '  set it yourself if you are running bootstrap.py by hand.'
             % (acctdir or '(empty)', sysdir))
@@ -222,7 +222,7 @@ def main():
         bbcmp = os.path.join(here, 'bbcmp.py')
         for name in BBCMP_FIRST:
             run([sys.executable, bbcmp, sysdir,
-                 'GPL.BP/' + name, 'GPL.BP.OUT/' + name])
+                 'gpl.bp/' + name, 'gpl.bp.out/' + name])
 
         print('  building the pcode library')
         run([sys.executable, os.path.join(here, 'pcode_bld.py'), sysdir])
@@ -256,7 +256,7 @@ def main():
             # the same thing by commenting the line out (line 603).
             sd(sdexe, env, ['-i'], expect_fail=True)
 
-            for name in ('VOC', 'VOC.DIC', 'ACCOUNTS.DIC', '$MAP', 'DICT.DIC'):
+            for name in ('voc', 'voc.dic', 'accounts.dic', '$map', 'dict.dic'):
                 if not os.path.exists(os.path.join(sysdir, name)):
                     die('sd -i did not create %s; pass 1 really did fail'
                         % name)

@@ -376,10 +376,12 @@ try {
     # lower case as of PROJECT_STATUS.md 5.12 (a), and Test-Path on NTFS matches
     # $HOLD against $hold, so it would pass whichever case CREATEA wrote and
     # assert nothing about the rename.  Compare against the directory listing
-    # with -ceq instead.  VOC and BP.OUT are deliberately still upper case; the
-    # per-account VOC rename is a later step and BP.OUT is made by BASIC.
+    # with -ceq instead.
+    #
+    # 19 Aug 26 - voc JOINED THEM, 5.12 (a)'s wide half (CREATEA:581).  bp.out
+    # is still absent from this list because BASIC makes it, not CREATE.ACCOUNT.
     $onDisk = @(Get-ChildItem -LiteralPath $acctDir -Force | Select-Object -ExpandProperty Name)
-    foreach ($f in @('VOC', '$hold', '$hold.dic', '$svlists', 'bp', 'cat')) {
+    foreach ($f in @('voc', '$hold', '$hold.dic', '$svlists', 'bp', 'cat')) {
         $hit = @($onDisk | Where-Object { $_ -ceq $f }).Count
         Note ('  ' + $f + ' (exact case)') 'yes' $(if ($hit -eq 1) { 'yes' } else { 'no' }) $true
     }

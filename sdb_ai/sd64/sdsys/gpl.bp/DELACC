@@ -1,0 +1,306 @@
+* DELACC
+* DELETE.ACCOUNT verb
+* Copyright (c) 2007 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Aug 26 Windows port - SDSYS accounts, and the account's own voc, are lower
+*           case on disk.  PROJECT_STATUS.md 5.12 (a).
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 14 Aug 26 Windows port - the OS account is offered for deletion only when SD
+*           created it, read back from the description CREATE_USER stamps.
+*           The CREATUSR gate is gone, and the ACCOUNTS record is deleted last
+*           so a failure leaves something the verb can be re-run against.
+* rev 0.9.0 delete-account requires admin priv, are we admin?
+*           on user account, delete os user if configured
+* rev 1.0-1 use userdel not deluser (deluser not on all Linux version)
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* DELETE.ACCOUNT account.name
+*
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $delete.account
+$catalog $DELACC
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+* REV 0.9.0
+deffun is_group(group) calling '!is_group'
+deffun os_group(action,group,member) calling '!os_group'
+deffun delete_user(username) calling '!delete_user'
+deffun valid_os_name(name) calling '!valid_os_name'
+* 14 Aug 26 Windows port - did SD create the OS account behind this account?
+deffun is_sd_user(username) calling '!is_sd_user'
+   prompt ''
+
+   parser = "!PARSER"
+
+* rev 0.9.0 delete-account requires admin priv, are we admin?
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+     stop sysmsg(2001)  ;* Command requires administrator privileges
+   end   
+
+   @system.return.code = -ER$ARGS            ;* Preset for argument errors
+
+
+   call @parser(parser$reset, 0, @sentence, 0)
+   call @parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   * Get and process account name
+
+   call @parser(parser$get.token, token.type, acc.name, keyword)
+   if token.type = PARSER$END then
+      display sysmsg(6001) :  ;* Account name:
+      input acc.name
+      acc.name = trim(acc.name)
+      if acc.name = '' then stop
+   end
+
+   * Validate account name
+
+   acc.name = upcase(acc.name)
+
+   * Check no further command arguments
+
+   call @parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END then
+      stop sysmsg(2018, token) ;* Unexpected token (xx)
+   end
+
+   if acc.name = 'SDSYS' then
+      stop sysmsg(6025) ;* Cannot delete SDSYS account
+   end
+
+   if acc.name = @who then
+      stop sysmsg(6026) ;* Cannot delete own account
+   end
+
+   * Check account exists in ACCOUNTS file
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      stop sysmsg(6000) ;* Cannot open ACCOUNTS file in SDSYS account
+   end
+
+   readu acc.rec from acc.f, acc.name locked
+      stop sysmsg(6006, status()) ;* ACCOUNTS file record locked by user xx
+   end else
+      @system.return.code = -status()
+      stop sysmsg(6027) ;* Account not registered in ACCOUNTS file
+   end
+* rev 0.9.0   
+   group_name = acc.rec<ACC$GROUP>
+
+   pathname = parse.pathname.tokens(acc.rec<ACC$PATH>)
+
+   * Check  account directory exists
+
+   if not(ospath(pathname, OS$EXISTS)) then
+      display sysmsg(6028) ;* WARNING: Account directory does not exist
+   end else
+      * Check for cross-references from other accounts
+      * ie Files in this account are referenced from other accounts
+
+      xref.found = @false
+      select acc.f to 11
+      loop
+         readnext xacc from 11 else exit
+         if xacc # acc.name then
+            read xacc.rec from acc.f, xacc then
+               xacc.path = parse.pathname.tokens(xacc.rec<ACC$PATH>)
+               openpath xacc.path:@ds:'voc' to xvoc.f then
+                  select xvoc.f to 12
+                  loop
+                     readnext xid from 12 else exit
+                     read xvoc.rec from xvoc.f, xid then
+                        xvoc.rec = upcase(xvoc.rec)
+                        type = upcase(xvoc.rec[1,1])
+                        begin case
+                           case type = 'F'
+                              num.components = dcount(xvoc.rec<2>, @vm)
+                              for comp = 1 to num.components
+                                 fpath = ospath(xvoc.rec<2,comp>, OS$FULLPATH)
+                                 if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then
+                                    gosub report.xref
+                                 end
+                              next comp
+
+                              fpath = ospath(xvoc.rec<3>, OS$FULLPATH)
+                              if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then
+                                 gosub report.xref
+                              end
+
+                           case type = 'Q'
+                              if xvoc.rec<2> = acc.name or xvoc.rec<2> = pathname then
+                                 gosub report.xref
+                              end
+                        end case
+                     end
+                  repeat
+               end
+            end
+         end
+      repeat
+
+      if xref.found then
+         loop
+            display sysmsg(6029) : ;* Continue with account deletion (Y/N)?
+            input yn
+            yn = upcase(yn)
+            if yn = 'N' then
+               @system.return.code = -ER$STOPPED
+               stop sysmsg(6030) ;* Account deletion abandoned
+            end
+         until yn = 'Y'
+         repeat
+      end
+
+      * Ask if to delete directory
+
+      loop
+         display sysmsg(6031, pathname) :  ;* Delete directory xx (Y/N)?
+         input yn
+         yn = upcase(yn)
+         until yn = 'Y' or yn = 'N'
+      repeat
+
+      if yn = 'Y' then
+         yn = ospath(pathname, OS$DELETE)
+      end
+   end
+
+* 14 Aug 26 Windows port - THE ACCOUNTS RECORD IS NOW DELETED LAST, not here.
+*   It used to go first, so anything that failed afterwards - the group, the OS
+*   account - left leftovers with no register entry pointing at them, and
+*   DELETE.ACCOUNT could not be re-run against them because it starts by
+*   reading that record.  Deleting it last means a failure leaves the account
+*   still registered and the verb still able to finish the job.  The record is
+*   held with READU throughout, so nothing else can touch it in between.
+
+   * rev 0.9.0 remove group. os user?
+   if is_group(group_name) then
+      * Modified by Composer AI - 2026/06/10.
+      * Use shared !valid_os_name before OS.EXECUTE (phase 2).
+      * os.name.chars = '...'
+      * if convert(os.name.chars, '', group_name) # '' or len(group_name) > 32 then
+      if not(valid_os_name(group_name)) then
+         crt sysmsg(10026,group_name, 2) ;* Warning unable to delete group: %1 error: %2
+      end else
+* 14 Aug 26 Windows port - was: OS.EXECUTE "sudo groupdel ": group_name
+      stat = os_group("DEL", group_name, "")
+      if stat = 0 then
+         crt sysmsg(10025,group_name) ;* group: %1 Deleted
+      end else
+         crt sysmsg(10026,group_name, stat) ;* Warning unable to delete group: %1 error: %2
+      end
+      end
+      * --------------------
+   end
+   
+* 14 Aug 26 Windows port - THE config('CREATUSR') GATE IS GONE, matching
+*   CREATEA, which lost it when creating an account became creating the OS
+*   account.  Asking a configuration parameter for permission to undo the only
+*   thing the verb does made no sense on the creating side and makes none here.
+*
+*   WHAT REPLACES IT IS THE QUESTION THAT ACTUALLY MATTERS: did SD create this
+*   OS account?  CREATEA creates one for every account it makes, but the
+*   install adopts the installer's pre-existing account (CREATEA, ADOPT), and
+*   an administrator can register an account by hand.  Deleting unconditionally
+*   would eventually delete a login SD never made - an administrator's, in the
+*   case the access model makes ordinary.  !is_sd_user reads back the
+*   description CREATE_USER stamps on the accounts it creates.
+*
+*   Owner's decision, 14 Aug 2026: offer only the ones SD made.  The three
+*   answers are all different and all wanted - see !is_sd_user.
+   * is this a user account ?
+   FINDSTR 'sdu_' in group_name setting yn then
+      * remove sdu_ prefix
+      username = change(group_name,'sdu_','')
+
+      * Modified by Composer AI - 2026/06/10.
+      * Use shared !valid_os_name before OS.EXECUTE (phase 2).
+      if not(valid_os_name(username)) then
+         crt sysmsg(10029,username, 2) ;* Warning unable to delete OS User: %1 error: %2
+      end else
+         sd.made.it = is_sd_user(username)
+         lookup.stat = status()
+
+         begin case
+            case lookup.stat # 0
+               * Not there at all.  This is the half-removed account - the SD
+               * side outliving the OS side - and it is the state a failed
+               * creation reaches too, so it is reported rather than warned
+               * about: there is nothing wrong and nothing to do.
+               crt sysmsg(10037,username) ;* Windows account %1 does not exist
+
+            case sd.made.it
+               crt sysmsg(10027,username): ;* Delete OS user %1 (Y/N)?
+               input yn
+               * Anything but Y leaves it alone.  The two mistakes do not cost
+               * the same, so the quiet answer is the safe one.
+               if upcase(yn) = 'Y' then
+* 14 Aug 26 Windows port - was: OS.EXECUTE "sudo userdel ":username
+                  void delete_user(username)
+                  stat = status()
+                  if stat = 0 then
+                     crt sysmsg(10028,username) ;* OS User: %1 Deleted
+                  end else
+                     crt sysmsg(10029,username, stat) ;* Warning unable to delete OS User: %1 error: %2
+                  end
+               end
+
+            case 1
+               * It exists and SD did not make it.  Not offered, not asked
+               * about - said plainly, so whoever wants it gone knows they are
+               * removing something SD never created.
+               crt sysmsg(10036,username) ;* %1 was not created by SD
+         end case
+      end
+      * --------------------
+   end
+
+   * Delete ACCOUNTS entry.  Last, so that anything failing above leaves the
+   * account registered and this verb able to be run again - see the note
+   * where this used to be.
+
+   delete acc.f, acc.name
+
+   @system.return.code = 0
+   return
+
+* ======================================================================
+
+report.xref:
+   if not(xref.found) then
+      crt sysmsg(6032) ;* Files in this account are referenced from other accounts
+      crt sysmsg(6033) ;* Account           VOC entry
+      xref.found = @true
+   end
+
+   crt fmt(xacc, '16L') : '  ' : xid
+   return
+end
+
+* END-CODE

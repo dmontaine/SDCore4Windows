@@ -73,7 +73,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
-$osUsers = Join-Path $env:ProgramData 'SD\sdsys\OS.USERS'
+$osUsers = Join-Path $env:ProgramData 'SD\sdsys\os.users'
 
 # DRIVING SD FROM POWERSHELL has two traps, both in PROJECT_STATUS.md 6: input
 # must be PIPED rather than redirected, and the pipe prepends a BOM to the first
@@ -312,11 +312,11 @@ Write-Output '=== 0. The record key, and whether the list can be read at all ===
 # design not work: the file is (RX) to sdusers and CPROC opens it from the
 # user's own process.
 $probeSrc = Join-Path $bp 'SDOSUSER'
-$probeObj = Join-Path $acctDir 'BP.OUT\SDOSUSER'
+$probeObj = Join-Path $acctDir 'bp.out\SDOSUSER'
 $src = @(
     "* SDOSUSER - written by gplbld/verify-osusers.ps1.  Safe to delete."
     "      CRT 'LOGNAME=':@LOGNAME"
-    "      OPENPATH @SDSYS:@DS:'OS.USERS' TO F.OSU THEN"
+    "      OPENPATH @SDSYS:@DS:'os.users' TO F.OSU THEN"
     "         CRT 'OPEN=1'"
     "         READ OSU.REC FROM F.OSU, @LOGNAME THEN"
     "            CRT 'REC=':OSU.REC<1>"

@@ -228,8 +228,8 @@ $out = Invoke-SD @("CREATE.FILE $ctlFile DIRECTORY")
 # ASK SD WHETHER IT MADE THE FILE; DO NOT GO LOOKING FOR THE VOC RECORD.
 # A VOC entry is NOT a file on disk: VOC is a DYNAMIC file (CREATEA:575,
 # "create.file ... VOC dynamic"), which on disk is a directory of %0, %1
-# hashing buckets - sdsys\VOC holds exactly two files however many hundred
-# records it has.  A Test-Path for sdsys\VOC\<name> can therefore never be
+# hashing buckets - sdsys\voc holds exactly two files however many hundred
+# records it has.  A Test-Path for sdsys\voc\<name> can therefore never be
 # true, and the version of this check that did that refused a CREATE.FILE
 # which had plainly succeeded, on the 12:46:36 run, printing SD's own
 # "Created DATA part as ..." immediately above its complaint.
@@ -261,7 +261,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $gcat ('$' + $ctlName)))) {
 Write-Output ''
 Write-Output '=== 2. Creating a PROGRAMMER account ======================================'
 
-$inRegister = Test-Path -LiteralPath (Join-Path $sdsys ('ACCOUNTS\' + $Account.ToUpper()))
+$inRegister = Test-Path -LiteralPath (Join-Path $sdsys ('accounts\' + $Account.ToUpper()))
 
 # A LEFTOVER WINDOWS ACCOUNT WITH NO SD REGISTER ENTRY IS OUR OWN DEBRIS, and
 # clearing it keeps this a single command.  -Keep leaves the Windows account and
@@ -304,8 +304,8 @@ Set-Content -LiteralPath (Join-Path $acctDir ('BP\' + $userName))  -Value $src -
 Set-Content -LiteralPath (Join-Path $acctDir ('BP\' + $localName)) -Value $src -Encoding Ascii
 $acct = $Account.ToUpper()
 $out  = Invoke-SD @("LOGTO $acct", "BASIC BP $userName", "BASIC BP $localName")
-Note 'account: BP.OUT gained the object' $true (Test-Path -LiteralPath (Join-Path $acctDir ('BP.OUT\' + $userName)))
-Note 'account: BP.OUT gained the second' $true (Test-Path -LiteralPath (Join-Path $acctDir ('BP.OUT\' + $localName)))
+Note 'account: bp.out gained the object' $true (Test-Path -LiteralPath (Join-Path $acctDir ('bp.out\' + $userName)))
+Note 'account: bp.out gained the second' $true (Test-Path -LiteralPath (Join-Path $acctDir ('bp.out\' + $localName)))
 
 # ---------------------------------------------------------------------------
 Write-Output ''
@@ -390,7 +390,7 @@ $ErrorActionPreference = 'Continue'
 # gcat alone leaves a slower route to the same place.  It was measured still
 # inherited on the 11:27:32 install, after gcat locked correctly - which is why
 # it is checked here and not assumed to follow.
-foreach ($locked in @($gcat, (Join-Path $sdsys 'GPL.BP.OUT'))) {
+foreach ($locked in @($gcat, (Join-Path $sdsys 'gpl.bp.out'))) {
     $leaf = Split-Path $locked -Leaf
     $acl = & icacls.exe $locked 2>&1
     $aclText = ($acl | Out-String)

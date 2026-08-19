@@ -5,6 +5,26 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  The system files are now lower case on disk.
+           * SD's own files inside C:\ProgramData\SD\sdsys are named gpl.bp,
+             newvoc, voc_template, messages, syscom, sd.voclib, accounts, bp,
+             voc, voc.dic, dict.dic, $hold, $map, $ipc, $cred, os.users and so
+             on, instead of GPL.BP, NEWVOC and the rest.  So is the voc file
+             inside each account directory.
+           * WHAT YOU TYPE DOES NOT CHANGE.  These are names on disk, not names
+             in your VOC: LISTF, CT VOC and OS_CWD show them, and that is the
+             point of the change, but you still type LIST VOC, BASIC BP PROG
+             and COUNT ACCOUNTS exactly as before.  The VOC entries themselves
+             are renamed separately, one at a time.
+           * EXISTING SYSTEMS AND ACCOUNTS ARE NOT TOUCHED, and there is nothing
+             to migrate.  Windows matches file names without regard to case, and
+             every one of these files is reached through a name recorded in a
+             VOC entry, so a system or an account created before this goes on
+             working under its old spelling.  Only newly created ones get the
+             new names.
+           * The private catalogue (cat), the global catalogue (gcat) and the
+             print queue (prt) were already lower case and are unchanged.
+
 18 Aug 26  The commands are now spelled in lower case.
            * LIST, COUNT, SELECT, CREATE.FILE, SETPTR and the rest are stored
              in the VOC as list, count, select, create.file, setptr and so on,

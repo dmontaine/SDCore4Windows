@@ -1,7 +1,7 @@
 # secure-osusers.ps1 - lock the shell permission list so only an administrator
 # can change who is on it.
 #
-#   powershell -File secure-osusers.ps1 -Path "C:\ProgramData\SD\sdsys\OS.USERS" ...
+#   powershell -File secure-osusers.ps1 -Path "C:\ProgramData\SD\sdsys\os.users" ...
 #
 # PROJECT_STATUS.md 7 step 7.  Run by the installer, once, AFTER the icacls that
 # secures the data tree - it has to be after, or inheritance puts the

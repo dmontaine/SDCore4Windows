@@ -1,6 +1,6 @@
 # secure-cred.ps1 - lock the credential store to SYSTEM and Administrators
 #
-#   powershell -File secure-cred.ps1 -Path "C:\ProgramData\SD\sdsys\$CRED"
+#   powershell -File secure-cred.ps1 -Path "C:\ProgramData\SD\sdsys\$cred"
 #
 # PROJECT_STATUS.md 7 step 6.  Run by the installer, once, AFTER the icacls
 # that secures the data tree - it has to be after, or inheritance puts the

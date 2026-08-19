@@ -31,10 +31,18 @@
 # Test-Path check passes whichever case CREATEA wrote and proves nothing.  Every
 # name check below compares against the real directory listing with -ceq.
 #
-# THE CONTROLS ARE THE POINT, and there are two.  The account's VOC is still
-# upper case on disk, deliberately - it is a later rename - so a change that
-# lower-cased everything would fail here rather than pass.  And cat has been
-# lower case since before the port, so it shows the listing can report either.
+# AND 5.12 (a)'s WIDE HALF WENT ON 19 Aug 2026: the SHIPPED SDSYS files are
+# lower case on disk too, and so is the per-account voc.  Section 2a is the new
+# one and it reads the installed sdsys directly.  NOTHING MIGRATES - an account
+# or an sdsys built before this keeps the upper-case spellings and NTFS matches
+# either, which is why the rename could be made a directory at a time.
+#
+# THE CONTROLS MOVED WITH IT, and that is worth reading before adding a check
+# here.  The account's VOC used to be the on-disk control; it is lower case now,
+# so the controls that remain are the VOC IDS - section 3 types BP and
+# $COMMAND.STACK in lower case and requires an UPPER-case answer, so a change
+# that lower-cased every id would fail there rather than pass.  cat has been
+# lower case since before the port and shows the listing can report either.
 #
 # COPYP RIDES ALONG because it shipped in the same cycle.  See section 5.
 #
@@ -70,6 +78,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $sdExe    = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $acctRoot = Join-Path $env:ProgramData 'SD\user_accounts'
+$sdsysDir = Join-Path $env:ProgramData 'SD\sdsys'
 $holdRec  = ('ZZ' + $Tag).ToUpper()      # a record in $hold
 $listName = ('ZZL' + $Tag).ToUpper()     # a saved select list in $svlists
 
@@ -193,17 +202,59 @@ try {
     $onDisk = @(Get-ChildItem -LiteralPath $acctDir -Force | Select-Object -ExpandProperty Name)
     Write-Output ('  listing: ' + ($onDisk -join '  '))
 
-    foreach ($n in @('$hold', '$hold.dic', '$svlists', 'bp')) {
+    # voc joined this list on 19 Aug 2026 - CREATEA:581 creates it as 'voc' now.
+    foreach ($n in @('$hold', '$hold.dic', '$svlists', 'bp', 'voc')) {
         Note ($n + ' present, exact case') 1 @($onDisk | Where-Object { $_ -ceq $n }).Count
     }
     # The old spellings must be absent, which Test-Path could never have shown.
-    foreach ($n in @('$HOLD', '$HOLD.DIC', '$SVLISTS', 'BP')) {
+    foreach ($n in @('$HOLD', '$HOLD.DIC', '$SVLISTS', 'BP', 'VOC')) {
         Note ($n + ' absent') 0 @($onDisk | Where-Object { $_ -ceq $n }).Count
     }
-    # THE CONTROLS.  VOC is a later rename and must still be upper case; cat was
-    # lower case before this change and shows the listing reports both.
-    Note 'control: VOC still upper case' 1 @($onDisk | Where-Object { $_ -ceq 'VOC' }).Count
+    # THE CONTROL.  cat was lower case before any of this and shows the listing
+    # reports the real case rather than folding it - without which every check
+    # above would pass on an account that had never been renamed at all.  The
+    # controls that show this is a rename and not a sweep are the VOC IDS, and
+    # they are in section 3: BP and $COMMAND.STACK are still upper case.
     Note 'control: cat still lower case' 1 @($onDisk | Where-Object { $_ -ceq 'cat' }).Count
+
+    # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 2a. THE SHIPPED SDSYS NAMES ON DISK, 5.12 (a) WIDE HALF =============='
+    Write-Output '  These are the ones the owner asked about: bp and voc in SDSYS itself.'
+    Write-Output '  Some ship from the repository, some are made by BBPROC at bootstrap and'
+    Write-Output '  some by stage.py, so a miss here says which half was left behind.'
+
+    $sysDisk = @(Get-ChildItem -LiteralPath $sdsysDir -Force |
+                 Select-Object -ExpandProperty Name)
+    Write-Output ('  listing: ' + (($sysDisk | Sort-Object) -join '  '))
+
+    # SHIPPED FROM THE REPOSITORY (gplbld/stage.py SDSYS_SHIP and SDSYS_EMPTY).
+    $shipped = @('gpl.bp', 'syscom', 'newvoc', 'voc_template', 'messages',
+                 'sd.voclib', 'accounts', 'bp', 'gpl.bp.out', 'bp.out',
+                 'pcode.out', '$hold', '$cred', 'os.users', 'os.users.dic')
+    # MADE BY THE BOOTSTRAP: BBPROC's FILES_LIST, plus voc at BBPROC:158.
+    $made    = @('voc', 'voc.dic', 'dict.dic', 'dir_dict', 'accounts.dic',
+                 '$hold.dic', '$map', '$map.dic', '$ipc')
+    # MADE BY THE INSTALLER: sd.iss hands secure-psdir.ps1 the path to create.
+    $byInst  = @('pstmp')
+
+    foreach ($n in ($shipped + $made + $byInst)) {
+        Note ('sdsys ' + $n + ' present, exact case') 1 `
+             @($sysDisk | Where-Object { $_ -ceq $n }).Count
+    }
+    foreach ($n in @('GPL.BP', 'SYSCOM', 'NEWVOC', 'VOC_TEMPLATE', 'MESSAGES',
+                     'SD.VOCLIB', 'ACCOUNTS', 'BP', 'GPL.BP.OUT', 'BP.OUT',
+                     'PCODE.OUT', '$HOLD', '$CRED', 'OS.USERS', 'OS.USERS.DIC',
+                     'VOC', 'VOC.DIC', 'DICT.DIC', 'DIR_DICT', 'ACCOUNTS.DIC',
+                     '$HOLD.DIC', '$MAP', '$MAP.DIC', '$IPC', 'PSTMP')) {
+        Note ('sdsys ' + $n + ' absent') 0 @($sysDisk | Where-Object { $_ -ceq $n }).Count
+    }
+    # THE CONTROLS FOR THIS SECTION.  gcat, cat, prt, bin and terminfo were
+    # lower case before any of it, so they show the listing is not folding case.
+    foreach ($n in @('gcat', 'cat', 'prt', 'bin')) {
+        Note ('control: sdsys ' + $n + ' unchanged') 1 `
+             @($sysDisk | Where-Object { $_ -ceq $n }).Count
+    }
 
     # -----------------------------------------------------------------------
     Write-Output ''
@@ -211,11 +262,18 @@ try {
     Write-Output '  Fields 2 and 3 hold the path, and that is what LISTF and CT VOC show.'
     Write-Output '  This is 5.12 (a) and is independent of the id, which the next block tests.'
 
-    $ct = Invoke-SD @('CT VOC $hold', 'CT VOC $savedlists', 'CT VOC BP')
+    $ct = Invoke-SD @('CT VOC $hold', 'CT VOC $savedlists', 'CT VOC BP',
+                      'CT VOC VOC', 'CT VOC SYSCOM')
     Note 'CT VOC $hold names $hold'          $true ($ct -cmatch '(?m)^\s*2:\s*\$hold\s*$')
     Note 'CT VOC $hold names $hold.dic'      $true ($ct -cmatch '(?m)^\s*3:\s*\$hold\.dic\s*$')
     Note 'CT VOC $savedlists names $svlists' $true ($ct -cmatch '(?m)^\s*2:\s*\$svlists\s*$')
     Note 'CT VOC BP names bp'                $true ($ct -cmatch '(?m)^\s*2:\s*bp\s*$')
+    # 19 Aug 26 - THE WIDE HALF.  The account's own VOC pointer and one that
+    # reaches into SDSYS, so a miss says whether it was newvoc's F records or
+    # the on-disk rename that was left behind.  Field 3 of VOC is @SDSYS/voc.dic.
+    Note 'CT VOC VOC names voc'              $true ($ct -cmatch '(?m)^\s*2:\s*voc\s*$')
+    Note 'CT VOC VOC names @SDSYS/voc.dic'   $true ($ct -cmatch '(?m)^\s*3:\s*@SDSYS/voc\.dic\s*$')
+    Note 'CT VOC SYSCOM names @SDSYS/syscom' $true ($ct -cmatch '(?m)^\s*2:\s*@SDSYS/syscom\s*$')
     Write-Output '  --- CT VOC said: ---'
     Write-Output $ct
 

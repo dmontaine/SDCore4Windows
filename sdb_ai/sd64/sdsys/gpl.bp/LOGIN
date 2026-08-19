@@ -1,0 +1,709 @@
+* LOGIN
+* LOGIN  -  Startup user session
+* Copyright (c) 2007 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+* 
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+* 
+* 
+* START-HISTORY:
+* 19 Aug 26 Windows port - the SDSYS paths are lower case on disk: accounts,
+*           newvoc, $ipc, and the account's own voc.  PROJECT_STATUS.md 5.12 (a).
+* rev 0.9.1 Mar 25 mab return to single rev tracking
+* rev 0.9.0 Jan 25 mab change permission required for account login, must now either be;
+*                      1) users ACCOUNT
+*                      2) member of the ACCOUNT's linux group
+*                      regardles must be a member of sdusers
+*                      3) if user started with sudo sd, cproc should have set K$ADMINISTRATOR
+*                         and dropped user to sdsys. we no longer test system(27) (uid of process)
+*
+* 20240612 dsm removed read/write $LOGINS
+* 20240330 mab rev 064 mods to $LOGINS / ACCOUNTS
+* 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 13 Aug 26 Windows port - removed the sdusers and ACC$GROUP membership tests
+* 13 Aug 26 Windows port - administrator rights are set on entry to SDSYS and
+*                      cleared on entry to anything else
+* 14 Aug 26 Windows port - both of those reversed.  The sdusers and ACC$GROUP
+*                      tests are restored from f9edab0, login takes no password
+*                      at all, and administrator rights come from elevation at
+*                      process start rather than from the account entered
+* 14 Aug 26 Windows port - the sign-on banner names the port and drops the
+*                      "(AI modified)" suffix
+* 16 Aug 26 Windows port - every login and every refused login is written to
+*                      the audit trail.  PROJECT_STATUS.md 7 step 4
+* 17 Aug 26 Windows port - update.voc applies the account's VOC tier instead of
+*                      re-copying the whole of NEWVOC, which was handing a
+*                      standard account back everything CREATE.ACCOUNT withheld.
+*                      PROJECT_STATUS.md section 8
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* Mode argument:
+*   0   Interactive user
+*   1   SDApiSrvr session
+*   2   Updating VOC only
+*   3   End of install - offer to upgrade all VOCs (non-GPL version only)
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$flags trusted
+
+subroutine login(ok, mode)
+
+$catalogue $LOGIN
+
+$include revstamp.h
+
+$include syscom.h
+$include header.h
+$include parser.h
+$include int$keys.h
+$include debug.h
+
+$include err.h
+$include keys.h
+$include keyin.h
+$include keycode.h
+* 20240219 mab user must be member of sdusers  
+* 14 Aug 26 Windows port - is_grp_member is back.  The sdusers gate and the
+*   per-account group test below both call it.  See PROJECT_STATUS.md 5.6.
+deffun is_grp_member(user,group) calling '!is_grp_member'
+
+   ok = @false
+
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Every refusal below
+*   leaves through terminate.connection, so the audit record is written there
+*   once rather than at each goto, and this says why.  IT IS SET HERE SO THAT A
+*   REFUSAL ADDED LATER AND NOT GIVEN A REASON STILL PRODUCES A RECORD - a
+*   vague line in the trail is recoverable, a missing one is not.
+   audit.reason = 'unspecified'
+   audit.account = ''
+
+* 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Set here, at the top,
+*   rather than left to the three call sites that do set them, because BCOMP's
+*   "is not assigned a value" is what bootstrap.py line 229 fails the whole
+*   bootstrap on, and both are read in update.voc - textually far above the
+*   get.acc.tier that assigns them.  '' is also the value that means "full VOC",
+*   so if a call site added later forgets, the behaviour is the pre-tier one
+*   rather than a silently reduced account.
+   update.voc.tier = ''
+   tier.acc.name = ''
+
+   is.phantom = kernel(K$IS.PHANTOM, 0)
+
+   * If the terminal type has not yet been set, work out what it is
+
+   if mode = 0 then    ;* Interactive session startup
+      s = system(7)
+      if s = '' then
+            * This user has come in from a command prompt of some sort.
+            s = env('TERM')
+            if s = '' then s = 'vt100'
+      end
+
+      void kernel(K$TERM.TYPE, s)
+
+      * Set terminal depth and width
+
+      s = env('LINES');
+      if not(s matches '1N0N') then s = terminfo('lines')
+      if s <= 0 then s = DEFAULT.DEPTH
+      setpu PU$LENGTH, -1, max(s, MIN.DEPTH)
+
+      s = env('COLUMNS');
+      if not(s matches '1N0N') then s = terminfo('cols')
+      if s <= 0 then s = DEFAULT.WIDTH
+      setpu PU$WIDTH, -1, max(s, MIN.WIDTH)
+
+      * Clear screen except for phantoms and single command execution
+
+      if not(is.phantom) and system(1026) = '' then
+         if not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
+            display @(-1) :
+         end
+
+         if system(7) = 'sdterm' then
+            if getpu(PU$WIDTH, -1) < 256 and getpu(PU$LENGTH, -1) < 256 then
+               display @(-256, getpu(PU$WIDTH, -1) + 256 * getpu(PU$LENGTH, -1)) :
+            end
+         end
+      end
+   end
+
+   if mode = 2 or mode = 3 then     ;* Just doing a VOC upgrade or install
+      if mode = 2 then              ;* VOC update
+* 17 Aug 26 Windows port - this is UPDATE.ACCOUNT (CPROC internal verb 15), which
+*   is ungated, so the account's own tier decides what it may copy back in.
+*   PROJECT_STATUS.md section 8.
+         tier.acc.name = @who
+         gosub get.acc.tier
+         update.voc.f = voc
+         gosub update.voc
+         close update.voc.f
+      end
+
+      if @who = 'SDSYS' and kernel(K$ADMINISTRATOR,-1) then
+         loop
+            display sysmsg(5003) :  ;* Update VOC in all registered accounts (Y/N)?
+            input yn
+            yn = upcase(yn)
+         until yn = 'Y' or yn = 'N'
+         repeat
+
+         if yn = 'Y' then
+            voc.paths = @path
+            openpath @sdsys:@ds:'accounts' to acc.f then
+               select acc.f to 12
+               loop
+                  readnext acc.name from 12 else exit
+                  read acc.rec from acc.f, acc.name then
+                     acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+
+                     locate acc.path in voc.paths<1> setting s else
+                        s = acc.path:@ds:'voc'
+                        openpath s to update.voc.f then
+                           display sysmsg(5004, s) ;* Updating xx
+* 17 Aug 26 Windows port - the register record is already read, so the tier comes
+*   straight off it rather than through get.acc.tier - which would reopen
+*   ACCOUNTS underneath this very walk.  PROJECT_STATUS.md section 8.
+                           update.voc.tier = acc.rec<ACC$TIER>
+                           gosub update.voc
+                           close update.voc.f
+                           voc.paths<-1> = acc.path
+                        end
+                     end
+                  end
+               repeat
+               close acc.f
+            end else
+               display sysmsg(2200) ;* Cannot open accounts register
+            end
+         end
+      end 
+
+      ok = @true
+      return
+   end
+
+
+
+   if not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
+      *display "[ ScarletDME Rev " : SD.REV.STAMP : "   Copyright Ladybridge Systems, " : SD.COPYRIGHT.YEAR : " ]"
+* rev 0.9.1 back to single rev track 
+      * Modified by Composer AI - 2026/06/10.
+      * Close version banner string; unclosed quote caused "Unrecognised statement".
+      * display "SD, the Multivalue String Database, version " : SD.REV.STAMP : "(AI modified)
+      display "SD for Windows, the Multivalue String Database, version " : SD.REV.STAMP
+      * --------------------
+      display "(c) 2000-2026 by Ladybridge Systems and Other Contributors"
+      display
+      * following must be left to comply with clause 1 of the gpl licence
+      display "This program is free software and is supplied with ABSOLUTELY NO WARRANTY."
+      display "You are welcome to modify or redistribute this software subject to certain"
+      display "conditions.  For details type CONFIG GPL, for contributors type CONFIG CONTRIB."
+      display
+   end
+
+   * Open the ACCOUNTS register
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      display sysmsg(2200) ;* Cannot open accounts register
+      goto terminate.connection
+   end
+
+* 20240219 mab always run in secure mode, no changes allowed to K$SECURE flag!! * 
+*               we also no longer allow telnet connections via the internal
+*               telnet server, nor are we supporting serial connections
+*               SO we should never be true at the follow test.
+*               BUT just to be safe, terminate if we get here as Network/serial connection
+
+  if system(42) or system(1027) then   ;* Network/serial connection
+    logmsg sysmsg(5063, 'security test')  ;* Failed login authentication from %1
+    goto terminate.connection
+  end else
+* 14 Aug 26 Windows port - the sdusers gate is back, and with it the operating
+*   system identity it tests.  The operating system has already authenticated
+*   this user, so SD asks it who they are and never asks for a password.
+*   See PROJECT_STATUS.md section 5.6.
+     * This user has come in from a command prompt.
+     lgn.id = @logname
+
+* 14 Aug 26 Windows port - INTERNAL MODE IS EXEMPT FROM THE sdusers GATE.
+*   Owner's decision, 14 Aug 2026, and the reason is the bootstrap: it runs
+*   "sd -internal SECOND.COMPILE", which logs in, and on a clean BUILD machine
+*   sdusers DOES NOT EXIST - only the installer creates it.  Testing it here
+*   made building the product depend on a group that only installing it
+*   produces, which is circular and would have refused the bootstrap at the
+*   door on any machine that had never had SD on it.
+*
+*   IT OPENS NO HOLE.  "sd -INTERNAL" names SDSYS for itself in sd.c, and SDSYS
+*   now requires an elevated session, so an internal caller has already passed
+*   a strictly harder test than sdusers membership before reaching this line.
+*   See PROJECT_STATUS.md section 5.6.
+
+     if not(kernel(K$INTERNAL,-1)) then
+        if not(is_grp_member(lgn.id,'sdusers')) then
+           display sysmsg(5009) ;* This user is not registered for SD use
+           audit.reason = 'not a member of sdusers'
+           goto terminate.connection
+        end
+     end
+  end
+
+   s = pterm(PT$INVERT, @true)
+
+   * Determine account
+* 20240330 mab we no longer support forced accounts from $LOGINS
+*   forced.account = lgn.rec<LGN$FORCE.ACCOUNT>
+* 14 Aug 26 Windows port - the three cases are restored from this repository's
+*   own pre-port source at commit f9edab0, which is the specification rather
+*   than a model designed here.  Which account you land in follows from who the
+*   operating system says you are and whether this session is elevated.  There
+*   is nothing to type and nothing is asked for.
+*   See PROJECT_STATUS.md section 5.6.
+   initial.account = ''
+
+   begin case
+      case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname", or -INTERNAL
+         initial.account = upcase(kernel(K$FORCED.ACCOUNT,0))
+
+         read acc.rec from acc.f, initial.account else
+            display sysmsg(5018, initial.account) ;* Account %1 not in register
+            audit.account = initial.account
+            audit.reason = 'no such account in the register'
+            goto terminate.connection
+         end
+
+* 20240330 mab must be privilaged to enter sdsys
+* 14 Aug 26 Windows port - "privileged" means ELEVATED.  K$ADMINISTRATOR is
+*   seeded from IsElevated() at process start, so being an administrator in the
+*   SAM is not enough: you have to have used it.
+* 15 Aug 26 Windows port - NOBODY LOGS IN TO AN ACCOUNT BUT THEIR OWN.
+*
+*   Owner's rule, 15 Aug 2026, and it covers administrators: "an administrator
+*   has access to all accounts, ONCE THEY HAVE LOGGED INTO SD, NOT BEFORE".
+*   So entry is always your own account, and LOGTO is what moves you - which is
+*   where the grant is tested, and where an elevated session gets its access to
+*   everything (CPROC, logto.authorised).  One door, one place the decision is
+*   made, instead of two that had drifted apart.
+*
+*   WHAT THIS REPLACED, both of which let somebody stand in an account without
+*   ever standing in their own: an elevated session skipped the ACC$GROUP test
+*   here entirely, so "sd -ASOMEBODYELSE" admitted an administrator straight
+*   into anybody's account; and "sd" elevated with no account named went to
+*   SDSYS.  The second case is deleted outright, below.
+*
+*   -INTERNAL IS THE EXCEPTION AND HAS TO BE.  sd.c forces it to SDSYS, and it
+*   is the install and bootstrap door: during a bootstrap no account exists for
+*   anybody to land in and there is nothing to LOGTO from.  It is unpublished
+*   and comes from a command line rather than a session.
+
+         if kernel(K$INTERNAL,-1) then
+            if initial.account = 'SDSYS' and not(kernel(K$ADMINISTRATOR,-1)) then
+               display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+               audit.reason = 'SDSYS requires an elevated session'
+               goto terminate.connection
+            end
+         end else
+            if initial.account # upcase(@logname) then
+               display sysmsg(10051) ;* You can only log in to your own account
+               audit.reason = 'not the caller own account'
+               goto terminate.connection
+            end
+         end
+
+* 20240219 mab sd command from console with no account specified, we default to
+*              user's account
+* 14 Aug 26 Windows port - and no account of that name is a refusal, not a
+*   prompt.  No linked SD account means no login.
+* 15 Aug 26 Windows port - AND IT IS NOW THE ONLY CASE THERE IS for a person.
+*   The elevated-session case that stood here put an administrator into SDSYS
+*   without their having logged in anywhere first; it is gone with the rule
+*   above.  An administrator arrives in their own account like everybody else
+*   and types LOGTO SDSYS.
+
+      case 1
+         initial.account = upcase(@logname)
+
+         read acc.rec from acc.f, initial.account else
+            display sysmsg(5018, initial.account) ;* Account %1 not in register
+            audit.account = initial.account
+            audit.reason = 'no such account in the register'
+            goto terminate.connection
+         end
+   end case
+
+   audit.account = initial.account
+
+   acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+
+   if not(ospath(acc.path, OS$CD)) then
+      display sysmsg(5019, acc.path) ;* Unable to change to directory xx
+      goto terminate.connection
+   end
+
+
+   * Set @PATH
+
+   account.path = ospath("", OS$CWD)
+
+   initial.account.path = account.path
+   if initial.account = '' then
+      * Try to work out account name by checking to see if it is in the
+      * ACCOUNTS register.
+
+      select acc.f to 12
+      loop
+         readnext acc.id from 12 else exit
+         read acc.rec from acc.f, acc.id then
+            acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+            if account.path = acc.path then
+               initial.account = acc.id
+               exit
+            end
+         end
+      repeat
+      clearselect 12
+
+      if initial.account = '' then
+         * Just use final part of pathname
+         initial.account = upcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999])
+      end
+   end
+
+   who = initial.account
+   close acc.f
+
+   * Set @TTY
+
+   begin case
+      case is.phantom          ; tty = 'phantom'
+      case system(42) # ''     ; tty = 'telnet'
+      case system(1027) # ''   ; tty = 'port'
+      case 1                   ; tty = kernel(K$TTY, 0)
+   end case
+
+   * Open the VOC file
+
+   openpath "VOC" to voc on error
+      display 'Error ' : status() : ' opening VOC file. Check access rights.'
+      goto terminate.connection
+   end else
+   * 20240219 mab as part of the security changes, do not allow auto creation of account !
+   *   gosub create.account
+       display sysmsg(5163)    ;* Directory is not a  sd account
+       goto terminate.connection 
+   end
+
+   if catalogued('CCALL.INIT') then call ccall.init
+
+
+   * Open IPC file and delete any items for old versions of this process id
+
+   openpath @sdsys:@ds:'$ipc' to ipc.f then
+      recordlocku ipc.f,'M':@userno     ;* Message queue
+      delete ipc.f, 'M':@userno
+
+      recordlocku ipc.f,'P':@userno     ;* Phantom register
+      delete ipc.f, 'P':@userno
+
+      void fcontrol(ipc.f, FC$NON.TXN, 0) ;* Set non-transactional
+   end
+
+   if not(is.phantom) and not(fileinfo(voc, FL$READONLY)) then
+      read voc.rec from voc, "$RELEASE" then
+         * ----- Field 2 - Release level
+         s = matchfield(voc.rec<2>, "0X0A", 1)
+         if s # SD.REV.STAMP then
+            display sysmsg(5025, s) ;* Your VOC is at release level xx
+            loop
+               display char(7) :
+               display sysmsg(5026) :  ;* Update VOC to new release?
+               input s
+
+               s = upcase(s[1,1])
+               begin case
+                  case s = "N"
+                     exit
+                  case s = "Y"
+* 17 Aug 26 Windows port - THIS IS THE ONE THAT NEEDED NO VERB.  Any user gets
+*   this prompt whenever their VOC's release level differs from SD.REV.STAMP, and
+*   before the tier was recorded, answering Y restored every capability
+*   CREATE.ACCOUNT had withheld.  PROJECT_STATUS.md section 8.
+                     tier.acc.name = @who
+                     gosub get.acc.tier
+                     update.voc.f = voc
+                     gosub update.voc
+                     close update.voc.f
+                     exit
+               end case
+               display sysmsg(5027) ;* Please answer Y or N"
+            repeat
+         end
+
+         * ----- Field 3 - Command processing modes
+         s = voc.rec<3>
+         cursor.at.end = (index(s, 'E', 1) # 0)
+         command.overlay = (index(s, 'O', 1) # 0)
+         show.stack = (index(s, 'S', 1) # 0)
+         clear.on.data = not(index(s, 'X', 1)) and not(cursor.at.end)
+      end else
+         display sysmsg(5028) ;* $RELEASE VOC record not found
+         goto terminate.connection
+      end
+
+      * Cross-check revisions
+
+      if compare(system(1012), SD.REV.STAMP) then
+         display sysmsg(5029) ;* Revision level cross-check error
+         if not(kernel(K$INTERNAL,-1)) then goto terminate.connection
+      end
+
+      * Look for a saved command stack
+
+      read voc.rec from voc,"$COMMAND.STACK" then
+         if upcase(voc.rec[1,1]) = "X" THEN
+
+           openpath initial.account.path:@ds:'stacks' to stk.f then
+              read command.stack from stk.f, @logname else null
+              close stk.f
+           end
+
+         end
+      end
+   end
+
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The single point at
+*   which a login has succeeded, which is why the record is written here and
+*   not at the account tests: everything above can still refuse.  The identity
+*   is NOT passed - audit_message() stamps it from the user table, because
+*   CPROC reassigns logname when it drops to sdsys (5.6).
+   void kernel(K$AUDIT, 'LOGIN account=' : audit.account)
+
+   ok = @true
+   return
+
+terminate.connection:
+* 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  EVERY refused login
+*   leaves through here, so one record covers all of them and a refusal added
+*   later is recorded whether or not whoever adds it thinks about the trail.
+   void kernel(K$AUDIT, 'LOGIN REFUSED account=' : audit.account : ' reason=' : audit.reason)
+
+   display sysmsg(5024) ;* Connection terminated
+   sleep 2
+abort.login:
+   return to abort.login
+
+*
+* ======================================================================
+* 14 Aug 26 Windows port - AUTHENTICATE.ACCOUNT HAS BEEN DELETED, and the
+* credential machinery it called has NOT.  Login takes no password: the
+* operating system authenticated this user before SD started, and the two
+* gates above are group membership and elevation.
+*
+* $CRED, !CRED_SET, !CRED_VERIFY and SET.PASSWORD all remain, deliberately, on
+* the repository owner's decision of 14 Aug 2026.  The API is a separate door
+* and it does require an account password on top of the ssh tunnel, so the
+* credential register changes owner rather than becoming dead code - it stops
+* being the console's gate and becomes the API's.  Until APISRVR is brought
+* under it (PROJECT_STATUS.md section 7 step 6) those four have no caller, and
+* that is a recorded state rather than an oversight.
+* See PROJECT_STATUS.md sections 5.6 and 8.
+
+*
+* ======================================================================
+* UPDATE.VOC  -  Copy NEWVOC to VOC
+
+update.voc:
+   yn = ''
+
+   openpath @sdsys:@ds:"newvoc" to sdsys.file else
+      display sysmsg(2210) ;* Cannot open SDSYS NEWVOC
+      goto abort.login
+   end
+
+* 17 Aug 26 Windows port - THE TIER FILTER, PROJECT_STATUS.md section 8.  THIS
+*   ROUTINE WAS THE HOLE IN THE VOC TIERS.  CREATEA gives a standard account
+*   NEWVOC less the capabilities in TIER.OMIT.STANDARD; this routine then
+*   re-copied the whole of NEWVOC and handed them straight back - the compiler,
+*   the cataloguer, both editors, COPY and DELETE.CATALOG.
+*
+*   AND IT IS REACHED WITHOUT ANY PRIVILEGE.  Two ways: UPDATE.ACCOUNT, which is
+*   CPROC internal verb 15 and tests nothing, and - worse, because it needs no
+*   verb at all - the $RELEASE test below, which asks any user "Update VOC to new
+*   release?" whenever the account's release level differs from SD.REV.STAMP.
+*   One Y and the tier was gone.  So the tiers survived exactly until the next
+*   release stamp, which is not a boundary anybody would have noticed moving.
+*
+*   THE TIER COMES FROM THE ACCOUNTS RECORD, field 5, written by CREATEA.  The
+*   caller sets update.voc.tier, because the three call sites know the account by
+*   two different routes: two of them are the current account (@who) and the
+*   third is walking the whole register with the record already in hand.
+*
+*   BLANK MEANS THE FULL VOC - the pre-tier behaviour.  See SYSCOM/KEYS.H for
+*   why that is the safe way round rather than reading blank as STANDARD.
+   omit.rec = ''
+   omit.tier = upcase(update.voc.tier)
+   if omit.tier # '' and omit.tier # 'PROGRAMMER' and omit.tier # 'ADMINISTRATOR' then
+      read omit.rec from sdsys.file, 'TIER.OMIT.STANDARD' else omit.rec = ''
+   end
+   omit.count = dcount(omit.rec, @fm)
+
+   select sdsys.file to 11
+   loop
+      readnext id from 11 else exit
+
+      copy.it = @true
+
+*     The list records are never themselves VOC entries, whichever tier this is.
+*     Before this they were copied in like any other record, so any account that
+*     ran UPDATE.ACCOUNT acquired a TIER.OMIT.STANDARD entry in its VOC.  Inert -
+*     their descriptions start with T, which is not a VOC type letter - but it
+*     had no business being there.
+* 18 Aug 26 Windows port - CASE INSENSITIVE, PROJECT_STATUS.md 5.12 (b).  id
+*     comes from READNEXT over a DIRECTORY file, so it is the name as it stands
+*     on disk.  A rename of the VOC ids would make these two comparisons miss
+*     and put both list records into every account's VOC.
+      if upcase(id) = 'TIER.OMIT.STANDARD' then copy.it = @false
+      if upcase(id) = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
+
+*     An explicit comparison rather than LOCATE, for the reason CREATEA gives at
+*     the matching loop: CPROC's two LOCATE precedents each search a structure
+*     built the other way up from what they appear to search, and a membership
+*     test that silently matched nothing would omit nothing here and look
+*     exactly like a filter that had worked.
+      if copy.it and omit.count > 1 then
+         for omit.i = 2 to omit.count       ;* field 1 is the description
+*           18 Aug 26 Windows port - AND SO IS THIS ONE, and it is the one that
+*           matters: the list holds verb ids and id is a verb id, so if either
+*           side is lower-cased without the other NOTHING is omitted and a
+*           standard account silently gets the full VOC.  5.12 (b).
+            if upcase(omit.rec<omit.i>) = upcase(id) then
+               copy.it = @false
+               omit.i = omit.count          ;* stop looking
+            end
+         next omit.i
+      end
+
+* 17 Aug 26 Windows port - CONTINUE, and it is demonstrated 30 lines below in
+*   this same loop, where a declined type change skips the write.  CREATEA's
+*   matching loop says CONTINUE's behaviour inside LOOP ... REPEAT "is not
+*   demonstrated anywhere here" and uses a flag round the write instead - that
+*   note was wrong about this file, and is left standing there because the flag
+*   it chose is not worth a second uncompiled change to correct.
+      if not(copy.it) then continue
+
+      read rec from sdsys.file,id then
+         new.type = upcase(rec[1,1])
+         if new.type = 'P' then new.type = upcase(rec[1,2])
+
+* 17 Aug 26 Windows port - old.rec IS CLEARED FIRST, and it never was.  A failed
+*   READ leaves its target variable untouched (op_dio3.c:1254 takes the ELSE
+*   clause without writing str_descr), so for a record the account's VOC does not
+*   yet hold, old.rec still held the PREVIOUS id's record - and the compare()
+*   below decides on that whether to write.
+*
+*   USUALLY HARMLESS AND OCCASIONALLY NOT: when two adjacent ids normalise to
+*   byte-identical records the missing one is silently skipped.  NEWVOC has
+*   several pairs that do - CATALOG and CATALOGUE are both V|CA|$CATALOG, CD and
+*   COMPILE.DICT are both V|CA|$CD - and a directory select on NTFS comes back in
+*   name order, so they arrive adjacent.  An account holding CATALOG and lacking
+*   CATALOGUE never got CATALOGUE.
+*
+*   UPSTREAM TOO - ../sdb64 sd64/sdsys/GPL.BP/LOGIN has no initialisation either.
+*   See UPSTREAM_FIXES.md.
+         old.rec = ''
+         readu old.rec from update.voc.f, id then
+            old.type = upcase(old.rec[1,1])
+            if old.type = 'P' then old.type = upcase(old.rec[1,2])
+
+            * Special case to avoid prompt for 2.4-15 change to MD item
+
+            if id = 'MD' and (old.type = 'Q' or old.type = 'F') then
+               goto accept.without.query
+            end
+
+            if new.type # old.type then
+               if yn # 'A' then
+                  display
+                  display sysmsg(5048, id, old.type) ;* Existing VOC record %1 is of type %2
+                  display sysmsg(5049, new.type) :  ;* Update VOC record is of type %1. Replace record(Y/N)?
+                  loop
+                     input yn
+                     yn = upcase(yn)
+                  until yn = 'Y' or yn = 'N' or yn = 'A'
+                    display sysmsg(5058) : ;* Replace record (Yes/No/All)?
+                  repeat
+                  if yn = 'N' then
+                     release update.voc.f, id
+                     continue
+                  end
+               end
+            end
+         end
+
+accept.without.query:
+         rec<1> = new.type   ;* Remove comment text
+         if new.type = 'K' and rec<3> # '' then   ;* Keyword with other use
+            s = upcase(rec<3>)
+            rec<3> = if s[1,1] = 'P' then s<1>[1,2] else s[1,1]
+         end
+
+         if compare(old.rec, rec) then
+            write rec to update.voc.f, id
+            display '.' :
+         end else
+            release update.voc.f, id
+         end
+      end
+   repeat
+   display 
+
+   close sdsys.file
+
+   return
+
+*
+* ======================================================================
+* GET.ACC.TIER  -  Read an account's VOC tier from the ACCOUNTS register
+*
+* 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Takes tier.acc.name and
+*   sets update.voc.tier for the routine above.  A missing register, a missing
+*   record or a record written before tiers existed all give '', which
+*   update.voc reads as the full VOC - see SYSCOM/KEYS.H.
+*
+*   ITS OWN FILE VARIABLE, deliberately.  update.voc is called from inside a loop
+*   that has ACCOUNTS open on acc.f with a select list active on channel 12, and
+*   reusing either would end that walk part way through with no error and no sign
+*   of it.  That call site does not come through here - it has the record already
+*   - but the next one might.
+
+get.acc.tier:
+   update.voc.tier = ''
+
+   openpath @sdsys:@ds:'accounts' to tier.acc.f then
+      read tier.acc.rec from tier.acc.f, upcase(tier.acc.name) then
+         update.voc.tier = tier.acc.rec<ACC$TIER>
+      end
+      close tier.acc.f
+   end
+
+   return
+end
+
+* END-CODE

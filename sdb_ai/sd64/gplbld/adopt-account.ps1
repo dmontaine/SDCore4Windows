@@ -101,7 +101,7 @@ if (-not (Test-Path $sd)) {
 # An ACCOUNTS record is one file per account, keyed by the UPPERCASED name -
 # checked on this machine rather than assumed: SDSYS, SDACCT2..SDACCT5 sit
 # beside directories named sdacct2..sdacct5 in lower case.
-$record = Join-Path $DataDir ('sdsys\ACCOUNTS\' + $User.ToUpper())
+$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToUpper())
 
 function Invoke-Sd {
     <#

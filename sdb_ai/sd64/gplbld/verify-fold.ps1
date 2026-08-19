@@ -151,7 +151,7 @@ function Remove-Made {
     # Section 4's probe: the source record in BP and the object in BP.OUT.  Both
     # are plain files - BP and BP.OUT are directory files.
     foreach ($p in @((Join-Path (Join-Path $sdsys 'BP') $probeName),
-                     (Join-Path (Join-Path $sdsys 'BP.OUT') $probeName))) {
+                     (Join-Path (Join-Path $sdsys 'bp.out') $probeName))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
     }
 }

@@ -38,13 +38,13 @@ FILES_LIST = ''
 *  list of files to "create" (add ~0 and ~1)
 *
 *                  file      create dict
-FILES_LIST<-1> = "ACCOUNTS"  :@VM:'Y'
-FILES_LIST<-1> = "$HOLD"     :@VM:'Y' 
-FILES_LIST<-1> = "$MAP"      :@VM:'Y'
-FILES_LIST<-1> = "$IPC"      :@VM:'N' 
-FILES_LIST<-1> = "DICT.DIC"  :@VM:'N'  
-FILES_LIST<-1> = "DIR_DICT"  :@VM:'N' 
-FILES_LIST<-1> = "VOC.DIC"   :@VM:'N'  
+FILES_LIST<-1> = "accounts"  :@VM:'Y'
+FILES_LIST<-1> = "$hold"     :@VM:'Y' 
+FILES_LIST<-1> = "$map"      :@VM:'Y'
+FILES_LIST<-1> = "$ipc"      :@VM:'N' 
+FILES_LIST<-1> = "dict.dic"  :@VM:'N'  
+FILES_LIST<-1> = "dir_dict"  :@VM:'N' 
+FILES_LIST<-1> = "voc.dic"   :@VM:'N'  
 *
 FILE_CT = DCOUNT(FILES_LIST,@FM)
 
@@ -89,7 +89,7 @@ IF RUN.CREATE.DICT.DATA = 'Y' THEN
 	   * determine actual name
 	   *
 	   IF FILES_LIST<I,2> = 'Y' THEN
-	     DICT_FILE_NAME  = FILES_LIST<I,1> : '.DIC'
+	     DICT_FILE_NAME  = FILES_LIST<I,1> : '.dic'
        END ELSE
 	     DICT_FILE_NAME  = FILES_LIST<I,1>
 	   END

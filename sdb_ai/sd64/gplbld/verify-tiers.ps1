@@ -160,7 +160,7 @@ function Get-Missing($text, [string[]]$ids) {
 }
 
 function Get-AccountTier($name) {
-    $rec = Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $name.ToUpper())
+    $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $name.ToUpper())
     if (-not (Test-Path -LiteralPath $rec)) { return '<no ACCOUNTS record>' }
     $f = Get-Content -LiteralPath $rec
     if ($f.Count -lt 5) { return '<blank>' }
@@ -195,7 +195,7 @@ Write-Output '=== 0. The omit list this test asserts against ===================
 
 # Read the shipped list and compare it with $Withheld.  If they disagree the
 # test is out of date, and saying so is worth more than failing obscurely.
-$omitRec  = Join-Path $env:ProgramData 'SD\sdsys\NEWVOC\TIER.OMIT.STANDARD'
+$omitRec  = Join-Path $env:ProgramData 'SD\sdsys\newvoc\TIER.OMIT.STANDARD'
 $shipped  = @(Get-Content -LiteralPath $omitRec | Select-Object -Skip 1)
 $diff     = (Compare-Object $shipped $Withheld -SyncWindow 100)
 Note 'shipped TIER.OMIT.STANDARD matches this test' 0 ($diff | Measure-Object).Count
@@ -208,7 +208,7 @@ Note 'omit list length' $Withheld.Count $shipped.Count
 # list.  It went unnoticed while the add list never changed; SET.PASSWORD
 # joining it on 17 Aug 2026 is exactly the edit that would have slipped
 # through, updating the record and not the test, or the other way about.
-$addRec    = Join-Path $env:ProgramData 'SD\sdsys\NEWVOC\TIER.ADD.ADMINISTRATOR'
+$addRec    = Join-Path $env:ProgramData 'SD\sdsys\newvoc\TIER.ADD.ADMINISTRATOR'
 $shippedAd = @(Get-Content -LiteralPath $addRec | Select-Object -Skip 1)
 $diffAd    = (Compare-Object $shippedAd $AdminVerbs -SyncWindow 100)
 Note 'shipped TIER.ADD.ADMINISTRATOR matches this test' 0 ($diffAd | Measure-Object).Count
@@ -231,7 +231,7 @@ foreach ($t in $Tiers) {
     # CREATE.ACCOUNT then refuses the name for a reason that has nothing to do
     # with the tiers, several steps further on, and reads like a tier fault.
     # Give it a fresh prefix instead: -Prefix sdtierb.
-    if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $t.Name.ToUpper()))) {
+    if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $t.Name.ToUpper()))) {
         Write-Output ("  " + $t.Name.ToUpper() + " is still in the ACCOUNTS register from an earlier run.")
         Write-Output ("  CREATE.ACCOUNT would refuse it.  Use a fresh set of names, e.g.:")
         Write-Output ("      " + $PSCommandPath + " -Keep -Prefix sdtierb")

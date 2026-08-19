@@ -133,7 +133,7 @@ if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
 # so after one run the Windows account is gone and the SD account is not.
 # CREATE.ACCOUNT then refuses the name several steps further on, for a reason
 # that has nothing to do with the API.
-if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $Prefix.ToUpper()))) {
+if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper()))) {
     Fail ($Prefix.ToUpper() + " is still in the ACCOUNTS register from an earlier run." +
           "  Remove it with DELETE.ACCOUNT, or use a fresh -Prefix.")
 }
@@ -170,9 +170,9 @@ try {
     $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 
     $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER", $winPw, $winPw)
-    $accRec = Join-Path $env:ProgramData ('SD\sdsys\ACCOUNTS\' + $Prefix.ToUpper())
+    $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
-    Note 'ACCOUNTS record created' $true $made
+    Note 'accounts record created' $true $made
     if (-not $made) {
         Write-Host $out
         Fail 'CREATE.ACCOUNT did not register the account.'

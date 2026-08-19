@@ -184,7 +184,7 @@ function CountIn($sub) {
     if (Test-Path -LiteralPath $d) { (Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue).Count } else { -1 }
 }
 $nGcat   = CountIn 'gcat'
-$nOut    = CountIn 'GPL.BP.OUT'
+$nOut    = CountIn 'gpl.bp.out'
 $szCproc = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')) {
                (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')).Length } else { -1 }
 $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')) {
@@ -202,7 +202,7 @@ if ($szCproc -le 0)   { $faults += '$CPROC is the 0-byte placeholder - the boots
 if ($nGcat   -lt 100) { $faults += "gcat holds $nGcat entries" }
 if ($nOut    -lt 150) { $faults += "GPL.BP.OUT holds $nOut objects" }
 if ($szBcomp -eq 70697) { $faults += '$BCOMP is bbcmp.py''s seed, not BCOMP''s own object' }
-if (-not (Test-Path -LiteralPath (Join-Path $Sdsys 'VOC'))) { $faults += "VOC is absent - 'sd -i' did not complete" }
+if (-not (Test-Path -LiteralPath (Join-Path $Sdsys 'voc'))) { $faults += "voc is absent - 'sd -i' did not complete" }
 if ($faults) { Fail ("the staged tree is not whole:`n  - " + ($faults -join "`n  - ")) }
 Write-Host "   staged tree is whole"
 
@@ -313,7 +313,7 @@ if ($installArgs.Count -gt 0) {
 # exit status - the same rule adopt-account.ps1 follows - even now that the
 # wait above means the wizard has actually closed by the time it starts.
 $igcatDir = Join-Path $PdTree 'sdsys\gcat'
-$ioutDir  = Join-Path $PdTree 'sdsys\GPL.BP.OUT'
+$ioutDir  = Join-Path $PdTree 'sdsys\gpl.bp.out'
 function InstalledCount($d) {
     if (Test-Path -LiteralPath $d) { (Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue).Count } else { 0 }
 }

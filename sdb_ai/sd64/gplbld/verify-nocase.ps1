@@ -118,7 +118,7 @@ Write-Output ''
 # without driving ED through a pipe.  latin-1 and LF to match the BASIC sources
 # this tree ships.
 $probeSrc = Join-Path $bp 'SDNOCASE'
-$probeObj = Join-Path $acctDir 'BP.OUT\SDNOCASE'
+$probeObj = Join-Path $acctDir 'bp.out\SDNOCASE'
 
 $src = @(
     "* SDNOCASE - written by gplbld/verify-nocase.ps1.  Safe to delete."

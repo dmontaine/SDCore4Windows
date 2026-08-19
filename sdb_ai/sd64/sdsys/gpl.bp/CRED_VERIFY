@@ -1,0 +1,82 @@
+* CRED_VERIFY
+* Verify a password against an SD account's stored credential.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 19 Aug 26 Windows port - the credential store is $cred on disk.  5.12 (a).
+* 13 Aug 26 Windows port - written for the account credential model
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !CRED_VERIFY(account, password, ok)
+*
+*    Returns ok = @true only if the account has a credential recorded and the
+*    password derives to the stored verifier.
+*
+*    It fails closed.  An account with no entry in $CRED cannot be entered,
+*    and neither can one whose entry is incomplete.
+*
+*    The caller is responsible for not revealing which of the account name or
+*    the password was wrong.
+*
+*    See PROJECT_STATUS.md section 5.6.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine CRED_VERIFY(account, password, ok)
+$catalog !CRED_VERIFY
+
+$include int$keys.h
+$include err.h
+
+   ok = @false
+   set.status 0
+
+   account = upcase(trim(account))
+   if account = '' or password = '' then return
+
+   openpath @sdsys:@ds:'$cred' to cred.f else
+      set.status ER$NVR
+      return
+   end
+
+   read cred.rec from cred.f, account else
+      close cred.f
+      return                     ;* no credential - fail closed
+   end
+
+   close cred.f
+
+   salt = cred.rec<CRED$SALT>
+   verifier = cred.rec<CRED$VERIFIER>
+   if salt = '' or verifier = '' then return
+
+   derived = ''
+   call !SD_KEY_FROM_PW(password, salt, derived)
+   if derived = '' then return
+
+   if derived = verifier then ok = @true
+
+   return
+end
+
+* END-CODE

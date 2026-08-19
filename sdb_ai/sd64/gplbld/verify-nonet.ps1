@@ -46,7 +46,7 @@ Write-Output ("transcript: " + $logPath)
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $sdsys = Join-Path $env:ProgramData 'SD\sdsys'
 $gcat  = Join-Path $sdsys 'gcat'
-$bpout = Join-Path $sdsys 'GPL.BP.OUT'
+$bpout = Join-Path $sdsys 'gpl.bp.out'
 
 $results = New-Object System.Collections.ArrayList
 $failed  = $false
@@ -107,7 +107,7 @@ foreach ($n in @('DELSRVR', 'SETSRVR', 'LISTSRVR')) {
 # went; if the removal had been done by pattern rather than by name it would
 # have taken this too, and every check above would still pass.
 Note 'gcat still has $APISRVR'     $true (Test-Path -LiteralPath (Join-Path $gcat '$APISRVR'))
-Note 'GPL.BP.OUT still has APISRVR' $true (Test-Path -LiteralPath (Join-Path $bpout 'APISRVR'))
+Note 'gpl.bp.out still has APISRVR' $true (Test-Path -LiteralPath (Join-Path $bpout 'APISRVR'))
 
 # And the catalogue as a whole is still populated - a removal that emptied it
 # would also pass "is DELSRVR absent?".

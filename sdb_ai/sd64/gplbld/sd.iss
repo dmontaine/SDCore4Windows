@@ -151,7 +151,7 @@ Source: "{#Stage}\ProgramFiles\*"; DestDir: "{app}"; \
 ; uninsneveruninstall, because this is the user's database.  Uninstalling SD
 ; must not remove accounts, passwords or data - the repository owner's
 ; instruction, 14 Aug 2026 - and the boundary between "shipped" and "the
-; user's" runs through the middle of this tree: ACCOUNTS ships with the SDSYS
+; user's" runs through the middle of this tree: accounts ships with the SDSYS
 ; record in it and then accumulates every account the user creates.  There is
 ; no way to remove the shipped half without risking the other, so none of it
 ; is removed.  The opt-in path in [Code] deletes the whole tree instead, which
@@ -160,7 +160,7 @@ Source: "{#Stage}\ProgramFiles\*"; DestDir: "{app}"; \
 ; The Check stops an upgrade overwriting a live database.  On a machine that
 ; already has C:\ProgramData\SD\sdsys, this whole section is skipped and the
 ; existing data is kept untouched.  UPGRADING AN EXISTING DATABASE IS NOT
-; SOLVED - a new release's GPL.BP.OUT will not reach an existing install, and
+; SOLVED - a new release's gpl.bp.out will not reach an existing install, and
 ; that needs a migration story before there is ever a second release.  Said
 ; plainly here rather than discovered later.
 Source: "{#Stage}\ProgramData\sdsys\*"; DestDir: "{#DataDir}\sdsys"; \
@@ -345,7 +345,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; them into the account directory, which the grant above leaves writable by
 ; every SD user - so one user could read another's new Windows password, and,
 ; worse, rewrite a pending script before the elevated helper ran it.  This
-; creates SDSYS\PSTMP with a per-creator ACL; secure-psdir.ps1 has the detail.
+; creates SDSYS\pstmp with a per-creator ACL; secure-psdir.ps1 has the detail.
 ;
 ; ORDER: after the icacls, as above, AND BEFORE adopt-account.ps1, which runs
 ; at ssPostInstall and is the install's own first caller of !ps_script.  [Run]
@@ -360,7 +360,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; account creation rather than quietly writing privileged scripts somewhere
 ; every SD user can edit them.  That is the intended trade.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-psdir.ps1"" -Path ""{#DataDir}\sdsys\PSTMP"""; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-psdir.ps1"" -Path ""{#DataDir}\sdsys\pstmp"""; \
     Flags: runhidden; StatusMsg: "Securing the script directory..."
 
 ; NOT OPTIONAL SINCE 16 Aug 2026 - see the note in [Tasks].  The Check is the
@@ -917,7 +917,7 @@ end;
 { LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did
   not happen.  PROJECT_STATUS.md 7 step 7.
 
-  WHAT IT PROTECTS.  SDSYS OS.USERS names the accounts allowed SH, one record
+  WHAT IT PROTECTS.  SDSYS os.users names the accounts allowed SH, one record
   per account.  CPROC reads it from the USER'S OWN process when they type SH,
   so ordinary users must be able to READ it - which is the difference from the
   credential store, where they get nothing at all.  What they must never have
@@ -960,8 +960,8 @@ begin
   Code := 0;
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Script := ExpandConstant('{app}\secure-osusers.ps1');
-  Store := ExpandConstant('{#DataDir}\sdsys\OS.USERS');
-  Dict := ExpandConstant('{#DataDir}\sdsys\OS.USERS.DIC');
+  Store := ExpandConstant('{#DataDir}\sdsys\os.users');
+  Dict := ExpandConstant('{#DataDir}\sdsys\os.users.dic');
 
   Failed := '';
   if not LockOsUsersPath(Ps, Script, Store, Code) then
@@ -1008,14 +1008,14 @@ begin
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Script := ExpandConstant('{app}\secure-gcat.ps1');
   Target := ExpandConstant('{#DataDir}\sdsys\gcat');
-  Objects := ExpandConstant('{#DataDir}\sdsys\GPL.BP.OUT');
+  Objects := ExpandConstant('{#DataDir}\sdsys\gpl.bp.out');
 
-  { GPL.BP.OUT BESIDE gcat - owner's instruction, 18 Aug 2026.  It holds the
+  { gpl.bp.out BESIDE gcat - owner's instruction, 18 Aug 2026.  It holds the
     compiled objects the global catalogue is loaded FROM, and it measured
     sdusers:(I)(OI)(CI)(M) on the 11:27:32 install after gcat was already
     locked.  On its own it is the weaker path - planting an object there does
     nothing until an administrator re-catalogues it - but that is a delay, not
-    a barrier, and nothing writes it after an install except a GPL.BP
+    a barrier, and nothing writes it after an install except a gpl.bp
     recompile, which is elevated anyway.
 
     Called once per path, like SecureOsUsers: -File binds a comma-joined
@@ -1092,7 +1092,7 @@ begin
   Result := '';
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Script := ExpandConstant('{app}\secure-cred.ps1');
-  Store := ExpandConstant('{#DataDir}\sdsys\$CRED');
+  Store := ExpandConstant('{#DataDir}\sdsys\$cred');
 
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
                   Script + '" -Path "' + Store + '"',

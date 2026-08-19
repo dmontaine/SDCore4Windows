@@ -33,7 +33,7 @@
 # a tree that the Inno Setup script packages.  See PROJECT_STATUS.md 5.9.
 #
 # WITH --bootstrap IT ALSO RUNS THE BOOTSTRAP, and that is what makes the tree
-# installable.  Staged cold, gcat, cat, GPL.BP.OUT, BP.OUT and PCODE.OUT are
+# installable.  Staged cold, gcat, cat, gpl.bp.out, bp.out and pcode.out are
 # empty, so the end user has to run the sequence in PROJECT_STATUS.md 3 - which
 # needs Python, and needs gplbld/ inside the data tree that the
 # data-tree-holds-data-only decision forbids.  It could not have worked anyway:
@@ -112,31 +112,31 @@ DLL_SEARCH = [
 # Copied from sd64/sdsys.  Each entry says why it ships, because the next
 # person to read this list will be deciding whether to remove something.
 SDSYS_SHIP = [
-    ('GPL.BP',        'BASIC source; SECOND.COMPILE compiles the lot of it'),
-    ('SYSCOM',        'include records the compile needs'),
+    ('gpl.bp',        'BASIC source; SECOND.COMPILE compiles the lot of it'),
+    ('syscom',        'include records the compile needs'),
     # 15 Aug 26 - THESE TWO DESCRIPTIONS WERE THE WRONG WAY ROUND, and they are
-    # the first thing read by anyone adding a verb.  VOC_TEMPLATE is the
-    # ADMINISTRATIVE superset that becomes SDSYS's own VOC; NEWVOC is the
+    # the first thing read by anyone adding a verb.  voc_template is the
+    # ADMINISTRATIVE superset that becomes SDSYS's own VOC; newvoc is the
     # smaller set CREATEA copies into each new account (CREATEA:520).  The
     # difference is deliberate access control - CREATE.ACCOUNT, DELETE.ACCOUNT,
-    # ACCOUNTS and FIRST.COMPILE are in VOC_TEMPLATE and NOT in NEWVOC, so an
+    # accounts and FIRST.COMPILE are in voc_template and NOT in newvoc, so an
     # ordinary account cannot reach them at all.  A new administrative verb
-    # therefore goes in VOC_TEMPLATE ONLY; putting it in NEWVOC hands it to
+    # therefore goes in voc_template ONLY; putting it in newvoc hands it to
     # every account SD creates.
     # 17 Aug 26 - AND THAT RULE STILL HOLDS AFTER THE VOC TIERS, which is why
     # CREATEA gives an ADMINISTRATOR account its nine administration verbs by
-    # reading them OUT of VOC_TEMPLATE rather than by moving them into NEWVOC.
-    # The tier lists in NEWVOC (TIER.OMIT.STANDARD, TIER.ADD.ADMINISTRATOR) fail
+    # reading them OUT of voc_template rather than by moving them into newvoc.
+    # The tier lists in newvoc (TIER.OMIT.STANDARD, TIER.ADD.ADMINISTRATOR) fail
     # safe only in that direction: a lost or empty omit list is read as "no
-    # policy" and gives the full VOC, which is harmless while NEWVOC holds
+    # policy" and gives the full VOC, which is harmless while newvoc holds
     # nothing administrative and hands out CREATE.ACCOUNT the moment it does.
     # PROJECT_STATUS.md section 8.
-    ('NEWVOC',        'the VOC a newly created account is given'),
-    ('VOC_TEMPLATE',  "the administrative superset; becomes SDSYS's own VOC"),
-    ('MESSAGES',      'sysmsg() text'),
-    ('SD.VOCLIB',     'library routines'),
-    ('ACCOUNTS',      'holds the SDSYS record; the bootstrap adds to it'),
-    ('BP',            'SDSYS BP - see the note in the header about tests'),
+    ('newvoc',        'the VOC a newly created account is given'),
+    ('voc_template',  "the administrative superset; becomes SDSYS's own VOC"),
+    ('messages',      'sysmsg() text'),
+    ('sd.voclib',     'library routines'),
+    ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
+    ('bp',            'SDSYS BP - see the note in the header about tests'),
     ('changelog',     'ships with the system by standing instruction'),
     ('licence',       'GPL-3.0'),
     ('contrib',       'contributor list, reachable as CONFIG CONTRIB'),
@@ -145,31 +145,31 @@ SDSYS_SHIP = [
 # Created empty, and filled by the bootstrap when --bootstrap is given.  Their
 # README placeholders are not shipped - that would put files in a database.
 SDSYS_EMPTY = [
-    ('GPL.BP.OUT',  'compiled objects from SECOND.COMPILE'),
-    ('BP.OUT',      'compiled objects from the SDSYS BP'),
+    ('gpl.bp.out',  'compiled objects from SECOND.COMPILE'),
+    ('bp.out',      'compiled objects from the SDSYS bp'),
     ('gcat',        'global catalogue; the bootstrap touches $CPROC here first'),
     ('cat',         'private catalogue'),
-    ('PCODE.OUT',   'pcode_bld.py output'),
-    ('$HOLD',       'spooler hold file'),
+    ('pcode.out',   'pcode_bld.py output'),
+    ('$hold',       'spooler hold file'),
     ('prt',         'print queue'),
     ('bin',         'NOT the executables - the pcode library lives here, see below'),
     # 17 Aug 26 - THE CREDENTIAL STORE, AND NOTHING CREATED IT UNTIL NOW.  The
-    # comment below used to list $CRED among the files "the bootstrap and the
+    # comment below used to list $cred among the files "the bootstrap and the
     # running system create for themselves", and that was simply wrong: sd -i
-    # creates VOC, VOC.DIC, ACCOUNTS.DIC, $MAP and DICT.DIC and no more, and
-    # CRED_SET opens $CRED without creating it.  So SET.PASSWORD failed on
-    # every install ever made with "Cannot open the $CRED register", which
+    # creates VOC, voc.dic, accounts.dic, $map and dict.dic and no more, and
+    # CRED_SET opens $cred without creating it.  So SET.PASSWORD failed on
+    # every install ever made with "Cannot open the $cred register", which
     # nobody saw because no VOC pointed at SET.PASSWORD until 17 Aug 2026.
-    # A directory file, the same shape as ACCOUNTS - an empty directory is
+    # A directory file, the same shape as accounts - an empty directory is
     # one.  secure-cred.ps1 locks it once the tree ACL is on.
-    ('$CRED',       'credential store: per-account salt and Argon2 verifier'),
+    ('$cred',       'credential store: per-account salt and Argon2 verifier'),
     # 17 Aug 26 - SHELL PERMISSION, PROJECT_STATUS.md 7 step 7.  Both are
     # directory files and BOTH have to be here, because WRITE_INSTALL_DICTS
     # OPENPATHs the dictionary rather than creating it - the bootstrap would
     # skip the entries with "ERROR OPENING FILE" and the file would ship with
     # no dictionary, so LIST and ED would not resolve a field.
     #
-    # OS.USERS SHIPS EMPTY AND THAT IS THE SAFE DIRECTION: no record means no
+    # os.users SHIPS EMPTY AND THAT IS THE SAFE DIRECTION: no record means no
     # account has shell access, which is the behaviour before this existed.
     # It is the opposite of the tier lists, where a missing record means the
     # FULL VOC (CREATEA) - do not copy that convention here.
@@ -177,9 +177,9 @@ SDSYS_EMPTY = [
     # secure-osusers.ps1 locks it once the tree ACL is on, read-only to
     # sdusers.  Without that lock any SD user could add their own name, and
     # the file would be decoration rather than a control - which is exactly
-    # what happened to $CRED above.
-    ('OS.USERS',     'accounts permitted SH and/or OS.EXECUTE'),
-    ('OS.USERS.DIC', 'its dictionary; WRITE_INSTALL_DICTS fills it'),
+    # what happened to $cred above.
+    ('os.users',     'accounts permitted SH and/or OS.EXECUTE'),
+    ('os.users.dic', 'its dictionary; WRITE_INSTALL_DICTS fills it'),
 ]
 
 # sd64/terminfo is generated by "make terminfo" and is not tracked, so it is
@@ -190,9 +190,9 @@ TERMINFO_FILES = [('terminfo.src', 'source, so sdtic is usable after install')]
 
 # Directories the bootstrap and the running system create for themselves, listed
 # so nobody adds them to SDSYS_EMPTY on the assumption they were forgotten:
-#   stacks  DIR_DICT  VOC  VOC.DIC  DICT.DIC  ACCOUNTS.DIC  $MAP  $MAP.DIC
-#   $IPC  errlog
-# $CRED is NOT among them and never was - see SDSYS_EMPTY above.
+#   stacks  dir_dict  voc  voc.dic  dict.dic  accounts.dic  $map  $map.dic
+#   $ipc  errlog
+# $cred is NOT among them and never was - see SDSYS_EMPTY above.
 
 # Empty account roots.  Three siblings under one root is what makes a single
 # icacls with inheritance enough (PROJECT_STATUS.md 5.8).  "shm" is the fourth,
@@ -207,13 +207,13 @@ PF_BIN_SUBDIR = os.path.join('usr', 'bin')
 # staging directory rather than here - a build must not depend on, or write to,
 # the build machine's own installed system - so the SDSYS account record comes
 # out holding the staging path and is rewritten to this afterwards.  That is
-# safe because ACCOUNTS/SDSYS is the ONLY place an absolute path is embedded,
+# safe because accounts/SDSYS is the ONLY place an absolute path is embedded,
 # and stage.py proves it rather than trusting it: see check_no_stage_paths().
 PRODUCTION_SDSYS = r'C:\ProgramData\SD\sdsys'
 
-# Field 1 of an ACCOUNTS record is the account's directory.
+# Field 1 of an accounts record is the account's directory.
 #
-# ACCOUNTS is a DIRECTORY-type SD file, so each record is a plain text file and
+# accounts is a DIRECTORY-type SD file, so each record is a plain text file and
 # its field marks are NEWLINES, not the \xfe field mark used inside a DH file.
 # Splitting on \xfe finds nothing, leaves the whole record as field 1, and
 # rewriting it then flattens the record to one line - silently discarding every
@@ -267,7 +267,7 @@ def check_no_stage_paths(stage, sdsys, allowed):
 
     This is the invariant the whole pre-bootstrap idea rests on.  Bootstrapping
     here rather than at C:\ProgramData\SD\sdsys means anything that recorded
-    an absolute path recorded the WRONG one, and only ACCOUNTS/SDSYS is known
+    an absolute path recorded the WRONG one, and only accounts/SDSYS is known
     to do that.  "Known" was a sweep somebody did once, which is exactly the
     kind of claim that quietly stops being true - so it is checked on every
     build instead.  If this fires, do not add the file to `allowed` without
@@ -307,7 +307,7 @@ def check_bootstrap_complete(sdsys):
     object code" with an access violation, which reads as a corrupt binary.
 
     assert-current.ps1 CANNOT COVER THIS.  It compares an install against
-    SOURCE, and gcat, GPL.BP.OUT and VOC are build products with no source
+    SOURCE, and gcat, gpl.bp.out and voc are build products with no source
     counterpart, so it exited 0 over the broken tree.  The check has to be
     here, at the moment the tree is built, against what the bootstrap created.
 
@@ -330,18 +330,18 @@ def check_bootstrap_complete(sdsys):
         faults.append('gcat/$LOGIN is absent - nothing could log in')
     if n('gcat') < 100:
         faults.append('gcat holds %d entries, expected ~132' % n('gcat'))
-    if n('GPL.BP.OUT') < 150:
-        faults.append('GPL.BP.OUT holds %d objects, expected ~193' % n('GPL.BP.OUT'))
-    if not os.path.isdir(os.path.join(sdsys, 'VOC')):
+    if n('gpl.bp.out') < 150:
+        faults.append('gpl.bp.out holds %d objects, expected ~190' % n('gpl.bp.out'))
+    if not os.path.isdir(os.path.join(sdsys, 'voc')):
         faults.append("VOC is absent - 'sd -i' did not complete")
     return faults
 
 
 def retarget_sdsys_account(sdsys, production):
-    """Point the SDSYS ACCOUNTS record at a directory, and return the old one.
+    """Point the SDSYS accounts record at a directory, and return the old one.
 
-    Field 1 of an ACCOUNTS record is the account directory, and IT IS WHERE
-    GPL.BP AND GPL.BP.OUT RESOLVE TO once a session has logged in.  So this is
+    Field 1 of an accounts record is the account directory, and IT IS WHERE
+    gpl.bp AND gpl.bp.out RESOLVE TO once a session has logged in.  So this is
     called TWICE: at the staged tree before the bootstrap, or the bootstrap
     compiles somebody else's sources, and at the production path afterwards, so
     the install does not carry a build path.  Rewriting one field is the entire
@@ -352,9 +352,9 @@ def retarget_sdsys_account(sdsys, production):
     bootstrap silently compiled 190 programs there and catalogued them into the
     staged gcat, and on a clean machine that path does not exist at all.
     """
-    rec = os.path.join(sdsys, 'ACCOUNTS', 'SDSYS')
+    rec = os.path.join(sdsys, 'accounts', 'SDSYS')
     if not os.path.isfile(rec):
-        die('there is no ACCOUNTS/SDSYS record in %s' % sdsys)
+        die('there is no accounts/SDSYS record in %s' % sdsys)
     with open(rec, 'rb') as f:
         fields = f.read().decode('latin-1').split(FM)
     was = fields[0]
@@ -514,7 +514,7 @@ def main():
     # than in the data tree on purpose - the helper is executed with full
     # privilege, and the data tree is writable by every member of sdusers, so
     # shipping it there would let one SD user rewrite what another user's
-    # elevated helper runs.  GPL.BP/ELEVATE reaches them with
+    # elevated helper runs.  gpl.bp/ELEVATE reaches them with
     # kernel(K$WINPATH), because they are "/" to SD and "C:\Program Files\SD"
     # to PowerShell, which cannot open the first.
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
@@ -577,7 +577,7 @@ def main():
         # The account directory has to name the staged tree BEFORE the
         # bootstrap logs in - see retarget_sdsys_account().
         shipped = retarget_sdsys_account(sdsys, os.path.abspath(sdsys))
-        print('  ACCOUNTS/SDSYS pointed at the staged tree')
+        print('  accounts/SDSYS pointed at the staged tree')
         print('    was %s' % shipped)
 
         print('bootstrapping the staged tree')
@@ -606,12 +606,12 @@ def main():
         os.remove(bconf)
 
         was = retarget_sdsys_account(sdsys, PRODUCTION_SDSYS)
-        print('  ACCOUNTS/SDSYS retargeted')
+        print('  accounts/SDSYS retargeted')
         print('    from %s' % was)
         print('    to   %s' % PRODUCTION_SDSYS)
 
         offenders = check_no_stage_paths(stage, sdsys,
-                                         allowed={'ACCOUNTS/SDSYS', 'errlog'})
+                                         allowed={'accounts/SDSYS', 'errlog'})
         if offenders:
             print('  these staged files still name the staging directory:')
             for o in sorted(offenders)[:20]:

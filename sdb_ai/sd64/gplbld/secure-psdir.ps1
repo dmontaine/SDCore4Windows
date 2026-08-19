@@ -1,6 +1,6 @@
 # secure-psdir.ps1 - the directory !ps_script writes privileged scripts into
 #
-#   powershell -File secure-psdir.ps1 -Path "C:\ProgramData\SD\sdsys\PSTMP"
+#   powershell -File secure-psdir.ps1 -Path "C:\ProgramData\SD\sdsys\pstmp"
 #
 # PROJECT_STATUS.md 7 step 4.  Run by the installer, AFTER the icacls that
 # secures the data tree and BEFORE adopt-account.ps1, which reaches SDSYS and

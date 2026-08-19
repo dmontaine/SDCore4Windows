@@ -7,9 +7,9 @@
 #
 # Three BASIC include records are generated from C headers rather than edited:
 #
-#   gplsrc/revstamp.h  ->  sdsys/GPL.BP/REVSTAMP.H      (was GPL.BP/REVSTAMP)
-#   gplsrc/err.h       ->  sdsys/SYSCOM/ERR.H           (was GPL.BP/ERRGEN)
-#   gplsrc/err.h       ->  sdsys/GPL.BP/ERRTEXT.H       (was GPL.BP/ERRGEN)
+#   gplsrc/revstamp.h  ->  sdsys/gpl.bp/REVSTAMP.H      (was GPL.BP/REVSTAMP)
+#   gplsrc/err.h       ->  sdsys/syscom/ERR.H           (was GPL.BP/ERRGEN)
+#   gplsrc/err.h       ->  sdsys/gpl.bp/ERRTEXT.H       (was GPL.BP/ERRGEN)
 #
 # This script replaces the first two of those generators at build time.  It is
 # not a rewrite of them for its own sake - it exists because running them from
@@ -193,9 +193,9 @@ def main():
 
     revstamp_h = os.path.join(args.gplsrc, 'revstamp.h')
     err_h = os.path.join(args.gplsrc, 'err.h')
-    out_revstamp = os.path.join(args.sdsys, 'GPL.BP', 'REVSTAMP.H')
-    out_syscom = os.path.join(args.sdsys, 'SYSCOM', 'ERR.H')
-    out_errtext = os.path.join(args.sdsys, 'GPL.BP', 'ERRTEXT.H')
+    out_revstamp = os.path.join(args.sdsys, 'gpl.bp', 'REVSTAMP.H')
+    out_syscom = os.path.join(args.sdsys, 'syscom', 'ERR.H')
+    out_errtext = os.path.join(args.sdsys, 'gpl.bp', 'ERRTEXT.H')
 
     for path in (revstamp_h, err_h):
         if not os.path.isfile(path):

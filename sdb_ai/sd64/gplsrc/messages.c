@@ -23,7 +23,7 @@
  *
  * START-DESCRIPTION:
  *
- * The message library (SDSYS MESSAGES file) uses numbers to identify
+ * The message library (SDSYS messages file) uses numbers to identify
  * messages. For non-English texts, the message number is prefixed by a
  * language code of up to three letters.
  *
@@ -147,7 +147,7 @@ bool load_language(char* language_prefix) {
 char* sysmsg(int msg_no) {
   /* STRING_CHUNK* str = NULL; /x redundant x/ unused variable */
   char id[16];              /* Holds the msg id */
-  char path[MAX_PATHNAME_LEN + 1]; /* Pathstring of the MESSAGES file or Record */
+  char path[MAX_PATHNAME_LEN + 1]; /* Pathstring of the messages file or Record */
   int n;            /* A random tmp var by Ladybridge */
   int msg_rec = -1; /* The message record FileHandle */
   char* p;
@@ -180,7 +180,7 @@ char* sysmsg(int msg_no) {
     }
     /* -------------------- */
     /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cMESSAGES", sysseg->sysdir, 
+    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cmessages", sysseg->sysdir, 
                DS) >= (MAX_PATHNAME_LEN + 1)) {
       /* TODO: this should be sent to the system log. */
       k_error("Overflowed directory/filename path length in sysmsg()!");
@@ -208,7 +208,7 @@ char* sysmsg(int msg_no) {
   if (prefix[0] != '\0') {
     n = sprintf(id, "%s%d", prefix, msg_no);
     /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cMESSAGES%c%s", sysseg->sysdir, 
+    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cmessages%c%s", sysseg->sysdir, 
             DS, DS, id) >= (MAX_PATHNAME_LEN + 1)) {
       /* TODO: this should be sent to the system log. */
       k_error("Overflowed directory/filename path length in sysmsg()!");
@@ -230,7 +230,7 @@ char* sysmsg(int msg_no) {
   if (msg_rec < 0) {
     n = sprintf(id, "%d", msg_no);
     /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cMESSAGES%c%s", sysseg->sysdir, 
+    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cmessages%c%s", sysseg->sysdir, 
             DS, DS, id) >= (MAX_PATHNAME_LEN + 1)) {
       /* TODO: this should be sent to the system log. */
       k_error("Overflowed directory/filename path length in sysmsg()!");

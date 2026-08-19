@@ -55,7 +55,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 2
 }
 
-$store = Join-Path $env:ProgramData 'SD\sdsys\$CRED'
+$store = Join-Path $env:ProgramData 'SD\sdsys\$cred'
 
 $results = New-Object System.Collections.ArrayList
 $fatal   = $false
