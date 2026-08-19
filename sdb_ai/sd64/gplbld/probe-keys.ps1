@@ -35,7 +35,14 @@
 # redirected - piping into it would measure the pipe and produce a confident
 # answer to the wrong question, which is the exact failure this exists to stop.
 
-param([switch]$Keep)
+# THE PROGRAM IS LEFT INSTALLED, AND THAT IS DELIBERATE - it was not, and the
+# first thing that happened was the obvious one.  This is run once per console
+# host, so the operator learns "RUN BP ZZKEYPROBE" on the first run and types it
+# in the next window - where, if the previous run had removed it, SD answers
+# that it does not exist.  A probe that deletes the command it just taught you
+# is a trap of its own making.  -Cleanup takes it away when you have finished
+# with all three.
+param([switch]$Cleanup)
 
 $ErrorActionPreference = 'Stop'
 
@@ -46,22 +53,28 @@ function Stop-Here([int]$code, [string]$msg) {
 
 # ---------------------------------------------------------------------------
 # 1. A real console, or nothing.
+#
+# BOTH GUARDS ARE SCOPED TO THE MEASURING RUN, and -Cleanup is exempt from
+# both on purpose.  Removing a file needs no console and no install: gating it
+# on either means the tidy-up cannot be run from wherever the operator happens
+# to be, or - worse - cannot be run at all once the tree has moved on.  A guard
+# that blocks the undo is a guard that gets worked around.
 
-if ([Console]::IsInputRedirected) {
-    Write-Output 'probe-keys: standard input is redirected, so this is not a console.'
-    Write-Output '  Piping into this script would measure the pipe, not the keyboard,'
-    Write-Output '  and every instrument in gplbld already does that.  Run it from a'
-    Write-Output '  console window - cmd, PowerShell or Windows Terminal - by hand.'
-    exit 2
-}
+if (-not $Cleanup) {
+    if ([Console]::IsInputRedirected) {
+        Write-Output 'probe-keys: standard input is redirected, so this is not a console.'
+        Write-Output '  Piping into this script would measure the pipe, not the keyboard,'
+        Write-Output '  and every instrument in gplbld already does that.  Run it from a'
+        Write-Output '  console window - cmd, PowerShell or Windows Terminal - by hand.'
+        exit 2
+    }
 
-# ---------------------------------------------------------------------------
-# 2. The install must match source, or the bytes mean nothing.
-
-& (Join-Path $PSScriptRoot 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) {
-    Write-Output ''
-    Stop-Here 2 'refusing - see above'
+    # The install must match source, or the bytes mean nothing.
+    & (Join-Path $PSScriptRoot 'assert-current.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output ''
+        Stop-Here 2 'refusing - see above'
+    }
 }
 
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
@@ -87,6 +100,22 @@ $bp = Join-Path $acctDir 'BP'
 if (-not (Test-Path -LiteralPath $bp)) { Stop-Here 2 "no BP in $acctDir - the probe has nowhere to live." }
 
 $probeName = 'ZZKEYPROBE'
+$bpOut     = Join-Path $acctDir 'BP.OUT'
+
+Write-Output ''
+Write-Output "probe-keys: SD account $(Split-Path $acctDir -Leaf), source in $bp"
+
+# -Cleanup is a mode, not a tidy-up at the end of a normal run: it removes and
+# stops, so it can be used from any window once all three consoles are read.
+if ($Cleanup) {
+    $gone = $false
+    foreach ($d in @($bp, $bpOut)) {
+        $p = Join-Path $d $probeName
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; Write-Output "  removed $p"; $gone = $true }
+    }
+    if (-not $gone) { Write-Output "  nothing to remove - $probeName is not installed" }
+    exit 0
+}
 
 # ---------------------------------------------------------------------------
 # 4. The program.
@@ -201,7 +230,17 @@ if ($out -notmatch '0 error\(s\)') {
     Write-Output $out
     Stop-Here 2 "$probeName did not compile"
 }
-Write-Output '  compiled.'
+# "0 error(s)" IS THE COMPILER TALKING, NOT THE FILE SYSTEM.  What the operator
+# is about to type is RUN, which needs the OBJECT, so check the object is there
+# rather than trust the message - otherwise the first sign of trouble is SD
+# saying the program does not exist, at a prompt, with the script already gone.
+$objPath = Join-Path $bpOut $probeName
+if (-not (Test-Path -LiteralPath $objPath)) {
+    Write-Output '  --- SD said: ---'
+    Write-Output $out
+    Stop-Here 2 "compiled clean but no object at $objPath - RUN would fail"
+}
+Write-Output "  compiled: $objPath"
 
 # ---------------------------------------------------------------------------
 # 6. Hand over.
@@ -218,24 +257,26 @@ Write-Output ''
 Write-Output '  COPY THE OUTPUT OUT OF THE WINDOW WHEN YOU ARE DONE.  Nothing can'
 Write-Output '  capture it from here: SD writes to the console directly, so there is'
 Write-Output '  no transcript of it and no file to read afterwards.'
+Write-Output ''
+Write-Output '  THE PROGRAM STAYS INSTALLED when you leave, so for the other console'
+Write-Output '  hosts you can just start sd and type the same command - you do not'
+Write-Output '  need to run this script again.  -Cleanup removes it at the end.'
 Write-Output '=========================================================================='
 Write-Output ''
 
 & $sdExe
 
 # ---------------------------------------------------------------------------
-# 7. Take it away again.
+# 7. Leave it in place, so the next console works the same way.
 
 Write-Output ''
-if ($Keep) {
-    Write-Output "probe-keys: -Keep, so $probeName is left in $bp"
-    Write-Output "  Re-run it any time with:  sd   then   RUN BP $probeName"
-} else {
-    foreach ($d in @($bp, (Join-Path $acctDir 'BP.OUT'))) {
-        $p = Join-Path $d $probeName
-        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
-    }
-    Write-Output "probe-keys: removed $probeName and its object.  -Keep leaves them."
-}
+Write-Output "probe-keys: $probeName is left in $bp, so the same command works"
+Write-Output '  in the next console without running this script again:'
+Write-Output ''
+Write-Output "      sd        then        RUN BP $probeName"
+Write-Output ''
+Write-Output '  Remove it when you have read all three consoles:'
+Write-Output ''
+Write-Output "      $($MyInvocation.MyCommand.Path) -Cleanup"
 
 exit 0
