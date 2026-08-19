@@ -208,7 +208,7 @@ $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')) {
 # (commit c893308), so the old figures have read three high since the 17:21
 # cycle.  The thresholds below did not move and did not need to: they are set
 # far enough back to catch a bootstrap that failed, not to police a count.
-Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~99)" -f $nGcat, $nOut, $nTinfo)
+Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~100)" -f $nGcat, $nOut, $nTinfo)
 Write-Host ("   `$CPROC {0} bytes (want >0)   `$BCOMP {1} (want ~88,000 - 70,697 is the seed)" -f $szCproc, $szBcomp)
 
 $faults = @()

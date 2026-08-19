@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 19 Aug 26 Windows port - reset the buffers for every entry, not only for one
+ *           that compiled, and exit non-zero when any entry did not.
+ *           UPSTREAM_FIXES.md #9.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -180,6 +183,10 @@ int16_t string_offsets[NumStrNames];
 char strings[4096];
 
 int errors;
+/* 19 Aug 26 Windows port - errors is reset for EVERY entry, so it cannot say
+ * whether the run as a whole succeeded.  This one is never reset, and it is
+ * what gives sdtic a non-zero exit status.  UPSTREAM_FIXES.md #9.          */
+int failed_entries;
 
 struct NAME {
   struct NAME* next;
@@ -374,6 +381,18 @@ int main(int argc, char* argv[]) {
         src_fu = NULL;
       }
     }
+  }
+
+/* 19 Aug 26 Windows port - AN ENTRY THAT DID NOT COMPILE NOW FAILS THE RUN.
+ * sdtic used to return 0 whatever happened, so "make terminfo" reported success
+ * while writing a database with entries missing from it, and the first anyone
+ * heard of it was a user whose terminal did not work.  gplbld/cycle.ps1 counts
+ * the compiled files for that reason; this makes the tool itself say so.      */
+  if (failed_entries != 0) {
+    printf("sdtic: %d terminal definition(s) did not compile - see above.\n",
+           failed_entries);
+    status = 1;
+    goto abort;
   }
 
   status = 0;
@@ -642,8 +661,25 @@ void process_file() {
       /* -------------------- */
 
       errors = 0;
-      reset_buffers();
     }
+
+    if (errors != 0)
+      failed_entries++;
+
+/* 19 Aug 26 Windows port - RESET THE BUFFERS FOR EVERY ENTRY, NOT ONLY FOR ONE
+ * THAT COMPILED.  reset_buffers() used to sit inside the "if" above, so an
+ * entry that produced an error - or one skipped by selective compilation - left
+ * strings[], string_offsets[] and str_count holding its own half-built data, and
+ * the NEXT entry accumulated on top of it.  Compiling the full 62-entry database
+ * with one bad entry in it therefore overran strings[4096] and SEGFAULTED part
+ * way through, leaving a truncated terminfo directory - 24 files of 100 - and,
+ * because stdout is block buffered when redirected, not one of the diagnostics
+ * that had been printed.  UPSTREAM_FIXES.md #9.
+ *   MEASURED by giving an entry a description containing a comma, which is what
+ * found this: get_token() splits on commas, so the words after it are read as
+ * capability names, lookup() rejects them and errors becomes non-zero.        */
+    errors = 0;
+    reset_buffers();
   }
 
 exit_process_file:

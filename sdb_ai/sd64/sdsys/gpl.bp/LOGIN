@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the fallback terminal type is 'windows', not
+*           'vt100'.  PROJECT_STATUS.md 5.18.
 * 19 Aug 26 Windows port - the SDSYS paths are lower case on disk: accounts,
 *           newvoc, $ipc, and the account's own voc.  PROJECT_STATUS.md 5.12 (a).
 * rev 0.9.1 Mar 25 mab return to single rev tracking
@@ -113,7 +115,15 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
       if s = '' then
             * This user has come in from a command prompt of some sort.
             s = env('TERM')
-            if s = '' then s = 'vt100'
+* 19 Aug 26 Windows port - 'windows' rather than 'vt100'.  vt100 binds the
+*   arrow keys to ESC O A/B/C/D, which a terminal sends only in application
+*   cursor mode, and nothing in SD ever sends smkx to enter it - so under
+*   vt100 no arrow key can arrive at all.  Its kbs is ^H for the same kind of
+*   reason.  PROJECT_STATUS.md 5.18.
+*   THE VOC login PARAGRAPH IS WHAT ACTUALLY DECIDES THIS - it runs after this
+*   subroutine and sets the type unconditionally, so this line is reached only
+*   by a session with no login paragraph.  Both must name the same type.
+            if s = '' then s = 'windows'
       end
 
       void kernel(K$TERM.TYPE, s)

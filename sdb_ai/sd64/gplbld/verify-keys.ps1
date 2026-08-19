@@ -91,8 +91,8 @@ function Test-Erase([int]$code) {
 try {
     Write-Output ''
     Write-Output '=== 1. the erase itself ==================================================='
-    Write-Output '  Terminal type is whatever LOGIN gives an unset TERM - vt100 by default,'
-    Write-Output '  whose kbs is ^H.  Both bytes must work regardless.'
+    Write-Output '  The shipped default is the windows type, whose kbs is DEL.  Both'
+    Write-Output '  bytes must work regardless of what the type says.'
 
     $del = Test-Erase 127
     Note 'DEL (0x7F) erases the character'   $true  ($del -match 'record\(s\) counted')
@@ -110,6 +110,42 @@ try {
     $none = Invoke-SD @('COUNTX VOC')
     Note 'control: with no erase, COUNTX is refused' $true  ($none -match 'is not in your VOC')
     Note 'control: and nothing was counted'          $false ($none -match 'record\(s\) counted')
+
+    Write-Output ''
+    Write-Output '=== 3. the arrow keys ===================================================='
+    Write-Output '  PROJECT_STATUS.md 5.18.  A terminal spells an arrow one of two ways, and'
+    Write-Output '  sends the ESC O form only in APPLICATION CURSOR MODE, which is entered by'
+    Write-Output '  smkx - a string SD never sends, on any platform, from anywhere in the'
+    Write-Output '  tree.  So the ordinary ESC [ form is the only one that can ever arrive,'
+    Write-Output '  and the shipped default type must be one that binds it.  vt100 and xterm'
+    Write-Output '  bind the other one, which is how all four arrows came to be dead.'
+    Write-Output ''
+    Write-Output '  THE INSTRUMENT NEEDS BOTH ARROWS AT ONCE, and the two ways of failing are'
+    Write-Output '  told apart by the answer, not by a second run:  type COUNTVOC, LEFT four'
+    Write-Output '  times, RIGHT once, then a space.'
+    Write-Output '    both work    -> cursor at 5 -> COUNT VOC   -> "422 record(s) counted"'
+    Write-Output '    LEFT only    -> cursor at 4 -> COUN TVOC   -> "COUN is not in your VOC"'
+    Write-Output '    neither      -> cursor at 8 -> COUNTVOC    -> "COUNTVOC is not in..."'
+
+    $esc = [char]27
+    $arrowLine = { param($l, $r) 'COUNTVOC' + ($l * 4) + $r + ' ' }
+
+    $normal = Invoke-SD @((& $arrowLine "$esc[D" "$esc[C"))
+    Note 'LEFT and RIGHT (ESC [ D, ESC [ C) both move the cursor' $true `
+         ($normal -match 'record\(s\) counted')
+    Note 'and LEFT did not land it one short of the mark'         $false `
+         ($normal -match 'COUN is not in your VOC')
+
+    # WITHOUT THIS THE SECTION WOULD PASS ON A BUILD THAT ACCEPTED ANY ESCAPE
+    # SEQUENCE AS AN ARROW.  Only the decisive half is asserted - whatever the
+    # unbound bytes leave in the command line, they must not produce a COUNT.
+    $appmode = Invoke-SD @((& $arrowLine ($esc + 'OD') ($esc + 'OC')))
+    Note 'control: the application-mode spelling is NOT bound'    $false `
+         ($appmode -match 'record\(s\) counted')
+
+    $noarrow = Invoke-SD @('COUNTVOC ')
+    Note 'control: with no arrows at all, COUNTVOC is refused'    $true `
+         ($noarrow -match 'COUNTVOC is not in your VOC')
 
     if (-not $Quiet) {
         Write-Output ''

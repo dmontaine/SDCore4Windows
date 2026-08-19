@@ -5,6 +5,40 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  The arrow keys work, and the default terminal type is now WINDOWS.
+           * LEFT, RIGHT, UP and DOWN DID NOTHING in cmd, PowerShell or
+             Windows Terminal.  The key was discarded and the cursor stayed
+             where it was.
+           * WHY.  A terminal has two different ways of spelling an arrow key.
+             In its ordinary state it sends ESC [ D for Left; it sends the
+             other spelling, ESC O D, only after the application has asked it
+             to switch, and SD never asks.  The vt100 definition SD was
+             defaulting to since 18 Aug lists only the second spelling, so the
+             key SD was listening for was one no Windows console ever sends.
+           * The LINUX definition has always had this right - it lists the
+             ordinary spelling, and DEL for Backspace, which is exactly what
+             every Windows console sends.  Its name describes an operating
+             system, but what matters is the byte protocol.
+           * SD now ships a WINDOWS terminal definition, an exact copy of
+             LINUX, and the LOGIN paragraph in every account's VOC selects it.
+             TERM on its own should now say
+                 Device    : windows
+           * EXISTING ACCOUNTS KEEP THEIR OLD SETTING until their VOC is
+             updated, which happens when you answer Y to "Update VOC to new
+             release?" or run UPDATE.ACCOUNT.  Until then, TERM WINDOWS sets
+             it for the session.
+           * You can still choose your own - TERM WYSE60, say.  All 62
+             definitions are still shipped.
+
+19 Aug 26  The terminal definition compiler no longer fails silently.
+           * SDTIC compiles terminfo.src into the definitions SD reads.  If one
+             definition in the file was malformed it could stop part way
+             through, leaving some terminal types missing, and still report
+             success - so the first sign of trouble was a terminal that did not
+             work.
+           * It now compiles every other definition correctly, names the bad
+             one with its line number, and returns an error.
+
 19 Aug 26  The Backspace key works.
            * IT DID NOTHING AT ALL in cmd, PowerShell or Windows Terminal, and
              in PuTTY unless you had changed its "Backspace key" setting to

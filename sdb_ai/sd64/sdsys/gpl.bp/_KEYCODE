@@ -21,7 +21,9 @@
 * 19 Aug 26 Windows port - both Ctrl-H (8) and DEL (127) are bound to
 *           K$BACKSPACE as defaults, before the terminfo binds so terminfo still
 *           overrides either.  Every Windows console host sends DEL and the
-*           default vt100 says ^H, so the key did nothing out of the box.
+*           default of the day, vt100, said ^H, so the key did nothing out of
+*           the box.  The default is the windows type from 19 Aug; this stays,
+*           for a session that selects another one.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -56,7 +58,7 @@ $include keycode.h
 *   on a terminal that disagreed with its own terminfo entry.
 *
 *   MEASURED 19 Aug 2026: EVERY Windows console host - cmd, PowerShell and
-*   Windows Terminal - sends DEL, while LOGIN:116 defaults an unset TERM to
+*   Windows Terminal - sends DEL, while the default terminal type of the day was
 *   vt100, whose kbs is ^H.  So backspace was dead out of the box on the platform
 *   this port is for.  It is also why PuTTY had to be set to "Control-H": its
 *   default is Control-?, which is DEL.
@@ -64,6 +66,13 @@ $include keycode.h
 *   OF THE 62 TERMINFO ENTRIES HERE, 51 SAY ^H AND ONLY xterm AND linux SAY DEL,
 *   so no choice of terminal type was going to fix it - which is what made
 *   vt100-w look like it should have helped and not help.
+*
+*   LATER THE SAME DAY THE DEFAULT MOVED TO THE NEW windows TYPE, whose kbs is
+*   DEL, so this bind is no longer what carries the key on a stock system - the
+*   arrow keys were dead for the same reason and the type is what fixed those
+*   (PROJECT_STATUS.md 5.18).  KEEP IT ANYWAY.  It costs two binds and it is
+*   what makes the key survive a user typing TERM VT100, or an account whose
+*   VOC still holds the old login paragraph, of which there will be many.
 *
 *   POSITION IS THE WHOLE POINT.  bind REPLACES an existing binding, so these two
 *   are defaults that the terminfo binds below overwrite.  vt100-at (AccuTerm)
