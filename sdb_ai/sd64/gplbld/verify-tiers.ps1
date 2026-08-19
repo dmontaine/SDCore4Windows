@@ -241,10 +241,21 @@ foreach ($t in $Tiers) {
     $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword).Trim()
     Write-Output ("  " + $cmd)
     $out = Invoke-SD @($cmd, $pw, $pw)
-    if ($out -notmatch [regex]::Escape($t.Name)) {
+    # 19 Aug 26 - THE REGISTER RECORD, NOT THE OUTPUT TEXT.  This used to be
+    # "if ($out -notmatch $t.Name)", A CHECK THAT COULD NEVER FAIL: SD echoes
+    # the command it was given, so the account name is in the output whether
+    # CREATE.ACCOUNT worked or refused.  A run in which nothing at all was
+    # created therefore walked past this and first showed up in section 3 as
+    # all three tiers holding 429 records with nothing withheld - which reads
+    # exactly like the silent tier-filter failure 5.12 warns about, and is
+    # not.  429 is how many records voc_template holds: LOGTO had failed and
+    # left every session in SDSYS.  Assert the thing CREATE.ACCOUNT is FOR.
+    $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $t.Name.ToUpper())
+    if (-not (Test-Path -LiteralPath $rec)) {
         Write-Output '  --- SD said: ---'
         Write-Output $out
-        Write-Output ('  CREATE.ACCOUNT for ' + $t.Name + ' produced nothing recognisable')
+        Write-Output ('  CREATE.ACCOUNT wrote no accounts record for ' + $t.Name.ToUpper())
+        Write-Output '  Everything after this would measure SDSYS, not the account.'
         exit 2
     }
 }

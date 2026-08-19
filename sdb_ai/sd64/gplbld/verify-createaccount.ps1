@@ -54,6 +54,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 19 Aug 26 - A TRANSCRIPT, AND IT WAS THE ONLY VERIFIER WITHOUT ONE.  This
+# script is ELEVATED, and an elevated window does not paste its output back
+# into the session that asked for it - which is the whole reason verify-tiers
+# and verify-lcnames keep one.  On 19 Aug it exited 2 in under a second and
+# there was NO RECORD AT ALL of why; the fault had to be reconstructed from
+# verify-tiers' audit trail instead.  Outside the trees cycle.ps1 deletes.
+$logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
+if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+$logPath = Join-Path $logDir ('verify-createaccount-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
+Write-Output ("transcript: " + $logPath)
+
+# 19 Aug 26 - AND CHECK THE NAME IS A NAME.  A caller that splats its arguments
+# wrongly delivers "-Account sdacct14" as the VALUE of -Account, and the run
+# then fails several steps later looking like something else entirely.
+# post-cycle-elevated.ps1's header has the measurement.
+if ($Account -notmatch '^[A-Za-z][A-Za-z0-9_.]*$') {
+    Write-Output ("verify-createaccount: -Account is '{0}', which is not a usable account name." -f $Account)
+    Write-Output '  Letters, digits, dot and underscore only, starting with a letter.'
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 2
+}
+
 # 15 Aug 26 - REFUSE A STALE TREE BEFORE DOING ANYTHING, and before -Cleanup
 # too: cleaning up after a run whose results were void is fine, but starting a
 # new one is not.  CLAUDE.md requires a test cycle to begin with a fresh
@@ -64,6 +87,7 @@ $ErrorActionPreference = 'Stop'
 if ($LASTEXITCODE -ne 0) {
     Write-Output ''
     Write-Output 'verify-createaccount: refusing - see above'
+    try { Stop-Transcript | Out-Null } catch { }
     exit 2
 }
 
@@ -437,4 +461,9 @@ catch {
 }
 finally {
     Remove-Item Env:\SDACCTPW -ErrorAction SilentlyContinue
+    # 19 Aug 26 - EVERY exit INSIDE THE try ABOVE PASSES THROUGH HERE, which is
+    # why the transcript is closed here rather than beside each one.  It matters
+    # when this is called from post-cycle-elevated.ps1: a transcript left running
+    # would swallow the NEXT verifier's output into this file.
+    try { Stop-Transcript | Out-Null } catch { }
 }
