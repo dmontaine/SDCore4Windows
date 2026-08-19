@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
+*            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
+*            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 19 Aug 26 Windows port - the fallback terminal type is 'windows', not
 *           'vt100'.  PROJECT_STATUS.md 5.18.
 * 19 Aug 26 Windows port - the SDSYS paths are lower case on disk: accounts,
@@ -410,7 +413,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 
    * Open the VOC file
 
-   openpath "VOC" to voc on error
+   openpath "voc" to voc on error
       display 'Error ' : status() : ' opening VOC file. Check access rights.'
       goto terminate.connection
    end else
@@ -644,7 +647,11 @@ update.voc:
 
             * Special case to avoid prompt for 2.4-15 change to MD item
 
-            if id = 'MD' and (old.type = 'Q' or old.type = 'F') then
+* 19 Aug 26 Windows port - UPCASE THE ID, PROJECT_STATUS.md 5.12 (b).  id comes
+*   from a READNEXT over the update VOC, whose record is 'md' from this release,
+*   so an exact comparison against 'MD' stopped matching and every account being
+*   updated would be asked about a type change it should never see.
+            if upcase(id) = 'MD' and (old.type = 'Q' or old.type = 'F') then
                goto accept.without.query
             end
 

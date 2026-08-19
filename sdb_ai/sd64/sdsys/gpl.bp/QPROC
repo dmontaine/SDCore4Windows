@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
+*            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
+*            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 18 Aug 26 Windows port - the query processor's VOC token read folds as typed,
 *            then lower, then upper.  PROJECT_STATUS.md 5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -508,7 +511,7 @@ $define MAX.STRINGS     20          ;* For SEARCH command
 
    dict.open = @false
    if len(dict.flag) then
-      open "DICT.DICT" to dict.file then dict.open = @true
+      open "dict.dict" to dict.file then dict.open = @true
    end else
       open "DICT", qproc.file.name to dict.file then dict.open = @true
    end

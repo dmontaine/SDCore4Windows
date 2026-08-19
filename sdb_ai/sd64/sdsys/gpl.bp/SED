@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
+*            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
+*            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 19 Aug 26 Windows port - char(127) is F.BACKSPACE, not F.DELETE, and the
 *            Delete key takes its own sequence ESC [ 3 ~.  Backspace deleted
 *            forwards on every Windows console.  PROJECT_STATUS.md 5.19.
@@ -5472,7 +5475,7 @@ explore:
    end else
       begin case
          case buffer.type = BUFF.TYPE.EXPLORE
-            file.name = 'VOC'
+            file.name = 'voc'
             dict.flag = ''
             template = 'WITH TYPE = "F"'   ;* UV Pick needs "F", not 'F'
             building.file.list = @true

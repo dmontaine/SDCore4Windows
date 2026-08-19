@@ -308,6 +308,52 @@ try {
     # the note below said it would.  It is an assertion now, not a control.
     Note 'typing BP is answered as bp' $true `
          ($ctUc -cmatch '(?m)^VOC bp\s*$')
+    # 19 Aug 26 - THE TEN F/Q FILE POINTERS MOVED, 5.12 (b).  Same instrument:
+    # type the OLD upper-case id and read which spelling CT says it matched.
+    # VOC is the one worth naming - DELETEF bans it, CNAME, CREATEF, SHOW and
+    # SED name it as a literal, and CPROC reads $VOC.PARSER out of it.
+    #
+    # THE TEN SPLIT ACROSS TWO VOCs AND THE FIRST VERSION OF THIS TESTED THEM
+    # ALL IN ONE, which failed four checks on a rename that was perfectly good.
+    # An account's VOC is built from newvoc; voc_template becomes SDSYS's own.
+    # ACCOUNTS, MESSAGES, QFILE and OS.USERS are in voc_template ONLY, so in
+    # DON's account they do not exist and never did - "Record not found" is the
+    # right answer there, not evidence of anything.  Ask each one where it lives.
+    $ctFq = Invoke-SD @('CT VOC VOC', 'CT VOC NEWVOC', 'CT VOC SYSCOM',
+                        'CT VOC DICT.DICT', 'CT VOC MD', 'CT VOC SD.ACCOUNTS')
+    foreach ($p in @(@{U='VOC';         L='voc'},
+                     @{U='NEWVOC';      L='newvoc'},
+                     @{U='SYSCOM';      L='syscom'},
+                     @{U='DICT.DICT';   L='dict.dict'},
+                     @{U='MD';          L='md'},
+                     @{U='SD.ACCOUNTS'; L='sd.accounts'})) {
+        Note ("typing {0} is answered as {1}" -f $p.U, $p.L) $true `
+             ($ctFq -cmatch ('(?m)^VOC ' + [regex]::Escape($p.L) + '\s*$'))
+    }
+
+    $ctSys = Invoke-SD @('LOGTO SDSYS', 'CT VOC ACCOUNTS', 'CT VOC MESSAGES',
+                         'CT VOC QFILE', 'CT VOC OS.USERS')
+    foreach ($p in @(@{U='ACCOUNTS'; L='accounts'},
+                     @{U='MESSAGES'; L='messages'},
+                     @{U='QFILE';    L='qfile'},
+                     @{U='OS.USERS'; L='os.users'})) {
+        Note ("SDSYS: typing {0} is answered as {1}" -f $p.U, $p.L) $true `
+             ($ctSys -cmatch ('(?m)^VOC ' + [regex]::Escape($p.L) + '\s*$'))
+    }
+    # AND THE OTHER HALF OF THAT SPLIT IS ITSELF AN ASSERTION: those four are
+    # administrative and must NOT have arrived in an ordinary account's VOC.
+    Note 'ACCOUNTS is absent from the account VOC, as it always was' $true `
+         ($ctFq -match "Record 'ACCOUNTS' not found" -or $ctFq -notmatch '(?m)^VOC accounts')
+
+    # THE TWO Q-POINTERS NAME ANOTHER ID IN FIELD 3, and that field had to move
+    # with them.  SD.ACCOUNTS field 2 is an ACCOUNT name and stays upper - that
+    # is the wide half of 5.12 and is out of scope, so it doubles as a control
+    # on this pair: a sweep would have taken SDSYS down with it.
+    $ctQ = Invoke-SD @('CT VOC MD', 'CT VOC SD.ACCOUNTS')
+    Note 'MD field 3 names voc'              $true ($ctQ -cmatch '(?m)^\s*3:\s*voc\s*$')
+    Note 'SD.ACCOUNTS field 3 names accounts' $true ($ctQ -cmatch '(?m)^\s*3:\s*accounts\s*$')
+    Note 'control: SD.ACCOUNTS field 2 is still SDSYS' $true ($ctQ -cmatch '(?m)^\s*2:\s*SDSYS\s*$')
+
     # THE CONTROL, and it is what says this is one file at a time rather than a
     # sweep: the same query shape against an id that has NOT moved must still be
     # answered in upper case.  $HOLD was one of these until 18 Aug and BP until

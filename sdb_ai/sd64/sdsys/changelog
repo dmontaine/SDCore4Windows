@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  The system file names in your VOC are lower case.
+           * VOC, NEWVOC, ACCOUNTS, MESSAGES, SYSCOM, QFILE, DICT.DICT, MD,
+             SD.ACCOUNTS and OS.USERS are now voc, newvoc, accounts, messages,
+             syscom, qfile, dict.dict, md, sd.accounts and os.users.  LISTF and
+             LIST VOC show the new spelling.
+           * YOU DO NOT HAVE TO CHANGE ANYTHING.  Typing a name in either case
+             still finds the file, in a command and in a program, so existing
+             programs and paragraphs keep working.
+           * EXISTING ACCOUNTS KEEP THE OLD SPELLING until their VOC is
+             updated - answer Y to "Update VOC to new release?" or run
+             UPDATE.ACCOUNT.  Both spellings work either way.
+           * DELETE.FILE still refuses to delete your VOC, whichever case you
+             type.
+
 19 Aug 26  Backspace works inside the full-screen editors, and the arrow keys
            no longer type themselves into your record.
            * IN SED AND THE UPDATE.RECORD SCREENS, Backspace deleted the

@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
+*            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
+*            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -121,7 +124,7 @@ $include bcomp.h
    end
 
    if len(dict.flag) then
-      open 'DICT.DICT' to dict.f else
+      open 'dict.dict' to dict.f else
          @system.return.code = -status()
          stop sysmsg(2022) ;* DICT.DICT not found
       end

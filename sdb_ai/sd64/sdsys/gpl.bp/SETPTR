@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
+*            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
+*            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 18 Aug 26 Windows port - the $HOLD VOC id is now $hold, and so is the
 *            "$hold " prefix this program puts in front of a hold-file
 *            record name.  to_file.c reads that prefix back and now
@@ -134,7 +137,7 @@ $define TEMPLATE.PRINT.UNIT -3
    overlay.warning = @false
 
    if not(pcldata) then
-      open 'SYSCOM' to syscom.f then
+      open 'syscom' to syscom.f then
          read pcldata from syscom.f, '$PCLDATA' else null
          close syscom.f
       end

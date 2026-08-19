@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
+*            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
+*            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 19 Aug 26 Windows port - SDSYS accounts is lower case on disk.  5.12 (a).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -65,7 +68,7 @@ $include keys.h
       goto revert.to.old.account
    end
 
-   openpath "VOC" to new.voc else
+   openpath "voc" to new.voc else
       err = ER$ACCOUNT
       msg = sysmsg(5163) ;* Directory is not a SD account
       goto revert.to.old.account
