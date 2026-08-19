@@ -614,6 +614,104 @@ end
     }
 
     # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 8. A LOWER-CASE VOC ID, REACHED BY TYPING IT IN UPPER CASE ==========='
+    Write-Output '  Nothing SD ships is lower case yet, so the DOWNWARD half of the fold has'
+    Write-Output '  never fired for a verb or a keyword - only the upward half has, which is'
+    Write-Output '  what sections 3 to 5a measure.  This makes two records with lower-case'
+    Write-Output '  ids and reaches them by typing the names in UPPER case.'
+    Write-Output '  IT FOUND A REAL BLOCKER on 18 Aug 2026.  CPROC:1401 resolved a typed verb'
+    Write-Output '  as entered, then UPPER, then upper-with-hyphens-as-dots, with no'
+    Write-Output '  lower-case attempt at all - so lower-casing the command ids would have'
+    Write-Output '  made every verb typed in upper case answer "is not in your VOC", for'
+    Write-Output '  every user.  Reading the code said otherwise; only this said so.'
+
+    $mkp = 'ZZMKPROBE'
+    $bp8 = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+             Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
+    if ($bp8.Count -ne 1) {
+        Note 'section 8 could run (bp directory found)' $true $false
+    } else {
+        # Single-quoted here-string: every $ in it is SD source, not PowerShell.
+        # The COUNT.SUP read folds both ways so this section keeps working after
+        # the command ids move - it is the thing being tested, so it must not
+        # assume the answer.
+        $mkpSrc = @'
+* ZZMKPROBE - written by verify-lcnames.ps1.  Safe to delete.
+* Writes two VOC records whose ids are LOWER CASE: a verb and a keyword.
+   open 'VOC' to voc.f else stop
+   rec = 'V'
+   rec<2> = 'CA'
+   rec<3> = '$COPYP'
+   write rec to voc.f, 'zzprobev'
+
+   k = ''
+   read k from voc.f, 'COUNT.SUP' else
+      read k from voc.f, 'count.sup' else k = ''
+   end
+
+   if k # '' then
+      write k to voc.f, 'zzprobek'
+      print 'WROTE=OK'
+   end else
+      print 'WROTE=NOKEYWORD'
+   end
+end
+'@
+        [IO.File]::WriteAllText((Join-Path $bp8[0].FullName $mkp),
+                                ($mkpSrc -replace "`r`n", "`n"),
+                                (New-Object Text.UTF8Encoding $false))
+
+        $mk8 = Invoke-SD @("BASIC bp $mkp", "RUN bp $mkp")
+        if ($mk8 -notmatch 'WROTE=OK') {
+            Write-Output '  --- SD said: ---'
+            Write-Output $mk8
+            Note 'the two lower-case probe records were written' $true $false
+        } else {
+            Note 'the two lower-case probe records were written' $true $true
+
+            # THE VERB.  $COPYP with no argument says "File name required", which
+            # only a dispatched verb can produce, and an unknown verb says "is
+            # not in your VOC" - two different answers, so this cannot pass by
+            # accident.  The id is zzprobev and the name typed is ZZPROBEV.
+            $v8 = Invoke-SD @('ZZPROBEV')
+            Note 'a lower-case VERB id dispatches typed UPPER' $true `
+                 ($v8 -match 'File name required')
+            Note 'and does not answer "not in your VOC"'      $false `
+                 ($v8 -match 'is not in your VOC')
+            Write-Output '  --- ZZPROBEV said: ---'
+            Write-Output $v8
+
+            # THE CONTROL for it: a name that is in the VOC in NO case must still
+            # be refused, or the fold above would be indistinguishable from a
+            # lookup that matches anything.
+            $vc8 = Invoke-SD @('ZZPROBEVNOSUCH')
+            Note 'control: an unknown verb is still refused' $true `
+                 ($vc8 -match 'is not in your VOC')
+
+            # THE KEYWORD, and the instrument is a VISIBLE DIFFERENCE rather than
+            # an absence of error.  zzprobek is a copy of COUNT.SUP, which
+            # suppresses the "n record(s) listed" line.  Typed as ZZPROBEK it can
+            # only take effect if the keyword read folded downwards; if it did
+            # not, QPROC treats the token as a RECORD ID instead and says so.
+            $kOn  = Invoke-SD @('LIST VOC COPYP NO.PAGE')
+            $kOff = Invoke-SD @('LIST VOC COPYP ZZPROBEK NO.PAGE')
+            Note 'without the keyword, the count line is printed' $true `
+                 ($kOn  -match 'record\(s\) listed')
+            Note 'a lower-case KEYWORD id works typed UPPER'      $false `
+                 ($kOff -match 'record\(s\) listed')
+            Note 'and was not taken for a record id'              $false `
+                 ($kOff -match 'ZZPROBEK. not found')
+            Write-Output '  --- LIST ... ZZPROBEK said: ---'
+            Write-Output $kOff
+        }
+
+        # Both records and the program go, whether or not the checks passed.
+        $null = Invoke-SD @('DELETE VOC zzprobev', 'DELETE VOC zzprobek')
+        Remove-Item -LiteralPath (Join-Path $bp8[0].FullName $mkp) -Force -ErrorAction SilentlyContinue
+    }
+
+    # -----------------------------------------------------------------------
     if (-not $Keep) {
         Write-Output ''
         Write-Output '=== cleanup =============================================================='

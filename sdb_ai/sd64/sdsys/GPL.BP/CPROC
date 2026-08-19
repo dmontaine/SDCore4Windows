@@ -1397,12 +1397,35 @@ proc.sentence.common:      ;* (Note: return to here from int.if)
          verb = alias.targets<i>
       end
 
+* 18 Aug 26 Windows port - A LOWER-CASE TIER, AND THIS IS THE SITE THE WHOLE OF
+*   5.12 (b) DEPENDS ON.  This is where a typed verb is resolved, and it went
+*   as entered, then UPPER, then upper-with-hyphens-as-dots - no lower-case
+*   attempt at all.  It is not one of the 74 fold sites: the third tier is a
+*   change() rather than a plain read, so it matched neither scripted shape and
+*   was passed over.
+*
+*   MEASURED BEFORE THE CHANGE on the 22:37:20 install, with a VOC record whose
+*   id is 'zzprobev': typing zzprobev dispatched it and typing ZZPROBEV answered
+*   "ZZPROBEV is not in your VOC".  So lower-casing the command ids without this
+*   would have made EVERY verb typed in upper case fail, for every user.
+*
+*   ORDER: as entered, then LOWER, then UPPER, then the hyphen form - the same
+*   order as every other fold site, and the hyphen form keeps its place last
+*   because it is a spelling variant rather than a case variant.  Additive on
+*   today's tree: every shipped id is upper case, so the new attempt can only
+*   turn a lookup that fails today into one that succeeds.
       * Try name as entered
       read voc.rec from voc, verb else
-         * Try in uppercase
-         read voc.rec from voc, upcase(verb) else
-            * Try in uppercase with hyphens changed to dots
-            read voc.rec from voc, change(upcase(verb), '-', '.') else null
+         * Try in lowercase
+         read voc.rec from voc, downcase(verb) else
+            * Try in uppercase
+            read voc.rec from voc, upcase(verb) else
+               * Try in uppercase with hyphens changed to dots
+               read voc.rec from voc, change(upcase(verb), '-', '.') else
+                  * and in lowercase with hyphens changed to dots
+                  read voc.rec from voc, change(downcase(verb), '-', '.') else null
+               end
+            end
          end
       end
 
