@@ -34,7 +34,7 @@
     DELETE.ACCOUNT afterwards.
 
 .EXAMPLE
-    C:\Users\dmont\Projects\sdb_ai_windows\sdb_ai\sd64\gplbld\verify-apiport.ps1 -Prefix sdapi1
+    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-apiport.ps1 -Prefix sdapi1
 #>
 
 [CmdletBinding()]

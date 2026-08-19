@@ -44,7 +44,7 @@
     what a cycle is meant to show (PROJECT_STATUS.md 7 step 3).
 
 .EXAMPLE
-    C:\Users\dmont\Projects\sdb_ai_windows\sdb_ai\sd64\gplbld\cycle.ps1
+    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\cycle.ps1
 #>
 
 [CmdletBinding()]
