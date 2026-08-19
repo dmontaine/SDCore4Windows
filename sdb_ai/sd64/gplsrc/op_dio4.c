@@ -654,8 +654,6 @@ void op_select() {
 
   u_int16_t op_flags;
   DESCRIPTOR* descr;
-  DESCRIPTOR* list_descr;
-  DESCRIPTOR* count_descr;
   int16_t list_no;
   FILE_VAR* fvar;
   int32_t record_count;
@@ -698,23 +696,6 @@ void op_select() {
       case DIRECTORY_FILE:
         if (!dir_select(fvar, list_no))
           process.status = ER_RNF;
-        break;
-
-      case NET_FILE:
-        list_descr = SelectList(list_no);
-        k_release(list_descr);
-        InitDescr(list_descr, STRING);
-        list_descr->data.str.saddr = NULL;
-
-        count_descr = SelectCount(list_no);
-        k_release(count_descr);
-        InitDescr(count_descr, INTEGER);
-        count_descr->data.value = 0;
-
-        if (!net_select(fvar, &(list_descr->data.str.saddr),
-                        &(count_descr->data.value))) {
-          process.status = ER_RNF;
-        }
         break;
 
       default:
@@ -855,8 +836,6 @@ void op_selectv() {
   STRING_CHUNK* tgt_str;
   STRING_CHUNK* str;
   int32_t record_count;
-  DESCRIPTOR* list_descr;
-  DESCRIPTOR* count_descr;
   char* p;
   int16_t bytes;
 
@@ -913,23 +892,6 @@ void op_selectv() {
       case DIRECTORY_FILE:
         if (!dir_select(fvar, 11))
           process.status = ER_RNF;
-        break;
-
-      case NET_FILE:
-        list_descr = SelectList(11);
-        k_release(list_descr);
-        InitDescr(list_descr, STRING);
-        list_descr->data.str.saddr = NULL;
-
-        count_descr = SelectCount(11);
-        k_release(count_descr);
-        InitDescr(count_descr, INTEGER);
-        count_descr->data.value = 0;
-
-        if (!net_select(fvar, &(list_descr->data.str.saddr),
-                        &(count_descr->data.value))) {
-          process.status = ER_RNF;
-        }
         break;
 
       default:

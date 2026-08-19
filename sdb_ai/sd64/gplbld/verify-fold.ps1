@@ -90,6 +90,13 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
         $out += ''
         $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
         $out += "*** The last line above is the prompt that stopped it."
+        $out += "*** AND IT LEFT DEBRIS: killing the job kills the session without"
+        $out += "*** letting it deregister, so its user-table slot and any record"
+        $out += "*** locks it held stay behind.  A later DELETE.FILE on the same"
+        $out += "*** name then blocks SILENTLY, and cycle.ps1 will refuse to start"
+        $out += "*** with 'SD is still running: sdwind(N)' because sdwind will not"
+        $out += "*** shut down while it thinks a session is attached.  Both were"
+        $out += "*** seen on 18 Aug 2026.  Stop-Process the sdwind PID it names."
     }
     Remove-Job $job -Force
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")

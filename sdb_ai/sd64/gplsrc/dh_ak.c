@@ -782,11 +782,6 @@ void op_indices1() {
       (e_stack++)->data.str.saddr = tgt;
       break;
 
-    case NET_FILE:
-      InitDescr(e_stack, STRING);
-      (e_stack++)->data.str.saddr = net_indices1(fvar);
-      break;
-
     default:
       InitDescr(e_stack, STRING);
       (e_stack++)->data.str.saddr = NULL;
@@ -851,11 +846,6 @@ void op_indices2() {
     k_dismiss();
 
     switch (fvar->type) {
-      case NET_FILE:
-        InitDescr(e_stack, STRING);
-        (e_stack++)->data.str.saddr = net_indices2(fvar, index_name);
-        break;
-
       default:
         InitDescr(e_stack, STRING);
         (e_stack++)->data.str.saddr = NULL;
@@ -895,9 +885,6 @@ void op_selindx() {
   int16_t used_bytes;
   int16_t rec_offset;
   DH_RECORD *rec_ptr;
-  char index_name[MAX_AK_NAME_LEN + 1];
-  DESCRIPTOR *list_descr;
-  DESCRIPTOR *count_descr;
 
   process.status = 1; /* Preset for error paths */
   dh_err = 0;
@@ -924,24 +911,7 @@ void op_selindx() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) {
-    /* Find index name */
-
-    descr = e_stack - 3;
-    k_get_c_string(descr, index_name, MAX_AK_NAME_LEN);
-
-    list_descr = SelectList(list_no);
-    k_release(list_descr);
-    InitDescr(list_descr, STRING);
-    list_descr->data.str.saddr = NULL;
-
-    record_count = net_selectindex(fvar, index_name, &(list_descr->data.str.saddr));
-
-    count_descr = SelectCount(list_no);
-    k_release(count_descr);
-    InitDescr(count_descr, INTEGER);
-    count_descr->data.value = record_count;
-  } else {
+  {
     if (fvar->type != DYNAMIC_FILE)
       goto exit_selindx; /* Not DH file */
     dh_file = fvar->access.dh.dh_file;
@@ -1058,9 +1028,6 @@ void op_selindxv() {
   char *p;
   char *q;
   int16_t bytes;
-  char index_name[MAX_AK_NAME_LEN + 1];
-  DESCRIPTOR *list_descr;
-  DESCRIPTOR *count_descr;
 
   process.status = 1; /* Preset for error paths */
   dh_err = 0;
@@ -1091,24 +1058,7 @@ void op_selindxv() {
   if (indexed_value_len < 0)
     goto exit_selindxv; /* Not indexable, hence empty */
 
-  if (fvar->type == NET_FILE) {
-    /* Find index name */
-
-    descr = e_stack - 4;
-    k_get_c_string(descr, index_name, MAX_AK_NAME_LEN);
-
-    list_descr = SelectList(list_no);
-    k_release(list_descr);
-    InitDescr(list_descr, STRING);
-    list_descr->data.str.saddr = NULL;
-
-    record_count = net_selectindexv(fvar, index_name, indexed_value, &(list_descr->data.str.saddr));
-
-    count_descr = SelectCount(list_no);
-    k_release(count_descr);
-    InitDescr(count_descr, INTEGER);
-    count_descr->data.value = record_count;
-  } else {
+  {
     if (fvar->type != DYNAMIC_FILE)
       goto exit_selindxv; /* Not DH file */
     dh_file = fvar->access.dh.dh_file;
@@ -1219,7 +1169,6 @@ Private void akscan(bool right) {
   bool found;
   bool return_key = FALSE; /* Return key value? (SETTING clause) */
   u_char old_flags;
-  char akname[MAX_AK_NAME_LEN + 1];
 
   process.status = 1; /* Preset for error paths */
   dh_err = 0;
@@ -1255,12 +1204,6 @@ Private void akscan(bool right) {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) {
-    descr = e_stack - 4;
-    k_get_c_string(descr, akname, MAX_AK_NAME_LEN);
-    process.status = net_scanindex(fvar, akname, list_no, (return_key) ? key_descr : NULL, right);
-    goto exit_akscan;
-  }
 
   if (fvar->type != DYNAMIC_FILE)
     goto exit_akscan; /* Not DH file */
@@ -1555,7 +1498,6 @@ Private void setakpos(bool right) {
   int16_t rec_offset;
   DH_RECORD *rec_ptr;
   DH_INT_NODE *node_ptr;
-  char akname[MAX_AK_NAME_LEN + 1];
 
   process.status = 1; /* Preset for error paths */
   dh_err = 0;
@@ -1566,12 +1508,6 @@ Private void setakpos(bool right) {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) {
-    descr = e_stack - 2;
-    k_get_c_string(descr, akname, MAX_AK_NAME_LEN);
-    process.status = net_setindex(fvar, akname, right);
-    goto exit_setakpos;
-  }
 
   if (fvar->type != DYNAMIC_FILE)
     goto exit_setakpos; /* Not DH file */

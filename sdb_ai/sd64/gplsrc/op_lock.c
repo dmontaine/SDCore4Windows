@@ -91,11 +91,7 @@ void op_filelock() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) {
-    process.status = net_filelock(fvar, !(op_flags & P_LOCKED));
-    if (process.status)
-      status = ER_LCK; /* Take the LOCKED clause */
-  } else {
+  {
     file_id = fvar->file_id;
     fptr = FPtr(file_id);
 
@@ -193,9 +189,7 @@ void op_flunlock() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) {
-    process.status = net_fileunlock(fvar);
-  } else {
+  {
     file_id = fvar->file_id;
     fptr = FPtr(file_id);
     if ((lock_owner = fptr->file_lock) == process.user_no) {
@@ -583,9 +577,7 @@ void op_reclckd() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) {
-    status = net_recordlocked(fvar, id, id_len);
-  } else {
+  {
     file_id = fvar->file_id;
     fptr = FPtr(file_id);
 
@@ -754,8 +746,6 @@ void op_rlsall() {
  */
 
   process.op_flags = 0;
-
-  net_unlock_all();
 
   if (process.txn_id == 0) {
     (void)unlock_record(NULL, "", 0);
@@ -1092,13 +1082,6 @@ int16_t lock_record(
   RLOCK_ENTRY* d_lptr;
   LLT_ENTRY* llt;
 
-  if (fvar->type == NET_FILE) {
-    /* All locking for network files is handled at the remote end.
-      Send a request to get this lock.                            */
-
-    return net_lock(fvar, raw_id, id_len, update, no_wait);
-  }
-
   file_id = fvar->file_id;
   fptr = FPtr(file_id);
 
@@ -1372,10 +1355,6 @@ bool unlock_record(FILE_VAR* fvar, /* NULL if for all files */
   LLT_ENTRY* next_llt;
 
   if (fvar != NULL) {
-    if (fvar->type == NET_FILE) {
-      return net_unlock(fvar, raw_id, id_len) != 0; /* 0274 */
-    }
-
     file_id = fvar->file_id;
   }
 

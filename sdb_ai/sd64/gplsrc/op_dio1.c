@@ -405,8 +405,7 @@ void dio_close(FILE_VAR* fvar) {
 
     /* 0323 Handle close in a transaction */
 
-    if ((process.txn_id != 0) && !(fvar->flags & FV_NON_TXN) &&
-        (fvar->type != NET_FILE)) {
+    if ((process.txn_id != 0) && !(fvar->flags & FV_NON_TXN)) {
       /* Do not really close in mid-transaction */
       (void)txn_close(fvar);
       return;
@@ -465,9 +464,6 @@ void dio_close(FILE_VAR* fvar) {
       close_seq(fvar);
       break;
 
-    case NET_FILE:
-      net_close(fvar);
-      break;
   }
 
   if (fvar->voc_name != NULL)
@@ -553,8 +549,6 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   AK_CTRL* ak_ctrl;
   u_int32_t ak_map;
   struct stat statbuf;
-  char* server;
-  char* remote_file;
   u_int32_t device = 0;
   u_int32_t inode = 0;
 
@@ -632,24 +626,17 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
       goto exit_op_open;
     }
 
-    if (strchr(mapped_name, ';') != NULL) /* This is a network file reference */
-    {
-      /* Modified by Composer AI - 2026/06/10.
-         Replaced strtok() with the reentrant strtok_r(), preserving
-         the original tokenizing semantics. */
-      /* server = strtok(mapped_name, ";"); */
-      /* remote_file = strtok(NULL, "\0"); */
-      char* savep = NULL;
-      server = strtok_r(mapped_name, ";", &savep);
-      remote_file = strtok_r(NULL, "\0", &savep);
-      /* -------------------- */
+    /* 18 Aug 26 Windows port - SDNET IS GONE.  A VOC file reference containing
+       a semicolon used to mean "server;remote_file" and was handed to
+       net_open(), which opened a socket to a remote SD server on port 4245
+       using credentials held in sd.conf under a substitution cipher.  Owner's
+       decision, 18 Aug 2026: remove it.  qmclient stays, because the API needs
+       it and is mitigated by requiring an ssh tunnel; qmnet has no such
+       mitigation and no off switch - the NETFILES parameter was never tested
+       anywhere.  PROJECT_STATUS.md section 8.
 
-      if (!net_open(server, remote_file, fvar)) {
-        /* process.status will have been set by open_networked_file() */
-        goto exit_op_open;
-      }
-      goto opened_network_file;
-    }
+       Nothing replaces the branch: a name containing a semicolon now falls
+       through to fullpath() and fails to open like any other bad pathname. */
   }
 
   fullpath(pathname, mapped_name);
@@ -854,7 +841,6 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   }
 
 opened_via_txn_cache:
-opened_network_file:
 
   /* Set file variable */
 

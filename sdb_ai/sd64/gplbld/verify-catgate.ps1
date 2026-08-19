@@ -116,6 +116,10 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
         $out = Receive-Job $job
         $out += ''
         $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
+        $out += "*** It also leaves the session's user-table slot and locks behind,"
+        $out += "*** so sdwind will not shut down and cycle.ps1 will refuse to"
+        $out += "*** start.  Stop-Process the sdwind PID it names.  See"
+        $out += "*** verify-fold.ps1's copy of this note."
     }
     Remove-Job $job -Force
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")

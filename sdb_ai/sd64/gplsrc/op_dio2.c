@@ -155,14 +155,6 @@ void op_fileinfo() {
 
     fvar = descr->data.fvar;
     ftype = fvar->type;
-    if (ftype == NET_FILE) /* Network file */
-    {
-      str = net_fileinfo(fvar, key);
-      k_dismiss();
-      InitDescr(e_stack, STRING);
-      (e_stack++)->data.str.saddr = str;
-      return;
-    }
 
     fptr = FPtr(fvar->file_id);
 

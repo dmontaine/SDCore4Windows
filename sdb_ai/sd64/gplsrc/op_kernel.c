@@ -457,9 +457,14 @@ void op_kernel() {
       }
       break;
 
+/* 18 Aug 26 Windows port - SDNET IS GONE and this returns an empty list.  The
+   key is KEPT rather than deleted so that the numbering in INT$KEYS.H does not
+   move and so a caller gets an empty answer instead of falling into the default
+   case.  Nothing in GPL.BP calls it now: LISTSRVR went with the feature.
+   PROJECT_STATUS.md section 8.                                              */
     case K_GET_SDNET_CONNECTIONS:
       InitDescr(&result, STRING);
-      result.data.str.saddr = get_sdnet_connections();
+      result.data.str.saddr = NULL;
       break;
 
     case K_INVALIDATE_OBJECT:

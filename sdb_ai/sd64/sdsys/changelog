@@ -5,6 +5,39 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  SDNet, the remote file access system, has been removed.
+           * SD could open a file held on another SD server by putting
+             "server;file" in a VOC entry.  That is gone.  A VOC entry
+             containing a semicolon is now simply a file name that does not
+             resolve.
+           * WHY.  Each server's user name and password were kept in sd.conf,
+             obscured with a simple letter substitution that is not encryption,
+             and the session ran over port 4245.  There was also no way to
+             switch the feature off: the NETFILES setting was read at startup
+             and then never consulted by anything.
+           * THE API IS NOT AFFECTED.  SDClient and the remote API are a
+             separate mechanism, they are unchanged, and they stay protected by
+             requiring an ssh tunnel.
+           * SET.SERVER, DELETE.SERVER and LIST.SERVERS have gone with it.  Two
+             of those three had never worked in any case - their VOC entries
+             were malformed.
+           * NETFILES is still ACCEPTED in sd.conf, so an existing
+             configuration file will not stop SD starting.  It now does
+             nothing, which is also what it did before.
+
+18 Aug 26  UNLOCK works.  It never has, on any release this port was built
+           from.
+           * Its VOC entry carried the description text, "Verb to unlock
+             records", in the field where the record TYPE belongs.  SD reads
+             that field to decide what the entry is, so UNLOCK was not a verb
+             as far as SD was concerned.
+           * UNLOCK is what you use to clear a record lock left behind by a
+             session that died while holding one.  Until now the only way to
+             release such a lock was to stop and restart SD, which disconnects
+             everybody.
+           * It is an administrator verb; standard and programmer accounts do
+             not get it.
+
 18 Aug 26  A file or VOC entry whose name is not upper case can now be found
            whatever case you type it in.
            * SD looked for the name exactly as you typed it and then, if that
