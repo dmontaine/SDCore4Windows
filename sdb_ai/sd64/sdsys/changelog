@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+18 Aug 26  The commands are now spelled in lower case.
+           * LIST, COUNT, SELECT, CREATE.FILE, SETPTR and the rest are stored
+             in the VOC as list, count, select, create.file, setptr and so on,
+             and that is how they appear in LIST VOC, LISTV and CT VOC.
+           * WHAT YOU TYPE DOES NOT CHANGE.  SD tries a name as you typed it,
+             then in lower case, then in upper case, so LIST, list and List all
+             run the same verb.  Every command you already know still works,
+             typed the way you already type it, and so does every keyword -
+             WITH, BY, NO.PAGE and the rest.
+           * EXISTING ACCOUNTS ARE NOT TOUCHED.  An account created before this
+             keeps the upper-case names in its VOC and goes on working.  There
+             is nothing to migrate.  An account you create now, or one you
+             refresh with UPDATE.ACCOUNT, gets the new spelling.
+           * The account tiers are unaffected: a standard account is still
+             refused the same 18 capabilities, and an administrator still gets
+             the same 10 administration verbs.
+           * NOT RENAMED, and both on purpose: the file names in your VOC - VOC,
+             BP, NEWVOC, GPL.BP, ACCOUNTS, MESSAGES, SYSCOM, QFILE - which move
+             with the file-naming change rather than with the commands; and the
+             $ records, which are being renamed one at a time.
+
 18 Aug 26  LIST now finds a record whatever case you type its name in.
            * CORRECTION to the entry below, which says the old spelling still
              works when you type it.  That was true of COUNT, CT and ED and NOT

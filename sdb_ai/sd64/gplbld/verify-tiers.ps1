@@ -101,17 +101,20 @@ $Tiers = @(
 # The 18 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
 # authority; this list is checked against it below rather than trusted, because
 # a test that carries its own stale copy of the thing under test is no test.
-$Withheld = @('BASIC','CATALOG','CATALOGUE','RUN','ED','EDIT','SED','COPY','COPYP',
-              'DELETE.CATALOG','DELETE.CATALOGUE','MODIFY','COMPILE.DICT','CD',
-              'GENERATE','PHANTOM','SH','!')
+# 18 Aug 26 - LOWER CASE, because the command ids moved (PROJECT_STATUS.md
+# 5.12 (b)).  Compare-Object below is case insensitive and would not have
+# noticed, which is exactly why this is spelled the way the record now is.
+$Withheld = @('basic','catalog','catalogue','run','ed','edit','sed','copy','copyp',
+              'delete.catalog','delete.catalogue','modify','compile.dict','cd',
+              'generate','phantom','sh','!')
 
 # The 10 only an administrator gets.  SET.PASSWORD joined on 17 Aug 2026 -
 # owner's ruling, and an administrator can add it to a user's VOC if they want
 # users setting their own.  The program already tells the two cases apart:
 # your own password needs the current one, anyone else's needs admin rights.
-$AdminVerbs = @('CREATE.ACCOUNT','DELETE.ACCOUNT','MODIFY.ACCOUNT','UPDATE.ACCOUNT',
-                'GRANT','REVOKE','LIST.GRANTS','UNLOCK','ENCRYPT.FIELD',
-                'SET.PASSWORD')
+$AdminVerbs = @('create.account','delete.account','modify.account','update.account',
+                'grant','revoke','list.grants','unlock','encrypt.field',
+                'set.password')
 
 # Neither list record may ever land in a VOC.
 $ListRecs = @('TIER.OMIT.STANDARD','TIER.ADD.ADMINISTRATOR')

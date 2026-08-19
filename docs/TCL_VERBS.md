@@ -15,6 +15,16 @@ expecting one to exist, and why the `CREATUSR` configuration gate — which aske
 permission to do the second half of the only thing the verb does — was removed
 on 14 Aug 2026. See PROJECT_STATUS.md §5.6.1 and §7.
 
+**THE NAMES BELOW ARE WRITTEN IN UPPER CASE AND ARE STORED IN LOWER CASE.**
+Since 18 Aug 2026 the VOC ids are `list`, `create.account` and so on
+(PROJECT_STATUS.md §5.12 (b)); this table is left in upper case because it is a
+comparison against OpenQM 2.6.6, which spells them that way. **It makes no
+difference to what you type** — SD tries a name as typed, then lower, then
+upper. What it changes is what SD prints back: `CT VOC LIST` answers
+`VOC list`. The file-pointer entries (`VOC`, `BP`, `NEWVOC`, `GPL.BP`,
+`ACCOUNTS`, `MESSAGES`, `SYSCOM`, `QFILE`) are deliberately still upper case —
+they move with the file names, §5.12 (a).
+
 **Verbs use `.` as the separator, never `_`** — `CREATE.ACCOUNT`, not
 `CREATE_ACCOUNT`. Underscored names in `sdsys/GPL.BP` such as `CREATE_USER`,
 `OS_GROUP` and `SET_PASSWD` are *subroutines*, catalogued globally as
