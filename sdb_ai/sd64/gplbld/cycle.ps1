@@ -185,6 +185,20 @@ function CountIn($sub) {
 }
 $nGcat   = CountIn 'gcat'
 $nOut    = CountIn 'gpl.bp.out'
+# 19 Aug 26 - THE TERMINFO DATABASE, and it is counted RECURSIVELY because it is
+# sharded a level deep: sdtermlb.c:166 opens <sysdir>\terminfo\<first letter>\<name>,
+# so CountIn would report 0 for a perfectly good one.  Without it, no terminal
+# type resolves - "Unrecognised terminal name" for vt100 and everything else -
+# and NOTHING ELSE WOULD SAY SO: it is not tracked (it is "make terminfo"
+# output), stage.py only checks that the DIRECTORY exists, and sd.iss copies the
+# staged tree with a wildcard.  So an sdtic that failed half way, or a stale
+# terminfo/ left by an interrupted build, ships silently and the first anyone
+# hears of it is a user whose terminal does not work.
+$nTinfo  = $(
+    $d = Join-Path $Sdsys 'terminfo'
+    if (Test-Path -LiteralPath $d) {
+        (Get-ChildItem -LiteralPath $d -Recurse -File -ErrorAction SilentlyContinue).Count
+    } else { -1 })
 $szCproc = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')) {
                (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')).Length } else { -1 }
 $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')) {
@@ -194,13 +208,14 @@ $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')) {
 # (commit c893308), so the old figures have read three high since the 17:21
 # cycle.  The thresholds below did not move and did not need to: they are set
 # far enough back to catch a bootstrap that failed, not to police a count.
-Write-Host ("   gcat {0} (want ~129)   GPL.BP.OUT {1} (want ~190)" -f $nGcat, $nOut)
+Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~99)" -f $nGcat, $nOut, $nTinfo)
 Write-Host ("   `$CPROC {0} bytes (want >0)   `$BCOMP {1} (want ~88,000 - 70,697 is the seed)" -f $szCproc, $szBcomp)
 
 $faults = @()
 if ($szCproc -le 0)   { $faults += '$CPROC is the 0-byte placeholder - the bootstrap never reached the last step' }
 if ($nGcat   -lt 100) { $faults += "gcat holds $nGcat entries" }
-if ($nOut    -lt 150) { $faults += "GPL.BP.OUT holds $nOut objects" }
+if ($nOut    -lt 150) { $faults += "gpl.bp.out holds $nOut objects" }
+if ($nTinfo  -lt 50)  { $faults += "terminfo holds $nTinfo entries - run 'make terminfo'; no terminal type would resolve" }
 if ($szBcomp -eq 70697) { $faults += '$BCOMP is bbcmp.py''s seed, not BCOMP''s own object' }
 if (-not (Test-Path -LiteralPath (Join-Path $Sdsys 'voc'))) { $faults += "voc is absent - 'sd -i' did not complete" }
 if ($faults) { Fail ("the staged tree is not whole:`n  - " + ($faults -join "`n  - ")) }
