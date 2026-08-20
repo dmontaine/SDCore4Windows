@@ -214,7 +214,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # added for, by a different route: run the client's own
                   # tests and every verify script afterwards refuses, for a
                   # reason that has nothing to do with the installed tree.
-                  'smoke-test.exe', 'internal-state-test.exe')
+                  'smoke-test.exe', 'internal-state-test.exe',
+                  # 20 Aug 26 - the SET.PASSWORD trailing-token verifier, added
+                  # the same day as the guard it tests.  A verify script is not
+                  # shipped by stage.py or sd.iss and cannot reach an installed
+                  # tree, so without this line WRITING a test would make every
+                  # test refuse to run - which is the toll section 7 step 11
+                  # already recorded for remote_connect_test.c.
+                  'verify-setpw.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

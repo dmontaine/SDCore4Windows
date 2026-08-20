@@ -5,6 +5,18 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  SET.PASSWORD now refuses a password typed on the command line.
+           * IT USED TO IGNORE IT SILENTLY.  "SET.PASSWORD DON mypassword"
+             set the account to DON, threw the rest away without a word, and
+             asked you for the password as though nothing had happened - so
+             everything looked like it worked, and you had no way of knowing
+             your password had gone into the command stack for nothing.
+           * It now stops and says so.  The password is still read from the
+             two hidden prompts, exactly as before; nothing else changes.
+           * If you have typed one this way, it is worth setting a different
+             password, since the old one was recorded where you did not
+             intend it to be.
+
 20 Aug 26  The old cleartext API login is gone.  Old clients stop working.
            * THE CHANGE OF 19 AUG ADDED THE NEW LOGIN AND LEFT THE OLD ONE IN
              PLACE.  This removes it.  A client that still sends a password in
