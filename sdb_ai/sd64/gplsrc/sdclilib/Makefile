@@ -53,7 +53,7 @@ check: $(DLL)
 	  tests/smoke_test.c -I. -L. -lsdclilib
 	./smoke-test.exe
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Wno-unknown-pragmas \
-	  -o internal-state-test.exe tests/internal_state_test.c -lws2_32
+	  -o internal-state-test.exe tests/internal_state_test.c -lws2_32 -lbcrypt
 	./internal-state-test.exe
 
 # 17 Aug 26 - SEPARATE FROM "check" ON PURPOSE.  Everything under "check" runs

@@ -114,8 +114,10 @@
    handling with Linux", introduced these as ECONTXT=6/EMSG_PAIR=7 - the
    opposite of the sdb64 dev commit d0647b9 it was aligning TO, which had
    defined EMSG_PAIR=6/ECONTXT=7 seventeen days earlier.  sdb64's values
-   came first and are the shared ones.  The same fix is owed to
-   winsdclilib itself - PROJECT_STATUS.md 5.3.                          */
+   came first and are the shared ones.
+   19 Aug 26 - winsdclilib fixed it independently in a1987b0, and now takes
+   this file wholesale, so the debt this note used to record is paid and the
+   three copies agree.                                                    */
 #define SV_EMSG_PAIR      6    /* Client request/response transport failed */
 #define SV_ECONTXT        7    /* Client called function in wrong context */
 

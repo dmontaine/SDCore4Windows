@@ -201,25 +201,39 @@ the default would have been wrong:
 server is not trusted to set the client's CPU cost, and a server asking for
 almost none would weaken the derivation a captured exchange is judged against.
 
-## THE 32-BIT SHIPPING DLL BUILDS FROM A STALE COPY — phase 6 blocker
+## The three locations, synchronised 19 Aug 2026
 
-**`Projects/winsdclilib/sdclilib.c` and this repository's
-`gplsrc/sdclilib/sdclilib.c` have diverged**, 112 KB against 138 KB. The repo
-copy is a strict **superset**: every function in `winsdclilib` is in it, plus
-`SDConnectLocal`, `sd_exe_path`, `sysdir` and the four `transport_*` functions.
-So `winsdclilib` is an older ancestor, not a fork with anything of its own.
+**The stale-32-bit-DLL blocker recorded here is resolved.** `winsdclilib` had
+not moved since 15 Aug while this tree added `SDConnectLocal`, the transport
+layer and SCRAM, and `sdclilib32` built from `winsdclilib` — so the
+`qmclilib.dll` intended for mvDeveloper was being built from source with no
+SCRAM in it, still sending the password in clear, and nothing in either project
+would have said so.
 
-That matters because `Projects/sdclilib32/Makefile` sets
-`SRCDIR ?= ../winsdclilib`, so **the 32-bit `qmclilib.dll` that ships with
-mvDeveloper is built from the stale copy** — which has no SCRAM in it and will
-not get any by editing this repository.
+| | Holds | Product |
+| --- | --- | --- |
+| `sd64/gplsrc/sdclilib` | **the source** | `sdclilib.dll`, 64-bit |
+| `Projects/winsdclilib` | a mirror, `master` `e35376a` | `sdclilib.dll`, 64-bit |
+| `Projects/sdclilib32` | no source; `SRCDIR` points here | `qmclilib.dll`, **32-bit** |
 
-**Phase 6 cannot be done without resolving this**, since it is "rebuild the
-64-bit and 32-bit DLLs". The likely answer is to make `winsdclilib` take this
-repository's `sdclilib.c`, or to point `SRCDIR` here. Deciding which is the
-repository owner's call; it was not touched as part of phase 4 because phase 4
-could be built and verified without it. `sdclilib32` is also still not a git
-repository.
+`sdclilib32`'s `SRCDIR` was repointed from `../winsdclilib` to this tree, so
+there is now **one hop, not two** — the middle copy can no longer lag. The
+seven shared files are byte-identical across the two that hold source;
+`gplsrc/sdclilib/VENDORING.md` has the full topology, the sync commands and
+what stays 32-bit-specific.
+
+**Verified after the sync:** `make check` green in `winsdclilib` (smoke,
+internal state) and in `sdclilib32` (smoke, internal state, **QM alias**), by
+both the Makefile and `build.cmd` routes; `qmclilib.dll` is PE32 i386 and
+depends only on `bcrypt`, `KERNEL32`, `msvcrt` and `WS2_32` — all Windows, so
+it is still a single file that can be copied next to an application.
+
+**`make check` earned its keep**: `internal_state_test.c` includes
+`sdclilib.c` directly, so it needed `-lbcrypt` too. That was missing in all
+three Makefiles and both `build.cmd`s, and only the test link failed — the DLL
+itself had been fine.
+
+`sdclilib32` is still not a git repository.
 
 ## Phase 5, the next task
 
@@ -264,13 +278,14 @@ something.
 
 `sdapi1` and `sdapi2` are both spent; use a fresh prefix.
 
-## The client side is a separate, unversioned project
+## The 32-bit project is still unversioned
 
 `C:\Users\dmont\Projects\sdclilib32` builds the 32-bit `qmclilib.dll` that
-mvDeveloper will use. **It is not a git repository** — worth fixing before
-relying on it.
+mvDeveloper will use. **It is not a git repository** — worth fixing, and more
+so now: it is the only one of the three whose state nothing records, so the
+19 Aug sync of it exists on disk and nowhere else. Its `SRCDIR`, `-lbcrypt`
+and README changes cannot be reviewed, reverted or seen from another machine.
 
-It has no copy of the library source: its Makefile points `SRCDIR` at
-`../winsdclilib`, so both DLLs build from one `sdclilib.c`. Phase 4 edits that
-one file and both builds pick it up. `winsdclilib` itself is untouched by the
-SCRAM work so far and its working tree is clean.
+**The claim this section used to make — "`winsdclilib` is untouched by the
+SCRAM work and its tree is clean" — was true and was the problem.** See the
+topology section above.

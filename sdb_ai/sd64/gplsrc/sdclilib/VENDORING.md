@@ -1,13 +1,60 @@
 # Vendoring notes
 
-This directory is a vendored copy of the standalone client library project,
-plus local additions listed below.
+**THIS DIRECTORY IS THE SOURCE OF TRUTH FOR THE CLIENT LIBRARY, AS OF
+19 Aug 2026. It used to be the copy; the arrow has turned round.**
 
-- Upstream: `github.com/dmontaine/winsdclilib`
-- Imported commit: `b6624565cacb365d0a2788545495a7fa3ba3f743` (5 Aug 2026)
-- Imported: 13 Aug 2026
+It began as a vendored copy of `github.com/dmontaine/winsdclilib`, imported at
+commit `b6624565cacb365d0a2788545495a7fa3ba3f743` (5 Aug 2026) on 13 Aug 2026,
+replacing the former `gplsrc/sdclilib.c` which was the Linux client library.
+It then moved a long way ahead of it — `SDConnectLocal()`, `sysdir()`, the
+socket-or-pipe transport layer, and SCRAM-SHA-256 — while upstream stood still.
 
-It replaces the former `gplsrc/sdclilib.c`, which was the Linux client library.
+## The three locations, and which way things flow
+
+| | Holds | Built product |
+| --- | --- | --- |
+| **`sd64/gplsrc/sdclilib`** (here) | the source | `sdclilib.dll`, 64-bit |
+| `Projects/winsdclilib` | a mirror of the source | `sdclilib.dll`, 64-bit |
+| `Projects/sdclilib32` | no source at all | `qmclilib.dll`, **32-bit** |
+
+**Edits are made here.** `winsdclilib` takes them; it is a mirror, not a
+fork, and nothing should be changed there that is not changed here first.
+`sdclilib32` holds no copy of the source at all — its `Makefile` sets
+`SRCDIR ?= ../sd4windows/sdb_ai/sd64/gplsrc/sdclilib` and builds from these
+files directly.
+
+**`sdclilib32` was repointed here on 19 Aug 2026, and the reason is worth
+keeping.** It used to build from `../winsdclilib`, which had not moved since
+15 Aug — so the 32-bit `qmclilib.dll` that ships with mvDeveloper was being
+built from source with no SCRAM in it, still sending the password in clear,
+and **nothing in that project would have reported it**. Two hops meant the
+middle one could lag silently; one hop cannot. It is the failure its own
+Makefile comment had predicted in the abstract.
+
+**What is genuinely 32-bit-specific stays in `sdclilib32`**: `qmcompat.c`, the
+`qmclilib.def` export table that produces the QM-named aliases, `qmclilib.h`,
+`-static-libgcc`, and the pinned `i686` compiler with the `ARCH` guard that
+refuses to build a 64-bit DLL under a 32-bit name.
+
+**Nothing binary is tracked in any of the three.** All three `.gitignore`
+build products, so "the same version" means each builds a current DLL from the
+same source, not that a DLL is committed anywhere.
+
+## Keeping them in step
+
+```sh
+# from Projects/
+cp sd4windows/sdb_ai/sd64/gplsrc/sdclilib/{sdclilib.c,scram_client.h,sdclilib.h,sdclient.h,err.h,revstamp.h,sdclilib.bi} winsdclilib/
+cp sd4windows/sdb_ai/sd64/gplsrc/sdclilib/tests/{smoke_test.c,internal_state_test.c} winsdclilib/tests/
+```
+
+`local_connect_test.c`, `remote_connect_test.c` and the probe programs stay
+here: they need an installed SD, the API port, or `gplbld`'s harness, none of
+which the standalone project has.
+
+**Then build and check all three** — `make check` in `winsdclilib` and in
+`sdclilib32`, and `make sdclilib` from `sd64`. The 32-bit one is the one that
+matters: it is a shipping deliverable, not a test convenience.
 
 ## Why it lives in its own directory
 
@@ -55,5 +102,8 @@ Two differences from the `sdclient.c` original, both deliberate:
 - The process handle from `CreateProcess` is closed as well as the thread
   handle. The original closed only the thread handle and leaked the other.
 
-When syncing from upstream, re-apply these; they are confined to the sections
-marked in the source and do not alter upstream's protocol handling.
+**These no longer need re-applying after a sync.** That instruction belonged to
+the arrangement where this directory was the copy; since 19 Aug 2026 the flow
+is outwards, so they are simply part of the source and `winsdclilib` receives
+them. Kept here because they still record *why* the additions exist and how
+they differ from the `gplsrc/sdclient.c` original they were modelled on.

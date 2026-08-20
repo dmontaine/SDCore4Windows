@@ -101,9 +101,11 @@ SD_API void SDWriteu(int fno, char *id, char *data);
    handling with Linux", introduced these as ECONTXT=6/EMSG_PAIR=7 - the
    opposite of the sdb64 dev commit d0647b9 it was aligning TO, which had
    defined EMSG_PAIR=6/ECONTXT=7 seventeen days earlier.  sdb64's values came
-   first and are the shared ones.  A DEVIATION FROM THE VENDORED SOURCE, which
-   this directory otherwise keeps faithfully (VENDORING.md): the same fix is
-   owed to winsdclilib itself - PROJECT_STATUS.md 5.3.                      */
+   first and are the shared ones.
+   19 Aug 26 - it WAS a deviation from vendored source, and is not any more.
+   winsdclilib fixed it independently in a1987b0 and now takes this directory's
+   files wholesale; this tree is where the client is developed.  VENDORING.md
+   has the reversal.                                                        */
 #define SV_EMSG_PAIR 6
 #define SV_ECONTXT   7
 
