@@ -6,48 +6,42 @@ what is deployed, and what to do next.
 
 ## Where it stands
 
-**Phases 1 and 2 are complete and verified. Phase 3 is WRITTEN AND NOT
-VERIFIED — nothing in it has been compiled. Phases 4 to 6 are not started.**
+**Phases 1 to 3 are complete and verified. Phases 4 to 6 are not started.**
 
 Nothing on the existing login path has changed. Request 24 still reaches
-`vb.login`, which still calls `!CRED_VERIFY` with the same signature. The work
-so far is entirely additive, and phase 5 remains the only point of no return.
+`vb.login`, which still calls `!CRED_VERIFY` with the same signature — and
+that is a measured check, not an assumption. The work so far is entirely
+additive, and phase 5 remains the only point of no return.
 
 | Phase | | Verified by |
 | --- | --- | --- |
 | 1 | Crypto primitives, C and the `SDEXT` bridge | `gplbld/verify-scram.c` in C; `sdsys/bp/TESTSCRAM` through BASIC |
 | 2 | `$CRED` version 2, `!CRED_SET`, `!CRED_VERIFY`, `SET.PASSWORD` | `sdsys/bp/TESTCRED` |
-| 3 | Server exchange, request types 47 and 48 in `APISRVR` | **written, unverified** — `gplbld/verify-scramlogin.ps1`, which needs a cycle first |
+| 3 | Server exchange, request types 47 and 48 in `APISRVR` | `gplbld/verify-scramlogin.ps1` — **24/24**, 21:03:41 install, 19 Aug 2026 |
 | 4 | Client exchange in `sdclilib.c` | not started |
 | 5 | Retire `SrvrLogin` | not started |
 | 6 | Rebuild both DLLs, re-set passwords, test against mvDeveloper | not started |
 
-## Phase 3, what is written
+## Phase 3, and how to re-run it
 
-| Part | State |
-| --- | --- |
-| `APISRVR` `vb.scram.first` / `vb.scram.final` | written, **never compiled** |
-| `APISRVR` dispatch, the not-logged-in gate, `deffun` moved to the top | written, never compiled |
-| `sdsys/messages/5272`, `5273`, `5274` | new |
-| `gplbld/verify-scramlogin.ps1` | **`-SelfTest` run, 5/5**; the server half never run |
-
-`-SelfTest` is unelevated, needs no server and no install, and checks the
-script's own client-side derivation against the RFC 7677 vectors. Run it first
-whenever the exchange fails and it is not obvious which side is wrong: if it
-passes, the instrument is sound and the disagreement is SD's.
+**`verify-scramlogin.ps1` is 24/24 on the 21:03:41 install of 19 Aug 2026.**
+It has two modes, and the offline one is the first thing to reach for.
 
 ```powershell
-gplbld\verify-scramlogin.ps1 -SelfTest
+gplbld\verify-scramlogin.ps1 -SelfTest             UNELEVATED, no server, no install
+gplbld\verify-scramlogin.ps1 -Prefix sdscram2      ELEVATED, fresh prefix each run
 ```
 
-**A CYCLE IS OWED BEFORE THE REST OF IT.** `assert-current` refuses, `make sd`
-is owed too (four `gplsrc` files are newer than `bin\sdclilib.dll`), and the
-three new message files only exist in the source tree. Then, ELEVATED, with a
-prefix nobody has used:
+`-SelfTest` checks the script's own client-side derivation against the RFC 7677
+vectors — the same `New-ScramProof` the live checks use, not a copy. Run it
+first whenever the exchange fails and it is not obvious which side is wrong: if
+it passes, the instrument is sound and the disagreement is SD's.
 
-```powershell
-gplbld\verify-scramlogin.ps1 -Prefix sdscram1
-```
+**The live run needs a `-Prefix` nobody has used**, `sdscram1` is spent, and it
+changes the installed system and puts it back in a `finally` — throwaway
+account, `APIPORT` in `sd.conf`, two service restarts. It leaves the
+`ACCOUNTS` and `$CRED` records for `DELETE.ACCOUNT` on purpose, so a
+half-failed `CREATE.ACCOUNT` cannot hide.
 
 **What to look at first if it fails.** `47 accepted` failing means the handler
 did not run or `$cred` did not open; `48 accepted` failing with `47` green
@@ -55,41 +49,35 @@ means the AuthMessage the two sides assembled differ, and the string to
 suspect is `server-first` — `scram.sfirst` is stored verbatim on purpose, so a
 mismatch means the client rebuilt it rather than echoing it.
 
+**Two gaps in the suite, neither needing a cycle.** The `5272` refusals assert
+only that `server.error` was non-zero and never check the message text; `5274`
+is unexercised, being the server-fault path. `5017` and `5273` were both
+observed reaching the client.
+
 Both test programs use the RFC 7677 section 3 vectors, which were recomputed
 independently before being written down, so a failure is the implementation and
 not a mistranscribed constant.
 
-## THE INSTALLED SYSTEM IS HAND-PATCHED
+## THE HAND-PATCHING IS GONE — this section is kept for what it warns about
 
-Read this before running anything that reinstalls.
+Until 19 Aug 2026 the install was hand-patched: `sd.exe`, `INT$KEYS.H`,
+`CRED_SET`, `CRED_VERIFY`, `SET_ACC_PASSWORD`, `KEYS.H`, `TESTSCRAM` and
+`TESTCRED` had been copied in rather than installed, because cycling would
+delete `C:\ProgramData\SD`. **The cycle of 19 Aug did exactly that and the
+tree was rebuilt from source**, so none of it applies any more.
+`assert-current` is exit 0 against the 21:03:41 install.
 
-`cycle.ps1` — the sanctioned deploy — **deletes both trees** and installs
-fresh. That is deliberate and documented in its own synopsis. It would remove
-`C:\ProgramData\SD`, and with it:
+**What the episode is worth remembering for:**
 
-- the `don` account adopted on 19 Aug 2026,
-- `APIPORT=4243` in `sd.conf`, which was commented out on a fresh install and
-  had to be enabled by hand before the API would listen at all,
-- `sdsys/bp/TESTSCRAM` and `sdsys/bp/TESTCRED` — though both are now in the
-  source tree, so an install would restore them.
-
-Rather than cycle, the following were copied into the running install by hand.
-A proper cycle is owed before anything ships.
-
-| Copied to the install | From |
-| --- | --- |
-| `usr/bin/sd.exe` | `sdb_ai/sd64/bin/sd.exe` |
-| `sdsys/gpl.bp/INT$KEYS.H`, `CRED_SET`, `CRED_VERIFY`, `SET_ACC_PASSWORD` | source tree |
-| `sdsys/syscom/KEYS.H` | source tree |
-| `sdsys/bp/TESTSCRAM`, `TESTCRED` | source tree |
-
-The previous `sd.exe` is backed up twice: `sdb_ai/sd64/bin/sd.exe.installed-backup-20260819`
-and `C:\Program Files\SD\usr\bin\sd.exe.bak-20260819`.
-
-**This was safe for these changes specifically** — `config.h` and `sysseg.h`
-are untouched, so the shared-segment hazard HISTORY.md warns about ("fatal if
-one rebuilt binary is copied onto a running system") does not apply. Check that
-again before hand-patching anything else.
+- **A cycle deletes the data tree, and things that only exist there go with
+  it.** The `don` account and `APIPORT=4243` both did. `APIPORT` ships
+  commented out, so the API does not listen at all on a fresh install until
+  something sets it — `verify-scramlogin.ps1` and `verify-apiport.ps1` both
+  set it and put it back rather than depending on it.
+- **Hand-patching is safe only while `config.h` and `sysseg.h` are untouched.**
+  Those fix the shared-segment layout, and HISTORY.md records that copying one
+  rebuilt binary onto a running system is fatal when they change. That is why
+  the hand-patching was survivable, not that it was a good idea.
 
 ## Resuming
 
