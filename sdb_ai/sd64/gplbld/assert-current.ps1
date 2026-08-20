@@ -106,10 +106,21 @@ if ($binaries.Count -eq 0) {
     # client DLL - the tests link against the DLL, they are not part of it - so
     # "run make sd" is the wrong instruction for an edit there and the sequence
     # it interrupts is the one that would have run the test.
+    # 19 Aug 26 - AND BUILD PRODUCTS ARE NOT SOURCE.  A2 asks one question -
+    # "is any SOURCE newer than the binaries" - and a .exe, .dll, .a or .o is
+    # by definition an answer to it, not part of it.  "make check" in
+    # gplsrc\sdclilib builds smoke-test.exe and internal-state-test.exe INTO
+    # THAT DIRECTORY rather than into localtest\, so running the client's own
+    # tests made this report "run make sd" for ever afterwards - the same false
+    # stale localtest\ was added for, arriving by a different route.  Filtering
+    # on the extension rather than on a list of names means the next build
+    # product to appear there is covered before anybody trips over it.
+    $buildProducts = '\.(exe|dll|a|o|obj|lib|exp)$'
     $uncompiled  = @(Get-ChildItem (Join-Path $sd64 'gplsrc') -Recurse -File |
                      Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
                                     $_.FullName -notmatch '\\localtest\\' -and
                                     $_.FullName -notmatch '\\sdclilib\\tests\\' -and
+                                    $_.Name -notmatch $buildProducts -and
                                     $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
     if ($uncompiled.Count -gt 0) {
         Bad ("{0} source file(s) are newer than bin\{1} ({2}) - run 'make sd':" -f
@@ -177,7 +188,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 32-bit build of it.  Same reasoning: test source and build
                   # products that live in a watched tree and never ship.
                   'verify-scramclient.c', 'verify-scramclient.exe',
-                  'verify-scramclient32.exe')
+                  'verify-scramclient32.exe',
+                  # 19 Aug 26 - "make check" in gplsrc\sdclilib builds these
+                  # two INTO THAT DIRECTORY rather than into localtest\, so
+                  # they are the same false stale the localtest\ exclusion was
+                  # added for, by a different route: run the client's own
+                  # tests and every verify script afterwards refuses, for a
+                  # reason that has nothing to do with the installed tree.
+                  'smoke-test.exe', 'internal-state-test.exe')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
