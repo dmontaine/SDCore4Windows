@@ -6,20 +6,54 @@ what is deployed, and what to do next.
 
 ## Where it stands
 
-**Phases 1 and 2 are complete and verified. Phases 3 to 6 are not started.**
+**Phases 1 and 2 are complete and verified. Phase 3 is WRITTEN AND NOT
+VERIFIED — nothing in it has been compiled. Phases 4 to 6 are not started.**
 
-Nothing on the existing login path has changed. `APISRVR` still calls
-`!CRED_VERIFY` with the same signature and needs no recompile. The work so far
-is entirely additive, and phase 5 remains the only point of no return.
+Nothing on the existing login path has changed. Request 24 still reaches
+`vb.login`, which still calls `!CRED_VERIFY` with the same signature. The work
+so far is entirely additive, and phase 5 remains the only point of no return.
 
 | Phase | | Verified by |
 | --- | --- | --- |
 | 1 | Crypto primitives, C and the `SDEXT` bridge | `gplbld/verify-scram.c` in C; `sdsys/bp/TESTSCRAM` through BASIC |
 | 2 | `$CRED` version 2, `!CRED_SET`, `!CRED_VERIFY`, `SET.PASSWORD` | `sdsys/bp/TESTCRED` |
-| 3 | Server exchange, request types 47 and 48 in `APISRVR` | not started |
+| 3 | Server exchange, request types 47 and 48 in `APISRVR` | **written, unverified** — `gplbld/verify-scramlogin.ps1`, which needs a cycle first |
 | 4 | Client exchange in `sdclilib.c` | not started |
 | 5 | Retire `SrvrLogin` | not started |
 | 6 | Rebuild both DLLs, re-set passwords, test against mvDeveloper | not started |
+
+## Phase 3, what is written
+
+| Part | State |
+| --- | --- |
+| `APISRVR` `vb.scram.first` / `vb.scram.final` | written, **never compiled** |
+| `APISRVR` dispatch, the not-logged-in gate, `deffun` moved to the top | written, never compiled |
+| `sdsys/messages/5272`, `5273`, `5274` | new |
+| `gplbld/verify-scramlogin.ps1` | **`-SelfTest` run, 5/5**; the server half never run |
+
+`-SelfTest` is unelevated, needs no server and no install, and checks the
+script's own client-side derivation against the RFC 7677 vectors. Run it first
+whenever the exchange fails and it is not obvious which side is wrong: if it
+passes, the instrument is sound and the disagreement is SD's.
+
+```powershell
+gplbld\verify-scramlogin.ps1 -SelfTest
+```
+
+**A CYCLE IS OWED BEFORE THE REST OF IT.** `assert-current` refuses, `make sd`
+is owed too (four `gplsrc` files are newer than `bin\sdclilib.dll`), and the
+three new message files only exist in the source tree. Then, ELEVATED, with a
+prefix nobody has used:
+
+```powershell
+gplbld\verify-scramlogin.ps1 -Prefix sdscram1
+```
+
+**What to look at first if it fails.** `47 accepted` failing means the handler
+did not run or `$cred` did not open; `48 accepted` failing with `47` green
+means the AuthMessage the two sides assembled differ, and the string to
+suspect is `server-first` — `scram.sfirst` is stored verbatim on purpose, so a
+mismatch means the client rebuilt it rather than echoing it.
 
 Both test programs use the RFC 7677 section 3 vectors, which were recomputed
 independently before being written down, so a failure is the implementation and
@@ -110,20 +144,19 @@ change shows as 620 changed lines. Edit in place, or write bytes in binary
 mode. `git show --stat` catches it — a file whose diff is far larger than the
 edit was rewritten wholesale.
 
-## Phase 3, the next task
+## Phase 3, the two questions it opened, answered
 
-Replace `vb.login` in `APISRVR` with handlers for request types 47 and 48. The
-message formats and the derivation are in SCRAM_AUTH.md; the primitives all
-exist and are proven, so this is protocol plumbing rather than cryptography.
+**Per-session state is ordinary program variables.** `APISRVR` is one process
+per connection running one `loop`, so a variable set while handling 47 is still
+set when 48 arrives and no two connections share it. They are initialised
+before the loop rather than in the first-time block, so `scram.stage` — the
+only thing standing between a client-final and a signature check run against
+empty values — is never merely unassigned.
 
-Two things to look at before writing it:
-
-1. **How `APISRVR` currently holds per-session state across requests.** The
-   exchange is two round trips, so the client nonce, server nonce, salt and the
-   assembled `AuthMessage` have to survive from 47 to 48, and a 48 arriving
-   without a 47 must abort rather than proceed on empty values.
-2. **Where `SrvrLogin`'s "already logged in" guard belongs** in a two-step
-   exchange — whether it sits on 47, on 48, or on both.
+**The "already logged in" guard sits on both**, because the main loop's gate
+only *admits* 24/25/47/48 when the session is unauthenticated; it does not
+block them afterwards. 48 additionally refuses itself unless `scram.stage` is
+1, which is the check that gate cannot make.
 
 Note that the server does **not** run PBKDF2 at login: it holds `StoredKey`
 directly and needs two HMACs and a hash. The 600,000-iteration cost falls on
@@ -132,6 +165,25 @@ directly and needs two HMACs and a hash. The 600,000-iteration cost falls on
 `!CRED_VERIFY` stays after phase 3 — not on the login path any more, but
 `SET_ACC_PASSWORD` still needs it for "changing your own password requires the
 current one".
+
+## Phase 4, the next task
+
+Client exchange in `sdclilib.c`, behind an unchanged `QMConnect`/`SDConnect`.
+`gplbld/verify-scramlogin.ps1` is a complete worked client for it — the packet
+framing, the ACK wait, the message construction and the server-signature check
+are all there in PowerShell, and the .NET calls map onto the `bcrypt.dll` ones
+the design names.
+
+Three things it already settles, and getting them wrong is what the C will do
+by default:
+
+- **Send the SCRAM message as the whole body, with no padding.** `SDConnect`
+  pads each request-24 field to a two byte multiple with a NUL. `vb.scram.*`
+  strips trailing NULs defensively, but the protocol has none.
+- **Echo `server-first` verbatim into `AuthMessage`.** Do not rebuild it from
+  the parsed parts.
+- **A missing or wrong `v=` is a failed connection.** It is exactly the check
+  that gets softened during debugging and never hardened again.
 
 ## The client side is a separate, unversioned project
 

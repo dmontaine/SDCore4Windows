@@ -156,7 +156,17 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-fold.ps1', 'verify-nonet.ps1',
                   'verify-lcnames.ps1', 'post-cycle-elevated.ps1',
                   'verify-keys.ps1', 'probe-keys.ps1',
-                  'verify-editkeys.ps1')
+                  'verify-editkeys.ps1', 'verify-scramlogin.ps1',
+                  # 19 Aug 26 - verify-scram.c and its build product were added
+                  # on 19 Aug and never listed here, so both showed up under
+                  # "newer than the install" from the moment they existed.
+                  # THE .exe MATTERS MORE THAN IT LOOKS: docs/SCRAM_HANDOFF.md
+                  # tells the next session to rebuild it by hand, which would
+                  # have made this script report STALE afterwards - and
+                  # verify-scramlogin.ps1 refuses to run without it, so
+                  # rebuilding the C test would have blocked the BASIC one for
+                  # a reason with nothing to do with either.
+                  'verify-scram.c', 'verify-scram.exe')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

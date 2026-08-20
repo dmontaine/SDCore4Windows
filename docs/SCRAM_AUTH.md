@@ -6,8 +6,12 @@ depends on.
 
 **Status.** Phases 1 and 2 are complete and verified — the primitives against
 the RFC 7677 vectors in both C and BASIC, and `$CRED` version 2 end to end.
-Phases 3 to 6 are not started. Nothing on the existing login path has changed
-yet, so the work so far is entirely additive.
+**Phase 3 is written and not verified**: `APISRVR` `vb.scram.first` /
+`vb.scram.final`, and `gplbld/verify-scramlogin.ps1` to exercise them. Its
+client half passes the RFC 7677 vectors offline (`-SelfTest`, 5/5); the server
+half has never been compiled. Phases 4 to 6 are not started. Nothing on the
+existing login path has changed, so the work so far is entirely additive —
+request 24 still reaches `vb.login`.
 
 **The structural fact this document exists to record:**
 
@@ -239,6 +243,18 @@ None of it blocks the first three phases.
 - **Lockout.** Cheap to add while the credential record is changing anyway, and
   currently absent entirely. A failure count and lockout timestamp in `$CRED`
   would close the one gap SCRAM leaves wide.
+- **User enumeration, introduced by phase 3 and left there deliberately.** An
+  account with no usable credential is refused at request 47; a wrong password
+  is refused at 48. Same message, same three-second sleep, different round
+  trip — so the two are distinguishable. RFC 5802's answer is a dummy salt and
+  iteration count derived from a server-held secret, so an unknown account
+  gets a plausible server-first and fails at 48 like everyone else. It must be
+  **deterministic per username and secret**, or two 47s for one unknown name
+  give different salts and leak the same fact. `APISRVR` can read `$CRED` but
+  not write it, so the secret has to be seeded where credentials already are —
+  `CRED_SET`, elevated — under an id `valid_os_name()` cannot produce. Deferred
+  because it re-opens verified phase 2 work and because it changes no stored
+  credential and no wire format, so adding it later costs nothing.
 - **TLS, later or never.** If `SCRAM-SHA-256-PLUS` is ever wanted, the
   channel-binding flag in the client-first message is where it attaches — worth
   sending `n,,` honestly now rather than something that would have to change.

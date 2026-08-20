@@ -19,6 +19,12 @@
 *
 *
 * START-HISTORY:
+* 19 Aug 26 Windows port - SCRAM-SHA-256 login, request types 47 and 48.
+*           vb.scram.first and vb.scram.final; vb.login is untouched and still
+*           serves request 24 until phase 5 retires it.  docs/SCRAM_AUTH.md.
+* 19 Aug 26 Windows port - the valid_os_name deffun moved to the declarations
+*           at the top.  It was inside vb.login, which phase 5 deletes, and
+*           vb.scram.first needs it after that.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -90,13 +96,22 @@ $include header.h
 $include err.h
 $include keys.h
 
-* 20240219 mab user must be member of sdusers  
+* 20240219 mab user must be member of sdusers
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
 
 common /$APISRVR/ logged.in,          ;* Process is logged in
 files(100),         ;* Array of file variables
 logging             ;* Logging network traffic?
+
+* 19 Aug 26 Windows port - DECLARED HERE, NOT IN vb.login.  Both the old login
+*   and the SCRAM one screen the user name with it, and phase 5 of
+*   docs/SCRAM_AUTH.md deletes vb.login - which would have taken the
+*   declaration with it and left vb.scram.first calling an undeclared function.
+*   Below the common block, not above it: CPROC is the only program here that
+*   shows the two together and it declares its functions after syscom.h's
+*   common, so that is the order known to compile.
+deffun valid_os_name(name) calling '!valid_os_name'
 
 * If this is the first time through, initialise various things in
 * the SYSCOM common block.
@@ -200,6 +215,26 @@ dim args(MAX.ARG.COUNT)
 error.msg = ''
 done = @false
 
+* 19 Aug 26 Windows port - SCRAM exchange state.  docs/SCRAM_AUTH.md.
+*
+* THIS IS ALL THE PER-SESSION STATE THE EXCHANGE NEEDS, and it is ordinary
+* program variables because APISRVR is one process per connection running one
+* loop: a variable set while handling request 47 is still set when 48 arrives,
+* and no two connections share it.  Nothing is written to disk and nothing is
+* keyed by session id, so there is no cross-session leak to reason about.
+*
+* THEY ARE INITIALISED HERE, OUTSIDE THE FIRST-TIME BLOCK, ON PURPOSE.  An
+* unassigned variable would make "did request 47 happen" depend on a variable
+* that has never been written, and scram.stage is the only thing standing
+* between a client-final and a signature check run against empty values.
+scram.stage = 0        ;* 0 = no exchange in progress, 1 = client-first accepted
+scram.user = ''        ;* User name from client-first, once screened
+scram.cfirst.bare = '' ;* client-first-bare, the GS2 header stripped
+scram.sfirst = ''      ;* server-first, exactly as it went out
+scram.nonce = ''       ;* Combined nonce, client's then ours
+scram.storedkey = ''   ;* From $cred, base64
+scram.serverkey = ''   ;* From $cred, base64
+
 loop
    unload.object               ;* Unload inactive object code
 
@@ -223,7 +258,11 @@ loop
    server.error = SV$OK           ;* Assume success
 
    if not(logged.in) then
-      if action # 24 and action # 25 then
+      * 19 Aug 26 Windows port - 47 and 48 join 24 and 25 as the requests a
+      * session may issue before it has authenticated.  They are the two halves
+      * of one SCRAM exchange, so both have to be admitted here; 48 refuses
+      * itself if 47 did not come first, which is a check this gate cannot make.
+      if action # 24 and action # 25 and action # 47 and action # 48 then
          abort.message = sysmsg(5270) ;* Not logged in
          goto connection.failed
       end
@@ -279,6 +318,8 @@ loop
    vb.selectleft,     ;*  44   Scan index to left
    vb.selectright,    ;*  45   Scan index to right
    vb.mark.mapping,   ;*  46   Enable/disable mark mapping
+   vb.scram.first,    ;*  47   SCRAM client-first
+   vb.scram.final,    ;*  48   SCRAM client-final
    vb.illegal.action
 
    st = status()
@@ -981,7 +1022,8 @@ vb.login:
                username = cmnd[3,n]
                * Modified by Composer AI - 2026/06/10.
                * Reject shell-unsafe login names before authentication.
-               deffun valid_os_name(name) calling '!valid_os_name'
+               * 19 Aug 26 Windows port - the deffun moved to the top of the
+               * program; vb.scram.first needs it and this handler is going.
                if not(valid_os_name(username)) then
                   abort.message = sysmsg(5017) ;* Invalid user name or password
                   server.error = SV$ON.ERROR
@@ -1103,6 +1145,310 @@ exit.vb.local.login:
                * dsm 20240612close lgn.f
                if server.error = SV$OK then logged.in = @true
                else done = @true
+
+               return
+
+               * ======================================================================
+               * SCRAM-SHA-256 login, client-first.  docs/SCRAM_AUTH.md, phase 3.
+               *
+               * In:   n,,n=<user>,r=<client nonce>
+               * Out:  r=<combined nonce>,s=<salt>,i=<iterations>
+               *
+               * NO PASSWORD CROSSES THE WIRE IN EITHER DIRECTION, which is the
+               * whole point of replacing request 24.  The server publishes the
+               * salt and the cost, the client answers a nonce, and a capture of
+               * both packets yields an offline guess bounded by the iteration
+               * count and nothing else.
+               *
+               * THE BODY IS THE SCRAM MESSAGE AND NOTHING ELSE.  vb.login's body
+               * is length-prefixed fields each padded to a two byte multiple;
+               * this one is not, because the packet is already length delimited.
+               * scram.trim.body drops trailing NULs anyway - see there for why.
+               *
+               * THE SERVER DOES NOT RUN PBKDF2 HERE.  It holds StoredKey, so
+               * the 600,000 iterations are spent once, in SET.PASSWORD.  Login
+               * costs two HMACs and a hash, which is what makes it safe to do
+               * this work before the client has proved anything.
+
+vb.scram.first:
+               gosub scram.trim.body
+
+               * A fresh exchange on a session that has already authenticated is
+               * a client bug or an attempt to change identity part way through.
+               * vb.login needed no such guard because it was a single message
+               * that set logged.in and nothing followed it.
+               if logged.in then
+                  abort.message = sysmsg(5273) ;* Authentication sequence error
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
+
+               scram.stage = 0        ;* a restart abandons any exchange in flight
+
+               * GS2 header.  'n,,' is "no channel binding", and it is honest -
+               * there is no TLS channel here to bind to.  'y,,' claims the
+               * server does not support binding, which is the downgrade signal,
+               * and 'p=' demands a binding that does not exist.  Both refused.
+               if cmnd[1,3] # 'n,,' then goto scram.bad.message
+
+               scram.cfirst.bare = cmnd[4,99999999]
+
+               * Exactly two attributes.  RFC 5802 section 5 requires the server
+               * to FAIL on an m= mandatory extension rather than ignore it, and
+               * counting the commas is what makes that automatic: anything
+               * extra, in any position, lands here.
+               *
+               * It also settles the nonce.  A client nonce containing a comma
+               * would split into three fields and be refused now, rather than
+               * mismatching later for reasons nobody could see.
+               if count(scram.cfirst.bare, ',') # 1 then goto scram.bad.message
+
+               scram.attr = field(scram.cfirst.bare, ',', 1)
+               if scram.attr[1,2] # 'n=' then goto scram.bad.message
+               username = scram.attr[3,99999999]
+
+               scram.attr = field(scram.cfirst.bare, ',', 2)
+               if scram.attr[1,2] # 'r=' then goto scram.bad.message
+               scram.cnonce = scram.attr[3,99999999]
+               if scram.cnonce = '' then goto scram.bad.message
+
+               * NO =2C / =3D UNESCAPING, and none is needed: valid_os_name
+               * allows letters, digits, dot, underscore and hyphen only, so a
+               * name that would have required escaping cannot be a user here.
+               * Refusing it is therefore the same answer as decoding it.
+               if username = '' or username[1,1] = '$' then goto scram.bad.cred
+               if not(valid_os_name(username)) then goto scram.bad.cred
+
+               openpath @sdsys:@ds:'$cred' to scram.cred.f else
+                  abort.message = sysmsg(5274) ;* Authentication service unavailable
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
+
+               read scram.cred from scram.cred.f, upcase(username) else
+                  close scram.cred.f
+                  goto scram.bad.cred      ;* no credential - fail closed
+               end
+               close scram.cred.f
+
+               * A version 1 record holds an Argon2 verifier and no StoredKey.
+               * It cannot drive a SCRAM exchange and cannot be converted - the
+               * plaintext was never stored, by design - so the account has to
+               * run SET.PASSWORD again.  !CRED_VERIFY refuses it the same way.
+               if scram.cred<CRED$VERSION> # SCRAM$CRED.VERSION then
+                  scram.cred = ''
+                  goto scram.bad.cred
+               end
+
+               scram.salt = scram.cred<CRED$SALT>
+               scram.iter = scram.cred<CRED$ITER>
+               scram.storedkey = scram.cred<CRED$STOREDKEY>
+               scram.serverkey = scram.cred<CRED$SERVERKEY>
+               scram.cred = ''
+
+               if scram.salt = '' or scram.iter = '' then goto scram.bad.cred
+               if scram.storedkey = '' or scram.serverkey = '' then goto scram.bad.cred
+
+               * 18 RANDOM BYTES, AND THE 18 IS NOT ARBITRARY.  It is a multiple
+               * of three, so base64 encodes it with no '=' padding, and every
+               * character base64 emits is inside RFC 5802's printable set -
+               * which excludes the comma this message is parsed on and the
+               * space that would end it.
+               scram.snonce = SDEXT('18', @TRUE, SD_RANDBYTES)
+               if scram.snonce = '' then goto scram.crypto.failed
+
+               scram.nonce = scram.cnonce : scram.snonce
+
+               * KEPT VERBATIM, NOT REBUILT.  server-first goes into AuthMessage
+               * byte for byte, so storing the string that was actually sent
+               * removes any chance of the two differing - which would fail the
+               * signature check with nothing to show for it.
+               scram.sfirst = 'r=' : scram.nonce : ',s=' : scram.salt : ',i=' : scram.iter
+
+               scram.user = username
+               scram.stage = 1
+               response = scram.sfirst
+
+               return
+
+               * ======================================================================
+               * SCRAM-SHA-256 login, client-final.  docs/SCRAM_AUTH.md, phase 3.
+               *
+               * In:   c=biws,r=<combined nonce>,p=<ClientProof>
+               * Out:  v=<ServerSignature>
+               *
+               * THE SERVER NEVER HOLDS ClientKey.  It recovers a candidate from
+               * the proof and checks its SHA-256 against StoredKey, so a stolen
+               * $cred still cannot authenticate as the client - forming a proof
+               * needs the preimage.  It CAN impersonate the server, which is
+               * why the $cred ACL matters exactly as much as it did before.
+
+vb.scram.final:
+               gosub scram.trim.body
+
+               if logged.in then
+                  abort.message = sysmsg(5273) ;* Authentication sequence error
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
+
+               * A client-final with no client-first before it has no nonce to
+               * answer and no AuthMessage to sign.  Refusing here is the point:
+               * running the comparison against empty values is the shape of bug
+               * that turns a signature check into a formality.
+               if scram.stage # 1 then
+                  abort.message = sysmsg(5273) ;* Authentication sequence error
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
+
+               * ONE ATTEMPT PER CLIENT-FIRST.  Cleared before the proof is
+               * examined, so a client cannot sit on one server-first and grind
+               * proofs against it - each guess costs a fresh round trip and the
+               * three second sleep below.
+               scram.stage = 0
+
+               if count(cmnd, ',') # 2 then goto scram.bad.message
+
+               * 'biws' is base64("n,,") - the header the exchange began with,
+               * echoed back so it cannot be stripped in flight.  It is a literal
+               * because the only header accepted at 47 was a literal.
+               scram.attr = field(cmnd, ',', 1)
+               if scram.attr # 'c=biws' then goto scram.bad.message
+
+               scram.attr = field(cmnd, ',', 2)
+               if scram.attr[1,2] # 'r=' then goto scram.bad.message
+
+               * EXACT MATCH ON THE WHOLE COMBINED NONCE.  This is what kills
+               * replay: the server half was generated for this exchange and for
+               * no other, so a client-final captured earlier answers a nonce
+               * that no longer exists.
+               if scram.attr[3,99999999] # scram.nonce then goto scram.bad.message
+
+               scram.cfinal.bare = 'c=biws,' : scram.attr
+
+               scram.attr = field(cmnd, ',', 3)
+               if scram.attr[1,2] # 'p=' then goto scram.bad.message
+               scram.proof = scram.attr[3,99999999]
+               if scram.proof = '' then goto scram.bad.message
+
+               scram.authmsg = scram.cfirst.bare : ',' : scram.sfirst : ',' : scram.cfinal.bare
+
+               * EVERY FAILURE FROM HERE ON IS ONE ANSWER.  The nonce matched,
+               * so the caller is talking about a real exchange; whether the
+               * proof was malformed, the wrong length or simply wrong is its
+               * own business and telling it apart helps nobody but a guesser.
+               scram.csig = SDEXT(scram.storedkey : @FM : scram.authmsg, @TRUE, SD_HMACSHA256)
+               if scram.csig = '' then goto scram.crypto.failed
+
+               scram.ckey = SDEXT(scram.proof : @FM : scram.csig, @TRUE, SD_XORBYTES)
+               if scram.ckey = '' then goto scram.bad.cred
+
+               scram.derived = SDEXT(scram.ckey, @TRUE, SD_SHA256)
+               scram.ckey = ''
+               if scram.derived = '' then goto scram.bad.cred
+
+               * Constant time, as !CRED_VERIFY is.  The primitive was written
+               * for this call as much as for that one.
+               if SDEXT(scram.derived : @FM : scram.storedkey, @TRUE, SD_CTEQUAL) # '1' then
+                  goto scram.bad.cred
+               end
+
+               * AUTHENTICATED.  The reply is a signature only a holder of this
+               * account's ServerKey can compute, and that is the mutual half:
+               * a process that took the port before SD started can collect a
+               * proof it cannot use, but cannot produce this, so the client
+               * detects it.  A client that treats a missing or wrong v= as a
+               * warning throws that away - see docs/SCRAM_AUTH.md, phase 4.
+               scram.ssig = SDEXT(scram.serverkey : @FM : scram.authmsg, @TRUE, SD_HMACSHA256)
+               if scram.ssig = '' then goto scram.crypto.failed
+
+               * THE IDENTITY IS THE NAME THAT WAS PROVEN, UNCONDITIONALLY.
+               * vb.login consulted config('APILOGIN') here and, when it was 0,
+               * discarded the supplied name in favour of kernel(K$USERNAME) -
+               * "the peer authenticated over the tunnel already".  That branch
+               * rested on getpeereid(), which Windows has no equivalent of and
+               * which op_kernel.c records as gone; peer_usr_id is deliberately
+               * left unassigned, PROJECT_STATUS.md section 7 step 6.  There is
+               * no unauthenticated SCRAM in any case - the exchange cannot
+               * start without a user name and cannot finish without proof of
+               * its password - so the config test has nothing left to choose
+               * between.  K$SET.USERNAME is refused to a caller that is not
+               * $internal; this program is.
+               logname = scram.user
+               void kernel(K$SET.USERNAME, scram.user)
+
+               scram.storedkey = ''
+               scram.serverkey = ''
+
+               response = 'v=' : scram.ssig
+               logged.in = @true
+
+               return
+
+               * ----------------------------------------------------------------------
+               * Shared exits for both SCRAM handlers.  Reached by goto from either;
+               * each ends in the return that leaves the handler.
+
+scram.bad.message:
+               abort.message = sysmsg(5272) ;* Invalid authentication message
+               server.error = SV$ON.ERROR
+               goto exit.vb.scram.fail
+
+scram.crypto.failed:
+               * A primitive that fails is a fault in this server, not a wrong
+               * password, and saying so costs nothing: it tells an attacker
+               * only that SDEXT is broken, which no credential depends on.
+               abort.message = sysmsg(5274) ;* Authentication service unavailable
+               server.error = SV$ON.ERROR
+               goto exit.vb.scram.fail
+
+scram.bad.cred:
+               * ONE MESSAGE AND ONE DELAY FOR EVERY CREDENTIAL FAILURE, as
+               * vb.login has.  Unknown account, version 1 record and wrong
+               * password read identically in the reply.
+               *
+               * THEY ARE NOT IDENTICAL IN THE ROUND TRIP, and that is a known
+               * gap rather than an oversight: an account with no usable
+               * credential fails at 47, a wrong password at 48, so the two are
+               * distinguishable by which request was refused.  RFC 5802's
+               * answer is a dummy salt derived from a server-held secret, so an
+               * unknown account receives a plausible server-first and fails at
+               * 48 like everyone else.  That needs a secret this program can
+               * read but not write - docs/SCRAM_AUTH.md, "Still open".
+               abort.message = sysmsg(5017) ;* Invalid username or password
+               server.error = SV$ON.ERROR
+               sleep 3
+               goto exit.vb.scram.fail
+
+exit.vb.scram.fail:
+               * THE CONNECTION GOES, as it does for a failed request 24.  It is
+               * also the only brake besides the sleep: there is still no
+               * lockout, so making each guess pay for a new connection is worth
+               * the little it buys.
+               scram.stage = 0
+               scram.storedkey = ''
+               scram.serverkey = ''
+               done = @true
+
+               return
+
+               * ----------------------------------------------------------------------
+               * Drop trailing NULs from the request body.
+               *
+               * THE MESSAGE NEEDS NO PADDING AND MUST NOT BE GIVEN ANY - the
+               * packet carries its own length.  But vb.login's body pads every
+               * field to a two byte multiple with a NUL, and a client written
+               * from that precedent would put one inside the base64, where it
+               * would surface as "authentication failed" with nothing to show
+               * which byte was at fault.  NUL is not valid anywhere in a SCRAM
+               * message, so dropping it here can only remove padding.
+
+scram.trim.body:
+               loop
+               while cmnd # '' and cmnd[len(cmnd),1] = char(0)
+                  cmnd = cmnd[1,len(cmnd)-1]
+               repeat
 
                return
 
