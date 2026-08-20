@@ -1,4 +1,6 @@
-'' sdclilib.bi - public FreeBASIC API for the sdclilib ScarletDME client library.
+'' sdclilib.bi - public FreeBASIC API for the SD client library.
+''
+'' Modifications Copyright (c) 2026 Donald Montaine
 ''
 '' Distributed under the GNU Lesser General Public License, version 3 or
 '' later (LGPL-3.0-or-later). See LICENSE and GPLv3.txt for the full terms.

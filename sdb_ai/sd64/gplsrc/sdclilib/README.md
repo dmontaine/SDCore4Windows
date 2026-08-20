@@ -1,6 +1,6 @@
 # sdclilib for Windows (MinGW GCC)
 
-This project builds a native Windows DLL for remote access to a ScarletDME
+This project builds a native Windows DLL for remote access to an SD
 server. It combines the complete, platform-neutral client behavior from the
 Linux library with the Winsock transport from the existing Visual Studio port.
 

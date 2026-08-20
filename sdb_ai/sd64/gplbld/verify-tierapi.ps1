@@ -4,7 +4,7 @@
     from reaching one it should not?
 
 .DESCRIPTION
-    THE POINT IS THE CLIENT IT USES.  This drives qm-connect.exe, which links
+    THE POINT IS THE CLIENT IT USES.  This drives sd-connect.exe, which links
     against the 32-bit qmclilib.dll in ..\sdclilib32 - the same file
     mvDeveloper loads.  So "mvDeveloper can connect as a standard user" stops
     being an inference about the protocol and becomes a reading of the actual
@@ -30,8 +30,8 @@
     does: three throwaway accounts, APIPORT in sd.conf if it was not already
     on, and SD restarted.  The restore runs in a finally block.
 
-    THE PASSWORDS GO ON qm-connect's COMMAND LINE, which puts them in the
-    process list.  That is qm-connect's interface, not a choice made here, and
+    THE PASSWORDS GO ON sd-connect's COMMAND LINE, which puts them in the
+    process list.  That is sd-connect's interface, not a choice made here, and
     it is why these are generated single-use passwords on accounts this script
     deletes.  Never point it at a real one.  (SET.PASSWORD itself refuses a
     password on its command line - see verify-setpw.ps1.)
@@ -48,7 +48,7 @@
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
     [int]    $Port = 4243,
-    [string] $QmConnect = 'C:\Users\dmont\Projects\sdclilib32\qm-connect.exe',
+    [string] $SdConnect = 'C:\Users\dmont\Projects\sdclilib32\sd-connect.exe',
     [switch] $Keep
 )
 
@@ -95,14 +95,14 @@ function Get-VocCount($text) {
 function Stop-SD { if ((Get-Service $SvcName).Status -eq 'Running') { & sc.exe stop $SvcName | Out-Null; Start-Sleep -Seconds 3; return $true }; return $false }
 function Start-SD { & sc.exe start $SvcName | Out-Null; Start-Sleep -Seconds 4 }
 
-# Runs qm-connect and answers only "did the login succeed".  Its exit code is
+# Runs sd-connect and answers only "did the login succeed".  Its exit code is
 # 0 for a connect, 1 for a refusal, 2 for bad usage - so 2 is a broken call
 # here and must never be read as a refusal.
 function Test-Connect([string]$user, [string]$pw, [string]$account) {
-    $o = & $QmConnect '127.0.0.1' "$Port" $user $pw $account 2>&1
+    $o = & $SdConnect '127.0.0.1' "$Port" $user $pw $account 2>&1
     $rc = $LASTEXITCODE
-    if ($rc -eq 2) { Write-Host ($o -join "`n"); Fail 'qm-connect rejected its arguments - this is a bug in this script, not a refusal.' }
-    Write-Host ('     qm-connect: ' + (($o | Select-String -Pattern '  ok |  FAILED') -join '; '))
+    if ($rc -eq 2) { Write-Host ($o -join "`n"); Fail 'sd-connect rejected its arguments - this is a bug in this script, not a refusal.' }
+    Write-Host ('     sd-connect: ' + (($o | Select-String -Pattern '  ok |  FAILED') -join '; '))
     return ($rc -eq 0)
 }
 
@@ -117,8 +117,8 @@ Step 0 'Checking the installed tree matches source'
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - run gplbld/cycle.ps1 first.' }
 
-if (-not (Test-Path -LiteralPath $QmConnect)) {
-    Fail ("qm-connect.exe not found at $QmConnect.  Build it: make qm-connect.exe in the sdclilib32 project. " +
+if (-not (Test-Path -LiteralPath $SdConnect)) {
+    Fail ("sd-connect.exe not found at $SdConnect.  Build it: make sd-connect.exe in the sdclilib32 project. " +
           "It is the 32-bit client, which is the whole reason this test uses it.")
 }
 

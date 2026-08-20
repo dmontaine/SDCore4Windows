@@ -3,7 +3,7 @@
 ## 1. Overview
 
 `sdclilib.dll` is a 64-bit native Windows C library for accessing a
-ScarletDME database server over TCP. It provides the same remote client API as
+SD database server over TCP. It provides the same remote client API as
 the Linux SD client library, including file operations, record locking,
 select lists, command execution, catalogued subroutine calls, dynamic-array
 operations, and multiple sessions.
