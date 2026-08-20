@@ -14,8 +14,33 @@ socket-or-pipe transport layer, and SCRAM-SHA-256 — while upstream stood still
 | | Holds | Built product |
 | --- | --- | --- |
 | **`sd64/gplsrc/sdclilib`** (here) | the source | `sdclilib.dll`, 64-bit |
-| `Projects/winsdclilib` | a mirror of the source | `sdclilib.dll`, 64-bit |
-| `Projects/sdclilib32` | no source at all | `qmclilib.dll`, **32-bit** |
+| `Projects/winsdclilib` | a mirror of the source | `sdclilib.dll` **and `sdclient.dll`**, 64-bit |
+| `Projects/sdclilib32` | no source at all | `qmclilib.dll` **and `qmclient.dll`**, **32-bit** |
+
+**THE SECOND NAME IN EACH IS THE SAME LIBRARY, NOT A VARIANT — 20 Aug 2026.**
+Owner's decision: each client project builds its DLL twice, under the name it
+has always produced and under the name its installer ships. `sdclilib.dll` and
+`qmclilib.dll` are what existing applications ask for and neither moves;
+`sdclient.dll` and `qmclient.dll` are for new work.
+
+**They are second LINKS, not copies of the file**, because an import library
+records the name of the DLL its symbols come from — a renamed copy hands out an
+implib pointing back at the original. In the 32-bit project the `.def` carries
+a `LIBRARY` statement that sets that name too, so `qmclient.def` is generated
+from `qmclilib.def` by rewriting one line rather than being a second copy of a
+99-name export list. Both projects' `make check` now run a test through each
+import library, which is the only thing that catches either mistake.
+
+**THIS TREE STILL BUILDS ONE DLL AND THAT IS DELIBERATE.** `make sd` here
+produces `sdclilib.dll` for the server's own use — `make check-local` and
+anything beside `sd.exe`. The second name exists for distribution, and
+distribution is what the two client projects are for.
+
+**AND THEY NOW HAVE INSTALLERS**: `winsdclilib/sdclient.iss` and
+`sdclilib32/qmclient.iss`, both packaging an already-built tree exactly as
+`gplbld/sd.iss` does. Until 20 Aug 2026 the only way to obtain the client
+library was to find it inside an installed SD server, which is the wrong shape
+for a client — it exists to run on a machine that is not the server.
 
 **Edits are made here.** `winsdclilib` takes them; it is a mirror, not a
 fork, and nothing should be changed there that is not changed here first.
