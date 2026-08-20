@@ -1,17 +1,23 @@
-# SCRAM work — handoff, 19 Aug 2026
+# SCRAM work — handoff, 20 Aug 2026
 
-State at the end of the first session. Design and rationale are in
-[SCRAM_AUTH.md](SCRAM_AUTH.md); this is the operational half — what is built,
-what is deployed, and what to do next.
+Design and rationale are in [SCRAM_AUTH.md](SCRAM_AUTH.md); this is the
+operational half — what is built, what is deployed, and what to do next.
 
 ## Where it stands
 
-**Phases 1 to 3 are complete and verified. Phases 4 to 6 are not started.**
+**PHASES 1 TO 5 ARE COMPLETE AND VERIFIED. PHASE 6 IS ALL BUT DONE.**
 
-Nothing on the existing login path has changed. Request 24 still reaches
-`vb.login`, which still calls `!CRED_VERIFY` with the same signature — and
-that is a measured check, not an assumption. The work so far is entirely
-additive, and phase 5 remains the only point of no return.
+**The cleartext login is gone.** Request 24 reaches a `vb.login` that refuses
+with message 5275 and drops the connection; `!CRED_VERIFY` stays for
+`SET_ACC_PASSWORD` and is no longer on any login path. The point of no return
+has been passed, on purpose, once.
+
+**THREE CLIENTS WERE MEASURED AGAINST THE PHASE 5 SERVER, not one** — the
+.NET client inside `verify-scramlogin.ps1`, `sdclilib.dll` through
+`remote_connect_test`, and the `!sdclient` BASIC class through `TESTSDCLI`.
+Three independent implementations agreeing with one server is what makes
+"SCRAM works" a measurement rather than one implementation agreeing with
+itself.
 
 | Phase | | Verified by |
 | --- | --- | --- |
@@ -19,17 +25,62 @@ additive, and phase 5 remains the only point of no return.
 | 2 | `$CRED` version 2, `!CRED_SET`, `!CRED_VERIFY`, `SET.PASSWORD` | `sdsys/bp/TESTCRED` |
 | 3 | Server exchange, request types 47 and 48 in `APISRVR` | `gplbld/verify-scramlogin.ps1` — **24/24**, 21:03:41 install, 19 Aug 2026 |
 | 4 | Client exchange in `sdclilib.c` | `gplbld/verify-scramclient.c` **27/27**, 64- and 32-bit; `gplbld/verify-apiport.ps1` end to end, 21:43:02 install |
-| 5 | Retire `SrvrLogin` | not started |
-| 6 | Rebuild both DLLs, re-set passwords, test against mvDeveloper | not started |
+| 5 | Retire `SrvrLogin`; SCRAM in the `!sdclient` class | `gplbld/verify-scramlogin.ps1` — **40/40**, 07:52:25 install, 20 Aug 2026 |
+| 6 | Rebuild both DLLs, re-set passwords, test against mvDeveloper | mvDeveloper passed 19 Aug; the DLLs and the re-set are what remain |
+
+## Phase 5, what was done and what it cost
+
+**`vb.login` REFUSES RATHER THAN BEING DELETED, and 24 stays in the
+pre-authentication gate.** Dropping 24 from that gate would answer an old
+client with 5270 *"Not logged in"*, which is true and useless. It gets 5275
+instead — *"Cleartext login is no longer supported; this server requires SCRAM
+authentication"* — and the verifier asserts that text, not merely a non-zero
+status.
+
+**THE THING THE DESIGN DOCUMENTS MISSED: `sdsys/GPL.BP/SDCLIENT`.** The
+`!sdclient` class module is the BASIC-callable half of the API — what
+`sdclilib.dll` is to an application outside SD, this is to a program inside
+it — and it sent request 24 at line 282. It is catalogued in `gcat` on every
+install, has no caller anywhere in this tree and no test, so retiring 24 would
+have broken it silently. Owner's decision, 20 Aug 2026: give it SCRAM.
+
+**It is NOT the removed qmnet.** That distinction is what makes the decision
+obvious rather than arguable: qmnet was `net_open()` in C, port 4245,
+`server;file` VOC references, credentials in `sd.conf` under a substitution
+cipher, removed 18 Aug (`op_dio1.c:627`). `!sdclient` opens **4243**, the API
+port, and the 18 Aug note keeps qmclient explicitly.
+
+**THE CLASS IS `$internal` NOW, and that is a privilege on the class and not
+on its callers.** SCRAM needs `SDEXT`, which BCOMP admits only to a program
+compiled `$internal` (`BCOMP:3777`, `int.intrinsics`). `TESTSDCLI` is
+deliberately **not** `$internal` and drives the class anyway, which is what
+demonstrates the flag stays inside. The class calls no `KERNEL` function and
+runs nothing locally — `execute()` and `call()` send their argument to the
+remote server — so there is no method through which a caller could borrow it.
+Recompiling `SDCLIENT` now needs `sd -internal` from an elevated window.
+
+**THE TWO MESSAGE GAPS THIS FILE RECORDED ARE CLOSED.** `verify-scramlogin.ps1`
+now asserts the *text* of every refusal against the installed `messages`
+record, so a refusal that fires on the wrong branch fails instead of passing:
+5017 for a wrong password and for an unknown account, 5272 for replay, a
+tampered nonce, `y,,` and `m=`, 5273 for 48-without-47, 5275 for request 24.
+
+**AND 5274 IS EXERCISED, by breaking the server on purpose.** `$cred` is
+renamed for one client-first and renamed back in a `finally`, with a second
+attempt in the outer `finally` — a run that ended with the credential store
+renamed would refuse every login on the machine. It is the only check here
+that needs the server to be faulty, and it is what distinguishes "the
+credential store will not open" from "your password is wrong".
 
 ## Phase 3, and how to re-run it
 
-**`verify-scramlogin.ps1` is 24/24 on the 21:03:41 install of 19 Aug 2026.**
-It has two modes, and the offline one is the first thing to reach for.
+**`verify-scramlogin.ps1` is 40/40 on the 07:52:25 install of 20 Aug 2026**,
+and it covers phases 3 and 5 together. It has two modes, and the offline one is
+the first thing to reach for.
 
 ```powershell
 gplbld\verify-scramlogin.ps1 -SelfTest             UNELEVATED, no server, no install
-gplbld\verify-scramlogin.ps1 -Prefix sdscram2      ELEVATED, fresh prefix each run
+gplbld\verify-scramlogin.ps1 -Prefix sdscram3      ELEVATED, fresh prefix each run
 ```
 
 `-SelfTest` checks the script's own client-side derivation against the RFC 7677
@@ -37,7 +88,8 @@ vectors — the same `New-ScramProof` the live checks use, not a copy. Run it
 first whenever the exchange fails and it is not obvious which side is wrong: if
 it passes, the instrument is sound and the disagreement is SD's.
 
-**The live run needs a `-Prefix` nobody has used**, `sdscram1` is spent, and it
+**The live run needs a `-Prefix` nobody has used**, `sdscram1` and `sdscram2`
+are spent, and it
 changes the installed system and puts it back in a `finally` — throwaway
 account, `APIPORT` in `sd.conf`, two service restarts. It leaves the
 `ACCOUNTS` and `$CRED` records for `DELETE.ACCOUNT` on purpose, so a
@@ -49,10 +101,9 @@ means the AuthMessage the two sides assembled differ, and the string to
 suspect is `server-first` — `scram.sfirst` is stored verbatim on purpose, so a
 mismatch means the client rebuilt it rather than echoing it.
 
-**Two gaps in the suite, neither needing a cycle.** The `5272` refusals assert
-only that `server.error` was non-zero and never check the message text; `5274`
-is unexercised, being the server-fault path. `5017` and `5273` were both
-observed reaching the client.
+**Both gaps this section recorded are closed, 20 Aug 2026.** Every refusal now
+asserts its message *text* against the installed `messages` record, and `5274`
+is exercised by renaming `$cred` for one client-first. See the top of this file.
 
 Both test programs use the RFC 7677 section 3 vectors, which were recomputed
 independently before being written down, so a failure is the implementation and
@@ -266,20 +317,35 @@ restart was needed. **`QMConnect` returning a generic "connection error" is
 what made this expensive**; the packet log is the fix for that, and it is now
 one environment variable away.
 
-## Phase 5, the next task
+## Phase 5 as it was planned, and where the plan was wrong
 
-Retire `SrvrLogin`. **This is the point of no return for old clients**, and it
-is deliberately concentrated here so it happens once, knowingly.
+Kept because four of its five bullets held and the fifth is the finding.
 
-- `APISRVR`: `vb.login` goes, and request 24 refuses rather than falling
-  through. `vb.local.login` (25) stays — `SDConnectLocal` sends no password.
-- The `deffun valid_os_name` was already moved to the top of the program for
-  this, so deleting `vb.login` cannot take it with it.
-- `verify-apiport.ps1`'s packet check asserts request 24 is never sent by this
-  client, so it should keep passing across the change.
-- `verify-scramlogin.ps1`'s "request 24 still accepted" check is the one that
-  must be **inverted** at that point, not deleted: it becomes the proof the
-  old path is gone.
+- `APISRVR`: `vb.login` refuses; **it did not "go"**, and 24 stays in the
+  pre-authentication gate — see the top of this file for why the reply is 5275
+  and not 5270. `vb.local.login` (25) stays untouched: `SDConnectLocal` sends
+  no password. ✓
+- The `deffun valid_os_name` had already been moved to the top of the program
+  for this. ✓
+- `verify-apiport.ps1` kept passing across the change, exactly as predicted —
+  `sdapi3`, 07:52:25 install, all checks. Its comment now says the check
+  survives as an assertion about the *client*, since the silent-fallback case
+  it was written for cannot happen any more. ✓
+- `verify-scramlogin.ps1`'s "request 24 still accepted" was **inverted, not
+  deleted**, and now asserts the 5275 text as well. ✓
+- **THE PLAN LISTED ONE CLIENT AND THERE WERE TWO.** `!sdclient` is not
+  mentioned anywhere in these documents and would have broken silently. That
+  is the lesson worth carrying: *grep the tree for the request number, not for
+  the client you have in mind*. `grep -rn "SrvrLogin"` finds all four places —
+  `sdclilib.c`, `SDCLIENT`, `verify-scramlogin.ps1`, and `gplsrc/sdclient.c`.
+
+**`gplsrc/sdclient.c` IS THE FOURTH AND IT IS DEAD.** It still builds a
+cleartext request 24 at line 609. `Makefile:66` removes it from `SRCS`
+(`$(TEMPSRCS:sdclient.c=)`), it is not in `gpl.src`, and no target depends on
+`sdclient.o` — the rule at `Makefile:214` is an orphan. So nothing links it and
+phase 5 does not break it. **Left alone deliberately**: deleting source is its
+own decision and was not in scope. If it is ever revived it needs the exchange
+from `sdclilib.c`.
 
 ## Which login the client speaks is measured, not argued
 

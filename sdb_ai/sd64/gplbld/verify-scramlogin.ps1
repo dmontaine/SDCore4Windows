@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Speak the SCRAM exchange at the API port directly and check what the
-    server does with it.  docs/SCRAM_AUTH.md phase 3.
+    server does with it.  docs/SCRAM_AUTH.md phases 3 and 5.
 
 .DESCRIPTION
     ONE ELEVATED COMMAND for request types 47 and 48.  It is the only thing
@@ -28,7 +28,12 @@
       - two exchanges for one account get different server nonces
       - a captured client-final replayed against a fresh exchange is refused
       - a client-final with no client-first before it is refused
-      - request 24 still works, because phase 3 is meant to be additive
+      - every refusal carries the message the handler meant to send, not
+        merely a non-zero status
+      - request 24 is REFUSED, and says why.  This check was "request 24 is
+        still accepted" until phase 5 retired the cleartext login; it was
+        inverted rather than deleted, so it is now the proof the old path is
+        gone rather than the proof it survived.
 
 .PARAMETER Prefix
     Name for the throwaway Windows and SD account.  Use one nobody has used -
@@ -100,6 +105,24 @@ function Fail($msg) {
 }
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
+
+# The text the server will have sent for sysmsg(N), read from the INSTALLED
+# tree.
+#
+# WHY THE MESSAGE AND NOT JUST "SERVER.ERROR WAS NON-ZERO".  A refusal that
+# lands on the wrong branch refuses just as firmly and reads identically from
+# outside, so "it said no" cannot tell a nonce mismatch from a bad password
+# from an unopenable $cred.  Naming the message is what makes each refusal a
+# statement about WHICH check fired.
+#
+# Reading the installed file rather than hard-coding the words is deliberate:
+# assert-current has already established the install matches source, so this
+# is source's text, and a handler that quoted the wrong number still fails.
+function Get-SysMsg([int]$n) {
+    $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
+    if (-not (Test-Path -LiteralPath $f)) { return "<message $n is not installed>" }
+    return ((Get-Content -LiteralPath $f -Raw)).Trim()
+}
 
 # Drives an SD session from SDSYS.  Same shape as verify-apiport.ps1: a blank
 # first line absorbs the BOM, TERM stops it paginating, OFF ends it.
@@ -411,6 +434,13 @@ if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $
 $restoreNeeded = $false
 $pw = ''
 
+# $cred is moved aside for one check and put straight back; these two let the
+# outer finally have a second go if the inner one could not.  A run that ended
+# with the credential store renamed would refuse every login on the machine.
+$credDir   = Join-Path $env:ProgramData 'SD\sdsys\$cred'
+$credAside = $credDir + '.moved-for-5274'
+$movedCred = $false
+
 try {
     # -----------------------------------------------------------------------
     Step 1 "Creating the throwaway account $Prefix"
@@ -562,7 +592,7 @@ try {
         $f = Invoke-ScramFirst $c $Prefix
         $r = Invoke-ScramFinal $c $f ($pw + 'x')
         Note 'wrong password refused'      $true ([int]$r.Response.ServerError -ne 0)
-        Write-Host ('   server said: ' + $r.Response.Text)
+        Note '  and it is 5017'            (Get-SysMsg 5017) $r.Response.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # Replay.  A client-final captured from the exchange that SUCCEEDED, sent
@@ -574,6 +604,10 @@ try {
         $null = Invoke-ScramFirst $c $Prefix
         $r = Invoke-ScramFinal $c $null $pw '' '' $capturedFinal
         Note 'replayed client-final refused' $true ([int]$r.Response.ServerError -ne 0)
+        # 5272, not 5017: the proof is never reached.  A stale nonce is a bad
+        # MESSAGE, and if this ever reads 5017 the server has run a signature
+        # check against an exchange that had already been closed.
+        Note '  and it is 5272'            (Get-SysMsg 5272) $r.Response.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # A client-final answering a nonce nobody issued.
@@ -583,6 +617,7 @@ try {
         $f = Invoke-ScramFirst $c $Prefix
         $r = Invoke-ScramFinal $c $f $pw (New-Nonce)
         Note 'tampered nonce refused'      $true ([int]$r.Response.ServerError -ne 0)
+        Note '  and it is 5272'            (Get-SysMsg 5272) $r.Response.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # 48 with no 47 before it.  This is the one that would pass silently if the
@@ -592,7 +627,8 @@ try {
         $c = New-SdConnection $Port
         $r = Invoke-ScramFinal $c $null $pw '' '' 'c=biws,r=nonsense,p=AAAA'
         Note 'client-final without client-first refused' $true ([int]$r.Response.ServerError -ne 0)
-        Write-Host ('   server said: ' + $r.Response.Text)
+        # 5273 and not 5272: the sequence is what is wrong, not the message.
+        Note '  and it is 5273'            (Get-SysMsg 5273) $r.Response.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # An account that does not exist.
@@ -601,6 +637,10 @@ try {
         $c = New-SdConnection $Port
         $f = Invoke-ScramFirst $c ($Prefix + 'nosuch')
         Note 'unknown account refused'     $true ([int]$f.Response.ServerError -ne 0)
+        # THE SAME WORDS AS A WRONG PASSWORD, which is the point - the reply
+        # must not distinguish an account that exists from one that does not.
+        # The round trip still does; docs/SCRAM_AUTH.md, "Still open".
+        Note '  and it is 5017, as a wrong password is' (Get-SysMsg 5017) $f.Response.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # The downgrade signal.  'y,,' says "the server does not support channel
@@ -611,6 +651,7 @@ try {
         $c = New-SdConnection $Port
         $f = Invoke-ScramFirst $c $Prefix 'y,,'
         Note 'y,, downgrade refused'       $true ([int]$f.Response.ServerError -ne 0)
+        Note '  and it is 5272'            (Get-SysMsg 5272) $f.Response.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # A mandatory extension the server does not understand.  RFC 5802 requires
@@ -622,18 +663,70 @@ try {
             'n,,m=whatever,n=' + $Prefix + ',r=' + (New-Nonce)))
         $r = Receive-SdPacket $c
         Note 'm= mandatory extension refused' $true ([int]$r.ServerError -ne 0)
+        Note '  and it is 5272'            (Get-SysMsg 5272) $r.Text.Trim()
     } finally { Close-SdConnection $c }
 
     # -----------------------------------------------------------------------
-    Step 8 'Phase 3 is additive: request 24 still works'
+    Step '7b' 'The server-fault path: an unopenable $cred is 5274, not 5017'
+
+    # THE ONE REFUSAL THAT IS NOT A SECURITY ANSWER, and the last one in the
+    # handler that nothing had ever exercised.  A primitive that fails or a
+    # credential store that will not open is a fault in this server; saying so
+    # tells an attacker only that SDEXT or the file is broken, which no
+    # credential depends on.  Reporting it as "invalid username or password"
+    # instead would send an administrator hunting a password that is correct.
+    #
+    # IT IS MEASURED BY BREAKING THE SERVER ON PURPOSE, briefly.  $cred is
+    # renamed, one client-first is sent, and it is renamed back in a finally -
+    # and again in the outer finally if that failed.  APISRVR opens $cred per
+    # request and closes it again, and each connection is its own process, so
+    # nothing holds a handle across the rename.
+    try {
+        Rename-Item -LiteralPath $credDir -NewName (Split-Path -Leaf $credAside) -ErrorAction Stop
+        $movedCred = $true
+    } catch {
+        Write-Host ('   could not move $cred aside: ' + $_.Exception.Message) -ForegroundColor Yellow
+        Write-Host '   5274 stays unexercised for this run - say so rather than assuming it.' -ForegroundColor Yellow
+    }
+
+    if ($movedCred) {
+        $c = $null
+        try {
+            $c = New-SdConnection $Port
+            $f = Invoke-ScramFirst $c $Prefix
+            Note 'unopenable $cred refused'  $true ([int]$f.Response.ServerError -ne 0)
+            Note '  and it is 5274, not 5017' (Get-SysMsg 5274) $f.Response.Text.Trim()
+        } finally {
+            Close-SdConnection $c
+            try {
+                Rename-Item -LiteralPath $credAside -NewName (Split-Path -Leaf $credDir) -ErrorAction Stop
+                $movedCred = $false
+                Write-Host '   $cred put back'
+            } catch {
+                Write-Host ('   COULD NOT PUT $cred BACK: ' + $_.Exception.Message) -ForegroundColor Red
+            }
+        }
+    }
+
+    # -----------------------------------------------------------------------
+    Step 8 'Phase 5: request 24 is retired, and refuses'
 
     $c3 = $null
     try {
         $c3 = New-SdConnection $Port
+        # THE CREDENTIALS ARE CORRECT.  That is what makes this a test of the
+        # retirement rather than of the password: the old path is refused for
+        # a login that would have succeeded before phase 5.
         Send-SdPacket $c3 $SrvrLogin (New-SrvrLoginBody $Prefix $pw)
         $r = Receive-SdPacket $c3
-        Note 'request 24 still accepted'   0     ([int]$r.ServerError)
-        if ($r.ServerError -ne 0) { Write-Host ('   server said: ' + $r.Text) }
+        Note 'request 24 refused'          $true ([int]$r.ServerError -ne 0)
+
+        # AND IT IS 5275, NOT 5017 OR 5270.  A retired request that answered
+        # "invalid username or password" would send everyone looking for a
+        # credential fault; "not logged in" would read as a client bug.  This
+        # is the check that keeps the reply diagnostic, and it is also what
+        # distinguishes a handler that refuses from one that was never reached.
+        Note '  and it is 5275'            (Get-SysMsg 5275) $r.Text.Trim()
 
         # -------------------------------------------------------------------
         Step 9 'The control for the wire check'
@@ -641,10 +734,68 @@ try {
         # WITHOUT THIS, "the password is not in the bytes" MEANS NOTHING - a
         # search that can never find anything passes just as well.  Request 24
         # carries the password in clear, and the same function finds it.
+        #
+        # STILL VALID AFTER PHASE 5, and worth being clear why: Test-SentContains
+        # reads what THIS SCRIPT sent, not what the server accepted.  The packet
+        # above still puts the password on the wire; the server now throws it
+        # away instead of reading it.  So the control measures the detector, as
+        # it always did, and does not depend on request 24 working.
         Note 'same search finds the password in a request 24 login' $true (Test-SentContains $c3 $pw)
     } finally { Close-SdConnection $c3 }
+
+    # -----------------------------------------------------------------------
+    Step '9b' 'The OTHER client: the !sdclient class module'
+
+    # SDCLIENT IS THE THIRD THING THAT SPEAKS THIS PROTOCOL, and it is the one
+    # nothing had ever tested.  sdclilib.dll is the client for applications
+    # outside SD; !sdclient is the client for BASIC programs inside it, and it
+    # sent the cleartext request 24 until phase 5 gave it a SCRAM exchange.
+    # Retiring 24 without changing it would have broken it silently - it has no
+    # test of its own and no caller in this tree to notice.
+    #
+    # EVERYTHING ABOVE SPEAKS SCRAM FROM .NET.  This step is the only one that
+    # exercises the BASIC implementation, and it runs against the same server,
+    # which is what stops the two agreeing with each other and both being wrong.
+    #
+    # THE PASSWORD GOES ON STDIN, NEVER ON THE COMMAND LINE - sdsys/bp/TESTSDCLI
+    # reads it with echo off.  A command line reaches the process list.
+    $cliOut = Invoke-SD @(
+        'BASIC BP TESTSDCLI',
+        'RUN BP TESTSDCLI',
+        $upper,
+        $pw,
+        "$Port")
+
+    $compiled = ($cliOut -notmatch 'error\(s\)' ) -or ($cliOut -match '0 error\(s\)')
+    Note 'TESTSDCLI compiles'          $true $compiled
+    # THE ERRGEN TRAP.  A $define that does not resolve becomes an ordinary
+    # unassigned variable, so the call compiles, the compiler says 0 errors
+    # and the program misbehaves at run time.  docs/SCRAM_HANDOFF.md.
+    Note 'no unassigned variables'     $false ($cliOut -match 'is not assigned a value')
+    if (-not $compiled) { Write-Host $cliOut }
+
+    Note '!sdclient connected over SCRAM' $true ($cliOut -match 'PASS  connect')
+    Note '!sdclient ran a command'        $true ($cliOut -match 'PASS  execute')
+    # The control inside TESTSDCLI: without it, "connect worked" says nothing
+    # about whether the proof was checked.
+    Note '!sdclient refused a wrong password' $true ($cliOut -match 'PASS  wrong password refused')
+    Note 'TESTSDCLI overall'              $true ($cliOut -match 'TESTSDCLI PASSED')
+    if ($cliOut -notmatch 'TESTSDCLI PASSED') { Write-Host $cliOut }
 }
 finally {
+    # BEFORE ANYTHING ELSE, AND REGARDLESS OF -Keep.  A $cred left renamed
+    # refuses every login on the machine, so this runs even on the paths that
+    # deliberately leave the rest of the system alone.
+    if ($movedCred -and (Test-Path -LiteralPath $credAside)) {
+        try {
+            Rename-Item -LiteralPath $credAside -NewName (Split-Path -Leaf $credDir) -ErrorAction Stop
+            Write-Host '   $cred put back (outer)'
+        } catch {
+            Write-Host ('   $cred IS STILL RENAMED - put it back by hand: ' +
+                        $credAside + ' -> ' + $credDir) -ForegroundColor Red
+        }
+    }
+
     if (-not $Keep) {
         Step 10 'Putting the system back'
 

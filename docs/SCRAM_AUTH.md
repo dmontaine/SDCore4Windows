@@ -12,8 +12,8 @@ end to end by `gplbld/verify-apiport.ps1` on the 21:43:02 install of
 19 Aug 2026 — right password admitted, wrong password refused, `SDSYS`
 refused. Phases 5 and 6 are not started.
 
-**`SrvrLogin` is no longer sent by this client.** The server still serves
-request 24 for anything else that speaks it; retiring that is phase 5, and it
+**`SrvrLogin` is no longer sent by this client, and no longer served.**
+Phase 5 retired request 24 on 20 Aug 2026; what follows described the plan and
 remains the only point of no return.
 
 **The exchange below is no longer a specification; it is what runs.** The
@@ -154,7 +154,8 @@ is two HMACs and a hash.
 | `!CRED_VERIFY` | rewritten for v2 | **Corrected 19 Aug 2026.** This scope first said delete it, because SCRAM has no "verify this password" step and its only caller was said to be the login path. `SET_ACC_PASSWORD` calls it too — "changing your own password requires the current one" — and there the password genuinely is in hand, locally, in an elevated session. It keeps its signature and its callers; only what it reads changes, and the comparison moves to constant time. |
 | `APISRVR` `vb.login` | replace with two handlers | Session state must hold the nonces, salt and `AuthMessage` between requests 47 and 48, and must abort if 48 arrives without 47. |
 | Crypto helpers | new `SDEXT` keys 104–109 | SHA-256, HMAC-SHA256, PBKDF2, random bytes, XOR, constant-time compare — alongside the existing `SD_SALT` 100 and `SD_KEYFROMPW` 101. |
-| `SrvrLogin` 24 | **breaks** — refuse | No fallback. The server rejects the old request rather than silently accepting a weaker path. |
+| `SrvrLogin` 24 | **breaks** — refuse | **Done, 20 Aug 2026.** No fallback. `vb.login` answers message 5275 and drops the connection. It stays in the pre-authentication gate so the reply can name the reason; dropping it there would answer 5270 "Not logged in" instead. |
+| `SDCLIENT` class | **rewritten** | Not foreseen by this document. `!sdclient` is the BASIC-callable client and sent request 24, so phase 5 would have broken it silently — it is catalogued on every install, has no caller in this tree and had no test. It speaks SCRAM from 20 Aug 2026, is `$internal` because the derivation needs `SDEXT`, and is exercised by `sdsys/bp/TESTSDCLI`. |
 | Group check (§7 step 6c) | unchanged | `ACC$GROUP` membership still gates account entry, reading the identity SCRAM established. |
 
 ### Keep binary out of BASIC strings
@@ -224,8 +225,11 @@ the check that gets softened during debugging and never hardened again.
 4. Client exchange in `sdclilib.c`, behind the unchanged entry points. Both DLLs
    build from this one source.
 5. Retire `SrvrLogin`. **This is the point of no return for old clients.**
+   **Done 20 Aug 2026**, together with the `!sdclient` class the plan had
+   overlooked.
 6. Rebuild the 64-bit and 32-bit DLLs, re-run `SET.PASSWORD` for every account,
-   re-test against mvDeveloper.
+   re-test against mvDeveloper. mvDeveloper passed on 19 Aug, ahead of the
+   phase; what remains is the rebuild and the re-set.
 
 Steps 1 to 3 are additive and reversible — the existing login keeps working
 throughout. The break is deliberately concentrated in step 5, so it happens

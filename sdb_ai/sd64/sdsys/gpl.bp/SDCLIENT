@@ -18,6 +18,10 @@
 *
 * 
 * START-HISTORY:
+* 20 Aug 26 Windows port - connect() speaks SCRAM-SHA-256 (requests 47 and 48)
+*           instead of the cleartext SrvrLogin, which APISRVR retired in the
+*           same change.  docs/SCRAM_AUTH.md phase 5.  The class is $internal
+*           now, because the derivation needs SDEXT.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -63,6 +67,25 @@
 *
 * START-CODE
 
+* 20 Aug 26 Windows port - $INTERNAL, AND IT IS NOT A PRIVILEGE HANDED TO THE
+*   CALLER.  SCRAM's client half needs PBKDF2, HMAC-SHA256, SHA-256, XOR and a
+*   nonce, and every one of those is an SDEXT key - which BCOMP admits only to
+*   a program compiled $internal (BCOMP's int.intrinsics list).  So the class
+*   has to carry the flag or it cannot log in at all.
+*
+*   WHAT THAT DOES AND DOES NOT GRANT.  HDR_INTERNAL is a property of THIS
+*   object code, not of whoever calls it: an ordinary program that does
+*   obj->connect(...) gains nothing it did not have.  The class calls no
+*   KERNEL function, sets no administrator flag and executes nothing locally -
+*   execute() and call() send their argument to the REMOTE server down the
+*   socket.  The one thing that would make this dangerous is a method that ran
+*   caller-supplied code in this process, and there is none.
+*
+*   IT ALSO CHANGES HOW THIS FILE IS COMPILED: $internal is admitted only to a
+*   session that is both internal mode and administrator (BCOMP, 13 Aug 26),
+*   so recompiling SDCLIENT now takes "sd -internal" from an elevated window,
+*   as APISRVR and the credential subroutines already did.
+$internal
 class sdclient
 $catalogue !sdclient
 
@@ -97,7 +120,7 @@ $define SrvrCall         20    ;* Call catalogued subroutine
 $define SrvrExecute      21    ;* Execute command
 $define SrvrRespond      22    ;* Respond to request for input
 $define SrvrEndCommand   23    ;* Abort command
-$define SrvrLogin        24    ;* Network login
+$define SrvrLogin        24    ;* Network login - RETIRED, refused by APISRVR
 $define SrvrLocalLogin   25    ;* SDLocal login
 $define SrvrSelectIndex  26    ;* Select index
 $define SrvrEnterPackage 27    ;* Enter a licensed package
@@ -120,6 +143,8 @@ $define SrvrSetRight     43    ;* Align index position to right
 $define SrvrSelectLeft   44    ;* Move index position to left
 $define SrvrSelectRight  45    ;* Move index position to right
 $define SrvrMarkMapping  46    ;* Enable/disable mark mapping
+$define SrvrScramFirst   47    ;* SCRAM client-first
+$define SrvrScramFinal   48    ;* SCRAM client-final
 
 $define SV$OK             0    ;* Action successful
 $define SV$ON.ERROR       1    ;* Action took ON ERROR clause
@@ -135,6 +160,7 @@ deffun get.response() local
 deffun write.packet(pkt.type, pkt) local
 deffun read.packet() local
 deffun context.error(expected) local
+deffun scram.login(username, password) local
 
 private context,        ;* State
         skt,            ;* Socket for connection
@@ -256,18 +282,6 @@ public function connect(host, (port), username, password, account)
    end
    * --------------------
 
-   * Create outgoing packet
-
-   * User name
-   pkt = iconv(len(username), 'ISL')
-   pkt := username
-   if rem(len(username), 2) then pkt := char(0)
-
-   * Password
-   pkt := iconv(len(password), 'ISL')
-   pkt := password
-   if rem(len(password), 2) then pkt := char(0)
-
    * Open connection to server
    if port < 0 then port = 4243
    skt = open.socket(host, port, SKT$BLOCKING)
@@ -278,15 +292,14 @@ public function connect(host, (port), username, password, account)
       until read.socket(skt, 1, SKT$BLOCKING, 0) = char(6)
    repeat
 
-   * Send authentication packet
-   pkt.type = SrvrLogin
-   if not(message.pair(pkt.type, pkt)) then
-      close.socket skt
-      return @false
-   end
-
-   if server.error # SV$OK then
-      if server.error = SV$ON.ERROR then error = in.pkt
+* 20 Aug 26 Windows port - SCRAM-SHA-256, NOT SrvrLogin.  This used to build a
+*   packet holding the user name and the password, each length-prefixed and
+*   padded to a two byte multiple, and send it as request 24 - so the password
+*   crossed the wire in clear on every connect().  APISRVR retired request 24
+*   in the same change and answers it with message 5275, so keeping the old
+*   packet here would not have been a weaker login, it would have been no
+*   login.  docs/SCRAM_AUTH.md phase 5.
+   if not(scram.login(username, password)) then
       close.socket skt
       return @false
    end
@@ -752,6 +765,156 @@ local function read.record(mode, fno, id, err)
 
 exit.read:
    return rec
+end
+
+* ======================================================================
+* SCRAM-SHA-256 login, the client half.  docs/SCRAM_AUTH.md phase 5.
+*
+* Out:  47   n,,n=<user>,r=<client nonce>
+* In:        r=<combined nonce>,s=<salt>,i=<iterations>
+* Out:  48   c=biws,r=<combined nonce>,p=<ClientProof>
+* In:        v=<ServerSignature>
+*
+* THE PASSWORD NEVER LEAVES THIS FUNCTION.  It is spent on PBKDF2 and what
+* goes on the wire is a proof, so a capture of both packets yields an offline
+* guess bounded by the iteration count and nothing else.
+*
+* THE 600,000 PBKDF2 ITERATIONS ARE THE CLIENT'S COST, once per connect().
+* The server holds StoredKey and spends two HMACs and a hash; that asymmetry
+* is the design, not an accident of it.
+*
+* IT MIRRORS scram_login() IN gplsrc/sdclilib/sdclilib.c, deliberately and
+* without sharing code - one is C in a DLL, the other BASIC in the server's
+* own catalogue.  Both are checked against the same server, which is what
+* keeps them honest; RFC 7677's vectors prove the primitives underneath.
+
+local function scram.login(username, password)
+   cnonce = SDEXT('18', @TRUE, SD_RANDBYTES)
+   if cnonce = '' then
+      error = 'Unable to generate a client nonce'
+      return @false
+   end
+
+*  'n,,' is "no channel binding", and it is honest - there is no TLS channel
+*  here to bind to.  The server refuses 'y,,' and 'p=' outright, so there is
+*  nothing to negotiate and the header is a literal on both sides.
+   cfirst.bare = 'n=' : username : ',r=' : cnonce
+
+   if not(message.pair(SrvrScramFirst, 'n,,' : cfirst.bare)) then return @false
+   if server.error # SV$OK then
+      if server.error = SV$ON.ERROR then error = in.pkt
+      else error = 'Server refused the authentication request'
+      return @false
+   end
+
+*  KEPT VERBATIM FOR AuthMessage, never rebuilt from the parsed parts.  The
+*  server stores the string it sent for the same reason: two sides that
+*  assemble AuthMessage differently fail the signature check with nothing to
+*  show for it.
+   sfirst = in.pkt
+
+   if count(sfirst, ',') # 2 then
+      error = 'Malformed server-first message'
+      return @false
+   end
+
+   s = field(sfirst, ',', 1)
+   if s[1,2] # 'r=' then
+      error = 'Malformed server-first message'
+      return @false
+   end
+   nonce = s[3,999999]
+
+   s = field(sfirst, ',', 2)
+   if s[1,2] # 's=' then
+      error = 'Malformed server-first message'
+      return @false
+   end
+   salt = s[3,999999]
+
+   s = field(sfirst, ',', 3)
+   if s[1,2] # 'i=' then
+      error = 'Malformed server-first message'
+      return @false
+   end
+   iter = s[3,999999]
+
+*  THE COMBINED NONCE MUST START WITH OURS.  Without this the client will
+*  happily complete an exchange belonging to somebody else, and the check
+*  costs one comparison.
+   if nonce[1,len(cnonce)] # cnonce or len(nonce) = len(cnonce) then
+      error = 'Server nonce does not extend the client nonce'
+      return @false
+   end
+
+*  A SERVER DOES NOT GET TO CHOOSE THIS CLIENT'S CPU COST.  Too few iterations
+*  weakens the derivation that a captured exchange would be judged against;
+*  too many are a denial of service against the caller.  Same two bounds as
+*  the C client - SCRAM_MIN_ITERATIONS in gplsrc/sdclilib/sdclilib.c - and
+*  nothing cross-checks the two copies.
+   if not(num(iter)) then
+      error = 'Server sent a non-numeric iteration count'
+      return @false
+   end
+   if iter < SCRAM$MIN.ITER or iter > SCRAM$MAX.ITER then
+      error = 'Server asked for an unacceptable iteration count'
+      return @false
+   end
+
+   salted = SDEXT(password : @FM : salt : @FM : iter : @FM : SCRAM$KEY.LEN, @TRUE, SD_PBKDF2)
+   if salted = '' then
+      error = 'Unable to derive the salted password'
+      return @false
+   end
+
+   client.key = SDEXT(salted : @FM : 'Client Key', @TRUE, SD_HMACSHA256)
+   stored.key = SDEXT(client.key, @TRUE, SD_SHA256)
+
+   cfinal.bare = 'c=biws,r=' : nonce
+   auth.msg = cfirst.bare : ',' : sfirst : ',' : cfinal.bare
+
+   client.sig = SDEXT(stored.key : @FM : auth.msg, @TRUE, SD_HMACSHA256)
+   proof = SDEXT(client.key : @FM : client.sig, @TRUE, SD_XORBYTES)
+
+*  Computed BEFORE the salted password is dropped, and kept to check the
+*  reply against.
+   srvr.key = SDEXT(salted : @FM : 'Server Key', @TRUE, SD_HMACSHA256)
+   expect.v = SDEXT(srvr.key : @FM : auth.msg, @TRUE, SD_HMACSHA256)
+
+*  Dropped as soon as they are spent.  ClientKey is the one value whose holder
+*  could authenticate as this account.
+   salted = ''
+   client.key = ''
+   srvr.key = ''
+
+   if proof = '' or expect.v = '' then
+      error = 'Unable to derive the authentication proof'
+      return @false
+   end
+
+   if not(message.pair(SrvrScramFinal, cfinal.bare : ',p=' : proof)) then return @false
+   if server.error # SV$OK then
+      if server.error = SV$ON.ERROR then error = in.pkt
+      else error = 'Server refused the authentication proof'
+      return @false
+   end
+
+*  MUTUAL AUTHENTICATION, AND A MISSING OR WRONG v= FAILS THE CONNECTION.  Not
+*  a warning.  Only a holder of this account's ServerKey can compute it, so
+*  this is what catches a process that took the port before SD started: it can
+*  collect a proof it cannot use, but it cannot produce this.  It is also the
+*  check that gets softened while debugging and never hardened again.
+   if in.pkt[1,2] # 'v=' then
+      error = 'Server did not return a signature'
+      return @false
+   end
+
+   if SDEXT(in.pkt[3,999999] : @FM : expect.v, @TRUE, SD_CTEQUAL) # '1' then
+      error = 'Server signature did not verify'
+      return @false
+   end
+
+   return @true
 end
 
 * ======================================================================

@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 20 Aug 26 Windows port - PHASE 5: request 24 is retired.  vb.login no longer
+*           authenticates anything; it refuses with message 5275 and drops the
+*           connection.  SCRAM (47/48) is the only network login.  There is no
+*           fallback, by design - docs/SCRAM_AUTH.md, "Compatibility".
 * 19 Aug 26 Windows port - SCRAM-SHA-256 login, request types 47 and 48.
 *           vb.scram.first and vb.scram.final; vb.login is untouched and still
 *           serves request 24 until phase 5 retires it.  docs/SCRAM_AUTH.md.
@@ -262,6 +266,9 @@ loop
       * session may issue before it has authenticated.  They are the two halves
       * of one SCRAM exchange, so both have to be admitted here; 48 refuses
       * itself if 47 did not come first, which is a check this gate cannot make.
+      * 20 Aug 26 Windows port - 24 STAYS IN THIS LIST THOUGH IT IS RETIRED, so
+      * that vb.login can answer with 5275 and name the reason.  Dropping it
+      * here would answer an old client with 5270 "Not logged in" instead.
       if action # 24 and action # 25 and action # 47 and action # 48 then
          abort.message = sysmsg(5270) ;* Not logged in
          goto connection.failed
@@ -295,7 +302,7 @@ loop
    vb.execute,        ;*  21   Execute command
    vb.respond,        ;*  22   Response to input
    vb.endcommand,     ;*  23   End command
-   vb.login,          ;*  24   Network login
+   vb.login,          ;*  24   Network login - RETIRED, always refused
    vb.local.login,    ;*  25   SDLocal login
    vb.selectindex,    ;*  26   Select index
    vb.illegal.action, ;*  27   Enter licensed package - not supported
@@ -465,7 +472,8 @@ end
 *
 *   THE IDENTITY IS kernel(K$USERNAME,0), NOT the local logname, which holds
 *   the same value today by both routes above.  K$USERNAME reads
-*   process.username - what K$SET.USERNAME wrote after !CRED_VERIFY, and what
+*   process.username - what K$SET.USERNAME wrote after the SCRAM proof
+*   check in vb.scram.final (it was !CRED_VERIFY until phase 5), and what
 *   audit_message() stamps every record with in C (section 7 step 4).  A grant
 *   check able to disagree with the audit trail about who acted would make the
 *   trail worthless, so the two read one source deliberately.
@@ -991,120 +999,32 @@ vb.endcommand:
                return
 
                * ======================================================================
-               * Login user 
-               * In:  username len (short integer)
-               *      username padded to 2 byte multiple
-               *      password len (short integer)
-               *      password padded to 2 byte multiple
+               * Network login, request 24 - RETIRED.  docs/SCRAM_AUTH.md phase 5.
+               *
+               * THE CLEARTEXT LOGIN IS GONE AND THERE IS NO FALLBACK.  This
+               * handler read a length-prefixed user name and password out of
+               * the packet body and passed them to !CRED_VERIFY.  The password
+               * crossed the wire in clear, which is the whole reason SCRAM was
+               * written; requests 47 and 48 replace it and a client that still
+               * sends 24 is refused rather than quietly served a weaker path.
+               *
+               * IT REFUSES HERE RATHER THAN BEING DROPPED FROM THE GATE ABOVE.
+               * Taking 24 out of the "may be sent before authentication" test
+               * would answer an old client with 5270 "Not logged in", which is
+               * true and useless - it reads as a client bug rather than as a
+               * protocol that moved.  One message naming the cause is worth
+               * the three lines it costs, and an old client is precisely the
+               * caller that will be reading this reply.
+               *
+               * THE BODY IS NOT PARSED.  It still carries a password, so
+               * nothing here reads it, copies it or lets it reach a variable.
+               *
+               * The connection is dropped, as it was for a failed login.
 
 vb.login:
-*              * dsm 20240612 openpath @sdsys:@ds:'$LOGINS' to lgn.f else
-*              * dsm 20240612    abort.message = sysmsg(6050) ;* Cannot open $LOGINS register
-*              * dsm 20240612    server.error = SV$ON.ERROR
-*              * dsm 20240612    return
-*              * dsm 20240612 end
-
-               * mab 20240219 read security.rec from lgn.f, '$SECURE' then
-               * mab 20240219    i = kernel(K$SECURE, security.rec<1>)
-               * mab 20240219 end
-
-               * mab 20240219 if kernel(K$SECURE, -1) or not(system(91)) then
-
-               * Extract user name
-
-               n = oconv(cmnd[1,2], 'ISL')
-               if n < 1 or n > MAX.USERNAME.LEN or cmnd[3,1] = '$' then
-                  abort.message = sysmsg(5017) ;* Invalid user name or password
-                  server.error = SV$ON.ERROR
-                  goto exit.vb.login
-               end
-
-               username = cmnd[3,n]
-               * Modified by Composer AI - 2026/06/10.
-               * Reject shell-unsafe login names before authentication.
-               * 19 Aug 26 Windows port - the deffun moved to the top of the
-               * program; vb.scram.first needs it and this handler is going.
-               if not(valid_os_name(username)) then
-                  abort.message = sysmsg(5017) ;* Invalid user name or password
-                  server.error = SV$ON.ERROR
-                  goto exit.vb.login
-               end
-               * --------------------
-               pos = 3 + n + bitand(n, 1)
-
-               * Extract password
-
-               n = oconv(cmnd[pos,2], 'ISL')
-               if n > MAX.USERNAME.LEN then
-                  abort.message = sysmsg(5017) ;* Invalid user name or password
-                  server.error = SV$ON.ERROR
-                  goto exit.vb.login
-               end
-
-               password = cmnd[pos+2,n]
-               pos = 3 + n + bitand(n, 1)
-
-* 17 Aug 26 Windows port - AUTHENTICATE AGAINST $CRED, not the operating
-*   system.  section 7 step 6a.  This was:
-*
-*     if login(username, password) then
-*
-*   which reached op_login() in op_kernel.c and then login_user() in
-*   linuxio.c, and that read /etc/shadow.  MSYS2 has no /etc/shadow, so with
-*   APILOGIN=1 - what sd.conf ships - it failed closed on EVERY login and the
-*   API has never worked on this platform.  login_user() is now gone.
-*
-*   !CRED_VERIFY is the same check SET.PASSWORD writes for: salt from $CRED,
-*   Argon2 derivation, compare against the stored verifier.  It fails closed
-*   on an account with no credential recorded, which is the behaviour wanted
-*   here - an account that has never had a password set cannot be reached
-*   through the API.
-*
-*   THE IDENTITY IS SET FROM WHAT WAS VERIFIED (step 6b).  op_login() used to
-*   set process.username as a side effect; nothing does that now, so this has
-*   to, and it uses the name !CRED_VERIFY was given rather than anything the
-*   client asserted separately.  K$SET.USERNAME is refused unless the caller
-*   is $internal, which this program is - see op_kernel.c.
-               call !CRED_VERIFY(username, password, login.ok)
-               if login.ok then
-
-                  if config('APILOGIN') then
-                  * we required user to enter a user name to connect (over and above the ssh tunnel validation)
-                  * so change the logname to reflect
-                      logname = username
-                      void kernel(K$SET.USERNAME, username)
-                  end else
-                  * we do not require a valid user name validate against user creating tunnel
-                     username = kernel(K$USERNAME, 0)
-                  end
-                  * require entry of valid sd username? (rem connection from ssh tunnel, so user already validated)
-                  * readu lgn.rec from lgn.f, username else null 
-                  * 20240219 mab user must be member of sdusers   
-                  * if logging then
-                  *    writeseq '>  vb.login username: ' : username  to log.f else null
-                  * end        
-* 13 Aug 26 Windows port - removed the sdusers group test; SD no longer
-*   consults operating system groups.
-
-                  * dsm 20240612 lgn.rec<LGN$DATE> = date()
-                  * dsm 20240612 lgn.rec<LGN$TIME> = time()
-                  * dsm 20240612 recordlocku lgn.f, username
-                  * dsm 20240612 write lgn.rec to lgn.f, username
-
-                  * dsm 20240612i = kernel(K$ADMINISTRATOR,lgn.rec<LGN$ADMIN>)
-               end else
-                  server.error = SV$ON.ERROR
-                  abort.message = sysmsg(5017) ;* Invalid user name or password
-                  sleep 3
-               end
-               * mab 20240219  end else      ;* System is insecure - no username/password checks
-               * mab 20240219     i = kernel(K$ADMINISTRATOR,1)    ;* All users are administrators
-               * mab 20240219  end
-
-exit.vb.login:
-               * dsm 20240612 close lgn.f
-               if server.error = SV$OK then logged.in = @true
-               else done = @true
+               abort.message = sysmsg(5275) ;* Request no longer supported...
+               server.error = SV$ON.ERROR
+               done = @true
 
                return
 

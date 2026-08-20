@@ -293,6 +293,19 @@
       $define SCRAM$ITERATIONS 600000   ;* PBKDF2 cost for a new password
       $define SCRAM$KEY.LEN       32    ;* SaltedPassword length, = SHA-256
 
+      * 20 Aug 26 Windows port - WHAT A CLIENT WILL ACCEPT FROM A SERVER'S i=.
+      * A server does not get to choose the client's CPU cost: below the floor
+      * the derivation a captured exchange is judged against is weakened, above
+      * the ceiling it is a denial of service against the caller.  The ceiling
+      * is far above SCRAM$ITERATIONS, so raising the cost needs no change here.
+      *
+      * THE C CLIENT HOLDS THE SAME TWO NUMBERS SEPARATELY - SCRAM_MIN_ITERATIONS
+      * and SCRAM_MAX_ITERATIONS in gplsrc/sdclilib/sdclilib.c - and nothing
+      * cross-checks them.  Same arrangement as the SDEXT key numbers, and for
+      * the same reason: the DLL ships as one file and cannot read this.
+      $define SCRAM$MIN.ITER    4096    ;* Floor on a server's i=
+      $define SCRAM$MAX.ITER 10000000   ;* Ceiling on a server's i=
+
       * ID = $SECURE
       *    F1 = Secure system? (boolean)
 

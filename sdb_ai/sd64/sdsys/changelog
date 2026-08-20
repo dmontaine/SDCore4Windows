@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  The old cleartext API login is gone.  Old clients stop working.
+           * THE CHANGE OF 19 AUG ADDED THE NEW LOGIN AND LEFT THE OLD ONE IN
+             PLACE.  This removes it.  A client that still sends a password in
+             clear is now refused with "Cleartext login is no longer
+             supported; this server requires SCRAM authentication".
+           * WHAT YOU HAVE TO DO: use a client library from this release or
+             later, and run SET.PASSWORD again for every account that uses the
+             API.  An account whose password has not been re-set is refused,
+             and the refusal reads as a wrong password because from the
+             server's point of view there is no credential to check.
+           * PROGRAMS THAT USE THE SDCLIENT CLASS ARE COVERED.  The !sdclient
+             class module that BASIC programs use to reach another SD server
+             now speaks the new login too.  Your code does not change -
+             connect() takes the same arguments - but the program has to be
+             running under this release at both ends.
+           * SDLocal connections are unaffected: they send no password and
+             never did.
+
 19 Aug 26  API logins no longer send your password over the connection.
            * The API used to send the user name and password as plain text.
              Anything able to watch the connection could read the password.
@@ -26,6 +44,8 @@ Entries are newest first, by date, until there is a version to attach them to.
            * You also need the new client library.  An older one still works
              for now, but it still sends the password in clear, and a later
              release will stop accepting it.
+             [20 Aug 26: that release is the entry above.  An older client is
+             refused outright from now on.]
 
 19 Aug 26  OS.EXECUTE now needs permission, as SH already did.
            * UNTIL NOW ANY ACCOUNT THAT COULD WRITE A PROGRAM HAD THE

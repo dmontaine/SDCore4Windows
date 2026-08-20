@@ -264,10 +264,15 @@ try {
     # -----------------------------------------------------------------------
     Step 7 'Which login the client actually spoke'
 
-    # WITHOUT THIS, "SCRAM WORKS" IS AN INFERENCE.  The server still serves
-    # request 24, so a client that had fallen back to the cleartext login would
-    # be admitted just as readily and every check above would still be green.
-    # The packet log is the only thing here that can tell them apart.
+    # WITHOUT THIS, "SCRAM WORKS" IS AN INFERENCE.  The packet log is the only
+    # thing here that can say which login the client spoke.
+    #
+    # 20 Aug 26 - PHASE 5 DOES NOT MAKE THIS REDUNDANT, though it removes the
+    # silent-fallback case it was written for: the server now refuses request
+    # 24, so a fallback would fail loudly rather than pass every check above.
+    # What survives is the positive half - that 47 and 48 are what the client
+    # sent - and the password search below, which the server's behaviour has
+    # never had any bearing on.
     if (Test-Path -LiteralPath $pktLog) {
         $types = @(Select-String -Path $pktLog -Pattern 'Type (\d+)' -AllMatches |
                    ForEach-Object { $_.Matches } | ForEach-Object { [int]$_.Groups[1].Value })
@@ -276,8 +281,8 @@ try {
         Note 'client sent SCRAM client-first (47)' $true ($types -contains 47)
         Note 'client sent SCRAM client-final (48)' $true ($types -contains 48)
 
-        # THE ONE THAT MATTERS. Phase 5 retires request 24 on the server; until
-        # then this is what stops a silent fallback going unnoticed.
+        # KEPT AFTER PHASE 5, as an assertion about THIS CLIENT rather than
+        # about the server: it must not send a request the server has retired.
         Note 'client sent NO cleartext login (24)' $false ($types -contains 24)
 
         # REBUILT FROM THE HEX, NOT READ OFF THE ASCII COLUMN.  debug() dumps

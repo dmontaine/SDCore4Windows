@@ -1,0 +1,102 @@
+* TESTSDCLI
+* Drive the !sdclient class against this server's own API port.
+*
+* WHAT IT IS FOR.  SDCLIENT is the BASIC-callable half of the API - the
+* equivalent of sdclilib.dll for a program running inside SD - and until
+* 20 Aug 2026 it sent the cleartext SrvrLogin, request 24, which APISRVR now
+* refuses.  It was given a SCRAM exchange in the same change.  This is what
+* says the exchange works, rather than that it compiles.
+*
+* IT IS DELIBERATELY NOT $internal.  SDCLIENT has to be, because the SCRAM
+* derivation needs SDEXT and BCOMP admits SDEXT only to an internal program.
+* This one calls OBJECT(), which is an ordinary intrinsic, so it proves the
+* class's flag stays inside the class and is not a requirement it pushes onto
+* whoever uses it.
+*
+* THE NEGATIVE IS THE HALF THAT MATTERS.  A connect() that succeeds could
+* succeed for reasons that have nothing to do with the proof; a connect() with
+* a wrong password that succeeded would mean the proof is not being checked.
+* Both are run, and the run fails unless the second one is refused.
+*
+* IT NEEDS APIPORT SET IN sd.conf AND AN ACCOUNT THAT HAS RUN SET.PASSWORD.
+* gplbld/verify-scramlogin.ps1 arranges both and runs this; by hand:
+*
+*   BASIC BP TESTSDCLI
+*   RUN BP TESTSDCLI
+*
+* and answer account, password and port.  The password is read with echo off,
+* and is never put on a command line - it would otherwise reach the process
+* list and every transcript of the session.
+
+      CRT 'account: ' :
+      INPUT ACC
+
+      ECHO OFF
+      CRT 'password: ' :
+      INPUT PW
+      ECHO ON
+      CRT
+
+      CRT 'port: ' :
+      INPUT PORT
+
+      CHECKS = 0
+      BAD = 0
+
+      IF ACC = '' OR PW = '' THEN
+         CRT 'FAIL - account and password are both required'
+         STOP
+      END
+      IF PORT = '' THEN PORT = 4243
+
+* ----------------------------------------------------------------------
+* The connection that should succeed.
+
+      OBJ = OBJECT('!SDCLIENT')
+
+      CHECKS += 1
+      IF OBJ->CONNECT('127.0.0.1', PORT, ACC, PW, ACC) THEN
+         CRT 'PASS  connect'
+      END ELSE
+         BAD += 1
+         CRT 'FAIL  connect: ' : OBJ->ERROR
+      END
+
+* ----------------------------------------------------------------------
+* And that the session is really usable, not merely admitted.  COUNT VOC is
+* the same command the post-cycle suite uses, for the same reason: it needs an
+* attached account and it prints a number.
+
+      IF BAD = 0 THEN
+         CHECKS += 1
+         REPLY = OBJ->EXECUTE('COUNT VOC', ERR)
+         IF INDEX(REPLY, 'record', 1) THEN
+            CRT 'PASS  execute:  ' : TRIM(REPLY)
+         END ELSE
+            BAD += 1
+            CRT 'FAIL  execute:  err ' : ERR : ', reply ' : TRIM(REPLY)
+         END
+
+         OBJ->DISCONNECT
+      END
+
+* ----------------------------------------------------------------------
+* THE CONTROL.  Same account, same port, one character added to the password.
+* Without this the check above proves only that something answered.
+
+      OBJ2 = OBJECT('!SDCLIENT')
+
+      CHECKS += 1
+      IF OBJ2->CONNECT('127.0.0.1', PORT, ACC, PW : 'x', ACC) THEN
+         BAD += 1
+         CRT 'FAIL  a wrong password was ACCEPTED'
+         OBJ2->DISCONNECT
+      END ELSE
+         CRT 'PASS  wrong password refused: ' : OBJ2->ERROR
+      END
+
+* ----------------------------------------------------------------------
+
+      CRT
+      CRT CHECKS - BAD : ' / ' : CHECKS : ' checks passed'
+      IF BAD THEN CRT 'TESTSDCLI FAILED' ELSE CRT 'TESTSDCLI PASSED'
