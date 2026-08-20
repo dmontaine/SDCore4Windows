@@ -392,7 +392,18 @@ $ErrorActionPreference = 'Continue'
 # it is checked here and not assumed to follow.
 foreach ($locked in @($gcat, (Join-Path $sdsys 'gpl.bp.out'))) {
     $leaf = Split-Path $locked -Leaf
+    # 20 Aug 26 - THE SAME GUARD verify-credacl.ps1:143 HAS, and the last
+    # unguarded instance of it in gplbld.  Under 'Stop', "2>&1" on a native
+    # command makes each stderr line a terminating NativeCommandError, so an
+    # icacls that could not read the path would kill this script instead of
+    # failing the check it is standing in front of.  Latent here - both paths
+    # are readable to the elevated session this runs in - but it is the same
+    # defect that made secure-account-dirs.ps1's group skip throw, found by
+    # verify-accountacl.ps1 on 20 Aug 2026.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $acl = & icacls.exe $locked 2>&1
+    $ErrorActionPreference = $prevEap
     $aclText = ($acl | Out-String)
     Write-Output $aclText
 

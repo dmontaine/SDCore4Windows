@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  Your account directory is locked to you, and the installer now
+           finishes the job on every account instead of stopping at the first
+           awkward one.
+           * WHAT THE LOCK IS.  C:\ProgramData\SD\user_accounts\<name> is
+             granted to that account's own group, to administrators and to the
+             system, and to nobody else.  Before it, every SD user could read
+             and rewrite every other user's account files from Explorer or a
+             command prompt - outside SD, so none of SD's own permission
+             checks applied.  SD itself has always refused to let you LOGTO an
+             account you are not a member of; this makes the files agree with
+             that.
+           * NOTHING YOU TYPE CHANGES, and your own account is unaffected -
+             you are a member of its group.
+           * THE FIX.  The installer re-applies the lock to accounts that
+             already existed, and it used to STOP at the first account whose
+             Windows group had been removed - reporting that it could not
+             secure the account directories, and leaving every account after
+             that one unlocked.  It now says which account it skipped and
+             carries on with the rest.
+           * A skipped account is left alone deliberately: locking a directory
+             to a group that no longer exists would take the account away from
+             the person who owns it.
+
 20 Aug 26  The old pre-fork product name is gone from the login code.
            * A banner naming the database SD was forked from was still in
              LOGIN, commented out.  Nothing printed it, but it was one

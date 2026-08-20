@@ -297,10 +297,8 @@ try {
     # WITHOUT THIS STEP THE WHOLE TEST PASSES VACUOUSLY.  Both halves are
     # idempotent, so running the script over a directory CREATE.ACCOUNT just
     # stamped leaves it identical whether the script did the work or did
-    # nothing.  /reset drops the explicit ACEs and lets the data tree's
-    # sdusers:(OI)(CI)(M) inherit again - which is precisely the state section
-    # 8 measured on 18 Aug 2026 and the state this whole facility exists to
-    # remove.
+    # nothing.  /reset drops the explicit ACEs and lets the container's
+    # inheritable ACEs apply again.
     $null = & icacls.exe $acctDir /reset
     if ($LASTEXITCODE -ne 0) { Fail "icacls /reset exited $LASTEXITCODE - the control could not be set up" }
 
@@ -310,8 +308,23 @@ try {
 
     Note 'R: differs from A'          $true  ($R -cne $A)
     Note 'R: inheritance is back on'  $false $aclR.AreAccessRulesProtected
-    Note 'R: sdusers is back'         $true  ([bool](@($aclR.Access | Where-Object {
-        $_.IdentityReference.Value -like '*\sdusers' }).Count))
+
+    # THE THIRD ASSERTION USED TO BE "sdusers is back" AND IT WAS WRONG - it
+    # failed on the 15:09:33 install while the control was working perfectly.
+    # Section 8's 18 Aug measurement of user_accounts predates
+    # secure-accounts.ps1 being applied to the container, and that script
+    # grants sdusers as (RD,AD,X,RA,S) with NO (OI)(CI) - deliberately not
+    # inheritable - so sdusers CANNOT appear on a child directory and "back"
+    # was never a state this could reach.  Measured after the reset: the
+    # inherited set is CREATOR OWNER (materialised as the creating user),
+    # BUILTIN\Administrators and NT AUTHORITY\SYSTEM.
+    #
+    # WHAT THE CONTROL ACTUALLY NEEDS TO SAY is that the thing the stamp ADDED
+    # is gone, which is the account's own group.  That is what makes the third
+    # reading evidence of the script's work rather than of nothing having
+    # happened, and unlike sdusers it is true by construction.
+    Note 'R: the account group is gone' $false ([bool](@($aclR.Access | Where-Object {
+        $_.IdentityReference.Value -like ('*\' + $group) }).Count))
 
     # -----------------------------------------------------------------------
     Step 4 'S - what secure-account-dirs.ps1 makes of it'
@@ -372,6 +385,20 @@ try {
     # And -WhatIf really did leave the ACL alone, which is what made the sweep
     # safe to run across every account on the machine.
     Note '-WhatIf changed nothing' $true ((Get-Dacl $acctDir) -ceq $S)
+}
+catch {
+    # 20 Aug 26 - WITHOUT THIS THE FIRST RUN PRODUCED NO VERDICT AT ALL.  The
+    # sweep in step 6 threw (secure-account-dirs.ps1's net.exe redirection,
+    # fixed the same day), the finally cleaned up, and the exception then
+    # propagated past the summary and the exit code - so the run ended with a
+    # stack trace and no statement about any of the checks that HAD passed.
+    # A verifier that cannot say what it measured is worth very little.
+    $script:failed = $true
+    Write-Host ''
+    Write-Host ('verify-accountacl: THREW - ' + $_.Exception.Message) -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace
+    $null = $results.Add([pscustomobject]@{
+        Check = 'the run completed without throwing'; Expected = $true; Observed = $false })
 }
 finally {
     if (-not $Keep) {

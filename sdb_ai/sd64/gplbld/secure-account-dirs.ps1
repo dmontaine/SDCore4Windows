@@ -92,8 +92,32 @@ foreach ($d in $targets) {
     # A GROUP THAT DOES NOT EXIST IS A SKIP, NOT A STAMP.  icacls would fail on
     # the name anyway, but the point is the intent: no group means nobody could
     # be granted the directory, and locking it would strand the account.
+    #
+    # 20 Aug 26 - THE $ErrorActionPreference DANCE IS NOT DECORATION, AND THIS
+    # SKIP HAD NEVER WORKED.  Under 'Stop', "2>&1" on a NATIVE command turns
+    # each stderr line into a terminating NativeCommandError - so a missing
+    # group made net.exe's "System error 1376 has occurred." THROW, and this
+    # script died at the exact moment it had detected the case it exists to
+    # handle.  The sweep is run by the installer over EVERY account directory
+    # (sd.iss SecureAccountDirs), so one account whose sdu_ group had been
+    # removed - which is what every verifier's cleanup leaves behind - aborted
+    # the run and left every LATER account unstamped, reporting failure.
+    #
+    # Found by gplbld/verify-accountacl.ps1 on the 15:09:33 install, on its
+    # first run, from the deliberate no-group directory in its step 6.
+    #
+    # THE PROJECT ALREADY KNEW THIS TRAP: verify-credacl.ps1 line 143 carries
+    # the same guard with a comment dated 17 Aug 2026, and secure-cred.ps1 has
+    # it written up at the top.  This file was written on 19 Aug and repeated
+    # it anyway.  Same remedy as verify-credacl's, for consistency: drop to
+    # 'Continue' for the call, read $LASTEXITCODE, put it back.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $null = & net.exe localgroup $group 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $groupExists = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEap
+
+    if (-not $groupExists) {
         Say "skipped $name - group $group does not exist"
         $skipped++
         continue
