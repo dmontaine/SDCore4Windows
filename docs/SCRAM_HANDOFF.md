@@ -284,7 +284,10 @@ it is still a single file that can be copied next to an application.
 three Makefiles and both `build.cmd`s, and only the test link failed — the DLL
 itself had been fine.
 
-`sdclilib32` is still not a git repository.
+**`sdclilib32` IS A GIT REPOSITORY FROM 20 AUG 2026** —
+`github.com/dmontaine/sdclilib32`, initial import `cf5a72a`, 12 files and no
+binaries. Until then it had been built from since 15 Aug and versioned
+nowhere, so every sync of it existed on disk alone.
 
 ## mvDeveloper authenticates with SCRAM — 19 Aug 2026, and this is phase 6's real test
 
@@ -375,13 +378,21 @@ something.
 
 `sdapi1` and `sdapi2` are both spent; use a fresh prefix.
 
-## The 32-bit project is still unversioned
+## The 32-bit project is versioned now — 20 Aug 2026
 
 `C:\Users\dmont\Projects\sdclilib32` builds the 32-bit `qmclilib.dll` that
-mvDeveloper will use. **It is not a git repository** — worth fixing, and more
-so now: it is the only one of the three whose state nothing records, so the
-19 Aug sync of it exists on disk and nowhere else. Its `SRCDIR`, `-lbcrypt`
-and README changes cannot be reviewed, reverted or seen from another machine.
+mvDeveloper uses, and `qmclient.dll` beside it. **It is a git repository from
+20 Aug 2026**, `github.com/dmontaine/sdclilib32`, initial import `cf5a72a`.
+
+This section used to say it was the only one of the three whose state nothing
+recorded, so every sync of it existed on disk and nowhere else and its
+`SRCDIR`, `-lbcrypt` and README changes could not be reviewed, reverted or seen
+from another machine. That is closed.
+
+**The import is 12 files and no binaries**, checked against the remote tree.
+`qmclient.def` is excluded with the build products: it is generated from
+`qmclilib.def`, and committing it would create the second hand-kept copy of a
+99-name export list that generating it exists to prevent.
 
 **The claim this section used to make — "`winsdclilib` is untouched by the
 SCRAM work and its tree is clean" — was true and was the problem.** See the
