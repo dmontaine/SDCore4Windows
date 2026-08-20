@@ -236,26 +236,33 @@ is deliberately concentrated here so it happens once, knowingly.
   must be **inverted** at that point, not deleted: it becomes the proof the
   old path is gone.
 
-## One thing is owed on phase 4
+## Which login the client speaks is measured, not argued
 
-**`verify-apiport.ps1`'s packet-type check has not been run.** Phase 4 itself
-is verified — the `-Prefix sdapi1` run passed end to end on the 21:43:02
-install, before that check existed. What was added afterwards, and not yet
-run, asserts which request types actually went out: 47 and 48 present, **24
-absent**, and the password absent from the reassembled byte stream with the
-user name found by the same search as its control.
+**`verify-apiport.ps1 -Prefix sdapi2`, 21:58:11 install: all checks passed.**
+A successful login does **not** on its own prove the client spoke SCRAM — the
+server still serves request 24, so a client that had fallen back would be
+admitted just as readily and every other check would still be green. Source
+says it cannot, `sdclilib.c` having no `SrvrLogin` call left and no
+`login_data` at all, but that is an argument. This is the reading:
 
-It matters because a successful login does **not** on its own prove the client
-spoke SCRAM: the server still serves request 24, so a client that had fallen
-back would be admitted just as readily. Source says it cannot — nothing in
-`sdclilib.c` calls `SrvrLogin` any more and `login_data` is gone entirely —
-but that is an argument, not a measurement.
-
-Elevated, with a prefix nobody has used (`sdapi1` is spent):
-
-```powershell
-gplbld\verify-apiport.ps1 -Prefix sdapi2
 ```
+request types sent: 1, 2, 3, 21, 47, 48
+   client sent SCRAM client-first (47)      PASS
+   client sent SCRAM client-final (48)      PASS
+   client sent NO cleartext login (24)      PASS
+   password absent from the bytes sent      PASS   963 bytes reassembled
+   same search finds the user name          PASS   <- the control
+```
+
+It works off the client's own `SDDebug(1)` log, enabled by `SD_CLIENT_DEBUG`
+in `tests/remote_connect_test.c`. **The password search reassembles the byte
+stream from the hex columns first**, because `debug()` dumps 16 bytes per line
+and a 20 character password splits across two of them — a plain text search of
+the log would have passed whether or not the password had been sent. The user
+name is sent in clear, in `n=`, so finding it proves the search can find
+something.
+
+`sdapi1` and `sdapi2` are both spent; use a fresh prefix.
 
 ## The client side is a separate, unversioned project
 
