@@ -95,6 +95,12 @@
 #define SrvrSelectLeft   44    /* Move index position to left */
 #define SrvrSelectRight  45    /* Move index position to right */
 #define SrvrMarkMapping  46    /* Enable/disable mark mapping */
+/* 19 Aug 26 Windows port - SCRAM-SHA-256 login, docs/SCRAM_AUTH.md phase 3/4.
+   The two halves of one exchange; both bodies are the SCRAM message itself,
+   with no length prefixes and no padding, because the packet already carries
+   its own length.  APISRVR's dispatch table is the other half of this pair. */
+#define SrvrScramFirst   47    /* SCRAM client-first  -> server-first */
+#define SrvrScramFinal   48    /* SCRAM client-final  -> server-final */
 
 /* Server error status values */
 #define SV_OK             0    /* Action successful                       */

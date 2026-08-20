@@ -9,7 +9,13 @@ CC := gcc
 endif
 CFLAGS ?= -O2 -std=c11 -Wall -Wextra -Wpedantic -Wno-unknown-pragmas
 CPPFLAGS += -DBUILDING_SDCLILIB
-LDLIBS += -lws2_32
+# 19 Aug 26 - bcrypt for the SCRAM login (docs/SCRAM_AUTH.md phase 4):
+# BCryptDeriveKeyPBKDF2, BCryptGenRandom and HMAC-SHA256.  It is a WINDOWS
+# system DLL, so the client stays a single file that can be copied next to an
+# application - the property the 32-bit qmclilib build exists to preserve, and
+# the reason the primitives came from here rather than from a library that
+# would have had to travel with it.
+LDLIBS += -lws2_32 -lbcrypt
 
 # 15 Aug 26 - THE COMPILER'S OWN DIRECTORY MUST BE ON PATH, even when CC is
 # already an absolute path.  gcc.exe finds its DLLs beside itself, but the

@@ -305,6 +305,12 @@ void set_default_character_maps(void);
    definition below matches its declared prototype (SV_* macros here are
    identical to those in sdclient.h, so the redefinition is benign). */
 #include "sdclilib.h"
+/* 19 Aug 26 Windows port - SCRAM-SHA-256 login.  docs/SCRAM_AUTH.md phase 4.
+   Header of static functions rather than a second .c file: the client ships as
+   ONE binary and this keeps it that way while letting
+   gplbld/verify-scramclient.c test the same code against the RFC 7677
+   vectors.  Everything in it comes from bcrypt.dll, part of Windows. */
+#include "scram_client.h"
 
 DLLEntry char* SDError(void);
 
@@ -951,13 +957,259 @@ exit_sdclose:
 
 
 /* ======================================================================
+   SCRAM-SHA-256 login.  docs/SCRAM_AUTH.md, phase 4.
+
+   Replaces the SrvrLogin body, which put the password on the wire in clear.
+   The password never leaves this function: what crosses is a proof computed
+   over a nonce the server chose, and a capture of both packets yields an
+   offline guess bounded by the iteration count and nothing else.
+
+   IT RETURNS TRUE ONLY IF THE SERVER PROVED ITSELF TOO.  The closing v= is a
+   signature only a holder of this account's ServerKey can compute, so a
+   process that took the port before SD started can collect a proof it cannot
+   use but cannot produce this.  Treating a missing or wrong v= as a warning
+   would throw away the entire mutual half, and it is exactly the check that
+   gets softened while debugging and never hardened again.  It is a hard
+   failure here, deliberately.
+
+   THE 600,000 PBKDF2 ITERATIONS ARE PAID HERE, once per connection.  The
+   server holds StoredKey and never runs the KDF at login - that asymmetry is
+   why the KDF had to be one a 32-bit process can afford.                  */
+
+/* Server-supplied sizes are capped rather than trusted.  These are generous
+   against the real values - a 24 character nonce, a 24 character salt - and
+   exist so a malformed or hostile server-first cannot reach a buffer. */
+#define SCRAM_MAX_SERVER_FIRST 512
+#define SCRAM_MAX_NONCE        256
+#define SCRAM_MAX_SALT_B64     256
+#define SCRAM_MAX_SALT         128
+#define SCRAM_MAX_AUTH_MSG     1024
+
+/* A hostile server could otherwise spend the client's CPU for it, or weaken
+   the derivation by asking for almost none.  The floor is RFC 7677's own
+   example value; the ceiling is far above SCRAM$ITERATIONS (600,000) so a
+   later increase needs no change here. */
+#define SCRAM_MIN_ITERATIONS   4096UL
+#define SCRAM_MAX_ITERATIONS   10000000UL
+
+/* Report why the server refused.  On SV_ERROR GetResponse() has already put
+   the fetched text in sderror and must not be overwritten; on SV_ON_ERROR the
+   abort message is the response body. */
+Private void scram_failed(const char* fallback) {
+  int n;
+
+  if (session[session_idx].server_error == SV_ERROR)
+    return;
+
+  n = buff_bytes;
+  if (session[session_idx].server_error == SV_ON_ERROR && n > 0) {
+    if (n > (int)sizeof(session[session_idx].sderror) - 1)
+      n = (int)sizeof(session[session_idx].sderror) - 1;
+    memcpy(session[session_idx].sderror, (char*)buff, (size_t)n);
+    session[session_idx].sderror[n] = '\0';
+    return;
+  }
+
+  strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror), fallback);
+}
+
+Private bool scram_login(char* username, char* password) {
+  unsigned char nonce_bytes[18];
+  char cnonce[SCRAM_B64_LEN];
+  char client_first[128];
+  char server_first[SCRAM_MAX_SERVER_FIRST];
+  char scratch[SCRAM_MAX_SERVER_FIRST];
+  char combined[SCRAM_MAX_NONCE];
+  char salt_b64[SCRAM_MAX_SALT_B64];
+  unsigned char salt[SCRAM_MAX_SALT];
+  size_t salt_len = 0;
+  char client_final_bare[SCRAM_MAX_NONCE + 16];
+  char client_final[SCRAM_MAX_NONCE + SCRAM_B64_LEN + 32];
+  char auth_message[SCRAM_MAX_AUTH_MSG];
+  char expected[SCRAM_B64_LEN + 4];
+  SCRAM_KEYS keys;
+  unsigned long iterations;
+  char* r_attr;
+  char* s_attr;
+  char* i_attr;
+  char* end;
+  bool status = FALSE;
+  int n;
+
+  memset(&keys, 0, sizeof(keys));
+
+  /* 18 bytes, and the 18 is not arbitrary: a multiple of three, so base64
+     adds no '=' padding, and every character it emits is inside RFC 5802's
+     printable set - which excludes the comma these messages are split on. */
+  if (!scram_random(nonce_bytes, sizeof(nonce_bytes)) ||
+      !scram_b64_encode(nonce_bytes, sizeof(nonce_bytes), cnonce, sizeof(cnonce))) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Could not generate a login nonce");
+    goto done;
+  }
+
+  /* 'n,,' is the GS2 header: no channel binding, said honestly because there
+     is no TLS channel here to bind to.  'biws' below is its base64, echoed in
+     the final message so it cannot be stripped in flight. */
+  n = snprintf(client_first, sizeof(client_first), "n,,n=%s,r=%s",
+               username, cnonce);
+  if (n < 0 || (size_t)n >= sizeof(client_first)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Invalid user name");
+    goto done;
+  }
+
+  /* The body is the SCRAM message and nothing else - no length prefixes and
+     no padding to an even length, both of which SrvrLogin's body has.  The
+     packet already carries its own length. */
+  if (!message_pair(SrvrScramFirst, client_first,
+                    (int32_t)strlen(client_first)))
+    goto done;
+
+  if (session[session_idx].server_error != SV_OK) {
+    scram_failed("Login refused by server");
+    goto done;
+  }
+
+  if (buff_bytes <= 0 || (size_t)buff_bytes >= sizeof(server_first)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Malformed server-first message");
+    goto done;
+  }
+  memcpy(server_first, (char*)buff, (size_t)buff_bytes);
+  server_first[buff_bytes] = '\0';
+
+  /* KEPT VERBATIM.  server_first goes into AuthMessage byte for byte, so the
+     parse works on a copy: rebuilding it from the parsed parts is the classic
+     way to get a signature mismatch with nothing on screen to explain it. */
+  memcpy(scratch, server_first, (size_t)buff_bytes + 1);
+
+  r_attr = strtok(scratch, ",");
+  s_attr = strtok(NULL, ",");
+  i_attr = strtok(NULL, ",");
+
+  if (r_attr == NULL || s_attr == NULL || i_attr == NULL ||
+      strtok(NULL, ",") != NULL ||
+      strncmp(r_attr, "r=", 2) != 0 ||
+      strncmp(s_attr, "s=", 2) != 0 ||
+      strncmp(i_attr, "i=", 2) != 0) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Malformed server-first message");
+    goto done;
+  }
+
+  r_attr += 2;
+  s_attr += 2;
+  i_attr += 2;
+
+  if (strlen(r_attr) >= sizeof(combined) || strlen(s_attr) >= sizeof(salt_b64)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Server-first message is implausibly long");
+    goto done;
+  }
+  strcpy_s(combined, sizeof(combined), r_attr);
+  strcpy_s(salt_b64, sizeof(salt_b64), s_attr);
+
+  /* THE CHECK THAT STOPS A REPLAYED SERVER RESPONSE.  Our nonce must be a
+     prefix of the combined one; anything else is an answer to somebody else's
+     exchange, or to an earlier one of ours. */
+  if (strncmp(combined, cnonce, strlen(cnonce)) != 0 ||
+      strlen(combined) <= strlen(cnonce)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Server nonce does not extend the one we sent");
+    goto done;
+  }
+
+  errno = 0;
+  iterations = strtoul(i_attr, &end, 10);
+  if (errno != 0 || end == i_attr || *end != '\0' ||
+      iterations < SCRAM_MIN_ITERATIONS || iterations > SCRAM_MAX_ITERATIONS) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Server asked for an unacceptable iteration count");
+    goto done;
+  }
+
+  if (!scram_b64_decode(salt_b64, salt, sizeof(salt), &salt_len) ||
+      salt_len == 0) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Server sent an undecodable salt");
+    goto done;
+  }
+
+  n = snprintf(client_final_bare, sizeof(client_final_bare), "c=biws,r=%s",
+               combined);
+  if (n < 0 || (size_t)n >= sizeof(client_final_bare))
+    goto done;
+
+  n = snprintf(auth_message, sizeof(auth_message), "%s,%s,%s",
+               client_first + 3,          /* client-first-bare: 'n,,' removed */
+               server_first,
+               client_final_bare);
+  if (n < 0 || (size_t)n >= sizeof(auth_message)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Authentication message too long");
+    goto done;
+  }
+
+  if (!scram_client_keys(password, salt, salt_len, iterations,
+                         auth_message, &keys)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Could not derive login keys");
+    goto done;
+  }
+
+  n = snprintf(client_final, sizeof(client_final), "%s,p=%s",
+               client_final_bare, keys.proof);
+  if (n < 0 || (size_t)n >= sizeof(client_final))
+    goto done;
+
+  if (!message_pair(SrvrScramFinal, client_final, (int32_t)strlen(client_final)))
+    goto done;
+
+  if (session[session_idx].server_error != SV_OK) {
+    scram_failed("Login refused by server");
+    goto done;
+  }
+
+  /* THE MUTUAL HALF.  expected was computed before the server answered, from
+     ServerKey, so this compares the reply against arithmetic rather than
+     against itself. */
+  n = snprintf(expected, sizeof(expected), "v=%s", keys.server_sig);
+  if (n < 0 || (size_t)n >= sizeof(expected))
+    goto done;
+
+  if (buff_bytes <= 0 || (size_t)buff_bytes >= sizeof(server_first)) {
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Malformed server-final message");
+    goto done;
+  }
+  memcpy(server_first, (char*)buff, (size_t)buff_bytes);
+  server_first[buff_bytes] = '\0';
+
+  if (!scram_equal(server_first, expected)) {
+    /* NOT A WARNING.  The server failed to prove itself, so whatever is on
+       the other end of this socket is not the one holding the credential. */
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+             "Server failed to authenticate itself - connection refused");
+    goto done;
+  }
+
+  status = TRUE;
+
+done:
+  SecureZeroMemory(&keys, sizeof(keys));
+  SecureZeroMemory(auth_message, sizeof(auth_message));
+  SecureZeroMemory(salt, sizeof(salt));
+  SecureZeroMemory(nonce_bytes, sizeof(nonce_bytes));
+  return status;
+}
+
+/* ======================================================================
    SDConnect()  -  Open connection to server.                             */
 DLLEntry  int
 SDConnect(char* host, int port, char* username, char* password, char* account) {
   int status = FALSE;
-  char login_data[2 + MAX_USERNAME_LEN + 2 + MAX_USERNAME_LEN];
   int n;
-  char* p;
   initialise_client();
   if (!FindFreeSession())
     goto exit_sdconnect;
@@ -967,50 +1219,29 @@ SDConnect(char* host, int port, char* username, char* password, char* account) {
     strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror), "Invalid host name");
     goto exit_sdconnect;
   }
-  /* Set up login data */
-  p = login_data;
   n = strlen(username);
-  if (n > MAX_USERNAME_LEN) {
+  if (n == 0 || n > MAX_USERNAME_LEN) {
     strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror), "Invalid user name");
     goto exit_sdconnect;
   }
-  *((int16_t*)p) = ShortInt(n); /* User name len */
-  p += 2;
-  memcpy(p, (char*)username, n); /* User name */
-  p += n;
-  if (n & 1)
-    *(p++) = '\0';
-  n = strlen(password);
-  if (n > MAX_USERNAME_LEN) {
+  /* THE PASSWORD IS NO LONGER LENGTH-LIMITED BY THE PACKET.  SrvrLogin put it
+     in a fixed field beside the user name; SCRAM never sends it at all, so the
+     only bound left is what PBKDF2 will accept.  An empty one is still
+     refused - the server has no credential that derives from nothing. */
+  if (password == NULL || *password == '\0') {
     strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror), "Invalid password");
     goto exit_sdconnect;
   }
-  *((int16_t*)p) = ShortInt(n); /* Password len */
-  p += 2;
-  memcpy(p, (char*)password, n); /* Password */
-  p += n;
-  if (n & 1)
-    *(p++) = '\0';
   /* Open connection to server */
   if (!OpenSocket((char*)host, port))
     goto exit_sdconnect;
-  /* Check username and password */
-  n = p - login_data;
-  if (!message_pair(SrvrLogin, login_data, n)) {
+  /* 19 Aug 26 Windows port - SCRAM-SHA-256 replaces the cleartext SrvrLogin
+     exchange.  docs/SCRAM_AUTH.md phase 4.  This was a message_pair(SrvrLogin,
+     ...) carrying the user name and password as plain bytes; scram_login()
+     sends neither, and refuses the connection unless the server proves itself
+     in return.  It sets sderror itself on every failure path. */
+  if (!scram_login(username, password))
     goto exit_sdconnect;
-  }
-  if (session[session_idx].server_error != SV_OK) {
-    if (session[session_idx].server_error == SV_ON_ERROR) {
-      n = buff_bytes - offsetof(INBUFF, data.abort.message);
-      if (n > 0) {
-        if (n > (int)sizeof(session[session_idx].sderror) - 1)
-          n = (int)sizeof(session[session_idx].sderror) - 1;
-        memcpy(session[session_idx].sderror, buff->data.abort.message, n);
-        session[session_idx].sderror[n] = '\0';
-      }
-    }
-    goto exit_sdconnect;
-  }
   /* Now attempt to attach to required account */
   if (!message_pair(SrvrAccount, account, strlen(account))) {
     goto exit_sdconnect;

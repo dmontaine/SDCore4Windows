@@ -5,6 +5,28 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+19 Aug 26  API logins no longer send your password over the connection.
+           * The API used to send the user name and password as plain text.
+             Anything able to watch the connection could read the password.
+             It now uses SCRAM-SHA-256, a challenge and response: the server
+             sets a puzzle only someone who knows the password can answer, and
+             the password itself is never sent in any form.
+           * THE SERVER NOW PROVES ITSELF TO YOU AS WELL.  It finishes by
+             returning a value only the real server can compute, and the
+             client refuses the connection if it does not match.  Another
+             program that grabbed the port before SD started cannot pretend to
+             be SD to collect passwords.
+           * NOTHING CHANGES IN YOUR APPLICATION.  QMConnect takes the same
+             arguments and returns the same things.
+           * YOU MUST RUN SET.PASSWORD AGAIN FOR EVERY ACCOUNT THAT USES THE
+             API.  The stored credentials changed shape and the old ones
+             cannot be converted - the password was never kept anywhere, by
+             design, so there is nothing to convert them from.  An account
+             whose password has not been re-set will be refused.
+           * You also need the new client library.  An older one still works
+             for now, but it still sends the password in clear, and a later
+             release will stop accepting it.
+
 19 Aug 26  OS.EXECUTE now needs permission, as SH already did.
            * UNTIL NOW ANY ACCOUNT THAT COULD WRITE A PROGRAM HAD THE
              OPERATING SYSTEM.  SH at the command prompt was refused unless

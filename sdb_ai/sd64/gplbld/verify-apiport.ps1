@@ -249,11 +249,65 @@ try {
     # C:\a\b -> /c/a/b
     $msys = '/' + $Sd64.Substring(0, 1).ToLower() + ($Sd64.Substring(2) -replace '\\', '/')
 
-    $cmd = "cd '$msys' && make check-remote APIHOST=127.0.0.1 APIPORT=$Port " +
+    # 19 Aug 26 - CAPTURE WHICH REQUEST TYPES THE CLIENT SENDS.  SD_CLIENT_DEBUG
+    # makes remote_connect_test call SDDebug(1), which logs one "Type <n>" line
+    # per packet.  Step 7 below reads it.
+    $pktLog = Join-Path $logDir ('client-packets-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+    $msysPktLog = '/' + $pktLog.Substring(0, 1).ToLower() + ($pktLog.Substring(2) -replace '\\', '/')
+
+    $cmd = "cd '$msys' && SD_CLIENT_DEBUG='$msysPktLog' make check-remote APIHOST=127.0.0.1 APIPORT=$Port " +
            "APIUSER=$Prefix APIPASS='$pw' APIACCT=" + $Prefix.ToUpper()
     & $bash -lc $cmd
     $testRc = $LASTEXITCODE
     Note 'remote_connect_test exit code' 0 $testRc
+
+    # -----------------------------------------------------------------------
+    Step 7 'Which login the client actually spoke'
+
+    # WITHOUT THIS, "SCRAM WORKS" IS AN INFERENCE.  The server still serves
+    # request 24, so a client that had fallen back to the cleartext login would
+    # be admitted just as readily and every check above would still be green.
+    # The packet log is the only thing here that can tell them apart.
+    if (Test-Path -LiteralPath $pktLog) {
+        $types = @(Select-String -Path $pktLog -Pattern 'Type (\d+)' -AllMatches |
+                   ForEach-Object { $_.Matches } | ForEach-Object { [int]$_.Groups[1].Value })
+        Write-Host ('   request types sent: ' + (($types | Sort-Object -Unique) -join ', '))
+
+        Note 'client sent SCRAM client-first (47)' $true ($types -contains 47)
+        Note 'client sent SCRAM client-final (48)' $true ($types -contains 48)
+
+        # THE ONE THAT MATTERS. Phase 5 retires request 24 on the server; until
+        # then this is what stops a silent fallback going unnoticed.
+        Note 'client sent NO cleartext login (24)' $false ($types -contains 24)
+
+        # REBUILT FROM THE HEX, NOT READ OFF THE ASCII COLUMN.  debug() dumps
+        # 16 bytes per line with the printable rendering alongside, so a 20
+        # character password is SPLIT ACROSS TWO LINES and a plain text search
+        # of the log could never find it - the check would pass whether or not
+        # the password had been sent.  Reassembling the byte stream first is
+        # what makes the answer mean something.
+        $bytes = New-Object System.Collections.Generic.List[byte]
+        foreach ($line in (Get-Content -LiteralPath $pktLog)) {
+            if ($line -match '^[0-9A-F]{4}:') {
+                $hexPart = $line.Substring(5, [Math]::Min(48, $line.Length - 5))
+                foreach ($m in [regex]::Matches($hexPart, '[0-9A-F]{2}')) {
+                    $bytes.Add([Convert]::ToByte($m.Value, 16))
+                }
+            }
+        }
+        $wire = [Text.Encoding]::ASCII.GetString($bytes.ToArray())
+        Write-Host ('   reassembled ' + $bytes.Count + ' bytes of client traffic')
+
+        Note 'password absent from the bytes sent' $false $wire.Contains($pw)
+
+        # THE CONTROL, and without it the line above is worth nothing.  The user
+        # name IS sent in clear - it is the n= attribute of client-first - so
+        # the same search over the same bytes must find it.  If this fails, the
+        # search is broken and the result above says nothing.
+        Note 'same search finds the user name' $true $wire.Contains($Prefix)
+    } else {
+        Note 'packet log written' $true $false
+    }
 }
 finally {
     if (-not $Keep) {

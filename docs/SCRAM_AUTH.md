@@ -4,12 +4,17 @@ Scoped 19 Aug 2026, accepted by the repository owner the same day. Replaces the
 cleartext `SrvrLogin` exchange and the `!CRED_VERIFY` password comparison it
 depends on.
 
-**Status.** Phases 1 to 3 are complete and verified — the primitives against
-the RFC 7677 vectors in both C and BASIC, `$CRED` version 2 end to end, and
-the server exchange proved against a live API port by
-`gplbld/verify-scramlogin.ps1`, **24/24** on the 21:03:41 install of
-19 Aug 2026. Phases 4 to 6 are not started. Nothing on the existing login path
-has changed, and that is one of the 24 — request 24 still reaches `vb.login`.
+**Status.** Phases 1 to 4 are complete and verified — the primitives against
+the RFC 7677 vectors in C, BASIC **and now the client's own Windows crypto**;
+`$CRED` version 2 end to end; the server exchange proved by
+`gplbld/verify-scramlogin.ps1` **24/24**; and the client exchange proved
+end to end by `gplbld/verify-apiport.ps1` on the 21:43:02 install of
+19 Aug 2026 — right password admitted, wrong password refused, `SDSYS`
+refused. Phases 5 and 6 are not started.
+
+**`SrvrLogin` is no longer sent by this client.** The server still serves
+request 24 for anything else that speaks it; retiring that is phase 5, and it
+remains the only point of no return.
 
 **The exchange below is no longer a specification; it is what runs.** The
 server signature, the nonce freshness, the replay refusal and the absence of

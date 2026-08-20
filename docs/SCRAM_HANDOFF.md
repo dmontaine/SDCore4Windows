@@ -18,7 +18,7 @@ additive, and phase 5 remains the only point of no return.
 | 1 | Crypto primitives, C and the `SDEXT` bridge | `gplbld/verify-scram.c` in C; `sdsys/bp/TESTSCRAM` through BASIC |
 | 2 | `$CRED` version 2, `!CRED_SET`, `!CRED_VERIFY`, `SET.PASSWORD` | `sdsys/bp/TESTCRED` |
 | 3 | Server exchange, request types 47 and 48 in `APISRVR` | `gplbld/verify-scramlogin.ps1` — **24/24**, 21:03:41 install, 19 Aug 2026 |
-| 4 | Client exchange in `sdclilib.c` | not started |
+| 4 | Client exchange in `sdclilib.c` | `gplbld/verify-scramclient.c` **27/27**, 64- and 32-bit; `gplbld/verify-apiport.ps1` end to end, 21:43:02 install |
 | 5 | Retire `SrvrLogin` | not started |
 | 6 | Rebuild both DLLs, re-set passwords, test against mvDeveloper | not started |
 
@@ -154,24 +154,108 @@ directly and needs two HMACs and a hash. The 600,000-iteration cost falls on
 `SET_ACC_PASSWORD` still needs it for "changing your own password requires the
 current one".
 
-## Phase 4, the next task
+## Phase 4, what was built
 
-Client exchange in `sdclilib.c`, behind an unchanged `QMConnect`/`SDConnect`.
-`gplbld/verify-scramlogin.ps1` is a complete worked client for it — the packet
-framing, the ACK wait, the message construction and the server-signature check
-are all there in PowerShell, and the .NET calls map onto the `bcrypt.dll` ones
-the design names.
+`gplsrc/sdclilib/scram_client.h` holds the primitives — base64 both ways,
+SHA-256, HMAC-SHA256, PBKDF2 and the whole derivation — and `scram_login()` in
+`sdclilib.c` runs the exchange. `SDConnect` calls it instead of sending
+`SrvrLogin`; `QMConnect`'s signature, return and `QMError()` are unchanged, so
+applications are unaffected and unaware.
 
-Three things it already settles, and getting them wrong is what the C will do
-by default:
+**A header of `static` functions, not a second `.c`.** The client ships as ONE
+binary; source may be split, the binary may not. It also lets
+`gplbld/verify-scramclient.c` include the same file and check it against the
+RFC 7677 vectors, so the constants test what ships rather than a second
+implementation written to agree with the first. Same arrangement as
+`gplsrc/sd_scram.c` and `gplbld/verify-scram.c` on the server side.
 
-- **Send the SCRAM message as the whole body, with no padding.** `SDConnect`
-  pads each request-24 field to a two byte multiple with a NUL. `vb.scram.*`
-  strips trailing NULs defensively, but the protocol has none.
-- **Echo `server-first` verbatim into `AuthMessage`.** Do not rebuild it from
-  the parsed parts.
-- **A missing or wrong `v=` is a failed connection.** It is exactly the check
-  that gets softened during debugging and never hardened again.
+**Everything comes from `bcrypt.dll`**, which is part of Windows, so the DLL
+stays a single file that can be copied next to an application. Base64 is
+implemented in the header rather than taken from `crypt32` — thirty lines
+against a second system dependency and `CryptBinaryToStringA`'s line-wrapping
+behaviour. `-lbcrypt` is in `gplsrc/sdclilib/Makefile`.
+
+```sh
+cd sdb_ai/sd64/gplbld
+gcc -Wall -Wextra -O2 -o verify-scramclient.exe verify-scramclient.c \
+    -I../gplsrc/sdclilib -lbcrypt && ./verify-scramclient.exe
+```
+
+**27/27, and it was run 32-bit as well** — `/c/msys64/mingw32/bin/gcc.exe`
+with `-static-libgcc`, producing a PE32 i386 binary that passes identically.
+That is the constraint the whole KDF decision rested on, so it is checked
+rather than assumed.
+
+**Three things the implementation had to get right**, each recorded because
+the default would have been wrong:
+
+- **The body is the SCRAM message and nothing else.** `SrvrLogin`'s body pads
+  each field to a two byte multiple with a NUL; the packet already carries its
+  own length, so SCRAM adds nothing.
+- **`server-first` is echoed into `AuthMessage` verbatim**, never rebuilt from
+  the parsed parts. `scram_login()` parses a copy for exactly this reason.
+- **A missing or wrong `v=` fails the connection.** Not a warning. It is the
+  check that gets softened while debugging and never hardened again.
+
+**The iteration count from the server is bounded, 4096 to 10,000,000.** A
+server is not trusted to set the client's CPU cost, and a server asking for
+almost none would weaken the derivation a captured exchange is judged against.
+
+## THE 32-BIT SHIPPING DLL BUILDS FROM A STALE COPY — phase 6 blocker
+
+**`Projects/winsdclilib/sdclilib.c` and this repository's
+`gplsrc/sdclilib/sdclilib.c` have diverged**, 112 KB against 138 KB. The repo
+copy is a strict **superset**: every function in `winsdclilib` is in it, plus
+`SDConnectLocal`, `sd_exe_path`, `sysdir` and the four `transport_*` functions.
+So `winsdclilib` is an older ancestor, not a fork with anything of its own.
+
+That matters because `Projects/sdclilib32/Makefile` sets
+`SRCDIR ?= ../winsdclilib`, so **the 32-bit `qmclilib.dll` that ships with
+mvDeveloper is built from the stale copy** — which has no SCRAM in it and will
+not get any by editing this repository.
+
+**Phase 6 cannot be done without resolving this**, since it is "rebuild the
+64-bit and 32-bit DLLs". The likely answer is to make `winsdclilib` take this
+repository's `sdclilib.c`, or to point `SRCDIR` here. Deciding which is the
+repository owner's call; it was not touched as part of phase 4 because phase 4
+could be built and verified without it. `sdclilib32` is also still not a git
+repository.
+
+## Phase 5, the next task
+
+Retire `SrvrLogin`. **This is the point of no return for old clients**, and it
+is deliberately concentrated here so it happens once, knowingly.
+
+- `APISRVR`: `vb.login` goes, and request 24 refuses rather than falling
+  through. `vb.local.login` (25) stays — `SDConnectLocal` sends no password.
+- The `deffun valid_os_name` was already moved to the top of the program for
+  this, so deleting `vb.login` cannot take it with it.
+- `verify-apiport.ps1`'s packet check asserts request 24 is never sent by this
+  client, so it should keep passing across the change.
+- `verify-scramlogin.ps1`'s "request 24 still accepted" check is the one that
+  must be **inverted** at that point, not deleted: it becomes the proof the
+  old path is gone.
+
+## One thing is owed on phase 4
+
+**`verify-apiport.ps1`'s packet-type check has not been run.** Phase 4 itself
+is verified — the `-Prefix sdapi1` run passed end to end on the 21:43:02
+install, before that check existed. What was added afterwards, and not yet
+run, asserts which request types actually went out: 47 and 48 present, **24
+absent**, and the password absent from the reassembled byte stream with the
+user name found by the same search as its control.
+
+It matters because a successful login does **not** on its own prove the client
+spoke SCRAM: the server still serves request 24, so a client that had fallen
+back would be admitted just as readily. Source says it cannot — nothing in
+`sdclilib.c` calls `SrvrLogin` any more and `login_data` is gone entirely —
+but that is an argument, not a measurement.
+
+Elevated, with a prefix nobody has used (`sdapi1` is spent):
+
+```powershell
+gplbld\verify-apiport.ps1 -Prefix sdapi2
+```
 
 ## The client side is a separate, unversioned project
 

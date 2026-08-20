@@ -63,6 +63,16 @@ int main(int argc, char** argv) {
 
   printf("API port %s:%d\n\n", host, port);
 
+  /* 19 Aug 26 Windows port - WHICH REQUEST TYPES ACTUALLY WENT OUT.
+     docs/SCRAM_AUTH.md phase 4.  A successful login does NOT prove the client
+     spoke SCRAM: the server still accepts the old request 24, so a client that
+     had fallen back to it would be admitted exactly as readily.  With
+     SD_CLIENT_DEBUG set, SDDebug(1) logs every packet's type to that path, and
+     gplbld/verify-apiport.ps1 then asserts 47 and 48 are present and 24 is not.
+     Off unless the variable is set, so an ordinary run is unaffected. */
+  if (getenv("SD_CLIENT_DEBUG") != NULL)
+    SDDebug(1);
+
   /* --- treatment: the right credentials, an account the user is granted -- */
 
   printf("connecting as %s to %s with the right password ...\n", user, account);

@@ -101,9 +101,15 @@ if ($binaries.Count -eq 0) {
     # foresaw exactly this; A2 simply did not inherit it.  Nothing under
     # localtest\ or __pycache__ is a source of sd.exe, so this does not loosen
     # the guard.
+    # 19 Aug 26 - sdclilib\tests\ excluded here too, and Check B's comment gives
+    # the reasoning.  Nothing in that directory is compiled INTO sd.exe or the
+    # client DLL - the tests link against the DLL, they are not part of it - so
+    # "run make sd" is the wrong instruction for an edit there and the sequence
+    # it interrupts is the one that would have run the test.
     $uncompiled  = @(Get-ChildItem (Join-Path $sd64 'gplsrc') -Recurse -File |
                      Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
                                     $_.FullName -notmatch '\\localtest\\' -and
+                                    $_.FullName -notmatch '\\sdclilib\\tests\\' -and
                                     $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
     if ($uncompiled.Count -gt 0) {
         Bad ("{0} source file(s) are newer than bin\{1} ({2}) - run 'make sd':" -f
@@ -166,7 +172,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # verify-scramlogin.ps1 refuses to run without it, so
                   # rebuilding the C test would have blocked the BASIC one for
                   # a reason with nothing to do with either.
-                  'verify-scram.c', 'verify-scram.exe')
+                  'verify-scram.c', 'verify-scram.exe',
+                  # 19 Aug 26 - phase 4's client-side equivalent, and the
+                  # 32-bit build of it.  Same reasoning: test source and build
+                  # products that live in a watched tree and never ship.
+                  'verify-scramclient.c', 'verify-scramclient.exe',
+                  'verify-scramclient32.exe')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
@@ -199,9 +210,17 @@ foreach ($t in $trees) {
     # This does NOT loosen the guard: nothing there is a source of sd.exe or of
     # the installed tree, and the other sdclilib test binaries are excluded by
     # the same reasoning if they are ever moved beside it.
+    # 19 Aug 26 - gplsrc\sdclilib\tests\ joins them, and for the same reason.
+    # It is TEST SOURCE: eight .c files, not one of them named in stage.py or
+    # sd.iss, none of which can reach an installed tree.  PROJECT_STATUS
+    # section 7 step 11 recorded that editing remote_connect_test.c owed a full
+    # cycle before verify-apiport.ps1 would run again - and verify-apiport
+    # calls this script first, so improving the test blocked the test.  A cycle
+    # that reinstalls nothing is not a guard, it is a toll.
     $newer += Get-ChildItem $t -Recurse -File -ErrorAction SilentlyContinue |
               Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
                              $_.FullName -notmatch '\\localtest\\' -and
+                             $_.FullName -notmatch '\\sdclilib\\tests\\' -and
                              $excluded -notcontains $_.Name -and
                              $_.LastWriteTime -gt $installed }
 }
