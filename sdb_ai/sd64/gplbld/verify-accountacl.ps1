@@ -125,17 +125,25 @@ function Show-Acl([string]$label, [string]$path) {
     }
 }
 
-# The literal head of sysmsg(N) as INSTALLED - everything before the first
-# substitution.  Read rather than hard-coded, because a check that quotes the
-# words in this file goes blind the day somebody rewords the message, and goes
-# blind in the passing direction.  verify-scramlogin.ps1 reads messages for the
-# same reason; assert-current has already established the install matches
-# source, so this is source's text.
-function Get-SysMsgHead([int]$n) {
+# The installed sysmsg(N) as a REGEX, with each %1/%2 replaced by ".*" and
+# every literal run escaped.  Read rather than hard-coded, because a check that
+# quotes the words in this file goes blind the day somebody rewords the
+# message, and goes blind in the passing direction.
+#
+# 20 Aug 26 - THIS TOOK THE TEXT BEFORE THE FIRST "%" UNTIL TODAY, AND IT ONLY
+# EVER WORKED HERE BY ACCIDENT.  10055 is "Could not secure account directory
+# %1 (%2)", which begins with literal text, so the head was usable.
+# verify-rdpaccount.ps1 copied the function and reads six messages that all
+# START with %1 - the head was the empty string for every one of them, and all
+# six checks reported FAIL on a run where the feature worked perfectly.  Fixed
+# here too rather than left as a working accident.
+function Get-SysMsgPattern([int]$n) {
     $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
     $t = ((Get-Content -LiteralPath $f -Raw)).Trim()
-    return (($t -split '%')[0]).Trim()
+    if ($t -eq '') { return '' }
+    $parts = [regex]::Split($t, '%\d')
+    return (($parts | ForEach-Object { [regex]::Escape($_) }) -join '.*')
 }
 
 # An identity that cannot be resolved to a SID must not abort the run - it is
@@ -235,11 +243,11 @@ try {
     # is the claim that the stamp went through; without this a !ps_script that
     # failed would show up only as a wrong ACL further down, and would read as
     # the two halves having drifted rather than as one of them refusing.
-    $m10055 = Get-SysMsgHead 10055
+    $m10055 = Get-SysMsgPattern 10055
     if ($m10055 -eq '') {
         Note 'message 10055 is installed' $true $false
     } else {
-        Note 'no message 10055 (could not secure)' $false ($out -match [regex]::Escape($m10055))
+        Note 'no message 10055 (could not secure)' $false ($out -match $m10055)
     }
 
     $group = 'sdu_' + $Prefix

@@ -83,12 +83,33 @@ function Fail($msg) {
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
-# The installed message text for sysmsg(N).  Read rather than hard-coded, so a
-# reworded message fails the check that names it instead of going blind.
-function Get-SysMsgHead([int]$n) {
+# The installed sysmsg(N) as a REGEX, with each %1/%2 replaced by ".*" and
+# every literal run escaped.  Read from the install rather than hard-coded, so
+# a reworded message fails the check that names it instead of going blind.
+#
+# 20 Aug 26 - IT USED TO TAKE THE TEXT BEFORE THE FIRST "%" AND THAT MEASURED
+# NOTHING.  Every message this script asserts STARTS with %1 - "%1 may sign in
+# over ssh only" - so the head was the empty string, the "is it installed"
+# guard beside it fired, and all six message checks reported FAIL on a run
+# where the feature worked perfectly.  12 of 18, first run, 20 Aug 2026.
+#
+# THE ACCIDENTAL CONTROL IS WHAT MADE IT OBVIOUS: 10034 failed too, and 10034
+# is an EXISTING message printed by a path RDPACCOUNT never touched.  A new
+# feature cannot break an old message it does not go near, so the fault had to
+# be in the checking.  Six failures with one of them impossible is worth more
+# than six plausible ones.
+#
+# verify-accountacl.ps1 carried the same function and did NOT expose it, because
+# the one message it reads - 10055, "Could not secure account directory %1" -
+# happens to begin with literal text.  Fixed there too rather than left as a
+# working accident.
+function Get-SysMsgPattern([int]$n) {
     $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
-    return ((((Get-Content -LiteralPath $f -Raw)).Trim() -split '%')[0]).Trim()
+    $t = ((Get-Content -LiteralPath $f -Raw)).Trim()
+    if ($t -eq '') { return '' }
+    $parts = [regex]::Split($t, '%\d')
+    return (($parts | ForEach-Object { [regex]::Escape($_) }) -join '.*')
 }
 
 # Blank first line absorbs the pipe's BOM, TERM stops pagination, OFF ends it.
@@ -191,8 +212,8 @@ try {
     Step 1 "CREATE.ACCOUNT USER $rdpAcc RDPACCOUNT"
 
     $r = New-Acct $rdpAcc 'RDPACCOUNT'
-    $m10056 = Get-SysMsgHead 10056
-    Note 'message 10056 shown' $true ($m10056 -ne '' -and $r.Out -match [regex]::Escape($m10056))
+    $m10056 = Get-SysMsgPattern 10056
+    Note 'message 10056 shown' $true ($m10056 -ne '' -and $r.Out -match $m10056)
     Note 'NOT in sdsshonly'    $false (In-SshOnly $rdpAcc)
     Note 'may sign in to Windows' 'admitted' (InteractiveLogon $rdpAcc $r.Password)
 
@@ -202,8 +223,8 @@ try {
     # Without this, "RDPACCOUNT can log on" would pass on a machine where the
     # deny right was never applied to anybody.
     $s = New-Acct $stdAcc ''
-    $m10034 = Get-SysMsgHead 10034
-    Note 'message 10034 shown' $true ($m10034 -ne '' -and $s.Out -match [regex]::Escape($m10034))
+    $m10034 = Get-SysMsgPattern 10034
+    Note 'message 10034 shown' $true ($m10034 -ne '' -and $s.Out -match $m10034)
     Note 'IS in sdsshonly'     $true  (In-SshOnly $stdAcc)
     Note 'may NOT sign in'     'refused 1385' (InteractiveLogon $stdAcc $s.Password)
 
@@ -211,22 +232,22 @@ try {
     Step 3 "MODIFY.ACCOUNT $stdAcc RDPACCOUNT - release it"
 
     $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc RDPACCOUNT")
-    $m10057 = Get-SysMsgHead 10057
-    Note 'message 10057 shown' $true ($m10057 -ne '' -and $out -match [regex]::Escape($m10057))
+    $m10057 = Get-SysMsgPattern 10057
+    Note 'message 10057 shown' $true ($m10057 -ne '' -and $out -match $m10057)
     Note 'no longer in sdsshonly' $false (In-SshOnly $stdAcc)
     Note 'now may sign in'     'admitted' (InteractiveLogon $stdAcc $s.Password)
 
     # Idempotence, and it must SAY so rather than silently succeed.
     $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc RDPACCOUNT")
-    $m10059 = Get-SysMsgHead 10059
-    Note 'second RDPACCOUNT says already' $true ($m10059 -ne '' -and $out -match [regex]::Escape($m10059))
+    $m10059 = Get-SysMsgPattern 10059
+    Note 'second RDPACCOUNT says already' $true ($m10059 -ne '' -and $out -match $m10059)
 
     # -----------------------------------------------------------------------
     Step 4 "MODIFY.ACCOUNT $stdAcc NO.RDPACCOUNT - confine it again"
 
     $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc NO.RDPACCOUNT")
-    $m10058 = Get-SysMsgHead 10058
-    Note 'message 10058 shown' $true ($m10058 -ne '' -and $out -match [regex]::Escape($m10058))
+    $m10058 = Get-SysMsgPattern 10058
+    Note 'message 10058 shown' $true ($m10058 -ne '' -and $out -match $m10058)
     Note 'back in sdsshonly'   $true  (In-SshOnly $stdAcc)
     Note 'refused again'       'refused 1385' (InteractiveLogon $stdAcc $s.Password)
 
@@ -242,8 +263,8 @@ try {
     Note 'admin NOT in sdsshonly to start' $false (In-SshOnly $admAcc)
 
     $out = Invoke-SD @("MODIFY.ACCOUNT $admAcc NO.RDPACCOUNT")
-    $m10061 = Get-SysMsgHead 10061
-    Note 'refused with message 10061' $true ($m10061 -ne '' -and $out -match [regex]::Escape($m10061))
+    $m10061 = Get-SysMsgPattern 10061
+    Note 'refused with message 10061' $true ($m10061 -ne '' -and $out -match $m10061)
     # THE ONE THAT MATTERS: the refusal must have refused, not merely reported.
     Note 'admin STILL not in sdsshonly' $false (In-SshOnly $admAcc)
     Note 'admin can still sign in'      'admitted' (InteractiveLogon $admAcc $a.Password)
