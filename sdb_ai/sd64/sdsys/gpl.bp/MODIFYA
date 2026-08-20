@@ -19,12 +19,18 @@
 * 
 *
 * START-HISTORY:
+* 20 Aug 26 Windows port - RDPACCOUNT and NO.RDPACCOUNT move an account in and
+*   out of sdsshonly, which is what decides whether it may sign in to Windows.
+*   PROJECT_STATUS.md section 8.  Nothing is recorded in ACCOUNTS: the group
+*   membership IS the property.
 * 19 Aug 26 Windows port - SDSYS accounts is lower case on disk.  5.12 (a).
 * rev 0.9.0 Jan 25 mab initial release
 * END-HISTORY
 *
 * START-DESCRIPTION:
 * MODIFY.ACCOUNT account <ADD/DELETE> user.name
+* MODIFY.ACCOUNT account RDPACCOUNT        - may sign in to Windows
+* MODIFY.ACCOUNT account NO.RDPACCOUNT     - confined to ssh again
 *
 * END-DESCRIPTION
 *
@@ -66,7 +72,8 @@ deffun valid_os_name(name) calling '!valid_os_name'
    * Get next token, account name
    call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
    if token.type = PARSER$END then
-      crt 'Command Syntax:  MODIFY.ACCOUNT <account> ADD | DELETE <username> '
+      crt 'Command Syntax:  MODIFY.ACCOUNT <account> ADD | DELETE <username>'
+      crt '                  MODIFY.ACCOUNT <account> RDPACCOUNT | NO.RDPACCOUNT'
       stop
    end
    *
@@ -84,6 +91,39 @@ deffun valid_os_name(name) calling '!valid_os_name'
    if is_group(group.name) then
       * Get next token, ADD or DELETE
       call @parser(PARSER$GET.TOKEN, token.type, action, keyword)
+
+* 20 Aug 26 Windows port - RDPACCOUNT and NO.RDPACCOUNT, PROJECT_STATUS.md
+*   section 8.  Two more actions in the slot ADD and DELETE already occupy:
+*
+*     MODIFY.ACCOUNT <account> RDPACCOUNT      may sign in to Windows
+*     MODIFY.ACCOUNT <account> NO.RDPACCOUNT   confined to ssh again
+*
+*   They take NO user name - they act on the account's OWN Windows user, which
+*   is what CREATE.ACCOUNT's keyword acts on - so they are handled before the
+*   ADD/DELETE test rather than inside it, which would demand one.
+*
+*   THE PROPERTY IS GROUP MEMBERSHIP AND NOTHING ELSE.  Absence from sdsshonly
+*   is what lets an account sign in to Windows, because that group carries
+*   SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight
+*   (gplbld/deny-logon.ps1).  Nothing is written to ACCOUNTS - owner's
+*   decision, 20 Aug 2026 - so there is no record here that could disagree with
+*   the group, and these two verbs are the whole of the state change.
+*
+*   WRAPPED ROUND THE ADD/DELETE BLOCK RATHER THAN FOLDED INTO IT.  That block
+*   is working code with four message paths in it; turning its "if ADD or
+*   DELETE" into arms of a case statement would rewrite all of it to add two
+*   actions that share none of it.  One "if not(rdp.done)" leaves it untouched.
+      rdp.done = @false
+      if upcase(action) = 'RDPACCOUNT' then
+         gosub set.rdp
+         rdp.done = @true
+      end
+      if upcase(action) = 'NO.RDPACCOUNT' then
+         gosub clear.rdp
+         rdp.done = @true
+      end
+
+      if not(rdp.done) then
       if (upcase(action) = 'ADD') or (upcase(action) = 'DELETE') then
       *  valid action
       *   Get next token, user name
@@ -147,10 +187,115 @@ deffun valid_os_name(name) calling '!valid_os_name'
          
          
       end else
-         crt 'MODIFY.ACCOUNT Action Must Be Add or Delete'
-      end 
-   
+         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, RDPACCOUNT or NO.RDPACCOUNT'
+      end
+      end       ;* not(rdp.done)
+
    end else
-     crt sysmsg(10024,group.name) ;* %1 is not a valid Linux Group
+     crt sysmsg(10024,group.name) ;* %1 is not a valid Windows group
    end
+   goto program.end
+
+* ======================================================================
+* The account's OWN Windows user.
+*
+* 20 Aug 26 Windows port - DERIVED FROM ACC$GROUP, NOT FROM THE RECORD ID.
+*   CREATE.ACCOUNT downcases the user name (CREATEA) and writes the ACCOUNTS
+*   record under the UPPER case name, so downcase(acc.name) would usually be
+*   right - but "usually" is doing real work there and this decides whether
+*   somebody can log in.  ACC$GROUP is "sdu_":acc.uname, written by
+*   CREATE.ACCOUNT from the user name itself, so taking the name back out of it
+*   is a reversal of what was actually recorded rather than a guess at it.
+*
+*   AND THE RESULT IS CHECKED AGAINST sdusers before anything acts on it, with
+*   the same test the ADD path above already uses.  That is what rejects a
+*   GROUP-type account: its ACC$GROUP is a name the caller supplied, not
+*   "sdu_"-anything, so the name that comes out is not an SD user and the
+*   check refuses it.  A GROUP account has no single Windows user for this to
+*   mean anything about.
+account.user:
+   acc.user = ''
+   if group.name[1,4] = 'sdu_' then acc.user = group.name[5,999]
+   if acc.user = '' then
+      crt sysmsg(10020,acc.name) ;* %1 is not a member of sdusers, not allowed
+      user.ok = @false
+      return
+   end
+   user.ok = is_grp_member(acc.user,'sdusers')
+   if not(user.ok) then
+      crt sysmsg(10020,acc.user) ;* %1 is not a member of sdusers, not allowed
+   end
+   return
+
+* ======================================================================
+* RDPACCOUNT - let this account sign in to Windows, by taking it out of
+* sdsshonly.  PROJECT_STATUS.md section 8.
+set.rdp:
+   gosub account.user
+   if not(user.ok) then return
+
+   if not(is_grp_member(acc.user,'sdsshonly')) then
+      crt sysmsg(10059,acc.user)  ;* %1 may already sign in to Windows
+      return
+   end
+
+   if not(valid_os_name(acc.user)) then
+      crt sysmsg(10062,acc.user,2) ;* Unable to release %1 from ssh-only, status: %2
+      return
+   end
+
+   stat = os_group("DELMEM", "sdsshonly", acc.user)
+   if stat = 0 then
+      crt sysmsg(10057,acc.user)   ;* %1 may now sign in to Windows
+   end else
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10062,acc.user,stat) ;* Unable to release %1 from ssh-only, status: %2
+   end
+   return
+
+* ======================================================================
+* NO.RDPACCOUNT - confine this account to ssh again, by putting it back into
+* sdsshonly.
+*
+* 20 Aug 26 Windows port - AND NO ADMINISTRATOR IS EVER CONFINED TO ssh.  This
+*   is the rule CREATEA states at its own sdsshonly test, where the comment
+*   says the check sits there "so the next route inherits the protection
+*   instead of rediscovering the lockout".  THIS IS THAT NEXT ROUTE, and it is
+*   the dangerous direction: sdsshonly carries SeDenyInteractiveLogonRight and
+*   SeDenyRemoteInteractiveLogonRight, so an administrator who ran this on
+*   their own account would keep the session they are in and be unable to sign
+*   in at their own console again.  That is exactly what happened on 15 Aug
+*   2026 the first time ADOPT ran.
+*
+*   BY SID, for the reason CREATEA gives: BUILTIN\Administrators is translated
+*   on a localised Windows.
+clear.rdp:
+   gosub account.user
+   if not(user.ok) then return
+
+   if is_grp_member(acc.user, "S-1-5-32-544") then
+      crt sysmsg(10061,acc.user)  ;* %1 is a Windows administrator and may not be confined to ssh
+      return
+   end
+
+   if is_grp_member(acc.user,'sdsshonly') then
+      crt sysmsg(10060,acc.user)  ;* %1 is already confined to ssh
+      return
+   end
+
+   if not(valid_os_name(acc.user)) then
+      crt sysmsg(10035,acc.user,2) ;* Unable to restrict %1 to ssh, status: %2
+      return
+   end
+
+   stat = os_group("ADDMEM", "sdsshonly", acc.user)
+   if stat = 0 then
+      crt sysmsg(10058,acc.user)   ;* %1 is confined to ssh again
+   end else
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10035,acc.user,stat) ;* Unable to restrict %1 to ssh, status: %2
+   end
+   return
+
+program.end:
    END

@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  A new kind of account: RDPACCOUNT, which may sign in to Windows.
+           * CREATE.ACCOUNT USER jim RDPACCOUNT
+             CREATE.ACCOUNT USER jim PROGRAMMER RDPACCOUNT
+             The account may sign in at the console, over Remote Desktop, and
+             run other Windows programs - as well as over ssh.  Without the
+             keyword an account is confined to ssh, which is unchanged and
+             stays the default.
+           * IT IS NOT A FOURTH TIER.  It is orthogonal to STANDARD,
+             PROGRAMMER and ADMINISTRATOR: give it with any of them, in either
+             order.  The tier decides what the account can DO inside SD; this
+             decides how the person reaches the machine.
+           * AN EXISTING ACCOUNT CAN BE MOVED EITHER WAY:
+                 MODIFY.ACCOUNT JIM RDPACCOUNT      may sign in to Windows
+                 MODIFY.ACCOUNT JIM NO.RDPACCOUNT   confined to ssh again
+           * AN ADMINISTRATOR CANNOT BE CONFINED TO ssh, and NO.RDPACCOUNT
+             refuses rather than doing it.  Confining an administrator would
+             deny them console and Remote Desktop sign-in, and they would be
+             unable to get back in after the session they typed it in.
+           * WHAT IT COSTS YOU TO KNOW.  An RDPACCOUNT user has a desktop, so
+             they can reach files with Explorer and run programs SD does not
+             control.  Each account's own directory is locked to that account
+             (see the entry below), which is what makes this safe to offer;
+             but it is a wider kind of access than an ssh-only account has,
+             and it is not the default for that reason.
+
 20 Aug 26  The API port is now open by default.
            * APIPORT=4243 is set in C:\ProgramData\SD\sd.conf on a new
              install, instead of being commented out for you to switch on.

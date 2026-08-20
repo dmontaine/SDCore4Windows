@@ -230,7 +230,9 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # exit, so an unlisted verify-accountacl.ps1 would report the
                   # tree stale because verify-accountacl.ps1 exists, and then
                   # refuse to run on the strength of its own newness.
-                  'verify-accountacl.ps1')
+                  'verify-accountacl.ps1',
+                  # 20 Aug 26 - section 8's RDPACCOUNT verifier, same reasoning.
+                  'verify-rdpaccount.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

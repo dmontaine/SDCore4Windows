@@ -171,6 +171,12 @@ deffun ps_script(script) calling '!ps_script'
 * 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
 *   already exists, instead of creating one.  See more.args for what gates it.
    adopt = @false
+* 20 Aug 26 Windows port - RDPACCOUNT, section 8.  A FLAG rather than a string,
+*   which is the opposite choice from tier above and for the reason given
+*   there: tier is written to ACCOUNTS and has to be readable by a person
+*   running LIST ACCOUNTS, and this is written nowhere at all.  It lives only
+*   long enough to reach the sdsshonly test.
+   rdp.account = @false
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -507,17 +513,35 @@ PW.TRY.AGAIN:
 *   BY SID.  BUILTIN\Administrators is translated on a localised Windows, and
 *   !is_grp_member learned to accept a SID on the same day, for this call - see
 *   its history.
+* 20 Aug 26 Windows port - RDPACCOUNT IS THE THIRD CASE, section 8.  The
+*   comment above predicted it: "the test is here rather than beside it so the
+*   next route inherits the protection instead of rediscovering the lockout".
+*
+*   IT IS TESTED INSIDE THE else, NOT ALONGSIDE, and the order is the point.
+*   ADOPT and administrator are asked FIRST, so an administrator who also typed
+*   RDPACCOUNT still gets 10040: they KEPT rights they already had, which is
+*   what happened, and the keyword changed nothing for them.  Only an account
+*   that would otherwise have been confined reaches 10056, so that message is
+*   only ever printed where the keyword actually did something.
+*
+*   NESTED RATHER THAN CHAINED so the block count is unchanged - an "end else
+*   if" here would need a further "end", and the two below already close
+*   "adopt" and "make.admin".
         if adopt or is_grp_member(acc.uname, "S-1-5-32-544") then
           crt sysmsg(10040,acc.uname)   ;* %1 keeps the Windows sign-in rights it already had
         end else
-          void os_group("ADDMEM", "sdsshonly", acc.uname)
-          stat = OS.ERROR()
-          if stat = 0 then
-            crt sysmsg(10034,acc.uname)   ;* %1 may sign in over ssh only
+          if rdp.account then
+            crt sysmsg(10056,acc.uname) ;* %1 may sign in to Windows as well as over ssh
           end else
-            @system.return.code = -ER$FAILED
-            stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
-          end
+            void os_group("ADDMEM", "sdsshonly", acc.uname)
+            stat = OS.ERROR()
+            if stat = 0 then
+              crt sysmsg(10034,acc.uname)   ;* %1 may sign in over ssh only
+            end else
+              @system.return.code = -ER$FAILED
+              stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
+            end
+          end     ;* rdp.account
         end       ;* adopt
         end       ;* make.admin
 
@@ -938,6 +962,40 @@ more.args:
 *   would still look right everywhere except its VOC.
          case upcase(token) = 'PROGRAMMER'
             if tier # 'ADMINISTRATOR' then tier = 'PROGRAMMER'
+
+* 20 Aug 26 Windows port - RDPACCOUNT, PROJECT_STATUS.md section 8.  The
+*   account keeps an ordinary Windows sign-in: console, Remote Desktop and
+*   other Windows programs, as well as ssh.  Without it an account is confined
+*   to ssh, which is the default and stays the common case.
+*
+*   ORTHOGONAL TO THE TIER, NOT A FOURTH ONE.  Owner's decision, 18 Aug 2026:
+*   "CREATE.ACCOUNT USER jim RDPACCOUNT" is a standard account that may sign
+*   in, and "... jim PROGRAMMER RDPACCOUNT" is a programmer that may.  So this
+*   sets its own flag and does NOT touch tier - the two are read in different
+*   places and neither may quietly move the other.
+*
+*   IT IS THE THIRD CASE ON A TEST THAT ALREADY EXISTED.  The sdsshonly branch
+*   below has read "adopt or is_grp_member(... S-1-5-32-544)" since 15 Aug, and
+*   its comment says the test sits there "so the next route inherits the
+*   protection instead of rediscovering the lockout".  This is that next route,
+*   and it needed one clause rather than a new mechanism.
+*
+*   NOTHING IS RECORDED IN ACCOUNTS, and that is a decision rather than an
+*   omission - owner, 20 Aug 2026.  Absence from sdsshonly IS the property:
+*   Windows enforces it through SeDenyInteractiveLogonRight and
+*   SeDenyRemoteInteractiveLogonRight on that group (gplbld/deny-logon.ps1),
+*   and SD never reads it - "sdsshonly" is WRITTEN here and nowhere else in
+*   this tree, and read nowhere at all.  A mirrored field could therefore only
+*   ever disagree with the thing that actually decides, and would be reporting
+*   a security property SD does not enforce.  ACC$USERS was deleted on exactly
+*   this reasoning on 15 Aug - SYSCOM/KEYS.H, "the operating system holds the
+*   grant, not this record".
+*
+*   Matched on the token text, like ADMINISTRATOR and PROGRAMMER above, and for
+*   the same reason: the KW$ table in SYSCOM/PARSER.H is positional and shared
+*   by every verb.  It cannot be abbreviated.
+         case upcase(token) = 'RDPACCOUNT'
+            rdp.account = @true
 
 * 14 Aug 26 Windows port - ADOPT takes an OS account that already exists
 *   instead of creating one.  It is the single exception to the owner's rule

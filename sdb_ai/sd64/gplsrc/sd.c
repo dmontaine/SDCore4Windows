@@ -567,10 +567,33 @@ Private bool comlin(int argc, char *argv[]) {
 /* 15 Aug 26 Windows port - A COMMAND IS A PARAMETER TOO.  Owner's rule,
    15 Aug 2026: "sd LISTF" runs LISTF just as "sd -start" started the server,
    and an unelevated session has no business doing either from the command
-   line.  The model it completes: whoever is at the console or on Remote
-   Desktop is an administrator, because SD's own accounts are confined to ssh
-   (PROJECT_STATUS.md 5.6.2) - and an ssh session arrives at SD itself through
-   ForceCommand rather than at a prompt.
+   line.
+
+   20 Aug 26 Windows port - THE JUSTIFICATION THAT STOOD HERE IS NOW FALSE, and
+   the gate is not.  It read: "whoever is at the console or on Remote Desktop is
+   an administrator, because SD's own accounts are confined to ssh".  That was
+   true by construction while every SD account went into sdsshonly, which
+   carries SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight.
+   CREATE.ACCOUNT's RDPACCOUNT keyword (PROJECT_STATUS.md section 8) skips that
+   group deliberately, so a NON-administrator can now be at a console or on
+   Remote Desktop.
+
+   WHAT THE GATE ACTUALLY RESTS ON, which never depended on that claim: it asks
+   whether the SESSION IS ELEVATED, not how the person arrived.  An RDPACCOUNT
+   user gets an ordinary unelevated token like anyone else, so "sd LISTF" is
+   refused for them exactly as it is for an unelevated administrator - which is
+   the behaviour wanted.  The old sentence explained why the refusal was
+   near-unreachable, not why it was right.
+
+   AN ssh SESSION STILL ARRIVES AT SD ITSELF through ForceCommand rather than
+   at a prompt, and that is unchanged.
+
+   THE INCONSISTENCY THIS EXPOSES IS REAL AND IS LEFT ALONE (section 8,
+   difficulty 3): from a desktop, "sd LISTF" is refused while "sd" then LISTF
+   at the prompt works.  Defensible - the gate is on the command line form, and
+   an interactive session is what an account is for - but it only becomes
+   visible with this class of user, and it is a decision rather than an
+   oversight.
 
    NOT "with no shell", which this comment claimed until 15 Aug 2026: SH hands
    one back.  It changes nothing about this gate - that shell is still
