@@ -116,11 +116,30 @@ if ($binaries.Count -eq 0) {
     # on the extension rather than on a list of names means the next build
     # product to appear there is covered before anybody trips over it.
     $buildProducts = '\.(exe|dll|a|o|obj|lib|exp)$'
+
+    # 20 Aug 26 - AND DOCUMENTATION IS NOT SOURCE EITHER, for the same reason
+    # and by the same test: nothing compiles a .md into sd.exe or the client
+    # DLL, and gplsrc is not installed at all - it is C source, and stage.py
+    # ships sdsys.  So an edit to gplsrc\sdclilib\VENDORING.md answered "run
+    # make sd, then run a cycle", and BOTH would have been pointless: the
+    # rebuild has nothing to read and the install has nothing to receive.
+    #
+    # FOUND BY DOING IT.  Editing VENDORING.md to record the client packaging
+    # work turned this check red, on a tree that had just cycled and passed the
+    # whole suite - so the next session would have spent an install on a
+    # markdown file, or learned to distrust the guard, which is worse.
+    #
+    # THE RULE IS THE ONE THE EXCLUSIONS ABOVE ALREADY FOLLOW: a file that
+    # cannot reach the binaries or the install cannot make either of them
+    # stale.  Extension rather than a list of names, so the next document is
+    # covered before anybody trips over it.
+    $documentation = '\.(md|txt)$'
     $uncompiled  = @(Get-ChildItem (Join-Path $sd64 'gplsrc') -Recurse -File |
                      Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
                                     $_.FullName -notmatch '\\localtest\\' -and
                                     $_.FullName -notmatch '\\sdclilib\\tests\\' -and
                                     $_.Name -notmatch $buildProducts -and
+                                    $_.Name -notmatch $documentation -and
                                     $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
     if ($uncompiled.Count -gt 0) {
         Bad ("{0} source file(s) are newer than bin\{1} ({2}) - run 'make sd':" -f
@@ -229,6 +248,19 @@ foreach ($t in $trees) {
     # the installed tree, and the other sdclilib test binaries are excluded by
     # the same reasoning if they are ever moved beside it.
     # 19 Aug 26 - gplsrc\sdclilib\tests\ joins them, and for the same reason.
+    # 20 Aug 26 - AND DOCUMENTATION, which is the same toll by a third route:
+    # editing gplsrc\sdclilib\VENDORING.md turned this red on a tree that had
+    # just cycled and passed the whole suite, so the next session would have
+    # spent an install on a markdown file - or learned to distrust the guard,
+    # which is worse.  Nothing under gplsrc is installed at all; stage.py
+    # ships sdsys.
+    #
+    # BUT IT ASKS $shipsAs RATHER THAN EXCLUDING THE EXTENSION OUTRIGHT.  A
+    # blunt filter would hide a .md or .txt that somebody later DOES ship, and
+    # that is the dangerous direction: a false stale costs one install, a false
+    # current costs an investigation.  This way a document is watched again the
+    # moment it appears in stage.py or sd.iss, which is exactly what the
+    # $neverShipped list above already does by name.
     # It is TEST SOURCE: eight .c files, not one of them named in stage.py or
     # sd.iss, none of which can reach an installed tree.  PROJECT_STATUS
     # section 7 step 11 recorded that editing remote_connect_test.c owed a full
@@ -239,6 +271,7 @@ foreach ($t in $trees) {
               Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
                              $_.FullName -notmatch '\\localtest\\' -and
                              $_.FullName -notmatch '\\sdclilib\\tests\\' -and
+                             -not ($_.Extension -in '.md', '.txt' -and -not (& $shipsAs $_.Name)) -and
                              $excluded -notcontains $_.Name -and
                              $_.LastWriteTime -gt $installed }
 }
