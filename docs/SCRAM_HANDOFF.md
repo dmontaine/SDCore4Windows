@@ -80,7 +80,7 @@ gcc -Wall -Wextra -O2 -o verify-scram.exe verify-scram.c ../gplsrc/sd_scram.c \
 
 Server build is `make sd` in `sdb_ai/sd64`, unchanged.
 
-## Four things that bit, and will bite again
+## Five things that bit, and will bite again
 
 **The `SDEXT` key numbers live in two files that nothing cross-checks** —
 `gplsrc/keys.h` for C and `sdsys/syscom/KEYS.H` for BASIC.
@@ -99,6 +99,16 @@ resolves from either.
 **The source tree and the install are separate copies.** Editing the source
 changes nothing until the file is copied across, and a stale installed include
 fails silently in the manner above rather than reporting a missing file.
+
+**This tree is `* -text`, and every file must stay LF.** `.gitattributes`
+disables end-of-line conversion so files round-trip byte-for-byte — the tree is
+a Linux distribution package stored from a Windows host, and CRLF would break
+shell scripts on a Linux checkout. Any tool that rewrites a file through a
+Windows text-mode write converts it to CRLF silently: Python's
+`open(path, 'w')` does exactly this. The result is a commit where a two-line
+change shows as 620 changed lines. Edit in place, or write bytes in binary
+mode. `git show --stat` catches it — a file whose diff is far larger than the
+edit was rewritten wholesale.
 
 ## Phase 3, the next task
 
