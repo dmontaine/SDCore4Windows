@@ -312,6 +312,17 @@
       $define SD_KEYFROMPW    101  ;* sd_encrypt_sodium sd_KeyFromPW function  
       $define SD_EUID_SET     102  ;* set current process's euid egid to that of user
       $define SD_EUID_RESTORE 103  ;* set current process's euid egid to what it was on entry to sd
+
+      * 19 Aug 26 Windows port - SCRAM-SHA-256 primitives for the API login
+      *   exchange.  All of them take and return BASE64, because SDEXT carries
+      *   NUL-terminated C strings and a raw 32-byte digest would contain a
+      *   mark character about one time in nine.  docs/SCRAM_AUTH.md
+      $define SD_SHA256       104  ;* sd_scram sha256, 1 arg
+      $define SD_HMACSHA256   105  ;* sd_scram hmac-sha256: base64 key, TEXT msg
+      $define SD_PBKDF2       106  ;* sd_scram pbkdf2, 4 args: pw, salt, iter, len
+      $define SD_RANDBYTES    107  ;* sd_scram random bytes, 1 arg: count
+      $define SD_XORBYTES     108  ;* sd_scram xor, 2 args, equal lengths
+      $define SD_CTEQUAL      109  ;* sd_scram constant-time compare, 2 args
       
       * 13 Aug 26 Windows port - embedded python keys removed with the
       *   interpreter.  See PROJECT_STATUS.md 5.15.

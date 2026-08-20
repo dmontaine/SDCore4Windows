@@ -298,6 +298,8 @@
 #define SD_EXT_KEY_ERR -10300  /* unknown key */
 #define SD_EXT_ARG_CNT -10301  /* incorrect argument count for called function */
 #define SD_INT_OVERFLW -10302  /* Result will create integer overflow  (> 32 Bit int)*/
+/* 19 Aug 26 Windows port - SCRAM primitives.  docs/SCRAM_AUTH.md */
+#define SD_SCRAM_ERR   -10303  /* sd_scram.c primitive failed or was given bad input */
 
 /* sdext_eguid_set error codes */
 #define SD_EUID_PWD_Err  -10400  /* Couldn't get pwd of user */

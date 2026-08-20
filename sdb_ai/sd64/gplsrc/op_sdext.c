@@ -48,8 +48,11 @@
 #include <limits.h>
 #include <sodium.h>
 
+#include <errno.h>
+
 #include "sd.h"
 #include "keys.h"
+#include "sd_scram.h"
 
 /* Modified by Composer AI - 2026/06/10.
    k_error() longjmps and never returns; redeclare noreturn for analyzer. */
@@ -66,6 +69,8 @@ char* SDMEArgArray[SD_MAX_ARGS];          /* create an array of pointers, for st
 char* NullString(void); 
 
 Private void sdme_err_rsp(int errnbr);
+Private void scram_reply(char* value);
+Private long scram_arg_long(const char* text);
 
 /* ======================================================================
    op_sdext()   op code for BASIC function  SDME.EXT   
@@ -238,7 +243,101 @@ void op_sdext() {
       }
       break;
 
-/* rev 0.9.0 set restore process euid and egid */
+/* 19 Aug 26 Windows port - SCRAM-SHA-256 primitives for the API login
+       exchange.  Every BINARY value is base64 - see gplsrc/sd_scram.c for why that
+       is forced rather than chosen - while the password given to SD_PBKDF2 and
+       the message signed by SD_HMACSHA256 are text, because neither is binary
+       in the protocol either.  Each case is a thin adapter: check the argument count, parse any integers, make one
+       call, and hand the result to the shared reply path. */
+
+    case SD_SHA256: {
+      if (argCnt != 1) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      scram_reply(sd_scram_sha256(SDMEArgArray[0]));
+      break;
+    }
+
+    case SD_HMACSHA256: {
+      if (argCnt != 2) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      scram_reply(sd_scram_hmac(SDMEArgArray[0], SDMEArgArray[1]));
+      break;
+    }
+
+    case SD_PBKDF2: {
+      long iterations;
+      long dk_len;
+
+      if (argCnt != 4) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      iterations = scram_arg_long(SDMEArgArray[2]);
+      dk_len = scram_arg_long(SDMEArgArray[3]);
+      if (iterations < 0 || dk_len < 0) {
+        sdme_err_rsp(SD_SCRAM_ERR);
+        break;
+      }
+      scram_reply(sd_scram_pbkdf2(SDMEArgArray[0], SDMEArgArray[1],
+                                  iterations, dk_len));
+      break;
+    }
+
+    case SD_RANDBYTES: {
+      long n_bytes;
+
+      if (argCnt != 1) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      n_bytes = scram_arg_long(SDMEArgArray[0]);
+      if (n_bytes < 0) {
+        sdme_err_rsp(SD_SCRAM_ERR);
+        break;
+      }
+      scram_reply(sd_scram_random(n_bytes));
+      break;
+    }
+
+    case SD_XORBYTES: {
+      if (argCnt != 2) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      scram_reply(sd_scram_xor(SDMEArgArray[0], SDMEArgArray[1]));
+      break;
+    }
+
+    /* Answers "1" or "0".  A malformed argument is reported as an error rather
+       than as "0", because by the time the login path compares these values
+       both sides are the server's own - a decode failure there is a bug here,
+       not a wrong password.  A caller deciding whether to admit a login must
+       still treat the error as a refusal. */
+    case SD_CTEQUAL: {
+      int same;
+      char answer[2];
+
+      if (argCnt != 2) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      same = sd_scram_ct_equal(SDMEArgArray[0], SDMEArgArray[1]);
+      if (same < 0) {
+        sdme_err_rsp(SD_SCRAM_ERR);
+        break;
+      }
+      answer[0] = (char)('0' + same);
+      answer[1] = '\0';
+      k_put_c_string(answer, e_stack);
+      e_stack++;
+      break;
+    }
+
+    /* rev 0.9.0 set restore process euid and egid */
     case SD_EUID_SET:
     case SD_EUID_RESTORE:
       sdext_eguid_set(key, SDMEArgArray[0]);
@@ -284,6 +383,38 @@ char* NullString() {
     return NULL;
   *p = '\0';
   return p;
+}
+
+/* 19 Aug 26 Windows port - shared reply path for the sd_scram primitives.
+   Every one of them answers a malloc'd base64 string or NULL, so success and
+   failure look the same at every call site.  Note sdme_err_rsp() pushes its
+   own empty result, so only the success path touches e_stack here. */
+Private void scram_reply(char* value) {
+  if (value == NULL) {
+    sdme_err_rsp(SD_SCRAM_ERR);
+    return;
+  }
+  k_put_c_string(value, e_stack);
+  e_stack++;
+  free(value);                /* malloc'd in sd_scram.c, not sodium_malloc'd */
+}
+
+/* Answers -1 for anything that is not a clean non-negative decimal integer.
+   The bounds themselves are checked inside sd_scram.c, which is where they are
+   documented; this only has to reject text that is not a number at all. */
+Private long scram_arg_long(const char* text) {
+  char* end;
+  long value;
+
+  if (text == NULL || *text == '\0')
+    return -1;
+
+  errno = 0;
+  value = strtol(text, &end, 10);
+  if (errno != 0 || *end != '\0' || value < 0)
+    return -1;
+
+  return value;
 }
 
 /* generic error return with null response, setting process.status */

@@ -18,23 +18,31 @@
 *
 *
 * START-HISTORY:
+* 19 Aug 26 Windows port - writes a version 2 SCRAM record.  The Argon2
+*           verifier is gone: SCRAM needs material a client can prove
+*           knowledge of without sending the password, and a one-way verifier
+*           cannot supply that.  docs/SCRAM_AUTH.md
 * 19 Aug 26 Windows port - the credential store is $cred on disk.  5.12 (a).
 * 13 Aug 26 Windows port - written for the account credential model
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*    call !CRED_SET(account, password, ok)
+* Derives and stores SCRAM material for an account.  What is written:
 *
-*    Writes a fresh salt and verifier for the named account into the $CRED
-*    register.  The password itself is never stored; the verifier is an Argon2
-*    key derived from the password and the salt, so setting the same password
-*    twice produces different stored values.
+*   SaltedPassword = PBKDF2-HMAC-SHA256(password, salt, iterations, 32)
+*   StoredKey      = SHA256(HMAC(SaltedPassword, "Client Key"))
+*   ServerKey      = HMAC(SaltedPassword, "Server Key")
 *
-*    Returns ok = @true on success.  Sets STATUS() to a non-zero value and
-*    returns @false if the register cannot be opened or written.
+* THE PASSWORD IS NOT STORED, and neither is ClientKey.  StoredKey is the
+* SHA-256 of ClientKey, so holding it does not let the holder authenticate as
+* the client - forming a proof needs ClientKey itself, which is the preimage.
+* It does let the holder impersonate the SERVER, which is why the $CRED ACL
+* matters as much as it ever did.  See PROJECT_STATUS.md section 7 step 6.
 *
-*    See PROJECT_STATUS.md section 5.6 for the identity model this belongs to.
+* This is the only place in the server that runs PBKDF2.  Login does not: it
+* holds StoredKey directly and needs two HMACs and a hash, so the cost of a
+* high iteration count falls on setting a password, not on connecting.
 *
 * END-DESCRIPTION
 *
@@ -45,6 +53,7 @@ subroutine CRED_SET(account, password, ok)
 $catalog !CRED_SET
 
 $include int$keys.h
+$include keys.h
 $include err.h
 
    ok = @false
@@ -69,17 +78,38 @@ $include err.h
       return
    end
 
-   verifier = ''
-   call !SD_KEY_FROM_PW(password, salt, verifier)
-   if verifier = '' then
+   iter = SCRAM$ITERATIONS
+
+   salted = SDEXT(password : @FM : salt : @FM : iter : @FM : SCRAM$KEY.LEN, @TRUE, SD_PBKDF2)
+   if salted = '' then
+      close cred.f
+      set.status ER$ARGS
+      return
+   end
+
+   client.key = SDEXT(salted : @FM : 'Client Key', @TRUE, SD_HMACSHA256)
+   stored.key = SDEXT(client.key, @TRUE, SD_SHA256)
+   server.key = SDEXT(salted : @FM : 'Server Key', @TRUE, SD_HMACSHA256)
+
+*  Drop the intermediates as soon as they are spent.  Neither may be stored,
+*  and ClientKey in particular is the one value that would let its holder
+*  authenticate as this account.
+   salted = ''
+   client.key = ''
+
+   if stored.key = '' or server.key = '' then
       close cred.f
       set.status ER$ARGS
       return
    end
 
    cred.rec = ''
+   cred.rec<CRED$VERSION> = SCRAM$CRED.VERSION
+   cred.rec<CRED$MECH> = 'SCRAM-SHA-256'
    cred.rec<CRED$SALT> = salt
-   cred.rec<CRED$VERIFIER> = verifier
+   cred.rec<CRED$ITER> = iter
+   cred.rec<CRED$STOREDKEY> = stored.key
+   cred.rec<CRED$SERVERKEY> = server.key
 
    write cred.rec to cred.f, account on error
       close cred.f

@@ -362,6 +362,18 @@
 #define SD_EUID_SET     102  /* set current process's euid egid to that of user */
 #define SD_EUID_RESTORE 103  /* set current process's euid egid to what it was on entry to sd */
 
+/* 19 Aug 26 Windows port - SCRAM-SHA-256 primitives for the API login
+   exchange.  These must stay in step with the $defines of the same names in
+   sdsys/syscom/KEYS.H, which is the BASIC half of the same table - they are
+   two files, and nothing checks that they agree.  All six take and return
+   base64.  docs/SCRAM_AUTH.md */
+#define SD_SHA256       104  /* sd_scram sha256, 1 arg */
+#define SD_HMACSHA256   105  /* sd_scram hmac-sha256: base64 key, TEXT msg */
+#define SD_PBKDF2       106  /* sd_scram pbkdf2, 4 args: pw, salt, iter, len */
+#define SD_RANDBYTES    107  /* sd_scram random bytes, 1 arg: count */
+#define SD_XORBYTES     108  /* sd_scram xor, 2 args, equal lengths */
+#define SD_CTEQUAL      109  /* sd_scram constant-time compare, 2 args */
+
 /* embedded python  */
 /* py  object types */
 #define  SD_Obj_Unkn         0  /* Unknown python object type */

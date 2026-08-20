@@ -71,6 +71,7 @@ op_tio
 pdump
 reccache
 sd_encrypt_sodium
+sd_scram
 sdlib
 sdsem
 win32sem

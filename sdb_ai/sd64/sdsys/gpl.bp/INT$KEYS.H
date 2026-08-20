@@ -260,10 +260,38 @@
       * $CRED file - account credentials.  13 Aug 26 Windows port.
       * Id = uppercase account name.  Replaces the password fields of the
       * $LOGINS register, which was removed on 20240612.  The password is
-      * never stored: CRED$VERIFIER is an Argon2 key derived from the password
-      * and CRED$SALT by !SD_KEY_FROM_PW.  See PROJECT_STATUS.md section 5.6.
-      $define CRED$SALT            1    ;* Salt, base64
-      $define CRED$VERIFIER        2    ;* Derived key, base64
+      * never stored.  See PROJECT_STATUS.md section 5.6.
+      *
+      * 19 Aug 26 Windows port - VERSION 2, FOR SCRAM.  docs/SCRAM_AUTH.md.
+      * Version 1 held CRED$SALT and CRED$VERIFIER, an Argon2 key derived by
+      * !SD_KEY_FROM_PW.  SCRAM needs material the client can prove knowledge
+      * of without sending the password, which an Argon2 verifier cannot
+      * supply, so the record holds StoredKey and ServerKey instead.
+      *
+      * THE VERSION IS FIELD 1 SO THAT AN OLD RECORD CANNOT BE MISREAD.  A
+      * version 1 record has base64 salt in field 1, which is not "2", so
+      * !CRED_VERIFY refuses it rather than deriving nonsense from a salt it
+      * has mistaken for a version number.  There is no migration: the
+      * plaintext was never stored, so every account has to run SET.PASSWORD
+      * again.
+      *
+      * CRED$MECH is informational.  Nothing gates on it today - CRED$VERSION
+      * carries that job - but it is written so that a later mechanism, most
+      * likely SCRAM-SHA-256-PLUS once there is a TLS channel to bind to, can
+      * be told apart within the same record version.
+      $define CRED$VERSION         1    ;* Record format version, currently 2
+      $define CRED$MECH            2    ;* Mechanism name, informational
+      $define CRED$SALT            3    ;* Salt, base64
+      $define CRED$ITER            4    ;* PBKDF2 iteration count
+      $define CRED$STOREDKEY       5    ;* SHA256(ClientKey), base64
+      $define CRED$SERVERKEY       6    ;* HMAC(SaltedPassword,"Server Key"), b64
+
+      * Cost and sizes for new credentials.  The iteration count is written
+      * into each record rather than read from here at verify time, so raising
+      * it applies to new passwords without invalidating existing ones.
+      $define SCRAM$CRED.VERSION   2    ;* Value written to CRED$VERSION
+      $define SCRAM$ITERATIONS 600000   ;* PBKDF2 cost for a new password
+      $define SCRAM$KEY.LEN       32    ;* SaltedPassword length, = SHA-256
 
       * ID = $SECURE
       *    F1 = Secure system? (boolean)

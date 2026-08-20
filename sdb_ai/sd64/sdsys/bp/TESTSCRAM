@@ -1,0 +1,130 @@
+* TESTSCRAM
+* Round-trip the SCRAM primitives (SDEXT keys 104-109) from BASIC.
+*
+* gplbld/verify-scram.c already proves the C is correct.  THIS PROVES THE
+* BRIDGE: that the keys are wired into op_sdext.c, that arguments survive the
+* @FM split, that integers arrive as text a C strtol can read, and that base64
+* comes back intact through k_put_c_string().  Same RFC 7677 section 3 vectors,
+* so any difference is the bridge and not the arithmetic.
+*
+* IT LIVES IN SDSYS AND MUST BE COMPILED IN INTERNAL MODE.  SDEXT is an
+* INTERNAL intrinsic - BCOMP registers it in int.intrinsics, not the ordinary
+* list - so a program that calls it needs $internal, and BCOMP:39 records that
+* $internal needs SDSYS as well as internal mode.  Compiled anywhere else the
+* compiler reads SDEXT(...) as an undimensioned matrix and reports a missing
+* right bracket on every line that calls it, which is what it does rather than
+* saying the function is not available to you.
+*
+* From an ELEVATED prompt:
+*
+*   sd -INTERNAL -ASDSYS
+*   BASIC BP TESTSCRAM
+*   RUN BP TESTSCRAM
+$internal
+
+      EQU SD.SHA256     TO 104
+      EQU SD.HMACSHA256 TO 105
+      EQU SD.PBKDF2     TO 106
+      EQU SD.RANDBYTES  TO 107
+      EQU SD.XORBYTES   TO 108
+      EQU SD.CTEQUAL    TO 109
+
+      CHECKS = 0
+      BAD = 0
+
+* RFC 7677 section 3
+      PW   = 'pencil'
+      SALT = 'W22ZaJ0SNY7soEsUEjb6gQ=='
+      ITER = 4096
+
+      CFB  = 'n=user,r=rOprNGfwEbeRWgbNEkqO'
+      SF   = 'r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0'
+      SF   = SF : ',s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096'
+      CFW  = 'c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0'
+      AUTH = CFB : ',' : SF : ',' : CFW
+
+      CRT 'RFC 7677 vectors, through SDEXT'
+
+      SALTED = SDEXT(PW : @FM : SALT : @FM : ITER : @FM : 32, @TRUE, SD.PBKDF2)
+      NAME = 'SaltedPassword'
+      GOT = SALTED
+      WANT = 'xKSVEDI6tPlSysH6mUQZOeeOp01r6B3fcJbodRPcYV0='
+      GOSUB CHECK.IT
+
+      CK = SDEXT(SALTED : @FM : 'Client Key', @TRUE, SD.HMACSHA256)
+      SK = SDEXT(CK, @TRUE, SD.SHA256)
+      NAME = 'StoredKey'
+      GOT = SK
+      WANT = 'WG5d8oPm3OtcPnkdi4Uo7BkeZkBFzpcXkuLmtbsT4qY='
+      GOSUB CHECK.IT
+
+      SRVK = SDEXT(SALTED : @FM : 'Server Key', @TRUE, SD.HMACSHA256)
+      NAME = 'ServerKey'
+      GOT = SRVK
+      WANT = 'wfPLwcE6nTWhTAmQ7tl2KeoiWGPlZqQxSrmfPwDl2dU='
+      GOSUB CHECK.IT
+
+      CSIG  = SDEXT(SK : @FM : AUTH, @TRUE, SD.HMACSHA256)
+      PROOF = SDEXT(CK : @FM : CSIG, @TRUE, SD.XORBYTES)
+      NAME = 'ClientProof'
+      GOT = PROOF
+      WANT = 'dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ='
+      GOSUB CHECK.IT
+
+      SSIG = SDEXT(SRVK : @FM : AUTH, @TRUE, SD.HMACSHA256)
+      NAME = 'ServerSignature'
+      GOT = SSIG
+      WANT = '6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4='
+      GOSUB CHECK.IT
+
+* The server's half - recover ClientKey from the proof and compare its hash
+* against the stored key.  This is the sequence APISRVR will run per login.
+      CRT
+      CRT 'Server-side verification'
+
+      RECOV = SDEXT(PROOF : @FM : CSIG, @TRUE, SD.XORBYTES)
+      RHASH = SDEXT(RECOV, @TRUE, SD.SHA256)
+      NAME = 'ct_equal accept'
+      GOT = SDEXT(RHASH : @FM : SK, @TRUE, SD.CTEQUAL)
+      WANT = '1'
+      GOSUB CHECK.IT
+
+      WRONG = SDEXT('pencil2' : @FM : SALT : @FM : ITER : @FM : 32, @TRUE, SD.PBKDF2)
+      WCK   = SDEXT(WRONG : @FM : 'Client Key', @TRUE, SD.HMACSHA256)
+      WSK   = SDEXT(WCK, @TRUE, SD.SHA256)
+      NAME = 'ct_equal reject'
+      GOT = SDEXT(WSK : @FM : SK, @TRUE, SD.CTEQUAL)
+      WANT = '0'
+      GOSUB CHECK.IT
+
+      CRT
+      CRT 'Nonces'
+
+      N1 = SDEXT(18, @TRUE, SD.RANDBYTES)
+      N2 = SDEXT(18, @TRUE, SD.RANDBYTES)
+      NAME = 'nonce length'
+      GOT = LEN(N1)
+      WANT = 24
+      GOSUB CHECK.IT
+      NAME = 'nonce differs'
+      IF N1 = N2 THEN GOT = 0 ELSE GOT = 1
+      WANT = 1
+      GOSUB CHECK.IT
+
+      CRT
+      CRT CHECKS : ' checks, ' : BAD : ' failed'
+      STOP
+
+CHECK.IT:
+      CHECKS = CHECKS + 1
+      IF GOT = WANT THEN
+         CRT '  ok    ' : NAME
+      END ELSE
+         BAD = BAD + 1
+         CRT '  FAIL  ' : NAME
+         CRT '          got  ' : GOT
+         CRT '          want ' : WANT
+      END
+      RETURN
+
+      END
