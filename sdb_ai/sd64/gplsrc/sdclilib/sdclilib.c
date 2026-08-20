@@ -4448,6 +4448,28 @@ Private void initialise_client() {
 	  CallArgArray[i] = NULL;
 	  CallArgArraySz[i] = 0;
 	}
+
+    /* 19 Aug 26 Windows port - SD_CLIENT_DEBUG NOW TURNS LOGGING ON BY ITSELF.
+       It used to choose the log's PATH and nothing else; the logging still had
+       to be started by the application calling SDDebug(1).  That is fine for a
+       program you can edit and useless for the ones that matter here - a
+       third-party client whose source nobody has, reporting "connection error"
+       and throwing QMError() away with it.  With no way to make such a client
+       call SDDebug, there was no way to see which request had failed.
+
+       AFTER the loops above, not before: SDDebug() reports a log it could not
+       open by writing into session[].sderror, and the loop clearing sderror
+       would have wiped exactly the message that says why there is no log.
+
+       Off for anyone who has not set the variable, and the path it names is
+       the caller's choice.  NOTE that the log holds a hex dump of every
+       packet - since SCRAM that no longer includes a password, but it does
+       include the user name and everything the session reads and writes. */
+    {
+      const char* auto_debug = getenv("SD_CLIENT_DEBUG");
+      if ((auto_debug != NULL) && (auto_debug[0] != '\0'))
+        SDDebug(1);
+    }
   }
 }
 
