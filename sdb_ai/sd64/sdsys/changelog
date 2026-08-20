@@ -5,6 +5,13 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  The old pre-fork product name is gone from the login code.
+           * A banner naming the database SD was forked from was still in
+             LOGIN, commented out.  Nothing printed it, but it was one
+             character away from appearing at every sign-in.  Removed.
+           * NOTHING YOU SEE CHANGES.  The banner you actually get is the
+             one below it and is untouched, as is the copyright line.
+
 20 Aug 26  SET.PASSWORD now refuses a password typed on the command line.
            * IT USED TO IGNORE IT SILENTLY.  "SET.PASSWORD DON mypassword"
              set the account to DON, threw the rest away without a word, and

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 20 Aug 26 Windows port - removed the dead pre-fork login banner.
 * 19 Aug 26 Windows port - the $COMMAND.STACK VOC id is $command.stack; both
 *            spellings are read, so a pre-rename account keeps working.
 *            PROJECT_STATUS.md 5.12 (b).
@@ -219,7 +220,11 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 
 
    if not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
-      *display "[ ScarletDME Rev " : SD.REV.STAMP : "   Copyright Ladybridge Systems, " : SD.COPYRIGHT.YEAR : " ]"
+* 20 Aug 26 Windows port - the dead pre-fork banner that sat here is gone.
+*   It was commented out, so nothing ever printed it, but it named the
+*   wrong product and was one character away from being visible at every
+*   login.  It was the last such string in the tree.  The live banner is
+*   three lines down; sdsys/changelog records the rebranding itself.
 * rev 0.9.1 back to single rev track 
       * Modified by Composer AI - 2026/06/10.
       * Close version banner string; unclosed quote caused "Unrecognised statement".
