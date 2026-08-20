@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  The API port is now open by default.
+           * APIPORT=4243 is set in C:\ProgramData\SD\sd.conf on a new
+             install, instead of being commented out for you to switch on.
+             SD listens for API (SDClient) connections as soon as it starts.
+           * IT LISTENS ON 127.0.0.1 ONLY, never on a network interface, so
+             nothing off this machine can reach it.  A client on another
+             machine still forwards the port over ssh:
+                 ssh -L 4243:127.0.0.1:4243 <user>@<host>
+           * AN OPEN PORT IS NOT AN OPEN DOOR.  A client still has to complete
+             the SCRAM login against a password held for that account, and
+             then pass the account's group check.  No account has an API
+             password until you run SET.PASSWORD for it, and until then every
+             login attempt is refused.
+           * WHY IT CHANGED.  Until 20 Aug the API login sent your password in
+             clear, so opening the port by default would have been careless.
+             That login is gone - see the entry below - and the reason for the
+             cautious default went with it.  Installing also deletes and
+             rebuilds the data tree, so the old default meant switching the
+             port back on by hand after every upgrade.
+           * TO TURN IT OFF, comment the APIPORT line out and restart SD.  No
+             port is then opened.  The setting is read when SD starts, not
+             when a session begins.
+
 20 Aug 26  Your account directory is locked to you, and the installer now
            finishes the job on every account instead of stopping at the first
            awkward one.

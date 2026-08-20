@@ -238,19 +238,33 @@ NUMUSERS=20
 SORTMEM=4096
 ERRLOG=50
 APILOGIN=1
-# 17 Aug 26 Windows port - APIPORT is the loopback port SD listens on for API
-# (SDClient) connections.  IT IS COMMENTED OUT ON PURPOSE, and leaving it that
-# way means no port is opened at all.
+# APIPORT is the loopback port SD listens on for API (SDClient) connections.
+# 4243 is the number the Linux build uses.
 #
-# Set it only if you intend to use the API.  The port is bound to 127.0.0.1
-# and never to a network interface - remote clients reach it by forwarding it
-# over ssh, "ssh -L 4243:127.0.0.1:4243 <user>@<host>" - but any process
-# already on this machine can connect to it, and what stands between such a
-# process and your data is the account password APILOGIN=1 demands, plus
-# membership of the account's group.  4243 is the number the Linux build uses.
+# 20 Aug 26 Windows port - ON BY DEFAULT.  Owner's decision, and it reverses
+# the 17 Aug default, which was commented out.  Two things changed:
+#
+#   * THE LOGIN IS NO LONGER CLEARTEXT.  On 17 Aug, opening this port meant
+#     any process on the machine could watch an API password go past in
+#     clear.  SCRAM phase 5 retired that login on 20 Aug - the password is
+#     never sent, and request 24 is refused outright - so the reason the
+#     default was defensive is gone.
+#   * EVERY INSTALL DELETES THE DATA TREE, so a commented-out default meant
+#     the port had to be re-enabled by hand after every upgrade, and the
+#     symptom of forgetting is a client saying it cannot connect.
+#
+# WHAT STILL GUARDS IT, because "on by default" is not "open".  The socket is
+# bound to 127.0.0.1 and never to a network interface, so nothing off this
+# machine can reach it; remote clients forward it over ssh,
+# "ssh -L 4243:127.0.0.1:4243 <user>@<host>".  A local process still has to
+# complete a SCRAM-SHA-256 exchange against a credential in $cred - which no
+# account has until SET.PASSWORD is run for it - and then pass the account's
+# group check.  An account with no API password cannot be logged in to at all.
+#
+# TO TURN IT OFF, comment this line out.  No port is then opened.
 #
 # Changing it takes effect when SD is next started, not when a session begins.
-#APIPORT=4243
+APIPORT=4243
 USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts
 SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo
