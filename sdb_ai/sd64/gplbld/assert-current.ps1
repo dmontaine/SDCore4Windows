@@ -221,7 +221,9 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # tree, so without this line WRITING a test would make every
                   # test refuse to run - which is the toll section 7 step 11
                   # already recorded for remote_connect_test.c.
-                  'verify-setpw.ps1')
+                  'verify-setpw.ps1',
+                  # 20 Aug 26 - and the tier/API verifier, same reasoning.
+                  'verify-tierapi.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

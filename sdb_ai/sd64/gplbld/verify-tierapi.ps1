@@ -1,0 +1,257 @@
+<#
+.SYNOPSIS
+    Can a client reach all three account tiers over the API, and is it stopped
+    from reaching one it should not?
+
+.DESCRIPTION
+    THE POINT IS THE CLIENT IT USES.  This drives qm-connect.exe, which links
+    against the 32-bit qmclilib.dll in ..\sdclilib32 - the same file
+    mvDeveloper loads.  So "mvDeveloper can connect as a standard user" stops
+    being an inference about the protocol and becomes a reading of the actual
+    library, without needing anyone at a GUI.
+
+    WHAT IT ESTABLISHES, and the last two are the ones that matter:
+
+      - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
+        over SCRAM and attach to their own account
+      - what each tier can DO once in, as a VOC count: 393 / 411 / 421.  A
+        standard account connects perfectly well and then has no BASIC, ED or
+        RUN, which is the answer to "can a standard user use mvDeveloper"
+      - a wrong password is refused, so the successes mean something
+      - ONE TIER CANNOT ENTER ANOTHER'S ACCOUNT.  vb.account applies the
+        ACC$GROUP check; without this the three successes above would only
+        show that three accounts exist
+
+    THE TIER DOES NOT GATE THE LOGIN AND IS NOT MEANT TO.  Nothing in the
+    SCRAM exchange or in vb.account consults the VOC, so a standard account is
+    expected to connect.  If that ever changes, this test is what notices.
+
+    IT CHANGES THE INSTALLED SYSTEM AND PUTS IT BACK, as verify-apiport.ps1
+    does: three throwaway accounts, APIPORT in sd.conf if it was not already
+    on, and SD restarted.  The restore runs in a finally block.
+
+    THE PASSWORDS GO ON qm-connect's COMMAND LINE, which puts them in the
+    process list.  That is qm-connect's interface, not a choice made here, and
+    it is why these are generated single-use passwords on accounts this script
+    deletes.  Never point it at a real one.  (SET.PASSWORD itself refuses a
+    password on its command line - see verify-setpw.ps1.)
+
+.PARAMETER Prefix
+    Base name for three throwaway accounts, <Prefix>1..3.  Use one nobody has
+    used - CREATE.ACCOUNT refuses a name it has seen.
+
+.EXAMPLE
+    gplbld\verify-tierapi.ps1 -Prefix sdtapi1
+#>
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)] [string] $Prefix,
+    [int]    $Port = 4243,
+    [string] $QmConnect = 'C:\Users\dmont\Projects\sdclilib32\qm-connect.exe',
+    [switch] $Keep
+)
+
+$ErrorActionPreference = 'Stop'
+
+$Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
+$conf    = Join-Path $env:ProgramData 'SD\sd.conf'
+$backup  = $conf + '.before-tierapi'
+$SvcName = 'SD'
+
+$logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
+if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+$log = Join-Path $logDir ('verify-tierapi-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+try { Start-Transcript -Path $log -Force | Out-Null } catch { }
+Write-Host "transcript: $log"
+
+$results = New-Object System.Collections.ArrayList
+$failed  = $false
+
+function Note($check, $expected, $got) {
+    $pass = ($expected -eq $got)
+    if (-not $pass) { $script:failed = $true }
+    $null = $results.Add([pscustomobject]@{ Check = $check; Expected = $expected; Observed = $got })
+    Write-Host ("  [{0}] {1}: expected {2}, got {3}" -f
+        $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
+}
+function Fail($msg) {
+    Write-Host ''; Write-Host "STOPPED: $msg" -ForegroundColor Red
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 1
+}
+function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
+
+function Invoke-SD([string[]]$commands) {
+    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    $out = $body | & $sdExe
+    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+}
+function Get-VocCount($text) {
+    if ($text -match '(\d+)\s+record\(s\) counted') { return [int]$Matches[1] }
+    return -1
+}
+function Stop-SD { if ((Get-Service $SvcName).Status -eq 'Running') { & sc.exe stop $SvcName | Out-Null; Start-Sleep -Seconds 3; return $true }; return $false }
+function Start-SD { & sc.exe start $SvcName | Out-Null; Start-Sleep -Seconds 4 }
+
+# Runs qm-connect and answers only "did the login succeed".  Its exit code is
+# 0 for a connect, 1 for a refusal, 2 for bad usage - so 2 is a broken call
+# here and must never be read as a refusal.
+function Test-Connect([string]$user, [string]$pw, [string]$account) {
+    $o = & $QmConnect '127.0.0.1' "$Port" $user $pw $account 2>&1
+    $rc = $LASTEXITCODE
+    if ($rc -eq 2) { Write-Host ($o -join "`n"); Fail 'qm-connect rejected its arguments - this is a bug in this script, not a refusal.' }
+    Write-Host ('     qm-connect: ' + (($o | Select-String -Pattern '  ok |  FAILED') -join '; '))
+    return ($rc -eq 0)
+}
+
+# ---------------------------------------------------------------------------
+$id = [Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Fail 'Run this from an ELEVATED PowerShell - CREATE.ACCOUNT and SET.PASSWORD for another account are both gated on administrator.'
+}
+
+Step 0 'Checking the installed tree matches source'
+& (Join-Path $Gplbld 'assert-current.ps1')
+if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - run gplbld/cycle.ps1 first.' }
+
+if (-not (Test-Path -LiteralPath $QmConnect)) {
+    Fail ("qm-connect.exe not found at $QmConnect.  Build it: make qm-connect.exe in the sdclilib32 project. " +
+          "It is the 32-bit client, which is the whole reason this test uses it.")
+}
+
+$Tiers = @(
+    [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 393 }
+    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 411 }
+    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 421 }
+)
+foreach ($t in $Tiers) {
+    if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }
+    if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $t.Name.ToUpper()))) {
+        Fail ($t.Name.ToUpper() + ' is still in the ACCOUNTS register.  Use a fresh -Prefix, or DELETE.ACCOUNT it.')
+    }
+}
+
+Add-Type -AssemblyName System.Web
+$restoreNeeded = $false
+$portAdded     = $false
+
+try {
+    # -----------------------------------------------------------------------
+    Step 1 'Creating one account per tier'
+    foreach ($t in $Tiers) {
+        # TWO PASSWORDS, AND THEY ARE NOT THE SAME THING.  winPw is the
+        # WINDOWS account's, which is what an ssh login would use; sdPw is the
+        # SD credential in $cred, which is the only one the API ever sees.
+        $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+        $bytes = New-Object byte[] 18
+        ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
+        $t | Add-Member -NotePropertyName SdPw -NotePropertyValue (
+            ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1')
+
+        $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword).Trim()
+        Write-Host ("  " + $cmd)
+        $null = Invoke-SD @($cmd, $winPw, $winPw)
+        # THE REGISTER RECORD, NOT THE OUTPUT TEXT - SD echoes the command it
+        # was given, so the name is in the output whether it worked or refused.
+        $made = Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $t.Name.ToUpper()))
+        Note ($t.Tier + ' account created') $true $made
+        if (-not $made) { Fail ('CREATE.ACCOUNT did not register ' + $t.Name) }
+        $restoreNeeded = $true
+    }
+
+    # -----------------------------------------------------------------------
+    Step 2 'Giving each an API credential'
+    foreach ($t in $Tiers) {
+        $out = Invoke-SD @(('SET.PASSWORD ' + $t.Name.ToUpper()), $t.SdPw, $t.SdPw)
+        Note ($t.Tier + ' password set') $true ($out -match 'Password set for account')
+    }
+
+    # -----------------------------------------------------------------------
+    Step 3 'What each tier can DO once in, as a VOC count'
+    # Not a login test at all - it is the answer to "a standard user connects,
+    # but can they use a developer tool".  393 has no BASIC, ED or RUN.
+    foreach ($t in $Tiers) {
+        $out = Invoke-SD @(('LOGTO ' + $t.Name.ToUpper()), 'COUNT VOC')
+        Note ($t.Tier + ' VOC count') $t.Voc (Get-VocCount $out)
+    }
+
+    # -----------------------------------------------------------------------
+    Step 4 'Making sure the API is listening'
+    $listen = @(netstat -an | Select-String 'LISTENING' | Where-Object { $_ -match (':' + $Port + '\s') })
+    if ($listen.Count -eq 0) {
+        Write-Host '  no listener - adding APIPORT and restarting SD'
+        Copy-Item -LiteralPath $conf -Destination $backup -Force
+        Add-Content -LiteralPath $conf -Value ("APIPORT=" + $Port)
+        $portAdded = $true
+        if (Stop-SD) { Start-SD } else { Start-SD }
+        $listen = @(netstat -an | Select-String 'LISTENING' | Where-Object { $_ -match (':' + $Port + '\s') })
+    }
+    Note 'a listener on the port' $true ($listen.Count -gt 0)
+    if ($listen.Count -eq 0) { Fail 'Nothing is listening - the rest of this script has nothing to talk to.' }
+    Note 'bound to 127.0.0.1 only' $false ([bool](@($listen) -match '0\.0\.0\.0:' + $Port))
+
+    # -----------------------------------------------------------------------
+    Step 5 'Each tier logs in through the 32-bit client mvDeveloper uses'
+    foreach ($t in $Tiers) {
+        Write-Host ('  ' + $t.Tier + ' as ' + $t.Name)
+        Note ($t.Tier + ' connects') $true (Test-Connect $t.Name $t.SdPw $t.Name)
+    }
+
+    # -----------------------------------------------------------------------
+    Step 6 'The controls'
+
+    # A wrong password.  Without this, "three tiers connected" would pass just
+    # as well against a server that admitted anybody.
+    Write-Host '  wrong password for the STANDARD account'
+    Note 'wrong password refused' $false (Test-Connect $Tiers[0].Name ($Tiers[0].SdPw + 'x') $Tiers[0].Name)
+
+    # ONE TIER MAY NOT ENTER ANOTHER'S ACCOUNT.  The login is fine - it is the
+    # same correct credential - and vb.account refuses the attach on ACC$GROUP.
+    # This is what makes the three successes above mean "reached its OWN
+    # account" rather than "reached an account".
+    Write-Host ('  ' + $Tiers[0].Tier + ' credentials, attaching to the ' + $Tiers[2].Tier + ' account')
+    Note 'one account cannot enter another' $false (Test-Connect $Tiers[0].Name $Tiers[0].SdPw $Tiers[2].Name)
+}
+finally {
+    if (-not $Keep) {
+        Step 7 'Putting the system back'
+        if ($portAdded -and (Test-Path -LiteralPath $backup)) {
+            Copy-Item -LiteralPath $backup -Destination $conf -Force
+            Remove-Item -LiteralPath $backup -Force
+            if (Stop-SD) { Start-SD }
+            Write-Host '   sd.conf restored and SD restarted'
+        }
+        if ($restoreNeeded) {
+            foreach ($t in $Tiers) {
+                if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) {
+                    Remove-LocalUser -Name $t.Name; Write-Host ("   removed Windows account " + $t.Name)
+                }
+                $d = Join-Path $env:ProgramData ('SD\user_accounts\' + $t.Name)
+                if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+                $g = 'sdu_' + $t.Name
+                if (Get-LocalGroup -Name $g -ErrorAction SilentlyContinue) { Remove-LocalGroup -Name $g }
+            }
+            # The SD half is left deliberately, as the other verifiers leave
+            # theirs: removing the register records here would hide a
+            # CREATE.ACCOUNT that had half failed.  $CRED keeps its records too.
+            Write-Host '   ACCOUNTS and $CRED records left in place - remove with DELETE.ACCOUNT'
+        }
+    } else {
+        Write-Host ''
+        Write-Host "-Keep: the three accounts and their credentials are STILL THERE." -ForegroundColor Yellow
+        foreach ($t in $Tiers) { Write-Host ("  {0,-14} {1}  password: {2}" -f $t.Tier, $t.Name, $t.SdPw) }
+    }
+}
+
+# ---------------------------------------------------------------------------
+Write-Host ''
+Write-Host '=== Summary ============================================================='
+$results | Format-Table Check, Expected, Observed -AutoSize | Out-String | Write-Host
+$passed = @($results | Where-Object { $_.Expected -eq $_.Observed }).Count
+Write-Host ("{0} / {1} checks passed" -f $passed, $results.Count)
+try { Stop-Transcript | Out-Null } catch { }
+if ($failed) { exit 1 }
+exit 0
