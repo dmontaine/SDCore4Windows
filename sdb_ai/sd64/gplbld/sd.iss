@@ -1042,8 +1042,7 @@ begin
     install would reveal it. }
   Result := 'The account directories were NOT locked (code ' + IntToStr(Code) + '). ' +
             'Until they are, any SD user can read and rewrite any other account''s ' +
-            'files outside SD. Put it right from an ELEVATED PowerShell prompt:' +
-            #13#10#13#10 +
+            'files outside SD. Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
             '    powershell -File "' + PerAccount + '" -Root "' + Root + '"' + #13#10#13#10;
 end;

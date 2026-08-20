@@ -87,7 +87,26 @@ $PfTree  = 'C:\Program Files\SD'
 $PdTree  = 'C:\ProgramData\SD'
 
 function Step($n, $msg) { Write-Host ""; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
-function Fail($msg)     { Write-Host ""; Write-Host "CYCLE STOPPED: $msg" -ForegroundColor Red; exit 1 }
+function Fail($msg) {
+    Write-Host ""
+    Write-Host "CYCLE STOPPED: $msg" -ForegroundColor Red
+
+    # SAY WHEN SD IS LEFT DOWN.  Step 1 stops the service and nothing restarts
+    # it on the way out, so a cycle that aborts at step 4 - as the 19 Aug 2026
+    # sd.iss run did - leaves the machine with no SD and no indication of it.
+    # It is NOT restarted here: a re-run stops it again immediately, and
+    # starting a server against a half-staged tree is worse than leaving it
+    # down.  The point is that it should never be a surprise.
+    $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -ne 'Running') {
+        Write-Host ""
+        Write-Host ("SD IS STOPPED - step 1 stopped it and this run did not get far enough to " +
+                    "reinstall.  Both trees are untouched until step 6.") -ForegroundColor Yellow
+        Write-Host "  Re-run this script when the fault is fixed, or start it now with:  sc.exe start $SvcName" -ForegroundColor Yellow
+    }
+
+    exit 1
+}
 
 # ---------------------------------------------------------------------------
 # Convert a Windows path to the /c/... form MSYS2 wants.  Passing a backslash
@@ -121,6 +140,32 @@ foreach ($n in 'Stage', 'Out') {
         Fail "-$n must be an absolute path, and '$v' is not."
     }
     Set-Variable -Name $n -Value ([System.IO.Path]::GetFullPath($v))
+}
+
+# LINT sd.iss BEFORE ANYTHING EXPENSIVE, AND BEFORE THE SERVICE GOES.  ISPP
+# treats a line whose first non-blank character is "#" as a preprocessor
+# directive, so a Pascal character constant wrapped onto its own line - the
+# "#13#10#13#10 +" idiom in the message strings - is read as a directive and
+# ISCC answers "Unknown preprocessor directive" without saying why.
+#
+# THE RULE WAS ALREADY WRITTEN DOWN, at sd.iss's InitializeWizard comment, AND
+# IT STILL BIT: the account-ACL message added on 19 Aug 2026 wrapped one, ~480
+# lines away from the note, and cost a cycle that had already stopped the
+# service, staged and bootstrapped before ISCC ever saw the file.  A comment
+# that far from the code being written is not a guard.  This is.
+$issDirectives = @('define', 'undef', 'include', 'if', 'ifdef', 'ifndef',
+                   'ifexist', 'ifnexist', 'elif', 'else', 'endif', 'for',
+                   'sub', 'endsub', 'expr', 'insert', 'append', 'emit',
+                   'error', 'pragma', 'file', 'x', 'dim', 'redim')
+$issBad = @(Get-Content -LiteralPath $Iss | ForEach-Object { $_ } |
+            Select-String -Pattern '^\s*#\s*(\w*)' |
+            Where-Object { $issDirectives -notcontains $_.Matches[0].Groups[1].Value.ToLower() })
+if ($issBad.Count -gt 0) {
+    foreach ($b in $issBad) {
+        Write-Host ("   sd.iss:{0}: {1}" -f $b.LineNumber, $b.Line.Trim()) -ForegroundColor Red
+    }
+    Fail ("sd.iss has {0} line(s) starting with '#' that ISPP will read as a preprocessor " -f $issBad.Count +
+          "directive.  Move the constant to the END of the previous line, as every other #13#10 in that file is.")
 }
 
 # ---------------------------------------------------------------------------
