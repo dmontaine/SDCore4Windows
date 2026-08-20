@@ -63,7 +63,11 @@ SDTEMP   := $(addsuffix .o,$(SDSRCS))
 SDOBJS   := $(SDTEMP)
 SDOBJSD  := $(addprefix $(GPLOBJ),$(SDTEMP))
 TEMPSRCS := $(wildcard *.c)
-SRCS     := $(TEMPSRCS:sdclient.c=)
+# 20 Aug 26 - was $(TEMPSRCS:sdclient.c=).  gplsrc/sdclient.c is deleted, so
+# the wildcard no longer finds it and the strip had nothing left to strip.
+# gplsrc/sdclient.h STAYS and is not the same question - op_tio.c takes
+# SV_PROMPT, SrvrRespond and SrvrEndCommand from it.  PROJECT_STATUS.md 7.
+SRCS     := $(TEMPSRCS)
 OBJS     := $(SRCS:.c=.o)
 DIROBJS  := $(addprefix $(GPLOBJ),$(OBJS))
 	
@@ -211,9 +215,6 @@ sd.o:	sd.c sd.h revstamp.h header.h debug.h dh_int.h tio.h config.h options.h \
 locks.h
 	@$(COMP) $(C_FLAGS) -c $< -o $(GPLOBJ)sd.o
 	
-sdclient.o: sdclient.c sddefs.h revstamp.h sdclient.h err.h
-	@$(COMP) $(C_FLAGS) -c $< -o $(GPLOBJ)sdclient.o
-
 sdconv.o: sdconv.c sd.h dh_int.h header.h revstamp.h
 	@$(COMP) $(C_FLAGS) -c $< -o $(GPLOBJ)sdconv.o
 

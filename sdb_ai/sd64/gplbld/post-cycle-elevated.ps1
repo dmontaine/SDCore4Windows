@@ -1,4 +1,4 @@
-# post-cycle-elevated.ps1 - the three ELEVATED verifiers, in one command
+# post-cycle-elevated.ps1 - the ELEVATED verifiers, in one command
 #
 #   Run from an ELEVATED PowerShell.  Nothing else here needs elevation.
 #
@@ -6,14 +6,14 @@
 # Start-Process -Verb RunAs returns "The operation was canceled by the user"
 # without ever showing one, because a detached process has no desktop to
 # display consent on.  So every elevated step has to be started by a human,
-# and three separate hand-run commands is exactly the shape cycle.ps1 was
-# written to get rid of (CLAUDE.md, "Do not hand-run the steps").
+# and a handful of separate hand-run commands is exactly the shape cycle.ps1
+# was written to get rid of (CLAUDE.md, "Do not hand-run the steps").
 #
 # It runs each verifier WITHOUT -Keep, so each removes what it made and the
 # tree is left clean.  -Keep is the stronger run - it leaves the accounts to be
-# read back independently - but it then owes a -Cleanup and three interactive
-# DELETE.ACCOUNTs, and verify-createaccount.ps1 already reads its account's
-# directory back case-exactly before removing it.
+# read back independently - but it then owes a -Cleanup and one interactive
+# DELETE.ACCOUNT per account it left, and verify-createaccount.ps1 already
+# reads its account's directory back case-exactly before removing it.
 #
 # The summary is written to a file as well as the screen, because an elevated
 # window does not paste its output back into the session that asked for it.
@@ -48,7 +48,12 @@
 
 param(
     [string]$TierPrefix = 'sdtierg',   # MUST be one nobody has used - see PROJECT_STATUS.md
-    [string]$Account    = 'sdacct14'   # likewise; sdacct1..13 are spent
+    [string]$Account    = 'sdacct14',  # likewise; sdacct1..13 are spent
+    # 20 Aug 26 - verify-accountacl.ps1's throwaway account.  LOWER CASE ONLY,
+    # unlike the two above: CREATEA downcases the user name and the directory
+    # takes it verbatim, so a mixed-case prefix would name a directory the
+    # sdu_ group derivation could not match.  Validated separately below.
+    [string]$AclPrefix  = 'sdacl2'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -70,6 +75,15 @@ foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account'; V = $
     }
 }
 
+# STRICTER, AND NOT AN OVERSIGHT ABOVE.  verify-accountacl.ps1 derives the
+# sdu_ group from the DIRECTORY name, which CREATEA writes downcased, so an
+# upper-case prefix here would send it looking for a group that is not there.
+if ($AclPrefix -notmatch '^[a-z][a-z0-9_]*$') {
+    Write-Output ("post-cycle-elevated: -AclPrefix is '{0}'." -f $AclPrefix)
+    Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
+    exit 2
+}
+
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
 $summary = Join-Path $logDir ('post-cycle-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.txt')
@@ -79,7 +93,12 @@ $summary = Join-Path $logDir ('post-cycle-' + (Get-Date -Format 'yyyyMMdd-HHmmss
 $steps = @(
     @{ Name = 'verify-fold.ps1';          P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
-    @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } }
+    @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
+    # 20 Aug 26 - section 8's per-account ACLs.  LAST, because it is the only
+    # step that deliberately breaks an ACL (icacls /reset) before putting it
+    # back, and a run that died mid-way should not leave the steps after it
+    # measuring a directory in that state.
+    @{ Name = 'verify-accountacl.ps1';    P = @{ Prefix  = $AclPrefix } }
 )
 
 $lines = @()

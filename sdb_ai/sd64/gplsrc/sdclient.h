@@ -17,6 +17,16 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 20 Aug 26 Windows port - THIS HEADER IS LIVE.  DO NOT DELETE IT.  gplsrc/
+ *   sdclient.c was deleted on this date and PROJECT_STATUS.md named this file
+ *   for deletion beside it; that half was wrong.  op_tio.c takes SV_PROMPT
+ *   (op_tio.c:3732), SrvrRespond (:3812) and SrvrEndCommand (:3817) from
+ *   here, op_tio is in gpl.src, and the build's only -I is gplsrc - so this
+ *   copy is the only one reachable and removing it stops the server
+ *   compiling.  op_dio3.c also includes it but uses nothing from it.
+ *   NOT to be confused with gplsrc/sdclilib/sdclient.h, a different file with
+ *   the same basename: that one is the client's, shared with both client
+ *   projects, and is not on this build's include path.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *

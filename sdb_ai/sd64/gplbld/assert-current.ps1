@@ -223,7 +223,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # already recorded for remote_connect_test.c.
                   'verify-setpw.ps1',
                   # 20 Aug 26 - and the tier/API verifier, same reasoning.
-                  'verify-tierapi.ps1')
+                  'verify-tierapi.ps1',
+                  # 20 Aug 26 - section 8's per-account ACL verifier, same
+                  # reasoning again.  It is the one that would hurt most to
+                  # leave out: it CALLS this script and refuses on a non-zero
+                  # exit, so an unlisted verify-accountacl.ps1 would report the
+                  # tree stale because verify-accountacl.ps1 exists, and then
+                  # refuse to run on the strength of its own newness.
+                  'verify-accountacl.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
