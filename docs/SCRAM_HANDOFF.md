@@ -235,6 +235,37 @@ itself had been fine.
 
 `sdclilib32` is still not a git repository.
 
+## mvDeveloper authenticates with SCRAM — 19 Aug 2026, and this is phase 6's real test
+
+**The 32-bit editor connected over SCRAM-SHA-256 and worked.** Read out of its
+own packet log, which is the first time anything has seen the shipping client's
+traffic:
+
+```
+OUT Type 47   n,,n=don,r=03buwFTPAkGwrFtQta1YtCQl
+IN            r=03buwFTPAkGwrFtQta1YtCQlYifnrKvGOHvoTKQU8GwbodPv,
+              s=LoeIdB1sUfL+EwQzvg3kCQ==,i=600000
+OUT Type 48   c=biws,r=<combined>,p=5OMM2PJ6suvAIs/mtV2ZsOa6T0PpLL7N9lk0KiDpSJ4=
+IN            v=DZZsq8z7HXBARLatE5KU4MvsVOOUoSSqcclWq5gt4z0=
+OUT Type 3    don                        <- account attach, accepted
+OUT Type 21   SSELECT VOC WITH ...       <- and then it just worked
+```
+
+**Request 24 never appears.** The password is not in the 1,005 bytes the
+session exchanged. `i=600000`, so the credential is at full cost. The `v=`
+came back and the client accepted it, which is the mutual half working against
+a real client rather than against a test.
+
+**What actually fixed it is not certain, and saying so is better than
+inventing a cause.** Between the failing attempt and this one, two things
+changed: the editor was restarted, and `SET.PASSWORD` had been run. The DLL
+was replaced too, but only with one that adds logging, so it cannot be the
+cause. The likeliest reading is that the failing attempt was made before the
+credential existed — the port had only just been re-enabled — and that a
+restart was needed. **`QMConnect` returning a generic "connection error" is
+what made this expensive**; the packet log is the fix for that, and it is now
+one environment variable away.
+
 ## Phase 5, the next task
 
 Retire `SrvrLogin`. **This is the point of no return for old clients**, and it
