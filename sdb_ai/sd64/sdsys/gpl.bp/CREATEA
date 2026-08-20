@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 19 Aug 26 Windows port - a new account's directory is locked to its own
+*            ACC$GROUP, so one SD user can no longer read or rewrite
+*            another's files outside SD.  PROJECT_STATUS.md section 8.
 * 19 Aug 26 Windows port - the $COMMAND.STACK VOC id is $command.stack; both
 *            spellings are read, so a pre-rename account keeps working.
 *            PROJECT_STATUS.md 5.12 (b).
@@ -138,6 +141,7 @@ deffun create_user(uname) calling '!create_user'
 deffun set_passwd(uname)  calling '!set_passwd'
 deffun valid_os_name(name) calling '!valid_os_name'
 deffun valid_os_path(path) calling '!valid_os_path'
+deffun ps_script(script) calling '!ps_script'
 
    prompt ''
 
@@ -576,7 +580,63 @@ PW.TRY.AGAIN:
    write acc.rec to acc.f, acc.name
    close acc.f
 
+   gosub secure.account.dir
+
    @system.return.code = 0
+   return
+
+* ======================================================================
+* secure.account.dir  -  lock this account's directory to its own group
+*
+* 19 Aug 26 Windows port - PROJECT_STATUS.md section 8, "the B work".  The data
+*   tree grants sdusers Modify with (OI)(CI), so without this every account
+*   directory inherits it and ANY SD user can read and rewrite ANY other
+*   account's files outside SD.  Measured on the 16:54:55 install before this
+*   went in: from an ordinary session, listing another account's directory
+*   returned 6 entries and writing into it was allowed.
+*
+*   SD ALREADY REFUSES THAT SESSION, which is what makes this alignment rather
+*   than new policy: logto.authorised admits an elevated session, one that has
+*   just obtained privilege, or a member of the account's ACC$GROUP, and an
+*   ordinary administrator is none of those - measured, "User not allowed in
+*   requested account".  This brings the file layer into line with the rule
+*   CPROC has enforced since 14 Aug 2026.
+*
+*   THE GROUP COMES FROM ACC$GROUP, the field written just above, so there is
+*   no second mapping to keep in step.  An EMPTY group is skipped: locking a
+*   directory to a group nobody can be in would take the account away from its
+*   own user, and that is the one failure this must not have.
+*
+*   THROUGH !ps_script, like OS_GROUP's writing actions, so an unelevated SDSYS
+*   session can perform it - section 7 step 4.
+*
+*   THE RULE IS ALSO IN gplbld/secure-account-dirs.ps1, which is the re-apply
+*   half the installer runs for accounts that already exist.  TWO COPIES, and
+*   the guard against them drifting is a measurement rather than a shared file:
+*   gplbld/verify-accountacl.ps1 asserts that a directory this makes and one
+*   that script stamps come out with the SAME ACL.
+secure.account.dir:
+   sad.group = trim(acc.rec<ACC$GROUP>)
+   if sad.group = '' then return
+
+*   ONE LINE WITH ";" SEPARATORS AND AN ELEVATION SELF-CHECK, which is
+*   OS_GROUP's shape rather than an invention.  The helper runs elevated; if
+*   this ever ran anywhere else the icacls would fail confusingly, so it says
+*   exit 5 instead.
+   sad.ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+   sad.ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+   sad.ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+   sad.ps := '& icacls.exe "' : pathname : '" /inheritance:r'
+   sad.ps := ' /grant "*S-1-5-18:(OI)(CI)(F)"'
+   sad.ps := ' /grant "*S-1-5-32-544:(OI)(CI)(F)"'
+   sad.ps := ' /grant "' : sad.group : ':(OI)(CI)(M)" | Out-Null; '
+   sad.ps := 'exit $LASTEXITCODE'
+
+   sad.rc = ps_script(sad.ps)
+   if sad.rc # 0 then
+      display sysmsg(10055, pathname, sad.rc) ;* Could not secure %1 (%2)
+   end
+
    return
 
 * ======================================================================

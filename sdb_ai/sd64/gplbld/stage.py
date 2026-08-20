@@ -523,6 +523,7 @@ def main():
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',
                    'secure-gcat.ps1',
+                   'secure-accounts.ps1', 'secure-account-dirs.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

@@ -982,6 +982,72 @@ begin
             '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
 end;
 
+{ LOCK THE ACCOUNT DIRECTORIES.  PROJECT_STATUS.md section 8, "the B work".
+
+  THE HOLE: the data tree grants sdusers Modify with (OI)(CI), so every account
+  directory inherits it and any SD user can read and rewrite any other
+  account's files outside SD.  Measured on the 16:54:55 install: from an
+  ordinary session, listing another account's directory returned 6 entries and
+  writing into it was allowed.
+
+  SD ALREADY REFUSES THAT SESSION, so this aligns the file layer with the rule
+  CPROC has enforced since 14 Aug 2026 rather than inventing a new one - LOGTO
+  into that account answered "User not allowed in requested account" in the
+  same measurement.
+
+  TWO SCRIPTS, AND THE ORDER MATTERS.  secure-accounts.ps1 does the CONTAINER:
+  it takes sdusers' inheritable Modify off user_accounts and leaves CREATOR
+  OWNER inheritable, which is what lets CREATE.ACCOUNT populate a directory it
+  has just made.  secure-account-dirs.ps1 then stamps each EXISTING account
+  with its own sdu_<name>.  Container first: the second is pointless while the
+  first is still handing out Modify to everybody.
+
+  AFTER AdoptAccount, deliberately.  Adopt is what creates the installing
+  user's own account, and running after it means that account is stamped by
+  this step on the very install that creates it, rather than waiting for the
+  next one.
+
+  NEW accounts are stamped by CREATE.ACCOUNT itself (CREATEA's
+  secure.account.dir), so this step is for the ones already on disk - which is
+  why it runs unconditionally on every install rather than only on a fresh
+  one. }
+function SecureAccountDirs: String;
+var
+  Code: Integer;
+  Ps, Container, PerAccount, Root: String;
+  ContainerOk, PerAccountOk: Boolean;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Container := ExpandConstant('{app}\secure-accounts.ps1');
+  PerAccount := ExpandConstant('{app}\secure-account-dirs.ps1');
+  Root := ExpandConstant('{#DataDir}\user_accounts');
+
+  ContainerOk := Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                      Container + '" -Path "' + Root + '"',
+                      '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+
+  PerAccountOk := False;
+  if ContainerOk then
+    PerAccountOk := Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                         PerAccount + '" -Root "' + Root + '"',
+                         '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+
+  if ContainerOk and PerAccountOk then
+    Exit;
+
+  { NAMED, NOT BURIED, like the credential store and the shell list: an ACL
+    that is the whole of a control fails silently, and nothing else in the
+    install would reveal it. }
+  Result := 'The account directories were NOT locked (code ' + IntToStr(Code) + '). ' +
+            'Until they are, any SD user can read and rewrite any other account''s ' +
+            'files outside SD. Put it right from an ELEVATED PowerShell prompt:' +
+            #13#10#13#10 +
+            '    powershell -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
+            '    powershell -File "' + PerAccount + '" -Root "' + Root + '"' + #13#10#13#10;
+end;
+
 { LOCK THE GLOBAL CATALOGUE.  PROJECT_STATUS.md 8, UPSTREAM_FIXES.md 7.
 
   gcat holds the object code every session executes - $LOGIN among it, which
@@ -1124,6 +1190,7 @@ var
   DenyMsg: String;
   OsuMsg: String;
   GcatMsg: String;
+  AcctAclMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -1165,6 +1232,10 @@ begin
 
     { Same rule - an unattended install must still end with a usable account. }
     AdoptCode := AdoptAccount;
+
+    { AFTER Adopt, so the account it has just made is stamped on this very
+      install rather than on the next one.  See SecureAccountDirs. }
+    AcctAclMsg := SecureAccountDirs;
     case AdoptCode of
       0: AccountMsg := 'You also have an SD account of your own, named ' +
                        Uppercase(ExpandConstant('{username}')) + '. Type "sd" to use it; ' +
@@ -1228,6 +1299,7 @@ begin
            CredMsg +
            OsuMsg +
            GcatMsg +
+           AcctAclMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a
              setting that is present. }
