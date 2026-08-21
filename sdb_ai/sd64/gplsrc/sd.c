@@ -546,11 +546,36 @@ Private bool comlin(int argc, char *argv[]) {
      ends.  Naming any other account with -INTERNAL is refused rather than
      quietly redirected, so nobody is left wondering where they ended up.
 
-     There is no bypass here: entering SDSYS needs the SDSYS password like
-     any other entry.  The install is not affected - "sd -i" runs $BBPROC,
-     which never goes through LOGIN, and until the installer sets a password
-     LOGIN admits an administrator to a credential-less account with a
-     warning.  See PROJECT_STATUS.md section 5.6.                           */
+     20 Aug 26 - THE JUSTIFICATION THAT STOOD HERE IS FALSE, AND THE GATE IS
+     NOT.  It read: "There is no bypass here: entering SDSYS needs the SDSYS
+     password like any other entry", plus a note about LOGIN admitting an
+     administrator to a credential-less account with a warning.  Both describe
+     the password login DELETED THE NEXT DAY - LOGIN's 14 Aug reversal, its
+     history block and the comment at its end: "Login takes no password: the
+     operating system authenticated this user before SD started, and the two
+     gates above are group membership and elevation."  Written 13 Aug, stale
+     on 14 Aug, never updated.  The changelog got this right and this comment
+     did not, because a dated entry is superseded by the next one while a
+     comment in the present tense just goes on being read.
+
+     WHAT THE GATE ACTUALLY RESTS ON, which never depended on a password:
+     ELEVATION, TWICE.  check_admin() above refuses an unelevated session at
+     the door, and LOGIN refuses SDSYS to a session without K$ADMINISTRATOR
+     (sysmsg 10002), which kernel.c seeds from IsElevated().  So reaching
+     SDSYS this way takes a Windows administrator who has actually elevated -
+     somebody who can already do anything on the machine, which is why this
+     buys an attacker nothing.
+
+     THE FLAG IS UNPUBLISHED, NOT SECRET, and nothing here rests on it being
+     unknown.  The source is GPL, so anyone may read this file and find it;
+     what "unpublished" means is that --HELP does not list it and no
+     user-facing document explains it, because it is for developing SD.  Do
+     not add an obscurity argument to the reasoning above - the two elevation
+     checks are the protection and they hold against a reader who knows
+     everything in this comment.  LOGIN says the same at its K$INTERNAL test.
+
+     The install is not affected - "sd -i" runs $BBPROC, which never goes
+     through LOGIN.  See PROJECT_STATUS.md section 5.6.                     */
 
   if (internal_mode) {
     if ((forced_account != NULL) && stricmp(forced_account, "SDSYS")) {

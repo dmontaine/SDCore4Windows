@@ -1569,8 +1569,8 @@ Entries are newest first, by date, until there is a version to attach them to.
            * Only a program compiled $internal may set them, and only SDSYS
              may compile one.  Before this, any account could compile a three
              line program that made itself an administrator.
-           * ENTERING SDSYS ALWAYS ASKS FOR ITS PASSWORD.  There is no longer
-             any route in that skips it for an administrator.
+           * The no-password entry an administrator used to get for running an
+             internal command is gone.
            * "sd" with no account named asks which account you want, instead
              of putting members of a Windows group straight into SDSYS.
 
