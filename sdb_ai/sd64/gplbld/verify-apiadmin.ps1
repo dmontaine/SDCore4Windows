@@ -228,7 +228,15 @@ try {
     Add-Type -AssemblyName System.Web
     $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 
-    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix PROGRAMMER API", $winPw, $winPw)
+    # NONE, AND IT HAS TO BE NONE.  Phase 2 made the access keyword compulsory
+    # and this call site was first given API, which would have destroyed step
+    # 7a: that step connects with a valid credential and asserts the API
+    # REFUSES the account for want of sdapi membership, and an account created
+    # with API is in sdapi from the moment it exists.  The keyword each site
+    # wants is the one its own test needs, and what this test needs is an
+    # account that can reach nothing until 7b grants it.  It uses no ssh
+    # either - every probe here goes over the API - so NONE rather than SSH.
+    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix PROGRAMMER NONE", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made

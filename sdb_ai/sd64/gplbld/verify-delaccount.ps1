@@ -488,7 +488,7 @@ try {
     # -----------------------------------------------------------------------
     Step 3 "DELETE.ACCOUNT $sdAcc - the Windows account must go, unasked"
 
-    # One Y for the account DIRECTORY, then the sentinel, then padding.  See the
+    # One Y for the SINGLE confirmation, then the sentinel, then padding.  See the
     # header: the sentinel coming back as "not in your VOC" is what proves
     # nothing else asked a question.
     $out = Invoke-SD @("DELETE.ACCOUNT $sdAcc", 'Y', $sentinel, 'Y', 'Y')

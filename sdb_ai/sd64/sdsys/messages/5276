@@ -1,1 +1,1 @@
-A password is never given on the command line; SET.PASSWORD prompts for it
+A password is never given on the command line; MODIFY.PASSWORD prompts for it

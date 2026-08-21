@@ -241,7 +241,7 @@ deffun valid_os_name(name) calling '!valid_os_name'
          
          
       end else
-         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, SSH, NO.SSH, API or NO.API'
+         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, SSH, API, BOTH or NONE'
       end
       end       ;* not(route.done)
 

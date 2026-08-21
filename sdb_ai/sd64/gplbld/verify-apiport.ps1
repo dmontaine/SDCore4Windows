@@ -175,7 +175,15 @@ try {
     Add-Type -AssemblyName System.Web
     $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER API", $winPw, $winPw)
+    # NONE, AND IT HAS TO BE NONE.  Phase 2 made the access keyword compulsory
+    # and this call site was first given API, which would have made step 2a
+    # vacuous: that step runs MODIFY.ACCOUNT ... API and asserts the account
+    # landed in sdapi, and an account created with API is already there, so the
+    # check would pass whether or not the grant did anything.  A check that
+    # cannot fail is the shape of instrument fault this project has paid for
+    # five times.  No ssh is used here either - the client goes straight to the
+    # port - so NONE rather than SSH.
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER NONE", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made
