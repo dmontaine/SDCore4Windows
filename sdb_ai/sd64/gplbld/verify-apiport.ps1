@@ -204,6 +204,25 @@ try {
     if (-not $set) { Write-Host $out; Fail 'SET.PASSWORD did not report success.' }
 
     # -----------------------------------------------------------------------
+    Step 2a 'Granting it API access'
+
+    # 21 Aug 26 - THIS STEP WAS MISSING AND THE SCRIPT HAD BEEN BROKEN SINCE
+    # THE DAY sdapi WAS ADDED.  APISRVR tests membership of sdapi after the
+    # SCRAM proof succeeds (APISRVR:1362) and CREATE.ACCOUNT deliberately does
+    # NOT join it, so a throwaway account made here authenticated correctly and
+    # was then refused with message 10073 - "sdapi3 is not permitted to use the
+    # API".  Measured 21 Aug 2026, and it reads exactly like a credential
+    # failure in the client's output, which is what made it worth a step of its
+    # own rather than a keyword tacked onto CREATE.ACCOUNT above.
+    #
+    # A PASS HERE IS NOT OPTIONAL - the connection test below cannot succeed
+    # without it, so a silent failure would be diagnosed as SCRAM.
+    $out = Invoke-SD @("MODIFY.ACCOUNT $Prefix API")
+    $inApi = [bool](Get-LocalGroupMember -Group 'sdapi' -Member $Prefix -ErrorAction SilentlyContinue)
+    Note 'granted API access (in sdapi)' $true $inApi
+    if (-not $inApi) { Write-Host $out; Fail 'MODIFY.ACCOUNT ... API did not put the account in sdapi.' }
+
+    # -----------------------------------------------------------------------
     Step 3 "Enabling APIPORT=$Port in the installed sd.conf"
 
     Copy-Item -LiteralPath $conf -Destination $backup -Force
@@ -230,13 +249,22 @@ try {
     Note 'a listener on the port' $true ($listen.Count -gt 0)
     foreach ($l in $listen) { Write-Host ('   ' + $l.ToString().Trim()) }
 
-    # THE SECURITY ASSERTION, and the reason this step exists at all.  Bound to
-    # loopback means unreachable from the network; 0.0.0.0 would mean SD is
-    # facing the world, which posture B says it never does.
+    # 21 Aug 26 - THIS ASSERTION IS INVERTED, AND IT IS THE SAME ASSERTION.
+    #
+    # It used to read "bound to 127.0.0.1" and "NOT bound to 0.0.0.0", because
+    # posture B said nothing of SD's own faces the network.  Owner reversed that
+    # on 21 Aug 2026 - the API is reached AT THE PORT and the ssh tunnel is no
+    # longer part of the design - so sdwind.c binds INADDR_ANY.
+    #
+    # WHAT THE STEP IS FOR HAS NOT CHANGED: assert where the socket actually is,
+    # rather than trusting the config file.  The old pair caught a build that
+    # exposed the port by accident; this pair catches one that did NOT apply the
+    # change and is still loopback-only - which would otherwise show up as
+    # "the client cannot connect from another machine" long after the install.
     $onLoopback = @($listen | Where-Object { $_ -match ('127\.0\.0\.1:' + $Port) }).Count -gt 0
     $onAny      = @($listen | Where-Object { $_ -match ('0\.0\.0\.0:' + $Port) }).Count -gt 0
-    Note 'bound to 127.0.0.1' $true $onLoopback
-    Note 'NOT bound to 0.0.0.0' $true (-not $onAny)
+    Note 'bound to 0.0.0.0 (every interface)' $true $onAny
+    Note 'NOT loopback-only'                  $true (-not $onLoopback)
 
     Note 'sdwind running' $true ([bool](Get-Process -Name sdwind -ErrorAction SilentlyContinue))
 
@@ -331,6 +359,18 @@ finally {
         }
 
         if ($restoreNeeded) {
+            # OUT OF sdapi FIRST, AND BEFORE THE ACCOUNT GOES.  Removing the
+            # Windows user takes its group memberships with it, so this is
+            # redundant on the happy path - but an account left behind holding
+            # an API grant is the one piece of litter from this script that
+            # would be a PERMISSION rather than a name in a register.  Same
+            # reasoning as verify-apiadmin.ps1's cleanup.
+            try {
+                if (Get-LocalGroupMember -Group 'sdapi' -Member $Prefix -ErrorAction SilentlyContinue) {
+                    Remove-LocalGroupMember -Group 'sdapi' -Member $Prefix -ErrorAction Stop
+                    Write-Host "   took $Prefix out of sdapi"
+                }
+            } catch { }
             if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
                 Remove-LocalUser -Name $Prefix
                 Write-Host "   removed Windows account $Prefix"
