@@ -228,7 +228,7 @@ try {
     Add-Type -AssemblyName System.Web
     $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 
-    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix PROGRAMMER", $winPw, $winPw)
+    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix PROGRAMMER API", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made

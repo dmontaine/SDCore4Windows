@@ -233,7 +233,7 @@ try {
     Add-Type -AssemblyName System.Web
     $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix", $winPw, $winPw)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix BOTH", $winPw, $winPw)
     Note 'accounts record created' $true (Test-Path -LiteralPath $accRec)
     if (-not (Test-Path -LiteralPath $accRec)) { Write-Host $out; Fail 'CREATE.ACCOUNT did not register the account.' }
     $made = $true

@@ -238,7 +238,7 @@ foreach ($t in $Tiers) {
         exit 2
     }
     $pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-    $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword).Trim()
+    $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword + ' BOTH').Trim()
     Write-Output ("  " + $cmd)
     $out = Invoke-SD @($cmd, $pw, $pw)
     # 19 Aug 26 - THE REGISTER RECORD, NOT THE OUTPUT TEXT.  This used to be

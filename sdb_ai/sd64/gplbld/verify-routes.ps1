@@ -56,6 +56,31 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 21 Aug 26 - SUPERSEDED BY PHASE 2 AND REFUSES RATHER THAN FAILING OBSCURELY.
+#
+# This script asserts the SSH / NO.SSH / API / NO.API keyword pairs and the
+# eight messages 10063-10071 that went with them.  Owner's decision of 21 Aug
+# 2026 replaced all of it with SSH | API | BOTH | NONE and messages
+# 10076-10081, so those eight message files no longer exist - and Shown()
+# answers $false for a message it cannot read, which would score this run as
+# eight failures that look like a broken feature.
+#
+# REFUSING IS THE HONEST ANSWER while the rewrite is outstanding.  A verifier
+# that cannot pass is not evidence of anything, and this project has paid five
+# times for checks that could not fail; one that CANNOT SUCCEED is the same
+# fault from the other side.  Phase 4 rewrites it for the four keywords.
+$retired = @(10063, 10064, 10065, 10066, 10067, 10068, 10069, 10070, 10071)
+$gone = @($retired | Where-Object {
+    -not (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\messages\' + $_))) })
+if ($gone.Count -gt 0) {
+    Write-Host ''
+    Write-Host 'verify-routes: SUPERSEDED - this script has not been rewritten yet.' -ForegroundColor Yellow
+    Write-Host ('  It asserts messages that Phase 2 retired: ' + ($gone -join ', ')) -ForegroundColor Yellow
+    Write-Host '  The routes are now set with SSH | API | BOTH | NONE, on both'          -ForegroundColor Yellow
+    Write-Host '  CREATE.ACCOUNT and MODIFY.ACCOUNT.  See PROJECT_STATUS.md, Phase 4.'   -ForegroundColor Yellow
+    exit 2
+}
+
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
@@ -195,7 +220,7 @@ Add-Type -AssemblyName System.Web
 
 function New-Acct($name, $extra) {
     $pw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $cmd = "CREATE.ACCOUNT USER $name"
+    $cmd = "CREATE.ACCOUNT USER $name BOTH"
     if ($extra -ne '') { $cmd += " $extra" }
     $out = Invoke-SD @($cmd, $pw, $pw)
     $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $name.ToUpper())

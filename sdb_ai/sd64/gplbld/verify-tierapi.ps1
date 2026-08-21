@@ -151,7 +151,7 @@ try {
         $t | Add-Member -NotePropertyName SdPw -NotePropertyValue (
             ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1')
 
-        $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword).Trim()
+        $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword + ' BOTH').Trim()
         Write-Host ("  " + $cmd)
         $null = Invoke-SD @($cmd, $winPw, $winPw)
         # THE REGISTER RECORD, NOT THE OUTPUT TEXT - SD echoes the command it

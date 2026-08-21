@@ -357,7 +357,7 @@ try {
 
     Write-Output ""
     Write-Output "=== 1. CREATE.ACCOUNT USER $Account ====================================="
-    $sdOut = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account), $plain, $plain)
+    $sdOut = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' SSH'), $plain, $plain)
     Write-Output "  --- what SD said ---"
     ($sdOut -split "`n") | Where-Object {
         $_ -match '\S' -and $_ -notmatch 'Ladybridge|WARRANTY|welcome to modify|conditions\.|free software|version 1\.0|is not in your VOC|^:?\s*$'

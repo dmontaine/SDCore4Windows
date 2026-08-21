@@ -34,10 +34,15 @@
     and the second run went 38 of 38 - so the profile half is now measured, not
     assumed.
 
-    THE ACCOUNT DIRECTORY AND THE PROFILE ARE DIFFERENT THINGS, and the verb
-    treats them differently.  ProgramData\SD\user_accounts\<name> is the SD
-    account's DATA and is still asked about (message 6031, one Y/N).
-    C:\Users\<name> is the Windows profile and goes with the login, unasked.
+    THE ACCOUNT DIRECTORY AND THE PROFILE ARE DIFFERENT THINGS, and since
+    21 Aug 2026 one confirmation covers both.  ProgramData\SD\user_accounts\
+    <name> is the SD account's DATA; C:\Users\<name> is the Windows profile and
+    goes with the login.  ITS WORDING IS CHECKED, not just its presence: 10084
+    names the Windows account, 10085 does not, and which one appears must match
+    whether !is_sd_user will let that account be removed.  That is the whole
+    point of the verb working out what will go BEFORE it asks - a prompt that
+    promised to delete a login SD then declined to touch would be worse than
+    no prompt.
 
     HOW "NO SECOND QUESTION" IS PROVED, AND WHY IT IS NOT AN ABSENCE.  Asserting
     that some prompt text is missing from the output is the shape of check this
@@ -384,7 +389,7 @@ if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
 # the "absent marker read as an answer" shape this project has paid for five
 # times (PROJECT_STATUS.md, "THE RULE THAT WAS PAID FOR FIVE TIMES"): assert the
 # marker is readable before believing what its absence means.
-$needMsgs = @(5051, 6029, 6031, 10025, 10028, 10036, 10037, 10075)
+$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085)
 $missing  = @($needMsgs | Where-Object { (Get-SysMsgPattern $_ $null) -eq '' })
 if ($missing.Count -gt 0) {
     Fail ('checks here name these messages and the install has none of them: ' +
@@ -450,7 +455,7 @@ try {
     Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc"
 
     $pw  = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc", $pw, $pw)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc BOTH", $pw, $pw)
     $made += $sdAcc
 
     $sdRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $sdAcc.ToUpper())
@@ -489,8 +494,15 @@ try {
     $out = Invoke-SD @("DELETE.ACCOUNT $sdAcc", 'Y', $sentinel, 'Y', 'Y')
     Write-Host $out
 
-    Note 'the directory question was asked (6031)'    $true  (Shown $out 6031 $null)
-    Note 'no cross-reference question (6029)'         $false (Shown $out 6029 $null)
+    # 21 Aug 26 - THE PROMPT CHANGED SHAPE AND SO DID THIS PAIR.  It used to
+    # assert 6031, "Delete directory xx (Y/N)?", which asked about the DATA
+    # only.  There is one confirmation now and it names what will actually go,
+    # so the check is that the LONGER wording was used - the one that promises
+    # to remove the Windows account - and that the shorter one was not.
+    # Asserting the wording is asserting the design: the whole point of working
+    # out del.user before the question was that the prompt cannot over-promise.
+    Note 'confirmation named the Windows account (10084)' $true  (Shown $out 10084 @($sdAcc.ToUpper(), $sdAcc))
+    Note 'the shorter wording was NOT used (10085)'       $false (Shown $out 10085 @($sdAcc.ToUpper()))
     Note 'the sentinel reached the VOC (5051)'        $true  (Shown $out 5051 @($sentinel))
     Note 'message 10028 shown (OS User deleted)'      $true  (Shown $out 10028 @($sdAcc))
     Note 'message 10025 shown (group deleted)'        $true  (Shown $out 10025 @('sdu_' + $sdAcc))
@@ -574,7 +586,12 @@ try {
     $out = Invoke-SD @("DELETE.ACCOUNT $borrowAcc", 'Y', $sentinel, 'Y', 'Y')
     Write-Host $out
 
-    Note 'the directory question was asked (6031)'     $true  (Shown $out 6031 $null)
+    # THE OTHER HALF OF THE SAME ASSERTION.  SD did not create this Windows
+    # account, so del.user is empty and the prompt must NOT offer to remove it.
+    # A run where 10084 appeared here would mean the caller had been asked to
+    # confirm a deletion that !is_sd_user then refused to perform.
+    Note 'confirmation used the shorter wording (10085)' $true  (Shown $out 10085 @($borrowAcc.ToUpper()))
+    Note 'it did NOT offer the Windows account (10084)'  $false (Shown $out 10084 @($borrowAcc.ToUpper(), $borrowAcc))
     Note 'the sentinel reached the VOC (5051)'         $true  (Shown $out 5051 @($sentinel))
     Note 'message 10036 shown (not created by SD)'     $true  (Shown $out 10036 @($borrowAcc))
     Note 'message 10028 NOT shown (OS User deleted)'   $false (Shown $out 10028 @($borrowAcc))

@@ -289,7 +289,7 @@ if ($inRegister) {
 
 Add-Type -AssemblyName System.Web
 $pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-$out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' PROGRAMMER'), $pw, $pw)
+$out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' PROGRAMMER BOTH'), $pw, $pw)
 if (-not (Test-Path -LiteralPath $acctDir)) {
     Write-Output '  --- SD said: ---'; Write-Output $out
     Write-Output '  CREATE.ACCOUNT produced no account directory'
