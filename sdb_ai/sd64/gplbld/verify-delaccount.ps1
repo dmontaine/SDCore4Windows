@@ -27,10 +27,12 @@
     there are two - and if neither works the profile checks report N/A naming
     the step and the Win32 error.  They never quietly pass.
 
-    ON THE 21 Aug RUN THEY DID REPORT N/A, and that is what the design is for:
-    30 PASS + 7 N/A of 37, both directions held, and the seven were the whole
-    profile half failing to be SET UP rather than failing.  A check that could
-    not tell those apart would have called it 37/37.
+    ON THE FIRST 21 Aug RUN THEY DID REPORT N/A, and that is what the design is
+    for: 30 PASS + 7 N/A of 37, both directions held, and the seven were the
+    whole profile half failing to be SET UP rather than failing.  A check that
+    could not tell those apart would have called it 37/37.  The setup was fixed
+    and the second run went 38 of 38 - so the profile half is now measured, not
+    assumed.
 
     THE ACCOUNT DIRECTORY AND THE PROFILE ARE DIFFERENT THINGS, and the verb
     treats them differently.  ProgramData\SD\user_accounts\<name> is the SD
@@ -204,13 +206,17 @@ function Start-SD {
 # N/A and the half went unmeasured.
 #
 #   THE BUFFER IS MAX_PATH NOW, AND THE COUNT IS THE BUFFER'S OWN CAPACITY.  The
-#   run passed 320.  CreateProfile is serviced by ProfSvc over RPC and the out
-#   parameter is size-constrained there, so a count above MAX_PATH is rejected
-#   by the stub rather than by the API - which is what 1783 means and why the
-#   error names no parameter.  INFERRED FROM THE ERROR, NOT PROVEN: this has not
-#   been re-run.  Passing $sb.Capacity rather than a literal at least makes it
-#   impossible for the declared size and the real buffer to disagree, which was
-#   the other candidate.
+#   failing run passed 320.  CreateProfile is serviced by ProfSvc over RPC and
+#   the out parameter is size-constrained there, so a count above MAX_PATH is
+#   rejected by the stub rather than by the API - which is what 1783 means and
+#   why the error names no parameter.  Passing $sb.Capacity rather than a
+#   literal also makes it impossible for the declared size and the real buffer
+#   to disagree, which was the other candidate and was eliminated first by
+#   measuring what New-Object StringBuilder 320 actually makes.
+#
+#   CONFIRMED, NOT INFERRED, on the sddel2 run: both subjects got their profile
+#   "via CreateProfile" and the run went 38 of 38.  So MAX_PATH was the whole of
+#   it, and route 2 below has still never executed.
 #
 # ROUTE 2, LogonUser + LoadUserProfile, tried only if route 1 fails.  This is
 # how a profile really gets made, and it depends on no undocumented constraint:
