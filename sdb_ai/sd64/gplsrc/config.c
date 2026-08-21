@@ -33,6 +33,7 @@
  *  GRPSIZE=n     Default group size when creating a dynamic file
  *  MAXIDLEN=63   Maximum record id len
  *  MUSTLOCK=1    Must hold update or file lock to write or delete record
+ *  NETDIRS=p;p   Directories a network session may reach outside its account
  *  NETFILES=0    Allow remote files?
  *                  0x0001   Allow outgoing NFS
  *                  0x0002   Allow incoming Q_M_Net
@@ -248,6 +249,30 @@ struct CONFIG* read_config(char* errmsg) {
         cfg->maxidlen = n;
       else if (sscanf(rec, "MUSTLOCK=%d", &n) == 1)
         pcfg.must_lock = n != 0;
+/* 21 Aug 26 Windows port - NETDIRS, the escape hatch for the containment gate
+   in op_dio2.c.  A network session is confined to the account it is standing
+   in plus the SDSYS entries a stock VOC names; a site with a data directory
+   outside any account names it here or its network sessions cannot reach it.
+
+   SEMICOLON SEPARATED, NOT COLON.  A Windows pathname contains a colon, so
+   the Unix PATH convention cannot be borrowed.
+
+   NO DEFAULT, AND THE EMPTY VALUE IS THE STRICT ONE.  struct config is
+   memset to zero above, so an sd.conf that does not mention NETDIRS confines
+   every network session to its account.  That is the safe direction and it is
+   the same convention as os.users: what is not named is refused.
+
+   BOUNDS CHECKED, and the refusal is deliberate rather than a truncation - a
+   truncated pathname is a SHORTER one, which as a containment root would
+   match MORE than the administrator asked for, not less.                   */
+      else if (strncmp(rec, "NETDIRS=", 8) == 0) {
+        if (strlen(rec + 8) > MAX_NETDIRS_LEN) {
+          sprintf(errmsg, "NETDIRS value is longer than %d characters.",
+                  MAX_NETDIRS_LEN);
+          goto exit_read_config;
+        }
+        strcpy(cfg->netdirs, rec + 8);
+      }
       else if (sscanf(rec, "NETFILES=%d", &n) == 1)
         cfg->netfiles |= n;
       else if (sscanf(rec, "NUMFILES=%d", &n) == 1)

@@ -234,6 +234,7 @@ bool bind_sysseg(bool create, char* errmsg) {
   sysseg->jnlmode = cfg->jnlmode;                     /* JNLMODE */
   strcpy((char*)(sysseg->jnldir), cfg->jnldir);       /* JNLDIR */
   sysseg->maxidlen = cfg->maxidlen;                   /* MAXIDLEN */
+  strcpy((char*)(sysseg->netdirs), cfg->netdirs);     /* NETDIRS */
   sysseg->netfiles = cfg->netfiles;                   /* NETFILES */
   sysseg->pdump = cfg->pdump;                         /* PDUMP */
   sysseg->portmap_base_port = cfg->portmap_base_port; /* PORTMAP */

@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 21 Aug 26 Windows port - NETDIRS, for the containment gate
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -27,6 +28,15 @@
  * START-CODE
  */
 
+
+/* 21 Aug 26 Windows port - NETDIRS.  A list, so it needs more room than a
+   single pathname; 1023 holds about four typical Windows directories.
+
+   IT IS DEFINED HERE RATHER THAN IN config.h BECAUSE OF INCLUDE ORDER: sd.h
+   pulls in sysseg.h, and config.h is included AFTER sd.h by every file that
+   wants it, so a definition in config.h is not in scope for the struct
+   below.  config.h uses this one.                                         */
+#define MAX_NETDIRS_LEN 1023
 
 /* System shared segment. */
 
@@ -55,6 +65,19 @@ struct SYSSEG {
    int16_t fixusers_base;      /* FIXUSERS: First user number and... */
    int16_t fixusers_range;     /*          ...Number of ports/users */
    int16_t maxidlen;           /* MAXIDLEN: Max record id length */
+   /* 21 Aug 26 Windows port - NETDIRS.  It lives here rather than in PCFG
+      because net_path_permitted() is consulted on every OPEN in a network
+      session, so it has to be readable without a per-process config load,
+      and because a per-process copy would be a containment root the session
+      itself could be given a different view of.
+
+      THIS CHANGES THE SHARED SEGMENT LAYOUT, and SYSSEG_REVSTAMP DOES NOT
+      CATCH THAT - same trap as APIPORT below and the PCFG change of
+      16 Aug 26.  Harmless as shipped, because an install replaces every
+      binary at once; the hazard is copying one rebuilt binary onto a
+      running system.  PROJECT_STATUS.md section 7 step 1a and section 6.  */
+   char netdirs[MAX_NETDIRS_LEN+1]; /* NETDIRS: dirs a network session may
+                                       reach outside its own account */
    int16_t netfiles;           /* NETFILES: 0x0001   Allow outgoing NFS
                                               0x0002   Allow incoming SDNet */
    int16_t pdump;              /* PDUMP:    0x0001   Ban dump of other username */

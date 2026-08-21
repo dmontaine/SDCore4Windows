@@ -24,6 +24,7 @@
  * 17 Aug 26 Windows port - APIPORT added, for the API listener sdwind runs.
  *           Windows has no xinetd and no systemd socket activation, so the
  *           listener and the per-connection spawn are ours to provide.
+ * 21 Aug 26 Windows port - NETDIRS added, for the containment gate
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -36,8 +37,10 @@
 
 /* !!CONFIG!! All places requiring changes for config parameters are marked */
 
+/* MAX_NETDIRS_LEN is in sysseg.h - see the note there for why. */
+
 struct CONFIG {
- 
+
   int16_t max_users;               /* User limit */
   char sysdir[MAX_PATHNAME_LEN+1];
   int16_t cmdstack;                /* CMDSTACK: Command stack depth */
@@ -50,6 +53,11 @@ struct CONFIG {
   int16_t jnlmode;                 /* JNLMODE:  Journalling mode */
   char jnldir[MAX_PATHNAME_LEN+1]; /* JNLDIR:   Journal file directory */
   int16_t maxidlen;                /* MAXIDLEN: Maximum record id length */
+  /* 21 Aug 26 Windows port - NETDIRS: directories outside its own account
+     that a network session may reach.  Semicolon separated, because a
+     Windows pathname contains a colon.  EMPTY IS THE STRICT VALUE and is
+     what an sd.conf not mentioning it gets.  See op_dio2.c.               */
+  char netdirs[MAX_NETDIRS_LEN+1]; /* NETDIRS:  Network session data dirs */
   int16_t netfiles;                /* NETFILES:
                                       0x0001    Allow outgoing NFS
                                       0x0002    Allow incoming SDNet   */

@@ -23,6 +23,8 @@
  * 28 Jul 24 mab remove op code overwrites (removed from opcodes.h)
  * 13 Aug 26 Windows port - seed USR_ADMIN from IsAdmin() at process start
  * 14 Aug 26 Windows port - seed it from IsElevated() instead
+ * 21 Aug 26 Windows port - and never for a network session, whatever the
+ *           token says
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -192,7 +194,49 @@ bool init_kernel() {
        should not demand elevation of somebody who is already an
        administrator.  See linuxlb.c, where the two sit side by side.        */
 
-    if (IsElevated())
+    /* 21 Aug 26 Windows port - AND NEVER FOR A NETWORK SESSION.  IsElevated()
+       reads the PROCESS token, and an API session's process is forked by
+       sdwind and inherits the SERVICE's token: sdwind runs as LocalSystem,
+       whose token carries BUILTIN\Administrators, so IsElevated() answered
+       TRUE for every remote client and USR_ADMIN was set for all of them.
+
+       MEASURED, 21 Aug 26, from inside the session rather than inferred from
+       outside: a PROGRAMMER-tier account over a real remote API connection
+       ran "os.execute 'cmd /c whoami'" and SD's own session printed back
+       PROBE.WHOAMI=nt_authority_system.  os_permitted() returns TRUE on
+       USR_ADMIN, so that was arbitrary command execution as SYSTEM for
+       anyone holding an ordinary account's credential.
+
+       AND THE CONTROL INVERTS IT, which is what makes it a measurement: the
+       SAME program in the SAME account from a LOCAL ELEVATED session was
+       REFUSED.  A local session starts in SDSYS with the flag set and gives
+       it up on the way out (CPROC, "administrator rights belong to SDSYS"),
+       so os_permitted() says no by the time it reaches the probe.  The API
+       session never leaves anywhere, so it kept the flag.  The remote client
+       got the operating system and the administrator at the keyboard did not.
+
+       CN_SOCKET IS THE DISCRIMINATOR AND NOT is_sdApiSrvr.  sd.c sets
+       CN_SOCKET from -N, which is what sdwind's execl passes; -Q sets
+       is_sdApiSrvr and is about the login protocol, not about where the
+       session came from.  Gating on the connection is the narrower claim and
+       is the same discriminator net_path_permitted() uses, so the two halves
+       of the containment cannot drift apart.
+
+       THIS ONLY MAKES THE CODE AGREE WITH WHAT IT ALREADY CLAIMED.
+       APISRVR:459 and :489 say outright "an API session cannot have
+       K$ADMINISTRATOR" and reason the account gating on it; nothing enforced
+       it until now.
+
+       IT IS NOT THE WHOLE FIX, AND MUST NOT BE READ AS ONE.  The $cred write
+       measured on 20 Aug went through no privilege flag at all - the probe
+       wrote the file from ordinary BASIC - so this closes OS.EXECUTE and
+       leaves the file reach open.  net_path_permitted() in op_dio2.c is that
+       half, and it depends on this one: without it an API session passes
+       logto.authorised on K$ADMINISTRATOR (CPROC:3753), reaches SDSYS, and a
+       root that follows the account would follow it there.
+       PROJECT_STATUS.md items 4 and 5.                                     */
+
+    if (IsElevated() && (connection_type != CN_SOCKET))
       my_uptr->flags |= USR_ADMIN;
 
     /* Phantom processes have the user name entered by the parent when the

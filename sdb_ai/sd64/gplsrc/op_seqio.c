@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 21 Aug 26 Windows port - containment gate on both openseq() path sites
  * 15 Aug 26 Windows port - op_openseq() freed the file variable it had just
  *           returned whenever the file did not yet exist.  See the comment at
  *           exit_op_openseq
@@ -495,6 +496,16 @@ Private void openseq(bool map_name) {
       goto exit_op_openseq;
     }
     fullpath(fullpathname, pathname);
+
+    /* 21 Aug 26 Windows port - containment gate, OPENSEQ leg.  This is the
+       VOC-mapped form, so the record it names sits inside whatever the VOC
+       F-record points at - which for a stock account VOC can be SDSYS.  See
+       net_path_permitted() in op_dio2.c.                                   */
+
+    if (!net_path_permitted(fullpathname)) {
+      process.status = ER_PERM;
+      goto exit_op_openseq;
+    }
   } else /* OPENSEQP */
   {
     /* Get file name */
@@ -521,6 +532,19 @@ Private void openseq(bool map_name) {
       flags |= SQ_PORT;
     } else {
       fullpath(fullpathname, file_name);
+
+      /* 21 Aug 26 Windows port - containment gate, OPENSEQP leg.  THIS is
+         the one that matters: OPENSEQP takes a pathname straight from the
+         caller with no VOC in the way, so it is the sequential-file twin of
+         OPENPATH.  It has to be tested BEFORE the name is taken apart below,
+         because from that point on file_name has been truncated at the last
+         separator and no longer names the target.                          */
+
+      if (!net_path_permitted(fullpathname)) {
+        process.status = ER_PERM;
+        goto exit_op_openseq;
+      }
+
       strcpy(file_name, fullpathname);
 
       /* 0220 Now disect the name to create a file_name and record_name pair */

@@ -5,6 +5,63 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  A session that arrives over the API is now confined to the account
+           it is standing in.  Sessions at the keyboard and over ssh are not
+           affected in any way.
+
+           WHY: until this version, a client connecting over the API could open
+           any file on this machine - including the file SD keeps passwords in.
+           Holding one ordinary account's password was enough, and no
+           administration command was needed.  If you have used the API, treat
+           the passwords of every account as having been reachable.
+
+           * WHAT AN API SESSION CAN STILL DO: everything inside its own
+             account, and the shipped SDSYS files every account needs -
+             messages, syscom, the dictionaries, sd.voclib.  Ordinary programs
+             are not affected.
+           * WHAT IT CAN NO LONGER DO: open, rename, delete or list anything
+             else.  A refused OPEN takes the ELSE branch and STATUS() is 3035,
+             which means "not permitted" rather than "not found".
+           * IF YOUR DATA LIVES OUTSIDE AN ACCOUNT - a shared directory that
+             VOC entries point at - name it in the new NETDIRS setting in
+             C:\ProgramData\SD\sd.conf, separating several with a semicolon.
+             Nothing else needs changing.  "CONFIG('NETDIRS')" prints what is
+             in force.
+           * THE PASSWORD FILE, THE PROGRAM CATALOGUE AND THE ACCOUNT REGISTER
+             ARE NEVER REACHABLE from an API session, and cannot be added to
+             NETDIRS.
+
+21 Aug 26  OS.EXECUTE and SH are no longer available to a session that arrived
+           over the API.
+
+           They were, and they ran as the LocalSystem account - so a remote
+           client could run any command on the machine with full privilege,
+           which is more than the administrator sitting at the keyboard gets.
+           Measured from inside such a session on 21 Aug 2026.  An API session
+           is no longer treated as an administrator for any purpose, which is
+           what SD's own code already assumed and did not enforce.
+
+21 Aug 26  "Limit ssh to SD users and administrators" is now offered on every
+           install, not only on a machine that had no ssh server beforehand.
+
+           It is still unticked by default and still does nothing unless you
+           tick it.  Before this, SD's own first install put an ssh server on
+           the machine permanently, so the option was never offered again -
+           while uninstalling always removed the setting.  The result was that
+           the restriction could be applied once and never re-applied, and on
+           this machine it had silently lapsed.
+
+           * IF YOU HAVE UPGRADED BEFORE AND USE ssh, check whether the
+             restriction is still in place; it may have been removed by an
+             earlier uninstall.  To put it back:
+
+                powershell -File "C:\Program Files\SD\allow-ssh-groups.ps1" -Installed
+
+           * IT WILL REFUSE if your sshd_config already says who may connect,
+             rather than overwrite somebody else's policy.
+           * TICKING IT DISABLES scp AND sftp for everyone on the machine,
+             which is why it is an option and not a default.
+
 21 Aug 26  You can now say, per account, whether it may reach this machine over
            ssh, through an API client, both, or neither.  Two new
            MODIFY.ACCOUNT actions, from SDSYS:

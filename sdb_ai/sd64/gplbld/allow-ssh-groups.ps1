@@ -14,11 +14,26 @@
 #
 # WHEN IT REFUSES, and why refusing is the point.
 #
-#   1. If SD did not install this ssh server.  PROJECT_STATUS.md 5.9: we never
-#      reconfigure an ssh server we did not install - it may be there for
-#      something else and may be managed by policy.  The installer only offers
-#      this alongside its own OpenSSH install; the -Installed switch is how it
-#      says so, and without it this script does nothing.
+#   1. If -Installed was not passed.  WHAT THAT SWITCH ASSERTS CHANGED ON
+#      21 Aug 2026 and the old wording is kept here because it was wrong in a
+#      way worth seeing: it said "SD did not install this ssh server", and the
+#      installer only offered the task under Check: SshServerAbsent.
+#
+#      THAT MADE THE TASK A ONE-SHOT.  SD's own first install puts sshd.exe on
+#      the machine for ever, uninstall always strips SD's block, and
+#      SshServerAbsent asks what was true BEFORE the install began - so after
+#      the first cycle the task could never be offered again, and this machine
+#      was found on 21 Aug 2026 with a stock sshd_config: no AllowGroups and,
+#      worse, no ForceCommand, so an sdsshonly account got a PowerShell prompt.
+#
+#      SO -Installed NOW MEANS "AN ADMINISTRATOR ASKED FOR THIS", and the task
+#      is offered on any machine.  PROJECT_STATUS.md 5.9 - never reconfigure an
+#      ssh server we did not install - is carried by the task being unticked by
+#      default rather than by this switch: nothing is touched unless somebody
+#      ticks a box that names what it will do.  Refusal 2 below is what stops
+#      this from walking over an existing policy, and it is the real backstop.
+#      Running this script by hand still needs the switch, which is what keeps
+#      it from being a thing that happens by accident.
 #   2. If sshd_config already restricts who may connect.  An existing
 #      AllowGroups, AllowUsers, DenyGroups or DenyUsers line is somebody's
 #      policy, and merging into it blind is how you either widen it silently or
@@ -221,7 +236,7 @@ try {
     }
 
     if (-not $Installed) {
-        Write-Output "allow-ssh-groups: -Installed not given - SD only configures an ssh server it installed itself (5.9)"
+        Write-Output "allow-ssh-groups: -Installed not given - this rewrites sshd_config and restarts sshd, so it has to be asked for"
         exit 2
     }
 

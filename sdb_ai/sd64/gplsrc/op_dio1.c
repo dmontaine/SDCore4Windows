@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
+ * 21 Aug 26 Windows port - containment gate on open_file(), covering both
+ *           OPEN and OPENPATH
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -640,6 +642,29 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   }
 
   fullpath(pathname, mapped_name);
+
+  /* 21 Aug 26 Windows port - THE CONTAINMENT GATE, and this one call covers
+     both OPEN and OPENPATH.  Everything above either mapped a VOC name or
+     took the caller's path verbatim; both arrive here, and pathname is the
+     resolved absolute form from this point on, so it is the one place where
+     what will actually be opened is known.
+
+     IT IS AFTER fullpath() ON PURPOSE.  Gating the name as typed would test a
+     string the operating system never sees - a VOC F-record, a relative path
+     and "don/../../sdsys/$cred" all name something different from what they
+     look like.  net_path_permitted() refuses anything fullpath() could not
+     fully resolve, so the two together mean the check is on the real target.
+
+     ER_PERM RATHER THAN AN ABORT.  OPEN ... ELSE is the BASIC idiom and a
+     k_error() here would read as a crash to every program that uses it; 3035
+     is distinct from the 3024 a missing file gives, so a refusal says
+     "permission" and not "not found" - which is the failure this codebase has
+     been bitten by before.  PROJECT_STATUS.md item 4.                      */
+
+  if (!net_path_permitted(pathname)) {
+    process.status = ER_PERM;
+    goto exit_op_open;
+  }
 
   if (process.txn_id != 0) {
     /* Try to re-open a file previously closed during this transaction */

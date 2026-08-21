@@ -114,12 +114,37 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; THE SECOND LAYER OF 5.6.2.  PROMOTED FROM A SUBTASK on 16 Aug 2026, because
 ; the parent it hung off no longer exists.
 ;
-; ITS OWN Check IS NOW DOING ALL THE WORK.  As a child it was unreachable unless
-; SD was installing the ssh server itself, and that was described as structural
-; rather than remembered; with the parent gone, the Check on this line is the
-; only thing left standing between it and a machine whose ssh server belongs to
-; somebody else.  Do not remove it.  allow-ssh-groups.ps1 refuses without
-; -Installed as a second, independent backstop.
+; ITS Check IS GONE - owner's decision, 21 Aug 2026, and the comment it replaces
+; said "Do not remove it".  That reasoning was right about the risk and wrong
+; about the mechanism, and the mechanism made the task a ONE-SHOT:
+;
+;   - Uninstall ALWAYS strips SD's block (RemoveAllowGroups, below).
+;   - SshServerAbsent asks whether sshd.exe was missing BEFORE THIS INSTALL
+;     BEGAN - SshWasAbsent, set in InitializeSetup.
+;   - SD'S OWN FIRST INSTALL PUTS sshd.exe THERE FOR EVER.
+;
+; So it worked exactly once, on a machine with no ssh server, and every cycle
+; since removed it and could not re-apply it.  Found 21 Aug 2026 by
+; verify-routes.ps1: 30/32, and the two failures were this - sshd_config stock,
+; no AllowGroups and no ForceCommand.  THE ForceCommand HALF IS THE SHARP ONE:
+; without it an ssh session lands at a PowerShell prompt instead of in SD, so an
+; account confined to sdsshonly gets a shell on the server - the thing the
+; confinement exists to prevent, arriving by the far door.
+;
+; "WE NEVER RECONFIGURE AN SSH SERVER WE DID NOT INSTALL" (5.9) IS NOT WEAKENED,
+; because it was never this Check that carried it: Flags: unchecked is, and that
+; is untouched.  Nothing happens to anybody's ssh server unless an administrator
+; ticks a box that names what it will do.  TICKING IT IS THE CONSENT, which is
+; what the rule was protecting.  Limiting ssh is about SD's access model rather
+; than about who installed the server, and that is the whole of the change.
+;
+; SshWasAbsent IS STILL RIGHT FOR THE OTHER TWO USES and keeps its Check: the
+; firewall step and the "did SD put this here" report are both genuinely about
+; whose server it is.
+;
+; TWO BACKSTOPS REMAIN IN allow-ssh-groups.ps1, and the second is the one that
+; matters now: it refuses if sshd_config ALREADY says who may connect, so it
+; cannot silently widen or replace somebody else's policy.
 ;
 ; The deny rights say where an account may NOT log in.  This says who may ssh at
 ; all: two independent controls rather than one.  Still off by default, because
@@ -136,7 +161,7 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; not a side effect that was missed - but it is not something to discover after
 ; ticking a box that only mentioned AllowGroups, which is what it used to say.
 Name: "limitssh"; Description: "Limit ssh to SD users and administrators, and put every ssh session straight into SD (disables scp and sftp)"; \
-    GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
+    GroupDescription: "Remote access:"; Flags: unchecked
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -1467,9 +1492,10 @@ begin
     measured NOT to reach these boxes, and it would leave two ways of saying
     the same thing in one file.
 
-    AND IT FIXES THE TEXT AS WELL AS THE HANG.  The box explains why two
-    options are "absent from this page" - which is incoherent read in a mode
-    that shows no pages, so there was nothing worth showing here anyway. }
+    AND IT FIXES THE TEXT AS WELL AS THE HANG.  The box explains why an option
+    is "absent from this page" - which is incoherent read in a mode that shows
+    no pages, so there was nothing worth showing here anyway.  (It said "two
+    options" until 21 Aug 2026; see the note on the message itself.) }
   if WizardSilent then
     Exit;
 
@@ -1482,13 +1508,32 @@ begin
       an option anybody is offered.  What the reader needs now is the opposite
       reassurance: SD requires an ssh server, this machine has one, and SD is
       going to keep its hands off it - which is also why BOTH ssh options have
-      vanished from the page they are looking at. }
+      vanished from the page they are looking at.
+
+      SUPERSEDED 21 Aug 2026 AND KEPT VISIBLE: the last clause is no longer
+      true.  Only ONE option vanishes now - limitssh lost its Check and is
+      offered on every install.  Left here rather than edited away because the
+      history of this box is the point: three rewordings, each one made
+      necessary by a change somewhere else in the file, and each time the text
+      went on asserting the old shape until somebody noticed. }
+    { REWORDED AGAIN 21 Aug 2026, because the limitssh task lost its Check and
+      this text would otherwise be false.  It said "the two ssh options are
+      absent from this page"; only ONE is now - installing the server, and its
+      firewall rule with it.  Limiting ssh IS offered here, on any machine, and
+      the sentence has to say so, or the reader ticks a box this box has just
+      told them is not there.  Third time this file has been found asserting
+      something that had stopped being true; the pattern is worth the note. }
     MsgBox('OpenSSH Server is already installed on this machine.' + #13#10#13#10 +
-           'SD needs an ssh server and would install one, but it will not touch ' +
-           'the one you already have: nothing is installed, nothing is restarted, ' +
-           'and neither its configuration nor its firewall rule is changed.' + #13#10#13#10 +
-           'That is why the two ssh options are absent from this page. Accounts SD ' +
-           'creates sign in over ssh, so make sure your server accepts them.',
+           'SD needs an ssh server and would install one, but it will not install ' +
+           'or restart the one you already have, and it will not change its ' +
+           'firewall rule. That is why the option to install a server is absent ' +
+           'from this page.' + #13#10#13#10 +
+           'You can still tick "Limit ssh to SD users and administrators". That ' +
+           'one edits sshd_config and restarts sshd, so it is your decision to ' +
+           'make about a server SD did not install - it is left unticked, and it ' +
+           'will refuse if your sshd_config already says who may connect.' + #13#10#13#10 +
+           'Accounts SD creates sign in over ssh, so make sure your server ' +
+           'accepts them.',
            mbInformation, MB_OK);
 end;
 

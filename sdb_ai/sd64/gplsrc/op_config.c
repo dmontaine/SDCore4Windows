@@ -115,6 +115,13 @@ void op_config() {
     result.data.value = sysseg->maxidlen;
   else if (!strcmp(param, "MUSTLOCK"))
     result.data.value = pcfg.must_lock;
+/* 21 Aug 26 Windows port - NETDIRS.  Read only, and from the SEGMENT rather
+   than from pcfg, for the same reason as APIPORT below: it is a system-wide
+   containment root and a per-process copy would be one the session could be
+   given a different view of.  net_path_permitted() reads the same bytes, so
+   what this prints is what is actually enforced.                          */
+  else if (!strcmp(param, "NETDIRS"))
+    k_put_c_string((char*)(sysseg->netdirs), &result);
   else if (!strcmp(param, "NETFILES"))
     result.data.value = sysseg->netfiles;
   else if (!strcmp(param, "NUMFILES"))

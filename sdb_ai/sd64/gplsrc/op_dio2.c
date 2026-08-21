@@ -18,6 +18,8 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 21 Aug 26 Windows port - net_path_permitted(), the containment root for a
+ *           network session
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -25,6 +27,7 @@
  *  op_fileinfo        FILEINFO
  *  op_sysdir          SYSDIR
  *  op_ospath          OSPATH
+ *  net_path_permitted May this session touch this path?
  *
  * END-DESCRIPTION
  *
@@ -35,15 +38,23 @@
 #include "keys.h"
 #include "dh_int.h"
 #include "header.h"
+#include "syscom.h"
 
 #include <time.h>
 #include <stdint.h>
 #include <pwd.h>
 #include <grp.h>
+/* 21 Aug 26 Windows port - cygwin_conv_path(), for net_path_permitted().
+   op_kernel.c includes this too, for K_WINPATH.                           */
+#include <sys/cygwin.h>
 
 Private bool valid_name(char* p);
 Private bool attach(char* path);
 Private STRING_CHUNK* get_file_status(FILE_VAR* fvar);
+Private bool net_normalise(char* path, char* out);
+Private bool path_within(char* cand, char* root);
+Private bool has_parent_ref(char* path);
+Private bool net_raw_permitted(char* path);
 
 bool make_path(char* tgt);
 bool FDS_open(DH_FILE* dh_file, int16_t subfile);
@@ -627,6 +638,61 @@ void op_ospath() {
   UpperCaseString(path);
 #endif
 
+  /* 21 Aug 26 Windows port - THE CONTAINMENT GATE FOR OSPATH.  Fifteen keys
+     share one opcode and they do not all touch the filesystem, so the gate is
+     applied to the ones that do and the rest are left alone:
+
+       GATED    EXISTS UNIQUE DELETE DTM CD OPEN DIR MKDIR MKPATH, and CHOWN
+                in its own case below because its path arrives inside a
+                three-part parameter rather than in "path".
+       NOT      PATHNAME and FILENAME validate a STRING and never look at the
+                disk; CWD reports the session's own directory; FLUSH.CACHE
+                takes no path; MAPPED.NAME maps a record id to a filename.
+       NOT      FULLPATH, deliberately.  It resolves a name and returns it -
+                the OPEN that follows is gated at open_file(), and refusing
+                the arithmetic as well would break code that builds a path
+                inside its own account before opening it.
+
+     CD IS IN THE LIST BUT IS NOT WHAT HOLDS THE LINE.  A session that got its
+     working directory outside the account would still be refused every open
+     there, because fullpath() resolves a relative name against the working
+     directory and the result is what net_path_permitted() sees.  @PATH does
+     not move with OS$CD, so the root does not follow it either.
+
+     THE REFUSAL HAS TO MATCH THE KEY'S RETURN TYPE.  Most answer with an
+     integer through set_status, but UNIQUE and DIR push a STRING and jump
+     straight to the exit, so refusing those with an integer would leave the
+     caller reading a number as a string.                                  */
+
+  switch (key) {
+    case OS_EXISTS:
+    case OS_DELETE:
+    case OS_DTM:
+    case OS_CD:
+    case OS_OPEN:
+    case OS_MKDIR:
+    case OS_MKPATH:
+      if (!net_raw_permitted(path)) {
+        process.status = ER_PERM;
+        status = 0;
+        goto set_status;
+      }
+      break;
+
+    case OS_UNIQUE:
+    case OS_DIR:
+      if (!net_raw_permitted(path)) {
+        process.status = ER_PERM;
+        k_put_c_string("", e_stack);
+        e_stack++;
+        goto exit_op_pathinfo;
+      }
+      break;
+
+    default:
+      break;
+  }
+
   switch (key) {
     case OS_PATHNAME: /* Test if valid pathname */
     {
@@ -824,6 +890,13 @@ void op_ospath() {
         /* pwd = getpwnam(owner_name); */
         if ((owner_name == NULL) || (group_name == NULL) || (chown_path == NULL)) {
           pwd = NULL; /* Handled as invalid parameters below */
+        /* 21 Aug 26 Windows port - containment gate, CHOWN leg.  Its path is
+           the third field of the parameter rather than "path", so the guard
+           before the switch could not see it and it is tested here instead -
+           after Extract() and before the path reaches chown().  Giving away
+           ownership of a file is a write in the only sense that matters. */
+        } else if (!net_raw_permitted(chown_path)) {
+          pwd = NULL; /* Refused - reported as invalid parameters below */
         } else {
           pwd = getpwnam(owner_name);
         }
@@ -920,6 +993,29 @@ void op_osrename() {
 #ifdef CASE_INSENSITIVE_FILE_SYSTEM
   UpperCaseString(old_path);
 #endif
+
+  /* 21 Aug 26 Windows port - containment gate, and OSRENAME IS A SIXTH ENTRY
+     POINT THAT THE WRITTEN SPEC DID NOT LIST.  It named open_file(), ospath(),
+     openseq() twice, os_permitted() and config.c; this opcode hands BOTH
+     pathnames straight to rename() with no fullpath() anywhere in between, so
+     without a gate here a network session could simply MOVE SDSYS/$cred
+     somewhere it was allowed to read - a rename being the one filesystem
+     operation that needs no access to the CONTENTS of what it moves.
+
+     BOTH ENDS ARE TESTED.  The source, because moving a file out of a
+     protected directory is a write to that directory; the target, because a
+     rename INTO the account would otherwise import anything the session could
+     name.  Refusing either is enough, so the cheaper source test comes first.
+
+     ER_PERM RATHER THAN ER_FNF, so a refusal cannot be mistaken for a missing
+     file - and it is set before the access() below, or a probe could still
+     learn whether a file exists outside the account from which error came
+     back.                                                                 */
+
+  if (!net_raw_permitted(old_path) || !net_raw_permitted(new_path)) {
+    process.status = ER_PERM;
+    goto exit_osrename;
+  }
 
   /* Check old path exists */
 
@@ -1062,6 +1158,338 @@ bool fullpath(char* path, /* Out (can be same as input path buffer) */
   strcpy(path, buff);
 
   return ok;
+}
+
+/* ======================================================================
+   net_normalise()  -  Fold a pathname into the POSIX namespace            */
+
+/* 21 Aug 26 Windows port - THE TWO NAMESPACES, AND WHY THIS EXISTS.
+ *
+ * fullpath() output lands in ONE OF TWO NAMESPACES depending on its INPUT,
+ * and net_path_permitted() has to compare across them.  MEASURED 21 Aug 26
+ * with a standalone probe built by MSYS2 gcc outside the repository:
+ *
+ *     getcwd()                        -> /c/ProgramData/SD/sdsys
+ *     sdrealpath("C:\\ProgramData\\SD\\sdsys") -> C:/ProgramData/SD/sdsys
+ *
+ * sdrealpath() treats a leading drive letter as the root and emits "C:/...",
+ * but falls back to getcwd() for a relative path and emits "/c/...".  So the
+ * SAME directory has two spellings, and @PATH - which the BASIC layer sets
+ * from ospath("", OS$CWD), i.e. getcwd() (LOGIN:384, CPROC:2709) - is always
+ * the POSIX one.  op_kernel.c:563 already records the same fact from the
+ * other side: "OS$FULLPATH returns a POSIX path whatever its comment claims".
+ *
+ * A PREFIX TEST ACROSS THE TWO WOULD MATCH NOTHING, so the gate would refuse
+ * a session's own account directory and every network session would break on
+ * its first OPEN.  Folding both sides through here is what makes the
+ * comparison mean anything.
+ *
+ * CCP_WIN_A_TO_POSIX IS IDEMPOTENT ON POSIX INPUT - measured, same probe - so
+ * this is safe to apply to a path already in the right namespace.  It folds
+ * backslashes and the drive letter; IT DOES NOT FOLD CASE, which is why
+ * path_within() below compares case-insensitively.
+ *
+ * Answers FALSE rather than a guess if the runtime cannot convert.  A wrong
+ * pathname here would compare against the wrong root, and the caller treats
+ * FALSE as "refuse" - exepath.c and K_WINPATH make the same choice.        */
+
+Private bool net_normalise(char* path, /* In  */
+                           char* out)  /* Out, MAX_PATHNAME_LEN + 1 bytes */
+{
+  if (path == NULL || *path == '\0')
+    return FALSE;
+
+  if (cygwin_conv_path(CCP_WIN_A_TO_POSIX, path, out, MAX_PATHNAME_LEN + 1) != 0)
+    return FALSE;
+
+  return (*out != '\0');
+}
+
+/* ======================================================================
+   has_parent_ref()  -  Does this path still contain a ".." component?     */
+
+/* 21 Aug 26 Windows port - THIS IS THE ESCAPE THAT WOULD HAVE MADE THE GATE
+ * DECORATION, and it was found by measuring sdrealpath() rather than by
+ * reading it.  Both halves below were run 21 Aug 26 against standalone probes
+ * built with MSYS2 gcc - the real sdrealpath() lifted out of linuxlb.c, and
+ * cygwin_conv_path() called directly.
+ *
+ * sdrealpath() COLLAPSES ".." ONLY WHILE EVERY COMPONENT EXISTS.  The moment
+ * lstat() answers ENOENT it glues the REST OF THE INPUT ON VERBATIM
+ * (linuxlb.c, "simply glue unrecognised component(s) on the end") and
+ * returns.  So:
+ *
+ *   .../user_accounts/don/../../sdsys              -> /c/ProgramData/SD/sdsys
+ *   .../don/nonexistent/../../../sdsys/$cred       -> UNCHANGED
+ *
+ * The second still BEGINS WITH THE ACCOUNT ROOT, so path_within() would admit
+ * it - and the operating system would then resolve the ".." and open $cred.
+ * One non-existent component is all it costs, and the attacker chooses it.
+ *
+ * AND net_normalise() DOES NOT SAVE US, which is the part that would have
+ * been assumed.  cygwin_conv_path() collapses ".." when it converts FROM the
+ * Windows namespace, and is a passthrough when the input is already POSIX:
+ *
+ *   C:/...(/don/../../sdsys/$cred)   -> /c/ProgramData/SD/sdsys/$cred
+ *   /c/...(/don/nonexistent/../...)  -> UNCHANGED
+ *
+ * So a path can arrive here uncollapsed by either layer, and refusing it
+ * outright is the only test that does not depend on which layer ran.  A
+ * legitimate path never needs one: if every component existed, sdrealpath()
+ * would already have removed it.                                          */
+
+Private bool has_parent_ref(char* path) {
+  char* p;
+
+  for (p = path; *p != '\0'; p++) {
+    if ((p != path) && (*(p - 1) != '/'))
+      continue; /* Not at a component boundary */
+
+    if ((p[0] == '.') && (p[1] == '.') && ((p[2] == '\0') || (p[2] == '/')))
+      return TRUE;
+  }
+
+  return FALSE;
+}
+
+/* ======================================================================
+   path_within()  -  Is cand at or below root?                             */
+
+/* 21 Aug 26 Windows port - both arguments must already have been through
+ * net_normalise().  The component test is the whole of the care here: a plain
+ * strncasecmp() would put .../DONKEY/secret inside a root of .../DON, so the
+ * byte after the prefix has to be the end of the string or a separator.
+ *
+ * CASE-INSENSITIVE ON PURPOSE.  Windows opens C:/PROGRAMDATA/... and
+ * C:/ProgramData/... as the same file, cygwin_conv_path() preserves whichever
+ * was typed, and a case-sensitive test would therefore refuse a session's own
+ * files whenever the caller spelled the path differently from getcwd().  It
+ * cannot be used to widen the root: a case difference can only fail to match,
+ * and a failure to match is a refusal.
+ *
+ * ".." IS NOT HANDLED HERE.  It cannot be: see has_parent_ref() above, which
+ * is why net_path_permitted() refuses an uncollapsed path before it ever
+ * reaches this comparison.  A prefix test on a path still holding ".." would
+ * admit exactly the escape this gate exists to stop.                       */
+
+Private bool path_within(char* cand, char* root) {
+  int root_len;
+
+  if ((cand == NULL) || (root == NULL) || (*cand == '\0') || (*root == '\0'))
+    return FALSE;
+
+  root_len = strlen(root);
+
+  /* Ignore a trailing separator on the root so that a root of "X/" and one
+    of "X" behave the same.  "/" itself is left alone: trimming it would make
+    root_len zero and match everything.                                     */
+
+  while ((root_len > 1) && (root[root_len - 1] == '/'))
+    root_len--;
+
+  if (strncasecmp(cand, root, root_len) != 0)
+    return FALSE;
+
+  return ((cand[root_len] == '\0') || (cand[root_len] == '/'));
+}
+
+/* ======================================================================
+   net_path_permitted()  -  May this session touch this pathname?          */
+
+/* 21 Aug 26 Windows port - THE CONTAINMENT GATE.  PROJECT_STATUS.md item 4.
+ *
+ * WHAT IT CLOSES, measured 20 Aug 26 over a real remote API connection: a
+ * PROGRAMMER-tier account opened SDSYS/$cred, wrote a record to it and read
+ * the record back - so a client holding nothing but an ordinary account's
+ * credential could reset any account's password.  It needed no administration
+ * verb and no privilege flag; the probe wrote the file directly from BASIC,
+ * which is what a PROGRAMMER account can do.  $cred was only the file that
+ * was TESTED - the same reach covers everything the data tree holds, and
+ * gcat is the sharp one, because it holds $LOGIN and $CPROC as object code
+ * and CPROC:315 calls $LOGIN for every session.
+ *
+ * THE ROOT IS THE ACCOUNT THE SESSION IS STANDING IN - owner's decision,
+ * 21 Aug 26, over a strict account-plus-NETDIRS root and a loose deny-SDSYS
+ * one.  It needs no list and no enumeration because the account grant is
+ * already checked where the session moves: LOGIN:344 admits nobody but their
+ * own account and logto.authorised tests the grant at the move (CPROC:3783),
+ * so the file gate inherits both by following @PATH.
+ *
+ * @PATH CANNOT BE FORGED FROM BASIC, checked 21 Aug 26 rather than assumed,
+ * and the gate would be decoration if it could:
+ *   - "@PATH = ..." does not compile.  BCOMP keeps the assignable @-variables
+ *     in at.syscom.lvars (BCOMP:304-307) and PATH is not among them.
+ *   - "common /$syscom/ ..." does not compile either.  A common block name
+ *     may begin with "$" only if internal (get.name, BCOMP:3113), which needs
+ *     $INTERNAL, which needs kernel(K$INTERNAL,-1) - and an API session is
+ *     started "sd -n -q", not -internal, so internal_mode is FALSE for it.
+ *
+ * AND IT DEPENDS ON THE USR_ADMIN FIX IN kernel.c, which is why the two were
+ * built together: an API session used to pass logto.authorised on
+ * K$ADMINISTRATOR, so a root that follows the account would have followed it
+ * into SDSYS and the gate would have opened the very tree it protects.
+ *
+ * SDSYS IS NOT SELF-CONTAINED OUT OF THE ACCOUNT, AND THAT IS WHY THE LIST
+ * BELOW EXISTS.  Found 21 Aug 26 by reading sdsys/voc_template: a STOCK
+ * account VOC carries EIGHT F-records pointing into SDSYS, and one of them is
+ * "voc" itself, whose dictionary part is @SDSYS/voc.dic.  An account-root
+ * gate with nothing else would refuse an account its own VOC dictionary.  The
+ * design as written down on 21 Aug assumed the account was self-contained; it
+ * is not, and this list is the correction.
+ *
+ * IT IS AN ALLOW-LIST, NOT A DENY-LIST, and that is the whole of its value.
+ * Naming what a stock VOC needs leaves $cred, gcat, os.users, accounts and
+ * cat outside by construction - the sharp ones are excluded by not being
+ * mentioned, so a new sharp file in SDSYS is refused the day it appears.
+ * Denying a list of known-sharp names instead would fail open on the next one
+ * added.  Same direction as os_permitted()'s "missing record means no".
+ *
+ * NOT COVERED, AND THE NEXT TIGHTENING: this admits a path, not a MODE, so a
+ * network session may still WRITE the shared entries below.  $cred, gcat and
+ * os.users are not among them, so nothing here reaches credentials, object
+ * code or the OS grant list; what it does leave is write access to
+ * sd.voclib and newvoc, which shape what FUTURE accounts get.  Narrowing this
+ * to read-only needs the open mode threaded down from each entry point, which
+ * differs per caller - deliberately left as its own change rather than
+ * guessed at here.
+ *
+ * PROGRAM LOADING DOES NOT COME THROUGH HERE, checked: load_object() calls
+ * dio_open() on the catalogue directly (object.c:197), never open_file(), so
+ * refusing gcat does not stop a network session RUNNING catalogued code.  It
+ * stops it REWRITING it, which is the exposure.
+ *
+ * THE INTERNAL EXEMPTION IS REQUIRED, NOT A CONVENIENCE.  CRED_VERIFY:68
+ * opens $cred during SCRAM, inside the session being authenticated, so
+ * without it no API login could complete at all.  It cannot be forged:
+ * BCOMP:2864 honours $INTERNAL only for a session that is itself internal AND
+ * elevated.  All four programs on the login path - APISRVR, CRED_VERIFY,
+ * LOGIN, CPROC - carry it, checked 21 Aug 26.                              */
+
+/* The SDSYS entries a stock account VOC names.  From sdsys/voc_template:
+   $MAP, dict.dict, messages, newvoc, qfile, SD.VOCLIB, syscom and voc.
+   Keep this in step with that directory - if a template VOC gains an
+   @SDSYS/ reference and this does not, a network session is refused it. */
+
+Private char* net_sysdir_shared[] = {"$ipc",     "$map",    "$map.dic",
+                                     "dict.dic", "messages", "newvoc",
+                                     "sd.voclib", "syscom",  "voc.dic",
+                                     NULL};
+
+/* ======================================================================
+   net_raw_permitted()  -  As net_path_permitted(), for an unresolved path   */
+
+/* 21 Aug 26 Windows port - OSPATH and OSRENAME take the caller's pathname
+ * and hand it to the operating system WITHOUT calling fullpath() first, so
+ * there is no resolved form to gate.  This resolves one into a scratch buffer
+ * for the check alone and leaves the caller's string untouched: the point is
+ * to change what is REFUSED, not what a permitted call then opens, and
+ * rewriting the path in place would alter behaviour for local sessions that
+ * are not being gated at all.
+ *
+ * The connection and internal tests are repeated here so that no session
+ * except a gated one pays for the fullpath() call.                        */
+
+Private bool net_raw_permitted(char* path) {
+  char resolved[MAX_PATHNAME_LEN + 1];
+
+  if (connection_type != CN_SOCKET)
+    return TRUE;
+
+  if (process.program.flags & HDR_INTERNAL)
+    return TRUE;
+
+  if (path == NULL || *path == '\0')
+    return FALSE;
+
+  /* fullpath() answers FALSE only when it could not resolve at all; a
+    component that does not exist yet is fine and comes back glued on, which
+    net_path_permitted() then refuses if it still holds "..".             */
+
+  if (!fullpath(resolved, path))
+    return FALSE;
+
+  return net_path_permitted(resolved);
+}
+
+bool net_path_permitted(char* path) /* Absolute, as left by fullpath() */
+{
+  char cand[MAX_PATHNAME_LEN + 1];
+  char root[MAX_PATHNAME_LEN + 1];
+  char item[MAX_PATHNAME_LEN + 1];
+  DESCRIPTOR* descr;
+  int i;
+
+  /* Not a network session - nothing to contain.  This is the ONLY test that
+    should ever be widened; everything below assumes it has passed.        */
+
+  if (connection_type != CN_SOCKET)
+    return TRUE;
+
+  if (process.program.flags & HDR_INTERNAL)
+    return TRUE;
+
+  if (!net_normalise(path, cand))
+    return FALSE;
+
+  /* Before any comparison: a surviving ".." makes every prefix test below
+    meaningless.  See has_parent_ref().                                    */
+
+  if (has_parent_ref(cand))
+    return FALSE;
+
+  /* The account the session is standing in.  process.syscom is NULL before
+    login has built it, and @PATH is empty until CPROC sets it, so a network
+    session that reaches here that early is refused - which is the safe
+    direction and is unreachable in practice, the whole login path being
+    $internal and exempt above.                                            */
+
+  if (process.syscom != NULL) {
+    descr = Element(process.syscom, SYSCOM_ACCOUNT_PATH);
+    if (k_get_c_string(descr, item, MAX_PATHNAME_LEN) > 0) {
+      if (net_normalise(item, root) && path_within(cand, root))
+        return TRUE;
+    }
+  }
+
+  /* The shipped SDSYS entries a stock VOC points at */
+
+  for (i = 0; net_sysdir_shared[i] != NULL; i++) {
+    if (snprintf(item, MAX_PATHNAME_LEN + 1, "%s%c%s", sysseg->sysdir, DS,
+                 net_sysdir_shared[i]) >= (MAX_PATHNAME_LEN + 1))
+      continue;
+
+    if (net_normalise(item, root) && path_within(cand, root))
+      return TRUE;
+  }
+
+  /* NETDIRS: site data directories outside any account.  Semicolon
+    separated, because a Windows pathname contains a colon.               */
+
+  if (sysseg->netdirs[0] != '\0') {
+    char* p;
+    char* q;
+
+    p = (char*)(sysseg->netdirs);
+    while (*p != '\0') {
+      q = item;
+      while ((*p != '\0') && (*p != ';') &&
+             ((q - item) < MAX_PATHNAME_LEN))
+        *(q++) = *(p++);
+      *q = '\0';
+
+      while ((*p != '\0') && (*p != ';'))
+        p++; /* Discard an over-long element rather than truncating into a
+                shorter directory that would then match more than it should */
+      if (*p == ';')
+        p++;
+
+      if ((item[0] != '\0') && net_normalise(item, root) &&
+          path_within(cand, root))
+        return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 /* ======================================================================

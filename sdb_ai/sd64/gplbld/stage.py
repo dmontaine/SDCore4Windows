@@ -279,6 +279,33 @@ APILOGIN=1
 #
 # Changing it takes effect when SD is next started, not when a session begins.
 # APIPORT=4243
+# NETDIRS says which directories OUTSIDE ITS OWN ACCOUNT a session that arrived
+# over the API may reach.  IT IS COMMENTED OUT ON PURPOSE and the empty value is
+# the strict one: with nothing here, an API session can open files in the
+# account it is standing in, and nothing else.
+#
+# 21 Aug 26 Windows port - WHY IT EXISTS.  Until now a session arriving over the
+# API could open any file on the machine, including SDSYS/$cred, the credential
+# store - measured, from a remote client, holding nothing but an ordinary
+# account's password.  Sessions at the keyboard and over ssh are unaffected by
+# this parameter; only API sessions are confined.
+#
+# THE SHIPPED SDSYS FILES A NORMAL ACCOUNT NEEDS ARE ALWAYS REACHABLE and do not
+# have to be listed - the VOC entries every account has (messages, syscom, the
+# dictionaries, sd.voclib) keep working.  $cred, gcat, os.users and the account
+# register are never reachable, and cannot be added here.
+#
+# LIST A DIRECTORY HERE ONLY IF YOUR DATA LIVES OUTSIDE AN ACCOUNT - a shared
+# data directory that VOC F-records point at, typically.  Separate several with
+# a SEMICOLON, because a Windows pathname contains a colon:
+#
+#     NETDIRS=D:\\shared\\data;E:\\archive
+#
+# A directory named here is reachable by EVERY API session in every account, so
+# it is a decision about the machine and not about one account.
+#
+# Changing it takes effect when SD is next started, not when a session begins.
+# NETDIRS=
 USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts
 SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo

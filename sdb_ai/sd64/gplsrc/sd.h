@@ -310,6 +310,11 @@ void flush_dh_cache(void);
 bool delete_path(char * path);
 bool fullpath(char * path, char * name);
 bool make_path(char * tgt);
+/* 21 Aug 26 Windows port - the containment gate for a network session.  Call
+   it with an ABSOLUTE path, i.e. after fullpath(): it compares against @PATH
+   and relies on sdrealpath() having already collapsed "..".  Answers TRUE for
+   every session that is not CN_SOCKET.  See op_dio2.c.                     */
+bool net_path_permitted(char * path);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);

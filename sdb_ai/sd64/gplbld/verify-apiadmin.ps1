@@ -94,6 +94,23 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
+# 21 Aug 26 - A THIRD OUTCOME, AND IT EXISTS TO STOP A VACUOUS PASS.
+#
+# Once OS.EXECUTE is gated for network sessions, the probe can no longer ASK
+# what the session is running as - the os.execute that would have printed
+# WHOAMI is refused, so the marker is absent.  Fed to Note() that reads as
+# "not SYSTEM" and PASSES, on a session that is still running as LocalSystem
+# and has merely lost the ability to say so.
+#
+# THAT IS THE SAME FAULT AS THE ONE FOUND ON 21 Aug IN THIS FILE - a check
+# that cannot fail is not a check - so it gets a state of its own rather than
+# a comment asking the reader to remember.  N/A does NOT set $failed and does
+# NOT count as a pass; the summary counts it separately.
+function Skip($check, $why) {
+    $null = $results.Add([pscustomobject]@{ Check = $check; Expected = 'n/a'; Observed = $why })
+    Write-Host ("  [N/A ] {0}: {1}" -f $check, $why) -ForegroundColor Yellow
+}
+
 function Fail($msg) {
     Write-Host ''
     Write-Host "STOPPED: $msg" -ForegroundColor Red
@@ -419,7 +436,28 @@ try {
     # three words counts.  Two independent changes for one fault, deliberately
     # - the check must not be able to go blind again if the probe is reworded.
     $apiIsSystem = ($apiWho -match '(?i)^nt[^a-z0-9]*authority[^a-z0-9]*system$')
-    Note 'API session is NOT running as SYSTEM' $false $apiIsSystem
+
+    # 21 Aug 26 - AND IT IS ONLY A CHECK WHILE THE PROBE CAN STILL ASK.
+    #
+    # This question is answered by running "whoami" INSIDE the session.  Once
+    # the containment gate refuses OS.EXECUTE to a network session - which is
+    # the very thing the next check asserts - no marker comes back, $apiWho is
+    # empty, and this would report "NOT running as SYSTEM ... PASS" on a
+    # session that is still LocalSystem and has only lost the ability to say
+    # so.  A false pass on the most important line in the file, for the second
+    # time and by a different route.
+    #
+    # WHAT IS ACTUALLY TRUE AFTER THE GATE: the session STILL RUNS AS
+    # LocalSystem.  sdwind fork()s it and it inherits the service token; that
+    # is unchanged and needs the CreateProcessAsUser work to fix.  What changed
+    # is that it can no longer reach the operating system with it.  Recording
+    # N/A here keeps those two facts apart.
+    if ($apiWho -eq '') {
+        Skip 'API session is NOT running as SYSTEM' `
+             'OS.EXECUTE was refused, so the probe could not ask - the session may still BE SYSTEM'
+    } else {
+        Note 'API session is NOT running as SYSTEM' $false $apiIsSystem
+    }
 
     # 21 Aug 26 - AND WHETHER OS.EXECUTE RAN AT ALL, which is section 8 item 5
     # measured rather than read.  WHOAMI is printed only if os.execute
