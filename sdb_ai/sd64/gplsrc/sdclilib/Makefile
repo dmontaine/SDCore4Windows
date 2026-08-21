@@ -175,6 +175,30 @@ check-sock-probe:
 	  done; \
 	done
 
+# 20 Aug 26 - WHAT PRIVILEGE A REMOTE API SESSION HOLDS.  PROJECT_STATUS.md
+# section 8.  APISRVR asserts twice that an API session "cannot have"
+# elevation and gates accounts on that basis; sdwind is a LocalSystem service
+# and fork()s the session, so the session inherits SYSTEM's token rather than
+# the client's.  This runs a command down a real API connection so the same
+# command can be run locally and the two compared.
+#
+# THE COMPARISON IS THE MEASUREMENT and lives in gplbld/verify-apiadmin.ps1,
+# which sets up the throwaway account and passes everything in.  Run by hand it
+# needs APIPORT, APIUSER, APIPASS, APIACCT and APICMD.
+APICMD  ?=
+
+check-api-admin: $(DLL)
+	@if [ -z "$(APIPORT)" ] || [ -z "$(APIUSER)" ] || [ -z "$(APIACCT)" ] \
+	   || [ -z "$(APICMD)" ]; then \
+	  echo "check-api-admin needs APIPORT, APIUSER, APIPASS, APIACCT and"; \
+	  echo "APICMD - run gplbld/verify-apiadmin.ps1, which sets all of it up."; \
+	  exit 2; fi
+	mkdir -p localtest
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/api-admin-probe.exe \
+	  tests/api_admin_probe.c -I. -L. -lsdclilib
+	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./api-admin-probe.exe \
+	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)" "$(APICMD)"
+
 # 20 Aug 26 - THE PEER PROBE, which settled how the API can identify the
 # process at the other end of a connection (section 8, posture B).
 #

@@ -109,7 +109,7 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc terminfo check-local check-remote
+.PHONY: sdclilib sdsvc terminfo check-local check-remote check-api-admin
 
 sdclilib:
 	@echo Building native client DLL
@@ -144,6 +144,15 @@ check-remote:
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) \
 	  APIHOST="$(APIHOST)" APIPORT="$(APIPORT)" APIUSER="$(APIUSER)" \
 	  APIPASS="$(APIPASS)" APIACCT="$(APIACCT)" check-remote
+
+# 20 Aug 26 - reachable from here for the same reason check-remote is: the sub-
+# make must be handed the UCRT64 compiler, or the probe is built by the MSYS2
+# "cc" and does not match the DLL it links against.  APICMD carries the command
+# the API session is asked to run; gplbld/verify-apiadmin.ps1 supplies it.
+check-api-admin:
+	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) \
+	  APIHOST="$(APIHOST)" APIPORT="$(APIPORT)" APIUSER="$(APIUSER)" \
+	  APIPASS="$(APIPASS)" APIACCT="$(APIACCT)" APICMD="$(APICMD)" check-api-admin
 
 # 15 Aug 26 - THE SERVICE IS NATIVE, AND ON PURPOSE.  A Windows service has to
 # call StartServiceCtrlDispatcher, and sd.exe is built against the MSYS2 POSIX

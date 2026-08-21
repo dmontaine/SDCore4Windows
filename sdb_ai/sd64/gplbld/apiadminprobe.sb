@@ -1,0 +1,69 @@
+* APIADMINPROBE - what can THIS session reach?
+*
+* Copied into a throwaway account's BP by gplbld/verify-apiadmin.ps1, compiled
+* there, and then run TWICE: once from a local SD session and once down a real
+* API connection.  THE COMPARISON IS THE MEASUREMENT - one run on its own says
+* nothing, because "the credential store opened" is the expected answer for an
+* elevated local session and the alarming one for a remote API client.
+*
+* WHY IT ASKS THE FILE SYSTEM RATHER THAN THE SESSION.  KERNEL is refused to a
+* program that is not compiled $internal, and BCOMP only compiles one of those
+* for SDSYS - so kernel(K$ADMINISTRATOR,-1) cannot be read from an ordinary
+* account at all.  What CAN be read is whether the operating system lets this
+* process touch a file locked to SYSTEM and Administrators, which is the half
+* that decides whether a remote client can rewrite credentials.
+* gplbld/secure-cred.ps1 grants $cred to those two and nothing else.
+*
+* IT WRITES AND THEN READS BACK, and the write is the point rather than the
+* open: a read-only open would not prove the store can be ALTERED, and an
+* attacker resetting somebody's password needs the write.  The read-back is
+* what is believed, not the absence of an error - a write that reported nothing
+* and did nothing would otherwise read as success.
+*
+* THE ID IS NAMESPACED so it cannot collide with an account name, and it is
+* removed again on the way out.
+*
+* EXACTLY ONE LINE PER QUESTION.  The caller greps for these markers, so a path
+* that printed PROBE.CRED.WRITE twice would be parsed as whichever came last.
+
+program apiadminprobe
+
+   crt 'PROBE.ACCOUNT=' : @who
+
+   cred.open = @false
+   openpath @sdsys:@ds:'$cred' to cred.f then
+      crt 'PROBE.CRED.OPEN=YES'
+      cred.open = @true
+   end else
+      crt 'PROBE.CRED.OPEN=NO status ' : status()
+   end
+
+   if cred.open then
+      probe.id = '$$apiadminprobe'
+      probe.rec = 'written by gplbld/verify-apiadmin.ps1 - safe to delete'
+      wr.ok = @false
+      wr.status = 0
+
+      write probe.rec to cred.f, probe.id on error
+         wr.status = status()
+      end
+
+      read back.rec from cred.f, probe.id then
+         wr.ok = @true
+         delete cred.f, probe.id
+      end else
+         null
+      end
+
+      if wr.ok then
+         crt 'PROBE.CRED.WRITE=YES'
+      end else
+         crt 'PROBE.CRED.WRITE=NO status ' : wr.status
+      end
+
+      close cred.f
+   end
+
+   crt 'PROBE.DONE'
+
+end

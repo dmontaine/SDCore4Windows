@@ -237,7 +237,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # verifier, same reasoning.  It calls this script too, so
                   # leaving it out has the self-blocking shape the
                   # verify-accountacl.ps1 note above describes.
-                  'verify-peerlog.ps1')
+                  'verify-peerlog.ps1',
+                  # 20 Aug 26 - section 8's API-privilege verifier and the
+                  # BASIC probe it copies into a throwaway account.  The .sb is
+                  # SOURCE FOR A TEST, not a shipped program: nothing in
+                  # stage.py or sd.iss names it, and it is compiled inside the
+                  # account the verifier creates and deleted with it.  Its
+                  # sibling gplsrc\sdclilib\tests\api_admin_probe.c needs no
+                  # line here - Check B already excludes sdclilib\tests\.
+                  'verify-apiadmin.ps1', 'apiadminprobe.sb')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
