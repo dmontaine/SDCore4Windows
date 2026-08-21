@@ -249,9 +249,9 @@ APILOGIN=1
 # WHAT CHANGED: AN API SESSION RUNS AS LocalSystem.  sdwind is a service and
 # accept_api_session() fork()s the session, so it inherits the SERVICE's
 # token rather than the connecting client's.  Measured 20 Aug 2026
-# (gplbld/verify-apiadmin.ps1): a PROGRAMMER-tier account, over a remote API
-# connection, OPENED AND WROTE $cred - the credential store, which is granted
-# to SYSTEM and Administrators and to nothing else.  So the API is currently a
+# by verify-apiadmin.ps1 in this directory: a PROGRAMMER-tier account, over
+# a remote API connection, OPENED AND WROTE $cred - the credential store,
+# which is granted to SYSTEM and Administrators and to nothing else.  So the API is currently a
 # privilege escalation from "holds an SD credential" to "is SYSTEM on this
 # machine", and shipping it on by default puts that on every install.
 #
