@@ -8,4 +8,4 @@ revoke
 list.grants
 unlock
 encrypt.field
-set.password
+modify.password

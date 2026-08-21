@@ -19,6 +19,11 @@
 * 
 *
 * START-HISTORY:
+* 21 Aug 26 Windows port - SSH, API, BOTH and NONE replace the SSH / NO.SSH /
+*   API / NO.API pairs added earlier the same day.  Owner's decision: the
+*   keyword says what the access IS, not what to change, and the same four
+*   words are CREATE.ACCOUNT's.  Administrators are refused - they always have
+*   both - and a group account is refused, having no Windows user at all.
 * 21 Aug 26 Windows port - RDPACCOUNT and NO.RDPACCOUNT are gone; SSH, NO.SSH,
 *   API and NO.API replace them.  Owner's decision, 21 Aug 2026: Remote Desktop
 *   is out of this port's focus, and the rule it obstructed - nobody SD creates
@@ -34,10 +39,19 @@
 *
 * START-DESCRIPTION:
 * MODIFY.ACCOUNT account <ADD/DELETE> user.name
-* MODIFY.ACCOUNT account SSH               - may sign in over ssh
-* MODIFY.ACCOUNT account NO.SSH            - may not sign in over ssh
-* MODIFY.ACCOUNT account API               - may use the API
-* MODIFY.ACCOUNT account NO.API            - may not use the API
+* MODIFY.ACCOUNT account SSH               - ssh only
+* MODIFY.ACCOUNT account API               - the API only
+* MODIFY.ACCOUNT account BOTH              - ssh and the API
+* MODIFY.ACCOUNT account NONE              - neither
+*
+* THE KEYWORD IS ABSOLUTE.  It says what the account's remote access is, and
+* whatever it does not name is withdrawn - so API takes ssh away.  The same
+* four words are CREATE.ACCOUNT's, so access is said one way whether an account
+* is being made or changed.
+*
+* AN ADMINISTRATOR IS REFUSED (10083) and a GROUP ACCOUNT is refused (10087).
+* Administrators always have both - owner's rule, 21 Aug 2026 - and a group
+* account has no Windows user to put in a group; it is reached with LOGTO.
 *
 * THE TWO REMOTE ROUTES, AND THERE IS NO THIRD.  The console and Remote Desktop
 * are denied to every account SD creates - sdsshonly, applied by CREATE.ACCOUNT
@@ -91,8 +105,7 @@ deffun valid_os_name(name) calling '!valid_os_name'
    call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
    if token.type = PARSER$END then
       crt 'Command Syntax:  MODIFY.ACCOUNT <account> ADD | DELETE <username>'
-      crt '                  MODIFY.ACCOUNT <account> SSH | NO.SSH'
-      crt '                  MODIFY.ACCOUNT <account> API | NO.API'
+      crt '                  MODIFY.ACCOUNT <account> SSH | API | BOTH | NONE'
       stop
    end
    *
@@ -111,22 +124,33 @@ deffun valid_os_name(name) calling '!valid_os_name'
       * Get next token, ADD or DELETE
       call @parser(PARSER$GET.TOKEN, token.type, action, keyword)
 
-* 21 Aug 26 Windows port - SSH, NO.SSH, API and NO.API, replacing RDPACCOUNT
-*   and NO.RDPACCOUNT.  Four more actions in the slot ADD and DELETE occupy:
+* 21 Aug 26 Windows port - SSH, API, BOTH and NONE.  Owner's decision, 21 Aug
+*   2026, replacing the SSH / NO.SSH / API / NO.API pairs of earlier the same
+*   day.  Four actions in the slot ADD and DELETE occupy:
 *
-*     MODIFY.ACCOUNT <account> SSH      may sign in over ssh
-*     MODIFY.ACCOUNT <account> NO.SSH   may not
-*     MODIFY.ACCOUNT <account> API      may use the API
-*     MODIFY.ACCOUNT <account> NO.API   may not
+*     MODIFY.ACCOUNT <account> SSH    ssh only
+*     MODIFY.ACCOUNT <account> API    the API only
+*     MODIFY.ACCOUNT <account> BOTH   both
+*     MODIFY.ACCOUNT <account> NONE   neither
+*
+*   THE KEYWORD SAYS WHAT THE ACCESS IS, NOT WHAT TO CHANGE, and that is the
+*   whole difference from the pairs it replaces.  "API" used to mean "add the
+*   API to whatever it already had"; it now means "the API and nothing else",
+*   so it WITHDRAWS ssh.  The same four words are CREATE.ACCOUNT's, so an
+*   account's access is said the same way whether it is being made or changed.
+*
+*   WHICH IS WHY THE MESSAGE STATES THE WHOLE RESULTING STATE rather than what
+*   moved.  Someone who types API meaning BOTH has just taken ssh away, and a
+*   message reading "may now use the API" would not tell them - it is true and
+*   it is the wrong half.  10076-10079 each name both routes.
 *
 *   They take NO user name - they act on the account's OWN Windows user - so
 *   they are handled before the ADD/DELETE test rather than inside it, which
 *   would demand one.
 *
-*   THE PROPERTY IS GROUP MEMBERSHIP AND NOTHING ELSE, which is why all four
-*   share one pair of routines with the group name and the four messages passed
-*   in.  Nothing is written to ACCOUNTS - owner's decision, 20 Aug 2026, kept -
-*   so there is no record that could disagree with the group.
+*   THE PROPERTY IS GROUP MEMBERSHIP AND NOTHING ELSE.  Nothing is written to
+*   ACCOUNTS - owner's decision, 20 Aug 2026, kept - so there is no record that
+*   could disagree with the group.
 *
 *   WRAPPED ROUND THE ADD/DELETE BLOCK RATHER THAN FOLDED INTO IT.  That block
 *   is working code with four message paths in it; turning its "if ADD or
@@ -134,31 +158,21 @@ deffun valid_os_name(name) calling '!valid_os_name'
 *   actions that share none of it.  One "if not(route.done)" leaves it
 *   untouched.
       route.done = @true
+      want.ssh = @false
+      want.api = @false
       begin case
          case upcase(action) = 'SSH'
-            route.group = 'sdssh'
-            msg.done = 10063  ;* %1 may now sign in over ssh
-            msg.already = 10064  ;* %1 may already sign in over ssh
-            msg.fail = 10067  ;* Unable to change ssh access for %1, status: %2
-            gosub route.add
-         case upcase(action) = 'NO.SSH'
-            route.group = 'sdssh'
-            msg.done = 10065  ;* %1 can no longer sign in over ssh
-            msg.already = 10066  ;* %1 already cannot sign in over ssh
-            msg.fail = 10067  ;* Unable to change ssh access for %1, status: %2
-            gosub route.remove
+            want.ssh = @true
+            gosub route.set
          case upcase(action) = 'API'
-            route.group = 'sdapi'
-            msg.done = 10068  ;* %1 may now use the API
-            msg.already = 10069  ;* %1 may already use the API
-            msg.fail = 10072  ;* Unable to change API access for %1, status: %2
-            gosub route.add
-         case upcase(action) = 'NO.API'
-            route.group = 'sdapi'
-            msg.done = 10070  ;* %1 can no longer use the API
-            msg.already = 10071  ;* %1 already cannot use the API
-            msg.fail = 10072  ;* Unable to change API access for %1, status: %2
-            gosub route.remove
+            want.api = @true
+            gosub route.set
+         case upcase(action) = 'BOTH'
+            want.ssh = @true
+            want.api = @true
+            gosub route.set
+         case upcase(action) = 'NONE'
+            gosub route.set
          case 1
             route.done = @false
       end case
@@ -268,82 +282,126 @@ account.user:
    return
 
 * ======================================================================
-* SSH / API - let this account use a remote route, by putting its own Windows
-* user into the group that route is allowed by.
+* SSH / API / BOTH / NONE - set this account's remote access to exactly what
+* was asked for, by making its own Windows user's membership of sdssh and
+* sdapi match want.ssh and want.api.
 *
-* 21 Aug 26 Windows port - ONE PAIR OF ROUTINES FOR BOTH ROUTES.  The caller
-*   sets route.group and the three message numbers; nothing else differs
-*   between "may ssh" and "may use the API", and two copies of this would be
-*   two places for the next fix to miss.
+* 21 Aug 26 Windows port - ONE ROUTINE, AND IT IS ABSOLUTE.  It replaced
+*   route.add and route.remove, which each moved ONE group in ONE direction and
+*   between them needed eight message numbers.  The keyword now says what the
+*   access IS, so there is one operation - make the world match - and it is
+*   idempotent by construction rather than by asking first.
 *
-*   IDEMPOTENT, AND IT SAYS SO.  os_group ADDMEM succeeds on a member that is
-*   already there, so asking first is what lets this report "already" rather
-*   than implying it did something - the rule GRANTA states at its own ADDMEM.
+*   IT REPORTS THE RESULTING STATE, NOT THE TRANSITION, for the reason given at
+*   the case statement above: with an absolute keyword the interesting fact is
+*   what the account can do now, and half of that may be something the caller
+*   did not realise they were withdrawing.
 *
-*   NO ADMINISTRATOR GUARD HERE, UNLIKE THE ROUTINE THIS REPLACED.  That guard
-*   existed because NO.RDPACCOUNT wrote to sdsshonly, which carries
-*   SeDenyInteractiveLogonRight - so running it on an administrator's own
-*   account locked them out of their console, which is what happened on 15 Aug
-*   2026 the first time ADOPT ran.  NEITHER GROUP HERE CAN DO THAT.  sdsshonly
-*   is not touched by any verb in this program any more, and sdssh cannot lock
-*   an administrator out of ssh because allow-ssh-groups.ps1 names the
-*   Administrators group in AllowGroups in its own right.  If a future route
-*   ever writes to sdsshonly again, the guard comes back with it.
-route.add:
-   gosub account.user
-   if not(user.ok) then return
-
-   if is_grp_member(acc.user, route.group) then
-      crt sysmsg(msg.already, acc.user)
-      return
-   end
-
-   if not(valid_os_name(acc.user)) then
-      crt sysmsg(msg.fail, acc.user, 2)
-      return
-   end
-
-   stat = os_group("ADDMEM", route.group, acc.user)
-   if stat = 0 then
-      crt sysmsg(msg.done, acc.user)
-   end else
-      @system.return.code = -ER$FAILED
-      crt sysmsg(msg.fail, acc.user, stat)
-   end
-   return
-
-* ======================================================================
-* NO.SSH / NO.API - withdraw a remote route, by taking the account's own
-* Windows user back out of that route's group.
+*   "NOTHING CHANGED" IS STILL SAID SEPARATELY (10080).  Reporting the state
+*   alone would leave a caller unable to tell a no-op from a change, and this
+*   is a verb people run twice when they are not sure it took.
 *
-* 21 Aug 26 Windows port - THE WITHDRAWAL IS IMMEDIATE FOR BOTH ROUTES, and
-*   that is worth knowing because the grant is not.  sshd re-reads its
+*   ADMINISTRATORS ARE REFUSED, and this guard is NEW.  Owner's rule, 21 Aug
+*   2026: "all administrators have access to both ssh and api ... the whole
+*   purpose of ADMINISTRATOR is that it gives unlimited access."  So there is
+*   nothing here for them to set, and silently ignoring the request would be
+*   worse than refusing it - the caller would believe the access had narrowed.
+*   BY SID, like CREATEA's test, because BUILTIN\Administrators is translated
+*   on a localised Windows.
+*
+*   NO sdsshonly GUARD, for the reason the routines this replaced gave: that
+*   group carries SeDenyInteractiveLogonRight and no verb in this program
+*   touches it.  sdssh cannot lock an administrator out of ssh either, because
+*   allow-ssh-groups.ps1 names the Administrators group in AllowGroups in its
+*   own right.  If a future route ever writes to sdsshonly, the guard returns.
+*
+*   THE WITHDRAWAL IS IMMEDIATE AND THE GRANT MAY NOT BE.  sshd re-reads its
 *   AllowGroups per connection and APISRVR asks the SAM per login, so neither
 *   consults a token; but a Windows access token fixes group membership at
 *   sign-in, so an account GRANTED a route mid-session may still need to sign
-*   out and back in before anything token-based agrees.  Nothing here depends
-*   on a token, so NO.SSH and NO.API bite at once.
-route.remove:
+*   out and back in before anything token-based agrees.
+route.set:
+   * A GROUP ACCOUNT HAS NO REMOTE ROUTE TO SET.  It has no Windows user at all
+   * - CREATE.ACCOUNT's GROUP arm makes an sdg_ group and reaches neither
+   * create_user() nor set_passwd() - and it is reached with LOGTO or an F
+   * pointer.  Said plainly here, because account.user below would otherwise
+   * answer "is not a member of sdusers", which is true and explains nothing.
+   if group.name[1,4] = 'sdg_' then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10087, acc.name) ;* %1 is a group account and has no remote access
+      return
+   end
+
    gosub account.user
    if not(user.ok) then return
 
-   if not(is_grp_member(acc.user, route.group)) then
-      crt sysmsg(msg.already, acc.user)
+   if is_grp_member(acc.user, "S-1-5-32-544") then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10083, acc.user) ;* %1 is an administrator and always has both
       return
    end
 
    if not(valid_os_name(acc.user)) then
-      crt sysmsg(msg.fail, acc.user, 2)
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.user, 2) ;* Unable to change remote access for %1
       return
    end
 
-   stat = os_group("DELMEM", route.group, acc.user)
-   if stat = 0 then
-      crt sysmsg(msg.done, acc.user)
-   end else
-      @system.return.code = -ER$FAILED
-      crt sysmsg(msg.fail, acc.user, stat)
+   has.ssh = is_grp_member(acc.user, 'sdssh')
+   has.api = is_grp_member(acc.user, 'sdapi')
+
+   if (has.ssh = want.ssh) and (has.api = want.api) then
+      crt sysmsg(10080, acc.user) ;* %1 already had that access; nothing changed
+      return
    end
+
+   route.stat = 0
+
+   if has.ssh # want.ssh then
+      if want.ssh then
+         route.stat = os_group("ADDMEM", 'sdssh', acc.user)
+      end else
+         route.stat = os_group("DELMEM", 'sdssh', acc.user)
+      end
+   end
+
+   * The API half runs only if the ssh half succeeded.  A failure part way
+   * leaves the account in a state neither the caller nor this message
+   * describes, so it is reported with the status and NOT summarised as though
+   * it had worked.
+   if route.stat = 0 then
+      if has.api # want.api then
+         if want.api then
+            route.stat = os_group("ADDMEM", 'sdapi', acc.user)
+         end else
+            route.stat = os_group("DELMEM", 'sdapi', acc.user)
+         end
+      end
+   end
+
+   if route.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.user, route.stat) ;* Unable to change remote access
+      return
+   end
+
+   gosub say.access
+   return
+
+* ======================================================================
+* Say what the account can reach now.  Shared with nothing today, but the same
+* four messages are CREATE.ACCOUNT's, which is the point of them.
+say.access:
+   begin case
+      case want.ssh and want.api
+         crt sysmsg(10078, acc.user) ;* may sign in over ssh and use the API
+      case want.ssh
+         crt sysmsg(10076, acc.user) ;* ssh, and may not use the API
+      case want.api
+         crt sysmsg(10077, acc.user) ;* the API, and may not sign in over ssh
+      case 1
+         crt sysmsg(10079, acc.user) ;* no remote access at all
+   end case
    return
 
 program.end:

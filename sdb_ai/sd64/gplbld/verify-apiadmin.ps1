@@ -242,10 +242,10 @@ try {
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
     $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
 
-    $out = Invoke-SDSys @(("SET.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
+    $out = Invoke-SDSys @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')
     Note 'credential set' $true $set
-    if (-not $set) { Write-Host $out; Fail 'SET.PASSWORD did not report success.' }
+    if (-not $set) { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
 
     # -----------------------------------------------------------------------
     Step 3 'The premise: what the ACL on $cred actually says'
@@ -384,7 +384,7 @@ try {
     #
     # THIS LEG IS WHAT MAKES THE GRANT BELOW MEAN ANYTHING.  Without it, the
     # measurement in 7c would pass just as well if the gate did not exist, and
-    # so would a run where SET.PASSWORD had silently failed.
+    # so would a run where MODIFY.PASSWORD had silently failed.
     $r = Invoke-ApiProbe
     Write-Host $r.Text
     $preConnect = Get-Marker $r.Text 'CONNECT'

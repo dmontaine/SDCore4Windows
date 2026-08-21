@@ -1126,7 +1126,7 @@ exit.vb.local.login:
                * scram.trim.body drops trailing NULs anyway - see there for why.
                *
                * THE SERVER DOES NOT RUN PBKDF2 HERE.  It holds StoredKey, so
-               * the 600,000 iterations are spent once, in SET.PASSWORD.  Login
+               * the 600,000 iterations are spent once, in MODIFY.PASSWORD.  Login
                * costs two HMACs and a hash, which is what makes it safe to do
                * this work before the client has proved anything.
 
@@ -1194,7 +1194,7 @@ vb.scram.first:
                * A version 1 record holds an Argon2 verifier and no StoredKey.
                * It cannot drive a SCRAM exchange and cannot be converted - the
                * plaintext was never stored, by design - so the account has to
-               * run SET.PASSWORD again.  !CRED_VERIFY refuses it the same way.
+               * run MODIFY.PASSWORD again.  !CRED_VERIFY refuses it the same way.
                if scram.cred<CRED$VERSION> # SCRAM$CRED.VERSION then
                   scram.cred = ''
                   goto scram.bad.cred

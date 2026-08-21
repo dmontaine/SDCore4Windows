@@ -163,7 +163,7 @@ try {
     #
     # SO THERE ARE TWO PASSWORDS HERE AND THEY ARE NOT THE SAME THING:
     #   $winPw  the WINDOWS account's, answered to CREATE.ACCOUNT's prompts
-    #   $pw     the SD account's credential, set below by SET.PASSWORD, and the
+    #   $pw     the SD account's credential, set below by MODIFY.PASSWORD, and the
     #           only one the API ever sees
     # Generated separately so neither can be mistaken for the other, and so
     # that a change to one cannot silently satisfy the other.
@@ -195,13 +195,13 @@ try {
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
     $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
 
-    # The account has no credential yet, so SET.PASSWORD does not ask for a
+    # The account has no credential yet, so MODIFY.PASSWORD does not ask for a
     # current one - SET_ACC_PASSWORD's has.cred test.  It asks for the new one
     # twice.
-    $out = Invoke-SD @(("SET.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
+    $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')
     Note 'password set' $true $set
-    if (-not $set) { Write-Host $out; Fail 'SET.PASSWORD did not report success.' }
+    if (-not $set) { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
 
     # -----------------------------------------------------------------------
     Step 2a 'Granting it API access'

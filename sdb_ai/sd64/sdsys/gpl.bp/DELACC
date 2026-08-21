@@ -18,6 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - ONE CONFIRMATION, and it names what will actually
+*           go.  Owner's decision: the directory and the Windows account go
+*           together, after a single Y/N, replacing the directory-only prompt
+*           (6031) and the separate cross-reference question (6029).  What
+*           will go is worked out BEFORE the question - !is_sd_user runs at
+*           the top now - so the prompt and the deletion cannot disagree, and
+*           a group account is never asked about a Windows account it has not
+*           got.
 * 19 Aug 26 Windows port - SDSYS accounts, and the account's own voc, are lower
 *           case on disk.  PROJECT_STATUS.md 5.12 (a).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -34,6 +42,14 @@
 *
 * DELETE.ACCOUNT account.name
 *
+* Removes the account directory, the sdu_ or sdg_ group, the ACCOUNTS record
+* and - for a USER account SD created - the Windows account and its profile.
+* One confirmation covers all of it.
+*
+* WHAT IT WILL NOT DO IS DELETE A WINDOWS ACCOUNT SD DID NOT CREATE.
+* !is_sd_user reads back the description CREATE_USER stamps, the account is
+* left in place and message 10036 says so.  The confirmation uses the shorter
+* wording in that case, so it never promises what it will not do.
 *
 * END-DESCRIPTION
 *
@@ -115,9 +131,42 @@ deffun is_sd_user(username) calling '!is_sd_user'
 
    pathname = parse.pathname.tokens(acc.rec<ACC$PATH>)
 
+* 21 Aug 26 Windows port - WORK OUT WHAT WILL GO BEFORE ASKING ABOUT IT.
+*   These three lines used to live in the deletion block at the bottom, which
+*   was fine while the prompt only asked about the directory.  The single
+*   confirmation names the Windows account, so it has to know whether there is
+*   one to name - and the answer is not "does the account have a Windows user"
+*   but "may SD delete it", which is !is_sd_user's question.
+*
+*   del.user IS THE ANSWER TO THE WHOLE QUESTION, in one variable: the name of
+*   the Windows account this verb will remove, or empty for every case where it
+*   will not - a GROUP account, an account whose Windows user is gone already,
+*   and one SD did not create.  Everything downstream reads it rather than
+*   re-deriving it, so the prompt and the deletion cannot disagree.
+*
+*   os.user IS KEPT SEPARATELY because the "SD did not create this" message
+*   (10036) has to name the account it is declining to touch, and del.user is
+*   empty in exactly that case.
+   del.user = ''
+   os.user = ''
+   sd.made.it = @false
+   lookup.stat = 0
+
+   findstr 'sdu_' in group_name setting yn then
+      os.user = change(group_name, 'sdu_', '')
+      if valid_os_name(os.user) then
+         sd.made.it = is_sd_user(os.user)
+         lookup.stat = status()
+         if lookup.stat = 0 and sd.made.it then
+            del.user = os.user
+         end
+      end
+   end
+
    * Check  account directory exists
 
-   if not(ospath(pathname, OS$EXISTS)) then
+   dir.exists = ospath(pathname, OS$EXISTS)
+   if not(dir.exists) then
       display sysmsg(6028) ;* WARNING: Account directory does not exist
    end else
       * Check for cross-references from other accounts
@@ -164,31 +213,44 @@ deffun is_sd_user(username) calling '!is_sd_user'
          end
       repeat
 
-      if xref.found then
-         loop
-            display sysmsg(6029) : ;* Continue with account deletion (Y/N)?
-            input yn
-            yn = upcase(yn)
-            if yn = 'N' then
-               @system.return.code = -ER$STOPPED
-               stop sysmsg(6030) ;* Account deletion abandoned
-            end
-         until yn = 'Y'
-         repeat
+* 21 Aug 26 Windows port - THE CROSS-REFERENCE QUESTION IS NOW A STATEMENT.
+*   It used to be its own Y/N (6029), which made two prompts on the one path
+*   where it fired.  Owner's decision, 21 Aug 2026: ONE confirmation before
+*   deleting.  The cross-references are still reported - report.xref has
+*   already printed them above - and they are now something the caller reads
+*   before the single question rather than something they answer twice.
+   end                                  ;* account directory exists
+
+* 21 Aug 26 Windows port - ONE CONFIRMATION, AND IT NAMES WHAT WILL ACTUALLY GO.
+*   Owner's decision, 21 Aug 2026: DELETE.ACCOUNT deletes the directory and the
+*   account, with a confirmation required first.  It replaces "Delete directory
+*   xx (Y/N)?", which asked about the DATA only and left the caller to discover
+*   what else went by watching the messages afterwards.
+*
+*   THE WORDING IS DECIDED BEFORE THE QUESTION IS ASKED, which is why
+*   is_sd_user runs above rather than in the deletion block below where it used
+*   to.  A prompt that promised to remove a Windows account SD had not created,
+*   or one a GROUP account never had, would be asking the caller to confirm
+*   something that is not going to happen - and this is the prompt that stands
+*   between somebody and their data.
+   loop
+      if del.user # '' then
+         display sysmsg(10084, acc.name, del.user) : ;* account, directory and Windows account
+      end else
+         display sysmsg(10085, acc.name) :           ;* account and its directory
       end
+      input yn
+      yn = upcase(yn)
+      until yn = 'Y' or yn = 'N'
+   repeat
 
-      * Ask if to delete directory
+   if yn = 'N' then
+      @system.return.code = -ER$STOPPED
+      stop sysmsg(6030) ;* Account deletion abandoned
+   end
 
-      loop
-         display sysmsg(6031, pathname) :  ;* Delete directory xx (Y/N)?
-         input yn
-         yn = upcase(yn)
-         until yn = 'Y' or yn = 'N'
-      repeat
-
-      if yn = 'Y' then
-         yn = ospath(pathname, OS$DELETE)
-      end
+   if dir.exists then
+      yn = ospath(pathname, OS$DELETE)
    end
 
 * 14 Aug 26 Windows port - THE ACCOUNTS RECORD IS NOW DELETED LAST, not here.
@@ -235,25 +297,25 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *   Owner's decision, 14 Aug 2026: offer only the ones SD made.  The three
 *   answers are all different and all wanted - see !is_sd_user.
    * is this a user account ?
-   FINDSTR 'sdu_' in group_name setting yn then
-      * remove sdu_ prefix
-      username = change(group_name,'sdu_','')
-
-      * Modified by Composer AI - 2026/06/10.
-      * Use shared !valid_os_name before OS.EXECUTE (phase 2).
-      if not(valid_os_name(username)) then
-         crt sysmsg(10029,username, 2) ;* Warning unable to delete OS User: %1 error: %2
+*
+* 21 Aug 26 Windows port - THIS BLOCK NO LONGER ASKS THE QUESTION, IT ACTS ON
+*   THE ANSWER.  os.user, sd.made.it, lookup.stat and del.user were all worked
+*   out near the top, before the confirmation, because the confirmation has to
+*   name the Windows account it is about to remove.  Re-deriving them here
+*   would be a second opinion that could differ from the one the caller agreed
+*   to - a Windows account created in the seconds between the two calls would
+*   be deleted having never been named.
+   if os.user # '' then
+      if not(valid_os_name(os.user)) then
+         crt sysmsg(10029,os.user, 2) ;* Warning unable to delete OS User: %1 error: %2
       end else
-         sd.made.it = is_sd_user(username)
-         lookup.stat = status()
-
          begin case
             case lookup.stat # 0
                * Not there at all.  This is the half-removed account - the SD
                * side outliving the OS side - and it is the state a failed
                * creation reaches too, so it is reported rather than warned
                * about: there is nothing wrong and nothing to do.
-               crt sysmsg(10037,username) ;* Windows account %1 does not exist
+               crt sysmsg(10037,os.user) ;* Windows account %1 does not exist
 
             case sd.made.it
 * 21 Aug 26 Windows port - THE Y/N PROMPT IS GONE.  Owner's decision, 21 Aug
@@ -261,46 +323,43 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *   what the verb does, not an extra it stops to ask about, and that settles
 *   the open question in PROJECT_STATUS.md 7 step 1c.
 *
-*   THE COMMENT THAT WENT WITH THE PROMPT SAID "the two mistakes do not cost
-*   the same, so the quiet answer is the safe one", AND THAT WAS THE WRONG WAY
-*   ROUND HERE.  Not deleting is not the quiet outcome: it leaves a Windows
-*   account and its profile behind with no SD account pointing at them, and
-*   nothing ever comes back for them.  Twenty-six such profiles had piled up
-*   on the development machine by 21 Aug 2026.
+*   AND SINCE LATER THE SAME DAY THERE IS ONE CONFIRMATION COVERING ALL OF IT,
+*   above, which names this account.  So the caller has agreed to exactly this
+*   before control reaches here.
 *
 *   WHAT STILL PROTECTS A BORROWED ACCOUNT IS !is_sd_user, NOT THE PROMPT, and
-*   it is untouched: this branch is only reached for an account SD created,
-*   and the "somebody else made it" case below is still refused outright.
-*   Under the access model an SD account is usually named after a Windows user
-*   who already exists, so borrowing is the ORDINARY case - which is exactly
-*   why the gate has to be a test and not a question.
-*
-*   THE ACCOUNT DIRECTORY IS STILL ASKED ABOUT, above.  That is the account's
-*   DATA and a different decision; this is the login SD made to reach it.
+*   it is untouched - it now runs at the top rather than here.  This branch is
+*   only reached for an account SD created, and the "somebody else made it"
+*   case below is still refused outright.  Under the access model an SD account
+*   is usually named after a Windows user who already exists, so borrowing is
+*   the ORDINARY case - which is exactly why the gate has to be a test and not
+*   a question.
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo userdel ":username
-               void delete_user(username)
+               void delete_user(del.user)
                stat = status()
                begin case
                   case stat = 0
-                     crt sysmsg(10028,username) ;* OS User: %1 Deleted
+                     crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
 
                   * The account went and the profile did not.  Said plainly
                   * rather than as a deletion failure, because the account
                   * really is gone and re-running cannot retry the profile -
                   * the name no longer resolves to a SID.
                   case stat = 6
-                     crt sysmsg(10028,username) ;* OS User: %1 Deleted
-                     crt sysmsg(10075,username) ;* Warning: the Windows profile for %1 was left behind
+                     crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
+                     crt sysmsg(10075,del.user) ;* Warning: the Windows profile for %1 was left behind
 
                   case 1
-                     crt sysmsg(10029,username, stat) ;* Warning unable to delete OS User: %1 error: %2
+                     crt sysmsg(10029,del.user, stat) ;* Warning unable to delete OS User: %1 error: %2
                end case
 
             case 1
                * It exists and SD did not make it.  Not offered, not asked
                * about - said plainly, so whoever wants it gone knows they are
-               * removing something SD never created.
-               crt sysmsg(10036,username) ;* %1 was not created by SD
+               * removing something SD never created.  The confirmation above
+               * did not promise to remove it either: del.user is empty in
+               * exactly this case, so the shorter wording was used.
+               crt sysmsg(10036,os.user) ;* %1 was not created by SD
          end case
       end
       * --------------------

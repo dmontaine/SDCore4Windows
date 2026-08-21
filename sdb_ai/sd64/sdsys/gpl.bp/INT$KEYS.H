@@ -272,7 +272,7 @@
       * version 1 record has base64 salt in field 1, which is not "2", so
       * !CRED_VERIFY refuses it rather than deriving nonsense from a salt it
       * has mistaken for a version number.  There is no migration: the
-      * plaintext was never stored, so every account has to run SET.PASSWORD
+      * plaintext was never stored, so every account has to run MODIFY.PASSWORD
       * again.
       *
       * CRED$MECH is informational.  Nothing gates on it today - CRED$VERSION

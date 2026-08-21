@@ -545,7 +545,7 @@ abort.login:
 * operating system authenticated this user before SD started, and the two
 * gates above are group membership and elevation.
 *
-* $CRED, !CRED_SET, !CRED_VERIFY and SET.PASSWORD all remain, deliberately, on
+* $CRED, !CRED_SET, !CRED_VERIFY and MODIFY.PASSWORD all remain, deliberately, on
 * the repository owner's decision of 14 Aug 2026.  The API is a separate door
 * and it does require an account password on top of the ssh tunnel, so the
 * credential register changes owner rather than becoming dead code - it stops

@@ -33,7 +33,7 @@
     THE PASSWORDS GO ON sd-connect's COMMAND LINE, which puts them in the
     process list.  That is sd-connect's interface, not a choice made here, and
     it is why these are generated single-use passwords on accounts this script
-    deletes.  Never point it at a real one.  (SET.PASSWORD itself refuses a
+    deletes.  Never point it at a real one.  (MODIFY.PASSWORD itself refuses a
     password on its command line - see verify-setpw.ps1.)
 
 .PARAMETER Prefix
@@ -110,7 +110,7 @@ function Test-Connect([string]$user, [string]$pw, [string]$account) {
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'Run this from an ELEVATED PowerShell - CREATE.ACCOUNT and SET.PASSWORD for another account are both gated on administrator.'
+    Fail 'Run this from an ELEVATED PowerShell - CREATE.ACCOUNT and MODIFY.PASSWORD for another account are both gated on administrator.'
 }
 
 Step 0 'Checking the installed tree matches source'
@@ -165,7 +165,7 @@ try {
     # -----------------------------------------------------------------------
     Step 2 'Giving each an API credential'
     foreach ($t in $Tiers) {
-        $out = Invoke-SD @(('SET.PASSWORD ' + $t.Name.ToUpper()), $t.SdPw, $t.SdPw)
+        $out = Invoke-SD @(('MODIFY.PASSWORD ' + $t.Name.ToUpper()), $t.SdPw, $t.SdPw)
         Note ($t.Tier + ' password set') $true ($out -match 'Password set for account')
     }
 

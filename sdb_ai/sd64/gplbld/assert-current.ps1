@@ -215,7 +215,7 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # tests and every verify script afterwards refuses, for a
                   # reason that has nothing to do with the installed tree.
                   'smoke-test.exe', 'internal-state-test.exe',
-                  # 20 Aug 26 - the SET.PASSWORD trailing-token verifier, added
+                  # 20 Aug 26 - the MODIFY.PASSWORD trailing-token verifier, added
                   # the same day as the guard it tests.  A verify script is not
                   # shipped by stage.py or sd.iss and cannot reach an installed
                   # tree, so without this line WRITING a test would make every

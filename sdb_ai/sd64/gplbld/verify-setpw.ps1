@@ -1,4 +1,4 @@
-# Does SET.PASSWORD now refuse a trailing token, and ONLY a trailing token?
+# Does MODIFY.PASSWORD now refuse a trailing token, and ONLY a trailing token?
 #
 # THE CONTROL IS THE WHOLE POINT.  "It refused" proves nothing on its own - a
 # verb that refused everything would pass just as well.  So the same command
@@ -27,8 +27,8 @@ Write-Host ''
 
 # --- TREATMENT: a trailing token.  Nothing sensible is fed after it, because
 # --- the verb must refuse before it prompts for anything.
-Write-Host '== treatment: SET.PASSWORD DON somethingextra'
-$t = Invoke-SD @('SET.PASSWORD DON somethingextra')
+Write-Host '== treatment: MODIFY.PASSWORD DON somethingextra'
+$t = Invoke-SD @('MODIFY.PASSWORD DON somethingextra')
 Note 'refused with 5276'            $true ($t -match [regex]::Escape($msg))
 Note 'and did NOT reach the prompt' $false ($t -match 'New password|Current password|has no password set')
 
@@ -36,8 +36,8 @@ Note 'and did NOT reach the prompt' $false ($t -match 'New password|Current pass
 # --- A deliberately wrong current password ends the attempt without changing
 # --- anything; there is no lockout to trip (docs/SCRAM_AUTH.md, "Still open").
 Write-Host ''
-Write-Host '== control: SET.PASSWORD DON  (reaches the prompt, then fails on a wrong current password)'
-$c = Invoke-SD @('SET.PASSWORD DON', 'definitely-not-the-password', '', '')
+Write-Host '== control: MODIFY.PASSWORD DON  (reaches the prompt, then fails on a wrong current password)'
+$c = Invoke-SD @('MODIFY.PASSWORD DON', 'definitely-not-the-password', '', '')
 Note 'control reached the password prompt' $true ($c -match 'Current password|New password|has no password set')
 Note 'control NOT refused with 5276'       $false ($c -match [regex]::Escape($msg))
 

@@ -29,12 +29,12 @@
 #   API sessions        YES - the SD service runs as LocalSystem (checked:
 #                       Win32_Service StartName), and sdwind forks "sd -n -q"
 #                       children that inherit it, so they read this as SYSTEM.
-#   Elevated console    YES - an administrator running SET.PASSWORD.  That is
-#                       why SET.PASSWORD is an administration verb.
+#   Elevated console    YES - an administrator running MODIFY.PASSWORD.  That is
+#                       why MODIFY.PASSWORD is an administration verb.
 #   Ordinary console    NO, deliberately.  In stage 1 SD runs as the invoking
 #                       user, so a user who could change their own password
 #                       could also rewrite everybody's.  The consequence is
-#                       that copying SET.PASSWORD into a user's VOC will not
+#                       that copying MODIFY.PASSWORD into a user's VOC will not
 #                       work at the file layer until section 5.7's service
 #                       model lands - the verb permits it, the ACL does not.
 #

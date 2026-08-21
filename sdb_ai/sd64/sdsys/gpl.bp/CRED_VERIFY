@@ -34,18 +34,18 @@
 * THIS SURVIVES SCRAM, WHICH THE DESIGN NOTE FIRST SAID IT WOULD NOT.  SCRAM
 * itself has no "verify this password" step - the client proves knowledge of
 * the password without sending it, so the server is never handed one to check.
-* But SET.PASSWORD is: changing your own password requires the current one,
+* But MODIFY.PASSWORD is: changing your own password requires the current one,
 * and there the password IS in hand, locally, in an elevated session.  So the
 * routine keeps its signature and its callers, and only what it reads changes.
 *
 * It leaves the API login path rather than disappearing.  APISRVR calls it
 * until the SCRAM exchange replaces that path; after then this exists for
-* SET.PASSWORD alone.
+* MODIFY.PASSWORD alone.
 *
 * FAIL CLOSED, AND THAT INCLUDES OLD RECORDS.  A version 1 record - Argon2
 * verifier, no StoredKey - cannot be checked here and cannot be converted
 * without the plaintext, which was never stored.  It is refused rather than
-* accommodated, and the account has to run SET.PASSWORD again.
+* accommodated, and the account has to run MODIFY.PASSWORD again.
 *
 * END-DESCRIPTION
 *

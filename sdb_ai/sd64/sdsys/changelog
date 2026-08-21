@@ -5,6 +5,60 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  ACCOUNTS SAY HOW THEY ARE REACHED, AND set.password IS NOW
+           modify.password.  Five changes to the account verbs.
+
+           1. CREATE.ACCOUNT USER NEEDS TO BE TOLD ABOUT REMOTE ACCESS.
+
+                  create.account user <name> ssh
+                  create.account user <name> api
+                  create.account user <name> both
+                  create.account user <name> none
+
+              One of the four is REQUIRED.  There is no default: an account
+              that should only ever be reached with LOGTO says "none" and
+              means it, and the old silent "ssh yes, API no" could not tell
+              that apart from somebody who had not thought about it.
+
+              An ADMINISTRATOR account always gets both and needs no keyword.
+              GROUP accounts take none of this - they have no Windows account
+              and are reached with LOGTO or an F pointer.
+
+           2. MODIFY.ACCOUNT TAKES THE SAME FOUR WORDS, and they REPLACE the
+              old SSH / NO.SSH / API / NO.API pairs.
+
+              THE KEYWORD NOW SAYS WHAT THE ACCESS IS, NOT WHAT TO ADD.  So
+
+                  modify.account fred api
+
+              gives Fred the API AND TAKES ssh AWAY.  If you want both, say
+              "both".  The message afterwards always names both routes, so you
+              can see what you have left him with.
+
+              It refuses on an administrator's account: administrators always
+              have both.
+
+           3. ADMINISTRATORS CAN USE THE API.  Until now they could not - an
+              administrator's account joined neither group, and the API
+              requires membership, so it refused them.  Nothing you need to do;
+              accounts created from now on are correct.
+
+           4. DELETE.ACCOUNT ASKS ONCE, THEN REMOVES EVERYTHING.  It used to
+              ask only about the account directory and remove the rest without
+              asking.  The single question names exactly what will go,
+              including the Windows account when there is one to remove.
+
+              IT STILL WILL NOT DELETE A WINDOWS ACCOUNT SD DID NOT CREATE.
+              That is unchanged, and the question uses shorter wording in that
+              case rather than promising something it will not do.
+
+           5. set.password IS NOW modify.password.  Same verb, same
+              behaviour - the name changed because every account now has a
+              password from the moment it is made, so there is nothing to
+              "set" for the first time.  A user account cannot be created
+              without one: refusing the prompt now creates nothing at all,
+              where before it left an account you could not sign in to.
+
 21 Aug 26  THE API IS REACHED AT ITS OWN PORT NOW, not through an ssh tunnel.
 
            If you connect a client with something like

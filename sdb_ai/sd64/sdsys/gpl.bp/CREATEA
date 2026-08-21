@@ -18,6 +18,13 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - REMOTE ACCESS IS SAID AT CREATION: SSH, API, BOTH
+*   or NONE, required for a USER account, and the same four words
+*   MODIFY.ACCOUNT takes.  ADMINISTRATOR forces BOTH, which closes a gap -
+*   an SD administrator could not use the API at all, because the branch
+*   that joined sdssh skipped administrators and APISRVR has no exemption.
+*   A password is now mandatory for a USER account: refusing to set one
+*   deletes the Windows user and creates nothing.  Owner's decisions.
 * 21 Aug 26 Windows port - RDPACCOUNT removed, and the two remote routes became
 *            per-account groups: a new account joins sdssh (sshd allows that
 *            group now, not sdusers) and does NOT join sdapi.  Owner's
@@ -40,7 +47,7 @@
 * 18 Aug 26 Windows port - the per-account file names on disk are lower case:
 *           $hold, $hold.dic, $svlists, bp.  PROJECT_STATUS.md 5.12 (a).  The
 *           VOC ids are unchanged, so this is the path text only.
-* 17 Aug 26 Windows port - SET.PASSWORD joins the administration verbs an
+* 17 Aug 26 Windows port - MODIFY.PASSWORD joins the administration verbs an
 *           ADMINISTRATOR account is given.  Owner's ruling; the escape
 *           hatch is that an administrator can add it to a user's VOC.
 * 17 Aug 26 Windows port - an ADMINISTRATOR account gets the administration
@@ -143,6 +150,10 @@ deffun is_group(group) calling '!is_group'
 deffun is_user(uname) calling '!is_user'
 deffun create_user(uname) calling '!create_user'
 deffun set_passwd(uname)  calling '!set_passwd'
+* 21 Aug 26 Windows port - for the unwind when no password is set.  An account
+*   cannot be created without one (owner's rule), and the Windows user is made
+*   BEFORE the password is asked for, so refusing has to take it back.
+deffun delete_user(uname) calling '!delete_user'
 deffun valid_os_name(name) calling '!valid_os_name'
 deffun valid_os_path(path) calling '!valid_os_path'
 deffun ps_script(script) calling '!ps_script'
@@ -175,6 +186,22 @@ deffun ps_script(script) calling '!ps_script'
 * 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
 *   already exists, instead of creating one.  See more.args for what gates it.
    adopt = @false
+* 21 Aug 26 Windows port - REMOTE ACCESS IS A CREATE-TIME PROPERTY NOW.
+*   Owner's decision, 21 Aug 2026: CREATE.ACCOUNT USER says how the account is
+*   reached - SSH, API, BOTH or NONE - and MODIFY.ACCOUNT changes it later with
+*   the same four words.  It replaced "ssh yes, API no" applied silently.
+*
+*   access.given IS SEPARATE FROM THE TWO FLAGS ON PURPOSE.  NONE and "nothing
+*   said" both leave access.ssh and access.api false, and they are not the same
+*   thing: one is a decision and the other is a caller who has not made one.
+*   Only the flags decide what happens; access.given decides whether to refuse.
+*
+*   ASSIGNED HERE RATHER THAN IN more.args because BCOMP's "is not assigned a
+*   value" is what bootstrap.py:229 fails the bootstrap on, and all three are
+*   read below the subroutine that sets them.
+   access.given = @false
+   access.ssh = @false
+   access.api = @false
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -195,7 +222,7 @@ deffun ps_script(script) calling '!ps_script'
    group_name = ''   ;* will be set to callers entered group name on group create, no case changes
    begin case
    case upcase(acc.type) = 'USER' 
-*    CREATE.ACCOUNT USER <user acct name>  {NO.QUERY}   
+*    CREATE.ACCOUNT USER <user acct name>  SSH|API|BOTH|NONE  {NO.QUERY}
      pathname = CONFIG('USRDIR')
      if pathname = '' then pathname = '/home/sd/user_accounts'
      call @parser(PARSER$GET.TOKEN, token.type, acc.uname, keyword)
@@ -203,7 +230,25 @@ deffun ps_script(script) calling '!ps_script'
      * any other args? (specifically no.query)
      * rem we may abort in this routine
      gosub more.args
-     
+
+* 21 Aug 26 Windows port - SAY HOW THIS ACCOUNT IS REACHED, or nothing is made.
+*   Owner's decision, 21 Aug 2026.  There is no default: a site that wants an
+*   application user who can only be reached by LOGTO says NONE and means it,
+*   and the old silent "ssh yes, API no" could not tell that apart from a
+*   caller who had not thought about it.
+*
+*   REFUSED HERE, BEFORE ANY WINDOWS ACCOUNT EXISTS.  more.args has run and
+*   nothing after it has yet created a user, a group, a directory or a register
+*   record, so this stops with the machine untouched - the same reason the
+*   NO.QUERY and reserved-name refusals sit in this stretch.
+*
+*   THE USER ARM ONLY.  more.args is shared with GROUP and OTHER, which have no
+*   Windows user and therefore no route to set; the check cannot live inside it.
+     if not(access.given) then
+       @system.return.code = -ER$ARGS
+       stop sysmsg(10082) ;* Say who may reach this account: SSH, API, BOTH or NONE
+     end
+
      * Is the user a valid os user?
      * Check reserved names then
      * Check user name as entered, then force to lower case and re check
@@ -290,6 +335,26 @@ PW.TRY.AGAIN:
               crt sysmsg(10008): ;* 'Warning, user created but password not set, Retry (Y/N)'
               input yn
               if upcase(yn) = 'Y' then goto PW.TRY.AGAIN
+* 21 Aug 26 Windows port - AND ANSWERING N NOW UNWINDS.  Owner's rule, 21 Aug
+*   2026: an account cannot be created without a password.
+*
+*   IT USED TO CARRY ON.  The account was made, the message said "user created
+*   but password not set", and creation ran to completion - leaving an SD
+*   account whose Windows user has no password and therefore no $cred, which
+*   under the SCRAM login is an account nothing can ever connect to.  A warning
+*   is the wrong shape for a state that cannot be used.
+*
+*   THE UNWIND IS COMPLETE BECAUSE OF WHERE THIS SITS.  Only the Windows user
+*   exists at this point: sdu_ group, account directory, VOC and the ACCOUNTS
+*   record are all created further down.  So removing the user is the whole of
+*   it, and delete_user takes any profile with it.
+*
+*   THE PASSWORD RULE IS THE USER ARM'S ALONE.  A GROUP account reaches neither
+*   create_user() nor set_passwd() - it has no Windows user - and "no password"
+*   there means the idea does not apply, not that a requirement was waived.
+              void delete_user(acc.uname)
+              @system.return.code = -ER$NOT.CREATED
+              stop sysmsg(10086) ;* An account must have a password. Nothing was created.
            end
          end
      end case
@@ -338,7 +403,9 @@ PW.TRY.AGAIN:
    case 1
 *   invalid command arg
 * rev 0.9.0 
-    crt 'Command Syntax: CREATE.ACCOUNT USER | GROUP <user name | group name>  {NO.QUERY}'
+    crt 'Command Syntax: CREATE.ACCOUNT USER <user name> SSH | API | BOTH | NONE'
+    crt '                  {ADMINISTRATOR | PROGRAMMER} {NO.QUERY}'
+    crt '                CREATE.ACCOUNT GROUP <group name> {NO.QUERY}'
     @system.return.code = -ER$ARGS
     stop 
    end case
@@ -552,28 +619,32 @@ PW.TRY.AGAIN:
             @system.return.code = -ER$FAILED
             stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
           end
-
-* 21 Aug 26 Windows port - sdapi IS NOT JOINED, AND THAT IS THE DECISION RATHER
-*   THAN AN OMISSION.  A new account gets ssh and no API.  Two reasons: APIPORT
-*   is off by default already (gplsrc/config.h), so this takes nothing away
-*   from a deployment that works today; and an API session runs as LocalSystem
-*   - measured 20 Aug 2026, gplbld/verify-apiadmin.ps1 - so until the
-*   containment gate lands, every account that may use the API may rewrite
-*   $cred.  Default-off keeps that reachable only by accounts an administrator
-*   named on purpose.
-*
-*   TO MAKE IT DEFAULT-ON INSTEAD, add a second ADDMEM for "sdapi" beside the
-*   one below and say so in the changelog.  That is the whole of the change.
-          void os_group("ADDMEM", "sdssh", acc.uname)
-          stat = OS.ERROR()
-          if stat = 0 then
-            crt sysmsg(10063,acc.uname)   ;* %1 may now sign in over ssh
-          end else
-            @system.return.code = -ER$FAILED
-            stop sysmsg(10067,acc.uname,stat) ;* Unable to change ssh access for %1, status: %2
-          end
         end       ;* adopt
         end       ;* make.admin
+
+* 21 Aug 26 Windows port - THE REMOTE ROUTE IS SET FOR EVERY USER ACCOUNT, AND
+*   THAT IS WHY IT MOVED OUT HERE.  It used to sit inside the two "else"
+*   branches above, which meant an ADMINISTRATOR account and an ADOPTed one
+*   joined NEITHER sdssh NOR sdapi.  For ssh that was harmless - an
+*   administrator reaches ssh because allow-ssh-groups.ps1 names the
+*   Administrators group in AllowGroups in its own right - but the API has no
+*   such second door: APISRVR tests sdapi membership with no administrator
+*   exemption (APISRVR:1362), so AN SD ADMINISTRATOR COULD NOT USE THE API AT
+*   ALL.  Owner's rule of 21 Aug 2026 closes that, and the code has to be here
+*   rather than in the branches for the rule to hold on every path.
+*
+*   WHAT DID NOT MOVE IS sdsshonly.  Which accounts are denied the KEYBOARD is
+*   a different question from which remote routes they may use, and the whole
+*   of the reasoning above still applies to it: an administrator must never be
+*   put in it, an adopted account must never be put in it, and no verb may lift
+*   it once set.
+*
+*   THE PARAGRAPH THAT STOOD HERE ARGUED FOR NOT JOINING sdapi and said "to
+*   make it default-on instead, add a second ADDMEM beside the one below".  Its
+*   reasoning was that an API session runs as LocalSystem and could rewrite
+*   $cred - measured 20 Aug 2026 - which the containment gate closed on 21 Aug.
+*   There is no default any more in any case: the caller says.
+        gosub set.access
 
       *
       * create user's sd group
@@ -814,7 +885,7 @@ make.account:
 *   administrator gets a programmer's VOC and says so the first time they type
 *   CREATE.ACCOUNT.  gplbld/stage.py's note on the two files says the same thing.
 *
-*   SET.PASSWORD joined them on 17 Aug 2026, owner's ruling.  It is an
+*   MODIFY.PASSWORD joined them on 17 Aug 2026, owner's ruling.  It is an
 *   administrator verb because an administrator can add it to a user's VOC if
 *   they want users setting their own; the program itself already tells the two
 *   cases apart, your own password needing the current one and anyone else's
@@ -999,6 +1070,42 @@ more.args:
 *   gives any other unknown keyword, which is the truth: there is no such
 *   keyword any more.
 *
+* 21 Aug 26 Windows port - AND SOMETHING DOES TAKE ITS PLACE, reversing the
+*   paragraph below.  Owner's decision, 21 Aug 2026: remote access is stated
+*   when the account is made.  SSH, API, BOTH or NONE, matched on token text
+*   for the same reason ADMINISTRATOR and PROGRAMMER are - the KW$ table in
+*   SYSCOM/PARSER.H is positional and shared by every verb.
+*
+*   THE ARGUMENT BELOW WAS THAT ACCESS CHANGES DURING AN ACCOUNT'S LIFE AND A
+*   CREATE-TIME KEYWORD CANNOT EXPRESS THAT.  That is true and it is not an
+*   argument against saying it at creation: MODIFY.ACCOUNT takes the SAME four
+*   words and changes it whenever it changes.  What the old default could not
+*   express was the site's intent - every account got ssh whether or not anyone
+*   wanted it to have one, because nothing asked.
+*
+*   LAST ONE WINS, and no keyword downgrades another the way PROGRAMMER must
+*   not downgrade ADMINISTRATOR.  These four are alternatives rather than a
+*   ladder, so "BOTH NONE" is simply NONE - the caller said two things and the
+*   second is the one they left.
+         case upcase(token) = 'SSH'
+            access.given = @true
+            access.ssh = @true
+            access.api = @false
+         case upcase(token) = 'API'
+            access.given = @true
+            access.ssh = @false
+            access.api = @true
+         case upcase(token) = 'BOTH'
+            access.given = @true
+            access.ssh = @true
+            access.api = @true
+         case upcase(token) = 'NONE'
+            access.given = @true
+            access.ssh = @false
+            access.api = @false
+
+* SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
+* against:
 *   NOTHING TAKES ITS PLACE ON THIS COMMAND LINE.  ssh and API access are set
 *   after creation with MODIFY.ACCOUNT, because they are properties that change
 *   during an account's life and a create-time keyword cannot express that.
@@ -1045,6 +1152,27 @@ more.args:
 *   deliberately untouched: ADOPT changes nothing about the Windows account, and
 *   the person is already in Administrators.
    if adopt and tier = 'STANDARD' then tier = 'ADMINISTRATOR'
+
+* 21 Aug 26 Windows port - AN ADMINISTRATOR ALWAYS HAS BOTH ROUTES, and no
+*   keyword can take either away.  Owner's rule, 21 Aug 2026: "all
+*   administrators have access to both ssh and api ... the whole purpose of
+*   ADMINISTRATOR is that it gives unlimited access."  MODIFY.ACCOUNT refuses
+*   them for the same reason (10083).
+*
+*   IT CLOSES A GAP RATHER THAN OPENING ONE.  Until today an ADMINISTRATOR
+*   account joined NEITHER sdssh NOR sdapi - the branch below skipped both -
+*   and APISRVR has no administrator exemption (APISRVR:1362), so an SD
+*   administrator could not use the API at all.  ssh they reached anyway,
+*   because allow-ssh-groups.ps1 names the Administrators group in AllowGroups
+*   in its own right; the API had no such second door.
+*
+*   AND IT SETS access.given, so an administrator need not name a keyword and
+*   the check in the USER arm does not refuse them for staying silent.
+   if tier = 'ADMINISTRATOR' then
+      access.given = @true
+      access.ssh = @true
+      access.api = @true
+   end
 return
 * ======================================================================
 
@@ -1099,7 +1227,63 @@ create.dir.file:
 
 return
 
-* rev 0.9.0 
+*=======================================================================
+* set.access
+*
+* 21 Aug 26 Windows port - put the new account's Windows user into the groups
+* its remote access calls for.  access.ssh and access.api come from the SSH /
+* API / BOTH / NONE keyword in more.args, or from the ADMINISTRATOR tier, which
+* forces both.
+*
+* USER ACCOUNTS ONLY.  A GROUP account has no Windows user - the GROUP arm
+* reaches neither create_user() nor set_passwd() - and is reached with LOGTO or
+* an F pointer, so there is nothing here for it and it never calls this.
+*
+* NO "already a member" TEST, unlike MODIFY.ACCOUNT's route.set.  The Windows
+* user was created moments ago in this same verb, so it is in no groups but the
+* ones already added above; asking would be asking a question whose answer is
+* known.  The ADOPT path is the one exception and it is deliberate that it
+* joins too - owner's rule of 21 Aug 2026 is that ALL administrators have both
+* routes, and an adopted account is always ADMINISTRATOR (see more.args).
+*
+* A FAILURE STOPS THE VERB, matching every other group step here.  An account
+* whose access is not what was asked for is worse than no account: nobody would
+* re-check, and the failure would surface later as "the client cannot connect".
+set.access:
+   if access.ssh then
+      void os_group("ADDMEM", "sdssh", acc.uname)
+      stat = OS.ERROR()
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         stop sysmsg(10081,acc.uname,stat) ;* Unable to change remote access for %1
+      end
+   end
+
+   if access.api then
+      void os_group("ADDMEM", "sdapi", acc.uname)
+      stat = OS.ERROR()
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         stop sysmsg(10081,acc.uname,stat) ;* Unable to change remote access for %1
+      end
+   end
+
+*  Says the whole resulting state, in the same four messages MODIFY.ACCOUNT
+*  uses, so an account's access reads identically whether it was just made or
+*  just changed.
+   begin case
+      case access.ssh and access.api
+         crt sysmsg(10078,acc.uname) ;* may sign in over ssh and use the API
+      case access.ssh
+         crt sysmsg(10076,acc.uname) ;* ssh, and may not use the API
+      case access.api
+         crt sysmsg(10077,acc.uname) ;* the API, and may not sign in over ssh
+      case 1
+         crt sysmsg(10079,acc.uname) ;* no remote access at all
+   end case
+return
+
+* rev 0.9.0
 *=======================================================================
 * create.group
 * group_name - name of group to create

@@ -25,7 +25,7 @@
 # reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $hold,
 # $savedlists, BP).  That gives:
 #
-#   ADMINISTRATOR  407 + 10 + 4 = 421     (9 until SET.PASSWORD joined them)
+#   ADMINISTRATOR  407 + 10 + 4 = 421     (9 until MODIFY.PASSWORD joined them)
 #   PROGRAMMER     407     + 4 = 411
 #   STANDARD       407 - 18 + 4 = 393
 #
@@ -108,13 +108,13 @@ $Withheld = @('basic','catalog','catalogue','run','ed','edit','sed','copy','copy
               'delete.catalog','delete.catalogue','modify','compile.dict','cd',
               'generate','phantom','sh','!')
 
-# The 10 only an administrator gets.  SET.PASSWORD joined on 17 Aug 2026 -
+# The 10 only an administrator gets.  MODIFY.PASSWORD joined on 17 Aug 2026 -
 # owner's ruling, and an administrator can add it to a user's VOC if they want
 # users setting their own.  The program already tells the two cases apart:
 # your own password needs the current one, anyone else's needs admin rights.
 $AdminVerbs = @('create.account','delete.account','modify.account','update.account',
                 'grant','revoke','list.grants','unlock','encrypt.field',
-                'set.password')
+                'modify.password')
 
 # Neither list record may ever land in a VOC.
 $ListRecs = @('TIER.OMIT.STANDARD','TIER.ADD.ADMINISTRATOR')
@@ -205,7 +205,7 @@ Note 'omit list length' $Withheld.Count $shipped.Count
 # 17 Aug 26 - AND THE SAME FOR THE ADD LIST, which was NOT cross-checked and
 # should always have been: the reasoning above - "a test that carries its own
 # stale copy of the thing under test is no test" - is not specific to the omit
-# list.  It went unnoticed while the add list never changed; SET.PASSWORD
+# list.  It went unnoticed while the add list never changed; MODIFY.PASSWORD
 # joining it on 17 Aug 2026 is exactly the edit that would have slipped
 # through, updating the record and not the test, or the other way about.
 $addRec    = Join-Path $env:ProgramData 'SD\sdsys\newvoc\TIER.ADD.ADMINISTRATOR'

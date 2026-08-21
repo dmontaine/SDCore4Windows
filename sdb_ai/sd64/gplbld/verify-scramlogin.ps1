@@ -469,10 +469,10 @@ try {
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
     $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
 
-    $out = Invoke-SD @(("SET.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
+    $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')
     Note 'password set' $true $set
-    if (-not $set) { Write-Host $out; Fail 'SET.PASSWORD did not report success.' }
+    if (-not $set) { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
 
     # THE CREDENTIAL IS VERSION 2, checked before anything tries to use it.  A
     # version 1 record would make every check below fail for a reason that has

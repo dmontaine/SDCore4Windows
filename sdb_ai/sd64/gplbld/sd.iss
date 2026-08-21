@@ -1277,7 +1277,7 @@ end;
   chose, then authenticate through the API as that account - a straight
   privilege escalation, where reading an Argon2 verifier is worth little.
   It stays reachable by everything that needs it: API sessions are forked by
-  sdwind, which runs as LocalSystem, and SET.PASSWORD is an administration
+  sdwind, which runs as LocalSystem, and MODIFY.PASSWORD is an administration
   verb run from an elevated session.
 
   IT MUST RUN AFTER THE DATA-TREE icacls, or inheritance puts that Modify
