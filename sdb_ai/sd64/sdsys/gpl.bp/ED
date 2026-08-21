@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - the command-error preset was ER$ARGS, not -ER$ARGS,
+*   so a caller testing the sign saw no error.  Upstream - UPSTREAM_FIXES.md #11.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * rev 0.9.1 Mar 25 mab remove call to system help (kernel(K$HELP,'') not avail on SD
 *                      Add help ALL to display help message.
@@ -54,7 +56,18 @@ $define COMMAND.STACK.DEPTH 99
    parser = "!PARSER"
    source.control = "SOURCE.CONTROL"
 
-   @system.return.code = ER$ARGS   ;* Preset for command errors
+* 21 Aug 26 Windows port - THE MINUS WAS MISSING.  gplsrc/err.h: commands set
+*   the arithmetic INVERSE of the err.h value into @SYSTEM.RETURN.CODE, and
+*   CREATEA:206 and DELACC:82 write this identical preset as -ER$ARGS.  Left
+*   positive it put 1 where a caller testing "if @system.return.code < 0" -
+*   which is how PROC:677 asks whether the command it ran failed - reads no
+*   error at all, and 1 is also a perfectly good "one thing was done" in the
+*   range COPY, DELETE and GETLIST use.  It is cleared to 0 further down, once
+*   the file is open, so it really is an error preset.  The only reader here is
+*   "if @system.return.code < 1" after "execute 'BASIC'", which is reading the
+*   COMPILER's count and not this.  Second instance of the defect
+*   fixed in CREATEA the same day; upstream too, UPSTREAM_FIXES.md #11.
+   @system.return.code = -ER$ARGS   ;* Preset for command errors
 
    dict.flag = ""
    no.query = @false
