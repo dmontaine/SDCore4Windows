@@ -18,6 +18,7 @@
 *
 * START-HISTORY:
 * 14 Aug 26 Windows port - Remove-LocalUser replaces userdel
+* 21 Aug 26 Windows port - and it takes the user PROFILE with it now
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -31,12 +32,36 @@
 *      1 the account could not be removed
 *      2 the name is not a valid OS user name
 *      5 access denied: SD is not running elevated
+*      6 the account went, the PROFILE did not - see below
 *
-*    THE USER PROFILE DIRECTORY IS LEFT ALONE, which is what "userdel"
-*    without -r did on Linux, and is the safer default: C:\Users\<name> is the
+*    THE PROFILE GOES TOO, AND THIS REVERSES WHAT THIS COMMENT USED TO SAY.
+*    It said the directory was left alone because "C:\Users\<name> is the
 *    person's own data and removing an SD account is not a reason to destroy
-*    it.  Windows leaves the directory and its ProfileList registry entry
-*    behind; deleting those is a deliberate act for an administrator.
+*    it".  That reasoning is sound for an account SD merely BORROWED and does
+*    not apply to one SD CREATED - and DELACC is the only caller, which asks
+*    !is_sd_user first and never gets here for a borrowed account.
+*
+*    WHAT THE OLD BEHAVIOUR COST, measured 21 Aug 2026: TWENTY-SIX orphaned
+*    profiles under C:\Users going back to 14 Aug, one per account-creating
+*    verifier run.  Every one had a live ProfileList registry entry with no
+*    account behind it.
+*
+*    AND THE REGISTRY ENTRY IS THE HALF THAT BITES.  Removing the DIRECTORY
+*    alone leaves the entry, and Windows then honours it the next time an
+*    account of that name appears - by putting the new profile at
+*    C:\Users\<name>.<COMPUTERNAME> instead.  That is where sdacct19.GITORLI,
+*    sdacct20.GITORLI, sdacct27.GITORLI and sdsshprobe.GITORLI came from.
+*    Remove-CimInstance on Win32_UserProfile takes both halves; Remove-Item
+*    would take the worse one.
+*
+*    THE SID IS READ BEFORE THE ACCOUNT IS DELETED, and the order is not
+*    incidental: a profile is keyed by SID, and once the account is gone the
+*    name can no longer be resolved to one.
+*
+*    STATUS 6 MEANS THE ACCOUNT WENT AND THE PROFILE DID NOT.  That is not the
+*    same failure as 1 and the caller says so: the account is deleted either
+*    way, so re-running would report "does not exist" and never retry the
+*    profile.  gplbld/clean-test-profiles.ps1 sweeps what is left.
 *
 * END-DESCRIPTION
 *
@@ -59,16 +84,40 @@ deffun valid_os_name(name) calling '!valid_os_name'
    ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
    ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
    ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
-   ps := 'try { Remove-LocalUser -Name "' : username : '" -ErrorAction Stop } catch { exit 1 }; exit 0'
+   ps := '$n = "' : username : '"; '
+   * The SID FIRST - see the note above.  A profile is keyed by SID and the
+   * name cannot be resolved to one after the account has gone.
+   ps := 'try { $sid = (Get-LocalUser -Name $n -ErrorAction Stop).SID.Value } '
+   ps := 'catch { exit 1 }; '
+   ps := 'try { Remove-LocalUser -Name $n -ErrorAction Stop } catch { exit 1 }; '
+   * An account that never signed in has no profile, and that is not a
+   * failure: Where-Object simply matches nothing and Remove-CimInstance is
+   * handed an empty pipeline.  Special profiles are excluded on principle
+   * rather than because one could match - a local account's SID never is one.
+   ps := 'try { Get-CimInstance Win32_UserProfile | '
+   ps := 'Where-Object { $_.SID -eq $sid -and -not $_.Special } | '
+   ps := 'Remove-CimInstance -ErrorAction Stop } catch { exit 6 }; '
+   ps := 'exit 0'
 
    os.execute ps
 
    stat = os.error()
-   if stat = 0 then
-      user_deleted = @true
-   end else
-      set.status stat
-   end
+   begin case
+      case stat = 0
+         user_deleted = @true
+
+      * 21 Aug 26 - THE ACCOUNT WENT AND THE PROFILE DID NOT, which is a
+      * SUCCESS with a warning attached rather than a failure.  Reporting it
+      * as a failure would be wrong twice: the account really is gone, and the
+      * caller would offer to retry something that can never succeed now,
+      * because the name no longer resolves to a SID.
+      case stat = 6
+         user_deleted = @true
+         set.status 6
+
+      case 1
+         set.status stat
+   end case
 
 return user_deleted
 end

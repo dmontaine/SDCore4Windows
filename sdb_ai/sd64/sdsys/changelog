@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  DELETE.ACCOUNT now removes the Windows account as part of the job,
+           instead of stopping to ask, and it removes that account's Windows
+           profile with it.
+
+           * IT ONLY EVER REMOVES AN ACCOUNT SD CREATED.  If the Windows
+             account was already there when CREATE.ACCOUNT was run - which is
+             the ordinary case, since an SD account is normally named after a
+             Windows user who already exists - it is left alone and
+             DELETE.ACCOUNT says so.  That check is what protects a borrowed
+             login, and it has not changed.
+           * WHY THE PROMPT WENT: not deleting was not the quiet outcome.  It
+             left a Windows account and its profile behind with nothing
+             pointing at them and nothing ever coming back for them.
+           * THE PROFILE MATTERS MORE THAN IT LOOKS.  Deleting only the
+             C:\Users\<name> folder leaves a registry entry behind, and the
+             next account of the same name then gets its profile put in
+             C:\Users\<name>.<COMPUTERNAME> instead.  Both halves go now.
+           * THE ACCOUNT'S OWN DIRECTORY IS STILL ASKED ABOUT SEPARATELY, as
+             before.  That is your data; this is the login SD made to reach it.
+           * IF THE PROFILE CANNOT BE REMOVED - someone is signed in as that
+             user, or a file is open - the account is still deleted and you are
+             told the profile was left behind.
+
 21 Aug 26  A session that arrives over the API is now confined to the account
            it is standing in.  Sessions at the keyboard and over ssh are not
            affected in any way.

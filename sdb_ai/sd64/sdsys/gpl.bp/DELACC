@@ -256,20 +256,45 @@ deffun is_sd_user(username) calling '!is_sd_user'
                crt sysmsg(10037,username) ;* Windows account %1 does not exist
 
             case sd.made.it
-               crt sysmsg(10027,username): ;* Delete OS user %1 (Y/N)?
-               input yn
-               * Anything but Y leaves it alone.  The two mistakes do not cost
-               * the same, so the quiet answer is the safe one.
-               if upcase(yn) = 'Y' then
+* 21 Aug 26 Windows port - THE Y/N PROMPT IS GONE.  Owner's decision, 21 Aug
+*   2026: DELETE.ACCOUNT deletes the associated Windows account.  It is part of
+*   what the verb does, not an extra it stops to ask about, and that settles
+*   the open question in PROJECT_STATUS.md 7 step 1c.
+*
+*   THE COMMENT THAT WENT WITH THE PROMPT SAID "the two mistakes do not cost
+*   the same, so the quiet answer is the safe one", AND THAT WAS THE WRONG WAY
+*   ROUND HERE.  Not deleting is not the quiet outcome: it leaves a Windows
+*   account and its profile behind with no SD account pointing at them, and
+*   nothing ever comes back for them.  Twenty-six such profiles had piled up
+*   on the development machine by 21 Aug 2026.
+*
+*   WHAT STILL PROTECTS A BORROWED ACCOUNT IS !is_sd_user, NOT THE PROMPT, and
+*   it is untouched: this branch is only reached for an account SD created,
+*   and the "somebody else made it" case below is still refused outright.
+*   Under the access model an SD account is usually named after a Windows user
+*   who already exists, so borrowing is the ORDINARY case - which is exactly
+*   why the gate has to be a test and not a question.
+*
+*   THE ACCOUNT DIRECTORY IS STILL ASKED ABOUT, above.  That is the account's
+*   DATA and a different decision; this is the login SD made to reach it.
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo userdel ":username
-                  void delete_user(username)
-                  stat = status()
-                  if stat = 0 then
+               void delete_user(username)
+               stat = status()
+               begin case
+                  case stat = 0
                      crt sysmsg(10028,username) ;* OS User: %1 Deleted
-                  end else
+
+                  * The account went and the profile did not.  Said plainly
+                  * rather than as a deletion failure, because the account
+                  * really is gone and re-running cannot retry the profile -
+                  * the name no longer resolves to a SID.
+                  case stat = 6
+                     crt sysmsg(10028,username) ;* OS User: %1 Deleted
+                     crt sysmsg(10075,username) ;* Warning: the Windows profile for %1 was left behind
+
+                  case 1
                      crt sysmsg(10029,username, stat) ;* Warning unable to delete OS User: %1 error: %2
-                  end
-               end
+               end case
 
             case 1
                * It exists and SD did not make it.  Not offered, not asked
