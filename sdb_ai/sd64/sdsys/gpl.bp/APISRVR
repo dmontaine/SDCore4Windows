@@ -19,6 +19,11 @@
 *
 *
 * START-HISTORY:
+* 21 Aug 26 Windows port - API ACCESS IS PER-ACCOUNT NOW.  vb.scram.final tests
+*           membership of sdapi after the proof succeeds and refuses with
+*           message 10073.  CREATE.ACCOUNT does not join that group, so the
+*           API is off for a new account until MODIFY.ACCOUNT ... API grants
+*           it.  Owner's decision, 21 Aug 2026.
 * 20 Aug 26 Windows port - two comments corrected, no code changed.  Both said
 *           an API session cannot have elevation; it runs as LocalSystem,
 *           because sdwind is a service and fork()s it.  Measured with
@@ -121,6 +126,12 @@ logging             ;* Logging network traffic?
 *   shows the two together and it declares its functions after syscom.h's
 *   common, so that is the order known to compile.
 deffun valid_os_name(name) calling '!valid_os_name'
+* 21 Aug 26 Windows port - AND is_grp_member MOVED UP HERE FOR THE SAME REASON.
+*   It was declared beside vb.account's ACC$GROUP test, which was its only
+*   caller.  vb.scram.final now tests sdapi as well, and that is 700 lines
+*   EARLIER in the flow but LATER in the file - so leaving the declaration
+*   where it was would compile today and break the moment either routine moved.
+deffun is_grp_member(user,group) calling '!is_grp_member'
 
 * If this is the first time through, initialise various things in
 * the SYSCOM common block.
@@ -519,7 +530,9 @@ end
 *   THE REFUSAL REUSES sysmsg(10003), the message the missing-account branch
 *   above already gives.  A caller therefore cannot tell "no such account" from
 *   "not granted", so the API does not enumerate accounts for an attacker.
-deffun is_grp_member(user,group) calling '!is_grp_member'
+*
+* 21 Aug 26 Windows port - the declaration that stood here moved to the top of
+*   the program; vb.scram.final needs it too now.  See the note beside it.
 
 if acc.group = '' then
    server.error = SV$ERROR
@@ -1309,6 +1322,49 @@ vb.scram.final:
                * warning throws that away - see docs/SCRAM_AUTH.md, phase 4.
                scram.ssig = SDEXT(scram.serverkey : @FM : scram.authmsg, @TRUE, SD_HMACSHA256)
                if scram.ssig = '' then goto scram.crypto.failed
+
+* 21 Aug 26 Windows port - MAY THIS USER USE THE API AT ALL?  Membership of
+*   sdapi, which CREATE.ACCOUNT deliberately does NOT join and
+*   "MODIFY.ACCOUNT <account> API" grants.  Owner's decision, 21 Aug 2026: ssh
+*   and the API are the two remote routes and each is settable per account.
+*
+*   IT IS A SESSION QUESTION, NOT AN ACCOUNT ONE, WHICH IS WHY IT IS HERE AND
+*   NOT IN vb.account.  "May Jack reach account GILL" is vb.account's
+*   ACC$GROUP test and is asked again at every LOGTO; "may Jack use the API"
+*   is asked once, about the person, and the right moment is the one where the
+*   name has just been proven and nothing has been served yet.
+*
+*   AFTER THE PROOF, DELIBERATELY, AND IT LEAKS NOTHING BY BEING DISTINCT.
+*   Everything above this point answers a failed exchange with one indistinct
+*   error, so a guesser learns nothing; a caller that reaches THIS line has
+*   already produced a valid proof, so telling it plainly that the account may
+*   not use the API gives away nothing it does not hold, and gives an
+*   administrator the one message that explains what happened.  Putting the
+*   test before the proof would have been the leak: it would answer "no such
+*   API user" to an unauthenticated stranger.
+*
+*   THE NAME IS scram.user, THE ONE JUST PROVEN.  K$SET.USERNAME has not run
+*   yet at this point, so kernel(K$USERNAME,0) would still hold whatever the
+*   forked session started with.
+*
+*   A LIVE SAM QUERY, NOT A TOKEN TEST, and that is not a choice - an API
+*   session runs as LocalSystem (PROJECT_STATUS.md, the opening section), so
+*   in_group() behind K$IN.GROUP would answer for SYSTEM and admit everybody.
+*   is_grp_member asks Get-LocalGroupMember about the NAME, so it is correct
+*   here and NO.API takes effect on the next connection with no sign-out.
+*
+*   A MISSING sdapi GROUP REFUSES EVERYBODY, and that is the safe direction
+*   rather than a bug to chase.  is_grp_member answers @false with status 1
+*   for a group that does not exist, so an install where
+*   gplbld/sync-route-groups.ps1 did not run has no API at all.  Same rule as
+*   os_permitted()'s "missing file or missing record means no" (op_sh.c), and
+*   the opposite of NEWVOC's tier lists - do not carry that convention across.
+               if not(is_grp_member(scram.user, 'sdapi')) then
+                  void kernel(K$AUDIT, 'API REFUSED user=' : scram.user : ' reason=not in sdapi')
+                  abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
 
                * THE IDENTITY IS THE NAME THAT WAS PROVEN, UNCONDITIONALLY.
                * vb.login consulted config('APILOGIN') here and, when it was 0,

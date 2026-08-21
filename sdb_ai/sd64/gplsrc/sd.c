@@ -599,21 +599,26 @@ Private bool comlin(int argc, char *argv[]) {
    and an unelevated session has no business doing either from the command
    line.
 
-   20 Aug 26 Windows port - THE JUSTIFICATION THAT STOOD HERE IS NOW FALSE, and
-   the gate is not.  It read: "whoever is at the console or on Remote Desktop is
-   an administrator, because SD's own accounts are confined to ssh".  That was
-   true by construction while every SD account went into sdsshonly, which
-   carries SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight.
-   CREATE.ACCOUNT's RDPACCOUNT keyword (PROJECT_STATUS.md section 8) skips that
-   group deliberately, so a NON-administrator can now be at a console or on
-   Remote Desktop.
+   20 Aug 26 Windows port - THE JUSTIFICATION THAT STOOD HERE WAS FALSE FOR ONE
+   DAY, and the gate never rested on it.  It read: "whoever is at the console or
+   on Remote Desktop is an administrator, because SD's own accounts are confined
+   to ssh".  That was true by construction while every SD account went into
+   sdsshonly, which carries SeDenyInteractiveLogonRight and
+   SeDenyRemoteInteractiveLogonRight; CREATE.ACCOUNT's RDPACCOUNT keyword skipped
+   that group, so for a day a NON-administrator could be at a console.
+
+   21 Aug 26 Windows port - AND IT IS TRUE BY CONSTRUCTION AGAIN.  RDPACCOUNT is
+   gone (owner's decision, 21 Aug 2026 - see CREATEA), so every account SD
+   creates is in sdsshonly unless Windows already calls it an administrator.
+   The old sentence could be restored; it is not, because the gate should not
+   depend on it a second time.
 
    WHAT THE GATE ACTUALLY RESTS ON, which never depended on that claim: it asks
-   whether the SESSION IS ELEVATED, not how the person arrived.  An RDPACCOUNT
-   user gets an ordinary unelevated token like anyone else, so "sd LISTF" is
-   refused for them exactly as it is for an unelevated administrator - which is
-   the behaviour wanted.  The old sentence explained why the refusal was
-   near-unreachable, not why it was right.
+   whether the SESSION IS ELEVATED, not how the person arrived.  A user who
+   reaches a console some other way gets an ordinary unelevated token like
+   anyone else, so "sd LISTF" is refused for them exactly as it is for an
+   unelevated administrator - which is the behaviour wanted.  The old sentence
+   explained why the refusal was near-unreachable, not why it was right.
 
    AN ssh SESSION STILL ARRIVES AT SD ITSELF through ForceCommand rather than
    at a prompt, and that is unchanged.

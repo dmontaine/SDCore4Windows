@@ -41,6 +41,15 @@
     SD account, an sd.conf APIPORT line, and two SD restarts.  The account is
     removed in a finally block, and what could not be removed is named.
 
+    21 AUG 2026 - AND IT NOW MEASURES THE sdapi GATE ON THE WAY PAST.
+    CREATE.ACCOUNT no longer joins sdapi, so step 7a connects with a valid
+    credential and NO permission and must be REFUSED; 7b grants it with
+    MODIFY.ACCOUNT ... API and 7c is the original measurement.  That was not
+    an addition for its own sake - without the grant this script could no
+    longer connect at all - but the refusal leg is what turns a necessary fix
+    into evidence, and it is deliberately taken with NO SD restart between,
+    because APISRVR asks the SAM per login rather than reading a cached list.
+
 .PARAMETER Prefix
     Name for the throwaway Windows and SD account.  Lower case, and one that
     does not exist - CREATE.ACCOUNT refuses a name it has seen.
@@ -292,31 +301,74 @@ try {
     if ($listen.Count -eq 0) { Fail "Nothing is listening on 127.0.0.1:$Port." }
 
     # -----------------------------------------------------------------------
-    Step 7 'THE MEASUREMENT: the same probe down a REMOTE API connection'
-
     # C:\a\b -> /c/a/b
     $msys = '/' + $Sd64.Substring(0, 1).ToLower() + ($Sd64.Substring(2) -replace '\\', '/')
     $cmd = "cd '$msys' && make check-api-admin APIHOST=127.0.0.1 APIPORT=$Port " +
            "APIUSER=$Prefix APIPASS='$pw' APIACCT=" + $Prefix.ToUpper() +
            " APICMD='RUN BP APIADMINPROBE'"
+
+    # 21 Aug 26 - THE PROBE RUN IS A FUNCTION NOW because it is made TWICE:
+    # once before this account is granted the API and once after.  Two copies
+    # of the stderr handling below is two places to get it wrong.
+    #
     # 2>&1 ON A NATIVE COMMAND UNDER $ErrorActionPreference='Stop' IS THE TRAP
     # THIS PROJECT HAS ALREADY BEEN BITTEN BY TWICE - secure-account-dirs.ps1:95
     # and verify-catgate.ps1:395.  PowerShell 5.1 wraps each stderr line in a
     # NativeCommandError and TERMINATES, and make writes to stderr routinely.
     # Without this the script would die at the one step it exists to perform,
     # and a run that never reached the verdict reads like a passing one.
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $apiOut = (& $bash -lc $cmd 2>&1 | Out-String)
-        $apiRc  = $LASTEXITCODE
-    } finally { $ErrorActionPreference = $prevEap }
+    function Invoke-ApiProbe {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $t = (& $bash -lc $cmd 2>&1 | Out-String)
+            $rc = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $prevEap }
+        # Field marks turned back into newlines BEFORE anything reads it, so
+        # the transcript is legible and every marker sits on a line of its own.
+        # The run that found this printed the probe's whole reply as one line
+        # and the answer was easy to miss inside it.
+        return @{ Text = (Convert-ProbeText $t); Rc = $rc }
+    }
 
-    # Field marks turned back into newlines BEFORE anything reads it, so the
-    # transcript is legible and every marker sits on a line of its own.  The
-    # run that found this printed the probe's whole reply as one line and the
-    # answer was easy to miss inside it.
-    $apiOut = Convert-ProbeText $apiOut
+    # -----------------------------------------------------------------------
+    Step '7a' 'THE NEW GATE: no sdapi membership, so the API must REFUSE this account'
+
+    # 21 Aug 26 - CREATE.ACCOUNT no longer joins sdapi (owner's decision,
+    # 21 Aug 2026), so the account made in step 1 has a valid credential and no
+    # permission to use it.  APISRVR tests sdapi AFTER the SCRAM proof
+    # succeeds, so this is an AUTHORISATION refusal on a correct password - not
+    # a bad-password path, and not the same code.
+    #
+    # THIS LEG IS WHAT MAKES THE GRANT BELOW MEAN ANYTHING.  Without it, the
+    # measurement in 7c would pass just as well if the gate did not exist, and
+    # so would a run where SET.PASSWORD had silently failed.
+    $r = Invoke-ApiProbe
+    Write-Host $r.Text
+    $preConnect = Get-Marker $r.Text 'CONNECT'
+    Note 'API REFUSES an account not in sdapi' $false ($preConnect -eq 'YES')
+
+    # -----------------------------------------------------------------------
+    Step '7b' "Granting it: MODIFY.ACCOUNT $($Prefix.ToUpper()) API"
+
+    $out = Invoke-SDSys @(("MODIFY.ACCOUNT " + $Prefix.ToUpper() + " API"))
+    $inApi = [bool](Get-LocalGroupMember -Group 'sdapi' -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like ("*\" + $Prefix) })
+    Note 'MODIFY.ACCOUNT ... API put it in sdapi' $true $inApi
+    if (-not $inApi) { Write-Host $out; Fail 'the account was not granted the API - nothing below can be measured.' }
+
+    # NO SD RESTART, AND THAT IS AN ASSERTION RATHER THAN A SAVING.  APISRVR
+    # asks the SAM per login through is_grp_member, so a grant is live for the
+    # next connection.  If this leg ever needs a restart to pass, the gate has
+    # been moved to something cached and the "immediate withdrawal" claim in
+    # MODIFYA is no longer true.
+
+    # -----------------------------------------------------------------------
+    Step '7c' 'THE MEASUREMENT: the same probe down a REMOTE API connection'
+
+    $r = Invoke-ApiProbe
+    $apiOut = $r.Text
+    $apiRc  = $r.Rc
     Write-Host $apiOut
 
     $apiConnect = Get-Marker $apiOut 'CONNECT'
@@ -356,16 +408,61 @@ try {
     $localWho  = Get-Marker $localOut 'WHOAMI'
     Write-Host "   whoami - local: '$localWho'   api: '$apiWho'"
 
-    # Underscores because the probe flattens "nt authority\system" to one token.
-    $apiIsSystem = ($apiWho -match '(?i)^nt_authority_+system$')
+    # 21 Aug 26 - THIS PATTERN WAS ^nt_authority_+system$ AND IT DID NOT MATCH
+    # WHAT THE PROBE PRINTS.  The probe flattened space but not BACKSLASH, so
+    # the marker arrived as "nt_authority\system" - and this check reported
+    # "API session is NOT running as SYSTEM" as a PASS on the very run where
+    # the session had just said it was.  A FALSE PASS on the most important
+    # check in this file.  The probe now flattens the backslash too
+    # (apiadminprobe.sb), and this pattern no longer depends on which
+    # separators it happened to catch: anything non-alphanumeric between the
+    # three words counts.  Two independent changes for one fault, deliberately
+    # - the check must not be able to go blind again if the probe is reworded.
+    $apiIsSystem = ($apiWho -match '(?i)^nt[^a-z0-9]*authority[^a-z0-9]*system$')
     Note 'API session is NOT running as SYSTEM' $false $apiIsSystem
 
-    if ($apiIsSystem) {
+    # 21 Aug 26 - AND WHETHER OS.EXECUTE RAN AT ALL, which is section 8 item 5
+    # measured rather than read.  WHOAMI is printed only if os.execute
+    # RETURNED; a refusal aborts the program at that line, so the marker is
+    # absent.  PROBE.DONE is printed BEFORE the attempt, so its presence
+    # separates "refused" from "never got there".
+    $apiRanOsExec   = ($apiWho   -ne '')
+    $localRanOsExec = ($localWho -ne '')
+
+    # A FAIL HERE IS THE FINDING, like the two $cred lines above: os_permitted()
+    # returns TRUE on USR_ADMIN and kernel.c:195 seeds USR_ADMIN from
+    # IsElevated() with no test of connection type.
+    Note 'API session CANNOT run OS.EXECUTE' $false $apiRanOsExec
+
+    # AND THE CONTROL THAT MAKES THAT MEAN SOMETHING, which is the inversion
+    # worth naming: a LOCAL ELEVATED session standing in the SAME account is
+    # REFUSED.  It starts in SDSYS with USR_ADMIN set and gives the flag up on
+    # the way out (CPROC, "administrator rights belong to SDSYS"), so by the
+    # time it reaches the probe os_permitted() says no.  The API session never
+    # leaves anywhere, so it keeps the flag.  Same account, same program, and
+    # the remote client is the one that gets the operating system.
+    Note 'control: local elevated session refused OS.EXECUTE' $false $localRanOsExec
+
+    # 21 Aug 26 - GATED ON "IT RAN" RATHER THAN ON "IT SAID SYSTEM".  The two
+    # are different failures and the first is the one that matters: OS.EXECUTE
+    # reaching the operating system at all from a network session is the hole,
+    # whatever identity it reports.  Gating on $apiIsSystem meant that when the
+    # pattern above went blind, this block stayed silent on the run that
+    # measured the thing it exists to announce.
+    if ($apiRanOsExec) {
         Write-Host ''
-        Write-Host 'FINDING: OS.EXECUTE ran, and the session is LocalSystem.' -ForegroundColor Red
-        Write-Host 'That is arbitrary command execution as SYSTEM from a remote API' -ForegroundColor Red
-        Write-Host 'client holding an ordinary account credential.  op_sh.c os_permitted()' -ForegroundColor Red
-        Write-Host 'returns TRUE on USR_ADMIN, which kernel.c:195 sets from IsElevated().' -ForegroundColor Red
+        Write-Host 'FINDING: OS.EXECUTE RAN in a remote API session.' -ForegroundColor Red
+        Write-Host ("It reported its identity as: " + $apiWho) -ForegroundColor Red
+        Write-Host 'op_sh.c os_permitted() returns TRUE on USR_ADMIN, and kernel.c:195' -ForegroundColor Red
+        Write-Host 'seeds USR_ADMIN from IsElevated() with no test of connection type.' -ForegroundColor Red
+        if (-not $localRanOsExec) {
+            Write-Host '' -ForegroundColor Red
+            Write-Host 'AND THE INVERSION IS THE SHARP PART: the LOCAL ELEVATED control,' -ForegroundColor Red
+            Write-Host 'running the SAME program in the SAME account, was REFUSED.  It gives' -ForegroundColor Red
+            Write-Host 'up USR_ADMIN on the way out of SDSYS (CPROC); the API session never' -ForegroundColor Red
+            Write-Host 'leaves, so it keeps it.  The remote client gets the operating system' -ForegroundColor Red
+            Write-Host 'and the administrator at the keyboard does not.' -ForegroundColor Red
+        }
     }
 
     if ($apiOpen -eq 'YES' -or $apiWrite -eq 'YES') {
@@ -395,6 +492,22 @@ finally {
     }
 
     if ($madeAccount) {
+        # 21 Aug 26 - OUT OF sdapi FIRST, AND BEFORE DELETE.ACCOUNT RATHER THAN
+        # RELYING ON IT.  Removing the Windows user takes its group memberships
+        # with it, so this is redundant on the happy path - but DELETE.ACCOUNT
+        # is exactly the step that sometimes does not finish (the block below
+        # exists for that), and an account left behind holding an API grant is
+        # the one piece of litter from this script that would be a permission
+        # rather than a name in a register.
+        foreach ($g in @('sdapi', 'sdssh')) {
+            try {
+                if (Get-LocalGroupMember -Group $g -Member $Prefix -ErrorAction SilentlyContinue) {
+                    Remove-LocalGroupMember -Group $g -Member $Prefix -ErrorAction Stop
+                    Write-Host "   took $Prefix out of $g"
+                }
+            } catch { }
+        }
+
         try {
             $out = Invoke-SDSys @("DELETE.ACCOUNT $Prefix", 'Y', 'Y')
             Write-Host $out

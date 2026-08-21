@@ -84,7 +84,19 @@ function Get-Patterns {
         Write-Output "allow-ssh-groups: cannot resolve S-1-5-32-544 - refusing to guess at the administrators group"
         return $null
     }
-    $names = @('sdusers', $admins.Name)
+    # 21 Aug 26 Windows port - sdssh, NOT sdusers.  sdusers grants access to the
+    # data FILES, so while it was the group named here "may read SD's files" and
+    # "may ssh into this machine" were one fact: ssh could not be withdrawn from
+    # an account without taking its files away as well.  They are separate now -
+    # CREATE.ACCOUNT joins both, and MODIFY.ACCOUNT <account> NO.SSH removes only
+    # this one.  Owner's decision, 21 Aug 2026.
+    #
+    # THE GROUP MUST EXIST AND BE POPULATED BEFORE THIS RUNS.  On an existing
+    # installation every account is in sdusers and none is in sdssh, so writing
+    # this line against an empty group locks all of them out at the next sshd
+    # restart.  gplbld/sync-route-groups.ps1 creates it and seeds it from
+    # sdusers, and sd.iss calls that FIRST - see the ordering comment there.
+    $names = @('sdssh', $admins.Name)
     $out = New-Object System.Collections.ArrayList
     foreach ($n in $names) {
         $null = $out.Add($n)

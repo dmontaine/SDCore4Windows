@@ -231,8 +231,16 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # tree stale because verify-accountacl.ps1 exists, and then
                   # refuse to run on the strength of its own newness.
                   'verify-accountacl.ps1',
-                  # 20 Aug 26 - section 8's RDPACCOUNT verifier, same reasoning.
-                  'verify-rdpaccount.ps1',
+                  # 21 Aug 26 - the remote-route verifier, same reasoning.  It
+                  # replaced verify-rdpaccount.ps1, which went with RDPACCOUNT
+                  # on 21 Aug 2026.
+                  #
+                  # sync-route-groups.ps1 IS DELIBERATELY NOT ON THIS LIST.  It
+                  # is an INSTALLER script - stage.py copies it to {app} and
+                  # sd.iss runs it - so it must be compared like deny-logon.ps1
+                  # and allow-ssh-groups.ps1 are.  Listing it here would hide a
+                  # stale copy of the one step that decides who may ssh in.
+                  'verify-routes.ps1',
                   # 20 Aug 26 - the peer-identification and errlog-trim
                   # verifier, same reasoning.  It calls this script too, so
                   # leaving it out has the self-blocking shape the

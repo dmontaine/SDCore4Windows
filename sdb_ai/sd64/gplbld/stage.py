@@ -546,6 +546,7 @@ def main():
     # kernel(K$WINPATH), because they are "/" to SD and "C:\Program Files\SD"
     # to PowerShell, which cannot open the first.
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
+                   'sync-route-groups.ps1',
                    'ssh-firewall.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',

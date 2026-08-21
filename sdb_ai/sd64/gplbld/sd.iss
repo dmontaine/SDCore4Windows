@@ -712,6 +712,51 @@ begin
             '    powershell -File "' + Script + '" sdsshonly' + #13#10#13#10;
 end;
 
+{ Create sdssh and sdapi - the two groups that say which REMOTE route an
+  account may use - and seed sdssh from sdusers.  21 Aug 2026.
+
+  IT MUST RUN BEFORE ApplyAllowGroups AND THAT IS NOT A PREFERENCE.  From this
+  release sshd's AllowGroups names sdssh instead of sdusers.  On a machine that
+  already has SD, every account is in sdusers and none is in sdssh - so if the
+  AllowGroups line is written first, sshd is restarted pointing at a group with
+  nobody in it and EVERY EXISTING ACCOUNT LOSES ssh at that instant.  The
+  seeding in the script is what makes the change invisible to a working
+  deployment; the ordering here is what lets the seeding happen in time.
+
+  NOT IN [Run] BESIDE sdsshonly, for a reason worth keeping: the script seeds
+  only the group IT created, because "was this group here a moment ago" is the
+  only honest test for "does this installation predate the split".  Creating it
+  in [Run] would answer that question wrongly - the script would find the group
+  present, decline to seed, and produce exactly the empty-AllowGroups lockout
+  above.
+
+  NOT FATAL, like the two ssh steps below.  A failure leaves ssh restricted to
+  whoever is in sdssh, which the script prints, and the recovery is one
+  net localgroup command that it also prints. }
+function SyncRouteGroups: String;
+var
+  Code: Integer;
+  Ps, Script: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\sync-route-groups.ps1');
+
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+
+  if Code = 0 then
+    Exit;
+
+  Result := 'The ssh and API access groups were NOT set up (code ' + IntToStr(Code) + '). ' +
+            'sshd allows the group "sdssh", so until it has members, ssh will be ' +
+            'refused to everyone except administrators. SD itself is installed and ' +
+            'working. To repair it, from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '"' + #13#10#13#10;
+end;
+
 { Applies the AllowGroups block and returns what to tell the user, or '' if the
   task was not selected.  PROJECT_STATUS.md 5.6.2.
 
@@ -1183,6 +1228,7 @@ var
   SshLimit: String;
   SshFw: String;
   SshMsg: String;
+  RouteMsg: String;
   AdoptCode: Integer;
   AccountMsg: String;
   CredMsg: String;
@@ -1227,6 +1273,14 @@ begin
       steps are independent, so the more fundamental one is done first. }
     SshFw := ApplySshFirewall;
     SshMsg := SshReport;
+
+    { STRICTLY BEFORE ApplyAllowGroups.  That step points sshd at the sdssh
+      group; this one creates it and seeds it from sdusers, which is the set
+      that could ssh in a moment ago.  The other order hands sshd an empty
+      group and locks every existing account out of the machine.  See the
+      function's own comment. }
+    RouteMsg := SyncRouteGroups;
+
     SshLimit := ApplyAllowGroups;
 
     { Same rule - an unattended install must still end with a usable account. }
@@ -1303,6 +1357,10 @@ begin
              install, and both report a protection that is absent rather than a
              setting that is present. }
            DenyMsg +
+           { And beside DenyMsg for the third time: empty unless the ssh and API
+             groups could not be set up, in which case ssh is refused to
+             everyone but administrators and the person needs to know now. }
+           RouteMsg +
            'You have been added to the "sdusers" group, which is what grants ' +
            'access to the SD database.' + #13#10#13#10 +
            'Windows only applies group membership when you sign in, so you must ' +

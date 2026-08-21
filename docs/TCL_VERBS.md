@@ -204,6 +204,36 @@ CREATE.ACCOUNT USER <name> {ADMINISTRATOR} {NO.QUERY}
 Without it the account is a standard Windows local user; with it the account is
 added to Windows `Administrators` and therefore administers SD.
 
+### How an account reaches the machine — 21 Aug 2026
+
+An SD account reaches this machine **over ssh or through an API client**. The
+console and Remote Desktop belong to Windows administrators: every account
+`CREATE.ACCOUNT` makes joins `sdsshonly`, which is denied
+`SeDenyInteractiveLogonRight` and `SeDenyRemoteInteractiveLogonRight`, and no
+verb lifts that. `RDPACCOUNT`, which briefly did, was removed on 21 Aug 2026 —
+it was named for Remote Desktop but Windows grades both denials together, so it
+handed over the keyboard as well.
+
+The two remaining routes are per account, and each is one Windows local group:
+
+| Route | Group | Read by | Default for a new account |
+|---|---|---|---|
+| ssh | `sdssh` | sshd `AllowGroups` | **on** |
+| API | `sdapi` | `APISRVR`, after the SCRAM proof | **off** |
+
+```
+MODIFY.ACCOUNT <account> SSH | NO.SSH
+MODIFY.ACCOUNT <account> API | NO.API
+```
+
+Both are live at the next connection — sshd re-reads its configuration per
+connection and `APISRVR` asks Windows per login, so neither waits on a Windows
+sign-out the way a token-based check would.
+
+Do not confuse these with `GRANT` / `REVOKE` / `LIST.GRANTS`, which answer a
+different question: *who may use this account*, rather than *how may this person
+reach the machine*.
+
 ## Not available — CRYPTO source was not in the original GPL release
 
 `CREATE.KEY`, `DELETE.KEY`, `ENCRYPT.FILE`, `GRANT.KEY`, `LIST.KEYS`,

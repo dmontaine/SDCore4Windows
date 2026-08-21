@@ -5,6 +5,56 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  You can now say, per account, whether it may reach this machine over
+           ssh, through an API client, both, or neither.  Two new
+           MODIFY.ACCOUNT actions, from SDSYS:
+
+              MODIFY.ACCOUNT <account> SSH        may sign in over ssh
+              MODIFY.ACCOUNT <account> NO.SSH     may not
+              MODIFY.ACCOUNT <account> API        may use the API
+              MODIFY.ACCOUNT <account> NO.API     may not
+
+           * A NEW ACCOUNT GETS ssh AND NOT THE API.  That is a change: until
+             now every account could use the API as soon as the port was open.
+             Say "MODIFY.ACCOUNT <account> API" for each account that needs it.
+           * WHY THE API STARTS OFF: an API session currently runs with more
+             privilege than the person connecting - see the entry below, dated
+             20 Aug.  Until that is fixed, an account should only be able to
+             use the API because somebody decided it should.
+           * EXISTING ACCOUNTS KEEP ssh AND LOSE NOTHING ELSE.  Installing this
+             version copies everyone who could ssh in before into the new group
+             that now controls it, so nobody is locked out.  Nobody is put into
+             the API group, so if you were using the API, grant it again to the
+             accounts that need it.
+           * BOTH TAKE EFFECT AT THE NEXT CONNECTION.  There is no need to sign
+             out of Windows, and no need to restart SD.
+           * "LIST.GRANTS" is unrelated and unchanged - that answers "who may
+             use this account", which is a different question from "how may
+             this person reach the machine".
+
+21 Aug 26  RDPACCOUNT is gone, and with it NO.RDPACCOUNT.
+
+           * WHAT IT DID: it let an account created by SD sign in to Windows.
+             It was named for Remote Desktop but it did not stop there - the
+             same Windows setting covers Remote Desktop and the physical
+             keyboard together, so an account created with RDPACCOUNT could
+             also walk up to the machine and log in.  That was never the
+             intention.
+           * THE RULE IT GOT IN THE WAY OF, and which now holds without
+             exception: NOBODY SD CREATES CAN LOG IN TO WINDOWS AT THIS
+             MACHINE UNLESS THEY ARE ALREADY A WINDOWS ADMINISTRATOR.  SD
+             accounts reach the machine over ssh or through an API client.
+           * If you type RDPACCOUNT now, CREATE.ACCOUNT stops with
+             "Unexpected token (RDPACCOUNT)" and makes no account.
+           * ACCOUNTS ALREADY CREATED WITH IT KEEP THEIR WINDOWS SIGN-IN.
+             Nothing goes round and takes it back, because SD did not record
+             which accounts they were.  If you have any, either delete and
+             recreate them, or take them out of the Windows group by hand:
+                 net localgroup sdsshonly <name> /add
+           * If you want Remote Desktop, you want Windows Server and RDP
+             client access licences, and probably a commercial product built
+             for it.  It is outside what this port is for.
+
 20 Aug 26  The API port is OFF by default again, and you should leave it off
            for now.  This reverses the entry below it, made earlier the same
            day.

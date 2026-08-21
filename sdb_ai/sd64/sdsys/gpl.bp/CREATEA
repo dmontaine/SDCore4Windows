@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - RDPACCOUNT removed, and the two remote routes became
+*            per-account groups: a new account joins sdssh (sshd allows that
+*            group now, not sdusers) and does NOT join sdapi.  Owner's
+*            decision, 21 Aug 2026.  PROJECT_STATUS.md section 8.
 * 19 Aug 26 Windows port - a new account's directory is locked to its own
 *            ACC$GROUP, so one SD user can no longer read or rewrite
 *            another's files outside SD.  PROJECT_STATUS.md section 8.
@@ -171,12 +175,6 @@ deffun ps_script(script) calling '!ps_script'
 * 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
 *   already exists, instead of creating one.  See more.args for what gates it.
    adopt = @false
-* 20 Aug 26 Windows port - RDPACCOUNT, section 8.  A FLAG rather than a string,
-*   which is the opposite choice from tier above and for the reason given
-*   there: tier is written to ACCOUNTS and has to be readable by a person
-*   running LIST ACCOUNTS, and this is written nowhere at all.  It lives only
-*   long enough to reach the sdsshonly test.
-   rdp.account = @false
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -513,35 +511,67 @@ PW.TRY.AGAIN:
 *   BY SID.  BUILTIN\Administrators is translated on a localised Windows, and
 *   !is_grp_member learned to accept a SID on the same day, for this call - see
 *   its history.
-* 20 Aug 26 Windows port - RDPACCOUNT IS THE THIRD CASE, section 8.  The
-*   comment above predicted it: "the test is here rather than beside it so the
-*   next route inherits the protection instead of rediscovering the lockout".
+* 21 Aug 26 Windows port - RDPACCOUNT IS GONE AND THE BRANCH IS FLAT AGAIN.
+*   Owner's decision, 21 Aug 2026: Remote Desktop needs Windows Server and RDP
+*   CALs, so a site that wants it is buying a commercial product, and it is
+*   outside this port's focus.  The rule it obstructed is the plain one -
+*   NOBODY SD CREATES REACHES THE KEYBOARD UNLESS THEY ARE AN ADMINISTRATOR -
+*   and RDPACCOUNT broke it: sdsshonly carries BOTH SeDenyInteractiveLogonRight
+*   and SeDenyRemoteInteractiveLogonRight, so lifting the Remote Desktop denial
+*   meant lifting the console denial with it.  The keyword said RDP and
+*   delivered a Windows sign-in by any route, this one included.
 *
-*   IT IS TESTED INSIDE THE else, NOT ALONGSIDE, and the order is the point.
-*   ADOPT and administrator are asked FIRST, so an administrator who also typed
-*   RDPACCOUNT still gets 10040: they KEPT rights they already had, which is
-*   what happened, and the keyword changed nothing for them.  Only an account
-*   that would otherwise have been confined reaches 10056, so that message is
-*   only ever printed where the keyword actually did something.
+*   Deleting it was cheaper than splitting sdsshonly into two deny-groups, and
+*   the rule now holds by construction rather than by an invariant somebody has
+*   to maintain.  Messages 10056-10062 went with it.
+* 21 Aug 26 Windows port - AND sdssh IS JOINED IN THE SAME BREATH, because the
+*   two halves of "confined to ssh" are now two groups.  sdsshonly says where
+*   this account may NOT go - the console; sdssh says where it MAY - sshd.
 *
-*   NESTED RATHER THAN CHAINED so the block count is unchanged - an "end else
-*   if" here would need a further "end", and the two below already close
-*   "adopt" and "make.admin".
+*   IT REPLACED sdusers IN AllowGroups.  sshd used to allow sdusers
+*   (gplbld/allow-ssh-groups.ps1), which is the group that grants access to the
+*   data FILES, so "may read SD's files" and "may ssh into this machine" were
+*   one fact and ssh could not be withdrawn from an account without taking its
+*   files away with it.  They are separate now.
+*
+*   BOTH ARE INSIDE THE adopt/administrator else, and that is deliberate on
+*   each count.  ADOPT CHANGES NOTHING ABOUT THE OPERATING SYSTEM ACCOUNT - the
+*   15 Aug rule three comments up - and a group that decides who may connect is
+*   exactly the kind of thing it must not alter.  An administrator needs no
+*   entry here either: allow-ssh-groups.ps1 names the Administrators group in
+*   AllowGroups in its own right, so an administrator reaches ssh whatever
+*   sdssh says, and adding one would suggest a lever that does not exist.
         if adopt or is_grp_member(acc.uname, "S-1-5-32-544") then
           crt sysmsg(10040,acc.uname)   ;* %1 keeps the Windows sign-in rights it already had
         end else
-          if rdp.account then
-            crt sysmsg(10056,acc.uname) ;* %1 may sign in to Windows as well as over ssh
+          void os_group("ADDMEM", "sdsshonly", acc.uname)
+          stat = OS.ERROR()
+          if stat = 0 then
+            crt sysmsg(10034,acc.uname)   ;* %1 may sign in over ssh only
           end else
-            void os_group("ADDMEM", "sdsshonly", acc.uname)
-            stat = OS.ERROR()
-            if stat = 0 then
-              crt sysmsg(10034,acc.uname)   ;* %1 may sign in over ssh only
-            end else
-              @system.return.code = -ER$FAILED
-              stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
-            end
-          end     ;* rdp.account
+            @system.return.code = -ER$FAILED
+            stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
+          end
+
+* 21 Aug 26 Windows port - sdapi IS NOT JOINED, AND THAT IS THE DECISION RATHER
+*   THAN AN OMISSION.  A new account gets ssh and no API.  Two reasons: APIPORT
+*   is off by default already (gplsrc/config.h), so this takes nothing away
+*   from a deployment that works today; and an API session runs as LocalSystem
+*   - measured 20 Aug 2026, gplbld/verify-apiadmin.ps1 - so until the
+*   containment gate lands, every account that may use the API may rewrite
+*   $cred.  Default-off keeps that reachable only by accounts an administrator
+*   named on purpose.
+*
+*   TO MAKE IT DEFAULT-ON INSTEAD, add a second ADDMEM for "sdapi" beside the
+*   one below and say so in the changelog.  That is the whole of the change.
+          void os_group("ADDMEM", "sdssh", acc.uname)
+          stat = OS.ERROR()
+          if stat = 0 then
+            crt sysmsg(10063,acc.uname)   ;* %1 may now sign in over ssh
+          end else
+            @system.return.code = -ER$FAILED
+            stop sysmsg(10067,acc.uname,stat) ;* Unable to change ssh access for %1, status: %2
+          end
         end       ;* adopt
         end       ;* make.admin
 
@@ -963,39 +993,16 @@ more.args:
          case upcase(token) = 'PROGRAMMER'
             if tier # 'ADMINISTRATOR' then tier = 'PROGRAMMER'
 
-* 20 Aug 26 Windows port - RDPACCOUNT, PROJECT_STATUS.md section 8.  The
-*   account keeps an ordinary Windows sign-in: console, Remote Desktop and
-*   other Windows programs, as well as ssh.  Without it an account is confined
-*   to ssh, which is the default and stays the common case.
+* 21 Aug 26 Windows port - RDPACCOUNT WAS A CASE HERE AND IS GONE.  Owner's
+*   decision, 21 Aug 2026 - see the sdsshonly branch above for why.  A caller
+*   who still types it now gets the "unrecognised token" answer the else below
+*   gives any other unknown keyword, which is the truth: there is no such
+*   keyword any more.
 *
-*   ORTHOGONAL TO THE TIER, NOT A FOURTH ONE.  Owner's decision, 18 Aug 2026:
-*   "CREATE.ACCOUNT USER jim RDPACCOUNT" is a standard account that may sign
-*   in, and "... jim PROGRAMMER RDPACCOUNT" is a programmer that may.  So this
-*   sets its own flag and does NOT touch tier - the two are read in different
-*   places and neither may quietly move the other.
-*
-*   IT IS THE THIRD CASE ON A TEST THAT ALREADY EXISTED.  The sdsshonly branch
-*   below has read "adopt or is_grp_member(... S-1-5-32-544)" since 15 Aug, and
-*   its comment says the test sits there "so the next route inherits the
-*   protection instead of rediscovering the lockout".  This is that next route,
-*   and it needed one clause rather than a new mechanism.
-*
-*   NOTHING IS RECORDED IN ACCOUNTS, and that is a decision rather than an
-*   omission - owner, 20 Aug 2026.  Absence from sdsshonly IS the property:
-*   Windows enforces it through SeDenyInteractiveLogonRight and
-*   SeDenyRemoteInteractiveLogonRight on that group (gplbld/deny-logon.ps1),
-*   and SD never reads it - "sdsshonly" is WRITTEN here and nowhere else in
-*   this tree, and read nowhere at all.  A mirrored field could therefore only
-*   ever disagree with the thing that actually decides, and would be reporting
-*   a security property SD does not enforce.  ACC$USERS was deleted on exactly
-*   this reasoning on 15 Aug - SYSCOM/KEYS.H, "the operating system holds the
-*   grant, not this record".
-*
-*   Matched on the token text, like ADMINISTRATOR and PROGRAMMER above, and for
-*   the same reason: the KW$ table in SYSCOM/PARSER.H is positional and shared
-*   by every verb.  It cannot be abbreviated.
-         case upcase(token) = 'RDPACCOUNT'
-            rdp.account = @true
+*   NOTHING TAKES ITS PLACE ON THIS COMMAND LINE.  ssh and API access are set
+*   after creation with MODIFY.ACCOUNT, because they are properties that change
+*   during an account's life and a create-time keyword cannot express that.
+*   CREATE.ACCOUNT's own defaults - ssh yes, API no - are applied above.
 
 * 14 Aug 26 Windows port - ADOPT takes an OS account that already exists
 *   instead of creating one.  It is the single exception to the owner's rule

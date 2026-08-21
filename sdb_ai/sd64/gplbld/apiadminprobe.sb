@@ -81,18 +81,48 @@ program apiadminprobe
 * HARMLESS BY CHOICE: it reads an identity and changes nothing.  Do not be
 * tempted to make it write something to prove the point harder.
 
+* 21 Aug 26 - PROBE.DONE MOVED ABOVE THE os.execute, AND THAT IS THE WHOLE OF
+* THE FIX TO A CHECK THAT FAILED FOR THE WRONG REASON.  It used to be the last
+* line, so it meant "everything ran".  But OS.EXECUTE is REFUSED to a local
+* elevated session standing in an ordinary account - k_error aborts the
+* program - so PROBE.DONE was never reached on the control leg and
+* "control: probe ran locally" reported FAIL on a run where every measurement
+* it cares about had already been taken and printed.  Measured 21 Aug 2026.
+*
+* THE REFUSAL IS DATA, NOT A FAILURE, AND THE ABSENCE OF PROBE.WHOAMI IS HOW
+* THE CALLER READS IT.  With DONE printed first, the two legs are directly
+* comparable: both print DONE, and only the leg that is PERMITTED prints
+* WHOAMI.  That difference is the measurement - see the note below.
+
+   crt 'PROBE.DONE'
+
+* ----------------------------------------------------------------------
+* AND NOW THE ONE THING THAT MAY ABORT.  Nothing may be added after this
+* point: a refusal ends the program here.
+
    crt 'PROBE.OSEXEC.TRIED=YES'
 
    who.out = ''
    os.execute 'cmd /c whoami' capturing who.out
 
-   * FLATTENED TO ONE TOKEN, and the underscores are deliberate.  The reply is
-   * "nt authority\system" - a SPACE and a BACKSLASH - and the caller reads
-   * these markers with one regex per line.  Turning the separators into
-   * underscores keeps the answer on one line and inside one token, so the
-   * marker cannot be truncated at the space and read as "nt".
+   * FLATTENED TO ONE TOKEN.  The reply is "nt authority\system" - a SPACE and
+   * a BACKSLASH - and the caller reads these markers with one regex per line,
+   * so both separators have to go or the marker is truncated at the space and
+   * read as "nt".
+   *
+   * 21 Aug 26 - THE BACKSLASH WAS NOT IN THIS LIST AND SHOULD HAVE BEEN.  The
+   * convert above listed char(10), char(13), @fm, @vm and space only, so the
+   * marker came out as "nt_authority\system" while verify-apiadmin.ps1 matched
+   * on ^nt_authority_+system$ - which does not match a backslash.  The result
+   * was a FALSE PASS on the most important check in that script: the session
+   * reported itself LocalSystem and the verdict read "API session is NOT
+   * running as SYSTEM".  Measured 21 Aug 2026, and the reason it was caught at
+   * all is that the raw marker is printed in the transcript beside the verdict.
+   * char(92) RATHER THAN A LITERAL BACKSLASH: this BASIC accepts \ as a string
+   * delimiter alongside ' and ", so a bare '\' in a source line is a shape
+   * worth not relying on.
    who.line = who.out
-   convert char(10):char(13):@fm:@vm:' ' to '_____' in who.line
+   convert char(10):char(13):@fm:@vm:' ':char(92) to '______' in who.line
    who.line = trim(who.line, '_', 'B')
 
    if who.line = '' then
@@ -100,7 +130,5 @@ program apiadminprobe
    end else
       crt 'PROBE.WHOAMI=' : who.line
    end
-
-   crt 'PROBE.DONE'
 
 end

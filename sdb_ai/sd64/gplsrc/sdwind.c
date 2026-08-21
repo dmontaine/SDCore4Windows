@@ -395,6 +395,14 @@ static void accept_api_session(void) {
      an administrator" was true by construction until an account existed that
      may sign in to Windows without being one.
 
+     21 Aug 26 Windows port - RDPACCOUNT IS GONE AND THIS STILL STANDS.  That
+     keyword was the demonstration, not the reason.  "Local" is not a claim
+     about identity even when every local account IS an administrator: the port
+     is reachable by any process on the machine, including one running as a
+     service or a scheduled task under an account that never signs in
+     anywhere.  ssh -L makes it reachable from another machine as well, and
+     win32peer.h records that such a client identifies as sshd.
+
      LOG ONLY - owner's decision, 20 Aug 2026.  Nothing is refused here.  The
      mechanism is what the three candidate policies in section 8 all need
      first, and the log is what says whether enforcement would break anything

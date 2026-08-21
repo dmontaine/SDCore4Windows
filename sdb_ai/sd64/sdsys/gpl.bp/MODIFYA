@@ -19,6 +19,11 @@
 * 
 *
 * START-HISTORY:
+* 21 Aug 26 Windows port - RDPACCOUNT and NO.RDPACCOUNT are gone; SSH, NO.SSH,
+*   API and NO.API replace them.  Owner's decision, 21 Aug 2026: Remote Desktop
+*   is out of this port's focus, and the rule it obstructed - nobody SD creates
+*   reaches the keyboard unless they are an administrator - now holds by
+*   construction.  See CREATEA's sdsshonly branch.
 * 20 Aug 26 Windows port - RDPACCOUNT and NO.RDPACCOUNT move an account in and
 *   out of sdsshonly, which is what decides whether it may sign in to Windows.
 *   PROJECT_STATUS.md section 8.  Nothing is recorded in ACCOUNTS: the group
@@ -29,8 +34,21 @@
 *
 * START-DESCRIPTION:
 * MODIFY.ACCOUNT account <ADD/DELETE> user.name
-* MODIFY.ACCOUNT account RDPACCOUNT        - may sign in to Windows
-* MODIFY.ACCOUNT account NO.RDPACCOUNT     - confined to ssh again
+* MODIFY.ACCOUNT account SSH               - may sign in over ssh
+* MODIFY.ACCOUNT account NO.SSH            - may not sign in over ssh
+* MODIFY.ACCOUNT account API               - may use the API
+* MODIFY.ACCOUNT account NO.API            - may not use the API
+*
+* THE TWO REMOTE ROUTES, AND THERE IS NO THIRD.  The console and Remote Desktop
+* are denied to every account SD creates - sdsshonly, applied by CREATE.ACCOUNT
+* and enforced by gplbld/deny-logon.ps1 - and no verb here lifts that.  An
+* administrator reaches the keyboard because Windows already calls them one,
+* not because SD granted it.
+*
+* EACH IS ONE GROUP MEMBERSHIP AND NOTHING IS WRITTEN TO ACCOUNTS.  sdssh is
+* what sshd's AllowGroups names; sdapi is what APISRVR tests after the SCRAM
+* proof succeeds.  A mirrored field could only ever disagree with the thing
+* that actually decides - the reasoning that deleted ACC$USERS on 15 Aug.
 *
 * END-DESCRIPTION
 *
@@ -73,7 +91,8 @@ deffun valid_os_name(name) calling '!valid_os_name'
    call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
    if token.type = PARSER$END then
       crt 'Command Syntax:  MODIFY.ACCOUNT <account> ADD | DELETE <username>'
-      crt '                  MODIFY.ACCOUNT <account> RDPACCOUNT | NO.RDPACCOUNT'
+      crt '                  MODIFY.ACCOUNT <account> SSH | NO.SSH'
+      crt '                  MODIFY.ACCOUNT <account> API | NO.API'
       stop
    end
    *
@@ -92,38 +111,59 @@ deffun valid_os_name(name) calling '!valid_os_name'
       * Get next token, ADD or DELETE
       call @parser(PARSER$GET.TOKEN, token.type, action, keyword)
 
-* 20 Aug 26 Windows port - RDPACCOUNT and NO.RDPACCOUNT, PROJECT_STATUS.md
-*   section 8.  Two more actions in the slot ADD and DELETE already occupy:
+* 21 Aug 26 Windows port - SSH, NO.SSH, API and NO.API, replacing RDPACCOUNT
+*   and NO.RDPACCOUNT.  Four more actions in the slot ADD and DELETE occupy:
 *
-*     MODIFY.ACCOUNT <account> RDPACCOUNT      may sign in to Windows
-*     MODIFY.ACCOUNT <account> NO.RDPACCOUNT   confined to ssh again
+*     MODIFY.ACCOUNT <account> SSH      may sign in over ssh
+*     MODIFY.ACCOUNT <account> NO.SSH   may not
+*     MODIFY.ACCOUNT <account> API      may use the API
+*     MODIFY.ACCOUNT <account> NO.API   may not
 *
-*   They take NO user name - they act on the account's OWN Windows user, which
-*   is what CREATE.ACCOUNT's keyword acts on - so they are handled before the
-*   ADD/DELETE test rather than inside it, which would demand one.
+*   They take NO user name - they act on the account's OWN Windows user - so
+*   they are handled before the ADD/DELETE test rather than inside it, which
+*   would demand one.
 *
-*   THE PROPERTY IS GROUP MEMBERSHIP AND NOTHING ELSE.  Absence from sdsshonly
-*   is what lets an account sign in to Windows, because that group carries
-*   SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight
-*   (gplbld/deny-logon.ps1).  Nothing is written to ACCOUNTS - owner's
-*   decision, 20 Aug 2026 - so there is no record here that could disagree with
-*   the group, and these two verbs are the whole of the state change.
+*   THE PROPERTY IS GROUP MEMBERSHIP AND NOTHING ELSE, which is why all four
+*   share one pair of routines with the group name and the four messages passed
+*   in.  Nothing is written to ACCOUNTS - owner's decision, 20 Aug 2026, kept -
+*   so there is no record that could disagree with the group.
 *
 *   WRAPPED ROUND THE ADD/DELETE BLOCK RATHER THAN FOLDED INTO IT.  That block
 *   is working code with four message paths in it; turning its "if ADD or
-*   DELETE" into arms of a case statement would rewrite all of it to add two
-*   actions that share none of it.  One "if not(rdp.done)" leaves it untouched.
-      rdp.done = @false
-      if upcase(action) = 'RDPACCOUNT' then
-         gosub set.rdp
-         rdp.done = @true
-      end
-      if upcase(action) = 'NO.RDPACCOUNT' then
-         gosub clear.rdp
-         rdp.done = @true
-      end
+*   DELETE" into arms of a case statement would rewrite all of it to add
+*   actions that share none of it.  One "if not(route.done)" leaves it
+*   untouched.
+      route.done = @true
+      begin case
+         case upcase(action) = 'SSH'
+            route.group = 'sdssh'
+            msg.done = 10063  ;* %1 may now sign in over ssh
+            msg.already = 10064  ;* %1 may already sign in over ssh
+            msg.fail = 10067  ;* Unable to change ssh access for %1, status: %2
+            gosub route.add
+         case upcase(action) = 'NO.SSH'
+            route.group = 'sdssh'
+            msg.done = 10065  ;* %1 can no longer sign in over ssh
+            msg.already = 10066  ;* %1 already cannot sign in over ssh
+            msg.fail = 10067  ;* Unable to change ssh access for %1, status: %2
+            gosub route.remove
+         case upcase(action) = 'API'
+            route.group = 'sdapi'
+            msg.done = 10068  ;* %1 may now use the API
+            msg.already = 10069  ;* %1 may already use the API
+            msg.fail = 10072  ;* Unable to change API access for %1, status: %2
+            gosub route.add
+         case upcase(action) = 'NO.API'
+            route.group = 'sdapi'
+            msg.done = 10070  ;* %1 can no longer use the API
+            msg.already = 10071  ;* %1 already cannot use the API
+            msg.fail = 10072  ;* Unable to change API access for %1, status: %2
+            gosub route.remove
+         case 1
+            route.done = @false
+      end case
 
-      if not(rdp.done) then
+      if not(route.done) then
       if (upcase(action) = 'ADD') or (upcase(action) = 'DELETE') then
       *  valid action
       *   Get next token, user name
@@ -187,9 +227,9 @@ deffun valid_os_name(name) calling '!valid_os_name'
          
          
       end else
-         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, RDPACCOUNT or NO.RDPACCOUNT'
+         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, SSH, NO.SSH, API or NO.API'
       end
-      end       ;* not(rdp.done)
+      end       ;* not(route.done)
 
    end else
      crt sysmsg(10024,group.name) ;* %1 is not a valid Windows group
@@ -228,72 +268,81 @@ account.user:
    return
 
 * ======================================================================
-* RDPACCOUNT - let this account sign in to Windows, by taking it out of
-* sdsshonly.  PROJECT_STATUS.md section 8.
-set.rdp:
+* SSH / API - let this account use a remote route, by putting its own Windows
+* user into the group that route is allowed by.
+*
+* 21 Aug 26 Windows port - ONE PAIR OF ROUTINES FOR BOTH ROUTES.  The caller
+*   sets route.group and the three message numbers; nothing else differs
+*   between "may ssh" and "may use the API", and two copies of this would be
+*   two places for the next fix to miss.
+*
+*   IDEMPOTENT, AND IT SAYS SO.  os_group ADDMEM succeeds on a member that is
+*   already there, so asking first is what lets this report "already" rather
+*   than implying it did something - the rule GRANTA states at its own ADDMEM.
+*
+*   NO ADMINISTRATOR GUARD HERE, UNLIKE THE ROUTINE THIS REPLACED.  That guard
+*   existed because NO.RDPACCOUNT wrote to sdsshonly, which carries
+*   SeDenyInteractiveLogonRight - so running it on an administrator's own
+*   account locked them out of their console, which is what happened on 15 Aug
+*   2026 the first time ADOPT ran.  NEITHER GROUP HERE CAN DO THAT.  sdsshonly
+*   is not touched by any verb in this program any more, and sdssh cannot lock
+*   an administrator out of ssh because allow-ssh-groups.ps1 names the
+*   Administrators group in AllowGroups in its own right.  If a future route
+*   ever writes to sdsshonly again, the guard comes back with it.
+route.add:
    gosub account.user
    if not(user.ok) then return
 
-   if not(is_grp_member(acc.user,'sdsshonly')) then
-      crt sysmsg(10059,acc.user)  ;* %1 may already sign in to Windows
+   if is_grp_member(acc.user, route.group) then
+      crt sysmsg(msg.already, acc.user)
       return
    end
 
    if not(valid_os_name(acc.user)) then
-      crt sysmsg(10062,acc.user,2) ;* Unable to release %1 from ssh-only, status: %2
+      crt sysmsg(msg.fail, acc.user, 2)
       return
    end
 
-   stat = os_group("DELMEM", "sdsshonly", acc.user)
+   stat = os_group("ADDMEM", route.group, acc.user)
    if stat = 0 then
-      crt sysmsg(10057,acc.user)   ;* %1 may now sign in to Windows
+      crt sysmsg(msg.done, acc.user)
    end else
       @system.return.code = -ER$FAILED
-      crt sysmsg(10062,acc.user,stat) ;* Unable to release %1 from ssh-only, status: %2
+      crt sysmsg(msg.fail, acc.user, stat)
    end
    return
 
 * ======================================================================
-* NO.RDPACCOUNT - confine this account to ssh again, by putting it back into
-* sdsshonly.
+* NO.SSH / NO.API - withdraw a remote route, by taking the account's own
+* Windows user back out of that route's group.
 *
-* 20 Aug 26 Windows port - AND NO ADMINISTRATOR IS EVER CONFINED TO ssh.  This
-*   is the rule CREATEA states at its own sdsshonly test, where the comment
-*   says the check sits there "so the next route inherits the protection
-*   instead of rediscovering the lockout".  THIS IS THAT NEXT ROUTE, and it is
-*   the dangerous direction: sdsshonly carries SeDenyInteractiveLogonRight and
-*   SeDenyRemoteInteractiveLogonRight, so an administrator who ran this on
-*   their own account would keep the session they are in and be unable to sign
-*   in at their own console again.  That is exactly what happened on 15 Aug
-*   2026 the first time ADOPT ran.
-*
-*   BY SID, for the reason CREATEA gives: BUILTIN\Administrators is translated
-*   on a localised Windows.
-clear.rdp:
+* 21 Aug 26 Windows port - THE WITHDRAWAL IS IMMEDIATE FOR BOTH ROUTES, and
+*   that is worth knowing because the grant is not.  sshd re-reads its
+*   AllowGroups per connection and APISRVR asks the SAM per login, so neither
+*   consults a token; but a Windows access token fixes group membership at
+*   sign-in, so an account GRANTED a route mid-session may still need to sign
+*   out and back in before anything token-based agrees.  Nothing here depends
+*   on a token, so NO.SSH and NO.API bite at once.
+route.remove:
    gosub account.user
    if not(user.ok) then return
 
-   if is_grp_member(acc.user, "S-1-5-32-544") then
-      crt sysmsg(10061,acc.user)  ;* %1 is a Windows administrator and may not be confined to ssh
-      return
-   end
-
-   if is_grp_member(acc.user,'sdsshonly') then
-      crt sysmsg(10060,acc.user)  ;* %1 is already confined to ssh
+   if not(is_grp_member(acc.user, route.group)) then
+      crt sysmsg(msg.already, acc.user)
       return
    end
 
    if not(valid_os_name(acc.user)) then
-      crt sysmsg(10035,acc.user,2) ;* Unable to restrict %1 to ssh, status: %2
+      crt sysmsg(msg.fail, acc.user, 2)
       return
    end
 
-   stat = os_group("ADDMEM", "sdsshonly", acc.user)
+   stat = os_group("DELMEM", route.group, acc.user)
    if stat = 0 then
-      crt sysmsg(10058,acc.user)   ;* %1 is confined to ssh again
+      crt sysmsg(msg.done, acc.user)
    end else
       @system.return.code = -ER$FAILED
-      crt sysmsg(10035,acc.user,stat) ;* Unable to restrict %1 to ssh, status: %2
+      crt sysmsg(msg.fail, acc.user, stat)
    end
    return
 

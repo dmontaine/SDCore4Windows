@@ -136,7 +136,9 @@ function Show-Acl([string]$label, [string]$path) {
 # verify-rdpaccount.ps1 copied the function and reads six messages that all
 # START with %1 - the head was the empty string for every one of them, and all
 # six checks reported FAIL on a run where the feature worked perfectly.  Fixed
-# here too rather than left as a working accident.
+# here too rather than left as a working accident.  (That script went with
+# RDPACCOUNT on 21 Aug 2026; verify-routes.ps1 replaced it and carries the
+# fixed version of this function and the note.)
 function Get-SysMsgPattern([int]$n) {
     $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
