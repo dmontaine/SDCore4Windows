@@ -127,11 +127,38 @@ function Start-SD {
     return [bool](Get-Process -Name sdwind -ErrorAction SilentlyContinue)
 }
 
+# SD RETURNS CAPTURED OUTPUT AS A DYNAMIC ARRAY, NOT AS TEXT WITH NEWLINES.
+# "execute cmnd capturing response" joins the lines with FIELD MARKS (char
+# 254), so everything the probe printed arrives as ONE physical line:
+#
+#   PROBE.ACCOUNT=SDAPIA1<fm>PROBE.CRED.OPEN=YES<fm>PROBE.CRED.WRITE=YES<fm>...
+#
+# 20 Aug 26 - THE FIRST VERSION OF THIS ANCHORED ON ^ AND CAPTURED \S*, AND
+# BOTH HALVES WERE WRONG ON THAT INPUT.  A field mark is not whitespace, so
+# the first marker swallowed the whole reply; and with no line starts after
+# it, every later marker read as ABSENT - which the verdict then reported as a
+# missing answer rather than the answer.  Three checks failed and the finding
+# was sitting inside the text of the first one.  The local leg parsed cleanly
+# because a local session's output really does have newlines, so the defect
+# appeared only on the leg that mattered.
+function Convert-ProbeText([string]$text) {
+    # Marks are 252-255.  The probe prints ASCII only, so nothing legitimate
+    # is in that range and turning them all into newlines is safe.  A run that
+    # arrived already decoded to U+FFFD is handled too.
+    # \u escapes rather than the literal characters: this file must not depend
+    # on being read back in the same encoding it was written in.
+    return ($text -replace '[\u00FC-\u00FF\uFFFD]', "`n")
+}
+
 # Pull one PROBE.<name>= marker out of a captured run.  Returns '' if absent,
 # which is distinguishable from 'NO' and is meant to be - a missing marker
 # means the probe did not get that far, not that the answer was no.
+#
+# DELIMITER-AGNOSTIC ON PURPOSE: no ^ anchor, and the value is bounded to the
+# characters the probe actually emits rather than to "not whitespace".  That
+# holds whatever SD puts between the lines.
 function Get-Marker([string]$text, [string]$name) {
-    $m = [regex]::Match($text, ('(?m)^\s*PROBE\.' + [regex]::Escape($name) + '=(\S*)'))
+    $m = [regex]::Match($text, ('PROBE\.' + [regex]::Escape($name) + '=([A-Za-z0-9_.]*)'))
     if ($m.Success) { return $m.Groups[1].Value }
     return ''
 }
@@ -284,6 +311,12 @@ try {
         $apiOut = (& $bash -lc $cmd 2>&1 | Out-String)
         $apiRc  = $LASTEXITCODE
     } finally { $ErrorActionPreference = $prevEap }
+
+    # Field marks turned back into newlines BEFORE anything reads it, so the
+    # transcript is legible and every marker sits on a line of its own.  The
+    # run that found this printed the probe's whole reply as one line and the
+    # answer was easy to miss inside it.
+    $apiOut = Convert-ProbeText $apiOut
     Write-Host $apiOut
 
     $apiConnect = Get-Marker $apiOut 'CONNECT'
