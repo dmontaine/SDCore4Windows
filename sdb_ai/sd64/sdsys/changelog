@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  "Limit ssh to SD users and administrators" is now ticked by
+           default during installation.  It was offered unticked before.
+
+           WHAT IT DOES, and it is worth reading before you accept it:
+
+           * Only members of "sdssh" and the administrators group may ssh in.
+           * Every ssh session goes straight into SD rather than to a shell.
+           * BECAUSE OF THAT SECOND ONE, scp AND sftp STOP WORKING for
+             everyone on the machine.  If you copy files over ssh, untick it.
+           * The original sshd_config is kept as sshd_config.before-sd.
+
+           * IT REFUSES BY ITSELF IF YOUR sshd_config ALREADY SAYS WHO MAY
+             CONNECT.  An existing AllowGroups, AllowUsers, DenyGroups or
+             DenyUsers line is somebody's policy, and SD will not widen it,
+             replace it or merge into it - it leaves the file alone and tells
+             you so.
+           * AN UNATTENDED INSTALL NOW APPLIES IT TOO, where before it applied
+             nothing.  If you install SD silently onto machines with ssh
+             servers you manage separately, this is the change to look at.
+
+           You can untick it during installation, and you can undo it
+           afterwards with:
+
+              powershell -File "C:\Program Files\SD\allow-ssh-groups.ps1" -Remove
+
 21 Aug 26  DELETE.ACCOUNT now removes the Windows account as part of the job,
            instead of stopping to ask, and it removes that account's Windows
            profile with it.

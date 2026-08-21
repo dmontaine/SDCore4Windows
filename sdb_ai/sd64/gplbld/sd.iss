@@ -131,12 +131,32 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; account confined to sdsshonly gets a shell on the server - the thing the
 ; confinement exists to prevent, arriving by the far door.
 ;
-; "WE NEVER RECONFIGURE AN SSH SERVER WE DID NOT INSTALL" (5.9) IS NOT WEAKENED,
-; because it was never this Check that carried it: Flags: unchecked is, and that
-; is untouched.  Nothing happens to anybody's ssh server unless an administrator
-; ticks a box that names what it will do.  TICKING IT IS THE CONSENT, which is
-; what the rule was protecting.  Limiting ssh is about SD's access model rather
-; than about who installed the server, and that is the whole of the change.
+; AND IT IS ON BY DEFAULT - owner's decision, 21 Aug 2026, the second change to
+; this task that day.  "Flags: unchecked" is gone.
+;
+; WHAT THAT REVERSES, AND IT IS WORTH BEING HONEST ABOUT.  When the Check came
+; off earlier the same day, the note here said 5.9 - "we never reconfigure an
+; ssh server we did not install" - was carried by Flags: unchecked, because
+; nothing happened unless an administrator ticked a box.  That is no longer
+; true: A SILENT INSTALL NOW APPLIES THIS, since an Inno task without
+; "unchecked" is selected in silent mode too.
+;
+; WHAT STILL CARRIES IT IS allow-ssh-groups.ps1's SECOND REFUSAL, and it is the
+; stronger of the two guards rather than the weaker: it reads sshd_config and
+; REFUSES if an AllowGroups, AllowUsers, DenyGroups or DenyUsers line is already
+; there.  So somebody else's access policy is never widened, replaced or merged
+; into - which is the thing 5.9 exists to protect.  What has gone is the
+; protection against SD configuring a server on a machine that has NO policy at
+; all, and on such a machine SD's model is the only model there is.
+;
+; THE COST IS STATED IN THE DESCRIPTION AND HAS NOT CHANGED: ForceCommand stops
+; scp and sftp working FOR EVERYONE on the machine.  It is now the default
+; rather than a choice, so the description is the only warning an administrator
+; gets before accepting it, and the box can still be UNticked.
+;
+; Limiting ssh is about SD's access model rather than about who installed the
+; server, which is why the Check went; making it the default says that model is
+; what SD expects to be running under rather than an option somebody remembers.
 ;
 ; SshWasAbsent IS STILL RIGHT FOR THE OTHER TWO USES and keeps its Check: the
 ; firewall step and the "did SD put this here" report are both genuinely about
@@ -161,7 +181,7 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; not a side effect that was missed - but it is not something to discover after
 ; ticking a box that only mentioned AllowGroups, which is what it used to say.
 Name: "limitssh"; Description: "Limit ssh to SD users and administrators, and put every ssh session straight into SD (disables scp and sftp)"; \
-    GroupDescription: "Remote access:"; Flags: unchecked
+    GroupDescription: "Remote access:"
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -1522,16 +1542,22 @@ begin
       firewall rule with it.  Limiting ssh IS offered here, on any machine, and
       the sentence has to say so, or the reader ticks a box this box has just
       told them is not there.  Third time this file has been found asserting
-      something that had stopped being true; the pattern is worth the note. }
+      something that had stopped being true; the pattern is worth the note.
+
+      AND AGAIN LATER THE SAME DAY, which makes the point better than the note
+      did: limitssh became ticked BY DEFAULT, so "you can still tick it" was
+      false in the other direction.  What the reader needs on a machine with
+      somebody else's ssh server is to know the box is ALREADY ticked and how
+      to refuse it. }
     MsgBox('OpenSSH Server is already installed on this machine.' + #13#10#13#10 +
            'SD needs an ssh server and would install one, but it will not install ' +
            'or restart the one you already have, and it will not change its ' +
            'firewall rule. That is why the option to install a server is absent ' +
            'from this page.' + #13#10#13#10 +
-           'You can still tick "Limit ssh to SD users and administrators". That ' +
-           'one edits sshd_config and restarts sshd, so it is your decision to ' +
-           'make about a server SD did not install - it is left unticked, and it ' +
-           'will refuse if your sshd_config already says who may connect.' + #13#10#13#10 +
+           '"Limit ssh to SD users and administrators" IS ticked, and it edits ' +
+           'sshd_config and restarts sshd. Untick it if you would rather SD left ' +
+           'your server alone. It will refuse by itself if your sshd_config ' +
+           'already says who may connect, and it keeps a copy of the original.' + #13#10#13#10 +
            'Accounts SD creates sign in over ssh, so make sure your server ' +
            'accepts them.',
            mbInformation, MB_OK);
