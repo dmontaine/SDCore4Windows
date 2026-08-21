@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  The error log now records who connects to the API port.
+           * Every accepted API (SDClient) connection adds a line to
+             C:\ProgramData\SD\sdsys\errlog naming the Windows process and
+             account at the other end:
+                 API connection from 127.0.0.1:59314 - pid 11448, GITORLI\don
+           * NOTHING IS REFUSED ON THE STRENGTH OF IT.  This records who
+             connected; it does not decide who may.  The API's own checks are
+             unchanged - the port is loopback only, a client must complete the
+             SCRAM exchange against a stored credential, and the account must
+             pass the group check.
+           * A CONNECTION FORWARDED OVER ssh SHOWS sshd, not the person at the
+             far end.  The tunnel ends on this machine, so the process that
+             connects genuinely is sshd.  What the line distinguishes is a
+             client running ON this machine from one arriving through a
+             tunnel; it cannot name a remote person.
+           * "peer process not identified" means the client had already gone
+             by the time the connection was looked up.  It is not an error and
+             the connection proceeds normally.
+           * ERRLOG NOW APPLIES TO THESE LINES TOO.  The background daemon
+             used to append to the error log without ever trimming it - it
+             only wrote at startup and on failure, so it never grew.  Now that
+             it writes per connection, it discards the oldest part of the log
+             on reaching the ERRLOG size in sd.conf, exactly as SD sessions
+             have always done.  If you have set ERRLOG unusually large,
+             consider what an entry per connection adds to it.
+
 20 Aug 26  A new kind of account: RDPACCOUNT, which may sign in to Windows.
            * CREATE.ACCOUNT USER jim RDPACCOUNT
              CREATE.ACCOUNT USER jim PROGRAMMER RDPACCOUNT

@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 20 Aug 26 Windows port - the peer of an API connection is identified and
+ *                      logged (win32peer.c), and log_message() gained the
+ *                      errlog trim the sd side has always had - without it
+ *                      the new per-connection line ignores ERRLOG and grows
+ *                      the file without bound
  * 17 Aug 26 Windows port - the API listener.  Windows has neither xinetd nor
  *                      systemd socket activation, so the listener and the
  *                      per-connection spawn that the Linux build gets from
@@ -61,11 +66,26 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+/* 20 Aug 26 Windows port - who is at the other end of an API connection.
+   NO WINDOWS HEADER IS REACHED THROUGH THIS: windows.h and netinet/in.h
+   cannot share a translation unit at all, which is exactly why the Win32
+   half is a separate file taking plain integers.  win32peer.h has the
+   measurement. */
+#include "win32peer.h"
+
+/* 20 Aug 26 Windows port - DOMAIN\name as win32_pid_user() returns it.  Its
+   two LookupAccountSid buffers are 256 each, plus the separator and the
+   terminator, so anything smaller would make that call fail rather than
+   truncate - it checks the length before it writes. */
+#define WHO_LEN 514
 
 bool terminate = FALSE;
 
-/* 17 Aug 26 Windows port - the API listener, -1 when APIPORT is not set,
-   which is the default and the shipped state. */
+/* 17 Aug 26 Windows port - the API listener, -1 when APIPORT is not set.
+   20 Aug 26 - IT IS SET IN THE SHIPPED sd.conf NOW.  This said "which is the
+   default and the shipped state" of being unset, and stopped being true the
+   same day, when the owner reversed the 17 Aug default and gplbld/stage.py's
+   template began shipping APIPORT=4243 active. */
 static int api_listener = -1;
 
 void check_lost_users(void);
@@ -353,9 +373,61 @@ static void accept_api_session(void) {
   pid_t pid;
   char bindir[MAX_PATHNAME_LEN + 1];
   char sdpath[MAX_PATHNAME_LEN + 20];
+  struct sockaddr_in peer;
+  struct sockaddr_in me;
+  socklen_t addrlen;
+  /* Sized so the longest line CANNOT truncate, which -Wformat-truncation
+     objected to at 512 and was right to: the account is up to WHO_LEN and
+     the rest of the line is about sixty characters.  A truncated log line
+     naming the wrong account would be worse than no line at all.         */
+  char msg[WHO_LEN + 128];
 
-  if ((conn = accept(api_listener, NULL, NULL)) < 0)
+  /* 20 Aug 26 Windows port - THE PEER ADDRESS IS KEPT NOW RATHER THAN
+     DISCARDED.  It used to be accept(..., NULL, NULL); the remote port is
+     what identifies this connection's row in the Windows TCP table.       */
+  addrlen = sizeof(peer);
+  if ((conn = accept(api_listener, (struct sockaddr*)&peer, &addrlen)) < 0)
     return; /* EINTR, or a client that gave up between select and accept */
+
+  /* 20 Aug 26 Windows port - WHO IS AT THE OTHER END.  Binding to 127.0.0.1
+     is not the same as authenticating the peer, and the difference stopped
+     being theoretical when RDPACCOUNT was built: "anyone who can be local is
+     an administrator" was true by construction until an account existed that
+     may sign in to Windows without being one.
+
+     LOG ONLY - owner's decision, 20 Aug 2026.  Nothing is refused here.  The
+     mechanism is what the three candidate policies in section 8 all need
+     first, and the log is what says whether enforcement would break anything
+     before it is turned on.  Note an ssh-forwarded client identifies SSHD,
+     which is the ordinary case under posture B; win32peer.h has why.
+
+     FIRST, AND BEFORE ANYTHING THAT CAN FAIL SLOWLY: the peer may exit and
+     its port be reused, so every instruction between accept() and here
+     widens the window (win32peer.h, TOCTOU).                              */
+  addrlen = sizeof(me);
+  if (getsockname(conn, (struct sockaddr*)&me, &addrlen) == 0) {
+    unsigned long peer_pid;
+    char who[WHO_LEN];
+
+    peer_pid = win32_peer_pid(ntohs(me.sin_port), ntohs(peer.sin_port));
+    if (peer_pid == 0) {
+      snprintf(msg, sizeof(msg),
+               "API connection from %s:%d - peer process not identified",
+               inet_ntoa(peer.sin_addr), (int)ntohs(peer.sin_port));
+    } else if (win32_pid_user(peer_pid, who, sizeof(who))) {
+      snprintf(msg, sizeof(msg), "API connection from %s:%d - pid %lu, %s",
+               inet_ntoa(peer.sin_addr), (int)ntohs(peer.sin_port), peer_pid,
+               who);
+    } else {
+      /* A pid with no name is worth logging as it stands.  It means the
+         process went between the two calls, or that LocalSystem could not
+         open it - and the two are worth telling apart from the log alone. */
+      snprintf(msg, sizeof(msg),
+               "API connection from %s:%d - pid %lu, owner unknown",
+               inet_ntoa(peer.sin_addr), (int)ntohs(peer.sin_port), peer_pid);
+    }
+    log_message(msg);
+  }
 
   /* sd lives beside this daemon, not under <sysdir>/bin, which holds pcode -
      the same correction check_lost_users() carries. */
@@ -408,6 +480,86 @@ void signal_handler(signum) int signum;
 }
 
 /* ======================================================================
+   trim_errlog()  -  Discard the oldest half of the error log
+
+   20 Aug 26 Windows port.  THE SD SIDE HAS ALWAYS DONE THIS AND THIS PROCESS
+   NEVER HAS - k_error.c:569 trims when the file reaches ERRLOG, sdwind's own
+   log_message() only ever appended.  It did not show, because until today
+   this program logged at startup and on failure and nowhere else, so the file
+   it wrote to was capped by whichever SD session next logged anything.  That
+   is an accident, not a cap: on a machine used only through the API, no SD
+   session need ever call log_message() at all.
+
+   Identifying the peer of every accepted connection turns this program into a
+   PER-CONNECTION writer, which is what makes the gap matter: config.c:214
+   promises ERRLOG kilobytes, config.c:401 refuses to honour anything under
+   10kb "for file trim to work in log_message()", and the shipped sd.conf asks
+   for 50 - about 450 connections' worth.
+
+   The algorithm is k_error.c's, in POSIX calls rather than SD's file layer,
+   WITH ONE GUARD ADDED.  That one assumes a newline within the first
+   BUFF_SIZE bytes read - "there must be one" - and dereferences the memchr
+   result unconditionally; a log holding one long line would take the daemon
+   down.  Here a missing newline abandons the trim and leaves the file alone,
+   which loses nothing: the next line still appends and the next trim tries
+   again.  Not raised upstream - the file is trimmed by the SD side there and
+   sdlnxd never writes often enough to reach the case.
+
+   IT REMOVES limit/2 BYTES PER CALL, NOT HALF THE FILE, and the name invites
+   the wrong reading.  Growing one line at a time - which is the only way this
+   file grows - it settles between limit/2 and limit, so ERRLOG is honoured.
+   A file ALREADY far over the limit comes down slowly, one half-limit per
+   message: 66000 bytes against a 10240 limit loses 5120 and no more.  That
+   is k_error.c's behaviour and is matched deliberately rather than improved,
+   so the two writers to one file cannot disagree about what it means.
+
+   Caller holds ERRLOG_SEM.  The descriptor must be O_BINARY, or the runtime
+   rewrites what is copied and dst loses track (k_error.c says the same).   */
+
+static void trim_errlog(int errlog, int limit) {
+  char buff[4096];
+  char* p;
+  char* nl;
+  int bytes;
+  int src;
+  int dst;
+
+  if (lseek(errlog, 0, SEEK_END) < limit)
+    return;
+
+  src = limit / 2; /* Move from here... */
+  dst = 0;         /* ...to here */
+
+  lseek(errlog, src, SEEK_SET);
+  bytes = read(errlog, buff, sizeof(buff));
+  if (bytes <= 0)
+    return;
+  src += bytes;
+
+  /* Start at a record boundary, or the log opens mid-line. */
+  nl = (char*)memchr(buff, '\n', bytes);
+  if (nl == NULL)
+    return; /* No boundary to start from - leave the file as it is */
+  p = nl + 1;
+  bytes -= (int)(p - buff);
+
+  while (bytes > 0) {
+    lseek(errlog, dst, SEEK_SET);
+    dst += write(errlog, p, bytes);
+
+    lseek(errlog, src, SEEK_SET);
+    bytes = read(errlog, buff, sizeof(buff));
+    if (bytes <= 0)
+      break;
+    src += bytes;
+    p = buff;
+  }
+
+  if (ftruncate(errlog, dst) != 0)
+    return; /* Nothing useful to do about it, and nothing lost by carrying on */
+}
+
+/* ======================================================================
    log_message()  -  Add message to error log                             */
 
 void log_message(char* msg) {
@@ -447,6 +599,10 @@ void log_message(char* msg) {
 
     close(errlog); */
     if (errlog >= 0) {
+      /* 20 Aug 26 Windows port - trim BEFORE appending, the same order and
+         the same threshold as k_error.c:569.  See trim_errlog(). */
+      trim_errlog(errlog, sysseg->errlog);
+
       lseek(errlog, 0, SEEK_END);
 
       timenow = time(NULL);

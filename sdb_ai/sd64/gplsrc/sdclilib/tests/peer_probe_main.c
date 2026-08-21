@@ -1,4 +1,7 @@
-/* peer_main.c - the Cygwin half.  Sockets and fork() only; no windows.h. */
+/* peer_probe_main.c - the Cygwin half.  Sockets and fork() only; no windows.h.
+ *
+ * 20 Aug 26 - the Windows half it links against is now gplsrc/win32peer.c,
+ * the file sdwind.c calls, rather than a copy kept beside this one. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +12,7 @@
 #include <sys/wait.h>
 #include <sys/cygwin.h>
 
-#include "peer_probe_win32.h"
+#include "win32peer.h"
 
 int main(void) {
   int lsn, conn;

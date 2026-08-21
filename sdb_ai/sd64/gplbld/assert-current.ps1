@@ -232,7 +232,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # refuse to run on the strength of its own newness.
                   'verify-accountacl.ps1',
                   # 20 Aug 26 - section 8's RDPACCOUNT verifier, same reasoning.
-                  'verify-rdpaccount.ps1')
+                  'verify-rdpaccount.ps1',
+                  # 20 Aug 26 - the peer-identification and errlog-trim
+                  # verifier, same reasoning.  It calls this script too, so
+                  # leaving it out has the self-blocking shape the
+                  # verify-accountacl.ps1 note above describes.
+                  'verify-peerlog.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

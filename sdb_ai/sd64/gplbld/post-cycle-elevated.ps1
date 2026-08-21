@@ -98,7 +98,15 @@ $steps = @(
     # step that deliberately breaks an ACL (icacls /reset) before putting it
     # back, and a run that died mid-way should not leave the steps after it
     # measuring a directory in that state.
-    @{ Name = 'verify-accountacl.ps1';    P = @{ Prefix  = $AclPrefix } }
+    @{ Name = 'verify-accountacl.ps1';    P = @{ Prefix  = $AclPrefix } },
+    # 20 Aug 26 - peer identification and the errlog trim.  AFTER EVERYTHING
+    # ELSE, and for a blunter reason than the note above: it OVERWRITES the SD
+    # error log with synthetic records, which is how the trim is made to fire
+    # without opening a thousand connections.  Any step that failed earlier
+    # leaves its diagnosis in that log, so this must not run before them.
+    # It also restarts SD twice, so nothing after it would be talking to the
+    # same server the earlier steps measured.
+    @{ Name = 'verify-peerlog.ps1';       P = @{} }
 )
 
 $lines = @()

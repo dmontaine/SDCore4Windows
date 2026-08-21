@@ -179,9 +179,14 @@ sdidx: sdidx.o
 # 14 Aug 26 Windows port - renamed from sdlnxd, and exepath.o added: the daemon
 #           launches "sd -cleanup" and has to find it beside itself rather than
 #           under <sysdir>/bin, which holds no executables.
-sdwind: sdwind.o sdsem.o win32sem.o exepath.o
+# 20 Aug 26 - win32peer.o and -liphlpapi: the daemon identifies the process at
+#           the other end of an API connection.  GetExtendedTcpTable lives in
+#           iphlpapi, which mingw does not link by default; the OpenProcess and
+#           LookupAccountSid half of that file is covered by the -ladvapi32
+#           already here for win32sem.o.
+sdwind: sdwind.o sdsem.o win32sem.o win32peer.o exepath.o
 	@echo Linking $@
-	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)win32sem.o $(GPLOBJ)exepath.o -ladvapi32 -o $(GPLBIN)sdwind
+	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)win32sem.o $(GPLOBJ)win32peer.o $(GPLOBJ)exepath.o -ladvapi32 -liphlpapi -o $(GPLBIN)sdwind
 
 terminfo:
 	@echo Compiling terminfo library

@@ -202,13 +202,18 @@ check-sock-probe:
 #   peer resolves to a DOMAIN and account name
 #   control: a non-existent peer returns 0        <- without it, a lookup that
 #                                                   returned a constant would pass
+# 20 Aug 26 - IT COMPILES THE SHIPPED FILE, not a copy of it.  The Windows
+# half was proved here as tests/peer_probe_win32.c and moved to
+# gplsrc/win32peer.c when sdwind gained the call; building ../win32peer.c is
+# what stops the test and the shipped code drifting apart, which a second copy
+# would have guaranteed the first time either was corrected.
 check-peer-probe:
 	mkdir -p localtest
-	$(MSYS_CC) -std=gnu17 -Wall -Wextra -c tests/peer_probe_win32.c \
-	  -o localtest/peer_probe_win32.o
-	$(MSYS_CC) -std=gnu17 -Wall -Wextra -Itests -c tests/peer_probe_main.c \
+	$(MSYS_CC) -std=gnu17 -Wall -Wextra -I.. -c ../win32peer.c \
+	  -o localtest/win32peer.o
+	$(MSYS_CC) -std=gnu17 -Wall -Wextra -I.. -c tests/peer_probe_main.c \
 	  -o localtest/peer_probe_main.o
-	$(MSYS_CC) localtest/peer_probe_main.o localtest/peer_probe_win32.o \
+	$(MSYS_CC) localtest/peer_probe_main.o localtest/win32peer.o \
 	  -liphlpapi -o localtest/peer-probe.exe
 	cd localtest && ./peer-probe.exe
 
