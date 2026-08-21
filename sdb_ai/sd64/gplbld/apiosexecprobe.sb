@@ -1,0 +1,54 @@
+* APIOSEXECPROBE - may THIS session reach the operating system?
+*
+* 21 Aug 26 - SPLIT OUT OF APIADMINPROBE, and the reason is in that file's tail
+* comment: this leg ABORTS when it is refused, and an abort discards the output
+* an API session has captured.  Kept in the same program, it destroyed the
+* $cred measurement every time the gate worked.  Run on its own, an abort costs
+* nothing, because the ABSENCE of PROBE.WHOAMI is exactly what this measures.
+*
+* Copied into a throwaway account's BP by gplbld/verify-apiadmin.ps1, compiled
+* there, and run TWICE: once from a local SD session and once down a real API
+* connection.  THE COMPARISON IS THE MEASUREMENT.
+*
+* WHAT A REFUSAL LOOKS LIKE: k_error aborts the program, so nothing after the
+* os.execute runs.  PROBE.OSEXEC.TRIED is printed BEFORE the attempt, so its
+* presence separates "refused" from "never got there", and PROBE.WHOAMI is
+* printed only if the call RETURNED.
+*
+* HARMLESS BY CHOICE: it reads an identity and changes nothing.  Do not be
+* tempted to make it write something to prove the point harder.
+
+program apiosexecprobe
+
+   crt 'PROBE.OSEXEC.TRIED=YES'
+
+   who.out = ''
+   os.execute 'cmd /c whoami' capturing who.out
+
+   * FLATTENED TO ONE TOKEN.  The reply is "nt authority\system" - a SPACE and
+   * a BACKSLASH - and the caller reads these markers with one regex per line,
+   * so both separators have to go or the marker is truncated at the space and
+   * read as "nt".
+   *
+   * 21 Aug 26 - THE BACKSLASH WAS NOT IN THIS LIST AND SHOULD HAVE BEEN.  The
+   * convert listed char(10), char(13), @fm, @vm and space only, so the marker
+   * came out as "nt_authority\system" while verify-apiadmin.ps1 matched on
+   * ^nt_authority_+system$ - which does not match a backslash.  The result was
+   * a FALSE PASS on the most important check in that script: the session
+   * reported itself LocalSystem and the verdict read "API session is NOT
+   * running as SYSTEM".  The reason it was caught at all is that the raw
+   * marker is printed in the transcript beside the verdict.
+   * char(92) RATHER THAN A LITERAL BACKSLASH: this BASIC accepts \ as a string
+   * delimiter alongside ' and ", so a bare backslash in a source line is a
+   * shape worth not relying on.
+   who.line = who.out
+   convert char(10):char(13):@fm:@vm:' ':char(92) to '______' in who.line
+   who.line = trim(who.line, '_', 'B')
+
+   if who.line = '' then
+      crt 'PROBE.WHOAMI=NONE'
+   end else
+      crt 'PROBE.WHOAMI=' : who.line
+   end
+
+end

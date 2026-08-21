@@ -253,7 +253,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # account the verifier creates and deleted with it.  Its
                   # sibling gplsrc\sdclilib\tests\api_admin_probe.c needs no
                   # line here - Check B already excludes sdclilib\tests\.
-                  'verify-apiadmin.ps1', 'apiadminprobe.sb')
+                  # 21 Aug 26 - and apiosexecprobe.sb, which is the same
+                  # verifier's SECOND probe.  Split out of apiadminprobe.sb
+                  # because the os.execute leg ABORTS when it is refused, and
+                  # an abort discards the output an API session has captured -
+                  # so while they shared a program, every run where the gate
+                  # worked threw away the $cred measurement on its way out.
+                  'verify-apiadmin.ps1', 'apiadminprobe.sb',
+                  'apiosexecprobe.sb')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

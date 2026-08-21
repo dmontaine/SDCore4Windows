@@ -270,14 +270,27 @@ try {
     if (-not (Test-Path -LiteralPath $bpDir)) {
         Fail "No bp directory at $bpDir - CREATE.ACCOUNT's layout has changed."
     }
+    # 21 Aug 26 - TWO PROBES NOW, AND THE SPLIT IS NOT COSMETIC.  The os.execute
+    # leg ABORTS when it is refused, and an abort DISCARDS the output an API
+    # session has captured - so while the two lived in one program, every run
+    # where the gate worked came back holding the refusal message and NOT ONE
+    # of the $cred markers the program had already printed.  That scored two
+    # FAILs which were absence of data rather than measurement.  Measured
+    # 21 Aug 2026; apiadminprobe.sb's tail comment has the detail.
+    #
+    # APIADMINPROBE IS ABORT-FREE BY CONSTRUCTION and carries the measurements
+    # that must come back.  APIOSEXECPROBE is the one allowed to die.
     Copy-Item -LiteralPath (Join-Path $Gplbld 'apiadminprobe.sb') `
               -Destination (Join-Path $bpDir 'APIADMINPROBE') -Force
+    Copy-Item -LiteralPath (Join-Path $Gplbld 'apiosexecprobe.sb') `
+              -Destination (Join-Path $bpDir 'APIOSEXECPROBE') -Force
 
-    $out = Invoke-SDIn $Prefix.ToUpper() @('BASIC BP APIADMINPROBE')
+    $out = Invoke-SDIn $Prefix.ToUpper() @('BASIC BP APIADMINPROBE', 'BASIC BP APIOSEXECPROBE')
     Write-Host $out
-    $compiled = ($out -match 'APIADMINPROBE') -and ($out -notmatch '[1-9][0-9]* error')
+    $compiled = ($out -match 'APIADMINPROBE') -and ($out -match 'APIOSEXECPROBE') `
+                -and ($out -notmatch '[1-9][0-9]* error')
     Note 'probe compiled' $true $compiled
-    if (-not $compiled) { Fail 'The probe did not compile - the output above says why.' }
+    if (-not $compiled) { Fail 'A probe did not compile - the output above says why.' }
 
     # -----------------------------------------------------------------------
     Step 5 'CONTROL: the same probe from a LOCAL ELEVATED session'
@@ -287,6 +300,10 @@ try {
     # would pass every assertion in step 7 while measuring nothing at all.
     $localOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIADMINPROBE')
     Write-Host $localOut
+
+    # Separate run, because this one may abort - see the note in step 4.
+    $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+    Write-Host $localOsOut
 
     $localAcct  = Get-Marker $localOut 'ACCOUNT'
     $localOpen  = Get-Marker $localOut 'CRED.OPEN'
@@ -320,9 +337,13 @@ try {
     # -----------------------------------------------------------------------
     # C:\a\b -> /c/a/b
     $msys = '/' + $Sd64.Substring(0, 1).ToLower() + ($Sd64.Substring(2) -replace '\\', '/')
-    $cmd = "cd '$msys' && make check-api-admin APIHOST=127.0.0.1 APIPORT=$Port " +
-           "APIUSER=$Prefix APIPASS='$pw' APIACCT=" + $Prefix.ToUpper() +
-           " APICMD='RUN BP APIADMINPROBE'"
+    $cmdFor = {
+        param([string]$apiCmd)
+        "cd '$msys' && make check-api-admin APIHOST=127.0.0.1 APIPORT=$Port " +
+        "APIUSER=$Prefix APIPASS='$pw' APIACCT=" + $Prefix.ToUpper() +
+        " APICMD='$apiCmd'"
+    }
+    $cmd = & $cmdFor 'RUN BP APIADMINPROBE'
 
     # 21 Aug 26 - THE PROBE RUN IS A FUNCTION NOW because it is made TWICE:
     # once before this account is granted the API and once after.  Two copies
@@ -335,10 +356,14 @@ try {
     # Without this the script would die at the one step it exists to perform,
     # and a run that never reached the verdict reads like a passing one.
     function Invoke-ApiProbe {
+        # 21 Aug 26 - takes the command now, because the os.execute leg is a
+        # SECOND run against the same session settings.  Defaulted, so the two
+        # existing callers in step 7a and 7b are unchanged.
+        param([string]$RunCmd = $cmd)
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
-            $t = (& $bash -lc $cmd 2>&1 | Out-String)
+            $t = (& $bash -lc $RunCmd 2>&1 | Out-String)
             $rc = $LASTEXITCODE
         } finally { $ErrorActionPreference = $prevEap }
         # Field marks turned back into newlines BEFORE anything reads it, so
@@ -388,6 +413,12 @@ try {
     $apiRc  = $r.Rc
     Write-Host $apiOut
 
+    # 21 Aug 26 - THE SECOND API RUN, and it is allowed to come back with
+    # nothing but an abort.  Everything the verdict depends on has already been
+    # collected by the run above, which cannot abort.
+    $apiOsOut = (Invoke-ApiProbe (& $cmdFor 'RUN BP APIOSEXECPROBE')).Text
+    Write-Host $apiOsOut
+
     $apiConnect = Get-Marker $apiOut 'CONNECT'
     $apiAcct    = Get-Marker $apiOut 'ACCOUNT'
     $apiOpen    = Get-Marker $apiOut 'CRED.OPEN'
@@ -421,8 +452,8 @@ try {
     # and kernel.c:195 seeds USR_ADMIN from IsElevated() with no test of
     # connection type.  If OS.EXECUTE runs here at all, that gate is open to
     # every API client.
-    $apiWho    = Get-Marker $apiOut 'WHOAMI'
-    $localWho  = Get-Marker $localOut 'WHOAMI'
+    $apiWho    = Get-Marker $apiOsOut   'WHOAMI'
+    $localWho  = Get-Marker $localOsOut 'WHOAMI'
     Write-Host "   whoami - local: '$localWho'   api: '$apiWho'"
 
     # 21 Aug 26 - THIS PATTERN WAS ^nt_authority_+system$ AND IT DID NOT MATCH
@@ -467,10 +498,31 @@ try {
     $apiRanOsExec   = ($apiWho   -ne '')
     $localRanOsExec = ($localWho -ne '')
 
+    # 21 Aug 26 - AND WHETHER THE ATTEMPT WAS MADE AT ALL, WHICH IS WHAT MAKES
+    # THE NEXT CHECK A CHECK.  "CANNOT run OS.EXECUTE" is read off the ABSENCE
+    # of WHOAMI, and an absent marker is equally consistent with the probe
+    # never having started - a compile that failed, a connection that dropped,
+    # a name that no longer resolves.  That is the same vacuous-pass shape as
+    # the SYSTEM line below, so it gets the same treatment rather than a
+    # comment: PROBE.OSEXEC.TRIED is printed BEFORE the attempt, so its
+    # presence is the difference between "refused" and "never got there".
+    $apiTriedOsExec   = ($apiOsOut   -match 'PROBE\.OSEXEC\.TRIED')
+    $localTriedOsExec = ($localOsOut -match 'PROBE\.OSEXEC\.TRIED')
+
+    Note 'the OS.EXECUTE probe ran at all, API'   $true $apiTriedOsExec
+    Note 'the OS.EXECUTE probe ran at all, local' $true $localTriedOsExec
+
     # A FAIL HERE IS THE FINDING, like the two $cred lines above: os_permitted()
     # returns TRUE on USR_ADMIN and kernel.c:195 seeds USR_ADMIN from
     # IsElevated() with no test of connection type.
-    Note 'API session CANNOT run OS.EXECUTE' $false $apiRanOsExec
+    #
+    # ONLY MEANINGFUL IF THE ATTEMPT WAS MADE - see the two lines above.
+    if ($apiTriedOsExec) {
+        Note 'API session CANNOT run OS.EXECUTE' $false $apiRanOsExec
+    } else {
+        Skip 'API session CANNOT run OS.EXECUTE' `
+             'the probe never reached the attempt, so a refusal cannot be distinguished from a no-show'
+    }
 
     # AND THE CONTROL THAT MAKES THAT MEAN SOMETHING, which is the inversion
     # worth naming: a LOCAL ELEVATED session standing in the SAME account is
@@ -479,7 +531,12 @@ try {
     # time it reaches the probe os_permitted() says no.  The API session never
     # leaves anywhere, so it keeps the flag.  Same account, same program, and
     # the remote client is the one that gets the operating system.
-    Note 'control: local elevated session refused OS.EXECUTE' $false $localRanOsExec
+    if ($localTriedOsExec) {
+        Note 'control: local elevated session refused OS.EXECUTE' $false $localRanOsExec
+    } else {
+        Skip 'control: local elevated session refused OS.EXECUTE' `
+             'the probe never reached the attempt'
+    }
 
     # 21 Aug 26 - GATED ON "IT RAN" RATHER THAN ON "IT SAID SYSTEM".  The two
     # are different failures and the first is the one that matters: OS.EXECUTE

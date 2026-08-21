@@ -65,70 +65,32 @@ program apiadminprobe
    end
 
 * ----------------------------------------------------------------------
-* WHAT IDENTITY IS THIS SESSION ACTUALLY RUNNING AS?
+* 21 Aug 26 - THE os.execute LEG LIVES IN APIOSEXECPROBE NOW, AND THE SPLIT IS
+* THE FIX TO A MEASUREMENT THAT WAS LOST RATHER THAN FAILED.
 *
-* 20 Aug 26 - added because os_permitted() (op_sh.c) lets a session reach the
-* operating system if USR_ADMIN is set, and kernel.c seeds USR_ADMIN from
-* IsElevated() with no test of connection type.  An API session is forked by
-* sdwind, which is a LocalSystem service, so it looks elevated - which would
-* mean OS.EXECUTE is open to any API client.
+* WHAT HAPPENED, measured 21 Aug 2026 on the 08:1x install.  The os.execute
+* was the last thing this program did, and a REFUSAL aborts it.  On the LOCAL
+* leg that costs nothing - the markers above have already been printed to the
+* terminal and are in the transcript.  On the API leg the session's output is
+* CAPTURED and returned in the reply, and an abort DISCARDS THE CAPTURED
+* BUFFER: the reply came back holding "EXECUTE generated an abort event" and
+* the refusal message, and NOT ONE of the markers this program had already
+* printed.
 *
-* "whoami" IS THE POINT AND IT IS NOT INCIDENTAL.  Everything measured so far
-* infers the session's identity from OUTSIDE the process - the owner of the
-* forked sd.exe, read with GetOwner.  This asks SD's own session what it is,
-* from inside, and one line of output settles it.
+* SO THE RUN PROVED OS.EXECUTE WAS REFUSED - which is what it was there for -
+* AND DESTROYED THE $cred EVIDENCE ON THE WAY, which is the headline claim of
+* the containment gate.  verify-apiadmin.ps1 read four blanks and scored two
+* FAILs that were absence of data, not measurement.
 *
-* HARMLESS BY CHOICE: it reads an identity and changes nothing.  Do not be
-* tempted to make it write something to prove the point harder.
-
-* 21 Aug 26 - PROBE.DONE MOVED ABOVE THE os.execute, AND THAT IS THE WHOLE OF
-* THE FIX TO A CHECK THAT FAILED FOR THE WRONG REASON.  It used to be the last
-* line, so it meant "everything ran".  But OS.EXECUTE is REFUSED to a local
-* elevated session standing in an ordinary account - k_error aborts the
-* program - so PROBE.DONE was never reached on the control leg and
-* "control: probe ran locally" reported FAIL on a run where every measurement
-* it cares about had already been taken and printed.  Measured 21 Aug 2026.
+* PRINTING BEFORE THE ABORT IS NOT ENOUGH, and that is the part worth keeping:
+* the 21 Aug fix that moved PROBE.DONE above the attempt was correct and did
+* not save anything here, because the loss is in the CAPTURE, not the ordering.
+* A leg that can abort has to be a SEPARATE RUN, so that the run which must
+* return data never aborts at all.
 *
-* THE REFUSAL IS DATA, NOT A FAILURE, AND THE ABSENCE OF PROBE.WHOAMI IS HOW
-* THE CALLER READS IT.  With DONE printed first, the two legs are directly
-* comparable: both print DONE, and only the leg that is PERMITTED prints
-* WHOAMI.  That difference is the measurement - see the note below.
+* NOTHING BELOW THIS POINT.  This program is now abort-free by construction,
+* which is the property the caller depends on.
 
    crt 'PROBE.DONE'
-
-* ----------------------------------------------------------------------
-* AND NOW THE ONE THING THAT MAY ABORT.  Nothing may be added after this
-* point: a refusal ends the program here.
-
-   crt 'PROBE.OSEXEC.TRIED=YES'
-
-   who.out = ''
-   os.execute 'cmd /c whoami' capturing who.out
-
-   * FLATTENED TO ONE TOKEN.  The reply is "nt authority\system" - a SPACE and
-   * a BACKSLASH - and the caller reads these markers with one regex per line,
-   * so both separators have to go or the marker is truncated at the space and
-   * read as "nt".
-   *
-   * 21 Aug 26 - THE BACKSLASH WAS NOT IN THIS LIST AND SHOULD HAVE BEEN.  The
-   * convert above listed char(10), char(13), @fm, @vm and space only, so the
-   * marker came out as "nt_authority\system" while verify-apiadmin.ps1 matched
-   * on ^nt_authority_+system$ - which does not match a backslash.  The result
-   * was a FALSE PASS on the most important check in that script: the session
-   * reported itself LocalSystem and the verdict read "API session is NOT
-   * running as SYSTEM".  Measured 21 Aug 2026, and the reason it was caught at
-   * all is that the raw marker is printed in the transcript beside the verdict.
-   * char(92) RATHER THAN A LITERAL BACKSLASH: this BASIC accepts \ as a string
-   * delimiter alongside ' and ", so a bare '\' in a source line is a shape
-   * worth not relying on.
-   who.line = who.out
-   convert char(10):char(13):@fm:@vm:' ':char(92) to '______' in who.line
-   who.line = trim(who.line, '_', 'B')
-
-   if who.line = '' then
-      crt 'PROBE.WHOAMI=NONE'
-   end else
-      crt 'PROBE.WHOAMI=' : who.line
-   end
 
 end
