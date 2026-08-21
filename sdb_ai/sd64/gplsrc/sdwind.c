@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 21 Aug 26 Windows port - the API listener binds EVERY INTERFACE, not just
+ *                      loopback.  Owner's decision: the API is reached at the
+ *                      port and the ssh tunnel is no longer part of the
+ *                      design.  Reverses posture B - see open_api_listener()
+ *                      for what changed in front of the port to allow it
  * 20 Aug 26 Windows port - the peer of an API connection is identified and
  *                      logged (win32peer.c), and log_message() gained the
  *                      errlog trim the sd side has always had - without it
@@ -82,10 +87,10 @@
 bool terminate = FALSE;
 
 /* 17 Aug 26 Windows port - the API listener, -1 when APIPORT is not set.
-   20 Aug 26 - IT IS SET IN THE SHIPPED sd.conf NOW.  This said "which is the
-   default and the shipped state" of being unset, and stopped being true the
-   same day, when the owner reversed the 17 Aug default and gplbld/stage.py's
-   template began shipping APIPORT=4243 active. */
+   21 Aug 26 - THE SHIPPED sd.conf SETS IT, so -1 means an administrator
+   commented it out rather than "the default".  This default has moved three
+   times; gplbld/stage.py's SD_CONF carries the record of why, and it is the
+   one place to change it. */
 static int api_listener = -1;
 
 void check_lost_users(void);
@@ -302,10 +307,39 @@ void check_lost_users() {
    open_api_listener()  -  Bind the API port, if there is one
 
    17 Aug 26 Windows port.  Returns -1 for "no listener", which is not an
-   error: APIPORT defaults to zero and a shipped system opens no port at all.
-   Enabling it is an act by an administrator, because the port is reachable by
-   every local process on the machine - what answers that is $CRED and the
-   ACC$GROUP check inside APISRVR, not the transport.  section 7 step 6.      */
+   error: a system whose sd.conf has no APIPORT opens no port at all.  What
+   answers a connection is $CRED and the ACC$GROUP check inside APISRVR, not
+   the transport.  section 7 step 6.
+
+   21 Aug 26 Windows port - IT BINDS EVERY INTERFACE NOW, AND THAT REVERSES
+   POSTURE B.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
+   normally 4243, and the ssh tunnel is no longer part of the design.
+
+   THE COMMENT THAT STOOD HERE ARGUED THE OPPOSITE and is worth quoting rather
+   than deleting, because the argument was sound when it was made: "Posture B
+   (section 8): nothing of SD's own faces the network, ssh carries the traffic.
+   A bind address in the configuration file would be a way to get that wrong by
+   accident."
+
+   WHAT CHANGED IS NOT THE ARGUMENT, IT IS WHAT STANDS IN FRONT OF THE PORT.
+   Posture B was settled on 14 Aug, when the API's login was cleartext and a
+   session that got in could open $cred and reach OS.EXECUTE.  Since then:
+   SCRAM-SHA-256 replaced the cleartext login (19-20 Aug), and the containment
+   gate in op_dio2.c plus the USR_ADMIN fix in kernel.c shut both of those
+   (21 Aug, measured - ER_PERM 3035 on $cred, and OS.EXECUTE refused by name).
+   So the port is no longer a boundary doing work that nothing else does.
+
+   WHAT IS STILL TRUE AND IS THE REASON THIS IS NOT FREE: an API session's
+   TOKEN is still LocalSystem, because sdwind fork()s it and Windows has no
+   setuid.  Binding a network interface widens who may ATTEMPT a SCRAM exchange
+   from "every local process" to "everything the firewall admits".  It does not
+   widen what a session can do once it is in - that is the gate's job - but the
+   token work in section 7 is what closes the remaining half.
+
+   STILL NOT CONFIGURABLE, and deliberately: one bind address in a config file
+   is a way to get this wrong by accident in the other direction too.  A site
+   that wants to narrow it uses the firewall rule, which is where a Windows
+   administrator expects to look.  gplbld/api-firewall.ps1.                   */
 
 static int open_api_listener(int port) {
   int fd;
@@ -325,15 +359,14 @@ static int open_api_listener(int port) {
 
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
-  /* LOOPBACK ONLY, AND NOT CONFIGURABLE.  Posture B (section 8): nothing of
-     SD's own faces the network, ssh carries the traffic.  A bind address in
-     the configuration file would be a way to get that wrong by accident.   */
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  /* EVERY INTERFACE.  See the block above this function for why this changed
+     and what still guards it.                                              */
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
   addr.sin_port = htons((u_int16_t)port);
 
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
     snprintf(msg, sizeof(msg),
-             "API listener not started: cannot bind 127.0.0.1 port %d", port);
+             "API listener not started: cannot bind port %d", port);
     log_message(msg);
     close(fd);
     return -1;
@@ -347,7 +380,11 @@ static int open_api_listener(int port) {
     return -1;
   }
 
-  snprintf(msg, sizeof(msg), "API listener on 127.0.0.1 port %d", port);
+  /* SAYS "all interfaces" RATHER THAN NAMING ONE.  The log line is where an
+     administrator finds out what this install actually exposes, and it read
+     "127.0.0.1" for as long as that was true - so it must not go on saying so
+     now that it is not.                                                     */
+  snprintf(msg, sizeof(msg), "API listener on all interfaces, port %d", port);
   log_message(msg);
   return fd;
 }

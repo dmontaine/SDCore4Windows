@@ -183,6 +183,28 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 Name: "limitssh"; Description: "Limit ssh to SD users and administrators, and put every ssh session straight into SD (disables scp and sftp)"; \
     GroupDescription: "Remote access:"
 
+; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
+; normally 4243, and the ssh tunnel is no longer part of the design (8, posture
+; B reversed).  gplsrc/sdwind.c binds every interface and gplbld/stage.py ships
+; APIPORT=4243 active, so the firewall rule is what decides who may reach it.
+;
+; TICKED BY DEFAULT, AND IT IS THE ONE TASK HERE THAT DIFFERS FROM sshremote
+; ON PURPOSE.  sshremote is unchecked because ssh has a use for somebody who
+; never wants a remote connection at all - a local user reaches SD by ssh'ing
+; to localhost, which is the case that made the ssh server mandatory.  THE API
+; HAS NO SUCH CASE after this change: its whole purpose is a client on another
+; machine, so an install that leaves the port firewalled off ships a feature
+; that does not work, with "cannot connect" as the symptom of not having read
+; the task list.  That is the same argument gplbld/stage.py records for APIPORT
+; itself being active.
+;
+; TO SHIP IT OPT-IN INSTEAD, add "Flags: unchecked" to the line below and say
+; so in the changelog.  Nothing else needs to change: ApplyApiFirewall already
+; scopes the rule to loopback when the task is not selected, exactly as
+; ApplySshFirewall does.
+Name: "apiremote"; Description: "Let other computers on your network connect to the SD API (port 4243)"; \
+    GroupDescription: "Remote access:"
+
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
 ; Everything here is program.  It is replaced on upgrade and removed on
@@ -916,6 +938,59 @@ begin
               '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10;
 end;
 
+{ WHO MAY REACH THE API PORT.  Owner's decision, 21 Aug 2026: the API is
+  reached at the port, not through an ssh tunnel (8, posture B reversed).
+
+  NO SshWasAbsent GUARD, and that is the difference from ApplySshFirewall
+  above.  That one refuses unless SD installed the ssh server itself, because
+  SD does not reconfigure an ssh server it did not install (5.9) - the rule is
+  about somebody else's software.  THIS RULE IS SD'S OWN, for SD's own port,
+  created by api-firewall.ps1 and removed by it on uninstall, so there is no
+  pre-existing configuration to respect and nothing to refuse.
+
+  NO -Port EITHER, so the rule is for api-firewall.ps1's default, which is the
+  same 4243 that gplbld/stage.py's SD_CONF template sets.  An administrator who
+  changes APIPORT afterwards has to re-run the script with -Port; the script's
+  own header says why it does not read sd.conf to find out. }
+function ApplyApiFirewall: String;
+var
+  Code: Integer;
+  Ps, Args: String;
+  Wanted: Boolean;
+begin
+  Result := '';
+  Wanted := WizardIsTaskSelected('apiremote');
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+          ExpandConstant('{app}\api-firewall.ps1') + '"';
+  if Wanted then
+    Args := Args + ' -Open'
+  else
+    Args := Args + ' -Restrict';
+
+  if not Exec(Ps, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'Who may reach the SD API could NOT be set: the script did not run. ' +
+              'No firewall rule was created, so other computers cannot reach port 4243.' + #13#10#13#10;
+    Exit;
+  end;
+
+  if Code = 0 then
+  begin
+    if Wanted then
+      Result := 'Other computers on your network CAN now connect to the SD API on port 4243. ' +
+                'They still need an SD account with a password and API access.' + #13#10#13#10
+    else
+      Result := 'The SD API can be reached FROM THIS COMPUTER ONLY. To let other computers ' +
+                'connect later, run this from an elevated prompt:' + #13#10#13#10 +
+                '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
+  end
+  else
+    Result := 'Setting who may reach the SD API FAILED, so no rule was created and other ' +
+              'computers cannot reach port 4243. Run this from an elevated prompt to see why:' + #13#10#13#10 +
+              '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
+end;
+
 { What happened to the ssh server, judged from the state of the machine rather
   than from an exit code.
 
@@ -1272,6 +1347,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
   SshFw: String;
+  ApiFw: String;
   SshMsg: String;
   RouteMsg: String;
   AdoptCode: Integer;
@@ -1318,6 +1394,12 @@ begin
       steps are independent, so the more fundamental one is done first. }
     SshFw := ApplySshFirewall;
     SshMsg := SshReport;
+
+    { The other remote route, and the same reasoning about ordering: it decides
+      who may reach the API port at all, and it depends on nothing above it.
+      Owner's decision of 21 Aug 2026 makes this a route in its own right
+      rather than something carried inside an ssh tunnel. }
+    ApiFw := ApplyApiFirewall;
 
     { STRICTLY BEFORE ApplyAllowGroups.  That step points sshd at the sdssh
       group; this one creates it and seeds it from sdusers, which is the set
@@ -1441,6 +1523,7 @@ begin
              the account advice MEANS - an account nobody can sign in to yet. }
            SshMsg +
            SshFw +
+           ApiFw +
            AccountMsg +
            { CORRECTED 15 Aug 2026, owner, on two counts.
 
@@ -1648,6 +1731,34 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+(* Take SD's own API firewall rule away.
+
+   AND THIS ONE IS REMOVED WHERE THE ssh RULE IS NOT, which looks like the same
+   decision going two ways and is not.  The ssh rule was created by the OpenSSH
+   capability, the capability stays behind, and putting the rule back would mean
+   WIDENING it - an uninstaller must not open a port on its way out.  THE API
+   RULE IS SD'S OWN: api-firewall.ps1 created it, it names a port only SD
+   listens on, and removing it CLOSES rather than opens.  Leaving it would
+   leave a rule for a service that is gone, pointing at a port that will admit
+   whatever binds it next.
+
+   AT usUninstall for the same reason as RemoveAllowGroups: by usPostUninstall
+   the script has been deleted with the rest of {app}.
+
+   Not brace-delimited - see RemoveFromPath. *)
+procedure RemoveApiFirewall;
+var
+  Ps, Script: String;
+  Code: Integer;
+begin
+  Script := ExpandConstant('{app}\api-firewall.ps1');
+  if not FileExists(Script) then
+    Exit;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '" -Remove',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath: String;
@@ -1655,6 +1766,7 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     RemoveAllowGroups;
+    RemoveApiFirewall;
     RemoveFromPath;
     Exit;
   end;

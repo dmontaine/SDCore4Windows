@@ -238,47 +238,45 @@ NUMUSERS=20
 SORTMEM=4096
 ERRLOG=50
 APILOGIN=1
-# APIPORT is the loopback port SD listens on for API (SDClient) connections.
-# 4243 is the number the Linux build uses.
+# APIPORT is the port SD listens on for API (SDClient) connections.  4243 is
+# the number the Linux build uses.
 #
-# 20 Aug 26 Windows port - OFF BY DEFAULT AGAIN, and this reverses the
-# on-by-default decision taken EARLIER THE SAME DAY.  Not a change of mind
-# about the argument that won it - that argument was about cleartext, and it
-# is still correct.  A different fact turned up afterwards.
+# 21 Aug 26 Windows port - ON BY DEFAULT, AND IT NOW FACES THE NETWORK.
+# Owner's decision, 21 Aug 2026: the API is reached AT THE PORT and the ssh
+# tunnel is no longer part of the design, so a port nobody can reach is not a
+# posture - it is a broken feature.  gplsrc/sdwind.c binds every interface.
 #
-# WHAT CHANGED: AN API SESSION RUNS AS LocalSystem.  sdwind is a service and
-# accept_api_session() fork()s the session, so it inherits the SERVICE's
-# token rather than the connecting client's.  Measured 20 Aug 2026
-# by verify-apiadmin.ps1 in this directory: a PROGRAMMER-tier account, over
-# a remote API connection, OPENED AND WROTE $cred - the credential store,
-# which is granted to SYSTEM and Administrators and to nothing else.  So the API is currently a
-# privilege escalation from "holds an SD credential" to "is SYSTEM on this
-# machine", and shipping it on by default puts that on every install.
+# THIS IS THE THIRD TIME THIS DEFAULT HAS MOVED and the reasons are worth
+# keeping, because two of them were right when they were written:
 #
-# CONFIGURATION DOES NOT CLOSE IT, checked rather than assumed: SDCLIENT=1
-# only stops EXECUTE and an attacker uses CALL, and SDCLIENT=2 restricts CALL
-# to programs carrying HDR.SDCALL.ALLOWED - which BCOMP:2948 sets from a bare
-# "$SDCALL" directive with NO privilege check, so a PROGRAMMER marks their own
-# subroutine callable and walks through.
+#   17 Aug  on   - the API is the point of the port (5.15)
+#   20 Aug  off  - AN API SESSION RUNS AS LocalSystem.  Measured that day by
+#                  verify-apiadmin.ps1: a PROGRAMMER-tier account, over a
+#                  remote API connection, OPENED AND WROTE $cred - the
+#                  credential store - and reported itself nt_authority\\system.
+#                  Shipping that on by default put a privilege escalation from
+#                  "holds an SD credential" to "is SYSTEM" on every install.
+#   21 Aug  on   - that specific escalation is CLOSED.  The containment gate
+#                  in op_dio2.c makes the account the session stands in its
+#                  root, and kernel.c no longer grants USR_ADMIN to a socket
+#                  session.  Re-measured the same day, from inside a real
+#                  remote API session: $cred refused with ER_PERM (3035), and
+#                  OS.EXECUTE refused by name.  22 PASS + 1 N/A of 23.
 #
-# THE ARGUMENTS FOR ON-BY-DEFAULT STILL STAND and should win again once the
-# session's token is fixed: the login is no longer cleartext, and every
-# install deletes the data tree, so a commented-out default means re-enabling
-# by hand after every upgrade with "cannot connect" as the symptom of
-# forgetting.  PROJECT_STATUS.md's opening section has the fix options.
+# WHAT IS STILL OPEN, so this is a judgement and not a clean bill: the
+# session's TOKEN is still LocalSystem - sdwind fork()s it and Windows has no
+# setuid.  What changed is its REACH, not its identity.
 #
-# WHAT GUARDS IT WHEN IT IS TURNED ON.  The socket is bound to 127.0.0.1 and
-# never to a network interface, so nothing off this machine can reach it
-# directly - though "ssh -L 4243:127.0.0.1:4243 <user>@<host>" forwards it,
-# which is how a remote client connects and also why loopback is not much of a
-# boundary.  A local process still has to complete a SCRAM-SHA-256 exchange
-# against a credential in $cred - which no account has until SET.PASSWORD is
-# run for it - and then pass the account's group check.
+# WHAT GUARDS THE PORT.  A caller must complete a SCRAM-SHA-256 exchange
+# against a credential in $cred - which an account only has once a password
+# has been set for it - then be a member of sdapi, then pass the account's
+# group check.  The firewall rule is gplbld/api-firewall.ps1, and narrowing
+# WHO may reach the port is done there rather than here: one bind address in a
+# config file is a way to get this wrong by accident in either direction.
 #
-# TO TURN IT ON, uncomment the line below.
-#
-# Changing it takes effect when SD is next started, not when a session begins.
-# APIPORT=4243
+# TO TURN IT OFF, comment the line below out.  Changing it takes effect when
+# SD is next started, not when a session begins.
+APIPORT=4243
 # NETDIRS says which directories OUTSIDE ITS OWN ACCOUNT a session that arrived
 # over the API may reach.  IT IS COMMENTED OUT ON PURPOSE and the empty value is
 # the strict one: with nothing here, an API session can open files in the
@@ -575,6 +573,11 @@ def main():
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
                    'sync-route-groups.ps1',
                    'ssh-firewall.ps1',
+                   # 21 Aug 26 - the API faces the network now, so who may
+                   # reach the port is a firewall rule SD owns.  Shipped, so
+                   # it is watched by assert-current like the rest of these -
+                   # do NOT add it to that script's $neverShipped list.
+                   'api-firewall.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',

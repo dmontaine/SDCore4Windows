@@ -5,6 +5,48 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  THE API IS REACHED AT ITS OWN PORT NOW, not through an ssh tunnel.
+
+           If you connect a client with something like
+           "ssh -L 4243:127.0.0.1:4243 user@host" you no longer need to:
+           point the client straight at port 4243 on the server instead.
+           The tunnel still works, but it is no longer what the design
+           expects and it is not tested.
+
+           WHAT CHANGED, in three parts:
+
+           * sd.conf now sets APIPORT=4243.  It used to ship commented
+             out, so the API was off until you turned it on.
+           * The server accepts API connections on any network interface.
+             It used to listen on 127.0.0.1 only, which is why a tunnel
+             was needed.
+           * Installation offers "Let other computers on your network
+             connect to the SD API (port 4243)", TICKED BY DEFAULT.  Untick
+             it and the port is reachable from the machine itself only.
+
+           WHAT STILL STANDS BETWEEN A STRANGER AND YOUR DATA.  Reaching
+           the port is not the same as getting in.  A caller must:
+
+           * complete a SCRAM-SHA-256 exchange against a password held for
+             that account - so an account with no password cannot connect
+             at all;
+           * be a member of the "sdapi" group, which no account joins
+             unless you put it there; and
+           * pass the account's own group check.
+
+           A session that does get in is confined to the account it signed
+           in to.  It cannot open SD's credential store and cannot run
+           operating-system commands.
+
+           TO GO BACK TO LOCAL-ONLY at any time, from an elevated prompt:
+
+               powershell -File "C:\Program Files\SD\api-firewall.ps1" -Restrict
+
+           and to turn the API off altogether, comment out the APIPORT line
+           in C:\ProgramData\SD\sdsys\sd.conf and restart SD.
+
+           Uninstalling SD removes the firewall rule it created.
+
 21 Aug 26  "Limit ssh to SD users and administrators" is now ticked by
            default during installation.  It was offered unticked before.
 
