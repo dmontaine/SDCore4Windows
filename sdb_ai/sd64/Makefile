@@ -86,7 +86,30 @@ SDSRCS   := $(shell cat $(GPLDOTSRC))
 SDTEMP   := $(addsuffix .o,$(SDSRCS))
 SDOBJS   := $(SDTEMP)
 SDOBJSD  := $(addprefix $(GPLOBJ),$(SDTEMP))
-TEMPSRCS := $(wildcard *.c)
+# 21 Aug 26 Windows port - THE SAME EMPTY-WILDCARD BUG AS SDHDRS ABOVE, found
+# the same day and one fix later.  This was "$(wildcard *.c)", evaluated from
+# sdb_ai/sd64, where there is not one .c file - so SRCS, OBJS and DIROBJS all
+# expanded to NOTHING.  All three were dead, which is why nothing complained.
+#
+# IT MATTERED THE MOMENT SDHDRS WAS FIXED, because "$(OBJS): $(SDHDRS)" below
+# was then a dependency on an EMPTY list of targets - it read as if every
+# object depended on every header and covered nothing that $(SDOBJS) did not
+# already cover.  MEASURED: after fixing SDHDRS, a change to sd.h rebuilt 91
+# of 94 objects, and the three left behind were sdwind.o, sdtic.o and
+# win32peer.o - none of which is in gpl.src and none of which has an explicit
+# rule listing sd.h.
+#
+# sdwind.o IS THE ONE THAT MATTERS.  sdwind.c includes sd.h and reads sysseg->
+# in eight places, including api_port, so a struct SYSSEG change would leave
+# THE API LISTENER compiled against the old layout while everything else moved
+# - the same fault that cost a cycle earlier today, in the one process that
+# would be hardest to suspect.
+#
+# $(notdir ...) BECAUSE THE RULE TARGETS ARE BARE NAMES.  The .c.o suffix rule
+# and every explicit rule below name "foo.o", not "$(GPLSRC)foo.o", so the
+# dependency has to be stated against the bare name or it attaches to a target
+# that does not exist.
+TEMPSRCS := $(notdir $(wildcard $(GPLSRC)*.c))
 # 20 Aug 26 - was $(TEMPSRCS:sdclient.c=).  gplsrc/sdclient.c is deleted, so
 # the wildcard no longer finds it and the strip had nothing left to strip.
 # gplsrc/sdclient.h STAYS and is not the same question - op_tio.c takes
@@ -278,8 +301,10 @@ sysseg.o: sysseg.c sd.h locks.h config.h revstamp.h
 #
 # These lines carry NO RECIPE, so they only ADD prerequisites - the twelve
 # explicit rules above keep theirs and keep their recipes, and everything else
-# still builds through .c.o.  Both lists are covered: SDOBJS is what sd itself
-# is made of, OBJS is every .c in gplsrc, which is what the utilities come from.
+# still builds through .c.o.  BOTH LISTS ARE NEEDED: SDOBJS is what sd itself
+# is made of, and OBJS is every .c in gplsrc, which is where sdwind, sdtic and
+# win32peer come from - none of those is in gpl.src.  OBJS was empty until
+# 21 Aug 26; see the note on TEMPSRCS.
 $(SDOBJS): $(SDHDRS)
 $(OBJS): $(SDHDRS)
 

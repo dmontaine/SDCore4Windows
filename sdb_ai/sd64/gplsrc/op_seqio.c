@@ -17,7 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
- * 21 Aug 26 Windows port - containment gate on both openseq() path sites
+ * 21 Aug 26 Windows port - containment gate on both openseq() path sites, and
+ *           a read-only admission forces read_only
  * 15 Aug 26 Windows port - op_openseq() freed the file variable it had just
  *           returned whenever the file did not yet exist.  See the comment at
  *           exit_op_openseq
@@ -502,9 +503,16 @@ Private void openseq(bool map_name) {
        F-record points at - which for a stock account VOC can be SDSYS.  See
        net_path_permitted() in op_dio2.c.                                   */
 
-    if (!net_path_permitted(fullpathname)) {
-      process.status = ER_PERM;
-      goto exit_op_openseq;
+    if (!net_path_permitted(fullpathname, TRUE)) {
+      if (!net_path_permitted(fullpathname, FALSE)) {
+        process.status = ER_PERM;
+        goto exit_op_openseq;
+      }
+      /* Admitted for reading only.  read_only is declared at the top of this
+         function and is consulted below, BEFORE dio_open, so the file is
+         opened DIO_READ rather than DIO_OVERWRITE - the descriptor itself is
+         never writable, which is stronger than refusing the writes later. */
+      read_only = TRUE;
     }
   } else /* OPENSEQP */
   {
@@ -540,9 +548,12 @@ Private void openseq(bool map_name) {
          because from that point on file_name has been truncated at the last
          separator and no longer names the target.                          */
 
-      if (!net_path_permitted(fullpathname)) {
-        process.status = ER_PERM;
-        goto exit_op_openseq;
+      if (!net_path_permitted(fullpathname, TRUE)) {
+        if (!net_path_permitted(fullpathname, FALSE)) {
+          process.status = ER_PERM;
+          goto exit_op_openseq;
+        }
+        read_only = TRUE; /* see the OPENSEQ leg above */
       }
 
       strcpy(file_name, fullpathname);

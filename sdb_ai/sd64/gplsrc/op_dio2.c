@@ -19,7 +19,7 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 21 Aug 26 Windows port - net_path_permitted(), the containment root for a
- *           network session
+ *           network session, and the read/write axis on the shared entries
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -54,7 +54,7 @@ Private STRING_CHUNK* get_file_status(FILE_VAR* fvar);
 Private bool net_normalise(char* path, char* out);
 Private bool path_within(char* cand, char* root);
 Private bool has_parent_ref(char* path);
-Private bool net_raw_permitted(char* path);
+Private bool net_raw_permitted(char* path, bool for_write);
 
 bool make_path(char* tgt);
 bool FDS_open(DH_FILE* dh_file, int16_t subfile);
@@ -665,23 +665,47 @@ void op_ospath() {
      caller reading a number as a string.                                  */
 
   switch (key) {
+    /* Reads: they look at the disk and change nothing. */
     case OS_EXISTS:
-    case OS_DELETE:
     case OS_DTM:
     case OS_CD:
     case OS_OPEN:
-    case OS_MKDIR:
-    case OS_MKPATH:
-      if (!net_raw_permitted(path)) {
+      if (!net_raw_permitted(path, FALSE)) {
         process.status = ER_PERM;
         status = 0;
         goto set_status;
       }
       break;
 
-    case OS_UNIQUE:
+    /* Writes.  MKDIR and MKPATH create; DELETE removes.  CHOWN is a write too
+      and is handled in its own case below, because its path arrives inside a
+      three-part parameter rather than in "path". */
+    case OS_DELETE:
+    case OS_MKDIR:
+    case OS_MKPATH:
+      if (!net_raw_permitted(path, TRUE)) {
+        process.status = ER_PERM;
+        status = 0;
+        goto set_status;
+      }
+      break;
+
+    /* A read that answers with a STRING, so a refusal has to answer with one
+      too - see the note above. */
     case OS_DIR:
-      if (!net_raw_permitted(path)) {
+      if (!net_raw_permitted(path, FALSE)) {
+        process.status = ER_PERM;
+        k_put_c_string("", e_stack);
+        e_stack++;
+        goto exit_op_pathinfo;
+      }
+      break;
+
+    /* OS_UNIQUE COUNTS AS A WRITE although it creates nothing: the only
+      reason to ask for an unused name in a directory is to put something
+      there, and answering would say what the directory does not contain. */
+    case OS_UNIQUE:
+      if (!net_raw_permitted(path, TRUE)) {
         process.status = ER_PERM;
         k_put_c_string("", e_stack);
         e_stack++;
@@ -895,7 +919,7 @@ void op_ospath() {
            before the switch could not see it and it is tested here instead -
            after Extract() and before the path reaches chown().  Giving away
            ownership of a file is a write in the only sense that matters. */
-        } else if (!net_raw_permitted(chown_path)) {
+        } else if (!net_raw_permitted(chown_path, TRUE)) {
           pwd = NULL; /* Refused - reported as invalid parameters below */
         } else {
           pwd = getpwnam(owner_name);
@@ -1012,7 +1036,7 @@ void op_osrename() {
      learn whether a file exists outside the account from which error came
      back.                                                                 */
 
-  if (!net_raw_permitted(old_path) || !net_raw_permitted(new_path)) {
+  if (!net_raw_permitted(old_path, TRUE) || !net_raw_permitted(new_path, TRUE)) {
     process.status = ER_PERM;
     goto exit_osrename;
   }
@@ -1344,14 +1368,22 @@ Private bool path_within(char* cand, char* root) {
  * Denying a list of known-sharp names instead would fail open on the next one
  * added.  Same direction as os_permitted()'s "missing record means no".
  *
- * NOT COVERED, AND THE NEXT TIGHTENING: this admits a path, not a MODE, so a
- * network session may still WRITE the shared entries below.  $cred, gcat and
- * os.users are not among them, so nothing here reaches credentials, object
- * code or the OS grant list; what it does leave is write access to
- * sd.voclib and newvoc, which shape what FUTURE accounts get.  Narrowing this
- * to read-only needs the open mode threaded down from each entry point, which
- * differs per caller - deliberately left as its own change rather than
- * guessed at here.
+ * THE SHARED ENTRIES ARE READ-ONLY TO A NETWORK SESSION (21 Aug 26).  Until
+ * this, the gate admitted a PATH and not a MODE, so a session could WRITE
+ * sd.voclib and newvoc - which shape what FUTURE accounts get - even though it
+ * could not reach $cred, gcat or os.users at all.  for_write below is that
+ * axis.  THE ACCOUNT AND NETDIRS STAY READ-WRITE: an account's own files are
+ * its own, and a NETDIRS entry is a data directory the administrator named on
+ * purpose.
+ *
+ * MOST OF THE ENFORCEMENT IS NOT HERE, AND THAT IS THE POINT.  An SD OPEN does
+ * not declare intent - a file opened plainly can be written later - so there
+ * is no mode to test at open time.  What open_file() does instead is set
+ * FV_RDONLY on the file variable, which every write path in the engine already
+ * honours: op_dio3.c at 133, 310 and 753, op_seqio.c at 112, 1456, 1530 and
+ * 1652.  Borrowing the flag READONLY already sets means the refusals are the
+ * ones users and programs already know, and it leaves no write site for this
+ * change to have missed.
  *
  * PROGRAM LOADING DOES NOT COME THROUGH HERE, checked: load_object() calls
  * dio_open() on the catalogue directly (object.c:197), never open_file(), so
@@ -1389,7 +1421,7 @@ Private char* net_sysdir_shared[] = {"$ipc",     "$map",    "$map.dic",
  * The connection and internal tests are repeated here so that no session
  * except a gated one pays for the fullpath() call.                        */
 
-Private bool net_raw_permitted(char* path) {
+Private bool net_raw_permitted(char* path, bool for_write) {
   char resolved[MAX_PATHNAME_LEN + 1];
 
   if (connection_type != CN_SOCKET)
@@ -1408,10 +1440,11 @@ Private bool net_raw_permitted(char* path) {
   if (!fullpath(resolved, path))
     return FALSE;
 
-  return net_path_permitted(resolved);
+  return net_path_permitted(resolved, for_write);
 }
 
-bool net_path_permitted(char* path) /* Absolute, as left by fullpath() */
+bool net_path_permitted(char* path,     /* Absolute, as left by fullpath() */
+                        bool for_write) /* Asking to modify, not just read? */
 {
   char cand[MAX_PATHNAME_LEN + 1];
   char root[MAX_PATHNAME_LEN + 1];
@@ -1451,15 +1484,19 @@ bool net_path_permitted(char* path) /* Absolute, as left by fullpath() */
     }
   }
 
-  /* The shipped SDSYS entries a stock VOC points at */
+  /* The shipped SDSYS entries a stock VOC points at.  READ ONLY - see the
+    header note.  A write is not refused here as a special case; the loop is
+    simply skipped, so a write falls through to NETDIRS and then to FALSE. */
 
-  for (i = 0; net_sysdir_shared[i] != NULL; i++) {
-    if (snprintf(item, MAX_PATHNAME_LEN + 1, "%s%c%s", sysseg->sysdir, DS,
-                 net_sysdir_shared[i]) >= (MAX_PATHNAME_LEN + 1))
-      continue;
+  if (!for_write) {
+    for (i = 0; net_sysdir_shared[i] != NULL; i++) {
+      if (snprintf(item, MAX_PATHNAME_LEN + 1, "%s%c%s", sysseg->sysdir, DS,
+                   net_sysdir_shared[i]) >= (MAX_PATHNAME_LEN + 1))
+        continue;
 
-    if (net_normalise(item, root) && path_within(cand, root))
-      return TRUE;
+      if (net_normalise(item, root) && path_within(cand, root))
+        return TRUE;
+    }
   }
 
   /* NETDIRS: site data directories outside any account.  Semicolon

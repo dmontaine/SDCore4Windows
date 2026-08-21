@@ -313,8 +313,15 @@ bool make_path(char * tgt);
 /* 21 Aug 26 Windows port - the containment gate for a network session.  Call
    it with an ABSOLUTE path, i.e. after fullpath(): it compares against @PATH
    and relies on sdrealpath() having already collapsed "..".  Answers TRUE for
-   every session that is not CN_SOCKET.  See op_dio2.c.                     */
-bool net_path_permitted(char * path);
+   every session that is not CN_SOCKET.
+
+   for_write SEPARATES THE TWO ANSWERS.  The account and NETDIRS are
+   read-write; the shipped SDSYS entries a stock VOC needs are READ ONLY, so
+   asking with TRUE about one of those is refused while FALSE is admitted.  A
+   caller that opens without knowing the mode - which is every SD OPEN - asks
+   with TRUE first and marks the file variable FV_RDONLY when the answer is no.
+   See op_dio2.c.                                                           */
+bool net_path_permitted(char * path, bool for_write);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);

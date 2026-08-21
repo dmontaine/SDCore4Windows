@@ -20,7 +20,7 @@
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
  * 21 Aug 26 Windows port - containment gate on open_file(), covering both
- *           OPEN and OPENPATH
+ *           OPEN and OPENPATH, and FV_RDONLY for a read-only admission
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -513,6 +513,10 @@ bool get_voc_file_reference(
 
 Private void open_file(bool map_name) /* Map file name via VOC entry */
 {
+  /* 21 Aug 26 - TRUE unless the containment gate admitted this path for
+     reading only.  Always TRUE for a session that is not CN_SOCKET.       */
+  bool net_may_write = TRUE;
+
   /* Stack:
 
       |================================|=============================|
@@ -661,7 +665,21 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
      "permission" and not "not found" - which is the failure this codebase has
      been bitten by before.  PROJECT_STATUS.md item 4.                      */
 
-  if (!net_path_permitted(pathname)) {
+  /* AN SD "OPEN" DOES NOT DECLARE INTENT, so there is no mode to test here: a
+     file opened plainly can be written later.  The question is therefore asked
+     the other way round - may this session WRITE here? - and a no that is not
+     also a no to reading becomes FV_RDONLY on the file variable below.
+
+     ASKING FOR WRITE FIRST IS ALSO THE CHEAP ORDER: an account's own files
+     answer TRUE on the first call and never make the second, which is every
+     ordinary open.  Only a shared SDSYS entry pays for both.
+
+     net_path_permitted() answers TRUE to everything when this is not a network
+     session, so net_may_write stays TRUE and nothing below changes.        */
+
+  net_may_write = net_path_permitted(pathname, TRUE);
+
+  if (!net_may_write && !net_path_permitted(pathname, FALSE)) {
     process.status = ER_PERM;
     goto exit_op_open;
   }
@@ -866,6 +884,20 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   }
 
 opened_via_txn_cache:
+
+  /* 21 Aug 26 Windows port - READ-ONLY ADMISSION BECOMES A READ-ONLY FILE.
+     Here rather than beside either of the two places FV_RDONLY is set from
+     P_READONLY, because this label is the ONE point every successful path
+     reaches - the DH cache, the transaction cache and a fresh open all arrive
+     here, and setting it at those two would have missed the third.
+
+     FV_RDONLY IS THE RIGHT FLAG RATHER THAN A NEW ONE: every write path in the
+     engine already honours it (op_dio3.c 133, 310, 753; op_seqio.c 112, 1456,
+     1530, 1652), so there is no write site left for this to have missed, and a
+     refusal is the one READONLY already produces.                          */
+
+  if (!net_may_write)
+    fvar->flags |= FV_RDONLY;
 
   /* Set file variable */
 
