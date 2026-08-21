@@ -64,6 +64,43 @@ program apiadminprobe
       close cred.f
    end
 
+* ----------------------------------------------------------------------
+* WHAT IDENTITY IS THIS SESSION ACTUALLY RUNNING AS?
+*
+* 20 Aug 26 - added because os_permitted() (op_sh.c) lets a session reach the
+* operating system if USR_ADMIN is set, and kernel.c seeds USR_ADMIN from
+* IsElevated() with no test of connection type.  An API session is forked by
+* sdwind, which is a LocalSystem service, so it looks elevated - which would
+* mean OS.EXECUTE is open to any API client.
+*
+* "whoami" IS THE POINT AND IT IS NOT INCIDENTAL.  Everything measured so far
+* infers the session's identity from OUTSIDE the process - the owner of the
+* forked sd.exe, read with GetOwner.  This asks SD's own session what it is,
+* from inside, and one line of output settles it.
+*
+* HARMLESS BY CHOICE: it reads an identity and changes nothing.  Do not be
+* tempted to make it write something to prove the point harder.
+
+   crt 'PROBE.OSEXEC.TRIED=YES'
+
+   who.out = ''
+   os.execute 'cmd /c whoami' capturing who.out
+
+   * FLATTENED TO ONE TOKEN, and the underscores are deliberate.  The reply is
+   * "nt authority\system" - a SPACE and a BACKSLASH - and the caller reads
+   * these markers with one regex per line.  Turning the separators into
+   * underscores keeps the answer on one line and inside one token, so the
+   * marker cannot be truncated at the space and read as "nt".
+   who.line = who.out
+   convert char(10):char(13):@fm:@vm:' ' to '_____' in who.line
+   who.line = trim(who.line, '_', 'B')
+
+   if who.line = '' then
+      crt 'PROBE.WHOAMI=NONE'
+   end else
+      crt 'PROBE.WHOAMI=' : who.line
+   end
+
    crt 'PROBE.DONE'
 
 end

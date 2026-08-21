@@ -158,7 +158,7 @@ function Convert-ProbeText([string]$text) {
 # characters the probe actually emits rather than to "not whitespace".  That
 # holds whatever SD puts between the lines.
 function Get-Marker([string]$text, [string]$name) {
-    $m = [regex]::Match($text, ('PROBE\.' + [regex]::Escape($name) + '=([A-Za-z0-9_.]*)'))
+    $m = [regex]::Match($text, ('PROBE\.' + [regex]::Escape($name) + '=([A-Za-z0-9_.\\-]*)'))
     if ($m.Success) { return $m.Groups[1].Value }
     return ''
 }
@@ -343,6 +343,30 @@ try {
     # administrators are deliberately not given.
     Note 'API session CANNOT open $cred'  'NO' $apiOpen
     Note 'API session CANNOT write $cred' 'NO' $apiWrite
+
+    # 20 Aug 26 - AND WHAT THE SESSION SAYS IT IS, FROM INSIDE.  Everything
+    # above infers the identity from OUTSIDE the process, by reading the owner
+    # of the forked sd.exe.  This is SD's own session answering.
+    #
+    # IT ALSO TESTS os_permitted() (op_sh.c), which returns TRUE on USR_ADMIN -
+    # and kernel.c:195 seeds USR_ADMIN from IsElevated() with no test of
+    # connection type.  If OS.EXECUTE runs here at all, that gate is open to
+    # every API client.
+    $apiWho    = Get-Marker $apiOut 'WHOAMI'
+    $localWho  = Get-Marker $localOut 'WHOAMI'
+    Write-Host "   whoami - local: '$localWho'   api: '$apiWho'"
+
+    # Underscores because the probe flattens "nt authority\system" to one token.
+    $apiIsSystem = ($apiWho -match '(?i)^nt_authority_+system$')
+    Note 'API session is NOT running as SYSTEM' $false $apiIsSystem
+
+    if ($apiIsSystem) {
+        Write-Host ''
+        Write-Host 'FINDING: OS.EXECUTE ran, and the session is LocalSystem.' -ForegroundColor Red
+        Write-Host 'That is arbitrary command execution as SYSTEM from a remote API' -ForegroundColor Red
+        Write-Host 'client holding an ordinary account credential.  op_sh.c os_permitted()' -ForegroundColor Red
+        Write-Host 'returns TRUE on USR_ADMIN, which kernel.c:195 sets from IsElevated().' -ForegroundColor Red
+    }
 
     if ($apiOpen -eq 'YES' -or $apiWrite -eq 'YES') {
         Write-Host ''
