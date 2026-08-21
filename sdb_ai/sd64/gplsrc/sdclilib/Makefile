@@ -175,6 +175,43 @@ check-sock-probe:
 	  done; \
 	done
 
+# 20 Aug 26 - THE PEER PROBE, which settled how the API can identify the
+# process at the other end of a connection (section 8, posture B).
+#
+# SECTION 8 PROPOSED A NAMED PIPE WITH GetNamedPipeClientProcessId, AND THAT
+# TRANSPORT IS CLOSED - section 7 step 11 measured it on 17 Aug 2026: a named
+# pipe pushed into the Cygwin descriptor table is reported PERMANENTLY READY
+# by select(), so sdpoll() spins and sd.exe never answers.  sd.c refuses the
+# "-C <pipename>" form for exactly that reason.
+#
+# GetExtendedTcpTable asks the same question of the socket sdwind ALREADY has,
+# and changes no transport at all.  This probe proves it end to end and knows
+# the answer independently: it fork()s its own client, so the pid it is looking
+# for is one fork() told it rather than one it deduced.
+#
+# BOTH HALVES ARE MSYS2 - unlike the sock probe above, there is no native
+# parent.  The split is a HEADER problem, not a process one: <windows.h> and
+# <netinet/in.h> cannot share a translation unit (redefinition of struct
+# in6_addr, w32api against cygwin), which is why the Windows half takes plain
+# integers and the socket half never sees a Windows header.  Same shape as
+# gplsrc/win32sem.c, win32audit.c and win32pipe.c.
+#
+# Expected:
+#   owning pid matches the client's WINDOWS pid   <- cross-checked with
+#                                                   cygwin_internal()
+#   peer resolves to a DOMAIN and account name
+#   control: a non-existent peer returns 0        <- without it, a lookup that
+#                                                   returned a constant would pass
+check-peer-probe:
+	mkdir -p localtest
+	$(MSYS_CC) -std=gnu17 -Wall -Wextra -c tests/peer_probe_win32.c \
+	  -o localtest/peer_probe_win32.o
+	$(MSYS_CC) -std=gnu17 -Wall -Wextra -Itests -c tests/peer_probe_main.c \
+	  -o localtest/peer_probe_main.o
+	$(MSYS_CC) localtest/peer_probe_main.o localtest/peer_probe_win32.o \
+	  -liphlpapi -o localtest/peer-probe.exe
+	cd localtest && ./peer-probe.exe
+
 clean:
 	$(RM) $(DLL) $(IMPLIB) smoke-test.exe internal-state-test.exe
 	$(RM) -r localtest
