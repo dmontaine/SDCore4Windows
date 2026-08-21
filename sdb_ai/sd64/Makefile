@@ -57,7 +57,31 @@ L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32
 
 RM       := rm
 
-SDHDRS   := $(wildcard *.h)
+# 21 Aug 26 Windows port - THIS WAS EMPTY, AND IT COST A CYCLE.
+#
+# It was "$(wildcard *.h)".  make runs from sdb_ai/sd64, where there is not one
+# .h file - they are all in gplsrc/ - so SDHDRS expanded to NOTHING, and it was
+# then used nowhere either, so nothing complained.  VPATH does not help: it
+# tells make where to LOOK for a prerequisite, and $(wildcard) does not consult
+# it.
+#
+# WHAT THAT MEANT: the .c.o suffix rule at the bottom of this file gives an
+# object exactly one prerequisite, its own .c.  A change to a HEADER therefore
+# rebuilt only the twelve objects with explicit rules below - and every other
+# object kept whatever struct layout it was compiled against.
+#
+# MEASURED 21 Aug 2026, after a cycle failed at "sd -i did not create voc".
+# struct SYSSEG had gained a field; "make sd" reported success; and gplobj held
+# 69 objects from 18 August beside 15 from that morning.  ONE BINARY WITH TWO
+# DIFFERENT IDEAS OF WHERE sysseg->netfiles LIVES.  It linked without a
+# warning, started, and then did nothing - which is the worst way for this to
+# fail, because every visible signal said the build was fine.
+#
+# The dependency below is deliberately blunt: ANY header change rebuilds
+# EVERYTHING.  A full build is a couple of minutes and this codebase has no
+# header hygiene to lean on; -MMD dependency files would be more precise and
+# would also be a thing to get wrong.  Correctness first.
+SDHDRS   := $(wildcard $(GPLSRC)*.h)
 SDSRCS   := $(shell cat $(GPLDOTSRC))
 SDTEMP   := $(addsuffix .o,$(SDSRCS))
 SDOBJS   := $(SDTEMP)
@@ -246,6 +270,18 @@ sysdump.o: sysdump.c sd.h locks.h revstamp.h config.h
 
 sysseg.o: sysseg.c sd.h locks.h config.h revstamp.h
 	@$(COMP) $(C_FLAGS) -c $< -o $(GPLOBJ)sysseg.o
+
+# 21 Aug 26 Windows port - EVERY OBJECT DEPENDS ON EVERY HEADER.  See the note
+# on SDHDRS at the top: without this, the suffix rule below gives an object its
+# own .c and nothing else, and a struct change in a header silently produces a
+# binary whose translation units disagree about the layout.
+#
+# These lines carry NO RECIPE, so they only ADD prerequisites - the twelve
+# explicit rules above keep theirs and keep their recipes, and everything else
+# still builds through .c.o.  Both lists are covered: SDOBJS is what sd itself
+# is made of, OBJS is every .c in gplsrc, which is what the utilities come from.
+$(SDOBJS): $(SDHDRS)
+$(OBJS): $(SDHDRS)
 
 .c.o:
 	@echo Compiling $@, $(BITSIZE) bit target.
