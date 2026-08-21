@@ -42,10 +42,31 @@ $ErrorActionPreference = 'Stop'
 
 # The prefixes the account-creating verifiers use.  Keep in step with them:
 # verify-createaccount.ps1 (sdacct), verify-sshonly.ps1 (sdsshprobe),
-# verify-tiers.ps1 (sdtiert), verify-accountacl.ps1 (sdacl),
-# verify-routes.ps1 (sdrt), verify-apiadmin.ps1 (sdapia).
+# verify-tiers.ps1 (sdtiert), verify-tierapi.ps1 (sdtapi),
+# verify-accountacl.ps1 (sdacl), verify-routes.ps1 (sdrt),
+# verify-apiadmin.ps1 (sdapia), verify-catgate.ps1 (sdcatg),
+# verify-delaccount.ps1 (sddel).
 # A trailing digit or the ".<COMPUTERNAME>" suffix Windows adds is allowed.
-$rx = '^(sdacct|sdsshprobe|sdtiert|sdacl|sdrt|sdapia)[0-9]*(\.[A-Za-z0-9-]+)?$'
+#
+# 21 Aug 26 - A TRAILING LETTER IS ALLOWED TOO.  A prefix is a STEM here, not
+# the whole name: the scripts that make more than one account per run append a
+# letter to tell them apart - verify-routes makes <prefix>s, <prefix>a and
+# <prefix>x, and verify-delaccount's subjects are <prefix>s and <prefix>b.
+# "sdrt4s" matched nothing, so those names were outside the sweep; sdcatg and
+# sdtapi were missing from the list outright.
+#
+# NO ORPHAN OF THOSE SHAPES WAS FOUND WHEN THIS WAS WIDENED - the machine held
+# four profiles, three of them special and the fourth the owner's.  So this
+# closes a hole rather than clearing a backlog, and the reason the hole never
+# filled is worth knowing: verify-routes signs its accounts in with LogonUser
+# and NOTHING ELSE, and LogonUser alone creates no profile.  A profile needs
+# LoadUserProfile, an ssh session or userenv!CreateProfile.
+#
+# IT DOES WIDEN THE BLAST RADIUS BY ONE CHARACTER and that is accepted rather
+# than overlooked: the stems stay specific, and the third safety test below - a
+# profile whose SID still has a local account is refused outright - is what
+# actually keeps this to orphans.
+$rx = '^(sdacct|sdsshprobe|sdtiert|sdtapi|sdacl|sdrt|sdapia|sdcatg|sddel)[0-9]*[a-z]?(\.[A-Za-z0-9-]+)?$'
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
         ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
