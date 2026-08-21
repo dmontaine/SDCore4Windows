@@ -261,10 +261,24 @@ try {
     $sdwindPid = if ($sdwind) { $sdwind.Id } else { 0 }
     Write-Host "   sdwind pid $sdwindPid"
 
+    # 21 Aug 26 - THE ADDRESS IS NO LONGER PART OF THIS CHECK, and leaving it in
+    # cost the first run of the suite after Phase 1.  This matched a literal
+    # "127.0.0.1:<port>  LISTENING" line from netstat; Phase 1 moved sdwind's
+    # bind to INADDR_ANY on the owner's decision of 21 Aug 2026, so netstat
+    # prints 0.0.0.0:<port> and this could no longer pass.  It then called Fail,
+    # so everything below it - which is the whole of what this script measures -
+    # was never reached.  Measured 21 Aug 13:19, exit 1 on step 3.
+    #
+    # NOTHING ELSE HERE NEEDED CHANGING.  A 0.0.0.0 listener serves loopback,
+    # so the Connect('127.0.0.1', $Port) below is unaffected; this step only
+    # ever existed to confirm there IS something to talk to before trying.
+    # WHERE the socket is bound is verify-apiport.ps1's assertion and belongs
+    # in one place, not three - it is the script whose subject that is.
     $listen = @(netstat -an | Select-String 'LISTENING' |
-                Where-Object { $_ -match ('127\.0\.0\.1:' + $Port + '\s') })
-    Note 'listener on 127.0.0.1' $true ($listen.Count -gt 0)
-    if ($listen.Count -eq 0) { Fail "Nothing is listening on 127.0.0.1:$Port - the rest cannot be measured." }
+                Where-Object { $_ -match (':' + $Port + '\s') })
+    Note 'a listener on the port' $true ($listen.Count -gt 0)
+    foreach ($l in $listen) { Write-Host ('   ' + $l.ToString().Trim()) }
+    if ($listen.Count -eq 0) { Fail "Nothing is listening on port $Port - the rest cannot be measured." }
 
     # -----------------------------------------------------------------------
     Step 4 "Connecting from THIS process (pid $PID)"

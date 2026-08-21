@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - a failed create_user() set @SYSTEM.RETURN.CODE to
+*   ER$NOT.CREATED instead of -ER$NOT.CREATED, so a caller testing the sign was
+*   told a refused creation had worked.  Upstream too - UPSTREAM_FIXES.md #11.
 * 21 Aug 26 Windows port - REMOTE ACCESS IS SAID AT CREATION: SSH, API, BOTH
 *   or NONE, required for a USER account, and the same four words
 *   MODIFY.ACCOUNT takes.  ADMINISTRATOR forces BOTH, which closes a gap -
@@ -324,7 +327,20 @@ deffun ps_script(script) calling '!ps_script'
          END
          if not(create_user(acc.uname)) then
            * create user failed
-           @system.return.code = ER$NOT.CREATED
+* 21 Aug 26 Windows port - THE MINUS WAS MISSING, and it is the one error exit
+*   in this file of twenty-five that did not have it.  gplsrc/err.h states the
+*   convention at the top: "Commands that set negative error codes into
+*   @SYSTEM.RETURN.CODE use the arithmetic inverse of the values listed below."
+*   So this left 6 where every other failure here leaves -6.
+*
+*   AND POSITIVE IS NOT AN UNUSED RANGE - it means "this many things were
+*   done".  COPY and COPYP put records.copied there, DELETE and NSELECT put
+*   record.count, GETLIST and FORMLST put a dcount.  A refused creation was
+*   leaving behind a value indistinguishable from "six records copied", and
+*   PROC:677 - "if @system.return.code < 0" - is how a PROC asks whether the
+*   command it just ran failed.  It was being told this one had not.
+*   Upstream too: UPSTREAM_FIXES.md #11.
+           @system.return.code = -ER$NOT.CREATED
            stop sysmsg(10006,STATUS()) ;* Create User Failed, OS Error: %1
          end else
            crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created'

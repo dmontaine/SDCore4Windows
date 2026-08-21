@@ -337,10 +337,21 @@ try {
     if (-not (Start-SD)) { Fail 'SD would not start again.  Read the SD error log.' }
     Start-Sleep -Seconds 2
 
+    # 21 Aug 26 - THE ADDRESS IS NO LONGER PART OF THIS CHECK.  Same stale
+    # assertion as verify-peerlog.ps1 step 3 and the same cause: Phase 1 moved
+    # sdwind's bind to INADDR_ANY, netstat prints 0.0.0.0:<port>, and a match on
+    # a literal 127.0.0.1 could not pass.  IT COST MORE HERE - the Fail below
+    # aborted before step 7, which is the containment-gate measurement this
+    # whole script exists for, so a run that proved nothing looked like a run
+    # that found something.  Measured 21 Aug 13:20, exit 1 on step 6.
+    #
+    # A 0.0.0.0 listener serves loopback, so the probe connection below is
+    # unaffected.  Where the socket is bound is verify-apiport.ps1's assertion.
     $listen = @(netstat -an | Select-String 'LISTENING' |
-                Where-Object { $_ -match ('127\.0\.0\.1:' + $Port + '\s') })
-    Note 'listener on 127.0.0.1' $true ($listen.Count -gt 0)
-    if ($listen.Count -eq 0) { Fail "Nothing is listening on 127.0.0.1:$Port." }
+                Where-Object { $_ -match (':' + $Port + '\s') })
+    Note 'a listener on the port' $true ($listen.Count -gt 0)
+    foreach ($l in $listen) { Write-Host ('   ' + $l.ToString().Trim()) }
+    if ($listen.Count -eq 0) { Fail "Nothing is listening on port $Port." }
 
     # -----------------------------------------------------------------------
     # C:\a\b -> /c/a/b
