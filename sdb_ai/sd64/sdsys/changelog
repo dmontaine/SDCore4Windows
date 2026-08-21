@@ -5,6 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  A FAILED create.account NOW REPORTS FAILURE TO A SCRIPT.
+
+           Only affects you if you TEST the result in a PROC or a paragraph.
+           Nothing about what you see on screen changes.
+
+           When create.account could not create the Windows account it set
+           @SYSTEM.RETURN.CODE to 6 instead of -6.  Error codes there are
+           negative; positive values mean "this many things were done", which
+           is how copy and delete report their counts.  So a PROC asking the
+           usual "if @system.return.code < 0" was told the account had been
+           created when it had not, and carried on to the next name.  The
+           message on screen said otherwise the whole time.
+
+           The same missing minus is fixed in ed, which preset its
+           command-error code the same way.
+
 21 Aug 26  ACCOUNTS SAY HOW THEY ARE REACHED, AND set.password IS NOW
            modify.password.  Five changes to the account verbs.
 
