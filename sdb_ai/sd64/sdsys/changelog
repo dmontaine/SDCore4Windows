@@ -30,6 +30,13 @@ Entries are newest first, by date, until there is a version to attach them to.
              on reaching the ERRLOG size in sd.conf, exactly as SD sessions
              have always done.  If you have set ERRLOG unusually large,
              consider what an entry per connection adds to it.
+           * AFTER THE LOG IS TRIMMED, ITS FIRST LINE MAY HAVE NO TIMESTAMP.
+             An entry is two lines - a timestamped header and the message
+             indented below it - and trimming restarts the file at a line,
+             not at an entry, so the first message can be left without its
+             header.  This is not damage and no entry after it is affected.
+             SD has always trimmed the log this way; it is only visible now
+             because the log turns over more often.
 
 20 Aug 26  A new kind of account: RDPACCOUNT, which may sign in to Windows.
            * CREATE.ACCOUNT USER jim RDPACCOUNT
