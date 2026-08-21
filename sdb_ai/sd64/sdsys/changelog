@@ -5,6 +5,51 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  THE INSTALLER NOW FINISHES BY OPENING SD, SO YOU CAN GIVE YOUR OWN
+           ACCOUNT A PASSWORD.
+
+           When you close the installer's last dialog, a console window opens,
+           already logged in to the SD account the installer has just made for
+           you, and asks you to set a password for it.  Then it leaves you at
+           the prompt like any other session; type "off" when you have
+           finished.
+
+           It can run before you sign out and back in, which the same dialog
+           tells you is needed, because it borrows the installer's rights.
+           Your own "sd" still has to wait for the sign-out.
+
+           THAT PASSWORD IS NOT FOR THIS CONSOLE.  Typing "sd" on the machine
+           itself has never asked for one and still does not - Windows has
+           already established who you are.  The password is what reaches the
+           account from SOMEWHERE ELSE: the API, and anything else that has to
+           prove who it is over a network.  Without one, the account works
+           perfectly here and cannot be reached from anywhere.
+
+           You can close the window without setting one.  SD will ask again the
+           next time you open it - see the entry below.  An unattended
+           (/VERYSILENT) install never opens the window at all, for the obvious
+           reason that there is nobody there; those accounts are asked the
+           first time somebody uses them.
+
+21 Aug 26  AN ACCOUNT WITH NO PASSWORD IS ASKED TO SET ONE WHEN IT IS OPENED.
+
+           If an SD account has no password, opening it from an ELEVATED
+           console asks for one before you reach the prompt, and the session
+           ends if you decline.  It is the same two hidden prompts
+           modify.password uses.
+
+           WHO THIS CAN HAPPEN TO IS A SHORT LIST.  Every account created since
+           the previous release has a password from the moment it is made, so
+           in practice this is the account the installer gives the person
+           installing SD, and anything left over from an older version.
+
+           IT ONLY ASKS WHERE YOU CAN ANSWER.  Not in an ordinary
+           (unelevated) session - the credential store is readable only by
+           administrators, so an ordinary session could not set one anyway, and
+           it is not asked to.  Not when SD is reading a piped script, which
+           has no one at the keyboard.  Not for a group account, which has no
+           password by design.
+
 21 Aug 26  A FAILED create.account NOW REPORTS FAILURE TO A SCRIPT.
 
            Only affects you if you TEST the result in a PROC or a paragraph.

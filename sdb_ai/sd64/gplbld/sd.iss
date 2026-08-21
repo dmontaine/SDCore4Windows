@@ -1079,6 +1079,72 @@ begin
   Result := Code;
 end;
 
+{ AND THE INSTALL ENDS IN AN SD SESSION, WHICH IS HOW THE PASSWORD IS TAKEN.
+  Owner's decision, 21 Aug 2026: the installing user's password is collected by
+  leaving them in SD at the end of the install, not by an installer password
+  page.  ADOPT creates no Windows user and sets no password, so the account
+  AdoptAccount has just made has no credential, and LOGIN's require.credential
+  asks for one before the prompt appears.  This function only opens the door;
+  the asking is SD's.
+
+  ELEVATED, AND THEREFORE HERE RATHER THAN AS A "postinstall" [Run] CHECKBOX,
+  which is what the approved plan called for.  The gravestone in the [Run]
+  section above is why it is not.  Three things killed the old SDSYS password
+  step; a postinstall checkbox fixes only the third:
+
+    1. sd -internal needed a running server.  Answered - [Run] installs and
+       starts the service before this, and adopt-account.ps1 stops a server
+       only if it started that server itself.
+    2. Inno logs a postinstall entry as "Run as: Original user", so it runs on
+       the UNELEVATED token.  THIS ONE IS STILL FATAL AND IS THE WHOLE REASON
+       FOR THE DIFFERENT SHAPE.  That token does not carry sdusers until the
+       user signs out and back in, so it cannot open the data tree at all; and
+       SecureCredStore has just locked $cred to SYSTEM and Administrators, so
+       even if it could, !CRED_SET could not write the credential.  Setup's own
+       token carries Administrators and both ACLs grant it.
+    3. "nowait" meant the console vanished before anything could be read.
+       SW_SHOW is the answer to that, and the ewNoWait note below says why
+       not waiting is not the same fault twice.
+
+  SD's own permission model needs no elevation for this - setting your OWN
+  password takes the "own" branch in SET_ACC_PASSWORD and never reaches the
+  administrator test - so what elevation buys is those two file ACLs and
+  nothing else.  An elevated session still lands in the user's own account:
+  the case that sent an elevated session to SDSYS was deleted from LOGIN on
+  15 Aug 2026.
+
+  A NEW CONSOLE, AND THAT IS FREE.  Setup is a GUI process with no console of
+  its own, so Windows gives sd.exe one, and SW_SHOW makes it visible.
+
+  ewNoWait, AND IT IS NOT THE "nowait" THAT KILLED THE OLD STEP.  That one hid
+  a console for a command which exited at once, so the error vanished before
+  anybody could read it.  This leaves a VISIBLE window running an INTERACTIVE
+  session that stays until the person quits it - which is the owner's
+  instruction in its own words: the password is collected "by leaving them in
+  SD at the end of the install".  Waiting would instead hold the wizard open
+  behind a prompt they have to know to type OFF at.
+
+  CALLED AFTER THE CLOSING DIALOG, so the two do not compete: a modal box with
+  focus while SD is asking for a password is how a password gets typed into the
+  wrong window.
+
+  A PROCEDURE, NOT A FUNCTION, and that is the honest shape.  Exec would answer
+  whether the process STARTED, and nothing here can learn more than that - SD
+  outlives this call, so whether a password was set is unknowable from Setup.
+  The dialog therefore says what is about to be offered and how to get back to
+  it, and there is no result worth returning. }
+procedure TakeAccountPassword;
+var
+  Code: Integer;
+begin
+  if not Exec(ExpandConstant('{app}\usr\bin\sd.exe'), '',
+              ExpandConstant('{#DataDir}'), SW_SHOW,
+              ewNoWait, Code) then
+    { The one thing that IS knowable, and it is not worth a message box: the
+      user has just been told to type "sd", and will meet the same fault. }
+    Log('SD could not be launched for the password step');
+end;
+
 { LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did
   not happen.  PROJECT_STATUS.md 7 step 7.
 
@@ -1416,11 +1482,37 @@ begin
     { AFTER Adopt, so the account it has just made is stamped on this very
       install rather than on the next one.  See SecureAccountDirs. }
     AcctAclMsg := SecureAccountDirs;
+
     case AdoptCode of
-      0: AccountMsg := 'You also have an SD account of your own, named ' +
-                       Uppercase(ExpandConstant('{username}')) + '. Type "sd" to use it; ' +
-                       'there is no password to set, because Windows has already ' +
-                       'authenticated you.' + #13#10#13#10;
+      0: begin
+           { DO NOT START A LINE WITH #13, even in the middle of an expression.
+             ISPP reads a leading "#" as a preprocessor directive and answers
+             "Unknown preprocessor directive" - the same class of trap as the
+             square bracket the AdoptAccount comment warns about.  Every other
+             line break in this file leaves the #13#10 at the END of a line for
+             this reason. }
+           AccountMsg := 'You also have an SD account of your own, named ' +
+                         Uppercase(ExpandConstant('{username}')) + '.' + #13#10#13#10;
+           { REPLACED "Type sd to use it; there is no password to set, because
+             Windows has already authenticated you."  The second half stopped
+             being true on 21 Aug 2026 and was the wrong half of the truth even
+             before: the console does not ask for a password and still does not,
+             but the account needs one to be reachable from anywhere else.
+
+             AND THE FIRST HALF CONTRADICTED THE SIGN-OUT PARAGRAPH ABOVE, which
+             has always been the accurate one - an ordinary "sd" cannot open the
+             database until this user's token carries sdusers.  The window below
+             runs on SETUP's token, which carries Administrators, and that is
+             the whole reason it can run now. }
+           AccountMsg := AccountMsg +
+                         'When you close this box, SD opens so you can give that account a ' +
+                         'password. You do not need one at this machine - Windows has already ' +
+                         'authenticated you - it is what reaches the account from ANOTHER ' +
+                         'machine. It can run now, before you sign out, because it borrows ' +
+                         'the installer''s rights. Type OFF to leave it.' + #13#10#13#10 +
+                         'If you skip it, SD asks again the first time you ' +
+                         'open the account.' + #13#10#13#10;
+         end;
       2: AccountMsg := 'Your SD account, ' + Uppercase(ExpandConstant('{username}')) +
                        ', was already there and has been left alone.' + #13#10#13#10;
     else
@@ -1554,7 +1646,13 @@ begin
            'TO GIVE SOMEBODY ELSE ACCESS, at the machine itself:' + #13#10#13#10 +
            '    sd' + #13#10 +
            '    LOGTO SDSYS' + #13#10 +
-           '    CREATE.ACCOUNT USER <name>' + #13#10#13#10 +
+           { THE KEYWORD IS NOT OPTIONAL SINCE 21 AUG 2026 and this line said it
+             was, which would have sent the reader straight into message 10082.
+             A Phase 2 miss found while writing Phase 3: the verb changed, the
+             one place in the product that quotes it did not.  SSH is named
+             rather than BOTH because it is what the paragraph below goes on to
+             demonstrate. }
+           '    CREATE.ACCOUNT USER <name> SSH' + #13#10#13#10 +
            'Windows asks you to confirm at the LOGTO. Do it AT THE MACHINE - ' +
            'over ssh, and under a remote-control tool not installed as a ' +
            'service, Windows cannot show you that prompt and you get a frozen ' +
@@ -1577,6 +1675,34 @@ begin
              'Your accounts and data are untouched.' + #13#10#13#10 +
              'Upgrading an existing database in place is not yet supported.',
              mbInformation, MB_OK);
+
+    { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
+      user's password is collected by leaving them in SD, not by an installer
+      password page.  The function's own comment carries why it is here rather
+      than in a postinstall [Run] entry, which is where the plan put it.
+
+      LAST OF EVERYTHING, AND AFTER EVERY BOX.  It needs the ACLs set at the
+      top of this step and the account AdoptAccount made; and a modal box
+      holding focus while SD asks for a password is how a password is typed
+      into the wrong window.
+
+      ONLY WHEN AN ACCOUNT WAS JUST MADE.  Code 2 is the reinstall case: that
+      account was left alone and keeps whatever password it had.  If it has
+      none, LOGIN asks the first time its owner opens it - the rule lives
+      there and this is only the install's convenience.
+
+      A SILENT INSTALL NEVER REACHES THIS LINE, because the WizardSilent guard
+      above it exits first.  That is deliberate and needs no second test: an
+      unattended deployment must not put a console in front of nobody, and the
+      account it leaves without a password is the case LOGIN exists for.
+
+      NO BOX IF IT FAILS, ONLY A LOG LINE.  Exec answers whether the process
+      STARTED, and the only reason it would not is a missing sd.exe - which the
+      user is about to discover for themselves, having just been told to type
+      "sd".  There is nothing a box could say that the next thing they do will
+      not. }
+    if AdoptCode = 0 then
+      TakeAccountPassword;
   end;
 end;
 

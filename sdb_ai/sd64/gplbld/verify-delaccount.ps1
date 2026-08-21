@@ -565,8 +565,40 @@ try {
 
     # CREATE.ACCOUNT USER refuses a name whose Windows account already exists
     # (message 10038); ADOPT is the sanctioned door and needs sd -internal.
-    $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $borrowAcc, 'ADOPT')
+    #
+    # AND SINCE 21 AUG 2026 IT ALSO NEEDS THE ONE-SHOT MARKER, so this verifier
+    # writes one exactly as adopt-account.ps1 does.  Placing the marker rather
+    # than hand-writing an ACCOUNTS record was the choice made when phase 3
+    # closed this door: it keeps the control leg on the REAL adoption path, so
+    # what step 5 measures is still what an install produces.  A subject built
+    # by hand would be a subject nothing else in the product ever makes.
+    #
+    # CREATEA deletes it on acceptance; removed here as well for the case where
+    # the verb refuses, because a marker left on the machine is a hole and this
+    # script is run on the same install the suite goes on to use.
+    $adoptMarker = Join-Path $env:ProgramData 'SD\sdsys\$adopt'
+    Set-Content -LiteralPath $adoptMarker -Encoding utf8 `
+                -Value "written by verify-delaccount.ps1 for $borrowAcc"
+
+    # READ BEFORE THE CLEANUP, and initialised to the FAILING value.  Testing
+    # the file after the finally would test the finally: it would answer "gone"
+    # on every build, including one where CREATEA never deleted it.
+    $markerLeft = $true
+    try {
+        $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $borrowAcc, 'ADOPT')
+        $markerLeft = Test-Path -LiteralPath $adoptMarker
+    }
+    finally {
+        if (Test-Path -LiteralPath $adoptMarker) {
+            Remove-Item -LiteralPath $adoptMarker -Force -ErrorAction SilentlyContinue
+        }
+    }
     Write-Host $out
+
+    # THE MARKER IS PART OF WHAT IS UNDER TEST NOW, so assert it was consumed.
+    # A build where CREATEA accepted ADOPT without deleting it would pass every
+    # other check in this file and leave the install-only gate permanently open.
+    Note 'ADOPT consumed the one-shot marker' $false $markerLeft
 
     $bRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $borrowAcc.ToUpper())
     $bDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $borrowAcc)

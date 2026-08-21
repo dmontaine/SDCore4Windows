@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - ADOPT IS INSTALL-ONLY.  K$INTERNAL is no longer
+*   enough on its own: a one-shot marker written by gplbld/adopt-account.ps1
+*   must be present, and accepting the keyword deletes it.  Owner's ruling,
+*   21 Aug 2026 - "-internal is an unpublished development flag, never exposed
+*   to customers", so gating on it was never "install-only".
 * 21 Aug 26 Windows port - a failed create_user() set @SYSTEM.RETURN.CODE to
 *   ER$NOT.CREATED instead of -ER$NOT.CREATED, so a caller testing the sign was
 *   told a refused creation had worked.  Upstream too - UPSTREAM_FIXES.md #11.
@@ -205,6 +210,19 @@ deffun ps_script(script) calling '!ps_script'
    access.given = @false
    access.ssh = @false
    access.api = @false
+
+* 21 Aug 26 Windows port - THE ONE-SHOT MARKER THAT MAKES ADOPT INSTALL-ONLY.
+*   gplbld/adopt-account.ps1 writes this file immediately before running the
+*   verb and removes it again afterwards; more.args accepts ADOPT only while it
+*   is there, and deletes it on acceptance.  The reasoning is at the keyword
+*   itself - the name is assigned here for the same reason access.given is,
+*   which is that BCOMP's "is not assigned a value" is what bootstrap.py:229
+*   fails the whole bootstrap on.
+*
+*   IT IS NOT SHIPPED AND MUST NEVER BE.  A marker in the source tree would be
+*   staged into every install and leave the door open permanently, which is the
+*   state this replaces.
+   adopt.marker = @sdsys:@ds:'$adopt'
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -1142,8 +1160,35 @@ more.args:
 *   install gets its one door.  It is reported as an unrecognised token
 *   rather than as a refusal, because a keyword a console user may never use
 *   is not a keyword they need to know exists.
-         case upcase(token) = 'ADOPT' and kernel(K$INTERNAL, -1)
+* 21 Aug 26 Windows port - AND ON A ONE-SHOT MARKER AS WELL, which is what
+*   turns "unpublished" into "install-only".  Owner's ruling, 21 Aug 2026:
+*   -internal is an unpublished development flag, never exposed to customers,
+*   so gating on it is NOT install-only - ADOPT must be usable DURING
+*   installation and not afterwards.  That reverses the 15 Aug position
+*   recorded in adopt-account.ps1, that an elevated administrator typing this
+*   by hand is acceptable.
+*
+*   THE MARKER IS WRITTEN BY adopt-account.ps1 immediately before this verb
+*   runs and removed again in its finally, so the door is open for the length
+*   of one call by the installer and shut the rest of the time.
+*
+*   DELETED HERE, ON ACCEPTANCE, so it authorises exactly ONE adoption even if
+*   whoever wrote it never takes it away.  Two independent removals, because
+*   the failure that matters is the one where it survives.
+*
+*   THE DELETE IS INSIDE THE BRANCH, WHICH IS THE HALF THAT MATTERS, and the
+*   test is deliberately written not to depend on whether AND short-circuits
+*   here - it reads a file and changes nothing, so it costs nothing if it runs
+*   for every token.  Spending the marker is what must not happen except on an
+*   accepted ADOPT, and only the accepted case can reach the delete.
+*
+*   AND IT STAYS AN UNRECOGNISED TOKEN WHEN THE MARKER IS ABSENT, which is why
+*   the test is in the case condition rather than inside the branch: the
+*   fall-through is "Unexpected token (ADOPT)".  A refusal naming the keyword
+*   would confirm to whoever guessed it that it exists.
+         case upcase(token) = 'ADOPT' and kernel(K$INTERNAL, -1) and ospath(adopt.marker, OS$EXISTS)
             adopt = @true
+            void ospath(adopt.marker, OS$DELETE)
 
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)

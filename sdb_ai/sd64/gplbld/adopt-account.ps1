@@ -12,13 +12,29 @@
 # user and setting no password, and it is gated on K$INTERNAL - so it is
 # reachable from "sd -internal", which is what the install uses.
 #
-# THAT GATE IS NOT A WALL, AND IT IS NOT MEANT TO BE.  An elevated
-# administrator can type "sd -internal CREATE.ACCOUNT USER x ADOPT" themselves
-# and give another administrator an account.  Owner's position, 15 Aug 2026:
-# that is fine, and it stays UNDOCUMENTED - it is not in the changelog and not
-# in the installer's closing dialog.  Somebody who has found it already knows
-# what they are doing; what the gate stops is an ordinary console session
-# quietly adopting somebody's existing Windows login.
+# AND SINCE 21 AUG 2026 ON A ONE-SHOT MARKER AS WELL, WHICH THIS SCRIPT WRITES.
+# Owner's ruling: "-internal is an unpublished development flag, never exposed
+# to customers - so gating ADOPT on K$INTERNAL is not install-only.  ADOPT must
+# be usable during installation and not afterwards."
+#
+# THAT REVERSES THE PARAGRAPH THAT STOOD HERE, and it is worth saying which one.
+# It read: the gate is not a wall and is not meant to be; an elevated
+# administrator can type the verb themselves and give another administrator an
+# account; owner's position, 15 Aug 2026, that this is fine as long as it stays
+# undocumented.  It is no longer fine.  The keyword is now refused - as an
+# unrecognised token, so it still tells nobody it exists - unless the marker is
+# there, and the marker exists for the length of one call from this script.
+#
+# THE MARKER IS NOT A SECRET AND DOES NOT NEED TO BE.  The data tree grants
+# sdusers Modify, so an ordinary user can create the file; it buys them nothing,
+# because K$INTERNAL still means "sd -internal", which forces SDSYS, which LOGIN
+# refuses without an elevated session.  What the marker adds is a window in
+# time, not a second identity test.
+#
+# IT IS REMOVED TWICE OVER.  CREATEA deletes it when it accepts the keyword, and
+# the finally below deletes it whatever happened - because the failure that
+# matters here is the one where it survives the install and leaves the door
+# propped open for the life of the machine.
 #
 # THREE THINGS KILLED THE LAST STEP THAT TRIED THIS, the SDSYS password step
 # whose gravestone is at the bottom of gplbld/sd.iss.  All three are handled
@@ -187,29 +203,85 @@ if (-not (Test-SdRunning)) {
 }
 
 try {
-    # --- the verb ------------------------------------------------------------
+    # --- open the door, for one call -----------------------------------------
     #
-    # Separate arguments, not one string: the same shape PROJECT_STATUS.md 7
-    # step 0 records for every other -internal command, and not piped, because
-    # a piped session has its own traps.
-    $r = Invoke-Sd @('-internal', 'CREATE.ACCOUNT', 'USER', $User, 'ADOPT')
+    # Single quotes: in double quotes PowerShell would read $adopt as a variable
+    # and expand it to nothing, leaving the marker at sdsys\ - which is a
+    # directory, so New-Item would fail and ADOPT would be refused.  The name is
+    # CREATEA's, at the adopt.marker assignment.
+    #
+    # WHAT IS IN IT IS FOR A HUMAN, not for CREATEA, which tests existence only.
+    # Content would have to be parsed by the verb to mean anything, and a
+    # mismatch on case or a domain prefix would break the install for no gain.
+    # But a marker that outlives its window is a hole, so anybody who finds one
+    # should be able to tell at a glance what wrote it and when.
+    $marker = Join-Path $DataDir 'sdsys\$adopt'
 
-    # JUDGED ON THE RECORD, NOT ON THE EXIT STATUS.  CREATE.ACCOUNT reports
-    # failure through @system.return.code and a message; the process status is
-    # not a reliable summary of it.  The account either exists afterwards or it
-    # does not.
-    if (Test-Path $record) {
-        Say "adopt-account: $User now has an SD account"
-        if ($r.Text) { Say $r.Text }
-        $result = 0
+    # CAUGHT RATHER THAN LEFT TO $ErrorActionPreference, which is Stop: an
+    # uncaught throw here would leave the finally to run with $result never
+    # assigned, and "exit $result" would then fail on its own account and bury
+    # the real reason.  Without the marker the verb is refused, so there is no
+    # point running it - say so and stop.
+    $markerOk = $true
+    try {
+        Set-Content -LiteralPath $marker -Encoding utf8 -Value @(
+            "Written by adopt-account.ps1 for $User at $(Get-Date -Format 's').",
+            'It permits ONE "CREATE.ACCOUNT USER <name> ADOPT" and is deleted on use.',
+            'If this file is still here, the install did not finish - delete it.')
+    }
+    catch {
+        $markerOk = $false
+        Say "adopt-account: could not write $marker - $($_.Exception.Message)"
+    }
+
+    if (-not $markerOk) {
+        Say "adopt-account: without the marker ADOPT is refused, so it was not run"
+        $result = 1
     }
     else {
-        Say "adopt-account: CREATE.ACCOUNT USER $User ADOPT did not create an account"
-        Say $r.Text
-        $result = 1
+        # --- the verb --------------------------------------------------------
+        #
+        # Separate arguments, not one string: the same shape PROJECT_STATUS.md 7
+        # step 0 records for every other -internal command, and not piped,
+        # because a piped session has its own traps.
+        $r = Invoke-Sd @('-internal', 'CREATE.ACCOUNT', 'USER', $User, 'ADOPT')
+
+        # JUDGED ON THE RECORD, NOT ON THE EXIT STATUS.  CREATE.ACCOUNT reports
+        # failure through @system.return.code and a message; the process status
+        # is not a reliable summary of it.  The account either exists afterwards
+        # or it does not.
+        if (Test-Path $record) {
+            Say "adopt-account: $User now has an SD account"
+            if ($r.Text) { Say $r.Text }
+            $result = 0
+        }
+        else {
+            Say "adopt-account: CREATE.ACCOUNT USER $User ADOPT did not create an account"
+            Say $r.Text
+            $result = 1
+        }
     }
 }
 finally {
+    # SHUT THE DOOR, whatever happened above.  CREATEA deletes the marker when
+    # it accepts the keyword, so on the ordinary path this finds nothing; what
+    # it is here for is every other path - the verb refused, sd never ran, the
+    # process was killed.  A marker left behind is the one failure mode that
+    # matters, because nothing later would notice it.
+    #
+    # ERRORS SWALLOWED DELIBERATELY.  Being unable to remove it is worth
+    # recording but must not change the exit code: the account either exists or
+    # it does not, and that is what sd.iss reports on.
+    if ($marker -and (Test-Path -LiteralPath $marker)) {
+        try {
+            Remove-Item -LiteralPath $marker -Force -ErrorAction Stop
+            Say "adopt-account: removed the one-shot ADOPT marker"
+        }
+        catch {
+            Say "adopt-account: COULD NOT REMOVE $marker - delete it by hand"
+        }
+    }
+
     # Leave the machine as it was found.  An install that silently leaves a
     # daemon running is a surprise, and a reinstall over a running system must
     # not stop somebody else's server.
