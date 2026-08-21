@@ -9,9 +9,15 @@
     unproven.
 
     IT CHANGES THE INSTALLED SYSTEM AND PUTS IT BACK.  A throwaway account is
-    created and deleted, APIPORT is added to the installed sd.conf and removed
-    again, and SD is restarted twice.  The restore runs in a finally block, so
-    it also happens when a check fails part way.
+    created and deleted, APIPORT in the installed sd.conf is set to the port
+    under test and the file is then put back byte for byte from a copy, and SD
+    is restarted twice.  The restore runs in a finally block, so it also
+    happens when a check fails part way.
+
+    "PUT BACK", NOT "REMOVED AGAIN", SINCE 21 Aug 2026.  APIPORT used to ship
+    commented out, so restoring and closing the port were the same act.  It
+    ships ACTIVE now (posture B reversed - PROJECT_STATUS.md 8), and this
+    script restores whatever the install came with rather than a closed port.
 
     WHY A THROWAWAY ACCOUNT AND NOT YOURS.  The test needs an account with a
     password, and setting one on a real account to run a test leaves a
@@ -342,7 +348,13 @@ finally {
         }
 
         if (Stop-SD) { $null = Start-SD }
-        Write-Host '   SD restarted with the port closed'
+        # 21 Aug 26 - SAYS "as it was" RATHER THAN "with the port closed", which
+        # stopped being true when APIPORT began shipping active.  The restore
+        # above copies back the sd.conf this install came with, so what happens
+        # to the port depends on what that file says - and since 21 Aug it says
+        # APIPORT=4243.  A line asserting the port is shut would be a false
+        # statement about the one thing this script exists to manipulate.
+        Write-Host '   SD restarted with sd.conf as this install shipped it'
     } else {
         Write-Host ''
         Write-Host "-Keep: APIPORT=$Port is STILL SET and $Prefix still exists." -ForegroundColor Yellow
