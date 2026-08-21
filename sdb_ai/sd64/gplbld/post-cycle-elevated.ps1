@@ -53,7 +53,10 @@ param(
     # unlike the two above: CREATEA downcases the user name and the directory
     # takes it verbatim, so a mixed-case prefix would name a directory the
     # sdu_ group derivation could not match.  Validated separately below.
-    [string]$AclPrefix  = 'sdacl2'
+    [string]$AclPrefix  = 'sdacl2',
+    # 20 Aug 26 - verify-apiadmin.ps1's throwaway account.  Lower case only,
+    # for the same reason as $AclPrefix, and validated with it below.
+    [string]$ApiPrefix  = 'sdapia2'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -83,6 +86,11 @@ if ($AclPrefix -notmatch '^[a-z][a-z0-9_]*$') {
     Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
     exit 2
 }
+if ($ApiPrefix -notmatch '^[a-z][a-z0-9_]*$') {
+    Write-Output ("post-cycle-elevated: -ApiPrefix is '{0}'." -f $ApiPrefix)
+    Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
+    exit 2
+}
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -106,7 +114,17 @@ $steps = @(
     # leaves its diagnosis in that log, so this must not run before them.
     # It also restarts SD twice, so nothing after it would be talking to the
     # same server the earlier steps measured.
-    @{ Name = 'verify-peerlog.ps1';       P = @{} }
+    @{ Name = 'verify-peerlog.ps1';       P = @{} },
+    # 20 Aug 26 - THE API-PRIVILEGE VERIFIER, AND IT FAILS TODAY ON PURPOSE.
+    # A remote API session runs as LocalSystem and can write $cred (measured;
+    # PROJECT_STATUS.md's opening section).  Nothing is fixed yet, so this step
+    # is expected to report 13/15 with the two verdict checks FAILING - that is
+    # the finding standing, not the suite rotting.  When the fix lands it goes
+    # green, which is the whole reason it is here rather than run by hand.
+    #
+    # LAST, because it creates and deletes a throwaway account and restarts SD
+    # twice - the same reasoning as the two steps above it.
+    @{ Name = 'verify-apiadmin.ps1';      P = @{ Prefix = $ApiPrefix } }
 )
 
 $lines = @()

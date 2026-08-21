@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+20 Aug 26  The API port is OFF by default again, and you should leave it off
+           for now.  This reverses the entry below it, made earlier the same
+           day.
+           * APIPORT is commented out in C:\ProgramData\SD\sd.conf on a new
+             install.  Uncomment it to switch the API on.
+           * WHY, PLAINLY: an API session currently runs with more privilege
+             than the person connecting.  SD's background service runs as
+             LocalSystem and starts each API session itself, so the session
+             inherits the service's privileges instead of the client's.  A
+             programmer-level account connecting over the API was measured
+             reading and writing SD's password store, which no ordinary user
+             can touch.
+           * WHAT THAT MEANS FOR YOU.  If you switch the API on, treat anyone
+             with an API password on a programmer or administrator account as
+             having full control of the machine.  Standard accounts appear far
+             more limited, but that has not been proved and should not be
+             relied on.
+           * Turning the port off is enough to avoid it.  Nothing else about
+             SD is affected, and terminal sessions are not affected at all -
+             they run as you, which is what makes them safe.
+           * This will be fixed and the port will go back to being on by
+             default.  Until then the default errs the other way.
+
 20 Aug 26  The error log now records who connects to the API port.
            * Every accepted API (SDClient) connection adds a line to
              C:\ProgramData\SD\sdsys\errlog naming the Windows process and

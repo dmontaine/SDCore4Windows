@@ -19,6 +19,11 @@
 *
 *
 * START-HISTORY:
+* 20 Aug 26 Windows port - two comments corrected, no code changed.  Both said
+*           an API session cannot have elevation; it runs as LocalSystem,
+*           because sdwind is a service and fork()s it.  Measured with
+*           gplbld/verify-apiadmin.ps1.  The account gating in this program was
+*           reasoned on the sentences that are now gone.
 * 20 Aug 26 Windows port - PHASE 5: request 24 is retired.  vb.login no longer
 *           authenticates anything; it refuses with message 5275 and drops the
 *           connection.  SCRAM (47/48) is the only network login.  There is no
@@ -455,9 +460,25 @@ end
 *   the operating system rather than SD records the grant.
 *
 *   ONLY THE GROUP TEST TRANSFERS from logto.authorised, and its other three
-*   gates are dead weight here rather than a hazard: K$INTERNAL and
-*   K$ADMINISTRATOR both describe session state an API session cannot have,
-*   and elev.obtained is a CPROC local with no meaning in this program.
+*   gates do not apply here: K$INTERNAL is set only by "sd -internal" or
+*   "sd -I", which an API session never has, and elev.obtained is a CPROC
+*   local with no meaning in this program.
+*
+* 20 Aug 26 Windows port - THIS USED TO SAY K$ADMINISTRATOR DESCRIBES "SESSION
+*   STATE AN API SESSION CANNOT HAVE", AND THAT IS FALSE ON WINDOWS.  sdwind
+*   is a service running as LocalSystem and accept_api_session() fork()s the
+*   session, so it inherits the SERVICE's token, not the connecting client's.
+*   kernel.c seeds USR_ADMIN from IsElevated() with no test of connection
+*   type, and LocalSystem's token carries BUILTIN\Administrators.
+*
+*   MEASURED, not deduced - gplbld/verify-apiadmin.ps1, 20 Aug 2026: a
+*   PROGRAMMER-tier account over a remote API connection OPENED AND WROTE
+*   $cred, which is granted to SYSTEM and Administrators and to nothing else.
+*
+*   DO NOT REASON FROM THAT SENTENCE.  It was written when this port assumed
+*   an API session ran as the connecting user, which it does on Linux and does
+*   not here.  PROJECT_STATUS.md's opening section carries the finding and the
+*   fix options; nothing is fixed yet.
 *
 *   BEWARE THE TWO "INTERNAL"S WHILE READING THAT ROUTINE, because they are
 *   different things with almost the same name and both are in play in this
@@ -486,8 +507,14 @@ end
 *   AND IT REFUSES SDSYS THROUGH THE API, which is intended and not a side
 *   effect to be fixed later.  ACCOUNTS/SDSYS carries ACC$GROUP = sdsys, which
 *   is not a Windows group and never has been (section 6), so is_grp_member
-*   answers false with status 1.  Administration needs elevation and an API
-*   session cannot have it, so there is nothing to admit.
+*   answers false with status 1.
+*
+* 20 Aug 26 Windows port - THE SECOND HALF OF THIS IS DELETED, and it said
+*   "Administration needs elevation and an API session cannot have it, so
+*   there is nothing to admit."  An API session runs as LocalSystem - see the
+*   note above.  THE REFUSAL STILL HOLDS, and for the reason above it rather
+*   than for that one: ACC$GROUP names no Windows group, so the group test
+*   fails.  What is gone is the belief that it would not matter if it passed.
 *
 *   THE REFUSAL REUSES sysmsg(10003), the message the missing-account branch
 *   above already gives.  A caller therefore cannot tell "no such account" from

@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 20 Aug 26 Windows port - two comments corrected, no code changed: the
+ *           -INTERNAL note claimed entering SDSYS needs the SDSYS password,
+ *           which LOGIN stopped being true on 14 Aug; and check_admin()
+ *           claimed the spawned children inherit an ordinary user's token,
+ *           which the API's do not - sdwind is a service
  * 15 Aug 26 Windows port - the administrative switches need an ELEVATED
  *           session, not merely an administrator's account: check_admin()
  *           asks IsElevated(), and -CLEANUP, -D, -L, -M, -U, -SUSPEND and
@@ -773,10 +778,26 @@ void check_admin() {
 
      WHAT IS DELIBERATELY NOT GATED, BECAUSE SD SPAWNS ITSELF.  op_kernel.c
      builds "-p<n>" and forks sd for every PHANTOM, and the client, network
-     and API paths use -C, -N and -Q.  Those children inherit an ORDINARY
-     user's token, so gating them would break phantoms, the client library,
-     network logins and the API - the last of which is what this port is
-     for (PROJECT_STATUS.md 1).                                             */
+     and API paths use -C, -N and -Q.  Gating them would break phantoms, the
+     client library, network logins and the API - the last of which is what
+     this port is for (PROJECT_STATUS.md 1).
+
+     20 Aug 26 Windows port - AND THE REASON THAT USED TO BE GIVEN FOR IT IS
+     FALSE FOR ONE OF THOSE FOUR.  It read "Those children inherit an ORDINARY
+     user's token".  True for PHANTOM and for -C, whose parent is a user's own
+     sd.exe.  NOT TRUE FOR THE API: its parent is sdwind, which is a Windows
+     service running as LocalSystem, so an API session inherits SYSTEM'S
+     token.  Measured 20 Aug 2026 with gplbld/verify-apiadmin.ps1 - a
+     PROGRAMMER-tier account over a remote API connection opened and wrote
+     $cred, which is granted to SYSTEM and Administrators alone.
+
+     THE DECISION NOT TO GATE IS UNCHANGED AND IS STILL RIGHT - check_admin()
+     is about the COMMAND LINE, and these children are spawned by SD rather
+     than typed by anybody.  What is wrong is only the sentence that said the
+     children are harmless because they are unprivileged.  This is the third
+     place in the tree to rest on that assumption; APISRVR carried the other
+     two.  PROJECT_STATUS.md's opening section has the finding and the fix
+     options, and nothing is fixed yet.                                     */
 
   if (!IsElevated()) {
     fprintf(stderr, "This command needs an elevated session - "

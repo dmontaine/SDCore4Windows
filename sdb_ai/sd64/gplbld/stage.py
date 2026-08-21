@@ -241,30 +241,44 @@ APILOGIN=1
 # APIPORT is the loopback port SD listens on for API (SDClient) connections.
 # 4243 is the number the Linux build uses.
 #
-# 20 Aug 26 Windows port - ON BY DEFAULT.  Owner's decision, and it reverses
-# the 17 Aug default, which was commented out.  Two things changed:
+# 20 Aug 26 Windows port - OFF BY DEFAULT AGAIN, and this reverses the
+# on-by-default decision taken EARLIER THE SAME DAY.  Not a change of mind
+# about the argument that won it - that argument was about cleartext, and it
+# is still correct.  A different fact turned up afterwards.
 #
-#   * THE LOGIN IS NO LONGER CLEARTEXT.  On 17 Aug, opening this port meant
-#     any process on the machine could watch an API password go past in
-#     clear.  SCRAM phase 5 retired that login on 20 Aug - the password is
-#     never sent, and request 24 is refused outright - so the reason the
-#     default was defensive is gone.
-#   * EVERY INSTALL DELETES THE DATA TREE, so a commented-out default meant
-#     the port had to be re-enabled by hand after every upgrade, and the
-#     symptom of forgetting is a client saying it cannot connect.
+# WHAT CHANGED: AN API SESSION RUNS AS LocalSystem.  sdwind is a service and
+# accept_api_session() fork()s the session, so it inherits the SERVICE's
+# token rather than the connecting client's.  Measured 20 Aug 2026
+# (gplbld/verify-apiadmin.ps1): a PROGRAMMER-tier account, over a remote API
+# connection, OPENED AND WROTE $cred - the credential store, which is granted
+# to SYSTEM and Administrators and to nothing else.  So the API is currently a
+# privilege escalation from "holds an SD credential" to "is SYSTEM on this
+# machine", and shipping it on by default puts that on every install.
 #
-# WHAT STILL GUARDS IT, because "on by default" is not "open".  The socket is
-# bound to 127.0.0.1 and never to a network interface, so nothing off this
-# machine can reach it; remote clients forward it over ssh,
-# "ssh -L 4243:127.0.0.1:4243 <user>@<host>".  A local process still has to
-# complete a SCRAM-SHA-256 exchange against a credential in $cred - which no
-# account has until SET.PASSWORD is run for it - and then pass the account's
-# group check.  An account with no API password cannot be logged in to at all.
+# CONFIGURATION DOES NOT CLOSE IT, checked rather than assumed: SDCLIENT=1
+# only stops EXECUTE and an attacker uses CALL, and SDCLIENT=2 restricts CALL
+# to programs carrying HDR.SDCALL.ALLOWED - which BCOMP:2948 sets from a bare
+# "$SDCALL" directive with NO privilege check, so a PROGRAMMER marks their own
+# subroutine callable and walks through.
 #
-# TO TURN IT OFF, comment this line out.  No port is then opened.
+# THE ARGUMENTS FOR ON-BY-DEFAULT STILL STAND and should win again once the
+# session's token is fixed: the login is no longer cleartext, and every
+# install deletes the data tree, so a commented-out default means re-enabling
+# by hand after every upgrade with "cannot connect" as the symptom of
+# forgetting.  PROJECT_STATUS.md's opening section has the fix options.
+#
+# WHAT GUARDS IT WHEN IT IS TURNED ON.  The socket is bound to 127.0.0.1 and
+# never to a network interface, so nothing off this machine can reach it
+# directly - though "ssh -L 4243:127.0.0.1:4243 <user>@<host>" forwards it,
+# which is how a remote client connects and also why loopback is not much of a
+# boundary.  A local process still has to complete a SCRAM-SHA-256 exchange
+# against a credential in $cred - which no account has until SET.PASSWORD is
+# run for it - and then pass the account's group check.
+#
+# TO TURN IT ON, uncomment the line below.
 #
 # Changing it takes effect when SD is next started, not when a session begins.
-APIPORT=4243
+# APIPORT=4243
 USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts
 SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo
