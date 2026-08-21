@@ -87,6 +87,20 @@ function Fail($msg) {
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
+# WHAT SD SAID, INDENTED, INTO THE TRANSCRIPT.  Added 21 Aug 2026 after the
+# first run of this file: step 3 failed five checks and printed NOT ONE LINE of
+# what the verb had actually done, so the diagnosis had to be reconstructed from
+# the source and could not be completed.  Every other verifier here prints its
+# output; this one did not, and a failing check with no evidence is barely
+# better than no check.  It is called on EVERY step, not only on failure - the
+# point is that a run which passes is still readable afterwards.
+function Said($label, $out) {
+    Write-Host "   --- $label ---" -ForegroundColor DarkGray
+    foreach ($l in ($out -split "`r?`n")) {
+        if ($l.Trim() -ne '') { Write-Host ("     " + $l) -ForegroundColor DarkGray }
+    }
+}
+
 # The installed sysmsg(N) as a REGEX: each %n becomes the value supplied for it
 # or ".*", every literal run escaped.  Read from the install rather than
 # hard-coded, so a reworded message fails the check that names it instead of
@@ -220,7 +234,7 @@ if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
 # "absent marker read as an answer" shape this project has paid for five times
 # (PROJECT_STATUS.md, "THE RULE THAT WAS PAID FOR FIVE TIMES"): assert the
 # marker is readable before believing what its absence means.
-$needMsgs = @(2018, 5051, 10008, 10040, 10082, 10084, 10085, 10086, 10087)
+$needMsgs = @(2018, 5051, 10008, 10014, 10015, 10040, 10082, 10084, 10085, 10086, 10087)
 $missing  = @($needMsgs | Where-Object { (Get-SysMsgPattern $_ $null) -eq '' })
 if ($missing.Count -gt 0) {
     Fail ('checks here name these messages and the install has none of them: ' +
@@ -261,6 +275,7 @@ try {
     # puts the test straight after more.args, so no Windows user, group,
     # directory or register entry exists yet.
     $out = Invoke-SD @("CREATE.ACCOUNT USER $noKw")
+    Said "CREATE.ACCOUNT USER $noKw  (no keyword)" $out
     Note 'message 10082 shown (say who may reach this)' $true (Shown $out 10082 @())
     Note 'nothing at all was made'                      'nothing' (Traces $noKw)
 
@@ -269,6 +284,7 @@ try {
     # and not about the name, the machine or the verb being broken outright.
     $pw  = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     $out = Invoke-SD @("CREATE.ACCOUNT USER $noKw SSH", $pw, $pw)
+    Said "CREATE.ACCOUNT USER $noKw SSH  (the control)" $out
     if (HasUser $noKw) { $script:madeUsers += $noKw }
     Note 'CONTROL: the same name with SSH is created' 'register+directory+windows-user+sdu_group' (Traces $noKw)
     Note 'CONTROL: routes are ssh alone'              'ssh' (Routes $noKw)
@@ -281,6 +297,7 @@ try {
     # Then N to "Retry (Y/N)", which since 21 Aug 2026 deletes the Windows user
     # and creates nothing instead of warning and carrying on.
     $out = Invoke-SD @("CREATE.ACCOUNT USER $pwAcc SSH", 'Sd-Verify-One-1!', 'Sd-Verify-Two-2!', 'N')
+    Said "CREATE.ACCOUNT USER $pwAcc SSH  (mismatched passwords, then N)" $out
     if (HasUser $pwAcc) { $script:madeUsers += $pwAcc }   # only if the unwind failed
 
     Note 'message 10008 shown (retry?)'   $true (Shown $out 10008 @())
@@ -297,6 +314,7 @@ try {
     # verb that cannot make anything.
     $pw2 = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     $out = Invoke-SD @("CREATE.ACCOUNT USER $pwAcc SSH", $pw2, $pw2)
+    Said "CREATE.ACCOUNT USER $pwAcc SSH  (the control)" $out
     if (HasUser $pwAcc) { $script:madeUsers += $pwAcc }
     Note 'CONTROL: matching passwords create the account' 'register+directory+windows-user+sdu_group' (Traces $pwAcc)
 
@@ -313,10 +331,37 @@ try {
     # create_user() nor set_passwd().  If either rule had been written as a
     # blanket one, this call would hang on a prompt or be refused.
     $out = Invoke-SD @("CREATE.ACCOUNT GROUP $grpAcc")
+    Said "CREATE.ACCOUNT GROUP $grpAcc" $out
     if (HasGrp ('sdg_' + $grpAcc)) { $script:madeGroups += ('sdg_' + $grpAcc) }
 
+    # WHERE IT STOPPED, IF IT STOPPED, AND THIS IS THE CHECK THE FIRST RUN
+    # NEEDED AND DID NOT HAVE.  CREATEA makes the directory, then the sdg_
+    # group, then make.account fills the directory, then the register entry.
+    # So the directory's CONTENTS say which of those got as far as running:
+    #
+    #   empty          -> create.group failed and stopped (10015 will say why)
+    #   holds voc      -> make.account ran, so the failure is after it
+    #
+    # Recorded before the checks below and before any cleanup, because the
+    # first run deleted the directory in its finally and took the evidence.
+    $gdir = GrpDir $grpAcc
+    $gkids = @()
+    if (Test-Path -LiteralPath $gdir) {
+        $gkids = @(Get-ChildItem -LiteralPath $gdir -Force -ErrorAction SilentlyContinue |
+                   ForEach-Object { $_.Name })
+    }
+    Write-Host ("   group directory holds: " +
+                $(if ($gkids.Count -eq 0) { '(nothing)' } else { $gkids -join ', ' })) -ForegroundColor DarkGray
+
+    # NAME THE GROUP STEP'S OWN MESSAGE either way, so the next failure says
+    # WHY rather than leaving it to be reconstructed from the source.  10015
+    # carries the status code from os_group.
+    Note 'message 10014 shown (group created)' $true  (Shown $out 10014 @(('sdg_' + $grpAcc)))
+    Note 'message 10015 NOT shown (could not create the group)' $false (Shown $out 10015 @())
+
     Note 'registered in ACCOUNTS'          $true (Test-Path -LiteralPath (AcctRec $grpAcc))
-    Note 'group account directory made'    $true (Test-Path -LiteralPath (GrpDir $grpAcc))
+    Note 'group account directory made'    $true (Test-Path -LiteralPath $gdir)
+    Note 'make.account ran (there is a voc)' $true ($gkids -contains 'voc')
     Note "sdg_$grpAcc group made"          $true (HasGrp ('sdg_' + $grpAcc))
     Note 'NO Windows user of that name'    $false (HasUser $grpAcc)
     Note 'NO sdu_ group either'            $false (HasGrp ('sdu_' + $grpAcc))
@@ -331,6 +376,7 @@ try {
     # member of sdusers", which is true and explains nothing.  route.set tests
     # the sdg_ prefix first for exactly that reason.
     $out = Invoke-SD @("MODIFY.ACCOUNT $grpAcc SSH")
+    Said "MODIFY.ACCOUNT $grpAcc SSH" $out
     Note 'MODIFY.ACCOUNT refused: message 10087' $true (Shown $out 10087 @($grpAcc.ToUpper()))
     Note 'still no Windows user'                 $false (HasUser $grpAcc)
 
@@ -344,6 +390,7 @@ try {
     # extra question so the session still ends.  verify-delaccount.ps1's header
     # carries the full reasoning.
     $out = Invoke-SD @("DELETE.ACCOUNT $grpAcc", 'Y', $sentinel, 'Y', 'Y')
+    Said "DELETE.ACCOUNT $grpAcc" $out
     Note 'message 10085 shown (no Windows account named)' $true  (Shown $out 10085 @($grpAcc.ToUpper()))
     Note 'message 10084 NOT shown'                        $false (Shown $out 10084 @())
     Note 'the sentinel reached the VOC (5051)'            $true  (Shown $out 5051 @($sentinel))
@@ -372,6 +419,7 @@ try {
     }
 
     $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ADOPT')
+    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ADOPT  (no marker)" $out
 
     # AS AN UNRECOGNISED TOKEN, NOT AS A REFUSAL, and that is deliberate: a
     # keyword a console user may never use is not one they need to know exists,
@@ -388,6 +436,7 @@ try {
     Set-Content -LiteralPath $adoptMarker -Encoding utf8 `
                 -Value "written by verify-accountrules.ps1 for $adpAcc"
     $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ADOPT')
+    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ADOPT  (with the marker)" $out
     $markerLeft = Test-Path -LiteralPath $adoptMarker
 
     Note 'CONTROL: with the marker, ADOPT registers it' $true (Test-Path -LiteralPath (AcctRec $adpAcc))
@@ -411,6 +460,7 @@ try {
     # for 2018 specifically - the token test comes first in more.args, before
     # anything looks at the register.
     $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ADOPT')
+    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ADOPT  (marker spent)" $out
     Note 'the marker does not work twice (2018)' $true (Shown $out 2018 @('ADOPT'))
 }
 catch {
