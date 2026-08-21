@@ -384,8 +384,10 @@ if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
 #
 # Shown() answers $false for a message file it cannot read, and several checks
 # below EXPECT $false - so a missing or emptied message would score them as
-# passes on a run that measured nothing.  6029, 10037 and 10075 are asserted
-# absent and never asserted present, so nothing else would catch it.  That is
+# passes on a run that measured nothing.  10037, 10075 and 10085 are asserted
+# absent on at least one leg, so nothing else would catch it.  (6029 stood here
+# until 21 Aug 2026; Phase 2 retired the message and it left $needMsgs with it.)
+# That is
 # the "absent marker read as an answer" shape this project has paid for five
 # times (PROJECT_STATUS.md, "THE RULE THAT WAS PAID FOR FIVE TIMES"): assert the
 # marker is readable before believing what its absence means.
