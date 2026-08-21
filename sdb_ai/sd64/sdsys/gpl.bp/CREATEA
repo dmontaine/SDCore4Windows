@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 21 Aug 26 Windows port - CREATE.ACCOUNT GROUP ABORTED EVERY TIME, and had
+*   since 10 June.  create.group tested "acc.type = 'USER' and
+*   not(valid_os_name(acc.uname))" on one line; "and" evaluates both operands,
+*   acc.uname is assigned only in the USER arm, and !VALID_OS_NAME aborts on an
+*   unassigned argument.  Nested.  Measured by verify-accountrules.ps1.
 * 21 Aug 26 Windows port - ADOPT IS INSTALL-ONLY.  K$INTERNAL is no longer
 *   enough on its own: a one-shot marker written by gplbld/adopt-account.ps1
 *   must be present, and accepting the keyword deletes it.  Owner's ruling,
@@ -1368,9 +1373,40 @@ if not(valid_os_name(group_name)) then
    group_success = @FALSE
    return
 end
-if upcase(acc.type) = 'USER' and not(valid_os_name(acc.uname)) then
-   group_success = @FALSE
-   return
+* 21 Aug 26 Windows port - NESTED, BECAUSE "and" DOES NOT SHORT-CIRCUIT.  This
+*   was one line:
+*
+*      if upcase(acc.type) = 'USER' and not(valid_os_name(acc.uname)) then
+*
+*   and it ABORTED EVERY "CREATE.ACCOUNT GROUP" with
+*   "000000EE: Unassigned variable at line 30 of !VALID_OS_NAME".  acc.uname is
+*   assigned in the USER arm alone (line 249 of this file); on the GROUP path it
+*   has no value at all.  SD BASIC evaluates BOTH operands of "and" whatever the
+*   first one answers, so the call was made anyway and !VALID_OS_NAME aborted on
+*   its first use of the argument.
+*
+*   BCOMP CANNOT SEE IT.  Its "is not assigned a value" test is per VARIABLE,
+*   not per PATH, and acc.uname IS assigned - just not on this one.  So this
+*   compiled clean and died at run time, every time.
+*
+*   CREATE.ACCOUNT GROUP HAS THEREFORE NEVER WORKED ON THIS PORT, and nothing
+*   noticed because nothing tested it until gplbld/verify-accountrules.ps1 on
+*   21 Aug 2026.  It is not an sdb64 defect: upstream's create.group has no
+*   valid_os_name guards at all - checked in ../sdb64 - so the whole test is
+*   ours, from the 10 June phase 2 work.
+*
+*   AND IT LEFT A DIRECTORY BEHIND EACH TIME.  The abort happens after the
+*   account directory is made (line 499) and before anything else, so the name
+*   was then permanently unusable: line 500 refuses an existing directory with
+*   message 10009.  That half is NOT fixed here - a general unwind for a failed
+*   creation is a wider change than this defect - and the verb's own comment
+*   above make.account already says "we could end up with groups created and no
+*   actual account".
+if upcase(acc.type) = 'USER' then
+   if not(valid_os_name(acc.uname)) then
+      group_success = @FALSE
+      return
+   end
 end
 * --------------------
 *
