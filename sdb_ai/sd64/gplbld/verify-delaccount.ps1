@@ -20,11 +20,17 @@
     no profile until something signs in as it, so a freshly created test account
     has nothing to remove and would pass the profile checks vacuously - the
     handoff note of 21 Aug 2026 says exactly this.  Both subjects are therefore
-    given a real profile with userenv!CreateProfile before the verb runs: the
-    same two artefacts an ssh login would leave, a directory under C:\Users and
-    a ProfileList entry keyed by SID, which are the two halves DELETE_USER
-    targets with Remove-CimInstance.  If CreateProfile will not run, the profile
-    checks report N/A and say why; they never quietly pass.
+    given a real profile before the verb runs: the same two artefacts an ssh
+    login would leave, a directory under C:\Users and a ProfileList entry keyed
+    by SID, which are the two halves DELETE_USER targets with Remove-CimInstance.
+    Two routes are tried - see the block above $profileSig, which records why
+    there are two - and if neither works the profile checks report N/A naming
+    the step and the Win32 error.  They never quietly pass.
+
+    ON THE 21 Aug RUN THEY DID REPORT N/A, and that is what the design is for:
+    30 PASS + 7 N/A of 37, both directions held, and the seven were the whole
+    profile half failing to be SET UP rather than failing.  A check that could
+    not tell those apart would have called it 37/37.
 
     THE ACCOUNT DIRECTORY AND THE PROFILE ARE DIFFERENT THINGS, and the verb
     treats them differently.  ProgramData\SD\user_accounts\<name> is the SD
@@ -184,20 +190,103 @@ function Start-SD {
     return $false
 }
 
-# userenv!CreateProfile, documented since Windows 8.  It makes the two things a
-# first sign-in would make - the directory and the ProfileList entry - without
-# needing a logon at all, which is what makes the profile half testable here.
-# The alternatives do not work: LogonUser on its own creates no profile whatever
-# the logon type (which is why verify-routes has never left one behind), and the
-# account SD makes is in sdsshonly, so an interactive logon is refused outright.
+# MAKING A PROFILE WITHOUT A SIGN-IN, TWO WAYS, BECAUSE THE FIRST ONE FAILED.
+#
+# The profile half of DELETE.ACCOUNT cannot be measured on an account that has
+# no profile, and nothing here ever signs one in: LogonUser on its own creates
+# no profile whatever the logon type - which is why verify-routes has never left
+# one behind - and the account SD makes is in sdsshonly, so an interactive logon
+# is refused outright.
+#
+# ROUTE 1, userenv!CreateProfile.  Documented since Windows 8, makes both halves
+# a first sign-in would make.  On the 21 Aug run it returned 0x800706F7,
+# RPC_X_BAD_STUB_DATA, for BOTH subjects - so all seven profile checks reported
+# N/A and the half went unmeasured.
+#
+#   THE BUFFER IS MAX_PATH NOW, AND THE COUNT IS THE BUFFER'S OWN CAPACITY.  The
+#   run passed 320.  CreateProfile is serviced by ProfSvc over RPC and the out
+#   parameter is size-constrained there, so a count above MAX_PATH is rejected
+#   by the stub rather than by the API - which is what 1783 means and why the
+#   error names no parameter.  INFERRED FROM THE ERROR, NOT PROVEN: this has not
+#   been re-run.  Passing $sb.Capacity rather than a literal at least makes it
+#   impossible for the declared size and the real buffer to disagree, which was
+#   the other candidate.
+#
+# ROUTE 2, LogonUser + LoadUserProfile, tried only if route 1 fails.  This is
+# how a profile really gets made, and it depends on no undocumented constraint:
+# LoadUserProfile creates the profile when the user has none.  LOGON32_LOGON_
+# NETWORK because it is the one logon type BOTH subjects can pass -
+# deny-logon.ps1 sets SeDenyInteractiveLogonRight and SeDenyRemoteInteractive-
+# LogonRight and deliberately NOT SeDenyNetworkLogonRight, since Win32-OpenSSH
+# needs it (deny-logon.ps1:20).  It needs the account's password, which this
+# script generated for both subjects and still holds.
+#
+# If BOTH fail the checks still report N/A, naming the step and the Win32 error.
+# They never quietly pass.
 $profileSig = @'
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 public class SdDelProfile {
     [DllImport("userenv.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
     public static extern int CreateProfile(string pszUserSid, string pszUserName,
         [Out] StringBuilder pszProfilePath, uint cchProfilePath);
+
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public struct PROFILEINFO {
+        public int    dwSize;
+        public int    dwFlags;
+        public string lpUserName;
+        public string lpProfilePath;
+        public string lpDefaultPath;
+        public string lpServerName;
+        public string lpPolicyPath;
+        public IntPtr hProfile;
+    }
+
+    [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    static extern bool LogonUser(string user, string domain, string pass,
+        int logonType, int logonProvider, out IntPtr token);
+
+    [DllImport("userenv.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    static extern bool LoadUserProfile(IntPtr hToken, ref PROFILEINFO lpProfileInfo);
+
+    [DllImport("userenv.dll", SetLastError=true)]
+    static extern bool UnloadUserProfile(IntPtr hToken, IntPtr hProfile);
+
+    [DllImport("kernel32.dll", SetLastError=true)]
+    static extern bool CloseHandle(IntPtr handle);
+
+    // Which call failed, so the N/A line can name it.  Two steps can fail here
+    // and their error codes overlap - 1385 from LogonUser is a denied logon
+    // right, from anywhere else it means nothing.
+    public static string LastStep = "";
+
+    // 0 on success, else the Win32 error of the step named by LastStep.
+    public static int MakeProfileByLogon(string user, string pass) {
+        IntPtr token = IntPtr.Zero;
+        LastStep = "LogonUser";
+        if (!LogonUser(user, ".", pass, 3, 0, out token))   // LOGON32_LOGON_NETWORK
+            return Marshal.GetLastWin32Error();
+        try {
+            PROFILEINFO pi = new PROFILEINFO();
+            pi.dwSize     = Marshal.SizeOf(typeof(PROFILEINFO));
+            pi.dwFlags    = 1;                              // PI_NOUI
+            pi.lpUserName = user;
+            LastStep = "LoadUserProfile";
+            if (!LoadUserProfile(token, ref pi))
+                return Marshal.GetLastWin32Error();
+            // Unloaded again at once: the hive is not wanted, the DIRECTORY and
+            // the ProfileList entry it just created are.  A loaded profile also
+            // reads as "somebody is signed in" to clean-test-profiles.ps1.
+            UnloadUserProfile(token, pi.hProfile);
+            LastStep = "";
+            return 0;
+        } finally {
+            CloseHandle(token);
+        }
+    }
 }
 '@
 
@@ -214,20 +303,38 @@ function Get-ProfileEntry($sid) {
 }
 
 # Returns the profile path, or '' with $script:profileWhy set to the reason.
-function New-TestProfile($name) {
+# $script:profileHow names the route that worked, so the transcript records
+# which one this machine actually needed.
+function New-TestProfile($name, $pass) {
     $script:profileWhy = ''
+    $script:profileHow = ''
     $sid = Get-Sid $name
     if ($sid -eq '') { $script:profileWhy = "no Windows account $name to give a profile to"; return '' }
-    $sb = New-Object System.Text.StringBuilder 320
-    $hr = [SdDelProfile]::CreateProfile($sid, $name, $sb, 320)
-    # 0x800700B7 is ERROR_ALREADY_EXISTS as an HRESULT: a profile is already
-    # there, which is the state this call was asked to reach.
-    if ($hr -ne 0 -and $hr -ne -2147024713) {
-        $script:profileWhy = ('CreateProfile returned 0x{0:X8}' -f $hr)
+
+    # Route 1.  0x800700B7 is ERROR_ALREADY_EXISTS as an HRESULT: a profile is
+    # already there, which is the state this call was asked to reach.
+    $sb = New-Object System.Text.StringBuilder 260
+    $hr = [SdDelProfile]::CreateProfile($sid, $name, $sb, [uint32]$sb.Capacity)
+    if ($hr -eq 0 -or $hr -eq -2147024713) {
+        $script:profileHow = 'CreateProfile'
+    } else {
+        # Route 2.
+        $rc = [SdDelProfile]::MakeProfileByLogon($name, $pass)
+        if ($rc -eq 0) {
+            $script:profileHow = 'LogonUser + LoadUserProfile'
+        } else {
+            $msg = (New-Object System.ComponentModel.Win32Exception -ArgumentList $rc).Message
+            $script:profileWhy = ('CreateProfile 0x{0:X8}, then {1} failed {2} ({3})' -f
+                                  $hr, [SdDelProfile]::LastStep, $rc, $msg)
+            return ''
+        }
+    }
+
+    $e = Get-ProfileEntry $sid
+    if (-not $e) {
+        $script:profileWhy = ('{0} reported success but no Win32_UserProfile entry appeared' -f $script:profileHow)
         return ''
     }
-    $e = Get-ProfileEntry $sid
-    if (-not $e) { $script:profileWhy = 'CreateProfile succeeded but no Win32_UserProfile entry appeared'; return '' }
     return $e.LocalPath
 }
 
@@ -301,8 +408,18 @@ if (-not (Start-SD)) { Fail 'sdwind did not appear within 15 seconds - SD will n
 # already defined.  Typed straight into an elevated window rather than through
 # "powershell -File", the second run is the same process and would die here
 # before measuring anything.
-if (-not ('SdDelProfile' -as [type])) {
+#
+# AND A LIVE SESSION CANNOT BE GIVEN A NEW DEFINITION, which is the case worth
+# saying out loud rather than failing obscurely on: a window that ran an earlier
+# version of this script still holds that version's SdDelProfile, and the guard
+# above would happily skip past it into a "method not found" several steps
+# later.  Checked by asking for a method the old one did not have.
+$sdProfileType = 'SdDelProfile' -as [type]
+if (-not $sdProfileType) {
     Add-Type -TypeDefinition $profileSig -Language CSharp | Out-Null
+} elseif (-not $sdProfileType.GetMethod('MakeProfileByLogon')) {
+    Fail ('this window already holds an older SdDelProfile, and Add-Type cannot replace a ' +
+          'type in a live session.  Open a fresh elevated PowerShell and run again.')
 }
 Add-Type -AssemblyName System.Web
 
@@ -336,13 +453,13 @@ try {
     Step 2 "Give it a profile, so the profile half is not tested vacuously"
 
     $sdSid  = Get-Sid $sdAcc
-    $sdProf = New-TestProfile $sdAcc
+    $sdProf = New-TestProfile $sdAcc $pw
     if ($sdProf -eq '') {
         Skip 'profile made for the SD account' $script:profileWhy
     } else {
         Note 'profile directory exists'     $true (Test-Path -LiteralPath $sdProf)
         Note 'ProfileList entry exists'     $true ([bool](Get-ProfileEntry $sdSid))
-        Write-Host "   profile: $sdProf"
+        Write-Host ("   profile: {0}  (via {1})" -f $sdProf, $script:profileHow)
     }
 
     # -----------------------------------------------------------------------
@@ -406,12 +523,12 @@ try {
     Note 'its description is NOT "SD account"'         $false ((Get-Description $borrowAcc) -ceq 'SD account')
 
     $bSid  = Get-Sid $borrowAcc
-    $bProf = New-TestProfile $borrowAcc
+    $bProf = New-TestProfile $borrowAcc $bpw
     if ($bProf -eq '') {
         Skip 'profile made for the borrowed account' $script:profileWhy
     } else {
         Note 'borrowed profile exists'  $true (Test-Path -LiteralPath $bProf)
-        Write-Host "   profile: $bProf"
+        Write-Host ("   profile: {0}  (via {1})" -f $bProf, $script:profileHow)
     }
 
     # CREATE.ACCOUNT USER refuses a name whose Windows account already exists
