@@ -270,7 +270,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # script and refuses on a non-zero exit, so leaving it out is
                   # the self-blocking shape the verify-accountacl.ps1 note above
                   # describes - and it would arrive on its very first run.
-                  'verify-delaccount.ps1')
+                  'verify-delaccount.ps1',
+                  # 21 Aug 26 - phase 4's refusal verifier: the required access
+                  # keyword, the mandatory password and its unwind, a GROUP
+                  # account, and ADOPT without the one-shot marker.  Same
+                  # reasoning again, and the same self-blocking shape - it calls
+                  # this script first and refuses on a non-zero exit.
+                  'verify-accountrules.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

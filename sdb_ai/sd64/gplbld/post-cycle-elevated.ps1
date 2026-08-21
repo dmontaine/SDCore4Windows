@@ -56,7 +56,12 @@ param(
     [string]$AclPrefix  = 'sdacl2',
     # 20 Aug 26 - verify-apiadmin.ps1's throwaway account.  Lower case only,
     # for the same reason as $AclPrefix, and validated with it below.
-    [string]$ApiPrefix  = 'sdapia2'
+    [string]$ApiPrefix  = 'sdapia2',
+    # 21 Aug 26 - verify-routes.ps1's three throwaway accounts, and
+    # verify-accountrules.ps1's four.  Both derive Windows account names from
+    # the prefix, so lower case only, validated with the two above.
+    [string]$RoutePrefix = 'sdrt5',
+    [string]$RulesPrefix = 'sdar1'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -91,6 +96,13 @@ if ($ApiPrefix -notmatch '^[a-z][a-z0-9_]*$') {
     Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
     exit 2
 }
+foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix'; V = $RulesPrefix })) {
+    if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
+        Write-Output ("post-cycle-elevated: -{0} is '{1}'." -f $p.N, $p.V)
+        Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
+        exit 2
+    }
+}
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -107,6 +119,20 @@ $steps = @(
     # back, and a run that died mid-way should not leave the steps after it
     # measuring a directory in that state.
     @{ Name = 'verify-accountacl.ps1';    P = @{ Prefix  = $AclPrefix } },
+    # 21 Aug 26 - the two route/rule verifiers, added when phase 4 rewrote the
+    # first and wrote the second.  Both were run by hand until now, which is
+    # exactly the shape this file exists to remove.
+    #
+    # BEFORE verify-peerlog.ps1, WHICH IS THE ORDERING THAT MATTERS.  That step
+    # overwrites the SD error log with synthetic records, so anything that could
+    # leave a diagnosis there has to have run already.  Both of these drive
+    # CREATE.ACCOUNT and MODIFY.ACCOUNT, which are exactly the verbs that would.
+    @{ Name = 'verify-routes.ps1';        P = @{ Prefix  = $RoutePrefix } },
+    # AND THIS ONE PLACES THE ADOPT MARKER, briefly, to measure the gate.  It
+    # removes it in a finally and again at the top of its own step 4, but a run
+    # killed between those two points leaves the install-only gate open until
+    # somebody deletes C:\ProgramData\SD\sdsys\$adopt by hand.
+    @{ Name = 'verify-accountrules.ps1';  P = @{ Prefix  = $RulesPrefix } },
     # 20 Aug 26 - peer identification and the errlog trim.  AFTER EVERYTHING
     # ELSE, and for a blunter reason than the note above: it OVERWRITES the SD
     # error log with synthetic records, which is how the trim is made to fire

@@ -1,12 +1,25 @@
 <#
 .SYNOPSIS
-    The two remote routes: is a new account confined to ssh and refused the API,
-    can each be withdrawn and restored independently, and is RDPACCOUNT gone?
+    The two remote routes: does the create-time keyword decide them, is
+    MODIFY.ACCOUNT absolute rather than additive, does an administrator get both
+    and refuse to be changed, and is RDPACCOUNT gone?
 
 .DESCRIPTION
     Owner's rule, 21 Aug 2026: NOBODY SD CREATES REACHES THE KEYBOARD UNLESS
     THEY ARE AN ADMINISTRATOR, and the two routes that remain - ssh and the API
     - are settable per account.  This measures all three halves of that.
+
+    REWRITTEN 21 AUG 2026 FOR PHASE 2's FOUR KEYWORDS.  It asserted the
+    SSH / NO.SSH / API / NO.API pairs and messages 10063-10071, which no longer
+    exist; between Phase 2 and this rewrite it refused with exit 2 rather than
+    scoring eight failures that would have looked like a broken feature.
+
+    THE ONE ASSERTION THAT MATTERS MOST IS THAT "API" TAKES ssh AWAY.  The
+    keyword now says what the access IS, not what to add, so
+    "MODIFY.ACCOUNT x API" on an account that had ssh leaves it with the API
+    ALONE.  An additive implementation passes every other check in this file:
+    the account ends up in sdapi either way, and only the sdssh membership
+    afterwards tells the two apart.
 
     THE KEYBOARD CHECK IS A LOGON, NOT A GROUP LISTING.  Membership of
     sdsshonly is the mechanism, but what matters is whether Windows lets the
@@ -56,28 +69,27 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# 21 Aug 26 - SUPERSEDED BY PHASE 2 AND REFUSES RATHER THAN FAILING OBSCURELY.
+# 21 Aug 26 - THE REFUSAL THAT STOOD HERE HAS GONE, AND ITS REPLACEMENT IS THE
+# OPPOSITE TEST.  Between Phase 2 and this rewrite the script exited 2 if any of
+# messages 10063-10071 was missing, because it asserted them and Shown() answers
+# $false for a message file it cannot read - eight failures that look like a
+# broken feature.
 #
-# This script asserts the SSH / NO.SSH / API / NO.API keyword pairs and the
-# eight messages 10063-10071 that went with them.  Owner's decision of 21 Aug
-# 2026 replaced all of it with SSH | API | BOTH | NONE and messages
-# 10076-10081, so those eight message files no longer exist - and Shown()
-# answers $false for a message it cannot read, which would score this run as
-# eight failures that look like a broken feature.
-#
-# REFUSING IS THE HONEST ANSWER while the rewrite is outstanding.  A verifier
-# that cannot pass is not evidence of anything, and this project has paid five
-# times for checks that could not fail; one that CANNOT SUCCEED is the same
-# fault from the other side.  Phase 4 rewrites it for the four keywords.
+# NOW IT REFUSES IF ANY OF THEM IS STILL THERE.  Phase 2 retired all nine, so a
+# tree that still has one is a tree this script's assertions do not describe -
+# an install that predates Phase 2, most likely, and every route check below
+# would be measuring the old verb.  Same guard, pointed the other way, and it
+# costs nothing on a correct install.
 $retired = @(10063, 10064, 10065, 10066, 10067, 10068, 10069, 10070, 10071)
-$gone = @($retired | Where-Object {
-    -not (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\messages\' + $_))) })
-if ($gone.Count -gt 0) {
+$left = @($retired | Where-Object {
+    Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\messages\' + $_)) })
+if ($left.Count -gt 0) {
     Write-Host ''
-    Write-Host 'verify-routes: SUPERSEDED - this script has not been rewritten yet.' -ForegroundColor Yellow
-    Write-Host ('  It asserts messages that Phase 2 retired: ' + ($gone -join ', ')) -ForegroundColor Yellow
-    Write-Host '  The routes are now set with SSH | API | BOTH | NONE, on both'          -ForegroundColor Yellow
-    Write-Host '  CREATE.ACCOUNT and MODIFY.ACCOUNT.  See PROJECT_STATUS.md, Phase 4.'   -ForegroundColor Yellow
+    Write-Host 'verify-routes: THE INSTALLED TREE PREDATES PHASE 2.' -ForegroundColor Yellow
+    Write-Host ('  Messages Phase 2 retired are still installed: ' + ($left -join ', ')) -ForegroundColor Yellow
+    Write-Host '  This script asserts SSH | API | BOTH | NONE and messages 10076-10083,' -ForegroundColor Yellow
+    Write-Host '  so it would be measuring a verb that is no longer the one under test.' -ForegroundColor Yellow
+    Write-Host '  Run a cycle.' -ForegroundColor Yellow
     exit 2
 }
 
@@ -218,10 +230,16 @@ foreach ($a in @($stdAcc, $admAcc, $rdpAcc)) {
 Add-Type -TypeDefinition $logonSig -Language CSharp | Out-Null
 Add-Type -AssemblyName System.Web
 
-function New-Acct($name, $extra) {
+# $access is the SSH | API | BOTH | NONE word, which Phase 2 made REQUIRED for a
+# USER account - there is no default any more, and leaving it out is message
+# 10082.  ADMINISTRATOR supplies its own, so the caller passes '' for that one:
+# passing a word as well would still work, but it would hide the thing worth
+# knowing, which is that an administrator needs no keyword and overrides one.
+function New-Acct($name, $access, $extra) {
     $pw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $cmd = "CREATE.ACCOUNT USER $name BOTH"
-    if ($extra -ne '') { $cmd += " $extra" }
+    $cmd = "CREATE.ACCOUNT USER $name"
+    if ($access -ne '') { $cmd += " $access" }
+    if ($extra -ne '')  { $cmd += " $extra" }
     $out = Invoke-SD @($cmd, $pw, $pw)
     $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $name.ToUpper())
     if (-not (Test-Path -LiteralPath $rec)) { Write-Host $out; Fail "CREATE.ACCOUNT did not register $name" }
@@ -229,31 +247,55 @@ function New-Acct($name, $extra) {
     return @{ Password = $pw; Out = $out }
 }
 
+# The two group memberships as one string, so a Note reports what the account
+# actually has rather than one half of it.  Reading them together is what makes
+# "API took ssh away" a single check instead of two that could both be right
+# about the wrong account.
+function Routes($user) {
+    $r = @()
+    if (InGroup 'sdssh' $user) { $r += 'ssh' }
+    if (InGroup 'sdapi' $user) { $r += 'api' }
+    if ($r.Count -eq 0) { return 'none' }
+    return ($r -join '+')
+}
+
 try {
     # -----------------------------------------------------------------------
-    Step 1 "A new account: CREATE.ACCOUNT USER $stdAcc"
+    Step 1 "The keyword decides: CREATE.ACCOUNT USER $stdAcc SSH"
 
-    $s = New-Acct $stdAcc ''
+    # SSH RATHER THAN BOTH, deliberately.  This account is the subject of every
+    # route change below, and starting it with one route is what lets step 4
+    # see the other one being taken away.
+    $s = New-Acct $stdAcc 'SSH' ''
     Note 'message 10034 shown (ssh only)'   $true (Shown $s.Out 10034)
-    Note 'message 10063 shown (may ssh)'    $true (Shown $s.Out 10063)
+    Note 'message 10076 shown (ssh, not the API)' $true (Shown $s.Out 10076)
     Note 'IS in sdsshonly'                  $true  (InGroup 'sdsshonly' $stdAcc)
-    Note 'IS in sdssh'                      $true  (InGroup 'sdssh' $stdAcc)
-    # THE DEFAULT-OFF DECISION, 21 Aug 2026.  If this ever reads $true, either
-    # CREATEA joined sdapi or something else did, and every new account can
-    # reach the API as LocalSystem until the containment gate lands.
-    Note 'NOT in sdapi'                     $false (InGroup 'sdapi' $stdAcc)
+    # THE KEYWORD IS THE WHOLE OF IT, 21 Aug 2026.  If this reads 'ssh+api'
+    # then SSH granted the API as well and the four words mean nothing.
+    Note 'routes are ssh alone'             'ssh'  (Routes $stdAcc)
     Note 'may NOT sign in at the keyboard'  'refused 1385' (InteractiveLogon $stdAcc $s.Password)
 
     # -----------------------------------------------------------------------
-    Step 2 "THE CONTROL: an administrator account CAN sign in"
+    Step 2 "THE CONTROL: an administrator CAN sign in, and gets both routes"
 
     # Without this, step 1's refusal would pass on a machine where LogonUser
     # refuses everybody - a wrong password, a disabled account, a broken
     # P/Invoke all read as "refused" and none of them is the deny right.
-    $a = New-Acct $admAcc 'ADMINISTRATOR'
+    #
+    # NO ACCESS KEYWORD IS GIVEN, and that is an assertion in itself: the tier
+    # sets access.given, so an administrator creation must not be refused with
+    # 10082 for staying silent.
+    $a = New-Acct $admAcc '' 'ADMINISTRATOR'
     Note 'admin is in Administrators'   $true  (InGroup 'Administrators' $admAcc)
     Note 'admin NOT in sdsshonly'       $false (InGroup 'sdsshonly' $admAcc)
     Note 'admin CAN sign in'            'admitted' (InteractiveLogon $admAcc $a.Password)
+    # THE PHASE 2 GAP CLOSURE.  Before 21 Aug 2026 the administrator branch
+    # joined NEITHER group, and APISRVR:1362 requires sdapi with no exemption -
+    # so an SD administrator could not use the API at all.  ssh they reached
+    # anyway, because allow-ssh-groups.ps1 names Administrators in its own
+    # right, which is why sdapi is the half that was actually broken.
+    Note 'admin has both routes'        'ssh+api' (Routes $admAcc)
+    Note 'admin: message 10078 shown (both)' $true (Shown $a.Out 10078)
 
     # -----------------------------------------------------------------------
     Step 3 "RDPACCOUNT is gone"
@@ -269,48 +311,58 @@ try {
              Get-LocalUser -Name $rdpAcc -ErrorAction SilentlyContinue))
 
     # -----------------------------------------------------------------------
-    Step 4 "ssh can be withdrawn and restored, and the keyboard stays shut"
+    Step 4 "MODIFY.ACCOUNT is ABSOLUTE: the keyword says what the access IS"
 
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc NO.SSH")
-    Note 'NO.SSH: message 10065'        $true  (Shown $out 10065)
-    Note 'NO.SSH: out of sdssh'         $false (InGroup 'sdssh' $stdAcc)
+    # THE CHECK THIS STEP EXISTS FOR IS THE SECOND LINE, not the first.  An
+    # additive implementation - the pre-21-Aug behaviour - also puts the account
+    # in sdapi and would pass "routes include api".  What tells the two apart is
+    # that ssh is GONE afterwards, on an account created with SSH one step ago.
+    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc API")
+    Note 'API: message 10077 (API, not ssh)' $true (Shown $out 10077)
+    Note 'API: routes are api ALONE'         'api' (Routes $stdAcc)
 
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc NO.SSH")
-    Note 'NO.SSH twice says already'    $true  (Shown $out 10066)
+    # 10080 IS A SEPARATE MESSAGE FROM THE FOUR, deliberately: "nothing changed"
+    # is not the same statement as "this is what you have", and route.set says
+    # it and returns without touching a group.
+    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc API")
+    Note 'API twice: message 10080 (nothing changed)' $true (Shown $out 10080)
+    Note 'API twice: routes unchanged'                'api' (Routes $stdAcc)
 
-    # THE INVARIANT.  No route verb may hand back the keyboard - that is the
-    # whole reason RDPACCOUNT was deleted rather than split.
-    Note 'still in sdsshonly'           $true  (InGroup 'sdsshonly' $stdAcc)
+    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc BOTH")
+    Note 'BOTH: message 10078'          $true     (Shown $out 10078)
+    Note 'BOTH: routes are ssh+api'     'ssh+api' (Routes $stdAcc)
+
+    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc NONE")
+    Note 'NONE: message 10079'          $true  (Shown $out 10079)
+    Note 'NONE: routes are none'        'none' (Routes $stdAcc)
+
+    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc SSH")
+    Note 'SSH: message 10076'           $true  (Shown $out 10076)
+    Note 'SSH: routes are ssh alone'    'ssh'  (Routes $stdAcc)
+
+    # THE INVARIANT, RE-CHECKED AFTER ALL OF IT.  No route verb may hand back
+    # the keyboard - that is the whole reason RDPACCOUNT was deleted rather than
+    # split.  Asserting it once at creation would not catch a route verb that
+    # quietly touched sdsshonly, and NONE and BOTH are new code that could.
+    Note 'still in sdsshonly'            $true (InGroup 'sdsshonly' $stdAcc)
     Note 'still refused at the keyboard' 'refused 1385' (InteractiveLogon $stdAcc $s.Password)
 
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc SSH")
-    Note 'SSH: message 10063'           $true  (Shown $out 10063)
-    Note 'SSH: back in sdssh'           $true  (InGroup 'sdssh' $stdAcc)
-
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc SSH")
-    Note 'SSH twice says already'       $true  (Shown $out 10064)
-
     # -----------------------------------------------------------------------
-    Step 5 "the API can be granted and withdrawn, independently of ssh"
+    Step 5 "an administrator is REFUSED, and nothing moves"
 
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc API")
-    Note 'API: message 10068'           $true  (Shown $out 10068)
-    Note 'API: in sdapi'                $true  (InGroup 'sdapi' $stdAcc)
-    # INDEPENDENT, which is the point of two groups rather than one flag.
-    Note 'API left ssh alone'           $true  (InGroup 'sdssh' $stdAcc)
-
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc API")
-    Note 'API twice says already'       $true  (Shown $out 10069)
-
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc NO.API")
-    Note 'NO.API: message 10070'        $true  (Shown $out 10070)
-    Note 'NO.API: out of sdapi'         $false (InGroup 'sdapi' $stdAcc)
-
-    $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc NO.API")
-    Note 'NO.API twice says already'    $true  (Shown $out 10071)
-
-    Note 'still in sdsshonly after API work' $true (InGroup 'sdsshonly' $stdAcc)
-    Note 'still refused at the keyboard'     'refused 1385' (InteractiveLogon $stdAcc $s.Password)
+    # Owner's rule, 21 Aug 2026: administrators always have both, so there is
+    # nothing to set.  It is refused with a message rather than ignored - the
+    # difference matters, because silence would read as success to whoever
+    # typed it.
+    #
+    # THE SECOND CHECK IS THE ONE THAT COULD FAIL QUIETLY.  A route.set that
+    # printed 10083 and carried on would pass the message check and leave an
+    # administrator with no API, which is exactly the state Phase 2 closed.
+    $out = Invoke-SD @("MODIFY.ACCOUNT $admAcc NONE")
+    Note 'admin refused: message 10083' $true     (Shown $out 10083)
+    Note 'admin still has both routes'  'ssh+api' (Routes $admAcc)
+    Note 'admin still NOT in sdsshonly' $false    (InGroup 'sdsshonly' $admAcc)
+    Note 'admin can still sign in'      'admitted' (InteractiveLogon $admAcc $a.Password)
 
     # -----------------------------------------------------------------------
     Step 6 "sshd allows sdssh and no longer allows sdusers"
@@ -428,7 +480,7 @@ if ($failed) {
 }
 
 Write-Host ''
-Write-Host ('verify-routes: the keyboard is shut, ssh and the API move independently, ' +
-            'and RDPACCOUNT is gone.') -ForegroundColor Green
+Write-Host ('verify-routes: the keyboard is shut, the four keywords say what the access IS, ' +
+            'an administrator has both and cannot be changed, and RDPACCOUNT is gone.') -ForegroundColor Green
 try { Stop-Transcript | Out-Null } catch { }
 exit 0
