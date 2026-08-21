@@ -260,7 +260,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # so while they shared a program, every run where the gate
                   # worked threw away the $cred measurement on its way out.
                   'verify-apiadmin.ps1', 'apiadminprobe.sb',
-                  'apiosexecprobe.sb')
+                  'apiosexecprobe.sb',
+                  # 21 Aug 26 - housekeeping for the Windows side, which no
+                  # cycle touches: the account-creating verifiers leave a
+                  # profile behind each run and nothing had ever removed them.
+                  # Ships nowhere - it is run by hand, elevated.
+                  'clean-test-profiles.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
