@@ -442,7 +442,25 @@ try {
     # reachable from another machine with "ssh -L", which is the route
     # administrators are deliberately not given.
     Note 'API session CANNOT open $cred'  'NO' $apiOpen
-    Note 'API session CANNOT write $cred' 'NO' $apiWrite
+
+    # 21 Aug 26 - THE WRITE IS ENTAILED BY THE OPEN, AND READING ITS ABSENCE AS
+    # A FAILURE WAS WRONG.  apiadminprobe.sb only attempts the write inside
+    # "if cred.open then" - there is no file variable to write through
+    # otherwise - so a refused OPEN means PROBE.CRED.WRITE is never printed.
+    # Measured on sdapia6: open came back "NO status 3035" and this line read a
+    # blank and scored FAIL on the run where the gate had just worked.
+    #
+    # A REFUSED OPEN IS THE STRONGER RESULT, NOT A MISSING ONE.  You cannot
+    # write a file you could not open, so the assertion is satisfied - but it
+    # is satisfied for a DIFFERENT REASON than "the write was refused", and the
+    # transcript says which, because collapsing the two would hide the day the
+    # open starts succeeding again.
+    if ($apiOpen -eq 'NO') {
+        Write-Host '   (the write was never attempted: the open was refused, which subsumes it)'
+        Note 'API session CANNOT write $cred' 'NO' 'NO'
+    } else {
+        Note 'API session CANNOT write $cred' 'NO' $apiWrite
+    }
 
     # 20 Aug 26 - AND WHAT THE SESSION SAYS IT IS, FROM INSIDE.  Everything
     # above infers the identity from OUTSIDE the process, by reading the owner
@@ -506,11 +524,41 @@ try {
     # the SYSTEM line below, so it gets the same treatment rather than a
     # comment: PROBE.OSEXEC.TRIED is printed BEFORE the attempt, so its
     # presence is the difference between "refused" and "never got there".
-    $apiTriedOsExec   = ($apiOsOut   -match 'PROBE\.OSEXEC\.TRIED')
-    $localTriedOsExec = ($localOsOut -match 'PROBE\.OSEXEC\.TRIED')
+    # 21 Aug 26 - AND THE REFUSAL MESSAGE IS THE EVIDENCE, NOT THE MARKER.
+    #
+    # PROBE.OSEXEC.TRIED is printed BEFORE the attempt, which was supposed to
+    # separate "refused" from "never got there".  It does on the local leg and
+    # it CANNOT on the API leg: the refusal aborts the program, an abort
+    # discards the captured buffer, and the marker goes with it.  So the check
+    # that asked for it could never pass over the API while the gate worked -
+    # a check that cannot pass is as useless as one that cannot fail, and it
+    # scored FAIL on sdapia6 for that reason.
+    #
+    # WHAT DOES COME BACK IS SD'S OWN REFUSAL, and it is better evidence than
+    # the marker ever was, because it NAMES THE ACCOUNT AND THE PROGRAM:
+    #
+    #   000000D3: sdapia6 is not permitted to use OS.EXECUTE at line 26 of
+    #   /cygdrive/c/.../sdapia6/BP.OUT/APIOSEXECPROBE
+    #
+    # ASSERT ON SOMETHING THAT MUST BE PRESENT.  That is the lesson from all
+    # four instrument faults in this file: an absent marker is not an answer.
+    $refusedRx = [regex]::Escape($Prefix) + ' is not permitted to use OS\.EXECUTE'
+    $apiRefusedOsExec   = ($apiOsOut   -match $refusedRx) -and ($apiOsOut   -match 'APIOSEXECPROBE')
+    # The local leg is refused under whatever Windows account is running this,
+    # so it is matched on the message rather than on a name.
+    $localRefusedOsExec = ($localOsOut -match 'not permitted to use OS\.EXECUTE')
 
-    Note 'the OS.EXECUTE probe ran at all, API'   $true $apiTriedOsExec
-    Note 'the OS.EXECUTE probe ran at all, local' $true $localTriedOsExec
+    # Reached the attempt: either it said so, or it was refused AT it.
+    $apiTriedOsExec   = ($apiOsOut   -match 'PROBE\.OSEXEC\.TRIED') -or $apiRefusedOsExec
+    $localTriedOsExec = ($localOsOut -match 'PROBE\.OSEXEC\.TRIED') -or $localRefusedOsExec
+
+    Note 'the OS.EXECUTE probe reached the attempt, API'   $true $apiTriedOsExec
+    Note 'the OS.EXECUTE probe reached the attempt, local' $true $localTriedOsExec
+
+    # THE POSITIVE FORM OF THE HEADLINE, and the one to read: SD refused THIS
+    # account BY NAME, in THIS program.  Nothing about it is inferred from an
+    # absence.
+    Note 'API session was refused OS.EXECUTE by name' $true $apiRefusedOsExec
 
     # A FAIL HERE IS THE FINDING, like the two $cred lines above: os_permitted()
     # returns TRUE on USR_ADMIN and kernel.c:195 seeds USR_ADMIN from
