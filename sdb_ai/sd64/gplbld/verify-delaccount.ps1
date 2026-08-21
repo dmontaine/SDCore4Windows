@@ -314,18 +314,18 @@ function New-TestProfile($name, $pass) {
     # Route 1.  0x800700B7 is ERROR_ALREADY_EXISTS as an HRESULT: a profile is
     # already there, which is the state this call was asked to reach.
     $sb = New-Object System.Text.StringBuilder 260
-    $hr = [SdDelProfile]::CreateProfile($sid, $name, $sb, [uint32]$sb.Capacity)
+    $hr = $script:P::CreateProfile($sid, $name, $sb, [uint32]$sb.Capacity)
     if ($hr -eq 0 -or $hr -eq -2147024713) {
         $script:profileHow = 'CreateProfile'
     } else {
         # Route 2.
-        $rc = [SdDelProfile]::MakeProfileByLogon($name, $pass)
+        $rc = $script:P::MakeProfileByLogon($name, $pass)
         if ($rc -eq 0) {
             $script:profileHow = 'LogonUser + LoadUserProfile'
         } else {
             $msg = (New-Object System.ComponentModel.Win32Exception -ArgumentList $rc).Message
             $script:profileWhy = ('CreateProfile 0x{0:X8}, then {1} failed {2} ({3})' -f
-                                  $hr, [SdDelProfile]::LastStep, $rc, $msg)
+                                  $hr, $script:P::LastStep, $rc, $msg)
             return ''
         }
     }
@@ -403,24 +403,36 @@ foreach ($a in @($sdAcc, $borrowAcc)) {
 
 if (-not (Start-SD)) { Fail 'sdwind did not appear within 15 seconds - SD will not start.' }
 
-# GUARDED, because this script is meant to be run more than once - a spent
-# prefix is the ordinary reason - and Add-Type THROWS on a type name it has
-# already defined.  Typed straight into an elevated window rather than through
-# "powershell -File", the second run is the same process and would die here
-# before measuring anything.
+# THE TYPE CARRIES A HASH OF ITS OWN SOURCE IN ITS NAME, and that is what makes
+# this script safe to run twice in one window.
 #
-# AND A LIVE SESSION CANNOT BE GIVEN A NEW DEFINITION, which is the case worth
-# saying out loud rather than failing obscurely on: a window that ran an earlier
-# version of this script still holds that version's SdDelProfile, and the guard
-# above would happily skip past it into a "method not found" several steps
-# later.  Checked by asking for a method the old one did not have.
-$sdProfileType = 'SdDelProfile' -as [type]
-if (-not $sdProfileType) {
-    Add-Type -TypeDefinition $profileSig -Language CSharp | Out-Null
-} elseif (-not $sdProfileType.GetMethod('MakeProfileByLogon')) {
-    Fail ('this window already holds an older SdDelProfile, and Add-Type cannot replace a ' +
-          'type in a live session.  Open a fresh elevated PowerShell and run again.')
+# Add-Type THROWS on a type name already defined, and a live PowerShell session
+# CANNOT be given a new definition of one.  This script is meant to be run more
+# than once - a spent prefix is the ordinary reason - so an elevated window that
+# has run it before already holds its SdDelProfile.  Guarding by name alone
+# gets the OLD definition and dies with "method not found" several steps later;
+# guarding by name and refusing was the first fix, and it cost the owner a run
+# on 21 Aug 2026 by demanding a fresh window for no reason the operator could
+# see.
+#
+# Naming the type after its source removes the question instead of reporting it.
+# Same source, same name, reused.  Edited source, a different name, compiled
+# beside the old one, which nothing then refers to.  It cannot go stale, and no
+# future edit to $profileSig has to remember any of this.
+$md5   = [Security.Cryptography.MD5]::Create()
+$stamp = [BitConverter]::ToString(
+             $md5.ComputeHash([Text.Encoding]::UTF8.GetBytes($profileSig))
+         ).Replace('-', '').Substring(0, 8)
+$profileTypeName = 'SdDelProfile_' + $stamp
+if (-not ($profileTypeName -as [type])) {
+    Add-Type -Language CSharp -TypeDefinition (
+        $profileSig -replace 'class SdDelProfile', ('class ' + $profileTypeName)) | Out-Null
 }
+# Held in a variable because the name is not known until now.  "$P::Member"
+# reaches statics on a type held this way exactly as "[Name]::Member" does.
+$script:P = $profileTypeName -as [type]
+if (-not $script:P) { Fail "could not compile $profileTypeName - see above" }
+
 Add-Type -AssemblyName System.Web
 
 $sentinel = 'SDDELSENTINEL'
