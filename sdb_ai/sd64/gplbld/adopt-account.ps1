@@ -124,7 +124,12 @@ if (-not (Test-Path $sd)) {
 # An ACCOUNTS record is one file per account, keyed by the UPPERCASED name -
 # checked on this machine rather than assumed: SDSYS, SDACCT2..SDACCT5 sit
 # beside directories named sdacct2..sdacct5 in lower case.
-$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToUpper())
+#
+# INVARIANT FOR THE SAME REASON AS THE MARKER BELOW (22 Aug 2026): SD upcases
+# with the uc_chars[] ASCII map, and .ToUpper() on a Turkish locale sends "i" to
+# the dotted U+0130.  This one decides the reinstall case, so a mismatch would
+# make the installer try to adopt an account that is already there.
+$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToUpperInvariant())
 
 function Invoke-Sd {
     <#
@@ -230,10 +235,18 @@ try {
     # are the same $User this script was invoked with, downcased on both sides.
     # CREATEA does it at the adopt.marker assignment in the USER arm.
     #
+    # AND "Invariant" IS WHAT MAKES THAT TRUE - 22 Aug 2026.  SD's downcase() is
+    # a fixed ASCII byte map, lc_chars[], built A-Z -> a-z at ctype.c:61 and
+    # identity everywhere else.  .ToLower() is CULTURE-SENSITIVE: on a Turkish or
+    # Azeri locale "I" folds to the dotless U+0131, which is not what CREATEA
+    # will look for.  The names valid_os_name permits are ASCII only
+    # (VALID_OS_NAME:29), so the invariant fold matches SD's map exactly - and on
+    # this machine the two are byte-identical, so nothing measured here changes.
+    #
     # WHAT IS IN IT IS STILL FOR A HUMAN.  A marker that outlives its window is
     # a hole, so anybody who finds one should be able to tell at a glance what
     # wrote it and when.
-    $marker = Join-Path $DataDir ('sdsys\$adopt.' + $User.ToLower())
+    $marker = Join-Path $DataDir ('sdsys\$adopt.' + $User.ToLowerInvariant())
 
     # CAUGHT RATHER THAN LEFT TO $ErrorActionPreference, which is Stop: an
     # uncaught throw here would leave the finally to run with $result never

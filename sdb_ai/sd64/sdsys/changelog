@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  THE INSTALLER NOW GIVES YOU AN SD ACCOUNT ON TURKISH AND AZERI
+           SYSTEMS TOO.
+
+           The installer makes an SD account for whoever authorises it, and to
+           do that it has to match your Windows user name against SD's copy of
+           it - which means changing both to the same case.  Windows and SD do
+           not change case the same way everywhere: on a Turkish or Azeri
+           system Windows turns "I" into a dotless "i", and SD does not.  A
+           user name containing that letter did not match itself, so the
+           install finished without giving you an SD account.
+
+           Both sides now use the same rule, which does not vary by locale.
+           Nothing changes on a system whose locale was never affected.
+
 21 Aug 26  FAILED API LOGINS ARE NOW WRITTEN TO THE AUDIT TRAIL.
 
            Until now the audit file recorded only one kind of API refusal: an
