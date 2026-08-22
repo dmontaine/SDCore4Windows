@@ -18,11 +18,16 @@
 	  * 
 	  * 
 	  * START-HISTORY:
+	  * 22 Aug 26 Windows port - the erase is char(8), not @(IT$CUB).  cub1 came
+	  *           back EMPTY in the installer's console, so the erase printed a
+	  *           bare space and the cursor walked forward.  TWO FAULTS, one
+	  *           key: this was the visible half.
 	  * 22 Aug 26 Windows port - both Ctrl-H (8) and DEL (127) erase, whatever the
 	  *           terminal type's kbs claims.  This routine reads raw bytes and
 	  *           never saw _KEYCODE's 19 Aug binding fix, and the unmatched byte
 	  *           was APPENDED rather than ignored - so backspace corrupted a
-	  *           HIDDEN password entry instead of correcting it.
+	  *           HIDDEN password entry instead of correcting it.  The invisible
+	  *           half - it was fixed and the key still looked dead.
 	  * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 	  * END-HISTORY
 	  *
@@ -152,7 +157,34 @@
                case index(erase.keys, c, 1)           ;* BACKSPACE key - 22 Aug 26, see above
                   if len(string) then
                      string = string[1, len(string) - 1]
-                     if echo.input then display @(IT$CUB) : ' ' : @(IT$CUB) :
+*                    22 Aug 26 Windows port - char(8), NOT @(IT$CUB).  The byte
+*                    matching above was fixed earlier the same day and the key
+*                    STILL did nothing visible: the owner's screenshot of the
+*                    installer's password prompt shows "********    ******" -
+*                    four backspaces, four SPACES, and the cursor moving
+*                    FORWARD each time.
+*
+*                    THAT SCREENSHOT IS THE WHOLE DIAGNOSIS.  The space
+*                    arrived, so display reached the console; the cursor did
+*                    not move, so @(IT$CUB) emitted NOTHING; and no escape
+*                    garbage appeared, so it was empty rather than unhandled.
+*                    @(IT$CUB) is emitn(sdtgetstr("cub1")) at op_tio.c:274, so
+*                    it is empty whenever cub1 is - and the string is what the
+*                    erase depends on.
+*
+*                    WHY cub1 WAS EMPTY IN THAT SESSION IS NOT ESTABLISHED.
+*                    terminfo IS installed, the windows entry IS there, and it
+*                    DOES carry cub1=\b - and a piped session on the same
+*                    install emitted byte 8 correctly.  Something differs about
+*                    a real console and it is not yet known what.  Left open
+*                    deliberately rather than guessed at in a comment.
+*
+*                    THE ERASE SHOULD NEVER HAVE RESTED ON A CAPABILITY.
+*                    BS-space-BS is THE portable destructive erase; char(8)
+*                    moves the cursor left on every terminal SD supports and on
+*                    the Windows console, and cub1 for the windows type IS \b,
+*                    so this changes no terminal on which it already worked.
+                     if echo.input then display char(8) : ' ' : char(8) :
                   end
 
                case n = return.key                    ;* RETURN key
