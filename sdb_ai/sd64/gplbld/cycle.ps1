@@ -198,11 +198,14 @@ while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Da
 # STILL NOT A KILL.  "sd -stop" refuses while users are logged in, which is
 # exactly the protection the comment below describes: it ends an idle daemon and
 # leaves somebody's live session alone.  Only if it declines do we fail.
+$stopSaidOk = $false
 if (Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) {
     $sdExe = Join-Path $PfTree 'usr\bin\sd.exe'
     if (Test-Path -LiteralPath $sdExe) {
         Write-Host '   service stopped but a daemon is still up - asking sd -stop'
-        & $sdExe -stop 2>&1 | ForEach-Object { Write-Host "     $_" }
+        $stopOut = (& $sdExe -stop 2>&1 | Out-String)
+        $stopOut -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { Write-Host "     $_" }
+        $stopSaidOk = ($stopOut -match 'has been shut down')
         $deadline = (Get-Date).AddSeconds(20)
         while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
             Start-Sleep -Milliseconds 500
@@ -223,6 +226,32 @@ if ($left) {
     $names = @($left | ForEach-Object { $_.Name } | Sort-Object -Unique)
     $advice = if ($names -contains 'sd') {
         'Close any SD session and run this again.'
+    } elseif ($stopSaidOk) {
+        # 21 Aug 26 - THE CASE THAT COST TWO RUNS, and it needs naming because
+        # every ordinary reading of it is wrong.  "sd -stop" REPORTED SUCCESS -
+        # "SD (64 Bit) has been shut down" - and the daemon was still there.
+        #
+        # It happens when there is MORE THAN ONE sdwind.  Measured 21 Aug: a
+        # second daemon started at 16:30:55 outside the service and logged "API
+        # listener not started: cannot bind port 4243", because the one from
+        # 16:25:45 already had it.  "sd -stop" reaches whichever daemon owns the
+        # shared segment it finds, stops that one, and says so - truthfully -
+        # while the older one keeps running with the port and a segment nothing
+        # can now reach.
+        #
+        # ENDING IT IS SAFE AND IS THE ONLY RECOVERY.  It is a DAEMON, not
+        # somebody's session - the test above has already established no "sd"
+        # process exists - and it has been asked to stop and did not.  The
+        # script still will not do it: an automatic kill here is exactly the
+        # thing the "named, not killed" rule exists to prevent, and a daemon
+        # that ignores a successful shutdown is worth a human look.
+        'BUT "sd -stop" REPORTED SUCCESS, so this daemon is orphaned from the shared ' +
+        'segment - there was probably a second sdwind. It is not a session and nothing ' +
+        'else will end it:' + "`n" +
+        # PARENTHESISED, because -join binds LOOSER than +: without them
+        # "'a' + $x -join ',' + 'b'" parses as "('a' + $x) -join (',' + 'b')"
+        # and the advice line comes out as nonsense at the moment it is needed.
+        '      Stop-Process -Id ' + (($left | ForEach-Object { $_.Id }) -join ',') + ' -Force'
     } else {
         'No SD session is running, so the daemon is refusing for another reason - ' +
         'check for an API session, then "sd -stop" by hand.'
