@@ -105,7 +105,13 @@ param(
     [string]$NamePrefix  = '',   # verify-apiname.ps1   - one account
     [string]$PortPrefix  = '',   # verify-apiport.ps1   - one account
     [string]$ScramPrefix = '',   # verify-scramlogin.ps1 - one account
-    [string]$TierApiPrefix = ''  # verify-tierapi.ps1   - one account per tier
+    [string]$TierApiPrefix = '', # verify-tierapi.ps1   - one account per tier
+
+    # 22 Aug 26 - Send each step's FULL output to its own file and show only a
+    # progress line per step, plus every failing check, on the screen.  The file
+    # is unfiltered; only the screen is selected.  See the loop for why that
+    # distinction is load-bearing, and for what -Quiet costs.
+    [switch]$Quiet
 )
 
 $ErrorActionPreference = 'Continue'
@@ -288,7 +294,8 @@ Write-Output ("post-cycle-elevated: SD is running (sdwind {0}), -Run '{1}'" -f $
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
-$summary = Join-Path $logDir ('post-cycle-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.txt')
+$stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
+$summary = Join-Path $logDir ('post-cycle-' + $stamp + '.txt')
 
 # Name => hashtable of parameters, splatted by NAME.  An empty hashtable means
 # "no arguments", which splats correctly too.
@@ -301,16 +308,23 @@ $steps = @(
     @{ Name = 'verify-nonet.ps1';         P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
     @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
-    # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7) and the
-    # OS.USERS SH/OS.EX truth table (section 7 step 7).  Both drive
-    # CREATE.ACCOUNT, so both belong BEFORE verify-peerlog for the error-log
+    # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
+    # CREATE.ACCOUNT, so it belongs BEFORE verify-peerlog for the error-log
     # reason the routes/rules comment below spells out.
     #
-    # verify-osusers takes NO prefix: its -Phase/-LogName/-ResultFile/-MarkerDir
-    # parameters are how it re-invokes ITSELF, and all four default to empty.
-    # Passing anything here would put it in a phase rather than start it.
+    # *** verify-osusers.ps1 WAS PUT HERE ON 22 Aug AND DOES NOT BELONG. ***
+    # It REFUSES an elevated window - "CPROC admits K$ADMINISTRATOR whatever
+    # OS.USERS says, so an elevated run is admitted by elevation and says
+    # nothing about the list" (verify-osusers.ps1:243) - so it exited 2 without
+    # measuring anything.  It is in post-cycle-unelevated.ps1 now, beside
+    # verify-credacl, which refuses elevation for the same class of reason: a
+    # test that passes because of the token is worse than one nobody runs.
+    #
+    # HOW IT GOT HERE, because the mistake is repeatable: the file was
+    # classified by grepping for WindowsBuiltInRole, which it does mention -
+    # in a gate that refuses rather than requires.  Grep found the role and
+    # assumed the sign.  Read the branch, not the symbol.
     @{ Name = 'verify-catgate.ps1';       P = @{ Account = $CatPrefix } },
-    @{ Name = 'verify-osusers.ps1';       P = @{} },
     # 20 Aug 26 - section 8's per-account ACLs.  It is the only step that
     # deliberately breaks an ACL (icacls /reset) before putting it back.
     #
@@ -419,16 +433,86 @@ $steps = @(
     @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } }
 )
 
-$lines = @()
+# ---------------------------------------------------------------------------
+# 22 Aug 26 - -Quiet: FULL OUTPUT TO A FILE PER STEP, PROGRESS AND FAILURES ON
+# THE SCREEN.  Seventeen verbose steps is several thousand lines, and the
+# console scrollback is not where any of it should be read from anyway.
+#
+# THE FILE IS NEVER FILTERED, and that is the whole design.  §8 of
+# PROJECT_STATUS.md records the intermittent 138/142 being LOST TWICE because
+# "the run went through Select-String, so Start-Transcript recorded the command
+# and not the answers".  So the per-step file gets EVERYTHING - all six streams,
+# via *> - and only what is echoed to the SCREEN is selected.  A filter that
+# can lose evidence must never be the only copy.
+#
+# WHAT -Quiet COSTS, and it is worth knowing before using it: several verifiers
+# call Start-Transcript themselves, and a transcript records what reaches the
+# HOST.  Under -Quiet their output goes to a file instead, so THEIR OWN
+# transcripts will be thin or empty.  Nothing is lost - the runner's per-step
+# file is the fuller record - but do not go looking in the verifier's own
+# transcript afterwards and conclude the step printed nothing.
+#
+# IT IS OPT-IN, NOT THE DEFAULT.  Changing what a suite prints in the middle of
+# an investigation is how evidence goes missing, and today has already cost
+# three runs to changes made around this file rather than in it.
+$lines  = @()
+$failed = 0
+$i      = 0
 foreach ($s in $steps) {
+    $i++
     $path = Join-Path $PSScriptRoot $s.Name
     $shown = ($s.P.GetEnumerator() | ForEach-Object { '-' + $_.Key + ' ' + $_.Value }) -join ' '
-    Write-Output ''
-    Write-Output ('===== ' + $s.Name + ' ' + $shown + ' =====')
     $splat = $s.P
-    & $path @splat
+    $short = $s.Name -replace '\.ps1$', ''
+
+    if (-not $Quiet) {
+        Write-Output ''
+        Write-Output ('===== ' + $s.Name + ' ' + $shown + ' =====')
+        & $path @splat
+        $code = $LASTEXITCODE
+        $lines += ('{0,-28} {1,-22} exit {2}' -f $s.Name, $shown, $code)
+        if ($code -ne 0) { $failed++ }
+        continue
+    }
+
+    $stepLog = Join-Path $logDir ('{0}-{1:d2}-{2}.log' -f $stamp, $i, $short)
+    Write-Host ('[{0,2}/{1}] {2,-22} {3,-24}' -f $i, $steps.Count, $short, $shown) -NoNewline
+
+    # *> captures ALL streams - output, error, warning, verbose, debug and
+    # information.  Write-Host goes to the INFORMATION stream in PowerShell 5+,
+    # which is why it is caught here and would not have been in 2.0.
+    & $path @splat *> $stepLog
     $code = $LASTEXITCODE
-    $lines += ('{0,-28} {1,-22} exit {2}' -f $s.Name, $shown, $code)
+
+    # Surfaced from the file, never from a pipe the file did not also get.
+    # '[FAIL]' is the marker most verifiers use per check; the summary tables
+    # also end rows with FAIL, but those are the same checks counted twice, so
+    # only the marker is surfaced and the count points at the file.
+    $fails = @()
+    if (Test-Path -LiteralPath $stepLog) {
+        $fails = @(Select-String -LiteralPath $stepLog -Pattern '\[FAIL\]' -SimpleMatch -ErrorAction SilentlyContinue)
+    }
+
+    if ($code -eq 0 -and $fails.Count -eq 0) {
+        Write-Host ' OK' -ForegroundColor Green
+    } else {
+        $failed++
+        Write-Host (' FAILED  exit {0}, {1} failing check(s)' -f $code, $fails.Count) -ForegroundColor Red
+        $fails | Select-Object -First 15 | ForEach-Object {
+            Write-Host ('         ' + $_.Line.Trim()) -ForegroundColor Red
+        }
+        if ($fails.Count -gt 15) {
+            Write-Host ('         ... and {0} more, all in the file below' -f ($fails.Count - 15)) -ForegroundColor Red
+        }
+        # A step can exit non-zero with no [FAIL] marker at all - it refused to
+        # start, or died.  Then the last few lines are the only clue there is.
+        if ($fails.Count -eq 0) {
+            Get-Content -LiteralPath $stepLog -Tail 8 -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host ('         ' + $_) -ForegroundColor DarkYellow }
+        }
+        Write-Host ('         full output: ' + $stepLog) -ForegroundColor Yellow
+    }
+    $lines += ('{0,-28} {1,-22} exit {2}  {3}' -f $s.Name, $shown, $code, $stepLog)
 }
 
 Write-Output ''
@@ -437,3 +521,11 @@ $lines | ForEach-Object { Write-Output $_ }
 $lines | Set-Content -LiteralPath $summary -Encoding utf8
 Write-Output ''
 Write-Output ("summary written to: " + $summary)
+if ($Quiet) {
+    Write-Output ("per-step output:    " + (Join-Path $logDir ($stamp + '-NN-verify-*.log')))
+}
+if ($failed -gt 0) {
+    Write-Output ("post-cycle-elevated: {0} of {1} step(s) did not exit 0." -f $failed, $steps.Count)
+    exit 1
+}
+Write-Output ("post-cycle-elevated: all {0} steps exited 0." -f $steps.Count)

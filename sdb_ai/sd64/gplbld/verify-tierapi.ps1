@@ -191,7 +191,24 @@ try {
     }
     Note 'a listener on the port' $true ($listen.Count -gt 0)
     if ($listen.Count -eq 0) { Fail 'Nothing is listening - the rest of this script has nothing to talk to.' }
-    Note 'bound to 127.0.0.1 only' $false ([bool](@($listen) -match '0\.0\.0\.0:' + $Port))
+    # 22 Aug 26 - THIS CHECK WAS INVERTED AGAINST ITS OWN NAME, and it is
+    # POSTURE B LEFT BEHIND.  It read:
+    #
+    #   Note 'bound to 127.0.0.1 only' $false (... -match '0.0.0.0:' + $Port)
+    #
+    # The EXPRESSION asks "is it bound to 0.0.0.0", which is TRUE on a correct
+    # install; the EXPECTATION was $false.  So it failed BECAUSE the server was
+    # right.  Under posture B - loopback TCP with ssh carrying it - the port was
+    # meant to be loopback-only and this passed; Phase 1 reversed that on
+    # 21 Aug 2026 (INADDR_ANY, APIPORT ships active, the installer opens a
+    # firewall rule), and this line was not moved with it.
+    #
+    # verify-apiport.ps1 asks the same question the right way round, two steps
+    # earlier in the runner, and reported "bound to 0.0.0.0 (every interface):
+    # expected True, got True" on the same install minutes before this said the
+    # opposite.  THAT DISAGREEMENT IS WHAT MAKES IT A TEST BUG rather than a
+    # finding: two verifiers, one server, one run, contradictory answers.
+    Note 'bound to every interface, not loopback only' $true ([bool](@($listen) -match '0\.0\.0\.0:' + $Port))
 
     # -----------------------------------------------------------------------
     Step 5 'Each tier logs in through the 32-bit client mvDeveloper uses'

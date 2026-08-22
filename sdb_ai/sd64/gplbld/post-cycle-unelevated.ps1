@@ -102,6 +102,19 @@ $summary = Join-Path $logDir ('post-cycle-unelevated-' + (Get-Date -Format 'yyyy
 # POSITIONALLY and silently gave verify-tiers.ps1 a $Prefix of "-Prefix".
 $steps = @(
     @{ Name = 'verify-credacl.ps1';     P = @{} },
+    # 22 Aug 26 - MOVED HERE FROM post-cycle-elevated.ps1, WHERE IT EXITED 2
+    # WITHOUT MEASURING ANYTHING.  verify-osusers.ps1:243 refuses an elevated
+    # window: "CPROC admits K$ADMINISTRATOR whatever OS.USERS says, so an
+    # elevated run is admitted by elevation and says nothing about the list."
+    # That is verify-credacl's reason in a different guise, which is why the
+    # two sit together.
+    #
+    # IT PROMPTS FOR UAC TWICE, by its own design - it starts unelevated as the
+    # account holder and asks for elevation only for the steps that write
+    # OS.USERS.  So this runner is NOT unattended once it reaches this step.
+    # It is second so that the prompt comes early rather than after five
+    # silent minutes.
+    @{ Name = 'verify-osusers.ps1';     P = @{} },
     @{ Name = 'verify-nocase.ps1';      P = @{} },
     @{ Name = 'verify-setpw.ps1';       P = @{} },
     @{ Name = 'verify-allowgroups.ps1'; P = @{} },

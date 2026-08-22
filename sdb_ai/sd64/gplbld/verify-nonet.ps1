@@ -143,8 +143,19 @@ Write-Output '=== 3. UNLOCK, which shipped in the same cycle and is unrelated ==
 # that number is not worth depending on - match a line that is a bare V with an
 # optional leading number.  The raw output is printed either way, so a miss is
 # diagnosable rather than mysterious.
+# 22 Aug 26 - THE COLON WAS MISSING, so this could never match and had been
+# failing every run since it was written.  The comment above says CT prints
+# "0001 V"; this SD prints "1: V", with a colon, which the pattern did not
+# allow - it wanted digits, whitespace, V.  Found on the first run of this file
+# under post-cycle-elevated.ps1: the raw output printed directly beneath the
+# FAIL said "1: V" in as many words, which is the whole reason the script
+# prints it.  verify-lcnames.ps1:767 makes the same check against COPYP and had
+# the colon all along, so the two now agree.
+#
+# The digit is left optional rather than pinned to 1: the field number is what
+# it is, and this check is about the TYPE CODE, not about which line it lands on.
 $out = Invoke-SD @('CT VOC UNLOCK')
-Note 'CT VOC UNLOCK shows a V type code' $true ($out -match '(?m)^\s*\d*\s*V\s*$')
+Note 'CT VOC UNLOCK shows a V type code' $true ($out -match '(?m)^\s*\d*:?\s*V\s*$')
 Note 'and no longer the description text' $false ($out -match 'Verb to unlock records')
 Write-Output '  --- CT VOC UNLOCK said: ---'
 Write-Output $out
