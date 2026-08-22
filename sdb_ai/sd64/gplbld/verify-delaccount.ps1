@@ -161,26 +161,6 @@ function Invoke-SD([string[]]$commands) {
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
 
-# ADOPT is gated on K$INTERNAL, which means "sd -internal", which means separate
-# arguments and NOT piped - the shape adopt-account.ps1 uses and the only shape
-# that has ever worked for it (PROJECT_STATUS.md 7 step 0).  It also needs a
-# running server, which is why Start-SD exists below.
-function Invoke-SDInternal([string[]] $SdArgs) {
-    $so = Join-Path $env:TEMP ("sd-delacct-out-$PID.txt")
-    $se = Join-Path $env:TEMP ("sd-delacct-err-$PID.txt")
-    $p = Start-Process -FilePath $sdExe -ArgumentList $SdArgs -NoNewWindow -PassThru `
-                       -RedirectStandardOutput $so -RedirectStandardError $se
-    $exited = $p.WaitForExit(120000)
-    $text = ''
-    foreach ($f in @($so, $se)) {
-        if (Test-Path $f) {
-            $text += (Get-Content $f -Raw)
-            Remove-Item $f -Force -ErrorAction SilentlyContinue
-        }
-    }
-    if (-not $exited) { return "sd $SdArgs did not finish within two minutes" }
-    return $text.Trim()
-}
 
 # NEVER "Start-Process -Wait" for sd -start: sdwind inherits sd's handles and
 # outlives it, so anything waiting on the output streams waits for the daemon.
@@ -532,7 +512,7 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    Step 4 "THE CONTROL: an account SD did not make, adopted with ADOPT"
+    Step 4 "THE CONTROL: an account SD is told it did not make"
 
     # Without this, step 3 would pass just as happily on a build that deletes
     # every Windows account it is pointed at - and that is the one mistake that
@@ -546,14 +526,44 @@ try {
     # so a disabled control would mean a CreateProfile failure could be either
     # the machine or the account state.  The password is generated, printed
     # nowhere, and the account is removed in step 6.
+    # BUILT BY CREATE.ACCOUNT AND THEN MARKED, NOT BY ADOPT.  Owner's ruling,
+    # 21 Aug 2026: ADOPT exists to adopt the INSTALLER during the install and is
+    # not available afterwards, so a verifier must not reach for it to
+    # manufacture a subject.  This file used to write the one-shot $adopt marker
+    # itself and adopt a hand-made Windows account, which re-opened the very
+    # window the marker exists to close.
+    #
+    # NOTHING IS LOST, and that is a measurement rather than a hope: an adopted
+    # ACCOUNTS record and an SD-made one are identical in shape (checked against
+    # DON, adopted at install, 21 Aug 2026), and DELETE.ACCOUNT does not read the
+    # record to decide.  It asks !is_sd_user, which is exactly
+    # 'if ($u.Description -ceq "SD account") { exit 0 }; exit 1' (IS_SD_USER:94).
+    # The description IS the discriminator, so setting it is what makes this an
+    # account SD did not make - and it isolates that one variable instead of
+    # varying how the account arrived as well.
     $bpw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $null = New-LocalUser -Name $borrowAcc -Password (ConvertTo-SecureString $bpw -AsPlainText -Force) `
-                          -Description 'made by hand, not by SD' -ErrorAction Stop
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $borrowAcc BOTH", $bpw, $bpw)
+    $bRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $borrowAcc.ToUpper())
+    $bDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $borrowAcc)
+    if (-not (Test-Path -LiteralPath $bRec)) {
+        Write-Host $out
+        Fail ("CREATE.ACCOUNT did not register $borrowAcc, so there is no SD " +
+              'account to delete and direction two cannot be measured.')
+    }
     $made += $borrowAcc
+    Note 'the borrowed subject is registered' $true ([bool](Test-Path -LiteralPath $bRec))
+    Note "sdu_$borrowAcc group made"          $true ([bool](Get-LocalGroup -Name ('sdu_' + $borrowAcc) -ErrorAction SilentlyContinue))
 
-    Note 'the borrowed account exists'                 $true  ([bool](Get-LocalUser -Name $borrowAcc -ErrorAction SilentlyContinue))
-    Note 'its description is NOT "SD account"'         $false ((Get-Description $borrowAcc) -ceq 'SD account')
+    # THE CONTROL FOR THE MARKING ITSELF.  CREATE.ACCOUNT stamps "SD account"; if
+    # it did not, the next line would be setting a description that was already
+    # what we want and step 5 would prove nothing about the branch.
+    Note 'CREATE.ACCOUNT stamped it as SD-made'     $true  ((Get-Description $borrowAcc) -ceq 'SD account')
+    Set-LocalUser -Name $borrowAcc -Description 'made by hand, not by SD' -ErrorAction Stop
+    Note 'now marked as an account SD did not make' $false ((Get-Description $borrowAcc) -ceq 'SD account')
 
+    # ENABLED, WITH A KNOWN PASSWORD, and now for free: SET_PASSWD calls
+    # Enable-LocalUser, so both subjects reach the profile step in the SAME STATE
+    # and a CreateProfile failure cannot be the account being disabled.
     $bSid  = Get-Sid $borrowAcc
     $bProf = New-TestProfile $borrowAcc $bpw
     if ($bProf -eq '') {
@@ -562,57 +572,6 @@ try {
         Note 'borrowed profile exists'  $true (Test-Path -LiteralPath $bProf)
         Write-Host ("   profile: {0}  (via {1})" -f $bProf, $script:profileHow)
     }
-
-    # CREATE.ACCOUNT USER refuses a name whose Windows account already exists
-    # (message 10038); ADOPT is the sanctioned door and needs sd -internal.
-    #
-    # AND SINCE 21 AUG 2026 IT ALSO NEEDS THE ONE-SHOT MARKER, so this verifier
-    # writes one exactly as adopt-account.ps1 does.  Placing the marker rather
-    # than hand-writing an ACCOUNTS record was the choice made when phase 3
-    # closed this door: it keeps the control leg on the REAL adoption path, so
-    # what step 5 measures is still what an install produces.  A subject built
-    # by hand would be a subject nothing else in the product ever makes.
-    #
-    # CREATEA deletes it on acceptance; removed here as well for the case where
-    # the verb refuses, because a marker left on the machine is a hole and this
-    # script is run on the same install the suite goes on to use.
-    $adoptMarker = Join-Path $env:ProgramData 'SD\sdsys\$adopt'
-    Set-Content -LiteralPath $adoptMarker -Encoding utf8 `
-                -Value "written by verify-delaccount.ps1 for $borrowAcc"
-
-    # READ BEFORE THE CLEANUP, and initialised to the FAILING value.  Testing
-    # the file after the finally would test the finally: it would answer "gone"
-    # on every build, including one where CREATEA never deleted it.
-    $markerLeft = $true
-    try {
-        $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $borrowAcc, 'ADOPT')
-        $markerLeft = Test-Path -LiteralPath $adoptMarker
-    }
-    finally {
-        if (Test-Path -LiteralPath $adoptMarker) {
-            Remove-Item -LiteralPath $adoptMarker -Force -ErrorAction SilentlyContinue
-        }
-    }
-    Write-Host $out
-
-    # THE MARKER IS PART OF WHAT IS UNDER TEST NOW, so assert it was consumed.
-    # A build where CREATEA accepted ADOPT without deleting it would pass every
-    # other check in this file and leave the install-only gate permanently open.
-    Note 'ADOPT consumed the one-shot marker' $false $markerLeft
-
-    $bRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $borrowAcc.ToUpper())
-    $bDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $borrowAcc)
-    if (-not (Test-Path -LiteralPath $bRec)) {
-        Write-Host $out
-        Fail ("ADOPT did not register $borrowAcc, so there is no SD account to " +
-              'delete and direction two cannot be measured.')
-    }
-    Note 'ADOPT registered it'              $true ([bool](Test-Path -LiteralPath $bRec))
-    Note "sdu_$borrowAcc group made"        $true ([bool](Get-LocalGroup -Name ('sdu_' + $borrowAcc) -ErrorAction SilentlyContinue))
-    # ADOPT changes nothing about the Windows account - the 15 Aug rule in
-    # CREATEA - so the description it was made with must still be there.  If
-    # this ever failed, direction two would be measuring its own side effect.
-    Note 'ADOPT left the description alone' $true ((Get-Description $borrowAcc) -ceq 'made by hand, not by SD')
 
     # -----------------------------------------------------------------------
     Step 5 "DELETE.ACCOUNT $borrowAcc - the Windows account must SURVIVE"
@@ -645,7 +604,7 @@ try {
     }
 
     # The SD side still goes: only the LOGIN is spared.  The group is SD's own
-    # work (CREATEA makes sdu_<name> on the adopt path too), so it goes with it.
+    # work, so it goes with it.
     Note 'the SD account was still removed'  $false (Test-Path -LiteralPath $bRec)
     Note 'sdu_ group is gone'                $false ([bool](Get-LocalGroup -Name ('sdu_' + $borrowAcc) -ErrorAction SilentlyContinue))
     Note 'account directory is gone'         $false (Test-Path -LiteralPath $bDir)

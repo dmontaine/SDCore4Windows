@@ -5,6 +5,40 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+21 Aug 26  FAILED API LOGINS ARE NOW WRITTEN TO THE AUDIT TRAIL.
+
+           Until now the audit file recorded only one kind of API refusal: an
+           account that authenticated correctly but had not been given API
+           access.  Everything else - a wrong password, an account with no API
+           password set, a password set before the SCRAM change, a user name
+           the server will not accept - was refused and left no trace at all.
+           If you were asked "who has been trying to log in?", there was
+           nothing to answer with.
+
+           Every refusal is recorded now, in sdsys\audit, one line each:
+
+               API REFUSED user=jim reason=wrong password
+
+           The reasons are plain: wrong password, no credential, credential is
+           version 1 - run MODIFY.PASSWORD, name rejected by valid_os_name,
+           not in sdapi, and a few for malformed or out-of-order messages.
+
+           WHAT THE CLIENT SEES HAS NOT CHANGED.  It is still told the same
+           thing for every credential failure - "Invalid username or password"
+           - after the same pause.  The detail goes only to the audit file,
+           which ordinary SD accounts can add to but cannot read.
+
+           A user name is recorded as it was typed, except that anything
+           outside letters, digits, dot, underscore and hyphen becomes "?",
+           and a long one is cut to 32 characters and marked "...".  So
+           GITORLI\jim is recorded as GITORLI?jim.  That is deliberate: the
+           name has not been checked at that point, and a name containing a
+           new line could otherwise forge a line in the trail.
+
+           Note that anyone who can reach the API port can now cause a line to
+           be written, at most one per connection.  If the file grows more
+           than you want, it is safe to move it aside; SD starts a new one.
+
 21 Aug 26  THE INSTALLER NOW FINISHES BY OPENING SD, SO YOU CAN GIVE YOUR OWN
            ACCOUNT A PASSWORD.
 

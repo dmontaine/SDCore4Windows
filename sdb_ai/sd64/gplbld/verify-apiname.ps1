@@ -264,17 +264,41 @@ try {
     Note 'every refused spelling reads exactly like a wrong password' $true $same
 
     # -----------------------------------------------------------------------
-    Step 6 'AND IT LEAVES NO AUDIT RECORD'
+    Step 6 'AND EVERY REFUSAL IS AUDITED'
 
-    # APISRVR audits one refusal reason only - "not in sdapi", at :1363.  The
-    # scram.bad.cred path writes nothing, so a refused spelling is invisible
-    # afterwards as well as at the time.
+    # THIS EXPECTATION IS THE OPPOSITE OF WHAT IT WAS ON 21 Aug 2026, and the
+    # inversion is the fix.  APISRVR used to audit one reason only - "not in
+    # sdapi" - and that fires AFTER the proof succeeds, so everything reaching
+    # scram.bad.cred wrote nothing at all.  This script measured that (the file
+    # did not grow across five refusals) and section 8 carried it as an open
+    # question.  There is now one writer at exit.vb.scram.fail, driven by
+    # scram.refuse.reason, and every path out of both handlers passes it.
     $auditAfter = ''
     if (Test-Path -LiteralPath $audit) { $auditAfter = Get-Content -LiteralPath $audit -Raw }
-    $grew = ($auditAfter.Length -gt $auditBefore.Length)
-    $named = ($auditAfter -match [regex]::Escape($machine + '\' + $Prefix))
-    Note 'audit names the refused spelling' $false $named
-    Write-Host ("     audit grew during step 4/5: {0}" -f $grew)
+    Note 'audit grew across the refusals' $true ($auditAfter.Length -gt $auditBefore.Length)
+
+    $new = $auditAfter.Substring([Math]::Min($auditBefore.Length, $auditAfter.Length))
+
+    # THE REASON, NOT JUST A RECORD.  "something was written" would pass on a
+    # writer that logged the wrong thing for every refusal alike; these two say
+    # the right branch named itself, and they differ from each other.
+    Note 'records reason=name rejected by valid_os_name' $true `
+         ($new -cmatch 'reason=name rejected by valid_os_name')
+    Note 'records reason=wrong password'                 $true `
+         ($new -cmatch 'reason=wrong password')
+
+    # THE SANITISER, AND THIS IS THE LOG-INJECTION CONTROL.  audit_message()
+    # (k_error.c) writes the text verbatim and ends the record with a newline,
+    # and these names have NOT passed valid_os_name - that is why they are being
+    # recorded.  scram.clean.name maps anything outside valid_os_name's own set
+    # to '?', so the backslash form must appear ONLY in its sanitised spelling.
+    $sanitised = $machine + '?' + $Prefix
+    $raw       = $machine + '\' + $Prefix
+    Note 'the name is recorded sanitised'  $true  ($new -cmatch [regex]::Escape($sanitised))
+    Note 'the raw backslash never appears' $false ($new -cmatch [regex]::Escape($raw))
+
+    Write-Host '     --- what the trail gained ---'
+    foreach ($l in ($new -split "`r?`n")) { if ($l.Trim()) { Write-Host ("     " + $l.Trim()) } }
 
     # -----------------------------------------------------------------------
     Step 7 'THE CLIENT CAP IS A DIFFERENT CHECK, and says so'

@@ -227,6 +227,17 @@ deffun ps_script(script) calling '!ps_script'
 *   IT IS NOT SHIPPED AND MUST NEVER BE.  A marker in the source tree would be
 *   staged into every install and leave the door open permanently, which is the
 *   state this replaces.
+*
+* 21 Aug 26 Windows port - AND IT NAMES THE ACCOUNT IT AUTHORISES.  The USER arm
+*   overwrites this with '$adopt.<name>' as soon as the name is parsed, so one
+*   marker opens the door for one account rather than for the verb in general.
+*   Owner's ruling: the project AS DELIVERED must enforce that SD account setup
+*   happens in SD.  Somebody who forges a marker afterwards is degrading their
+*   own install, which is their right and is not what this defends against.
+*
+*   WHAT IS LEFT HERE IS THE FALLBACK FOR THE ARMS THAT NEVER ADOPT - GROUP and
+*   OTHER, which share more.args and never assign acc.uname.  Nothing writes
+*   this bare name any more, so it cannot exist on a delivered system.
    adopt.marker = @sdsys:@ds:'$adopt'
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
@@ -253,6 +264,21 @@ deffun ps_script(script) calling '!ps_script'
      if pathname = '' then pathname = '/home/sd/user_accounts'
      call @parser(PARSER$GET.TOKEN, token.type, acc.uname, keyword)
      if token.type = PARSER$END then stop
+
+* 21 Aug 26 Windows port - THE MARKER NAMES THE ONE ACCOUNT IT AUTHORISES.
+*   Built HERE rather than in more.args because that subroutine is shared with
+*   the GROUP and OTHER arms, where acc.uname is never assigned - and AND DOES
+*   NOT SHORT-CIRCUIT, so putting downcase(acc.uname) in the ADOPT case
+*   condition would abort every CREATE.ACCOUNT GROUP with an unassigned
+*   variable.  That is the defect PROJECT_STATUS.md section 6 records at
+*   CREATEA:1405, which went unnoticed from 10 June to 21 Aug 2026.
+*
+*   DOWNCASED, BECAUSE THIS PATH DOES NOT DO IT.  adopt-account.ps1 writes the
+*   name in lower case; acc.uname keeps whatever case was typed until the
+*   is_user test below, and on the ADOPT branch that downcase runs only in its
+*   ELSE - so an account found under its typed spelling is never folded.
+     adopt.marker = @sdsys:@ds:'$adopt.':downcase(acc.uname)
+
      * any other args? (specifically no.query)
      * rem we may abort in this routine
      gosub more.args

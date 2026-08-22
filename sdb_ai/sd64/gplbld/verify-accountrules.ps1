@@ -425,43 +425,66 @@ try {
     # keyword a console user may never use is not one they need to know exists,
     # so a message naming it would confirm the guess.  2018 is "Unexpected
     # token (%1)".
+    # THIS IS THE TEST, and since 21 Aug 2026 it is the ONLY place a verifier
+    # runs ADOPT: it must be refused.  There used to be a second, identical
+    # refusal below labelled "the marker does not work twice"; with nothing here
+    # writing a marker any more the two were the same command in the same state.
     Note 'ADOPT refused as an unknown token (2018)' $true (Shown $out 2018 @('ADOPT'))
     Note 'no SD account was registered'             $false (Test-Path -LiteralPath (AcctRec $adpAcc))
     Note 'the Windows account is untouched'         $true  (HasUser $adpAcc)
 
-    # THE CONTROL, AND IT IS THE WHOLE POINT OF THE LEG.  Same command, same
-    # name, seconds apart, with the marker present.  Without this, "ADOPT was
-    # refused" would pass on a build where ADOPT is broken outright or where
-    # sd -internal never ran at all.
-    Set-Content -LiteralPath $adoptMarker -Encoding utf8 `
-                -Value "written by verify-accountrules.ps1 for $adpAcc"
-    $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ADOPT')
-    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ADOPT  (with the marker)" $out
-    $markerLeft = Test-Path -LiteralPath $adoptMarker
+    # THE CONTROL, AND IT NOW COMES FROM THE INSTALL RATHER THAN A SECOND RUN.
+    # Owner's ruling, 21 Aug 2026: ADOPT exists to adopt the INSTALLER during the
+    # install and is not available afterwards.  This leg used to write the marker
+    # itself and run ADOPT again - which re-opened the very window the marker
+    # exists to close, and left the product looking as though it offered a door
+    # it does not.
+    #
+    # NOTHING IS LOST, and the evidence is better.  The install runs ADOPT
+    # exactly once and leaves every property this leg used to assert: the
+    # register record, the SPENT marker, the untouched description, both route
+    # groups, and message 10040 in adopt-account.log.  Reading those measures the
+    # REAL adoption instead of a simulation of it, which is what this file's own
+    # comment already said was happening "every time" and nothing measured.
+    #
+    # IT STILL CONTROLS THE REFUSAL ABOVE.  "ADOPT was refused" would pass on a
+    # build where ADOPT is broken outright; these rows say the verb works, on the
+    # one occasion it is meant to.
+    $adoptLog = Join-Path $Data 'adopt-account.log'
+    $installUser = ''
+    if (Test-Path -LiteralPath $adoptLog) {
+        $logText = Get-Content -LiteralPath $adoptLog -Raw
+        $m = [regex]::Match($logText, '(?m)^(\S+) keeps the Windows sign-in rights it already had')
+        if ($m.Success) { $installUser = $m.Groups[1].Value }
+    }
 
-    Note 'CONTROL: with the marker, ADOPT registers it' $true (Test-Path -LiteralPath (AcctRec $adpAcc))
-    Note 'the marker was consumed'                      $false $markerLeft
-    # ADOPT CHANGES NOTHING ABOUT THE WINDOWS ACCOUNT - the 15 Aug rule - so the
-    # description it was made with must survive.
-    Note 'the description is untouched' 'made by hand, not by SD' (
-             (Get-LocalUser -Name $adpAcc -ErrorAction SilentlyContinue).Description)
-    # AND IT GETS BOTH ROUTES, because ADOPT forces tier ADMINISTRATOR and an
-    # administrator always has both.  Before Phase 2 an ADOPTed account joined
-    # NEITHER, and APISRVR:1362 requires sdapi with no exemption - so the person
-    # who installed SD could not use its API.  The install exercises this every
-    # time; nothing measured it until now.
-    Note 'an ADOPTed account has both routes' 'ssh+api' (Routes $adpAcc)
-    # 10040, not 10034: ADOPT must not put a borrowed login into sdsshonly.
-    Note 'message 10040 shown (keeps its sign-in rights)' $true  (Shown $out 10040 @($adpAcc))
-    Note 'NOT put in sdsshonly'                           $false (InGroup 'sdsshonly' $adpAcc)
+    if ($installUser -eq '') {
+        # NOT SILENTLY SKIPPED.  A missing log means the refusal above has lost
+        # its control, and that has to be visible rather than inferred from a
+        # shorter summary.
+        Note 'adopt-account.log names the installing user' $true $false
+        Write-Host '   without it the refusal above has no control - see this step''s comment' -ForegroundColor Yellow
+    } else {
+        Write-Host "   the install adopted: $installUser"
+        Note 'CONTROL: the install registered the adopted account' $true `
+             (Test-Path -LiteralPath (AcctRec $installUser))
+        Note 'CONTROL: the marker was consumed and none survives' $false `
+             (Test-Path -LiteralPath $adoptMarker)
+        # ADOPT CHANGES NOTHING ABOUT THE WINDOWS ACCOUNT - the 15 Aug rule - so
+        # the installing user's description must not read as one SD created.
+        Note 'CONTROL: the description is not "SD account"' $false `
+             (((Get-LocalUser -Name $installUser -ErrorAction SilentlyContinue).Description) -ceq 'SD account')
+        # BOTH ROUTES, because ADOPT forces tier ADMINISTRATOR and an
+        # administrator always has both.  Before Phase 2 an ADOPTed account
+        # joined NEITHER, and APISRVR requires sdapi with no exemption - so the
+        # person who installed SD could not use its API.
+        Note 'CONTROL: an ADOPTed account has both routes' 'ssh+api' (Routes $installUser)
+        # 10040, not 10034: ADOPT must not put a borrowed login into sdsshonly.
+        Note 'CONTROL: it kept its sign-in rights (10040)' $true `
+             ($logText -match [regex]::Escape($installUser + ' keeps the Windows sign-in rights it already had'))
+        Note 'CONTROL: it is not in sdsshonly' $false (InGroup 'sdsshonly' $installUser)
+    }
 
-    # A SECOND ADOPT WITH NO MARKER IS REFUSED AGAIN, which is what "one-shot"
-    # means.  It would be refused as "account already exists" too, so this asks
-    # for 2018 specifically - the token test comes first in more.args, before
-    # anything looks at the register.
-    $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ADOPT')
-    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ADOPT  (marker spent)" $out
-    Note 'the marker does not work twice (2018)' $true (Shown $out 2018 @('ADOPT'))
 }
 catch {
     $script:failed = $true

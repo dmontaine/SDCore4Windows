@@ -19,6 +19,16 @@
 *
 *
 * START-HISTORY:
+* 21 Aug 26 Windows port - EVERY REFUSED API LOGIN IS AUDITED, not just the
+*           sdapi one.  Before this only "not in sdapi" reached the trail, and
+*           that fires AFTER the proof succeeds - so a wrong password, an
+*           unknown account, a version 1 credential and a rejected name all
+*           went to scram.bad.cred and wrote nothing.  Measured, not inferred:
+*           gplbld/verify-apiname.ps1 watched the audit file not grow at all
+*           across five consecutive refused logins.  One writer, at
+*           exit.vb.scram.fail, driven by scram.refuse.reason; the reply to the
+*           client is unchanged and still says the same thing to all of them.
+*           PROJECT_STATUS.md section 8.
 * 21 Aug 26 Windows port - API ACCESS IS PER-ACCOUNT NOW.  vb.scram.final tests
 *           membership of sdapi after the proof succeeds and refuses with
 *           message 10073.  CREATE.ACCOUNT does not join that group, so the
@@ -254,6 +264,13 @@ scram.sfirst = ''      ;* server-first, exactly as it went out
 scram.nonce = ''       ;* Combined nonce, client's then ours
 scram.storedkey = ''   ;* From $cred, base64
 scram.serverkey = ''   ;* From $cred, base64
+* THE AUDIT TRAIL'S TWO VARIABLES.  scram.refuse.reason is the whole mechanism:
+* '' means "this exchange has not been refused", and any other value is written
+* once at exit.vb.scram.fail.  Keeping it here with the rest of the state is
+* what makes a refusal impossible to leave unlogged - every path out of both
+* handlers goes through that one exit.
+scram.audit.name = ''   ;* Name as PRESENTED, sanitised - see scram.clean.name
+scram.refuse.reason = '';* Why this exchange was refused; '' = not refused
 
 loop
    unload.object               ;* Unload inactive object code
@@ -1138,6 +1155,7 @@ vb.scram.first:
                * vb.login needed no such guard because it was a single message
                * that set logged.in and nothing followed it.
                if logged.in then
+                  scram.refuse.reason = 'sequence error - already authenticated'
                   abort.message = sysmsg(5273) ;* Authentication sequence error
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
@@ -1167,6 +1185,12 @@ vb.scram.first:
                if scram.attr[1,2] # 'n=' then goto scram.bad.message
                username = scram.attr[3,99999999]
 
+               * TAKEN HERE, BEFORE ANY CHECK, so that every refusal below has a
+               * name to record - including the ones that reject the name
+               * itself, which are the interesting ones.  Sanitised because at
+               * this point it is still whatever the client sent.
+               gosub scram.clean.name
+
                scram.attr = field(scram.cfirst.bare, ',', 2)
                if scram.attr[1,2] # 'r=' then goto scram.bad.message
                scram.cnonce = scram.attr[3,99999999]
@@ -1176,10 +1200,17 @@ vb.scram.first:
                * allows letters, digits, dot, underscore and hyphen only, so a
                * name that would have required escaping cannot be a user here.
                * Refusing it is therefore the same answer as decoding it.
-               if username = '' or username[1,1] = '$' then goto scram.bad.cred
-               if not(valid_os_name(username)) then goto scram.bad.cred
+               if username = '' or username[1,1] = '$' then
+                  scram.refuse.reason = 'unusable name'
+                  goto scram.bad.cred
+               end
+               if not(valid_os_name(username)) then
+                  scram.refuse.reason = 'name rejected by valid_os_name'
+                  goto scram.bad.cred
+               end
 
                openpath @sdsys:@ds:'$cred' to scram.cred.f else
+                  scram.refuse.reason = 'cannot open $cred'
                   abort.message = sysmsg(5274) ;* Authentication service unavailable
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
@@ -1187,6 +1218,7 @@ vb.scram.first:
 
                read scram.cred from scram.cred.f, upcase(username) else
                   close scram.cred.f
+                  scram.refuse.reason = 'no credential'
                   goto scram.bad.cred      ;* no credential - fail closed
                end
                close scram.cred.f
@@ -1197,6 +1229,7 @@ vb.scram.first:
                * run MODIFY.PASSWORD again.  !CRED_VERIFY refuses it the same way.
                if scram.cred<CRED$VERSION> # SCRAM$CRED.VERSION then
                   scram.cred = ''
+                  scram.refuse.reason = 'credential is version 1 - run MODIFY.PASSWORD'
                   goto scram.bad.cred
                end
 
@@ -1206,8 +1239,14 @@ vb.scram.first:
                scram.serverkey = scram.cred<CRED$SERVERKEY>
                scram.cred = ''
 
-               if scram.salt = '' or scram.iter = '' then goto scram.bad.cred
-               if scram.storedkey = '' or scram.serverkey = '' then goto scram.bad.cred
+               if scram.salt = '' or scram.iter = '' then
+                  scram.refuse.reason = 'credential incomplete'
+                  goto scram.bad.cred
+               end
+               if scram.storedkey = '' or scram.serverkey = '' then
+                  scram.refuse.reason = 'credential incomplete'
+                  goto scram.bad.cred
+               end
 
                * 18 RANDOM BYTES, AND THE 18 IS NOT ARBITRARY.  It is a multiple
                * of three, so base64 encodes it with no '=' padding, and every
@@ -1247,6 +1286,7 @@ vb.scram.final:
                gosub scram.trim.body
 
                if logged.in then
+                  scram.refuse.reason = 'sequence error - already authenticated'
                   abort.message = sysmsg(5273) ;* Authentication sequence error
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
@@ -1257,6 +1297,7 @@ vb.scram.final:
                * running the comparison against empty values is the shape of bug
                * that turns a signature check into a formality.
                if scram.stage # 1 then
+                  scram.refuse.reason = 'sequence error - no client-first'
                   abort.message = sysmsg(5273) ;* Authentication sequence error
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
@@ -1302,15 +1343,25 @@ vb.scram.final:
                if scram.csig = '' then goto scram.crypto.failed
 
                scram.ckey = SDEXT(scram.proof : @FM : scram.csig, @TRUE, SD_XORBYTES)
-               if scram.ckey = '' then goto scram.bad.cred
+               if scram.ckey = '' then
+                  scram.refuse.reason = 'client key derivation failed'
+                  goto scram.bad.cred
+               end
 
                scram.derived = SDEXT(scram.ckey, @TRUE, SD_SHA256)
                scram.ckey = ''
-               if scram.derived = '' then goto scram.bad.cred
+               if scram.derived = '' then
+                  scram.refuse.reason = 'stored key derivation failed'
+                  goto scram.bad.cred
+               end
 
                * Constant time, as !CRED_VERIFY is.  The primitive was written
                * for this call as much as for that one.
                if SDEXT(scram.derived : @FM : scram.storedkey, @TRUE, SD_CTEQUAL) # '1' then
+                  * THE WRONG PASSWORD, and the one the trail most needs to
+                  * name: it is the only refusal here that means somebody knows
+                  * the account exists.
+                  scram.refuse.reason = 'wrong password'
                   goto scram.bad.cred
                end
 
@@ -1360,7 +1411,10 @@ vb.scram.final:
 *   os_permitted()'s "missing file or missing record means no" (op_sh.c), and
 *   the opposite of NEWVOC's tier lists - do not carry that convention across.
                if not(is_grp_member(scram.user, 'sdapi')) then
-                  void kernel(K$AUDIT, 'API REFUSED user=' : scram.user : ' reason=not in sdapi')
+                  * THE RECORD IS WRITTEN AT exit.vb.scram.fail LIKE EVERY OTHER
+                  * REFUSAL NOW.  This used to call K$AUDIT here and was the only
+                  * refusal that reached the trail at all.
+                  scram.refuse.reason = 'not in sdapi'
                   abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
@@ -1394,11 +1448,13 @@ vb.scram.final:
                * each ends in the return that leaves the handler.
 
 scram.bad.message:
+               if scram.refuse.reason = '' then scram.refuse.reason = 'malformed authentication message'
                abort.message = sysmsg(5272) ;* Invalid authentication message
                server.error = SV$ON.ERROR
                goto exit.vb.scram.fail
 
 scram.crypto.failed:
+               if scram.refuse.reason = '' then scram.refuse.reason = 'authentication service failed'
                * A primitive that fails is a fault in this server, not a wrong
                * password, and saying so costs nothing: it tells an attacker
                * only that SDEXT is broken, which no credential depends on.
@@ -1419,12 +1475,37 @@ scram.bad.cred:
                * unknown account receives a plausible server-first and fails at
                * 48 like everyone else.  That needs a secret this program can
                * read but not write - docs/SCRAM_AUTH.md, "Still open".
+               if scram.refuse.reason = '' then scram.refuse.reason = 'credential'
                abort.message = sysmsg(5017) ;* Invalid username or password
                server.error = SV$ON.ERROR
                sleep 3
                goto exit.vb.scram.fail
 
 exit.vb.scram.fail:
+               * THE ONE PLACE A REFUSED LOGIN IS RECORDED, and the reason it is
+               * here rather than at each refusal: every path out of both
+               * handlers passes through this label, so a refusal added later is
+               * audited whether or not its author thinks about the trail.  Same
+               * argument as LOGIN's terminate.connection (section 7 step 4).
+               *
+               * THE CLIENT IS TOLD NOTHING NEW.  abort.message is already set
+               * by the label that sent us here, and every credential failure
+               * still answers 5017 after the same three second sleep.  The
+               * trail gets the truth; the caller gets what it always got.
+               *
+               * THE COST, ACCEPTED DELIBERATELY: a stranger can now make this
+               * server write an audit record, one per connection and never
+               * faster than the sleep above allows.  An unlogged authentication
+               * failure is the worse of the two, and win32_audit_rotate()
+               * exists for the file.
+               if scram.refuse.reason # '' then
+                  * A client-final with no client-first never reached the name,
+                  * so there is nothing to report rather than an empty field.
+                  if scram.audit.name = '' then scram.audit.name = '(none)'
+                  void kernel(K$AUDIT, 'API REFUSED user=' : scram.audit.name : ' reason=' : scram.refuse.reason)
+                  scram.refuse.reason = ''
+               end
+
                * THE CONNECTION GOES, as it does for a failed request 24.  It is
                * also the only brake besides the sleep: there is still no
                * lockout, so making each guess pay for a new connection is worth
@@ -1453,6 +1534,50 @@ scram.trim.body:
                   cmnd = cmnd[1,len(cmnd)-1]
                repeat
 
+               return
+
+               * ----------------------------------------------------------------------
+               * The presented user name, made safe to put in the audit trail.
+               * Reads username, writes scram.audit.name.
+               *
+               * WHY IT HAS TO BE SANITISED: audit_message() (k_error.c) writes
+               * the text VERBATIM and ends the record with a newline, so a name
+               * carrying one would FORGE AN AUDIT LINE - and this runs on the
+               * paths where the name has NOT passed valid_os_name, which is the
+               * whole point of recording it.  The name is still whatever the
+               * client sent, and a hostile client is not bound by the 32
+               * character cap our own sdclilib applies.
+               *
+               * THE PERMITTED SET IS valid_os_name's OWN, so a name that would
+               * have been accepted appears unchanged and anything else is
+               * visibly marked with ?.  Reading the trail therefore shows what
+               * was tried without the trail being able to lie about it.
+
+scram.clean.name:
+               * Assigned here rather than kept in the state block above: it is a
+               * constant, not per-session state, and VALID_OS_NAME sets its own
+               * copy the same way.  The two must not drift - if that one gains
+               * a character, so does this.
+               scram.cn.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-'
+               scram.cn.raw = username
+               scram.cn.trunc = @false
+               if len(scram.cn.raw) > MAX.USERNAME.LEN then
+                  scram.cn.raw = scram.cn.raw[1, MAX.USERNAME.LEN]
+                  scram.cn.trunc = @true
+               end
+
+               * The same convert() idiom VALID_OS_NAME uses, inverted: the
+               * first call collects the characters that are NOT allowed, the
+               * second maps each of them to ?.  Duplicates in the first result
+               * are harmless - convert maps positionally and both map to ?.
+               scram.cn.bad = convert(scram.cn.chars, '', scram.cn.raw)
+               if scram.cn.bad # '' then
+                  scram.cn.raw = convert(scram.cn.bad, str('?', len(scram.cn.bad)), scram.cn.raw)
+               end
+
+               scram.audit.name = scram.cn.raw
+               if scram.audit.name = '' then scram.audit.name = '(empty)'
+               if scram.cn.trunc then scram.audit.name := '...'
                return
 
                * ======================================================================

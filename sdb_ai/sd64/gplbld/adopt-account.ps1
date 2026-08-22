@@ -31,6 +31,13 @@
 # refuses without an elevated session.  What the marker adds is a window in
 # time, not a second identity test.
 #
+# AND SINCE 21 AUG 2026 IT IS A WINDOW FOR ONE NAME.  The file is
+# 'sdsys\$adopt.<user>', so a marker authorises adopting that account and no
+# other.  Owner's ruling: the project AS DELIVERED must enforce that SD account
+# setup happens in SD - a generic marker re-opened the verb for every name, and
+# an elevated administrator forging one afterwards is degrading their own
+# install, which is their right and is not what this defends against.
+#
 # IT IS REMOVED TWICE OVER.  CREATEA deletes it when it accepts the keyword, and
 # the finally below deletes it whatever happened - because the failure that
 # matters here is the one where it survives the install and leaves the door
@@ -210,12 +217,23 @@ try {
     # directory, so New-Item would fail and ADOPT would be refused.  The name is
     # CREATEA's, at the adopt.marker assignment.
     #
-    # WHAT IS IN IT IS FOR A HUMAN, not for CREATEA, which tests existence only.
-    # Content would have to be parsed by the verb to mean anything, and a
-    # mismatch on case or a domain prefix would break the install for no gain.
-    # But a marker that outlives its window is a hole, so anybody who finds one
-    # should be able to tell at a glance what wrote it and when.
-    $marker = Join-Path $DataDir 'sdsys\$adopt'
+    # THE NAME IS IN THE PATH, NOT IN THE CONTENT - 21 Aug 2026.  This used to
+    # be a bare 'sdsys\$adopt' and said so here: content "would have to be
+    # parsed by the verb to mean anything, and a mismatch on case or a domain
+    # prefix would break the install for no gain".  The parsing objection was
+    # right and is answered by putting the name in the FILE NAME instead; the
+    # "no gain" was overruled by the owner on 21 Aug 2026 - the project as
+    # delivered must enforce that SD account setup happens in SD, and a generic
+    # marker re-opens the verb for every name rather than for one.
+    #
+    # NEITHER SIDE CAN DRIFT: the name written here and the name CREATEA tests
+    # are the same $User this script was invoked with, downcased on both sides.
+    # CREATEA does it at the adopt.marker assignment in the USER arm.
+    #
+    # WHAT IS IN IT IS STILL FOR A HUMAN.  A marker that outlives its window is
+    # a hole, so anybody who finds one should be able to tell at a glance what
+    # wrote it and when.
+    $marker = Join-Path $DataDir ('sdsys\$adopt.' + $User.ToLower())
 
     # CAUGHT RATHER THAN LEFT TO $ErrorActionPreference, which is Stop: an
     # uncaught throw here would leave the finally to run with $result never
@@ -226,7 +244,8 @@ try {
     try {
         Set-Content -LiteralPath $marker -Encoding utf8 -Value @(
             "Written by adopt-account.ps1 for $User at $(Get-Date -Format 's').",
-            'It permits ONE "CREATE.ACCOUNT USER <name> ADOPT" and is deleted on use.',
+            "It permits ONE 'CREATE.ACCOUNT USER $User ADOPT' and is deleted on use.",
+            'It authorises that name only - the name is part of this file name.',
             'If this file is still here, the install did not finish - delete it.')
     }
     catch {
