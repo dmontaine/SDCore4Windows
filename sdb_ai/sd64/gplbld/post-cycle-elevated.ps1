@@ -127,10 +127,21 @@ $steps = @(
     @{ Name = 'verify-fold.ps1';          P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
     @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
-    # 20 Aug 26 - section 8's per-account ACLs.  LAST, because it is the only
-    # step that deliberately breaks an ACL (icacls /reset) before putting it
-    # back, and a run that died mid-way should not leave the steps after it
-    # measuring a directory in that state.
+    # 20 Aug 26 - section 8's per-account ACLs.  It is the only step that
+    # deliberately breaks an ACL (icacls /reset) before putting it back.
+    #
+    # 21 Aug 26 - THIS COMMENT USED TO SAY "LAST, because ... a run that died
+    # mid-way should not leave the steps after it measuring a directory in
+    # that state", AND BOTH HALVES WERE WRONG.  It is not last - five steps
+    # follow it - and it was not last when that was written either, since
+    # peerlog and apiadmin already came after.  The reasoning did not
+    # generalise: the ACL it breaks is on its OWN throwaway account directory,
+    # user_accounts\<AclPrefix> (verify-accountacl.ps1:207), which no other
+    # step reads, and the prefix is single-use so the next cycle will not meet
+    # it either.  POSITION IS NOT LOAD-BEARING FOR THIS STEP.  It is for
+    # verify-peerlog (overwrites the error log) and verify-apiadmin (restarts
+    # SD twice), which is why those two are where they are and this one is
+    # simply where it landed.
     @{ Name = 'verify-accountacl.ps1';    P = @{ Prefix  = $AclPrefix } },
     # 21 Aug 26 - the two route/rule verifiers, added when phase 4 rewrote the
     # first and wrote the second.  Both were run by hand until now, which is
