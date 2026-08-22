@@ -18,6 +18,11 @@
 	  * 
 	  * 
 	  * START-HISTORY:
+	  * 22 Aug 26 Windows port - both Ctrl-H (8) and DEL (127) erase, whatever the
+	  *           terminal type's kbs claims.  This routine reads raw bytes and
+	  *           never saw _KEYCODE's 19 Aug binding fix, and the unmatched byte
+	  *           was APPENDED rather than ignored - so backspace corrupted a
+	  *           HIDDEN password entry instead of correcting it.
 	  * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 	  * END-HISTORY
 	  *
@@ -78,7 +83,34 @@
       end
       
       c = terminfo('kbs')    ;* 0402
-      backspace = if len(c) = 1 then seq(c) else 8
+
+*     22 Aug 26 Windows port - BOTH ERASE BYTES, for the reason _KEYCODE gives.
+*     This routine reads RAW BYTES with keyinc() and compared them against the
+*     single byte kbs named, so it never saw the binding table _KEYCODE fixed on
+*     19 Aug - the same family as UPDREC and SED, which that file's comment
+*     names as needing separate fixes.  This is the third member and was missed.
+*
+*     IT WAS WORSE HERE THAN A DEAD KEY.  There is no forward-delete in a
+*     single-line INPUT, so the unmatched byte fell through to the catch-all
+*     case below and was APPENDED TO THE STRING.  On a password prompt, which is
+*     what "INPUT ... HIDDEN" is for, backspace added a character and echoed
+*     another '*' - so a typing mistake could not be corrected and the attempt
+*     to correct it made the entry longer.  Reported by the repository owner,
+*     22 Aug 2026, entering the password the installer's adoption session asks
+*     for.
+*
+*     ADDITIVE, AND kbs STILL COUNTS.  Whatever the terminal type claims is kept
+*     in the set; 8 and 127 are added to it.  DEL has no other meaning in this
+*     routine, so nothing that worked before changes - it turns a keystroke that
+*     corrupted the input into one that erases.
+*
+*     THE OLD "backspace" VARIABLE IS GONE RATHER THAN LEFT SET AND UNREAD.  It
+*     held the single byte this used to compare against, and nothing consults it
+*     now; a variable that still looks like the authority on which key erases is
+*     worse than no variable.  Its "else 8" default is covered - 8 is in the set
+*     unconditionally.
+      erase.keys = char(8) : char(127)
+      if len(c) = 1 and index(erase.keys, c, 1) = 0 then erase.keys := c
 
       string = ''
       if max.input = 0 then max.input = 99999
@@ -117,7 +149,7 @@
 
             n = seq(c)
             begin case  ;* 0392 Allow rebindable values
-               case n = backspace                     ;* BACKSPACE key
+               case index(erase.keys, c, 1)           ;* BACKSPACE key - 22 Aug 26, see above
                   if len(string) then
                      string = string[1, len(string) - 1]
                      if echo.input then display @(IT$CUB) : ' ' : @(IT$CUB) :

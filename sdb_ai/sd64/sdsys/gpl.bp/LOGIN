@@ -683,7 +683,15 @@ require.credential:
 
    if has.cred then return
 
-   display sysmsg(10089, initial.account) ;* Account %1 has no password...
+   display sysmsg(10089, initial.account) ;* Account %1 needs a password...
+
+*  22 Aug 26 Windows port - A BLANK LINE BETWEEN THE EXPLANATION AND THE PROMPT.
+*  Owner, 22 Aug 2026, on seeing the paragraph land hard against "New password:".
+*  It is here rather than as a trailing line break in the message because 10089
+*  is a paragraph and this is spacing between two separate things - a message
+*  that ends in blank lines invites the next editor to trim them as trailing
+*  whitespace.
+   display
 
    loop
       display sysmsg(10090) :  ;* New password:

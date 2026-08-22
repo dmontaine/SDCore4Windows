@@ -66,7 +66,13 @@
 param(
     # One line per check and no explanation.  For somebody re-running it who has
     # already read the preamble once.
-    [switch] $Brief
+    [switch] $Brief,
+
+    # 22 Aug 26 - SKIP THE "shall I?" PROMPT.  Anything that is not a person
+    # needs this: Read-Host in a non-interactive host does not wait, it THROWS,
+    # so the absence of somebody to answer is caught and named rather than left
+    # as a stack trace.  Same reasoning and same switch name as VerifyInstall1.
+    [switch] $Yes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,8 +150,45 @@ if (-not $Brief) {
     Write-Host '  Checking your SD installation' -ForegroundColor White
     Write-Host '  ============================='
     Write-Host ''
-    Write-Host '  This only looks.  It does not change anything, so it is safe to run'
-    Write-Host '  again at any time.  It takes a few seconds.'
+    Write-Host '  This window is not part of the installation.  The install has finished'
+    Write-Host '  and nothing here can undo it or change it.'
+    Write-Host ''
+    Write-Host '  What it will do, and it is all reading:'
+    Write-Host ''
+    Write-Host '    * look for the SD program files and the SD service'
+    Write-Host '    * check that you can reach the database'
+    Write-Host '    * count the programs SD built during the install'
+    Write-Host '    * check the network options, if you turned any on'
+    Write-Host ''
+    Write-Host '  It creates nothing, deletes nothing, and starts and stops nothing.'
+    Write-Host '  It takes a few seconds, and you can run it again whenever you like'
+    Write-Host '  from the Start Menu: SD  ->  Check the SD installation.'
+    Write-Host ''
+}
+
+# 22 Aug 26 - AND IT ASKS, EVEN THOUGH THE TICKBOX ALREADY DID.  Owner, 22 Aug:
+# "there was no explanation of the post install validation process and no option
+# for the user to refuse it."  The installer's tickbox is a refusal, but it is
+# one line on a page somebody is clicking Finish on, so in practice it is not a
+# decision anybody makes.  This is the one that is hard to miss, and it costs a
+# keystroke to say no.
+if (-not $Yes) {
+    $answer = $null
+    try   { $answer = Read-Host '  Run the checks now? (y/n)' }
+    catch {
+        Write-Host ''
+        Write-Host '  Nothing is available to answer that question, so nothing was run.'
+        Write-Host '  Pass -Yes to run the checks without asking.'
+        Write-Host ''
+        exit 2
+    }
+    if ($answer -notmatch '^(y|yes)$') {
+        Write-Host ''
+        Write-Host '  Nothing was checked.  The installation is unaffected either way.'
+        Write-Host '  Start Menu -> SD -> Check the SD installation, whenever you want it.'
+        Write-Host ''
+        exit 0
+    }
 }
 
 if ($script:elevated) {

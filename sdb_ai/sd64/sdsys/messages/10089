@@ -1,1 +1,1 @@
-Account %1 has no password. One is needed before it can be reached from another machine.
+Account %1 needs a password.\n\nWhen you sign in to this computer at the keyboard you need only your\nWindows password.  When you connect from another computer, over ssh or\nthrough the SD API, you need only this password.\n\nYou will be asked to type it twice.  What you type is not shown - each\ncharacter appears as a star - and Backspace corrects a mistake.\n\nWhen you have finished, type  off  and press Enter to close this window.

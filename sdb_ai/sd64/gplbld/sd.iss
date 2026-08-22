@@ -556,15 +556,32 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; database checks as "not yet" rather than as failures.  That distinction is
 ; the whole design of the script and is why this can be safely defaulted on.
 ;
-; -NoExit, NOT "nowait".  The third thing that killed the password step was
-; that the console vanished before anything could be read.  A check nobody can
-; read is not a check, so the window STAYS until the user closes it.
+; -NoExit KEEPS THE WINDOW, nowait KEEPS SETUP FROM WAITING ON IT.  Both, and
+; they answer different halves.  The third thing that killed the old password
+; step was a console that vanished before anything could be read, so the window
+; must stay - that is -NoExit.  But WITHOUT "nowait" Inno blocks on the process
+; it started, and the owner met exactly that on 22 Aug 2026: "the main install
+; window did not close until the post install check window was closed".  Setup
+; sitting open behind a window the user is reading looks like the check is part
+; of the install and must be finished before anything is done.
+;
+; THIS IS NOT THE "nowait" THAT KILLED THE PASSWORD STEP, and the distinction is
+; the same one the TakeAccountPassword comment draws: that one hid a console for
+; a command which exited at once.  This leaves a VISIBLE window that stays until
+; the person closes it, and only Setup stops waiting.
 ;
 ; skipifsilent, because /VERYSILENT means nobody is watching a console anyway.
+;
+; THE DESCRIPTION SAYS WHAT IT DOES, NOT JUST ITS NAME.  Owner, same day: "there
+; was no explanation of the post install validation process and no option for
+; the user to refuse it."  The tickbox IS the refusal - clearing it skips the
+; step entirely - but a one-word label gave nobody grounds to decide, so it now
+; says what will happen.  The script explains itself again and asks before it
+; does anything, which is the second refusal and the one that is hard to miss.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -NoExit -File ""{app}\check-install.ps1"""; \
-    Flags: postinstall skipifsilent skipifdoesntexist; \
-    Description: "Check that SD installed correctly (recommended - it only looks, and changes nothing)"
+    Flags: postinstall nowait skipifsilent skipifdoesntexist; \
+    Description: "Check this installation now - opens a window listing what was installed and whether it works. It only reads; it changes nothing. You can also run it later from the Start Menu."
 
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;
@@ -1214,7 +1231,16 @@ procedure TakeAccountPassword;
 var
   Code: Integer;
 begin
-  if not Exec(ExpandConstant('{app}\usr\bin\sd.exe'), '',
+  { -QUIET, ADDED 22 Aug 2026 on the owner's instruction.  It clears CMD_QUIET
+    (sd.c:347), which LOGIN:234 tests before printing the six-line version and
+    GPL banner.  This window exists to ask one question; opening it with a
+    licence notice above the question buries it, and the person reading has
+    just clicked through a wizard that told them what SD is.  The banner is
+    unchanged for every other way of starting SD - it is suppressed here, not
+    removed.  Clause 1 of the GPL is satisfied by the banner the ordinary
+    "sd" prints, which LOGIN's comment marks as required and which this does
+    not touch. }
+  if not Exec(ExpandConstant('{app}\usr\bin\sd.exe'), '-QUIET',
               ExpandConstant('{#DataDir}'), SW_SHOW,
               ewNoWait, Code) then
     { The one thing that IS knowable, and it is not worth a message box: the
