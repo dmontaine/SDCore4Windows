@@ -199,6 +199,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # on this list reports the tree stale because it exists, and
                   # then refuses to run on the strength of its own newness.
                   'verify-apiname.ps1',
+                  # 22 Aug 26 - post-cycle-unelevated.ps1, the second runner,
+                  # listed in the commit that created it under the same rule.
+                  # It is a RUNNER and not a verifier, so it ships no more than
+                  # post-cycle-elevated.ps1 two lines above does - both only
+                  # invoke things already on this list.
+                  'post-cycle-unelevated.ps1',
                   # 19 Aug 26 - verify-scram.c and its build product were added
                   # on 19 Aug and never listed here, so both showed up under
                   # "newer than the install" from the moment they existed.
