@@ -39,10 +39,51 @@ param(
     # Keep going after a failing step.  Off by default: a failed check here
     # usually means the install is not what the last cycle left, and the next
     # step's result would be describing the same broken tree.
-    [switch] $ContinueOnFailure
+    [switch] $ContinueOnFailure,
+
+    # 22 Aug 26 - HAND OVER TO post-cycle-elevated.ps1 AS THE LAST ACT, so the
+    # whole suite is ONE command.  Requires -Run, which is passed straight
+    # through.  It raises ONE UAC prompt for the handover, on top of the ~3
+    # verify-osusers raises on its own account.
+    #
+    #     post-cycle-unelevated.ps1 -ThenElevated -Run b2
+    #
+    # THIS IS NOT THE SAME AS COLLAPSING THE TWO RUNNERS, and the difference is
+    # the whole reason it is allowed.  Two PROCESSES with the correct token
+    # each: this one keeps a genuine ordinary token for verify-credacl and
+    # verify-osusers, and the child gets a real elevated one from UAC.  What
+    # cannot be done - and was asked and answered on 22 Aug - is the reverse,
+    # an elevated parent manufacturing an ordinary child: runas /trustlevel
+    # yields a RESTRICTED token, not this user's normal one, and a security
+    # test answered by the wrong token is worse than one nobody runs.
+    #
+    # UNELEVATED FIRST IS ALSO THE BETTER ORDER, measured 22 Aug: this half
+    # sees the tree closest to what the cycle left, before sixteen steps of
+    # account, sd.conf and service churn.
+    [switch] $ThenElevated,
+
+    # Passed to post-cycle-elevated.ps1 -Run.  Ignored without -ThenElevated.
+    [string] $Run = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+# 22 Aug 26 - CHECKED FIRST, because the alternative is discovering it after
+# eight steps and about four UAC prompts.  post-cycle-elevated.ps1 refuses
+# without -Run too, but by then this half has already been spent.
+if ($ThenElevated -and (-not $Run)) {
+    Write-Output 'post-cycle-unelevated: -ThenElevated needs -Run <token>, which is passed straight through.'
+    Write-Output '  Pick one nobody has used; the elevated runner checks all thirteen derived'
+    Write-Output '  names against Get-LocalUser before it runs anything.'
+    Write-Output ''
+    Write-Output '      post-cycle-unelevated.ps1 -ThenElevated -Run b2'
+    exit 2
+}
+if ($Run -and ($Run -notmatch '^[a-z0-9]+$')) {
+    Write-Output ("post-cycle-unelevated: -Run is '{0}'." -f $Run)
+    Write-Output '  Lower case letters and digits only - it becomes part of a Windows account name.'
+    exit 2
+}
 
 # ---------------------------------------------------------------------------
 # THE GATE.  Refuse elevation outright, for the verify-credacl reason above.
@@ -86,7 +127,8 @@ if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
 # under C:\ProgramData\SD, which a cycle deletes.
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
-$summary = Join-Path $logDir ('post-cycle-unelevated-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.txt')
+$stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
+$summary = Join-Path $logDir ('post-cycle-unelevated-' + $stamp + '.txt')
 
 # ---------------------------------------------------------------------------
 # ORDER.  verify-credacl first, because it is the one that decides a security
@@ -159,7 +201,72 @@ Write-Output ('summary written to: ' + $summary)
 
 if ($failed -gt 0) {
     Write-Output ("post-cycle-unelevated: {0} step(s) did not exit 0." -f $failed)
+    if ($ThenElevated) {
+        Write-Output '  NOT handing over to post-cycle-elevated.ps1 - fix these first, or'
+        Write-Output '  re-run with -ContinueOnFailure to hand over anyway.'
+        if (-not $ContinueOnFailure) { exit 1 }
+    } else { exit 1 }
+} else {
+    Write-Output 'post-cycle-unelevated: every step exited 0.'
+}
+
+if (-not $ThenElevated) { exit ([int]($failed -gt 0)) }
+
+# ---------------------------------------------------------------------------
+# THE HANDOVER.  One UAC prompt, then the elevated runner in its own process
+# with its own token.
+#
+# -RedirectStandardOutput CANNOT BE USED WITH -Verb, so the redirection goes
+# INSIDE the child instead - "& '<script>' ... *> '<log>'".  PowerShell refuses
+# the combination outright; this is not a preference.
+#
+# AND THE CHILD'S WINDOW CLOSES WHEN IT FINISHES, taking its scrollback with
+# it, so -Quiet is passed as well: without it the only record of seventeen
+# steps would be the summary file, and every failing check would be gone.  With
+# it, each step's full output is already in its own file before the window
+# goes.
+#
+# ABSOLUTE PATHS THROUGHOUT.  An elevated child starts in C:\WINDOWS\system32,
+# which is the trap cycle.ps1's header records costing a run - "ISCC WAS RUN
+# FROM C:\WINDOWS\system32, where gplbld\sd.iss does not resolve".
+$elevated = Join-Path $PSScriptRoot 'post-cycle-elevated.ps1'
+if (-not (Test-Path -LiteralPath $elevated)) {
+    Write-Output ("post-cycle-unelevated: -ThenElevated, but {0} is not there." -f $elevated)
+    exit 2
+}
+
+$elevLog = Join-Path $logDir ('post-cycle-elevated-' + $stamp + '.log')
+Write-Output ''
+Write-Output '===== handing over to post-cycle-elevated.ps1 ====='
+Write-Output ("  -Run {0}" -f $Run)
+Write-Output ('  output: ' + $elevLog)
+Write-Output '  EXPECT A UAC PROMPT NOW - approving it is what elevates the child.'
+
+$inner = "& '{0}' -Run '{1}' -Quiet *> '{2}'" -f $elevated, $Run, $elevLog
+try {
+    $child = Start-Process -FilePath 'powershell.exe' `
+                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $inner) `
+                -Verb RunAs -Wait -PassThru -ErrorAction Stop
+} catch {
+    # THE CANCELLED-PROMPT PATH.  Declining UAC throws here rather than
+    # returning a code, and the raw exception says only "The operation was
+    # canceled by the user" - which is also what a DESKTOP-LESS shell gets when
+    # no prompt can be shown at all (post-cycle-elevated.ps1's header, 19 Aug).
+    # The two are indistinguishable from the message, so name both.
+    Write-Output ''
+    Write-Output ('post-cycle-unelevated: the elevated half did not start - ' + $_.Exception.Message)
+    Write-Output '  Either the UAC prompt was declined, or this shell has no desktop to show'
+    Write-Output '  one on.  The unelevated results above still stand.  To run the other half:'
+    Write-Output ("      {0} -Run {1}" -f $elevated, $Run)
     exit 1
 }
-Write-Output 'post-cycle-unelevated: every step exited 0.'
-exit 0
+
+Write-Output ('post-cycle-elevated exited ' + $child.ExitCode)
+if (Test-Path -LiteralPath $elevLog) {
+    Write-Output ''
+    Get-Content -LiteralPath $elevLog | Select-String -Pattern '^\[|FAILED|did not exit 0|all \d+ steps exited' |
+        ForEach-Object { Write-Output ('  ' + $_.Line) }
+    Write-Output ''
+    Write-Output ('  full elevated output: ' + $elevLog)
+}
+exit $child.ExitCode
