@@ -43,6 +43,33 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\SD
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+
+; 22 Aug 26 - THE INSTALL LOCATION IS NOT A CHOICE.  Owner's decision: the DATA
+; tree is not offered as one - DataDir is #defined above as {commonappdata}\SD,
+; a compile-time constant with no wizard page - so offering an alternative to
+; {autopf}\SD was an asymmetry with nothing behind it.  A user who moved the
+; program directory got a half-movable install: the programs somewhere of their
+; choosing, the data always in C:\ProgramData\SD.
+;
+; AND IT WAS NOT COST-FREE, WHICH IS HOW IT WAS FOUND.  Twenty-one verify
+; scripts locate the install as "$env:ProgramFiles\SD", and assert-current.ps1:40
+; hardcodes the literal "C:\Program Files\SD\usr\bin\sd.exe" - so on an install
+; the user had moved, the staleness guard would compare against a path that does
+; not exist and the whole suite would fail without saying why.  Inno DOES record
+; the real location (HKLM ...\Uninstall\{AppId}_is1, InstallLocation, measured
+; 22 Aug), so teaching all twenty-two to read it was possible; removing the
+; choice removes the class of fault instead.
+;
+; UsePreviousAppDir=no MATTERS AS MUCH AS DisableDirPage.  Without it Inno
+; reuses the directory a PREVIOUS install recorded, so a machine that once
+; installed elsewhere would keep doing so and the pin would silently not apply
+; there - which is the one case this is for.
+;
+; /DIR= ON THE COMMAND LINE STILL OVERRIDES BOTH.  That is Inno's behaviour and
+; is left alone: it is an explicit act by somebody who has read this far, not a
+; wizard page a user clicks past.
+DisableDirPage=yes
+UsePreviousAppDir=no
 OutputBaseFilename=sd-setup-{#AppVer}
 Compression=lzma2
 SolidCompression=yes

@@ -1,8 +1,8 @@
-# post-cycle-unelevated.ps1 - the verifiers that need NO elevation, in one command
+# VerifyInstall1.ps1 - the verifiers that need NO elevation, in one command
 #
 #   Run from an ORDINARY PowerShell.  It REFUSES an elevated one - see below.
 #
-# WHY IT EXISTS, 22 Aug 2026.  post-cycle-elevated.ps1 runs nine verifiers and
+# WHY IT EXISTS, 22 Aug 2026.  VerifyInstall2.ps1 runs nine verifiers and
 # there are twenty-four in this directory.  Seven of the fifteen it leaves out
 # need no elevation at all, which meant they could be run by anybody, at any
 # time, for free - and so nobody ran them.  Between 21 Aug and 22 Aug not one of
@@ -21,7 +21,7 @@
 # decides the rule, so the gate below is unconditional.
 #
 # IT SPENDS NO PREFIXES, which is the other reason to run it often.  Every step
-# in post-cycle-elevated.ps1 burns a single-use account name, so re-running it
+# in VerifyInstall2.ps1 burns a single-use account name, so re-running it
 # to check something costs seven names and an argument list.  Nothing here
 # creates a Windows account: the probes live inside the invoking user's own SD
 # account, or in a temporary copy of a config file, and each step cleans up
@@ -41,12 +41,12 @@ param(
     # step's result would be describing the same broken tree.
     [switch] $ContinueOnFailure,
 
-    # 22 Aug 26 - HAND OVER TO post-cycle-elevated.ps1 AS THE LAST ACT, so the
+    # 22 Aug 26 - HAND OVER TO VerifyInstall2.ps1 AS THE LAST ACT, so the
     # whole suite is ONE command.  Requires -Run, which is passed straight
     # through.  It raises ONE UAC prompt for the handover, on top of the ~3
     # verify-osusers raises on its own account.
     #
-    #     post-cycle-unelevated.ps1 -ThenElevated -Run b2
+    #     VerifyInstall1.ps1 -ThenElevated -Run b2
     #
     # THIS IS NOT THE SAME AS COLLAPSING THE TWO RUNNERS, and the difference is
     # the whole reason it is allowed.  Two PROCESSES with the correct token
@@ -62,25 +62,30 @@ param(
     # account, sd.conf and service churn.
     [switch] $ThenElevated,
 
-    # Passed to post-cycle-elevated.ps1 -Run.  Ignored without -ThenElevated.
-    [string] $Run = ''
+    # Passed to VerifyInstall2.ps1 -Run.  Ignored without -ThenElevated.
+    [string] $Run = '',
+
+    # 22 Aug 26 - Skip the "are you sure" prompt.  For anything that is not a
+    # person at a keyboard: a scripted run, or the installer, which cannot
+    # answer a Read-Host and would hang for ever waiting to.
+    [switch] $Yes
 )
 
 $ErrorActionPreference = 'Stop'
 
 # 22 Aug 26 - CHECKED FIRST, because the alternative is discovering it after
-# eight steps and about four UAC prompts.  post-cycle-elevated.ps1 refuses
+# eight steps and about four UAC prompts.  VerifyInstall2.ps1 refuses
 # without -Run too, but by then this half has already been spent.
 if ($ThenElevated -and (-not $Run)) {
-    Write-Output 'post-cycle-unelevated: -ThenElevated needs -Run <token>, which is passed straight through.'
+    Write-Output 'VerifyInstall1: -ThenElevated needs -Run <token>, which is passed straight through.'
     Write-Output '  Pick one nobody has used; the elevated runner checks all thirteen derived'
     Write-Output '  names against Get-LocalUser before it runs anything.'
     Write-Output ''
-    Write-Output '      post-cycle-unelevated.ps1 -ThenElevated -Run b2'
+    Write-Output '      VerifyInstall1.ps1 -ThenElevated -Run b2'
     exit 2
 }
 if ($Run -and ($Run -notmatch '^[a-z0-9]+$')) {
-    Write-Output ("post-cycle-unelevated: -Run is '{0}'." -f $Run)
+    Write-Output ("VerifyInstall1: -Run is '{0}'." -f $Run)
     Write-Output '  Lower case letters and digits only - it becomes part of a Windows account name.'
     exit 2
 }
@@ -89,7 +94,7 @@ if ($Run -and ($Run -notmatch '^[a-z0-9]+$')) {
 # THE GATE.  Refuse elevation outright, for the verify-credacl reason above.
 if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
     ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Output 'post-cycle-unelevated: this is an ELEVATED PowerShell, and these checks need an ordinary one.'
+    Write-Output 'VerifyInstall1: this is an ELEVATED PowerShell, and these checks need an ordinary one.'
     Write-Output ''
     Write-Output '  verify-credacl.ps1 asks whether an ORDINARY user can read or write sdsys\$cred.'
     Write-Output '  Administrators are granted Full by secure-cred.ps1, so an elevated run would pass'
@@ -113,13 +118,82 @@ if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]:
 $svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
 $sdwind = @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue)
 if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
-    Write-Output 'post-cycle-unelevated: REFUSING - SD is not running.'
+    Write-Output 'VerifyInstall1: REFUSING - SD is not running.'
     Write-Output ("  service: {0}    sdwind processes: {1}" -f
                   $(if ($svc) { $svc.Status } else { 'not installed' }), $sdwind.Count)
     Write-Output ''
     Write-Output '  Starting it needs elevation, which this runner does not have by design.'
     Write-Output '  From an ELEVATED shell:   C:\Windows\System32\sc.exe start SD'
     exit 2
+}
+
+# ---------------------------------------------------------------------------
+# 22 Aug 26 - SAY WHAT THIS IS ABOUT TO DO, AND ASK.  Owner's instruction.  It
+# runs for several minutes, creates and deletes Windows accounts, restarts the
+# SD service and asks for elevation more than once - none of which a person
+# should discover halfway through.
+#
+# THE INSTALL LOCATION IS ASSUMED, AND SINCE 22 Aug IT IS PINNED.  Everything
+# below finds SD at "$env:ProgramFiles\SD"; sd.iss now sets DisableDirPage and
+# UsePreviousAppDir=no so there is no other answer.  The check is kept anyway,
+# because an install made BEFORE that change can still be somewhere else, and a
+# suite that cannot find sd.exe should say so in one line rather than in
+# twenty-four.
+$sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
+if (-not (Test-Path -LiteralPath $sdExe)) {
+    Write-Output ('VerifyInstall1: SD is not where these scripts look for it - ' + $sdExe)
+    # Inno records the real location; read it rather than guessing.
+    foreach ($k in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                     'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+        Get-ItemProperty $k -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like 'SD *' -and $_.InstallLocation } |
+            ForEach-Object { Write-Output ('  the installer recorded: ' + $_.InstallLocation) }
+    }
+    Write-Output '  These scripts hardcode Program Files (21 of them, and assert-current.ps1).'
+    Write-Output '  Reinstall to the default location, or move the install back.'
+    exit 2
+}
+
+if (-not $Yes) {
+    Write-Output ''
+    Write-Output '  VerifyInstall1 - does this SD installation actually work?'
+    Write-Output '  ---------------------------------------------------------------------'
+    Write-Output '  It runs the checks that need an ORDINARY account, then hands over to'
+    Write-Output '  VerifyInstall2 for the ones that need an administrator.  Together they'
+    Write-Output '  exercise account creation and deletion, the permission tiers, the file'
+    Write-Output '  and catalogue ACLs, ssh and API logins, and the audit trail.'
+    Write-Output ''
+    Write-Output '  BEFORE YOU SAY YES, it will:'
+    Write-Output '    * take several minutes, and look idle for stretches of it'
+    Write-Output '    * CREATE AND DELETE Windows user accounts and groups, named from -Run'
+    Write-Output '    * RESTART THE SD SERVICE more than once, so log anyone else out first'
+    Write-Output '    * ask for elevation about four times - it is not unattended'
+    Write-Output ('    * write what it finds under ' + (Join-Path $env:LOCALAPPDATA 'SD-verify'))
+    Write-Output ''
+    Write-Output '  It puts back what it changes.  Nothing here alters your own data.'
+    Write-Output ''
+    # 22 Aug 26 - Read-Host DOES NOT SIMPLY FAIL TO ANSWER when nobody is there.
+    # Measured: in a NonInteractive host it THROWS - "Windows PowerShell is in
+    # NonInteractive mode.  Read and Prompt functionality is not available" -
+    # and under the installer's Exec with SW_HIDE there is no console to type
+    # into at all.  Either way the caller gets a stack trace or a hang instead
+    # of a result, so the absence of a person is caught and NAMED here.
+    $answer = $null
+    try   { $answer = Read-Host '  Run the checks now? (y/n)' }
+    catch {
+        Write-Output ''
+        Write-Output 'VerifyInstall1: nothing is available to answer that question.'
+        Write-Output '  This host cannot prompt, so the run needs the decision made up front:'
+        Write-Output ''
+        Write-Output '      VerifyInstall1.ps1 -Yes -ThenElevated -Run <token>'
+        Write-Output ''
+        Write-Output '  Nothing was run.'
+        exit 2
+    }
+    if ($answer -notmatch '^(y|yes)$') {
+        Write-Output '  Nothing was run.'
+        exit 0
+    }
 }
 
 # The same transcript reasoning as cycle.ps1 and the elevated runner: a run
@@ -139,12 +213,12 @@ $summary = Join-Path $logDir ('post-cycle-unelevated-' + $stamp + '.txt')
 # cheapest-first, to fail fast on a stale tree.
 #
 # Name => hashtable of parameters, splatted by NAME.  An empty hashtable means
-# "no arguments", which splats correctly too.  See post-cycle-elevated.ps1's
+# "no arguments", which splats correctly too.  See VerifyInstall2.ps1's
 # comment for why this is a hashtable and not an array: an array binds
 # POSITIONALLY and silently gave verify-tiers.ps1 a $Prefix of "-Prefix".
 $steps = @(
     @{ Name = 'verify-credacl.ps1';     P = @{} },
-    # 22 Aug 26 - MOVED HERE FROM post-cycle-elevated.ps1, WHERE IT EXITED 2
+    # 22 Aug 26 - MOVED HERE FROM VerifyInstall2.ps1, WHERE IT EXITED 2
     # WITHOUT MEASURING ANYTHING.  verify-osusers.ps1:243 refuses an elevated
     # window: "CPROC admits K$ADMINISTRATOR whatever OS.USERS says, so an
     # elevated run is admitted by elevation and says nothing about the list."
@@ -186,7 +260,7 @@ foreach ($s in $steps) {
 
     if ($code -ne 0 -and -not $ContinueOnFailure) {
         Write-Output ''
-        Write-Output ("post-cycle-unelevated: STOPPING - {0} exited {1}." -f $s.Name, $code)
+        Write-Output ("VerifyInstall1: STOPPING - {0} exited {1}." -f $s.Name, $code)
         Write-Output '  Re-run with -ContinueOnFailure to see the rest anyway.'
         break
     }
@@ -200,14 +274,14 @@ Write-Output ''
 Write-Output ('summary written to: ' + $summary)
 
 if ($failed -gt 0) {
-    Write-Output ("post-cycle-unelevated: {0} step(s) did not exit 0." -f $failed)
+    Write-Output ("VerifyInstall1: {0} step(s) did not exit 0." -f $failed)
     if ($ThenElevated) {
-        Write-Output '  NOT handing over to post-cycle-elevated.ps1 - fix these first, or'
+        Write-Output '  NOT handing over to VerifyInstall2.ps1 - fix these first, or'
         Write-Output '  re-run with -ContinueOnFailure to hand over anyway.'
         if (-not $ContinueOnFailure) { exit 1 }
     } else { exit 1 }
 } else {
-    Write-Output 'post-cycle-unelevated: every step exited 0.'
+    Write-Output 'VerifyInstall1: every step exited 0.'
 }
 
 if (-not $ThenElevated) { exit ([int]($failed -gt 0)) }
@@ -229,15 +303,15 @@ if (-not $ThenElevated) { exit ([int]($failed -gt 0)) }
 # ABSOLUTE PATHS THROUGHOUT.  An elevated child starts in C:\WINDOWS\system32,
 # which is the trap cycle.ps1's header records costing a run - "ISCC WAS RUN
 # FROM C:\WINDOWS\system32, where gplbld\sd.iss does not resolve".
-$elevated = Join-Path $PSScriptRoot 'post-cycle-elevated.ps1'
+$elevated = Join-Path $PSScriptRoot 'VerifyInstall2.ps1'
 if (-not (Test-Path -LiteralPath $elevated)) {
-    Write-Output ("post-cycle-unelevated: -ThenElevated, but {0} is not there." -f $elevated)
+    Write-Output ("VerifyInstall1: -ThenElevated, but {0} is not there." -f $elevated)
     exit 2
 }
 
 $elevLog = Join-Path $logDir ('post-cycle-elevated-' + $stamp + '.log')
 Write-Output ''
-Write-Output '===== handing over to post-cycle-elevated.ps1 ====='
+Write-Output '===== handing over to VerifyInstall2.ps1 ====='
 Write-Output ("  -Run {0}" -f $Run)
 Write-Output ('  output: ' + $elevLog)
 Write-Output '  EXPECT A UAC PROMPT NOW - approving it is what elevates the child.'
@@ -251,10 +325,10 @@ try {
     # THE CANCELLED-PROMPT PATH.  Declining UAC throws here rather than
     # returning a code, and the raw exception says only "The operation was
     # canceled by the user" - which is also what a DESKTOP-LESS shell gets when
-    # no prompt can be shown at all (post-cycle-elevated.ps1's header, 19 Aug).
+    # no prompt can be shown at all (VerifyInstall2.ps1's header, 19 Aug).
     # The two are indistinguishable from the message, so name both.
     Write-Output ''
-    Write-Output ('post-cycle-unelevated: the elevated half did not start - ' + $_.Exception.Message)
+    Write-Output ('VerifyInstall1: the elevated half did not start - ' + $_.Exception.Message)
     Write-Output '  Either the UAC prompt was declined, or this shell has no desktop to show'
     Write-Output '  one on.  The unelevated results above still stand.  To run the other half:'
     Write-Output ("      {0} -Run {1}" -f $elevated, $Run)

@@ -1,4 +1,4 @@
-# post-cycle-elevated.ps1 - the ELEVATED verifiers, in one command
+# VerifyInstall2.ps1 - the ELEVATED verifiers, in one command
 #
 #   Run from an ELEVATED PowerShell.  Nothing else here needs elevation.
 #
@@ -80,7 +80,7 @@ param(
     # because A WINDOWS LOCAL USER SURVIVES AN UNINSTALL and a fresh install is
     # therefore NOT a fresh set of names.
     #
-    #   post-cycle-elevated.ps1 -Run b1
+    #   VerifyInstall2.ps1 -Run b1
     #
     # Every individual prefix still overrides, so an interrupted cycle can re-run
     # one step with a fresh name without spending a whole new token.
@@ -141,7 +141,7 @@ $ErrorActionPreference = 'Continue'
 # already used, so a -Run token reads like the names it produces.
 if ($Run) {
     if ($Run -notmatch '^[a-z0-9]+$') {
-        Write-Output ("post-cycle-elevated: -Run is '{0}'." -f $Run)
+        Write-Output ("VerifyInstall2: -Run is '{0}'." -f $Run)
         Write-Output '  Lower case letters and digits only - it becomes part of a Windows account name.'
         exit 2
     }
@@ -168,8 +168,8 @@ foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $
                  @{ N = 'NamePrefix'; V = $NamePrefix }, @{ N = 'PortPrefix'; V = $PortPrefix },
                  @{ N = 'ScramPrefix'; V = $ScramPrefix }, @{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
     if (-not $p.V) {
-        Write-Output ("post-cycle-elevated: -{0} was not given and -Run was not either." -f $p.N)
-        Write-Output '  Simplest: post-cycle-elevated.ps1 -Run <token nobody has used>'
+        Write-Output ("VerifyInstall2: -{0} was not given and -Run was not either." -f $p.N)
+        Write-Output '  Simplest: VerifyInstall2.ps1 -Run <token nobody has used>'
         exit 2
     }
 }
@@ -177,7 +177,7 @@ foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $pr = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Output 'post-cycle-elevated: this needs an ELEVATED PowerShell.'
+    Write-Output 'VerifyInstall2: this needs an ELEVATED PowerShell.'
     exit 2
 }
 
@@ -185,7 +185,7 @@ if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 # is a mangled argument, not a name - see the header.
 foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account'; V = $Account })) {
     if ($p.V -notmatch '^[A-Za-z][A-Za-z0-9_.]*$') {
-        Write-Output ("post-cycle-elevated: -{0} is '{1}', which is not a usable account name." -f $p.N, $p.V)
+        Write-Output ("VerifyInstall2: -{0} is '{1}', which is not a usable account name." -f $p.N, $p.V)
         Write-Output '  Letters, digits, dot and underscore only, starting with a letter.'
         exit 2
     }
@@ -195,12 +195,12 @@ foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account'; V = $
 # sdu_ group from the DIRECTORY name, which CREATEA writes downcased, so an
 # upper-case prefix here would send it looking for a group that is not there.
 if ($AclPrefix -notmatch '^[a-z][a-z0-9_]*$') {
-    Write-Output ("post-cycle-elevated: -AclPrefix is '{0}'." -f $AclPrefix)
+    Write-Output ("VerifyInstall2: -AclPrefix is '{0}'." -f $AclPrefix)
     Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
     exit 2
 }
 if ($ApiPrefix -notmatch '^[a-z][a-z0-9_]*$') {
-    Write-Output ("post-cycle-elevated: -ApiPrefix is '{0}'." -f $ApiPrefix)
+    Write-Output ("VerifyInstall2: -ApiPrefix is '{0}'." -f $ApiPrefix)
     Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
     exit 2
 }
@@ -211,7 +211,7 @@ foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix';
                  @{ N = 'NamePrefix';  V = $NamePrefix }, @{ N = 'PortPrefix';    V = $PortPrefix },
                  @{ N = 'ScramPrefix'; V = $ScramPrefix },@{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
     if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
-        Write-Output ("post-cycle-elevated: -{0} is '{1}'." -f $p.N, $p.V)
+        Write-Output ("VerifyInstall2: -{0} is '{1}'." -f $p.N, $p.V)
         Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
         exit 2
     }
@@ -248,7 +248,7 @@ foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account';     V
     }
 }
 if ($claimed.Count -gt 0) {
-    Write-Output 'post-cycle-elevated: REFUSING - these names are already taken on this machine:'
+    Write-Output 'VerifyInstall2: REFUSING - these names are already taken on this machine:'
     $claimed | ForEach-Object { Write-Output $_ }
     Write-Output ''
     Write-Output '  A Windows local user survives an uninstall, so a fresh install is not a'
@@ -279,7 +279,7 @@ if ($claimed.Count -gt 0) {
 $svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
 $sdwind = @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue)
 if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
-    Write-Output 'post-cycle-elevated: REFUSING - SD is not running.'
+    Write-Output 'VerifyInstall2: REFUSING - SD is not running.'
     Write-Output ("  service: {0}    sdwind processes: {1}" -f
                   $(if ($svc) { $svc.Status } else { 'not installed' }), $sdwind.Count)
     Write-Output ''
@@ -309,7 +309,7 @@ if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
 # before step 1, which is precisely where a reader is deciding whether to trust
 # the run.
 $sdwindPids = ($sdwind | ForEach-Object Id) -join ','
-Write-Output ("post-cycle-elevated: SD is running (sdwind {0}), -Run '{1}'" -f $sdwindPids, $Run)
+Write-Output ("VerifyInstall2: SD is running (sdwind {0}), -Run '{1}'" -f $sdwindPids, $Run)
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -335,7 +335,7 @@ $steps = @(
     # It REFUSES an elevated window - "CPROC admits K$ADMINISTRATOR whatever
     # OS.USERS says, so an elevated run is admitted by elevation and says
     # nothing about the list" (verify-osusers.ps1:243) - so it exited 2 without
-    # measuring anything.  It is in post-cycle-unelevated.ps1 now, beside
+    # measuring anything.  It is in VerifyInstall1.ps1 now, beside
     # verify-credacl, which refuses elevation for the same class of reason: a
     # test that passes because of the token is worse than one nobody runs.
     #
@@ -544,7 +544,7 @@ if ($Quiet) {
     Write-Output ("per-step output:    " + (Join-Path $logDir ($stamp + '-NN-verify-*.log')))
 }
 if ($failed -gt 0) {
-    Write-Output ("post-cycle-elevated: {0} of {1} step(s) did not exit 0." -f $failed, $steps.Count)
+    Write-Output ("VerifyInstall2: {0} of {1} step(s) did not exit 0." -f $failed, $steps.Count)
     exit 1
 }
-Write-Output ("post-cycle-elevated: all {0} steps exited 0." -f $steps.Count)
+Write-Output ("VerifyInstall2: all {0} steps exited 0." -f $steps.Count)

@@ -190,7 +190,7 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-credacl.ps1', 'verify-nocase.ps1',
                   'verify-osusers.ps1', 'verify-catgate.ps1',
                   'verify-fold.ps1', 'verify-nonet.ps1',
-                  'verify-lcnames.ps1', 'post-cycle-elevated.ps1',
+                  'verify-lcnames.ps1', 'VerifyInstall2.ps1',
                   'verify-keys.ps1', 'probe-keys.ps1',
                   'verify-editkeys.ps1', 'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
@@ -199,12 +199,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # on this list reports the tree stale because it exists, and
                   # then refuses to run on the strength of its own newness.
                   'verify-apiname.ps1',
-                  # 22 Aug 26 - post-cycle-unelevated.ps1, the second runner,
+                  # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
                   # listed in the commit that created it under the same rule.
                   # It is a RUNNER and not a verifier, so it ships no more than
-                  # post-cycle-elevated.ps1 two lines above does - both only
+                  # VerifyInstall2.ps1 two lines above does - both only
                   # invoke things already on this list.
-                  'post-cycle-unelevated.ps1',
+                  'VerifyInstall1.ps1',
                   # 19 Aug 26 - verify-scram.c and its build product were added
                   # on 19 Aug and never listed here, so both showed up under
                   # "newer than the install" from the moment they existed.
