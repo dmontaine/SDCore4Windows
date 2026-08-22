@@ -297,6 +297,42 @@ if ($reinstated.Count -gt 0) {
     Note ("  note: {0} now appears in stage.py or sd.iss, so it is watched again" -f ($reinstated -join ', '))
 }
 
+# 21 Aug 26 - THE ONE FILE THAT SHIPS AND IS DELIBERATELY NOT WATCHED.  Owner's
+# decision.  Every list above exempts something that CANNOT reach the install;
+# sdsys\changelog can, and is exempt anyway, so it needs its own list and its
+# own justification.
+#
+# THE TOLL IT ENDS.  CLAUDE.md requires a changelog entry in the same commit as
+# any user-visible change, so nearly every commit touches it - and every touch
+# turned this script red, which makes the whole verify suite refuse, because
+# each verifier calls this first.  The install that clears it reinstalls a text
+# file nobody has read since it was written.  A guard that charges a cycle for
+# writing documentation teaches the next session to skip the documentation or
+# to skip the guard, and both are worse than what it is protecting against.
+#
+# IT CANNOT GO ON $neverShipped, and that is not a technicality.  That list is
+# self-policing - anything on it that turns up quoted in stage.py or sd.iss is
+# put BACK under the guard - and changelog is quoted, at stage.py:140.  So it
+# would be reinstated on the next run and the exemption would silently do
+# nothing.  Kept separate so the two lists keep their different meanings: that
+# one says "this cannot make the install stale", this one says "this can, and
+# we accept it".
+#
+# WHAT IS ACCEPTED: an installed tree may carry a changelog one or more entries
+# behind source.  It is documentation for a user, read by nothing - no verifier
+# measures it, no program reads it, and it cannot change behaviour.  That is the
+# whole of the exposure, and it is why this file and no other is on this list.
+#
+# AND IT IS NOT SILENT, which is the condition the header's bias imposes: a
+# false "current" costs an investigation, so the one place this script knowingly
+# reports current on a stale file, it says so - by name, and NOT through Note(),
+# so -Quiet does not swallow it.
+#
+# PATH-ANCHORED, NOT BY NAME.  The lists above match a bare file name because
+# their names are distinctive; "changelog" is not, and a second one appearing
+# anywhere under gplsrc, sdsys or gplbld must still be watched.
+$shippedButExempt = @('sdsys\changelog')
+
 $trees = @('gplsrc', 'sdsys', 'gplbld') | ForEach-Object { Join-Path $sd64 $_ }
 $newer = @()
 foreach ($t in $trees) {
@@ -336,6 +372,15 @@ foreach ($t in $trees) {
                              -not ($_.Extension -in '.md', '.txt' -and -not (& $shipsAs $_.Name)) -and
                              $excluded -notcontains $_.Name -and
                              $_.LastWriteTime -gt $installed }
+}
+
+# Partitioned AFTER the filter rather than folded into it, so the exemption is
+# one readable step and the conditions above stay as they were.
+$exemptNewer = @($newer | Where-Object { $shippedButExempt -contains $_.FullName.Substring($sd64.Length + 1) })
+$newer       = @($newer | Where-Object { $shippedButExempt -notcontains $_.FullName.Substring($sd64.Length + 1) })
+foreach ($e in $exemptNewer) {
+    Write-Output ("  EXEMPT: {0} is newer than the install ({1}) - the installed tree carries an older copy" -f
+        $e.FullName.Substring($sd64.Length + 1), $e.LastWriteTime.ToString('dd MMM HH:mm:ss'))
 }
 
 if ($newer.Count -gt 0) {
