@@ -9,6 +9,25 @@
 # and a handful of separate hand-run commands is exactly the shape cycle.ps1
 # was written to get rid of (CLAUDE.md, "Do not hand-run the steps").
 #
+# *** 22 Aug 26 - THE PARAGRAPH ABOVE IS NO LONGER TRUE ON THIS MACHINE, AND IT
+# IS THE PREMISE THE WHOLE SPLIT RESTS ON. ***  Measured, twice, from an
+# UNELEVATED agent shell:
+#
+#     Start-Process powershell -ArgumentList ... -Verb RunAs -Wait -PassThru
+#
+# returned exit 0, and the child reported "user=GITORLI\don elevated=True"
+# while the parent reported elevated=False.  No "operation was canceled".  So
+# an agent shell CAN get an elevated child here, and the reason this file must
+# be started by a human has gone.
+#
+# WHAT IS NOT ESTABLISHED, and matters before anyone builds on it: WHY.  Either
+# UAC on this machine is configured not to prompt for this account, or
+# something changed since 19 Aug.  Those have very different consequences - the
+# first is a local setting that another machine will not share, and the second
+# would mean the 19 Aug observation was wrong or has been overtaken.  NOBODY HAS
+# LOOKED.  Treat "an agent can elevate" as true HERE and unproven anywhere else,
+# and do not delete the split until it is understood.
+#
 # It runs each verifier WITHOUT -Keep, so each removes what it made and the
 # tree is left clean.  -Keep is the stronger run - it leaves the accounts to be
 # read back independently - but it then owes a -Cleanup and one interactive
