@@ -116,6 +116,36 @@ function NotYet  ($m) { $script:notyet++;   Write-Host ('  [not yet] ' + $m) -Fo
 function Info    ($m) { if (-not $Brief) { Write-Host ('            ' + $m) -ForegroundColor DarkGray } }
 function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 
+# 22 Aug 26 - SAY THE WINDOW CAN BE CLOSED.  Owner's instruction.  The window is
+# opened with -NoExit, deliberately, so that a check nobody can read cannot
+# happen - and the cost of that is a window sitting at a live prompt with
+# nothing saying the work is over.  Somebody who has just been told their
+# install is fine is left wondering whether SD still wants something from them.
+#
+# ON EVERY ENDING, not only the good one, because "is it finished?" is the same
+# question whichever answer it reached - and it is loudest on the path that
+# found a problem, where a reader is most likely to sit and wait for something
+# more to happen.
+#
+# DEFINED HERE, WITH THE OTHER HELPERS, rather than beside the summary it is
+# used by.  PowerShell binds a function when execution reaches it, and the
+# refusal path exits long before the summary - so a definition further down
+# would have been an unrecognised command on the one path a user takes by
+# choosing not to run anything.
+# $Ran is false on the one path where nothing was checked, because the user said
+# no.  "Test completed" would not be true there, and a closing line that
+# overstates what happened is the same class of thing as the summary that told
+# somebody to sign out when that could not help them.
+function Finish([bool] $Ran = $true) {
+    Write-Host ''
+    if ($Ran) {
+        Write-Host '  Test completed - you can close this window now.' -ForegroundColor Cyan
+    } else {
+        Write-Host '  You can close this window now.' -ForegroundColor Cyan
+    }
+    Write-Host ''
+}
+
 # ---------------------------------------------------------------------------
 # IS THIS USER IN sdusers, AND DOES THIS TOKEN KNOW IT?  Two questions, and the
 # whole [not yet] path depends on telling them apart.
@@ -186,7 +216,7 @@ if (-not $Yes) {
         Write-Host ''
         Write-Host '  Nothing was checked.  The installation is unaffected either way.'
         Write-Host '  Start Menu -> SD -> Check the SD installation, whenever you want it.'
-        Write-Host ''
+        Finish $false
         exit 0
     }
 }
@@ -352,7 +382,6 @@ if ($null -eq $sshSvc) {
     Info 'OpenSSH often needs a restart after being installed.'
 }
 
-# ---------------------------------------------------------------------------
 Write-Host ''
 Write-Host '  ============================='
 if ($script:problems -gt 0) {
@@ -367,7 +396,7 @@ if ($script:problems -gt 0) {
         # was skipped; the summary only counts them.
         Write-Host ('  ' + $script:notyet + ' other check(s) could not be made - see above.') -ForegroundColor Yellow
     }
-    Write-Host ''
+    Finish
     exit 1
 }
 
@@ -387,10 +416,10 @@ if ($script:notyet -gt 0) {
     Write-Host '    Start Menu -> SD -> Check the SD installation'
     Write-Host '  or:'
     Write-Host ('    powershell -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
-    Write-Host ''
+    Finish
     exit 0
 }
 
 Write-Host '  Everything checks out.  SD is installed and working.' -ForegroundColor Green
-Write-Host ''
+Finish
 exit 0
