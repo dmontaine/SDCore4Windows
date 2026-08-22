@@ -182,13 +182,54 @@ $deadline = (Get-Date).AddSeconds(45)
 while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 500
 }
+
+# 21 Aug 26 - AND THEN ASK SD ITSELF, because stopping the SERVICE does not
+# always take the DAEMON with it.  Measured 21 Aug 2026, 17:05: sc.exe stop
+# returned, the service went to Stopped, and sdwind(15956) - started at 16:25:45
+# by verify-apiadmin's "sc.exe start SD" - was still there 45 seconds later with
+# its parent gone.  The cycle failed at step 1 and cost a run.
+#
+# sdsvc.c ALREADY DOES THIS on its own stop path (run_sd("-stop") at :433, :467
+# and :482), so this is not a second mechanism - it is the same call, made again
+# from outside, for the case where the service exited without its daemon
+# following.  A daemon whose parent has gone is nobody's child and the SCM has
+# nothing left to stop.
+#
+# STILL NOT A KILL.  "sd -stop" refuses while users are logged in, which is
+# exactly the protection the comment below describes: it ends an idle daemon and
+# leaves somebody's live session alone.  Only if it declines do we fail.
+if (Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) {
+    $sdExe = Join-Path $PfTree 'usr\bin\sd.exe'
+    if (Test-Path -LiteralPath $sdExe) {
+        Write-Host '   service stopped but a daemon is still up - asking sd -stop'
+        & $sdExe -stop 2>&1 | ForEach-Object { Write-Host "     $_" }
+        $deadline = (Get-Date).AddSeconds(20)
+        while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+}
+
 $left = Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue
 if ($left) {
     # Named, not killed.  A surviving sd is somebody's session, and ending it
     # from here would take their work with it.
+    #
+    # THE TWO CASES READ DIFFERENTLY, and telling them apart is the whole point
+    # of saying which processes are left: an "sd" is a SESSION and somebody has
+    # to close it, an "sdwind" alone is a DAEMON that has just refused both the
+    # service and "sd -stop", which means it believes somebody is still logged
+    # in to it.
+    $names = @($left | ForEach-Object { $_.Name } | Sort-Object -Unique)
+    $advice = if ($names -contains 'sd') {
+        'Close any SD session and run this again.'
+    } else {
+        'No SD session is running, so the daemon is refusing for another reason - ' +
+        'check for an API session, then "sd -stop" by hand.'
+    }
     Fail ("SD is still running after 45s: " +
           (($left | ForEach-Object { "$($_.Name)($($_.Id))" }) -join ', ') +
-          "`n  Close any SD session and run this again.")
+          "`n  " + $advice)
 }
 Write-Host "   SD is stopped"
 
