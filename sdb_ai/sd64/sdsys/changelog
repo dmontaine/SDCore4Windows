@@ -5,6 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  BACKSPACE NOW WORKS WHEN YOU ARE ASKED FOR A PASSWORD.
+
+           Typing a password at an SD prompt - the one the installer asks
+           for, and any other - ignored the Backspace key, so a mistake
+           could not be corrected.  It was worse than it looked: the key
+           was added to what you had typed rather than removed from it, so
+           trying to correct a slip made the password longer.
+
+           Both kinds of Backspace key now erase, whichever your terminal
+           sends.
+
+           The same prompt now explains itself.  It says what the password
+           is for - you need it only when connecting from another computer,
+           over ssh or the API, never at this keyboard - and it tells you to
+           type  off  when you have finished.
+
 22 Aug 26  THE INSTALLER CAN NOW CHECK ITSELF WHEN IT FINISHES.
 
            The last page of the installer has a new tickbox, on by default:
