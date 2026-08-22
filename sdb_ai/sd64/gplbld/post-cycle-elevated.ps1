@@ -272,8 +272,19 @@ if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
 # reporting RUNNING while it waits five seconds to see whether sdwind stays up,
 # so the SCM's answer alone can be true while the daemon is already gone - the
 # same gap cycle.ps1 step 1 waits on the process for.
-Write-Output ("post-cycle-elevated: SD is running (sdwind {0}), -Run '{1}'" -f
-              ($sdwind | ForEach-Object Id) -join ',', $Run)
+#
+# THE -join IS ON ITS OWN LINE DELIBERATELY.  Written inline as
+#     "... {0} ... {1}" -f ($sdwind | ForEach-Object Id) -join ',', $Run
+# it does not do what it reads as: -f and -join are the SAME PRECEDENCE and bind
+# LEFT TO RIGHT, so PowerShell parses it as ("..." -f $ids) -join (',', $Run).
+# -f then has one argument, {1} has nothing to fill it, and the whole line dies
+# with "Index (zero based) must be greater than or equal to zero and less than
+# the size of the argument list".  Measured 22 Aug 2026, on the first run after
+# the guard above was added - non-fatal, but it printed a red block immediately
+# before step 1, which is precisely where a reader is deciding whether to trust
+# the run.
+$sdwindPids = ($sdwind | ForEach-Object Id) -join ','
+Write-Output ("post-cycle-elevated: SD is running (sdwind {0}), -Run '{1}'" -f $sdwindPids, $Run)
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
