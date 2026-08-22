@@ -61,7 +61,19 @@ param(
     # verify-accountrules.ps1's four.  Both derive Windows account names from
     # the prefix, so lower case only, validated with the two above.
     [string]$RoutePrefix = 'sdrt5',
-    [string]$RulesPrefix = 'sdar1'
+    [string]$RulesPrefix = 'sdar1',
+    # 21 Aug 26 - verify-delaccount.ps1's two throwaway accounts, <prefix>s and
+    # <prefix>b.  Lower case only, same derivation as the two above.
+    #
+    # WIRED IN ON THE OWNER'S INSTRUCTION, 21 Aug 2026, AND THE REASON IS THE
+    # ONE FAILURE THIS FILE CANNOT OTHERWISE CATCH.  It was the only verifier
+    # left that had to be REMEMBERED: it is on assert-current's $neverShipped
+    # list, so it never reports the tree stale, and nothing else reported its
+    # absence either.  It went a whole phase without running, which is how
+    # Phase 3's $adopt marker assertion reached the end of the plan unmeasured
+    # (HISTORY, 21 Aug, "the verifier nobody runs").  A step that is only run
+    # when somebody thinks of it is not in the suite.
+    [string]$DelPrefix   = 'sddel5'
 )
 
 $ErrorActionPreference = 'Continue'
@@ -96,7 +108,8 @@ if ($ApiPrefix -notmatch '^[a-z][a-z0-9_]*$') {
     Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
     exit 2
 }
-foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix'; V = $RulesPrefix })) {
+foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix'; V = $RulesPrefix },
+                 @{ N = 'DelPrefix';   V = $DelPrefix })) {
     if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
         Write-Output ("post-cycle-elevated: -{0} is '{1}'." -f $p.N, $p.V)
         Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
@@ -133,6 +146,20 @@ $steps = @(
     # killed between those two points leaves the install-only gate open until
     # somebody deletes C:\ProgramData\SD\sdsys\$adopt by hand.
     @{ Name = 'verify-accountrules.ps1';  P = @{ Prefix  = $RulesPrefix } },
+    # 21 Aug 26 - DELETE.ACCOUNT both directions, and the second step that
+    # places the ADOPT marker, so the caveat above covers this one too.
+    #
+    # HERE, AND NOT LATER, FOR THE SAME REASON AS THE TWO ABOVE: it drives
+    # CREATE.ACCOUNT, ADOPT and DELETE.ACCOUNT, so a failure leaves its
+    # diagnosis in the SD error log that verify-peerlog.ps1 then overwrites.
+    # It does not restart SD - its Start-SD returns early if sdwind is already
+    # up - so it does not disturb the server the earlier steps measured.
+    #
+    # IT MAKES WINDOWS PROFILES AND DELETES THEM, which no other step does.
+    # A run killed inside it can leave C:\Users\<prefix>s or <prefix>b and a
+    # ProfileList entry behind; both subjects are named from -DelPrefix, so
+    # the next cycle needs a fresh one either way.
+    @{ Name = 'verify-delaccount.ps1';    P = @{ Prefix  = $DelPrefix } },
     # 20 Aug 26 - peer identification and the errlog trim.  AFTER EVERYTHING
     # ELSE, and for a blunter reason than the note above: it OVERWRITES the SD
     # error log with synthetic records, which is how the trim is made to fire
