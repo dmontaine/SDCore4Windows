@@ -47,6 +47,26 @@
 # repeat stops here instead of three sections later wearing a disguise.
 
 param(
+    # 22 Aug 26 - ONE TOKEN THAT DERIVES ALL THIRTEEN.  The eight verifiers that
+    # were in neither runner were wired in on this date, which took the prefix
+    # count from seven to thirteen.  Thirteen single-use names, invented by hand
+    # and all distinct from every name spent since 13 Aug, is not a thing anybody
+    # types correctly at the end of a cycle - and the failure mode is not a clean
+    # refusal but a verifier three sections in, wearing a disguise, which is the
+    # fault this file's header already records costing an install.
+    #
+    # So: -Run <token> derives every prefix below that was not given explicitly.
+    # Use a token nobody has used - the check further down refuses one whose
+    # accounts already exist, which is the half that actually protects you,
+    # because A WINDOWS LOCAL USER SURVIVES AN UNINSTALL and a fresh install is
+    # therefore NOT a fresh set of names.
+    #
+    #   post-cycle-elevated.ps1 -Run b1
+    #
+    # Every individual prefix still overrides, so an interrupted cycle can re-run
+    # one step with a fresh name without spending a whole new token.
+    [string]$Run = '',
+
     [string]$TierPrefix = 'sdtierg',   # MUST be one nobody has used - see PROJECT_STATUS.md
     [string]$Account    = 'sdacct14',  # likewise; sdacct1..13 are spent
     # 20 Aug 26 - verify-accountacl.ps1's throwaway account.  LOWER CASE ONLY,
@@ -73,10 +93,61 @@ param(
     # Phase 3's $adopt marker assertion reached the end of the plan unmeasured
     # (HISTORY, 21 Aug, "the verifier nobody runs").  A step that is only run
     # when somebody thinks of it is not in the suite.
-    [string]$DelPrefix   = 'sddel5'
+    [string]$DelPrefix   = 'sddel5',
+
+    # 22 Aug 26 - THE SIX THAT WERE IN NEITHER RUNNER AND NEEDED A NAME.
+    # verify-nonet and verify-osusers were wired in on the same date and take no
+    # prefix at all, so they are not here.  Lower case only, all of them: each
+    # derives Windows account names from the prefix, the same reason $AclPrefix
+    # carries.
+    [string]$CatPrefix   = '',   # verify-catgate.ps1   - one account
+    [string]$SshPrefix   = '',   # verify-sshonly.ps1   - one account
+    [string]$NamePrefix  = '',   # verify-apiname.ps1   - one account
+    [string]$PortPrefix  = '',   # verify-apiport.ps1   - one account
+    [string]$ScramPrefix = '',   # verify-scramlogin.ps1 - one account
+    [string]$TierApiPrefix = ''  # verify-tierapi.ps1   - one account per tier
 )
 
 $ErrorActionPreference = 'Continue'
+
+# ---------------------------------------------------------------------------
+# 22 Aug 26 - DERIVE FROM -Run.  Only fills what was not given explicitly, so
+# an override always wins.  The stems are the ones each verifier's own history
+# already used, so a -Run token reads like the names it produces.
+if ($Run) {
+    if ($Run -notmatch '^[a-z0-9]+$') {
+        Write-Output ("post-cycle-elevated: -Run is '{0}'." -f $Run)
+        Write-Output '  Lower case letters and digits only - it becomes part of a Windows account name.'
+        exit 2
+    }
+    if (-not $PSBoundParameters.ContainsKey('TierPrefix'))    { $TierPrefix    = "sdtiert$Run" }
+    if (-not $PSBoundParameters.ContainsKey('Account'))       { $Account       = "sdacct$Run"  }
+    if (-not $PSBoundParameters.ContainsKey('AclPrefix'))     { $AclPrefix     = "sdacl$Run"   }
+    if (-not $PSBoundParameters.ContainsKey('ApiPrefix'))     { $ApiPrefix     = "sdapia$Run"  }
+    if (-not $PSBoundParameters.ContainsKey('RoutePrefix'))   { $RoutePrefix   = "sdrt$Run"    }
+    if (-not $PSBoundParameters.ContainsKey('RulesPrefix'))   { $RulesPrefix   = "sdar$Run"    }
+    if (-not $PSBoundParameters.ContainsKey('DelPrefix'))     { $DelPrefix     = "sddel$Run"   }
+    if (-not $CatPrefix)     { $CatPrefix     = "sdcatg$Run" }
+    if (-not $SshPrefix)     { $SshPrefix     = "sdssh$Run"  }
+    if (-not $NamePrefix)    { $NamePrefix    = "sdapin$Run" }
+    if (-not $PortPrefix)    { $PortPrefix    = "sdapi$Run"  }
+    if (-not $ScramPrefix)   { $ScramPrefix   = "sdscram$Run" }
+    if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
+}
+
+# WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
+# seven older parameters carry literal defaults from before this token existed,
+# and those defaults are all SPENT names that would fail anyway.  Inventing
+# fresh literals here would just add six more to that pile.
+foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $SshPrefix },
+                 @{ N = 'NamePrefix'; V = $NamePrefix }, @{ N = 'PortPrefix'; V = $PortPrefix },
+                 @{ N = 'ScramPrefix'; V = $ScramPrefix }, @{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
+    if (-not $p.V) {
+        Write-Output ("post-cycle-elevated: -{0} was not given and -Run was not either." -f $p.N)
+        Write-Output '  Simplest: post-cycle-elevated.ps1 -Run <token nobody has used>'
+        exit 2
+    }
+}
 
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $pr = New-Object Security.Principal.WindowsPrincipal($id)
@@ -109,12 +180,56 @@ if ($ApiPrefix -notmatch '^[a-z][a-z0-9_]*$') {
     exit 2
 }
 foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix'; V = $RulesPrefix },
-                 @{ N = 'DelPrefix';   V = $DelPrefix })) {
+                 @{ N = 'DelPrefix';   V = $DelPrefix },
+                 # 22 Aug 26 - the six new ones, same rule and the same reason.
+                 @{ N = 'CatPrefix';   V = $CatPrefix },  @{ N = 'SshPrefix';     V = $SshPrefix },
+                 @{ N = 'NamePrefix';  V = $NamePrefix }, @{ N = 'PortPrefix';    V = $PortPrefix },
+                 @{ N = 'ScramPrefix'; V = $ScramPrefix },@{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
     if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
         Write-Output ("post-cycle-elevated: -{0} is '{1}'." -f $p.N, $p.V)
         Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
         exit 2
     }
+}
+
+# ---------------------------------------------------------------------------
+# 22 Aug 26 - REFUSE A SPENT NAME BEFORE ANYTHING RUNS, not four verifiers in.
+#
+# A WINDOWS LOCAL USER SURVIVES AN UNINSTALL.  cycle.ps1 deletes both trees, so
+# the SD side of a spent name goes - but the Windows account and its sdu_ group
+# do not, and CREATE.ACCOUNT refuses a name whose Windows account already exists
+# (message 10038).  A fresh install is therefore NOT a fresh set of names, which
+# is exactly the assumption a tired reader makes at the end of a cycle.
+#
+# Each verifier does check its own name, but it checks it when it gets there:
+# on 22 Aug the eight-step run would have gone six deep before a collision
+# surfaced, and every account made before it would still need removing by hand.
+# This asks all thirteen up front and names every clash at once.
+$claimed = @()
+foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account';     V = $Account },
+                 @{ N = 'AclPrefix';  V = $AclPrefix },  @{ N = 'ApiPrefix';   V = $ApiPrefix },
+                 @{ N = 'RoutePrefix';V = $RoutePrefix },@{ N = 'RulesPrefix'; V = $RulesPrefix },
+                 @{ N = 'DelPrefix';  V = $DelPrefix },  @{ N = 'CatPrefix';   V = $CatPrefix },
+                 @{ N = 'SshPrefix';  V = $SshPrefix },  @{ N = 'NamePrefix';  V = $NamePrefix },
+                 @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix },
+                 @{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
+    # -Name "<p>*" catches the derived forms too: verify-routes makes <p>s and
+    # <p>a, verify-delaccount <p>s and <p>b, verify-tiers <p>1..3.
+    $u = @(Get-LocalUser  -Name ($p.V + '*')        -ErrorAction SilentlyContinue)
+    $g = @(Get-LocalGroup -Name ('sdu_' + $p.V + '*') -ErrorAction SilentlyContinue)
+    if ($u.Count -or $g.Count) {
+        $claimed += ('  -{0,-14} {1,-12} already exists: {2}' -f $p.N, $p.V,
+                     ((@($u | ForEach-Object Name) + @($g | ForEach-Object Name)) -join ', '))
+    }
+}
+if ($claimed.Count -gt 0) {
+    Write-Output 'post-cycle-elevated: REFUSING - these names are already taken on this machine:'
+    $claimed | ForEach-Object { Write-Output $_ }
+    Write-Output ''
+    Write-Output '  A Windows local user survives an uninstall, so a fresh install is not a'
+    Write-Output '  fresh set of names.  Pick a -Run token nobody has used, or override the'
+    Write-Output '  individual prefixes that clash.'
+    exit 2
 }
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
@@ -125,8 +240,23 @@ $summary = Join-Path $logDir ('post-cycle-' + (Get-Date -Format 'yyyyMMdd-HHmmss
 # "no arguments", which splats correctly too.
 $steps = @(
     @{ Name = 'verify-fold.ps1';          P = @{} },
+    # 22 Aug 26 - SDNet is gone and its neighbours are not.  FIRST BECAUSE IT IS
+    # CHEAP AND STATIC: it creates no account, needs no prefix and reads the
+    # installed tree, so if the tree is not what the cycle left it says so
+    # before twelve throwaway accounts have been made.
+    @{ Name = 'verify-nonet.ps1';         P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
     @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
+    # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7) and the
+    # OS.USERS SH/OS.EX truth table (section 7 step 7).  Both drive
+    # CREATE.ACCOUNT, so both belong BEFORE verify-peerlog for the error-log
+    # reason the routes/rules comment below spells out.
+    #
+    # verify-osusers takes NO prefix: its -Phase/-LogName/-ResultFile/-MarkerDir
+    # parameters are how it re-invokes ITSELF, and all four default to empty.
+    # Passing anything here would put it in a phase rather than start it.
+    @{ Name = 'verify-catgate.ps1';       P = @{ Account = $CatPrefix } },
+    @{ Name = 'verify-osusers.ps1';       P = @{} },
     # 20 Aug 26 - section 8's per-account ACLs.  It is the only step that
     # deliberately breaks an ACL (icacls /reset) before putting it back.
     #
@@ -171,6 +301,20 @@ $steps = @(
     # ProfileList entry behind; both subjects are named from -DelPrefix, so
     # the next cycle needs a fresh one either way.
     @{ Name = 'verify-delaccount.ps1';    P = @{ Prefix  = $DelPrefix } },
+    # 22 Aug 26 - the ssh-only account model (section 5.6.2).  LAST OF THE
+    # ACCOUNT STEPS and still before verify-peerlog, same error-log reason.
+    #
+    # IT IS THE ONE STEP THAT DOES NOT CALL assert-current, and that is
+    # deliberate rather than an omission - CLAUDE.md exempts it and
+    # verify-allowgroups because they test WINDOWS behaviour rather than SD's.
+    # So it proves nothing about whether the tree is current; the steps around
+    # it do that.
+    #
+    # IT DOES A REAL ssh LOGIN, so it is the slowest step here and the only one
+    # that can fail for a reason outside SD entirely - sshd not running, a host
+    # key prompt, a firewall.  Read a failure here against verify-routes'
+    # sshd_config checks before suspecting SD.
+    @{ Name = 'verify-sshonly.ps1';       P = @{ Account = $SshPrefix } },
     # 20 Aug 26 - peer identification and the errlog trim.  AFTER EVERYTHING
     # ELSE, and for a blunter reason than the note above: it OVERWRITES the SD
     # error log with synthetic records, which is how the trim is made to fire
@@ -179,16 +323,46 @@ $steps = @(
     # It also restarts SD twice, so nothing after it would be talking to the
     # same server the earlier steps measured.
     @{ Name = 'verify-peerlog.ps1';       P = @{} },
-    # 20 Aug 26 - THE API-PRIVILEGE VERIFIER, AND IT FAILS TODAY ON PURPOSE.
-    # A remote API session runs as LocalSystem and can write $cred (measured;
-    # PROJECT_STATUS.md's opening section).  Nothing is fixed yet, so this step
-    # is expected to report 13/15 with the two verdict checks FAILING - that is
-    # the finding standing, not the suite rotting.  When the fix lands it goes
-    # green, which is the whole reason it is here rather than run by hand.
+    # 20 Aug 26 - THE API-PRIVILEGE VERIFIER.
     #
-    # LAST, because it creates and deletes a throwaway account and restarts SD
-    # twice - the same reasoning as the two steps above it.
-    @{ Name = 'verify-apiadmin.ps1';      P = @{ Prefix = $ApiPrefix } }
+    # *** 22 Aug 26 - THIS COMMENT SAID IT "FAILS TODAY ON PURPOSE" AND WAS
+    # EXPECTED TO REPORT "13/15 with the two verdict checks FAILING". BOTH
+    # HALVES ARE NOW WRONG. *** The containment gate landed on 21 Aug
+    # (op_dio2.c, and the USR_ADMIN fix in kernel.c), so on the 22 Aug 08:32:03
+    # install it reports 22/23 with BOTH verdict checks PASSING - the API
+    # session can neither open nor write $cred - and the 23rd a standing N/A
+    # (the whoami probe cannot run, because OS.EXECUTE is refused, which is
+    # itself the right answer).  What is NOT fixed is the session's TOKEN, which
+    # is still LocalSystem; that is PROJECT_STATUS.md's opening section and it
+    # is not what this step measures.  A FAILURE HERE IS NOW A REGRESSION.
+    #
+    # FIRST OF THE API STEPS, all of which come after verify-peerlog: each
+    # edits APIPORT in the installed sd.conf and restarts SD, so none of them
+    # is talking to the server the earlier steps measured, and all of them
+    # write API connection records to the error log peerlog has finished with.
+    @{ Name = 'verify-apiadmin.ps1';      P = @{ Prefix = $ApiPrefix } },
+    # 22 Aug 26 - !valid_os_name on the API login path, and the audit trail.
+    # SECOND of the API steps and deliberately before the three that rewrite
+    # sd.conf: it is the only one that does NOT touch the file, so it measures
+    # the port in the state the install ships it (APIPORT=4243, active since
+    # Phase 1).  It writes refusal records to the audit file on purpose.
+    @{ Name = 'verify-apiname.ps1';       P = @{ Prefix = $NamePrefix } },
+    # 22 Aug 26 - the two API gates answering DIFFERENTLY: a wrong password
+    # refused by !CRED_VERIFY, and SDSYS refused by the ACC$GROUP test.  That
+    # pair is what makes the admitted case mean anything, and no other verifier
+    # makes it - verify-apiadmin measures containment, not the gates.
+    @{ Name = 'verify-apiport.ps1';       P = @{ Prefix = $PortPrefix } },
+    # 22 Aug 26 - the SCRAM exchange spoken directly at the port, against the
+    # RFC rather than against sdclilib: replay refused, client-final with no
+    # client-first refused, two exchanges get different nonces, the password
+    # never appears in the bytes, and request 24 (cleartext) REFUSED.
+    @{ Name = 'verify-scramlogin.ps1';    P = @{ Prefix = $ScramPrefix } },
+    # 22 Aug 26 - all three tiers reachable over the API, and one that should
+    # not be reachable refused.  LAST because it is the only step that needs a
+    # binary from OUTSIDE this repository - sd-connect.exe from the sdclilib32
+    # tree (its -SdConnect default).  If that tree is absent this step is the
+    # one that fails, and nothing before it is lost.
+    @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } }
 )
 
 $lines = @()
