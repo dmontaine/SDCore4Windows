@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  THE INSTALLER CAN NOW CHECK ITSELF WHEN IT FINISHES.
+
+           The last page of the installer has a new tickbox, on by default:
+           "Check that SD installed correctly".  Leave it ticked and a window
+           opens listing what was checked - the program files, the SD service,
+           your access to the database, whether SD's programs were built, and
+           the network options if you turned them on.
+
+           IT ONLY LOOKS.  It changes nothing at all, so you can run it as
+           often as you like.  There is now a Start Menu entry for it as well:
+           SD > Check the SD installation.
+
+           SOME CHECKS WILL SAY "not yet", AND THAT IS NORMAL.  The installer
+           puts you in a group called sdusers, which is what lets you open the
+           database - but Windows only works out which groups you are in when
+           you sign in, so it does not take effect until you sign out and back
+           in.  Until you do, the check cannot read the database and says so
+           instead of pretending something is broken.  Sign out, sign back in,
+           and run it again from the Start Menu.
+
+           If you run it as an administrator it will tell you that the answers
+           are about the administrator account rather than about you.
+
 22 Aug 26  THE INSTALLER NO LONGER ASKS WHERE TO PUT SD.
 
            SD installs to C:\Program Files\SD and its database to

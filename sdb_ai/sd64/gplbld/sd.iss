@@ -278,6 +278,24 @@ Name: "{#DataDir}\shm"; Flags: uninsneveruninstall
 [Icons]
 Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 
+; 22 Aug 26 - THE CHECK NEEDS TO BE FINDABLE, AND THAT IS NOT A CONVENIENCE.
+; check-install.ps1 is offered as a tickbox at the end of the install, but the
+; run it does there is ALWAYS the incomplete one: the installing user's token
+; cannot carry sdusers until they sign out and back in, so every database check
+; reports "not yet" by design.  The run that actually checks the database is
+; the one AFTERWARDS - so without this shortcut the check could never be
+; completed by anybody who did not write the command down.
+;
+; NOT ELEVATED, DELIBERATELY.  The question is whether this user's ORDINARY
+; sign-in can reach SD; an administrator token reads the data tree through the
+; Administrators ACE and would pass regardless.  The script detects elevation
+; and says what the answer is worth, but that is the backstop, not the intent.
+Name: "{group}\Check the SD installation"; \
+    Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -NoExit -File ""{app}\check-install.ps1"""; \
+    WorkingDir: "{app}"; \
+    Comment: "Check that SD is installed and working. It only looks; it changes nothing."
+
 [Run]
 ; ORDER MATTERS.  The group has to exist before icacls can grant to it, and the
 ; ACLs have to be right before anyone is invited in.
@@ -515,6 +533,38 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-service.ps1"" -Install -AppDir ""{app}"""; \
     Flags: runhidden skipifdoesntexist; \
     StatusMsg: "Creating and starting the SD service..."
+
+; THE POST-INSTALL CHECK, AND IT IS A CHECKBOX RATHER THAN A STEP.  Owner's
+; instruction, 22 Aug 2026: a post-install verify that runs as the last step of
+; the install "without complication", knowing it cannot be as comprehensive as
+; the development suite.
+;
+; "postinstall" PUTS IT ON THE FINISHED PAGE AS A TICKBOX, which is what makes
+; it offered rather than imposed - the user can clear it and the install ends
+; the same way it always did.  It is checked by default because it only reads.
+;
+; AND THE "Run as: Original user" BEHAVIOUR IS THE REASON THIS SHAPE WORKS.
+; Everywhere else in this file that behaviour is the enemy - the gravestone
+; below records it killing the SDSYS password step, because the unelevated
+; token does not carry sdusers and cannot open the database.  HERE IT IS
+; EXACTLY WHAT IS WANTED: the question the check asks is "can the person who
+; just installed this use it", and asking it with an elevated token would
+; answer as Administrators and pass regardless.  check-install.ps1's header
+; carries the reasoning at length; it is the rule verify-credacl.ps1 follows.
+;
+; The check knows it is running before the user has signed out and reports the
+; database checks as "not yet" rather than as failures.  That distinction is
+; the whole design of the script and is why this can be safely defaulted on.
+;
+; -NoExit, NOT "nowait".  The third thing that killed the password step was
+; that the console vanished before anything could be read.  A check nobody can
+; read is not a check, so the window STAYS until the user closes it.
+;
+; skipifsilent, because /VERYSILENT means nobody is watching a console anyway.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -NoExit -File ""{app}\check-install.ps1"""; \
+    Flags: postinstall skipifsilent skipifdoesntexist; \
+    Description: "Check that SD installed correctly (recommended - it only looks, and changes nothing)"
 
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;

@@ -579,6 +579,14 @@ def main():
                    # do NOT add it to that script's $neverShipped list.
                    'api-firewall.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
+                   # 22 Aug 26 - the POST-INSTALL CHECK, offered as a
+                   # checkbox on the installer's last page.  It ships, so
+                   # assert-current watches it like the rest of these - do
+                   # NOT add it to that script's $neverShipped list.  It is
+                   # deliberately NOT one of the verify-*.ps1 development
+                   # scripts, none of which can run on a user's machine:
+                   # they compare the install against the SOURCE TREE.
+                   'check-install.ps1',
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',
                    'secure-gcat.ps1',
