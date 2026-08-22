@@ -232,6 +232,49 @@ if ($claimed.Count -gt 0) {
     exit 2
 }
 
+# ---------------------------------------------------------------------------
+# 22 Aug 26 - IS SD ACTUALLY RUNNING?  assert-current DOES NOT ANSWER THIS, and
+# the difference cost a run on the day this was written.
+#
+# WHAT HAPPENED.  The service had been stopped to clear a stale user table and
+# was never started again.  verify-fold.ps1 called assert-current, which PASSED
+# - it compares hashes and mtimes, so a stopped server is entirely current -
+# printed "the installed tree matches source", and then died on its first SD
+# command with "SD has not been started".  A green line immediately above a
+# failure is the worst possible reading order.
+#
+# WHY IT IS WORTH A GUARD NOW AND WAS NOT BEFORE: this file had nine steps and
+# has seventeen.  Every one of them would discover a stopped server separately,
+# and the ones that create accounts would leave them behind on the way.
+#
+# IT REFUSES RATHER THAN STARTING IT.  Auto-starting would hide the state, and
+# the state is diagnostic: a stopped SD after a cycle means either the cycle did
+# not finish or something stopped it, and both are worth knowing before
+# measuring anything.  cycle.ps1 owns starting SD; this file only measures.
+$svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
+$sdwind = @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue)
+if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
+    Write-Output 'post-cycle-elevated: REFUSING - SD is not running.'
+    Write-Output ("  service: {0}    sdwind processes: {1}" -f
+                  $(if ($svc) { $svc.Status } else { 'not installed' }), $sdwind.Count)
+    Write-Output ''
+    Write-Output '  assert-current would still pass: it compares hashes and mtimes, so a'
+    Write-Output '  stopped server is perfectly "current".  Nothing here can measure one.'
+    Write-Output ''
+    Write-Output '      C:\Windows\System32\sc.exe start SD'
+    Write-Output ''
+    Write-Output '  If it was stopped to clear a stale user table, check C:\ProgramData\SD\shm'
+    Write-Output '  is empty first - that is what proves the old table went.'
+    exit 2
+}
+
+# BOTH ARE CHECKED, not just the service.  sdsvc.log records the service
+# reporting RUNNING while it waits five seconds to see whether sdwind stays up,
+# so the SCM's answer alone can be true while the daemon is already gone - the
+# same gap cycle.ps1 step 1 waits on the process for.
+Write-Output ("post-cycle-elevated: SD is running (sdwind {0}), -Run '{1}'" -f
+              ($sdwind | ForEach-Object Id) -join ',', $Run)
+
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
 $summary = Join-Path $logDir ('post-cycle-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.txt')

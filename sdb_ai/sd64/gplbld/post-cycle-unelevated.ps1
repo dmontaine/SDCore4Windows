@@ -56,6 +56,31 @@ if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]:
     exit 2
 }
 
+# ---------------------------------------------------------------------------
+# 22 Aug 26 - IS SD ACTUALLY RUNNING?  The same guard as the elevated runner and
+# for the same reason: assert-current compares hashes and mtimes, so a STOPPED
+# server is perfectly "current" and every verifier prints a green
+# "matches source" line immediately before failing on its first SD command.
+#
+# Five of the seven steps here drive real SD sessions (credacl is the exception,
+# and allowgroups touches only a copy of sshd_config), so a stopped server fails
+# most of this file one step at a time.
+#
+# IT REFUSES RATHER THAN STARTING IT - and here it could not start it anyway:
+# this runner deliberately holds an UNELEVATED token, which cannot start a
+# service.  Saying so plainly beats five identical failures.
+$svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
+$sdwind = @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue)
+if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
+    Write-Output 'post-cycle-unelevated: REFUSING - SD is not running.'
+    Write-Output ("  service: {0}    sdwind processes: {1}" -f
+                  $(if ($svc) { $svc.Status } else { 'not installed' }), $sdwind.Count)
+    Write-Output ''
+    Write-Output '  Starting it needs elevation, which this runner does not have by design.'
+    Write-Output '  From an ELEVATED shell:   C:\Windows\System32\sc.exe start SD'
+    exit 2
+}
+
 # The same transcript reasoning as cycle.ps1 and the elevated runner: a run
 # whose output is not kept is a run that has to be repeated to be quoted.  Not
 # under C:\ProgramData\SD, which a cycle deletes.
