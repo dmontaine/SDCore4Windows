@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  THE INSTALLER NO LONGER ASKS WHERE TO PUT SD.
+
+           SD installs to C:\Program Files\SD and its database to
+           C:\ProgramData\SD.  The wizard used to let you change the first
+           of those but never the second, which meant the two could end up
+           apart and only half the install had moved.
+
+           The page that asked has been removed, so both now go where they
+           have always been documented to go.  If you installed an earlier
+           version somewhere else, this one will not follow it there.
+
+           Nothing you do day to day changes.
+
 22 Aug 26  THE INSTALLER NOW GIVES YOU AN SD ACCOUNT ON TURKISH AND AZERI
            SYSTEMS TOO.
 

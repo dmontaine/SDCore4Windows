@@ -316,7 +316,57 @@ Write-Output ("  -Run {0}" -f $Run)
 Write-Output ('  output: ' + $elevLog)
 Write-Output '  EXPECT A UAC PROMPT NOW - approving it is what elevates the child.'
 
-$inner = "& '{0}' -Run '{1}' -Quiet *> '{2}'" -f $elevated, $Run, $elevLog
+# 22 Aug 26 - Tee-Object, NOT "*> file".  Owner, watching the elevated window
+# through a whole run: "it is not printing the steps", "it is also supposed to
+# print any failures".  Both true, and this line was why.
+#
+# -Quiet's contract (VerifyInstall2.ps1:456) is "FULL OUTPUT TO A FILE PER STEP,
+# PROGRESS AND FAILURES ON THE SCREEN", and it writes every one of those with
+# Write-Host - the progress line, ' OK'/' FAILED', the [FAIL] lines and the
+# dying step's last 8 lines.  WRITE-HOST GOES TO THE INFORMATION STREAM in
+# PowerShell 5+, "*>" captures all six streams, so the whole of it went into
+# the file and the window sat blank for ten minutes looking hung.
+#
+# VerifyInstall2.ps1:500 STATES THIS EXACT MECHANIC for the inner redirect -
+# "Write-Host goes to the INFORMATION stream in PowerShell 5+, which is why it
+# is caught here".  The knowledge was there and was not carried one level up.
+#
+# AND THE EXIT CODE HAD TO BE RESTATED, WHICH IS NOT WHAT WAS EXPECTED.  The
+# reasoning written here first was that "*>" propagates the script's code and a
+# PIPELINE would lose it, so the explicit exit was insurance.  MEASURED, WITH A
+# SCRIPT THAT EXITS 7, and the first half was simply wrong:
+#
+#   & probe *> log                                  -> child exit 1
+#   & probe *>&1 | Tee-Object -FilePath log         -> child exit 1
+#   & probe *>&1 | Tee-Object -FilePath log; exit $LASTEXITCODE  -> child exit 7
+#
+# "*>" NEVER CARRIED THE CODE EITHER.  powershell -Command answers 1 for any
+# non-zero, and the b2 run's "VERIFYINSTALL1 EXIT: 1" looked like proof it
+# worked ONLY BECAUSE VerifyInstall2's failure code is also 1.  Two different
+# things collide on the same number and the coincidence hid the fault.
+#
+# WHAT THAT COST, and it is the reason this matters rather than a tidy-up:
+# VerifyInstall2 has NINE "exit 2" paths - unusable -Run token, prefix already
+# spent, SD not running - against ONE "exit 1" (:563).  This script reports the
+# child's code as its own (:381), so every "THE SUITE COULD NOT RUN" was
+# delivered as "A STEP FAILED".  A reused prefix and a broken product are
+# opposite conclusions and they were indistinguishable from the exit code.
+#
+# So the explicit exit is not insurance against the pipeline.  It is the only
+# thing that has ever made this code mean what it says.
+#
+# '; exit $LASTEXITCODE' IS CONCATENATED AS A SINGLE-QUOTED LITERAL and is not
+# part of the -f string: inside double quotes PowerShell would substitute THIS
+# shell's $LASTEXITCODE when the string is built, freezing the child's verdict
+# to whatever the parent last did.
+#
+# WHAT IT COSTS: Write-Host's red and green do not survive the pipeline, so the
+# failures print in plain text.  The words still say FAILED; only the emphasis
+# goes.  The -NoNewline on the progress line was already not holding under "*>"
+# - the log shows '[ 1/16] verify-fold' and ' OK' on separate lines - so that is
+# unchanged rather than newly broken.
+$inner = ("& '{0}' -Run '{1}' -Quiet *>&1 | Tee-Object -FilePath '{2}'" `
+            -f $elevated, $Run, $elevLog) + '; exit $LASTEXITCODE'
 try {
     $child = Start-Process -FilePath 'powershell.exe' `
                 -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $inner) `

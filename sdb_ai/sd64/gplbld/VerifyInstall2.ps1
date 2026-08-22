@@ -509,7 +509,22 @@ foreach ($s in $steps) {
     # only the marker is surfaced and the count points at the file.
     $fails = @()
     if (Test-Path -LiteralPath $stepLog) {
-        $fails = @(Select-String -LiteralPath $stepLog -Pattern '\[FAIL\]' -SimpleMatch -ErrorAction SilentlyContinue)
+        # 22 Aug 26 - THE PATTERN IS THE LITERAL MARKER, NOT A REGEX FOR IT.
+        # -SimpleMatch takes the pattern LITERALLY, so '\[FAIL\]' looked for
+        # eight characters INCLUDING THE BACKSLASHES and no verifier has ever
+        # written those.  It matched nothing, every run, since the day -Quiet
+        # was added: the b2 run reported "FAILED  exit 1, 0 failing check(s)"
+        # for verify-sshonly while its own step file held five [FAIL] lines.
+        #
+        # Measured three ways on that file rather than reasoned about:
+        #   -SimpleMatch '\[FAIL\]'  ->  0     (what this line used to be)
+        #   '\[FAIL\]' as a regex    ->  5
+        #   -SimpleMatch '[FAIL]'    ->  5     (this line now)
+        #
+        # Either of the last two is correct; the literal is kept because a
+        # SIMPLE match on a FIXED marker is what was meant, and it cannot be
+        # broken again by regex metacharacters in a marker somebody changes.
+        $fails = @(Select-String -LiteralPath $stepLog -Pattern '[FAIL]' -SimpleMatch -ErrorAction SilentlyContinue)
     }
 
     if ($code -eq 0 -and $fails.Count -eq 0) {

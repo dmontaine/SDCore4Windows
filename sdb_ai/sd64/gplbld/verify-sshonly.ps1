@@ -16,13 +16,33 @@
 # reach SD at all.  That has to be answered on a clean machine as well as this
 # one - PROJECT_STATUS.md 7 step 2 - so the test is a file, not a session.
 #
-# THE EXPERIMENT IS A CONTROL FOLLOWED BY A TREATMENT, and the control is the
-# point.  The probe account is created OUTSIDE sdsshonly and made to log in
+# THE EXPERIMENT IS A GATE, THEN A CONTROL, THEN A TREATMENT, and the control is
+# the point.  The probe account is created OUTSIDE sdsshonly and made to log in
 # first.  Only then does it join the group and get tested again.  Without the
 # control, a failure caused by something else entirely reads exactly like the
 # design failing - which is not hypothetical: the first run of this script
 # refused the key login on BOTH sides, and the control is the only reason that
 # was correctly read as "not the deny rights" instead of "5.6.2 is broken".
+#
+# THE GATE IS NEW ON 22 Aug 2026, AND IT IS WHY THIS SCRIPT USED TO FAIL.  Owner's
+# decision, after the -Run b1 suite: assert the premise the product now has
+# rather than the one it had when this was written.  sshd's config carries
+# "AllowGroups sdssh <machine>\sdssh Administrators <machine>\Administrators"
+# since 5.6.2's own change, so an account in NO SD group is refused BEFORE the
+# deny rights are ever consulted.  This script created exactly such an account
+# and called it the control, so the control was refused along with the
+# treatment and the run exited 1 having measured nothing about 5.6.2 at all.
+#
+# So the account in no group is now a CHECK rather than an accident - it asserts
+# that ssh is refused without sdssh, which is the product's first line of
+# defence and was going untested - and the control JOINS sdssh before it is
+# asked to log in, which is what makes it a control again.
+#
+# WHAT PROVES THE GATE REFUSED FOR THE RIGHT REASON: the control immediately
+# after it.  Same account, same password, same client, one group membership
+# different, and it is admitted.  A wrong password or a broken sshd would
+# refuse both.  That is the same logic the control has always rested on, used
+# once more.
 #
 # THREE MEASUREMENTS, because they cover different halves of what sshd does:
 #
@@ -74,6 +94,8 @@
 param(
     [string]$Account = 'sdsshprobe',
     [string]$Group   = 'sdsshonly',
+    # 22 Aug 26 - THE GROUP sshd's AllowGroups NAMES.  See the gate in section 1.
+    [string]$SshGroup = 'sdssh',
     [switch]$Keep,
     [switch]$Cleanup,
     [switch]$RetestSsh
@@ -355,7 +377,7 @@ try {
     $env:SDPROBEPW = $plain      # how SshPassword hands it to ssh; cleared below
 
     Write-Output ""
-    Write-Output "=== 1. control: a plain local account, in no SD group ==================="
+    Write-Output "=== 1. the gate, then the control ======================================"
 
     # -NoPassword/-Disabled is deliberately NOT used here: this mirrors an
     # account that SET_PASSWD has already enabled, which is the state
@@ -365,6 +387,31 @@ try {
     New-LocalUser -Name $Account -Password $secure -Description $MARKER `
         -AccountNeverExpires -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
     Write-Output "  created local user $Account (random password, not stored)"
+
+    # THE GATE.  In no SD group, so AllowGroups has nothing to match and sshd
+    # refuses before the deny rights are reached.  SshResult answers
+    # "refused: <what ssh said>", so the reason is printed and the check itself
+    # compares the normalised word - otherwise every change in ssh's wording
+    # would read as a regression.
+    $gate = SshPassword
+    Write-Output ("  ssh said: " + $gate)
+    Note ('gate: ssh with a password, in no ' + $SshGroup) 'refused' `
+        $(if ($gate -like 'refused*') { 'refused' } else { $gate }) $true
+
+    # AND NOW MAKE IT A CONTROL.  One membership is the only thing that changes
+    # between the check above and the one below.
+    if (-not (Get-LocalGroup -Name $SshGroup -ErrorAction SilentlyContinue)) {
+        # NOT a failure of 5.6.2 - the group is the installer's to create, so a
+        # missing one means the test cannot be run rather than that the design
+        # is wrong.  Exit 2 says so, and the probe is removed on the way out.
+        Write-Output ("verify-sshonly: the group " + $SshGroup + " does not exist - sshd's AllowGroups")
+        Write-Output "  names it, so nothing can log in over ssh and there is no control to be had."
+        Write-Output "  Run allow-ssh-groups.ps1, or install SD, and try again."
+        Remove-Probe
+        exit 2
+    }
+    Add-LocalGroupMember -Group $SshGroup -Member $Account
+    Write-Output ("  added " + $Account + " to " + $SshGroup)
 
     Note 'control: LogonUser INTERACTIVE'       'admitted' (LogonResult $Account $plain $LOGON_INTERACTIVE)       $true
     Note 'control: LogonUser NETWORK_CLEARTEXT' 'admitted' (LogonResult $Account $plain $LOGON_NETWORK_CLEARTEXT) $true
@@ -395,7 +442,15 @@ try {
         '/grant', '*S-1-5-18:F', '/grant', '*S-1-5-32-544:F',
         '/grant', ($Account + ':R'))
 
-    Note 'control: ssh with a key (no profile yet)' 'admitted' (SshKey) $false
+    # 22 Aug 26 - THE LABEL NO LONGER SAYS "no profile yet", because it is no
+    # longer reliably true.  It was written when the control's PASSWORD login
+    # was being refused by the gate above, so nothing had ever created a
+    # profile by this point.  Now that the control is admitted, the password
+    # login immediately before this may well have made one.  The row stays
+    # non-decisive either way: what it records is that key-only access to a
+    # never-logged-on account cannot work, and -RetestSsh is what confirms it
+    # after a password login.
+    Note 'control: ssh with a key' 'admitted' (SshKey) $false
 
     Write-Output ""
     Write-Output "=== 2. treatment: the group, the deny rights, and the account in it ====="
