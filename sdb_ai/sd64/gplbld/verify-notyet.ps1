@@ -165,6 +165,17 @@ function Invoke-AsToken($token, [scriptblock]$body) {
 # the scriptblock and survives it - measured the same way.
 function Invoke-CheckInstall($token, $label) {
     $out = Invoke-AsToken $token {
+        # RUN IT WITH THE PREFERENCE IT NORMALLY HAS, NOT THIS SCRIPT'S.
+        # $ErrorActionPreference = 'Stop' at the top of this file is inherited
+        # by anything it invokes, so the first non-terminating error inside
+        # check-install became fatal and the run died with "Access is denied"
+        # instead of reporting.  check-install is WRITTEN to tolerate failures -
+        # that is what [PROBLEM] and [not yet] are for - and the Start Menu runs
+        # it with the default 'Continue'.  A test must not change the conditions
+        # of the thing it is measuring.  Measured on the second elevated run.
+        $ErrorActionPreference = 'Continue'
+        $ProgressPreference = 'SilentlyContinue'
+
         # *>&1 AND NOT 2>&1.  check-install writes every line with Write-Host,
         # which is the INFORMATION stream in PowerShell 5+; 2>&1 redirects only
         # the error stream, so it would capture almost nothing and every check
