@@ -204,6 +204,25 @@ if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Director
 $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 $summary = Join-Path $logDir ('post-cycle-unelevated-' + $stamp + '.txt')
 
+# 22 Aug 26 - AND IT NOW ACTUALLY KEEPS ONE.  The paragraph above claimed "the
+# same transcript reasoning as cycle.ps1 and the elevated runner" and then kept
+# only the SUMMARY - sixteen words of exit codes - while both of those keep the
+# whole run.  So a failing unelevated step left its exit code and nothing else.
+#
+# IT MATTERED FOR FOUR OF THE EIGHT.  verify-allowgroups, verify-credacl,
+# verify-nocase and verify-setpw are the only verifiers with no Start-Transcript
+# of their own, so on this path their detail reached a console and stopped
+# there.  The other four write their own and were never at risk, which is why
+# nothing had noticed.
+#
+# THE FILE'S OWN HEADER IS THE ARGUMENT FOR THIS: it justifies its existence by
+# observing that "not one of the seven appears in any transcript" - using the
+# transcript trail as the evidence that a guard had stopped guarding - while
+# leaving no such trail behind itself.
+$transcript = Join-Path $logDir ('VerifyInstall1-' + $stamp + '.log')
+try { Start-Transcript -Path $transcript -Force | Out-Null } catch { }
+Write-Output ("transcript: " + $transcript)
+
 # ---------------------------------------------------------------------------
 # ORDER.  verify-credacl first, because it is the one that decides a security
 # rule and the one the gate above exists for: if the session is somehow still

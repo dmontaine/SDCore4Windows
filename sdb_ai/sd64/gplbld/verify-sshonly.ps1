@@ -103,6 +103,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# 22 Aug 26 - A TRANSCRIPT, LIKE EVERY OTHER VERIFIER.  This was the ONLY one of
+# the twenty-four without a Start-Transcript, and it is the one that keeps
+# failing - so the single verifier under active investigation was the single one
+# leaving no record.
+#
+# IT LOOKED LIKE IT HAD ONE, WHICH IS WHY IT SURVIVED.  Run through
+# VerifyInstall1, the handover passes -Quiet and VerifyInstall2 redirects each
+# step into its own file, so a log exists and nothing seems missing.  Run
+# VerifyInstall2 DIRECTLY - which is exactly what a declined handover UAC prompt
+# leaves you doing - and there is no -Quiet, so the output goes to a console
+# that then closes.  The b3 run of 22 Aug lost its detail that way: the summary
+# said exit 1 and nothing anywhere said why.
+#
+# A verifier's own transcript is thin under -Quiet, because a transcript records
+# what reaches the HOST and -Quiet sends that to a file instead.  That is the
+# documented cost in VerifyInstall2's header and it is fine: the two capture the
+# same run by different routes, and between them one of them always has it.
+$logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
+if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+$logPath = Join-Path $logDir ('verify-sshonly-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
+Write-Output ("transcript: " + $logPath)
+
 $MARKER  = 'SD ssh-only verification probe - safe to delete'
 $workdir = Join-Path $env:TEMP 'sd-sshonly-probe'
 $keyfile = Join-Path $workdir 'probe_ed25519'
