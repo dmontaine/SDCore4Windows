@@ -18,9 +18,12 @@ Entries are newest first, by date, until there is a version to attach them to.
 
            That happened a moment too late.  Everything the login sequence
            itself does came before it, so the screen was not cleared when
-           you signed on, and the cursor could not be moved at any prompt
-           the login sequence asked - which is why Backspace at the
-           password prompt erased nothing.
+           you signed on.
+
+           This is the reason behind the Backspace fault listed below, and
+           that fault was already repaired separately - the password prompt
+           no longer depends on the terminal description at all, and works
+           either way.
 
            SD now checks that the description it asked for was actually
            found, and falls back to  windows  when it was not.
