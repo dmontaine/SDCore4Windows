@@ -81,7 +81,14 @@ Write-Output ("transcript: " + $logPath)
 $MARKER  = 'SD not-yet verification probe - safe to delete'
 $homedir = Join-Path $env:SystemDrive ('Users\' + $Account)
 $SdGroup = 'sdusers'
-$checkInstall = Join-Path $PSScriptRoot 'check-install.ps1'
+# THE INSTALLED COPY, NOT THE ONE BESIDE THIS SCRIPT, and that is not a
+# convenience.  The probe account cannot read C:\Users\<developer>\..., so a
+# source-tree path under impersonation fails with "is not recognized as the name
+# of a cmdlet, function, script file, or operable program" - which reads like a
+# spelling mistake and is actually an ACL.  Measured on the first elevated run.
+# It is also the more correct target: this is the file the Start Menu runs, and
+# assert-current above has already established that it matches source.
+$checkInstall = Join-Path $env:ProgramFiles 'SD\check-install.ps1'
 
 $results = New-Object System.Collections.ArrayList
 $failed  = $false
@@ -127,6 +134,23 @@ function Remove-Probe {
     return $true
 }
 
+# EVERY IMPERSONATED CALL GOES THROUGH HERE.  RunImpersonated has an Action
+# overload and a Func<T> one, and PowerShell binds a scriptblock to the ACTION,
+# which returns void - so the caller gets $null and every comparison downstream
+# comes out of an empty string.  Measured against this process's own token, and
+# then met for real: the fix was applied to the check-install call and MISSED on
+# the inline token test one screen above it, which duly reported "expected
+# False, got " on the first elevated run.  One helper, so the two cannot
+# diverge again.  Script scope is visible inside the scriptblock and survives
+# it, which is how the value comes back.
+function Invoke-AsToken($token, [scriptblock]$body) {
+    $script:impResult = $null
+    [Security.Principal.WindowsIdentity]::RunImpersonated($token, {
+        $script:impResult = & $body
+    })
+    return $script:impResult
+}
+
 # Runs check-install under a given token and returns its output and exit code.
 # The script is invoked with & so that its own `exit` ends the script rather
 # than this one, and $LASTEXITCODE is what it exited with.
@@ -140,17 +164,16 @@ function Remove-Probe {
 # pass, and the run reports confident nonsense.  Script scope is visible inside
 # the scriptblock and survives it - measured the same way.
 function Invoke-CheckInstall($token, $label) {
-    $script:ciCapture = $null
-    [Security.Principal.WindowsIdentity]::RunImpersonated($token, {
+    $out = Invoke-AsToken $token {
         # *>&1 AND NOT 2>&1.  check-install writes every line with Write-Host,
         # which is the INFORMATION stream in PowerShell 5+; 2>&1 redirects only
         # the error stream, so it would capture almost nothing and every check
-        # below would compare against an empty string.  Same mechanic that cost
-        # VerifyInstall1 its on-screen progress - PROJECT_STATUS.md START HERE.
+        # below would compare against an empty string.  Measured on the real
+        # script: 2>&1 gave 0 characters, *>&1 gave 596.  Same mechanic that
+        # cost VerifyInstall1 its on-screen progress - PROJECT_STATUS.md.
         $o = & $checkInstall -Brief -Yes -NoPause *>&1 | Out-String
-        $script:ciCapture = [pscustomobject]@{ Text = $o; Code = $LASTEXITCODE }
-    })
-    $out = $script:ciCapture
+        [pscustomobject]@{ Text = $o; Code = $LASTEXITCODE }
+    }
     if ($null -eq $out) {
         # Cannot happen by the route above, but a null here would poison every
         # check downstream silently, so it stops instead.
@@ -162,6 +185,17 @@ function Invoke-CheckInstall($token, $label) {
         if ($line.Trim().Length) { Write-Output ("  | " + $line) }
     }
     return $out
+}
+
+# Does the CURRENT (impersonated) token carry sdusers?  Translate() is wrapped
+# because a token can carry SIDs that no longer resolve to a name, and one of
+# those must not take the whole check down.
+$tokenHasSdUsers = {
+    $hit = $false
+    foreach ($g in [Security.Principal.WindowsIdentity]::GetCurrent().Groups) {
+        try { if ($g.Translate([Security.Principal.NTAccount]).Value -match '\sdusers$') { $hit = $true } } catch { }
+    }
+    $hit
 }
 
 $logonSig = @'
@@ -289,13 +323,7 @@ try {
                            Where-Object { $_.SID.Value -eq $meSid }).Count)
     Note 'the group carries the probe' $true $inGroupNow
 
-    $inStaleToken = [Security.Principal.WindowsIdentity]::RunImpersonated($staleTok, {
-        $hit = $false
-        foreach ($g in [Security.Principal.WindowsIdentity]::GetCurrent().Groups) {
-            try { if ($g.Translate([Security.Principal.NTAccount]).Value -match '\\sdusers$') { $hit = $true } } catch { }
-        }
-        $hit
-    })
+    $inStaleToken = Invoke-AsToken $staleTok $tokenHasSdUsers
     Note 'token T does NOT carry it' $false $inStaleToken
 
     Write-Output ""
@@ -336,6 +364,11 @@ try {
         Write-Output ("  LogonUser failed with Win32 error " + [SdStaleToken]::LastError)
         Note 'control: a fresh token could be taken' $true $false
     } else {
+        # The token half of the control, asked directly rather than through
+        # check-install: this is the mechanism the whole test rests on, and it
+        # should be provable without trusting the thing under test.
+        Note 'token F DOES carry it' $true (Invoke-AsToken $freshTok $tokenHasSdUsers)
+
         $fresh = Invoke-CheckInstall $freshTok 'token F (fresh)'
         $f = $fresh.Text
         Note 'control: fresh token reports [ok]' $true `
