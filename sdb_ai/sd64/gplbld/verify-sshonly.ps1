@@ -16,33 +16,40 @@
 # reach SD at all.  That has to be answered on a clean machine as well as this
 # one - PROJECT_STATUS.md 7 step 2 - so the test is a file, not a session.
 #
-# THE EXPERIMENT IS A GATE, THEN A CONTROL, THEN A TREATMENT, and the control is
-# the point.  The probe account is created OUTSIDE sdsshonly and made to log in
-# first.  Only then does it join the group and get tested again.  Without the
-# control, a failure caused by something else entirely reads exactly like the
-# design failing - which is not hypothetical: the first run of this script
-# refused the key login on BOTH sides, and the control is the only reason that
-# was correctly read as "not the deny rights" instead of "5.6.2 is broken".
+# THE EXPERIMENT IS A LADDER, THEN A TREATMENT.  Section 1 climbs three rungs,
+# adding EXACTLY ONE GROUP AT A TIME, so that each refusal is attributable to
+# the membership that was missing and to nothing else:
 #
-# THE GATE IS NEW ON 22 Aug 2026, AND IT IS WHY THIS SCRIPT USED TO FAIL.  Owner's
-# decision, after the -Run b1 suite: assert the premise the product now has
-# rather than the one it had when this was written.  sshd's config carries
-# "AllowGroups sdssh <machine>\sdssh Administrators <machine>\Administrators"
-# since 5.6.2's own change, so an account in NO SD group is refused BEFORE the
-# deny rights are ever consulted.  This script created exactly such an account
-# and called it the control, so the control was refused along with the
-# treatment and the run exited 1 having measured nothing about 5.6.2 at all.
+#   rung 1  no SD group           ssh refused AT THE DOOR by sshd's AllowGroups
+#   rung 2  + sdssh               sshd ADMITS it; SD refuses - "Error 5 getting
+#                                 semaphores", because the semaphore DACL names
+#                                 sdusers and this token has not got it
+#   rung 3  + sdusers             admitted.  This is the control.
 #
-# So the account in no group is now a CHECK rather than an accident - it asserts
-# that ssh is refused without sdssh, which is the product's first line of
-# defence and was going untested - and the control JOINS sdssh before it is
-# asked to log in, which is what makes it a control again.
+# Sections 2-4 then add sdsshonly and test the deny rights - the treatment -
+# against a control that can actually log in.
 #
-# WHAT PROVES THE GATE REFUSED FOR THE RIGHT REASON: the control immediately
-# after it.  Same account, same password, same client, one group membership
-# different, and it is admitted.  A wrong password or a broken sshd would
-# refuse both.  That is the same logic the control has always rested on, used
-# once more.
+# WHY THE LADDER EXISTS, and it is a correction rather than an elaboration.
+# Until 22 Aug 2026 there was one gate and one control, and the control WAS
+# RUNG 2: in sdssh, never in sdusers.  So it could not log in, every ssh check
+# in the file failed with Error 5, and the runs from b1 to b4 all exited 1
+# having measured NOTHING about 5.6.2 - while the deny-rights rows they were
+# supposed to support passed all along, by LogonUser, unnoticed underneath.
+#
+# THE FAILURE WAS THE FINDING.  "Error 5" was not a broken control; it was a
+# SECOND GATE nobody had written a check for.  An account can satisfy sshd
+# completely and still not reach SD.  That is a real property with a real
+# failure mode - an account made by hand, given ssh, and left out of sdusers
+# looks entirely set up and cannot run SD - so it is now rung 2 rather than an
+# obstacle to get past.
+#
+# WHAT MAKES THE TWO REFUSALS TELLABLE APART is that they come from different
+# components and do not look alike; SshVerdict below classifies them, and the
+# raw text is printed either way.  Without that, rung 2 would restate rung 1.
+#
+# THE GROUPS ARE MEASURED, NOT ASSUMED.  sddefs.h:189 defines SD_USERS_GROUP as
+# "sdusers"; sdsem.c:183 creates the semaphores with it as their DACL; sshd's
+# AllowGroups names sdssh.  Neither is inferred from a comment in sd.iss.
 #
 # THREE MEASUREMENTS, because they cover different halves of what sshd does:
 #
@@ -94,8 +101,15 @@
 param(
     [string]$Account = 'sdsshprobe',
     [string]$Group   = 'sdsshonly',
-    # 22 Aug 26 - THE GROUP sshd's AllowGroups NAMES.  See the gate in section 1.
+    # 22 Aug 26 - THE GROUP sshd's AllowGroups NAMES.  Rung 1 of section 1.
     [string]$SshGroup = 'sdssh',
+    # 22 Aug 26 - THE GROUP THE SEMAPHORE DACL NAMES.  Rung 2.  Measured, not
+    # assumed: sddefs.h:189 defines SD_USERS_GROUP as "sdusers", sdsem.c:183
+    # creates Global\sd_sem_716d0302_<n> with w32sem_create(name,
+    # SD_USERS_GROUP, ...), and win32sem.c hands that straight to
+    # build_descriptor() as the semaphore's DACL.  w32sem_open asks for
+    # SEMAPHORE_ALL_ACCESS, so a token without the group is refused there.
+    [string]$UsersGroup = 'sdusers',
     [switch]$Keep,
     [switch]$Cleanup,
     [switch]$RetestSsh
@@ -214,6 +228,41 @@ function SshResult($r) {
     return ('refused: ' + $why)
 }
 
+# 22 Aug 26 - WHICH GATE REFUSED, not merely that something did.  The ladder in
+# section 1 turns one refusal into three distinct answers, and it can only do
+# that because THE TWO REFUSALS DO NOT LOOK ALIKE.  Measured on the b4 run:
+#
+#   in no SD group    ssh: "Permission denied (publickey,password,keyboard-interactive)"
+#   in sdssh, not sdusers  SD:  "Error 5 getting semaphores"
+#
+# The first is sshd turning the connection away at the door, before SD is
+# reached at all.  The second is sshd ADMITTING it - AllowGroups is satisfied -
+# and SD then failing to open its semaphores, because their DACL names sdusers
+# and this token has not got it.  Two different components saying no.
+#
+# WITHOUT THIS the two rungs would both read "refused" and the second would be
+# a restatement of the first, proving nothing.  The raw text is printed either
+# way, so a change in anybody's wording is visible rather than silently
+# reclassified.
+# Write-Host, NOT Write-Output, AND THAT IS NOT A STYLE CHOICE - 22 Aug 2026.
+# EVERYTHING A POWERSHELL FUNCTION WRITES TO THE OUTPUT STREAM IS PART OF WHAT
+# IT RETURNS.  The first version of this used Write-Output for the diagnostic
+# line, so it returned an ARRAY - the message and the verdict - and both gate
+# rows failed with "got System.Object[]" while the underlying ssh attempts had
+# been perfectly correct.  Measured on the b5 run.
+#
+# Write-Host goes to the host instead, so it is displayed and NOT returned.  It
+# is still captured both ways that matter: Start-Transcript records what reaches
+# the host, and VerifyInstall2's -Quiet redirect uses *> which takes stream 6
+# with everything else.
+function SshVerdict {
+    $r = SshPassword
+    Write-Host ("  ssh said: " + $r)
+    if ($r -eq 'admitted')             { return 'admitted' }
+    if ($r -match 'getting semaphores'){ return 'refused by SD' }
+    return 'refused at the door'
+}
+
 # THE TEST THAT MATTERS, and it is automated rather than typed.
 #
 # ssh takes no password on the command line, by design.  It does however honour
@@ -306,27 +355,39 @@ function LogonResult($user, $pass, $type) {
 }
 
 # ------------------------------------------------------------------ cleanup --
+# Write-Host THROUGHOUT, AND IT IS LOAD BEARING HERE - 22 Aug 2026.  This
+# function RETURNS A BOOLEAN THE CALLER BRANCHES ON, and everything a
+# PowerShell function writes to the output stream is part of what it returns.
+# With Write-Output the refusal path returned @("cleanup: REFUSING...", $false)
+# - a NON-EMPTY ARRAY - and "if ($ok)" is TRUE for one.  So -Cleanup pointed at
+# an account without this script's marker printed REFUSING and then EXITED 0,
+# reporting success for a refusal.
+#
+# The protection itself always worked - the account is not touched - but the
+# exit code said the opposite, which is the half a caller reads.  Found by
+# sweeping for the same fault after SshVerdict above hit it; nothing else in
+# the file returns a value it also prints around.
 function Remove-Probe {
     $u = Get-LocalUser -Name $Account -ErrorAction SilentlyContinue
     if ($null -eq $u) {
-        Write-Output "cleanup: no local user $Account"
+        Write-Host "cleanup: no local user $Account"
     } elseif ($u.Description -ne $MARKER) {
         # Refusing here is the point.  An account this script did not create is
         # somebody's real account, whatever it happens to be called.
-        Write-Output "cleanup: REFUSING to remove $Account - it does not carry this script's marker"
+        Write-Host "cleanup: REFUSING to remove $Account - it does not carry this script's marker"
         return $false
     } else {
         Remove-LocalUser -Name $Account
-        Write-Output "cleanup: removed local user $Account"
+        Write-Host "cleanup: removed local user $Account"
     }
 
     if (Test-Path $homedir) {
         Remove-Item -Recurse -Force $homedir -ErrorAction SilentlyContinue
-        Write-Output "cleanup: removed $homedir"
+        Write-Host "cleanup: removed $homedir"
     }
     if (Test-Path $workdir) {
         Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
-        Write-Output "cleanup: removed $workdir (key material)"
+        Write-Host "cleanup: removed $workdir (key material)"
     }
     return $true
 }
@@ -400,41 +461,66 @@ try {
     $env:SDPROBEPW = $plain      # how SshPassword hands it to ssh; cleared below
 
     Write-Output ""
-    Write-Output "=== 1. the gate, then the control ======================================"
+    Write-Output "=== 1. the gate ladder: one membership at a time ====================="
+    Write-Output "  Each rung adds exactly ONE group and shows exactly ONE gate."
 
     # -NoPassword/-Disabled is deliberately NOT used here: this mirrors an
     # account that SET_PASSWD has already enabled, which is the state
-    # CREATE.ACCOUNT leaves behind.  Note that New-LocalUser joins NO group at
-    # all - not even Users - which is exactly what SD's own CREATE_USER does,
-    # and section 4 below is what tests whether that matters.
+    # CREATE.ACCOUNT leaves behind.  New-LocalUser joins NO group at all, not
+    # even Users, which is where rung 1 starts.
     New-LocalUser -Name $Account -Password $secure -Description $MARKER `
         -AccountNeverExpires -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
     Write-Output "  created local user $Account (random password, not stored)"
 
-    # THE GATE.  In no SD group, so AllowGroups has nothing to match and sshd
-    # refuses before the deny rights are reached.  SshResult answers
-    # "refused: <what ssh said>", so the reason is printed and the check itself
-    # compares the normalised word - otherwise every change in ssh's wording
-    # would read as a regression.
-    $gate = SshPassword
-    Write-Output ("  ssh said: " + $gate)
-    Note ('gate: ssh with a password, in no ' + $SshGroup) 'refused' `
-        $(if ($gate -like 'refused*') { 'refused' } else { $gate }) $true
+    # --- RUNG 1: no SD group at all -------------------------------------
+    # sshd's AllowGroups has nothing to match, so the connection is turned away
+    # AT THE DOOR and SD is never reached.
+    Write-Output ""
+    Write-Output "  rung 1: in no SD group"
+    Note ('gate: ssh refused without ' + $SshGroup) 'refused at the door' (SshVerdict) $true
 
-    # AND NOW MAKE IT A CONTROL.  One membership is the only thing that changes
-    # between the check above and the one below.
+    # --- RUNG 2: + sdssh, and NOT sdusers -------------------------------
+    # 22 Aug 26 - THIS RUNG IS THE b1-b3 FAILURE TURNED INTO AN ASSERTION.
+    # Every run since the gate was added reported "Error 5 getting semaphores"
+    # here and called it a broken control.  It is not broken - it is a SECOND
+    # GATE, and nothing in the suite covered it: sshd ADMITS this account,
+    # because AllowGroups is satisfied, and SD then refuses because the
+    # semaphore DACL names sdusers and this token has not got it.
+    #
+    # WHY IT IS WORTH A CHECK RATHER THAN A STEP TO HURRY PAST: "an account
+    # outside sdusers cannot reach SD at all, even over ssh" is a real property
+    # of the product with a real failure mode - an account created by hand,
+    # given ssh access, and left out of sdusers looks completely set up and
+    # cannot run SD.  The message it produces is the one to recognise.
     if (-not (Get-LocalGroup -Name $SshGroup -ErrorAction SilentlyContinue)) {
         # NOT a failure of 5.6.2 - the group is the installer's to create, so a
         # missing one means the test cannot be run rather than that the design
         # is wrong.  Exit 2 says so, and the probe is removed on the way out.
         Write-Output ("verify-sshonly: the group " + $SshGroup + " does not exist - sshd's AllowGroups")
-        Write-Output "  names it, so nothing can log in over ssh and there is no control to be had."
+        Write-Output "  names it, so nothing can log in over ssh and there is no ladder to climb."
         Write-Output "  Run allow-ssh-groups.ps1, or install SD, and try again."
         Remove-Probe
         exit 2
     }
     Add-LocalGroupMember -Group $SshGroup -Member $Account
-    Write-Output ("  added " + $Account + " to " + $SshGroup)
+    Write-Output ""
+    Write-Output ("  rung 2: added " + $Account + " to " + $SshGroup + " (still NOT in " + $UsersGroup + ")")
+    Note ('gate: ssh admitted by sshd, refused by SD without ' + $UsersGroup) `
+        'refused by SD' (SshVerdict) $true
+
+    # --- RUNG 3: + sdusers - and now it is the control -------------------
+    # ONE membership is the only thing that differs from rung 2, which is what
+    # makes the admission below attributable to it and nothing else.
+    if (-not (Get-LocalGroup -Name $UsersGroup -ErrorAction SilentlyContinue)) {
+        Write-Output ("verify-sshonly: the group " + $UsersGroup + " does not exist - SD's semaphores")
+        Write-Output "  and data tree are granted to it, so no account can run SD and there is"
+        Write-Output "  no control to be had.  Install SD and try again."
+        Remove-Probe
+        exit 2
+    }
+    Add-LocalGroupMember -Group $UsersGroup -Member $Account
+    Write-Output ""
+    Write-Output ("  rung 3: added " + $Account + " to " + $UsersGroup + " - now an SD-shaped account")
 
     Note 'control: LogonUser INTERACTIVE'       'admitted' (LogonResult $Account $plain $LOGON_INTERACTIVE)       $true
     Note 'control: LogonUser NETWORK_CLEARTEXT' 'admitted' (LogonResult $Account $plain $LOGON_NETWORK_CLEARTEXT) $true
@@ -532,12 +618,25 @@ try {
 
     Write-Output ""
     Write-Output "=== 4. does BUILTIN\Users membership matter? ==========================="
-    Write-Output "  New-LocalUser joins no group at all, and SD's CREATE_USER does the same,"
-    Write-Output "  so an SD account is in sdusers, sdu_<name> and $Group and nothing else."
-    Write-Output "  If ssh only works once Users is added, CREATE.ACCOUNT has to add it."
+    Write-Output "  It does not, and the ladder in section 1 is what showed that."
+    Write-Output "  This section used to ASK the question, because an SD account is in"
+    Write-Output "  sdusers, sdu_<name> and $Group and nothing else - so if ssh only worked"
+    Write-Output "  once Users was added, CREATE.ACCOUNT would have to add it too."
+    Write-Output ""
+    Write-Output "  22 Aug 26 - IT WAS ASKED THE WRONG WAY ROUND FOR AS LONG AS IT EXISTED."
+    Write-Output "  Every run from b1 to b4 added Users here and STILL got Error 5, because"
+    Write-Output "  the probe was not in sdusers and nothing in the file put it there.  The"
+    Write-Output "  row was non-decisive, so it failed quietly and answered nothing.  Rung 3"
+    Write-Output "  now grants sdusers and the login is admitted; adding Users on top of"
+    Write-Output "  that changes nothing, which is the actual answer."
 
     Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $Account -ErrorAction SilentlyContinue
-    Note 'in Users: ssh with a password' 'admitted' (SshPassword) $false
+    # STILL NOT DECISIVE, and now for a better reason than before: sdusers is
+    # what carries this, so a change here would be a curiosity rather than a
+    # failure of 5.6.2.  It is kept as a control on rung 3 - if adding a group
+    # that should not matter DID matter, the ladder would be measuring
+    # something other than what it claims.
+    Note 'in Users as well: ssh still admitted' 'admitted' (SshPassword) $false
 
     Write-Output ""
     Write-Output "=== summary ============================================================"
