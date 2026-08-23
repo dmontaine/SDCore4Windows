@@ -1875,14 +1875,30 @@ begin
     way to change it; there is no need for a custom page.  Only the ACCOUNT
     half varies, so the text is fixed rather than built. }
   if (CurPageID = wpFinished) and InstallReachedPostInstall and PasswordStepWanted then
+  begin
+    { THE LABEL HAS TO BE GROWN BEFORE IT IS FILLED, and the first version of
+      this did not - the owner's screenshot showed the text cut off mid-sentence
+      at "It closes by".  Inno AUTO-SIZES FinishedLabel to the stock text, which
+      is three short lines, so anything longer is simply clipped at the old
+      height.  Nothing warns: the Caption assignment succeeds and the words are
+      just not drawn.
+
+      Taken from the PARENT rather than set to a number, so it is right at any
+      DPI and font size.  The stock page leaves the whole area below the label
+      empty, so there is nothing under it to overlap. }
+    WizardForm.FinishedLabel.Height :=
+      WizardForm.FinishedLabel.Parent.ClientHeight - WizardForm.FinishedLabel.Top - ScaleY(8);
+
+    { NO HAND-WRAPPED LINES EITHER.  The label word-wraps, so the leading spaces
+      that used to indent the continuation of each numbered item fought with it
+      and made the clipping worse.  Only the breaks BETWEEN items are explicit. }
     WizardForm.FinishedLabel.Caption :=
       'Setup has finished installing SD on your computer.' + #13#10#13#10 +
-      'When you click Finish, ONE WINDOW OPENS and does two things in turn:' + #13#10#13#10 +
-      '    1. SD asks you to set a password for your SD account. It closes by' + #13#10 +
-      '        itself once you have set it.' + #13#10#13#10 +
-      '    2. The same window then checks the installation and reports what it' + #13#10 +
-      '        found. It only reads, and it asks before it starts.' + #13#10#13#10 +
-      'This is expected. Do not close that window until it says you can.';
+      'When you click Finish, one window opens and does two things in turn:' + #13#10#13#10 +
+      '1. SD asks you to set a password for your SD account. It closes by itself once you have set it.' + #13#10#13#10 +
+      '2. The same window then checks the installation and reports what it found. It only reads, and it asks before it starts.' + #13#10#13#10 +
+      'This is expected. Setting up SD is not finished until that window says so.';
+  end;
 
   { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
     in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with

@@ -198,8 +198,19 @@ if (-not $Brief) {
     Write-Host '  Checking your SD installation' -ForegroundColor White
     Write-Host '  ============================='
     Write-Host ''
-    Write-Host '  This window is not part of the installation.  The install has finished'
-    Write-Host '  and nothing here can undo it or change it.'
+    # 22 Aug 26 - IT NO LONGER CLAIMS THE INSTALL HAS FINISHED.  Owner: "the
+    # install doesn't actually finish until you close the post install script
+    # window, so ... 'The install has finished' is not correct."  Right, and it
+    # was wrong twice over: this window is reached THROUGH the installer's own
+    # finishing step, and the password step that ran a moment ago in this same
+    # window is part of setting SD up, not something after it.
+    #
+    # WHAT IS TRUE IS THE REASSURING HALF ANYWAY - the files are on disk and
+    # nothing here writes - so saying that instead costs nothing and does not
+    # have to be taken back.
+    Write-Host '  SD is installed, and this is the last step of setting it up.'
+    Write-Host '  Nothing here changes anything - it only reads - so it is safe to'
+    Write-Host '  run again whenever you like.'
     Write-Host ''
     Write-Host '  What it will do, and it is all reading:'
     Write-Host ''
