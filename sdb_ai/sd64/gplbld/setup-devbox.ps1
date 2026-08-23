@@ -265,13 +265,48 @@ function Step-Git {
         Ok ('git present - ' + (& git --version))
         return
     }
-    $null = Install-Winget 'Git.Git' 'Git for Windows'
+    # Return on the install's own verdict rather than falling through.  Under
+    # -CheckOnly Install-Winget has already said "git is missing", and the
+    # PATH check below would then say "installed but not on PATH" about an
+    # install that never happened - one cause, two lines, which is the defect
+    # the ssh clones had (HISTORY, 23 Aug).
+    if (-not (Install-Winget 'Git.Git' 'Git for Windows')) { return }
     # PATH in THIS process does not pick up a just-installed program, so the
     # clone step below would still fail.  Say so rather than let it look like
     # a clone problem.
     $g = Get-Command git -ErrorAction SilentlyContinue
     if ($null -eq $g) {
         Hand 'git was installed but is not on PATH in this session - re-run this script in a NEW elevated window to finish'
+    }
+}
+
+# GitHub CLI.  ADDED 23 Aug 2026 ON THE OWNER'S INSTRUCTION.
+#
+# Recorded because this file's own section 2 argues the other way, and the next
+# person reading it should not think the argument was missed.  MSYS2's own git
+# was deliberately kept OUT of the pacman list on the grounds that nothing in
+# the project uses it, and by that reasoning gh does not belong here either:
+# no Makefile, script or build step calls it, and the key can be pasted into
+# the GitHub web UI with no tooling at all.
+#
+# THE OWNER'S CALL OVERRIDES THAT, and it is a reasonable one: the ONE step
+# this script cannot do for you is the SSH key, it is the step that stopped the
+# first real run dead, and `gh ssh-key add` is the shortest way through it.  A
+# setup script that names a tool it does not install - which is exactly what
+# this one did until today - is worse than one that installs it.
+function Step-Gh {
+    Head 'GitHub CLI'
+    $g = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -ne $g) {
+        Ok ('gh present - ' + (@(& gh --version)[0]))
+        return
+    }
+    if (-not (Install-Winget 'GitHub.cli' 'GitHub CLI')) { return }
+    $g = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -eq $g) {
+        # Not a problem - nothing in this script needs gh, and the next window
+        # will have it.  It matters only for the ssh-key step below.
+        Hand 'gh was installed but is not on PATH in this session - open a NEW window before using it for the key step'
     }
 }
 
@@ -492,7 +527,24 @@ function Step-Ssh {
     Hand ('no SSH key in ~\.ssh - these will not clone: ' + (($needSsh | ForEach-Object { $_.Name }) -join ', '))
     Say '  Create one and add the public half to GitHub, then re-run:'
     Say '      ssh-keygen -t ed25519 -C "you@example.com"'
-    Say '      gh ssh-key add ~\.ssh\id_ed25519.pub      (or paste it in the web UI)'
+
+    # THIS USED TO NAME `gh` UNCONDITIONALLY WHEN NOTHING INSTALLED IT.  On the
+    # reference machine gh happened to be present, so the advice read perfectly
+    # well from the one box that would never follow it; on the fresh machine
+    # this script exists for it was "gh: command not found" at the exact moment
+    # somebody is stuck.  Step-Gh installs it now (owner, 23 Aug 2026), so the
+    # gh line is the normal path again - but it is still CHECKED rather than
+    # assumed, because a just-installed gh is not on this session's PATH and
+    # the install can fail.
+    if ($null -ne (Get-Command gh -ErrorAction SilentlyContinue)) {
+        Say '      gh ssh-key add ~\.ssh\id_ed25519.pub'
+    } else {
+        Say '  gh is installed but not on THIS session''s PATH - either open a new'
+        Say '  window and use:   gh ssh-key add %USERPROFILE%\.ssh\id_ed25519.pub'
+        Say '  or paste the PUBLIC half into https://github.com/settings/keys'
+        Say '      type %USERPROFILE%\.ssh\id_ed25519.pub'
+    }
+
     Say '  The ssh clones below are SKIPPED rather than attempted - re-running'
     Say '  after the key is in place picks them up.'
 }
@@ -625,6 +677,7 @@ Write-Host '====================================================='
 
 Step-Preflight
 Step-Git
+Step-Gh
 Step-Msys
 Step-Packages
 Step-Sodium
