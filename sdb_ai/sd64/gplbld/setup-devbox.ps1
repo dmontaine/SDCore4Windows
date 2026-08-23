@@ -27,8 +27,11 @@
 #
 # WHAT IT CANNOT DO, said here rather than discovered at the end:
 #
-#   * IT CANNOT CREATE SSH KEYS.  Two remotes are git@github.com, and
-#     credentials are the operator's to set up.  It detects and reports.
+#   * IT CANNOT CREATE SSH KEYS - and since 23 Aug 2026 that no longer stops
+#     it.  Every repository is PUBLIC and is CLONED OVER https, so a machine
+#     with no credentials at all sets itself up completely and builds.  The
+#     ssh push URL is set afterwards for the two that are pushed to, and a key
+#     is wanted only the first time somebody pushes.
 #   * IT CANNOT FETCH Projects\GPL.BP.  That tree has NO REMOTE - it is 212
 #     files of original ScarletDME BASIC, PROJECT_STATUS.md section 2 calls it
 #     "genuinely valuable", and section 7 step 12 worked from it.  A machine
@@ -109,37 +112,45 @@ $SodiumUrl     = "https://download.libsodium.org/libsodium/releases/libsodium-$S
 # It is a STARTING POINT, not the answer - Resolve-Iscc is the answer.
 $IsccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
 
-# Set by Step-Ssh, read by Step-Clone.  Initialised TRUE so that if the ssh
-# step is ever skipped or moved, the clones are ATTEMPTED rather than silently
-# passed over - a failed clone says so, a skipped one is easy to miss.
-$script:HaveSshKey = $true
-
 # The four, and what each is for.  linuxsdclilib is deliberately absent -
 # removed from the project 23 Aug 2026, section 2.
+# CLONE OVER https, PUSH OVER ssh.  Changed 23 Aug 2026, owner's decision,
+# before the first clean-VM run so that the run tests the final script.
+#
+# ALL THREE GitHub REPOSITORIES ARE PUBLIC, so a key was never needed to READ
+# them - only to push.  Cloning over git@ meant a machine with no credentials
+# skipped sd4windows and sdclilib32, and skipped `make sd` with them, which is
+# the one step this script calls the only real test of the environment.  So a
+# bare machine could be set up right up to the point that would have proved it.
+#
+# `Push` is applied with `git remote set-url --push` after the clone, so the
+# owner's push path is unchanged and nothing has to be edited by hand
+# afterwards.  A machine with no key clones, builds and tests; the key is only
+# wanted the first time somebody pushes, and git says so plainly then.
 $Repos = @(
     [pscustomobject]@{
         Name = 'sd4windows'
-        Url  = 'git@github.com:dmontaine/sd4windows.git'
+        Url  = 'https://github.com/dmontaine/sd4windows'
+        Push = 'git@github.com:dmontaine/sd4windows.git'
         Why  = 'the port, and the client library''s home'
-        Ssh  = $true
     }
     [pscustomobject]@{
         Name = 'sdb64'
         Url  = 'https://codeberg.org/stringdatabase/sdb64'
+        Push = ''      # read-only upstream - nothing here ever pushes to it
         Why  = 'upstream Linux, read-only - the attribution tool'
-        Ssh  = $false
     }
     [pscustomobject]@{
         Name = 'winsdclilib'
         Url  = 'https://github.com/dmontaine/winsdclilib'
+        Push = ''      # already https both ways on the reference machine
         Why  = 'mirror of gplsrc/sdclilib - push to it when the client changes'
-        Ssh  = $false
     }
     [pscustomobject]@{
         Name = 'sdclilib32'
-        Url  = 'git@github.com:dmontaine/sdclilib32.git'
+        Url  = 'https://github.com/dmontaine/sdclilib32'
+        Push = 'git@github.com:dmontaine/sdclilib32.git'
         Why  = '32-bit qmclilib.dll; holds no source, SRCDIR points into sd4windows'
-        Ssh  = $true
     }
 )
 
@@ -491,8 +502,8 @@ function Warn-IsccElsewhere($path) {
 }
 
 function Step-Ssh {
-    Head 'SSH keys for the git@ remotes'
-    $needSsh = @($Repos | Where-Object { $_.Ssh })
+    Head 'SSH keys - for PUSHING, not for the setup'
+    $needSsh = @($Repos | Where-Object { $_.Push -ne '' })
     $keyDir = Join-Path $env:USERPROFILE '.ssh'
     $haveKey = $false
     if (Test-Path -LiteralPath $keyDir) {
@@ -501,31 +512,28 @@ function Step-Ssh {
         if ($keys.Count -gt 0) { $haveKey = $true }
     }
 
-    # Step-Clone reads this.  23 Aug 2026, from the first real run: without it
-    # the ssh clones are ATTEMPTED anyway and each one fails on its own,
-    # turning one cause into three lines in the summary - "no SSH key" under
-    # LEFT FOR A PERSON and two separate PROBLEMS underneath it.  Three
-    # entries for one missing key reads like three things to fix, and it
-    # buries the one problem on that run that was real.
+    # THIS STEP NO LONGER BLOCKS ANYTHING, and that is the point of the change
+    # on 23 Aug 2026.  The clones are https now, so a machine with no key sets
+    # itself up completely - every repository, and `make sd` at the end.  A
+    # missing key costs nothing until the first push, which is a thing the
+    # operator does deliberately and which git explains clearly by itself.
     #
-    # IT ALSO STOPS AN INTERACTIVE HANG.  The first ssh clone asks
-    # "Are you sure you want to continue connecting (yes/no/[fingerprint])?"
-    # for github.com's host key and WAITS.  That prompt is legitimate when a
-    # clone can succeed; asking it before a clone that is already doomed means
-    # the script sits there for a while and then fails anyway.
-    $script:HaveSshKey = $haveKey
+    # It was a blocker until today: with git@ clone URLs, no key meant no
+    # sd4windows, which meant no build, which meant the one step that proves
+    # the environment never ran on the machine that most needed proving.
 
     if ($haveKey) {
-        Ok 'a private key is present in ~\.ssh'
-        # Presence is not authorisation, and saying so matters: the clone is
-        # what proves it, and it fails much later.
-        Say '  (that it is the RIGHT key is not something this can check - the clone below is the test)'
-        Say '  (the first ssh clone asks you to accept github.com''s host key - that is expected)'
+        Ok 'a private key is present in ~\.ssh - pushes should work'
+        # Presence is not authorisation, and saying so matters: only a real
+        # push proves it, and that is a long way from here.
+        Say '  (that it is the RIGHT key is not something this can check)'
         return
     }
 
-    Hand ('no SSH key in ~\.ssh - these will not clone: ' + (($needSsh | ForEach-Object { $_.Name }) -join ', '))
-    Say '  Create one and add the public half to GitHub, then re-run:'
+    Ok 'no SSH key - that does NOT affect this setup'
+    Say ('  Everything clones over https and builds without one. A key is wanted')
+    Say ('  only to PUSH to: ' + (($needSsh | ForEach-Object { $_.Name }) -join ', '))
+    Say '  When you want that:'
     Say '      ssh-keygen -t ed25519 -C "you@example.com"'
 
     # THIS USED TO NAME `gh` UNCONDITIONALLY WHEN NOTHING INSTALLED IT.  On the
@@ -545,8 +553,7 @@ function Step-Ssh {
         Say '      type %USERPROFILE%\.ssh\id_ed25519.pub'
     }
 
-    Say '  The ssh clones below are SKIPPED rather than attempted - re-running'
-    Say '  after the key is in place picks them up.'
+    Say '  The clones below go ahead either way.'
 }
 
 function Step-Clone {
@@ -573,24 +580,28 @@ function Step-Clone {
         }
         if ($CheckOnly) { Hand ('would clone ' + $r.Name + ' - ' + $r.Why); continue }
 
-        # No key, no point - Step-Ssh has already said so once, and saying it
-        # again per repository is what made one cause look like three.
-        if ($r.Ssh -and -not $script:HaveSshKey) {
-            Say ('  ' + $r.Name.PadRight(14) + '- skipped, no SSH key (see above)')
-            continue
-        }
-
         Say ('  cloning ' + $r.Name + ' ...')
         & git clone $r.Url $dest
         if ($LASTEXITCODE -ne 0) {
-            if ($r.Ssh) {
-                Bad ($r.Name + ' did not clone. It is an ssh remote - check the key step above')
-            } else {
-                Bad ($r.Name + ' did not clone (git exit ' + $LASTEXITCODE + ')')
-            }
+            # No ssh special case any more - every clone is https, so a failure
+            # here is the network or the URL and never a missing credential.
+            Bad ($r.Name + ' did not clone (git exit ' + $LASTEXITCODE + ')')
             continue
         }
         Did ($r.Name + ' cloned - ' + $r.Why)
+
+        # PUSH GOES BACK OVER ssh where there is one.  Set here rather than
+        # left to the operator: the fetch URL is what makes a bare machine
+        # work, and the push URL is what stops that convenience quietly
+        # becoming "this clone can no longer push where it used to".
+        if ($r.Push -ne '') {
+            & git -C $dest remote set-url --push origin $r.Push
+            if ($LASTEXITCODE -eq 0) {
+                Say ('  ' + ''.PadRight(14) + '  push URL set to ' + $r.Push)
+            } else {
+                Bad ($r.Name + ': clone succeeded but the ssh push URL could not be set - pushes will go to ' + $r.Url)
+            }
+        }
     }
 
     # SECTION 2 RELIES ON origin/dev BEING READABLE WITHOUT THE NETWORK:
