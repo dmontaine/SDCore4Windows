@@ -192,7 +192,7 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-fold.ps1', 'verify-nonet.ps1',
                   'verify-lcnames.ps1', 'VerifyInstall2.ps1',
                   'verify-keys.ps1', 'probe-keys.ps1',
-                  'verify-editkeys.ps1', 'verify-scramlogin.ps1',
+                  'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
                   # created it, which is section 7 step 7's rule: a verifier not

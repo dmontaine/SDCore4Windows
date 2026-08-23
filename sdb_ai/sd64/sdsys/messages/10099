@@ -1,0 +1,1 @@
+PROC is not supported in this version of SD, and %1 is a PROC.\n\nThe VOC record is valid PROC and has been left alone; what is gone is the\ninterpreter that ran it.

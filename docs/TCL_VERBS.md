@@ -156,7 +156,6 @@ upper. What it changes is what SD prints back: `CT VOC LIST` answers
 | `SAVE.STACK` | Save the command stack |
 | `SEARCH` | Search file for records containing string(s) |
 | `SELECT` | Select records meeting criteria |
-| `SED` | Full screen editor |
 | `SET` | Set a user `@`variable |
 | `SET.DATE` | Set SD processing date |
 | `SET.DEVICE` | Attach a tape device |
@@ -182,7 +181,6 @@ upper. What it changes is what SD prints back: `CT VOC LIST` answers
 | `TIME` | Display date and time |
 | `UNLOCK` | Unlock a record or file |
 | `UPDATE.ACCOUNT` | Update VOC items from NEWVOC |
-| `UPDATE.RECORD` | Utility to update records in file |
 | `WHO` | Display user number and account name |
 | `WHERE` | Display pathname of current account |
 
@@ -242,6 +240,18 @@ reach the machine*.
 Note this is about *file* encryption. It says nothing about the account
 password machinery, which is SD's own and uses libsodium (PROJECT_STATUS.md
 §5.6).
+
+## Removed from SD, 23 Aug 2026
+
+`PROC`, `SED` and `UPDATE.RECORD`, on the repository owner's decision.  PROC was
+not a verb but a VOC record TYPE - an item of type `PQ` was interpreted by
+`$PROC` - and a `PQ` item now reports that PROC is not supported rather than
+running.  `SED` was the full-screen editor and `UPDATE.RECORD` the full-screen
+record editor.
+
+`ED`, the LINE editor, is unaffected and is the editor this system uses.  So is
+`LIST`, `COUNT`, `SELECT` and everything else the QUERY processor runs - `$QPROC`
+is a different program from `$PROC` despite the name.
 
 ## In OpenQM 2.6.6, deliberately not in SD
 

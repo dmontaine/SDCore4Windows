@@ -30,9 +30,11 @@
 # WHAT IT COVERS NOW, LATER THE SAME DAY: EVERYTHING.  This said "eight
 # verifiers need elevation and are still not in either runner - apiport,
 # catgate, nonet, osusers, scramlogin, sshonly, tierapi, apiname", and every one
-# of those is now in a runner.  There are TWENTY-SEVEN verify-*.ps1 here; this
-# file runs TEN and hands the other SEVENTEEN to VerifyInstall2.ps1, so NONE is
-# left to be remembered.  Checked by listing both runners' step tables against
+# of those is now in a runner.  There are TWENTY-SIX verify-*.ps1 here; this
+# file runs NINE and hands the other SEVENTEEN to VerifyInstall2.ps1, so NONE is
+# left to be remembered.  (Twenty-seven until 23 Aug 2026, when PROC, SED and
+# UPDATE.RECORD were removed from the system and verify-editkeys.ps1 went with
+# them - it tested nothing else.)  Checked by listing both runners' step tables against
 # the directory, not by eye.
 #
 # THAT IS A PROPERTY TO KEEP, NOT A SCORE.  The failure this file was written
@@ -260,7 +262,6 @@ $steps = @(
     @{ Name = 'verify-setpw.ps1';       P = @{} },
     @{ Name = 'verify-allowgroups.ps1'; P = @{} },
     @{ Name = 'verify-keys.ps1';        P = @{} },
-    @{ Name = 'verify-editkeys.ps1';    P = @{} },
     @{ Name = 'verify-lcnames.ps1';     P = @{} },
     # 22 Aug 26 - section 7 step 12's guard.  It belongs in THIS runner rather
     # than VerifyInstall2: it spends no prefix, creates nothing, and needs no

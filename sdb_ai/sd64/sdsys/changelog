@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+23 Aug 26  PROC, SED AND UPDATE.RECORD HAVE BEEN REMOVED.
+
+           SED was the full-screen editor and UPDATE.RECORD the full-screen
+           record editor.  Both are gone, along with the PROC language: a VOC
+           item of type PQ now reports that PROC is not supported instead of
+           running.  Your PQ records are left alone - it is the interpreter
+           that has gone, not the records.
+
+           ED, the line editor, is not affected and is the editor this system
+           uses.  Neither is anything you run with LIST, COUNT, SELECT or
+           SORT: those are the query processor, which is a different thing
+           from PROC despite the similar name.
+
 22 Aug 26  A SCHEDULED JOB CAN NOW RUN AN SD COMMAND, AND ONLY THE COMMANDS
            AN ADMINISTRATOR HAS NAMED FOR IT.
 

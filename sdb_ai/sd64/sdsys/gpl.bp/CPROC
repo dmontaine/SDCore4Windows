@@ -1616,47 +1616,20 @@ $endif
             end case
 
          case voc.entry.type[1,2] = 'PQ'
-               ins at.sentence before sentence.stack<1>
-               at.sentence = new.sentence
-               last.command = at.sentence
-
-               * Set the pointers and the active buffers
-
-               mat proc.ibuf = ''
-
-               s = @sentence
-               loop
-               while s # ''
-                  c = s[1,1]
-                  if c = '"' or c = "'" or c = '\' then
-                     j = index(s, c, 2) ; if j = 0 then j = len(s)
-                     proc.ibuf(0)<-1> = s[1,j]
-                     s = trimf(s[j+1, 9999999])
-                  end else
-                     proc.ibuf(0)<-1> = field(s, ' ', 1)
-                     s = trimf(s[col2() + 1, 999999])
-                  end
-               repeat
-
-               * If this is a PQ style Proc, change the field marks in the
-               * primary input buffer to spaces.
-
-               c = voc.entry.type[3,1]
-               if c # 'N' and c # 'X' then
-                  convert @fm to ' ' in proc.ibuf(0)
-               end
-
-               proc.iptr = 1
-               proc.iptr.cpos = 1
-               proc.acti = 0
-
-               mat proc.obuf = ''
-               proc.acto = 0
-
-               i = '$PROC'
-               call @i(voc.rec, verb, filename, @voc, '')
-               i = ''                ;* Ensure link unsnapped
-               mat proc.fvar = 0     ;* Ensure all files are closed
+* 23 Aug 26 Windows port - PROC IS REMOVED.  Owner's decision, 23 Aug 2026:
+*   PROC, SED and UPDATE.RECORD are out of this system.  The dispatch that
+*   stood here built the PROC input buffers from @sentence and called $PROC,
+*   which no longer exists.
+*
+*   IT REFUSES BY NAME RATHER THAN FALLING THROUGH.  Deleting the case
+*   outright would drop a PQ item into the "invalid dispatch code" arm above,
+*   and that is the wrong thing to tell somebody: the code in their VOC record
+*   is perfectly valid PROC, it is the interpreter that is gone.
+*
+*   NOTHING SHIPPED IS AFFECTED - no record in newvoc or voc_template is type
+*   PQ, checked 23 Aug.  This can only be reached by a PQ item somebody wrote.
+            display sysmsg(10099, verb)  ;* PROC is not supported; %1 is a PROC
+            unwinding = 2
 
          case voc.entry.type[1,1] = 'R'                       ;* **** Remote
             open voc.rec<2> to rem.f then
