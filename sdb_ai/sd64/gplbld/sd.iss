@@ -1241,9 +1241,14 @@ begin
     A PROCEDURE, NOT A FUNCTION.  Exec answers whether the process STARTED and
     nothing here can learn more: the script outlives this call, so whether a
     password was set is unknowable from Setup. }
+  { -User IS PASSED, NOT LEFT TO $env:USERNAME.  Setup knows who is installing;
+    the script would otherwise be guessing from its own process, and it uses the
+    name to look for a credential afterwards.  Same rule as -AppDir, which
+    adopt-account.ps1 records costing a real install when it was defaulted. }
   Args := '-NoProfile -ExecutionPolicy Bypass -NoExit -File "' +
           ExpandConstant('{app}\finish-install.ps1') + '" -AppDir "' +
-          ExpandConstant('{app}') + '"';
+          ExpandConstant('{app}') + '" -User "' +
+          ExpandConstant('{username}') + '"';
   if PasswordStepWanted then
     Args := Args + ' -WithPassword';
 
@@ -1644,7 +1649,7 @@ begin
                          '    1. SD opens so you can give that account a password. You do ' +
                          'not need one at this machine - Windows has already authenticated ' +
                          'you - it is what reaches the account from ANOTHER machine, over ' +
-                         'ssh or the API. TYPE  off  WHEN YOU HAVE SET IT.' + #13#10#13#10 +
+                         'ssh or the API. It closes by itself once you have set it.' + #13#10#13#10 +
                          '    2. The same window then checks the installation and tells ' +
                          'you what it found. It only reads; it changes nothing, and it ' +
                          'asks before it starts.' + #13#10#13#10 +
@@ -1853,6 +1858,32 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  { 22 Aug 26 - THE FINISHED PAGE SAYS WHAT HAPPENS NEXT.  Owner, looking at
+    it: "the last pane of the wizard doesn't say anything about the script that
+    is going to run after the user clicks Finish".  It said Inno's stock text -
+    Setup has finished, click Finish to exit - which is now untrue by omission:
+    clicking Finish opens a console window that asks for a password.
+
+    THE EXPLANATION EXISTS ALREADY, in the box at ssPostInstall, and that is
+    exactly why this is needed rather than redundant.  That box appears BEFORE
+    this page and is dismissed before the reader gets here, so at the moment
+    they decide to click Finish there is nothing on screen about it.  A window
+    that opens by itself after an installer has apparently finished reads as a
+    fault unless the page they clicked said it would.
+
+    FinishedLabel IS THE STOCK LABEL and setting its Caption is the supported
+    way to change it; there is no need for a custom page.  Only the ACCOUNT
+    half varies, so the text is fixed rather than built. }
+  if (CurPageID = wpFinished) and InstallReachedPostInstall and PasswordStepWanted then
+    WizardForm.FinishedLabel.Caption :=
+      'Setup has finished installing SD on your computer.' + #13#10#13#10 +
+      'When you click Finish, ONE WINDOW OPENS and does two things in turn:' + #13#10#13#10 +
+      '    1. SD asks you to set a password for your SD account. It closes by' + #13#10 +
+      '        itself once you have set it.' + #13#10#13#10 +
+      '    2. The same window then checks the installation and reports what it' + #13#10 +
+      '        found. It only reads, and it asks before it starts.' + #13#10#13#10 +
+      'This is expected. Do not close that window until it says you can.';
+
   { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
     in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with
     -Silent stopped here with a modal box on screen and copied not one file

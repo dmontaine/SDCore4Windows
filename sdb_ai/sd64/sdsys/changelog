@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  YOU NO LONGER HAVE TO TYPE  off  AFTER SETTING YOUR PASSWORD.
+
+           The window the installer opens closes SD by itself once the
+           password is set, and goes straight on to checking the install.
+
+           The installer's last page now also says that this window is
+           going to open, so a console appearing after Setup has closed is
+           not a surprise.
+
+           If no password is set - because you pressed Enter to skip it -
+           the window says so, and says that SD will ask again the first
+           time you open the account.
+
 22 Aug 26  THE INSTALLER NOW FINISHES BEFORE IT ASKS YOU ANYTHING ELSE.
 
            The installer used to open SD for your password while its own

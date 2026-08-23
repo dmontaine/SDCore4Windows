@@ -50,6 +50,11 @@ param(
     # nothing to ask for and SD is not opened at all.
     [switch] $WithPassword,
 
+    # Whose account.  Passed by Setup as {username}; the default is for a hand
+    # run.  Used ONLY to look for a credential afterwards - see the check at the
+    # end of the password step.
+    [string] $User = $env:USERNAME,
+
     # Passed straight through to check-install.ps1.
     [switch] $Yes
 )
@@ -59,6 +64,10 @@ $ErrorActionPreference = 'Stop'
 if ($AppDir -eq '') { $AppDir = Join-Path $env:ProgramFiles 'SD' }
 $SdExe = Join-Path $AppDir 'usr\bin\sd.exe'
 $Check = Join-Path $AppDir 'check-install.ps1'
+
+# The data tree is not a choice - DataDir is #defined as {commonappdata}\SD in
+# sd.iss, with no wizard page - so this is a constant rather than a guess.
+$SysDir = Join-Path (Join-Path $env:ProgramData 'SD') 'sdsys'
 
 Write-Host ''
 Write-Host '  SD is installed.' -ForegroundColor White
@@ -71,8 +80,8 @@ if ($WithPassword) {
     Write-Host '    1. SD opens so you can give your account a password.'
     Write-Host '    2. This window then checks that the installation is sound.'
     Write-Host ''
-    Write-Host '  Starting SD now.  Type  off  when you have set the password,'
-    Write-Host '  and the check will follow automatically.' -ForegroundColor Cyan
+    Write-Host '  Starting SD now.  It closes by itself once the password is set,'
+    Write-Host '  and the check follows automatically.' -ForegroundColor Cyan
     Write-Host ''
 
     if (-not (Test-Path -LiteralPath $SdExe)) {
@@ -92,11 +101,62 @@ if ($WithPassword) {
         #
         # -QUIET suppresses the version and licence banner (CMD_QUIET, sd.c:347,
         # tested at LOGIN:234).  This window has already said what is happening.
+        #
+        # "off" IS THE SECOND ARGUMENT, AND IT IS WHAT ENDS THE SESSION WITHOUT
+        # THE USER.  Owner, 22 Aug 2026: "the paragraph that runs the password
+        # entry should be able to log out without the user having to do it."
+        #
+        # SD RUNS A SINGLE COMMAND AND EXITS when one is given (sd.c:645), and
+        # LOGIN STILL RUNS FIRST - which is the whole trick.  require.credential
+        # is reached during login, so the password is asked for, and only then
+        # does "off" execute.  Order comes for free; nothing had to change in
+        # the BASIC layer.
+        #
+        # THE MECHANISM IS ALREADY PROVEN IN THIS INSTALL, which is why it is not
+        # a gamble: adopt-account.ps1 drives "sd -internal CREATE.ACCOUNT USER
+        # <n> ADOPT" the same way, minutes earlier in the same install.
+        #
+        # IT NEEDS THE ELEVATED TOKEN, and has it.  sd.c calls check_admin()
+        # before accepting a command line, so single-command mode is refused to
+        # an ordinary session - this one runs on Setup's token.
+        #
+        # DECLINING STILL WORKS: an empty password makes LOGIN terminate the
+        # connection itself with message 10095, so "off" is never reached and
+        # the session ends anyway.  The message stays readable because this is
+        # OUR console, not one that vanishes with the process.
         try {
-            $p = Start-Process -FilePath $SdExe -ArgumentList '-QUIET' `
+            $p = Start-Process -FilePath $SdExe -ArgumentList '-QUIET','off' `
                     -NoNewWindow -Wait -PassThru -ErrorAction Stop
             Write-Host ''
-            Write-Host ('  SD closed (exit ' + $p.ExitCode + ').') -ForegroundColor DarkGray
+
+            # DID A PASSWORD ACTUALLY GET SET?  Asked because passing "off" adds
+            # a way to fail SILENTLY that did not exist before: if the prompt
+            # never appears - LOGIN's gate wants a TTY and an administrator
+            # token, and a session missing either would skip require.credential
+            # - then "off" runs immediately, SD exits, and the user is never
+            # asked.  Without this they would find out weeks later, the first
+            # time they tried to reach the account from another machine.
+            #
+            # IT IS ALSO THE DECLINE CASE, and the same sentence serves both:
+            # pressing Enter on an empty password is a legitimate answer that
+            # leaves no credential.  Neither is an error, so this is a note and
+            # not a failure - it says what is true and how to put it right.
+            #
+            # THE STORE IS READABLE HERE AND NOWHERE ELSE.  SecureCredStore has
+            # locked $cred to SYSTEM and Administrators, so this test works only
+            # because this script is elevated - the same token the password step
+            # needs.  A missing directory means the ACL or the install is wrong,
+            # which is check-install's business below, not this one's; silence
+            # is the right answer here.
+            $credRec = Join-Path (Join-Path $SysDir '$cred') $User
+            if ((Test-Path -LiteralPath (Join-Path $SysDir '$cred')) -and
+                (-not (Test-Path -LiteralPath $credRec))) {
+                Write-Host '  No password was set for your SD account.' -ForegroundColor Yellow
+                Write-Host '  That is fine at this machine - Windows has already authenticated' -ForegroundColor Yellow
+                Write-Host '  you - but the account cannot be reached over ssh or the API until' -ForegroundColor Yellow
+                Write-Host '  one is set.  SD asks again the first time you open the account.' -ForegroundColor Yellow
+                Write-Host ''
+            }
         } catch {
             Write-Host ''
             Write-Host ('  SD could not be started: ' + $_.Exception.Message) -ForegroundColor Red
