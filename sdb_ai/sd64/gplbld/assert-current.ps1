@@ -225,6 +225,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # products that live in a watched tree and never ship.
                   'verify-scramclient.c', 'verify-scramclient.exe',
                   'verify-scramclient32.exe',
+                  # 23 Aug 26 - probe-console, section 7 step 13 leg 1's
+                  # instrument.  Listed IN THE COMMIT THAT CREATES IT, which is
+                  # the rule verify-scram.c was added without and paid for two
+                  # lines above.  All three parts: the source, the runner, and
+                  # the build product, because probe-console.ps1 COMPILES ON
+                  # EVERY RUN - so an unlisted .exe would make the tree report
+                  # stale the moment anybody used the instrument.
+                  'probe-console.c', 'probe-console.ps1', 'probe-console.exe',
                   # 19 Aug 26 - "make check" in gplsrc\sdclilib builds these
                   # two INTO THAT DIRECTORY rather than into localtest\, so
                   # they are the same false stale the localtest\ exclusion was
