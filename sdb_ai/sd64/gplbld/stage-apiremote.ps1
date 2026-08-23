@@ -67,9 +67,26 @@ if (-not (Test-Path -LiteralPath $vbox)) {
 
 # --------------------------------------------------------------- -Remove -----
 if ($Remove) {
-    & $vbox sharedfolder remove $Vm --name $Share 2>&1 | Out-Null
-    & $vbox sharedfolder remove $Vm --name $Share --transient 2>&1 | Out-Null
-    Say "removed shared folder '$Share' from '$Vm' (if it was there)"
+    # A VM'S CONFIG IS ONLY MUTABLE WHEN IT IS FULLY POWERED OFF.  Running is
+    # "locked for a session"; SAVED is "not mutable or running", which is the
+    # one that catches you out - savestate looks like it has stopped the machine
+    # and it has not released the configuration.  Measured 22 Aug 2026, tearing
+    # this very rig down.  A transient share is already gone by then, because
+    # savestate ends the session that owned it.
+    $st = ((& $vbox showvminfo $Vm --machinereadable 2>$null | Select-String '^VMState=') -replace '.*=','' -replace '"','')
+    if ($st -eq 'poweroff') {
+        & $vbox sharedfolder remove $Vm --name $Share 2>&1 | Out-Null
+        Say "removed shared folder '$Share' from '$Vm' (if it was there)"
+    } else {
+        if ($st -eq 'running') {
+            & $vbox sharedfolder remove $Vm --name $Share --transient 2>&1 | Out-Null
+            Say "removed the TRANSIENT share; the permanent one needs the VM powered off"
+        } else {
+            Say "shared folder '$Share' LEFT ATTACHED - '$Vm' is $st, not poweroff"
+        }
+        Say "  Power it off and run this again, or:"
+        Say "    VBoxManage sharedfolder remove `"$Vm`" --name $Share"
+    }
     if (Test-Path -LiteralPath $Kit) {
         Remove-Item -Recurse -Force -LiteralPath $Kit
         Say "removed $Kit"
