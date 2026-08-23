@@ -5,6 +5,12 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  THE INSTALLATION CHECK CLOSES ON A KEYPRESS.
+
+           Its window used to stay open at a PowerShell prompt, so the only
+           way to be rid of it was to know to type  exit  there.  It now
+           ends with "Press any key to close this window" and closes.
+
 22 Aug 26  YOU NO LONGER HAVE TO TYPE  off  AFTER SETTING YOUR PASSWORD.
 
            The window the installer opens closes SD by itself once the

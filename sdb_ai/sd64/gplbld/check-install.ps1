@@ -72,7 +72,11 @@ param(
     # needs this: Read-Host in a non-interactive host does not wait, it THROWS,
     # so the absence of somebody to answer is caught and named rather than left
     # as a stack trace.  Same reasoning and same switch name as VerifyInstall1.
-    [switch] $Yes
+    [switch] $Yes,
+
+    # 22 Aug 26 - do not wait for a keypress at the end.  For anything that
+    # is not a person sitting in front of the window.
+    [switch] $NoPause
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,11 +120,12 @@ function NotYet  ($m) { $script:notyet++;   Write-Host ('  [not yet] ' + $m) -Fo
 function Info    ($m) { if (-not $Brief) { Write-Host ('            ' + $m) -ForegroundColor DarkGray } }
 function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 
-# 22 Aug 26 - SAY THE WINDOW CAN BE CLOSED.  Owner's instruction.  The window is
-# opened with -NoExit, deliberately, so that a check nobody can read cannot
-# happen - and the cost of that is a window sitting at a live prompt with
-# nothing saying the work is over.  Somebody who has just been told their
-# install is fine is left wondering whether SD still wants something from them.
+# 22 Aug 26 - SAY WHEN IT IS OVER, AND CLOSE ON A KEYPRESS.  Owner's
+# instruction, twice.  The window has to outlive the checks - a check nobody
+# can read is not a check, which is the third fault that killed the old SDSYS
+# password step - but the first way of doing that, -NoExit, left a LIVE
+# POWERSHELL PROMPT with nothing saying the work was over and no way out but
+# typing "exit" at a prompt nobody had asked for.
 #
 # ON EVERY ENDING, not only the good one, because "is it finished?" is the same
 # question whichever answer it reached - and it is loudest on the path that
@@ -157,9 +162,40 @@ function Rerun {
 function Finish([bool] $Ran = $true) {
     Write-Host ''
     if ($Ran) {
-        Write-Host '  Test completed - you can close this window now.' -ForegroundColor Cyan
+        Write-Host '  Test completed.' -ForegroundColor Cyan
     } else {
-        Write-Host '  You can close this window now.' -ForegroundColor Cyan
+        Write-Host '  Nothing was checked.' -ForegroundColor Cyan
+    }
+
+    # 22 Aug 26 - A KEYPRESS CLOSES IT, rather than a prompt the user must type
+    # "exit" at.  Owner's instruction.  The window used to be held open with
+    # -NoExit, which leaves a LIVE POWERSHELL PROMPT sitting there - so the
+    # window stayed, which was the point, but getting rid of it meant knowing to
+    # type a command at a prompt nobody asked for.  Waiting for a key does the
+    # same job and ends by itself.
+    #
+    # -NoExit IS GONE FROM BOTH LAUNCH SITES to match: the installer's finishing
+    # step and the Start Menu shortcut.  If either kept it, this pause would be
+    # followed by the very prompt it exists to avoid.
+    #
+    # IT MUST NOT HANG SOMETHING THAT IS NOT A PERSON.  ReadKey throws in a host
+    # with no console - which is what -Yes callers generally are - so the throw
+    # is caught and skipped rather than left to become a stack trace at the end
+    # of an otherwise successful run.  -NoPause is the explicit way to ask for
+    # the same thing.
+    if ((-not $NoPause) -and (-not [Console]::IsInputRedirected)) {
+    # THE GUARD IS IsInputRedirected, NOT A try/catch - MEASURED 22 Aug 2026.
+    # The first version wrapped ReadKey in try/catch on the assumption it would
+    # THROW in a host with no console, the way Read-Host does.  IT DOES NOT: it
+    # BLOCKS, for ever.  A background job left to run with no -NoPause hung until
+    # it was killed, which is the unbounded-wait fault PROJECT_STATUS section 8
+    # records costing three runs.
+    # [Console]::IsInputRedirected is false only for a REAL console, which is
+    # exactly when a keypress can arrive.  The try/catch stays as a backstop for
+    # a host that refuses the call outright, but it is no longer the guard.
+        Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
+        catch { }
     }
     Write-Host ''
 }

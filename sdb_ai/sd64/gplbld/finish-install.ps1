@@ -6,8 +6,11 @@
 # both in one script, call sd for the password and then move on to the post
 # validation".
 #
-#   1. SD opens so you can give your account a password.  You type OFF to leave.
-#   2. The installation check runs, in this same window.
+#   1. SD opens so you can give your account a password.  It closes ITSELF once
+#      the password is set - "off" is passed as a single command, so LOGIN asks
+#      first and the session then ends without the user doing anything.
+#   2. The installation check runs, in this same window, and a keypress closes
+#      the window at the end.
 #
 # WHY ONE SCRIPT RATHER THAN TWO THINGS SETUP LAUNCHES.  Setup had been opening
 # the password session from ssPostInstall - while the wizard was still on screen
@@ -178,6 +181,18 @@ if ($WithPassword) {
 # finishing step gets the check's verdict rather than "the launcher started".
 if (-not (Test-Path -LiteralPath $Check)) {
     Write-Host ("  The installation check is missing - expected " + $Check) -ForegroundColor Red
+    Write-Host ''
+    # PAUSE HERE TOO.  Every other ending is check-install's, which waits for a
+    # key of its own; this one returns without ever reaching it.  Since -NoExit
+    # went, an unpaused exit closes the window instantly - so the one message
+    # that reports a broken install would be the only one nobody could read.
+    if (-not [Console]::IsInputRedirected) {
+        # ReadKey BLOCKS rather than throwing when there is no console - see the
+        # note in check-install.ps1's Finish().  IsInputRedirected is the guard.
+        Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
+        catch { }
+    }
     Write-Host ''
     exit 2
 }

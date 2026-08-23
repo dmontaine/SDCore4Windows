@@ -292,7 +292,7 @@ Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 ; and says what the answer is worth, but that is the backstop, not the intent.
 Name: "{group}\Check the SD installation"; \
     Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -NoExit -File ""{app}\check-install.ps1"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\check-install.ps1"""; \
     WorkingDir: "{app}"; \
     Comment: "Check that SD is installed and working. It only looks; it changes nothing."
 
@@ -1245,7 +1245,7 @@ begin
     the script would otherwise be guessing from its own process, and it uses the
     name to look for a credential afterwards.  Same rule as -AppDir, which
     adopt-account.ps1 records costing a real install when it was defaulted. }
-  Args := '-NoProfile -ExecutionPolicy Bypass -NoExit -File "' +
+  Args := '-NoProfile -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\finish-install.ps1') + '" -AppDir "' +
           ExpandConstant('{app}') + '" -User "' +
           ExpandConstant('{username}') + '"';
