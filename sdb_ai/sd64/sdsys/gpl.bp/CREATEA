@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 22 Aug 26 Windows port - the USRDIR/GRPDIR fallbacks were Linux paths
+*   (/home/sd/...), unreachable on this platform.  They now match what
+*   config.c defaults pcfg.usrdir/grpdir to, which is what the shipped config
+*   sets in any case, so the fallback and the default finally agree.
 * 22 Aug 26 Windows port - the ACCOUNTS register key is written in LOWER case.
 *   It is a file name, and e1095ab made every other SDSYS file name lower; the
 *   register was the last thing shouting.  Readers are unaffected - the lookup
@@ -266,7 +270,7 @@ deffun ps_script(script) calling '!ps_script'
    case upcase(acc.type) = 'USER' 
 *    CREATE.ACCOUNT USER <user acct name>  SSH|API|BOTH|NONE  {NO.QUERY}
      pathname = CONFIG('USRDIR')
-     if pathname = '' then pathname = '/home/sd/user_accounts'
+     if pathname = '' then pathname = 'C:\ProgramData\SD\user_accounts'
      call @parser(PARSER$GET.TOKEN, token.type, acc.uname, keyword)
      if token.type = PARSER$END then stop
 
@@ -440,7 +444,7 @@ PW.TRY.AGAIN:
    case upcase(acc.type) = 'GROUP' 
 *    CREATE.ACCOUNT GROUP <grp acct name>  {NO.QUERY}     
      pathname = CONFIG('GRPDIR')
-     if pathname = '' then pathname = '/home/sd/group_accounts'
+     if pathname = '' then pathname = 'C:\ProgramData\SD\group_accounts'
      call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
      if token.type = PARSER$END then stop
      pathname := @ds:acc.name

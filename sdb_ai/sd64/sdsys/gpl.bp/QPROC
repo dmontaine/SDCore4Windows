@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 22 Aug 26 Windows port - is.windows is gone.  system(91) is a constant 1
+*            here, so "if is.windows and is.dir" tested a platform that cannot
+*            be anything else.  PROJECT_STATUS.md section 7 step 12.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -84,7 +87,6 @@ $define MAX.STRINGS     20          ;* For SEARCH command
    @selected = 0
 
    debugging = @false
-   is.windows = system(91)
    capturing = system(1000)
 
    * Item tables.  One entry for each item referenced in command
@@ -505,7 +507,12 @@ $define MAX.STRINGS     20          ;* For SEARCH command
 
    is.dir = (fileinfo(data.f, FL$TYPE) = FL$TYPE.DIR)
    is.case.insensitive = (bitand(fileinfo(data.f, FL$FLAGS), FL$FLAGS.NOCASE) # 0)
-   if is.windows and is.dir then is.case.insensitive = @true
+
+   * A DIRECTORY FILE IS ALWAYS CASE-INSENSITIVE HERE.  Upstream writes this
+   * as "if is.windows and is.dir", with is.windows = system(91); system(91)
+   * is a constant 1 in this port (op_sys.c:282), so the platform half of the
+   * test could only ever be true.  verify-nocase.ps1 measures both halves.
+   if is.dir then is.case.insensitive = @true
 
    * Open the dictionary, if it exists
 

@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 22 Aug 26 Windows port - A TOKEN IS NO LONGER SPLIT AT A BACKSLASH.  The
+*            split is upstream's, guarded there by "if not(is.windows)"; the
+*            port kept the line and dropped the guard, which is the wrong arm
+*            for a Windows-only build.  Measured, not read: "RUN BP
+*            C:\Temp\zznosuch" answered "Program BP.OUT C: not found".
+*            PROJECT_STATUS.md section 7 step 12.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -113,7 +119,11 @@ rescan:
                k = index(parser.sentence, ')', 1) ; if k and k < j then j = k
                k = index(parser.sentence, '"', 1) ; if k and k < j then j = k
                k = index(parser.sentence, "'", 1) ; if k and k < j then j = k
-               k = index(parser.sentence, '\', 1) ; if k and k < j then j = k
+
+               * NO BACKSLASH HERE, and it is not an omission.  On this
+               * platform a backslash is a path separator, so splitting at one
+               * truncates every native path typed at TCL - CREATE.ACCOUNT
+               * OTHER takes its pathname through this parser.
 
 
                type = PARSER$TOKEN

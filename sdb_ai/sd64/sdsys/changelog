@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  A WINDOWS PATH TYPED AT THE COMMAND PROMPT IS NO LONGER CUT OFF
+           AT THE FIRST BACKSLASH.
+
+           Typing a path such as C:\Data\Sales was read as just "C:".  The
+           rest was treated as though you had typed a second, separate thing.
+           CREATE.ACCOUNT OTHER, which is given a folder to put the account
+           in, was the command most likely to show it: the account went to
+           the wrong place, or the command failed for a reason that made no
+           sense from what you had typed.
+
+           Typing the same path with forward slashes always worked, and
+           still does.  Both are now read the same way.
+
 22 Aug 26  THE INSTALLATION CHECK NO LONGER STOPS WITH "Access is denied"
            WHEN YOU RUN IT BEFORE SIGNING OUT.
 
