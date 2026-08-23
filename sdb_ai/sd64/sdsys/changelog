@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  THE INSTALLER NOW FINISHES BEFORE IT ASKS YOU ANYTHING ELSE.
+
+           The installer used to open SD for your password while its own
+           window was still on screen, and then offer the installation
+           check as a tick box on its last page - so one action asked you
+           twice, once on that page and again in the check itself.
+
+           Now the installer closes first.  A single window then opens and
+           does two things in turn: SD asks for your account password, and
+           when you type  off  the same window checks the installation.
+
+           The tick box is gone.  The check still asks before it runs, so
+           you can decline it, and it is on the Start Menu whenever you
+           want it: SD > Check the SD installation.
+
 22 Aug 26  THE INSTALLATION CHECK NOW SAYS WHEN IT HAS FINISHED.
 
            Its window stays open on purpose, so that you can read what it

@@ -587,6 +587,10 @@ def main():
                    # scripts, none of which can run on a user's machine:
                    # they compare the install against the SOURCE TREE.
                    'check-install.ps1',
+                   # 22 Aug 26 - the finishing step: the password session
+                   # and the check, in that order, in one window, launched
+                   # from DeinitializeSetup once the wizard has gone.
+                   'finish-install.ps1',
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',
                    'secure-gcat.ps1',

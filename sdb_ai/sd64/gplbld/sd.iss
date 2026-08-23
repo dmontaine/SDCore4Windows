@@ -534,54 +534,20 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Flags: runhidden skipifdoesntexist; \
     StatusMsg: "Creating and starting the SD service..."
 
-; THE POST-INSTALL CHECK, AND IT IS A CHECKBOX RATHER THAN A STEP.  Owner's
-; instruction, 22 Aug 2026: a post-install verify that runs as the last step of
-; the install "without complication", knowing it cannot be as comprehensive as
-; the development suite.
+; THE POST-INSTALL CHECK IS NOT A [Run] ENTRY AT ALL ANY MORE - 22 Aug 2026.
+; It was a "postinstall" tickbox here, and the owner met two faults with that on
+; a real install:
 ;
-; "postinstall" PUTS IT ON THE FINISHED PAGE AS A TICKBOX, which is what makes
-; it offered rather than imposed - the user can clear it and the install ends
-; the same way it always did.  It is checked by default because it only reads.
+;   * TWO YES/NO QUESTIONS for one action - the tickbox on the Finished page and
+;     then the script asking again.  The script's question is the one that gets
+;     read, so the tickbox was the one to go.
+;   * It ran while the wizard was still on screen, so the install window sat
+;     open behind it.
 ;
-; AND THE "Run as: Original user" BEHAVIOUR IS THE REASON THIS SHAPE WORKS.
-; Everywhere else in this file that behaviour is the enemy - the gravestone
-; below records it killing the SDSYS password step, because the unelevated
-; token does not carry sdusers and cannot open the database.  HERE IT IS
-; EXACTLY WHAT IS WANTED: the question the check asks is "can the person who
-; just installed this use it", and asking it with an elevated token would
-; answer as Administrators and pass regardless.  check-install.ps1's header
-; carries the reasoning at length; it is the rule verify-credacl.ps1 follows.
-;
-; The check knows it is running before the user has signed out and reports the
-; database checks as "not yet" rather than as failures.  That distinction is
-; the whole design of the script and is why this can be safely defaulted on.
-;
-; -NoExit KEEPS THE WINDOW, nowait KEEPS SETUP FROM WAITING ON IT.  Both, and
-; they answer different halves.  The third thing that killed the old password
-; step was a console that vanished before anything could be read, so the window
-; must stay - that is -NoExit.  But WITHOUT "nowait" Inno blocks on the process
-; it started, and the owner met exactly that on 22 Aug 2026: "the main install
-; window did not close until the post install check window was closed".  Setup
-; sitting open behind a window the user is reading looks like the check is part
-; of the install and must be finished before anything is done.
-;
-; THIS IS NOT THE "nowait" THAT KILLED THE PASSWORD STEP, and the distinction is
-; the same one the TakeAccountPassword comment draws: that one hid a console for
-; a command which exited at once.  This leaves a VISIBLE window that stays until
-; the person closes it, and only Setup stops waiting.
-;
-; skipifsilent, because /VERYSILENT means nobody is watching a console anyway.
-;
-; THE DESCRIPTION SAYS WHAT IT DOES, NOT JUST ITS NAME.  Owner, same day: "there
-; was no explanation of the post install validation process and no option for
-; the user to refuse it."  The tickbox IS the refusal - clearing it skips the
-; step entirely - but a one-word label gave nobody grounds to decide, so it now
-; says what will happen.  The script explains itself again and asks before it
-; does anything, which is the second refusal and the one that is hard to miss.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -NoExit -File ""{app}\check-install.ps1"""; \
-    Flags: postinstall nowait skipifsilent skipifdoesntexist; \
-    Description: "Check this installation now - opens a window listing what was installed and whether it works. It only reads; it changes nothing. You can also run it later from the Start Menu."
+; Both are now answered by finish-install.ps1, launched from DeinitializeSetup
+; once the wizard has gone - see RunFinishingStep and DeinitializeSetup in
+; the Code section.  It runs the password step and the check IN ORDER, in ONE
+; window, and Setup is not waiting on either.
 
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;
@@ -635,6 +601,21 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 22 Aug 26 - THE FINISHING STEP RUNS AFTER THE WIZARD HAS GONE, so what it
+    needs to know has to outlive the procedure that learns it.  Both are set at
+    ssPostInstall and read in DeinitializeSetup.
+
+    InstallReachedPostInstall IS A GUARD, NOT A CONVENIENCE.  DeinitializeSetup
+    is called however Setup ends, cancelling included; without this, cancelling
+    on the first page would still open an SD session on a machine that has just
+    had nothing installed.
+
+    PasswordStepWanted is false on the reinstall case (adopt code 2), where the
+    account was left alone and keeps whatever password it had.  There is then
+    nothing to ask for, and finish-install.ps1 says so rather than leaving a
+    reader wondering what became of the step it promised them. }
+  InstallReachedPostInstall: Boolean;
+  PasswordStepWanted: Boolean;
 
 function InitializeSetup: Boolean;
 begin
@@ -1227,25 +1208,68 @@ end;
   outlives this call, so whether a password was set is unknowable from Setup.
   The dialog therefore says what is about to be offered and how to get back to
   it, and there is no result worth returning. }
-procedure TakeAccountPassword;
+procedure RunFinishingStep;
 var
   Code: Integer;
+  Args: String;
 begin
-  { -QUIET, ADDED 22 Aug 2026 on the owner's instruction.  It clears CMD_QUIET
-    (sd.c:347), which LOGIN:234 tests before printing the six-line version and
-    GPL banner.  This window exists to ask one question; opening it with a
-    licence notice above the question buries it, and the person reading has
-    just clicked through a wizard that told them what SD is.  The banner is
-    unchanged for every other way of starting SD - it is suppressed here, not
-    removed.  Clause 1 of the GPL is satisfied by the banner the ordinary
-    "sd" prints, which LOGIN's comment marks as required and which this does
-    not touch. }
-  if not Exec(ExpandConstant('{app}\usr\bin\sd.exe'), '-QUIET',
-              ExpandConstant('{#DataDir}'), SW_SHOW,
+  { REWRITTEN 22 Aug 2026, owner: "put them both in one script, call sd for the
+    password and then move on to the post validation", and put both AFTER the
+    installer window has closed.
+
+    THIS USED TO Exec sd.exe DIRECTLY, from ssPostInstall.  Two faults came of
+    that on a real install: the wizard stayed on screen behind the SD window,
+    and the CHECK was a separate Finished-page tickbox, so ONE ACTION ASKED THE
+    USER TWICE.  Setup now launches ONE script which does the password step and
+    the check in order, in ONE window.
+
+    -QUIET STILL, and it lives in finish-install.ps1 now rather than here.
+
+    ELEVATED, AND THAT IS NOT A CHOICE.  The password step needs Setup's token:
+    the gravestone in the Run section records why - an unelevated token does not
+    carry sdusers until the user signs out, so it cannot open the data tree, and
+    SecureCredStore has just locked $cred to SYSTEM and Administrators.  The
+    check therefore runs elevated too, which is a REAL TRADE and is written up
+    in finish-install.ps1's header: it answers the database question about the
+    ADMINISTRATOR token, says so twice on screen, and the Start Menu shortcut is
+    the run that answers it properly after a sign-out.
+
+    ewNoWait, so Setup does not sit behind the window it just opened.  The
+    script itself waits on SD - it can afford to, nothing is holding it open but
+    the user, and that wait is what sequences the two steps.
+
+    A PROCEDURE, NOT A FUNCTION.  Exec answers whether the process STARTED and
+    nothing here can learn more: the script outlives this call, so whether a
+    password was set is unknowable from Setup. }
+  Args := '-NoProfile -ExecutionPolicy Bypass -NoExit -File "' +
+          ExpandConstant('{app}\finish-install.ps1') + '" -AppDir "' +
+          ExpandConstant('{app}') + '"';
+  if PasswordStepWanted then
+    Args := Args + ' -WithPassword';
+
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+              Args, ExpandConstant('{#DataDir}'), SW_SHOW,
               ewNoWait, Code) then
-    { The one thing that IS knowable, and it is not worth a message box: the
-      user has just been told to type "sd", and will meet the same fault. }
-    Log('SD could not be launched for the password step');
+    { Not worth a message box - there is no wizard left to put one on, and the
+      user has just been told to type "sd", which meets the same fault. }
+    Log('finish-install.ps1 could not be launched');
+end;
+
+{ AFTER THE WIZARD HAS GONE, WHICH IS THE WHOLE POINT OF PUTTING IT HERE.
+  Owner's instruction, 22 Aug 2026.  DeinitializeSetup runs as Setup terminates,
+  with the wizard form already destroyed and Setup's ELEVATED token still held -
+  the only hook that has both.  ssPostInstall has the token but runs with the
+  wizard still on screen, and a postinstall Run entry runs after the window but
+  on the UNELEVATED token, which the password step cannot use.
+
+  IT FIRES ON A CANCELLED INSTALL TOO, hence the flag.  DeinitializeSetup is
+  called however Setup ends - including when the user cancels on the first page
+  - so without InstallReachedPostInstall this would open an SD session on a
+  machine where nothing was installed. }
+procedure DeinitializeSetup;
+begin
+  if InstallReachedPostInstall and not WizardSilent then
+    RunFinishingStep;
 end;
 
 { LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did
@@ -1607,14 +1631,26 @@ begin
              database until this user's token carries sdusers.  The window below
              runs on SETUP's token, which carries Administrators, and that is
              the whole reason it can run now. }
+           { 22 Aug 26 - IT NOW DESCRIBES TWO STEPS IN ONE WINDOW, because that
+             is what happens.  The check used to be a tickbox on the Finished
+             page, which asked the user a second time for one action; the
+             tickbox is gone and both steps run from one script after this
+             wizard closes.  Somebody who is not told that a window will open
+             by itself, after the installer has apparently finished, has every
+             reason to think something has gone wrong. }
            AccountMsg := AccountMsg +
-                         'When you close this box, SD opens so you can give that account a ' +
-                         'password. You do not need one at this machine - Windows has already ' +
-                         'authenticated you - it is what reaches the account from ANOTHER ' +
-                         'machine. It can run now, before you sign out, because it borrows ' +
-                         'the installer''s rights. Type OFF to leave it.' + #13#10#13#10 +
-                         'If you skip it, SD asks again the first time you ' +
-                         'open the account.' + #13#10#13#10;
+                         'ONE WINDOW OPENS AFTER THIS INSTALLER CLOSES, and it does two ' +
+                         'things in turn.' + #13#10#13#10 +
+                         '    1. SD opens so you can give that account a password. You do ' +
+                         'not need one at this machine - Windows has already authenticated ' +
+                         'you - it is what reaches the account from ANOTHER machine, over ' +
+                         'ssh or the API. TYPE  off  WHEN YOU HAVE SET IT.' + #13#10#13#10 +
+                         '    2. The same window then checks the installation and tells ' +
+                         'you what it found. It only reads; it changes nothing, and it ' +
+                         'asks before it starts.' + #13#10#13#10 +
+                         'The password step can run now, before you sign out, because it ' +
+                         'borrows the installer''s rights. If you skip it, SD asks again ' +
+                         'the first time you open the account.' + #13#10#13#10;
          end;
       2: AccountMsg := 'Your SD account, ' + Uppercase(ExpandConstant('{username}')) +
                        ', was already there and has been left alone.' + #13#10#13#10;
@@ -1804,8 +1840,14 @@ begin
       user is about to discover for themselves, having just been told to type
       "sd".  There is nothing a box could say that the next thing they do will
       not. }
-    if AdoptCode = 0 then
-      TakeAccountPassword;
+    { 22 Aug 26 - RECORDED HERE, RUN LATER.  This used to call the password step
+      directly, which opened SD while the wizard was still on screen.  Both the
+      password step and the check now run from DeinitializeSetup, once the
+      window has gone, so all that happens here is remembering what was decided:
+      whether the install got this far at all, and whether an account was just
+      made and therefore has no password yet. }
+    InstallReachedPostInstall := True;
+    PasswordStepWanted := (AdoptCode = 0);
   end;
 end;
 
