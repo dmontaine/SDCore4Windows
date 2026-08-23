@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 22 Aug 26 Windows port - the terminal type is CHECKED after it is set, and
+*           falls back to 'windows' when the name from the environment has no
+*           terminfo entry.  Until a type loads there are no capabilities at
+*           all, and the password prompt below runs before the VOC login
+*           paragraph could repair it.  PROJECT_STATUS.md 5.18.
 * 21 Aug 26 Windows port - AN ACCOUNT WITH NO PASSWORD SETS ONE BEFORE IT
 *           REACHES THE PROMPT, and declining ends the session.  Owner's
 *           decision, 21 Aug 2026.  Elevated sessions at a real terminal only:
@@ -140,13 +145,41 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   cursor mode, and nothing in SD ever sends smkx to enter it - so under
 *   vt100 no arrow key can arrive at all.  Its kbs is ^H for the same kind of
 *   reason.  PROJECT_STATUS.md 5.18.
-*   THE VOC login PARAGRAPH IS WHAT ACTUALLY DECIDES THIS - it runs after this
-*   subroutine and sets the type unconditionally, so this line is reached only
-*   by a session with no login paragraph.  Both must name the same type.
+*   THE VOC login PARAGRAPH SETS THE TYPE AGAIN, unconditionally, but it runs
+*   AFTER this subroutine returns (CPROC:411 against CPROC:324), so it decides
+*   nothing that happens in here - see the next comment.  Both must still name
+*   the same type.
             if s = '' then s = 'windows'
       end
 
-      void kernel(K$TERM.TYPE, s)
+* 22 Aug 26 Windows port - ASK FOR THE TYPE, THEN CHECK IT LOADED.  UNTIL ONE
+*   LOADS THERE ARE NO CAPABILITIES AT ALL, not just no cub1: tsettermtype()
+*   calls free_terminfo() only AFTER the open succeeds (sdtermlb.c:167-173), so
+*   a name with no entry leaves tinfo NULL on the FIRST call and sdtgetstr()
+*   returns "" for every id (sdtermlb.c:395).
+*
+*   THE NAME COMES FROM THE ENVIRONMENT AND NEED NOT HAVE AN ENTRY: here
+*   getenv("TERM") answers 'xterm-256color' even when Windows set no TERM at
+*   all - the MSYS2 runtime supplies it - and terminfo/x holds only 'xterm'.
+*   That is the whole of the 22 Aug backspace fault: @(IT$CUB) and
+*   terminfo('kbs') were empty at the installer's password prompt because no
+*   type had ever loaded.  PROJECT_STATUS.md 5.18.
+*
+*   IT CANNOT BE LEFT TO THE PARAGRAPH.  The clear screen and
+*   require.credential's password prompt are both in this subroutine, so they
+*   are always in the unrepaired state - which is why every measurement taken
+*   at the ':' prompt said the capability was fine.
+*
+*   kernel(K$TERM.TYPE) RETURNS THE TYPE IN FORCE AFTER THE ATTEMPT and leaves
+*   it unchanged on failure (op_kernel.c:226-232), so a mismatch is the
+*   failure.  downcase first: settermtype() lowercases the name it stores, so
+*   an upper-case TERM would not compare equal to itself.  TERM:245-246 is the
+*   same test on the same two calls.
+      s = downcase(s)
+      if (kernel(K$TERM.TYPE, s) # s) and (s # 'windows') then
+         s = 'windows'
+         void kernel(K$TERM.TYPE, s)
+      end
 
       * Set terminal depth and width
 

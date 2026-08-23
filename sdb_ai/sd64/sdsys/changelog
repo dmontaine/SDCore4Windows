@@ -5,6 +5,30 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  SD NO LONGER LOSES TRACK OF WHAT YOUR TERMINAL CAN DO WHILE YOU
+           ARE LOGGING IN.
+
+           SD reads your terminal's abilities from a description filed
+           under the name in your TERM setting.  If there was no
+           description of that name - and there is none for
+           xterm-256color, which is what a terminal usually reports here
+           even when you have not set TERM at all - SD carried on with no
+           terminal abilities whatsoever until the account's login
+           paragraph set the type a second time.
+
+           That happened a moment too late.  Everything the login sequence
+           itself does came before it, so the screen was not cleared when
+           you signed on, and the cursor could not be moved at any prompt
+           the login sequence asked - which is why Backspace at the
+           password prompt erased nothing.
+
+           SD now checks that the description it asked for was actually
+           found, and falls back to  windows  when it was not.
+
+           If you have set TERM to a name SD does have - windows, xterm,
+           linux, ansi and about sixty others are supplied - nothing
+           changes for you.
+
 22 Aug 26  ACCOUNT NAMES ARE NOW LOWER CASE ON DISK.
 
            SD keeps one file per account in sdsys\accounts, and that file
