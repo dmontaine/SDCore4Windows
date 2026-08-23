@@ -395,6 +395,79 @@ foreach ($e in $exemptNewer) {
         $e.FullName.Substring($sd64.Length + 1), $e.LastWriteTime.ToString('dd MMM HH:mm:ss'))
 }
 
+# --- B2. A RENAME MOVES NO TIMESTAMP, so section B cannot see one.
+#
+# 22 Aug 26 - FOUND BY DOING IT.  sdsys\accounts\SDSYS was renamed to lower case
+# with "git mv", which PRESERVES mtime, so the file was not newer than the
+# install and NOTHING HERE RAISED A WORD.  Four other files in that commit forced
+# the cycle; had the rename been the only change, it would have shipped untested
+# and this script would have said the tree matched source.
+#
+# A CASE-ONLY RENAME IS THE HARDER HALF, and it is the one that happened.
+# Windows compares names case-insensitively, so "SDSYS" and "sdsys" look like the
+# same file to any ordinary test - Test-Path, -eq, a hashtable lookup.  Only an
+# ORDINAL comparison of the two spellings sees it, which is what -cne does below.
+#
+# IT COMPARES THE SHIPPED TREE ONLY.  sdsys\ is what stage.py copies into
+# ProgramData, so a source path there should have an installed counterpart with
+# the SAME SPELLING.  gplsrc is compiled rather than copied and gplbld drives the
+# install, so neither has a path-for-path image to compare against.
+#
+# THE EXCLUSIONS ARE MEASURED, NOT GUESSED.  Comparing the two trees on a
+# known-good install gave exactly SEVEN source paths with no counterpart, all of
+# them a bare README that keeps an otherwise-empty build-output directory in git
+# - $hold, cat, pcode.out, bp.out, prt, gcat, gpl.bp.out.  Nothing else differs,
+# so both checks are silent on a current tree and the bias in this file's header
+# is kept: a false stale costs one install, a false current costs an
+# investigation.
+#
+# AND IT MUST NOT REPORT CLEAN WHEN IT CHECKED NOTHING.  The first version built
+# the installed path as "Join-Path $instTree 'sdsys'" - but $instTree IS ALREADY
+# ...\ProgramData\SD\sdsys, so it looked for sdsys\sdsys, found nothing, skipped
+# the whole comparison and printed "no source file is renamed" anyway.  It sailed
+# past the very rename it had just been written for.  A guard that cannot run has
+# to SAY SO; silence here is a false current, which this file's header prices at
+# an investigation.
+$renamed = @()
+$checkedNames = $false
+$srcSys  = Join-Path $sd64 'sdsys'
+$instSys = $instTree
+if ((Test-Path $srcSys) -and (Test-Path $instSys)) {
+    $checkedNames = $true
+    $instByLower = @{}
+    Get-ChildItem $instSys -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+        $rel = $_.FullName.Substring($instSys.Length + 1)
+        $instByLower[$rel.ToLowerInvariant()] = $rel
+    }
+    Get-ChildItem $srcSys -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and $_.Name -ne 'README' } |
+        ForEach-Object {
+            $rel = $_.FullName.Substring($srcSys.Length + 1)
+            $key = $rel.ToLowerInvariant()
+            if ($instByLower.ContainsKey($key)) {
+                # -cne is the whole point: -ne would call these equal.
+                if ($instByLower[$key] -cne $rel) {
+                    $renamed += ("sdsys\{0}  is installed as  sdsys\{1}" -f $rel, $instByLower[$key])
+                }
+            } else {
+                $renamed += ("sdsys\{0}  is not in the install at all" -f $rel)
+            }
+        }
+}
+
+if ($renamed.Count -gt 0) {
+    Bad ("{0} source file(s) are named differently in the install:" -f $renamed.Count)
+    $renamed | Select-Object -First 10 | ForEach-Object { Write-Output ("       " + $_) }
+    if ($renamed.Count -gt 10) { Write-Output ("       ... and {0} more" -f ($renamed.Count - 10)) }
+    Write-Output '       (a rename keeps its timestamp, so the check above cannot see one)'
+    $stale = $true
+} elseif (-not $checkedNames) {
+    Bad ("could not compare source and installed file NAMES - {0} or {1} is not there." -f $srcSys, $instSys)
+    $stale = $true
+} else {
+    Note '  no source file is renamed relative to the install'
+}
+
 if ($newer.Count -gt 0) {
     Bad ("{0} source file(s) are newer than the install:" -f $newer.Count)
     $newer | Sort-Object LastWriteTime -Descending | Select-Object -First 10 | ForEach-Object {
