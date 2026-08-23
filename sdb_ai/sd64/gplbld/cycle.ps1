@@ -80,7 +80,27 @@ Write-Host "transcript: $script:CycleLog"
 $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Sd64    = Split-Path -Parent $Gplbld
 $Iss     = Join-Path $Gplbld 'sd.iss'
+# ISCC: THE DEFAULT PATH FIRST, THEN THE REGISTRY.  23 Aug 2026 - this was a
+# bare hardcoded path until setup-devbox.ps1's first real run reported Inno
+# installed and ISCC not present at it.  The default is still tried first, so
+# on a machine where it is in the usual place this resolves to exactly the
+# string that used to be here and nothing about a cycle changes.  The fallback
+# reads what Inno's own installer wrote, which covers a per-user winget
+# install or a non-default location.  setup-devbox.ps1's Resolve-Iscc is the
+# same lookup and says why in more detail.
 $Iscc    = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+if (-not (Test-Path -LiteralPath $Iscc)) {
+    foreach ($k in @(
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1')) {
+        try {
+            $loc = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).InstallLocation
+        } catch { continue }
+        if ([string]::IsNullOrWhiteSpace($loc)) { continue }
+        $cand = Join-Path $loc 'ISCC.exe'
+        if (Test-Path -LiteralPath $cand) { $Iscc = $cand; break }
+    }
+}
 $Bash    = 'C:\msys64\usr\bin\bash.exe'
 $SvcName = 'SD'
 $PfTree  = 'C:\Program Files\SD'

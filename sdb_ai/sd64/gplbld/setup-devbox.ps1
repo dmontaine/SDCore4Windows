@@ -86,7 +86,15 @@ $MsysBash = Join-Path $MsysRoot 'usr\bin\bash.exe'
 # if a stripped install ever lacked them.
 $PacmanPackages = @(
     'gcc', 'make', 'pkgconf', 'libxcrypt-devel', 'libbsd', 'python',
-    'mingw-w64-ucrt-x86_64-gcc', 'curl', 'tar'
+    'mingw-w64-ucrt-x86_64-gcc', 'curl', 'tar',
+    # 23 Aug 26 - diffutils, ADDED FROM THE FIRST REAL RUN.  libsodium's
+    # configure printed "cmp: command not found" three times and "diff:
+    # command not found" once on the owner's laptop, where every other package
+    # was already present.  It is not fatal - configure treats a missing cmp as
+    # "the files differ" and carries on, and the build finished - but it is a
+    # real missing dependency that only shows up as noise, so it was never
+    # going to be noticed any other way than by watching a build.
+    'diffutils'
 )
 
 # NOT PACKAGED FOR THE MSYS2 RUNTIME - only for mingw64/ucrt64/clang64, which
@@ -97,9 +105,14 @@ $PacmanPackages = @(
 $SodiumVersion = '1.0.20'
 $SodiumUrl     = "https://download.libsodium.org/libsodium/releases/libsodium-$SodiumVersion-stable.tar.gz"
 
-# cycle.ps1 hardcodes this exact path, so a non-default Inno install would
-# build SD fine and then fail to produce an installer.
+# The path Inno Setup 6 uses by default, and the one cycle.ps1 tries first.
+# It is a STARTING POINT, not the answer - Resolve-Iscc is the answer.
 $IsccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+
+# Set by Step-Ssh, read by Step-Clone.  Initialised TRUE so that if the ssh
+# step is ever skipped or moved, the clones are ATTEMPTED rather than silently
+# passed over - a failed clone says so, a skipped one is easy to miss.
+$script:HaveSshKey = $true
 
 # The four, and what each is for.  linuxsdclilib is deliberately absent -
 # removed from the project 23 Aug 2026, section 2.
@@ -298,9 +311,24 @@ function Step-Packages {
     Say ('  missing: ' + ($missing -join ' '))
     if ($CheckOnly) { Hand ('pacman -S --needed ' + ($missing -join ' ')); return }
 
-    # -Syu first, because pacman refuses to install against a stale database
-    # and the error it gives for that is not obviously about the database.
-    $null = Invoke-Msys 'pacman -Sy --noconfirm'
+    # -Syu, NOT -Sy.  Corrected 23 Aug 2026; the comment here already said
+    # -Syu and the code did -Sy, which is not a typo with no consequences.
+    #
+    # `pacman -Sy` followed by `pacman -S <pkg>` is a PARTIAL UPGRADE: it
+    # refreshes the package database without upgrading anything already
+    # installed, and then installs new packages built against library versions
+    # that are newer than the ones on disk.  On MSYS2, as on any Arch-derived
+    # system, that is a documented way to break a working toolchain.
+    #
+    # AND IT IS MOST DANGEROUS ON EXACTLY THE MACHINES THIS GETS RE-RUN ON.
+    # On a fresh machine nothing is installed yet, so there is nothing to be
+    # out of step with and -Sy would have been harmless.  The damage case is
+    # an EXISTING MSYS2 that is missing one package - which is this repository
+    # owner's own build machine, where `diffutils` turned out to be missing.
+    Say '  pacman -Syu: this upgrades ALL MSYS2 packages, not just the missing ones.'
+    Say '  That is deliberate - installing into a stale tree is what breaks toolchains -'
+    Say '  but on a machine that already builds SD it is a real change.'
+    $null = Invoke-Msys 'pacman -Syu --noconfirm'
     if (Invoke-Msys ('pacman -S --needed --noconfirm ' + ($missing -join ' '))) {
         Did ('installed ' + ($missing -join ' '))
     }
@@ -339,20 +367,92 @@ function Step-Sodium {
     }
 }
 
+# WHERE IS ISCC.exe REALLY?  Rewritten 23 Aug 2026 after the first real run.
+#
+# The old version tested ONE hardcoded path immediately after winget returned,
+# and on the owner's laptop it reported "[done] Inno Setup 6 installed" and
+# "[PROBLEM] Inno Setup is not at ..." on consecutive lines.  Both of the
+# things that can cause that are handled here, because the printout cannot
+# tell them apart afterwards:
+#
+#   - THE INSTALL HAD NOT SETTLED.  winget returns when the installer process
+#     exits, which is not always when the files are all in place.  Step-Inno
+#     retries for a few seconds rather than deciding on the first look.
+#   - IT WENT SOMEWHERE ELSE.  winget falls back to a per-user install when a
+#     machine-scope one is refused, and Inno's own path can be changed at
+#     install time.  So the REGISTRY is consulted - it is what the installer
+#     itself writes, and it is authoritative in a way a guessed path is not.
+#
+# Inno Setup 6 is a 32-bit application even on x64, so its uninstall key
+# normally lives under WOW6432Node; the native view is read too, against a
+# future 64-bit build.
+function Resolve-Iscc {
+    # The canonical path first, so a machine that has it where cycle.ps1 looks
+    # resolves to exactly that and nothing below can change the answer.
+    if (Test-Path -LiteralPath $IsccPath) { return $IsccPath }
+
+    $keys = @(
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1'
+    )
+    foreach ($k in $keys) {
+        try {
+            $loc = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).InstallLocation
+        } catch { continue }
+        if ([string]::IsNullOrWhiteSpace($loc)) { continue }
+        $cand = Join-Path $loc 'ISCC.exe'
+        if (Test-Path -LiteralPath $cand) { return $cand }
+    }
+
+    # A per-user winget install, which lands here and is invisible to both of
+    # the above.
+    $userCand = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
+    if (Test-Path -LiteralPath $userCand) { return $userCand }
+
+    return $null
+}
+
 function Step-Inno {
     Head 'Inno Setup'
-    if (Test-Path -LiteralPath $IsccPath) {
-        Ok ('ISCC present at ' + $IsccPath)
+    $found = Resolve-Iscc
+    if ($found) {
+        Ok ('ISCC present at ' + $found)
+        if ($found -ne $IsccPath) { Warn-IsccElsewhere $found }
         return
     }
     if ($CheckOnly) { Hand 'Inno Setup 6 is missing - winget install JRSoftware.InnoSetup'; return }
 
     $null = Install-Winget 'JRSoftware.InnoSetup' 'Inno Setup 6'
-    if (-not (Test-Path -LiteralPath $IsccPath)) {
-        # Not fatal to the BUILD - only to building an installer - so this is a
-        # problem rather than a stop.  cycle.ps1 hardcodes the path.
-        Bad "Inno Setup is not at $IsccPath. cycle.ps1 hardcodes that path, so the installer cannot be built until it is there"
+
+    # Not one look - see the header above.  Ten seconds is far longer than the
+    # race needs and costs nothing on a machine where it is already there,
+    # because that machine never reaches this line.
+    for ($i = 0; $i -lt 10; $i++) {
+        $found = Resolve-Iscc
+        if ($found) { break }
+        Start-Sleep -Seconds 1
     }
+
+    if (-not $found) {
+        # Not fatal to the BUILD - only to building an installer - so this is a
+        # problem rather than a stop.
+        Bad ("Inno Setup installed but no ISCC.exe was found, at $IsccPath, " +
+             'in the Inno Setup 6 uninstall key, or in a per-user install. ' +
+             'cycle.ps1 needs it to build the installer')
+        return
+    }
+    Did ('Inno Setup 6 installed - ISCC at ' + $found)
+    if ($found -ne $IsccPath) { Warn-IsccElsewhere $found }
+}
+
+# ISCC IS SOMEWHERE cycle.ps1 WILL NOT LOOK BY ITSELF.  Not a problem here -
+# nothing this script does needs ISCC - but it is a problem the first time
+# anybody runs a cycle, and that is a long way from this message, so it is
+# stated with the actual path rather than left to be discovered.
+function Warn-IsccElsewhere($path) {
+    Hand ("ISCC is at $path, not $IsccPath. cycle.ps1 tries the default " +
+          'first and then the registry, so it will find this one - but if a ' +
+          'cycle ever reports ISCC missing, that is the path it needs')
 }
 
 function Step-Ssh {
@@ -366,11 +466,26 @@ function Step-Ssh {
         if ($keys.Count -gt 0) { $haveKey = $true }
     }
 
+    # Step-Clone reads this.  23 Aug 2026, from the first real run: without it
+    # the ssh clones are ATTEMPTED anyway and each one fails on its own,
+    # turning one cause into three lines in the summary - "no SSH key" under
+    # LEFT FOR A PERSON and two separate PROBLEMS underneath it.  Three
+    # entries for one missing key reads like three things to fix, and it
+    # buries the one problem on that run that was real.
+    #
+    # IT ALSO STOPS AN INTERACTIVE HANG.  The first ssh clone asks
+    # "Are you sure you want to continue connecting (yes/no/[fingerprint])?"
+    # for github.com's host key and WAITS.  That prompt is legitimate when a
+    # clone can succeed; asking it before a clone that is already doomed means
+    # the script sits there for a while and then fails anyway.
+    $script:HaveSshKey = $haveKey
+
     if ($haveKey) {
         Ok 'a private key is present in ~\.ssh'
         # Presence is not authorisation, and saying so matters: the clone is
         # what proves it, and it fails much later.
         Say '  (that it is the RIGHT key is not something this can check - the clone below is the test)'
+        Say '  (the first ssh clone asks you to accept github.com''s host key - that is expected)'
         return
     }
 
@@ -378,6 +493,8 @@ function Step-Ssh {
     Say '  Create one and add the public half to GitHub, then re-run:'
     Say '      ssh-keygen -t ed25519 -C "you@example.com"'
     Say '      gh ssh-key add ~\.ssh\id_ed25519.pub      (or paste it in the web UI)'
+    Say '  The ssh clones below are SKIPPED rather than attempted - re-running'
+    Say '  after the key is in place picks them up.'
 }
 
 function Step-Clone {
@@ -403,6 +520,13 @@ function Step-Clone {
             continue
         }
         if ($CheckOnly) { Hand ('would clone ' + $r.Name + ' - ' + $r.Why); continue }
+
+        # No key, no point - Step-Ssh has already said so once, and saying it
+        # again per repository is what made one cause look like three.
+        if ($r.Ssh -and -not $script:HaveSshKey) {
+            Say ('  ' + $r.Name.PadRight(14) + '- skipped, no SSH key (see above)')
+            continue
+        }
 
         Say ('  cloning ' + $r.Name + ' ...')
         & git clone $r.Url $dest
