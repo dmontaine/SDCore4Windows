@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  THE INSTALLATION CHECK NO LONGER STOPS WITH "Access is denied"
+           WHEN YOU RUN IT BEFORE SIGNING OUT.
+
+           The installer puts you in the "sdusers" group, and Windows only
+           applies that when you next sign in - so on the sign-in that ran
+           the installer, the database cannot be read yet.  The check knows
+           about this and is meant to say so, in as many words, and tell you
+           to sign out and back in.
+
+           Instead it stopped dead with "Access is denied" and told you
+           nothing, because looking for a folder it is not allowed to read
+           raises an error rather than simply answering "no".  That was the
+           one case the check exists to handle kindly, and it was the only
+           case it had never been run in.
+
+           It now says the database could not be read on this sign-in, and
+           that this is the same membership it has just told you about
+           rather than a second fault.
+
+           For the same reason it no longer claims the network API is
+           switched off when what actually happened is that it could not
+           read the settings file.
+
 22 Aug 26  SD NO LONGER LOSES TRACK OF WHAT YOUR TERMINAL CAN DO WHILE YOU
            ARE LOGGING IN.
 

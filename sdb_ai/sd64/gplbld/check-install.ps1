@@ -117,6 +117,31 @@ $script:elevated = ([Security.Principal.WindowsPrincipal] `
 function Ok      ($m) { Write-Host ('  [ok]      ' + $m) -ForegroundColor Green }
 function Problem ($m) { $script:problems++; Write-Host ('  [PROBLEM] ' + $m) -ForegroundColor Red }
 function NotYet  ($m) { $script:notyet++;   Write-Host ('  [not yet] ' + $m) -ForegroundColor Yellow }
+
+# TEST-PATH THROWS ON AN ACL DENIAL RATHER THAN RETURNING $false, and this
+# script sets $ErrorActionPreference = 'Stop' - so on the ONE token this file
+# exists to reassure, a token that does not carry sdusers yet, it ABORTED with
+# "Access is denied" instead of reporting anything at all.
+#
+# Found 22 Aug 2026 by gplbld\verify-notyet.ps1, which is the first thing ever
+# to run this script against a genuinely stale token.  Every previous proof of
+# the [not yet] path was made on a token that already had the group, so nothing
+# had ever reached these lines without the rights to read the tree.  The very
+# first user to run the Start Menu shortcut before signing out would have met a
+# crash where the whole design promises reassurance.
+#
+# THREE ANSWERS, NOT TWO, for the same reason this script has three outcomes:
+# "cannot see it" is not "it is not there".  Answering a denial with $false -
+# which is what -ErrorAction SilentlyContinue would do - would report a present
+# and healthy database as MISSING, which is worse than the crash it replaced.
+function Test-PathState([string] $path) {
+    try {
+        if (Test-Path -LiteralPath $path) { return 'present' }
+        return 'missing'
+    } catch {
+        return 'unreadable'
+    }
+}
 function Info    ($m) { if (-not $Brief) { Write-Host ('            ' + $m) -ForegroundColor DarkGray } }
 function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 
@@ -349,8 +374,21 @@ if ($sdUsers.InGroup -eq $false) {
 # the outside.
 Section '  The database'
 
-if (-not (Test-Path -LiteralPath $SysDir)) {
+$sysState = Test-PathState $SysDir
+if ($sysState -eq 'missing') {
     Problem ('The database is missing - expected ' + $SysDir)
+} elseif ($sysState -eq 'unreadable') {
+    # Present, but not to this token.  Which of the two answers is right depends
+    # on the same membership section 3 has already reported, so it is read from
+    # there rather than guessed at again.
+    if ($sdUsers.InToken) {
+        Problem ('The database is there but could not be read: ' + $SysDir)
+        Info 'This sign-in carries the "sdusers" group, so it should be able to.'
+    } else {
+        NotYet 'The database could not be read on this sign-in.'
+        Info 'This is the same group membership as above, not a second problem.'
+        Info 'Sign out and back in, then run this again.'
+    }
 } else {
     Ok ('The database is in ' + $DataDir)
 
@@ -412,7 +450,8 @@ Section '  Remote access'
 
 $apiPort = $null
 $conf = Join-Path $DataDir 'sd.conf'
-if (Test-Path -LiteralPath $conf) {
+$confState = Test-PathState $conf
+if ($confState -eq 'present') {
     try {
         $line = Select-String -LiteralPath $conf -Pattern '^\s*APIPORT\s*=\s*(\d+)' -ErrorAction Stop |
                     Select-Object -First 1
@@ -420,7 +459,13 @@ if (Test-Path -LiteralPath $conf) {
     } catch { }
 }
 
-if ($null -eq $apiPort -or $apiPort -le 0) {
+if ($confState -eq 'unreadable') {
+    # SAYING "switched off" HERE WOULD BE A FALSE STATEMENT, not just a gap:
+    # sd.conf could not be read, so whether the API is on is simply unknown.
+    # Same denial as the database above and the same remedy.
+    NotYet 'The network options could not be checked on this sign-in.'
+    Info 'Reading sd.conf needs the same group membership as the database above.'
+} elseif ($null -eq $apiPort -or $apiPort -le 0) {
     Ok 'The network API is switched off, so nothing is listening for it.'
 } else {
     $listening = $false
