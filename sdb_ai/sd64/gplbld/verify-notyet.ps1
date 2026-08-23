@@ -152,6 +152,16 @@ function Invoke-AsToken($token, [scriptblock]$body) {
 }
 
 # Runs check-install under a given token and returns its output and exit code.
+#
+# EVERY LINE IT PRINTS IS Write-Host, FOR THE SAME REASON Remove-Probe's are.
+# A function returns everything it writes to the OUTPUT stream, so the
+# Write-Output version of this returned an ARRAY - the header, each captured
+# line, the crash report, and then the object - and $stale.Text and $stale.Crash
+# read off that array gave nothing.  The visible symptom on the third elevated
+# run was that the "*** check-install DID NOT FINISH ***" block never appeared
+# at all while the checks depending on it failed: the diagnosis had been written
+# into the return value.  Third time this trap has been paid for in this
+# repository - PROJECT_STATUS.md START HERE.
 # The script is invoked with & so that its own `exit` ends the script rather
 # than this one, and $LASTEXITCODE is what it exited with.
 #
@@ -207,31 +217,42 @@ function Invoke-CheckInstall($token, $label) {
         # check downstream silently, so it stops instead.
         throw "Invoke-CheckInstall: nothing came back from the impersonated run ($label)"
     }
-    Write-Output ""
-    Write-Output ("  --- check-install as $label, exit $($out.Code) ---")
+    Write-Host ""
+    Write-Host ("  --- check-install as $label, exit $($out.Code) ---")
     if ($null -ne $out.Crash) {
-        Write-Output "  *** check-install DID NOT FINISH ***"
-        Write-Output ("  *** " + $out.Crash.Message)
-        Write-Output ("  *** at check-install.ps1 line " + $out.Crash.Line + ":  " + ($out.Crash.Stmt).Trim())
+        Write-Host "  *** check-install DID NOT FINISH ***"
+        Write-Host ("  *** " + $out.Crash.Message)
+        Write-Host ("  *** at check-install.ps1 line " + $out.Crash.Line + ":  " + ($out.Crash.Stmt).Trim())
         foreach ($sl in ($out.Crash.Stack -split "`r?`n")) {
-            if ($sl.Trim().Length) { Write-Output ("  *** " + $sl.Trim()) }
+            if ($sl.Trim().Length) { Write-Host ("  *** " + $sl.Trim()) }
         }
     }
     foreach ($line in ($out.Text -split "`r?`n")) {
-        if ($line.Trim().Length) { Write-Output ("  | " + $line) }
+        if ($line.Trim().Length) { Write-Host ("  | " + $line) }
     }
     return $out
 }
 
-# Does the CURRENT (impersonated) token carry sdusers?  Translate() is wrapped
-# because a token can carry SIDs that no longer resolve to a name, and one of
-# those must not take the whole check down.
-$tokenHasSdUsers = {
-    $hit = $false
-    foreach ($g in [Security.Principal.WindowsIdentity]::GetCurrent().Groups) {
-        try { if ($g.Translate([Security.Principal.NTAccount]).Value -match '\sdusers$') { $hit = $true } } catch { }
+# WHAT THE CURRENT (impersonated) TOKEN IS, AND WHETHER IT CARRIES sdusers.
+#
+# BY SID, NOT BY TRANSLATED NAME, and that is a correction rather than a
+# preference.  The first version copied check-install's own loop, which calls
+# $g.Translate([NTAccount]) inside a try/catch and treats a throw as "absent".
+# Under impersonation that translate does not reliably succeed, so the answer
+# was False for BOTH tokens - which made "token T does NOT carry it" PASS FOR
+# THE WRONG REASON and only showed up because the fresh-token row beside it
+# expected True and got False on a token check-install had just called [ok].
+# A SID comparison needs no name lookup and cannot fail that way.
+#
+# It returns the identity NAME too, so the run says whose token each section
+# actually ran under instead of leaving it to be inferred.
+$tokenFacts = {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    [pscustomobject]@{
+        Name       = $id.Name
+        HasSdUsers = [bool](@($id.Groups | Where-Object { $_.Value -eq $sdUsersSid }).Count)
+        Groups     = @($id.Groups).Count
     }
-    $hit
 }
 
 $logonSig = @'
@@ -315,6 +336,11 @@ try {
     }
     if ($null -ne $existing) { $null = Remove-Probe }
 
+    # Resolved OUTSIDE impersonation, where the lookup is certain to work, and
+    # then only compared inside it.
+    $sdUsersSid = (Get-LocalGroup -Name $SdGroup).SID.Value
+    Write-Output ("  $SdGroup is " + $sdUsersSid)
+
     Add-Type -TypeDefinition $logonSig -Language CSharp | Out-Null
 
     # A password nobody chose and nobody keeps.  The alphabet excludes I, l, 1,
@@ -359,8 +385,9 @@ try {
                            Where-Object { $_.SID.Value -eq $meSid }).Count)
     Note 'the group carries the probe' $true $inGroupNow
 
-    $inStaleToken = Invoke-AsToken $staleTok $tokenHasSdUsers
-    Note 'token T does NOT carry it' $false $inStaleToken
+    $staleFacts = Invoke-AsToken $staleTok $tokenFacts
+    Write-Output ("  token T is " + $staleFacts.Name + ", " + $staleFacts.Groups + " groups")
+    Note 'token T does NOT carry it' $false $staleFacts.HasSdUsers
 
     Write-Output ""
     Write-Output "=== 2. check-install under the stale token ==========================="
@@ -405,7 +432,9 @@ try {
         # The token half of the control, asked directly rather than through
         # check-install: this is the mechanism the whole test rests on, and it
         # should be provable without trusting the thing under test.
-        Note 'token F DOES carry it' $true (Invoke-AsToken $freshTok $tokenHasSdUsers)
+        $freshFacts = Invoke-AsToken $freshTok $tokenFacts
+        Write-Output ("  token F is " + $freshFacts.Name + ", " + $freshFacts.Groups + " groups")
+        Note 'token F DOES carry it' $true $freshFacts.HasSdUsers
 
         $fresh = Invoke-CheckInstall $freshTok 'token F (fresh)'
         $f = $fresh.Text
