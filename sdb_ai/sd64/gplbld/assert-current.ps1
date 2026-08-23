@@ -288,7 +288,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # account, and ADOPT without the one-shot marker.  Same
                   # reasoning again, and the same self-blocking shape - it calls
                   # this script first and refuses on a non-zero exit.
-                  'verify-accountrules.ps1')
+                  'verify-accountrules.ps1',
+                  # 22 Aug 26 - check-install's [not yet] verifier, and it
+                  # arrived as the self-blocking shape rather than as a warning
+                  # about it: written, committed and handed over WITHOUT this
+                  # line, so its very first elevated run refused - naming
+                  # itself as the newer file.  Note that check-install.ps1 is
+                  # NOT on this list and must not be: it ships, and the cross-
+                  # check below would put it back under the guard anyway.
+                  'verify-notyet.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
