@@ -136,6 +136,24 @@ function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 # no.  "Test completed" would not be true there, and a closing line that
 # overstates what happened is the same class of thing as the summary that told
 # somebody to sign out when that could not help them.
+# 22 Aug 26 - WHERE TO FIND IT, IN ONE PLACE.  Owner: the elevated banner said
+# to "run this again ... from an ordinary window" and named neither what "this"
+# is nor where to get it.  That banner is now the MOST READ text in the file -
+# the install-time run is launched by the finishing step, which must be
+# elevated, so it fires on every fresh install.
+#
+# FOUR PLACES SAID SOME OF THIS AND NO TWO SAID THE SAME AMOUNT, which is how
+# one of them ended up saying none of it.  They all call this now, so the
+# Start Menu wording and the path cannot drift apart again.
+#
+# THE PATH IS BUILT FROM $AppDir rather than written out, so it stays true if
+# this is ever run from somewhere other than the install.
+function Rerun {
+    Write-Host '    Start Menu  ->  SD  ->  Check the SD installation'
+    Write-Host '  or:'
+    Write-Host ('    powershell -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
+}
+
 function Finish([bool] $Ran = $true) {
     Write-Host ''
     if ($Ran) {
@@ -215,7 +233,8 @@ if (-not $Yes) {
     if ($answer -notmatch '^(y|yes)$') {
         Write-Host ''
         Write-Host '  Nothing was checked.  The installation is unaffected either way.'
-        Write-Host '  Start Menu -> SD -> Check the SD installation, whenever you want it.'
+        Write-Host '  You can run it whenever you want it:'
+        Rerun
         Finish $false
         exit 0
     }
@@ -226,8 +245,11 @@ if ($script:elevated) {
     Write-Host '  NOTE: this window has administrator rights, which changes what the' -ForegroundColor Yellow
     Write-Host '  database answers below are worth.  Administrators can open the SD' -ForegroundColor Yellow
     Write-Host '  database whatever groups you are in, so a pass here does NOT show' -ForegroundColor Yellow
-    Write-Host '  that your ordinary sign-in can use SD.  For that answer, run this' -ForegroundColor Yellow
-    Write-Host '  again from an ORDINARY window - no "Run as administrator".' -ForegroundColor Yellow
+    Write-Host '  that your ordinary sign-in can use SD.' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host '  For that answer, run this same check again from an ORDINARY window' -ForegroundColor Yellow
+    Write-Host '  - not "Run as administrator":' -ForegroundColor Yellow
+    Rerun
 }
 
 $sdUsers = Get-SdUsersState
@@ -413,9 +435,7 @@ if ($script:notyet -gt 0) {
     # repeat something unfindable is the same fault as being told to sign out
     # when that cannot help, which this file already had once.
     Write-Host '  Afterwards, run it again from:'
-    Write-Host '    Start Menu -> SD -> Check the SD installation'
-    Write-Host '  or:'
-    Write-Host ('    powershell -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
+    Rerun
     Finish
     exit 0
 }
