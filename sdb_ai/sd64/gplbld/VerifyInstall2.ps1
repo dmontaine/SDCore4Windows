@@ -325,6 +325,14 @@ $steps = @(
     # installed tree, so if the tree is not what the cycle left it says so
     # before twelve throwaway accounts have been made.
     @{ Name = 'verify-nonet.ps1';         P = @{} },
+    # 22 Aug 26 - check-install's [not yet] path, 13/13 on the 21:34:25 tree.
+    # PLACED EARLY AND NEEDING NO PREFIX: it creates ONE Windows account under a
+    # fixed name and removes it in the same run, so there is no prefix to spend
+    # and nothing for a later step to collide with.  It also tests a SHIPPED
+    # script rather than SD itself, and it found that script aborting with
+    # "Access is denied" on the one token it exists to reassure - so it earns
+    # its place ahead of the twelve throwaway accounts below.
+    @{ Name = 'verify-notyet.ps1';        P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
     @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
     # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
