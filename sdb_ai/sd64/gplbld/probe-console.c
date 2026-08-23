@@ -12,30 +12,55 @@
  * implements termios.  Two layers would then both own the console.
  *
  * Reasoning cannot settle it, and the cost of guessing is the console: this is
- * the code path every interactive session uses.  So the probe does what SD
- * does, then does what SD WOULD do natively, and looks at what survives.
+ * the code path every interactive session uses.
  *
- *   1. is fd 0 a tty, and is its handle a real console?
- *   2. the console mode as we found it
- *   3. the console mode after Cygwin's own termios raw-mode setup
- *      - this is the interesting one: it shows Cygwin's raw mode
- *        expressed in Console API terms, which is the target to match
- *   4. the console mode after we set SD's intended native mode directly
- *   5. THE DECIDING STEP - read keystrokes, then read the mode back.
- *      If Cygwin has stomped it, the leg must wait for the flip.
+ * ---------------------------------------------------------------------------
+ * THE FIRST VERSION OF THIS PROBE ANSWERED "YES" ON A RUN WHERE read() HAD
+ * FAILED, and that is why the verdict logic below is as fussy as it is.
+ * 23 Aug 2026, first real-console run: step 5 printed "(read returned -1)" and
+ * the probe still concluded "the mode we set survived a Cygwin read
+ * unchanged" - because all it compared was the mode bits, and a read that
+ * never happened cannot disturb them.  A check that passes without meaning it
+ * is worse than no check.  So now:
  *
- * Restores both the termios settings and the console modes on the way out,
- * including on Ctrl-C, because leaving a console in raw mode with no echo is
- * a thing the operator would have to close the window to escape.
+ *   - a verdict of YES requires a read that SUCCEEDED,
+ *   - a failed read prints errno rather than just "-1",
+ *   - there is a CONTROL READ FIRST, in Cygwin's raw mode and nothing of
+ *     ours, so that a later failure can be attributed at all, and
+ *   - if the deciding read fails, the entry mode is put back and the read is
+ *     tried AGAIN.  Success then pins the failure on our SetConsoleMode,
+ *     which is a decisive NO; failure both ways is INCONCLUSIVE and says so.
+ *
+ * Without those two controls a failed read is ambiguous, and the ambiguity
+ * gets resolved by whoever wants an answer.
+ * ---------------------------------------------------------------------------
+ *
+ * ALREADY MEASURED ON THAT FIRST RUN, and it holds whatever the verdict turns
+ * out to be: on entry this console reads 0x2e8 - line input off, echo off,
+ * processed input off, virtual-terminal input ON - and Cygwin's own
+ * tcsetattr(raw) leaves it at 0x2e8, unchanged.  So CYGWIN IS ALREADY DRIVING
+ * SetConsoleMode and translating termios into console modes, and 0x2e8 is the
+ * mode the native code has to reproduce.
+ *
+ * Restores the termios settings and both console modes on the way out,
+ * including on Ctrl-C, because leaving a console raw with no echo is a thing
+ * the operator would have to close the window to escape.
  */
 
 #include <windows.h>
 #include <io.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
+
+/* Step 3 clears OPOST, so from there a bare \n does not return the carriage
+   and every later line staircases across the screen - the first run printed
+   its entire verdict that way.  CRLF costs nothing before raw mode and is
+   correct after it. */
+#define NL "\r\n"
 
 static HANDLE hIn = INVALID_HANDLE_VALUE;
 static HANDLE hOut = INVALID_HANDLE_VALUE;
@@ -55,7 +80,7 @@ static void restore(void) {
 static void on_signal(int sig) {
   (void)sig;
   restore();
-  printf("\n(interrupted - console restored)\n");
+  printf(NL "(interrupted - console restored)" NL);
   _exit(2);
 }
 
@@ -63,60 +88,89 @@ static void on_signal(int sig) {
 static void show_in(const char *tag) {
   DWORD m = 0;
   if (!GetConsoleMode(hIn, &m)) {
-    printf("  %-34s GetConsoleMode FAILED, error %lu\n", tag, (unsigned long)GetLastError());
+    printf("  %-34s GetConsoleMode FAILED, error %lu" NL, tag,
+           (unsigned long)GetLastError());
     return;
   }
-  printf("  %-34s 0x%08lx  %s%s%s%s\n", tag, (unsigned long)m,
+  printf("  %-34s 0x%08lx  %s%s%s%s" NL, tag, (unsigned long)m,
          (m & ENABLE_LINE_INPUT) ? "LINE " : "-line ",
          (m & ENABLE_ECHO_INPUT) ? "ECHO " : "-echo ",
          (m & ENABLE_PROCESSED_INPUT) ? "PROCESSED " : "-processed ",
          (m & ENABLE_VIRTUAL_TERMINAL_INPUT) ? "VT" : "-vt");
 }
 
+/* Retries EINTR, which a stray signal would otherwise present as a broken
+   read and this probe would then blame on SetConsoleMode. */
+static int read_keys(unsigned char *buf, size_t len, int *err) {
+  int n;
+  do {
+    errno = 0;
+    n = (int)read(0, buf, len);
+  } while (n < 0 && errno == EINTR);
+  *err = errno;
+  return n;
+}
+
+static void show_bytes(int n, int err, unsigned char *buf) {
+  int i;
+  printf("  bytes: ");
+  if (n < 0) {
+    printf("read FAILED, errno %d (%s)" NL, err, strerror(err));
+    return;
+  }
+  if (n == 0) {
+    printf("end of file" NL);
+    return;
+  }
+  for (i = 0; i < n; i++)
+    printf("%d ", buf[i]);
+  printf(NL);
+}
+
 int main(void) {
   DWORD m = 0, after = 0, want = 0;
   struct termios raw;
   unsigned char buf[64];
-  int n, i;
+  int n, err, n2 = 0, err2 = 0, retried = 0;
 
   signal(SIGINT, on_signal);
   signal(SIGTERM, on_signal);
 
-  printf("probe-console - section 7 step 13, leg 1\n");
-  printf("=========================================\n\n");
+  printf("probe-console - section 7 step 13, leg 1" NL);
+  printf("=========================================" NL NL);
 
   /* --- 1. Is this a console at all? ------------------------------------ */
 
-  printf("1. What fd 0 and fd 1 are\n");
-  printf("  isatty(0) = %d, isatty(1) = %d\n", isatty(0), isatty(1));
+  printf("1. What fd 0 and fd 1 are" NL);
+  printf("  isatty(0) = %d, isatty(1) = %d" NL, isatty(0), isatty(1));
 
   hIn = (HANDLE)get_osfhandle(0);
   hOut = (HANDLE)get_osfhandle(1);
-  printf("  get_osfhandle(0) = %p, get_osfhandle(1) = %p\n",
-         (void *)hIn, (void *)hOut);
 
   if (hIn == INVALID_HANDLE_VALUE || !GetConsoleMode(hIn, &in_mode_entry)) {
-    printf("\n  fd 0 IS NOT A CONSOLE HANDLE (error %lu).\n", (unsigned long)GetLastError());
-    printf("  Run this in a real console window, not through a pipe.\n");
-    printf("  ANSWER: undetermined - the probe did not get to the question.\n");
+    printf(NL "  fd 0 IS NOT A CONSOLE HANDLE (error %lu)." NL,
+           (unsigned long)GetLastError());
+    printf("  Run this in a real console window, not through a pipe." NL);
+    printf("  ANSWER: undetermined - the probe did not reach the question." NL);
     return 2;
   }
   if (!GetConsoleMode(hOut, &out_mode_entry)) {
-    printf("\n  fd 1 is not a console handle (error %lu).\n", (unsigned long)GetLastError());
+    printf(NL "  fd 1 is not a console handle (error %lu)." NL,
+           (unsigned long)GetLastError());
     return 2;
   }
   modes_saved = 1;
-  printf("  Both are real console handles, so the question is live.\n\n");
+  printf("  Both are real console handles, so the question is live." NL NL);
 
   /* --- 2 and 3. What Cygwin's own raw mode looks like ------------------ */
 
-  printf("2. Console input mode as found\n");
+  printf("2. Console input mode as found" NL);
   show_in("on entry");
-  printf("\n");
+  printf(NL);
 
-  printf("3. After Cygwin's termios raw mode - what linuxio.c does today\n");
+  printf("3. After Cygwin's termios raw mode - what linuxio.c does today" NL);
   if (tcgetattr(0, &tty_entry) != 0) {
-    printf("  tcgetattr failed - not a tty after all\n");
+    printf("  tcgetattr failed - not a tty after all" NL);
     restore();
     return 2;
   }
@@ -132,59 +186,86 @@ int main(void) {
   raw.c_cc[VMIN] = 1;
   tcsetattr(0, TCSANOW, &raw);
   show_in("after tcsetattr(raw)");
-  printf("  ^ this is the mode the native code has to reproduce\n\n");
+  printf("  ^ the mode the native code has to reproduce" NL NL);
 
-  /* --- 4. Set SD's intended native mode directly ------------------------ */
+  /* --- 4. A CONTROL READ, BEFORE WE TOUCH ANYTHING --------------------- */
 
-  printf("4. Setting SD's intended NATIVE mode with SetConsoleMode\n");
+  printf("4. CONTROL read - Cygwin raw mode only, nothing of ours yet" NL);
+  printf("   Press the LEFT ARROW key, then Enter." NL);
+  printf("   (an arrow reads 27 91 68 when it arrives the way SD expects)" NL);
+  n = read_keys(buf, sizeof(buf), &err);
+  show_bytes(n, err, buf);
+  if (n < 0) {
+    printf(NL "  The control read ALREADY fails, before we set anything." NL);
+    printf("  ANSWER: INCONCLUSIVE - the fault is not SetConsoleMode's, and" NL);
+    printf("  nothing later in this probe could be attributed to it." NL);
+    restore();
+    return 0;
+  }
+  printf(NL);
+
+  /* --- 5. Set SD's intended native mode directly ------------------------ */
+
+  printf("5. Setting SD's intended NATIVE mode with SetConsoleMode" NL);
   GetConsoleMode(hIn, &m);
   want = m;
   want &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
   want |= ENABLE_PROCESSED_INPUT; /* ISIG on - set_term(TRUE) */
   if (!SetConsoleMode(hIn, want)) {
-    printf("  SetConsoleMode FAILED, error %lu\n", (unsigned long)GetLastError());
-    printf("  ANSWER: NO - the leg must wait for the toolchain flip.\n");
+    printf("  SetConsoleMode FAILED, error %lu" NL,
+           (unsigned long)GetLastError());
+    printf("  ANSWER: NO - the leg must wait for the toolchain flip." NL);
     restore();
     return 0;
   }
   show_in("requested");
-  printf("\n");
+  printf(NL);
 
-  /* --- 5. Does it survive a Cygwin read? ------------------------------- */
+  /* --- 6. THE DECIDING STEP -------------------------------------------- */
 
-  printf("5. THE DECIDING STEP\n");
-  printf("  Press the LEFT ARROW key, then press Enter.\n");
-  printf("  (an arrow reads 27 91 68 when it arrives the way SD expects)\n");
-  printf("  bytes: ");
-  fflush(stdout);
+  printf("6. THE DECIDING STEP - the same key, with our mode set" NL);
+  printf("   Press the LEFT ARROW key, then Enter." NL);
+  n = read_keys(buf, sizeof(buf), &err);
+  show_bytes(n, err, buf);
 
-  n = read(0, buf, sizeof(buf));
-  if (n <= 0)
-    printf("(read returned %d)", n);
-  for (i = 0; i < n; i++)
-    printf("%d ", buf[i]);
-  printf("\n\n");
-
-  if (!GetConsoleMode(hIn, &after)) {
-    printf("  GetConsoleMode after the read FAILED, error %lu\n", (unsigned long)GetLastError());
-    restore();
-    return 0;
-  }
+  if (!GetConsoleMode(hIn, &after))
+    after = 0;
   show_in("after a Cygwin read()");
 
-  printf("\n=========================================\n");
-  if (after == want) {
-    printf("ANSWER: YES.  The mode we set survived a Cygwin read unchanged,\n");
-    printf("so linuxio.c can move to the Console API BEFORE the flip.\n");
+  if (n < 0) {
+    printf(NL "  Read failed.  Restoring the entry mode and retrying, to find"
+           NL "  out whether OUR change is what broke it." NL);
+    SetConsoleMode(hIn, in_mode_entry);
+    printf("   Press the LEFT ARROW key once more, then Enter." NL);
+    n2 = read_keys(buf, sizeof(buf), &err2);
+    show_bytes(n2, err2, buf);
+    retried = 1;
+  }
+
+  printf(NL "=========================================" NL);
+
+  if (n >= 0 && after == want) {
+    printf("ANSWER: YES.  A Cygwin read SUCCEEDED with our mode set, and the" NL);
+    printf("mode was unchanged afterwards.  linuxio.c can move to the Console" NL);
+    printf("API BEFORE the toolchain flip." NL);
+  } else if (n >= 0) {
+    printf("ANSWER: NO.  The read worked, but Cygwin changed the mode under us:" NL);
+    printf("  we set   0x%08lx" NL, (unsigned long)want);
+    printf("  read got 0x%08lx" NL, (unsigned long)after);
+    printf("Two layers own the console, so linuxio.c moves WITH the flip." NL);
+  } else if (retried && n2 >= 0) {
+    printf("ANSWER: NO, and decisively.  The read failed with our mode set and" NL);
+    printf("SUCCEEDED as soon as the entry mode was restored, so calling" NL);
+    printf("SetConsoleMode underneath Cygwin's tty layer is what broke it." NL);
+    printf("linuxio.c must move WITH the toolchain flip, like sys/cygwin.h." NL);
   } else {
-    printf("ANSWER: NO.  Cygwin changed the mode under us:\n");
-    printf("  we set   0x%08lx\n", (unsigned long)want);
-    printf("  read got 0x%08lx\n", (unsigned long)after);
-    printf("Two layers own the console, so linuxio.c must move WITH the\n");
-    printf("toolchain flip, like the sys/cygwin.h calls.  Section 7 step 13.\n");
+    printf("ANSWER: INCONCLUSIVE.  The read failed both with our mode set and" NL);
+    printf("with the entry mode restored, so the fault is not SetConsoleMode's" NL);
+    printf("and this probe has not answered the question.  Do NOT read the" NL);
+    printf("first failure as a NO." NL);
   }
 
   restore();
-  printf("(console restored)\n");
+  printf("(console restored)" NL);
   return 0;
 }
