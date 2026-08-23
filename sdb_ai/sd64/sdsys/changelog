@@ -5,6 +5,28 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  A SCHEDULED JOB CAN NOW RUN AN SD COMMAND, AND ONLY THE COMMANDS
+           AN ADMINISTRATOR HAS NAMED FOR IT.
+
+           Until now, typing a command after "sd" - "sd MY.REPORT" - needed a
+           session started with "Run as administrator".  A scheduled task does
+           not run that way, so there was no way to have SD do anything on a
+           timer without handing the job administrator rights.
+
+           Now there are two ways past that.  An elevated session still runs
+           anything, exactly as before.  Anything else runs what is listed for
+           its account in the SD system file batch.jobs, which only an
+           administrator can change: one record per account, one command name
+           on each line.
+
+           The command must be a single name with nothing after it, and it
+           must be a paragraph or a sentence in that account.  There is no
+           password anywhere in this - the job signs in as its own Windows
+           account and SD puts it in the matching SD account.
+
+           Nothing changes for a session you type at: commands entered at the
+           ":" prompt are unaffected.
+
 22 Aug 26  A WINDOWS PATH TYPED AT THE COMMAND PROMPT IS NO LONGER CUT OFF
            AT THE FIRST BACKSLASH.
 

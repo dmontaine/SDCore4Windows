@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 22 Aug 26 Windows port - a command on the command line no longer needs an
+ *           elevated session: the gate moved to LOGIN, which admits an
+ *           elevated session as before OR a command named on the invoking
+ *           account's list in SDSYS batch.jobs.  PROJECT_STATUS.md 7 step 9
  * 20 Aug 26 Windows port - two comments corrected, no code changed: the
  *           -INTERNAL note claimed entering SDSYS needs the SDSYS password,
  *           which LOGIN stopped being true on 14 Aug; and check_admin()
@@ -639,8 +643,35 @@ Private bool comlin(int argc, char *argv[]) {
    Plain "sd" with nothing after it is untouched: that is how a user reaches
    their own account, and it is the whole of what an ordinary session may do.
    Nothing SD spawns passes a command this way - a phantom carries its command
-   in the user table and gets only "-p<n>".                                 */
-    check_admin();
+   in the user table and gets only "-p<n>".
+
+   22 Aug 26 Windows port - THE GATE HAS MOVED TO LOGIN, AND IT IS A LIST NOW
+   RATHER THAN A TOKEN TEST.  PROJECT_STATUS.md 7 step 9.  check_admin() stood
+   here and refused every unelevated command line, which also refused the thing
+   step 9 exists for: a scheduled job runs as a batch account and is NOT
+   elevated, so it never reached LOGIN and section 8's "needs no new C code"
+   was wrong on exactly this point.  Measured before it was changed - "sd COUNT
+   VOC" from an ordinary shell answered "This command needs an elevated
+   session", exit 1.
+
+   THE SHAPE IS STEP 7'S, and it is the owner's decision of 22 Aug 2026 taken
+   from three offered: ELEVATION STILL PASSES ON ITS OWN, so nothing an
+   administrator does today changes, AND an account with the command on its
+   list in SDSYS batch.jobs passes too.  Everyone else is refused exactly as
+   before - by LOGIN, with a message that says which of the two it was.
+
+   WHY IT IS SAFE TO ADMIT THE COMMAND HERE.  Nothing executes it at this
+   point: sd.c only stores it (SYSTEM(1026)), LOGIN runs first and CPROC does
+   not pick it up until its single-command branch, which is after the whole
+   login paragraph.  LOGIN is FAIL-CLOSED - no batch.jobs file, no record for
+   the account, or a name not on it, are all refusals - so removing the test
+   here does not open anything the list does not name.
+
+   AND THE LIST IS NOT IN THE VOC, though section 8 designed it there.  SDSYS
+   voc is inside the data tree, which grants sdusers Modify - measured 22 Aug
+   by writing a file into it from an ordinary token - and a VOC record cannot
+   carry an ACL of its own.  batch.jobs is a separate file locked read-only by
+   secure-osusers.ps1, which is step 7's lesson applied rather than repeated. */
 
     bytes = 0;
     for (n = arg; n < argc; n++) {

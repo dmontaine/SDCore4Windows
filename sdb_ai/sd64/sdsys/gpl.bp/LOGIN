@@ -114,6 +114,14 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    audit.reason = 'unspecified'
    audit.account = ''
 
+* 22 Aug 26 Windows port - PROJECT_STATUS.md 7 step 9.  ASSIGNED HERE, not at
+*   the gate, for the reason the block below gives: it is read by the audit
+*   line at the end of this subroutine, which is reached on paths that never
+*   run the gate at all, and BCOMP's "is not assigned a value" fails the whole
+*   bootstrap.  '' is also the value that means "no command was given", which
+*   is the interactive session and the common case.
+   batch.command = ''
+
 * 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Set here, at the top,
 *   rather than left to the three call sites that do set them, because BCOMP's
 *   "is not assigned a value" is what bootstrap.py line 229 fails the whole
@@ -152,6 +160,11 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
             if s = '' then s = 'windows'
       end
 
+* 22 Aug 26 Windows port - THE BATCH GATE, PROJECT_STATUS.md 7 step 9.  A
+*   command given on the command line is now admitted by an ELEVATED session as
+*   before, or by the invoking account's list in SDSYS batch.jobs, and refused
+*   otherwise.  sd.c used to refuse every unelevated command line, which
+*   refused the scheduled job this exists for.  See batch.permitted.
 * 22 Aug 26 Windows port - ASK FOR THE TYPE, THEN CHECK IT LOADED.  UNTIL ONE
 *   LOADS THERE ARE NO CAPABILITIES AT ALL, not just no cub1: tsettermtype()
 *   calls free_terminfo() only AFTER the open succeeds (sdtermlb.c:167-173), so
@@ -632,12 +645,53 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
       end
    end
 
+* 22 Aug 26 Windows port - THE BATCH GATE.  PROJECT_STATUS.md 7 step 9.
+*
+*   WHAT IT IS FOR.  A scheduled job signs in as a Windows batch account, and
+*   if that account has an SD account it lands here with nothing asked - there
+*   is no credential anywhere in this path and there must not be.  What was
+*   missing is a limit on WHAT it may then run, and sd.c used to supply a
+*   cruder one: an unelevated command line was refused outright, which refused
+*   the batch account too.
+*
+*   ELEVATION STILL PASSES ON ITS OWN, which is step 7's shape and the owner's
+*   decision of 22 Aug 2026.  An elevated session reaches this line and goes
+*   straight through, so nothing an administrator does today changes.  Everyone
+*   else needs the command on their account's list.
+*
+*   IT IS HERE, LAST, ON PURPOSE.  Everything above can still refuse, and a
+*   refusal here leaves through terminate.connection like every other, so it is
+*   written to the audit trail with a reason and without a second call.  CPROC
+*   does not pick the command up until its single-command branch, which is
+*   after this whole subroutine has returned - so nothing has run yet.
+*
+*   A PHANTOM IS EXEMPT because its command does not arrive this way at all -
+*   it comes from the user table and CPROC handles it in a separate branch.  An
+*   INTERNAL session is exempt because that is the install path, which sd.c
+*   gates on its own.  Mode 0 for the same reason as the block above: mode 2 is
+*   UPDATE.ACCOUNT copying a VOC, not a login.
+   if mode = 0 and not(is.phantom) and not(kernel(K$INTERNAL,-1)) then
+      batch.command = trim(system(1026))
+      if batch.command # '' and not(kernel(K$ADMINISTRATOR,-1)) then
+         gosub batch.permitted
+         if not(batch.ok) then goto terminate.connection
+      end
+   end
+
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The single point at
 *   which a login has succeeded, which is why the record is written here and
 *   not at the account tests: everything above can still refuse.  The identity
 *   is NOT passed - audit_message() stamps it from the user table, because
 *   CPROC reassigns logname when it drops to sdsys (5.6).
-   void kernel(K$AUDIT, 'LOGIN account=' : audit.account)
+*
+*   22 Aug 26 - THE COMMAND IS NAMED IN THE RECORD when there is one, because
+*   "LOGIN account=x" alone cannot distinguish a person signing in from a job
+*   that ran something.  It is empty for every interactive session.
+   if batch.command = '' then
+      void kernel(K$AUDIT, 'LOGIN account=' : audit.account)
+   end else
+      void kernel(K$AUDIT, 'LOGIN account=' : audit.account : ' command=' : batch.command)
+   end
 
    ok = @true
    return
@@ -765,6 +819,101 @@ require.credential:
 
    cred.ok = @false
    display sysmsg(10095) ;* No password was set...
+   return
+
+*
+* ======================================================================
+* BATCH.PERMITTED  -  may this account run this command from the command line?
+*
+* PROJECT_STATUS.md 7 step 9.  Sets batch.ok, and on a refusal sets
+* audit.reason and displays which of the three refusals it was.  It NEVER sets
+* batch.ok true by falling through: every path that does not reach the last
+* line leaves it false, which is the direction a permission list has to fail.
+*
+* THE LIST IS @SDSYS/batch.jobs, ONE RECORD PER ACCOUNT, one command name per
+* field.  Section 8 designed it as an X-type record in SDSYS's VOC; it is a
+* file instead, because SDSYS voc grants sdusers Modify - measured 22 Aug 2026
+* by writing into it from an ordinary token - and a VOC record cannot carry an
+* ACL of its own.  secure-osusers.ps1 locks this file read-only to sdusers, the
+* same control and the same script as step 7's os.users.
+*
+* KEYED BY initial.account, WHICH IS ALSO THE ANSWER TO SECTION 8's "-A must
+* match".  The forced account from "sd -Axxx" is what initial.account already
+* holds by the time this runs, so consulting it cannot consult one account's
+* list while running in another - there is no second name to disagree with.
+
+batch.permitted:
+   batch.ok = @false
+
+*  ONE TOKEN, NO ARGUMENTS, AND THIS IS THE LINE DOING THE SECURITY WORK.
+*  Section 8: "must be in the VOC" is worth nothing on its own, since every
+*  verb is a VOC item - it is the absence of arguments that stops a listed
+*  name being turned into something else.
+   if index(batch.command, ' ', 1) then
+      display sysmsg(10097)  ;* A command run this way takes no arguments
+      audit.reason = 'command line carried arguments'
+      return
+   end
+
+   openpath @sdsys:@ds:'batch.jobs' to batch.f else
+      display sysmsg(10096, batch.command, initial.account)
+      audit.reason = 'batch.jobs could not be opened'
+      return
+   end
+
+   read batch.rec from batch.f, downcase(initial.account) else batch.rec = ''
+   close batch.f
+
+*  BOTH SHAPES ARE READ, AND THAT IS DELIBERATE.  The dictionary describes
+*  COMMAND as field 1 multivalued, which is what LIST needs and what the value
+*  marks in "a]b" mean; somebody editing with ED will as naturally put one name
+*  on each LINE.  Reading field marks and value marks alike lets the two agree
+*  instead of one of them silently granting nothing.  It cannot admit anything
+*  extra either way - the name still has to match exactly.
+   batch.listed = @false
+   batch.list = change(batch.rec, @fm, @vm)
+   batch.n = dcount(batch.list, @vm)
+   for batch.i = 1 to batch.n
+      if downcase(trim(batch.list<1, batch.i>)) = downcase(batch.command) then
+         batch.listed = @true
+      end
+   next batch.i
+
+   if not(batch.listed) then
+      display sysmsg(10096, batch.command, initial.account)
+      audit.reason = 'command is not on the account list'
+      return
+   end
+
+*  PA AND S ONLY.  Section 8's reason is that a mislisted name should fail when
+*  somebody sets it up rather than at 3am - this cannot fully deliver that
+*  until there is a verb to edit the list with (step 10), but it does refuse
+*  with a message that names the type problem rather than "not permitted".
+*
+*  THE THREE-CASE FOLD, as CPROC does it at its own VOC read: as typed, then
+*  lower, then upper.  5.12.
+   read batch.voc.rec from voc, batch.command else
+      read batch.voc.rec from voc, downcase(batch.command) else
+         read batch.voc.rec from voc, upcase(batch.command) else
+            display sysmsg(10098, batch.command)
+            audit.reason = 'no VOC record for the command'
+            return
+         end
+      end
+   end
+
+*  THE TYPE IS THE LEADING CHARACTERS OF FIELD 1 AND THE REST MAY BE PROSE -
+*  "File for BASIC programs" is how CREATEA writes a file pointer, so a test
+*  for equality with 'PA' would reject a perfectly good paragraph.  Compare the
+*  leading characters, which is what SD itself dispatches on.
+   batch.type = upcase(trim(batch.voc.rec<1>))
+   if batch.type[1,2] # 'PA' and batch.type[1,1] # 'S' then
+      display sysmsg(10098, batch.command)
+      audit.reason = 'VOC type is not PA or S'
+      return
+   end
+
+   batch.ok = @true
    return
 
 *

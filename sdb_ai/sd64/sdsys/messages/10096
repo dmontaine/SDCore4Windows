@@ -1,0 +1,1 @@
+%1 is not a command that account %2 may run from the command line.\n\nAn administrator grants it by adding the name to the account's record in\nthe SD system file batch.jobs, which only an administrator can change.

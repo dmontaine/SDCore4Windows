@@ -30,8 +30,8 @@
 # WHAT IT COVERS NOW, LATER THE SAME DAY: EVERYTHING.  This said "eight
 # verifiers need elevation and are still not in either runner - apiport,
 # catgate, nonet, osusers, scramlogin, sshonly, tierapi, apiname", and every one
-# of those is now in a runner.  There are TWENTY-SIX verify-*.ps1 here; this
-# file runs NINE and hands the other SEVENTEEN to VerifyInstall2.ps1, so NONE is
+# of those is now in a runner.  There are TWENTY-SEVEN verify-*.ps1 here; this
+# file runs TEN and hands the other SEVENTEEN to VerifyInstall2.ps1, so NONE is
 # left to be remembered.  Checked by listing both runners' step tables against
 # the directory, not by eye.
 #
@@ -265,7 +265,13 @@ $steps = @(
     # 22 Aug 26 - section 7 step 12's guard.  It belongs in THIS runner rather
     # than VerifyInstall2: it spends no prefix, creates nothing, and needs no
     # elevation, which is this file's whole entry condition.
-    @{ Name = 'verify-parsertokens.ps1'; P = @{} }
+    @{ Name = 'verify-parsertokens.ps1'; P = @{} },
+    # 22 Aug 26 - section 7 step 9's guard, and it is here for the same reason
+    # verify-osusers is: the measurement MUST be made with an ordinary token,
+    # because an elevated session passes the batch gate on its own.  IT RAISES
+    # TWO UAC PROMPTS ITSELF, for the two steps that write SDSYS batch.jobs -
+    # so this runner now costs about five in total rather than three.
+    @{ Name = 'verify-batchjob.ps1';     P = @{} }
 )
 
 $lines  = @()

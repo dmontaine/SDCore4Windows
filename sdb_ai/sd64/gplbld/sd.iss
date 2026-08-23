@@ -1426,6 +1426,54 @@ end;
   that program; the ACL protects the directory from everything, including code
   not yet written.  secure-gcat.ps1's header carries the consequence: global
   cataloguing now needs a genuinely ELEVATED session. }
+{ LOCK THE BATCH COMMAND LIST.  PROJECT_STATUS.md 7 step 9.
+
+  THE SAME CONTROL AS THE SHELL LIST ABOVE, on a different file and against a
+  different escalation.  SDSYS batch.jobs names, per account, the commands that
+  account may run from the command line - which is how a scheduled job runs
+  anything at all now that LOGIN admits a listed command instead of demanding an
+  elevated session.  LOGIN reads it from the USER'S OWN process, so ordinary
+  users must be able to READ it and must never be able to WRITE it: a user who
+  can add a line to their own record grants themselves the command line.
+
+  IT REUSES secure-osusers.ps1, which takes -Path and is not specific to
+  os.users.  A second script would be a second thing to keep true.
+
+  WHY NOT IN THE VOC, where section 8 designed it: SDSYS voc is inside the data
+  tree, which grants sdusers Modify - measured 22 Aug 2026 by writing a file
+  into it from an ordinary token - and a VOC record cannot carry an ACL of its
+  own.  Then the list would be decoration, which is what happened to $CRED.
+
+  TWO OBJECTS, TWO CALLS, and the dictionary for the reason SecureOsUsers gives:
+  an administrator reads the list THROUGH it. }
+function SecureBatchJobs: String;
+var
+  Code: Integer;
+  Ps, Script, Store, Dict, Failed: String;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-osusers.ps1');
+  Store := ExpandConstant('{#DataDir}\sdsys\batch.jobs');
+  Dict := ExpandConstant('{#DataDir}\sdsys\batch.jobs.dic');
+
+  Failed := '';
+  if not LockOsUsersPath(Ps, Script, Store, Code) then
+    Failed := Store
+  else if not LockOsUsersPath(Ps, Script, Dict, Code) then
+    Failed := Dict;
+
+  if Failed = '' then
+    Exit;
+
+  Result := 'The batch command list was NOT locked (code ' + IntToStr(Code) + '). ' +
+            'Until it is, any SD user can add commands to their own record and run them ' +
+            'from the command line.  Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
+end;
+
 function SecureGcat: String;
 var
   Code: Integer;
@@ -1553,6 +1601,7 @@ var
   CredMsg: String;
   DenyMsg: String;
   OsuMsg: String;
+  BjMsg: String;
   GcatMsg: String;
   AcctAclMsg: String;
 begin
@@ -1571,6 +1620,10 @@ begin
       run.  Order between them does not matter - different files, no shared
       state - so it goes second simply because the escalation is the graver. }
     OsuMsg := SecureOsUsers;
+
+    { Beside it, same control, different escalation: this one is the command
+      line rather than the shell.  Order between them does not matter. }
+    BjMsg := SecureBatchJobs;
 
     { Third of the three ACL steps, and the same reasoning: it closes a hole
       rather than configuring something, and it is silent if it does not run.
@@ -1714,6 +1767,7 @@ begin
              three paragraphs the reader already skimmed on the first page. }
            CredMsg +
            OsuMsg +
+           BjMsg +
            GcatMsg +
            AcctAclMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy

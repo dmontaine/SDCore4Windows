@@ -202,6 +202,8 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 22 Aug 26 - verify-parsertokens.ps1, listed in the commit
                   # that created it under section 7 step 7's rule.
                   'verify-parsertokens.ps1',
+                  # 22 Aug 26 - verify-batchjob.ps1, step 9's guard, same rule.
+                  'verify-batchjob.ps1',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
                   # listed in the commit that created it under the same rule.
                   # It is a RUNNER and not a verifier, so it ships no more than

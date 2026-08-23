@@ -1,7 +1,15 @@
-# secure-osusers.ps1 - lock the shell permission list so only an administrator
-# can change who is on it.
+# secure-osusers.ps1 - lock a permission list so only an administrator can
+# change who is on it.
 #
 #   powershell -File secure-osusers.ps1 -Path "C:\ProgramData\SD\sdsys\os.users" ...
+#
+# 22 Aug 26 - IT SERVES TWO LISTS NOW, and the name is the older of them.  It
+# takes -Path and has nothing in it specific to os.users, so PROJECT_STATUS.md
+# 7 step 9 locks SDSYS batch.jobs - the commands each account may run from the
+# command line - with the same script rather than a near-copy.  sd.iss calls it
+# four times in all, twice from SecureOsUsers and twice from SecureBatchJobs,
+# each with the exit code checked.  A second script would be a second thing to
+# keep true; everything written below applies to both.
 #
 # PROJECT_STATUS.md 7 step 7.  Run by the installer, once, AFTER the icacls that
 # secures the data tree - it has to be after, or inheritance puts the
