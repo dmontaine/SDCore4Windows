@@ -182,8 +182,25 @@ function Invoke-CheckInstall($token, $label) {
         # below would compare against an empty string.  Measured on the real
         # script: 2>&1 gave 0 characters, *>&1 gave 596.  Same mechanic that
         # cost VerifyInstall1 its on-screen progress - PROJECT_STATUS.md.
-        $o = & $checkInstall -Brief -Yes -NoPause *>&1 | Out-String
-        [pscustomobject]@{ Text = $o; Code = $LASTEXITCODE }
+        # AND CATCH IT DYING, because it can.  check-install.ps1:82 sets
+        # $ErrorActionPreference = 'Stop' for itself, so the preference set
+        # above does not reach it and an unguarded non-terminating error inside
+        # it is fatal.  Without this the harness reports only "Access is
+        # denied" from somewhere, which says nothing about WHERE.
+        $o = ''
+        $crash = $null
+        try {
+            $o = & $checkInstall -Brief -Yes -NoPause *>&1 | Out-String
+        } catch {
+            $o = $o + "`n<<CRASHED>> " + $_.Exception.Message
+            $crash = [pscustomobject]@{
+                Message = $_.Exception.Message
+                Line    = $_.InvocationInfo.ScriptLineNumber
+                Stmt    = $_.InvocationInfo.Line
+                Stack   = $_.ScriptStackTrace
+            }
+        }
+        [pscustomobject]@{ Text = $o; Code = $LASTEXITCODE; Crash = $crash }
     }
     if ($null -eq $out) {
         # Cannot happen by the route above, but a null here would poison every
@@ -192,6 +209,14 @@ function Invoke-CheckInstall($token, $label) {
     }
     Write-Output ""
     Write-Output ("  --- check-install as $label, exit $($out.Code) ---")
+    if ($null -ne $out.Crash) {
+        Write-Output "  *** check-install DID NOT FINISH ***"
+        Write-Output ("  *** " + $out.Crash.Message)
+        Write-Output ("  *** at check-install.ps1 line " + $out.Crash.Line + ":  " + ($out.Crash.Stmt).Trim())
+        foreach ($sl in ($out.Crash.Stack -split "`r?`n")) {
+            if ($sl.Trim().Length) { Write-Output ("  *** " + $sl.Trim()) }
+        }
+    }
     foreach ($line in ($out.Text -split "`r?`n")) {
         if ($line.Trim().Length) { Write-Output ("  | " + $line) }
     }
@@ -342,6 +367,8 @@ try {
 
     $stale = Invoke-CheckInstall $staleTok 'token T (stale)'
     $t = $stale.Text
+
+    Note 'check-install finished at all' $true ($null -eq $stale.Crash)
 
     Note 'says the sign-in has not got it yet' $true `
         ($t -match 'in the "sdusers" group, but this sign-in does not have it yet')
