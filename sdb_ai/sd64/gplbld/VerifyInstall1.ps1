@@ -3,7 +3,7 @@
 #   Run from an ORDINARY PowerShell.  It REFUSES an elevated one - see below.
 #
 # WHY IT EXISTS, 22 Aug 2026.  VerifyInstall2.ps1 runs nine verifiers and
-# there are twenty-four in this directory.  Seven of the fifteen it leaves out
+# there were twenty-four in this directory.  Seven of the fifteen it leaves out
 # need no elevation at all, which meant they could be run by anybody, at any
 # time, for free - and so nobody ran them.  Between 21 Aug and 22 Aug not one of
 # the seven appears in any transcript, and three of the twenty-four
@@ -27,12 +27,18 @@
 # account, or in a temporary copy of a config file, and each step cleans up
 # after itself.  Run it as many times as you like.
 #
-# WHAT IT DOES NOT COVER.  Eight verifiers need elevation and are still not in
-# either runner - apiport, catgate, nonet, osusers, scramlogin, sshonly,
-# tierapi, apiname.  PROJECT_STATUS.md carries the inventory and says which are
-# deliberately out (sshonly and allowgroups test Windows rather than SD;
-# apiname answered a question once).  Do not read this file's existence as
-# "the rest are covered".
+# WHAT IT COVERS NOW, LATER THE SAME DAY: EVERYTHING.  This said "eight
+# verifiers need elevation and are still not in either runner - apiport,
+# catgate, nonet, osusers, scramlogin, sshonly, tierapi, apiname", and every one
+# of those is now in a runner.  There are TWENTY-SIX verify-*.ps1 here; this
+# file runs NINE and hands the other SEVENTEEN to VerifyInstall2.ps1, so NONE is
+# left to be remembered.  Checked by listing both runners' step tables against
+# the directory, not by eye.
+#
+# THAT IS A PROPERTY TO KEEP, NOT A SCORE.  The failure this file was written
+# for - a guard nobody runs has already stopped guarding - returns the moment a
+# verifier is added without a row in one of the two tables.  Add the row in the
+# same commit, the way PROJECT_STATUS.md 4.0 says to.
 
 [CmdletBinding()]
 param(
@@ -255,7 +261,11 @@ $steps = @(
     @{ Name = 'verify-allowgroups.ps1'; P = @{} },
     @{ Name = 'verify-keys.ps1';        P = @{} },
     @{ Name = 'verify-editkeys.ps1';    P = @{} },
-    @{ Name = 'verify-lcnames.ps1';     P = @{} }
+    @{ Name = 'verify-lcnames.ps1';     P = @{} },
+    # 22 Aug 26 - section 7 step 12's guard.  It belongs in THIS runner rather
+    # than VerifyInstall2: it spends no prefix, creates nothing, and needs no
+    # elevation, which is this file's whole entry condition.
+    @{ Name = 'verify-parsertokens.ps1'; P = @{} }
 )
 
 $lines  = @()

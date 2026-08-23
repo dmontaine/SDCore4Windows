@@ -199,6 +199,9 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # on this list reports the tree stale because it exists, and
                   # then refuses to run on the strength of its own newness.
                   'verify-apiname.ps1',
+                  # 22 Aug 26 - verify-parsertokens.ps1, listed in the commit
+                  # that created it under section 7 step 7's rule.
+                  'verify-parsertokens.ps1',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
                   # listed in the commit that created it under the same rule.
                   # It is a RUNNER and not a verifier, so it ships no more than

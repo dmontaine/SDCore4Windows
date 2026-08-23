@@ -70,11 +70,12 @@ if ($LASTEXITCODE -ne 0) {
 
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
-# THE SD ACCOUNT IS THE WINDOWS NAME IN UPPER CASE.  CREATE_USER stamps the
-# account that way and adopt-account.ps1 follows it, so DON is don's account.
-# If step 8's wider half ever removes that upcasing, this line is one of the
-# places that has to change with it.
-$account = $env:USERNAME.ToUpper()
+# THE SD ACCOUNT IS THE WINDOWS NAME IN LOWER CASE, since 22 Aug 2026 - step 8's
+# account-name half landed and CREATEA now downcases the register key (5.12).
+# This line said .ToUpper() until then, and its comment said it would have to
+# change when that happened; it is only because NTFS is case-insensitive that
+# the stale form kept resolving to the same directory rather than failing.
+$account = $env:USERNAME.ToLower()
 $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $account)
 
 $results = New-Object System.Collections.ArrayList
