@@ -77,7 +77,6 @@ sdsem
 win32sem
 win32audit
 win32pipe
-win32console
 sdtermlb
 strings
 sysdump

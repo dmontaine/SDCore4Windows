@@ -35,9 +35,6 @@
 #include "sdtermlb.h"
 #include "telnet.h"
 #include "tio.h"
-/* 23 Aug 26 Windows port - its own header rather than windows.h here, which
-   would collide with this codebase's own BOOL/BYTE.  See win32pipe.h. */
-#include "win32console.h"
 
 #include <netdb.h>
 #include <pwd.h>
@@ -82,9 +79,9 @@ Private bool connection_lost = FALSE;
 
 /* Keyboard */
 
-/* 23 Aug 26 Windows port - the termios pair is gone; win32console.c owns the
-   console mode now, and holds the entry mode and SD's own.  Section 7 step 13
-   leg 1.  ttyin stayed at 0 for its whole life and had no other reader. */
+Private int ttyin = 0;
+Private struct termios old_tty_settings;
+Private struct termios new_tty_settings;
 Private bool tty_modes_saved = FALSE;
 Private int16_t type_ahead = -1;
 
@@ -276,13 +273,41 @@ bool init_console() {
 
     /* Fetch the current terminal settings and attempt to set new ones. */
 
-    /* 23 Aug 26 Windows port - Console API, not termios.  The mode is
-       measured rather than chosen and win32console.c carries the reasoning,
-       including why processed input is OFF even though this code used to set
-       ISIG: SD handles the break key itself, below, and the byte has to reach
-       it.  A piped session answers 0 here and that is normal, not a failure -
-       it is what a failed tcgetattr() meant before. */
-    tty_modes_saved = (win32_console_init() != 0);
+    ttyin = 0;
+    if (!tcgetattr(ttyin, &old_tty_settings)) {
+      tty_modes_saved = TRUE;
+
+      /* Construct desired settings */
+
+      new_tty_settings = old_tty_settings;
+
+      new_tty_settings.c_iflag &= ~ISTRIP; /* 8 bit input */
+      new_tty_settings.c_iflag |= IGNPAR;  /* Disable parity */
+      new_tty_settings.c_iflag &= ~ICRNL;  /* Do not map CR to NL */
+      new_tty_settings.c_iflag &= ~IGNCR;  /* Do not discard CR */
+      new_tty_settings.c_iflag &= ~INLCR;  /* Do not map NL to CR */
+      new_tty_settings.c_iflag &= ~IXON;   /* Kill X-on/off for output... */
+      new_tty_settings.c_iflag &= ~IXOFF;  /* ...and input */
+
+      new_tty_settings.c_oflag &= ~OPOST; /* Do not convert LF to CRLF */
+
+      new_tty_settings.c_cflag &= ~CSIZE; /* Enable... */
+      new_tty_settings.c_cflag |= CS8;    /* ...8 bit operation */
+
+      new_tty_settings.c_lflag &= ~ICANON; /* No erase/kill processing */
+      new_tty_settings.c_lflag |= ISIG;    /* Enable signal processing */
+      new_tty_settings.c_lflag &= ~ECHO;   /* Half duplex */
+      new_tty_settings.c_lflag &= ~ECHONL; /* No echo of linefeed */
+
+      new_tty_settings.c_cc[VMIN] = 1;     /* Single character input */
+      new_tty_settings.c_cc[VQUIT] = '\0'; /* No quit character */
+      new_tty_settings.c_cc[VSUSP] = '\0'; /* No suspend character */
+      new_tty_settings.c_cc[VEOF] = '\0';  /* No eof character */
+
+      /* Attempt to set device to this mode */
+
+      tcsetattr(ttyin, TCSANOW, &new_tty_settings);
+    }
   }
 
   case_inversion = TRUE;
@@ -318,16 +343,13 @@ void set_term(trap_break) bool trap_break; /* Treat break char as a break? */
 {
   trap_break_char = trap_break;
 
-  /* 23 Aug 26 Windows port - trap_break CHANGES NO CONSOLE BIT, and that is
-     the finding rather than a simplification.  This used to move ISIG, but SD
-     compares the incoming byte against tio.break_char in do_input() below and
-     calls break_key() itself, so the flag has always been a software one -
-     the termios call merely made it look otherwise.  Processed input must
-     stay off or the console would eat the byte first.  win32console.c has the
-     measurement.  The re-apply stays, so a mode disturbed by anything else is
-     put back, which is what the old set_new_tty_modes() call did here. */
-  if (connection_type == CN_CONSOLE)
+  if (connection_type == CN_CONSOLE) {
+    if (trap_break_char)
+      new_tty_settings.c_lflag |= ISIG;
+    else
+      new_tty_settings.c_lflag &= ~ISIG;
     set_new_tty_modes();
+  }
 }
 
 /* ======================================================================
@@ -352,15 +374,14 @@ void shut_console() {
 
 void set_old_tty_modes() {
   if (tty_modes_saved)
-    win32_console_restore();
+    tcsetattr(ttyin, TCSANOW, &old_tty_settings);
 }
 
 /* ======================================================================
    set_new_tty_modes()  -  Reset tty to modes required by SD              */
 
 void set_new_tty_modes() {
-  if (tty_modes_saved)
-    win32_console_set();
+  tcsetattr(ttyin, TCSANOW, &new_tty_settings);
 }
 
 /* ====================================================================== */

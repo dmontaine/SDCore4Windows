@@ -5,6 +5,31 @@
  * or fail, and a person reads what it prints.  probe-keys.ps1 is the same
  * shape and says why that distinction matters.
  *
+ * ---------------------------------------------------------------------------
+ * READ THIS BEFORE TRUSTING ANYTHING BELOW: THIS PROBE ASKED THE WRONG
+ * QUESTION, AND ITS "YES" COST A BROKEN INSTALLER.  23 Aug 2026.
+ *
+ * It measures whether SetConsoleMode() STICKS.  It does, and key delivery
+ * survives it - both true.  But the question that decided the leg was whether
+ * SetConsoleMode is SUFFICIENT, and this probe cannot answer that, because
+ * STEP 3 CALLS tcsetattr(raw) AND NEVER UNDOES IT.  Every reading after step 3
+ * is taken with Cygwin ALREADY in raw mode, so the probe never observes what
+ * SetConsoleMode alone does.
+ *
+ * AND IT IS NOT SUFFICIENT.  Cygwin's tty layer sits in front of the console
+ * and implements termios in userspace: canonical line buffering and echo are
+ * CYGWIN's, not the console driver's.  linuxio.c was converted on the strength
+ * of this probe and the installer's password prompt then echoed the password
+ * in cleartext and froze.  Reverted; PROJECT_STATUS.md section 7 step 13.
+ *
+ * WHAT IS STILL WORTH HAVING HERE: the entry mode, 0x2e8 - line off, echo off,
+ * processed input off, VT input on - which is what the native code has to
+ * reproduce IF the toolchain flip ever happens.  Keep the measurement, not the
+ * verdict.  To make this probe decisive it would have to RESTORE the entry
+ * termios before step 6 and see whether SetConsoleMode alone still gives raw
+ * behaviour - and the answer to that is already known to be no.
+ * ---------------------------------------------------------------------------
+ *
  * WHAT IT DECIDES.  Section 7 step 13's first leg is linuxio.c's six termios
  * calls -> Console API.  The leg is only doable BEFORE the toolchain flip if
  * SetConsoleMode() called from an MSYS2 process actually sticks, because under
