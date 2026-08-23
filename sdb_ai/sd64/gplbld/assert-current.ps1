@@ -296,7 +296,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # itself as the newer file.  Note that check-install.ps1 is
                   # NOT on this list and must not be: it ships, and the cross-
                   # check below would put it back under the guard anyway.
-                  'verify-notyet.ps1')
+                  'verify-notyet.ps1',
+                  # 22 Aug 26 - the API-across-a-real-network staging script.
+                  # Listed IN THE COMMIT THAT CREATES IT, which is the rule the
+                  # entry above learned the hard way: verify-notyet.ps1 went in
+                  # without this line and its first elevated run refused, naming
+                  # itself as the newer file.  It drives VBoxManage and copies
+                  # two build products to a folder outside the tree; stage.py
+                  # and sd.iss name neither it nor them.
+                  'stage-apiremote.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
