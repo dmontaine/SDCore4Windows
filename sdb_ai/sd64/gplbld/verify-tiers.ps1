@@ -1,4 +1,4 @@
-# verify-tiers.ps1 - prove the three VOC tiers, and that they survive a VOC
+﻿# verify-tiers.ps1 - prove the three VOC tiers, and that they survive a VOC
 # update.  PROJECT_STATUS.md section 8.
 #
 #   powershell -File verify-tiers.ps1            create, check, clean up
@@ -13,21 +13,29 @@
 # The controls are the other two tiers, and the decisive comparisons are
 # BETWEEN accounts:
 #
-#   STANDARD       has neither the 18 withheld capabilities nor the 10
+#   STANDARD       has neither the 17 withheld capabilities nor the 10
 #                  administration verbs
-#   PROGRAMMER     has the 18 and NOT the 10       <- controls the add list
+#   PROGRAMMER     has the 17 and NOT the 10       <- controls the add list
 #   ADMINISTRATOR  has both                        <- controls the omit list
 #
 # COUNT VOC IS THE PRIMARY INSTRUMENT, because it is exact and arithmetic
-# rather than a spot check.  Installed NEWVOC holds 410 names, of which "%t" is
+# rather than a spot check.  Installed NEWVOC holds 407 names, of which "%t" is
 # a dynamic-file artefact and not a record, and TIER.OMIT.STANDARD and
-# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 407 records
+# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 404 records
 # reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $hold,
 # $savedlists, BP).  That gives:
 #
-#   ADMINISTRATOR  407 + 10 + 4 = 421     (9 until MODIFY.PASSWORD joined them)
-#   PROGRAMMER     407     + 4 = 411
-#   STANDARD       407 - 18 + 4 = 393
+#   ADMINISTRATOR  404 + 10 + 4 = 418     (9 until MODIFY.PASSWORD joined them)
+#   PROGRAMMER     404     + 4 = 408
+#   STANDARD       404 - 17 + 4 = 391
+#
+# 23 Aug 26 - WAS 410/407 AND 421/411/393, AND THE THREE COUNTS MOVED TOGETHER
+# WHEN PROC, SED AND UPDATE.RECORD WENT.  Three NEWVOC records were deleted -
+# listpq, sed, update.record - and "sed" left TIER.OMIT.STANDARD with them, so
+# the omit list is 17.  STANDARD fell by 2 rather than 3 BECAUSE it never had
+# "sed" to lose: it was already withheld.  That asymmetry is the check that the
+# two changes are consistent with each other, and all three numbers below were
+# re-derived from it rather than copied off a failing run.
 #
 # Three different numbers, each derived rather than observed-and-blessed, so a
 # fault in either list moves one of them.  The targeted LIST VOC checks below
@@ -93,18 +101,22 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
 # The tiers, and what each account is expected to come out as.
 $Tiers = @(
-    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 393 }
-    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 411 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 421 }
+    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 391 }
+    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 408 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 418 }
 )
 
-# The 18 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
+# The 17 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
 # authority; this list is checked against it below rather than trusted, because
 # a test that carries its own stale copy of the thing under test is no test.
 # 18 Aug 26 - LOWER CASE, because the command ids moved (PROJECT_STATUS.md
 # 5.12 (b)).  Compare-Object below is case insensitive and would not have
 # noticed, which is exactly why this is spelled the way the record now is.
-$Withheld = @('basic','catalog','catalogue','run','ed','edit','sed','copy','copyp',
+# 23 Aug 26 - "sed" REMOVED, and the check above is what caught it: the shipped
+# TIER.OMIT.STANDARD lost the line when the editor went, and this copy did not,
+# so "shipped TIER.OMIT.STANDARD matches this test" failed with 1 difference.
+# That check is the reason this list is allowed to exist at all - keep it.
+$Withheld = @('basic','catalog','catalogue','run','ed','edit','copy','copyp',
               'delete.catalog','delete.catalogue','modify','compile.dict','cd',
               'generate','phantom','sh','!')
 
@@ -287,7 +299,7 @@ Write-Output '=== 4. Which records, per tier ===================================
 foreach ($t in $Tiers) {
     $text = $vocText[$t.Name]
 
-    # The 18: absent for STANDARD, present for the other two.
+    # The 17: absent for STANDARD, present for the other two.
     $missWithheld = Get-Missing $text $Withheld
     $wantWithheld = $(if ($t.Tier -eq 'STANDARD') { $Withheld.Count } else { 0 })
     Note ($t.Name + ' withheld capabilities MISSING') $wantWithheld ($missWithheld | Measure-Object).Count
@@ -309,7 +321,8 @@ foreach ($t in $Tiers) {
 Write-Output ''
 Write-Output '=== 5. UPDATE.ACCOUNT must not give the standard account its verbs back ==='
 
-# The whole reason ACC$TIER exists.  Before 17 Aug 2026 this restored all 18.
+# The whole reason ACC$TIER exists.  Before 17 Aug 2026 this restored all of
+# them - the count has moved since and the sentence is about the behaviour.
 $std  = $Tiers[0]
 $text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNT', 'COUNT VOC',
                     ("LIST VOC " + (($Withheld | ForEach-Object { "'" + $_ + "'" }) -join ' ')))

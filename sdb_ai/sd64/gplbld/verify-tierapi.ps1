@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Can a client reach all three account tiers over the API, and is it stopped
     from reaching one it should not?
@@ -14,7 +14,7 @@
 
       - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
         over SCRAM and attach to their own account
-      - what each tier can DO once in, as a VOC count: 393 / 411 / 421.  A
+      - what each tier can DO once in, as a VOC count: 391 / 408 / 418.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
       - a wrong password is refused, so the successes mean something
@@ -123,9 +123,9 @@ if (-not (Test-Path -LiteralPath $SdConnect)) {
 }
 
 $Tiers = @(
-    [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 393 }
-    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 411 }
-    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 421 }
+    [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 391 }
+    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 408 }
+    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 418 }
 )
 foreach ($t in $Tiers) {
     if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }
@@ -172,7 +172,9 @@ try {
     # -----------------------------------------------------------------------
     Step 3 'What each tier can DO once in, as a VOC count'
     # Not a login test at all - it is the answer to "a standard user connects,
-    # but can they use a developer tool".  393 has no BASIC, ED or RUN.
+    # but can they use a developer tool".  391 has no BASIC, ED or RUN.
+    # 23 Aug 26 - 393/411/421 until PROC, SED and UPDATE.RECORD went; the
+    # arithmetic behind all three is in verify-tiers.ps1's header.
     foreach ($t in $Tiers) {
         $out = Invoke-SD @(('LOGTO ' + $t.Name.ToUpper()), 'COUNT VOC')
         Note ($t.Tier + ' VOC count') $t.Voc (Get-VocCount $out)

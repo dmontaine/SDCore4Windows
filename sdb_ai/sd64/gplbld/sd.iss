@@ -1589,6 +1589,164 @@ begin
             '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10#13#10;
 end;
 
+{ ---------------------------------------------------------------------------
+  The closing summary box
+  --------------------------------------------------------------------------- }
+
+{ SM_CYSCREEN for the overflow test below.  Inno exposes no screen metrics of
+  its own and this is the only thing here that needs one. }
+function GetSystemMetrics(nIndex: Integer): Integer;
+  external 'GetSystemMetrics@user32.dll stdcall';
+
+{ A CUSTOM FORM RATHER THAN MsgBox, BECAUSE MsgBox HAS NO WIDTH TO SET.
+  Owner, 23 Aug 2026: "this dialog is very tall, can it be made wider and
+  shorter?"  Windows sizes a message box itself and Inno exposes no control
+  over it, so the only way to widen this one is to stop calling MsgBox.
+
+  MEASURED BEFORE IT WAS BUILT, BECAUSE WIDENING ALONE DOES NOT DO IT.  The
+  healthy-install text, Segoe UI 9pt, wrapped with TextRenderer.MeasureText:
+
+      450px text column            675px tall   <- about what MsgBox chose
+      800px text column            555px tall   <- widening buys 120px, 18%
+      800px, blank lines collapsed 345px        <- the other 210px is spacing
+
+  So the FIFTEEN BLANK SEPARATOR LINES cost more height than the narrow column
+  does, and a wider MsgBox - if there were such a thing - would still have been
+  tall.  This draws each paragraph as its own control with a SEVEN pixel gap in
+  place of a fifteen pixel empty line, which is what actually makes it short.
+
+  IT CHANGES NOT ONE WORD OF THE MESSAGE.  The split is on the blank lines the
+  string already contains, so every fragment assembled above still reads the
+  same and still concatenates the same way - the blank lines become layout
+  instead of characters.  DO NOT "SIMPLIFY" THIS INTO A SINGLE MEMO: a memo
+  renders those blank lines and the box goes straight back to being tall.
+
+  THE WIDTH IS MEASURED, NOT CHOSEN.  On the owner's screen the MsgBox came out
+  454x885 and the first attempt at this - ScaleX(820) - came out 1413x493,
+  which he called "way too wide".  His instruction was halfway between the two,
+  so ScaleX(542): measured 940x557 on the same screen.  Height is down 37% and
+  the width is his.  Re-measure before changing it rather than nudging it.
+
+  THE MEMO IS STILL HERE AS A FALLBACK, DELIBERATELY.  A label stack cannot
+  scroll - Inno's scripting exposes no TScrollBox - so on a short screen, or an
+  install unlucky enough to raise every warning above at once, the stack can be
+  taller than the desktop with no way to reach the bottom.  When it does not
+  fit this falls back to a scrolling memo holding the same string, which is no
+  worse than what shipped before. }
+procedure ShowSummaryBox(const Caption, Msg: String);
+var
+  F: TSetupForm;
+  Host: TPanel;
+  Memo: TNewMemo;
+  Btn: TNewButton;
+  Para: TNewStaticText;
+  Rest, Chunk: String;
+  P, Y, TextW, MargX, MargY, GapY, BtnH, MaxContentH: Integer;
+begin
+  MargX := ScaleX(14);
+  MargY := ScaleY(14);
+  GapY  := ScaleY(7);
+  BtnH  := ScaleY(23);
+
+  { The height passed here is a placeholder - the content sets it below, once
+    the paragraphs have been laid out and their real heights are known. }
+  F := CreateCustomForm(ScaleX(542), ScaleY(120), False, False);
+  try
+    F.Caption := Caption;
+    TextW := F.ClientWidth - 2 * MargX;
+
+    { SM_CYSCREEN is 1.  The 160 leaves the caption bar, the button row and a
+      taskbar; the only job here is to notice a stack that will not fit. }
+    MaxContentH := GetSystemMetrics(1) - ScaleY(160);
+
+    Host := TPanel.Create(F);
+    Host.Parent := F;
+    Host.Left := MargX;
+    Host.Top := MargY;
+    Host.Width := TextW;
+    Host.BevelOuter := bvNone;
+    Host.Anchors := [akLeft, akTop, akRight, akBottom];
+
+    Y := 0;
+    Rest := Msg;
+    while Rest <> '' do
+    begin
+      P := Pos(#13#10#13#10, Rest);
+      if P = 0 then
+      begin
+        Chunk := Rest;
+        Rest := '';
+      end
+      else
+      begin
+        Chunk := Copy(Rest, 1, P - 1);
+        Rest := Copy(Rest, P + 4, Length(Rest));
+      end;
+
+      { Every optional fragment above ends with a blank line, so an empty
+        chunk is the normal case rather than a malformed message. }
+      if Trim(Chunk) = '' then
+        Continue;
+
+      Para := TNewStaticText.Create(F);
+      Para.Parent := Host;
+      Para.AutoSize := False;
+      Para.WordWrap := True;
+      Para.Left := 0;
+      Para.Top := Y;
+      Para.Width := TextW;
+      Para.Caption := Chunk;
+      Para.AdjustHeight();
+      Y := Y + Para.Height + GapY;
+    end;
+
+    { No trailing gap under the last paragraph. }
+    if Y > GapY then
+      Y := Y - GapY;
+
+    if Y > MaxContentH then
+    begin
+      Host.Free();
+      Memo := TNewMemo.Create(F);
+      Memo.Parent := F;
+      Memo.Left := MargX;
+      Memo.Top := MargY;
+      Memo.Width := TextW;
+      Memo.Height := MaxContentH;
+      Memo.Anchors := [akLeft, akTop, akRight, akBottom];
+      Memo.ReadOnly := True;
+      Memo.WordWrap := True;
+      Memo.ScrollBars := ssVertical;
+      Memo.Text := Msg;
+      Y := MaxContentH;
+    end
+    else
+      Host.Height := Y;
+
+    F.ClientHeight := MargY + Y + MargY + BtnH + MargY;
+
+    Btn := TNewButton.Create(F);
+    Btn.Parent := F;
+    Btn.Caption := SetupMessage(msgButtonOK);
+    Btn.Width := F.CalculateButtonWidth([Btn.Caption]);
+    Btn.Height := BtnH;
+    Btn.Left := F.ClientWidth - Btn.Width - MargX;
+    Btn.Top := F.ClientHeight - BtnH - MargY;
+    Btn.Anchors := [akRight, akBottom];
+    Btn.ModalResult := mrOk;
+    { Cancel as well as Default, so Esc and the X button close it like OK.
+      There is nothing to decide here - the install has already happened. }
+    Btn.Default := True;
+    Btn.Cancel := True;
+
+    F.ActiveControl := Btn;
+    F.FlipAndCenterIfNeeded(True, WizardForm, False);
+    F.ShowModal();
+  finally
+    F.Free();
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
@@ -1676,8 +1834,23 @@ begin
              square bracket the AdoptAccount comment warns about.  Every other
              line break in this file leaves the #13#10 at the END of a line for
              this reason. }
+           { LOWER CASE, 23 Aug 2026, AND IT IS THE PRODUCT THAT MOVED RATHER
+             THAN A PREFERENCE HERE.  Uppercase stood until the account-name
+             half of 5.12 landed on 22 Aug: CREATEA downcases the register key
+             and adopt-account.ps1 follows, so LIST ACCOUNTS answers "don".
+             Naming it DON here sent the reader looking for an account spelled
+             a way nothing in the product spells it.  The constant expanded
+             below is the WINDOWS name and may be mixed case, which is why this
+             folds rather than just dropping the call.
+
+             AND DO NOT WRITE THAT CONSTANT'S NAME IN A BRACE COMMENT.  Pascal
+             comments do not nest and the closing brace of the constant ENDS
+             THE COMMENT, so the prose after it compiles as code - "Identifier
+             expected", pointing at a line that looks like English.  Same class
+             as the square bracket the AdoptAccount comment warns about, and it
+             cost a compile here on 23 Aug 2026. }
            AccountMsg := 'You also have an SD account of your own, named ' +
-                         Uppercase(ExpandConstant('{username}')) + '.' + #13#10#13#10;
+                         Lowercase(ExpandConstant('{username}')) + '.' + #13#10#13#10;
            { REPLACED "Type sd to use it; there is no password to set, because
              Windows has already authenticated you."  The second half stopped
              being true on 21 Aug 2026 and was the wrong half of the truth even
@@ -1710,7 +1883,8 @@ begin
                          'borrows the installer''s rights. If you skip it, SD asks again ' +
                          'the first time you open the account.' + #13#10#13#10;
          end;
-      2: AccountMsg := 'Your SD account, ' + Uppercase(ExpandConstant('{username}')) +
+      { Lower case for the reason given at code 0 above. }
+      2: AccountMsg := 'Your SD account, ' + Lowercase(ExpandConstant('{username}')) +
                        ', was already there and has been left alone.' + #13#10#13#10;
     else
       { Named rather than buried: without an account the person who just
@@ -1760,7 +1934,12 @@ begin
       Windows account is ADOPT, and that stays undocumented deliberately.
       SD has accounts rather than accounts and users (docs/TCL_VERBS.md), so
       CREATE.ACCOUNT IS the account-creation interface. }
-    MsgBox('SD is installed.' + #13#10#13#10 +
+    { "SD is installed." USED TO BE THE FIRST LINE OF THE BODY and is now the
+      window title instead - dropped 23 Aug 2026, owner, when the box stopped
+      being a MsgBox.  A MsgBox is captioned "Setup" and cannot be told
+      otherwise, so the body had to say it; a TSetupForm has a caption of its
+      own and saying it twice wasted the first line of a box being shortened. }
+    ShowSummaryBox('SD is installed',
            { EMPTY ON EVERY HEALTHY INSTALL, and first when it is not.  This is
              the one line in the box that reports a hole rather than a setting,
              so it is read before the sign-out instruction rather than after
@@ -1856,8 +2035,7 @@ begin
            'service, Windows cannot show you that prompt and you get a frozen ' +
            'screen instead.' + #13#10#13#10 +
            'The new account signs in over ssh, on this machine as well:' + #13#10#13#10 +
-           '    ssh <name>@localhost',
-           mbInformation, MB_OK);
+           '    ssh <name>@localhost');
 
     { Its own box rather than a paragraph in the one above: this one reports
       what happened to a file outside SD's tree, and it can say "nothing was
