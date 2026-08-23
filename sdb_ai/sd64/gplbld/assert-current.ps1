@@ -233,6 +233,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # EVERY RUN - so an unlisted .exe would make the tree report
                   # stale the moment anybody used the instrument.
                   'probe-console.c', 'probe-console.ps1', 'probe-console.exe',
+                  # 23 Aug 26 - setup-devbox.ps1 builds a DEVELOPMENT machine
+                  # from nothing.  It never ships and never reaches an install
+                  # - it runs BEFORE there is a clone, let alone a tree - and
+                  # is listed in the commit that creates it, which is the rule
+                  # verify-scram.c was added without and paid for above.
+                  'setup-devbox.ps1',
                   # 19 Aug 26 - "make check" in gplsrc\sdclilib builds these
                   # two INTO THAT DIRECTORY rather than into localtest\, so
                   # they are the same false stale the localtest\ exclusion was
