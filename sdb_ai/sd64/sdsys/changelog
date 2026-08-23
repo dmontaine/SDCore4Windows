@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+22 Aug 26  ACCOUNT NAMES ARE NOW LOWER CASE ON DISK.
+
+           SD keeps one file per account in sdsys\accounts, and that file
+           used to be named in capitals - DON - while everything else
+           belonging to the same account was lower case, including its own
+           directory in user_accounts.  New accounts are now recorded in
+           lower case, so the two match.
+
+           NOTHING YOU TYPE CHANGES.  Account names have never been case
+           sensitive and still are not: create.account, logto and the rest
+           accept whatever case you type, and existing accounts keep the
+           names they already have.
+
 22 Aug 26  THE INSTALLATION CHECK CLOSES ON A KEYPRESS.
 
            Its window used to stay open at a PowerShell prompt, so the only

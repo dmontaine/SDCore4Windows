@@ -207,7 +207,7 @@ PF_BIN_SUBDIR = os.path.join('usr', 'bin')
 # staging directory rather than here - a build must not depend on, or write to,
 # the build machine's own installed system - so the SDSYS account record comes
 # out holding the staging path and is rewritten to this afterwards.  That is
-# safe because accounts/SDSYS is the ONLY place an absolute path is embedded,
+# safe because accounts/sdsys is the ONLY place an absolute path is embedded,
 # and stage.py proves it rather than trusting it: see check_no_stage_paths().
 PRODUCTION_SDSYS = r'C:\ProgramData\SD\sdsys'
 
@@ -320,7 +320,7 @@ def check_no_stage_paths(stage, sdsys, allowed):
 
     This is the invariant the whole pre-bootstrap idea rests on.  Bootstrapping
     here rather than at C:\ProgramData\SD\sdsys means anything that recorded
-    an absolute path recorded the WRONG one, and only accounts/SDSYS is known
+    an absolute path recorded the WRONG one, and only accounts/sdsys is known
     to do that.  "Known" was a sweep somebody did once, which is exactly the
     kind of claim that quietly stops being true - so it is checked on every
     build instead.  If this fires, do not add the file to `allowed` without
@@ -405,9 +405,9 @@ def retarget_sdsys_account(sdsys, production):
     bootstrap silently compiled 190 programs there and catalogued them into the
     staged gcat, and on a clean machine that path does not exist at all.
     """
-    rec = os.path.join(sdsys, 'accounts', 'SDSYS')
+    rec = os.path.join(sdsys, 'accounts', 'sdsys')
     if not os.path.isfile(rec):
-        die('there is no accounts/SDSYS record in %s' % sdsys)
+        die('there is no accounts/sdsys record in %s' % sdsys)
     with open(rec, 'rb') as f:
         fields = f.read().decode('latin-1').split(FM)
     was = fields[0]
@@ -649,7 +649,7 @@ def main():
         # The account directory has to name the staged tree BEFORE the
         # bootstrap logs in - see retarget_sdsys_account().
         shipped = retarget_sdsys_account(sdsys, os.path.abspath(sdsys))
-        print('  accounts/SDSYS pointed at the staged tree')
+        print('  accounts/sdsys pointed at the staged tree')
         print('    was %s' % shipped)
 
         print('bootstrapping the staged tree')
@@ -678,12 +678,12 @@ def main():
         os.remove(bconf)
 
         was = retarget_sdsys_account(sdsys, PRODUCTION_SDSYS)
-        print('  accounts/SDSYS retargeted')
+        print('  accounts/sdsys retargeted')
         print('    from %s' % was)
         print('    to   %s' % PRODUCTION_SDSYS)
 
         offenders = check_no_stage_paths(stage, sdsys,
-                                         allowed={'accounts/SDSYS', 'errlog'})
+                                         allowed={'accounts/sdsys', 'errlog'})
         if offenders:
             print('  these staged files still name the staging directory:')
             for o in sorted(offenders)[:20]:

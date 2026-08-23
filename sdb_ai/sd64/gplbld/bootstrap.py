@@ -98,7 +98,7 @@ def is_elevated():
 def check_account_record(sysdir):
     """Refuse to bootstrap a tree whose SDSYS account points somewhere else.
 
-    Field 1 of accounts/SDSYS is the account directory, and once a session has
+    Field 1 of accounts/sdsys is the account directory, and once a session has
     logged in it is what gpl.bp and gpl.bp.out resolve to - the gcat comes from
     the config file, the sources do not.  The tracked record ships naming
     /usr/local/sdsys, the Linux development tree, and on 15 Aug 2026 a run
@@ -106,13 +106,13 @@ def check_account_record(sysdir):
     tree: a staged gcat holding 13 Aug objects, with no symptom until somebody
     installed it.  Cheap to check, expensive to find.
     """
-    rec = os.path.join(sysdir, 'accounts', 'SDSYS')
+    rec = os.path.join(sysdir, 'accounts', 'sdsys')
     if not os.path.isfile(rec):
-        die('no accounts/SDSYS record in %s' % sysdir)
+        die('no accounts/sdsys record in %s' % sysdir)
     with open(rec, 'rb') as f:
         acctdir = f.read().decode('latin-1').split(FM)[0]
     if not os.path.isdir(acctdir) or not os.path.samefile(acctdir, sysdir):
-        die('accounts/SDSYS names %s, but this bootstrap is for\n'
+        die('accounts/sdsys names %s, but this bootstrap is for\n'
             '  %s.  Field 1 is the SDSYS account directory, and gpl.bp and\n'
             '  gpl.bp.out resolve through it, so the compile would read and\n'
             '  write there instead.  gplbld/stage.py sets this before calling;\n'

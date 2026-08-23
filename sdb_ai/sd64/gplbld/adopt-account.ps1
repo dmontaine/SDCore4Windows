@@ -121,15 +121,24 @@ if (-not (Test-Path $sd)) {
     exit 1
 }
 
-# An ACCOUNTS record is one file per account, keyed by the UPPERCASED name -
-# checked on this machine rather than assumed: SDSYS, SDACCT2..SDACCT5 sit
-# beside directories named sdacct2..sdacct5 in lower case.
+# An ACCOUNTS record is one file per account, keyed by the name in LOWER case.
 #
-# INVARIANT FOR THE SAME REASON AS THE MARKER BELOW (22 Aug 2026): SD upcases
-# with the uc_chars[] ASCII map, and .ToUpper() on a Turkish locale sends "i" to
-# the dotted U+0130.  This one decides the reinstall case, so a mismatch would
-# make the installer try to adopt an account that is already there.
-$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToUpperInvariant())
+# 22 Aug 26 - IT WAS UPPER UNTIL TODAY, and this comment said so, having been
+# "checked on this machine rather than assumed": SDSYS and SDACCT2..SDACCT5 sat
+# beside directories named sdacct2..sdacct5 in lower case.  That asymmetry is
+# what the owner objected to - accounts\DON next to user_accounts\don for one
+# person - so CREATEA now downcases the key and this follows it.
+#
+# IT DOES NOT MATTER FOR THE LOOKUP, and that was measured: a directory-file
+# record is a file on NTFS, so the read is case-insensitive - a probe found
+# DON, don, Don, SDSYS and sdsys alike.  It matters for what gets WRITTEN, and
+# for this test being able to say which case it expects to see.
+#
+# INVARIANT FOR THE SAME REASON AS THE MARKER BELOW (22 Aug 2026): SD folds
+# with the lc_chars[]/uc_chars[] ASCII maps, and .ToLower() on a Turkish locale
+# sends "I" to a dotless U+0131.  This one decides the reinstall case, so a
+# mismatch would make the installer try to adopt an account already there.
+$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToLowerInvariant())
 
 function Invoke-Sd {
     <#

@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 22 Aug 26 Windows port - the ACCOUNTS register key is written in LOWER case.
+*   It is a file name, and e1095ab made every other SDSYS file name lower; the
+*   register was the last thing shouting.  Readers are unaffected - the lookup
+*   is case-insensitive on NTFS, measured - and so are displayed names, which
+*   upcase at the point of use rather than from the register.
 * 21 Aug 26 Windows port - CREATE.ACCOUNT GROUP ABORTED EVERY TIME, and had
 *   since 10 June.  create.group tested "acc.type = 'USER' and
 *   not(valid_os_name(acc.uname))" on one line; "and" evaluates both operands,
@@ -486,7 +491,33 @@ PW.TRY.AGAIN:
 
    * Validate account name
 
-   acc.name = upcase(acc.name)
+* 22 Aug 26 Windows port - THE REGISTER KEY IS LOWER CASE.  Owner's instruction,
+*   on seeing "sdsys\accounts\DON" sitting beside "user_accounts\don" for the
+*   same person.  This line upcased it, and the ACCOUNTS record id is a FILE
+*   NAME, so the register was the one part of the tree still shouting after
+*   e1095ab made every SDSYS file name lower case on disk.
+*
+*   FOR A USER ACCOUNT THE NAME ARRIVES LOWER ALREADY: acc.uname is downcased at
+*   :371 before create_user, and :432 copies it into acc.name.  So this line was
+*   undoing work done two hundred lines earlier.  downcase() also covers the
+*   GROUP and OTHER arms, where the name is whatever was typed.
+*
+*   NOTHING NEEDED TO CHANGE IN THE READERS, and that was measured rather than
+*   hoped for.  A directory-file record is a file on an NTFS volume, so the
+*   lookup is case-insensitive: a probe read DON, don, Don, SDSYS and sdsys from
+*   the register and found all five.  MODIFYA:112, CPROC:2643 and LOGIN:913 keep
+*   their upcase() on the key they were HANDED and still hit the record.
+*
+*   DISPLAYED NAMES ARE UNAFFECTED, which is the other half of why this is
+*   small.  Messages upcase at the point of use - MODIFYA:112 upcases what the
+*   user typed before sysmsg(10087) ever sees it - so the register's case does
+*   not reach message text, and the verifiers asserting an upper-case name in
+*   output still hold.
+*
+*   upcase() IS THE RIGHT SPELLING FOR ASCII HERE, as downcase() is: both are
+*   SD's fixed byte maps (lc_chars/uc_chars, ctype.c:61) rather than anything
+*   locale-sensitive, and valid_os_name permits ASCII only.
+   acc.name = downcase(acc.name)
 
    if len(acc.name) > 32 or not(alpha(acc.name[1,1])) or index(acc.name, ' ', 1) then
       stop sysmsg(6003) ;* Account name is invalid
