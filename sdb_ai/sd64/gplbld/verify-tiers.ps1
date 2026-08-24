@@ -182,8 +182,25 @@ function Note($check, $expected, $got) {
 # DO NOT USE THIS FOR "sd -start" - see verify-createaccount.ps1's Start-SD and
 # PROJECT_STATUS.md section 6.  Nothing here starts SD; cycle.ps1 leaves the
 # service running.
+#
+# 24 Aug 26 - TERM 200,9999 IS RE-APPLIED AFTER EVERY LOGTO the caller passes,
+# AND FOR THE REASON THIS FUNCTION HAS ALWAYS HAD SUCH A LINE ONCE UP FRONT.
+# LOGIN re-initialises terminal depth and width from env('LINES')/env('COLUMNS')
+# on every account switch (LOGIN:201-209), so a TERM set BEFORE a LOGTO is
+# wiped by that LOGTO.  Section 3 stopped fitting inside the default page depth
+# on 24 Aug when the split grew LIST VOC's output from ~29 to ~65 lines, and
+# the resulting page prompt hung the pipe forever - a page prompt reads from
+# the same stdin the script is feeding, so once OFF has been written no answer
+# ever arrives.  This function now inserts a fresh TERM after every LOGTO the
+# caller supplied, so a section that swaps accounts stays in the wide terminal
+# it asked for.  PROJECT_STATUS.md section 8, fiftieth session.
 function Invoke-SD([string[]]$commands) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    $expanded = New-Object System.Collections.ArrayList
+    foreach ($c in $commands) {
+        $null = $expanded.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    }
+    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
     $out = $body | & $sdExe
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
