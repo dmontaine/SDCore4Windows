@@ -17,6 +17,14 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 24 Aug 26 Windows port - READSEQ now accepts CRLF as a line terminator and
+ *           strips it, leaving a LONE CR alone because that is data.  It read
+ *           CRLF files by splitting on LF only, so every line kept a trailing
+ *           CR - measured, and READCSV inherits it (BCOMP:10230 compiles
+ *           READCSV to OP.READSEQ), so reading a conformant RFC 4180 CSV put
+ *           a stray CR on the last field of every row.  The CR is held across
+ *           the buffer boundary rather than assumed to be in one buffer:
+ *           SEQ_BUFFER_SIZE is 2048.  PROJECT_STATUS.md 7 step 16 (a).
  * 21 Aug 26 Windows port - containment gate on both openseq() path sites, and
  *           a read-only admission forces read_only
  * 15 Aug 26 Windows port - op_openseq() freed the file variable it had just
@@ -1092,6 +1100,10 @@ void op_readseq() {
   char* q;
   int bytes_read;
   bool lf_found;
+  /* 24 Aug 26 Windows port - a CR seen as the last byte of a buffer, whose LF
+     (if any) will be the first byte of the next one.  PROJECT_STATUS 7 step
+     16 (a). */
+  bool cr_held = FALSE;
   bool done = FALSE;
   u_int16_t flags;
   int poll_status;
@@ -1232,6 +1244,13 @@ void op_readseq() {
       bytes = sq_file->bytes - offset;
       if (bytes == 0) /* End of file */
       {
+        /* A CR held back below, with no LF ever following it, is DATA and
+           must not be swallowed by end of file. */
+        if (cr_held) {
+          ts_copy("\x0D", 1);
+          cr_held = FALSE;
+        }
+
         if (tgt_descr->data.str.saddr != NULL)
           break; /* 0915 Found some data */
 
@@ -1241,17 +1260,46 @@ void op_readseq() {
 
       p = sq_file->buff + offset;
 
+      /* A CR held back from the previous buffer.  It was not copied then
+         because whether it was a terminator could not yet be known: the LF
+         may be the first byte of THIS buffer.  SEQ_BUFFER_SIZE is 2048, so a
+         CRLF landing across a buffer boundary is ordinary rather than rare -
+         in a large CSV it is close to certain. */
+      if (cr_held) {
+        cr_held = FALSE;
+        if (*p == '\x0A') /* It was a CRLF: consume the LF, emit neither */
+        {
+          sq_file->posn += 1;
+          sq_file->line++;
+          break;
+        }
+        ts_copy("\x0D", 1); /* A LONE CR IS DATA - keep it */
+      }
+
       q = memchr(p, '\x0A', bytes);
       if (q != NULL) /* Found a LF.  Copy to but not including LF */
       {
         n = q - p;
-        ts_copy(p, n);
+        /* ...nor a CR immediately before it.  ONLY when it is immediately
+           before: a lone CR anywhere else in the line is data, which is what
+           BCOMP:1672 and config.c:172 already assume. */
+        if ((n > 0) && (p[n - 1] == '\x0D'))
+          ts_copy(p, n - 1);
+        else
+          ts_copy(p, n);
         sq_file->posn += n + 1;
         sq_file->line++;
         break;
       } else /* No LF.  Copy all data */
       {
-        ts_copy(p, bytes);
+        /* Hold back a trailing CR instead of copying it - see cr_held above.
+           posn still advances over it, so the byte is consumed exactly once. */
+        if ((bytes > 0) && (p[bytes - 1] == '\x0D')) {
+          ts_copy(p, bytes - 1);
+          cr_held = TRUE;
+        } else {
+          ts_copy(p, bytes);
+        }
         sq_file->posn += bytes;
       }
     } while (!done);

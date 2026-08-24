@@ -17,6 +17,14 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 24 Aug 26 Windows port - a directory-file record written by an external
+ *           editor with CRLF read back with a trailing CR on EVERY field: the
+ *           mapping loop turned the LF into a field mark and left the CR.
+ *           CRLF now folds to ONE field mark; a LONE CR is left alone because
+ *           it is data.  Image mode is untouched, so binary reads cannot be
+ *           affected.  The CR is held across the chunk boundary rather than
+ *           assumed to be in one chunk: MAX_T1_BUFFER_SIZE is 31744.
+ *           PROJECT_STATUS.md 7 step 16 (a).
  * rev 0.9-3 mab map_t1_id - map ~ to %T and . to %D (consistent with what dir_select in op_dio4.c)
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
  * 01 Jul 24 mab define max string size.
@@ -932,13 +940,17 @@ Private void read_record(bool matread) {
   int32_t remaining_bytes;
   int64_t remaining_bytes64;
   int16_t n;
+  /* 24 Aug 26 Windows port - a CR seen as the last byte of a chunk, whose LF
+     (if any) will be the first byte of the next one.  PROJECT_STATUS 7 step
+     16 (a). */
+  bool cr_pending = FALSE;
   int16_t status;
   DESCRIPTOR temp_descr; /* Temporary string used by MATREAD */
   DESCRIPTOR *str_descr; /* Descriptor into which to perform string read */
   STRING_CHUNK *str;
   u_int32_t txn_id;
-  char *p;
-  char *q;
+  /* 24 Aug 26 Windows port - p and q went with the memchr mapping loop the
+     CRLF change replaced; the compactor declares its own src/dst. */
   struct stat statbuf;
 
   op_flags = process.op_flags;
@@ -1167,29 +1179,84 @@ Private void read_record(bool matread) {
           if (remaining_bytes == 0) {
             /* This chunk contains the final byte of the file. This is
                probably a newline which we do not want to convert into
-               a field mark. If so, decrement the byte count.          */
+               a field mark. If so, decrement the byte count.
 
-            if (t1_buffer[bytes - 1] == '\n')
+               24 Aug 26 Windows port - and if that newline was a CRLF, drop
+               BOTH bytes, or the last field keeps a trailing CR.  If the pair
+               straddled the chunk boundary the CR is in cr_pending instead,
+               and clearing it is how the same case is handled there.      */
+
+            if ((bytes > 0) && (t1_buffer[bytes - 1] == '\n')) {
               bytes--;
+              if ((bytes > 0) && (t1_buffer[bytes - 1] == '\r'))
+                bytes--;
+              else if (bytes == 0)
+                cr_pending = FALSE;
+            }
           }
 
-          if (bytes) {
-            /* Walk through the buffer replacing newlines by field marks. */
+          /* 24 Aug 26 Windows port - CRLF folds to ONE field mark; a LONE CR
+             is left alone because it is data.  PROJECT_STATUS 7 step 16 (a).
 
-            p = t1_buffer;
-            n = bytes;
-            do {
-              q = memchr(p, '\n', n);
-              if (q == NULL)
-                break;
-              *q = FIELD_MARK;
-              n -= (q + 1 - p);
-              p = q + 1;
-            } while (n);
+             This compacts rather than substituting in place, because CRLF is
+             two bytes in and one out.  dst never overtakes src, so it is safe
+             in the same buffer. */
+          if (bytes || cr_pending) {
+            char *src = t1_buffer;
+            char *dst = t1_buffer;
+            int32_t left = bytes; /* own counter - the function's n is 16-bit */
+
+            if (cr_pending) {
+              /* A CR ended the PREVIOUS chunk.  Only now can we see whether
+                 an LF followed it.  MAX_T1_BUFFER_SIZE is 31744, so a record
+                 larger than that really does arrive in pieces. */
+              cr_pending = FALSE;
+              if (left && (*src == '\n')) {
+                *dst++ = FIELD_MARK;
+                src++;
+                left--;
+              } else {
+                *dst++ = '\r'; /* lone CR - data */
+              }
+            }
+
+            while (left) {
+              char c = *src++;
+              left--;
+
+              if (c == '\r') {
+                if (left) {
+                  if (*src == '\n') {
+                    src++;
+                    left--;
+                    *dst++ = FIELD_MARK;
+                  } else {
+                    *dst++ = '\r'; /* lone CR - data */
+                  }
+                } else {
+                  /* Last byte of the chunk: defer the decision. */
+                  cr_pending = TRUE;
+                }
+              } else if (c == '\n') {
+                *dst++ = FIELD_MARK;
+              } else {
+                *dst++ = c;
+              }
+            }
+
+            bytes = (int32_t)(dst - t1_buffer);
           }
         }
         if (bytes)
           ts_copy(t1_buffer, bytes);
+      }
+
+      /* A CR that ended the record with no LF after it is DATA, and would
+         otherwise be swallowed by having been deferred. */
+      if (cr_pending) {
+        char cr = '\r';
+        ts_copy(&cr, 1);
+        cr_pending = FALSE;
       }
 
       (void)ts_terminate();
