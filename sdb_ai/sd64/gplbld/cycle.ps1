@@ -81,6 +81,28 @@ $script:CycleLog = Join-Path $logDir ('cycle-' + (Get-Date -Format 'yyyyMMdd-HHm
 try { Start-Transcript -Path $script:CycleLog -Force | Out-Null } catch { }
 Write-Host "transcript: $script:CycleLog"
 
+# 24 Aug 26 - STOP THE TRANSCRIPT ON EVERY EXIT PATH.  PowerShell 5.1 keeps a
+# transcript ACTIVE until it is stopped or the whole session ends, and it
+# supports SEVERAL AT ONCE - every active one receives every line.  So running
+# this script a second time in the SAME elevated window left the first run's
+# log open, and it went on recording the second run.
+#
+# MEASURED 24 Aug 2026, and it had already corrupted the record: after the
+# 15:13:25 cycle, cycle-20260824-133558.log - the log for the 13:36:51 install
+# that PROJECT_STATUS cites - held TWO "CYCLE COMPLETE" lines and two step-1
+# banners, and verify-tiers-20260824-134341.log had an entire cycle appended
+# after its own output.  Neither carried a "transcript end" marker, because
+# neither was ever stopped.
+#
+# WHY IT SURVIVED THIS LONG: a run launched as its own process
+# (powershell -File ...) closes the file when the process exits, so the log is
+# clean and carries its end marker.  The bleed only appears when the documented
+# usage is followed literally - typing the script path at an already-open
+# elevated prompt - which is the usage this script is written for.
+function StopCycleTranscript {
+    try { Stop-Transcript | Out-Null } catch { }
+}
+
 # gplbld\ -> sd64\.  Every path below is absolute and derived from this script's
 # own location, which is the whole point: the hand-run sequence broke on a
 # relative path resolved against C:\WINDOWS\system32.
@@ -147,6 +169,7 @@ function Fail($msg) {
         Write-Host "  Re-run this script when the fault is fixed, or start it now with:  sc.exe start $SvcName" -ForegroundColor Yellow
     }
 
+    StopCycleTranscript
     exit 1
 }
 
@@ -393,6 +416,7 @@ Write-Host ("   {0}, {1:N0} bytes, {2}" -f $setup.Name, $setup.Length, $setup.La
 if ($SkipInstall) {
     Write-Host ""
     Write-Host "-SkipInstall: stopping here.  The installed tree is untouched and STALE." -ForegroundColor Yellow
+    StopCycleTranscript
     exit 0
 }
 
@@ -571,8 +595,10 @@ Write-Host ""
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "CYCLE COMPLETE - the install matches source.  Measure now, and stop measuring at the next source change." -ForegroundColor Green
+    StopCycleTranscript
 } else {
     Write-Host ""
     Write-Host "INSTALLED, BUT assert-current REFUSES - read what it listed above before believing any measurement." -ForegroundColor Yellow
+    StopCycleTranscript
     exit 1
 }
