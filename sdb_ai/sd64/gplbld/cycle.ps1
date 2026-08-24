@@ -39,15 +39,17 @@
     uninstalled and nothing is deleted - so this is the safe way to check that
     a change compiles without spending an install.
 
-.PARAMETER Silent
-    Install with /VERYSILENT.  Off by default: the wizard pages are part of
-    what a cycle is meant to show (PROJECT_STATUS.md 7 step 3).
+.NOTES
+    THERE IS NO -Silent.  It was removed 23 Aug 2026 on the owner's ruling:
+    "unattended deployment is not supported in sd - install can only happen at
+    the keyboard or in a remoted session."  sd.iss refuses a silent install
+    outright, so there is nothing here to pass one.
 
-    IT ALSO COLLECTS NO PASSWORD, and that is not a detail.  The password step
-    runs only on a non-silent install (sd.iss DeinitializeSetup), so a -Silent
-    cycle leaves EVERY account without a credential: no ssh, no API, and the
-    elevated half of the verify suite has nothing to log in with.  Step 9 says
-    so at the end of the run.  Use the default unless you have a reason.
+    It had been added 17 Aug 2026 with this script and was never part of
+    anybody's pattern.  Its single use, by a session that wanted a cycle
+    nobody had to watch, produced an install with no password on any account
+    and cost two sessions to diagnose.  A cycle needs a person; that is now
+    true of the tooling and not only of the convention.
 
 .EXAMPLE
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\cycle.ps1
@@ -57,8 +59,7 @@
 param(
     [string] $Stage = 'C:\Users\dmont\stagetest',
     [string] $Out   = 'C:\Users\dmont\sdout',
-    [switch] $SkipInstall,
-    [switch] $Silent
+    [switch] $SkipInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -438,19 +439,9 @@ foreach ($t in @($PfTree, $PdTree)) {
 # ---------------------------------------------------------------------------
 Step 7 "Installing"
 
+# 23 Aug 26 - NO SILENT SWITCH, and sd.iss would refuse one anyway.  The wizard
+# runs, a person answers it, and the install ends by collecting a password.
 $installArgs = @()
-if ($Silent) {
-    # 23 Aug 26 - /NOPASSWORD=yes IS REQUIRED NOW, AND WITHOUT IT THE INSTALLER
-    # REFUSES.  sd.iss's InitializeSetup turns a bare /VERYSILENT away, because
-    # DeinitializeSetup runs the password step only when NOT silent - so a
-    # silent install finishes with an empty credential register and nothing
-    # says so.  This is the acknowledgement, not a way round it: a -Silent
-    # cycle DOES leave every account without a password, step 9 below reports
-    # it, and the elevated half of the verify suite needs one to exist.
-    $installArgs += '/VERYSILENT'
-    $installArgs += '/NOPASSWORD=yes'
-    Write-Host "   -Silent: no password will be collected (passing /NOPASSWORD=yes)" -ForegroundColor Yellow
-}
 
 # 17 Aug 26 - Start-Process -Wait, NOT "& $setup".  THE CALL OPERATOR DOES NOT
 # WAIT FOR A GUI-SUBSYSTEM PROCESS, and Setup.exe is one - PE subsystem 2,

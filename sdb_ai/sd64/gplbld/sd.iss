@@ -651,43 +651,42 @@ begin
      here, exactly as the data tree above is. *)
   SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
 
-  (* A SILENT INSTALL MUST SAY OUT LOUD THAT IT IS ACCEPTING NO PASSWORD.
-     23 Aug 2026, owner's decision.
+  (* SD DOES NOT SUPPORT UNATTENDED INSTALLATION.  Owner's ruling, 23 Aug 2026,
+     in his own words: "unattended deployment is not supported in sd - install
+     can only happen at the keyboard or in a remoted session."  There is
+     deliberately NO escape switch.
 
-     WHY THIS EXISTS.  DeinitializeSetup runs the password step only when NOT
-     silent, so a silent install finishes with an EMPTY credential register -
-     no account can be reached over ssh or through the API, and an elevated
-     "sd <command>" at a console stops at the credential prompt.  The tree
+     WHY IT IS A RULING AND NOT A PRECAUTION.  The install ENDS by asking for a
+     password - DeinitializeSetup runs the step only when not silent - so a
+     silent install finishes with an EMPTY credential register: no account
+     reachable over ssh or through the API, and an elevated "sd <command>" at a
+     console stops at the credential prompt with nobody to answer it.  The tree
      otherwise looks complete and nothing said a word.  That cost two sessions
-     in Aug 2026: it was handed over as an unexplained hang in SD's start-up
-     and was neither in start-up nor in SD.
+     in Aug 2026, handed over as an unexplained hang in SD's start-up, and it
+     was neither in start-up nor in SD.
 
-     REFUSED RATHER THAN WARNED, because a warning in a silent install is read
-     by nobody - that is what silent means.  The flag makes the choice
-     deliberate and leaves it in the command line, where the next person can
-     see it.
+     A WARNING WOULD NOT HAVE DONE.  Nobody reads output from a silent install;
+     that is what silent means.  An earlier version of this gate offered
+     /NOPASSWORD=yes to proceed anyway, and the owner removed it: a switch that
+     buys a credential-less system is a switch somebody will paste from a forum.
 
-     NOT A BAN ON SILENT INSTALLS.  gplbld\cycle.ps1 passes the flag and is
-     unaffected; so is any deployment that means it.  What is refused is
-     acquiring a credential-less system by accident.
-
-     {param:...} DEFAULTS TO 'no' SO A BARE /SILENT LANDS HERE.  Compared with
-     CompareText so /NOPASSWORD=YES and =yes both count. *)
-  if WizardSilent and
-     (CompareText(ExpandConstant('{param:NOPASSWORD|no}'), 'yes') <> 0) then
+     REMOTE DESKTOP IS NOT UNATTENDED and is unaffected - the wizard runs, a
+     person answers it.  5.6.2 puts a remoted session on the console's side of
+     the line, and that is where installation lives too. *)
+  if WizardSilent then
   begin
-    Log('SD: refusing a silent install - no /NOPASSWORD=yes given, and a ' +
-        'silent install collects no password.');
+    Log('SD: refusing a silent install - SD does not support unattended ' +
+        'installation.  The install ends by asking for a password and there ' +
+        'is nobody to ask.');
     SuppressibleMsgBox(
-      'This is a silent install, and a silent install cannot ask for a password.' + #13#10#13#10 +
-      'It would finish with NO password set for any account, which means:' + #13#10#13#10 +
-      '    - ssh cannot be used' + #13#10 +
-      '    - the SD API cannot be used' + #13#10 +
-      '    - SD could be used ONLY at this computer, from a session run as' + #13#10 +
-      '      administrator' + #13#10#13#10 +
-      'If that is what you want, install again adding:   /NOPASSWORD=yes' + #13#10#13#10 +
-      'Otherwise run the installer normally and it will ask for a password ' +
-      'when it finishes.',
+      'SD cannot be installed silently.' + #13#10#13#10 +
+      'Installing ends by asking for a password, and a silent install has ' +
+      'nobody to ask. It would finish with NO password set for any account, ' +
+      'which means ssh and the SD API could not be used at all, and SD could ' +
+      'be used only at this computer from a session run as administrator.' + #13#10#13#10 +
+      'Run the installer normally instead. You can do that at this computer''s ' +
+      'keyboard, or through Remote Desktop or similar remote-control software - ' +
+      'both work, because a person is there to answer.',
       mbError, MB_OK, IDOK);
     Result := False;
     Exit;
@@ -1316,20 +1315,13 @@ end;
   machine where nothing was installed. }
 procedure DeinitializeSetup;
 begin
-  if InstallReachedPostInstall then
-  begin
-    if WizardSilent then
-      (* 23 Aug 2026 - SAY IT IN THE LOG, since there is no window to say it in.
-         Reaching here silently means /NOPASSWORD=yes was given and the person
-         accepted this at InitializeSetup; the line is for whoever reads the log
-         afterwards, which is usually somebody wondering why ssh is refused. *)
-      Log('SD: SILENT INSTALL - the password step did not run.  No account has ' +
-          'a credential: ssh and the API will refuse every login, and SD can be ' +
-          'used only at this computer from a session run as administrator.  ' +
-          'Set one with "sd" at a console, or run SET.PASSWORD.')
-    else
-      RunFinishingStep;
-  end;
+  (* 23 Aug 2026 - "not WizardSilent" SHOULD NOW BE UNREACHABLE: InitializeSetup
+     refuses a silent install outright, because SD does not support unattended
+     installation (owner's ruling, same day).  It is kept as a second line of
+     defence rather than tidied away, since what it guards is a password prompt
+     opening with nobody to answer it - the exact fault that ruling came out of. *)
+  if InstallReachedPostInstall and not WizardSilent then
+    RunFinishingStep;
 end;
 
 { LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did

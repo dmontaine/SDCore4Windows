@@ -5,22 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
-23 Aug 26  A SILENT INSTALL NOW HAS TO SAY THAT IT IS SETTING NO PASSWORD.
+23 Aug 26  SD CANNOT BE INSTALLED SILENTLY ANY MORE.
 
-           Installing with /SILENT or /VERYSILENT cannot ask you for a
-           password, so it used to finish with no password set for any
+           /SILENT and /VERYSILENT are now refused, with a message saying why.
+           There is no switch to override it.
+
+           Installing ends by asking you for a password, and a silent install
+           has nobody to ask, so it used to finish with no password set for any
            account - and said nothing about it.  The result looked like a
            complete installation but could not be reached over ssh or through
-           the SD API at all.
+           the SD API at all, and could be used only at that computer from a
+           session run as administrator.
 
-           A silent install is now refused unless you also pass:
-
-               /NOPASSWORD=yes
-
-           which says you accept that.  When it does run that way, it writes a
-           line into the installation log saying no password was set and what
-           that costs.  Nothing changes for a normal install: it still asks for
-           a password when it finishes.
+           Unattended deployment is not supported.  Install at the computer's
+           keyboard, or through Remote Desktop or similar remote-control
+           software - both work, because a person is there to answer.  Nothing
+           changes for a normal install.
 
 23 Aug 26  YOU ARE NOW TOLD WHAT SETTING NO PASSWORD ACTUALLY COSTS.
 
