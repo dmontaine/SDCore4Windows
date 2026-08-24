@@ -4,6 +4,12 @@
  * 23 Aug 26 Windows port - written.  PROJECT_STATUS.md section 7 step 14,
  *           shape (b): the API session authenticates with SCRAM in APISRVR and
  *           THEN becomes the user, rather than being spawned as them.
+ * 24 Aug 26 Windows port - the identity did not survive the session's first
+ *           fork().  ImpersonateLoggedOnUser alone is per-THREAD and Cygwin's
+ *           fork() silently reverts the thread, so the LOGTO group check
+ *           (APISRVR:566 -> op_sh.c:379) dropped it back to LocalSystem and
+ *           every later write was SYSTEM's.  The runtime is now told to carry
+ *           the token itself.  See "ADOPTING IT INTO THE RUNTIME" below.
  * END-HISTORY
  *
  * WHY THIS EXISTS.  sdwind.c:491 fork()s the session, so it inherits the
@@ -28,13 +34,48 @@
  * gplbld/probe-impersonate.c measured it - open() of a file the impersonated
  * user may not read fails with EACCES, and succeeds again after RevertToSelf.
  *
- * TWO LIMITS, BOTH DELIBERATE AND NEITHER FIXABLE HERE:
+ * ADOPTING IT INTO THE RUNTIME, AND WHY IMPERSONATING IS NOT ENOUGH ON ITS OWN.
+ * ImpersonateLoggedOnUser sets a token on the CALLING THREAD.  Cygwin's fork()
+ * deimpersonates and reimpersonates around the clone, and it restores only what
+ * the RUNTIME knows about - so a token set behind its back is silently dropped
+ * and the thread comes back as the process's own identity.  Nothing reports it:
+ * no error, no signal, and win32s4u.c cannot see it happen.
  *
- *   IT IS PER-THREAD AND DOES NOT REACH BACKWARDS.  Handles already open keep
- *   the access they were opened with.  The shared segment and $cred are opened
- *   before this runs and stay LocalSystem's.  That is acceptable because the
- *   ACCOUNT's files are opened at LOGTO, which is after; it is not acceptable
- *   to assume, so anything opened earlier should be treated as privileged.
+ * That is not a corner case here.  The account switch at LOGTO runs
+ * is_grp_member (APISRVR:566), which is BASIC calling !ps_script, which reaches
+ * op_sh.c:379 and forks there.  So the identity was gone before the session
+ * opened a single account file, and every record it wrote came out owned by
+ * NT AUTHORITY\SYSTEM.
+ *
+ * THE FIX IS A PAIR OF CALLS AND IT HAS TO BE BOTH.  cygwin_internal(
+ * CW_SET_EXTERNAL_TOKEN) only REGISTERS a token for the runtime to adopt at its
+ * next user-context change; seteuid() is what performs that change.  Measured
+ * by gplbld/probe-impfork.c's Q4 leg, in the API session's own shape (a fork()ed
+ * and exec()d Cygwin child) and in a direct control, both instruments agreeing:
+ *
+ *   plain fork()                     thread token NONE,   file owned by SYSTEM
+ *   CW_SET_EXTERNAL_TOKEN, fork()    thread token NONE,   file owned by SYSTEM
+ *   CW_SET_EXTERNAL_TOKEN + seteuid  thread token TARGET, file owned by TARGET
+ *
+ * The bare call is the form this project wrote down for a day and it does not
+ * work.  An implementation of it would have compiled, returned 0 from every
+ * call, and silently not worked.
+ *
+ * WHAT ELSE MOVES WHEN seteuid() DOES, surveyed over the 13 POSIX uid sites in
+ * gplsrc: seteuid changes the EFFECTIVE uid only, so the REAL uid stays the
+ * service's and getpwuid(getuid()) at linuxlb.c:95 and :213, and sdfix.c:1548,
+ * are untouched.  The one visible change is op_sys.c:228, SYSTEM(28), which
+ * reports geteuid() to BASIC - and it has no caller anywhere in gpl.bp.
+ * setegid() is deliberately NOT called: ingroup.c:76 reads getegid() and does
+ * have callers, and the measurement did not need it.
+ *
+ * ONE LIMIT REMAINS, DELIBERATE AND NOT FIXABLE HERE:
+ *
+ *   IT DOES NOT REACH BACKWARDS.  Handles already open keep the access they
+ *   were opened with.  The shared segment and $cred are opened before this runs
+ *   and stay LocalSystem's.  That is acceptable because the ACCOUNT's files are
+ *   opened at LOGTO, which is after; it is not acceptable to assume, so
+ *   anything opened earlier should be treated as privileged.
  *
  *   THERE IS A WINDOW.  Between execl and the call to this, the session is
  *   LocalSystem.  APISRVR's dispatcher admits only requests 24, 25, 47 and 48
@@ -60,6 +101,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* THE MSYS2 RUNTIME'S OWN HEADERS, and they go AFTER windows.h because
+   sys/cygwin.h needs the Win32 HANDLE type.  This is not the sd.h collision
+   the note above is about - these are system headers, and gplbld/probe-impfork.c
+   mixes exactly this set with windows.h and builds clean under -Wall. */
+#include <unistd.h>
+#include <pwd.h>
+#include <sys/cygwin.h>
+
 #include "win32s4u.h"
 
 /* Origin and source names are cosmetic - they appear in the logon session's
@@ -71,6 +120,59 @@
 /* The token we are impersonating with, kept so it can be closed on revert.
    One session is one process here, so a single static is the right scope. */
 static HANDLE s4u_token = NULL;
+
+/* The effective uid before the runtime adopted the token, so a revert can put
+   it back.  (uid_t)-1 means "nothing to restore" and is NOT a valid uid.   */
+static uid_t s4u_saved_euid = (uid_t)-1;
+
+/* ======================================================================
+   adopt_in_runtime()  -  make the MSYS2 runtime carry the token across fork()
+
+   Returns TRUE only when the runtime has actually taken the identity on.  The
+   caller FAILS CLOSED on FALSE: an identity that survives to the LOGTO group
+   check and no further is the defect this file exists to remove, not a partial
+   success.                                                                  */
+
+static int adopt_in_runtime(HANDLE token, const char* username) {
+  struct passwd* pw;
+  uid_t before;
+
+  /* getpwnam resolves the Windows account through the runtime's own NSS, which
+     is the same view seteuid() will use.  Looking it up any other way would be
+     asking a different question from the one that has to agree. */
+  pw = getpwnam(username);
+  if (pw == NULL)
+    return 0;
+
+  /* REGISTER.  This only records the token; on its own it changes nothing and
+     the identity still dies at the first fork().  Measured, not assumed. */
+  if (cygwin_internal(CW_SET_EXTERNAL_TOKEN, token, CW_TOKEN_IMPERSONATION) != 0)
+    return 0;
+
+  before = geteuid();
+
+  /* REFUSE THE NULL CASE.  seteuid() to the uid already held returns 0 from a
+     fast path WITHOUT touching the user context, so the runtime would never
+     adopt what was just registered - and this function would report success
+     for a session whose identity drops at the first fork.  Unreachable in
+     practice (the session is the service's uid and the target is a real user),
+     which is exactly why it must not be left to chance. */
+  if (before == pw->pw_uid)
+    return 0;
+
+  if (seteuid(pw->pw_uid) != 0)
+    return 0;
+
+  /* READBACK, NOT A RETURN CODE.  seteuid reporting success and the euid not
+     having moved is the shape of failure that matters here. */
+  if (geteuid() != pw->pw_uid) {
+    seteuid(before);
+    return 0;
+  }
+
+  s4u_saved_euid = before;
+  return 1;
+}
 
 /* ======================================================================
    AssumeUserIdentity()  -  impersonate a local user, no password needed
@@ -191,6 +293,16 @@ int AssumeUserIdentity(const char* username) {
   if (!ImpersonateLoggedOnUser(token))
     goto exit_assume;
 
+  /* THE THREAD IS THE USER NOW, AND THAT IS NOT YET ENOUGH.  Cygwin's fork()
+     restores only the identity the RUNTIME knows about, so without this the
+     token is dropped silently at the LOGTO group check.  Fail closed: revert
+     the thread rather than hand back a session that is the user only until it
+     forks. */
+  if (!adopt_in_runtime(token, username)) {
+    RevertToSelf();
+    goto exit_assume;
+  }
+
   /* Hold the token for RevertUserIdentity(). */
   if (s4u_token != NULL)
     CloseHandle(s4u_token);
@@ -214,7 +326,15 @@ exit_assume:
    RevertUserIdentity()  -  go back to the process's own token               */
 
 void RevertUserIdentity(void) {
+  /* RevertToSelf FIRST, so the seteuid below is attempted from the process's
+     own privileged token rather than from the user's.  The runtime half has to
+     be undone too: reverting only the thread would leave the euid moved, and
+     the next fork() would carry the user back in. */
   RevertToSelf();
+  if (s4u_saved_euid != (uid_t)-1) {
+    seteuid(s4u_saved_euid);
+    s4u_saved_euid = (uid_t)-1;
+  }
   if (s4u_token != NULL) {
     CloseHandle(s4u_token);
     s4u_token = NULL;

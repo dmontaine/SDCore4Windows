@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  AN API SESSION NOW KEEPS YOUR IDENTITY WHEN IT OPENS AND WRITES
+           FILES.  This closes the gap described in the 23 Aug entry below.
+
+           WHAT WAS WRONG.  Taking on your Windows identity applied only to the
+           one thread that did it.  While switching to your account the session
+           starts a short-lived helper process, and starting it quietly put the
+           session back to the service's own identity - with no error and
+           nothing in the log - before it had opened a single file of yours.
+           So the login half worked and the part you would actually notice did
+           not: records came out owned by the system account rather than by you.
+
+           WHAT CHANGES FOR YOU.  Records an API session creates are now owned
+           by the account that logged in, and the session reaches files with
+           your access rather than the service's.  If your account may not read
+           something, the API session may not read it either.
+
+           IF YOUR IDENTITY CANNOT BE TAKEN ON, THE LOGIN IS REFUSED rather
+           than continued with the service's identity.  A session that believes
+           it is you while holding the service's rights is worse than one that
+           never started.
+
+           The error-log alarm in the entry directly below stays as it is.  A
+           healthy session writes nothing to it, so silence there is now the
+           normal case rather than a sign the alarm is untested.
+
+
 24 Aug 26  THE ERROR LOG NOW SAYS IF AN API SESSION LOSES YOUR IDENTITY.
 
            The entry below for 23 Aug explains that an API session takes on

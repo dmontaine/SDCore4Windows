@@ -18,12 +18,19 @@
  *           the API session authenticates with SCRAM and THEN becomes the
  *           user, because it cannot be spawned as them - sdwind does not know
  *           who the caller is at fork time.
+ * 24 Aug 26 Windows port - AssumeUserIdentity() now also makes the MSYS2
+ *           runtime adopt the token, so it survives fork().  No signature
+ *           change and no new entry point: the session still becomes the user
+ *           at one place, and callers need not know it takes two calls.
  * END-HISTORY
  *
  * AssumeUserIdentity() returns TRUE only when the calling thread is, on
- * return, running as the named user.  It FAILS CLOSED: anything else returns
- * FALSE with the thread untouched, and the caller must refuse the login rather
- * than carry on holding the service's token.
+ * return, running as the named user AND THE RUNTIME WILL CARRY THAT IDENTITY
+ * ACROSS fork().  The second half is not a bonus: without it the token is
+ * dropped silently at the session's first fork, which is the LOGTO group
+ * check.  It FAILS CLOSED: anything else returns FALSE with the thread
+ * reverted, and the caller must refuse the login rather than carry on holding
+ * the service's token.
  *
  * win32s4u.c's header carries why S4U rather than LogonUser, the one privilege
  * that makes it work, and the two limits - it is per-thread and does not reach
