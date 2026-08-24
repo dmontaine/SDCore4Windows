@@ -13,29 +13,37 @@
 # The controls are the other two tiers, and the decisive comparisons are
 # BETWEEN accounts:
 #
-#   STANDARD       has neither the 17 withheld capabilities nor the 10
+#   STANDARD       has neither the 42 withheld capabilities nor the 21
 #                  administration verbs
-#   PROGRAMMER     has the 17 and NOT the 10       <- controls the add list
+#   PROGRAMMER     has the 42 and NOT the 21       <- controls the add list
 #   ADMINISTRATOR  has both                        <- controls the omit list
 #
 # COUNT VOC IS THE PRIMARY INSTRUMENT, because it is exact and arithmetic
-# rather than a spot check.  Installed NEWVOC holds 407 names, of which "%t" is
+# rather than a spot check.  Installed NEWVOC holds 395 names, of which "%t" is
 # a dynamic-file artefact and not a record, and TIER.OMIT.STANDARD and
-# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 404 records
+# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 392 records
 # reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $hold,
 # $savedlists, BP).  That gives:
 #
-#   ADMINISTRATOR  404 + 10 + 4 = 418     (9 until MODIFY.PASSWORD joined them)
-#   PROGRAMMER     404     + 4 = 408
-#   STANDARD       404 - 17 + 4 = 391
+#   ADMINISTRATOR  392 + 21 + 4 = 417
+#   PROGRAMMER     392      + 4 = 396
+#   STANDARD       392 - 42 + 4 = 354
+#
+# 24 Aug 26 - WAS 391/408/418, AND THE COUNTS MOVED WHEN THE OWNER'S RULING ON
+# THE 30/45/65 SPLIT LANDED (PROJECT_STATUS.md 8, "THE SPLIT, settled 24 Aug
+# 2026").  Twelve verb records were deleted from NEWVOC (config, listu,
+# list.readu, list.locks, clear.locks, lock, logout, set.date, sh, !,
+# clean.account, umask) so all A verbs now live in voc_template only; UMASK
+# was deleted from voc_template too.  TIER.OMIT.STANDARD grew from 17 to 42
+# and TIER.ADD.ADMINISTRATOR from 10 to 21.  All three counts were re-derived
+# from the arithmetic above rather than copied off a passing run.
 #
 # 23 Aug 26 - WAS 410/407 AND 421/411/393, AND THE THREE COUNTS MOVED TOGETHER
 # WHEN PROC, SED AND UPDATE.RECORD WENT.  Three NEWVOC records were deleted -
-# listpq, sed, update.record - and "sed" left TIER.OMIT.STANDARD with them, so
-# the omit list is 17.  STANDARD fell by 2 rather than 3 BECAUSE it never had
-# "sed" to lose: it was already withheld.  That asymmetry is the check that the
-# two changes are consistent with each other, and all three numbers below were
-# re-derived from it rather than copied off a failing run.
+# listpq, sed, update.record - and "sed" left TIER.OMIT.STANDARD with them.
+# STANDARD fell by 2 rather than 3 BECAUSE it never had "sed" to lose: it was
+# already withheld.  That asymmetry is the check that the two changes are
+# consistent with each other.
 #
 # Three different numbers, each derived rather than observed-and-blessed, so a
 # fault in either list moves one of them.  The targeted LIST VOC checks below
@@ -101,12 +109,12 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
 # The tiers, and what each account is expected to come out as.
 $Tiers = @(
-    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 391 }
-    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 408 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 418 }
+    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 354 }
+    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 417 }
 )
 
-# The 17 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
+# The 42 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
 # authority; this list is checked against it below rather than trusted, because
 # a test that carries its own stale copy of the thing under test is no test.
 # 18 Aug 26 - LOWER CASE, because the command ids moved (PROJECT_STATUS.md
@@ -116,17 +124,43 @@ $Tiers = @(
 # TIER.OMIT.STANDARD lost the line when the editor went, and this copy did not,
 # so "shipped TIER.OMIT.STANDARD matches this test" failed with 1 difference.
 # That check is the reason this list is allowed to exist at all - keep it.
-$Withheld = @('basic','catalog','catalogue','run','ed','edit','copy','copyp',
-              'delete.catalog','delete.catalogue','modify','compile.dict','cd',
-              'generate','phantom','sh','!')
+# 24 Aug 26 - GREW FROM 17 TO 42 with the owner's split ruling.  Four groups,
+# same order as the shipped record: P1 compilers/editors/catalogue (15), P2
+# file & index definition (14), P3 bulk record edit (9), P4 process
+# introspection (4).  sh and ! are no longer here - they moved to
+# TIER.ADD.ADMINISTRATOR because the ruling puts them ADMIN-only rather than
+# PROGRAMMER-and-above.
+$Withheld = @(
+    # P1 - compilers, editors, code catalogue
+    'basic','catalog','catalogue','delete.catalog','delete.catalogue',
+    'compile.dict','cd','generate','phantom','run','map','debug','ed','edit','modify',
+    # P2 - file and index definition
+    'create.file','delete.file','clear.file','configure.file',
+    'analyse.file','analyze.file','fstat','hsm','set.trigger',
+    'create.index','delete.index','build.index','make.index','list.index',
+    # P3 - bulk record edit
+    'copy','copyp','delete','rename','reformat','sreformat','sort.item','delete.common','cname',
+    # P4 - process introspection
+    'pstat','pdebug','pdump','dump'
+)
 
-# The 10 only an administrator gets.  MODIFY.PASSWORD joined on 17 Aug 2026 -
+# The 21 only an administrator gets.  MODIFY.PASSWORD joined on 17 Aug 2026 -
 # owner's ruling, and an administrator can add it to a user's VOC if they want
 # users setting their own.  The program already tells the two cases apart:
 # your own password needs the current one, anyone else's needs admin rights.
-$AdminVerbs = @('create.account','delete.account','modify.account','update.account',
-                'grant','revoke','list.grants','unlock','encrypt.field',
-                'modify.password')
+# 24 Aug 26 - GREW FROM 10 TO 21 with the owner's split ruling.  The A2
+# system-state and A3 shell-escape verbs moved out of NEWVOC entirely because
+# a PROGRAMMER should not have sh, !, config, listu, list.readu, list.locks,
+# clear.locks, lock, logout, set.date, or clean.account either.
+$AdminVerbs = @(
+    # A1 - account and grant administration
+    'create.account','delete.account','modify.account','update.account','clean.account',
+    'grant','revoke','list.grants','unlock','modify.password','encrypt.field',
+    # A2 - system-wide state
+    'config','listu','list.readu','list.locks','clear.locks','lock','logout','set.date',
+    # A3 - shell escapes
+    'sh','!'
+)
 
 # Neither list record may ever land in a VOC.
 $ListRecs = @('TIER.OMIT.STANDARD','TIER.ADD.ADMINISTRATOR')
@@ -299,7 +333,7 @@ Write-Output '=== 4. Which records, per tier ===================================
 foreach ($t in $Tiers) {
     $text = $vocText[$t.Name]
 
-    # The 17: absent for STANDARD, present for the other two.
+    # The 42 withheld: absent for STANDARD, present for the other two.
     $missWithheld = Get-Missing $text $Withheld
     $wantWithheld = $(if ($t.Tier -eq 'STANDARD') { $Withheld.Count } else { 0 })
     Note ($t.Name + ' withheld capabilities MISSING') $wantWithheld ($missWithheld | Measure-Object).Count
@@ -307,8 +341,8 @@ foreach ($t in $Tiers) {
         Write-Output ('    missing: ' + ($missWithheld -join ' '))
     }
 
-    # The 9: present for ADMINISTRATOR only.  This is the control that stops a
-    # broken add list looking like a working one.
+    # The 21 admin: present for ADMINISTRATOR only.  This is the control that
+    # stops a broken add list looking like a working one.
     $missAdmin = Get-Missing $text $AdminVerbs
     $wantAdmin = $(if ($t.Tier -eq 'ADMINISTRATOR') { 0 } else { $AdminVerbs.Count })
     Note ($t.Name + ' administration verbs MISSING') $wantAdmin ($missAdmin | Measure-Object).Count

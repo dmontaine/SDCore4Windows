@@ -5,6 +5,54 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  THE THREE-TIER SPLIT IS SETTLED.  What each account gets on
+           creation now reflects the whole split rather than a starter cut.
+
+           STANDARD accounts get 77 verbs - what an application needs and no
+           more.  Query and list (SELECT, LIST, GET.LIST and their family),
+           spool and print, session and environment (LOGTO, DATE, WHO, SET),
+           screen and message, prompt and input state, and eight read-only
+           inspectors (SEARCH, LIST.DIFF, LIST.ITEM, LIST.COMMON, LIST.VARS,
+           REPORT.SRC, REPORT.STYLE, FORMAT).  Everything an application built
+           on SD invokes and nothing that edits code or data in bulk.
+
+           PROGRAMMER accounts get all of STANDARD plus 42 more - the
+           compilers, editors and cataloguer (BASIC, ED, CATALOG, RUN, MAP,
+           DEBUG, MODIFY, PHANTOM, GENERATE, COMPILE.DICT and their aliases),
+           the file and index definition verbs (CREATE.FILE, CONFIGURE.FILE,
+           HSM, SET.TRIGGER, CREATE.INDEX and their family), the bulk record
+           editors (COPY, DELETE, RENAME, REFORMAT, CNAME) and the process
+           introspection verbs (PSTAT, PDEBUG, PDUMP, DUMP).
+
+           ADMINISTRATOR accounts get everything - the 21 administration
+           verbs above PROGRAMMER cover account and grant administration
+           (CREATE.ACCOUNT, GRANT, UNLOCK, MODIFY.PASSWORD, ENCRYPT.FIELD and
+           their family), system-wide state (CONFIG, LISTU, LIST.LOCKS,
+           CLEAR.LOCKS, LOGOUT, SET.DATE), and the shell escapes (SH, !).
+
+           WHAT MOVED SINCE THE OWNER'S FIRST-PASS CUT.  The debug family
+           (PSTAT, PDEBUG, PDUMP, DUMP) moved from ADMINISTRATOR to
+           PROGRAMMER - a programmer needs these to debug their own code.
+           The read-only inspectors moved from PROGRAMMER to STANDARD - they
+           read only, they need no BASIC or catalogue, an application can
+           invoke them.
+
+           UMASK WAS REMOVED FROM EVERY TIER.  UMASK controls POSIX file-mode
+           bits, which Windows does not use for security - all file access
+           runs through the ACLs an SD account already receives.  Setting a
+           umask on Windows produces no security effect and would only be
+           misleading.  The record types stay compiled but no VOC in any tier
+           dispatches to them.
+
+           TWELVE VERB RECORDS LEFT NEWVOC.  config, listu, list.readu,
+           list.locks, clear.locks, lock, logout, set.date, sh, !,
+           clean.account and umask are no longer copied into any account's
+           VOC.  Administrators still receive them, from VOC_TEMPLATE, via
+           TIER.ADD.ADMINISTRATOR.  A programmer or standard account created
+           before this update keeps whichever of them was in its VOC then -
+           SD only ever adds records at an update, never removes them.
+
+
 24 Aug 26  SD NOW WRITES WINDOWS LINE ENDINGS TO FILES YOU CAN OPEN.
 
            Anything SD writes that an ordinary Windows program can open now
