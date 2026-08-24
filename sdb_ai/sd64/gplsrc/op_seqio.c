@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 24 Aug 26 Windows port - WRITESEQ to a PORT sent "\r\n" with a byte count of
+ *           1, so it terminated every line with a bare CR and never sent the
+ *           LF.  Count corrected to 2.  Separate from the line-ending work
+ *           below and unrelated to Newline: a port is not a file.  Also in
+ *           sdb64 - UPSTREAM_FIXES.md #14.
  * 24 Aug 26 Windows port - READSEQ now accepts CRLF as a line terminator and
  *           strips it, leaving a LONE CR alone because that is data.  It read
  *           CRLF files by splitting on LF only, so every line kept a trailing
@@ -1742,7 +1747,19 @@ Private void writeseq(bool flush_to_disk) {
         goto exit_op_writeseq;
       src_str = src_str->next;
     }
-    if (!writeport(fu, "\r\n", 1))
+    /* 24 Aug 26 Windows port - THE COUNT WAS 1, ON A TWO-CHARACTER LITERAL, so
+       every WRITESEQ to a port terminated its line with a bare CR and the LF
+       was never sent.  The literal is the statement of intent and the count
+       contradicted it; `writeport()`'s third argument is a byte count
+       (`lnxport.c:88`).  Nothing else disagrees: `onewline` (`tio.h:162`) is
+       init `"\r\n"` for character-device output.  Upstream `sdb64` has the
+       identical line - UPSTREAM_FIXES.md #14.
+
+       THIS IS NOT THE step 16 (b) CHANGE and does not use `Newline`.  A port
+       is not a directory file, so the owner's external-readability rule does
+       not reach it; this is the separate defect of a call that never did what
+       it was written to do. */
+    if (!writeport(fu, "\r\n", 2))
       goto exit_op_writeseq;
   } else if (sq_file->flags & SQ_NOBUF) {
     while (src_str != NULL) {
