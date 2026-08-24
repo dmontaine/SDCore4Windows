@@ -192,6 +192,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-fold.ps1', 'verify-nonet.ps1',
                   'verify-lcnames.ps1', 'VerifyInstall2.ps1',
                   'verify-keys.ps1', 'probe-keys.ps1',
+                  # 24 Aug 26 - probe-syswrites.ps1, section 7 step 15's
+                  # measurement: which of the eight remaining sdusers:(M)
+                  # targets an ORDINARY session actually writes.  Listed in
+                  # the commit that created it, under step 7's rule - a
+                  # script not on this list makes the tree report stale
+                  # because it exists, and then every verifier refuses.
+                  'probe-syswrites.ps1',
                   'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
