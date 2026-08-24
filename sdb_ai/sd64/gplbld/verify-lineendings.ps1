@@ -67,7 +67,8 @@ Write-Host "  bp dir : $bp"
 # ---- fixtures -------------------------------------------------------------
 # Words deliberately END IN DIFFERENT LETTERS so a "last character" reading
 # cannot be right by coincidence.
-$names = @('ZZLECRLF','ZZLELF','ZZLESEQ','ZZLESTRD','ZZLELONE','ZZLECSV')
+$names = @('ZZLECRLF','ZZLELF','ZZLESEQ','ZZLESTRD','ZZLELONE','ZZLECSV',
+           'ZZLEWSEQ','ZZLEWCSV','ZZLEWREC')
 function Remove-Fixtures {
     foreach ($n in $names + @('ZZLETEST')) {
         foreach ($d in @($bp, (Join-Path $acct 'BP.OUT'), (Join-Path $acct 'cat'))) {
@@ -101,7 +102,12 @@ Write-Host "   ZZLESTRD: CR at offset 2047, LF at 2048 - exactly on the SEQ_BUFF
 # 6: a conformant RFC 4180 CSV - CRLF terminated, which is what Excel writes.
 [System.IO.File]::WriteAllBytes((Join-Path $bp 'ZZLECSV'), [Text.Encoding]::ASCII.GetBytes("A1,B1`r`nA2,B2`r`n"))
 
-foreach ($n in $names) {
+# The write targets must exist for OPENSEQ ... OVERWRITE; ZZLEWREC is created
+# by SD's own record write and must NOT be pre-made.
+[System.IO.File]::WriteAllBytes((Join-Path $bp 'ZZLEWSEQ'), @())
+[System.IO.File]::WriteAllBytes((Join-Path $bp 'ZZLEWCSV'), @())
+
+foreach ($n in @('ZZLECRLF','ZZLELF','ZZLESEQ','ZZLESTRD','ZZLELONE','ZZLECSV')) {
     $p = Join-Path $bp $n
     if (-not (Test-Path -LiteralPath $p)) { Remove-Fixtures; Fail "fixture $n was not created - nothing can be measured." }
     Write-Host ("   {0,-9} {1} bytes" -f $n, (Get-Item -LiteralPath $p).Length)
@@ -119,6 +125,28 @@ $prog = @'
          CRT 'OPEN BP FAILED'
          STOP
       END
+*
+* ---- WRITE SIDE, step 16 (b).  What does SD emit? ----
+      OPENSEQ 'BP', 'ZZLEWSEQ' OVERWRITE TO WF ELSE
+         CRT 'OPENSEQ ZZLEWSEQ FAILED'
+         STOP
+      END
+      WRITESEQ 'ONE' TO WF ELSE CRT 'WRITESEQ FAILED'
+      WRITESEQ 'TWO' TO WF ELSE CRT 'WRITESEQ FAILED'
+      CLOSESEQ WF
+*
+      OPENSEQ 'BP', 'ZZLEWCSV' OVERWRITE TO VF ELSE
+         CRT 'OPENSEQ ZZLEWCSV FAILED'
+         STOP
+      END
+      WRITECSV 'A1', 'B1' TO VF ELSE CRT 'WRITECSV FAILED'
+      WRITECSV 'A2', 'B2' TO VF ELSE CRT 'WRITECSV FAILED'
+      CLOSESEQ VF
+*
+* A directory-file RECORD write: field marks become the newline on disk.
+      REC = 'RA':@FM:'RB':@FM:'RC'
+      WRITE REC TO F, 'ZZLEWREC' ELSE CRT 'WRITE RECORD FAILED'
+      CRT 'WRITES DONE'
       IDS = 'ZZLECRLF':@FM:'ZZLELF':@FM:'ZZLELONE'
       FOR R = 1 TO 3
          ID = IDS<R>
@@ -256,6 +284,34 @@ Note 'READCSV: last fields carrying a CR' 0 @($csv | Where-Object { $_.Groups[5]
 if ($csv.Count -ge 1) {
     Note 'READCSV: last field length (2 = clean, 3 = CR kept)' '2' $csv[0].Groups[4].Value
 }
+
+# ---- step 16 (b): what did SD WRITE? --------------------------------------
+# Read as raw bytes, because this is the one question a reading through SD
+# cannot answer - SD folds CRLF on the way back in, so a round trip would
+# report success whatever is on disk.
+function Get-Terminator($name) {
+    $p = Join-Path $bp $name
+    if (-not (Test-Path -LiteralPath $p)) { return 'NOT CREATED' }
+    $b = [System.IO.File]::ReadAllBytes($p)
+    if ($b.Length -eq 0) { return 'EMPTY' }
+    $cr = 0; $lf = 0; $crlf = 0
+    for ($i = 0; $i -lt $b.Length; $i++) {
+        if ($b[$i] -eq 13) { $cr++; if (($i+1) -lt $b.Length -and $b[$i+1] -eq 10) { $crlf++ } }
+        if ($b[$i] -eq 10) { $lf++ }
+    }
+    Write-Host ("   {0,-9} {1,4} bytes  CR={2} LF={3} pairs={4}  {5}" -f `
+        $name, $b.Length, $cr, $lf, $crlf, (($b | ForEach-Object { '{0:X2}' -f $_ }) -join ' '))
+    if ($crlf -gt 0 -and $cr -eq $crlf -and $lf -eq $crlf) { return 'CRLF' }
+    if ($cr -eq 0 -and $lf -gt 0) { return 'LF' }
+    if ($lf -eq 0 -and $cr -gt 0) { return 'CR' }
+    return 'MIXED'
+}
+
+Write-Host ''
+Write-Host '   --- what SD wrote, read as raw bytes ---'
+Note 'WRITESEQ writes CRLF'                 'CRLF' (Get-Terminator 'ZZLEWSEQ')
+Note 'WRITECSV writes CRLF (RFC 4180)'      'CRLF' (Get-Terminator 'ZZLEWCSV')
+Note 'directory-file record write uses CRLF' 'CRLF' (Get-Terminator 'ZZLEWREC')
 
 if (-not $Keep) { Remove-Fixtures } else { Write-Host ''; Write-Host "-Keep: fixtures left in $bp" }
 

@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  SD NOW WRITES WINDOWS LINE ENDINGS TO FILES YOU CAN OPEN.
+
+           Anything SD writes that an ordinary Windows program can open now
+           ends its lines the way Windows does, with CR+LF.  That covers
+           records in a directory file, WRITESEQ and WRITECSV output, command
+           output captured with COMO, printer output sent to a file, and the
+           error log.
+
+           WHY.  A directory file exists so that its records ARE ordinary
+           files - you can open one in Notepad, or point Excel at a CSV SD
+           produced.  Those files were being written with the Unix line
+           ending, so Notepad ran the lines together and a CSV was not quite
+           the format it claimed to be.  SD's CSV statements are documented as
+           following the RFC 4180 standard, and that standard asks for CR+LF.
+
+           WHAT IS NOT AFFECTED.  Dynamic files are stored in SD's own format
+           and are not readable by other programs, so nothing about them
+           changes.  Nothing about how SD reads files changes either - it
+           accepts both endings, as the entry below describes.
+
+           EXISTING FILES ARE LEFT ALONE.  Only newly written data uses the
+           new ending, so a file can contain both.  SD reads either, so this
+           is untidy rather than a problem.
+
+
 24 Aug 26  FILES EDITED IN NOTEPAD, OR SAVED FROM EXCEL, NOW READ CORRECTLY.
 
            Directory files exist so that you can edit their records with an

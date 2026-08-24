@@ -17,9 +17,14 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 24 Aug 26 Windows port - Newline is CRLF and NewlineBytes is 2.  A directory
+ *           file's records are read and written by external programs, so they
+ *           get the platform's line ending; DH files cannot be read from
+ *           outside and this macro never reaches them.  See the comment at the
+ *           definition.  PROJECT_STATUS.md 7 step 16 (b).
  * 31 Dec 23 SD launch - prior history suppressed
  * 02 Jul 24 mab define max string size.
- * 06 Aug 24 mab define sdext max arg 
+ * 06 Aug 24 mab define sdext max arg
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -62,8 +67,30 @@
 
 #define DS '/'
 #define DSS "/"
-#define Newline "\n"
-#define NewlineBytes 1
+
+/* 24 Aug 26 Windows port - CRLF.  PROJECT_STATUS.md 7 step 16 (b).
+   Owner's rule, 24 Aug 26: a DIRECTORY file's records are real OS files that
+   external programs read and write, so they get the platform's line ending;
+   DYNAMIC (DH) files are in SD's own hashed format, cannot be read from
+   outside, and therefore do not matter.  EVERY site this macro reaches is on
+   the first side of that line - directory-file record writes, WRITESEQ /
+   WRITECSV, COMO, hold files and the error log - and NO DH path uses it at
+   all, so the rule resolves to the constant.
+
+   IT IS NOT A NEW IDEA, IT IS A RESTORATION.  k_error.c:605-611 says in its
+   own words that it uses this macro "instead of the more obvious use of \n"
+   precisely so it can "do our own handling of the CRLF newline pair on
+   Windows" - code written when this was "\r\n".  tio.h:111's per-print-unit
+   newline is char[2+1] for the same reason.
+
+   THE READERS WERE MADE TOLERANT FIRST, AND THAT ORDER IS NOT OPTIONAL.
+   Step 16 (a) - verified 24 Aug, install 12:15:51 - folds CRLF on the way in
+   at op_dio3.c and op_seqio.c.  Without it, changing this line would write
+   two bytes and read back a stray CR on every field.  DS stays '/' for the
+   reason 7 step 12 records: @ds is load-bearing for compilation.  These two
+   "derived items" are NOT one decision. */
+#define Newline "\r\n"
+#define NewlineBytes 2
 
 #define default_access 0666
 
