@@ -971,8 +971,35 @@ finally {
     if (-not $Keep) {
         Step 9 'Cleaning up'
         if ($made) {
-            $out = Invoke-SD @("DELETE.ACCOUNT " + $Prefix.ToUpper() + ' USER', 'Y')
-            Write-Host "   account $Prefix removed"
+            # 24 Aug 26 - TWO FAULTS IN TWO LINES, AND THE SECOND HID THE FIRST.
+            #
+            # DELETE.ACCOUNT TAKES THE ACCOUNT NAME AND NOTHING ELSE.  This
+            # passed "<name> USER", mirroring CREATE.ACCOUNT's leading type
+            # keyword onto a verb that has none, and DELACC:103 rejects it as
+            # an unexpected token (sysmsg 2018) BEFORE deleting anything.
+            #
+            # And the announcement below was unconditional - it read neither
+            # $out nor the resulting state - so every run from b18 to b32 said
+            # "account removed" and left its Windows account, its SD account
+            # record and its user profile behind.  That is the backlog
+            # clean-test-profiles.ps1 keeps being asked to clear.
+            #
+            # ANCHOR ON THE STATE, NOT ON THE VERB'S OUTPUT.  "Removed" is a
+            # claim about what is gone, so it is answered by looking, and the
+            # raw output is printed whenever the claim fails.
+            $out = Invoke-SD @("DELETE.ACCOUNT " + $Prefix.ToUpper(), 'Y')
+            $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
+            $stillReg = Test-Path -LiteralPath $rec
+            $stillWin = $null -ne (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue)
+            if ($stillReg -or $stillWin) {
+                Write-Host "   WARNING: $Prefix was NOT fully removed." -ForegroundColor Yellow
+                Write-Host ("     SD account record present: {0}    Windows user present: {1}" -f $stillReg, $stillWin)
+                Write-Host '     --- what DELETE.ACCOUNT actually said ---'
+                @($out) | ForEach-Object { Write-Host "     | $_" }
+                Write-Host '     Clear it with gplbld\clean-test-profiles.ps1 before reusing the prefix.'
+            } else {
+                Write-Host "   account $Prefix removed - SD record and Windows user both gone"
+            }
         }
         if (Test-Path -LiteralPath $base) {
             # The fixture DIRECTORIES keep Administrators, so the tree walks;
