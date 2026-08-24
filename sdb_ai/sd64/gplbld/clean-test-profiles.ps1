@@ -89,6 +89,11 @@ $ErrorActionPreference = 'Stop'
 # Fixed the same way, by taking the "b" into the stem rather than loosening the
 # suffix class for everything. sdsshb is listed separately from sdsshprobe
 # because they are different names, not two spellings of one.
+#
+# THE BACKLOG ITSELF WAS CLEARED on 24 Aug 2026: all 35 removed, C:\Users back
+# to dmont and Public, and no ProfileList entry left behind. It needed a reboot
+# first - every one of the 35 hives was still loaded, which is the stuck-hive
+# case handled below.
 $rx = '^(sdacct|sdacctb|sdsshprobe|sdsshb|sdtiert|sdtapi|sdacl|sdrt|sdapia|sdapiidb|sdcatg|sddel)[0-9]*[a-z]?(\.[A-Za-z0-9-]+)?$'
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
