@@ -106,16 +106,51 @@ $all = @(Get-CimInstance Win32_UserProfile | Where-Object {
 
 if ($all.Count -eq 0) { Write-Output 'clean-test-profiles: nothing to do.'; exit 0 }
 
-$skipSpecial = @($all | Where-Object { $_.Special })
-$skipLoaded  = @($all | Where-Object { -not $_.Special -and $_.Loaded })
-$skipLive    = @($all | Where-Object { -not $_.Special -and -not $_.Loaded -and $live -contains $_.SID })
-$targets     = @($all | Where-Object { -not $_.Special -and -not $_.Loaded -and $live -notcontains $_.SID })
+# 24 Aug 26 - THE "loaded" SKIP USED TO ASSERT A CAUSE IT HAD NOT CHECKED.
+# It printed "loaded, someone is signed in" for all 35 orphans, about accounts
+# that had just been DELETED - nobody was signed in as any of them and nobody
+# could be. The Loaded flag was right (all 35 hives really are in HKEY_USERS,
+# 76 of them); the EXPLANATION bolted onto it was invented.
+#
+# A loaded hive whose account no longer exists is a STUCK hive, not a session:
+# Windows unloads at logoff, and one that outlives its own account was never
+# released - a process holding a handle into it, or a logon killed rather than
+# ended. Several sd sessions have been Stop-Process'd to escape hangs.
+#
+# So the two cases are separated and each says only what it knows. The stuck
+# ones also get the remedy, because "skipped" with no way forward is what left
+# this sitting for weeks.
+$skipSpecial     = @($all | Where-Object { $_.Special })
+$skipLoadedLive  = @($all | Where-Object { -not $_.Special -and $_.Loaded -and $live -contains $_.SID })
+$skipLoadedStuck = @($all | Where-Object { -not $_.Special -and $_.Loaded -and $live -notcontains $_.SID })
+$skipLive        = @($all | Where-Object { -not $_.Special -and -not $_.Loaded -and $live -contains $_.SID })
+$targets         = @($all | Where-Object { -not $_.Special -and -not $_.Loaded -and $live -notcontains $_.SID })
 
-foreach ($p in $skipSpecial) { Write-Output ("  skipped (special): " + $p.LocalPath) }
-foreach ($p in $skipLoaded)  { Write-Output ("  skipped (loaded, someone is signed in): " + $p.LocalPath) }
-foreach ($p in $skipLive)    { Write-Output ("  skipped (the account still exists - remove the account first): " + $p.LocalPath) }
+foreach ($p in $skipSpecial)    { Write-Output ("  skipped (special): " + $p.LocalPath) }
+foreach ($p in $skipLoadedLive) { Write-Output ("  skipped (hive loaded AND the account exists - may be signed in): " + $p.LocalPath) }
+foreach ($p in $skipLoadedStuck){ Write-Output ("  skipped (STUCK HIVE - loaded but the account is gone): " + $p.LocalPath) }
+foreach ($p in $skipLive)       { Write-Output ("  skipped (the account still exists - remove the account first): " + $p.LocalPath) }
 
-if ($targets.Count -eq 0) { Write-Output 'clean-test-profiles: nothing removable.'; exit 0 }
+if ($skipLoadedStuck.Count -gt 0) {
+    Write-Output ''
+    Write-Output ("  {0} STUCK HIVE(S). Their accounts are gone, so nobody is signed in;" -f $skipLoadedStuck.Count)
+    Write-Output '  the registry hive was simply never unloaded, and a profile cannot be'
+    Write-Output '  removed while it is loaded. Clear them one of two ways:'
+    Write-Output '    - reboot, which unloads every hive, then re-run this; or'
+    Write-Output '    - unload each one, elevated:  reg unload HKU\<SID>'
+    Write-Output '  The SIDs are:'
+    foreach ($p in $skipLoadedStuck) { Write-Output ("    {0}   {1}" -f $p.SID, (Split-Path $p.LocalPath -Leaf)) }
+}
+
+if ($targets.Count -eq 0) {
+    if ($skipLoadedStuck.Count -gt 0) {
+        Write-Output ''
+        Write-Output 'clean-test-profiles: nothing removable YET - see the stuck hives above.'
+        exit 1
+    }
+    Write-Output 'clean-test-profiles: nothing removable.'
+    exit 0
+}
 
 if ($List) {
     Write-Output ("clean-test-profiles: {0} profile(s) would be removed:" -f $targets.Count)
