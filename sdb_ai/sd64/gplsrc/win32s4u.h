@@ -37,7 +37,17 @@
    sd.h's definitions, and from win32s4u.c, which deliberately has none. */
 int AssumeUserIdentity(const char* username);
 void RevertUserIdentity(void);
-int ImpersonatingUser(void);
+
+/* 24 Aug 26 - ImpersonatingUser() TOOK NO ARGUMENTS AND ASKED THE WRONG
+   QUESTION.  It returned whether s4u_token was non-NULL - what this file
+   believes - rather than whether the thread is impersonating, which is what
+   Windows knows.  A fork() reverts the thread and clears nothing, so the two
+   part company exactly when it matters.  It now asks Windows and reports the
+   NAME; HoldingUserToken() is the belief, kept separately so the two can be
+   compared rather than confused.  win32s4u.c carries the full reasoning.
+   Changing the signature was safe: it had no callers anywhere.            */
+int ImpersonatingUser(char* name, int namelen);
+int HoldingUserToken(void);
 
 #endif
 

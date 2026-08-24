@@ -569,6 +569,14 @@ if not(is_grp_member(kernel(K$USERNAME, 0), acc.group)) then
    goto revert.to.old.account
 end
 
+* 24 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14.  RIGHT HERE, because
+*   is_grp_member is '!ps_script' and that fork()s (op_sh.c:379) - and a fork
+*   silently reverts this thread to the service's token.  Checking immediately
+*   after it is what separates "lost at the group check" from "lost later".
+
+id.point = 'LOGTO group check'
+gosub check.identity
+
 if not(ospath(account.path, OS$CD)) then
    server.error = SV$ERROR
    error.msg = sysmsg(5019, account.path) ;* Unable to change to directory %1
@@ -904,6 +912,13 @@ vb.write:
 
                id.len = oconv(cmnd[3,2], 'ISL')
                id = cmnd[5,id.len]
+
+               * 24 Aug 26 Windows port - step 14.  The write is where b28 read
+               *   a record owned by SYSTEM, so the identity is checked at the
+               *   moment it matters and not only where it is believed to break.
+
+               id.point = 'record write'
+               gosub check.identity
 
                write cmnd[5 + id.len, 99999999] to files(fno), id
                on error server.error = SV$ON.ERROR
@@ -2061,6 +2076,36 @@ vb.mark.mapping:
                                                                      mark.mapping files(fno), oconv(cmnd[3,2], 'ISL')
 
                                                                      return
+
+                                                                     * ======================================================================
+                                                                     * check.identity - has this session still got the caller's identity?
+                                                                     *
+                                                                     * 24 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14 (b).
+                                                                     *
+                                                                     * IT REPORTS ONLY THE DISAGREEMENT, which is why it can stay in.
+                                                                     * K$IMPERSONATING returns two fields: <1> the identity WINDOWS says
+                                                                     * this thread runs as, <2> whether SD still holds an S4U token.
+                                                                     * Equal is healthy and says nothing.  Field 1 empty while field 2 is
+                                                                     * true is the defect - SD believes it is the user and the thread is
+                                                                     * not - and that is the only case that writes a line.
+                                                                     *
+                                                                     * READING EITHER FIELD ALONE IS WHAT HID THIS.  The old
+                                                                     * ImpersonatingUser() returned the BELIEF and nothing else, so it
+                                                                     * would have answered "still impersonating" at the exact moment the
+                                                                     * identity was gone.
+                                                                     *
+                                                                     * In:  id.point - where it was called from, for the log line
+
+check.identity:
+                                                                     if logged.in then
+                                                                        id.state = kernel(K$IMPERSONATING, 0)
+                                                                        if id.state<1> = '' and id.state<2> then
+                                                                           logmsg 'API IDENTITY LOST at ' : id.point : ' - session believes it is ' : scram.user : ' but the thread holds the service token'
+                                                                        end
+                                                                     end
+
+                                                                     return
+
 
                                                                      * ======================================================================
 check.file:

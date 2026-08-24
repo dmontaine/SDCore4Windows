@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  THE ERROR LOG NOW SAYS IF AN API SESSION LOSES YOUR IDENTITY.
+
+           The entry below for 23 Aug explains that an API session takes on
+           your Windows identity when you log in, but does not yet use it when
+           it opens files.  This adds the missing alarm for that.
+
+           If the session ever believes it is you while Windows says it is not,
+           a line is written to the error log naming where it happened:
+
+             API IDENTITY LOST at record write - session believes it is ...
+
+           Nothing is written when the two agree, so a healthy session is
+           silent and you will not see this at all once the underlying problem
+           is fixed.  It changes no behaviour: nothing is refused or slowed
+           because of it.  It is there so the condition cannot go unnoticed
+           again, which is how it went unnoticed in the first place.
+
+
 24 Aug 26  THE SIGN-ON BANNER NOW SAYS "SD CORE".
 
            The line printed when you sign on reads "SD Core for Windows, the

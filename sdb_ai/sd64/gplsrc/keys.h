@@ -182,6 +182,14 @@
    caller must refuse the login.  win32s4u.c.                                */
 #define K_ASSUME_USER        61
 
+/* 24 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14, shape (b).  Ask what
+   Windows identity this thread is ACTUALLY running as, and what SD believes,
+   as two fields so they can be compared.  Read-only, so unlike K_ASSUME_USER
+   it is NOT gated on HDR_INTERNAL: it reports the session's own identity,
+   which @logname already exposes, and a diagnostic no ordinary program may
+   run is one nobody runs.                                                   */
+#define K_IMPERSONATING      62
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

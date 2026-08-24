@@ -299,6 +299,28 @@ void op_kernel() {
       }
       break;
 
+/* 24 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14 (b).  TWO FIELDS, and
+   the pair is the whole point: field 1 is the identity Windows says this
+   thread is running as, field 2 is whether SD still holds an S4U token for it.
+   Reading either alone is what made step 14 hard to see - the old
+   ImpersonatingUser() returned only the belief and would have reported "still
+   impersonating" at the moment the identity was gone.
+
+   Field 1 empty with field 2 = 1 is the defect: SD thinks it is the user and
+   the thread is not.                                                        */
+    case K_IMPERSONATING:
+      {
+        char who[256];
+        char both[300];
+
+        if (!ImpersonatingUser(who, sizeof(who)))
+          who[0] = '\0';
+        snprintf(both, sizeof(both), "%s%c%d", who, FIELD_MARK,
+                 HoldingUserToken());
+        k_put_c_string(both, &result);
+      }
+      break;
+
     case K_DATE_CONV:
       if ((result.data.value = (k_get_c_string(descr, s, 32))) > 0) {
         strcpy(default_date_conversion, s);

@@ -222,12 +222,77 @@ void RevertUserIdentity(void) {
 }
 
 /* ======================================================================
-   ImpersonatingUser()  -  is this thread running as somebody else?
+   ImpersonatingUser()  -  is this thread running as somebody else, and WHO?
 
    Reported rather than assumed: a caller that believes it impersonated and did
-   not is the failure this whole file is written to avoid.                    */
+   not is the failure this whole file is written to avoid.
 
-int ImpersonatingUser(void) {
+   24 Aug 26 Windows port - IT DID THE THING ITS OWN COMMENT WARNS AGAINST, and
+   it had no callers, so nothing had ever caught it.  It was:
+
+       return (s4u_token != NULL) ? 1 : 0;
+
+   which reports whether THIS FILE STILL HOLDS A HANDLE, not whether the thread
+   is impersonating.  Those are different facts, and PROJECT_STATUS.md 7 step
+   14 is the case where they disagree: a fork() silently reverts the calling
+   thread to the process token, and nothing clears s4u_token when it happens -
+   RevertUserIdentity() is the only thing that would, and it has no caller
+   either.  So at the moment the identity is GONE this returned 1.
+
+   Step 14 (b) was written as "call this at write time and the answer is
+   direct".  It would have answered "still impersonating" and looked like it
+   contradicted b28's SYSTEM-owned record.  A confident wrong answer from the
+   instrument sent to confirm the finding.
+
+   It now ASKS WINDOWS.  OpenThreadToken fails with ERROR_NO_TOKEN when the
+   thread holds no impersonation token, which is the answer "not impersonating"
+   rather than an error, and the caller gets the NAME because "whose identity"
+   is the question and a boolean cannot carry it.                            */
+
+int ImpersonatingUser(char* name, int namelen) {
+  HANDLE tok = NULL;
+  unsigned char buf[512];
+  char user[256];
+  char dom[256];
+  DWORD ulen;
+  DWORD dlen;
+  DWORD got = 0;
+  SID_NAME_USE use;
+
+  if ((name != NULL) && (namelen > 0))
+    name[0] = '\0';
+
+  /* OpenAsSelf TRUE so the access check uses the PROCESS token.  With FALSE,
+     a thread impersonating a token that cannot open itself would report "not
+     impersonating" - the wrong answer, arrived at from the right call.      */
+
+  if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &tok))
+    return 0; /* ERROR_NO_TOKEN here IS the answer, not a failure */
+
+  if (GetTokenInformation(tok, TokenUser, buf, sizeof(buf), &got)) {
+    TOKEN_USER* tu = (TOKEN_USER*)buf;
+
+    ulen = sizeof(user);
+    dlen = sizeof(dom);
+    if (LookupAccountSidA(NULL, tu->User.Sid, user, &ulen, dom, &dlen, &use)) {
+      if ((name != NULL) && (namelen > 0))
+        snprintf(name, namelen, "%s\\%s", dom, user);
+    }
+  }
+
+  CloseHandle(tok);
+  return 1;
+}
+
+/* ======================================================================
+   HoldingUserToken()  -  does this file still hold an S4U token?
+
+   The other half of the pair above, and it exists so the two can be COMPARED.
+   ImpersonatingUser() says what Windows does; this says what SD believes.
+   Equal is healthy.  Believing while not impersonating is step 14's defect,
+   and no single value can express that.                                    */
+
+int HoldingUserToken(void) {
   return (s4u_token != NULL) ? 1 : 0;
 }
 
