@@ -240,6 +240,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # moment anybody used it.  Listed in the commit that creates
                   # it, which is the rule verify-scram.c was added without.
                   'probe-s4u.c', 'probe-s4u.ps1', 'probe-s4u.exe',
+                  # 23 Aug 26 - probe-impersonate, the instrument that decides
+                  # section 7 step 14 between shapes (a) and (b): does
+                  # ImpersonateLoggedOnUser govern the MSYS2 runtime's open(),
+                  # which is how SD opens every data file (dh_file.c:815).
+                  # Same three parts and the same reason as probe-s4u above.
+                  'probe-impersonate.c', 'probe-impersonate.ps1',
+                  'probe-impersonate.exe',
                   # 23 Aug 26 - section 7 step 15's guard, listed in the commit
                   # that creates it under section 7 step 7's rule.  It CALLS
                   # this script and refuses on a non-zero exit, so an unlisted
