@@ -256,6 +256,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # unlisted .exe would report the tree stale the moment
                   # anybody used the instrument.
                   'probe-impfork.c', 'probe-impfork.ps1', 'probe-impfork.exe',
+                  # 24 Aug 26 - probe-sessionfork.ps1, step 14 (a2).  It asks
+                  # whether the API SESSION forks at all, which is the tension
+                  # probe-impfork left: fork() is the only thing that drops the
+                  # impersonation, and nothing on the login-to-write path looks
+                  # like it forks.  Listed in the commit that creates it, under
+                  # section 7 step 7's rule.  PowerShell only, so no build
+                  # product to list alongside it.
+                  'probe-sessionfork.ps1',
                   # 23 Aug 26 - section 7 step 14's end-to-end check: does an
                   # API session actually run CONFINED to the user, not just
                   # logged in as them.  Listed in the commit that creates it.
