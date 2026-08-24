@@ -81,8 +81,35 @@ if ($Phase -ne '') {
                 # decision of 22 Aug - elevation passes on its own - and it is
                 # the row that proves this change did not tighten the
                 # administrator path while loosening the other.
+                # 23 Aug 26 - "$null |" IS LOAD-BEARING, NOT TIDINESS.
+                #
+                # This child was launched by Start-Process -Verb RunAs, so it HAS
+                # A CONSOLE, and a bare "& $sdExe" hands that console straight to
+                # the child as stdin.  LOGIN:639 then sees kernel(K$TTY,0) # ''
+                # - ttyname(fileno(stdin)), kernel.c:250 - decides somebody is
+                # there to type, and asks an account with no credential to set a
+                # password.  Nobody is there, so it BLOCKS FOR EVER and the whole
+                # suite stops on this line.
+                #
+                # That is not hypothetical: it is the fault the forty-fourth
+                # session handed over as "elevated sd hangs during start-up", and
+                # it costs an elevation to clear because an ordinary token cannot
+                # kill an SD console session.  A -Silent install leaves every
+                # account without a credential (sd.iss:1276), so this is the
+                # NORMAL state after a cycle, not an unlucky one.
+                #
+                # MEASURED in a real elevated console, 23 Aug 2026: bare call
+                # gives the child a TTY, "$null |" gives NOTTY, and this command
+                # then returns in 0.3s with "ZZNOSUCHVERB is not in your VOC"
+                # instead of a password prompt.  Start-Job would do it too - that
+                # is why Invoke-SdCommand above never hit this - but a pipe keeps
+                # the measurement in this process, where the elevated token is.
+                #
+                # IT DOES NOT WEAKEN THE ROW.  What is being measured is whether
+                # an elevated session may still RUN the command; the credential
+                # prompt is a different subject and does not belong in the way.
                 Push-Location -LiteralPath (Join-Path $env:ProgramData ('SD\user_accounts\' + $Account))
-                try   { $out = (& $sdExe $paName 2>&1 | Out-String) }
+                try   { $out = ($null | & $sdExe $paName 2>&1 | Out-String) }
                 finally { Pop-Location }
                 Set-Content -LiteralPath $ResultFile -Value $out -Encoding utf8
             }

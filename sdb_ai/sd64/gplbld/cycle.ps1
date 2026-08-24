@@ -520,6 +520,44 @@ if (($iGcat -lt $nGcat) -or ($iOut -lt $nOut)) {
           "  Nothing measured on this tree means anything." -f $iGcat, $nGcat, $iOut, $nOut)
 }
 
+# ---------------------------------------------------------------------------
+# Step 9 - DID ANYBODY GET A PASSWORD?
+#
+# ADDED 23 Aug 2026, after this cost two sessions.  sd.iss:1276 is
+# "if InstallReachedPostInstall and not WizardSilent then RunFinishingStep;",
+# and RunFinishingStep (sd.iss:1211) is where the password is taken - by leaving
+# the user in an SD session, the owner's decision of 21 Aug 2026.  SO A -Silent
+# INSTALL COLLECTS NO PASSWORD AT ALL, and the tree otherwise looks complete.
+#
+# WHAT THAT COSTS, and it is not only the login: no ssh, no API, and any
+# ELEVATED session that runs "sd <command>" from a console stops at the
+# credential prompt and blocks for ever, because LOGIN:639 sees a tty and
+# assumes somebody is there to type.  That is the fault the forty-fourth session
+# handed over as an unexplained start-up hang.
+#
+# READ, NOT INFERRED FROM -Silent.  A non-silent install where the user pressed
+# Enter on an empty line is the same state and deserves the same warning; and if
+# the step is ever fixed to run silently this check keeps working unchanged.
+# This script is already elevated, which is what makes $cred readable at all -
+# it is SYSTEM and Administrators only.
+Write-Host ""
+$credDir = Join-Path $env:ProgramData 'SD\sdsys\$cred'
+$nCred   = 0
+try   { $nCred = @(Get-ChildItem -LiteralPath $credDir -File -Force -ErrorAction Stop).Count }
+catch { $nCred = -1 }
+
+if ($nCred -eq 0) {
+    Write-Host "NO ACCOUNT HAS A PASSWORD - the credential register is empty." -ForegroundColor Yellow
+    Write-Host "  A -Silent install skips the password step entirely (sd.iss:1276)." -ForegroundColor Yellow
+    Write-Host "  Until one is set: no ssh, no API, and an ELEVATED 'sd <command>' at a" -ForegroundColor Yellow
+    Write-Host "  console will BLOCK at the password prompt - which stalls the verify suite." -ForegroundColor Yellow
+    Write-Host "  Set one now, at a console:  sd" -ForegroundColor Yellow
+} elseif ($nCred -lt 0) {
+    Write-Host "Could not read $credDir - cannot say whether any account has a password." -ForegroundColor Yellow
+} else {
+    Write-Host "   credential register: $nCred account(s) with a password"
+}
+
 Write-Host ""
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -eq 0) {
