@@ -66,6 +66,8 @@
 *                      re-copying the whole of NEWVOC, which was handing a
 *                      standard account back everything CREATE.ACCOUNT withheld.
 *                      PROJECT_STATUS.md section 8
+* 24 Aug 26 Windows port - the sign-on banner says "SD Core", to tell this
+*                      build apart from regular SD
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -288,7 +290,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
       * Modified by Composer AI - 2026/06/10.
       * Close version banner string; unclosed quote caused "Unrecognised statement".
       * display "SD, the Multivalue String Database, version " : SD.REV.STAMP : "(AI modified)
-      display "SD for Windows, the Multivalue String Database, version " : SD.REV.STAMP
+      display "SD Core for Windows, the Essential Multivalue String Database, version " : SD.REV.STAMP
       * --------------------
       display "(c) 2000-2026 by Ladybridge Systems and Other Contributors"
       display

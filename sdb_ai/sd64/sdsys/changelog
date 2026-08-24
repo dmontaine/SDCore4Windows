@@ -5,6 +5,15 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  THE SIGN-ON BANNER NOW SAYS "SD CORE".
+
+           The line printed when you sign on reads "SD Core for Windows, the
+           Essential Multivalue String Database".  It is a name change only -
+           nothing about what the product does has changed with it.  The point
+           is to tell this build apart from regular SD at a glance, so that a
+           screenshot or a support question says which one it came from.
+
+
 23 Aug 26  AN API SESSION NOW RUNS AS THE USER WHO LOGGED IN.
 
            Until now a session reached through the API ran as the Windows
