@@ -262,6 +262,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # INSTALLER script - stage.py copies it to {app} and sd.iss
                   # runs it - so it SHIPS, and a shipped file must stay watched.
                   'verify-pcodeacl.ps1',
+                  # 24 Aug 26 - unit tests for verify-apiidentity's two
+                  # helpers, listed in the commit that creates them.  They
+                  # lift the functions out of that script by AST, touch
+                  # nothing but %TEMP%, and make no claim about the installed
+                  # tree - so they are not verify-* and are in neither
+                  # post-cycle runner.  Both cover a bug that was paid for:
+                  # section 6's WHO-pattern and icacls-ordering traps.
+                  'test-apiidentity-units.ps1',
                   # 23 Aug 26 - setup-devbox.ps1 builds a DEVELOPMENT machine
                   # from nothing.  It never ships and never reaches an install
                   # - it runs BEFORE there is a clone, let alone a tree - and
