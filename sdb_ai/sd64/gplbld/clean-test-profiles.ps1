@@ -66,7 +66,30 @@ $ErrorActionPreference = 'Stop'
 # than overlooked: the stems stay specific, and the third safety test below - a
 # profile whose SID still has a local account is refused outright - is what
 # actually keeps this to orphans.
-$rx = '^(sdacct|sdsshprobe|sdtiert|sdtapi|sdacl|sdrt|sdapia|sdcatg|sddel)[0-9]*[a-z]?(\.[A-Za-z0-9-]+)?$'
+# 24 Aug 26 - sdapiidb added, for verify-apiidentity.ps1.  It had piled up
+# TWELVE accounts (b19-b30) before anyone looked, which is exactly the backlog
+# this list exists to prevent.
+#
+# THE STEM IS "sdapiidb" AND NOT "sdapiid", AND THAT IS NOT A TYPO.  The suffix
+# class below is [0-9]*[a-z]? - digits THEN an optional letter - while these
+# names are a letter THEN digits ("sdapiidb29").  Widening the class to
+# [a-z]?[0-9]* would have fixed the match and widened the blast radius of every
+# other stem at the same time, which is what the note above warns against.
+# Taking the "b" into the stem matches these names and nothing else.
+#
+# It also does not collide with "sdapia" (verify-apiadmin): that stem needs an
+# 'a' where these names have an 'i', so neither can match the other's accounts.
+# 24 Aug 26 - AND THE SAME HOLE WAS ALREADY OPEN FOR THE WHOLE b-SERIES.
+# Looking for sdapiidb's leftovers turned up 35 test profiles under C:\Users,
+# and 29 of them - every sdacctb<n> and sdsshb<n> - failed this regex for the
+# identical reason. The "b" runs name themselves <stem>b<number>, so the letter
+# comes BEFORE the digits and [0-9]*[a-z]? cannot match them. They have been
+# invisible to this sweep since the b-series started.
+#
+# Fixed the same way, by taking the "b" into the stem rather than loosening the
+# suffix class for everything. sdsshb is listed separately from sdsshprobe
+# because they are different names, not two spellings of one.
+$rx = '^(sdacct|sdacctb|sdsshprobe|sdsshb|sdtiert|sdtapi|sdacl|sdrt|sdapia|sdapiidb|sdcatg|sddel)[0-9]*[a-z]?(\.[A-Za-z0-9-]+)?$'
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
         ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
