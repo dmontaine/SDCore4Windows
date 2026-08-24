@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  FILES EDITED IN NOTEPAD, OR SAVED FROM EXCEL, NOW READ CORRECTLY.
+
+           Directory files exist so that you can edit their records with an
+           ordinary Windows editor.  Windows editors end each line with CR+LF.
+           SD only ever looked for the LF, so it kept the CR - and put it on
+           the end of the data.
+
+           You would have seen it as an invisible extra character at the end
+           of every line: comparisons failing for no visible reason, a name
+           that would not match, a trailing space that was not a space.
+
+           WHAT THIS MEANS IN PRACTICE.  Reading a CSV file saved by Excel is
+           the clearest case.  The last column of every row picked up that
+           stray character, because a comma ended the other columns and the
+           line ending only ever touched the last one.  READCSV, READSEQ and
+           reading a directory file record are all corrected.
+
+           A CR ON ITS OWN IS STILL DATA and is left exactly as it is.  Only
+           the CR+LF pair that ends a line is treated as a line ending, so
+           this cannot alter data that happens to contain a CR.
+
+           Files SD itself writes are unchanged for now - it still writes LF.
+           Reading was the half that lost data, so it is the half fixed here.
+
+
 24 Aug 26  AN API SESSION NOW KEEPS YOUR IDENTITY WHEN IT OPENS AND WRITES
            FILES.  This closes the gap described in the 23 Aug entry below.
 
