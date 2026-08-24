@@ -237,6 +237,27 @@ $summary = Join-Path $logDir ('post-cycle-unelevated-' + $stamp + '.txt')
 # transcript trail as the evidence that a guard had stopped guarding - while
 # leaving no such trail behind itself.
 $transcript = Join-Path $logDir ('VerifyInstall1-' + $stamp + '.log')
+# 24 Aug 26 - CLOSE ANY TRANSCRIPT THIS WINDOW ALREADY HAS OPEN, FIRST.
+# PowerShell 5.1 keeps a transcript ACTIVE until it is stopped or the session
+# ends, and supports several at once - every active one receives every line.
+# So a run in a window where an earlier run left one open writes into BOTH.
+#
+# MEASURED 24 Aug 2026, twice.  After the 15:13:25 cycle,
+# cycle-20260824-133558.log held two complete cycles.  Then at 15:53, one
+# verify-tierapi run appended itself to cycle-20260824-133558.log,
+# cycle-20260824-151325.log AND verify-tiers-20260824-134341.log - three logs
+# from earlier runs, all still open in that window, all growing at once.
+#
+# Stopping the stale ones here is what bounds it: at most one transcript is
+# active, and it is this run's.  Stop-Transcript throws when none is running,
+# which is the loop's exit condition and is not an error.
+$stale = 0
+while ($true) {
+    try { Stop-Transcript -ErrorAction Stop | Out-Null; $stale++ } catch { break }
+}
+if ($stale -gt 0) {
+    Write-Output ("closed $stale transcript(s) this window had left open")
+}
 try { Start-Transcript -Path $transcript -Force | Out-Null } catch { }
 Write-Output ("transcript: " + $transcript)
 
