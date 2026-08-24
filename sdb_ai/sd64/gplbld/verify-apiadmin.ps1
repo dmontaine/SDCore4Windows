@@ -124,7 +124,15 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 # verify-apiport.ps1's helper, except that it does not go to SDSYS: the probe
 # lives in the throwaway account's BP and has to be run from there.
 function Invoke-SDIn([string]$account, [string[]]$commands) {
-    $body = "`n" + ((@("LOGTO $account", 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
+    # so the initial TERM below is wiped by any further LOGTO in $commands.
+    # Full write-up in verify-tiers.ps1's Invoke-SD.
+    $expanded = New-Object System.Collections.ArrayList
+    foreach ($c in $commands) {
+        $null = $expanded.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    }
+    $body = "`n" + ((@("LOGTO $account", 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
     $out = $body | & $sdExe
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }

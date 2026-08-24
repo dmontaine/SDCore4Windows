@@ -70,7 +70,15 @@ function Note($check, $expected, $got) {
 # Every call is bounded - section 8 of PROJECT_STATUS records three runs lost to
 # an unbounded prompt loop.  The leading blank line absorbs the pipe's BOM.
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
-    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
+    # so the initial TERM below is wiped by any LOGTO in $commands.  Full
+    # write-up in verify-tiers.ps1's Invoke-SD.
+    $expanded = New-Object System.Collections.ArrayList
+    foreach ($c in $commands) {
+        $null = $expanded.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    }
+    $body = "`n" + ((@('TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
     $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
                      -ArgumentList $sdExe, $body
     if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }

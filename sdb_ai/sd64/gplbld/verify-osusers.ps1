@@ -80,7 +80,15 @@ $osUsers = Join-Path $env:ProgramData 'SD\sdsys\os.users'
 # line, so a blank sacrificial line absorbs it.  TERM 200,9999 keeps SD from
 # wrapping the messages this script matches on.
 function Invoke-SD([string[]]$commands) {
-    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
+    # so the initial TERM below is wiped by any LOGTO in $commands.  Full
+    # write-up in verify-tiers.ps1's Invoke-SD.
+    $expanded = New-Object System.Collections.ArrayList
+    foreach ($c in $commands) {
+        $null = $expanded.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    }
+    $body = "`n" + ((@('TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
 
     # EAP IS LOWERED ACROSS THE CALL.  Under Stop, 2>&1 on a native command
     # turns each stderr line into a terminating NativeCommandError - the trap

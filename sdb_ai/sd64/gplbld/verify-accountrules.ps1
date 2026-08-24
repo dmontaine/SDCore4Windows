@@ -133,7 +133,16 @@ function Shown($out, [int]$n, [string[]]$vals) {
 # The pipe is not a convenience: Start-Process -RedirectStandardInput hands SD a
 # FILE handle and SD answers "Process terminated" and exits (section 6).
 function Invoke-SD([string[]]$commands) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
+    # so the initial TERM below is wiped by any LOGTO in $commands and long
+    # LIST/COUNT output paginates on a stdin the pipe can no longer answer.
+    # Full write-up in verify-tiers.ps1's Invoke-SD.
+    $expanded = New-Object System.Collections.ArrayList
+    foreach ($c in $commands) {
+        $null = $expanded.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    }
+    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
     $out = $body | & $sdExe
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }

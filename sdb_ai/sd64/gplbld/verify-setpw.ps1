@@ -10,7 +10,15 @@ $msg   = (Get-Content -LiteralPath (Join-Path $env:ProgramData 'SD\sdsys\message
 
 function Invoke-SD([string[]]$commands) {
     # Blank first line absorbs the BOM; TERM stops it paginating; OFF ends it.
-    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
+    # so a LOGTO in $commands wipes the initial TERM - full write-up in
+    # verify-tiers.ps1's Invoke-SD.
+    $expanded = New-Object System.Collections.ArrayList
+    foreach ($c in $commands) {
+        $null = $expanded.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    }
+    $body = "`n" + ((@('TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
     $out = $body | & $sdExe
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
