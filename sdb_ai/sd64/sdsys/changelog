@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+23 Aug 26  THE PCODE LIBRARY IS NO LONGER WRITABLE BY SD USERS.
+
+           <sysdir>\bin holds the pcode library - the interpreter itself,
+           which SD loads into shared memory when it starts and every session
+           then runs.  Until now any member of the sdusers group could write
+           to it, so one SD user could have replaced what everybody else's
+           session executes, including an administrator's.
+
+           That directory is now readable by SD users and writable only by
+           administrators, which is the same protection the global catalogue
+           has had since 18 Aug.  Nothing needs to write it after an install:
+           only the process that starts SD reads it, and that is already
+           elevated.
+
+           If you have anything that writes into <sysdir>\bin, it will now be
+           refused and will need to run elevated.
+
 23 Aug 26  THE MESSAGE AT THE END OF INSTALLATION IS EASIER TO READ.
 
            It said the same things, in one tall narrow column that ran most of

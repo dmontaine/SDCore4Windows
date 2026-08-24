@@ -606,6 +606,10 @@ def main():
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',
                    'secure-gcat.ps1',
+                   # 23 Aug 26 - section 7 step 15.  gcat decides WHICH
+                   # catalogued program runs; this locks what the interpreter
+                   # running it IS.  Both ship or neither is worth much.
+                   'secure-pcode.ps1',
                    'secure-accounts.ps1', 'secure-account-dirs.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)

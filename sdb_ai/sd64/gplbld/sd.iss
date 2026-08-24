@@ -1513,6 +1513,44 @@ begin
             '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
 end;
 
+{ LOCK THE PCODE LIBRARY, and return what to tell the user if it did not
+  happen.  PROJECT_STATUS.md 7 step 15.
+
+  ONE LEVEL BELOW SecureGcat, AND THE PAIR IS THE POINT.  gcat decides which
+  catalogued program runs for every session; <sysdir>\bin\pcode is the
+  interpreter that runs it.  sysseg.c:189/193/279 reads that file whole into
+  the shared segment at start-up and every session executes it through
+  load_pcode() - so an SD user who could write it would run their own code in
+  SDSYS's and an administrator's sessions from the next SD start.  It measured
+  sdusers:(I)(OI)(CI)(M) on the 10:01:45 install, and the write was PROVED from
+  an unelevated token rather than read off the ACE.
+
+  ONE PATH, so no per-path loop: that directory holds only pcode and pcode.old.
+  It must run AFTER the data-tree icacls, like every other lock here, or
+  inheritance puts the Modify straight back. }
+function SecurePcode: String;
+var
+  Code: Integer;
+  Ps, Script, Target: String;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-pcode.ps1');
+  Target := ExpandConstant('{#DataDir}\sdsys\bin');
+
+  if LockOsUsersPath(Ps, Script, Target, Code) then
+    Exit;
+
+  { NAMED, NOT BURIED, like the global catalogue and the credential store: this
+    ACL is the whole of a control and it fails silently if the step does not
+    run. }
+  Result := 'The pcode library was NOT locked (code ' + IntToStr(Code) + '). ' +
+            'Until it is, any SD user can replace the interpreter every session runs. ' +
+            'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
+end;
+
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
   happen.  PROJECT_STATUS.md 7 step 6.
 
@@ -1761,6 +1799,7 @@ var
   OsuMsg: String;
   BjMsg: String;
   GcatMsg: String;
+  PcodeMsg: String;
   AcctAclMsg: String;
 begin
   if CurStep = ssPostInstall then
@@ -1788,6 +1827,12 @@ begin
       Order between the three does not matter - different paths, no shared
       state. }
     GcatMsg := SecureGcat;
+
+    { AND THE LEVEL BELOW IT, 23 Aug 2026, section 7 step 15.  Beside
+      SecureGcat because they are the same control at two depths: gcat is
+      which program runs, pcode is the interpreter that runs it.  Order
+      between them does not matter - different paths, no shared state. }
+    PcodeMsg := SecurePcode;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
       accounts rather than configuring the server, and it needs nothing from
@@ -1948,6 +1993,7 @@ begin
            OsuMsg +
            BjMsg +
            GcatMsg +
+           PcodeMsg +
            AcctAclMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a

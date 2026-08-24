@@ -245,6 +245,12 @@ Write-Output ("transcript: " + $transcript)
 # POSITIONALLY and silently gave verify-tiers.ps1 a $Prefix of "-Prefix".
 $steps = @(
     @{ Name = 'verify-credacl.ps1';     P = @{} },
+    # 23 Aug 26 - section 7 step 15's guard, and it sits DIRECTLY BESIDE
+    # verify-credacl for that step's reason: both ask what an ORDINARY token
+    # can write, both are meaningless from an elevated one, and both refuse
+    # elevation themselves rather than trusting this runner's gate.  It spends
+    # no prefix, creates no account, and cleans up the one file it makes.
+    @{ Name = 'verify-pcodeacl.ps1';    P = @{} },
     # 22 Aug 26 - MOVED HERE FROM VerifyInstall2.ps1, WHERE IT EXITED 2
     # WITHOUT MEASURING ANYTHING.  verify-osusers.ps1:243 refuses an elevated
     # window: "CPROC admits K$ADMINISTRATOR whatever OS.USERS says, so an

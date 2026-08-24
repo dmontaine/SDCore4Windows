@@ -240,6 +240,17 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # moment anybody used it.  Listed in the commit that creates
                   # it, which is the rule verify-scram.c was added without.
                   'probe-s4u.c', 'probe-s4u.ps1', 'probe-s4u.exe',
+                  # 23 Aug 26 - section 7 step 15's guard, listed in the commit
+                  # that creates it under section 7 step 7's rule.  It CALLS
+                  # this script and refuses on a non-zero exit, so an unlisted
+                  # verify-pcodeacl.ps1 would report the tree stale because
+                  # verify-pcodeacl.ps1 exists, and then refuse to run on the
+                  # strength of its own newness - verify-accountacl's trap.
+                  #
+                  # secure-pcode.ps1 IS DELIBERATELY NOT ON THIS LIST.  It is an
+                  # INSTALLER script - stage.py copies it to {app} and sd.iss
+                  # runs it - so it SHIPS, and a shipped file must stay watched.
+                  'verify-pcodeacl.ps1',
                   # 23 Aug 26 - setup-devbox.ps1 builds a DEVELOPMENT machine
                   # from nothing.  It never ships and never reaches an install
                   # - it runs BEFORE there is a clone, let alone a tree - and
