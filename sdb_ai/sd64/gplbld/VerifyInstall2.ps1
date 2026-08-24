@@ -125,6 +125,7 @@ param(
     [string]$PortPrefix  = '',   # verify-apiport.ps1   - one account
     [string]$ScramPrefix = '',   # verify-scramlogin.ps1 - one account
     [string]$TierApiPrefix = '', # verify-tierapi.ps1   - one account per tier
+    [string]$ApiIdPrefix = '',   # verify-apiidentity.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -158,6 +159,7 @@ if ($Run) {
     if (-not $PortPrefix)    { $PortPrefix    = "sdapi$Run"  }
     if (-not $ScramPrefix)   { $ScramPrefix   = "sdscram$Run" }
     if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
+    if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -452,6 +454,13 @@ $steps = @(
     # client-first refused, two exchanges get different nonces, the password
     # never appears in the bytes, and request 24 (cleartext) REFUSED.
     @{ Name = 'verify-scramlogin.ps1';    P = @{ Prefix = $ScramPrefix } },
+    # 23 Aug 26 - section 7 step 14, shape (b): an API session must be CONFINED
+    # to what the user may read, not merely logged in as them.  It opens two
+    # fixtures over a live API session - one the user may read, one ACL'd like
+    # sdsys\$cred - and the second must be refused.  AFTER verify-scramlogin,
+    # because it needs the SCRAM login to work before its answer means anything;
+    # a failure here with scramlogin green is the identity change, not the login.
+    @{ Name = 'verify-apiidentity.ps1';   P = @{ Prefix = $ApiIdPrefix } },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.  LAST because it is the only step that needs a
     # binary from OUTSIDE this repository - sd-connect.exe from the sdclilib32

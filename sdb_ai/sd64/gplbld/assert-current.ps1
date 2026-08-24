@@ -247,6 +247,10 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # Same three parts and the same reason as probe-s4u above.
                   'probe-impersonate.c', 'probe-impersonate.ps1',
                   'probe-impersonate.exe',
+                  # 23 Aug 26 - section 7 step 14's end-to-end check: does an
+                  # API session actually run CONFINED to the user, not just
+                  # logged in as them.  Listed in the commit that creates it.
+                  'verify-apiidentity.ps1',
                   # 23 Aug 26 - section 7 step 15's guard, listed in the commit
                   # that creates it under section 7 step 7's rule.  It CALLS
                   # this script and refuses on a non-zero exit, so an unlisted
