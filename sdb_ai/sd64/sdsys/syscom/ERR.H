@@ -282,6 +282,8 @@ $define SD$EDType.Err  -10205  ;* Encode Decode type error
 $define SD$EXT.KEY.ERR -10300  ;* unknown key
 $define SD$EXT.ARG.CNT -10301  ;* incorrect argument count for called function
 $define SD$INT.OVERFLW -10302  ;* Result will create integer overflow  (> 32 Bit int)
+* 19 Aug 26 Windows port - SCRAM primitives.  docs/SCRAM_AUTH.md
+$define SD$SCRAM.ERR   -10303  ;* sd.scram.c primitive failed or was given bad input
 
 * sdext_eguid_set error codes
 $define SD$EUID.PWD.Err  -10400  ;* Couldn't get pwd of user

@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  THREE MORE ERROR CODES HAVE MESSAGE TEXT, and the OPGEN
+           developer tool is gone.
+           * Errors 4100 (Undefined Server Error), 4101 (Invalid File
+             Number) and -10303 (a SCRAM primitive failed or was given bad
+             input) had no message text.  They have it now, so ERRTEXT and
+             error displays name them instead of showing a bare number.
+           * GPL.BP/OPGEN has been removed.  The 13 Aug entry below recorded
+             that it could not be run on an installed system: it generates
+             GPL.BP/OPCODES.H from the C header opcodes.h, and no install
+             carries C source.  Nothing in SD calls it and no VOC pointed at
+             it.  OPCODES.H is unaffected and still ships; it is regenerated
+             from the repository by gplbld/gen_includes.py, which already
+             produced SYSCOM/ERR.H, GPL.BP/ERRTEXT.H and GPL.BP/REVSTAMP.H.
+           * Regenerating OPCODES.H dropped OP.SDPYOBJ, left behind when
+             embedded Python was removed on 13 Aug.  Nothing referred to it.
+
+
 24 Aug 26  THE THREE-TIER SPLIT IS SETTLED.  What each account gets on
            creation now reflects the whole split rather than a starter cut.
 
