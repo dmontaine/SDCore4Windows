@@ -88,6 +88,10 @@
  * impersonated user.  So 8..11, decoded in words by the parent.
  */
 
+/* WIN32_LEAN_AND_MEAN keeps windows.h from dragging in winsock.h, which
+   conflicts with the POSIX <sys/socket.h> the Q3 sequence needs.  Mixing the
+   two header families is the usual way this file type fails to build. */
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <ntsecapi.h>
 #include <aclapi.h>
@@ -101,6 +105,14 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <dirent.h>
+#include <signal.h>
+#include <pwd.h>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -232,6 +244,318 @@ static int try_create(const char *what, const char *path) {
 static void show_uids(const char *when) {
   say("    runtime uid %-24s uid=%ld euid=%ld", when, (long)getuid(),
       (long)geteuid());
+}
+
+/* ==========================================================================
+   Q3 - DOES THE SWITCH SURVIVE WHAT A SESSION DOES NEXT?
+
+   Q1 and Q2 create their file IMMEDIATELY after impersonating.  A real API
+   session does not: APISRVR sends the SCRAM response over the socket, reads
+   the next request, runs vb.account (which reads VOC, may execute ON.LOGTO,
+   and switches account), then vb.open, then vb.write.  b28 plus this probe's
+   Q1/Q2 say the thread is NOT impersonating by the time that write lands, and
+   nothing in gplsrc reverts it - so something the session does in between
+   drops it, and the runtime is the only candidate left.
+
+   THIS IS A BISECT, NOT A GUESS.  Each operation below is something that flow
+   actually performs.  After EVERY one the thread token is read back AND a file
+   is created, so the step where the two stop agreeing with the target names
+   the culprit.  Both instruments are kept because they can disagree: the token
+   readback is what Windows thinks, the file owner is what the runtime did.
+
+   A step that changes nothing is as much a result as one that does, so every
+   row is printed whether or not it moved.
+   ========================================================================== */
+
+#define Q3_OPS 14
+
+static char q3_note[Q3_OPS][192];
+static char q3_who[Q3_OPS][256];
+static int  q3_state[Q3_OPS];   /* 1 impersonating, 0 not, -1 unreadable */
+static int  q3_made[Q3_OPS];
+static char q3_path[Q3_OPS][MAX_PATH];
+static int  q3_count = 0;
+
+static int q3_sock_a = -1, q3_sock_b = -1;
+
+/* The LSA connection the S4U token came from, handed in by measure() so step
+   12 can close it the way win32s4u.c does. */
+static LSA_HANDLE q3_hlsa = NULL;
+
+static const char *q3_label(int i) {
+  switch (i) {
+    case 0:  return "baseline (nothing yet)";
+    case 1:  return "usleep(1000)";
+    case 2:  return "stat() a directory";
+    case 3:  return "open/read/close a file";
+    case 4:  return "opendir/readdir";
+    case 5:  return "chdir() - the account switch";
+    case 6:  return "getcwd()";
+    case 7:  return "getpwuid(getuid())";
+    case 8:  return "getpwnam(target)";
+    case 9:  return "socket send/recv - the request loop";
+    case 10: return "select() on that socket";
+    case 11: return "raise(SIGUSR1) with a handler";
+    /* STEP 12 IS THE ONE THE PRODUCT DOES AND NEITHER PROBE DID.
+       win32s4u.c's exit_assume: runs on the SUCCESS path too (ok = 1 falls
+       into it) and deregisters the LSA connection the S4U token came from.
+       Both probes leak hlsa instead, so this is a real difference between the
+       instrument and the thing it models - exactly where a probe that works
+       and a product that does not can diverge.  It goes BEFORE fork because
+       fork is already known to be destructive and would mask it. */
+    case 12: return "LsaDeregisterLogonProcess (win32s4u)";
+    case 13: return "fork() + waitpid";
+    default: return "(no such step)";
+  }
+}
+
+static volatile sig_atomic_t q3_signalled = 0;
+static void q3_onsig(int sig) { (void)sig; q3_signalled = 1; }
+
+/* A connected loopback TCP pair.  MSYS2 emulates AF_UNIX over TCP anyway
+   (linuxio.c:748), and the API session's fd 0 is a real TCP socket, so this is
+   the faithful shape.  0 on success. */
+static int q3_make_pair(void) {
+  int lis = -1;
+  struct sockaddr_in sa;
+  socklen_t len = sizeof(sa);
+
+  if ((lis = socket(AF_INET, SOCK_STREAM, 0)) < 0) return -1;
+  memset(&sa, 0, sizeof(sa));
+  sa.sin_family = AF_INET;
+  sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  sa.sin_port = 0;
+  if (bind(lis, (struct sockaddr *)&sa, sizeof(sa)) < 0) goto fail;
+  if (listen(lis, 1) < 0) goto fail;
+  if (getsockname(lis, (struct sockaddr *)&sa, &len) < 0) goto fail;
+  if ((q3_sock_a = socket(AF_INET, SOCK_STREAM, 0)) < 0) goto fail;
+  if (connect(q3_sock_a, (struct sockaddr *)&sa, sizeof(sa)) < 0) goto fail;
+  if ((q3_sock_b = accept(lis, NULL, NULL)) < 0) goto fail;
+  close(lis);
+  return 0;
+fail:
+  if (lis >= 0) close(lis);
+  if (q3_sock_a >= 0) { close(q3_sock_a); q3_sock_a = -1; }
+  return -1;
+}
+
+/* Perform one operation and say what it ACTUALLY did, not what it meant to -
+   a step that silently no-opped would otherwise read as "this is harmless". */
+static void q3_do(int i, const char *user, const char *dir, const char *file,
+                  char *note, size_t n) {
+  switch (i) {
+    case 0:
+      snprintf(note, n, "nothing - this row is the control");
+      break;
+    case 1:
+      usleep(1000);
+      snprintf(note, n, "slept 1000us");
+      break;
+    case 2: {
+      struct stat st;
+      if (stat(dir, &st) == 0)
+        snprintf(note, n, "stat ok, mode 0%o", (unsigned)(st.st_mode & 07777));
+      else
+        snprintf(note, n, "stat failed - errno %d (%s)", errno, strerror(errno));
+      break;
+    }
+    case 3: {
+      int fd = open(file, O_RDONLY | O_BINARY);
+      if (fd >= 0) {
+        char b[64];
+        ssize_t got = read(fd, b, sizeof(b));
+        close(fd);
+        snprintf(note, n, "read %ld bytes", (long)got);
+      } else {
+        snprintf(note, n, "open failed - errno %d (%s)", errno, strerror(errno));
+      }
+      break;
+    }
+    case 4: {
+      DIR *d = opendir(dir);
+      int cnt = 0;
+      if (d != NULL) {
+        while (readdir(d) != NULL) cnt++;
+        closedir(d);
+        snprintf(note, n, "listed %d entries", cnt);
+      } else {
+        snprintf(note, n, "opendir failed - errno %d (%s)", errno, strerror(errno));
+      }
+      break;
+    }
+    case 5:
+      if (chdir(dir) == 0) snprintf(note, n, "chdir into the writable fixture");
+      else snprintf(note, n, "chdir failed - errno %d (%s)", errno, strerror(errno));
+      break;
+    case 6: {
+      char cwd[MAX_PATH];
+      if (getcwd(cwd, sizeof(cwd)) != NULL) snprintf(note, n, "cwd is %.150s", cwd);
+      else snprintf(note, n, "getcwd failed - errno %d", errno);
+      break;
+    }
+    case 7: {
+      struct passwd *pw = getpwuid(getuid());
+      snprintf(note, n, "getpwuid -> %s", pw ? pw->pw_name : "(null)");
+      break;
+    }
+    case 8: {
+      struct passwd *pw = getpwnam(user);
+      snprintf(note, n, "getpwnam(%s) -> %s", user,
+               pw ? pw->pw_name : "(null - not in the runtime's user db)");
+      break;
+    }
+    case 9: {
+      if (q3_sock_a < 0 && q3_make_pair() != 0) {
+        snprintf(note, n, "could not make a loopback pair - errno %d", errno);
+        break;
+      }
+      if (send(q3_sock_a, "ping", 4, 0) != 4) {
+        snprintf(note, n, "send failed - errno %d (%s)", errno, strerror(errno));
+      } else {
+        char b[8];
+        ssize_t got = recv(q3_sock_b, b, sizeof(b), 0);
+        snprintf(note, n, "sent 4, received %ld", (long)got);
+      }
+      break;
+    }
+    case 10: {
+      fd_set rfds;
+      struct timeval tv;
+      int r;
+      if (q3_sock_a < 0) { snprintf(note, n, "no socket - step 9 did not run"); break; }
+      FD_ZERO(&rfds);
+      FD_SET(q3_sock_b, &rfds);
+      tv.tv_sec = 0; tv.tv_usec = 1000;
+      r = select(q3_sock_b + 1, &rfds, NULL, NULL, &tv);
+      snprintf(note, n, "select returned %d", r);
+      break;
+    }
+    case 11: {
+      void (*old)(int) = signal(SIGUSR1, q3_onsig);
+      q3_signalled = 0;
+      raise(SIGUSR1);
+      usleep(2000);   /* Cygwin delivers on its own signal thread */
+      snprintf(note, n, "handler %s", q3_signalled ? "ran" : "DID NOT run");
+      if (old != SIG_ERR) signal(SIGUSR1, old);
+      break;
+    }
+    case 12: {
+      if (q3_hlsa == NULL) {
+        snprintf(note, n, "no LSA handle to deregister - nothing was done");
+      } else {
+        NTSTATUS ds = LsaDeregisterLogonProcess(q3_hlsa);
+        q3_hlsa = NULL;   /* not usable again either way */
+        snprintf(note, n, "deregistered, NTSTATUS 0x%08lx", (unsigned long)ds);
+      }
+      break;
+    }
+    case 13: {
+      pid_t p = fork();
+      if (p == 0) _exit(0);
+      if (p < 0) {
+        snprintf(note, n, "fork failed - errno %d (%s)", errno, strerror(errno));
+      } else {
+        int st = 0;
+        waitpid(p, &st, 0);
+        snprintf(note, n, "forked pid %ld, reaped", (long)p);
+      }
+      break;
+    }
+    default:
+      snprintf(note, n, "(no such step)");
+      break;
+  }
+}
+
+/* Runs WHILE IMPERSONATING.  Records only; the owners are read afterwards, by
+   q3_report(), because reading a DACL is itself something the switch could
+   refuse and that would confound the reading. */
+static void q3_run(const char *user, const char *writedir, const char *file) {
+  char keepcwd[MAX_PATH];
+  int i;
+
+  if (getcwd(keepcwd, sizeof(keepcwd)) == NULL) keepcwd[0] = '\0';
+  q3_count = 0;
+
+  for (i = 0; i < Q3_OPS; i++) {
+    HANDLE th = NULL;
+
+    q3_do(i, user, writedir, file, q3_note[i], sizeof(q3_note[i]));
+
+    /* What Windows thinks.  ERROR_NO_TOKEN is the switch being GONE, and it is
+       told apart from a token that cannot be read for some other reason. */
+    if (OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &th)) {
+      snprintf(q3_who[i], sizeof(q3_who[i]), "%s", token_user(th));
+      q3_state[i] = 1;
+      CloseHandle(th);
+    } else if (GetLastError() == ERROR_NO_TOKEN) {
+      snprintf(q3_who[i], sizeof(q3_who[i]), "(no thread token - NOT impersonating)");
+      q3_state[i] = 0;
+    } else {
+      snprintf(q3_who[i], sizeof(q3_who[i]), "(OpenThreadToken failed: %s)",
+               winerr(GetLastError()));
+      q3_state[i] = -1;
+    }
+
+    /* What the runtime DID.  Created with the same POSIX open() as SD's. */
+    snprintf(q3_path[i], sizeof(q3_path[i]), "%s\\q3-%02d", writedir, i);
+    unlink(q3_path[i]);
+    {
+      int fd = open(q3_path[i], O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600);
+      if (fd >= 0) { q3_made[i] = 1; close(fd); }
+      else         { q3_made[i] = 0; }
+    }
+    q3_count++;
+  }
+
+  if (keepcwd[0] != '\0') { if (chdir(keepcwd) != 0) { /* reported below */ } }
+}
+
+/* Called AFTER RevertToSelf. */
+static void q3_report(const char *want) {
+  int i, lost = -1;
+
+  say("Q3 - DOES THE SWITCH SURVIVE WHAT A SESSION DOES NEXT?");
+  say("  target is %s.  Each row: the op, then the thread token and the owner", want);
+  say("  of a file created straight after it.");
+  say("");
+  say("   # operation                            token after      owner of file made after");
+  say("   - ------------------------------------ ---------------- -------------------------");
+
+  for (i = 0; i < q3_count; i++) {
+    int ok = 0;
+    const char *owner = q3_made[i] ? file_owner(q3_path[i], &ok) : "(not created)";
+    char shortwho[32];
+
+    if (q3_state[i] == 1) {
+      snprintf(shortwho, sizeof(shortwho), "%.31s",
+               (strcmp(q3_who[i], want) == 0) ? "target" : q3_who[i]);
+    } else if (q3_state[i] == 0) {
+      snprintf(shortwho, sizeof(shortwho), "NONE");
+    } else {
+      snprintf(shortwho, sizeof(shortwho), "unreadable");
+    }
+
+    say("  %2d %-36s %-16s %s", i, q3_label(i), shortwho, owner);
+
+    if (lost < 0 && q3_made[i] && ok && strcmp(owner, want) != 0) lost = i;
+    if (lost < 0 && q3_state[i] != 1) lost = i;
+  }
+  say("");
+  for (i = 0; i < q3_count; i++) say("   %2d %-36s %s", i, q3_label(i), q3_note[i]);
+  say("");
+
+  if (lost < 0) {
+    say("  THE SWITCH SURVIVED EVERY STEP.  Nothing a session does here drops");
+    say("  it, so the thing that drops it in a real API session is NOT in this");
+    say("  list - and the next move is (b), reporting ImpersonatingUser() from");
+    say("  inside a live session, which costs a cycle.");
+  } else {
+    say("  *** THE SWITCH IS LOST AT STEP %d: %s ***", lost, q3_label(lost));
+    say("  That step is the culprit, and it is reachable without touching");
+    say("  sd.exe.  Everything before it held.");
+  }
+  say("");
 }
 
 /* ==========================================================================
@@ -448,6 +772,12 @@ static int measure(const char *tag, const char *user, const char *allowed,
   m_forbidden = try_open("forbidden file", forbidden);
   made_during = try_create("file created WHILE impersonating", during_path);
 
+  /* Q3 runs LAST of the impersonated work, so it cannot disturb Q1/Q2 above -
+     their result stays exactly what the committed run produced. */
+  say("");
+  q3_hlsa = hlsa;   /* step 12 closes it, as win32s4u.c does on success */
+  q3_run(user, writedir, allowed);
+
   RevertToSelf();
   say("");
 
@@ -478,6 +808,12 @@ static int measure(const char *tag, const char *user, const char *allowed,
   say("  created WHILE impersonating  : %s", owner_during);
   say("  thread token at that moment  : %s", thread_who);
   say("");
+
+  {
+    char want[256];
+    snprintf(want, sizeof(want), "%s\\%s", dom, user);
+    q3_report(want);
+  }
 
   /* ---- verdict -------------------------------------------------------- */
   access_governed = (!m_forbidden && m_allowed);
@@ -586,6 +922,30 @@ int main(int argc, char *argv[]) {
     say("  -> %s", who);
     say("  readable: %s", ok ? "yes" : "NO");
     return ok ? 0 : 1;
+  }
+
+  /* --- SELF-TEST for the Q3 sequence.  Q3 only executes after a successful
+     S4U logon, so without this mode its first exercise would be the elevated
+     run - the same blind spot the --ownercheck mode exists to close.  This
+     runs the identical sequence WITHOUT impersonating, which proves the
+     operations execute, the socket/fork/signal legs work, the files get made
+     and their owners get read.  It is a MECHANICS CHECK, NOT A MEASUREMENT,
+     and it says so: every row must show this process's own identity, and
+     q3_report must therefore declare the switch lost at step 0 - which also
+     proves the detection fires rather than merely never firing. ---------- */
+  if (argc == 5 && strcmp(argv[1], "--q3check") == 0) {
+    char want[256];
+    char dom2[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD dl = sizeof(dom2);
+    say("--q3check: MECHANICS ONLY, NOT A MEASUREMENT.");
+    say("  Nothing is impersonated, so every row must read this process's own");
+    say("  identity and step 0 must be reported as the loss point.");
+    say("");
+    if (!GetComputerNameA(dom2, &dl)) { say("GetComputerNameA failed"); return R_CALL; }
+    q3_run(argv[2], argv[4], argv[3]);
+    snprintf(want, sizeof(want), "%s\\%s", dom2, argv[2]);
+    q3_report(want);
+    return 0;
   }
 
   /* --- the forked child does one measurement and says nothing else ----- */
