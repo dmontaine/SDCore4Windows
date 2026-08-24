@@ -37,6 +37,14 @@
 #     "genuinely valuable", and section 7 step 12 worked from it.  A machine
 #     built by this script can build and test SD; it cannot do the attribution
 #     work section 2 is written around until that tree is copied over by hand.
+#   * IT CANNOT CLONE Projects\sdhelp EITHER, and 24 Aug 2026 the owner asked
+#     for it anyway: "the documentation process may happen on another computer
+#     and I want those resources handy".  It is 30 MB and ~1300 files of
+#     OpenQM 2.6.6 and SD help - PDF and HTML, third-party, no remote - so it
+#     can be neither cloned nor vendored here (no binaries in this
+#     repository).  -SdHelpSource copies it from a path you supply; without
+#     one it is REPORTED as a hand-carry item rather than passed over in
+#     silence, which is the GPL.BP treatment above and for the same reason.
 #
 # THE LAYOUT IS LOAD-BEARING, NOT TIDINESS.  sdclilib32\Makefile carries
 # "SRCDIR ?= ../sd4windows/sdb_ai/sd64/gplsrc/sdclilib", so the four clones
@@ -53,6 +61,12 @@
 param(
     # The PARENT directory the four repositories become siblings in.
     [string]$Root = (Join-Path $env:USERPROFILE 'Projects'),
+
+    # Where to copy Projects\sdhelp FROM - a USB drive, a share, a pCloud
+    # sync folder, or another dev box's Projects\sdhelp.  Omitted, the tree
+    # is reported as owed rather than fetched; it has no remote to clone.
+    # The archive it unpacks from is "sdhelp_2-6-6 20260221 AM" on pCloud.
+    [string]$SdHelpSource = '',
 
     # Report what is missing and change nothing.
     [switch]$CheckOnly,
@@ -728,6 +742,63 @@ function Step-Build {
     }
 }
 
+# 24 Aug 26 - owner's instruction: the sdhelp tree must reach a new machine,
+# because the documentation work may be done there.  It is not a repository
+# and never will be - 30 MB of third-party PDF and HTML with no remote - so
+# this copies rather than clones, and says so plainly when it cannot.
+#
+# THE COUNT IS REPORTED, NOT JUST THE EXISTENCE OF THE DIRECTORY.  An empty
+# or half-copied sdhelp\ is the failure this would otherwise call [ok]:
+# a bare Test-Path passes on a directory somebody created and never filled.
+function Step-SdHelp {
+    Head 'sdhelp (documentation resources)'
+
+    $dest = Join-Path $Root 'sdhelp'
+    $have = 0
+    if (Test-Path -LiteralPath $dest) {
+        $have = @(Get-ChildItem -LiteralPath $dest -Recurse -File -ErrorAction SilentlyContinue).Count
+    }
+
+    if ($have -gt 0) {
+        Ok ('sdhelp   - already present, ' + $have + ' file(s) in ' + $dest)
+        return
+    }
+
+    if ($CheckOnly) {
+        Hand ('Projects\sdhelp is missing or empty at ' + $dest +
+              ' - re-run with -SdHelpSource <path> to copy it')
+        return
+    }
+
+    if ($SdHelpSource) {
+        if (-not (Test-Path -LiteralPath $SdHelpSource)) {
+            Bad ('-SdHelpSource ' + $SdHelpSource + ' does not exist, so nothing was copied')
+            return
+        }
+        $src = @(Get-ChildItem -LiteralPath $SdHelpSource -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($src -eq 0) {
+            Bad ('-SdHelpSource ' + $SdHelpSource + ' holds no files - refusing to report an empty copy as done')
+            return
+        }
+        Say ('  copying ' + $src + ' file(s) from ' + $SdHelpSource)
+        # robocopy exit codes below 8 are success; it returns 1 for "files copied".
+        $null = robocopy $SdHelpSource $dest /E /NFL /NDL /NJH /NJS /R:1 /W:1
+        if ($LASTEXITCODE -ge 8) {
+            Bad ('robocopy failed with exit ' + $LASTEXITCODE)
+            return
+        }
+        $now = @(Get-ChildItem -LiteralPath $dest -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($now -lt $src) {
+            Bad ('copied ' + $now + ' of ' + $src + ' file(s) - sdhelp is incomplete')
+        } else {
+            Ok ('sdhelp   - copied, ' + $now + ' file(s) in ' + $dest)
+        }
+        return
+    }
+
+    Hand ('Projects\sdhelp is NOT obtainable by this script - it has no remote and is 30 MB of third-party PDF/HTML. It is the OpenQM 2.6.6 and SD help set, wanted whenever documentation is written. Copy it from a machine that has it, or re-run this script with -SdHelpSource <path>. The archive is "sdhelp_2-6-6 20260221 AM" on pCloud')
+}
+
 function Step-Report {
     Head 'Summary'
 
@@ -776,7 +847,7 @@ Step-Preflight
 
 foreach ($step in @('Step-Git', 'Step-Gh', 'Step-Msys', 'Step-Packages',
                     'Step-Sodium', 'Step-Inno', 'Step-Ssh', 'Step-Clone',
-                    'Step-Build')) {
+                    'Step-SdHelp', 'Step-Build')) {
     try {
         & $step
     } catch {
