@@ -247,6 +247,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # Same three parts and the same reason as probe-s4u above.
                   'probe-impersonate.c', 'probe-impersonate.ps1',
                   'probe-impersonate.exe',
+                  # 24 Aug 26 - probe-impfork, which re-asks probe-impersonate's
+                  # question in the shape an API session actually has (a
+                  # fork()ed and exec()d Cygwin child, sdwind.c:491) and adds
+                  # the ownership leg that separates b28's two explanations.
+                  # Same three parts and the same reason as probe-impersonate
+                  # directly above: the runner COMPILES ON EVERY RUN, so an
+                  # unlisted .exe would report the tree stale the moment
+                  # anybody used the instrument.
+                  'probe-impfork.c', 'probe-impfork.ps1', 'probe-impfork.exe',
                   # 23 Aug 26 - section 7 step 14's end-to-end check: does an
                   # API session actually run CONFINED to the user, not just
                   # logged in as them.  Listed in the commit that creates it.
