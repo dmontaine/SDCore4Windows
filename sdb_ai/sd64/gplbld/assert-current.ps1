@@ -264,6 +264,16 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # section 7 step 7's rule.  PowerShell only, so no build
                   # product to list alongside it.
                   'probe-sessionfork.ps1',
+                  # 24 Aug 26 - verify-lineendings, section 7 step 16 (a).  It
+                  # plants CRLF records from OUTSIDE SD, which is what an
+                  # external editor does, and asserts they read back with no
+                  # trailing CR - with a LONE CR fixture as the control, since
+                  # a fix that stripped every CR would pass the rest and
+                  # corrupt data.  Its straddle fixture puts a CRLF exactly on
+                  # the 2048-byte SEQ_BUFFER_SIZE boundary, which is the case
+                  # no small fixture reaches.  Listed in the commit that
+                  # creates it, under section 7 step 7's rule.
+                  'verify-lineendings.ps1',
                   # 23 Aug 26 - section 7 step 14's end-to-end check: does an
                   # API session actually run CONFINED to the user, not just
                   # logged in as them.  Listed in the commit that creates it.
