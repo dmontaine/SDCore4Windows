@@ -250,19 +250,44 @@ an instrument failure, NOT a finding of "no forks".
 '@
     }
 
-    # Sessions are the children of sdwind.  Local Invoke-SD calls the verifier
-    # makes are children of the VERIFIER, so parentage separates them cleanly -
-    # no command-line matching anywhere.
-    $sessions = @($all | Where-Object { $sdwindPids -contains $_.ParentPid })
+    # -----------------------------------------------------------------------
+    # A CYGWIN fork()+exec() IS **TWO** WINDOWS PROCESS CREATIONS, AND READING
+    # IT AS ONE IS HOW THE FIRST VERSION OF THIS SCRIPT GOT THE RIGHT ANSWER
+    # FOR THE WRONG REASON ON b29.  fork() clones the image, so the child is
+    # briefly named after the PARENT's exe; exec() then starts a NEW Windows
+    # process for the target and the clone exits.  So sdwind spawning a session
+    # appears as:
+    #
+    #     sdwind.exe pid A   parent <daemon>     <- the fork clone
+    #     sd.exe     pid B   parent A            <- the exec target = THE SESSION
+    #
+    # The first version called A the session and B "a fork by the session",
+    # and reported that the session forks - which is true, but NOT because of
+    # those two rows: they are the spawn at sdwind.c:491, which happens BEFORE
+    # the hook and was never in question.  The real forks are children of B.
+    #
+    # Naming the exec target matters as well as counting it: the image the
+    # clone turns into is what identifies the call site.  A powershell.exe
+    # means !ps_script (op_sh.c:308 builds the path, :379 is the fork), which
+    # is how is_grp_member reaches Windows.
+    # -----------------------------------------------------------------------
+    $clones = @($all | Where-Object { $sdwindPids -contains $_.ParentPid })
     Say ''
-    Say "API SESSIONS FORKED BY sdwind: $($sessions.Count)"
+    Say "FORK CLONES MADE BY sdwind (sdwind.c:491, before the hook): $($clones.Count)"
+    foreach ($c in $clones) { Say "  pid $($c.Pid)  $($c.Name)  at $($c.Time.ToString('HH:mm:ss.fff'))" }
+
+    $clonePids = @($clones | ForEach-Object { $_.Pid })
+    $sessions  = @($all | Where-Object { $clonePids -contains $_.ParentPid })
+
+    Say ''
+    Say "API SESSIONS (the exec targets of those clones): $($sessions.Count)"
     foreach ($s in $sessions) { Say "  pid $($s.Pid)  $($s.Name)  at $($s.Time.ToString('HH:mm:ss.fff'))" }
 
     if ($sessions.Count -eq 0) {
         Fail @'
-no child of sdwind was seen, so the API session process was never identified.
-Without knowing which process WAS the session, "the session did not fork" is
-not a claim this run is entitled to make.
+sdwind made no fork clone that went on to exec, so the API session process was
+never identified. Without knowing which process WAS the session, "the session
+did not fork" is not a claim this run is entitled to make.
 '@
     }
 
@@ -274,18 +299,27 @@ not a claim this run is entitled to make.
     Say ' VERDICT'
     Say '============================================================'
     Say "  session pids watched : $($sessionPids -join ', ')"
-    Say "  starts whose parent is one of them : $($forks.Count)"
+    Say "  fork clones made BY a session : $($forks.Count)"
 
     if ($forks.Count -gt 0) {
         foreach ($f in $forks) {
-            Say ("     {0}  {1} pid {2}, parent {3}" -f $f.Time.ToString('HH:mm:ss.fff'), $f.Name, $f.Pid, $f.ParentPid)
+            # What did the clone turn into?  That names the call site.
+            $target = @($all | Where-Object { $_.ParentPid -eq $f.Pid })
+            $what = if ($target.Count -gt 0) {
+                        ($target | ForEach-Object { "$($_.Name) pid $($_.Pid)" }) -join ', '
+                    } else { '(no exec seen - a plain fork, or the child died first)' }
+            Say ("     {0}  clone {1} pid {2} -> {3}" -f $f.Time.ToString('HH:mm:ss.fff'), $f.Name, $f.Pid, $what)
         }
         Say ''
-        Say '  *** THE SESSION DOES FORK. ***'
-        Say '  probe-impfork showed fork() drops the impersonation, so this is'
-        Say '  very likely the mechanism behind b28. Identify the call site -'
-        Say '  the listed image name and timing say which - and step 14 has its'
-        Say '  cause without a change to sd.exe.'
+        Say '  *** THE SESSION DOES FORK, AFTER sdwind SPAWNED IT. ***'
+        Say '  probe-impfork measured that fork() silently drops a thread'
+        Say '  impersonation, so this is the mechanism behind b28.'
+        Say ''
+        Say '  If the exec target above is powershell.exe, the call site is'
+        Say '  !ps_script (op_sh.c:379 forks, :308 builds the path). The only'
+        Say '  thing reaching it after login is is_grp_member - APISRVR:566,'
+        Say '  inside vb.account (:439), the account switch that runs AFTER'
+        Say '  the hook at :1472 and BEFORE any file is opened for the caller.'
         exit 20
     }
 
