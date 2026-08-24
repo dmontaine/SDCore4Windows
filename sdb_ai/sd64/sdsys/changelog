@@ -5,6 +5,38 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+23 Aug 26  A SILENT INSTALL NOW HAS TO SAY THAT IT IS SETTING NO PASSWORD.
+
+           Installing with /SILENT or /VERYSILENT cannot ask you for a
+           password, so it used to finish with no password set for any
+           account - and said nothing about it.  The result looked like a
+           complete installation but could not be reached over ssh or through
+           the SD API at all.
+
+           A silent install is now refused unless you also pass:
+
+               /NOPASSWORD=yes
+
+           which says you accept that.  When it does run that way, it writes a
+           line into the installation log saying no password was set and what
+           that costs.  Nothing changes for a normal install: it still asks for
+           a password when it finishes.
+
+23 Aug 26  YOU ARE NOW TOLD WHAT SETTING NO PASSWORD ACTUALLY COSTS.
+
+           Both the end of the installer and SD's own prompt used to say that
+           without a password you could not use ssh or the API, and stopped
+           there.  That was true and easy to read as "some things will not
+           work".
+
+           It is stronger than that, and both now say so: with no password the
+           account can be used ONLY at that computer - at the keyboard, or
+           through Remote Desktop or similar remote-control software - and only
+           from a session run as administrator.
+
+           You can still choose it, and SD still asks again the next time you
+           open the account.
+
 23 Aug 26  THE PCODE LIBRARY IS NO LONGER WRITABLE BY SD USERS.
 
            <sysdir>\bin holds the pcode library - the interpreter itself,

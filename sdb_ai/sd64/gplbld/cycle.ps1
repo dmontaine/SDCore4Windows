@@ -43,6 +43,12 @@
     Install with /VERYSILENT.  Off by default: the wizard pages are part of
     what a cycle is meant to show (PROJECT_STATUS.md 7 step 3).
 
+    IT ALSO COLLECTS NO PASSWORD, and that is not a detail.  The password step
+    runs only on a non-silent install (sd.iss DeinitializeSetup), so a -Silent
+    cycle leaves EVERY account without a credential: no ssh, no API, and the
+    elevated half of the verify suite has nothing to log in with.  Step 9 says
+    so at the end of the run.  Use the default unless you have a reason.
+
 .EXAMPLE
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\cycle.ps1
 #>
@@ -433,7 +439,18 @@ foreach ($t in @($PfTree, $PdTree)) {
 Step 7 "Installing"
 
 $installArgs = @()
-if ($Silent) { $installArgs += '/VERYSILENT' }
+if ($Silent) {
+    # 23 Aug 26 - /NOPASSWORD=yes IS REQUIRED NOW, AND WITHOUT IT THE INSTALLER
+    # REFUSES.  sd.iss's InitializeSetup turns a bare /VERYSILENT away, because
+    # DeinitializeSetup runs the password step only when NOT silent - so a
+    # silent install finishes with an empty credential register and nothing
+    # says so.  This is the acknowledgement, not a way round it: a -Silent
+    # cycle DOES leave every account without a password, step 9 below reports
+    # it, and the elevated half of the verify suite needs one to exist.
+    $installArgs += '/VERYSILENT'
+    $installArgs += '/NOPASSWORD=yes'
+    Write-Host "   -Silent: no password will be collected (passing /NOPASSWORD=yes)" -ForegroundColor Yellow
+}
 
 # 17 Aug 26 - Start-Process -Wait, NOT "& $setup".  THE CALL OPERATOR DOES NOT
 # WAIT FOR A GUI-SUBSYSTEM PROCESS, and Setup.exe is one - PE subsystem 2,

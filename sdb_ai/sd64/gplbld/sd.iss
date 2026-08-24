@@ -650,6 +650,49 @@ begin
      The question is about the machine as we found it, so it is asked once,
      here, exactly as the data tree above is. *)
   SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
+
+  (* A SILENT INSTALL MUST SAY OUT LOUD THAT IT IS ACCEPTING NO PASSWORD.
+     23 Aug 2026, owner's decision.
+
+     WHY THIS EXISTS.  DeinitializeSetup runs the password step only when NOT
+     silent, so a silent install finishes with an EMPTY credential register -
+     no account can be reached over ssh or through the API, and an elevated
+     "sd <command>" at a console stops at the credential prompt.  The tree
+     otherwise looks complete and nothing said a word.  That cost two sessions
+     in Aug 2026: it was handed over as an unexplained hang in SD's start-up
+     and was neither in start-up nor in SD.
+
+     REFUSED RATHER THAN WARNED, because a warning in a silent install is read
+     by nobody - that is what silent means.  The flag makes the choice
+     deliberate and leaves it in the command line, where the next person can
+     see it.
+
+     NOT A BAN ON SILENT INSTALLS.  gplbld\cycle.ps1 passes the flag and is
+     unaffected; so is any deployment that means it.  What is refused is
+     acquiring a credential-less system by accident.
+
+     {param:...} DEFAULTS TO 'no' SO A BARE /SILENT LANDS HERE.  Compared with
+     CompareText so /NOPASSWORD=YES and =yes both count. *)
+  if WizardSilent and
+     (CompareText(ExpandConstant('{param:NOPASSWORD|no}'), 'yes') <> 0) then
+  begin
+    Log('SD: refusing a silent install - no /NOPASSWORD=yes given, and a ' +
+        'silent install collects no password.');
+    SuppressibleMsgBox(
+      'This is a silent install, and a silent install cannot ask for a password.' + #13#10#13#10 +
+      'It would finish with NO password set for any account, which means:' + #13#10#13#10 +
+      '    - ssh cannot be used' + #13#10 +
+      '    - the SD API cannot be used' + #13#10 +
+      '    - SD could be used ONLY at this computer, from a session run as' + #13#10 +
+      '      administrator' + #13#10#13#10 +
+      'If that is what you want, install again adding:   /NOPASSWORD=yes' + #13#10#13#10 +
+      'Otherwise run the installer normally and it will ask for a password ' +
+      'when it finishes.',
+      mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
   Result := True;
 end;
 
@@ -1273,8 +1316,20 @@ end;
   machine where nothing was installed. }
 procedure DeinitializeSetup;
 begin
-  if InstallReachedPostInstall and not WizardSilent then
-    RunFinishingStep;
+  if InstallReachedPostInstall then
+  begin
+    if WizardSilent then
+      (* 23 Aug 2026 - SAY IT IN THE LOG, since there is no window to say it in.
+         Reaching here silently means /NOPASSWORD=yes was given and the person
+         accepted this at InitializeSetup; the line is for whoever reads the log
+         afterwards, which is usually somebody wondering why ssh is refused. *)
+      Log('SD: SILENT INSTALL - the password step did not run.  No account has ' +
+          'a credential: ssh and the API will refuse every login, and SD can be ' +
+          'used only at this computer from a session run as administrator.  ' +
+          'Set one with "sd" at a console, or run SET.PASSWORD.')
+    else
+      RunFinishingStep;
+  end;
 end;
 
 { LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did
@@ -1926,7 +1981,24 @@ begin
                          'asks before it starts.' + #13#10#13#10 +
                          'The password step can run now, before you sign out, because it ' +
                          'borrows the installer''s rights. If you skip it, SD asks again ' +
-                         'the first time you open the account.' + #13#10#13#10;
+                         'the first time you open the account.' + #13#10#13#10 +
+      { 23 Aug 26 - WHAT SKIPPING ACTUALLY COSTS, owner's instruction the same
+        day.  The paragraph above named ssh and the API and stopped there, which
+        reads as "some features are unavailable".  It is stronger than that: with
+        no password the account is reachable ONLY from this machine, and only
+        from an elevated session, because PROJECT_STATUS.md 5.6.2 gives local
+        terminal access to administrators and LOGIN's 21 Aug rule admits the
+        console only when elevated - $cred is locked to SYSTEM and
+        Administrators, so an ordinary session cannot read it.
+
+        REMOTE DESKTOP IS NAMED because it is the case people get wrong: it
+        feels like connecting from another computer and is not.  5.6.2 puts it
+        with the physical console, on the administrator's side of the line. }
+                         'IF YOU SET NO PASSWORD, this account can be used ONLY at this ' +
+                         'computer - at the keyboard, or through Remote Desktop or similar ' +
+                         'remote-control software - and only from a session run as ' +
+                         'administrator. ssh and the SD API will refuse it until a password ' +
+                         'is set.' + #13#10#13#10;
          end;
       { Lower case for the reason given at code 0 above. }
       2: AccountMsg := 'Your SD account, ' + Lowercase(ExpandConstant('{username}')) +
