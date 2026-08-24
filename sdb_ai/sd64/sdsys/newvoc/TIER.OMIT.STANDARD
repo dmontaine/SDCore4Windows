@@ -13,7 +13,6 @@ map
 debug
 ed
 edit
-modify
 create.file
 delete.file
 clear.file

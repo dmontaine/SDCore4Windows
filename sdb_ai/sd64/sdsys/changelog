@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  MODIFY HAS BEEN REMOVED FROM SD CORE.
+
+           MODIFY, the full-screen record editor inherited from OpenQM, is no
+           longer part of the product.  No account of any tier receives it.
+           ED remains, and is the way to edit a record.
+
+           * MODIFY.ACCOUNT AND MODIFY.PASSWORD ARE NOT AFFECTED.  They are
+             different verbs with different programs behind them, and both
+             remain administrator commands.
+           * A programmer account's VOC drops from 396 records to 395, and an
+             administrator's from 417 to 416.  A standard account is
+             unchanged at 354, because MODIFY was already withheld from it.
+           * An account created before this update keeps whatever was in its
+             VOC at the time - SD only ever adds records at an update, never
+             removes them.
+
+
 24 Aug 26  THREE MORE ERROR CODES HAVE MESSAGE TEXT, and the OPGEN
            developer tool is gone.
            * Errors 4100 (Undefined Server Error), 4101 (Invalid File

@@ -14,7 +14,7 @@
 
       - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
         over SCRAM and attach to their own account
-      - what each tier can DO once in, as a VOC count: 354 / 396 / 417.  A
+      - what each tier can DO once in, as a VOC count: 354 / 395 / 416.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
       - a wrong password is refused, so the successes mean something
@@ -133,8 +133,8 @@ if (-not (Test-Path -LiteralPath $SdConnect)) {
 
 $Tiers = @(
     [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 354 }
-    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 396 }
-    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 417 }
+    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 395 }
+    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 416 }
 )
 foreach ($t in $Tiers) {
     if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }
