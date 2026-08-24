@@ -83,9 +83,32 @@
  *
  * BUILT WITH THE MSYS2 gcc, not UCRT64 - the runtime is the subject.
  *
+ * ---------------------------------------------------------------------------
+ * QUESTION 4, ADDED 24 Aug 26 - THE CLASS FIX, AND IT IS THE LAST UNKNOWN IN
+ * STEP 14's DECISION.  Q3 settled that fork() is the one thing that drops the
+ * impersonation.  That leaves the owner choosing between re-impersonating
+ * after each fork (narrow: fixes the LOGTO group check, leaves PHANTOM and SH
+ * dropping it silently) and cygwin_internal(CW_SET_EXTERNAL_TOKEN) (class:
+ * covers all of them), which PROJECT_STATUS records as "unproven here".
+ *
+ * Q4 proves or disproves it, WITHOUT TOUCHING sd.exe - this file is on
+ * assert-current's $neverShipped list, so the leg costs no cycle.  It measures
+ * TWO forms, because the bare call may be a no-op by design: it REGISTERS a
+ * token for the runtime to adopt at its next user-context change, and
+ * register-then-seteuid is the sequence Cygwin's own sshd and su use.
+ * Measuring only the bare call could report "the class fix does not work"
+ * when what was measured is "the call alone changes nothing".
+ *
+ * Its control is a PLAIN fork taken first, which must LOSE the identity; if
+ * it does not, the run has not reproduced the defect and the leg is VOID.
+ *
+ * ---------------------------------------------------------------------------
  * EXIT CODES.  2 usage, 3 VOID, 4 a required call failed, and on a completed
  * measurement 8 + 1 if access was governed + 2 if ownership tracked the
- * impersonated user.  So 8..11, decoded in words by the parent.
+ * impersonated user + 4 if the external token carried it across fork() in
+ * either form.  So 8..15, decoded in words by the parent.  R_EXTTOK and
+ * R_CALL are both 4 and do not collide: R_CALL is only ever returned bare,
+ * without R_BASE.
  */
 
 /* WIN32_LEAN_AND_MEAN keeps windows.h from dragging in winsock.h, which
@@ -113,6 +136,10 @@
 #include <dirent.h>
 #include <signal.h>
 #include <pwd.h>
+/* cygwin_internal() and CW_SET_EXTERNAL_TOKEN - Q4's whole subject.  It is
+   the MSYS2 runtime's own header, so it goes AFTER windows.h: it needs the
+   Win32 HANDLE type the external-token call is given. */
+#include <sys/cygwin.h>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -124,6 +151,10 @@
 #define R_BASE  8
 #define R_ACCESS 1
 #define R_OWNER  2
+/* Bit 4 was free: completed codes were 8..11 and R_USAGE/R_VOID/R_CALL are
+   only ever returned bare, without R_BASE.  Q4 sets it when the external
+   token carried the impersonation across fork() in EITHER form. */
+#define R_EXTTOK 4
 
 static void say(const char *fmt, ...) {
   va_list ap;
@@ -559,6 +590,361 @@ static void q3_report(const char *want) {
 }
 
 /* ==========================================================================
+   Q4 - CAN THE RUNTIME BE MADE TO CARRY THE TOKEN ACROSS fork()?
+
+   Q3 settled that fork() is the ONE thing that drops the impersonation.
+   PROJECT_STATUS section 7 step 14 turns that into a choice that is the
+   owner's, and one half of it is unmeasured:
+
+     NARROW  re-impersonate after each fork().  Fixes the LOGTO group check
+             and leaves PHANTOM (op_kernel.c:735) and SH (op_sh.c:379)
+             dropping it silently, exactly as they do today.
+     CLASS   cygwin_internal(CW_SET_EXTERNAL_TOKEN) - the runtime carries the
+             token itself, so every fork() is covered.  Recorded as "unproven
+             here", and it is the ONLY unknown left in the decision.
+
+   THIS LEG SETTLES THE CLASS OPTION AND IT DOES NOT TOUCH sd.exe, so it costs
+   no cycle: probe-impfork.c is on assert-current's $neverShipped list.
+
+   TWO FORMS ARE MEASURED, BECAUSE ONE OF THEM MAY BE A NO-OP BY DESIGN.
+   CW_SET_EXTERNAL_TOKEN REGISTERS a token for the runtime to adopt at its
+   next user-context change; it is not itself documented to perform one.  The
+   sequence Cygwin's own sshd and su use is register-THEN-seteuid.  Measuring
+   only the bare call could therefore report "the class fix does not work"
+   when what was actually measured is "the call alone changes nothing", and
+   that is precisely the false verdict CLAUDE.md's instrument rule is about.
+
+     form 1   CW_SET_EXTERNAL_TOKEN, then fork
+     form 2   CW_SET_EXTERNAL_TOKEN, then seteuid(target), then fork
+
+   THE CONTROL IS ROW 1 AND IT IS WHAT MAKES THE LEG A MEASUREMENT.  Before
+   either form is tried, a PLAIN fork is taken while impersonating.  It must
+   LOSE the identity.  If it does not, this run has not reproduced the defect
+   at all, and a later row reading "survived" would be evidence of nothing -
+   so the leg is declared VOID rather than passing.  A test that passes
+   because it did nothing must fail.
+
+   EVERY ROW READS BOTH INSTRUMENTS, not one: the thread token Windows
+   reports, AND the owner of a file created through the runtime in the same
+   breath.  Step 14 needs the second because the first can hold while the file
+   layer still writes as the service - that was b28's whole confusion - so a
+   form only counts as carrying the identity when BOTH say the target.
+   ========================================================================== */
+
+#define Q4_ROWS 7
+static char q4_note[Q4_ROWS][256];
+static char q4_who[Q4_ROWS][256];
+static char q4_uids[Q4_ROWS][96];
+static char q4_path[Q4_ROWS][MAX_PATH];
+static int  q4_state[Q4_ROWS];      /* 1 token read, 0 none, -1 unreadable */
+static int  q4_made[Q4_ROWS];
+static int  q4_count = 0;
+static uid_t q4_target_uid = (uid_t)-1;
+static int  q4_seteuid_rc = -2;     /* -2 = not attempted */
+static int  q4_seteuid_errno = 0;
+/* The euid AT THE MOMENT seteuid() was called.  If the target equals it, the
+   call had nothing to do: Cygwin returns 0 from a fast path without touching
+   the user context, so the runtime never adopts the registered token and
+   form 2 is UNMEASURED rather than failed.  Without this the --q4check mode -
+   which necessarily targets its own uid - would report a confident "lost"
+   for a form it never exercised. */
+static uid_t q4_euid_at_seteuid = (uid_t)-1;
+
+static const char *q4_label(int i) {
+  switch (i) {
+    case 0: return "impersonated, nothing else done";
+    case 1: return "fork() + waitpid   <- CONTROL, must lose it";
+    case 2: return "re-impersonated";
+    case 3: return "CW_SET_EXTERNAL_TOKEN registered";
+    case 4: return "fork() + waitpid   <- FORM 1 ANSWER";
+    case 5: return "re-registered, then seteuid(target)";
+    case 6: return "fork() + waitpid   <- FORM 2 ANSWER";
+    default: return "(no such row)";
+  }
+}
+
+/* One row: what Windows says this thread is, what the runtime says the user
+   is, and who owns a file created through the runtime in the same breath. */
+static void q4_snap(int i, const char *writedir) {
+  HANDLE th = NULL;
+  int fd;
+
+  if (OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &th)) {
+    snprintf(q4_who[i], sizeof(q4_who[i]), "%s", token_user(th));
+    q4_state[i] = 1;
+    CloseHandle(th);
+  } else if (GetLastError() == ERROR_NO_TOKEN) {
+    snprintf(q4_who[i], sizeof(q4_who[i]), "(no thread token - NOT impersonating)");
+    q4_state[i] = 0;
+  } else {
+    snprintf(q4_who[i], sizeof(q4_who[i]), "(OpenThreadToken failed: %s)",
+             winerr(GetLastError()));
+    q4_state[i] = -1;
+  }
+
+  snprintf(q4_uids[i], sizeof(q4_uids[i]), "uid %ld euid %ld",
+           (long)getuid(), (long)geteuid());
+
+  snprintf(q4_path[i], sizeof(q4_path[i]), "%s\\q4-%02d", writedir, i);
+  unlink(q4_path[i]);
+  fd = open(q4_path[i], O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600);
+  if (fd >= 0) { q4_made[i] = 1; close(fd); }
+  else         { q4_made[i] = 0; }
+
+  if (i + 1 > q4_count) q4_count = i + 1;
+}
+
+static void q4_fork(char *note, size_t n) {
+  pid_t p;
+  fflush(stdout);   /* or the child duplicates whatever is still buffered */
+  p = fork();
+  if (p == 0) _exit(0);
+  if (p < 0) {
+    snprintf(note, n, "fork FAILED - errno %d (%s)", errno, strerror(errno));
+  } else {
+    int st = 0;
+    waitpid(p, &st, 0);
+    snprintf(note, n, "forked pid %ld, reaped", (long)p);
+  }
+}
+
+/* Does row i hold the target on BOTH instruments? */
+static int q4_holds(int i, const char *want) {
+  int ok = 0;
+  char owner[256];
+
+  if (q4_state[i] != 1) return 0;
+  if (strcmp(q4_who[i], want) != 0) return 0;
+  if (!q4_made[i]) return 0;
+  snprintf(owner, sizeof(owner), "%s", file_owner(q4_path[i], &ok));
+  if (!ok) return 0;
+  return strcmp(owner, want) == 0;
+}
+
+/* Runs while this process is NOT impersonating - it takes and drops the
+   impersonation itself, so it is self-contained and cannot leave the caller
+   in a state it did not start in. */
+static void q4_run(HANDLE tok, const char *user, const char *writedir) {
+  struct passwd *pw;
+  uid_t orig_euid = geteuid();
+  uintptr_t rc;
+
+  q4_count = 0;
+
+  /* ---- row 0: the baseline the whole leg is measured against ---------- */
+  if (!ImpersonateLoggedOnUser(tok)) {
+    snprintf(q4_note[0], sizeof(q4_note[0]),
+             "ImpersonateLoggedOnUser FAILED: %s", winerr(GetLastError()));
+    q4_snap(0, writedir);
+    return;
+  }
+  snprintf(q4_note[0], sizeof(q4_note[0]), "impersonated");
+  q4_snap(0, writedir);
+
+  /* ---- row 1: THE CONTROL.  A plain fork, which must lose it ---------- */
+  q4_fork(q4_note[1], sizeof(q4_note[1]));
+  q4_snap(1, writedir);
+
+  /* ---- row 2: back to a known state before form 1 --------------------- */
+  if (!ImpersonateLoggedOnUser(tok))
+    snprintf(q4_note[2], sizeof(q4_note[2]),
+             "re-impersonate FAILED: %s", winerr(GetLastError()));
+  else
+    snprintf(q4_note[2], sizeof(q4_note[2]), "re-impersonated");
+  q4_snap(2, writedir);
+
+  /* ---- row 3: FORM 1 - register the token, do nothing else ------------ */
+  errno = 0;
+  rc = cygwin_internal(CW_SET_EXTERNAL_TOKEN, tok, CW_TOKEN_IMPERSONATION);
+  snprintf(q4_note[3], sizeof(q4_note[3]),
+           "cygwin_internal(CW_SET_EXTERNAL_TOKEN, handle %p, type %d) "
+           "returned %ld, errno %d",
+           (void *)tok, (int)CW_TOKEN_IMPERSONATION, (long)rc, errno);
+  q4_snap(3, writedir);
+
+  /* ---- row 4: the answer for form 1 ----------------------------------- */
+  q4_fork(q4_note[4], sizeof(q4_note[4]));
+  q4_snap(4, writedir);
+
+  /* ---- row 5: FORM 2 - register, then seteuid, which is what actually
+     asks the runtime to adopt what was registered ------------------------ */
+  if (q4_state[4] != 1) ImpersonateLoggedOnUser(tok);   /* form 1 may have lost it */
+
+  pw = getpwnam(user);
+  if (pw == NULL) {
+    snprintf(q4_note[5], sizeof(q4_note[5]),
+             "getpwnam(%s) returned NULL - seteuid NOT attempted, so form 2 "
+             "is unmeasured rather than failed", user);
+  } else {
+    q4_target_uid = pw->pw_uid;
+    errno = 0;
+    rc = cygwin_internal(CW_SET_EXTERNAL_TOKEN, tok, CW_TOKEN_IMPERSONATION);
+    errno = 0;
+    q4_euid_at_seteuid = geteuid();
+    q4_seteuid_rc = seteuid(q4_target_uid);
+    q4_seteuid_errno = errno;
+    snprintf(q4_note[5], sizeof(q4_note[5]),
+             "re-registered (returned %ld), seteuid(%ld) from euid %ld "
+             "returned %d, errno %d%s",
+             (long)rc, (long)q4_target_uid, (long)q4_euid_at_seteuid,
+             q4_seteuid_rc, q4_seteuid_errno,
+             (q4_target_uid == q4_euid_at_seteuid)
+               ? "  <- SAME uid: nothing to change, form 2 not exercised" : "");
+  }
+  q4_snap(5, writedir);
+
+  /* ---- row 6: the answer for form 2 ----------------------------------- */
+  q4_fork(q4_note[6], sizeof(q4_note[6]));
+  q4_snap(6, writedir);
+
+  /* PUT THE PROCESS BACK.  seteuid changes PROCESS state, not this thread's,
+     so leaving it set would follow the run out of this function and into
+     anything the caller does afterwards. */
+  if (q4_seteuid_rc == 0 && seteuid(orig_euid) != 0)
+    say("  Q4: WARNING - seteuid back to %ld failed, errno %d",
+        (long)orig_euid, errno);
+  RevertToSelf();
+}
+
+/* Returns 1 if EITHER form carried the identity across fork() on both
+   instruments; 0 otherwise, including every VOID path. */
+static int q4_report(const char *want) {
+  int i, base_ok, ctrl_lost, form1, form2, form2_measured;
+
+  say("Q4 - CAN cygwin_internal(CW_SET_EXTERNAL_TOKEN) CARRY IT ACROSS fork()?");
+  say("  This is the CLASS half of step 14's decision, and the only part of");
+  say("  that decision still unmeasured.  target is %s.", want);
+  say("");
+
+  if (q4_count == 0) {
+    say("  *** VOID: the leg did not run at all. ***");
+    say("");
+    return 0;
+  }
+
+  say("   # what was done                              token after      owner of file made after");
+  say("   - ---------------------------------------- ---------------- -------------------------");
+  for (i = 0; i < q4_count; i++) {
+    int ok = 0;
+    char owner[256];
+    char shortwho[32];
+
+    snprintf(owner, sizeof(owner), "%s",
+             q4_made[i] ? file_owner(q4_path[i], &ok) : "(not created)");
+    if (q4_state[i] == 1)
+      snprintf(shortwho, sizeof(shortwho), "%.31s",
+               (strcmp(q4_who[i], want) == 0) ? "target" : q4_who[i]);
+    else if (q4_state[i] == 0)
+      snprintf(shortwho, sizeof(shortwho), "NONE");
+    else
+      snprintf(shortwho, sizeof(shortwho), "unreadable");
+
+    say("  %2d %-40s %-16s %s", i, q4_label(i), shortwho, owner);
+  }
+  say("");
+  for (i = 0; i < q4_count; i++)
+    say("   %2d %s", i, q4_note[i]);
+  say("");
+  say("  the runtime's own uids per row (mechanism (ii) visible directly):");
+  for (i = 0; i < q4_count; i++)
+    say("   %2d %-40s %s", i, q4_label(i), q4_uids[i]);
+  say("");
+
+  /* ---- the null cases, refused out loud ------------------------------- */
+  base_ok   = q4_holds(0, want);
+  ctrl_lost = !q4_holds(1, want);
+
+  if (!base_ok) {
+    say("  *** VOID: row 0 did not hold the target on both instruments. ***");
+    say("      Nothing was impersonated to begin with, so no later row is a");
+    say("      claim about carrying an identity across fork().");
+    say("");
+    return 0;
+  }
+  if (!ctrl_lost) {
+    say("  *** VOID: the CONTROL fork did not lose the identity. ***");
+    say("      This run has not reproduced the defect, so a later row reading");
+    say("      'survived' would be evidence of nothing.  Q3 and this leg");
+    say("      disagree within one run - read Q3's table before trusting");
+    say("      either.");
+    say("");
+    return 0;
+  }
+  say("  controls hold: row 0 impersonated, and the plain fork at row 1 lost");
+  say("  it - so this run reproduces the defect the class fix is meant to fix.");
+  say("");
+
+  form1 = q4_holds(4, want);
+  form2 = q4_holds(6, want);
+
+  /* WAS FORM 2 ACTUALLY EXERCISED?  Three ways it can look like a result
+     without being one, and the third is the subtle one. */
+  form2_measured = 1;
+  if (q4_seteuid_rc == -2)                          form2_measured = 0;
+  else if (q4_seteuid_rc != 0)                      form2_measured = 0;
+  else if (q4_target_uid == q4_euid_at_seteuid)     form2_measured = 0;
+
+  say("  FORM 1  CW_SET_EXTERNAL_TOKEN alone, then fork : %s",
+      form1 ? "CARRIED" : "lost");
+  if (q4_seteuid_rc == -2)
+    say("  FORM 2  register + seteuid, then fork          : NOT MEASURED - "
+        "seteuid was never attempted");
+  else if (q4_seteuid_rc != 0)
+    say("  FORM 2  register + seteuid, then fork          : NOT MEASURED - "
+        "seteuid REFUSED (errno %d), which is not the same as lost",
+        q4_seteuid_errno);
+  else if (q4_target_uid == q4_euid_at_seteuid)
+    say("  FORM 2  register + seteuid, then fork          : NOT MEASURED - "
+        "the target uid (%ld) was ALREADY the euid, so seteuid had nothing "
+        "to change and the runtime never adopted the token",
+        (long)q4_target_uid);
+  else
+    say("  FORM 2  register + seteuid, then fork          : %s",
+        form2 ? "CARRIED" : "lost");
+  say("");
+
+  form2 = form2 && form2_measured;
+
+  if (form1 || form2) {
+    say("  *** THE CLASS FIX IS AVAILABLE. ***  The runtime carried the");
+    say("  impersonation across fork() by %s.",
+        form1 ? "the bare CW_SET_EXTERNAL_TOKEN call"
+              : "CW_SET_EXTERNAL_TOKEN followed by seteuid()");
+    say("  That covers PHANTOM (op_kernel.c:735) and SH (op_sh.c:379) as well");
+    say("  as the LOGTO group check, which the narrow fix does not.  It is now");
+    say("  a decision between two WORKING options rather than one working and");
+    say("  one unproven.");
+    if (!form1 && form2) {
+      say("");
+      say("  AND THE SHAPE MATTERS TO WHOEVER BUILDS IT: the bare call did");
+      say("  NOT carry it.  seteuid() is what makes the runtime adopt the");
+      say("  registered token, so the fix is the PAIR, not the one call this");
+      say("  file's step 14 entry names.  seteuid also moves the POSIX euid,");
+      say("  which the uid table above shows and which today stays SYSTEM.");
+    }
+  } else if (!form2_measured) {
+    say("  *** NOT AN ANSWER: FORM 1 LOST IT AND FORM 2 WAS NEVER EXERCISED.");
+    say("  The bare call is measured and did not carry the identity.  Form 2");
+    say("  is the one the Cygwin sources' own callers use, and the line above");
+    say("  says why this run did not reach it.  DO NOT record the class option");
+    say("  as disproved on this run - it has been half measured.");
+    say("  What it takes to finish: a target whose uid DIFFERS from the");
+    say("  runtime's euid, which is the elevated S4U path against a real");
+    say("  second account, not --q4check.");
+  } else {
+    say("  THE CLASS FIX DID NOT WORK HERE, IN EITHER FORM, AND BOTH WERE");
+    say("  GENUINELY EXERCISED.  On this evidence step 14's decision collapses");
+    say("  to the NARROW fix - re-impersonating after each fork() - and the");
+    say("  class option should be struck rather than left open as 'unproven'.");
+    say("  READ THE ROWS BEFORE ACTING ON THAT: a call that returned an error");
+    say("  above is a different finding from one that returned success and");
+    say("  changed nothing.");
+  }
+  say("");
+  return (form1 || form2) ? 1 : 0;
+}
+
+/* ==========================================================================
    The measurement.  One function, run twice in different configurations, so
    the two rows cannot drift apart.
 
@@ -594,6 +980,7 @@ static int measure(const char *tag, const char *user, const char *allowed,
   char before_path[MAX_PATH], during_path[MAX_PATH];
   char owner_before[256], owner_during[256], thread_who[256];
   int access_governed, owner_tracked;
+  int exttok = 0;
   int result;
 
   say("===========================================================");
@@ -809,10 +1196,17 @@ static int measure(const char *tag, const char *user, const char *allowed,
   say("  thread token at that moment  : %s", thread_who);
   say("");
 
+  /* Q4 runs LAST of all the impersonated work - after control B, and after
+     the owners above have been read - so nothing it does can disturb a
+     reading this file has already committed to.  Same reasoning as Q3's
+     placement, and it matters more here because Q4 calls seteuid(). */
+  q4_run(tok, user, writedir);
+
   {
     char want[256];
     snprintf(want, sizeof(want), "%s\\%s", dom, user);
     q3_report(want);
+    exttok = q4_report(want);
   }
 
   /* ---- verdict -------------------------------------------------------- */
@@ -883,8 +1277,10 @@ static int measure(const char *tag, const char *user, const char *allowed,
   result = R_BASE;
   if (access_governed) result |= R_ACCESS;
   if (owner_tracked)   result |= R_OWNER;
-  say("  exit code %d = 8 base + %d access + %d ownership", result,
-      access_governed ? R_ACCESS : 0, owner_tracked ? R_OWNER : 0);
+  if (exttok)          result |= R_EXTTOK;
+  say("  exit code %d = 8 base + %d access + %d ownership + %d external token",
+      result, access_governed ? R_ACCESS : 0, owner_tracked ? R_OWNER : 0,
+      exttok ? R_EXTTOK : 0);
   say("");
   return result;
 }
@@ -894,13 +1290,17 @@ static void explain(const char *tag, int code) {
   if (code == R_USAGE)      { say("  %-28s : usage error", tag); return; }
   if (code == R_VOID)       { say("  %-28s : VOID - controls did not hold", tag); return; }
   if (code == R_CALL)       { say("  %-28s : a required call failed", tag); return; }
-  if (code < R_BASE || code > (R_BASE | R_ACCESS | R_OWNER)) {
+  /* R_EXTTOK and R_CALL are both 4, which is safe ONLY because R_CALL is
+     returned bare and is matched above, before this range check: a completed
+     run always carries R_BASE, so the smallest code reaching here is 8. */
+  if (code < R_BASE || code > (R_BASE | R_ACCESS | R_OWNER | R_EXTTOK)) {
     say("  %-28s : did not complete (exit %d)", tag, code);
     return;
   }
-  say("  %-28s : access %s, ownership %s", tag,
+  say("  %-28s : access %s, ownership %s, external token %s", tag,
       (code & R_ACCESS) ? "GOVERNED" : "not governed",
-      (code & R_OWNER)  ? "tracks the token" : "blind to the token");
+      (code & R_OWNER)  ? "tracks the token" : "blind to the token",
+      (code & R_EXTTOK) ? "CARRIES ACROSS fork()" : "does not carry");
 }
 
 int main(int argc, char *argv[]) {
@@ -948,6 +1348,60 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
+  /* --- SELF-TEST for the Q4 sequence, and the same reason as the two above:
+     Q4 only executes after a successful S4U logon, so without this its first
+     exercise would be the elevated run.  This process impersonates ITSELF
+     with a duplicate of its own token, which needs no privilege, and then
+     runs the identical sequence.  It proves the cygwin_internal call is
+     reachable and what it returns, that the rows record, that fork/seteuid
+     execute, and that the control detection fires.
+
+     IT IS EXPLICITLY NOT AN ANSWER TO Q4.  Impersonating yourself is a
+     degenerate case - every owner is this account whatever the token does -
+     so a "CARRIED" here would be about the machinery, not about the class
+     fix.  It says so in its own output rather than leaving that to a
+     reader. ------------------------------------------------------------- */
+  if (argc == 3 && strcmp(argv[1], "--q4check") == 0) {
+    HANDLE me = NULL, imp = NULL;
+    struct passwd *self_pw;
+    const char *self_name;
+    char want[256];
+
+    say("--q4check: MECHANICS ONLY, NOT A MEASUREMENT.");
+    say("  Nothing elevates and no S4U logon happens.  This process");
+    say("  impersonates ITSELF, so every owner below is this account whatever");
+    say("  the token does.  A 'CARRIED' verdict here is about the machinery");
+    say("  and is NOT an answer to Q4.");
+    say("");
+    say("  writable dir    : %s   <- as received", argv[2]);
+
+    if (!OpenProcessToken(GetCurrentProcess(),
+                          TOKEN_DUPLICATE | TOKEN_QUERY, &me)) {
+      say("  OpenProcessToken failed: %s", winerr(GetLastError()));
+      return R_CALL;
+    }
+    snprintf(want, sizeof(want), "%s", token_user(me));
+    self_pw   = getpwuid(getuid());
+    self_name = self_pw ? self_pw->pw_name : "";
+    say("  impersonating   : %s   <- readback from our own process token", want);
+    say("  getpwuid name   : %s   <- what seteuid() will be given",
+        self_pw ? self_name : "(getpwuid failed - form 2 will be unmeasured)");
+
+    if (!DuplicateTokenEx(me, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation,
+                          TokenImpersonation, &imp)) {
+      say("  DuplicateTokenEx failed: %s", winerr(GetLastError()));
+      CloseHandle(me);
+      return R_CALL;
+    }
+    CloseHandle(me);
+    say("");
+
+    q4_run(imp, self_name, argv[2]);
+    q4_report(want);
+    CloseHandle(imp);
+    return 0;
+  }
+
   /* --- the forked child does one measurement and says nothing else ----- */
   if (argc == 6 && strcmp(argv[1], "--child") == 0) {
     return measure("FORKED AND EXEC'D CYGWIN CHILD - the API session's shape",
@@ -963,6 +1417,9 @@ int main(int argc, char *argv[]) {
   say("probe-impfork - PROJECT_STATUS.md section 7 step 14, after b28");
   say("  Q1  does impersonation govern open() in a fork()ed, exec()d child?");
   say("  Q2  when a file is CREATED while impersonating, whose name is on it?");
+  say("  Q3  which of the things a session does next drops the switch?");
+  say("  Q4  can CW_SET_EXTERNAL_TOKEN carry it across fork()?  <- the CLASS");
+  say("      half of step 14's decision, and the only part still unmeasured");
   say("");
   say("INPUTS AS RECEIVED");
   say("  target user     : %s", user);

@@ -152,6 +152,11 @@ if ($admins -match "\\$Account$") {
 }
 
 Write-Host 'probe-impfork - section 7 step 14, after b28'
+Write-Host '  now also carries Q4: can cygwin_internal(CW_SET_EXTERNAL_TOKEN)'
+Write-Host '  carry the impersonation across fork()?  That is the CLASS half of'
+Write-Host '  step 14''s decision and the only part of it still unmeasured.'
+Write-Host '  Q4 needs a target whose uid DIFFERS from the runtime''s euid, which'
+Write-Host '  is exactly what this runner provides and what --q4check cannot.'
 Write-Host ''
 Write-Host "  target account : $Account"
 Write-Host "  running as     : $($env:USERNAME), elevated"
