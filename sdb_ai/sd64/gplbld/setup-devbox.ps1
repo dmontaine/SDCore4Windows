@@ -114,6 +114,12 @@ $IsccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
 
 # The four, and what each is for.  linuxsdclilib is deliberately absent -
 # removed from the project 23 Aug 2026, section 2.
+# Set by Step-Git, read by Step-Clone and Step-Build.  Initialised FALSE: on a
+# machine with no git the clone step must SKIP, not call a command that is not
+# there.  That call threw CommandNotFoundException on the first clean-VM run
+# and, under $ErrorActionPreference = 'Stop', took the summary down with it.
+$script:HaveGit = $false
+
 # CLONE OVER https, PUSH OVER ssh.  Changed 23 Aug 2026, owner's decision,
 # before the first clean-VM run so that the run tests the final script.
 #
@@ -215,6 +221,28 @@ function Get-WingetPath {
     return $c.Source
 }
 
+# RE-READ PATH THE WAY A NEW WINDOW WOULD.  Added 23 Aug 2026 after the first
+# clean-VM run died on it.
+#
+# A process gets its PATH when it starts.  winget installs write the new
+# directory into the MACHINE or USER environment in the registry, and every
+# window opened afterwards picks it up - but THIS process keeps the copy it
+# started with, so a program installed a moment ago is still "not recognized".
+#
+# THAT IS EXACTLY WHAT KILLED THE FIRST FRESH-MACHINE RUN.  git installed
+# fine, the script said so, and then Step-Clone called `git clone` and threw
+# CommandNotFoundException - which under $ErrorActionPreference = 'Stop' took
+# the whole script down, so the build, the summary and every remaining check
+# were lost.  Telling somebody to "re-run in a new window" is not a fix when
+# rebuilding the variable is three lines.
+function Update-SessionPath {
+    $parts = @(
+        [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+    ) | Where-Object { $_ }
+    if ($parts.Count -gt 0) { $env:PATH = ($parts -join ';') }
+}
+
 function Install-Winget([string]$Id, [string]$Label) {
     if ($CheckOnly) { Hand ("$Label is missing - winget install $Id"); return $false }
     Say ("  installing $Label ...")
@@ -225,6 +253,8 @@ function Install-Winget([string]$Id, [string]$Label) {
         Bad "$Label did not install (winget exit $LASTEXITCODE)"
         return $false
     }
+    # BEFORE the caller looks for the program it just installed - see above.
+    Update-SessionPath
     Did "$Label installed"
     return $true
 }
@@ -269,26 +299,55 @@ function Step-Preflight {
     Ok ('winget at ' + $wg)
 }
 
+# FIND A PROGRAM winget HAS JUST INSTALLED, and make plain `git`/`gh` work for
+# the rest of this run.  Update-SessionPath covers the normal case; these are
+# the fallbacks for an installer that did not write PATH at all, or wrote it
+# somewhere this process cannot see.  Returns the full path, or $null.
+function Resolve-Tool([string]$Exe, [string[]]$Candidates) {
+    $c = Get-Command $Exe -ErrorAction SilentlyContinue
+    if ($null -ne $c) { return $c.Source }
+    foreach ($p in $Candidates) {
+        if (Test-Path -LiteralPath $p) {
+            # Callers invoke by NAME, so put the directory on PATH rather than
+            # threading a full path through every call site.
+            $env:PATH = (Split-Path -Parent $p) + ';' + $env:PATH
+            return $p
+        }
+    }
+    return $null
+}
+
+$GitCandidates = @(
+    'C:\Program Files\Git\cmd\git.exe',
+    (Join-Path $env:LOCALAPPDATA 'Programs\Git\cmd\git.exe')
+)
+$GhCandidates = @(
+    'C:\Program Files\GitHub CLI\gh.exe',
+    (Join-Path $env:LOCALAPPDATA 'Programs\GitHub CLI\gh.exe')
+)
+
 function Step-Git {
     Head 'Git'
-    $g = Get-Command git -ErrorAction SilentlyContinue
-    if ($null -ne $g) {
+    if (Resolve-Tool 'git' $GitCandidates) {
         Ok ('git present - ' + (& git --version))
+        $script:HaveGit = $true
         return
     }
     # Return on the install's own verdict rather than falling through.  Under
     # -CheckOnly Install-Winget has already said "git is missing", and the
-    # PATH check below would then say "installed but not on PATH" about an
-    # install that never happened - one cause, two lines, which is the defect
-    # the ssh clones had (HISTORY, 23 Aug).
+    # check below would then say "installed but not usable" about an install
+    # that never happened - one cause, two lines, which is the defect the ssh
+    # clones had (HISTORY, 23 Aug).
     if (-not (Install-Winget 'Git.Git' 'Git for Windows')) { return }
-    # PATH in THIS process does not pick up a just-installed program, so the
-    # clone step below would still fail.  Say so rather than let it look like
-    # a clone problem.
-    $g = Get-Command git -ErrorAction SilentlyContinue
-    if ($null -eq $g) {
-        Hand 'git was installed but is not on PATH in this session - re-run this script in a NEW elevated window to finish'
+
+    # Install-Winget has already re-read PATH from the registry, which is what
+    # opening a new window does.  This is the second look.
+    if (Resolve-Tool 'git' $GitCandidates) {
+        Ok ('git is usable in THIS session - ' + (& git --version))
+        $script:HaveGit = $true
+        return
     }
+    Hand 'git installed but cannot be found even after re-reading PATH - re-run this script in a NEW elevated window'
 }
 
 # GitHub CLI.  ADDED 23 Aug 2026 ON THE OWNER'S INSTRUCTION.
@@ -307,18 +366,18 @@ function Step-Git {
 # this one did until today - is worse than one that installs it.
 function Step-Gh {
     Head 'GitHub CLI'
-    $g = Get-Command gh -ErrorAction SilentlyContinue
-    if ($null -ne $g) {
+    if (Resolve-Tool 'gh' $GhCandidates) {
         Ok ('gh present - ' + (@(& gh --version)[0]))
         return
     }
     if (-not (Install-Winget 'GitHub.cli' 'GitHub CLI')) { return }
-    $g = Get-Command gh -ErrorAction SilentlyContinue
-    if ($null -eq $g) {
-        # Not a problem - nothing in this script needs gh, and the next window
-        # will have it.  It matters only for the ssh-key step below.
-        Hand 'gh was installed but is not on PATH in this session - open a NEW window before using it for the key step'
+    if (Resolve-Tool 'gh' $GhCandidates) {
+        Ok ('gh is usable in THIS session - ' + (@(& gh --version)[0]))
+        return
     }
+    # Not a problem - nothing in this script needs gh, and the next window will
+    # have it.  It matters only for the ssh-key step below.
+    Hand 'gh installed but not usable in this session - open a NEW window before using it for the key step'
 }
 
 function Step-Msys {
@@ -437,9 +496,16 @@ function Resolve-Iscc {
     # resolves to exactly that and nothing below can change the answer.
     if (Test-Path -LiteralPath $IsccPath) { return $IsccPath }
 
+    # HKCU as well as HKLM, confirmed necessary by the first clean-VM run:
+    # winget gave that machine a PER-USER Inno install, and a per-user install
+    # writes its uninstall key under HKCU.  The LOCALAPPDATA fallback below is
+    # what actually caught it there, but the key is the tidier answer and
+    # cycle.ps1 now reads the same four.
     $keys = @(
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1'
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1'
     )
     foreach ($k in $keys) {
         try {
@@ -487,7 +553,9 @@ function Step-Inno {
              'cycle.ps1 needs it to build the installer')
         return
     }
-    Did ('Inno Setup 6 installed - ISCC at ' + $found)
+    # Install-Winget has already said "Inno Setup 6 installed"; this adds only
+    # the part it could not know, which is where ISCC actually landed.
+    Say ('  ISCC at ' + $found)
     if ($found -ne $IsccPath) { Warn-IsccElsewhere $found }
 }
 
@@ -561,6 +629,16 @@ function Step-Clone {
     Say ('  they must be SIBLINGS - sdclilib32\Makefile reads')
     Say ('  SRCDIR ?= ../sd4windows/sdb_ai/sd64/gplsrc/sdclilib')
     Say ''
+
+    # NO git, NO CLONES - and say so rather than calling it.  This is the guard
+    # the first clean-VM run needed: without it `git clone` raises
+    # CommandNotFoundException, which terminates the whole script under Stop
+    # and loses the build, the summary and every remaining check.  A step that
+    # cannot run should report and step aside.
+    if (-not $script:HaveGit -and -not $CheckOnly) {
+        Bad 'git is not usable in this session, so nothing was cloned - see the Git step above'
+        return
+    }
 
     if (-not (Test-Path -LiteralPath $Root)) {
         if ($CheckOnly) { Hand ("root does not exist: " + $Root); return }
@@ -686,16 +764,28 @@ Write-Host ''
 Write-Host 'setup-devbox - SD for Windows development environment'
 Write-Host '====================================================='
 
+# THE SUMMARY IS THE DELIVERABLE, so no step is allowed to take it down with
+# it.  23 Aug 2026: on the first clean-VM run an unexpected exception in
+# Step-Clone ended the script where it stood - no build, no summary, no list of
+# what had been done or was still owed - and the machine WAS most of the way
+# set up.  Losing the report is worse than the failure it was reporting.
+#
+# Preflight is deliberately OUTSIDE this: it decides whether the run may happen
+# at all (elevation, winget), and if it exits there is nothing to summarise.
 Step-Preflight
-Step-Git
-Step-Gh
-Step-Msys
-Step-Packages
-Step-Sodium
-Step-Inno
-Step-Ssh
-Step-Clone
-Step-Build
+
+foreach ($step in @('Step-Git', 'Step-Gh', 'Step-Msys', 'Step-Packages',
+                    'Step-Sodium', 'Step-Inno', 'Step-Ssh', 'Step-Clone',
+                    'Step-Build')) {
+    try {
+        & $step
+    } catch {
+        # Named, not swallowed: the step is identified and the message kept, so
+        # this reads as a reported failure rather than a step that did nothing.
+        Bad ("$step stopped unexpectedly - " + $_.Exception.Message)
+    }
+}
+
 Step-Report
 
 Write-Host ''

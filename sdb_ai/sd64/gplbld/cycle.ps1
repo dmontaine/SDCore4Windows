@@ -90,9 +90,18 @@ $Iss     = Join-Path $Gplbld 'sd.iss'
 # same lookup and says why in more detail.
 $Iscc    = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
 if (-not (Test-Path -LiteralPath $Iscc)) {
+    # HKCU AND LOCALAPPDATA ARE NOT PADDING - the first clean-VM run, 23 Aug
+    # 2026, got a PER-USER Inno install at
+    # %LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe.  A per-user install writes
+    # its uninstall key under HKCU, not HKLM, so an HKLM-only lookup would have
+    # missed it and this script would have reported ISCC missing on a machine
+    # that has it.  That is also what setup-devbox.ps1's message promises, so
+    # the two must agree or the promise is false.
     foreach ($k in @(
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1')) {
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1',
+        'HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1')) {
         try {
             $loc = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).InstallLocation
         } catch { continue }
@@ -100,6 +109,12 @@ if (-not (Test-Path -LiteralPath $Iscc)) {
         $cand = Join-Path $loc 'ISCC.exe'
         if (Test-Path -LiteralPath $cand) { $Iscc = $cand; break }
     }
+}
+if (-not (Test-Path -LiteralPath $Iscc)) {
+    # Last resort, and the one that actually caught the VM: a per-user install
+    # whose registry key is missing or unreadable still puts ISCC here.
+    $userIscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
+    if (Test-Path -LiteralPath $userIscc) { $Iscc = $userIscc }
 }
 $Bash    = 'C:\msys64\usr\bin\bash.exe'
 $SvcName = 'SD'
