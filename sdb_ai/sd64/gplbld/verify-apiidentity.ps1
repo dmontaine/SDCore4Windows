@@ -65,10 +65,11 @@ $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
 # Request types.  APISRVR's dispatch table is the authority.
-$SrvrOpen   = 4
-$SrvrQuit   = 1
-$ScramFirst = 47
-$ScramFinal = 48
+$SrvrOpen    = 4
+$SrvrQuit    = 1
+$SrvrAccount = 3
+$ScramFirst  = 47
+$ScramFinal  = 48
 
 $script:checks = @()
 $script:void   = $false
@@ -110,7 +111,7 @@ function Invoke-SD([string[]]$commands) {
 # Extracted with the PowerShell AST, not retyped.
 # ---------------------------------------------------------------------------
 
-﻿function New-SdConnection([int]$port) {
+function New-SdConnection([int]$port) {
     $c = New-Object System.Net.Sockets.TcpClient
     $c.Connect('127.0.0.1', $port)
     $c.NoDelay = $true
@@ -347,34 +348,93 @@ try {
     Write-Host "   $Prefix is not an Administrator, so the deny fixture really denies"
 
     # ---------------------------------------------------------------- 2
-    Step 2 'Building the two fixtures'
+    # SET.FILE is a CROSS-ACCOUNT verb (SETFILE.b:29 - "SET.FILE account
+    # file.name pointer.name") and treats its first argument as an account
+    # name to look up in ACCOUNTS.  On b19/b20/b21 it was refused every time
+    # with sysmsg 2201 ("Account name '...' is not in register") and the whole
+    # test VOIDed downstream on ER_NVR.  The right SD mechanism to plant a VOC
+    # entry for an EXISTING WINDOWS PATH is CREATE.FILE ... DYNAMIC DIRECTORY
+    # <path>, which puts SD's hash bucket files inside <path> AND writes the
+    # correct VOC entry in one step.  vb.open from the API session then opens
+    # the bucket file, whose NTFS ACL is what step 14's impersonation gates.
+    Step 2 'Building the two fixture directories (ACLs applied later)'
     New-Item -ItemType Directory -Force -Path $allowDir | Out-Null
     New-Item -ItemType Directory -Force -Path $denyDir  | Out-Null
-    Set-Content -LiteralPath (Join-Path $allowDir 'REC1') -Value 'readable' -Encoding ascii
-    Set-Content -LiteralPath (Join-Path $denyDir  'REC1') -Value 'secret'   -Encoding ascii
-
-    # /inheritance:r FIRST, or the inherited ACEs grant read and "deny" is not
-    # denied.  This is sdsys\$cred's shape.
-    $null = Invoke-Icacls $denyDir  /inheritance:r
-    $null = Invoke-Icacls $denyDir  /grant 'SYSTEM:(OI)(CI)(F)' 'Administrators:(OI)(CI)(F)'
-    $null = Invoke-Icacls $allowDir /inheritance:r
-    $null = Invoke-Icacls $allowDir /grant 'SYSTEM:(OI)(CI)(F)' 'Administrators:(OI)(CI)(F)' ("{0}:(OI)(CI)(RX)" -f $Prefix)
     Write-Host "   allow: $allowDir"
     Write-Host "   deny : $denyDir"
 
     # ---------------------------------------------------------------- 3
-    Step 3 'Pointing the account VOC at both, with SET.FILE'
-    $out = Invoke-SD @("LOGTO " + $Prefix.ToUpper(),
-                       "SET.FILE $allowDir ZZIDALLOW",
-                       "SET.FILE $denyDir ZZIDDENY",
-                       'CT VOC ZZIDALLOW', 'CT VOC ZZIDDENY')
-    if ($out -notmatch 'ZZIDALLOW' -or $out -notmatch 'ZZIDDENY') {
-        Write-Host $out; Fail 'SET.FILE did not plant both VOC pointers.'
+    Step 3 'Creating ZZIDALLOW and ZZIDDENY as dynamic files in those paths'
+    # WHO probes bracket LOGTO and each CREATE.FILE so the raw output tells us
+    # which account each command ran under.  The check anchors on the SUCCESS
+    # wording ("Created DATA part as") per CLAUDE.md's false-positive rule -
+    # NOT on the record name, which appears in the failure output too.
+    $acct = $Prefix.ToUpper()
+    # KEYWORD IS "PATHNAME", NOT "DIRECTORY".  CREATEF.b's own doc comment
+    # says "{DIRECTORY path}" (line 30-31) but its parser code checks
+    # KW$PATHNAME = 46 (PARSER.H:61, CREATEF.b:183), and sibling verbs are
+    # explicit: "CREATE.INDEX ... [PATHNAME akpath]" (CREATEI.b:29), "AS
+    # PATHNAME path" (SETPTR.b:43).  b22 followed the stale comment and got
+    # "Unexpected token (DIRECTORY)".  Filed under: comments describe intent,
+    # keyword tables describe truth.
+    $out = Invoke-SD @('WHO',
+                       "LOGTO $acct", 'WHO',
+                       "CREATE.FILE ZZIDALLOW DYNAMIC PATHNAME $allowDir NO.QUERY",
+                       "CREATE.FILE ZZIDDENY DYNAMIC PATHNAME $denyDir NO.QUERY",
+                       'CT VOC ZZIDALLOW', 'CT VOC ZZIDDENY',
+                       'WHO')
+    Write-Host '   --- raw Invoke-SD output for Step 3 ---'
+    ($out -split "`r?`n") | ForEach-Object { Write-Host ('   | ' + $_) }
+    Write-Host '   --- end raw output ---'
+
+    # WHO prints "<session> <account>".  If the post-LOGTO WHO does not name
+    # the target account, LOGTO was silently refused and CREATE.FILE wrote
+    # into the wrong account's VOC.  A WHO not naming any account at all is a
+    # fault (no session).
+    $whos = @([regex]::Matches($out, '(?im)^\s*\d+\s+(\S+)') | ForEach-Object { $_.Groups[1].Value })
+    Write-Host ('   accounts WHO reported (in order): ' + ($whos -join ', '))
+    if ($whos.Count -lt 3) {
+        Fail "Step 3 expected three WHO reports; got $($whos.Count).  Session state cannot be trusted."
     }
-    Write-Host '   ZZIDALLOW and ZZIDDENY are in the account VOC'
+    if ($whos[1] -ne $acct -or $whos[2] -ne $acct) {
+        Fail ("LOGTO $acct was not honoured.  WHO after LOGTO said '$($whos[1])', WHO after CREATE.FILE said '$($whos[2])'.  " +
+              "CREATE.FILE therefore wrote to the WRONG account VOC - the API session below would find nothing.")
+    }
+
+    # SUCCESS anchor: CREATE.FILE prints sysmsg 6127 = "Created DATA part as
+    # %1" on the happy path.  That literal string appears nowhere on the
+    # failure paths (which use "already exists", "does not exist", "not
+    # defined", "not an F-type", etc.).  Count two of them - one per file.
+    $created = @([regex]::Matches($out, '(?im)^Created DATA part as ')).Count
+    if ($created -lt 2) {
+        Fail ("CREATE.FILE did not report success twice - saw $created 'Created DATA part as' line(s).  " +
+              'Read the raw output above; the first refusal is what to fix.')
+    }
+    # DISQUALIFIER control: any of these strings in the output means at least
+    # one CREATE.FILE (or CT VOC) failed even if two success lines appeared.
+    $disqualifiers = @('already exists', 'not in register', 'not found',
+                       'does not exist', 'is not defined', 'not an F-type')
+    $hit = @($disqualifiers | Where-Object { $out -match [regex]::Escape($_) })
+    if ($hit.Count -gt 0) {
+        Fail ("Failure text appeared in Step 3 output: " + ($hit -join ', ') +
+              '.  Some CREATE.FILE call was refused, or CT VOC did not find the record afterwards.')
+    }
+    Write-Host "   confirmed: both dynamic files created under $acct with distinct-from-failure success text"
 
     # ---------------------------------------------------------------- 4
-    Step 4 'Opening both through a LIVE API session'
+    # ACL comes AFTER CREATE.FILE so it applies to the bucket files SD just
+    # made.  /inheritance:r FIRST on deny, or an inherited (RX for Users)
+    # would grant read and "deny" would not deny.  This mirrors sdsys\$cred.
+    Step 4 'Setting the fixture ACLs (allow grants the user, deny does not)'
+    $null = Invoke-Icacls $denyDir  /inheritance:r /T /C
+    $null = Invoke-Icacls $denyDir  /grant 'SYSTEM:(OI)(CI)(F)' 'Administrators:(OI)(CI)(F)' /T /C
+    $null = Invoke-Icacls $allowDir /inheritance:r /T /C
+    $null = Invoke-Icacls $allowDir /grant 'SYSTEM:(OI)(CI)(F)' 'Administrators:(OI)(CI)(F)' ("{0}:(OI)(CI)(RX)" -f $Prefix) /T /C
+    Write-Host "   allow: SYSTEM(F), Administrators(F), $Prefix(RX)"
+    Write-Host "   deny : SYSTEM(F), Administrators(F) - no user grant"
+
+    # ---------------------------------------------------------------- 5
+    Step 5 'Opening both through a LIVE API session'
     $conn = $null
     try {
         $conn  = New-SdConnection $Port
@@ -391,6 +451,26 @@ try {
                   'K$ASSUME.USER refused and THAT IS THE FINDING, not a broken test.')
         }
         Write-Host "   logged in over the API as $Prefix"
+
+        # SCRAM authenticates the user; ATTACHING to an account is a separate,
+        # required step.  sdclilib.c:1241 does exactly this after login:
+        #     message_pair(SrvrAccount, account, strlen(account))
+        # verify-scramlogin never opens a file, so it does not attach; copying
+        # only its login left the session with NO account VOC, and every
+        # vb.open of ZZID* came back ER_NVR (3007) - the b19 VOID.  Without
+        # this attach the whole run measures nothing.
+        $acctName = $Prefix.ToUpper()
+        $acctPayload = [Text.Encoding]::ASCII.GetBytes($acctName)
+        Send-SdPacket $conn $SrvrAccount $acctPayload
+        $acctReply = Receive-SdPacket $conn
+        if ($acctReply.ServerError -ne 0) {
+            Write-Host ('   server said: ' + $acctReply.Text)
+            Fail ("SrvrAccount attach to $acctName failed - server error " +
+                  "$($acctReply.ServerError), status $($acctReply.Status).  " +
+                  'Without the attach the session has no account VOC and no ' +
+                  'open below could succeed - so nothing here is a result.')
+        }
+        Write-Host "   attached to account $acctName"
 
         $allow = Test-ApiOpen $conn 'ZZIDALLOW'
         $deny  = Test-ApiOpen $conn 'ZZIDDENY'
