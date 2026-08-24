@@ -30,12 +30,21 @@
 # WHAT IT COVERS NOW, LATER THE SAME DAY: EVERYTHING.  This said "eight
 # verifiers need elevation and are still not in either runner - apiport,
 # catgate, nonet, osusers, scramlogin, sshonly, tierapi, apiname", and every one
-# of those is now in a runner.  There are TWENTY-SIX verify-*.ps1 here; this
-# file runs NINE and hands the other SEVENTEEN to VerifyInstall2.ps1, so NONE is
-# left to be remembered.  (Twenty-seven until 23 Aug 2026, when PROC, SED and
+# of those is now in a runner.  There are TWENTY-NINE verify-*.ps1 here; this
+# file runs ELEVEN and hands the other EIGHTEEN to VerifyInstall2.ps1, so NONE
+# is left to be remembered.  (Twenty-seven until 23 Aug 2026, when PROC, SED and
 # UPDATE.RECORD were removed from the system and verify-editkeys.ps1 went with
 # them - it tested nothing else.)  Checked by listing both runners' step tables against
 # the directory, not by eye.
+#
+# 24 Aug 26 - THE COUNTS ABOVE WERE STALE AND THE INVARIANT WAS ACTUALLY
+# BROKEN, which is worth more than the arithmetic.  They read 26 / 9 / 17
+# while the directory held 29 and verify-lineendings.ps1 was in NEITHER
+# table - written 23 Aug, never added, never run by either runner.  The
+# header said this would happen "the moment a verifier is added without a
+# row in one of the two tables"; it had, and the stale total is what hid
+# it.  If these three numbers are edited again, re-derive them from the
+# directory rather than adjusting them by one.
 #
 # THAT IS A PROPERTY TO KEEP, NOT A SCORE.  The failure this file was written
 # for - a guard nobody runs has already stopped guarding - returns the moment a
@@ -269,6 +278,21 @@ $steps = @(
     @{ Name = 'verify-allowgroups.ps1'; P = @{} },
     @{ Name = 'verify-keys.ps1';        P = @{} },
     @{ Name = 'verify-lcnames.ps1';     P = @{} },
+    # 24 Aug 26 - section 7 step 16's guard, and IT WAS IN NEITHER RUNNER
+    # from the day it was written (23 Aug) until now.  That is precisely
+    # the failure this file's header describes - "a verifier nobody runs
+    # is a guard that has already stopped guarding, and nothing reports
+    # its absence" - reached by the route the header warns about: a
+    # verifier added without a row in either step table.  Found by
+    # listing both tables against the directory, which is what that
+    # header says to do and what nobody had done since.
+    #
+    # IT BELONGS HERE: no elevation, no prefix, no account, and it
+    # cleans up its own fixtures.  It raises no UAC prompt, so it does
+    # not change what this runner costs a person to sit through.
+    # Measured on the 15:14:28 install before being added, 17/17 PASS,
+    # so it is not being wired in untested.
+    @{ Name = 'verify-lineendings.ps1'; P = @{} },
     # 22 Aug 26 - section 7 step 12's guard.  It belongs in THIS runner rather
     # than VerifyInstall2: it spends no prefix, creates nothing, and needs no
     # elevation, which is this file's whole entry condition.
