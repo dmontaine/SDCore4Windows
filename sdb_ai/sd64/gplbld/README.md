@@ -29,15 +29,16 @@ Binary Free Install process.
       include records that are derived from C headers:
         gplsrc/revstamp.h -> sdsys/GPL.BP/REVSTAMP.H
         gplsrc/err.h      -> sdsys/SYSCOM/ERR.H and sdsys/GPL.BP/ERRTEXT.H
-      Run it from sd64 after editing either C header; "--check" reports what is
-      out of date without writing.  This replaces GPL.BP/REVSTAMP and
-      GPL.BP/ERRGEN, which did the same translation from inside SD and so
-      needed the C source in the installed database.  The $execute directives
+        gplsrc/opcodes.h  -> sdsys/GPL.BP/OPCODES.H
+      Run it from sd64 after editing any of those C headers; "--check" reports
+      what is out of date without writing.  This replaces GPL.BP/REVSTAMP,
+      GPL.BP/ERRGEN and GPL.BP/OPGEN, which did the same translations from
+      inside SD and so needed the C source in the installed database - which
+      the Windows install layout does not provide, so this script is the only
+      way to regenerate any of them on this port.  The $execute directives
       that ran them during compilation are commented out in GPL.BP/CPROC,
-      GPL.BP/APISRVR and GPL.BP/ERRTEXT.
-      GPL.BP/OPGEN, which generates GPL.BP/OPCODES.H from gplsrc/opcodes.h, is
-      not covered - nothing $executes it, so it remains a manual tool that has
-      to be run from a tree that still has gplsrc.
+      GPL.BP/APISRVR and GPL.BP/ERRTEXT; OPGEN was never $executed and its
+      BASIC source is deleted.
 
 
     BBPROC - BootStrap Command Processor (found in GPL.BP).
