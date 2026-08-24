@@ -176,6 +176,12 @@
    reader.  See op_kernel.c for the HDR_INTERNAL gate.                       */
 #define K_SET_USERNAME       60
 
+/* 23 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14, shape (b).  Take on
+   the authenticated user's Windows identity, no password held.  $internal
+   only, and it FAILS CLOSED: 0 means the thread was not changed and the
+   caller must refuse the login.  win32s4u.c.                                */
+#define K_ASSUME_USER        61
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

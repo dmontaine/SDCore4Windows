@@ -19,6 +19,12 @@
 *
 *
 * START-HISTORY:
+* 23 Aug 26 Windows port - THE SESSION BECOMES THE AUTHENTICATED USER.
+*           kernel(K$ASSUME.USER) in vb.scram.final, before logged.in is set,
+*           so a refusal leaves the caller authenticated into nothing.  The
+*           session was running as LocalSystem because sdwind.c:491 fork()s it;
+*           it cannot be fixed at the fork because SCRAM runs here, after the
+*           execl.  PROJECT_STATUS.md 7 step 14, shape (b); win32s4u.c.
 * 21 Aug 26 Windows port - EVERY REFUSED API LOGIN IS AUDITED, not just the
 *           sdapi one.  Before this only "not in sdapi" reached the trail, and
 *           that fires AFTER the proof succeeds - so a wrong password, an
@@ -1437,6 +1443,38 @@ vb.scram.final:
 
                scram.storedkey = ''
                scram.serverkey = ''
+
+* 23 Aug 26 Windows port - BECOME THE USER.  PROJECT_STATUS.md 7 step 14,
+*   shape (b), owner's decision 23 Aug 2026.
+*
+*   WHY IT IS HERE AND NOT AT THE FORK.  sdwind.c:491 fork()s this session, so
+*   it inherits the service's LocalSystem token; and it cannot be fixed there,
+*   because SCRAM runs in this program, after the execl, so at fork time
+*   sdwind does not yet know who is calling.  This line is the first moment
+*   the answer exists.
+*
+*   AND IT IS BEFORE logged.in, WHICH IS THE WHOLE OF THE CONTROL.  A refusal
+*   here leaves logged.in false, so the dispatcher goes on admitting only 24,
+*   25, 47 and 48 and the caller has authenticated into nothing.  Setting
+*   logged.in first and impersonating afterwards would leave a session that
+*   believes it is the user while holding the service's token, which is worse
+*   than one that never started.
+*
+*   NO PASSWORD IS INVOLVED.  SCRAM never gives this server the password - it
+*   holds StoredKey and ServerKey, and those two lines above have just cleared
+*   even those.  The identity comes from an S4U logon, which is granted on
+*   SeTcbPrivilege rather than on a credential.  win32s4u.c.
+*
+*   THE WINDOW THIS DOES NOT CLOSE: everything before this line ran as
+*   LocalSystem, and handles opened then keep that access - the shared segment
+*   and $cred among them.  The account's own files are opened at LOGTO, which
+*   is after, and that is what makes this worth doing.
+               if not(kernel(K$ASSUME.USER, scram.user)) then
+                  scram.refuse.reason = 'could not assume the Windows identity of the authenticated user'
+                  abort.message = sysmsg(5277) ;* Authentication succeeded but...
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
 
                response = 'v=' : scram.ssig
                logged.in = @true

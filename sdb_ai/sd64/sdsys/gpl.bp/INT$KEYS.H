@@ -140,6 +140,7 @@
       $define K$WINPATH         58       ;* POSIX pathname as a Windows one
       $define K$WINPID          59       ;* This session pid as Windows counts it
       $define K$SET.USERNAME    60       ;* Set the session user name ($internal)
+      $define K$ASSUME.USER     61       ;* Become the authenticated user ($internal)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

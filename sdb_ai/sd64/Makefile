@@ -53,7 +53,9 @@ COMP     := gcc
 # windows.h (its header says why).  LookupAccountName, ConvertSidToStringSid
 # and ConvertStringSecurityDescriptorToSecurityDescriptor all live there; the
 # semaphore calls themselves are in kernel32, which mingw links by default.
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32
+# 23 Aug 26 Windows port - -lsecur32 is for win32s4u.c: LsaRegisterLogonProcess,
+# LsaLogonUser and LsaDeregisterLogonProcess live there, not in advapi32.
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32
 
 RM       := rm
 

@@ -5,6 +5,30 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+23 Aug 26  AN API SESSION NOW RUNS AS THE USER WHO LOGGED IN.
+
+           Until now a session reached through the API ran as the Windows
+           LocalSystem account - the identity the SD service itself runs as -
+           whoever had logged in.  It was contained: it could only reach the
+           accounts the caller was entitled to, and that has been checked.  But
+           the files it opened were opened with the service's rights, not
+           yours.
+
+           After a successful login the session now takes on your Windows
+           identity, and the files it opens from then on are opened as you.
+           No password is involved: the server never has one to use, and the
+           identity is granted by Windows on the service's own privilege.
+
+           IF THAT STEP FAILS, THE LOGIN FAILS.  You are told that
+           authentication succeeded but the session could not take your Windows
+           identity, and the connection is refused.  It is deliberately not
+           allowed to carry on with the service's rights instead.
+
+           Two things this does not change.  Anything the session opened before
+           you logged in - which is nothing of yours - was opened by the
+           service.  And sessions reached at the keyboard or over ssh were
+           always the user already; only the API path was affected.
+
 23 Aug 26  SD CANNOT BE INSTALLED SILENTLY ANY MORE.
 
            /SILENT and /VERYSILENT are now refused, with a message saying why.

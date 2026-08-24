@@ -76,6 +76,7 @@ sdlib
 sdsem
 win32sem
 win32audit
+win32s4u
 win32pipe
 sdtermlb
 strings

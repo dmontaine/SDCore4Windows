@@ -41,6 +41,8 @@
 #include "options.h"
 #include "dh_int.h"
 #include "locks.h"
+/* 23 Aug 26 Windows port - K_ASSUME_USER, PROJECT_STATUS.md 7 step 14. */
+#include "win32s4u.h"
 
 #include <sys/wait.h>
 /* 16 Aug 26 Windows port - cygwin_conv_path(), for K_WINPATH.  sysseg.c
@@ -263,6 +265,38 @@ void op_kernel() {
       /* Report the name as it actually stands, so a refused caller is simply
          told what it still is rather than getting an error.                 */
       k_put_c_string(process.username, &result);
+      break;
+
+    /* 23 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14, shape (b).
+       Become the user this session has just authenticated as.
+
+       IT ANSWERS 1 OR 0 AND NOTHING ELSE, and 0 must be treated as fatal by
+       the caller: a session that carries on believing it is the user while
+       holding LocalSystem's token is worse than one that never started.
+       APISRVR refuses the login on 0.
+
+       $internal ONLY, like K_SET_USERNAME above.  The gate is what stops an
+       ordinary BASIC program asking to become somebody else - it would fail
+       anyway for want of SeTcbPrivilege in an interactive session, but a
+       refusal that depends on a privilege the process happens not to hold is
+       not a control.
+
+       NO WAY BACK IS OFFERED TO BASIC.  RevertUserIdentity() exists in
+       win32s4u.c and is deliberately not reachable from here: the session
+       becomes the user once, at the point SCRAM succeeds, and stays that way
+       until it ends.  A verb that could drop back to LocalSystem would undo
+       the whole of this step.                                               */
+    case K_ASSUME_USER:
+      {
+        char uname[MAX_USERNAME_LEN + 1];
+
+        result.data.value = 0;
+        if ((k_get_c_string(descr, uname, MAX_USERNAME_LEN) > 0) &&
+            (process.program.flags & HDR_INTERNAL)) {
+          if (AssumeUserIdentity(uname))
+            result.data.value = 1;
+        }
+      }
       break;
 
     case K_DATE_CONV:
