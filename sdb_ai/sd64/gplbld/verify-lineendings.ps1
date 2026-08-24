@@ -60,7 +60,9 @@ if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - the install does not m
 if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no sd.exe at $sdExe" }
 if (-not (Test-Path -LiteralPath $bp))    { Fail "no account bp directory at $bp" }
 
-Write-Host 'verify-lineendings - section 7 step 16 (a)'
+Write-Host 'verify-lineendings - section 7 step 16, BOTH halves'
+Write-Host '  (a) the readers accept CRLF and keep a lone CR as data'
+Write-Host '  (b) the writers emit CRLF on everything externally readable'
 Write-Host "  sd.exe : $sdExe"
 Write-Host "  bp dir : $bp"
 
@@ -144,8 +146,9 @@ $prog = @'
       CLOSESEQ VF
 *
 * A directory-file RECORD write: field marks become the newline on disk.
+*    WRITE takes ON ERROR, not ELSE - only the sequential statements take ELSE.
       REC = 'RA':@FM:'RB':@FM:'RC'
-      WRITE REC TO F, 'ZZLEWREC' ELSE CRT 'WRITE RECORD FAILED'
+      WRITE REC TO F, 'ZZLEWREC' ON ERROR CRT 'WRITE RECORD FAILED'
       CRT 'WRITES DONE'
       IDS = 'ZZLECRLF':@FM:'ZZLELF':@FM:'ZZLELONE'
       FOR R = 1 TO 3
