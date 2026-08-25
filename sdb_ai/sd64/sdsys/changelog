@@ -20,6 +20,12 @@ Entries are newest first, by date, until there is a version to attach them to.
              read and the command sat there for ever.  It now runs.
            * A scheduled task was never affected and is not changed: it has no
              terminal, so it was never asked.
+           * THE INSTALLER STILL ASKS, and asks the same way it always has -
+             one window, straight after setup, closing by itself when you are
+             done.  It now does it by running MODIFY.PASSWORD rather than by
+             relying on the login prompt, so the wording is the product's own:
+             "Account <name> has no password set.  Setting the first one."
+             Pressing Enter without typing one still declines, as before.
 
 
 24 Aug 26  SD'S SYSTEM DIRECTORIES ARE NOW READ-ONLY TO ORDINARY SD USERS.

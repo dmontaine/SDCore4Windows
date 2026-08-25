@@ -7,8 +7,16 @@
 # validation".
 #
 #   1. SD opens so you can give your account a password.  It closes ITSELF once
-#      the password is set - "off" is passed as a single command, so LOGIN asks
-#      first and the session then ends without the user doing anything.
+#      the password is set - MODIFY.PASSWORD is passed as a single command, so
+#      SD runs it and exits without the user doing anything.
+#
+#      CHANGED 24 Aug 2026, AND THE OLD FORM IS WHY.  It used to pass "off" and
+#      rely on LOGIN's require.credential prompting on the way IN, with "off"
+#      then ending the session.  That made the password a SIDE EFFECT of
+#      logging in, and step 9's ruling - a command line is batch, so it must
+#      not prompt - removed the prompt and this step silently stopped asking.
+#      Asking is now what the command DOES, so nothing about logging in can
+#      take it away again.
 #   2. The installation check runs, in this same window, and a keypress closes
 #      the window at the end.
 #
@@ -54,8 +62,10 @@ param(
     [switch] $WithPassword,
 
     # Whose account.  Passed by Setup as {username}; the default is for a hand
-    # run.  Used ONLY to look for a credential afterwards - see the check at the
-    # end of the password step.
+    # run.  24 Aug 2026 - IT IS NOW ALSO THE ARGUMENT TO MODIFY.PASSWORD, not
+    # only the name looked for in $cred afterwards, so a wrong value no longer
+    # just weakens a check: it would set the password on the wrong account, or
+    # be refused with "Account %1 not in register" (SET_ACC_PASSWORD:124).
     [string] $User = $env:USERNAME,
 
     # Passed straight through to check-install.ps1.
@@ -105,40 +115,65 @@ if ($WithPassword) {
         # -QUIET suppresses the version and licence banner (CMD_QUIET, sd.c:347,
         # tested at LOGIN:234).  This window has already said what is happening.
         #
-        # "off" IS THE SECOND ARGUMENT, AND IT IS WHAT ENDS THE SESSION WITHOUT
-        # THE USER.  Owner, 22 Aug 2026: "the paragraph that runs the password
-        # entry should be able to log out without the user having to do it."
+        # MODIFY.PASSWORD IS THE COMMAND, AND ASKING IS WHAT IT DOES.  Owner's
+        # decision, 24 Aug 2026.  SD runs a single command and exits when one is
+        # given (sd.c:645), so the session still ends without the user - owner,
+        # 22 Aug 2026: "the paragraph that runs the password entry should be
+        # able to log out without the user having to do it."
         #
-        # SD RUNS A SINGLE COMMAND AND EXITS when one is given (sd.c:645), and
-        # LOGIN STILL RUNS FIRST - which is the whole trick.  require.credential
-        # is reached during login, so the password is asked for, and only then
-        # does "off" execute.  Order comes for free; nothing had to change in
-        # the BASIC layer.
+        # ***IT REPLACED "off", AND THE REASON IS A REGRESSION THIS STEP
+        # ACTUALLY SUFFERED.***  Passing "off" relied on LOGIN's
+        # require.credential prompting on the way IN, with "off" then ending the
+        # session - so the password was a SIDE EFFECT of logging in.  Section 7
+        # step 9's ruling (a command line is batch, so it must not prompt) took
+        # that prompt away, and this step stopped asking with no error at all.
+        # The wizard completed and the account had no password.  Asking is now
+        # the command's own job, so no future change to how LOGIN treats a
+        # command line can remove it again.
         #
-        # THE MECHANISM IS ALREADY PROVEN IN THIS INSTALL, which is why it is not
-        # a gamble: adopt-account.ps1 drives "sd -internal CREATE.ACCOUNT USER
-        # <n> ADOPT" the same way, minutes earlier in the same install.
+        # WHY NOT -INTERNAL, which was the first idea: sd.c:589-594 forces
+        # -INTERNAL to the SDSYS account and refuses any other, so it would set
+        # SDSYS's password rather than this user's, silently.
         #
-        # IT NEEDS THE ELEVATED TOKEN, and has it.  sd.c calls check_admin()
-        # before accepting a command line, so single-command mode is refused to
-        # an ordinary session - this one runs on Setup's token.
+        # THE ACCOUNT IS PASSED AS ITS OWN ARGUMENT, not glued into a string.
+        # sd.c joins argv from the first non-switch onward into single_command
+        # (sd.c:681-695), so three elements arrive as "MODIFY.PASSWORD <user>".
+        # Case does not matter - SET_ACC_PASSWORD:80 does account = upcase(token).
         #
-        # DECLINING STILL WORKS: an empty password makes LOGIN terminate the
-        # connection itself with message 10095, so "off" is never reached and
-        # the session ends anyway.  The message stays readable because this is
-        # OUR console, not one that vanishes with the process.
+        # IT NEEDS THE ELEVATED TOKEN, and has it, twice over: sd.c calls
+        # check_admin() before accepting a command line at all, and
+        # SET_ACC_PASSWORD:113 refuses an account other than your own without
+        # K$ADMINISTRATOR.  This runs on Setup's token.
+        #
+        # DECLINING STILL WORKS, and now says so itself: an empty password makes
+        # SET_ACC_PASSWORD:176 print "Password not changed." and stop.  The
+        # message stays readable because this is OUR console, not one that
+        # vanishes with the process.
+        #
+        # A FRESH ACCOUNT IS THE EXPECTED CASE AND IS HANDLED: :152 prints
+        # "has no password set.  Setting the first one", and :159 skips the
+        # current-password prompt when there is no credential to check against.
         try {
-            $p = Start-Process -FilePath $SdExe -ArgumentList '-QUIET','off' `
+            $p = Start-Process -FilePath $SdExe `
+                    -ArgumentList '-QUIET','MODIFY.PASSWORD',$User `
                     -NoNewWindow -Wait -PassThru -ErrorAction Stop
             Write-Host ''
 
-            # DID A PASSWORD ACTUALLY GET SET?  Asked because passing "off" adds
-            # a way to fail SILENTLY that did not exist before: if the prompt
-            # never appears - LOGIN's gate wants a TTY and an administrator
-            # token, and a session missing either would skip require.credential
-            # - then "off" runs immediately, SD exits, and the user is never
-            # asked.  Without this they would find out weeks later, the first
-            # time they tried to reach the account from another machine.
+            # DID A PASSWORD ACTUALLY GET SET?  ***KEEP THIS CHECK. IT IS THE
+            # ONE THAT CAUGHT THE 24 Aug 2026 REGRESSION*** - and the comment
+            # that used to sit here had PREDICTED that regression in as many
+            # words, while this step still passed "off": "if the prompt never
+            # appears... off runs immediately, SD exits, and the user is never
+            # asked".  That is exactly what happened when LOGIN stopped
+            # prompting for a command line, and without this check the user
+            # would have found out weeks later, the first time they tried to
+            # reach the account from another machine.
+            #
+            # The failure mode is narrower now - MODIFY.PASSWORD asks for
+            # itself, so it cannot be silently skipped by a login-path change -
+            # but the check costs nothing and covers the whole class: a verb
+            # that was refused, a session that never started, a $cred that was
+            # not writable.
             #
             # IT IS ALSO THE DECLINE CASE, and the same sentence serves both:
             # pressing Enter on an empty password is a legitimate answer that
