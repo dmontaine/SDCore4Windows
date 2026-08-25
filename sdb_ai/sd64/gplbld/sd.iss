@@ -913,8 +913,26 @@ begin
 
      So: do not reintroduce a line break inside a paragraph here, and do not
      indent one.  Both look fine in the source and wrong on screen. *)
+  { 25 Aug 26 - "you can change this" WAS FALSE AND THE OWNER CAUGHT IT ON THE
+    PAGE.  DisableDirPage=yes and UsePreviousAppDir=no are set at the top of
+    this file, so the wizard never shows a directory page and there is nothing
+    to change.  The text had gone on saying otherwise since before that pin
+    went in.
+
+    Both locations are now described the same way, because they now behave the
+    same way.  /DIR= on the command line still overrides it - that is Inno's
+    behaviour and is deliberately left alone - but it is not something this
+    page should offer, being an explicit act by somebody who has read the
+    reasoning, not a wizard page a user clicks past.
+
+    THAT IS THE SECOND FALSE STATEMENT FOUND ON THIS PAGE IN ONE DAY; the
+    other was "SD LEAVES IT ALONE" about an existing ssh server.  This page
+    accumulates claims that quietly stop being true when something else in the
+    file changes, exactly as the wpSelectTasks MsgBox does - and its comment
+    has been recording that pattern for three rewordings.  When changing
+    behaviour, READ THIS PAGE. }
   M := 'WHERE THINGS GO' + #13#10#13#10 +
-       'Program files:  C:\Program Files\SD  - you can change this.' + #13#10 +
+       'Program files:  C:\Program Files\SD  - fixed, it cannot be moved.' + #13#10 +
        'Database:  C:\ProgramData\SD  - fixed, it cannot be moved.' + #13#10#13#10 +
 
        'WINDOWS GROUPS, AND ONE THING YOU MUST DO AFTERWARDS' + #13#10#13#10 +
@@ -945,8 +963,11 @@ begin
        'nothing on screen. Do not stop it part way.' + #13#10#13#10 +
        'IT USUALLY NEEDS A RESTART. Until you restart, no SD account except your ' +
        'own can sign in at all.' + #13#10#13#10 +
-       'By default it can be reached only from this machine. The options page can ' +
-       'open it to other computers on your network.' + #13#10#13#10 +
+       'IF SD INSTALLS IT, it can be reached only from this machine by default, ' +
+       'and the options page can open it to other computers on your network. ' +
+       'IF THIS MACHINE ALREADY HAS WINDOWS'' SSH SERVER, SD DOES NOT CHANGE ITS ' +
+       'FIREWALL RULE - who may reach it stays as you have it, and that option is ' +
+       'not offered.' + #13#10#13#10 +
        'IF THIS MACHINE ALREADY HAS A DIFFERENT SSH SERVER, SD WILL NOT INSTALL ' +
        'AT ALL. It says so and stops, before changing anything. SD needs to know ' +
        'how the ssh server is configured, and it can only know that about the one ' +
@@ -962,8 +983,11 @@ begin
        'computer, because the command is forced and there is no subsystem left to ' +
        'run. Remote-control tools that copy files are unaffected, and so are the ' +
        'console and Remote Desktop.' + #13#10#13#10 +
-       'Your own sshd_config is kept as sshd_config.before-sd, and uninstalling ' +
-       'SD puts it back.' + #13#10#13#10 +
+       'SD''s settings go in a marked block of their own, and a copy of your ' +
+       'sshd_config as it was is kept beside it as sshd_config.before-sd. ' +
+       'Uninstalling SD removes its block and restarts the ssh server, which ' +
+       'leaves the file as it was; the copy is there if you would rather put it ' +
+       'back yourself.' + #13#10#13#10 +
 
        'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10 +
        'Your database, the ssh server, and the sdusers group. Removing the ' +
