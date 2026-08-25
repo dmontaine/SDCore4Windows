@@ -64,16 +64,25 @@ function Invoke-SD([string[]]$commands) {
     # 24 Aug 26 - NO BOM DOWN THE PIPE.  PowerShell 5.1's default $OutputEncoding
     # put a UTF-8 BOM in front of the first command, SD read it as a verb and
     # answered "<BOM> is not in your VOC", so command 1 was eaten every run.
-    # 24 Aug 26 - THE LEADING BOM IS HARMLESS BY CONSTRUCTION, and fighting it
-    # cost more than it was worth.  PowerShell 5.1 puts a UTF-8 BOM in front of
-    # the first byte it pipes to a native exe; $OutputEncoding does not remove
-    # it, local or $global:, and routing through cmd.exe's "<" broke the feed
-    # entirely (0 of 9 verbs echoed).
+    # 24 Aug 26 - THE PIPE IS THE ONLY HARNESS THAT RUNS ANYTHING, and this
+    # comment replaces two earlier ones that were both wrong.
     #
-    # $body BEGINS WITH A NEWLINE, so the BOM lands on that empty first line and
-    # SD answers "<BOM> is not in your VOC" ONCE, before any real command. It
-    # cannot eat a verb. The caller asserts that below rather than trusting it:
-    # every command must echo, and the BOM message must appear at most once.
+    # WHAT WAS TRIED AND WHAT IT ACTUALLY DID:
+    #   pipe   ($body | & $sdExe)            verbs RUN and echo; PHANTOM and
+    #                                        SETPTR hang (>20s, sd.exe left)
+    #   file   (-RedirectStandardInput)      NOTHING RUNS.  SD prints its
+    #                                        banner and "Process terminated",
+    #                                        408 bytes, no verb executed
+    #   cmd /c "sd.exe < file"               0 of 9 verbs echoed
+    #
+    # SO A FILE-FED SESSION EXITING IN 1.3s IS NOT EVIDENCE THAT SD HANDLES
+    # EOF WELL - it never reached a command.  An earlier version of this file
+    # said "SD does not spin at EOF, it terminates the session" on exactly that
+    # reading; that is withdrawn, and what SD does at EOF is UNMEASURED.
+    #
+    # The BOM is tolerated rather than fixed, for the reason below: $body opens
+    # with a newline, so it lands on that empty line and cannot eat a verb, and
+    # the caller asserts "at most one" rather than trusting it.
     $out = $body | & $sdExe 2>&1
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
@@ -88,18 +97,13 @@ $stamp = 'ZZW' + (Get-Random -Minimum 1000 -Maximum 9999)
 $cmds = @(
     'WHO', 'COUNT VOC', "CREATE.FILE $stamp", "COUNT $stamp",
     'LISTU', 'DATE', 'WHERE', 'LIST.LOCKS',
-    # 24 Aug 26 - A WIDENED PASS WAS TRIED AND HUNG, AND IS NOT IN THIS LIST.
-    # It added PHANTOM, SETPTR, SELECT/SAVE.LIST/GET.LIST to cover the write
-    # paths these nine verbs do not reach.  It never returned: two sd.exe
-    # processes were left behind (the session and its phantom, both owned by
-    # the invoking user, cleared with Stop-Process and no elevation) and no
-    # output was flushed.  Same family as the LOGIN/TERM pagination hang - a
-    # prompt reading a stdin that has already been closed.
-    #
-    # SO PHANTOM AND THE SPOOLER ARE NOT MEASURED HERE, and the table this
-    # feeds says so rather than implying nine verbs covered everything.  It
-    # changes no recommendation: PHANTOM writes its command into $ipc
-    # (sd.c:55) and $ipc is the one directory already staying writable.
+    # 24 Aug 26 - EVERY VERB HERE WAS ISOLATED FIRST and returns over a pipe.
+    # SETPTR is followed by 'Y': it asks "OK to set new parameters (Y/N)?"
+    # (SETPTR:558) and hung until answered - measured, and answering it brought
+    # the case back to 0.5s.  PHANTOM is deliberately NOT in this list; it
+    # hangs the pipe because the phantom inherits it, and it gets its own pass.
+    'SETPTR 0,80,60,0,0', 'Y',
+    'SELECT VOC', "SAVE.LIST $stamp", "GET.LIST $stamp", "DELETE.LIST $stamp",
     "DELETE.FILE $stamp"
 )
 $out = Invoke-SD $cmds
@@ -163,3 +167,57 @@ if ($ran -lt $cmds.Count -or $bom -or -not $created) {
 }
 ''
 'SESSION RAN IN FULL - the per-target verdict above is evidence.'
+
+# ---------------------------------------------------------------------------
+# 24 Aug 26 - THE PHANTOM PASS, which cannot go in the list above.
+#
+# PHANTOM hangs a piped session: the phantom child inherits the pipe, so the
+# job never completes even after the parent exits.  Measured, 20s timeout, and
+# it is the reason PHANTOM is not one of the verbs in the main workload.
+#
+# So it is fired and abandoned, the tree is diffed either side, and the proof
+# that it RAN is that a second sd.exe appeared - the session's own output is
+# unusable here.  A pass that saw no extra process is refused out loud.
+#
+# IT ONLY RUNS ON A QUIET MACHINE.  The cleanup kills every sd.exe, which would
+# take somebody else's session with it, so the pass is SKIPPED unless there
+# were none to begin with.  Skipping says so rather than reporting "untouched".
+''
+'== PHANTOM pass =='
+$sdBefore = @(Get-CimInstance Win32_Process -Filter "Name='sd.exe'" -ErrorAction SilentlyContinue).Count
+if ($sdBefore -gt 0) {
+    "   SKIPPED - $sdBefore sd.exe already running; this pass would kill them."
+    '   Re-run when the machine is quiet.'
+} else {
+    $before2 = Snapshot
+    $body2 = "`n" + ((@('TERM 200,9999', 'PHANTOM COUNT VOC', 'OFF')) -join "`n") + "`n"
+    $job = Start-Job -ScriptBlock { param($e,$x) $x | & $e 2>&1 } -ArgumentList $sdExe, $body2
+    $peak = 0
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Milliseconds 400
+        $n = @(Get-CimInstance Win32_Process -Filter "Name='sd.exe'" -ErrorAction SilentlyContinue).Count
+        if ($n -gt $peak) { $peak = $n }
+    }
+    Stop-Job   -Job $job -ErrorAction SilentlyContinue
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    Get-CimInstance Win32_Process -Filter "Name='sd.exe'" -ErrorAction SilentlyContinue |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 1
+    $after2 = Snapshot
+
+    $chg2 = @()
+    foreach ($k in $after2.Keys) {
+        if (-not $before2.ContainsKey($k))   { $chg2 += "CREATED  $k" }
+        elseif ($before2[$k] -ne $after2[$k]) { $chg2 += "MODIFIED $k" }
+    }
+    if ($chg2.Count -eq 0) { '   nothing changed' } else { $chg2 | Sort-Object | ForEach-Object { "   $_" } }
+    foreach ($k in $roots.Keys) {
+        $hits = @($chg2 | Where-Object { $_ -like ('*' + $roots[$k] + '*') }).Count
+        '   {0,-10} {1}' -f $k, $(if ($hits) { "WRITTEN ($hits)" } else { 'untouched' })
+    }
+    if ($peak -le 0) {
+        '   REFUSING: no sd.exe was ever seen, so no phantom ran and the rows above measure nothing.'
+        exit 1
+    }
+    "   a phantom existed (sd.exe peaked at $peak) - the rows above are evidence."
+}
