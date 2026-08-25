@@ -983,8 +983,8 @@ begin
        'computer, because the command is forced and there is no subsystem left to ' +
        'run. Remote-control tools that copy files are unaffected, and so are the ' +
        'console and Remote Desktop.' + #13#10#13#10 +
-       'SD''s settings go in a marked block of their own, and a copy of your ' +
-       'sshd_config as it was is kept beside it as sshd_config.before-sd. ' +
+       'SD''s settings go in a marked block of their own, and any existing ' +
+       'sshd_config is kept beside it as sshd_config.before-sd. ' +
        'Uninstalling SD removes its block and restarts the ssh server, which ' +
        'leaves the file as it was; the copy is there if you would rather put it ' +
        'back yourself.' + #13#10#13#10 +
@@ -1165,8 +1165,14 @@ begin
   end;
 
   if Code = 0 then
+    { 25 Aug 26 - "Any existing", NOT "The original".  Owner's wording, on
+      reading this box during the no-ssh guest run.  "The original" implies the
+      reader had an sshd_config of their own, and on the machine this message
+      most often appears on there was no ssh server at all ten minutes earlier -
+      the file was created by the OpenSSH install, not by them.  "Any existing"
+      is true either way. }
     Result := 'ssh is now limited to members of "sdusers" and the administrators group. ' +
-              'The original sshd_config was kept as sshd_config.before-sd.'
+              'Any existing sshd_config was kept as sshd_config.before-sd.'
   else if Code = 2 then
     { The common case on a machine that has just been told to restart: sshd
       writes its config on first start, so there is nothing to edit yet. }
