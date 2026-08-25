@@ -136,7 +136,15 @@ SDSYS_SHIP = [
     ('messages',      'sysmsg() text'),
     ('sd.voclib',     'library routines'),
     ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
-    ('bp',            'SDSYS BP - see the note in the header about tests'),
+    # 24 Aug 26 - SDSYS BP HELD FIFTEEN TEST PROGRAMS AS WELL AS ITS FIVE
+    # utility programs, and every install put them on every end user's disk.
+    # PROJECT_STATUS.md 7 step 3 flagged it and the owner ruled to drop them.
+    # What is left is the shape SD ships with: PCL and PCL.GRID for printer
+    # control, U0032 (Log user off) and U50BB (@WHO) as the two documented
+    # user exits, and VFS.CLS as the template VFS class module.  TESTSDCLI
+    # moved to gplbld/testsdcli.bp; verify-scramlogin.ps1 drops it into
+    # place for its own run and removes it in the finally block.
+    ('bp',            'SDSYS BP - five utility programs (see 24 Aug 26 note)'),
     ('changelog',     'ships with the system by standing instruction'),
     ('licence',       'GPL-3.0'),
     ('contrib',       'contributor list, reachable as CONFIG CONTRIB'),

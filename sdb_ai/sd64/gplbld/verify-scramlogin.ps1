@@ -450,6 +450,12 @@ $credDir   = Join-Path $env:ProgramData 'SD\sdsys\$cred'
 $credAside = $credDir + '.moved-for-5274'
 $movedCred = $false
 
+# TESTSDCLI IS DROPPED INTO PLACE FOR STEP 9b AND REMOVED IN FINALLY.  Init
+# here so the finally can rely on it even if we fail before step 9b.  See
+# the copy at step 9b for the reasoning.
+$installedTestSdcli = Join-Path $env:ProgramData 'SD\sdsys\bp\TESTSDCLI'
+$droppedTestSdcli   = $false
+
 try {
     # -----------------------------------------------------------------------
     Step 1 "Creating the throwaway account $Prefix"
@@ -766,8 +772,27 @@ try {
     # exercises the BASIC implementation, and it runs against the same server,
     # which is what stops the two agreeing with each other and both being wrong.
     #
-    # THE PASSWORD GOES ON STDIN, NEVER ON THE COMMAND LINE - sdsys/bp/TESTSDCLI
-    # reads it with echo off.  A command line reaches the process list.
+    # THE PASSWORD GOES ON STDIN, NEVER ON THE COMMAND LINE - TESTSDCLI reads
+    # it with echo off.  A command line reaches the process list.
+    #
+    # TESTSDCLI IS DROPPED INTO PLACE HERE AND REMOVED IN THE OUTER FINALLY,
+    # 24 Aug 2026 - it used to ship at sdsys/bp/TESTSDCLI alongside the rest
+    # of SDSYS's BP, but that put a developer test file on every end user's
+    # machine.  It now lives beside this script as gplbld/testsdcli.bp and is
+    # copied in for the duration of the run.  BASIC still finds it as
+    # "BP TESTSDCLI" because that IS the on-disk path SDSYS's BP resolves to.
+    # sdsys/bp is locked to sdusers:(RX) by secure-sysdirs (step 15), but
+    # VerifyInstall2 runs elevated, so the Administrators:(F) grant applies.
+    # $installedTestSdcli was set at the top so the outer finally can rely on
+    # it even if we fail before this point.
+    $testSdcliSource = Join-Path $PSScriptRoot 'testsdcli.bp'
+    if (-not (Test-Path -LiteralPath $testSdcliSource)) {
+        Fail ("verify-scramlogin: cannot find " + $testSdcliSource +
+              " - it is what BASIC BP TESTSDCLI resolves to.")
+    }
+    Copy-Item -LiteralPath $testSdcliSource -Destination $installedTestSdcli -Force
+    $droppedTestSdcli = $true
+
     $cliOut = Invoke-SD @(
         'BASIC BP TESTSDCLI',
         'RUN BP TESTSDCLI',
@@ -803,6 +828,22 @@ finally {
             Write-Host ('   $cred IS STILL RENAMED - put it back by hand: ' +
                         $credAside + ' -> ' + $credDir) -ForegroundColor Red
         }
+    }
+
+    # TESTSDCLI cleanup - REGARDLESS OF -Keep, because a leftover in
+    # sdsys/bp is exactly the sdusers-visible file the 24 Aug drop removed.
+    # The .OUT part comes and goes with cycles anyway (bp.out ships empty,
+    # stage.py:148), but the source is what nothing on the install path
+    # would put back, so leaving it here is a silent revival of what was
+    # deliberately removed.
+    if ($droppedTestSdcli) {
+        foreach ($p in @($installedTestSdcli,
+                         (Join-Path $env:ProgramData 'SD\sdsys\bp.OUT\TESTSDCLI'))) {
+            if (Test-Path -LiteralPath $p) {
+                Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Write-Host '   TESTSDCLI removed from sdsys/bp (source lives in gplbld/testsdcli.bp)'
     }
 
     if (-not $Keep) {

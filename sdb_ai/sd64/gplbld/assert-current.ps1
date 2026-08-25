@@ -279,6 +279,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # in the commit that creates it, under section 7 step 7's
                   # rule.  PowerShell only, no build product to list.
                   'probe-catprivate.ps1',
+                  # 24 Aug 26 - testsdcli.bp, the BASIC source that used to
+                  # ship at sdsys/bp/TESTSDCLI.  verify-scramlogin.ps1 drops
+                  # it into place at run time and removes it, so it stays
+                  # out of every end user's install.  PROJECT_STATUS.md 7
+                  # step 3.  Listed in the commit that moves it, under
+                  # section 7 step 7's rule.
+                  'testsdcli.bp',
                   # 24 Aug 26 - verify-lineendings, section 7 step 16 (a).  It
                   # plants CRLF records from OUTSIDE SD, which is what an
                   # external editor does, and asserts they read back with no

@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  SDSYS'S BP HAS BEEN TRIMMED TO ITS UTILITY PROGRAMS.
+
+           Fifteen developer test programs that were installed alongside
+           SDSYS's utility programs no longer ship - they were harmless but
+           had no business being on an end user's disk.  What is left in
+           SDSYS's BP is the shape the product ships with:
+
+              PCL, PCL.GRID          printer control (Ladybridge)
+              U0032, U50BB           the two user exits (0032, 50BB)
+              VFS.CLS                template VFS class module
+
+           The removed programs were BIGSTR_TEST, MSGTEST, PCODE_LIST,
+           SDTEST_V8, SD_ENCRYPT, SD_ENCRYPT_B64, SD_ENCRYPT_EXT, SD_EXT,
+           TEST.THEN.ELSE, TESTCRED, TESTSCRAM, TESTSDCLI, TESTSZ, pref_t,
+           sdTests and tilde_test.  If you were using one of these
+           deliberately - none of them are documented product functions -
+           they are still in the source repository under
+           sdb_ai/sd64/sdsys/bp/ up to this commit, and TESTSDCLI (kept
+           because the SCRAM verifier drives it) is now at
+           sdb_ai/sd64/gplbld/testsdcli.bp.
+
 24 Aug 26  "sd <command>" NO LONGER ASKS YOU TO SET A PASSWORD.
 
            Running a single command - "sd COUNT VOC" - is a batch operation,
