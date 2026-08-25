@@ -921,13 +921,62 @@ begin
 end;
 
 { ---------------------------------------------------------------------------
-  The page that says what this will do, before anything has been chosen
+  How SD will be used, and then the page that says what this will do
   --------------------------------------------------------------------------- }
 
 var
+  ModePage: TWizardPage;
+  FullRadio: TNewRadioButton;
+  StandaloneRadio: TNewRadioButton;
+  ModeMemo: TNewMemo;
   SummaryPage: TOutputMsgMemoWizardPage;
 
-(* AFTER wpWelcome AND BEFORE THE TASKS PAGE, AND THAT ORDER IS THE POINT.
+(* 25 Aug 26 - THE STAND-ALONE OPTION, AND WHY IT IS A PAGE OF ITS OWN RATHER
+   THAN A BOX ON THE TASKS PAGE.  Owner's request, in his words: "another option
+   for users, a stand-alone system option.  No ssh, no api, just the ability to
+   quickly install", for "education, hobby use where the intent is to learn the
+   language or test some code, not have a production system".
+
+   ITS POSITION IS DECIDED BY THE DISCLOSURE PAGE, NOT BY TASTE.  "Before you
+   install" describes the OpenSSH install, the forced ssh command and the cost
+   to scp and sftp - none of which a stand-alone install does.  wpSelectTasks
+   comes AFTER that page, so a checkbox there would have let the reader agree to
+   a page describing an install they were about to decline.  SummaryPage is
+   re-anchored on ModePage.ID below for the same reason, and DisclosureText
+   takes the mode as an argument so the page cannot describe the other one.
+
+   BOTH DESCRIPTIONS ARE ON SCREEN AT ONCE, IN ONE MEMO, and neither is revealed
+   by clicking.  A reader who never clicks the second radio button would
+   otherwise never read what they were turning down - and this choice cannot be
+   changed from inside SD afterwards, so it is not one to discover later.
+
+   A MEMO RATHER THAN A LABEL UNDER EACH OPTION, and the reason is measured
+   elsewhere in this file rather than assumed: FinishedLabel was given more text
+   than it had been sized for and Windows drew none of the overflow - "the
+   Caption assignment succeeds and the words are just not drawn", at
+   CurPageChanged.  A memo with a scrollbar cannot clip, at any DPI, font size
+   or wizard style.  It is the same property the disclosure memo is built on. *)
+function StandaloneChosen: Boolean;
+begin
+  (* NIL-SAFE BECAUSE IT IS READ FROM Check: PARAMETERS, which Inno evaluates
+     per file and per [Run] entry.  InitializeWizard always runs first and a
+     silent install is refused in InitializeSetup, so the nil case is
+     unreachable today; it is here so that a future caller reached before the
+     wizard is built gets the SAFE answer - the full install, which is what
+     every version of this installer before today did - rather than a runtime
+     error inside a Check. *)
+  if StandaloneRadio = nil then
+    Result := False
+  else
+    Result := StandaloneRadio.Checked;
+end;
+
+(* AFTER THE MODE PAGE AND BEFORE THE TASKS PAGE, AND THAT ORDER IS THE POINT.
+
+   It said "after wpWelcome" until 25 Aug 2026, which was true until the mode
+   page went in between.  It is still the second page the reader sees; what
+   changed is that by the time they see it the mode is known, so it describes
+   the install they chose instead of the only one there used to be.
 
    Inno already provides the last-chance page: Ready to Install lists the
    destination and the ticked tasks with Cancel beside them.  What it cannot
@@ -954,7 +1003,19 @@ var
    directive and a wrapped string constant becomes "Unknown preprocessor
    directive".  The trap is recorded at the closing MsgBox; every #13#10 below
    is mid-line for that reason. *)
-procedure InitializeWizard;
+
+(* 25 Aug 26 - IT TAKES THE MODE AS AN ARGUMENT, AND THAT IS THE WHOLE DEFENCE
+   AGAINST THE FAULT THIS PAGE KEEPS HAVING.  The comment inside records four
+   occasions on which this text went on asserting something that had stopped
+   being true.  A single text with the ssh paragraphs edited to hedge would
+   have been a fifth: it would have had to describe both installs at once, and
+   be read by somebody doing neither.
+
+   The common paragraphs are written ONCE and the mode picks between the blocks
+   that genuinely differ.  Two whole copies of this page was the alternative,
+   and keeping two copies of a text with this history in step is not a thing to
+   take on. *)
+function DisclosureText(Standalone: Boolean): String;
 var
   M: String;
 begin
@@ -1003,11 +1064,21 @@ begin
        'Creates the group "sdusers" and adds you to it. That membership is what ' +
        'grants access to the database. Windows only applies a new group when you ' +
        'sign in, so YOU MUST SIGN OUT AND BACK IN, or restart, before SD will ' +
-       'run. Until then it reports that it cannot open its files.' + #13#10#13#10 +
-       'Creates the group "sdsshonly" and denies its members the right to sign in ' +
-       'at the console or over Remote Desktop. Accounts SD creates go in it. Your ' +
-       'own account does not.' + #13#10#13#10 +
+       'run. Until then it reports that it cannot open its files.' + #13#10#13#10;
 
+  { THE sdsshonly PARAGRAPH IS MODE-SPECIFIC BECAUSE THE GROUP'S JOB IS.  It
+    confines the Windows accounts CREATE.ACCOUNT USER makes to ssh, and a
+    stand-alone system refuses that verb - so the group is still created, the
+    installer's steps and the uninstaller both being unconditional, and it
+    stays empty for the life of the install.  "Accounts SD creates go in it",
+    on a system that creates none, would have been the fifth false statement
+    this page has carried. }
+  if Standalone then
+    M := M + 'Creates the group "sdsshonly" and puts nothing in it. On a stand-alone system nothing is ever added to it, because SD does not create Windows accounts here. It exists because one installer serves both kinds of system. Your own account is not in it.' + #13#10#13#10
+  else
+    M := M + 'Creates the group "sdsshonly" and denies its members the right to sign in at the console or over Remote Desktop. Accounts SD creates go in it. Your own account does not.' + #13#10#13#10;
+
+  M := M +
        'PERMISSIONS ON THE DATABASE' + #13#10#13#10 +
        'Removes inherited permissions from C:\ProgramData\SD and grants access to ' +
        'SYSTEM, administrators and sdusers only. Without this the database would ' +
@@ -1016,8 +1087,25 @@ begin
        'SERVICE AND PATH' + #13#10#13#10 +
        'Installs a Windows service that runs SD and starts it again after every ' +
        'restart. There is nothing to start by hand.' + #13#10#13#10 +
-       'Adds SD to the system PATH, unless you clear that option.' + #13#10#13#10 +
+       'Adds SD to the system PATH, unless you clear that option.' + #13#10#13#10;
 
+  (* THE ssh AND NETWORK SECTION - the half the two installs genuinely disagree
+     about, and the reason this function takes an argument at all.
+
+     THE FULL BRANCH IS THE EXISTING TEXT, WORD FOR WORD.  The owner has read it
+     on screen and it has been reworded four times to catch up with behaviour;
+     it is not re-drafted here to make the two branches look alike. *)
+  if Standalone then
+    M := M +
+       'NO SSH SERVER, NO NETWORK PORT, ONE ACCOUNT' + #13#10#13#10 +
+       'SD installs no ssh server and changes no ssh configuration. If this computer already has one, SD leaves it exactly as it is. scp and sftp go on working - on a full installation they stop working for everyone, and that is the single biggest difference between the two.' + #13#10#13#10 +
+       'SD OPENS NO NETWORK PORT AT ALL. The SD API is not available, so no program and no other computer can connect to SD here. This is not a firewall rule somebody can open later: SD is not listening on anything.' + #13#10#13#10 +
+       'THERE IS ONE SD ACCOUNT AND IT IS YOURS. You use SD at this computer, as yourself, by typing "sd". Nobody signs in from anywhere else, because there is nowhere to sign in from.' + #13#10#13#10 +
+       'MAKING SD ACCOUNTS FOR OTHER PEOPLE IS REFUSED, and SD says why when you try it. "create.account user" makes a Windows account that is denied the console and Remote Desktop, on the assumption it will sign in over ssh; with no ssh server it could sign in nowhere at all. Rather than make an account nobody can ever use, SD declines.' + #13#10#13#10 +
+       'YOU CAN STILL KEEP SEPARATE WORK SEPARATE, which is what an account is for in a system like this. "create.account group myproject" makes one, and "logto myproject" moves into it from an SD session run as administrator. No Windows account and no sign-in is involved in either.' + #13#10#13#10 +
+       'THIS CHOICE IS MADE NOW, AND NOT FROM INSIDE SD AFTERWARDS. Nothing in SD turns a stand-alone system into a full one later. If anyone else will ever use this SD, or a program needs to reach it over the API, go back one page and choose the full installation.' + #13#10#13#10
+  else
+    M := M +
        'OPENSSH SERVER - INSTALLED, NOT OPTIONAL' + #13#10#13#10 +
        'Accounts SD creates sign in over ssh and nothing else. That is true even ' +
        'with no network: on a machine used by one person, you reach SD by ' +
@@ -1051,12 +1139,19 @@ begin
        'sshd_config is kept beside it as sshd_config.before-sd. ' +
        'Uninstalling SD removes its block and restarts the ssh server, which ' +
        'leaves the file as it was; the copy is there if you would rather put it ' +
-       'back yourself.' + #13#10#13#10 +
+       'back yourself.' + #13#10#13#10;
 
-       'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10 +
-       'Your database, the ssh server, and the sdusers group. Removing the ' +
-       'database is offered separately and defaults to keeping it.' + #13#10#13#10 +
+  M := M + 'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10;
+  if Standalone then
+    M := M + 'Your database and the sdusers group. SD installed no ssh server here, so there is none to be left behind. Removing the database is offered separately and defaults to keeping it.' + #13#10#13#10
+  else
+    M := M + 'Your database, the ssh server, and the sdusers group. Removing the database is offered separately and defaults to keeping it.' + #13#10#13#10;
 
+  { KEPT COMMON, DELIBERATELY.  It is true of a stand-alone system too - the
+    installing user is one member of sdusers and an administrator can add
+    others by hand - and a warning is the wrong thing to soften on the strength
+    of "there is probably only one person here". }
+  M := M +
        'ONE LIMIT WORTH KNOWING BEFORE YOU RELY ON IT' + #13#10#13#10 +
        'SD users are not isolated from each other. Every SD process opens the ' +
        'database as the person running it, so anyone who can use SD on this ' +
@@ -1064,12 +1159,133 @@ begin
        'accounts as a privacy boundary between people who should not see each ' +
        'other''s data.';
 
-  SummaryPage := CreateOutputMsgMemoPage(wpWelcome,
+  Result := M;
+end;
+
+(* THE TEXT OF THE CHOICE ITSELF.  Both descriptions, complete, in one memo -
+   the owner asked for "text explaining what each option offers (complete
+   description, not a one liner)", and for both of them to be readable without
+   clicking anything.
+
+   THE PARAGRAPH RULE FROM DisclosureText APPLIES HERE UNCHANGED: one source
+   line per paragraph, no hand-wrapping, no indents.  The memo word-wraps to
+   whatever width it has.  And no line starts with "#". *)
+function ModeChoiceText: String;
+begin
+  Result :=
+    'FULL INSTALLATION' + #13#10#13#10 +
+    'For a system more than one person will use, or that a program will connect to. This is what this installer has always done, and it is the shape a working system needs.' + #13#10 +
+    'Other people can have SD accounts. "create.account user fred" makes a Windows account and an SD account together, and Windows is what holds the password.' + #13#10 +
+    'Those accounts sign in over ssh and nothing else - not at this computer, not over Remote Desktop. An ssh session goes straight into SD and never reaches a command prompt, so an SD account cannot get a shell on this machine.' + #13#10 +
+    'SD installs the OpenSSH server that comes with Windows if this computer has none. It is downloaded from Windows Update, CAN TAKE SEVERAL MINUTES with nothing on screen, and usually wants a restart before anyone can sign in.' + #13#10 +
+    'THE COST, AND IT FALLS ON EVERYONE: scp and sftp STOP WORKING on this computer, for every user, because every ssh session is forced into SD and there is no file-transfer subsystem left to run.' + #13#10 +
+    'The SD API listens on port 4243 so that programs can connect to SD. Setup adds a firewall rule; by default only this computer can reach it, and the next page can open it to other computers on your network.' + #13#10 +
+    'SD will not install at all if this computer has an ssh server that is not the one Windows ships, or if somebody has already changed how that one is configured. It says so and stops without changing anything.' + #13#10#13#10 +
+
+    'STAND-ALONE INSTALLATION' + #13#10#13#10 +
+    'For one person, at this computer, to learn SD or to try some code out. It is deliberately not a production system, and it is quicker to install because most of what is above does not happen.' + #13#10 +
+    'NO SSH SERVER IS INSTALLED and no ssh configuration is touched. If this computer already has an ssh server, of any make, SD leaves it alone. scp and sftp go on working.' + #13#10 +
+    'NO NETWORK PORT IS OPENED. The SD API is not available - SD is not listening on anything, so there is no rule to open and nothing to reach from another computer.' + #13#10 +
+    'THERE IS ONE SD ACCOUNT AND IT IS YOURS. You use SD here, as yourself, by typing "sd".' + #13#10 +
+    '"create.account user" is refused, and SD explains why when you try it. The Windows account it would make is denied this computer and Remote Desktop because it is meant to arrive over ssh - and with no ssh server it could sign in nowhere at all.' + #13#10 +
+    'YOU CAN STILL DIVIDE YOUR WORK UP, which is what an account is for in a system like this. "create.account group myproject" makes one and "logto myproject" moves into it, from an SD session run as administrator. No Windows account and no sign-in is involved.' + #13#10 +
+    'NOTHING ELSE IS CUT DOWN. Same SD, same language, same database, same commands. What is missing is the ways in from somewhere else.' + #13#10#13#10 +
+
+    'IF YOU ARE NOT SURE' + #13#10#13#10 +
+    'Choose the full installation. A stand-alone system cannot be turned into a full one from inside SD, and the things it leaves out - other people, ssh, the API - are the ones that are awkward to add later.';
+end;
+
+procedure InitializeWizard;
+begin
+  (* SIZES AND POSITIONS COME FROM THE PAGE, NEVER FROM A NUMBER I CHOSE.
+     SurfaceWidth and SurfaceHeight are what the wizard actually gave us at this
+     DPI and wizard style, so the memo is as big as there is room for and the
+     text inside it scrolls rather than being clipped.  The one literal here is
+     the gap between the radio buttons and the memo, through ScaleY. *)
+  ModePage := CreateCustomPage(wpWelcome,
+      'How this computer will use SD',
+      'Two installations. Read both - this cannot be changed from inside SD afterwards.');
+
+  FullRadio := TNewRadioButton.Create(ModePage);
+  FullRadio.Parent  := ModePage.Surface;
+  FullRadio.Left    := 0;
+  FullRadio.Top     := 0;
+  FullRadio.Width   := ModePage.SurfaceWidth;
+  FullRadio.Height  := ScaleY(17);
+  FullRadio.Caption := 'Full installation - more than one person, over ssh, with the SD API';
+  FullRadio.Checked := True;
+
+  StandaloneRadio := TNewRadioButton.Create(ModePage);
+  StandaloneRadio.Parent  := ModePage.Surface;
+  StandaloneRadio.Left    := 0;
+  StandaloneRadio.Top     := FullRadio.Top + FullRadio.Height + ScaleY(2);
+  StandaloneRadio.Width   := ModePage.SurfaceWidth;
+  StandaloneRadio.Height  := ScaleY(17);
+  StandaloneRadio.Caption := 'Stand-alone installation - one person at this computer, for learning and testing';
+
+  ModeMemo := TNewMemo.Create(ModePage);
+  ModeMemo.Parent     := ModePage.Surface;
+  ModeMemo.Left       := 0;
+  ModeMemo.Top        := StandaloneRadio.Top + StandaloneRadio.Height + ScaleY(8);
+  ModeMemo.Width      := ModePage.SurfaceWidth;
+  ModeMemo.Height     := ModePage.SurfaceHeight - ModeMemo.Top;
+  ModeMemo.ReadOnly   := True;
+  ModeMemo.WordWrap   := True;
+  ModeMemo.ScrollBars := ssVertical;
+  ModeMemo.Lines.Text := ModeChoiceText;
+
+  (* ANCHORED ON ModePage.ID, NOT ON wpWelcome, so the disclosure page comes
+     after the choice rather than beside it.  Seeded with the FULL text because
+     that is what the radio button above starts on; CurPageChanged rewrites it
+     from the live answer every time the page is shown, so a reader who goes
+     Back, changes their mind and comes forward again sees the other one. *)
+  SummaryPage := CreateOutputMsgMemoPage(ModePage.ID,
       'Before you install',
       'What SD changes on this computer',
       'Setup changes Windows itself, not only its own folders. All of it is listed below. ' +
       'Nothing has happened yet - Cancel stops without changing anything.',
-      M);
+      DisclosureText(False));
+end;
+
+(* ===========================================================================
+   25 Aug 26 - A SCAFFOLD, AND IT IS MEANT TO BE DELETED.  REMOVE THIS WHOLE
+   FUNCTION AS SOON AS THE STAND-ALONE BEHAVIOUR IS WIRED UP.
+
+   WHAT IS BUILT TODAY IS THE PAGE AND THE DISCLOSURE TEXT, AND NOTHING THAT
+   ACTS ON THE ANSWER.  Every [Run] step, the sd.conf that carries APIPORT, the
+   sshremote task and CREATE.ACCOUNT itself are all still unconditional, so an
+   install that accepted "stand-alone" today would install an ssh server,
+   configure it, open port 4243 and stop scp working for everyone - having just
+   shown the reader a page promising that it would do none of those things.
+
+   THAT IS THE ONE FAULT THIS FILE HAS PAID FOR OVER AND OVER: a page asserting
+   something that had stopped being true, four rewordings of the tasks MsgBox,
+   and the silent install that finished with no password on any account.  A
+   half-wired option is the same fault built deliberately, so it is refused out
+   loud instead.
+
+   REFUSING IS ALSO WHAT MAKES THE PAGE SAFE TO PUT THROUGH A CYCLE.  The
+   descriptions can be read and judged on screen - which is what the owner asked
+   to see - with no way to reach an install that contradicts them.
+   =========================================================================== *)
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+
+  if (CurPageID = ModePage.ID) and StandaloneChosen then
+  begin
+    Log('SD: refusing to continue - stand-alone was chosen and the behaviour ' +
+        'behind it is not built yet.');
+    MsgBox('The stand-alone installation is not finished in this build.' + #13#10#13#10 +
+           'The page you are looking at is being reviewed, and the option is ' +
+           'described in full so that it can be. What is NOT built yet is ' +
+           'everything that would act on the answer, so choosing it now would ' +
+           'give you a full installation while telling you it had given you a ' +
+           'stand-alone one.' + #13#10#13#10 +
+           'Choose the full installation to continue, or Cancel.',
+           mbError, MB_OK);
+    Result := False;
+  end;
 end;
 
 { ---------------------------------------------------------------------------
@@ -2709,6 +2925,22 @@ begin
       'This is expected. Setting up SD is not finished until that window says so.';
   end;
 
+  (* 25 Aug 26 - THE DISCLOSURE PAGE IS RE-TEXTED EVERY TIME IT IS SHOWN, from
+     the live radio button rather than from anything remembered.
+
+     WHY IT IS DONE HERE AND NOT ONCE AT CREATION.  InitializeWizard runs before
+     the reader has chosen, so the text it seeds the page with is a guess - and
+     Back is a supported way through an Inno wizard.  Somebody who reads the
+     full disclosure, presses Back, picks stand-alone and comes forward again
+     would otherwise be shown the ssh paragraphs for an install that does not
+     install ssh.  That is precisely the failure this page has had four times,
+     arriving by a new route.
+
+     RichEditViewer.Lines.Text IS WRITABLE - checked by compiling it rather than
+     by reading the help, with a control that fails on the same line. *)
+  if CurPageID = SummaryPage.ID then
+    SummaryPage.RichEditViewer.Lines.Text := DisclosureText(StandaloneChosen);
+
   { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
     in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with
     -Silent stopped here with a modal box on screen and copied not one file
@@ -2729,7 +2961,13 @@ begin
   if WizardSilent then
     Exit;
 
-  if (CurPageID = wpSelectTasks) and (not SshServerAbsent) then
+  { 25 Aug 26 - AND NOT ON A STAND-ALONE INSTALL, where every sentence of it is
+    false.  It says "SD WILL NOW CONFIGURE IT, and this is not optional" about
+    an ssh server a stand-alone install does not touch at all.  Gated here
+    rather than reworded: there is nothing this box needs to say to somebody who
+    has just chosen an install that leaves ssh alone, and the mode page has
+    already told them scp and sftp keep working. }
+  if (CurPageID = wpSelectTasks) and (not SshServerAbsent) and (not StandaloneChosen) then
     { Notify rather than offer, which is what the repository owner asked for:
       the option is not available and the reason is stated.
 
