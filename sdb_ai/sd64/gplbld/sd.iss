@@ -273,8 +273,17 @@ Name: "apiremote"; Description: "Let other computers on your network connect to 
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
-; Everything here is program.  It is replaced on upgrade and removed on
+; Everything here is program.  It is overwritten on upgrade and removed on
 ; uninstall, which is what should happen to program files.
+;
+; CORRECTED 25 Aug 2026, in place per the standing rule about wrong comments.
+; This said "REPLACED on upgrade", and replaced is not what happens: Inno's
+; [Files] copies and overwrites, and never removes a file that is ABSENT from
+; the new version - which is the entire reason [InstallDelete] exists.  So a
+; script dropped from stage.py sits here until somebody uninstalls SD.  The
+; difference is invisible until the first time something is retired, which is
+; why it went unnoticed.  stage.py's PF_RETIRED is the list that removes one,
+; and assert-current section B4 is what notices a leftover in the first place.
 Source: "{#Stage}\ProgramFiles\*"; DestDir: "{app}"; \
     Flags: recursesubdirs createallsubdirs ignoreversion
 

@@ -833,6 +833,102 @@ if ($mirrorErr -ne '') {
     }
 }
 
+# --- B4. THE SAME BLINDNESS ONE DIRECTORY OVER: C:\Program Files\SD.
+#
+# 25 Aug 26 - B3 above covers the data tree.  {app} has the identical gap and
+# it is easy to assume away, because sd.iss's own comment there says everything
+# under {app} is "replaced on upgrade and removed on uninstall".  THAT IS RIGHT
+# ABOUT OVERWRITING AND ABOUT UNINSTALLING AND WRONG ABOUT A RETIRED FILE:
+# Inno's [Files] copies and overwrites but never removes a file that is absent
+# from the new version, which is precisely why [InstallDelete] exists.  So a
+# script dropped from stage.py stays in C:\Program Files\SD until somebody
+# uninstalls SD.
+#
+# IT ASKS $shipsAs, WHICH IS ALREADY THE RIGHT QUESTION AND ALREADY EXISTS.
+# That valve answers "does this name appear, quoted or path-prefixed, in
+# stage.py or sd.iss" - which is the definition of shipping used everywhere
+# else in this file.  Retiring a script removes its name from stage.py, so the
+# same valve that puts a $neverShipped script back under the guard reports the
+# leftover here.  No second list, and nothing to keep in step.
+#
+# WHAT IT DELIBERATELY DOES NOT DO.  It looks at the TOP LEVEL of {app} only.
+# usr\bin holds the binaries and the MSYS2 DLL closure, which stage.py COMPUTES
+# with objdump rather than naming, so there is no list to compare against and a
+# name-based check there would report every DLL as unshipped.
+#
+# AND ITS ONE FALSE-NEGATIVE IS WORTH KNOWING, in the exact shape it has: the
+# valve requires the name to be QUOTED or path-prefixed, so a retired script
+# mentioned bare in a comment does NOT read as shipped - that is the case its
+# own note describes.  What DOES slip through is a retired name still carried
+# in QUOTES, which is how this file's own comments write a file name.  So when
+# retiring a script, take its name out of the quotes in stage.py rather than
+# leaving 'foo.ps1' in the comment that explains its removal.  The failure is
+# one missed leftover, not a false alarm, which is the direction this file
+# tolerates.
+#
+# THE EVIDENCE ITSELF IS CHECKED FIRST.  $shipEvidence is the text of stage.py
+# and sd.iss; if it came back empty every file below would look unshipped and
+# this section would report all twenty-odd of them.  A check whose reference
+# data is missing has to say so rather than produce its loudest possible output.
+function Find-UnshippedAppFiles {
+    param(
+        [Parameter(Mandatory = $true)] [string]      $AppRoot,
+        [Parameter(Mandatory = $true)] [scriptblock] $ShipsAs
+    )
+
+    $orphans = @()
+    $seen    = 0
+
+    # TOP LEVEL ONLY, and -File so that usr\ and etc\ are not descended into.
+    # unins000.exe and unins000.dat are Inno's own uninstaller, written by the
+    # installer rather than shipped by stage.py, so they are not leftovers; the
+    # digits are matched because a repeat install can produce unins001.
+    Get-ChildItem $AppRoot -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch '^unins\d+\.(exe|dat)$' } |
+        ForEach-Object {
+            $seen++
+            if (-not (& $ShipsAs $_.Name)) { $orphans += $_.Name }
+        }
+
+    # Checked, for the same reason Find-InstalledDeletions returns one: the
+    # finding is "this file is NOT shipped", so a run that opened nothing
+    # produces no findings and reads as the cleanest possible pass.
+    return [pscustomobject]@{ Orphans = @($orphans); Checked = $seen }
+}
+
+$appRoot  = Split-Path (Split-Path (Split-Path $inst -Parent) -Parent) -Parent
+$orphans  = @()
+$appSeen  = 0
+$appWhy   = ''
+if ("$shipEvidence".Length -eq 0) {
+    $appWhy = 'stage.py and sd.iss read as empty, so every file there would be reported'
+} elseif (-not (Test-Path $appRoot)) {
+    $appWhy = "$appRoot is not there"
+} else {
+    $app     = Find-UnshippedAppFiles -AppRoot $appRoot -ShipsAs $shipsAs
+    $orphans = $app.Orphans
+    $appSeen = $app.Checked
+}
+
+if ($appWhy -ne '') {
+    Bad ("cannot check {app} for leftover files - " + $appWhy + '.')
+    $stale = $true
+} elseif ($appSeen -eq 0) {
+    # Same null-case guard as B3.  The finding is "this file is not shipped",
+    # so a run that saw no files produces none and would read as clean.
+    Bad ("{0} holds no files at all - the leftover check measured nothing." -f $appRoot)
+    $stale = $true
+} elseif ($orphans.Count -gt 0) {
+    Bad ("{0} file(s) in {1} are no longer shipped by stage.py or sd.iss:" -f $orphans.Count, $appRoot)
+    $orphans | Select-Object -First 10 | ForEach-Object { Write-Output ("       " + $_) }
+    if ($orphans.Count -gt 10) { Write-Output ("       ... and {0} more" -f ($orphans.Count - 10)) }
+    Write-Output '       (Inno never removes a file dropped from a new version - add it to'
+    Write-Output '        PF_RETIRED in stage.py, which emits an [InstallDelete] for it)'
+    $stale = $true
+} else {
+    Note ("  no leftover files in {0} ({1} checked)" -f $appRoot, $appSeen)
+}
+
 if ($newer.Count -gt 0) {
     Bad ("{0} source file(s) are newer than the install:" -f $newer.Count)
     $newer | Sort-Object LastWriteTime -Descending | Select-Object -First 10 | ForEach-Object {

@@ -41,15 +41,17 @@ if ($err.Count -gt 0) {
     $err | ForEach-Object { Write-Host ("  {0} line {1}" -f $_.Message, $_.Extent.StartLineNumber) }
     exit 2
 }
-$fn = $ast.FindAll({ param($x)
-    $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-    $x.Name -eq 'Find-InstalledDeletions' }, $true)
-if ($fn.Count -ne 1) {
-    Write-Host "expected exactly 1 'Find-InstalledDeletions' in assert-current.ps1, found $($fn.Count)"
-    exit 2
+foreach ($n in @('Find-InstalledDeletions', 'Find-UnshippedAppFiles')) {
+    $fn = $ast.FindAll({ param($x)
+        $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $x.Name -eq $n }, $true)
+    if ($fn.Count -ne 1) {
+        Write-Host "expected exactly 1 '$n' in assert-current.ps1, found $($fn.Count)"
+        exit 2
+    }
+    . ([scriptblock]::Create($fn[0].Extent.Text))
 }
-. ([scriptblock]::Create($fn[0].Extent.Text))
-Write-Host "lifted Find-InstalledDeletions from $src"
+Write-Host "lifted 2 functions from $src"
 Write-Host ''
 
 $script:fail = 0
@@ -160,6 +162,46 @@ Remove-Item -LiteralPath (Join-Path $f.Inst 'messages') -Recurse -Force
 $r = Find-InstalledDeletions -SourceSys $f.Src -InstallSys $f.Inst -Mirrors @('gpl.bp', 'messages')
 Check 'a mirror missing from the INSTALL is skipped, not passed' ($r.Skipped -contains 'messages') "got: $($r.Skipped -join ', ')"
 Remove-Fixture $f
+
+# ===========================================================================
+# 7. THE {app} HALF - Find-UnshippedAppFiles
+#
+# Inno's [Files] copies and overwrites but never removes a file that is absent
+# from the new version, so a script dropped from stage.py stays in
+# C:\Program Files\SD until somebody uninstalls.  This is what notices.
+# ===========================================================================
+Write-Host '7. leftover files in {app}'
+$appDir = Join-Path $env:TEMP ('sdapp-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+foreach ($n in @('deny-logon.ps1', 'install-ssh.ps1', 'changelog',
+                 'unins000.exe', 'unins000.dat')) {
+    Set-Content -LiteralPath (Join-Path $appDir $n) -Value 'x' -Encoding ascii
+}
+New-Item -ItemType Directory -Path (Join-Path $appDir 'usr') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path (Join-Path $appDir 'usr') 'sd.exe') -Value 'x' -Encoding ascii
+
+# The real valve is a scriptblock over the text of stage.py and sd.iss; these
+# stand in for it so the test does not depend on what those files say today.
+$shipsAll  = { param($n) $true }
+$shipsSome = { param($n) $n -ne 'install-ssh.ps1' }
+
+$a = Find-UnshippedAppFiles -AppRoot $appDir -ShipsAs $shipsAll
+Check 'nothing reported when everything ships' ($a.Orphans.Count -eq 0) "got: $($a.Orphans -join ', ')"
+Check "Inno's uninstaller is not counted (Checked = 3)" ($a.Checked -eq 3) "Checked = $($a.Checked)"
+Check 'unins000.exe is not reported' (-not ($a.Orphans -contains 'unins000.exe')) "got: $($a.Orphans -join ', ')"
+Check 'usr\sd.exe is not descended into' (-not ($a.Orphans -contains 'sd.exe')) "got: $($a.Orphans -join ', ')"
+
+$b = Find-UnshippedAppFiles -AppRoot $appDir -ShipsAs $shipsSome
+Check 'CONTROL: a retired script IS reported' ($b.Orphans -contains 'install-ssh.ps1') "got: $($b.Orphans -join ', ')"
+Check 'and only that one' ($b.Orphans.Count -eq 1) "got: $($b.Orphans -join ', ')"
+
+Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue
+
+$empty = Join-Path $env:TEMP ('sdapp-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+New-Item -ItemType Directory -Path $empty -Force | Out-Null
+$c = Find-UnshippedAppFiles -AppRoot $empty -ShipsAs $shipsAll
+Check 'an empty {app} reports Checked = 0, which the caller refuses' ($c.Checked -eq 0) "Checked = $($c.Checked)"
+Remove-Item -LiteralPath $empty -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
 if ($script:fail -gt 0) {

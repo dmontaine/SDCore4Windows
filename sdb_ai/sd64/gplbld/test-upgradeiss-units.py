@@ -142,7 +142,39 @@ def main():
         check('changelog is on no ship list any more',
               'changelog' not in [n for n, _w in S.SDSYS_SHIP] and
               'changelog' not in [n for n, _w in S.SDSYS_EMPTY])
+
+        # PF_RETIRED is empty today, so its entry shape has to be exercised by
+        # putting one in.  An empty list emitting nothing is the correct state
+        # and proves nothing about what happens when a name is added.
+        # Asserted on the ENTRY lines, not on the whole file - the header
+        # prose mentions {app}, and the first draft of this check matched that
+        # and failed on its own documentation.
+        check('PF_RETIRED emits no entry while it is empty',
+              (len(S.PF_RETIRED) > 0) or
+              not any('{app}' in l for l in dels + copies))
     finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    root = tempfile.mkdtemp()
+    saved = S.PF_RETIRED
+    try:
+        S.PF_RETIRED = [('old-helper.ps1', 'dropped from stage.py')]
+        sdsys = build_tree(root)
+        path, _r, _p = S.write_upgrade_iss(root, sdsys, True)
+        text = open(path, encoding='ascii').read()
+        dels = [l for l in text.splitlines() if l.startswith('Name:')]
+        copies = [l for l in text.splitlines() if l.startswith('Source:')]
+        app = [l for l in dels if '{app}' in l]
+        print('{app} retired:')
+        check('a PF_RETIRED name emits one [InstallDelete] under {app}',
+              len(app) == 1, 'got %d: %s' % (len(app), app))
+        check('it names the file', len(app) == 1 and 'old-helper.ps1' in app[0])
+        check('it is UNGATED - no Check:, because {app} has its own lifecycle',
+              len(app) == 1 and 'Check:' not in app[0], 'got: %s' % app)
+        check('nothing is copied back for it',
+              not any('old-helper.ps1' in l for l in copies))
+    finally:
+        S.PF_RETIRED = saved
         shutil.rmtree(root, ignore_errors=True)
 
     # --- the refusals ------------------------------------------------------
