@@ -814,8 +814,11 @@ begin
     Log('SD: refusing - ssh-preflight exited ' + IntToStr(PreflightCode) +
         ': ' + String(PreflightReason));
     SuppressibleMsgBox(
-      'SD has not been installed, because of this computer''s ssh server.' +
-      #13#10#13#10 +
+      { The #13#10 stays at the END of the line above, never at the start of
+        this one: ISPP reads a leading '#' as a preprocessor directive, and
+        cycle.ps1 refuses the build for it.  It caught exactly that here on
+        25 Aug 2026 - before ISCC ran, which is what that guard is for. }
+      'SD has not been installed, because of this computer''s ssh server.' + #13#10#13#10 +
       String(PreflightReason) + #13#10 +
       'Why this matters: accounts SD creates sign in over ssh and nothing else, ' +
       'and SD configures the ssh server so that those accounts land in SD and ' +
