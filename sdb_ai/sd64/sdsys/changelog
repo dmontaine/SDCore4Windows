@@ -5,6 +5,26 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  THE FIVE PROGRAMS SD SHIPPED INTO THE SDSYS BP FILE ARE GONE.
+
+           SD used to install PCL and PCL.GRID (printer control), U0032 and
+           U50BB (user exits) and VFS.CLS (a template class module) into the
+           SDSYS account's BP file.  None of them is needed in this version,
+           and SD does not support virtual file systems, so the template was
+           describing something you cannot use.  PCL is unaffected as a
+           printer feature - the PCL keyword and the catalogued PCL routine
+           are both still there; what has gone is a second, older copy of the
+           source sitting in BP.
+
+           SD NOW SHIPS NOTHING INTO THE SDSYS BP FILE.  It is created empty
+           and is yours to use.
+
+           AND BECAUSE OF THAT, BP AND ITS COMPILED OBJECTS ARE NOW PRESERVED
+           WHEN YOU UPGRADE, alongside your accounts, the private catalogue
+           and the rest of your own data.  Anything you have written into the
+           SDSYS BP file, and anything you have compiled from it, survives an
+           upgrade untouched.
+
 25 Aug 26  LETTING OTHER COMPUTERS REACH THE SD API IS NOW OFF UNTIL YOU
            ASK FOR IT.
 

@@ -136,18 +136,9 @@ SDSYS_SHIP = [
     ('messages',      'sysmsg() text'),
     ('sd.voclib',     'library routines'),
     ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
-    # 24 Aug 26 - SDSYS BP HELD FIFTEEN TEST PROGRAMS AS WELL AS ITS FIVE
-    # utility programs, and every install put them on every end user's disk.
-    # PROJECT_STATUS.md 7 step 3 flagged it and the owner ruled to drop them.
-    # What is left is the shape SD ships with: PCL and PCL.GRID for printer
-    # control, U0032 (Log user off) and U50BB (@WHO) as the two documented
-    # user exits, and VFS.CLS as the template VFS class module.  TESTSDCLI
-    # moved to testsdcli.bp under gplbld; verify-scramlogin.ps1 drops it
-    # into place for its own run and removes it in the finally block.
-    # The name is written bare here on purpose - a path-separator prefix
-    # would trip assert-current's shipsAs matcher and reinstate the
-    # $neverShipped entry, exactly the trap noted at assert-current:497.
-    ('bp',            'SDSYS BP - five utility programs (see 24 Aug 26 note)'),
+    # 25 Aug 26 - bp IS NO LONGER ON THIS LIST.  SD ships NOTHING into SDSYS's
+    # own BP now; see SDSYS_EMPTY and SDSYS_PRESERVE below.  The 24 Aug note
+    # that stood here is kept there, with what became of the five programs.
     # 25 Aug 26 - CHANGELOG IS NO LONGER ON THIS LIST.  It used to ship into
     # the data tree, which the installer never overwrote, so a user's changelog
     # was frozen at their install date - in the one file whose entire job is
@@ -165,7 +156,30 @@ SDSYS_SHIP = [
 # README placeholders are not shipped - that would put files in a database.
 SDSYS_EMPTY = [
     ('gpl.bp.out',  'compiled objects from SECOND.COMPILE'),
-    ('bp.out',      'compiled objects from the SDSYS bp'),
+    # 25 Aug 26 - bp AND bp.out ARE BOTH CREATED EMPTY AND BOTH PRESERVED, and
+    # the pair is the whole point.
+    #
+    # WHAT CHANGED.  Until today SD shipped five programs into SDSYS's own BP -
+    # PCL and PCL.GRID (printer control), U0032 and U50BB (user exits), VFS.CLS
+    # (a template VFS class module).  Owner's ruling, 25 Aug 2026: they are not
+    # needed in this version, and VFS is not a supported feature, so shipping a
+    # template for one is worse than shipping nothing.  gpl.bp/PCL is the PCL
+    # that is actually compiled and catalogued; sdsys/bp/PCL was a second,
+    # divergent copy of it.
+    #
+    # THE DIRECTORY STILL HAS TO EXIST.  voc_template/bp is an F-pointer, so
+    # every account's VOC resolves BP through it, and sd.iss ACLs
+    # sdsys\bp through secure-sysdirs.ps1.  Created, then, but empty.
+    #
+    # AND BOTH ARE PRESERVED, WHICH IS WHAT THE CYCLE OF 25 Aug 2026 FORCED.
+    # bp.out was on the upgrade REPLACE list while staging empty, and stage.py
+    # refused the build for it - correctly: an upgrade would have deleted the
+    # installed objects and copied nothing back.  Now that SD ships nothing
+    # into either, anything in them on a live machine was put there by the
+    # site, which makes them the user's.  That is exactly the argument that
+    # keeps 'cat' - the private catalogue - on the preserve list.
+    ('bp',          "SDSYS's own BP - SD ships nothing into it; the site may"),
+    ('bp.out',      'its compiled objects; nothing compiles into it at install'),
     ('gcat',        'global catalogue; the bootstrap touches $CPROC here first'),
     ('cat',         'private catalogue'),
     ('pcode.out',   'pcode_bld.py output'),
@@ -331,6 +345,12 @@ SDSYS_PRESERVE = [
     ('batch.jobs.dic', 'its dictionary; goes with the file it describes'),
     ('prt',            'the print queue'),
     ('$hold',          "the spooler hold file - the user's saved output"),
+    # 25 Aug 26 - see the note at their SDSYS_EMPTY entries.  SD ships nothing
+    # into either, so anything in them belongs to the site.  bp.out being on
+    # the replace list while staging empty is what stage.py refused on
+    # 25 Aug 2026, and it was right to.
+    ('bp',             "SDSYS's own BP - programs the site wrote"),
+    ('bp.out',         'their compiled objects'),
 ]
 
 # Directories the bootstrap and the running system create for themselves, listed
