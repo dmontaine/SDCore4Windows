@@ -27,13 +27,23 @@
 #      worse, no ForceCommand, so an sdsshonly account got a PowerShell prompt.
 #
 #      SO -Installed NOW MEANS "AN ADMINISTRATOR ASKED FOR THIS", and the task
-#      is offered on any machine.  PROJECT_STATUS.md 5.9 - never reconfigure an
-#      ssh server we did not install - is carried by the task being unticked by
-#      default rather than by this switch: nothing is touched unless somebody
-#      ticks a box that names what it will do.  Refusal 2 below is what stops
-#      this from walking over an existing policy, and it is the real backstop.
-#      Running this script by hand still needs the switch, which is what keeps
-#      it from being a thing that happens by accident.
+#      is offered on any machine.
+#
+#      CORRECTED 24 Aug 2026 - the previous wording here said the task was
+#      "unticked by default" and that this backstopped PROJECT_STATUS.md 5.9's
+#      "never reconfigure an ssh server we did not install".  Neither half
+#      held.  sd.iss:210 carries no Flags: unchecked, so the task is TICKED by
+#      default (sd.iss:181-186 records the deliberate flip: "the model is what
+#      SD expects to be running under rather than an option somebody
+#      remembers").  What is actually left carrying 5.9 is REFUSAL 2 BELOW -
+#      the existing-Allow/Deny check - plus the description at sd.iss:210
+#      naming scp and sftp as the sharp edges.  On a machine with sshd but
+#      NO Allow/Deny line, the default tick will apply the block on the next
+#      install unless the administrator unticks it in the wizard.  That is
+#      the exposure PROJECT_STATUS.md 5.9 leaves as an owner decision.
+#
+#      Running this script by hand still needs -Installed, which is what
+#      keeps it from being a thing that happens by accident from the CLI.
 #   2. If sshd_config already restricts who may connect.  An existing
 #      AllowGroups, AllowUsers, DenyGroups or DenyUsers line is somebody's
 #      policy, and merging into it blind is how you either widen it silently or
