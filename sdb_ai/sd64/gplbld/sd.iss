@@ -1174,21 +1174,21 @@ function ModeChoiceText: String;
 begin
   Result :=
     'FULL INSTALLATION' + #13#10#13#10 +
-    'For a system more than one person will use, or that a program will connect to. This is what this installer has always done, and it is the shape a working system needs.' + #13#10 +
-    'Other people can have SD accounts. "create.account user fred" makes a Windows account and an SD account together, and Windows is what holds the password.' + #13#10 +
-    'Those accounts sign in over ssh and nothing else - not at this computer, not over Remote Desktop. An ssh session goes straight into SD and never reaches a command prompt, so an SD account cannot get a shell on this machine.' + #13#10 +
-    'SD installs the OpenSSH server that comes with Windows if this computer has none. It is downloaded from Windows Update, CAN TAKE SEVERAL MINUTES with nothing on screen, and usually wants a restart before anyone can sign in.' + #13#10 +
-    'THE COST, AND IT FALLS ON EVERYONE: scp and sftp STOP WORKING on this computer, for every user, because every ssh session is forced into SD and there is no file-transfer subsystem left to run.' + #13#10 +
-    'The SD API listens on port 4243 so that programs can connect to SD. Setup adds a firewall rule; by default only this computer can reach it, and the next page can open it to other computers on your network.' + #13#10 +
+    'For a system more than one person will use, or that a program will connect to. This is what this installer has always done, and it is the shape a working system needs.' + #13#10#13#10 +
+    'Other people can have SD accounts. "create.account user fred" makes a Windows account and an SD account together, and Windows is what holds the password.' + #13#10#13#10 +
+    'Those accounts sign in over ssh and nothing else - not at this computer, not over Remote Desktop. An ssh session goes straight into SD and never reaches a command prompt, so an SD account cannot get a shell on this machine.' + #13#10#13#10 +
+    'SD installs the OpenSSH server that comes with Windows if this computer has none. It is downloaded from Windows Update, CAN TAKE SEVERAL MINUTES with nothing on screen, and usually wants a restart before anyone can sign in.' + #13#10#13#10 +
+    'THE COST, AND IT FALLS ON EVERYONE: scp and sftp STOP WORKING on this computer, for every user, because every ssh session is forced into SD and there is no file-transfer subsystem left to run.' + #13#10#13#10 +
+    'The SD API listens on port 4243 so that programs can connect to SD. Setup adds a firewall rule; by default only this computer can reach it, and the next page can open it to other computers on your network.' + #13#10#13#10 +
     'SD will not install at all if this computer has an ssh server that is not the one Windows ships, or if somebody has already changed how that one is configured. It says so and stops without changing anything.' + #13#10#13#10 +
 
     'STAND-ALONE INSTALLATION' + #13#10#13#10 +
-    'For one person, at this computer, to learn SD or to try some code out. It is deliberately not a production system, and it is quicker to install because most of what is above does not happen.' + #13#10 +
-    'NO SSH SERVER IS INSTALLED and no ssh configuration is touched. If this computer already has an ssh server, of any make, SD leaves it alone. scp and sftp go on working.' + #13#10 +
-    'NO NETWORK PORT IS OPENED. The SD API is not available - SD is not listening on anything, so there is no rule to open and nothing to reach from another computer.' + #13#10 +
-    'THERE IS ONE SD ACCOUNT AND IT IS YOURS. You use SD here, as yourself, by typing "sd".' + #13#10 +
-    '"create.account user" is refused, and SD explains why when you try it. The Windows account it would make is denied this computer and Remote Desktop because it is meant to arrive over ssh - and with no ssh server it could sign in nowhere at all.' + #13#10 +
-    'YOU CAN STILL DIVIDE YOUR WORK UP, which is what an account is for in a system like this. "create.account group myproject" makes one and "logto myproject" moves into it, from an SD session run as administrator. No Windows account and no sign-in is involved.' + #13#10 +
+    'For one person, at this computer, to learn SD or to try some code out. It is deliberately not a production system, and it is quicker to install because most of what is above does not happen.' + #13#10#13#10 +
+    'NO SSH SERVER IS INSTALLED and no ssh configuration is touched. If this computer already has an ssh server, of any make, SD leaves it alone. scp and sftp go on working.' + #13#10#13#10 +
+    'NO NETWORK PORT IS OPENED. The SD API is not available - SD is not listening on anything, so there is no rule to open and nothing to reach from another computer.' + #13#10#13#10 +
+    'THERE IS ONE SD ACCOUNT AND IT IS YOURS. You use SD here, as yourself, by typing "sd".' + #13#10#13#10 +
+    '"create.account user" is refused, and SD explains why when you try it. The Windows account it would make is denied this computer and Remote Desktop because it is meant to arrive over ssh - and with no ssh server it could sign in nowhere at all.' + #13#10#13#10 +
+    'YOU CAN STILL DIVIDE YOUR WORK UP, which is what an account is for in a system like this. "create.account group myproject" makes one and "logto myproject" moves into it, from an SD session run as administrator. No Windows account and no sign-in is involved.' + #13#10#13#10 +
     'NOTHING ELSE IS CUT DOWN. Same SD, same language, same database, same commands. What is missing is the ways in from somewhere else.' + #13#10#13#10 +
 
     'IF YOU ARE NOT SURE' + #13#10#13#10 +
