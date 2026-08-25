@@ -5,6 +5,30 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  LETTING OTHER COMPUTERS REACH THE SD API IS NOW OFF UNTIL YOU
+           ASK FOR IT.
+
+           The installer offers two remote-access options: one for ssh and one
+           for the SD API.  The ssh one has always been off unless you tick
+           it.  The API one used to be ON unless you cleared it, so an
+           installation left at its defaults opened port 4243 to your local
+           network.
+
+           BOTH ARE NOW OFF UNLESS YOU TICK THEM.  On a default installation
+           the SD API can be reached from this computer only.
+
+           NOTHING ELSE ABOUT THE API CHANGED.  It is still switched on, still
+           listening on port 4243, and programs running on this computer
+           connect to it exactly as before.  What changed is the firewall rule
+           the installer leaves behind.
+
+           IF YOU WANT A CLIENT ON ANOTHER COMPUTER, tick "Let other computers
+           on your network connect to the SD API" during the install.  If you
+           have already installed and need it afterwards, run this from an
+           elevated PowerShell prompt:
+
+               powershell -File "C:\Program Files\SD\api-firewall.ps1" -Open
+
 25 Aug 26  THERE IS NOW A STAND-ALONE INSTALLATION, FOR ONE PERSON AT ONE
            COMPUTER.
 

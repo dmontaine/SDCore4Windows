@@ -277,22 +277,45 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; B reversed).  gplsrc/sdwind.c binds every interface and gplbld/stage.py ships
 ; APIPORT=4243 active, so the firewall rule is what decides who may reach it.
 ;
-; TICKED BY DEFAULT, AND IT IS THE ONE TASK HERE THAT DIFFERS FROM sshremote
-; ON PURPOSE.  sshremote is unchecked because ssh has a use for somebody who
-; never wants a remote connection at all - a local user reaches SD by ssh'ing
-; to localhost, which is the case that made the ssh server mandatory.  THE API
-; HAS NO SUCH CASE after this change: its whole purpose is a client on another
-; machine, so an install that leaves the port firewalled off ships a feature
-; that does not work, with "cannot connect" as the symptom of not having read
-; the task list.  That is the same argument gplbld/stage.py records for APIPORT
-; itself being active.
+; ===========================================================================
+; 25 Aug 26 - OPT-IN NOW.  Owner's decision, reversing the default this block
+; argued for.  The paragraph it reverses is kept below rather than deleted,
+; because the argument was a real one and a future session should be able to
+; see what was traded away.
 ;
-; TO SHIP IT OPT-IN INSTEAD, add "Flags: unchecked" to the line below and say
-; so in the changelog.  Nothing else needs to change: ApplyApiFirewall already
-; scopes the rule to loopback when the task is not selected, exactly as
-; ApplySshFirewall does.
+; WHAT DECIDED IT.  The two remote options defaulted OPPOSITE ways - ssh off
+; unless ticked, the API on unless cleared - and both open a port to the local
+; network.  That asymmetry was found while writing the stand-alone mode page,
+; when a summary line describing both as "optional" turned out to be true and
+; still misleading.  A default that has to be explained in the sentence next to
+; it is the wrong default; the owner's own rule about the limitssh checkbox -
+; "seeing a tick box a user just assumes it is an option" - is the same
+; instinct pointing the other way.
+;
+; WHAT IT COSTS, STATED PLAINLY, because the superseded argument below is right
+; about it: somebody who wanted a remote API client and did not read the task
+; list now gets "cannot connect".  ApplyApiFirewall's not-wanted branch already
+; prints the exact command to open it later, and the mode page names the API as
+; one of the things a full installation is FOR, so it is a discoverable failure
+; rather than a silent one.
+;
+; Nothing else changed: ApplyApiFirewall already scoped the rule to loopback
+; when the task was not selected, exactly as ApplySshFirewall does.
+; ---------------------------------------------------------------------------
+; SUPERSEDED 25 Aug 26, kept for its reasoning:
+;
+;   TICKED BY DEFAULT, AND IT IS THE ONE TASK HERE THAT DIFFERS FROM sshremote
+;   ON PURPOSE.  sshremote is unchecked because ssh has a use for somebody who
+;   never wants a remote connection at all - a local user reaches SD by ssh'ing
+;   to localhost, which is the case that made the ssh server mandatory.  THE API
+;   HAS NO SUCH CASE after this change: its whole purpose is a client on another
+;   machine, so an install that leaves the port firewalled off ships a feature
+;   that does not work, with "cannot connect" as the symptom of not having read
+;   the task list.  That is the same argument gplbld/stage.py records for APIPORT
+;   itself being active.
+; ===========================================================================
 Name: "apiremote"; Description: "Let other computers on your network connect to the SD API (port 4243)"; \
-    GroupDescription: "Remote access:"
+    GroupDescription: "Remote access:"; Flags: unchecked
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -1264,7 +1287,7 @@ begin
     'Those accounts sign in over ssh and nothing else - not at this computer, not over Remote Desktop. An ssh session goes straight into SD and never reaches a command prompt, so an SD account cannot get a shell on this machine.' + #13#10#13#10 +
     'SD installs the OpenSSH server that comes with Windows if this computer has none. It is downloaded from Windows Update, CAN TAKE SEVERAL MINUTES with nothing on screen, and usually wants a restart before anyone can sign in.' + #13#10#13#10 +
     'THE COST, AND IT FALLS ON EVERYONE: scp and sftp STOP WORKING on this computer, for every user, because every ssh session is forced into SD and there is no file-transfer subsystem left to run.' + #13#10#13#10 +
-    'The SD API listens on port 4243 so that programs can connect to SD. Setup adds a firewall rule; by default only this computer can reach it, and the next page can open it to other computers on your network.' + #13#10#13#10 +
+    'The SD API listens on port 4243 so that programs can connect to SD, and Setup adds a firewall rule for it. Only this computer can reach it unless you say otherwise: BOTH remote options on the next page are off until you tick them, the API and ssh alike.' + #13#10#13#10 +
     'SD will not install at all if this computer has an ssh server that is not the one Windows ships, or if somebody has already changed how that one is configured. It says so and stops without changing anything.' + #13#10#13#10 +
 
     'STAND-ALONE INSTALLATION' + #13#10#13#10 +
@@ -1297,7 +1320,8 @@ begin
   FullRadio.Top     := 0;
   FullRadio.Width   := ModePage.SurfaceWidth;
   FullRadio.Height  := ScaleY(17);
-  FullRadio.Caption := 'Full installation - more than one person, over ssh, with the SD API';
+  { Owner's wording, 25 Aug 2026, given on seeing the page. }
+  FullRadio.Caption := 'Full installation - multiple users, optional remote ssh, optional remote API access';
   FullRadio.Checked := True;
 
   StandaloneRadio := TNewRadioButton.Create(ModePage);
