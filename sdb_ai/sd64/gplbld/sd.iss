@@ -2616,7 +2616,9 @@ begin
            'SD users and administrators, and every ssh session goes straight into ' +
            'SD rather than a command prompt. scp and sftp stop working for ' +
            'everyone on this computer as a result. Your existing sshd_config is ' +
-           'kept as sshd_config.before-sd, and uninstalling SD puts it back.' + #13#10#13#10 +
+           'kept beside it as sshd_config.before-sd. Uninstalling SD removes ' +
+           'its block and restarts the ssh server, which leaves the file as it ' +
+           'was; the copy is there if you would rather put it back yourself.' + #13#10#13#10 +
            'SD WILL NOT CHANGE ITS FIREWALL RULE, because SD did not install this ' +
            'server - who may reach port 22 stays your decision. That is why the ' +
            'option about reaching ssh from other computers is absent from this ' +
