@@ -138,6 +138,28 @@ Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from a
 Name: "sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
     GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
 
+; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
+; normally 4243, and the ssh tunnel is no longer part of the design (8, posture
+; B reversed).  gplsrc/sdwind.c binds every interface and gplbld/stage.py ships
+; APIPORT=4243 active, so the firewall rule is what decides who may reach it.
+;
+; TICKED BY DEFAULT, AND IT IS THE ONE TASK HERE THAT DIFFERS FROM sshremote
+; ON PURPOSE.  sshremote is unchecked because ssh has a use for somebody who
+; never wants a remote connection at all - a local user reaches SD by ssh'ing
+; to localhost, which is the case that made the ssh server mandatory.  THE API
+; HAS NO SUCH CASE after this change: its whole purpose is a client on another
+; machine, so an install that leaves the port firewalled off ships a feature
+; that does not work, with "cannot connect" as the symptom of not having read
+; the task list.  That is the same argument gplbld/stage.py records for APIPORT
+; itself being active.
+;
+; TO SHIP IT OPT-IN INSTEAD, add "Flags: unchecked" to the line below and say
+; so in the changelog.  Nothing else needs to change: ApplyApiFirewall already
+; scopes the rule to loopback when the task is not selected, exactly as
+; ApplySshFirewall does.
+Name: "apiremote"; Description: "Let other computers on your network connect to the SD API (port 4243)"; \
+    GroupDescription: "Remote access:"
+
 ; THE SECOND LAYER OF 5.6.2.  PROMOTED FROM A SUBTASK on 16 Aug 2026, because
 ; the parent it hung off no longer exists.
 ;
@@ -218,30 +240,32 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; and put every ssh session straight into SD (disables scp and sftp)" - the
 ; sharp edge was at the end, past a comma and inside a parenthesis, which was
 ; exactly what a reader who scanned would skip.
+; 25 Aug 26 - IT HAS ITS OWN GROUP NOW, AND IT IS DECLARED LAST FOR THAT
+; REASON.  Owner, on reading the tasks page during the sshremote VM run: the
+; pane with three ssh-ish checkboxes was confusing.  It was, and the cause is
+; that ONLY TWO OF THE THREE WERE ABOUT REMOTE ACCESS.  sshremote and apiremote
+; both answer "who may reach this machine from elsewhere", in parallel wording,
+; on two different ports.  THIS ONE DOES NOT: it governs what EVERY ssh session
+; does and who may use ssh AT ALL, a local "ssh localhost" every bit as much as
+; a connection from another machine.  Filing it under "Remote access:" invited
+; reading it as a third reach switch, next to a box that pulls the opposite way
+; - sshremote WIDENS ssh's reach, this one NARROWS ssh's use - with nothing
+; separating them.
+;
+; THE DECLARATION HAD TO MOVE, not just the group name.  Inno emits a group
+; header per RUN of tasks sharing a GroupDescription, so leaving this between
+; sshremote and apiremote while renaming its group would have produced TWO
+; "Remote access:" headers with this wedged between them - worse than the
+; problem being fixed.  Declared after apiremote, the page reads:
+;
+;     Remote access:        sshremote, apiremote     (both "Let other computers...")
+;     How ssh sessions work: limitssh                (the one that is not)
+;
+; NOTHING ELSE CHANGES.  Same wording - that is 5.9's option C and is not
+; reopened here - same default-ticked, same behaviour, same ApplyAllowGroups
+; gate on WizardIsTaskSelected('limitssh').
 Name: "limitssh"; Description: "DISABLES scp and sftp for everyone: puts every ssh session straight into SD, and limits ssh to SD users and administrators"; \
-    GroupDescription: "Remote access:"
-
-; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
-; normally 4243, and the ssh tunnel is no longer part of the design (8, posture
-; B reversed).  gplsrc/sdwind.c binds every interface and gplbld/stage.py ships
-; APIPORT=4243 active, so the firewall rule is what decides who may reach it.
-;
-; TICKED BY DEFAULT, AND IT IS THE ONE TASK HERE THAT DIFFERS FROM sshremote
-; ON PURPOSE.  sshremote is unchecked because ssh has a use for somebody who
-; never wants a remote connection at all - a local user reaches SD by ssh'ing
-; to localhost, which is the case that made the ssh server mandatory.  THE API
-; HAS NO SUCH CASE after this change: its whole purpose is a client on another
-; machine, so an install that leaves the port firewalled off ships a feature
-; that does not work, with "cannot connect" as the symptom of not having read
-; the task list.  That is the same argument gplbld/stage.py records for APIPORT
-; itself being active.
-;
-; TO SHIP IT OPT-IN INSTEAD, add "Flags: unchecked" to the line below and say
-; so in the changelog.  Nothing else needs to change: ApplyApiFirewall already
-; scopes the rule to loopback when the task is not selected, exactly as
-; ApplySshFirewall does.
-Name: "apiremote"; Description: "Let other computers on your network connect to the SD API (port 4243)"; \
-    GroupDescription: "Remote access:"
+    GroupDescription: "How ssh sessions work:"
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
