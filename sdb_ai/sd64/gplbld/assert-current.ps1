@@ -271,6 +271,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # section 7 step 7's rule.  PowerShell only, so no build
                   # product to list alongside it.
                   'probe-sessionfork.ps1',
+                  # 24 Aug 26 - probe-catprivate.ps1, section 7 step 15's
+                  # one owed measurement: after the sdusers:(RX) lock on
+                  # sdsys\cat, does CATALOG (private) still write the record.
+                  # A probe, not a suite verifier - it runs once on the
+                  # current install and does not join VerifyInstall*.  Listed
+                  # in the commit that creates it, under section 7 step 7's
+                  # rule.  PowerShell only, no build product to list.
+                  'probe-catprivate.ps1',
                   # 24 Aug 26 - verify-lineendings, section 7 step 16 (a).  It
                   # plants CRLF records from OUTSIDE SD, which is what an
                   # external editor does, and asserts they read back with no
