@@ -142,8 +142,11 @@ SDSYS_SHIP = [
     # What is left is the shape SD ships with: PCL and PCL.GRID for printer
     # control, U0032 (Log user off) and U50BB (@WHO) as the two documented
     # user exits, and VFS.CLS as the template VFS class module.  TESTSDCLI
-    # moved to gplbld/testsdcli.bp; verify-scramlogin.ps1 drops it into
-    # place for its own run and removes it in the finally block.
+    # moved to testsdcli.bp under gplbld; verify-scramlogin.ps1 drops it
+    # into place for its own run and removes it in the finally block.
+    # The name is written bare here on purpose - a path-separator prefix
+    # would trip assert-current's shipsAs matcher and reinstate the
+    # $neverShipped entry, exactly the trap noted at assert-current:497.
     ('bp',            'SDSYS BP - five utility programs (see 24 Aug 26 note)'),
     ('changelog',     'ships with the system by standing instruction'),
     ('licence',       'GPL-3.0'),
