@@ -468,7 +468,20 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # itself as the newer file.  It drives VBoxManage and copies
                   # two build products to a folder outside the tree; stage.py
                   # and sd.iss name neither it nor them.
-                  'stage-apiremote.ps1')
+                  'stage-apiremote.ps1',
+                  # 25 Aug 26 - mkdoc.py, the documentation renderer.  Listed
+                  # IN THE COMMIT THAT CREATES IT, under section 7 step 7's
+                  # rule.  It is a build-time tool: it reads .md and writes
+                  # .html, and neither stage.py nor sd.iss names it, so it
+                  # cannot make an installed tree differ from source.
+                  #
+                  # AND THE SELF-POLICING IS THE POINT HERE, not a caveat.  The
+                  # documentation format has not been ruled on yet; when it is,
+                  # stage.py will name this script and the cross-check below
+                  # will put it straight back under the guard, which is the
+                  # correct answer from that moment on.  Nothing has to
+                  # remember to remove this line.
+                  'mkdoc.py')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

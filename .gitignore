@@ -57,3 +57,9 @@ sdb_ai/sd64/pass2
 # DLLs, so committing it would breach the no-binaries rule in CLAUDE.md.  The
 # default location is ../../stage from sd64, which is the repository root.
 stage/
+
+# 25 Aug 26 - the HTML that gplbld/mkdoc.py renders from a documentation .md.
+# The Markdown is the source and is tracked; the HTML is build output, exactly
+# as stage/ above is.  Scoped to docs/sample because that is the only place
+# documentation lives so far, and where it finally lives has not been ruled on.
+docs/sample/*.html
