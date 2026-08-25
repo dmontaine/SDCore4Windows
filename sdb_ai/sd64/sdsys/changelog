@@ -5,6 +5,44 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  SECURITY: WHEN SD INSTALLED ssh FOR YOU, PORT 22 WAS LEFT OPEN
+           TO YOUR NETWORK EVEN IF YOU DID NOT ASK FOR THAT.
+
+           SD installs the OpenSSH server whenever the machine does not
+           already have one, because SD accounts sign in over ssh and
+           nothing else.  Whether OTHER computers may then reach it is the
+           tasks-page checkbox "Let other computers on your network connect
+           to this one over ssh (port 22)", which is OFF unless you tick it.
+
+           WHEN IT WAS OFF, THE INSTALLER WAS SUPPOSED TO NARROW THE
+           FIREWALL RULE TO THIS MACHINE ONLY.  IT NEVER MANAGED TO.  The
+           step failed every single time it ran, and the installer said so
+           on its closing page:
+
+              Setting who may reach ssh FAILED, and Windows' own default
+              is in force - port 22 open to your local network.
+
+           The recovery command it offered failed for the same reason, so
+           there was no way to reach the intended setting.
+
+           WHO IS AFFECTED.  Only machines where SD installed ssh itself.
+           If you already had an ssh server before installing SD, SD does
+           not touch its firewall rule and never did - none of this applies.
+
+           WHAT TO DO IF YOU SAW THAT MESSAGE.  Install this build, or run
+           this once from an elevated prompt:
+
+              powershell -File "C:\Program Files\SD\ssh-firewall.ps1" -Installed -Restrict
+
+           It now reports "ssh is reachable FROM THIS MACHINE ONLY".  You
+           can check the setting at any time with -Show instead, or look at
+           the rule "OpenSSH SSH Server (sshd)" in wf.msc.
+
+           CONNECTING TO SD ON YOUR OWN MACHINE IS UNAFFECTED, over IPv4
+           and IPv6 alike.  Windows does not filter traffic that never
+           leaves the machine, so "ssh localhost" keeps working whichever
+           way the setting is left.
+
 24 Aug 26  THE "Limit ssh" WIZARD OPTION NOW WARNS FIRST, PROMISES SECOND.
 
            If you are installing SD on a machine that already uses ssh for

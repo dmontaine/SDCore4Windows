@@ -26,9 +26,13 @@
 # RemoteAddress, NOT Enabled=False.  Both would leave "ssh localhost" working -
 # Windows does not filter loopback traffic - but a disabled rule reads as
 # something that got switched off, and troubleshooting switches those back on.
-# A rule scoped to 127.0.0.1 and ::1 states the intent where an administrator
-# will read it, in wf.msc, and survives being re-enabled by somebody who did not
-# know why it was off.
+# A rule scoped to 127.0.0.1 states the intent where an administrator will read
+# it, in wf.msc, and survives being re-enabled by somebody who did not know why
+# it was off.
+#
+# 24 Aug 26 - THAT SAID "127.0.0.1 and ::1" UNTIL TODAY, AND ::1 IS THE ONE
+# VALUE WINDOWS WILL NOT TAKE.  Passing it threw on every run, so the rule was
+# never scoped at all.  The restrict branch below carries the measurement.
 #
 # -Installed IS REQUIRED FOR ANY CHANGE, for the reason allow-ssh-groups.ps1
 # gives at length: SD does not reconfigure an ssh server it did not install.
@@ -110,7 +114,40 @@ try {
         Write-Output "ssh-firewall: other computers MAY reach this machine over ssh"
     }
     else {
-        Set-NetFirewallRule -Name $rule.Name -RemoteAddress @('127.0.0.1', '::1') -Enabled True
+        # 24 Aug 26 - 127.0.0.1 ALONE.  THIS LINE USED TO PASS @('127.0.0.1','::1')
+        # AND IT THREW EVERY TIME IT RAN, WHICH WAS THE WHOLE BUG.
+        #
+        # Windows refuses ANY IPv6 loopback literal in -RemoteAddress:
+        # "An unspecified, multicast, broadcast, or loopback IPv6 address was
+        # specified".  Under ErrorActionPreference Stop the whole call throws,
+        # the catch below reports FAILED and exits 1, and the rule is LEFT AT
+        # RemoteAddress=Any - port 22 open to the local network, which is the
+        # exact exposure this script exists to prevent.
+        #
+        # IT WAS NEVER A REGRESSION.  sd.iss only calls this when SshWasAbsent,
+        # so on every machine it had run on - all of which already had sshd - the
+        # step exited before reaching here.  Found on the first install ever
+        # performed on a machine with no ssh server, VM Windows 11 -
+        # sshRemoteTest, 24 Aug 2026.
+        #
+        # DROPPING ::1 IS SAFE AND THAT WAS MEASURED, NOT ASSUMED - it matters
+        # because sshd binds :::22 as well as 0.0.0.0:22, so an IPv6 "ssh
+        # localhost" is a real case.  With the rule scoped to 127.0.0.1 alone,
+        # dialled with a socket of the MATCHING address family each time:
+        #     127.0.0.1:22 via AF_INET   REACHABLE
+        #     ::1:22       via AF_INET6  REACHABLE
+        # which is the header's own point above - Windows does not filter
+        # loopback traffic at all, so the value here only has to be something no
+        # remote address matches.  127.0.0.1/32 is accepted too and normalises
+        # to the same thing; the bare address is what wf.msc shows most plainly.
+        #
+        # probe-sshfirewall.ps1 re-takes this measurement, and it names the
+        # address family on every dial: New-Object Net.Sockets.TcpClient defaults
+        # to AF_INET and CANNOT dial an IPv6 literal, which fails with "None of
+        # the discovered or specified addresses match the socket address family"
+        # and reads exactly like "::1 is blocked".  That false reading was drawn
+        # here first and nearly became the reason not to make this fix.
+        Set-NetFirewallRule -Name $rule.Name -RemoteAddress '127.0.0.1' -Enabled True
         Write-Output "ssh-firewall: ssh is reachable FROM THIS MACHINE ONLY"
     }
 
