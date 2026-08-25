@@ -207,7 +207,18 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; script stops them working for everyone, which follows from the decision and is
 ; not a side effect that was missed - but it is not something to discover after
 ; ticking a box that only mentioned AllowGroups, which is what it used to say.
-Name: "limitssh"; Description: "Limit ssh to SD users and administrators, and put every ssh session straight into SD (disables scp and sftp)"; \
+; 24 Aug 26 - DESCRIPTION LEADS WITH THE DESTRUCTIVE EDGE.  On a machine that
+; already has sshd and uses it - for scp, for sftp, for a shell - ticking this
+; without reading breaks that use silently.  The 21 Aug flip made this default-
+; ticked; option C from PROJECT_STATUS.md 5.9 keeps that (Flags: unchecked
+; would trade one problem for a weaker default; SshWasAbsent would reintroduce
+; the "task a one-shot" trap allow-ssh-groups.ps1:22-27 records), so the
+; warning has to be in the description itself, and it has to be the first
+; thing read.  Previous wording was "Limit ssh to SD users and administrators,
+; and put every ssh session straight into SD (disables scp and sftp)" - the
+; sharp edge was at the end, past a comma and inside a parenthesis, which was
+; exactly what a reader who scanned would skip.
+Name: "limitssh"; Description: "DISABLES scp and sftp for everyone: puts every ssh session straight into SD, and limits ssh to SD users and administrators"; \
     GroupDescription: "Remote access:"
 
 ; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,

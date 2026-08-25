@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  THE "Limit ssh" WIZARD OPTION NOW WARNS FIRST, PROMISES SECOND.
+
+           If you are installing SD on a machine that already uses ssh for
+           anything - a shell for administrators, scp, sftp - the "Limit
+           ssh" checkbox on the tasks page will break those uses.  It has
+           always done that; the description now leads with the warning
+           instead of finishing with it in a parenthesis:
+
+              old:   Limit ssh to SD users and administrators, and put
+                     every ssh session straight into SD (disables scp and
+                     sftp)
+              new:   DISABLES scp and sftp for everyone: puts every ssh
+                     session straight into SD, and limits ssh to SD users
+                     and administrators
+
+           NOTHING ELSE CHANGES.  The task is still ticked by default; it
+           can still be UNticked in the wizard; the behaviour when it is
+           ticked is identical.  If sshd_config already has an AllowGroups,
+           AllowUsers, DenyGroups or DenyUsers line, the install still
+           refuses to touch it (allow-ssh-groups.ps1's second refusal).
+
 24 Aug 26  SDSYS'S BP HAS BEEN TRIMMED TO ITS UTILITY PROGRAMS.
 
            Fifteen developer test programs that were installed alongside
