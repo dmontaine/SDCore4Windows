@@ -596,6 +596,16 @@ def main():
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
                    'sync-route-groups.ps1',
                    'ssh-firewall.ps1',
+                   # 25 Aug 26 - ssh-preflight.ps1 decides whether SD may
+                   # install here at all, and it is the one script the
+                   # installer runs BEFORE any file is written.  sd.iss
+                   # therefore also embeds it with Flags: dontcopy and
+                   # extracts it in InitializeSetup; this entry is what puts a
+                   # copy in C:\Program Files\SD so an administrator can re-run
+                   # the check by hand afterwards.  It SHIPS, so assert-current
+                   # watches it like the rest of these - do NOT add it to that
+                   # script's $neverShipped list.
+                   'ssh-preflight.ps1',
                    # 21 Aug 26 - the API faces the network now, so who may
                    # reach the port is a firewall rule SD owns.  Shipped, so
                    # it is watched by assert-current like the rest of these -

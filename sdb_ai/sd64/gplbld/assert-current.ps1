@@ -207,6 +207,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # for eight days.  Listed in the commit that created it, per
                   # step 7's rule.
                   'probe-sshfirewall.ps1',
+                  # 25 Aug 26 - probe-sshpreflight.ps1, the both-polarities
+                  # test for ssh-preflight.ps1.  It edits sshd_config and
+                  # registers a bogus service before putting them back, so it
+                  # runs on a throwaway guest and must never reach a user's
+                  # machine.  ssh-preflight.ps1 ITSELF ships and is NOT on this
+                  # list - stage.py:598 records why.
+                  'probe-sshpreflight.ps1',
                   'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
