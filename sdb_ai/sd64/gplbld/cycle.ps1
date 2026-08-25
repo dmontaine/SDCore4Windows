@@ -102,6 +102,45 @@ if ($stale -gt 0) {
 try { Start-Transcript -Path $script:CycleLog -Force | Out-Null } catch { }
 Write-Host "transcript: $script:CycleLog"
 
+# 24 Aug 26 - A SECOND CYCLE IN THE SAME WINDOW LOSES ITS NATIVE OUTPUT, AND
+# UNTIL NOW IT LOST IT SILENTLY.  This is NOT the bleed the block above fixes -
+# that one is cured, and this run's guard reports 0 stale transcripts.  It is a
+# separate PowerShell 5.1 behaviour: after repeated Start/Stop-Transcript in one
+# session, transcription stops capturing the output of NATIVE programs while
+# continuing to capture PowerShell's own streams.
+#
+# MEASURED 24 Aug 2026, three consecutive runs in one elevated window:
+#
+#   17:59:51   614,422 bytes   190 compile lines   ISCC output present
+#   18:02:52    34,813 bytes   146 compile lines   ISCC output gone
+#   18:18:03     1,933 bytes     0 compile lines   ISCC output gone
+#
+# The last log holds NO native output at all - no compiles, no ISCC, no
+# installer - while all 19 Write-Host lines survived.  A cycle that FAILED to
+# compile in that state would leave no evidence anywhere.
+#
+# ***IT WARNS RATHER THAN REFUSES, DELIBERATELY.*** The run itself is sound -
+# every check this script makes is its own Write-Host, and step 3's structural
+# counts would still catch a missing object.  What is lost is the ability to
+# read WHY afterwards, so blocking the owner's cycle over it would cost more
+# than it saves.  Said TWICE, because a warning six minutes before the end
+# scrolls away: here, and again beside the final verdict.
+if ($global:SdCycleHasRunInThisWindow) {
+    $script:TranscriptDegraded = $true
+    Write-Host ''
+    Write-Host 'WARNING: THIS WINDOW HAS ALREADY RUN A CYCLE.' -ForegroundColor Yellow
+    Write-Host '  PowerShell 5.1 stops transcribing NATIVE-command output after repeated' -ForegroundColor Yellow
+    Write-Host '  Start/Stop-Transcript in one session, so the compile output, the ISCC' -ForegroundColor Yellow
+    Write-Host '  output and the installer output will be MISSING from the log above.' -ForegroundColor Yellow
+    Write-Host '  The run is still sound - every check below is PowerShell output - but if' -ForegroundColor Yellow
+    Write-Host '  it fails you will not be able to read why.' -ForegroundColor Yellow
+    Write-Host '  CLOSE THIS WINDOW and run the cycle from a fresh elevated one.' -ForegroundColor Yellow
+    Write-Host ''
+} else {
+    $script:TranscriptDegraded = $false
+}
+$global:SdCycleHasRunInThisWindow = $true
+
 # 24 Aug 26 - STOP THE TRANSCRIPT ON EVERY EXIT PATH.  PowerShell 5.1 keeps a
 # transcript ACTIVE until it is stopped or the whole session ends, and it
 # supports SEVERAL AT ONCE - every active one receives every line.  So running
@@ -612,6 +651,18 @@ if ($nCred -eq 0) {
 }
 
 Write-Host ""
+
+# SAID A SECOND TIME, BESIDE THE VERDICT.  The warning at the top of the run is
+# six minutes and several thousand lines away by now, and the end of the log is
+# what anybody actually reads - which is how this defect went unnoticed in the
+# first place.
+if ($script:TranscriptDegraded) {
+    Write-Host 'NOTE: this window had already run a cycle, so the compile, ISCC and' -ForegroundColor Yellow
+    Write-Host '  installer output are MISSING from this transcript.  The checks below are' -ForegroundColor Yellow
+    Write-Host '  PowerShell output and did record.  Use a fresh elevated window next time.' -ForegroundColor Yellow
+    Write-Host ""
+}
+
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
