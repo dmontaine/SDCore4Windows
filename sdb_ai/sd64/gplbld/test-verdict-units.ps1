@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Stop'
 # machine-specific path would make it a script only one clone can run - which
 # is the sort of thing setup-devbox.ps1 exists to stop being true.
 $gplbld  = $PSScriptRoot
-$targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1')
+$targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1', 'verify-cmdaudit.ps1')
 
 # Collected so the two copies can be compared to each other, not just tested
 # apart.  See the identical-copies assertion at the end.
@@ -100,13 +100,74 @@ foreach ($name in $targets) {
 # that shape: the tier VOC counts lived in two files, one was re-derived, and
 # NOTHING FAILED when the copies disagreed.  This fails.
 if ($extents.Count -eq $targets.Count) {
-    $texts = @($targets | ForEach-Object { $extents[$_] })
-    Row '(both)' 'the two Write-Verdict copies are identical' ($texts[0] -ceq $texts[1]) $true
-    if ($texts[0] -cne $texts[1]) {
-        Write-Host '    they differ - diff the function in the two files before doing anything else'
+    $texts  = @($targets | ForEach-Object { $extents[$_] })
+    $allSame = $true
+    for ($i = 1; $i -lt $texts.Count; $i++) {
+        if ($texts[$i] -cne $texts[0]) { $allSame = $false }
+    }
+    Row '(all)' ('the ' + $texts.Count + ' Write-Verdict copies are identical') $allSame $true
+    if (-not $allSame) {
+        Write-Host '    they differ - diff the function across the files before doing anything else'
+        for ($i = 0; $i -lt $texts.Count; $i++) {
+            Write-Host ('      ' + $targets[$i] + '  ' + $texts[$i].Length + ' chars')
+        }
     }
 } else {
-    Row '(both)' 'both copies were found' $extents.Count $targets.Count
+    Row '(all)' 'every copy was found' $extents.Count $targets.Count
+}
+
+# ---------------------------------------------------------------------------
+# Get-LoginRecords, from verify-cmdaudit.ps1.  Same reasoning as above: it is a
+# PURE function over text, so it can be driven with synthetic audit lines and
+# needs no install, no SD and no elevation - which matters more here than
+# usual, because the audit trail is readable only from an elevated session, so
+# this is the ONLY part of that verifier testable without one.
+$cmdaudit = Join-Path $gplbld 'verify-cmdaudit.ps1'
+if (Test-Path -LiteralPath $cmdaudit) {
+    Write-Host ('--- ' + $cmdaudit)
+    $t = $null; $e = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($cmdaudit, [ref]$t, [ref]$e)
+    $glr = $ast.FindAll({ param($x)
+        $x -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $x.Name -eq 'Get-LoginRecords' }, $true)
+
+    Row 'verify-cmdaudit.ps1' 'Get-LoginRecords is defined' ($glr.Count) 1
+    if ($glr.Count -eq 1) {
+        . ([scriptblock]::Create($glr[0].Extent.Text))
+        Write-Host ('    lifted ' + $glr[0].Extent.Text.Length + ' chars')
+
+        $n = 'verify-cmdaudit.ps1'
+
+        # A command line and an interactive session, together, as LOGIN writes
+        # them.  This is the shape the verifier asserts.
+        $sample = @(
+            '2026-08-24 18:30:00 LOGIN account=DON',
+            '2026-08-24 18:30:05 LOGIN account=DON command=COUNT VOC',
+            '2026-08-24 18:30:09 LOGIN REFUSED account=ZZ reason=something'
+        ) -join "`n"
+        $r = @(Get-LoginRecords $sample)
+        Row $n 'parses both LOGIN forms'          $r.Count 2
+        Row $n 'the bare form has no command'     (@($r | Where-Object { -not $_.HasCommand }).Count) 1
+        Row $n 'the command form has one'         (@($r | Where-Object { $_.HasCommand }).Count)      1
+        Row $n 'the command text survives spaces' (@($r | Where-Object { $_.Command -eq 'COUNT VOC' }).Count) 1
+        Row $n 'the account is captured'          (@($r | Where-Object { $_.Account -eq 'DON' }).Count) 2
+
+        # ***THE ORDERING TRAP.***  "LOGIN account=X command=Y" also matches a
+        # pattern looking for "LOGIN account=X", so if the bare form were
+        # tested first every command session would be classed as interactive -
+        # which is the regression this verifier exists to catch, reported as a
+        # pass.  This is the assertion that pins the order.
+        $r2 = @(Get-LoginRecords '2026-08-24 18:30:05 LOGIN account=DON command=COUNT VOC')
+        Row $n 'a command line is NOT read as bare' (@($r2 | Where-Object { $_.HasCommand }).Count) 1
+        Row $n 'and yields exactly one record'      $r2.Count 1
+
+        # Null cases: neither may invent a record.
+        Row $n 'empty text yields nothing'   (@(Get-LoginRecords '').Count)   0
+        Row $n 'null text yields nothing'    (@(Get-LoginRecords $null).Count) 0
+        Row $n 'unrelated text yields none'  (@(Get-LoginRecords "nothing here`nnor here").Count) 0
+    }
+} else {
+    Row 'verify-cmdaudit.ps1' 'the file exists' $false $true
 }
 
 Write-Host ''

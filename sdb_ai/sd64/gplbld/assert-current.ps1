@@ -337,6 +337,17 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # exactly that shape when the tier VOC counts lived in two
                   # files and nothing failed when they disagreed.
                   'test-verdict-units.ps1',
+                  # 24 Aug 26 - verify-cmdaudit.ps1, section 7 step 9's guard.
+                  # It reads LOGIN's own audit record to prove batch.command was
+                  # non-empty for a command line and empty for an interactive
+                  # session - the gate's INPUT, which is the half of that step
+                  # that can be automated at all.  Listed in the commit that
+                  # creates it, under section 7 step 7's rule, and it has the
+                  # self-blocking shape: it CALLS this script and refuses on a
+                  # non-zero exit, so an unlisted copy would report the tree
+                  # stale because it exists and then refuse to run on the
+                  # strength of its own newness.
+                  'verify-cmdaudit.ps1',
                   # 23 Aug 26 - setup-devbox.ps1 builds a DEVELOPMENT machine
                   # from nothing.  It never ships and never reaches an install
                   # - it runs BEFORE there is a clone, let alone a tree - and

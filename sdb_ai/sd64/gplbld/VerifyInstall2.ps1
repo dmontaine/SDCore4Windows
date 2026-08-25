@@ -335,6 +335,23 @@ $steps = @(
     # "Access is denied" on the one token it exists to reassure - so it earns
     # its place ahead of the twelve throwaway accounts below.
     @{ Name = 'verify-notyet.ps1';        P = @{} },
+    # 24 Aug 26 - section 7 step 9's guard, and it sits here for verify-notyet's
+    # reason directly above: it spends NO PREFIX, creates no account and leaves
+    # nothing behind but two ordinary sessions' worth of audit records, so it is
+    # free to run ahead of the twelve throwaway accounts below.
+    #
+    # IT IS THE AUTOMATABLE HALF OF STEP 9 AND ONLY THAT HALF.  It proves LOGIN
+    # computed a non-empty batch.command for a command line and an empty one for
+    # an interactive session - the GATE'S INPUT.  It cannot prove the password
+    # prompt was skipped; that needs an elevated session at a REAL console on an
+    # account with no credential, which cannot be had non-interactively.  The
+    # script's header and section 7 step 9 both say so.
+    #
+    # ELEVATED IS REQUIRED, WHICH IS WHY IT IS IN THIS RUNNER AND NOT THE OTHER:
+    # the audit trail is locked to SYSTEM and Administrators, and an unelevated
+    # "sd <command>" is refused unless the command is on the account batch.jobs
+    # list.
+    @{ Name = 'verify-cmdaudit.ps1';      P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
     @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
     # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
