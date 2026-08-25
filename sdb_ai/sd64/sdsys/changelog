@@ -27,6 +27,15 @@ Entries are newest first, by date, until there is a version to attach them to.
            Anything SD created while it was running - your VOC included - is
            left exactly as it is.
 
+           THE DICTIONARIES ARE BROUGHT UP TO DATE FOR YOU.  Upgrading now
+           reapplies the dictionary definitions this release ships, so a field
+           added since your last install is recognised.  It ADDS AND UPDATES
+           the entries SD ships and leaves alone any you added yourself - if
+           you have written your own dictionary items, they survive.  If that
+           step cannot run, the installer says so at the end rather than
+           finishing quietly, and upgrade-dicts.log in C:\ProgramData\SD says
+           what happened.
+
            ONE THING YOU STILL DO YOURSELF.  Run  update.account  in each
            account after upgrading, to bring that account's VOC up to date
            with the new release.  That is what the verb is for, and this

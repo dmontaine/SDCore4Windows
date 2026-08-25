@@ -931,6 +931,16 @@ def main():
                    # has to put the mechanism where SecureSysdirs can run it.
                    'secure-sysdirs.ps1',
                    'secure-accounts.ps1', 'secure-account-dirs.ps1',
+                   # 25 Aug 26 - the dictionary step for an UPGRADE.  A first
+                   # install gets its dictionaries from the staged tree, which
+                   # the build's own bootstrap already wrote; an upgrade keeps
+                   # the user's data tree, dictionaries included, so a release
+                   # that edits FILES_DICTS would never reach it.  This runs
+                   # gpl.bp/WRITE_INSTALL_DICTS, which MERGES record by record
+                   # rather than replacing the file - see its header.  It
+                   # SHIPS, so assert-current watches it like the rest of
+                   # these - do NOT add it to that script's $neverShipped list.
+                   'upgrade-dicts.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):
@@ -951,6 +961,35 @@ def main():
     dst = os.path.join(pf, 'changelog')
     shutil.copy2(changelog, dst)
     staged.add(stage, dst)
+
+    # 25 Aug 26 - FILES_DICTS SHIPS TO {app}, AND ONLY TO {app}.
+    #
+    # It is the tracked source for all eight dictionaries, 76 records keyed
+    # "<file>^<record>".  The dictionaries themselves are not tracked, because
+    # this repository holds no binary bits and a dictionary is more efficient
+    # as a DYNAMIC file - so they are created and loaded during the install
+    # (owner, 25 Aug 2026).  gpl.bp/WRITE_INSTALL_DICTS is what turns one into
+    # the other, and upgrade-dicts.ps1 runs it on an upgrade.
+    #
+    # IT MUST NOT GO INTO THE DATA TREE.  WRITE_INSTALL_DICTS reads it as
+    # @sdsys:"/gplbld/FILES_DICTS", so it has to be there WHILE IT RUNS and
+    # gone afterwards - a build input, not data.  bootstrap.py places and
+    # removes it at build time (BOOTSTRAP_ONLY) and upgrade-dicts.ps1 does the
+    # same on the target, each in a finally.  Shipping it into sdsys instead
+    # would put gplbld/ permanently inside the data tree, which is the thing
+    # the data-tree-holds-data-only decision forbids.
+    #
+    # THE {app}\gplbld PREFIX IS KEPT rather than flattened, so the path the
+    # installer copies FROM and the path the program reads are the same shape
+    # and a reader can see they correspond.
+    fd_src = os.path.join('gplbld', 'FILES_DICTS')
+    if not os.path.isdir(fd_src):
+        die('gplbld/FILES_DICTS is missing - it is the source for every '
+            'dictionary and upgrade-dicts.ps1 cannot run without it')
+    fd_dst = os.path.join(pf, 'gplbld', 'FILES_DICTS')
+    copy_tree(fd_src, fd_dst, staged, stage)
+    print('  FILES_DICTS: %d dictionary records staged to ProgramFiles\\gplbld'
+          % len(os.listdir(fd_dst)))
 
     # --- C:\ProgramData\SD\ -----------------------------------------------
 

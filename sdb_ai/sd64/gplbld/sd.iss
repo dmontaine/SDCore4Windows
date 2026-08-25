@@ -1430,6 +1430,90 @@ end;
   script handles the other two, starting a server and keeping its output.
 
   Returns the script's exit code, or -1 if it could not be run at all. }
+{ BRING AN UPGRADED INSTALL'S DICTIONARIES UP TO THE RELEASE.
+
+  WHY THE DICTIONARIES ARE BUILT AT INSTALL RATHER THAN SHIPPED.  Owner,
+  25 Aug 2026: this repository holds no binary bits, and a dictionary is more
+  efficient as a DYNAMIC file - so the dictionaries are created and loaded
+  during the install.  gplbld\FILES_DICTS is the tracked source, 76 records,
+  and gpl.bp\WRITE_INSTALL_DICTS is what turns it into dictionaries.
+
+  A FIRST INSTALL HAS NOTHING TO DO HERE and this returns at once.  It copies
+  the whole staged tree, whose dictionaries the BUILD's own bootstrap already
+  wrote.  An upgrade deliberately preserves the user's data tree - dictionaries
+  included, because they live inside it - so without this step a release that
+  edited FILES_DICTS would never reach an upgraded machine, and a field would
+  resolve on a fresh install and not on an upgraded one.
+
+  IT MERGES RATHER THAN REPLACING, which is why it is that program and not a
+  file copy: WRITE_INSTALL_DICTS writes one record at a time and clears
+  nothing, so a dictionary item an administrator added survives.  That is
+  UPDATE.ACCOUNT's shape, which is already the ruling for VOC.
+
+  ORDERING.  After the four ACL steps above, deliberately: each of them grants
+  BUILTIN\Administrators full control on the path it locks, so an elevated
+  process can still write, and running after them means this never widens
+  anything they have just narrowed.  Before AdoptAccount because both start a
+  server and each stops one only if it started it, so the cheaper property is
+  that neither depends on the other.
+
+  ELEVATED, AND THEREFORE HERE RATHER THAN IN the Run section: the script
+  reaches SDSYS through sd -internal, which needs Setup's own token.  The same
+  three faults AdoptAccount's header lists apply, and upgrade-dicts.ps1 handles
+  them the same way.
+
+  Returns '' when it worked or had nothing to do, and a paragraph for the
+  closing box when it did not. }
+function RefreshDictionaries: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  if DataTreeWasAbsent then Exit;
+
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\upgrade-dicts.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'The dictionary update step could not be started, so this ' +
+              'upgrade kept the dictionaries it already had. SD works; a ' +
+              'field added by this release may not be recognised. Run ' +
+              'upgrade-dicts.ps1 from the SD program folder, as an ' +
+              'administrator.' + #13#10#13#10;
+    Exit;
+  end;
+
+  { JUDGED ON THE SCRIPT'S OWN EXIT CODES, which its header lists.  Anything
+    that is not one of the three named failures is still a failure - a case
+    that fell through silently is how a step of this shape hides. }
+  case Code of
+    0: ;
+    3: Result := 'SD would not start during the upgrade, so the dictionaries ' +
+                 'were not updated. Everything else installed. Run ' +
+                 'upgrade-dicts.ps1 from the SD program folder, as an ' +
+                 'administrator, once SD is running.' + #13#10#13#10;
+    { DO NOT LET A #13 START A LINE, even in the middle of an expression: ISPP
+      reads a leading "#" as a preprocessor directive and answers "Unknown
+      preprocessor directive", naming a line that looks like ordinary Pascal.
+      Both branches below wrapped that way when they were written and were
+      caught by compiling the section rather than by reading it - which is the
+      same fault that cost a cycle on 19 Aug 2026, and the reason cycle.ps1
+      lints for it before it stages anything. }
+    4: Result := 'This installer did not carry the dictionary definitions, so ' +
+                 'the dictionaries were not updated. That is a fault in the ' +
+                 'build rather than on this computer - please report it.' + #13#10#13#10;
+  else
+    Result := 'The dictionaries could not be brought up to date for this ' +
+              'release, so this upgrade kept the ones it already had. SD ' +
+              'works; a field added by this release may not be recognised. ' +
+              'upgrade-dicts.log in the SD data folder says what happened.' + #13#10#13#10;
+  end;
+end;
+
 function AdoptAccount: Integer;
 var
   Code: Integer;
@@ -2207,6 +2291,7 @@ var
   PcodeMsg: String;
   SysdirMsg: String;
   AcctAclMsg: String;
+  DictMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -2281,6 +2366,12 @@ begin
     RouteMsg := SyncRouteGroups;
 
     SshLimit := ApplyAllowGroups;
+
+    { AN UPGRADE'S DICTIONARIES, and a no-op on a first install.  See the
+      function: it is here rather than earlier because every ACL step above
+      leaves Administrators full control, so nothing it writes is blocked, and
+      running after them means it cannot re-open anything they narrowed. }
+    DictMsg := RefreshDictionaries;
 
     { Same rule - an unattended install must still end with a usable account. }
     AdoptCode := AdoptAccount;
@@ -2431,6 +2522,10 @@ begin
            PcodeMsg +
            SysdirMsg +
            AcctAclMsg +
+           { Empty on every first install and on every upgrade that worked.
+             Beside the others because it reports something that did NOT
+             happen, and the reader needs it before the settings. }
+           DictMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a
              setting that is present. }
