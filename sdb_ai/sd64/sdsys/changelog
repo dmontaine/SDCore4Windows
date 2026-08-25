@@ -5,6 +5,50 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  INSTALLING A NEW RELEASE OVER AN EXISTING ONE NOW UPDATES YOUR
+           DATABASE.  UNTIL NOW IT SILENTLY DID NOT.
+
+           Your database lives in C:\ProgramData\SD, and the installer used to
+           leave it completely alone if it was already there.  That protected
+           your data, but it also meant a new release's programs and messages
+           never reached a computer that already had SD - so a fix could be
+           released and you would not get it, with nothing to say so.
+
+           NOW THE INSTALLER REPLACES THE PARTS SD SHIPS AND LEAVES YOUR OWN
+           ALONE.  Replaced: the catalogue and compiled programs, the BASIC
+           source, the messages, the include records, the VOC templates, the
+           library routines, the SDSYS BP programs, terminfo, the licence and
+           the contributor list.
+
+           KEPT, AND NOT TOUCHED: your accounts and their passwords, the
+           private catalogue, which Windows users are linked to which SD
+           accounts, the commands each account may run, your print queue and
+           held reports, everything under your own accounts, and sd.conf.
+           Anything SD created while it was running - your VOC included - is
+           left exactly as it is.
+
+           ONE THING YOU STILL DO YOURSELF.  Run  update.account  in each
+           account after upgrading, to bring that account's VOC up to date
+           with the new release.  That is what the verb is for, and this
+           changelog has been saying so for years.
+
+           If you would rather start clean, uninstalling still offers to
+           remove the database and still defaults to keeping it.
+
+25 Aug 26  THE CHANGELOG - THIS FILE - HAS MOVED TO
+           C:\Program Files\SD\changelog.
+
+           It used to be installed into the database, which the installer
+           never overwrote.  So your copy of it was frozen on the day you
+           first installed SD, and could never tell you about anything that
+           changed afterwards - in the one file whose entire job is telling
+           you what changed.
+
+           In its new home it is replaced every time you install a new
+           release, and removed when you uninstall.  Nothing else about it
+           changes.  The old frozen copy in the database is removed for you
+           when you upgrade, so there is only ever one.
+
 25 Aug 26  SD NOW REFUSES TO INSTALL IF THIS COMPUTER HAS A DIFFERENT ssh
            SERVER, OR IF SOMEBODY HAS ALREADY CONFIGURED THE WINDOWS ONE.
 

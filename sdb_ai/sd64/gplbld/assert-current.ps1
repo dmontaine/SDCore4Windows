@@ -469,6 +469,19 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # two build products to a folder outside the tree; stage.py
                   # and sd.iss name neither it nor them.
                   'stage-apiremote.ps1',
+                  # 25 Aug 26 - test-upgradeiss-units.py, the unit test for
+                  # stage.py's write_upgrade_iss().  Same shape and the same
+                  # reasoning as test-apiidentity-units.ps1 above: it IMPORTS
+                  # stage.py rather than restating its lists, so it cannot
+                  # drift from what it tests, touches nothing but %TEMP%, and
+                  # makes no claim about the installed tree.  Listed in the
+                  # commit that creates it, under section 7 step 7's rule.
+                  #
+                  # WHAT IT GUARDS IS WORTH THE LINE: write_upgrade_iss()
+                  # decides what an upgrade DELETES from a live database, and
+                  # the failure it exists to catch is $cred landing on the
+                  # replace list, after which every account is unreachable.
+                  'test-upgradeiss-units.py',
                   # 25 Aug 26 - mkdoc.py, the documentation renderer.  Listed
                   # IN THE COMMIT THAT CREATES IT, under section 7 step 7's
                   # rule.  It is a build-time tool: it reads .md and writes
@@ -517,7 +530,9 @@ if ($reinstated.Count -gt 0) {
 #
 # IT CANNOT GO ON $neverShipped, and that is not a technicality.  That list is
 # self-policing - anything on it that turns up quoted in stage.py or sd.iss is
-# put BACK under the guard - and changelog is quoted, at stage.py:140.  So it
+# put BACK under the guard - and changelog is quoted, at stage.py:848 (it was
+# :140 until 25 Aug 26, when it stopped shipping into the data tree and started
+# shipping to {app}; it still ships, so this reasoning is unchanged).  So it
 # would be reinstated on the next run and the exemption would silently do
 # nothing.  Kept separate so the two lists keep their different meanings: that
 # one says "this cannot make the install stale", this one says "this can, and

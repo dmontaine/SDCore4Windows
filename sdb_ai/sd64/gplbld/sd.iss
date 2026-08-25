@@ -307,12 +307,18 @@ Source: "{#Stage}\ProgramFiles\ssh-preflight.ps1"; Flags: dontcopy
 ; is removed.  The opt-in path in [Code] deletes the whole tree instead, which
 ; is honest about what it is doing.
 ;
-; The Check stops an upgrade overwriting a live database.  On a machine that
-; already has C:\ProgramData\SD\sdsys, this whole section is skipped and the
-; existing data is kept untouched.  UPGRADING AN EXISTING DATABASE IS NOT
-; SOLVED - a new release's gpl.bp.out will not reach an existing install, and
-; that needs a migration story before there is ever a second release.  Said
-; plainly here rather than discovered later.
+; The Check picks the branch rather than blocking one.  On a FIRST install
+; this entry lays down the whole tree.  On a machine that already has
+; C:\ProgramData\SD\sdsys it is skipped, and the generated upgrade.iss
+; included below does the work instead - replacing the shipped half in place
+; and leaving the user's half alone.
+;
+; CORRECTED 25 Aug 2026, in place rather than deleted, per the standing rule
+; about wrong comments.  This paragraph used to end "UPGRADING AN EXISTING
+; DATABASE IS NOT SOLVED - a new release's gpl.bp.out will not reach an
+; existing install, and that needs a migration story before there is ever a
+; second release."  That was true for eleven days and is the sentence a
+; returning reader will remember, so it is kept next to what replaced it.
 Source: "{#Stage}\ProgramData\sdsys\*"; DestDir: "{#DataDir}\sdsys"; \
     Flags: recursesubdirs createallsubdirs uninsneveruninstall; Check: DataTreeAbsent
 
@@ -323,6 +329,38 @@ Source: "{#Stage}\ProgramData\sdsys\*"; DestDir: "{#DataDir}\sdsys"; \
 ; unlike the database it genuinely is one.
 Source: "{#Stage}\ProgramData\sd.conf"; DestDir: "{#DataDir}"; \
     Flags: onlyifdoesntexist uninsneveruninstall
+
+; --- THE UPGRADE BRANCH, GENERATED --------------------------------------------
+; 25 Aug 26.  gplbld/stage.py writes <stage>\upgrade.iss from SDSYS_SHIP +
+; SDSYS_EMPTY + the terminfo pair, minus SDSYS_PRESERVE, and it carries its own
+; [InstallDelete] and [Files] sections gated on Check: DataTreeUpgrade.  Read
+; that file's header for the rule; read stage.py's SDSYS_PRESERVE for what an
+; upgrade must never touch and why.
+;
+; IT IS INCLUDED RATHER THAN WRITTEN HERE BECAUSE A COPY WOULD GO STALE
+; SILENTLY, and the thing it would go stale about is which directories an
+; upgrade DELETES from a live database.  Same reasoning as the MSYS2 DLL
+; closure being computed instead of listed.
+;
+; A MISSING FILE IS A BUILD FAILURE, DELIBERATELY.  #include stops ISCC if the
+; file is not there, and a tree staged without --bootstrap gets an upgrade.iss
+; whose only content is #error.  Both are loud.  The quiet failure this avoids
+; is an installer that builds cleanly and then cannot upgrade anything.
+;
+; THIS LINE MUST STAY LAST IN [Files], AND IT MUST NOT MOVE BELOW [Code].  The
+; include opens [InstallDelete], so any Source: entry put after it lands in the
+; wrong section - and inside [Code] the generated file's own ";" header
+; comments stop being comments and are compiled as Pascal, which answers
+; "'BEGIN' expected" on line 1 of a file that has no Pascal in it at all.
+; Both measured 25 Aug 2026 against the real ISCC, the second one by doing it.
+;
+; PASS AN ABSOLUTE /DStage.  cycle.ps1 does - it is C:\Users\dmont\stagetest by
+; default - and it is the only supported way to build.  ISPP resolves a
+; RELATIVE #include against the directory holding THIS file, gplbld\, while
+; ISCC resolves a relative Source: against SourceDir; the two are not the same
+; directory, so a relative /DStage would send them to different places.  It
+; fails loudly either way, naming the file it could not open.
+#include AddBackslash(Stage) + "upgrade.iss"
 
 [Dirs]
 ; Created empty and left alone.  shm is where etc\fstab maps /dev/shm, so every
@@ -839,6 +877,23 @@ end;
 function DataTreeAbsent: Boolean;
 begin
   Result := DataTreeWasAbsent;
+end;
+
+(* THE OTHER BRANCH, AND THE TWO ARE EXHAUSTIVE.  Every entry in the generated
+   upgrade.iss is gated on this; the whole-tree entry in [Files] is gated on
+   DataTreeAbsent above.  One or the other fires on every install, never both
+   and never neither.
+
+   IT READS THE SAME CACHED ANSWER, which is the point.  DataTreeWasAbsent is
+   sampled once in InitializeSetup because a live DirExists is destroyed by
+   the first file the installer writes - that bug skipped ~3,260 files and
+   still exited 0, and it is recorded where the variable is set.  A second
+   function asking Windows again would reintroduce it on the upgrade side,
+   where it would be far harder to see: the deletes would run and the copies
+   would not. *)
+function DataTreeUpgrade: Boolean;
+begin
+  Result := not DataTreeWasAbsent;
 end;
 
 function SshServerAbsent: Boolean;
