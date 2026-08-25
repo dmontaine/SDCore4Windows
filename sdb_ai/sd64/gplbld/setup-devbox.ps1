@@ -46,6 +46,16 @@
 #     one it is REPORTED as a hand-carry item rather than passed over in
 #     silence, which is the GPL.BP treatment above and for the same reason.
 #
+#     24 Aug 26 - REPORTING IT IS NOT WHAT HE ASKED FOR, AND THIS IS AN OPEN
+#     REQUIREMENT, NOT A SETTLED GAP.  On seeing the first end-to-end run he
+#     said sdhelp did not install and that he wants it INSTALLED - the whole
+#     point being a documentation phase on a machine that does not have it.
+#     Unlike GPL.BP, which he is content to hand-carry, this one still needs a
+#     decision on WHERE THE TREE COMES FROM: a release artefact, a pCloud
+#     fetch of "sdhelp_2-6-6 20260221 AM", or -SdHelpSource documented as the
+#     supported route.  -SdHelpSource has never been run.  PROJECT_STATUS.md
+#     section 7 step 17 carries it; HISTORY.md has the correction.
+#
 # THE LAYOUT IS LOAD-BEARING, NOT TIDINESS.  sdclilib32\Makefile carries
 # "SRCDIR ?= ../sd4windows/sdb_ai/sd64/gplsrc/sdclilib", so the four clones
 # MUST be siblings in one directory.  That is why -Root names a parent and the
