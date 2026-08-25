@@ -28,6 +28,16 @@
 # specified addresses match the socket address family", which looks exactly like
 # "::1 is blocked" and is not.  Every dial below names its address family.
 
+# -Expect SAYS WHICH ANSWER IS THE RIGHT ONE, AND IT IS REQUIRED THINKING.
+# RemoteAddress=Any is CORRECT when the sshremote task was ticked and is the
+# 24 Aug defect when it was not - the rule alone cannot tell you which, and a
+# probe that flags both as failure is one people learn to ignore.  So the
+# caller states what was chosen in the wizard and this asserts against it.
+param(
+    [ValidateSet('Restricted', 'Open')]
+    [string]$Expect = 'Restricted'
+)
+
 $ErrorActionPreference = 'Continue'
 
 $rule = 'OpenSSH-Server-In-TCP'
@@ -92,12 +102,20 @@ else {
     $r = Get-NetFirewallRule -Name $rule
     Write-Host ('  Enabled       : ' + $r.Enabled + '   Profile: ' + $r.Profile)
     Write-Host ('  RemoteAddress : ' + $now)
-    if ($now -match 'Any') {
-        Bad 'RemoteAddress is Any - port 22 is open to the local network'
-        Write-Host '         If the sshremote task was TICKED this is correct and expected.'
-        Write-Host '         If it was NOT ticked, this is the 24 Aug 2026 defect.'
+    Write-Host ('  expected      : ' + $Expect + '  (from -Expect, i.e. what was chosen in the wizard)')
+    if ($Expect -eq 'Open') {
+        if ($now -match 'Any') {
+            Ok 'RemoteAddress is Any, and the sshremote task was ticked - correct'
+        } else {
+            Bad ('sshremote was TICKED but RemoteAddress is ' + $now +
+                 ' - the machine is MORE restricted than asked for, and other computers cannot reach ssh')
+        }
     } else {
-        Ok ('RemoteAddress is scoped to ' + $now)
+        if ($now -match 'Any') {
+            Bad 'sshremote was NOT ticked but RemoteAddress is Any - port 22 is open to the local network. This is the 24 Aug 2026 defect'
+        } else {
+            Ok ('RemoteAddress is scoped to ' + $now)
+        }
     }
 }
 
@@ -111,7 +129,13 @@ else {
 }
 
 Head 'Can the documented recovery reach the restricted state at all'
-if (Test-Path -LiteralPath $fw) {
+if ($Expect -eq 'Open') {
+    Write-Host '  SKIPPED, deliberately. -Installed -Restrict would scope the rule to'
+    Write-Host '  loopback, which is the OPPOSITE of what was asked for on this machine,'
+    Write-Host '  and this probe does not undo the thing it is measuring. The restrict'
+    Write-Host '  path is exercised by an -Expect Restricted run on its own guest.'
+}
+elseif (Test-Path -LiteralPath $fw) {
     Write-Host ('  running: powershell -File "' + $fw + '" -Installed -Restrict')
     & powershell.exe -ExecutionPolicy Bypass -File $fw -Installed -Restrict 2>&1 | ForEach-Object { Write-Host ('    | ' + $_) }
     $rc = $LASTEXITCODE
