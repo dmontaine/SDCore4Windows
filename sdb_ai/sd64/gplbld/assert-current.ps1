@@ -469,6 +469,20 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # two build products to a folder outside the tree; stage.py
                   # and sd.iss name neither it nor them.
                   'stage-apiremote.ps1',
+                  # 25 Aug 26 - test-deletioncheck-units.ps1, the unit test for
+                  # THIS script's Find-InstalledDeletions.  Listed in the
+                  # commit that creates it, under section 7 step 7's rule -
+                  # and it has the self-blocking shape twice over, because an
+                  # unlisted test of assert-current would make assert-current
+                  # report the tree stale on account of the test's own newness,
+                  # which is what verify-notyet.ps1 paid for.
+                  #
+                  # IT IS THE ONLY POSITIVE CONTROL THIS CHECK HAS.  On a
+                  # healthy tree Find-InstalledDeletions correctly returns
+                  # nothing, so a run that had silently stopped working looks
+                  # exactly like a run that passed; only a planted deletion in
+                  # a fixture tells the two apart.
+                  'test-deletioncheck-units.ps1',
                   # 25 Aug 26 - test-upgradeiss-units.py, the unit test for
                   # stage.py's write_upgrade_iss().  Same shape and the same
                   # reasoning as test-apiidentity-units.ps1 above: it IMPORTS
@@ -674,6 +688,149 @@ if ($renamed.Count -gt 0) {
     $stale = $true
 } else {
     Note '  no source file is renamed relative to the install'
+}
+
+# --- B3. A DELETION MOVES NOTHING AT ALL, so neither B nor B2 can see one.
+#
+# 24 Aug 26 - FOUND WHILE REMOVING MODIFY.  Three source files were deleted and
+# this script reported "no source file is renamed relative to the install" and
+# named only the one file that had been EDITED.  The install still held
+# GPL.BP/MODIFY, voc_template/modify and newvoc/modify and nothing said so.
+#
+# THE CAUSE IS THAT EVERYTHING ABOVE IS ONE-DIRECTIONAL.  B and B2 walk SOURCE
+# and ask "is this in the install".  A file the install has and source no
+# longer does is invisible to both, so a commit that ONLY deletes reports the
+# tree current.  It had already happened once before that, with GPL.BP/OPGEN:
+# what made that tree stale was an edit in the same commit, not the delete.
+#
+# ***WHY IT SAT OPEN FOR A YEAR OF SESSIONS: THE OBVIOUS FIX CRIES WOLF FOR
+# EVER.*** Walking the whole install and flagging anything absent from source
+# flags gcat, gpl.bp.out, voc, errlog, $ipc\%0, $hold, every account and the
+# entire runtime - it would report stale on every run on every machine.  This
+# file's header prices a false stale at one install, and that price only holds
+# while a stale verdict still means something.
+#
+# SO IT ASKS stage.py WHICH DIRECTORIES ARE A VERBATIM COPY OF SOURCE and looks
+# only inside those.  stage.py is already the authority on what belongs in an
+# install, and SDSYS_MIRROR carries the measurement that justifies each name.
+# accounts is deliberately NOT one of them: it ships holding the SDSYS record
+# and then accumulates every account the user creates.
+#
+# IT ASKS RATHER THAN KEEPING ITS OWN COPY, and that is the same reasoning as
+# $shipsAs above.  A list here would be a second list to keep true, and what it
+# would go stale about is which directories this script is allowed to call
+# deletions in - so it would fail by going quiet, which is the direction this
+# file refuses.
+#
+# THE COMPARISON IS CASE-INSENSITIVE ON PURPOSE.  B2 owns the case-only rename
+# and reports it with -cne; matching ordinally here as well would report one
+# rename twice, as a rename AND as a deletion, and the second report would send
+# the reader looking for a file that is not missing.
+function Find-InstalledDeletions {
+    param(
+        [Parameter(Mandatory = $true)] [string]   $SourceSys,
+        [Parameter(Mandatory = $true)] [string]   $InstallSys,
+        [Parameter(Mandatory = $true)] [string[]] $Mirrors
+    )
+
+    $found   = @()
+    $skipped = @()
+    $checked = 0
+
+    foreach ($m in $Mirrors) {
+        $src = Join-Path $SourceSys  $m
+        $ins = Join-Path $InstallSys $m
+        if (-not (Test-Path $src) -or -not (Test-Path $ins)) {
+            $skipped += $m
+            continue
+        }
+
+        $srcNames = @{}
+        Get-ChildItem $src -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $srcNames[$_.FullName.Substring($src.Length + 1).ToLowerInvariant()] = $true
+            }
+
+        Get-ChildItem $ins -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $checked++
+                $rel = $_.FullName.Substring($ins.Length + 1)
+                if (-not $srcNames.ContainsKey($rel.ToLowerInvariant())) {
+                    $found += ("{0}\{1}" -f $m, $rel)
+                }
+            }
+    }
+
+    # Checked is not a statistic, it is the null-case guard.  Every finding
+    # below is of the form "this file is NOT in source", and a run that opened
+    # no directory at all produces none of them - so without this the quietest
+    # possible failure reads as the cleanest possible pass.
+    return [pscustomobject]@{
+        Deleted = @($found)
+        Skipped = @($skipped)
+        Checked = $checked
+    }
+}
+
+$mirrors   = @()
+$mirrorRaw = ''
+$mirrorErr = ''
+$stagePy   = Join-Path $PSScriptRoot 'stage.py'
+$python    = Get-Command python -ErrorAction SilentlyContinue
+
+if (-not (Test-Path $stagePy)) {
+    $mirrorErr = "$stagePy is not there"
+} elseif (-not $python) {
+    # A machine with no python cannot have built or staged this install, so a
+    # red verdict here is not a false one.  It is loud either way.
+    $mirrorErr = 'python is not on PATH, so stage.py cannot be asked'
+} else {
+    # --list-mirrors answers before stage.py checks anything about the machine,
+    # so it needs no build, no MSYS2 and no particular working directory.
+    $mirrorRaw = & $python.Source $stagePy --list-mirrors 2>&1
+    $mirrorRc  = $LASTEXITCODE
+    if ($mirrorRc -ne 0) {
+        $mirrorErr = "stage.py --list-mirrors exited $mirrorRc"
+    } else {
+        # The pattern drops anything that is not a bare directory name, which
+        # is also what keeps a stderr line out of the list when 2>&1 merges one
+        # into the stream.
+        $mirrors = @($mirrorRaw | ForEach-Object { "$_".Trim() } |
+                     Where-Object { $_ -match '^[A-Za-z0-9._$-]+$' })
+        if ($mirrors.Count -eq 0) {
+            $mirrorErr = 'stage.py --list-mirrors named no directories'
+        }
+    }
+}
+
+if ($mirrorErr -ne '') {
+    Bad ("cannot check for DELETED files - {0}." -f $mirrorErr)
+    Write-Output '       A deletion-only change would otherwise report the tree current.'
+    if ("$mirrorRaw" -ne '') {
+        Write-Output ('       stage.py said: ' + (("$mirrorRaw" -split "`n")[0]))
+    }
+    $stale = $true
+} else {
+    $del = Find-InstalledDeletions -SourceSys $srcSys -InstallSys $instSys `
+                                   -Mirrors $mirrors
+    if ($del.Skipped.Count -gt 0) {
+        Bad ("{0} mirrored director(ies) are missing from source or the install: {1}" -f
+             $del.Skipped.Count, ($del.Skipped -join ', '))
+        $stale = $true
+    } elseif ($del.Checked -eq 0) {
+        Bad ("the deletion check opened {0} director(ies) and found no files at all - it measured nothing" -f
+             $mirrors.Count)
+        $stale = $true
+    } elseif ($del.Deleted.Count -gt 0) {
+        Bad ("{0} file(s) are in the install but no longer in source:" -f $del.Deleted.Count)
+        $del.Deleted | Select-Object -First 10 | ForEach-Object { Write-Output ("       sdsys\" + $_) }
+        if ($del.Deleted.Count -gt 10) { Write-Output ("       ... and {0} more" -f ($del.Deleted.Count - 10)) }
+        Write-Output '       (a deletion moves no timestamp, so the checks above cannot see one)'
+        $stale = $true
+    } else {
+        Note ("  no installed file has been deleted from source ({0} files across {1} mirrored directories: {2})" -f
+              $del.Checked, $mirrors.Count, ($mirrors -join ' '))
+    }
 }
 
 if ($newer.Count -gt 0) {

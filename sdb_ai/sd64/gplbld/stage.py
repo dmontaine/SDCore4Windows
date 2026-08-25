@@ -245,6 +245,47 @@ TERMINFO_FILES = [('terminfo.src', 'source, so sdtic is usable after install')]
 # batch.jobs.dic are added because a dictionary belongs with the file it
 # describes, and $hold because the spooler hold file is the user's own saved
 # report output - replacing it would throw away work.
+# ---------------------------------------------------------------------------
+# Which sdsys directories are a VERBATIM copy of the source tree.
+#
+# assert-current.ps1 reads this with --list-mirrors, and it is the whole of
+# what makes a DELETION visible.  That script walks source -> install and asks
+# "is this file installed"; nothing walked the other way, so a file the install
+# has and source no longer does was invisible and a deletion-only commit
+# reported the tree current.  It had already happened twice, silently.
+#
+# THE NAIVE FIX CRIES WOLF FOR EVER, which is why the gap sat open: walking the
+# whole install and flagging anything not in source flags gcat, gpl.bp.out,
+# voc, errlog, every account and the entire runtime.  A guard that always fires
+# is worse than the gap it closes.  A directory qualifies here only if the
+# install NEVER writes into it, so "installed but not in source" can only mean
+# a deletion that has not shipped.
+#
+# MEASURED 25 Aug 2026 AGAINST A REAL INSTALL, not reasoned about.  Comparing
+# each SDSYS_SHIP directory in C:\ProgramData\SD\sdsys against sdb_ai/sd64/sdsys
+# gave, for installed-files-not-in-source:
+#
+#     gpl.bp 0/198   syscom 0/15   newvoc 0/394   voc_template 0/424
+#     messages 0/1909   sd.voclib 0/10   bp 0/5      accounts 17/18
+#
+# ***accounts IS THE ONE THAT DISQUALIFIES ITSELF AND IT IS NOT ON THIS LIST.***
+# It ships holding the SDSYS record and then accumulates every account the user
+# creates - the 17 were "don" and sixteen test accounts from the b38 runs.
+# Listing it would report a stale tree on every machine that had ever created
+# an account, which is every machine.
+#
+# licence and contrib are FILES rather than directories, so there is nothing
+# to walk; section B's source -> install pass already covers a file.
+SDSYS_MIRROR = [
+    ('gpl.bp',       'BASIC source; nothing writes it at runtime'),
+    ('syscom',       'include records'),
+    ('newvoc',       'read by CREATEA; never written'),
+    ('voc_template', 'read by CREATEA and UPDATE.ACCOUNT; never written'),
+    ('messages',     'sysmsg text'),
+    ('sd.voclib',    'library routines'),
+    ('bp',           "SDSYS's own BP - five utility programs"),
+]
+
 # Names this file USED to put in the data tree and no longer does.  An upgrade
 # deletes them; a first install never creates them, so there is nothing else to
 # do.  DELETE-ONLY, and the one place write_upgrade_iss() emits half a pair on
@@ -712,7 +753,21 @@ def main():
     ap.add_argument('--bootstrap', action='store_true',
                     help='run the bootstrap against the staged tree, so the '
                          'install needs neither Python nor a compiler')
+    ap.add_argument('--list-mirrors', action='store_true',
+                    help='print the sdsys directories that are a verbatim '
+                         'copy of source, one per line, and exit')
     args = ap.parse_args()
+
+    # ANSWERED BEFORE ANY OTHER CHECK, DELIBERATELY.  assert-current.ps1 asks
+    # this on every run, including on a tree that has not been built - it is a
+    # question about the LISTS in this file, not about the machine - so it must
+    # not need bin/sd.exe, terminfo/, MSYS2, elevation or even the right
+    # working directory.  Every die() below would otherwise turn a guard that
+    # should have answered into a guard that refuses.
+    if args.list_mirrors:
+        for name, _why in SDSYS_MIRROR:
+            print(name)
+        return 0
 
     # bootstrap.py refuses an unelevated window, and by the time it gets the
     # chance this script has already copied several thousand files.  Ask the
