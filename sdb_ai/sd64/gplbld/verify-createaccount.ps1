@@ -110,6 +110,49 @@ function Note($step, $expected, $got, $decisive) {
     Write-Output ("  [{0}] {1}: expected {2}, got {3}" -f $(if ($pass) { 'PASS' } else { 'FAIL' }), $step, $expected, $got)
 }
 
+# 24 Aug 26 - THE VERDICT LINE. ADDED BECAUSE THIS SCRIPT PRINTED NONE.
+#
+# Found on the b36 suite run: every other verifier ends with wording of its own
+# - "17 of 17 checks passed", "verify-pcodeacl: PASSED - ..." - and this one
+# ended with eight lines of cleanup prose. The catch block below prints
+# "verify-createaccount: FAILED", so FAILURE had wording and SUCCESS did not,
+# which leaves a reader only the ABSENCE of failure to check.
+#
+# THAT ASYMMETRY IS THE THING SECTION 0 FORBIDS, and it had just cost a false
+# reading: the elevated per-step logs are UTF-16LE, an ASCII grep for [FAIL]
+# over them matches nothing, and "no FAIL rows" therefore looked identical to
+# a clean run. A positive success string cannot be faked the same way - if it
+# is absent, either the run did not finish or the pattern is wrong, and both
+# are worth knowing.
+#
+# ***IT REFUSES THE NULL CASE OUT LOUD.*** A run that recorded no DECISIVE
+# check has proved nothing, and without this it would have reached "exit 0" on
+# an empty $results and scored as a pass. It sets $fatal rather than returning
+# a code, so the existing "if ($fatal) { exit 1 }" carries it and no exit path
+# has to change - and so nothing lands in the pipeline, which is what would
+# happen if this returned a value while also writing output.
+function Write-Verdict($name) {
+    $all      = @($script:results)
+    $decisive = @($all | Where-Object { $_.Decisive -eq 'yes' })
+    $failed   = @($decisive | Where-Object { $_.Result -ne 'PASS' })
+
+    Write-Output ""
+    if ($decisive.Count -eq 0) {
+        Write-Output ("{0}: FAILED - NO DECISIVE CHECK RAN, so this run proves nothing." -f $name)
+        Write-Output ("  {0} row(s) recorded, none of them decisive." -f $all.Count)
+        $script:fatal = $true
+        return
+    }
+    if ($failed.Count -gt 0) {
+        Write-Output ("{0}: FAILED - {1} of {2} decisive checks failed:" -f $name, $failed.Count, $decisive.Count)
+        $failed | ForEach-Object { Write-Output ("    " + $_.Check) }
+        $script:fatal = $true
+        return
+    }
+    Write-Output ("{0}: PASSED - {1} of {1} decisive checks passed, {2} row(s) in all." -f
+                  $name, $decisive.Count, $all.Count)
+}
+
 # STARTING SD IS NOT A JOB FOR Invoke-Native, AND THIS HUNG THE WHOLE SCRIPT.
 #
 # Measured 14 Aug 2026, fourth session: the script printed "SD is not running,
@@ -448,6 +491,12 @@ try {
     Write-Output "here would presuppose that decision.  Remove them by hand if you want the"
     Write-Output "tree pristine, and note what a half-removed account looks like while you do:"
     Write-Output "it is the thing 1c has to settle."
+
+    # LAST, AFTER THE CLEANUP PROSE, DELIBERATELY.  Putting it beside the
+    # summary table left eight lines between the verdict and the end of the
+    # file, so a `tail` of the log - which is how these are read - showed the
+    # prose and not the result.  The verdict is the last thing printed.
+    Write-Verdict 'verify-createaccount'
 
     if ($fatal) { exit 1 }
     exit 0

@@ -322,6 +322,21 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # post-cycle runner.  Both cover a bug that was paid for:
                   # section 6's WHO-pattern and icacls-ordering traps.
                   'test-apiidentity-units.ps1',
+                  # 24 Aug 26 - test-verdict-units.ps1, the unit test for the
+                  # Write-Verdict function added to verify-createaccount.ps1
+                  # and verify-sshonly.ps1 the same day.  Same shape and same
+                  # reasoning as test-apiidentity-units.ps1 directly above: it
+                  # lifts the function out of both scripts BY AST so it cannot
+                  # drift from what it tests, touches nothing, and makes no
+                  # claim about the installed tree.  Listed in the commit that
+                  # creates it, under section 7 step 7's rule.
+                  #
+                  # IT ALSO ASSERTS THE TWO COPIES ARE IDENTICAL, which is the
+                  # part worth keeping: the "if one changes, change both"
+                  # comment in those files is a hope, and session 51 paid for
+                  # exactly that shape when the tier VOC counts lived in two
+                  # files and nothing failed when they disagreed.
+                  'test-verdict-units.ps1',
                   # 23 Aug 26 - setup-devbox.ps1 builds a DEVELOPMENT machine
                   # from nothing.  It never ships and never reaches an install
                   # - it runs BEFORE there is a clone, let alone a tree - and

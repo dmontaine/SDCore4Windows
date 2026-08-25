@@ -183,6 +183,52 @@ function Note($step, $expected, $got, $decisive) {
     Write-Output ("  [{0}] {1}: expected {2}, got {3}" -f $(if ($pass) { 'PASS' } else { 'FAIL' }), $step, $expected, $got)
 }
 
+# 24 Aug 26 - THE VERDICT LINE. ADDED BECAUSE THIS SCRIPT PRINTED NONE.
+#
+# Found on the b36 suite run, at the same time as verify-createaccount.ps1's -
+# the two were the only verifiers in the suite ending with no wording of their
+# own. The catch block below prints "verify-sshonly: FAILED", so FAILURE had
+# wording and SUCCESS did not, which leaves a reader only the ABSENCE of
+# failure to check.
+#
+# THAT ASYMMETRY IS THE THING SECTION 0 FORBIDS, and it had just cost a false
+# reading: the elevated per-step logs are UTF-16LE, an ASCII grep for [FAIL]
+# over them matches nothing, and "no FAIL rows" therefore looked identical to
+# a clean run.
+#
+# ***IT REFUSES THE NULL CASE OUT LOUD*** - a run that recorded no DECISIVE
+# check has proved nothing, and this script has FOURTEEN exit points, most of
+# them preconditions, so reaching the end with an empty $results is a real
+# shape rather than a hypothetical one. It sets $fatal rather than returning a
+# code, so the existing "if ($fatal) { exit 1 }" carries it and none of those
+# exits has to change - and so nothing lands in the pipeline, which is what
+# would happen if this returned a value while also writing output.
+#
+# KEPT BYTE-FOR-BYTE IDENTICAL to verify-createaccount.ps1's copy, on purpose:
+# two verifiers whose verdicts are worded differently are two things to read
+# differently. If one changes, change both.
+function Write-Verdict($name) {
+    $all      = @($script:results)
+    $decisive = @($all | Where-Object { $_.Decisive -eq 'yes' })
+    $failed   = @($decisive | Where-Object { $_.Result -ne 'PASS' })
+
+    Write-Output ""
+    if ($decisive.Count -eq 0) {
+        Write-Output ("{0}: FAILED - NO DECISIVE CHECK RAN, so this run proves nothing." -f $name)
+        Write-Output ("  {0} row(s) recorded, none of them decisive." -f $all.Count)
+        $script:fatal = $true
+        return
+    }
+    if ($failed.Count -gt 0) {
+        Write-Output ("{0}: FAILED - {1} of {2} decisive checks failed:" -f $name, $failed.Count, $decisive.Count)
+        $failed | ForEach-Object { Write-Output ("    " + $_.Check) }
+        $script:fatal = $true
+        return
+    }
+    Write-Output ("{0}: PASSED - {1} of {1} decisive checks passed, {2} row(s) in all." -f
+                  $name, $decisive.Count, $all.Count)
+}
+
 # ---------------------------------------------------------- native commands --
 # EVERY external program goes through here, and the reason is a PowerShell 5.1
 # trap that cost this script its first run.  Redirecting a native program's
@@ -452,6 +498,10 @@ try {
         $hasProfile = Test-Path ('HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $sid)
         Write-Output ("  user profile exists for " + $Account + ": " + $hasProfile)
         Note 'retest: ssh with a key' 'admitted' (SshKey) $true
+        # -RetestSsh IS A REAL VERIFICATION RUN, not a housekeeping mode: it
+        # records a decisive check and exits on it, so it gets a verdict like
+        # the main path.  Modes that only clean up do NOT reach here.
+        Write-Verdict 'verify-sshonly'
         if ($fatal) { exit 1 }
         exit 0
     }
@@ -686,6 +736,11 @@ try {
     Write-Output ("The " + $Group + " group and its deny rights are LEFT IN PLACE - that is what the")
     Write-Output ("installer does, and CREATE.ACCOUNT needs the group to exist.  To undo:")
     Write-Output ("  Remove-LocalGroup -Name " + $Group + "   (the rights go with the SID)")
+
+    # LAST, AFTER THE CLEANUP PROSE, DELIBERATELY - see verify-createaccount.ps1.
+    # A `tail` of the log is how these are read, and the prose was what it
+    # showed.
+    Write-Verdict 'verify-sshonly'
 
     if ($fatal) { exit 1 }
     exit 0
