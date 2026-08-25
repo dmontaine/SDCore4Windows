@@ -199,6 +199,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # script not on this list makes the tree report stale
                   # because it exists, and then every verifier refuses.
                   'probe-syswrites.ps1',
+                  # 24 Aug 26 - probe-sshfirewall.ps1, section 7 step 3's
+                  # measurement: whether the installer actually scopes who may
+                  # reach ssh.  It can only be run on a machine that had NO
+                  # OpenSSH server, because ApplySshFirewall exits early unless
+                  # SshWasAbsent - which is why the defect it found sat unseen
+                  # for eight days.  Listed in the commit that created it, per
+                  # step 7's rule.
+                  'probe-sshfirewall.ps1',
                   'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
