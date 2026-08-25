@@ -5,6 +5,61 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  SD NOW REFUSES TO INSTALL IF THIS COMPUTER HAS A DIFFERENT ssh
+           SERVER, OR IF SOMEBODY HAS ALREADY CONFIGURED THE WINDOWS ONE.
+
+           Accounts SD creates sign in over ssh and nothing else, and SD
+           configures the ssh server so that those accounts land in SD and
+           cannot get a command prompt.  SD can only promise that about a
+           server it installed and configured itself.
+
+           SO THE INSTALLER NOW CHECKS FIRST, BEFORE IT CHANGES ANYTHING,
+           and stops with an explanation if it finds:
+
+              * another ssh server using port 22, or
+              * an ssh service that is not part of Windows, installed even
+                if it is not running, or
+              * Windows' own ssh server with settings somebody has already
+                changed.
+
+           It names what it found - the service and where it is, or the
+           setting that was added - so you can decide what to do.  Nothing on
+           the computer is changed when it refuses.
+
+           WHY IT WAS WORTH DOING.  Until now SD asked only whether Windows'
+           own ssh server was present.  On a computer running a different one
+           it decided there was no server at all, installed Windows' server,
+           and that server could not use port 22 because the other one already
+           had it.  SD's whole sign-in path was broken and the install said
+           nothing.
+
+           IF YOU HIT THIS.  Remove the other ssh server, or put this
+           computer's ssh configuration back the way Windows shipped it, and
+           run the installer again.
+
+25 Aug 26  THE "Limit ssh" CHECKBOX IS GONE.  IT IS NOW A STATEMENT.
+
+           SD limits ssh to SD users and administrators and puts every ssh
+           session straight into SD.  That has been ticked by default for some
+           time and was not really meant to be turned off - so showing it as a
+           checkbox suggested a choice that was not one.
+
+           IT IS NOW DESCRIBED ON THE "Before you install" page instead,
+           alongside the other things SD does without asking, including the
+           cost said plainly: scp and sftp stop working for everyone on the
+           computer, because the command is forced and there is no subsystem
+           left to run.  Remote-control tools that copy files are unaffected,
+           and so are the console and Remote Desktop.
+
+           NOTHING ABOUT THE BEHAVIOUR CHANGED - only how it is presented, and
+           that it can no longer be declined.  The reason it can no longer be
+           declined is the change above: the computer it existed for, the one
+           with somebody else's ssh server, is now turned away before the
+           install starts.
+
+           Your existing sshd_config is still kept as sshd_config.before-sd,
+           and uninstalling SD still puts it back.
+
 25 Aug 26  SECURITY: WHEN SD INSTALLED ssh FOR YOU, PORT 22 WAS LEFT OPEN
            TO YOUR NETWORK EVEN IF YOU DID NOT ASK FOR THAT.
 

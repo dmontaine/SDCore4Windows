@@ -310,8 +310,16 @@ if ($verdict -eq 0) {
 foreach ($r in $reasons) { Say ('   - ' + $r) }
 
 if ($ReasonFile) {
+    # UTF-8 WITHOUT A BOM, WRITTEN DELIBERATELY THIS WAY.  sd.iss reads this
+    # with LoadStringFromFile, which hands back an AnsiString: PowerShell's
+    # "-Encoding UTF8" prepends a byte-order mark in 5.1, and those three bytes
+    # would arrive as visible rubbish at the front of the refusal the user is
+    # shown.  Set-Content has no no-BOM option in 5.1, so write it directly.
     try {
-        Set-Content -LiteralPath $ReasonFile -Value ($reasons -join [Environment]::NewLine) -Encoding UTF8
+        [System.IO.File]::WriteAllText(
+            $ReasonFile,
+            (($reasons -join [Environment]::NewLine) + [Environment]::NewLine),
+            (New-Object System.Text.UTF8Encoding($false)))
     } catch {
         Say ('  (could not write the reason file: ' + $_.Exception.Message + ')')
     }

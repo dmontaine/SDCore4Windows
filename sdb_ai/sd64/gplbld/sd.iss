@@ -138,6 +138,33 @@ Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from a
 Name: "sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
     GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
 
+; ===========================================================================
+; 25 Aug 26 - THIS IS NO LONGER A TASK.  THERE IS NO CHECKBOX.  The work still
+; happens on every install; what has gone is the pretence that it was optional.
+;
+; OWNER'S REASON, AND IT IS THE WHOLE OF IT: "My suggestion would be to change
+; it from a tick box that can't be ticked off, to just a statement without a
+; tick box.  Seeing a tick box a user just assumes it is an option."  A
+; checkbox is a promise that unticking is supported.  This was ticked by
+; default and expected never to be unticked, which made the checkbox the
+; misleading part - not the wording, which 5.9's option C had already fixed.
+;
+; WHAT MADE IT SAFE TO DROP THE OPT-OUT.  The opt-out existed for the machine
+; that already had an ssh server somebody else configured.  Since the same day,
+; InitializeSetup REFUSES TO INSTALL on such a machine at all
+; (ssh-preflight.ps1), so that machine no longer reaches this page.  On the
+; machine that is left - Windows' own server, configured by nobody but SD -
+; there was never a case for declining.
+;
+; It is disclosed on the "Before you install" page instead, beside
+; "OPENSSH SERVER - INSTALLED, NOT OPTIONAL", which is where the things SD does
+; without asking are listed.
+;
+; ApplyAllowGroups no longer tests WizardIsTaskSelected: see its own comment.
+; The reasoning below is kept because it is why the step exists and what it
+; costs, none of which changed.
+; ===========================================================================
+;
 ; THE SECOND LAYER OF 5.6.2.  PROMOTED FROM A SUBTASK on 16 Aug 2026, because
 ; the parent it hung off no longer exists.
 ;
@@ -218,8 +245,9 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; and put every ssh session straight into SD (disables scp and sftp)" - the
 ; sharp edge was at the end, past a comma and inside a parenthesis, which was
 ; exactly what a reader who scanned would skip.
-Name: "limitssh"; Description: "DISABLES scp and sftp for everyone: puts every ssh session straight into SD, and limits ssh to SD users and administrators"; \
-    GroupDescription: "Remote access:"
+; (no Name: line here on purpose - see the 25 Aug 26 note at the top of this
+;  block.  The wording that used to be the Description now appears on the
+;  "Before you install" page as a statement.)
 
 ; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
 ; normally 4243, and the ssh tunnel is no longer part of the design (8, posture
@@ -249,6 +277,23 @@ Name: "apiremote"; Description: "Let other computers on your network connect to 
 ; uninstall, which is what should happen to program files.
 Source: "{#Stage}\ProgramFiles\*"; DestDir: "{app}"; \
     Flags: recursesubdirs createallsubdirs ignoreversion
+
+; --- THE ONE FILE THAT IS NEEDED BEFORE ANY FILE IS INSTALLED --------------
+; 25 Aug 26 - ssh-preflight.ps1 decides whether SD may install here AT ALL, so
+; InitializeSetup has to run it before the wizard is drawn and long before the
+; line above has copied anything.  dontcopy embeds a second copy in the
+; installer for ExtractTemporaryFile to unpack into {tmp}; it is NOT installed
+; by this entry.
+;
+; THE {app} COPY ABOVE IS DELIBERATE AS WELL, not a duplicate by accident: it
+; is what lets an administrator re-run the check by hand afterwards, the same
+; way ssh-firewall.ps1 and allow-ssh-groups.ps1 can be re-run.  stage.py:598
+; carries the same note from the other end.
+;
+; NAMED EXPLICITLY rather than swept up by a wildcard, because a wildcard here
+; would silently embed every script in the staged tree in the installer twice
+; and nobody would notice the size.
+Source: "{#Stage}\ProgramFiles\ssh-preflight.ps1"; Flags: dontcopy
 
 ; --- C:\ProgramData\SD\ ----------------------------------------------------
 ; THE DATA TREE IS INSTALLED ONCE AND NEVER TOUCHED AGAIN.
@@ -629,6 +674,10 @@ var
   PasswordStepWanted: Boolean;
 
 function InitializeSetup: Boolean;
+var
+  PreflightPs, PreflightScript, PreflightReasonPath: String;
+  PreflightReason: AnsiString;
+  PreflightCode: Integer;
 begin
   (* ASKED ONCE, BEFORE ANY FILE IS COPIED, AND THE ANSWER CACHED.
 
@@ -698,6 +747,84 @@ begin
       'Run the installer normally instead. You can do that at this computer''s ' +
       'keyboard, or through Remote Desktop or similar remote-control software - ' +
       'both work, because a person is there to answer.',
+      mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  (* SD INSTALLS ONLY BESIDE THE ssh SERVER IT OWNS.  Owner's ruling,
+     25 Aug 2026: "I would actually prefer that SD refused to install if
+     another ssh server is installed.  It adds a layer of unpredictability.
+     If we support only the windows ssh server, then we know what it is that
+     is being used and we have control over how it is configured."  And on a
+     Microsoft server somebody has already configured: "I lean toward refusing
+     in both cases because the pre-existing configuration could defeat our
+     security.  If the user wants to change our security policy after the
+     fact, that is not on us."
+
+     IT CLOSES A HOLE THAT WAS LIVE.  SshWasAbsent above asks whether
+     MICROSOFT's OpenSSH is present, and the rest of this file read that as
+     "is there an ssh server".  Beside Bitvise or freeSSHd those are different
+     questions: SD concluded there was none, installed Windows OpenSSH, and it
+     could not bind port 22 because the other server held it.  The whole access
+     path was then broken and nothing in the install said so.
+
+     HERE, AND NOT LATER, BECAUSE HERE IS FREE.  InitializeSetup runs before
+     the wizard is drawn and before one file is written, so a refusal costs the
+     user nothing but the time to read it.  NO ESCAPE SWITCH, for the reason
+     the silent-install ruling above gives.
+
+     THE CHECK IS A SCRIPT, NOT PASCAL HERE, for the reason install-ssh.ps1
+     records: a file can be read, parse-checked and TESTED on its own.
+     probe-sshpreflight.ps1 exercises both polarities on a throwaway guest.
+     It is embedded with dontcopy ([Files]) because it must run before the
+     copy step, and installed to {app} as well so it can be re-run by hand. *)
+  ExtractTemporaryFile('ssh-preflight.ps1');
+  PreflightPs         := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  PreflightScript     := ExpandConstant('{tmp}\ssh-preflight.ps1');
+  PreflightReasonPath := ExpandConstant('{tmp}\ssh-preflight-reason.txt');
+
+  if not Exec(PreflightPs,
+              '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+              PreflightScript + '" -ReasonFile "' + PreflightReasonPath + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, PreflightCode) then
+  begin
+    (* THE CHECK ITSELF DID NOT RUN.  Treated as a refusal, not waved through:
+       the whole point is that this machine is knowable, and a check that did
+       not run has established nothing.  Same reasoning as the script's own
+       exit 2. *)
+    Log('SD: refusing - ssh-preflight.ps1 could not be started.');
+    SuppressibleMsgBox(
+      'SD could not check this computer''s ssh server, so it has not installed ' +
+      'anything.' + #13#10#13#10 +
+      'SD needs the OpenSSH server that ships with Windows, and it checks first ' +
+      'that no other ssh server is present and that nobody has already changed ' +
+      'how this one is configured. That check could not be run.' + #13#10#13#10 +
+      'Nothing on this computer has been changed.',
+      mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  if PreflightCode <> 0 then
+  begin
+    PreflightReason := '';
+    if FileExists(PreflightReasonPath) then
+      LoadStringFromFile(PreflightReasonPath, PreflightReason);
+    Log('SD: refusing - ssh-preflight exited ' + IntToStr(PreflightCode) +
+        ': ' + String(PreflightReason));
+    SuppressibleMsgBox(
+      'SD has not been installed, because of this computer''s ssh server.' +
+      #13#10#13#10 +
+      String(PreflightReason) + #13#10 +
+      'Why this matters: accounts SD creates sign in over ssh and nothing else, ' +
+      'and SD configures the ssh server so that those accounts land in SD and ' +
+      'cannot get a command prompt. It can only promise that on a server it ' +
+      'installed and configured itself.' + #13#10#13#10 +
+      'What you can do: remove the other ssh server, or return this computer''s ' +
+      'ssh configuration to the way Windows shipped it, and run this installer ' +
+      'again.' + #13#10#13#10 +
+      'Nothing on this computer has been changed.',
       mbError, MB_OK, IDOK);
     Result := False;
     Exit;
@@ -817,9 +944,23 @@ begin
        'own can sign in at all.' + #13#10#13#10 +
        'By default it can be reached only from this machine. The options page can ' +
        'open it to other computers on your network.' + #13#10#13#10 +
-       'IF THIS MACHINE ALREADY HAS AN SSH SERVER, SD LEAVES IT ALONE. It ' +
-       'installs nothing, restarts nothing, and changes neither its configuration ' +
-       'nor its firewall rule.' + #13#10#13#10 +
+       'IF THIS MACHINE ALREADY HAS A DIFFERENT SSH SERVER, SD WILL NOT INSTALL ' +
+       'AT ALL. It says so and stops, before changing anything. SD needs to know ' +
+       'how the ssh server is configured, and it can only know that about the one ' +
+       'Windows ships. The same applies if somebody has already changed how this ' +
+       'computer''s Windows ssh server is configured.' + #13#10#13#10 +
+
+       'EVERY SSH SESSION GOES STRAIGHT INTO SD, AND THIS IS NOT AN OPTION' + #13#10#13#10 +
+       'SD limits ssh to SD users and administrators, and puts every ssh session ' +
+       'straight into SD instead of a command prompt. That is the whole point of ' +
+       'the ssh-only model: an account SD creates cannot get a shell on this ' +
+       'computer.' + #13#10#13#10 +
+       'THE COST, SAID PLAINLY: scp and sftp STOP WORKING FOR EVERYONE on this ' +
+       'computer, because the command is forced and there is no subsystem left to ' +
+       'run. Remote-control tools that copy files are unaffected, and so are the ' +
+       'console and Remote Desktop.' + #13#10#13#10 +
+       'Your own sshd_config is kept as sshd_config.before-sd, and uninstalling ' +
+       'SD puts it back.' + #13#10#13#10 +
 
        'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10 +
        'Your database, the ssh server, and the sdusers group. Removing the ' +
@@ -970,11 +1111,21 @@ var
   Ps: String;
 begin
   Result := '';
-  { RENAMED 16 Aug 2026 with the task itself.  It was 'installssh\allowgroups'
-    while it was a subtask; the parent is gone and a stale name here would read
-    as "the user did not tick it" for ever, silently. }
-  if not WizardIsTaskSelected('limitssh') then
-    Exit;
+  { 25 Aug 26 - THE TASK GATE IS GONE BECAUSE THE TASK IS GONE.  This used to
+    read "if not WizardIsTaskSelected('limitssh') then Exit", and before that
+    it named a subtask that no longer existed - a stale name here would have
+    read as "the user did not tick it" for ever, silently.  Now there is no
+    box to tick: SD's ssh model applies on every install, and the "Before you
+    install" page says so instead of a checkbox implying a choice.
+
+    WHAT USED TO CARRY 5.9 HERE, AND WHAT CARRIES IT NOW.  The default-ticked
+    box was the user's way to decline on a machine whose ssh server SD did not
+    install.  InitializeSetup now REFUSES that machine outright
+    (ssh-preflight.ps1), so it never reaches this line, and the only machine
+    that does is one whose ssh server SD installed and nobody else has
+    configured.  allow-ssh-groups.ps1's second refusal stays as a backstop for
+    hand-running the script; it is no longer the thing standing between SD and
+    somebody else's sshd_config, because that machine is turned away earlier. }
 
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
@@ -2416,15 +2567,33 @@ begin
       false in the other direction.  What the reader needs on a machine with
       somebody else's ssh server is to know the box is ALREADY ticked and how
       to refuse it. }
-    MsgBox('OpenSSH Server is already installed on this machine.' + #13#10#13#10 +
-           'SD needs an ssh server and would install one, but it will not install ' +
-           'or restart the one you already have, and it will not change its ' +
-           'firewall rule. That is why the option to install a server is absent ' +
-           'from this page.' + #13#10#13#10 +
-           '"Limit ssh to SD users and administrators" IS ticked, and it edits ' +
-           'sshd_config and restarts sshd. Untick it if you would rather SD left ' +
-           'your server alone. It will refuse by itself if your sshd_config ' +
-           'already says who may connect, and it keeps a copy of the original.' + #13#10#13#10 +
+    { REWORDED A FOURTH TIME, 25 Aug 2026, AND THE COMMENT ABOVE PREDICTED IT.
+      It says "each time the text went on asserting the old shape until
+      somebody noticed" - and this box was still telling the reader to untick
+      "Limit ssh to SD users and administrators", a checkbox that no longer
+      exists on the page they are looking at.
+
+      WHAT CHANGED UNDER IT.  limitssh stopped being a task; SD's ssh model now
+      applies on every install and is disclosed on the "Before you install"
+      page instead.  And a machine whose ssh server somebody else CONFIGURED no
+      longer reaches this page at all - InitializeSetup refuses it.  So the
+      only reader who now sees this box is one with Windows' own OpenSSH
+      installed and nobody having touched its configuration, and what they need
+      to know is what SD is about to do to it, not which box to untick. }
+    MsgBox('OpenSSH Server is already installed on this machine, and SD will use ' +
+           'it rather than installing another.' + #13#10#13#10 +
+           'SD has checked it: nothing has changed how it is configured, which is ' +
+           'why this install is going ahead. If somebody had changed it, SD would ' +
+           'have stopped before this point.' + #13#10#13#10 +
+           'SD WILL NOW CONFIGURE IT, and this is not optional: ssh is limited to ' +
+           'SD users and administrators, and every ssh session goes straight into ' +
+           'SD rather than a command prompt. scp and sftp stop working for ' +
+           'everyone on this computer as a result. Your existing sshd_config is ' +
+           'kept as sshd_config.before-sd, and uninstalling SD puts it back.' + #13#10#13#10 +
+           'SD WILL NOT CHANGE ITS FIREWALL RULE, because SD did not install this ' +
+           'server - who may reach port 22 stays your decision. That is why the ' +
+           'option about reaching ssh from other computers is absent from this ' +
+           'page.' + #13#10#13#10 +
            'Accounts SD creates sign in over ssh, so make sure your server ' +
            'accepts them.',
            mbInformation, MB_OK);
