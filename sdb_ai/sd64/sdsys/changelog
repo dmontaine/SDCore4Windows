@@ -5,6 +5,38 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  SD'S SYSTEM DIRECTORIES ARE NOW READ-ONLY TO ORDINARY SD USERS.
+
+           Seven parts of the SD data area could be changed by anyone in the
+           "sdusers" group.  They are now readable by everyone who needs them
+           and writable only by an administrator:
+
+               sdsys\accounts    the register of accounts
+               sdsys\$map        sdsys\messages    sdsys\newvoc
+               sdsys\bp          sdsys\cat         SD's own programs
+               sd.conf           the configuration read at start-up
+
+           * NOTHING AN ORDINARY USER DOES NEEDS TO WRITE THEM, which was
+             measured on a real session before the change was made - fifteen
+             commands including the spooler and saved lists, and a phantom.
+           * THE COMMANDS THAT DO WRITE THEM ARE ALREADY ADMINISTRATOR
+             COMMANDS and are unaffected: CREATE.ACCOUNT, DELETE.ACCOUNT,
+             CATALOG and CONFIG.  Each is run from an elevated session, which
+             still has full access.
+           * sdsys\$ipc IS DELIBERATELY UNCHANGED.  Every session writes to
+             it, and it is how a PHANTOM is given its command.
+           * A new install applies this.  An existing installation is not
+             changed, because the installer never overwrites a data area that
+             is already there.  To apply it to one you already have, run this
+             once from an elevated PowerShell prompt, for each of the seven:
+
+                 powershell -File "C:\Program Files\SD\secure-sysdirs.ps1"
+                     -Path "C:\ProgramData\SD\sdsys\accounts"
+
+           This follows the same reasoning as the global catalogue and the
+           pcode library, which were locked in the same way earlier.
+
+
 24 Aug 26  MODIFY HAS BEEN REMOVED FROM SD CORE.
 
            MODIFY, the full-screen record editor inherited from OpenQM, is no

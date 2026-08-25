@@ -281,6 +281,17 @@ $steps = @(
     # elevation themselves rather than trusting this runner's gate.  It spends
     # no prefix, creates no account, and cleans up the one file it makes.
     @{ Name = 'verify-pcodeacl.ps1';    P = @{} },
+    # 24 Aug 26 - section 7 step 15's second guard, and it sits here for the
+    # same reason verify-pcodeacl does: it asks what an ORDINARY token can
+    # write, it is meaningless from an elevated one, and it refuses elevation
+    # itself rather than trusting this runner's gate.  It spends no prefix,
+    # creates no account, and removes the probe files it makes.
+    #
+    # IT CARRIES A NEGATIVE CONTROL, which is why it is worth a row of its own
+    # rather than being folded into the step above: $ipc must come back
+    # WRITABLE.  Without that, a run where something locked the whole data
+    # tree - breaking every session - would score exactly like a healthy one.
+    @{ Name = 'verify-sysdiracl.ps1';   P = @{} },
     # 22 Aug 26 - MOVED HERE FROM VerifyInstall2.ps1, WHERE IT EXITED 2
     # WITHOUT MEASURING ANYTHING.  verify-osusers.ps1:243 refuses an elevated
     # window: "CPROC admits K$ADMINISTRATOR whatever OS.USERS says, so an

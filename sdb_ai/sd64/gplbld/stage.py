@@ -610,6 +610,12 @@ def main():
                    # catalogued program runs; this locks what the interpreter
                    # running it IS.  Both ship or neither is worth much.
                    'secure-pcode.ps1',
+                   # 24 Aug 26 - section 7 step 15, the owner's ruling.  The
+                   # rest of the inherited sdusers:(M) list - accounts, $map,
+                   # messages, newvoc, bp, cat and sd.conf.  NOT $ipc, which
+                   # every session writes.  sd.iss names the seven; this only
+                   # has to put the mechanism where SecureSysdirs can run it.
+                   'secure-sysdirs.ps1',
                    'secure-accounts.ps1', 'secure-account-dirs.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)

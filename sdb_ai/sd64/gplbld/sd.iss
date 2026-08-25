@@ -1598,6 +1598,105 @@ begin
             '    powershell -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
 end;
 
+{ LOCK THE SEVEN SDSYS SYSTEM DIRECTORIES NOTHING WRITES, and return what to
+  tell the user if it did not happen.  PROJECT_STATUS.md 7 step 15, on the
+  OWNER'S RULING of 24 Aug 2026.
+
+  THE REST OF THE INHERITED sdusers:(M) LIST, minus the one that is used.
+  Everything under the data tree inherits sdusers:(OI)(CI)(M) from the [Run]
+  icacls above; SecureGcat and SecurePcode took two of those back, and this
+  takes seven more.  accounts is the account register, $map and messages and
+  newvoc are read by the interpreter and by CREATE.ACCOUNT, bp and cat are
+  SDSYS's own program library and catalogue, and sd.conf is the configuration
+  every sd.exe reads at start-up.  A user who can write them can rewrite who
+  exists, what SDSYS runs, and how the server is configured.
+
+  ***$ipc IS DELIBERATELY ABSENT AND MUST NOT BE ADDED.***  It is the eighth
+  member of that list and the ONE an ordinary session was measured writing -
+  every session modifies $ipc\%0, PHANTOM writes its command there (sd.c:55),
+  APISRVR:214 opens it.  Locking it breaks every session and every phantom.
+  The measurement is probe-syswrites.ps1: 15 verbs including the spooler and
+  the saved-list family, plus a separate PHANTOM pass, on the 15:14:28 install
+  of 24 Aug 2026.
+
+  ***THAT NAME IS WRITTEN BARE, WITHOUT ITS DIRECTORY, DELIBERATELY, AND SO
+  MUST ANY OTHER DEVELOPMENT SCRIPT NAMED IN THIS FILE.***  assert-current.ps1
+  decides whether a file on its $neverShipped list really ships by scanning
+  THIS FILE and stage.py for the name preceded by a quote or a path separator
+  - the test that tells a ship list from a passing remark.  Prefixing that
+  probe with its directory here put a development-only script back under the
+  guard and made the whole tree report stale because a COMMENT mentioned it,
+  measured 24 Aug 2026.  A script that really ships is quoted in stage.py's
+  tuple and expanded from the app directory below; anything else gets a bare
+  name.  (And that constant is not spelled out here either - Pascal comments
+  do not nest, so ITS closing brace would end this one.)
+
+  SEVEN CALLS, NOT ONE, and not a Pascal array either.  LockOsUsersPath is
+  generic despite its name and passes ONE -Path, which is what SecureOsUsers
+  and SecureGcat already do for their two: -File binds a comma-joined argument
+  in ways that are worth not depending on.  No array is used anywhere in this
+  file and this is not the place to find out how Inno's Pascal Script handles
+  one.
+
+  sd.conf IS A FILE AND THE OTHER SIX ARE DIRECTORIES.  The script branches on
+  PSIsContainer because (OI) and (CI) are container-inherit flags and icacls
+  REFUSES them on a file; nothing is needed here, but it is the reason this
+  list may not be reordered into something that assumes all seven are alike.
+
+  IT MUST RUN AFTER THE DATA-TREE icacls, like every other lock here, or
+  inheritance puts the Modify straight back.  ssPostInstall is after the whole
+  Run section, so that ordering is structural rather than a rule about where
+  to put a line. }
+function SecureSysdirs: String;
+var
+  Code: Integer;
+  Ps, Script, Failed: String;
+  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf: String;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-sysdirs.ps1');
+
+  Accounts := ExpandConstant('{#DataDir}\sdsys\accounts');
+  Map      := ExpandConstant('{#DataDir}\sdsys\$map');
+  Messages := ExpandConstant('{#DataDir}\sdsys\messages');
+  Newvoc   := ExpandConstant('{#DataDir}\sdsys\newvoc');
+  Bp       := ExpandConstant('{#DataDir}\sdsys\bp');
+  Cat      := ExpandConstant('{#DataDir}\sdsys\cat');
+  Conf     := ExpandConstant('{#DataDir}\sd.conf');
+
+  Failed := '';
+  if not LockOsUsersPath(Ps, Script, Accounts, Code) then
+    Failed := Accounts
+  else if not LockOsUsersPath(Ps, Script, Map, Code) then
+    Failed := Map
+  else if not LockOsUsersPath(Ps, Script, Messages, Code) then
+    Failed := Messages
+  else if not LockOsUsersPath(Ps, Script, Newvoc, Code) then
+    Failed := Newvoc
+  else if not LockOsUsersPath(Ps, Script, Bp, Code) then
+    Failed := Bp
+  else if not LockOsUsersPath(Ps, Script, Cat, Code) then
+    Failed := Cat
+  else if not LockOsUsersPath(Ps, Script, Conf, Code) then
+    Failed := Conf;
+
+  if Failed = '' then
+    Exit;
+
+  { NAMED, NOT BURIED, like the global catalogue and the credential store: this
+    ACL is the whole of a control and it fails silently if the step does not
+    run.  The path that failed is named because seven were attempted and the
+    manual command below is only worth anything if it says which one. }
+  Result := 'An SD system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
+            Failed + '. ' +
+            'Until it is, any SD user can rewrite the account register, the system ' +
+            'programs SDSYS runs, or the configuration SD reads at start-up. ' +
+            'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
+end;
+
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
   happen.  PROJECT_STATUS.md 7 step 6.
 
@@ -1847,6 +1946,7 @@ var
   BjMsg: String;
   GcatMsg: String;
   PcodeMsg: String;
+  SysdirMsg: String;
   AcctAclMsg: String;
 begin
   if CurStep = ssPostInstall then
@@ -1880,6 +1980,18 @@ begin
       which program runs, pcode is the interpreter that runs it.  Order
       between them does not matter - different paths, no shared state. }
     PcodeMsg := SecurePcode;
+
+    { AND THE REST OF THE INHERITED Modify LIST, 24 Aug 2026, section 7 step
+      15, on the owner's ruling.  Beside the two above because it is the same
+      control over the remaining seven paths: gcat is which program runs,
+      pcode is the interpreter that runs it, and these are the register, the
+      system programs and the configuration.  Order between them does not
+      matter - different paths, no shared state - and it goes last of the four
+      only because it is the one whose list is longest to read.
+
+      IT MUST STAY AFTER THE [Run] icacls, which ssPostInstall guarantees.
+      $ipc is deliberately not in it; see the function. }
+    SysdirMsg := SecureSysdirs;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
       accounts rather than configuring the server, and it needs nothing from
@@ -2058,6 +2170,7 @@ begin
            BjMsg +
            GcatMsg +
            PcodeMsg +
+           SysdirMsg +
            AcctAclMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a
