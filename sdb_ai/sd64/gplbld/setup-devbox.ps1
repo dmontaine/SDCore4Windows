@@ -134,6 +134,12 @@ $IsccPath = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
 # and, under $ErrorActionPreference = 'Stop', took the summary down with it.
 $script:HaveGit = $false
 
+# Set by Step-Msys, read by Step-Packages.  Initialised FALSE so the STALE-tree
+# path is the default: a machine that already had MSYS2 gets its pacman -Syu,
+# which is the behaviour this script has always had.  Only a tree THIS RUN
+# unpacked skips it, and Step-Packages carries the whole reason why.
+$script:MsysJustInstalled = $false
+
 # CLONE OVER https, PUSH OVER ssh.  Changed 23 Aug 2026, owner's decision,
 # before the first clean-VM run so that the run tests the final script.
 #
@@ -402,7 +408,12 @@ function Step-Msys {
     }
     if ($CheckOnly) { Hand 'MSYS2 is missing - winget install MSYS2.MSYS2'; return }
 
-    $null = Install-Winget 'MSYS2.MSYS2' 'MSYS2'
+    if (Install-Winget 'MSYS2.MSYS2' 'MSYS2') {
+        # 24 Aug 26 - SIGNAL TO Step-Packages: the tree is fresh, so pacman -Syu
+        # must be skipped.  See the note there.  Found on DevEnvInstallTest the
+        # first time this reached MSYS2 on a truly bare box.
+        $script:MsysJustInstalled = $true
+    }
     if (-not (Test-Path -LiteralPath $MsysBash)) {
         # THE PATH IS NOT NEGOTIABLE and this is why it is checked rather than
         # searched for: the MSYS2 runtime derives its root by stripping TWO
@@ -444,10 +455,55 @@ function Step-Packages {
     # out of step with and -Sy would have been harmless.  The damage case is
     # an EXISTING MSYS2 that is missing one package - which is this repository
     # owner's own build machine, where `diffutils` turned out to be missing.
-    Say '  pacman -Syu: this upgrades ALL MSYS2 packages, not just the missing ones.'
-    Say '  That is deliberate - installing into a stale tree is what breaks toolchains -'
-    Say '  but on a machine that already builds SD it is a real change.'
-    $null = Invoke-Msys 'pacman -Syu --noconfirm'
+    # 24 Aug 26 - -Syu IS SKIPPED ON A TREE THIS RUN JUST INSTALLED, AND THAT
+    # IS NOT AN OPTIMISATION.  IT HUNG THE RUN, TWICE.
+    #
+    # WHAT HAPPENS.  `pacman -Syu` on a just-unpacked MSYS2 wants to upgrade the
+    # runtime itself - msys-2.0.dll and the pacman/bash packages around it - and
+    # it CANNOT, because Invoke-Msys is running inside a bash.exe that has that
+    # very DLL loaded and Windows will not let a mapped image be replaced.
+    # pacman prints its "terminate other MSYS2 programs before proceeding"
+    # advisory and then blocks for ever.  MEASURED on DevEnvInstallTest,
+    # 24 Aug 2026, 21:01: the terminal stopped repainting, and neither Enter nor
+    # two Ctrl+C reached it - the run had to be killed and the VM rolled back.
+    # It is the same shape MSYS2's own documentation describes when it says to
+    # close all shells after the first -Syu and open a new one.
+    #
+    # ***--noconfirm DOES NOT HELP AND BELIEVING IT DOES IS THE TRAP.***  It
+    # answers the Y/N prompt; it does not make an in-use DLL replaceable.  The
+    # first reading of this hang was "pacman is waiting for input", and it was
+    # not - it was waiting on a file lock that only ending the process clears.
+    #
+    # WHY SKIPPING IS CORRECT RATHER THAN A RISK, and the comment below already
+    # argued half of it: the partial-upgrade hazard -Syu exists to avoid needs a
+    # tree whose installed packages are OLDER than the database being fetched.
+    # A tree unpacked from the current MSYS2 installer minutes ago has no such
+    # skew - its packages and its database ship together, from the same release.
+    # So `pacman -S --needed` here installs against a database that already
+    # matches what is on disk, which is the safe case the note below calls
+    # "harmless".
+    #
+    # THE STALE-TREE CASE IS UNCHANGED AND STILL GETS ITS -Syu: an MSYS2 that
+    # was on the machine before this run may be months old, and that is the one
+    # the partial-upgrade rule is written for.  It also does not hang there, for
+    # the same reason it does here - a long-installed tree usually has a current
+    # runtime, so -Syu has no loaded DLL to replace.  If it ever does hang on
+    # such a machine, the fix is the same one MSYS2 documents: run -Syu by hand
+    # from a shell this script does not own, then re-run this script.
+    if ($script:MsysJustInstalled) {
+        Say '  MSYS2 was installed by THIS run, so pacman -Syu is skipped.'
+        Say '  -Syu would try to replace the runtime DLL that bash is holding open,'
+        Say '  and it hangs rather than failing (measured 24 Aug 2026).  The tree is'
+        Say '  fresh, so its packages and its database already match.'
+    } else {
+        # -Syu, NOT -Sy.  Corrected 23 Aug 2026; the comment here already said
+        # -Syu and the code did -Sy, which is not a typo with no consequences.
+        Say '  pacman -Syu: this upgrades ALL MSYS2 packages, not just the missing ones.'
+        Say '  That is deliberate - installing into a stale tree is what breaks toolchains -'
+        Say '  but on a machine that already builds SD it is a real change.'
+        $null = Invoke-Msys 'pacman -Syu --noconfirm'
+    }
+
     if (Invoke-Msys ('pacman -S --needed --noconfirm ' + ($missing -join ' '))) {
         Did ('installed ' + ($missing -join ' '))
     }
