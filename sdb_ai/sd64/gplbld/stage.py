@@ -455,6 +455,66 @@ SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo
 SH1=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command
 """
 
+# 25 Aug 26 - THE STAND-ALONE VARIANT, DERIVED FROM SD_CONF AND NEVER WRITTEN
+# OUT SEPARATELY.
+#
+# A stand-alone install opens no network port at all, which is a real state
+# rather than a firewall rule: gplsrc/sdwind.c open_api_listener() returns -1
+# for "no listener" when the port is <= 0, and its own comment says "a system
+# whose sd.conf has no APIPORT opens no port at all".  So APIPORT must be
+# absent, not set to 0 and not left to the firewall.
+#
+# WHY A replace() AND NOT A SECOND STRING.  SD_CONF is ~90 lines of settings and
+# reasoning that the two installs share completely.  A second literal would be a
+# second copy to keep in step, and everything this repository has learned about
+# two copies of one fact says it drifts - the four rewordings of the installer's
+# own disclosure page are the same lesson.  The two differ in ONE line, so one
+# line is what is expressed here.
+#
+# THE REPLACEMENT IS ASSERTED, NOT ASSUMED.  If SD_CONF's APIPORT line is ever
+# reworded, a silent no-op replace would ship a stand-alone system with the API
+# listening - the exact thing the wizard page promises it does not do.  So
+# sd_conf_standalone() refuses rather than returning something plausible.
+APIPORT_LINE = 'APIPORT=4243'
+
+STANDALONE_APIPORT = """\
+# 25 Aug 26 - NOT SET, AND THAT IS WHAT MAKES THIS A STAND-ALONE SYSTEM.
+# With no APIPORT, SD opens no socket at all - see gplsrc/sdwind.c,
+# open_api_listener().  The SD API is therefore unavailable on this machine and
+# there is no firewall rule that could make it available.
+#
+# Setting it turns the API on the next time SD starts, but nothing else here is
+# set up for it: no firewall rule was created and no account was joined to the
+# sdapi group, because a stand-alone install does neither.
+# APIPORT=4243"""
+
+
+def _active_apiport(text):
+    """The APIPORT lines that are SETTINGS, not comments about settings.
+
+    LINE-WISE, AND THAT IS THE POINT.  The first version of this tested
+    `APIPORT_LINE in out` and the commented-out replacement CONTAINS that
+    substring - so the guard fired on its own success and refused every build.
+    It is the trap CLAUDE.md names: a check has to anchor on something only the
+    real outcome produces, not on a string the other outcome also carries.
+    """
+    return [l for l in text.split('\n') if l.strip() == APIPORT_LINE]
+
+
+def sd_conf_standalone():
+    """SD_CONF with APIPORT commented out.  Refuses if the line is not there."""
+    if len(_active_apiport(SD_CONF)) != 1:
+        die('SD_CONF must contain exactly one active %r line - the stand-alone '
+            'sd.conf is derived from it by commenting that line out, and a '
+            'silent miss would ship a stand-alone install with the API '
+            'listening, which is the one thing its wizard page promises it '
+            'does not do' % APIPORT_LINE)
+    out = SD_CONF.replace(APIPORT_LINE + '\n', STANDALONE_APIPORT + '\n', 1)
+    if _active_apiport(out):
+        die('the stand-alone sd.conf still carries an active %r line'
+            % APIPORT_LINE)
+    return out
+
 
 # ---------------------------------------------------------------------------
 
@@ -997,6 +1057,15 @@ def main():
     with open(conf, 'w', encoding='latin-1', newline='\r\n') as f:
         f.write(SD_CONF)
     staged.add(stage, conf)
+
+    # The stand-alone variant, staged beside it under its own name.  sd.iss
+    # ships ONE of the two with DestName: sd.conf, gated on the wizard's mode
+    # page, so this name never reaches an installed machine.
+    sconf = os.path.join(pd, 'sd-standalone.conf')
+    with open(sconf, 'w', encoding='latin-1', newline='\r\n') as f:
+        f.write(sd_conf_standalone())
+    staged.add(stage, sconf)
+    print('  sd.conf: full (APIPORT=4243) and stand-alone (APIPORT unset) staged')
 
     for d in PROGRAM_DATA_DIRS:
         os.makedirs(os.path.join(pd, d))

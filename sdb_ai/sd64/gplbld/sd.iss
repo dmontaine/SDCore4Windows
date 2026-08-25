@@ -135,8 +135,31 @@ Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from a
 ; for the local-only user whose case made ssh mandatory in the first place.
 ; ssh-firewall.ps1 scopes the rule to loopback unless this is ticked, which
 ; leaves the risk attached to the decision that carries it.
+; 25 Aug 26 - AND NOT ON A STAND-ALONE INSTALL, WHICH INSTALLS NO ssh SERVER
+; FOR THIS TO EXPOSE.
+;
+; ***THE Check: IS BELT, NOT BRACES, AND THE BRACES ARE ApplySshFirewall.***
+; Inno's documentation says only that "Setup MIGHT call each check function
+; several times" and says nothing about re-evaluating a [Tasks] check when the
+; Select Tasks page is shown.  Measured 25 Aug 2026 with probe-taskcheck.iss:
+; InitializeWizard runs first, so StandaloneChosen is never nil here - but the
+; check fired ONCE, straight after the wizard was built, which in an interactive
+; run is BEFORE the reader has touched the mode page.  If that single call is
+; all there is, this reads the DEFAULT (full install) and the box stays visible.
+;
+; SO THE SAFETY DOES NOT LIVE HERE.  ApplySshFirewall exits on StandaloneChosen,
+; at install time, where the answer is certainly right.  The worst this line can
+; do is fail to hide a checkbox; it cannot cause a firewall rule to be written.
+;
+; LOOK AT THE TASKS PAGE ON A STAND-ALONE RUN OF THE NEXT CYCLE.  If the box is
+; still there, the single-call reading is correct and the fix is to move this
+; choice onto the mode page as a sub-option of the full install - which is
+; arguably where it belonged anyway, since this file's own InitializeWizard
+; comment complains that the ssh exposure checkbox is "a decision they were
+; being asked to take with no context at all".
 Name: "sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    GroupDescription: "Remote access:"; Flags: unchecked; Check: SshServerAbsent
+    GroupDescription: "Remote access:"; Flags: unchecked; \
+    Check: SshServerAbsent and not StandaloneChosen
 
 ; ===========================================================================
 ; 25 Aug 26 - THIS IS NO LONGER A TASK.  THERE IS NO CHECKBOX.  The work still
@@ -336,8 +359,26 @@ Source: "{#Stage}\ProgramData\sdsys\*"; DestDir: "{#DataDir}\sdsys"; \
 ; and uninsneveruninstall so uninstalling does not delete their configuration.
 ; Without the second one Inno removes it like any other installed file, because
 ; unlike the database it genuinely is one.
+;
+; 25 Aug 26 - TWO SOURCES, ONE DESTINATION, chosen by the mode page.  A
+; stand-alone install must open no port at all, and that is decided by sd.conf
+; carrying no APIPORT - not by a firewall rule.  gplbld/stage.py derives the
+; stand-alone file from SD_CONF by commenting out one line and REFUSES if that
+; line is not found, so the pair cannot drift.
+;
+; THE Check: IS SAFE HERE IN A WAY IT WOULD NOT BE ON A [Tasks] ENTRY.  [Files]
+; checks are evaluated during the install step, long after the wizard - the same
+; timing DataTreeAbsent above has always relied on.
+;
+; ONE OF THE TWO ALWAYS FIRES AND NEVER BOTH: StandaloneChosen is a single
+; Boolean and these are its two branches.  onlyifdoesntexist still applies to
+; each, so neither overwrites a configuration the user has edited, and an
+; upgrade rewrites nothing either way.
 Source: "{#Stage}\ProgramData\sd.conf"; DestDir: "{#DataDir}"; \
-    Flags: onlyifdoesntexist uninsneveruninstall
+    Flags: onlyifdoesntexist uninsneveruninstall; Check: not StandaloneChosen
+Source: "{#Stage}\ProgramData\sd-standalone.conf"; DestDir: "{#DataDir}"; \
+    DestName: "sd.conf"; \
+    Flags: onlyifdoesntexist uninsneveruninstall; Check: StandaloneChosen
 
 ; --- THE UPGRADE BRANCH, GENERATED --------------------------------------------
 ; 25 Aug 26.  gplbld/stage.py writes <stage>\upgrade.iss from SDSYS_SHIP +
@@ -615,7 +656,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; also answers correctly when the capability was already installed.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1"""; \
-    Flags: runhidden skipifdoesntexist; Check: SshServerAbsent; \
+    Flags: runhidden skipifdoesntexist; Check: SshServerAbsent and not StandaloneChosen; \
     StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
 
 ; THE SERVICE, AND IT IS NOT A TASK - owner's decision, 15 Aug 2026.  SD must
@@ -704,6 +745,14 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 25 Aug 26 - WAS THIS ALREADY A STAND-ALONE SYSTEM?  Sampled once in
+    InitializeSetup for exactly the reason the two above are, and the reason is
+    sharper here: THIS INSTALLER CREATES THE MARKER ITSELF, at ssPostInstall.  A
+    live FileExists would therefore answer False for the whole wizard and True
+    for everything after the marker is written - a Check that changes its mind
+    part way through the install, which is the shape of the bug that silently
+    skipped ~3,260 files and still exited 0. }
+  StandaloneWasMarked: Boolean;
   { 22 Aug 26 - THE FINISHING STEP RUNS AFTER THE WIZARD HAS GONE, so what it
     needs to know has to outlive the procedure that learns it.  Both are set at
     ssPostInstall and read in DeinitializeSetup.
@@ -757,6 +806,18 @@ begin
      The question is about the machine as we found it, so it is asked once,
      here, exactly as the data tree above is. *)
   SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
+
+  (* 25 Aug 26 - AND WHETHER THIS MACHINE IS ALREADY A STAND-ALONE SYSTEM.
+     Asked here, before the marker this installer may write exists, for the
+     reason recorded where the variable is declared.
+
+     THE MARKER IS NOT IN ANY SHIP LIST, WHICH IS WHY AN UPGRADE PRESERVES IT.
+     stage.py's generated upgrade.iss can only delete names stage.py itself put
+     in the tree, so '$standalone' - written by the installer at ssPostInstall
+     and by nothing else - is out of its reach by construction.  That is the
+     same default that protects voc, $map and errlog, and it is what makes a
+     stand-alone system STAY stand-alone across an upgrade. *)
+  StandaloneWasMarked := FileExists(ExpandConstant('{#DataDir}\sdsys\$standalone'));
 
   (* SD DOES NOT SUPPORT UNATTENDED INSTALLATION.  Owner's ruling, 23 Aug 2026,
      in his own words: "unattended deployment is not supported in sd - install
@@ -956,19 +1017,43 @@ var
    Caption assignment succeeds and the words are just not drawn", at
    CurPageChanged.  A memo with a scrollbar cannot clip, at any DPI, font size
    or wizard style.  It is the same property the disclosure memo is built on. *)
+(* THE ONE PLACE THAT ANSWERS "IS THIS A STAND-ALONE INSTALL?", and it has three
+   sources in a deliberate order.
+
+   1. AN EXISTING MARKER WINS OVER ANYTHING THE WIZARD SAYS.  A machine that was
+      installed stand-alone stays stand-alone: sd.conf is onlyifdoesntexist and
+      would keep its unset APIPORT whatever this returned, so a "full" upgrade
+      of a stand-alone box would install an ssh server and force its command for
+      an API that is still switched off.  Half-converted is worse than either.
+   2. ON ANY OTHER UPGRADE, FULL - the shape every install before today had.
+   3. ON A FIRST INSTALL, WHAT THE READER CHOSE.
+
+   NIL-SAFE BECAUSE IT IS READ FROM Check: PARAMETERS.  InitializeWizard always
+   runs first (measured 25 Aug 2026 with probe-taskcheck.iss) and a silent
+   install is refused in InitializeSetup, so nil is unreachable today; it
+   answers "full" if it is ever reached, which is the safe direction - it can
+   only ever install MORE than was asked for, never promise more than it
+   installed. *)
 function StandaloneChosen: Boolean;
 begin
-  (* NIL-SAFE BECAUSE IT IS READ FROM Check: PARAMETERS, which Inno evaluates
-     per file and per [Run] entry.  InitializeWizard always runs first and a
-     silent install is refused in InitializeSetup, so the nil case is
-     unreachable today; it is here so that a future caller reached before the
-     wizard is built gets the SAFE answer - the full install, which is what
-     every version of this installer before today did - rather than a runtime
-     error inside a Check. *)
-  if StandaloneRadio = nil then
+  if StandaloneWasMarked then
+    Result := True
+  else if not DataTreeWasAbsent then
+    Result := False
+  else if StandaloneRadio = nil then
     Result := False
   else
     Result := StandaloneRadio.Checked;
+end;
+
+(* THE MODE PAGE IS A FIRST-INSTALL QUESTION AND IS NOT ASKED TWICE.  On an
+   upgrade the existing tree already carries the answer - the marker, and an
+   sd.conf that onlyifdoesntexist will not rewrite - so showing the page would
+   offer a choice that changes nothing, which is the same false promise a
+   checkbox that cannot be unticked was removed for on 25 Aug 2026. *)
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = ModePage.ID) and (not DataTreeWasAbsent);
 end;
 
 (* AFTER THE MODE PAGE AND BEFORE THE TASKS PAGE, AND THAT ORDER IS THE POINT.
@@ -1247,47 +1332,6 @@ begin
       DisclosureText(False));
 end;
 
-(* ===========================================================================
-   25 Aug 26 - A SCAFFOLD, AND IT IS MEANT TO BE DELETED.  REMOVE THIS WHOLE
-   FUNCTION AS SOON AS THE STAND-ALONE BEHAVIOUR IS WIRED UP.
-
-   WHAT IS BUILT TODAY IS THE PAGE AND THE DISCLOSURE TEXT, AND NOTHING THAT
-   ACTS ON THE ANSWER.  Every [Run] step, the sd.conf that carries APIPORT, the
-   sshremote task and CREATE.ACCOUNT itself are all still unconditional, so an
-   install that accepted "stand-alone" today would install an ssh server,
-   configure it, open port 4243 and stop scp working for everyone - having just
-   shown the reader a page promising that it would do none of those things.
-
-   THAT IS THE ONE FAULT THIS FILE HAS PAID FOR OVER AND OVER: a page asserting
-   something that had stopped being true, four rewordings of the tasks MsgBox,
-   and the silent install that finished with no password on any account.  A
-   half-wired option is the same fault built deliberately, so it is refused out
-   loud instead.
-
-   REFUSING IS ALSO WHAT MAKES THE PAGE SAFE TO PUT THROUGH A CYCLE.  The
-   descriptions can be read and judged on screen - which is what the owner asked
-   to see - with no way to reach an install that contradicts them.
-   =========================================================================== *)
-function NextButtonClick(CurPageID: Integer): Boolean;
-begin
-  Result := True;
-
-  if (CurPageID = ModePage.ID) and StandaloneChosen then
-  begin
-    Log('SD: refusing to continue - stand-alone was chosen and the behaviour ' +
-        'behind it is not built yet.');
-    MsgBox('The stand-alone installation is not finished in this build.' + #13#10#13#10 +
-           'The page you are looking at is being reviewed, and the option is ' +
-           'described in full so that it can be. What is NOT built yet is ' +
-           'everything that would act on the answer, so choosing it now would ' +
-           'give you a full installation while telling you it had given you a ' +
-           'stand-alone one.' + #13#10#13#10 +
-           'Choose the full installation to continue, or Cancel.',
-           mbError, MB_OK);
-    Result := False;
-  end;
-end;
-
 { ---------------------------------------------------------------------------
   Install
   --------------------------------------------------------------------------- }
@@ -1418,6 +1462,18 @@ var
   Ps: String;
 begin
   Result := '';
+
+  { 25 Aug 26 - A STAND-ALONE INSTALL DOES NOT TOUCH sshd_config AT ALL, and
+    that is the promise the mode page makes in as many words: "no ssh server is
+    installed and no ssh configuration is touched ... scp and sftp go on
+    working".  Forcing the SD command here is precisely what stops scp working,
+    so this is the step that promise is about.
+
+    IT RETURNS '' RATHER THAN A MESSAGE.  There is nothing to report about work
+    that was correctly not done; SshReport says the one thing worth saying about
+    ssh on a stand-alone system, in one place. }
+  if StandaloneChosen then
+    Exit;
   { 25 Aug 26 - THE TASK GATE IS GONE BECAUSE THE TASK IS GONE.  This used to
     read "if not WizardIsTaskSelected('limitssh') then Exit", and before that
     it named a subtask that no longer existed - a stale name here would have
@@ -1489,6 +1545,17 @@ var
   Wanted: Boolean;
 begin
   Result := '';
+
+  { 25 Aug 26 - THIS EXIT IS THE ONE CARRYING THE STAND-ALONE PROMISE ABOUT ssh,
+    and it is deliberately not the [Tasks] Check.  That check may be evaluated
+    once, before the mode page has been seen (measured; see the comment on the
+    sshremote entry), so the checkbox may still be visible.  This runs at
+    install time, where StandaloneChosen is certainly right.  A visible checkbox
+    is untidy; a firewall rule written on an install that promised none would be
+    a lie with consequences. }
+  if StandaloneChosen then
+    Exit;
+
   if not SshWasAbsent then
     Exit;
 
@@ -1551,6 +1618,20 @@ var
   Wanted: Boolean;
 begin
   Result := '';
+
+  { 25 Aug 26 - NO RULE AT ALL ON A STAND-ALONE INSTALL, not even a -Restrict
+    one.  The stand-alone sd.conf carries no APIPORT, so SD binds no socket
+    (gplsrc/sdwind.c, open_api_listener: port <= 0 returns "no listener").  A
+    firewall rule for a port nothing is listening on would be a rule describing
+    a service that does not exist - and the mode page tells the reader there is
+    "no rule to open", which has to stay true.
+
+    api-firewall.ps1 -Restrict is NOT harmless-and-tidy here for that reason:
+    it would leave behind a rule naming port 4243 that the uninstaller then has
+    to remove, on a system that never had the API. }
+  if StandaloneChosen then
+    Exit;
+
   Wanted := WizardIsTaskSelected('apiremote');
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
@@ -1599,6 +1680,31 @@ end;
   be said in as many words rather than left to be discovered one account later. }
 function SshReport: String;
 begin
+  { 25 Aug 26 - ON A STAND-ALONE INSTALL THIS IS THE ONLY PARAGRAPH ABOUT ssh,
+    and it says what was NOT done rather than reporting an outcome.
+
+    IT HAS TO BE SAID SOMEWHERE.  The three branches below all describe an ssh
+    server SD installed or found; every one of them is false here, and saying
+    nothing at all would leave a reader who half-remembers the disclosure page
+    wondering whether the ssh step failed silently.  What was not done, and
+    what that costs them, is the useful thing to close on.
+
+    IT ALSO NAMES THE WAY OUT.  Reinstalling is the only route to a full
+    system, and it is better read here - once, at the end, while they still
+    have the installer - than discovered later. }
+  if StandaloneChosen then
+  begin
+    Result := 'THIS IS A STAND-ALONE INSTALLATION. No ssh server was installed, no ssh ' +
+              'configuration was changed, and no network port was opened. scp and sftp are ' +
+              'unaffected on this computer.' + #13#10#13#10 +
+              'SD is yours alone here: use it by typing "sd". "create.account user" is ' +
+              'refused and says why; "create.account group <name>" still works, and ' +
+              '"logto <name>" moves into one from a session run as administrator.' + #13#10#13#10 +
+              'To let other people or programs reach this SD later, uninstall and install ' +
+              'again choosing the full installation. Nothing inside SD makes that change.' + #13#10#13#10;
+    Exit;
+  end;
+
   if not SshWasAbsent then
   begin
     Result := 'This machine already had an OpenSSH server. SD did not install, restart or ' +
@@ -1728,6 +1834,71 @@ begin
               'works; a field added by this release may not be recognised. ' +
               'upgrade-dicts.log in the SD data folder says what happened.' + #13#10#13#10;
   end;
+end;
+
+(* 25 Aug 26 - THE MARKER THAT MAKES THE CHOICE OUTLIVE THE WIZARD.
+   sdsys\$standalone is what GPL.BP/CREATEA reads to refuse
+   CREATE.ACCOUNT USER, and it is the only record an installed system keeps of
+   which install it was.  The pattern is adopt-account.ps1's $adopt.<user>: a
+   file in SDSYS, tested with ospath(..., OS$EXISTS).
+
+   IT IS NOT ONE-SHOT, WHICH IS THE ONE WAY IT DIFFERS FROM $adopt.  CREATEA
+   deletes the adopt marker when it accepts the keyword, because that marker
+   authorises a single act.  This one describes the installation and must
+   survive for its life, so nothing deletes it - and nothing in any ship list
+   names it, so the generated upgrade.iss cannot delete it either.
+
+   ITS CONTENT IS FOR A HUMAN, and CREATEA does not read it - only whether the
+   file is there.  Somebody finding an unfamiliar file in SDSYS should be able
+   to learn what it does without the source.
+
+   FAILURE IS REPORTED, NOT SWALLOWED.  A stand-alone install whose marker did
+   not get written is a system that will cheerfully create dead accounts after
+   its own installer promised it would refuse to.  That is worth a paragraph in
+   the closing dialog, and it is why this returns a String like its neighbours
+   rather than a Boolean nobody reads. *)
+function WriteStandaloneMarker: String;
+var
+  Path: String;
+begin
+  Result := '';
+  if not StandaloneChosen then
+    Exit;
+
+  Path := ExpandConstant('{#DataDir}\sdsys\$standalone');
+
+  { Already there on an upgrade of a stand-alone system; nothing to do, and
+    rewriting it would only risk turning a good marker into a failed write. }
+  if StandaloneWasMarked then
+  begin
+    Log('SD: stand-alone marker already present at ' + Path);
+    Exit;
+  end;
+
+  if SaveStringToFile(Path,
+      'This file marks a STAND-ALONE SD installation.' + #13#10#13#10 +
+      'It was written by the SD installer because the stand-alone option was' + #13#10 +
+      'chosen. SD reads it to refuse "create.account user", which on a system' + #13#10 +
+      'with no ssh server would make an account that could sign in nowhere.' + #13#10#13#10 +
+      '"create.account group <name>" is unaffected and is how work is kept' + #13#10 +
+      'separate here.' + #13#10#13#10 +
+      'Deleting this file does NOT turn this into a full installation. No ssh' + #13#10 +
+      'server was installed and sd.conf sets no APIPORT, so the accounts it' + #13#10 +
+      'would then let you create still could not sign in. To get a full' + #13#10 +
+      'installation, uninstall SD and install it again choosing that option.' + #13#10,
+      False) then
+  begin
+    Log('SD: wrote the stand-alone marker at ' + Path);
+    Exit;
+  end;
+
+  Log('SD: FAILED to write the stand-alone marker at ' + Path);
+  Result := 'THE STAND-ALONE MARKER COULD NOT BE WRITTEN, and one thing this install ' +
+            'promised is therefore not in place. SD will NOT refuse "create.account user" ' +
+            'on this machine, and an account created that way cannot sign in anywhere, ' +
+            'because no ssh server was installed. Everything else about the install is ' +
+            'as described. To put it right, create an empty file at:' + #13#10#13#10 +
+            '    ' + Path + #13#10#13#10;
 end;
 
 function AdoptAccount: Integer;
@@ -2508,6 +2679,7 @@ var
   SysdirMsg: String;
   AcctAclMsg: String;
   DictMsg: String;
+  MarkerMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -2592,6 +2764,15 @@ begin
     { Same rule - an unattended install must still end with a usable account. }
     AdoptCode := AdoptAccount;
 
+    { 25 Aug 26 - THE MARKER GOES DOWN AFTER THE INSTALL'S OWN ACCOUNT STEP, and
+      that ordering is defence in depth rather than a requirement.  CREATEA's
+      refusal is scoped to exclude ADOPT, and AdoptAccount runs
+      'CREATE.ACCOUNT USER <name> ADOPT' - so the two are already compatible.
+      Writing it afterwards means that even if that scoping were ever got wrong,
+      the installer could still create its own account: the marker it would trip
+      over does not exist yet.  Nothing else in the install reads it. }
+    MarkerMsg := WriteStandaloneMarker;
+
     { AFTER Adopt, so the account it has just made is stamped on this very
       install rather than on the next one.  See SecureAccountDirs. }
     AcctAclMsg := SecureAccountDirs;
@@ -2641,11 +2822,33 @@ begin
              reason to think something has gone wrong. }
            AccountMsg := AccountMsg +
                          'ONE WINDOW OPENS AFTER THIS INSTALLER CLOSES, and it does two ' +
-                         'things in turn.' + #13#10#13#10 +
+                         'things in turn.' + #13#10#13#10;
+
+           { 25 Aug 26 - WHAT THE PASSWORD IS FOR DEPENDS ON THE INSTALL, and
+             the full-install sentence is false on a stand-alone system: there
+             is no ssh and no API, so nothing reaches this account from another
+             machine and a password buys nothing today.
+
+             THE STEP IS STILL OFFERED, DELIBERATELY.  Skipping it would be a
+             third behaviour to test and would leave $cred empty - the state
+             that cost two sessions in Aug 2026 - for the sake of saving one
+             prompt.  Saying plainly that it is optional here, and why somebody
+             might still want it, is the honest version of the same saving. }
+           if StandaloneChosen then
+             AccountMsg := AccountMsg +
+                         '    1. SD opens so you can give that account a password. ON A ' +
+                         'STAND-ALONE SYSTEM YOU DO NOT NEED ONE: nothing can reach this ' +
+                         'account from another machine, because no ssh server was installed ' +
+                         'and the SD API is switched off. Set one anyway if you may later ' +
+                         'reinstall as a full system. It closes by itself either way.' + #13#10#13#10
+           else
+             AccountMsg := AccountMsg +
                          '    1. SD opens so you can give that account a password. You do ' +
                          'not need one at this machine - Windows has already authenticated ' +
                          'you - it is what reaches the account from ANOTHER machine, over ' +
-                         'ssh or the API. It closes by itself once you have set it.' + #13#10#13#10 +
+                         'ssh or the API. It closes by itself once you have set it.' + #13#10#13#10;
+
+           AccountMsg := AccountMsg +
                          '    2. The same window then checks the installation and tells ' +
                          'you what it found. It only reads; it changes nothing, and it ' +
                          'asks before it starts.' + #13#10#13#10 +
@@ -2786,6 +2989,11 @@ begin
            SshMsg +
            SshFw +
            ApiFw +
+           { 25 Aug 26 - EMPTY ON EVERY INSTALL THAT WENT RIGHT, and it sits
+             beside the ssh pair for the same reason they do: if the marker did
+             not get written, the account advice below is describing rules this
+             machine will not actually enforce. }
+           MarkerMsg +
            AccountMsg +
            { CORRECTED 15 Aug 2026, owner, on two counts.
 

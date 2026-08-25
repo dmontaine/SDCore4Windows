@@ -5,6 +5,49 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  THERE IS NOW A STAND-ALONE INSTALLATION, FOR ONE PERSON AT ONE
+           COMPUTER.
+
+           The installer asks which kind you want, on a new page just after
+           the welcome page, and describes both in full before you choose.
+           You are only asked on a first install: upgrading keeps whatever
+           the computer already is.
+
+           CHOOSE THE FULL INSTALLATION if more than one person will use SD,
+           or if a program needs to connect to it.  It is what the installer
+           has always done and it is still the default.
+
+           CHOOSE THE STAND-ALONE INSTALLATION to learn SD or try some code
+           out on your own machine.  It is not meant to be a production
+           system.  On it:
+
+             - No ssh server is installed and no ssh configuration is
+               changed.  If you already have an ssh server, of any make, SD
+               leaves it alone.  scp and sftp GO ON WORKING - on a full
+               installation they stop working for everyone.
+             - No network port is opened.  The SD API is switched off in
+               sd.conf, so SD is not listening on anything and there is no
+               firewall rule to open.
+             - There is one SD account and it is yours.  You use SD by
+               typing  sd  at this computer.
+             - create.account user  is refused, and says why.  The Windows
+               account it would make is denied the console and Remote
+               Desktop because it is meant to arrive over ssh, so with no ssh
+               server it could sign in nowhere at all.
+             - create.account group  still works, and is how you keep
+               separate work separate.  Use  logto <name>  to move into one,
+               from a session run as administrator.  No Windows account and
+               no sign-in is involved.
+
+           NOTHING ELSE IS CUT DOWN: same SD, same language, same database,
+           same commands.  What is missing is the ways in from somewhere
+           else.
+
+           TO CHANGE YOUR MIND you have to uninstall and install again.
+           Nothing inside SD converts one into the other, and deleting the
+           marker file SD leaves in sdsys does not do it either - no ssh
+           server would be installed and the API would still be off.
+
 25 Aug 26  INSTALLING A NEW RELEASE OVER AN EXISTING ONE NOW UPDATES YOUR
            DATABASE.  UNTIL NOW IT SILENTLY DID NOT.
 

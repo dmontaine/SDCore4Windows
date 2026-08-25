@@ -18,6 +18,13 @@
 * 
 * 
 * START-HISTORY:
+* 25 Aug 26 Windows port - CREATE.ACCOUNT USER is refused on a stand-alone
+*   system, which the installer marks with '$standalone' in SDSYS.  The USER
+*   form only: it makes a Windows user that is denied the console and Remote
+*   Desktop, and a stand-alone system has no ssh server for it to arrive over,
+*   so the account could sign in nowhere.  GROUP is untouched and is how work is
+*   kept separate there.  The test sits AFTER more.args so that ADOPT is known -
+*   the installer creates its own account through this arm.  sysmsg 10100.
 * 22 Aug 26 Windows port - the USRDIR/GRPDIR fallbacks were Linux paths
 *   (/home/sd/...), unreachable on this platform.  They now match what
 *   config.c defaults pcfg.usrdir/grpdir to, which is what the shipped config
@@ -291,6 +298,38 @@ deffun ps_script(script) calling '!ps_script'
      * any other args? (specifically no.query)
      * rem we may abort in this routine
      gosub more.args
+
+* 25 Aug 26 Windows port - A STAND-ALONE SYSTEM REFUSES THIS FORM AND SAYS WHY.
+*   Owner's request, 25 Aug 2026: a stand-alone install is "no ssh, no api, just
+*   the ability to quickly install", for "education, hobby use where the intent
+*   is to learn the language or test some code, not have a production system".
+*   The installer leaves '$standalone' in SDSYS and this reads it - the same
+*   marker-in-sdsys pattern adopt.marker above uses, and for the same reason:
+*   the fact belongs to the INSTALLATION, and there is nowhere else to keep it
+*   that an installed system carries.
+*
+*   IT IS THE USER FORM ONLY, AND THAT DISTINCTION IS THE WHOLE RULING.  This
+*   arm makes a WINDOWS user and joins it to sdsshonly unless it is an
+*   administrator, which denies it the console and Remote Desktop on the
+*   assumption that it arrives over ssh.  With no ssh server such an account can
+*   sign in NOWHERE, so it would be an account nobody could ever use.  The GROUP
+*   arm makes no Windows user and joins nothing - acc.uname is never assigned on
+*   it - so it is untouched, and it is how a learner still separates their work.
+*
+*   AFTER more.args AND NOT BEFORE, BECAUSE ADOPT HAS TO BE KNOWN FIRST.  The
+*   installer's own account step runs
+*   'sd -internal CREATE.ACCOUNT USER <name> ADOPT' (gplbld/adopt-account.ps1),
+*   which is this very arm - so a test placed before more.args would refuse the
+*   install that wrote the marker, and a stand-alone system could not be
+*   installed at all.  ADOPT attaches an SD account to a Windows account that
+*   ALREADY EXISTS and creates no new one, which is the case this is not about.
+     if not(adopt) then
+       standalone.marker = @sdsys:@ds:'$standalone'
+       if ospath(standalone.marker, OS$EXISTS) then
+         @system.return.code = -ER$FAILED
+         stop sysmsg(10100, acc.uname) ;* create.account user is not available on a stand-alone system
+       end
+     end
 
 * 21 Aug 26 Windows port - SAY HOW THIS ACCOUNT IS REACHED, or nothing is made.
 *   Owner's decision, 21 Aug 2026.  There is no default: a site that wants an
