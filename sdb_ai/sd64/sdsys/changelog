@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+24 Aug 26  "sd <command>" NO LONGER ASKS YOU TO SET A PASSWORD.
+
+           Running a single command - "sd COUNT VOC" - is a batch operation,
+           not a session you are signing in to, so it now runs the command and
+           exits instead of stopping to ask for a password.
+
+           * NOTHING ELSE CHANGES.  Plain "sd", with no command, still asks an
+             administrator whose account has no password to set one, so the
+             account can be reached from the API or from another machine.
+             An ssh session is unaffected: it arrives as plain "sd".
+           * IT WAS ALSO A HANG.  At a console with nobody watching - a script
+             or a scheduled command run in a window - the prompt had nothing to
+             read and the command sat there for ever.  It now runs.
+           * A scheduled task was never affected and is not changed: it has no
+             terminal, so it was never asked.
+
+
 24 Aug 26  SD'S SYSTEM DIRECTORIES ARE NOW READ-ONLY TO ORDINARY SD USERS.
 
            Seven parts of the SD data area could be changed by anyone in the

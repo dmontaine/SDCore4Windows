@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 24 Aug 26 Windows port - "sd <command>" NO LONGER ASKS FOR A PASSWORD.
+*           Owner's ruling: a command line is BATCH, so it is not interactive,
+*           so it must not prompt.  The 21 Aug rule below stands for an
+*           interactive "sd" with no command.  batch.command is hoisted out of
+*           the batch gate so both tests can see it; same guard, so the audit
+*           record is unchanged.  PROJECT_STATUS.md 7 step 9.
 * 22 Aug 26 Windows port - the terminal type is CHECKED after it is set, and
 *           falls back to 'windows' when the name from the environment has no
 *           terminfo entry.  Until a type loads there are no capabilities at
@@ -637,8 +643,30 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *
 *   BEFORE THE AUDIT RECORD BELOW, so a session that ends here is written down
 *   as a refusal rather than as a login that happened to stop.
+*   24 Aug 26 Windows port - AND A COMMAND LINE IS EXEMPT.  Owner's ruling:
+*   "sd <command>" is BATCH, so it is not interactive, so it must not ask.
+*
+*   THIS IS NOT THE SAME EXEMPTION AS K$TTY AND THAT IS THE POINT.  K$TTY asks
+*   whether there is a terminal; this asks whether anybody is being invited to
+*   sit at it.  "sd COUNT VOC" typed at a console HAS a tty - K$TTY answers
+*   /dev/cons0 - and still must not stop to set a password: it is a one-shot
+*   command that runs and exits, not a session somebody is entering.  A
+*   scheduled job was already covered by K$TTY; this covers the console case
+*   that was not, which is the one that HUNG for a day and was mis-diagnosed
+*   three times (PROJECT_STATUS.md 7 step 9, and HISTORY's three entries).
+*
+*   batch.command IS HOISTED OUT OF THE BATCH GATE BELOW rather than calling
+*   system(1026) twice.  Same guard, so it is set in exactly the cases it was
+*   before and the audit record at the end of this routine is unchanged.
+*
+*   WHAT IT DOES NOT WEAKEN: an interactive "sd" with no command still asks,
+*   which is the case the 21 Aug rule was written for - an administrator
+*   signing in gets a password set so the account is reachable from the API
+*   and from another machine.  Nothing here lets anybody IN; it asks for a
+*   password to be SET.
    if mode = 0 and not(is.phantom) and not(kernel(K$INTERNAL,-1)) then
-      if kernel(K$ADMINISTRATOR,-1) and kernel(K$TTY,0) # '' then
+      batch.command = trim(system(1026))
+      if kernel(K$ADMINISTRATOR,-1) and kernel(K$TTY,0) # '' and batch.command = '' then
          gosub require.credential
          if not(cred.ok) then
             audit.reason = 'the account has no password and none was set'
@@ -672,8 +700,10 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   INTERNAL session is exempt because that is the install path, which sd.c
 *   gates on its own.  Mode 0 for the same reason as the block above: mode 2 is
 *   UPDATE.ACCOUNT copying a VOC, not a login.
+*   24 Aug 26 - batch.command IS NOW SET BY THE BLOCK ABOVE, under the same
+*   guard, because the password exemption added that day needs it too.  The
+*   assignment moved; nothing else here changed.
    if mode = 0 and not(is.phantom) and not(kernel(K$INTERNAL,-1)) then
-      batch.command = trim(system(1026))
       if batch.command # '' and not(kernel(K$ADMINISTRATOR,-1)) then
          gosub batch.permitted
          if not(batch.ok) then goto terminate.connection
