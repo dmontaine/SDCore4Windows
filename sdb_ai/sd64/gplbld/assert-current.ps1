@@ -480,6 +480,22 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # rather than carrying a copy, so the two cannot drift; both
                   # are on this list for the same reason and neither ships.
                   'cleanup-devlitter.ps1',
+                  # 26 Aug 26 - mkpdf.ps1, the PDF half of the documentation
+                  # toolchain: it prints mkdoc.py's HTML with headless Edge.
+                  # Listed in the commit that created it, per step 7's rule -
+                  # a script not on this list makes the tree report stale
+                  # because it EXISTS, and then every verifier refuses.
+                  #
+                  # IT SHIPS NOWHERE AND MUST NOT.  The format ruling stands:
+                  # the user prints to PDF from the browser and no PDF goes in
+                  # the installer, because the no-binaries rule forbids
+                  # tracking one.  This writes PDFs OUTSIDE the repository,
+                  # into the hand-carried sdhelp tree, on the owner's
+                  # instruction of 26 Aug 2026 that the first tester document
+                  # set be delivered in both Markdown and PDF.  mkdoc.py is on
+                  # this list for the same reason and neither is named by
+                  # stage.py or sd.iss.
+                  'mkpdf.ps1',
                   # 21 Aug 26 - DELETE.ACCOUNT, both directions.  It calls this
                   # script and refuses on a non-zero exit, so leaving it out is
                   # the self-blocking shape the verify-accountacl.ps1 note above
