@@ -897,6 +897,9 @@ def main():
     ap.add_argument('--list-mirrors', action='store_true',
                     help='print the sdsys directories that are a verbatim '
                          'copy of source, one per line, and exit')
+    ap.add_argument('--list-retired', action='store_true',
+                    help='print the sdsys names that no longer ship into the '
+                         'data tree, one per line, and exit')
     args = ap.parse_args()
 
     # ANSWERED BEFORE ANY OTHER CHECK, DELIBERATELY.  assert-current.ps1 asks
@@ -907,6 +910,23 @@ def main():
     # should have answered into a guard that refuses.
     if args.list_mirrors:
         for name, _why in SDSYS_MIRROR:
+            print(name)
+        return 0
+
+    # 25 Aug 26 - AND THE RETIRED NAMES, FOR THE SAME READER AND THE SAME
+    # REASON: so assert-current does not carry a second copy of this list.
+    #
+    # WHAT IT IS FOR.  assert-current walks source sdsys -> installed sdsys and
+    # reports anything it cannot find, to catch a rename.  A RETIRED name is in
+    # source and deliberately not in the data tree, so that walk reports it as
+    # missing and the whole tree goes STALE on a perfectly good install.  It
+    # did, on the first cycle after changelog moved to {app} - 25 Aug 2026,
+    # and it stopped the verify suite dead.
+    #
+    # ANSWERED HERE, BESIDE --list-mirrors, AND BEFORE ANY MACHINE CHECK, for
+    # the reason the comment above gives.
+    if args.list_retired:
+        for name, _why in SDSYS_RETIRED:
             print(name)
         return 0
 

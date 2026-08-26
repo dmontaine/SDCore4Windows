@@ -652,6 +652,55 @@ foreach ($e in $exemptNewer) {
 # an investigation.
 $renamed = @()
 $checkedNames = $false
+# 25 Aug 26 - THE RETIRED NAMES, ASKED OF stage.py RATHER THAN LISTED HERE.
+#
+# THE WALK BELOW REPORTS ANY SOURCE FILE UNDER sdsys THAT IS NOT INSTALLED
+# UNDER sdsys, to catch a rename.  A RETIRED name breaks that assumption: it is
+# still in source and is deliberately NOT in the data tree any more.
+#
+# IT COST A CYCLE AND A VERIFY RUN, 25 Aug 2026.  changelog moved to {app} on
+# 25 Aug - the data tree never overwrote it, so a user's changelog was frozen
+# at their install date.  The first cycle after that move installed perfectly
+# and then reported "sdsys\changelog is not in the install at all", the whole
+# tree STALE, and VerifyInstall1 refused at its first step.  The install was
+# right; this check was wrong.
+#
+# READ FROM stage.py FOR THE REASON --list-mirrors IS: a copy of the list here
+# is a second list to keep true, and the thing it would go stale about is
+# exactly what this check then mis-reports.
+# HOISTED HERE, above BOTH readers.  The mirrors block below used to define
+# these and it runs later in the file, so leaving them there would have left
+# $stagePy empty at this point - the retired list would have come back empty
+# and this fix would have done nothing, silently.
+$stagePy = Join-Path $PSScriptRoot 'stage.py'
+$python  = Get-Command python -ErrorAction SilentlyContinue
+
+$retired    = @()
+$retiredErr = ''
+if (-not (Test-Path $stagePy)) {
+    $retiredErr = "$stagePy is not there"
+} elseif (-not $python) {
+    $retiredErr = 'python is not on PATH, so stage.py cannot be asked'
+} else {
+    $retiredRaw = & $python.Source $stagePy --list-retired 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $retiredErr = "stage.py --list-retired exited $LASTEXITCODE"
+    } else {
+        $retired = @($retiredRaw | ForEach-Object { "$_".Trim() } |
+                     Where-Object { $_ -match '^[A-Za-z0-9._$-]+$' })
+    }
+}
+
+# THE FAILURE DIRECTION IS SAFE AND IS STILL SAID OUT LOUD.  An empty or
+# unreadable list leaves the walk exactly as strict as it was before today, so
+# it can only produce the FALSE STALE above - loud and wrong - never a silent
+# pass.  It is reported rather than swallowed so nobody debugs the symptom.
+if ($retiredErr) {
+    Note ("  could not read the retired list ({0}) - a name retired from the data tree will report STALE" -f $retiredErr)
+} elseif ($retired.Count -gt 0) {
+    Note ("  {0} retired name(s) excluded from the rename walk: {1}" -f $retired.Count, ($retired -join ' '))
+}
+
 $srcSys  = Join-Path $sd64 'sdsys'
 $instSys = $instTree
 if ((Test-Path $srcSys) -and (Test-Path $instSys)) {
@@ -666,6 +715,12 @@ if ((Test-Path $srcSys) -and (Test-Path $instSys)) {
         ForEach-Object {
             $rel = $_.FullName.Substring($srcSys.Length + 1)
             $key = $rel.ToLowerInvariant()
+
+            # 25 Aug 26 - SKIP THE RETIRED NAMES.  Matched on the FIRST PATH
+            # SEGMENT so a retired directory covers everything under it, and a
+            # retired file matches itself.  changelog is the only one today.
+            $seg = $rel.Split([char]'\')[0]
+            if ($retired -contains $seg) { return }
             if ($instByLower.ContainsKey($key)) {
                 # -cne is the whole point: -ne would call these equal.
                 if ($instByLower[$key] -cne $rel) {
@@ -775,8 +830,8 @@ function Find-InstalledDeletions {
 $mirrors   = @()
 $mirrorRaw = ''
 $mirrorErr = ''
-$stagePy   = Join-Path $PSScriptRoot 'stage.py'
-$python    = Get-Command python -ErrorAction SilentlyContinue
+# $stagePy and $python are set above, hoisted 25 Aug 2026 so the retired-name
+# reader can use them too.  Not re-assigned here: one definition, two readers.
 
 if (-not (Test-Path $stagePy)) {
     $mirrorErr = "$stagePy is not there"
