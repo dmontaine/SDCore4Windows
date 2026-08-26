@@ -469,6 +469,17 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # profile behind each run and nothing had ever removed them.
                   # Ships nowhere - it is run by hand, elevated.
                   'clean-test-profiles.ps1',
+                  # 26 Aug 26 - cleanup-devlitter.ps1, section 7 step 18's one
+                  # command: the leaked Windows users and sdu_ groups, then the
+                  # profile sweep above, then the home directory, then the spent
+                  # VM clone.  Listed in the commit that created it, per step
+                  # 7's rule - a script not on this list makes the tree report
+                  # stale because it exists, and then every verifier refuses.
+                  #
+                  # It reads its name pattern OUT OF clean-test-profiles.ps1
+                  # rather than carrying a copy, so the two cannot drift; both
+                  # are on this list for the same reason and neither ships.
+                  'cleanup-devlitter.ps1',
                   # 21 Aug 26 - DELETE.ACCOUNT, both directions.  It calls this
                   # script and refuses on a non-zero exit, so leaving it out is
                   # the self-blocking shape the verify-accountacl.ps1 note above
