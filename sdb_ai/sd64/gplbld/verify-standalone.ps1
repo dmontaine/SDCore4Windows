@@ -67,7 +67,13 @@ param(
     [string] $GroupAccount = 'sdsagroup',
 
     # Leave the group account behind for inspection.
-    [switch] $Keep
+    [switch] $Keep,
+
+    # 26 Aug 2026 - RUNNING THIS ON A GUEST, WHERE THERE IS NO SOURCE TREE.
+    # Give the installer the guest was installed from; see the block below the
+    # param list for what this does and does not prove.  Owner's decision.
+    [string] $Installer = '',
+    [string] $InstallerSha256 = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,13 +84,99 @@ $logPath = Join-Path $logDir ('verify-standalone-' + (Get-Date -Format 'yyyyMMdd
 try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
 Write-Output ("transcript: " + $logPath)
 
+# ===========================================================================
+# ESTABLISH THAT THE INSTALL UNDER TEST IS CURRENT - BY ONE ROUTE OR THE OTHER
+# ===========================================================================
+#
 # CLAUDE.md: call assert-current first from anything new that tests the install.
-& (Join-Path $PSScriptRoot 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) {
+# That works on the DEVELOPMENT HOST, where a source tree sits beside this
+# script and the danger is real: editing source and then measuring an install
+# built before the edit.
+#
+# 26 Aug 2026 - IT CANNOT WORK ON A GUEST, AND THE GUEST IS THE ONLY MACHINE
+# THAT CAN ANSWER SECTION 5.  assert-current derives the source tree from its
+# own location (`$sd64 = Split-Path $PSScriptRoot -Parent`), and on a guest
+# this script is reached over a share with no repository behind it - so the
+# call is to a file that is not there and dies before section 0 runs.
+#
+# WHAT REPLACES IT, AND WHAT IT DOES NOT CLAIM.  Owner's decision, 26 Aug 2026,
+# choosing this over a bare -NoAssertCurrent switch, whose problem is that
+# whoever finds it next will use it on the HOST, which is what the guard is for.
+#
+# Given -Installer, this establishes currency a different way and SAYS WHICH:
+#
+#   it proves   the installer file is the exact build expected (SHA256), and
+#               the data tree was created AFTER that installer was built.
+#   it does NOT prove this install came from that file.  Nothing on the guest
+#               can prove that, and pretending otherwise would be the kind of
+#               "value with an explanation bolted on" section 0 forbids.
+#
+# On the HOST, give neither switch: assert-current runs and is the better test.
+$currency = ''
+if ($Installer -ne '') {
     Write-Output ''
-    Write-Output 'verify-standalone: refusing - see above'
-    try { Stop-Transcript | Out-Null } catch { }
-    exit 2
+    Write-Output '=== currency: by installer identity, NOT by assert-current ========'
+    Write-Output ("  installer : " + $Installer)
+    if (-not (Test-Path -LiteralPath $Installer)) {
+        Write-Output '  REFUSING - that installer is not there.'
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    $insItem = Get-Item -LiteralPath $Installer
+    $insHash = (Get-FileHash -LiteralPath $Installer -Algorithm SHA256).Hash
+    Write-Output ("  built     : " + $insItem.LastWriteTime.ToString('dd MMM yyyy HH:mm:ss') +
+                  "   " + $insItem.Length + " bytes")
+    Write-Output ("  SHA256    : " + $insHash)
+
+    # A hash nobody stated is a hash nobody checked.  Requiring it is what makes
+    # this a test rather than a printout.
+    if ($InstallerSha256 -eq '') {
+        Write-Output '  REFUSING - give -InstallerSha256 as well.'
+        Write-Output '  Printing a hash proves nothing; this has to COMPARE it against the'
+        Write-Output '  build you believe the guest was installed from.'
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    if ($insHash -ne $InstallerSha256.Trim().ToUpper()) {
+        Write-Output ('  expected  : ' + $InstallerSha256.Trim().ToUpper())
+        Write-Output '  REFUSING - the installer is NOT the build you named.'
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    Write-Output '  hash MATCHES the build named on the command line.'
+
+    # And the install must POSTDATE the installer.  An install older than the
+    # installer cannot have come from it, which is the one direction this can
+    # actually rule out.
+    $treeDir = Join-Path $env:ProgramData 'SD'
+    if (-not (Test-Path -LiteralPath $treeDir)) {
+        Write-Output ('  REFUSING - no data tree at ' + $treeDir)
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    $treeAt = (Get-Item -LiteralPath $treeDir).CreationTime
+    Write-Output ("  data tree created " + $treeAt.ToString('dd MMM yyyy HH:mm:ss'))
+    if ($treeAt -lt $insItem.LastWriteTime) {
+        Write-Output '  REFUSING - the install PREDATES the installer, so it did not come'
+        Write-Output '  from it.  This is a stale install; reinstall before measuring.'
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    Write-Output '  the install postdates the installer.'
+    Write-Output ''
+    Write-Output '  NOTE: this does NOT prove the install came from that file - nothing on'
+    Write-Output '  a guest can. It proves the file is the expected build and the install'
+    Write-Output '  is newer than it. assert-current was NOT run.'
+    $currency = 'installer identity (' + $insHash.Substring(0,16) + '...), assert-current NOT run'
+} else {
+    & (Join-Path $PSScriptRoot 'assert-current.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output ''
+        Write-Output 'verify-standalone: refusing - see above'
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    $currency = 'assert-current, exit 0'
 }
 
 # SECTIONS 6 AND 7 DRIVE SD WITH LOGTO SDSYS, AND THAT NEEDS AN ELEVATED
@@ -120,6 +212,10 @@ Write-Output ("  marker    : " + $marker)
 Write-Output ("  sd.conf   : " + $sdConf)
 Write-Output ("  sd.exe    : " + $sdExe)
 Write-Output ("  user acct : " + $UserAccount + "   group acct: " + $GroupAccount)
+# WHICH CURRENCY PROOF THIS RUN USED.  Two runs of this script can differ in
+# what they established before measuring anything, so the run says which - here
+# and again in the closing verdict, because that is the line that gets read.
+Write-Output ("  currency  : " + $currency)
 
 $results = New-Object System.Collections.ArrayList
 $failed  = $false
@@ -499,6 +595,7 @@ if ($failed) {
     Write-Output 'verify-standalone: PASSED - this stand-alone install opened no port,'
     Write-Output '  wrote no firewall rule, changed no ssh configuration, refuses'
     Write-Output '  create.account user with sysmsg 10100, and still makes group accounts.'
+    Write-Output ('  currency established by: ' + $currency)
     if ($skipCount -gt 0) {
         # THE PASS IS NARROWER THAN IT LOOKS AND HAS TO SAY SO.  A green run
         # that quietly dropped a row it could not measure is the shape of every
