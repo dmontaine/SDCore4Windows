@@ -173,6 +173,7 @@ for k in range(len(starts) - 1):
         entry_at["H." + m.group(1)] = (a, starts[k + 1])
 
 # Table rows: | <mark> | **<ID>** | ... |
+TICK_MARK = "✅"
 ROW = re.compile(r"^\|\s*([^|\s]*)\s*\|\s*\*\*([0-9]+\.[0-9a-z]+|H\.[0-9a-z]+"
                  r"|7\.[0-9]+)\*\*\s*\|")
 rows = []
@@ -191,6 +192,30 @@ problems = []
 seen_ids = set()
 for ln_i, mark, eid in rows:
     seen_ids.add(eid)
+
+    # THE ROW'S OWN WORDS, NOT ONLY ITS MARK.  A ticked row that reads as open
+    # is a stale lead paragraph one line long, and the checks below compare the
+    # mark against the ENTRY and never against the row.
+    #
+    # ***AND IT IS A PARTIAL GUARD. SAID PLAINLY BECAUSE IT WAS ADDED IN
+    # RESPONSE TO THREE ROWS IT DOES NOT CATCH.*** Closing item 4 on 25 Aug 2026
+    # ticked 7.3, H.4 and H.4a and left them reading "one bullet open",
+    # "sshNoServer with a bridged NIC" and "the seven steps need a person at
+    # the wizard".  OPEN_PAT is tuned for entry prose - "still a decision",
+    # "never been run" - and matches none of those, so all three had to be
+    # rewritten by hand.
+    #
+    # It is kept because it costs nothing and does catch a row that says "still
+    # open" or "not yet built".  ***DO NOT READ A CLEAN PHASE 2 AS PROOF THAT
+    # EVERY TICKED ROW READS AS DONE.***  Broadening the pattern to catch prose
+    # like "needs a person" would flag legitimate open and partly rows, and a
+    # false positive here trains people to ignore the whole run.
+    if mark == TICK_MARK:
+        m = OPEN_PAT.search(lines[ln_i])
+        if m:
+            problems.append(
+                "row %d: %s is ticked DONE but the ROW ITSELF still reads as "
+                "open - %r" % (ln_i + 1, eid, m.group(0)))
     if eid not in entry_at:
         problems.append("row %d: ID %s has NO ENTRY in the file" % (ln_i + 1, eid))
         continue
