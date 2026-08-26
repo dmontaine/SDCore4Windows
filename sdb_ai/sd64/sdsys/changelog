@@ -16,9 +16,30 @@ Entries are newest first, by date, until there is a version to attach them to.
                micro bp myprog          micro
                edit  dict customers name
 
-           WHO HAS THEM.  Programmer and administrator accounts, both verbs.
-           A standard account has neither, for the same reason it has no ED:
-           it is not a development account.
+           WHO HAS THEM, AND IT IS TWO THINGS RATHER THAN ONE.
+
+           * THE VERB: programmer and administrator accounts get both.  A
+             standard account gets neither, for the same reason it has no ED -
+             it is not a development account.
+           * OS.EXECUTE PERMISSION: an editor runs outside SD, so reaching one
+             is reaching the operating system.  That is field 2 of your record
+             in the SD system file os.users - the same field that governs
+             OS.EXECUTE from inside a program - and only an administrator can
+             change it.
+
+           An elevated session passes on its own, as it does for SH, so an
+           empty list cannot lock the machine's own administrator out.  A
+           missing record means no.
+
+           IF YOU HAVE THE VERB AND NOT THE PERMISSION you are told so by name
+           and told what to ask for, rather than the command appearing to do
+           nothing.  A session with no terminal - an API session, or a piped
+           script - is refused first and separately: there is nowhere to draw
+           a full screen.
+
+           THEY WORK OVER ssh, which is the point of a terminal editor.  But
+           an ssh session can never be elevated, so an administrator arriving
+           that way needs an os.users entry the same as anybody else.
 
            ED IS UNCHANGED and is still there.  If you preferred the line
            editor, nothing has been taken away.  What HAS changed is that

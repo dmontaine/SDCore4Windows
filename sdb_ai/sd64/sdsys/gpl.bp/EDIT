@@ -15,6 +15,12 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 26 Aug 26 Windows port - TWO GATES, NOT ONE.  Owner's ruling: "these commands
+*           will only work if the user has OS.EXECUTE privileges.  If not, they
+*           should get a message that the command is not available."  The VOC
+*           tier decides who has the verb; OS.USERS field 2 decides whether it
+*           runs.  check.permitted, below, and it also refuses a session with
+*           no terminal - an API session or a piped script.
 * 26 Aug 26 Windows port - TWO VERBS, ONE PROGRAM.  Owner, 26 Aug 2026: a
 *           second full-screen editor, "one called with the verb micro and the
 *           other with the verb edit".  Both VOC entries are CA $EDIT; the
@@ -42,12 +48,12 @@
 *              out loud with the command that installs it.
 *
 *           2. IT DOES NOT GO THROUGH THE SH VERB.  "!micro" is CPROC's shell
-*              escape, so it carried OS.USERS field 1 - the wrong gate for a
-*              verb the owner wants tier-gated.  This program is $internal, so
-*              os_permitted() admits it on HDR_INTERNAL (op_sh.c:157) and the
-*              gate is the VOC tier: TIER.OMIT.STANDARD holds "edit", so a
-*              programmer and an administrator have it and a standard account
-*              does not.
+*              escape, so it carried OS.USERS field 1 - the SH field, which is
+*              not the right one for a program that runs an editor.  This
+*              program is $internal, so os_permitted() admits it on
+*              HDR_INTERNAL (op_sh.c:157), and check.permitted below tests
+*              OS.USERS field 2 - the OS.EXECUTE field - itself.  See its
+*              header for why the test is here rather than left to C.
 *
 *           3. THE TEMPORARY RECORD IS ADDRESSED BY ITS REAL PATH.
 *              "$HOLD/name" is a relative path that only resolved because the
@@ -70,7 +76,8 @@ PROGRAM EDIT
 $internal
 $catalog $EDIT
 
-$include SYSCOM KEYS.H
+$include syscom keys.h
+$include int$keys.h
 
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
@@ -152,9 +159,12 @@ $include SYSCOM KEYS.H
    end
 
 * ---------------------------------------------------------------------------
-* Find the editor BEFORE anything is written, so a machine without one is
-* told so instead of being handed an unchanged record.
+* Both gates BEFORE anything is written, so a session that may not do this is
+* told so rather than handed a working copy it cannot edit.
 * ---------------------------------------------------------------------------
+   gosub check.permitted
+   if not(permitted) then goto end.program
+
    gosub find.editor
    if editor.path = '' then goto end.program
 
@@ -250,6 +260,81 @@ compile.record.query:
       case response = 'N'
          crt in.file.name : ' ' : in.record.name : ' not catalogued'
    end case
+return
+
+* ---------------------------------------------------------------------------
+* check.permitted  -  THE SECOND GATE.
+*
+* Owner, 26 Aug 2026: *"these commands will only work if the user has
+* OS.EXECUTE privileges.  If not, they should get a message that the command
+* is not available."*
+*
+* THE VOC TIER IS THE FIRST GATE AND IS NOT ENOUGH ON ITS OWN.  A programmer
+* account has the verb; running an editor is still reaching the operating
+* system, and who may do that is OS.USERS field 2 - the same list and the same
+* field that governs OS.EXECUTE from inside a program.
+*
+* WHY THE TEST IS HERE RATHER THAN LEFT TO os_permitted().  This program is
+* $internal, so op_sh.c:157 admits it on HDR_INTERNAL and never consults the
+* list.  Dropping $internal would make C do the test, but its refusal is
+* k_error(sysmsg(10054)) - an abort, mid-program, AFTER the working copy has
+* been written and with wording about "the operating system shell" that names
+* neither this verb nor what to ask for.  Testing here refuses before anything
+* is created and says what to do about it.
+*
+* IT MIRRORS os_permitted() DELIBERATELY, including which way it fails: a
+* missing file or a missing record means NO.  An elevated session passes on
+* its own, as it does for SH, so an empty list cannot lock the machine's own
+* administrator out.
+*
+* AND THE TERMINAL TEST IS FIRST, because it is the plainer answer.  An API
+* session and a piped script have nowhere to draw a full screen, and telling
+* one of those about os.users would be answering a question it did not ask.
+* ---------------------------------------------------------------------------
+check.permitted:
+   permitted = @false
+
+   if kernel(K$TTY, 0) = '' then
+      error.text  = verb.text : ' needs a terminal to draw on, and this session'
+      error.text := ' has none.' : char(10)
+      error.text := 'ed, the line editor, works anywhere.'
+      return
+   end
+
+   if kernel(K$ADMINISTRATOR, -1) then
+      permitted = @true
+      return
+   end
+
+   openpath @sdsys : ds : 'os.users' to os.users.f else
+      error.text  = verb.text : ' is not available: this system has no os.users'
+      error.text := ' list, so nobody but an administrator may reach the'
+      error.text := ' operating system.' : char(10)
+      error.text := 'ed, the line editor, needs none of this.'
+      return
+   end
+
+*  THE THREE-CASE FOLD, as CPROC and LOGIN's batch gate do it: as held, then
+*  lower, then upper.  The record is written by hand with ED and the login
+*  name arrives in whatever case Windows reports it.
+   os.rec = ''
+   read os.rec from os.users.f, @logname else
+      read os.rec from os.users.f, downcase(@logname) else
+         read os.rec from os.users.f, upcase(@logname) else os.rec = ''
+      end
+   end
+   close os.users.f
+
+   if downcase(trim(os.rec<2>, ' ', 'B')) = 'yes' then
+      permitted = @true
+      return
+   end
+
+   error.text  = verb.text : ' is not available to ' : @logname : '.' : char(10)
+   error.text := 'It runs an editor outside SD, so it needs OS.EXECUTE'
+   error.text := ' permission: field 2 of your record in the SD system file'
+   error.text := ' os.users, which only an administrator can change.' : char(10)
+   error.text := 'ed, the line editor, needs none of this.'
 return
 
 * ---------------------------------------------------------------------------
