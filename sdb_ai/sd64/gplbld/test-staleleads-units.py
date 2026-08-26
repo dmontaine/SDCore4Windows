@@ -146,6 +146,54 @@ def main():
     case("section 7 heading renamed - must refuse", t, tmp, 2,
          "could not bound section 7")
 
+    # =====================================================================
+    # PHASE 3 - the fault it was built for, and the three ways it must NOT
+    # fire.  Phase 3 never touches the exit code, so every case here asserts
+    # rc=0 and reads the COUNT LINE.  Asserting rc alone would be the fault
+    # the section 8 case above was just repaired for.
+    # =====================================================================
+    ANCHOR = "> ***WHAT IS GENUINELY UNMEASURED, AND IT IS COSMETIC.***"
+    assert ANCHOR in base, "item 5's corrected wording is not where expected"
+
+    # [a] THE REAL ONE, restored verbatim.  This is the sentence item 5
+    # carried on 26 Aug 2026, sixty-nine lines below its own record of the
+    # owner cycling and CHOOSING stand-alone.  If this does not flag, the
+    # phase is decoration.
+    t = base.replace(ANCHOR, "> ***UNSEEN: nobody has looked at this page.***", 1)
+    assert t != base, "could not restore the UNSEEN claim"
+    case("phase 3: the restored UNSEEN claim must be CAUGHT", t, tmp, 0,
+         "1 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
+
+    # [b] The banner alone, with no sentence after it - the case DENY_BANNER
+    # exists for, since "nobody has looked" would not be there to match.
+    t = base.replace(ANCHOR, "> ***UNSEEN:*** and nothing else on the line.", 1)
+    case("phase 3: the bare UNSEEN: banner must be CAUGHT", t, tmp, 0,
+         "1 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
+
+    # [c] QUOTING a denial is not making one.  This is how the corrected entry
+    # actually reads, and an earlier cut of the phase reported it as the very
+    # claim it was withdrawing.
+    t = base.replace(ANCHOR,
+                     '> It used to read *"UNSEEN: nobody has looked at this\n'
+                     '> page"*, and that was wrong.', 1)
+    case("phase 3: a QUOTED denial must not fire", t, tmp, 0,
+         "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
+
+    # [d] Past-tense prose is narration, not a live denial.  Both false hits
+    # left on the repaired file were this shape.
+    t = base.replace(ANCHOR,
+                     "> The defect sat unseen for eight days, and is now fixed.", 1)
+    case("phase 3: past-tense 'sat unseen' must not fire", t, tmp, 0,
+         "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
+
+    # [e] THE NULL-CASE GUARD ITSELF.  Strip every observation phrase and the
+    # phase can no longer pair anything - it must SAY it measured nothing
+    # rather than reporting a clean zero.
+    t = base.replace("The owner cycled choosing stand-alone", "It happened", 1)
+    t = t.replace(ANCHOR, "> ***UNSEEN: nobody has looked at this page.***", 1)
+    case("phase 3: denial with no observation must not fire", t, tmp, 0,
+         "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
+
     shutil.rmtree(tmp, ignore_errors=True)
 
     print("")
