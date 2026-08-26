@@ -159,7 +159,14 @@ for k in range(len(starts) - 1):
     a = starts[k]
     m = re.match(r"^(\d+)\. \*\*", lines[a])
     if m and sec7_a < a < sec7_b:
-        entry_at["7." + m.group(1)] = (a, starts[k + 1])
+        # CLAMP TO SECTION 7'S END.  The LAST step has no next entry inside
+        # section 7, so starts[k+1] is a START HERE item or end-of-file and its
+        # range swallowed section 8's preamble - which says "Closed and
+        # superseded material is in HISTORY", so the last step was reported as
+        # leading with a closure it does not contain.  Found by step 18 being
+        # added on 26 Aug 2026; step 17 had never tripped it because section
+        # 8's first closure word happens to sit further from it.
+        entry_at["7." + m.group(1)] = (a, min(starts[k + 1], sec7_b))
         continue
     m = re.match(r"^> ### (\d+[a-z]?)\. ", lines[a])
     if m:

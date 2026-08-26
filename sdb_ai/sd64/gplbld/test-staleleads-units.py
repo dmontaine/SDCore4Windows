@@ -116,6 +116,18 @@ def main():
     case("table deleted - must refuse, not pass", t, tmp, 2,
          "no task table rows parsed")
 
+    # REGRESSION, 26 Aug 2026: the LAST step in section 7 has no next entry
+    # inside it, so its range ran to the next START HERE item and swallowed
+    # section 8's preamble - which contains "Closed and superseded material is
+    # in HISTORY".  Step 18 was reported as leading with a closure it does not
+    # contain.  Planting a closure word immediately after section 8's heading
+    # must NOT flag the last step.
+    t = base.replace("## 8. Open questions",
+                     "## 8. Open questions\n\nCLOSED DONE VERIFIED - bait.\n", 1)
+    assert t != base, "could not find section 8's heading"
+    case("closure text after section 8 must not leak back", t, tmp, 0,
+         "every row agrees with its entry")
+
     # Section 7's heading renamed must REFUSE rather than scan everything.
     t = base.replace("## 7. Next steps", "## 7. Things to do", 1)
     assert t != base, "could not rename section 7"
