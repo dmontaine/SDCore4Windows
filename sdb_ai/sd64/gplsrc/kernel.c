@@ -25,6 +25,7 @@
  * 14 Aug 26 Windows port - seed it from IsElevated() instead
  * 21 Aug 26 Windows port - and never for a network session, whatever the
  *           token says
+ * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -670,7 +671,7 @@ void k_return() {
   }
   /* -------------------- */
   if ((obj_hdr->id == 0) /* Return from recursive program */
-      || (process.program.flags & (PF_IS_TRIGGER | PF_IS_VFS | HDR_IS_CLASS))) {
+      || (process.program.flags & (PF_IS_TRIGGER | HDR_IS_CLASS))) {
     k_exit_cause = K_EXIT_RECURSIVE;
   } else {
     if ((--(obj_hdr->ext_hdr.prog.refs) == 0) &&

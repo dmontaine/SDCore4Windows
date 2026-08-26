@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Aug 26 Windows port - removed the branch that skipped absolutising a
+*           VFS: pathname.  VFS is gone; every pathname is absolutised.
 * 19 Aug 26 Windows port - SDSYS accounts, and a Q-pointer target account's voc,
 *           are lower case on disk.  PROJECT_STATUS.md 5.12 (a).
 * 18 Aug 26 Windows port - the name fold reaches the BASIC OPEN statement
@@ -188,23 +190,21 @@ parse.as.q.pointer:
 
             if pathname[1,1] = '@' then pathname = parse.pathname.tokens(pathname)
 
-            if upcase(pathname[1,4]) # 'VFS:' then
-               * Make pathname absolute
+            * Make pathname absolute
 * 20240121 mab use @VM not hard coded hex fd 
-               if not(pathname matches "'":@ds:"'0X":@VM:"1A':\'0X") then
-                  pathname = dir : @ds : pathname
-               end
+            if not(pathname matches "'":@ds:"'0X":@VM:"1A':\'0X") then
+               pathname = dir : @ds : pathname
+            end
 
-               * If we got here by following a Q-pointer, we need to convert a
-               * relative pathname to absolute form.
+            * If we got here by following a Q-pointer, we need to convert a
+            * relative pathname to absolute form.
 
-               if qpath # '' then
-                  qfile = voc.rec<fno>
+            if qpath # '' then
+               qfile = voc.rec<fno>
 						if qfile[1,1] # @ds then
 							* Convert voc item to absolute path
 							qfile = qpath : @ds : qfile
 						end
-               end
             end
 
             set.status 0

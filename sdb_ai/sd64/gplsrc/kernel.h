@@ -19,6 +19,7 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 00 Jun 24 bootstrap flag
+ * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -98,7 +99,8 @@ struct PROGRAM {
 #define IGNORE_ABORTS 0x00040000L  /* Ignore aborts from EXECUTEd sentence */
 #define PF_IS_TRIGGER 0x00080000L  /* Is trigger program */
 #define SORT_ACTIVE 0x00100000L    /* Program has sort in progress */
-#define PF_IS_VFS 0x00200000L      /* Is VFS handler */
+/* 0x00200000L is RETIRED - do not recycle.  It was PF_IS_VFS, a
+   compiled-object header flag; BCOMP never had a directive to set it. */
 #define PF_CAPTURING 0x00400000L   /* Capture data stacked for this CPROC */
 #define PF_IN_TRIGGER 0x00800000L  /* This or lower program is a trigger */
 #define PF_PRINTER_ON 0x01000000L  /* PRINTER ON? */

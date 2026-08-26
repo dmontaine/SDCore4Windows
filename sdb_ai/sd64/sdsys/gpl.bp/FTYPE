@@ -18,13 +18,15 @@
 * 
 * 
 * START-HISTORY:
+* 25 Aug 26 Windows port - dropped the VFS: pathname case.  Nothing in the
+*           C open path has ever recognised a VFS: pathname, so this
+*           reported a file type that could not then be opened.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
 * Mult   Multi-file
-* VFS    Virtual file system
 * Err    Error
 * Dir    Directory file
 * DH     Dynamic hashed file
@@ -46,8 +48,6 @@ $include keys.h
 
 
    if dcount(path, @vm) > 1 then return ('Mult')
-
-   if upcase(path[1,4]) = 'VFS:' then return ('VFS')
 
    if upcase(path[1,6]) = '@SDSYS' then path = @sdsys:path[7,9999]
 

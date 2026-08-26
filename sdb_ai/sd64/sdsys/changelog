@@ -5,6 +5,35 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+25 Aug 26  VIRTUAL FILE SYSTEM SUPPORT IS GONE FROM THE LANGUAGE TOO.
+
+           SD has never been able to open a virtual file system.  Nothing in
+           the file-opening code has ever recognised a "VFS:" pathname.  What
+           the language carried was the outline of one - a file type FTYPE
+           would report, three error numbers, and a set of names in the SYSCOM
+           include files - and none of it could be reached.  A VOC F-pointer
+           written as "VFS:something" was reported as a virtual file system,
+           passed the name resolver, and then failed to open with an unrelated
+           error.
+
+           ALL OF IT HAS BEEN REMOVED, so the language no longer offers a
+           feature it cannot perform.
+
+           WHAT THIS CHANGES FOR YOU.  These names are no longer defined, and
+           a program that mentions one will no longer compile:
+
+              FL$TYPE.VFS            SYSCOM KEYS.H
+              ER$VFS.NAME            SYSCOM ERR.H
+              ER$VFS.CLASS           SYSCOM ERR.H
+              ER$VFS.NGLBL           SYSCOM ERR.H
+
+           FTYPE no longer returns "VFS" for a "VFS:" pathname - it treats it
+           as an ordinary pathname, which will not open either.  Error numbers
+           3038, 3039 and 3040 are retired and will not be given a new meaning.
+
+           IF ONE OF YOUR PROGRAMS REFERS TO ANY OF THESE, it was testing for
+           a state SD could not reach, and the test can be deleted.
+
 25 Aug 26  THE FIVE PROGRAMS SD SHIPPED INTO THE SDSYS BP FILE ARE GONE.
 
            SD used to install PCL and PCL.GRID (printer control), U0032 and

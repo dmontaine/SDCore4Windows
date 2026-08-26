@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -315,7 +316,6 @@ struct FILE_VAR {
 #define DYNAMIC_FILE 2
 #define SEQ_FILE 3
 #define NET_FILE 4
-#define VFS_FILE 5
   /* Tokens also in BP DEBUG.H */
   u_char flags;
 #define FV_RDONLY 0x01  /* Read only file */

@@ -3,6 +3,8 @@
       * Copyright (c) 2004, Ladybridge Systems, All Rights Reserved
       
       $list off
+      * 25 Aug 26 Windows port - removed FL$TYPE.VFS; FILEINFO never
+      *                      returned it and VFS is gone from the C
       * rev 0.9-2 Mar 25 mab add sdpyobj
       * rev 0.9.0 Jan 25 mab with the change in ownership of group ACCOUNTS
       *                      add SYSTEM() keys
@@ -28,7 +30,6 @@
       $define FL$TYPE.DH        3  ;* DH file
       $define FL$TYPE.DIR       4  ;* Directory file
       $define FL$TYPE.SEQ       5  ;* Sequential file
-      $define FL$TYPE.VFS       6  ;* Virtual file system
       $define FL$MODULUS        5  ;* Get file modulus
       $define FL$MINMOD         6  ;* Get mimimum modulus value for file
       $define FL$GRPSIZE        7  ;* Get group size

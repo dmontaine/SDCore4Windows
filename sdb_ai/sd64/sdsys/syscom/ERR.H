@@ -22,6 +22,7 @@
 * 30 Jul 24 mab add error codes for SD_ENCRYPT_SODIUM
 * rev 0.9.0 Jan 25 mab sdext_eguid_set error codes
 * rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
+* 25 Aug 26 Windows port - VFS stripped: the C never implemented it
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -139,9 +140,8 @@ $define ER$BAD.DICT    3034    ;* Bad dictionary entry
 $define ER$PERM        3035    ;* Permissions error (os.errno)
 $define ER$SEEK.ERROR  3036    ;* Seek error
 $define ER$WRITE.ERROR 3037    ;* Write error (os.errno)
-$define ER$VFS.NAME    3038    ;* Bad class name in VFS entry
-$define ER$VFS.CLASS   3039    ;* VFS class routine not found
-$define ER$VFS.NGLBL   3040    ;* VFS class routine is not globally catalogued
+* 25 Aug 26 Windows port - 3038-3040 RETIRED, do not recycle.  They were
+* the VFS errors, never raised, and sdclilib/err.h still defines them.
 $define ER$ENCRYPTED   3041    ;* Access denied to encrypted file
 
 * 4000 - 4999   SDClient errors

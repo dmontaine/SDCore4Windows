@@ -18,13 +18,17 @@
 * 
 * 
 * START-HISTORY:
+* 25 Aug 26 Windows port - corrected the description: this has no caller.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
 *
 * START-DESCRIPTION:
 *
-* Used by the VFS on actions that require a partial list to be completed.
+* UNREACHABLE.  Its only caller was the VFS, which this port removed on
+* 25 Aug 26.  The pcode is still loaded by name at start-up, but no C
+* source calls pcode_extendlist.  Deleting it is a pcode-table change and
+* has not been made - see PROJECT_STATUS.md item 3a.
 *
 * END-DESCRIPTION
 *

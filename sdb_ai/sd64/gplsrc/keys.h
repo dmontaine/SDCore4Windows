@@ -24,6 +24,7 @@
  * rev 0.9.0 Jan 25 mab SD_EUID_SET SD_EUID_RESTORE
  * rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
  * 
+ * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -54,7 +55,6 @@
    #define FL_TYPE_DH      3  /* DH file */
    #define FL_TYPE_DIR     4  /* Directory file */
    #define FL_TYPE_SEQ     5  /* Sequential file */
-   #define FL_TYPE_VFS     6  /* VFS */
 #define FL_MODULUS         5
 #define FL_MINMOD          6
 #define FL_GRPSIZE         7

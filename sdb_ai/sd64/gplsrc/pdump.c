@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -224,8 +225,6 @@ void pdump() {
         fprintf(fu, "    Is trigger\n");
       if (pgm->flags & SORT_ACTIVE)
         fprintf(fu, "    Sort in progress\n");
-      if (pgm->flags & PF_IS_VFS)
-        fprintf(fu, "    VFS handler\n");
       if (pgm->flags & PF_CAPTURING)
         fprintf(fu, "    Capturing\n");
       if (pgm->flags & HDR_IS_CPROC)
