@@ -41,6 +41,26 @@ Entries are newest first, by date, until there is a version to attach them to.
            an ssh session can never be elevated, so an administrator arriving
            that way needs an os.users entry the same as anybody else.
 
+           ONLY MICRO HIGHLIGHTS SD BASIC.  Microsoft Edit has no syntax
+           highlighting, and that is the one real difference between the two
+           verbs.  MICRO colours statements, reserved words, intrinsic
+           functions, @variables, $directives, labels, strings, numbers and
+           comments.
+
+           It applies to a BP record and to nothing else - SD names the
+           working copy so micro can recognise the language, and a record
+           edited out of any other file is plain text.
+
+           The word lists are GENERATED FROM THE COMPILER's own tables - 218
+           statements, 37 reserved words and 176 intrinsic functions - so the
+           highlighting cannot drift from the language.  If a name you expect
+           is not coloured, that is worth reporting.
+
+           NOTHING IS INSTALLED INTO YOUR PROFILE.  SD ships the rules with
+           itself and points micro at them, so they work for every account on
+           the machine - including the ones that cannot log in to Windows and
+           so have no profile to put them in.
+
            TO GRANT IT, from an elevated session:
 
                logto sdsys

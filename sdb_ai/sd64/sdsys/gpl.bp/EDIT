@@ -141,10 +141,24 @@ $include int$keys.h
          editor.exe  = 'micro.exe'
          editor.name = 'micro'
          editor.get  = 'winget install -e --id zyedidia.micro --scope machine'
+*        MICRO HIGHLIGHTS SD BASIC, AND THIS IS HOW IT FINDS THE RULES.
+*        micro reads its configuration from $MICRO_CONFIG_HOME, then
+*        $XDG_CONFIG_HOME/micro, then ~/.config/micro (micro's options.md).
+*        Only the first is any use here: the other two are per-profile, and
+*        accounts SD creates cannot log in to Windows, so a syntax file in a
+*        profile is one they could never be given.  SD ships its own
+*        configuration directory instead and names it for the child.
+*
+*        kernel(K$WINPATH) because the directory is "/micro" to SD and
+*        "C:\Program Files\SD\micro" to PowerShell, which cannot open the
+*        first - the same conversion ELEVATE makes for its helper.
+         editor.cfg  = kernel(K$WINPATH, '/micro')
       case 1
          editor.exe  = 'edit.exe'
          editor.name = 'Microsoft Edit'
          editor.get  = 'winget install -e --id Microsoft.Edit --scope machine'
+*        Microsoft Edit has no syntax highlighting to configure.
+         editor.cfg  = ''
    end case
 
    if upcase(trim(cmd<2>, ' ', 'B')) = 'DICT' then
@@ -177,6 +191,22 @@ $include int$keys.h
       temp.record.name = 'dict.' : in.record.name : '.editing'
    end else
       temp.record.name = in.record.name : '.editing'
+   end
+
+*  ***AND A BP RECORD GETS A ".sdbasic" ON THE END, WHICH IS WHAT MAKES THE
+*  HIGHLIGHTING WORK.***  micro chooses a syntax file by matching a regex
+*  against the FILE NAME, and the name it sees is this working copy's, not the
+*  record's - a record called MY.REPORT tells it nothing.  The suffix is the
+*  only thing that can carry the language across, and microcfg/syntax/
+*  sdbasic.yaml detects exactly it.
+*
+*  ".editing" IS KEPT IN FRONT OF IT so a working copy left behind by a
+*  session that died is still recognisable as one, whichever kind it is.
+*
+*  Same test as the compile offer below, and deliberately so: what is worth
+*  compiling as BASIC is what is worth highlighting as BASIC.
+   if dict.text # 'DICT' and upcase(in.file.name[-2, 2]) = 'BP' then
+      temp.record.name := '.sdbasic'
    end
 
 * ---------------------------------------------------------------------------
@@ -487,7 +517,11 @@ process.record:
    crt @(-1) : 'Editing ' : trim(dict.text : ' ' : in.file.name) : ' ' :
    crt in.record.name
 
-   cmd = '& ' : q : editor.path : q : ' ' : q : os.file : q
+   cmd = ''
+   if editor.cfg # '' then
+      cmd := '$env:MICRO_CONFIG_HOME = ' : q : editor.cfg : q : '; '
+   end
+   cmd := '& ' : q : editor.path : q : ' ' : q : os.file : q
    cmd := '; exit $LASTEXITCODE'
    os.execute cmd
    rc = os.error()

@@ -1116,6 +1116,28 @@ def main():
             'dictionary and upgrade-dicts.ps1 cannot run without it')
     fd_dst = os.path.join(pf, 'gplbld', 'FILES_DICTS')
     copy_tree(fd_src, fd_dst, staged, stage)
+
+    # 26 Aug 26 - micro's configuration directory, which is what gives the
+    # MICRO verb syntax highlighting for SD BASIC.
+    #
+    # IT HAS TO BE MACHINE-WIDE AND micro OFFERS EXACTLY ONE WAY TO DO THAT.
+    # micro reads $MICRO_CONFIG_HOME, then $XDG_CONFIG_HOME/micro, then
+    # ~/.config/micro.  The last two are per-profile and accounts SD creates
+    # cannot log in to Windows at all, so a syntax file in a profile is one
+    # they could never be given.  gpl.bp/EDIT names this directory in
+    # MICRO_CONFIG_HOME when it launches micro.
+    #
+    # PROGRAM FILES, NOT THE DATA TREE, for the reason the helper scripts are
+    # there: the data tree is writable by every member of sdusers, and this is
+    # a file micro reads on their behalf.
+    mc_src = os.path.join('gplbld', 'microcfg')
+    if not os.path.isdir(mc_src):
+        die('gplbld/microcfg is missing - it carries the SD BASIC syntax file '
+            'the MICRO verb highlights with')
+    mc_dst = os.path.join(pf, 'micro')
+    copy_tree(mc_src, mc_dst, staged, stage)
+    print('  micro: %d syntax file(s) staged to ProgramFiles\\micro'
+          % len(os.listdir(os.path.join(mc_dst, 'syntax'))))
     print('  FILES_DICTS: %d dictionary records staged to ProgramFiles\\gplbld'
           % len(os.listdir(fd_dst)))
 

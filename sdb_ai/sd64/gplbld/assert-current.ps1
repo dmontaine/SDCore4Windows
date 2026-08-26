@@ -569,6 +569,31 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # answered "refused" to everything would otherwise pass a
                   # table of nothing but negatives.
                   'test-edittokens-units.py',
+                  # 26 Aug 26 - mkbasicsyntax.py and checksyntax.py, the pair
+                  # that BUILD and VALIDATE microcfg/syntax/sdbasic.yaml, the
+                  # SD BASIC highlighting the MICRO verb uses.  Listed in the
+                  # commit that creates them, under section 7 step 7's rule.
+                  #
+                  # ***THE YAML THEY PRODUCE IS NOT ON THIS LIST AND MUST NOT
+                  # BE.*** It SHIPS - stage.py copies gplbld/microcfg to
+                  # ProgramFiles\micro - so assert-current watches it like any
+                  # other shipped file.  These two are the build tools, they
+                  # are named by nothing in stage.py or sd.iss, and they run
+                  # by hand when BCOMP's tables change.
+                  #
+                  # mkbasicsyntax.py READS THE COMPILER rather than carrying a
+                  # word list: 218 statements, 37 reserved words and 176
+                  # intrinsics come out of BCOMP's own tables, so the
+                  # highlighting cannot drift from the language.
+                  #
+                  # checksyntax.py exists because micro reports a syntax file
+                  # it cannot parse by simply not highlighting, which looks
+                  # exactly like a file that did not match the filename.  It
+                  # catches an illegal YAML escape - "\." is not one, and a
+                  # regex written the natural way invalidates the whole FILE -
+                  # and a pattern RE2 could not compile.
+                  'mkbasicsyntax.py',
+                  'checksyntax.py',
                   # 26 Aug 26 - check-stale-leads.py, which reads
                   # PROJECT_STATUS.md and reports entries whose OPENING status
                   # claim is contradicted later in the same entry.  Listed IN
