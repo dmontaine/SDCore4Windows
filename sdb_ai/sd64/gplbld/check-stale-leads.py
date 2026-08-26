@@ -25,8 +25,17 @@ import os
 import re
 import sys
 
-DOC = os.path.join("C:" + os.sep, "Users", "dmont", "Projects", "sd4windows",
-                   "PROJECT_STATUS.md")
+# Defaults to the repository's own PROJECT_STATUS.md, resolved from THIS file's
+# location rather than a hard-coded path, so a clone or a moved tree still
+# works.  An explicit path may be passed instead - that is how the control test
+# runs it against a deliberately corrupted copy, which is the only way anyone
+# has seen this script FAIL rather than merely pass.
+if len(sys.argv) > 1:
+    DOC = sys.argv[1]
+else:
+    DOC = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       os.pardir, os.pardir, os.pardir, "PROJECT_STATUS.md")
+    DOC = os.path.normpath(DOC)
 
 # Wording that asserts something is NOT done.
 OPEN_PAT = re.compile(
@@ -124,3 +133,99 @@ if flagged == 0:
     print("")
     print("ZERO IS SUSPICIOUS, NOT CLEAN.  Confirm the patterns still match")
     print("something by checking the entry count above is non-zero.")
+
+# ===========================================================================
+# PHASE 2 - THE TASK TABLE AGAINST THE ENTRIES, IN BOTH DIRECTIONS
+# ===========================================================================
+#
+# The owner asked for a table at the top so nobody searches history to learn
+# what is done.  A hand-kept table is ANOTHER place status is stated, which is
+# exactly what rotted in phase 1 - so it is checked rather than trusted.
+#
+# THE DIRECTION THAT MATTERS MOST IS "TABLE SAYS OPEN, ENTRY SAYS CLOSED":
+# that is work finished and never ticked off, which is what made step 14 read
+# as an outstanding decision for two days.
+
+print("")
+print("=" * 70)
+print("PHASE 2: the task table against the entries")
+print("")
+
+# Map an entry ID to its start line.  7.N is a section 7 step; H.N a START HERE
+# item.  Built from the SAME `starts` list phase 1 used, so the two phases
+# cannot disagree about where an entry begins.
+entry_at = {}
+for k in range(len(starts) - 1):
+    a = starts[k]
+    m = re.match(r"^(\d+)\. \*\*", lines[a])
+    if m and sec7_a < a < sec7_b:
+        entry_at["7." + m.group(1)] = (a, starts[k + 1])
+        continue
+    m = re.match(r"^> ### (\d+[a-z]?)\. ", lines[a])
+    if m:
+        entry_at["H." + m.group(1)] = (a, starts[k + 1])
+
+# Table rows: | <mark> | **<ID>** | ... |
+ROW = re.compile(r"^\|\s*([^|\s]*)\s*\|\s*\*\*([0-9]+\.[0-9a-z]+|H\.[0-9a-z]+"
+                 r"|7\.[0-9]+)\*\*\s*\|")
+rows = []
+for i, ln in enumerate(lines):
+    m = ROW.match(ln)
+    if m and m.group(1) in ("✅", "⬜", "➖", "◐"):
+        rows.append((i, m.group(1), m.group(2)))
+
+print("  table rows found: %d   entries indexed: %d" % (len(rows), len(entry_at)))
+if not rows:
+    print("  REFUSING - no task table rows parsed.  Either the table is gone or")
+    print("  its row format changed; fix this rather than reporting a clean run.")
+    sys.exit(2)
+
+problems = []
+seen_ids = set()
+for ln_i, mark, eid in rows:
+    seen_ids.add(eid)
+    if eid not in entry_at:
+        problems.append("row %d: ID %s has NO ENTRY in the file" % (ln_i + 1, eid))
+        continue
+    a, b = entry_at[eid]
+    o = [i for i in range(a, b) if OPEN_PAT.search(lines[i])]
+    c = [i for i in range(a, b) if CLOSE_PAT.search(lines[i])]
+    if not o and not c:
+        continue
+    first_is_open = bool(o) and (not c or o[0] < c[0])
+    if mark == "✅" and first_is_open:
+        problems.append(
+            "row %d: %s is ticked DONE but its entry leads with an open claim "
+            "(line %d)" % (ln_i + 1, eid, o[0] + 1))
+    if mark == "⬜" and c and not first_is_open:
+        problems.append(
+            "row %d: %s is marked OPEN but its entry leads with a closure "
+            "(line %d) - FINISHED WORK NEVER TICKED OFF" % (ln_i + 1, eid, c[0] + 1))
+    # PARTLY IS A CLAIM WITH TEETH, not a way to silence the two checks above.
+    # It asserts the entry holds BOTH a closure and something still open, so an
+    # entry with only one of them is drift: either it finished (tick it) or
+    # nothing in it is done (mark it open).
+    if mark == "◐":
+        if not c:
+            problems.append(
+                "row %d: %s is marked PARTLY but its entry contains no closure "
+                "at all - mark it open" % (ln_i + 1, eid))
+        if not o:
+            problems.append(
+                "row %d: %s is marked PARTLY but its entry contains nothing "
+                "still open - tick it off" % (ln_i + 1, eid))
+
+for eid in sorted(entry_at):
+    if eid not in seen_ids:
+        problems.append("entry %s (line %d) has NO ROW in the task table"
+                        % (eid, entry_at[eid][0] + 1))
+
+if problems:
+    print("")
+    for p in problems:
+        print("  DRIFT: " + p)
+    print("")
+    print("  %d disagreement(s) between the table and the entries." % len(problems))
+    sys.exit(1)
+
+print("  every row agrees with its entry, and every entry has a row.")

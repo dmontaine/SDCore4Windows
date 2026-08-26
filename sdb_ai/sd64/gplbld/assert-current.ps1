@@ -555,7 +555,20 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # all of it.  Three careful reads missed what this found in
                   # one pass, which is the argument for a script over a
                   # resolution to read more carefully.
-                  'check-stale-leads.py')
+                  'check-stale-leads.py',
+                  # 26 Aug 26 - test-staleleads-units.py, the control test for
+                  # the script above.  Listed IN THE COMMIT THAT CREATES IT,
+                  # under section 7 step 7's rule.  It copies PROJECT_STATUS.md
+                  # to %TEMP%, corrupts the copy seven ways and requires the
+                  # checker to fail each time; it writes nothing in the tree.
+                  #
+                  # IT IS THE ONLY REASON A CLEAN RUN OF THE CHECKER MEANS
+                  # ANYTHING.  check-stale-leads.py exits 0 on the real file,
+                  # which is indistinguishable from a script that has silently
+                  # stopped working - both print a clean run.  Case [0] is a
+                  # POSITIVE control: if the unmodified file does not pass,
+                  # every injected failure below it proves nothing.
+                  'test-staleleads-units.py')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
