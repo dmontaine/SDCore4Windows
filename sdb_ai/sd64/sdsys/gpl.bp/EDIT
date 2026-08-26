@@ -252,6 +252,7 @@ $include int$keys.h
       if record.saved then
          gosub compile.record.query
          response = ''
+         crt
          loop
             crt '<E>xit or <R>e-edit : ' :
             input response, 1 :
@@ -292,6 +293,7 @@ compile.record.query:
 
    prompt ''
    response = ''
+   crt
    loop
       crt 'Compile ' : in.file.name : ' ' : in.record.name : '?  <Y>es, <N>o : ' :
       input response, 1 :
@@ -304,6 +306,7 @@ compile.record.query:
    crt
 
    response = ''
+   crt
    loop
       crt 'Catalog?  <L>ocal, <P>rivate, <G>lobal, <N>o : ' :
       input response, 1 :
@@ -608,6 +611,7 @@ save.record.query:
    end else
       prompt ''
       response = ''
+      crt
       loop
          crt trim(dict.text : ' ' : in.file.name) : ' ' : in.record.name :
          crt ' has been changed'
