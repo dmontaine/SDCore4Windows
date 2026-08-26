@@ -1021,6 +1021,15 @@ def main():
                    # it is watched by assert-current like the rest of these -
                    # do NOT add it to that script's $neverShipped list.
                    'api-firewall.ps1',
+                   # 26 Aug 26 - the EDIT verb needs a terminal full-screen
+                   # editor, and most machines already carry one
+                   # (System32\edit.exe).  This installs Microsoft Edit with
+                   # winget where they do not.  It SHIPS, so assert-current
+                   # watches it like the rest of these - do NOT add it to that
+                   # script's $neverShipped list.  Exit 2 means "no editor and
+                   # none could be installed", which is not an install
+                   # failure: only EDIT is unavailable, and ed is unaffected.
+                   'install-edit.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
                    # 22 Aug 26 - the POST-INSTALL CHECK, offered as a
                    # checkbox on the installer's last page.  It ships, so

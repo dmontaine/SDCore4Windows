@@ -1,0 +1,371 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 26 Aug 26 Windows port - EDIT.  The full-screen editor comes back, on the
+*           owner's ruling of 26 Aug 2026, and this is gpl.bp/MICRO ported.
+*           MICRO itself is deleted in the same commit: its VOC entries went
+*           on 16 Aug 2026 and the source has been callerless since.
+*
+*           WHAT IS THE SAME AS MICRO, because the wiring was asked to stay:
+*           the record is copied to $hold, an external editor is run on the
+*           copy, the copy is read back, and the user is asked whether to
+*           save and - for a BP record - whether to compile and catalogue.
+*           A DICT record is always saved and re-compiled with CD.
+*
+*           WHAT IS DIFFERENT, and each of these was a defect rather than a
+*           preference:
+*
+*           1. THE EDITOR IS FOUND, NOT ASSUMED.  MICRO ran "!micro", which
+*              on a machine without micro produced a shell error and then
+*              read back an unchanged record, reporting "Record is unchanged"
+*              - a confident wrong answer with nothing naming the cause.  The
+*              editor is located once, up front, and a missing one refuses
+*              out loud with the command that installs it.
+*
+*           2. IT DOES NOT GO THROUGH THE SH VERB.  "!micro" is CPROC's shell
+*              escape, so it carried OS.USERS field 1 - the wrong gate for a
+*              verb the owner wants tier-gated.  This program is $internal, so
+*              os_permitted() admits it on HDR_INTERNAL (op_sh.c:157) and the
+*              gate is the VOC tier: TIER.OMIT.STANDARD holds "edit", so a
+*              programmer and an administrator have it and a standard account
+*              does not.
+*
+*           3. THE TEMPORARY RECORD IS ADDRESSED BY ITS REAL PATH.
+*              "$HOLD/name" is a relative path that only resolved because the
+*              process happened to be sitting in the account directory.
+*              fileinfo(FL$PATH) asks SD where the file actually is.
+*
+*           4. IT CLEANS UP ON EVERY EXIT.  MICRO deleted the temporary
+*              record only on the "<E>xit" path, so every other way out - an
+*              empty record, a write error, a refusal to save - left
+*              "<name>.editing" in $hold for ever.
+*
+*           5. NO ABSOLUTE SCREEN POSITIONS.  MICRO wrote at fixed rows up to
+*              @(0,27), which is off the bottom of a 25-line terminal, and
+*              its prompts overwrote each other on a short one.  Everything
+*              here is written sequentially.
+* END-HISTORY
+*
+PROGRAM EDIT
+
+$internal
+$catalog $EDIT
+
+$include SYSCOM KEYS.H
+
+* ---------------------------------------------------------------------------
+* The editor.  Microsoft Edit - a terminal full-screen editor that ships in
+* Windows and is a winget package on machines that do not have it.  Named as
+* the executable rather than as a path: System32 is always on PATH, and a
+* machine-scope winget install puts its link directory there too, so the
+* lookup below answers correctly for either.
+* ---------------------------------------------------------------------------
+   editor.exe   = 'edit.exe'
+   editor.get   = 'winget install --id Microsoft.Edit --exact --scope machine'
+
+   q            = char(39)          ;* single quote, as ELEVATE builds its own
+   ds           = @ds
+
+   compiled.dict = @false
+   files.opened  = @false
+   record.saved  = @false
+   temp.written  = @false
+   error.text    = ''
+   input.record  = ''
+   temp.record   = ''
+   response      = ''
+
+* ---------------------------------------------------------------------------
+* The command line:  edit {DICT} file record
+* ---------------------------------------------------------------------------
+   cmd = convert(' ', @fm, trim(@command, ' ', 'C'))
+
+   if upcase(trim(cmd<2>, ' ', 'B')) = 'DICT' then
+      in.file.name   = cmd<3>
+      in.record.name = cmd<4>
+      dict.text      = 'DICT'
+   end else
+      in.file.name   = cmd<2>
+      in.record.name = cmd<3>
+      dict.text      = ''
+   end
+
+   if trim(in.file.name) = '' then
+      error.text = 'No file name specified.  Usage: edit {dict} <file> <record>'
+      goto end.program
+   end
+
+   if trim(in.record.name) = '' then
+      error.text = 'No record name specified.  Usage: edit {dict} <file> <record>'
+      goto end.program
+   end
+
+   temp.file.name = '$hold'
+   if dict.text = 'DICT' then
+      temp.record.name = 'dict.' : in.record.name : '.editing'
+   end else
+      temp.record.name = in.record.name : '.editing'
+   end
+
+* ---------------------------------------------------------------------------
+* Find the editor BEFORE anything is written, so a machine without one is
+* told so instead of being handed an unchanged record.
+* ---------------------------------------------------------------------------
+   gosub find.editor
+   if editor.path = '' then goto end.program
+
+   gosub open.files
+   if not(files.opened) then goto end.program
+
+   crt @(-1) :
+
+   loop
+      gosub process.record
+      if trim(temp.record, ' ', 'B') = '' then
+         error.text = 'Record is empty - not saved'
+         goto end.program
+      end
+
+      crt
+      if temp.record = input.record then
+         crt 'Record is unchanged'
+         record.saved = @true
+      end else
+         gosub save.record.query
+      end
+
+      if record.saved then
+         gosub compile.record.query
+         response = ''
+         loop
+            crt '<E>xit or <R>e-edit : ' :
+            input response, 1 :
+            crt
+            response = upcase(response)
+         until index('ER', response, 1) > 0 repeat
+         if response = 'E' then goto end.program
+      end
+   repeat
+
+* ---------------------------------------------------------------------------
+end.program:
+   gosub remove.temp.record
+
+   if error.text = '' then
+      crt 'edit ended normally'
+   end else
+      crt error.text
+   end
+   stop
+
+* ===========================================================================
+* SUBROUTINES: alphabetical
+* ===========================================================================
+
+* ---------------------------------------------------------------------------
+* compile.record.query  -  a DICT record is always re-compiled; a BP record is
+* offered the compile and the catalogue, exactly as MICRO offered them.
+* ---------------------------------------------------------------------------
+compile.record.query:
+   if compiled.dict then
+      execute 'CD ' : in.file.name : ' ' : in.record.name
+      return
+   end
+
+   if dict.text = 'DICT' then return
+   if upcase(in.file.name[-2, 2]) # 'BP' then return
+
+   prompt ''
+   response = ''
+   loop
+      crt 'Compile ' : in.file.name : ' ' : in.record.name : '?  <Y>es, <N>o : ' :
+      input response, 1 :
+      crt
+      response = upcase(response)
+   until index('YN', response, 1) > 0 repeat
+   if response # 'Y' then return
+
+   execute 'BASIC ' : in.file.name : ' ' : in.record.name
+   crt
+
+   response = ''
+   loop
+      crt 'Catalog?  <L>ocal, <P>rivate, <G>lobal, <N>o : ' :
+      input response, 1 :
+      crt
+      response = upcase(response)
+   until index('LPGN', response, 1) > 0 repeat
+
+   begin case
+      case response = 'L'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' LOCAL'
+      case response = 'P'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name
+      case response = 'G'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' GLOBAL'
+      case response = 'N'
+         crt in.file.name : ' ' : in.record.name : ' not catalogued'
+   end case
+return
+
+* ---------------------------------------------------------------------------
+* find.editor  -  ask Windows where the editor is, once.
+*
+* IT RETURNS THE RESOLVED PATH AND THE PATH IS WHAT IS RUN.  Asking
+* Get-Command and then running the bare name would be two lookups that could
+* disagree; and printing the path is what makes a wrong editor obvious rather
+* than mysterious.
+*
+* CommandType Application is deliberate: it cannot match a PowerShell alias or
+* function, only a real executable.
+* ---------------------------------------------------------------------------
+find.editor:
+   editor.path = ''
+   probe = '$c = Get-Command -Name ' : editor.exe
+   probe := ' -CommandType Application -ErrorAction SilentlyContinue; '
+   probe := 'if ($c) { $c[0].Source }'
+
+   os.execute probe capturing probe.out
+
+   editor.path = trim(convert(char(13) : char(10), '  ', probe.out))
+
+   if editor.path = '' then
+      error.text  = editor.exe : ' was not found on this machine, so there is'
+      error.text := ' nothing to edit with.' : @fm
+      error.text := 'Install it from an elevated prompt:' : @fm
+      error.text := '   ' : editor.get : @fm
+      error.text := 'or use ed, the line editor, which needs nothing installed.'
+      error.text  = change(error.text, @fm, char(10))
+   end
+return
+
+* ---------------------------------------------------------------------------
+* open.files  -  the record's file, and $hold for the working copy.
+* ---------------------------------------------------------------------------
+open.files:
+   open dict.text, in.file.name to input.file then
+      open temp.file.name to temp.file then
+         files.opened = @true
+      end else
+         error.text = 'File error: ' : temp.file.name : ' could not be opened.'
+      end
+   end else
+      error.text = 'File error: ' : trim(dict.text : ' ' : in.file.name)
+      error.text := ' could not be opened.'
+   end
+return
+
+* ---------------------------------------------------------------------------
+* process.record  -  write the working copy, run the editor on it, read it
+* back.  A record that does not exist yet is editable: the copy is simply
+* empty, which is how a new program is written.
+* ---------------------------------------------------------------------------
+process.record:
+   read input.record from input.file, in.record.name else input.record = ''
+   temp.record = input.record
+
+   if dict.text = 'DICT' then
+      temp.str = trim(field(temp.record, @fm, 1), ' ', 'B')[1, 1]
+      if index('CI', upcase(temp.str), 1) > 0 then
+         compiled.dict = @true
+         temp.record = field(temp.record, @fm, 1, 15)
+      end
+   end
+
+   write temp.record to temp.file, temp.record.name on error
+      error.text = 'Write error: the working copy could not be created in '
+      error.text := temp.file.name
+      goto end.program
+   end
+   temp.written = @true
+
+*  THE REAL PATH, NOT "$hold/name".  $hold is a directory file, so its record
+*  is a file on disk, and fileinfo() is what knows where.  MICRO passed a
+*  relative path and it resolved only because the process happened to be
+*  standing in the account directory.
+   hold.dir = fileinfo(temp.file, FL$PATH)
+   if hold.dir = '' then
+      error.text = 'Could not find the operating-system path of ' : temp.file.name
+      goto end.program
+   end
+   os.file = hold.dir : ds : temp.record.name
+
+   crt @(-1) : 'Editing ' : trim(dict.text : ' ' : in.file.name) : ' ' :
+   crt in.record.name
+
+   cmd = '& ' : q : editor.path : q : ' ' : q : os.file : q
+   cmd := '; exit $LASTEXITCODE'
+   os.execute cmd
+   rc = os.error()
+
+   crt @(-1) :
+
+   read temp.record from temp.file, temp.record.name else
+      error.text = 'The working copy has gone - nothing was read back.'
+      if rc # 0 then
+         error.text := '  The editor exited ' : rc : '.'
+      end
+      goto end.program
+   end
+return
+
+* ---------------------------------------------------------------------------
+* remove.temp.record  -  on EVERY exit, not only the tidy one.
+* ---------------------------------------------------------------------------
+remove.temp.record:
+   if temp.written then
+      delete temp.file, temp.record.name on error
+         crt 'Warning: the working copy ' : temp.record.name : ' is still in '
+         crt temp.file.name
+      end
+      temp.written = @false
+   end
+return
+
+* ---------------------------------------------------------------------------
+* save.record.query  -  a DICT record is always saved, as in MICRO.
+* ---------------------------------------------------------------------------
+save.record.query:
+   if dict.text = 'DICT' then
+      response = 'Y'
+   end else
+      prompt ''
+      response = ''
+      loop
+         crt trim(dict.text : ' ' : in.file.name) : ' ' : in.record.name :
+         crt ' has been changed'
+         crt 'Save?  <Y>es, <N>o : ' :
+         input response, 1 :
+         crt
+         response = upcase(response)
+      until index('YN', response, 1) > 0 repeat
+   end
+
+   if response # 'Y' then
+      error.text = 'Record not saved'
+      goto end.program
+   end
+
+   write temp.record to input.file, in.record.name on error
+      error.text = 'Write error: ' : trim(dict.text : ' ' : in.file.name)
+      error.text := ' ' : in.record.name : ' could not be updated.'
+      goto end.program
+   end
+   record.saved = @true
+return
+
+end

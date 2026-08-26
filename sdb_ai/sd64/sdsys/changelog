@@ -5,6 +5,47 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+26 Aug 26  THERE IS A FULL-SCREEN EDITOR AGAIN, AND IT IS CALLED EDIT.
+
+           EDIT opens a record in Microsoft Edit - the terminal editor that
+           ships with Windows - saves it back, and offers to compile and
+           catalogue a BP record, exactly as MICRO did before it was removed
+           on 17 Aug.
+
+               edit bp myprog
+               edit dict customers name
+
+           WHO HAS IT.  Programmer and administrator accounts.  A standard
+           account does not, for the same reason it has no ED: it is not a
+           development account.
+
+           ED IS UNCHANGED and is still there.  If you preferred the line
+           editor, nothing has been taken away.  What HAS changed is that
+           "EDIT" used to be a second name for ED, so if you have been typing
+           EDIT to get the line editor you will now get the full-screen one.
+
+           THE EDITOR IS FOUND, NOT ASSUMED.  Current Windows builds carry
+           edit.exe already.  On a machine without it the installer installs
+           it with winget, and if that cannot be done - no winget, no network,
+           a policy in the way - the install still succeeds and says so in
+           C:\ProgramData\SD\install-edit.log.  EDIT then refuses with the
+           command that installs it rather than appearing to do nothing.  To
+           do it by hand, from an elevated prompt:
+
+               winget install --id Microsoft.Edit --exact --scope machine
+
+           WHY THE SCOPE MATTERS: without it winget installs into the profile
+           of whoever ran it, and accounts SD creates cannot log in to Windows
+           at all, so a per-user copy is one they can never reach.
+
+           WHAT IT MEANS FOR CONTAINMENT, because 17 Aug removed MICRO on
+           exactly this ground.  An editor can open any file the person
+           running it is allowed to open, so EDIT widens what a programmer can
+           reach beyond SD's own files.  It is not a shell - Microsoft Edit
+           has no way to run a command - and it is not available to standard
+           accounts or over the API.  The line SD draws is the account tier,
+           not the OS.USERS list that governs SH.
+
 26 Aug 26  THE STAND-ALONE INSTALLER NO LONGER OFFERS TO OPEN THE API PORT.
 
            A stand-alone install opens no network port at all - it writes an
@@ -2018,7 +2059,9 @@ Entries are newest first, by date, until there is a version to attach them to.
 17 Aug 26  MICRO and the language verbs are gone.
            * MICRO launched an external editor, which is a way out of SD onto
              the machine underneath it.  It is removed for the same reason SH
-             is restricted.
+             is restricted.  REVERSED ON 26 Aug 26 - see the EDIT entry at the
+             top.  A full-screen editor is back, under the name EDIT, limited
+             to programmer and administrator accounts.
            * NLS, SET.LANGUAGE and LOAD.LANGUAGE are removed: SD is English
              only, and they were the only callers of the message-language
              machinery.
