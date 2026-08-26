@@ -689,12 +689,12 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Flags: runhidden skipifdoesntexist; Check: SshServerAbsent and not StandaloneChosen; \
     StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
 
-; THE FULL-SCREEN EDITOR, 26 Aug 2026, and it is not a task either.  The EDIT
-; verb runs Microsoft Edit, a terminal editor that ships IN Windows on current
-; builds; install-edit.ps1 checks for it first and only reaches for winget on a
-; machine that has none.  Offering it as a checkbox would mean a programmer
-; account with a verb that does nothing on a machine where somebody unticked a
-; box months earlier.
+; THE FULL-SCREEN EDITORS, 26 Aug 2026, and this is not a task either.  There
+; are two verbs and two editors: EDIT runs Microsoft Edit, which ships IN
+; Windows on current builds, and MICRO runs micro, which is always a winget
+; install.  install-editors.ps1 checks for each before reaching for winget.
+; Offering them as a checkbox would mean a programmer account with a verb that
+; does nothing on a machine where somebody unticked a box months earlier.
 ;
 ; IT RUNS ON A STAND-ALONE INSTALLATION TOO, unlike the ssh line above.  A
 ; stand-alone install is the one person at one computer writing code, which is
@@ -703,13 +703,13 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; ITS EXIT CODE IS NOT READ, AND THAT IS DELIBERATE RATHER THAN THE OVERSIGHT
 ; THE SSH ENTRY ABOVE RECORDS.  There is no state to check afterwards that the
 ; script has not already checked, and no outcome that should stop an install:
-; exit 2 means SD is complete and only EDIT is not.  What replaces the exit
-; code is the script's own log, C:\ProgramData\SD\install-edit.log, written
-; because a runhidden step that prints has said nothing.
+; exit 2 means SD is complete and one editor verb is not.  What replaces the
+; exit code is the script's own log, C:\ProgramData\SD\install-editors.log,
+; written because a runhidden step that prints has said nothing.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-edit.ps1"""; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-editors.ps1"""; \
     Flags: runhidden skipifdoesntexist; \
-    StatusMsg: "Checking for the full-screen editor..."
+    StatusMsg: "Checking for the full-screen editors..."
 
 ; THE SERVICE, AND IT IS NOT A TASK - owner's decision, 15 Aug 2026.  SD must
 ; be running when the installer finishes and after every Windows startup, so

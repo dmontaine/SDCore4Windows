@@ -15,10 +15,15 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 26 Aug 26 Windows port - TWO VERBS, ONE PROGRAM.  Owner, 26 Aug 2026: a
+*           second full-screen editor, "one called with the verb micro and the
+*           other with the verb edit".  Both VOC entries are CA $EDIT; the
+*           editor is chosen from field 1 of the command line.  See THE VERB
+*           CHOOSES THE EDITOR below for why this is not two programs.
 * 26 Aug 26 Windows port - EDIT.  The full-screen editor comes back, on the
 *           owner's ruling of 26 Aug 2026, and this is gpl.bp/MICRO ported.
-*           MICRO itself is deleted in the same commit: its VOC entries went
-*           on 16 Aug 2026 and the source has been callerless since.
+*           The old MICRO source is deleted in the same commit: its VOC
+*           entries went on 17 Aug 2026 and it had been callerless since.
 *
 *           WHAT IS THE SAME AS MICRO, because the wiring was asked to stay:
 *           the record is copied to $hold, an external editor is run on the
@@ -67,16 +72,6 @@ $catalog $EDIT
 
 $include SYSCOM KEYS.H
 
-* ---------------------------------------------------------------------------
-* The editor.  Microsoft Edit - a terminal full-screen editor that ships in
-* Windows and is a winget package on machines that do not have it.  Named as
-* the executable rather than as a path: System32 is always on PATH, and a
-* machine-scope winget install puts its link directory there too, so the
-* lookup below answers correctly for either.
-* ---------------------------------------------------------------------------
-   editor.exe   = 'edit.exe'
-   editor.get   = 'winget install --id Microsoft.Edit --exact --scope machine'
-
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
 
@@ -94,6 +89,36 @@ $include SYSCOM KEYS.H
 * ---------------------------------------------------------------------------
    cmd = convert(' ', @fm, trim(@command, ' ', 'C'))
 
+* ---------------------------------------------------------------------------
+* THE VERB CHOOSES THE EDITOR, AND THERE IS ONE PROGRAM RATHER THAN TWO.
+*
+* Owner, 26 Aug 2026: two full-screen editors, "one called with the verb micro
+* and the other with the verb edit".  Both VOC entries are CA $EDIT and this
+* reads field 1 of the command line - the verb as it was typed - to decide
+* which executable to run.
+*
+* WHY NOT TWO PROGRAMS.  Everything either verb does is the same: the working
+* copy, the save query, the compile-and-catalogue loop, the cleanup.  A second
+* copy of that is a second place for the next defect to be fixed in only one -
+* which is the shape of MICRO's own three faults, and of the 32-bit client's
+* middle hop before it was removed.  If the two ever need to behave
+* differently, the table below is where it goes.
+*
+* THE EXECUTABLE IS NAMED, NOT PATHED.  System32 is always on PATH and a
+* machine-scope winget install puts its link directory there too, so
+* find.editor's lookup answers for either.
+* ---------------------------------------------------------------------------
+   begin case
+      case upcase(trim(cmd<1>, ' ', 'B')) = 'MICRO'
+         editor.exe  = 'micro.exe'
+         editor.name = 'micro'
+         editor.get  = 'winget install -e --id zyedidia.micro --scope machine'
+      case 1
+         editor.exe  = 'edit.exe'
+         editor.name = 'Microsoft Edit'
+         editor.get  = 'winget install -e --id Microsoft.Edit --scope machine'
+   end case
+
    if upcase(trim(cmd<2>, ' ', 'B')) = 'DICT' then
       in.file.name   = cmd<3>
       in.record.name = cmd<4>
@@ -104,13 +129,18 @@ $include SYSCOM KEYS.H
       dict.text      = ''
    end
 
+*  The verb as typed, lower cased, so every message this program prints names
+*  the command the user actually used rather than one of the two.
+   verb.text = downcase(trim(cmd<1>, ' ', 'B'))
+   usage     = 'Usage: ' : verb.text : ' {dict} <file> <record>'
+
    if trim(in.file.name) = '' then
-      error.text = 'No file name specified.  Usage: edit {dict} <file> <record>'
+      error.text = 'No file name specified.  ' : usage
       goto end.program
    end
 
    if trim(in.record.name) = '' then
-      error.text = 'No record name specified.  Usage: edit {dict} <file> <record>'
+      error.text = 'No record name specified.  ' : usage
       goto end.program
    end
 
@@ -166,7 +196,7 @@ end.program:
    gosub remove.temp.record
 
    if error.text = '' then
-      crt 'edit ended normally'
+      crt verb.text : ' ended normally'
    end else
       crt error.text
    end
@@ -244,8 +274,9 @@ find.editor:
    editor.path = trim(convert(char(13) : char(10), '  ', probe.out))
 
    if editor.path = '' then
-      error.text  = editor.exe : ' was not found on this machine, so there is'
-      error.text := ' nothing to edit with.' : @fm
+      error.text  = editor.name : ' (' : editor.exe : ') was not found on this'
+      error.text := ' machine, so ' : verb.text : ' has nothing to edit with.'
+      error.text := @fm
       error.text := 'Install it from an elevated prompt:' : @fm
       error.text := '   ' : editor.get : @fm
       error.text := 'or use ed, the line editor, which needs nothing installed.'
