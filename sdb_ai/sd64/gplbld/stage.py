@@ -297,7 +297,24 @@ SDSYS_MIRROR = [
     ('voc_template', 'read by CREATEA and UPDATE.ACCOUNT; never written'),
     ('messages',     'sysmsg text'),
     ('sd.voclib',    'library routines'),
-    ('bp',           "SDSYS's own BP - five utility programs"),
+    # 25 Aug 26 - bp IS NO LONGER A MIRROR, and it stopped qualifying the
+    # moment SD stopped shipping into it.
+    #
+    # THE RULE FOR THIS LIST IS THE COMMENT ABOVE: a directory qualifies only
+    # if the install NEVER writes into it, so that "installed but not in
+    # source" can only mean a deletion that has not shipped.  sdsys/bp is now
+    # the opposite of that - SD ships nothing there and it is on SDSYS_PRESERVE
+    # precisely because it is where the SITE puts its own programs.
+    #
+    # LEAVING IT HERE WOULD HAVE FIRED ON THE FIRST PERSON TO USE IT AS
+    # INTENDED: assert-current's B3 walks install -> source and reports
+    # anything the install has that source does not.  One program written into
+    # SDSYS's BP would be reported as an unshipped deletion, assert-current
+    # would go red, and every verifier refuses to run behind it.  "A guard that
+    # always fires is worse than the gap it closes" is this list's own comment.
+    #
+    # NOTHING IS LOST.  Deletion detection exists to catch a shipped file that
+    # source no longer has; SD ships no file here to delete.
 ]
 
 # Names this file USED to put in the data tree and no longer does.  An upgrade
