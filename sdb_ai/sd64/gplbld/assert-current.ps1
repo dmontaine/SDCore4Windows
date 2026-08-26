@@ -584,7 +584,22 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # human running a grep on a hunch, neither by anything that
                   # runs.  --self-test builds broken fixtures and requires a
                   # rejection from each, so a clean run means something.
-                  'check-client-sync.py')
+                  'check-client-sync.py',
+                  # 26 Aug 26 - probe-sshremote.ps1, the HOST half of the ssh
+                  # scoping test: it dials the GUEST's port 22 across the
+                  # bridged segment.  probe-sshfirewall.ps1 is the guest half
+                  # and reads the rule.  Listed IN THE COMMIT THAT CREATES IT,
+                  # under section 7 step 7's rule.  It runs on the host, opens
+                  # outbound TCP and reads the ARP table; it never touches the
+                  # installed tree, and stage.py and sd.iss name neither it nor
+                  # probe-sshfirewall.ps1.
+                  #
+                  # WHAT IT CLOSES: every ssh reachability dial in this
+                  # project's record goes to LOOPBACK, so "RemoteAddress =
+                  # 127.0.0.1" has only ever been READ, never shown to refuse
+                  # anybody.  -SelfTest proves the dialer tells connect,
+                  # refuse and time-out apart without needing a guest.
+                  'probe-sshremote.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
