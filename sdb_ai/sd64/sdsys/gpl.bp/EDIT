@@ -227,7 +227,17 @@ $include int$keys.h
    loop
       gosub process.record
       if trim(temp.record, ' ', 'B') = '' then
-         error.text = 'Record is empty - not saved'
+*        NAME THE FILE THE EDITOR WAS GIVEN, because this message is what a
+*        failed LAUNCH looks like as well as a genuinely empty record, and on
+*        26 Aug 2026 it was the second - the path was POSIX and Windows put
+*        the user's typing somewhere else entirely.  Told only "Record is
+*        empty" there is nothing to go on; told the path, a wrong one is
+*        obvious at a glance.
+         error.text  = 'Record is empty - not saved.' : char(10)
+         error.text := 'The editor was given:' : char(10)
+         error.text := '   ' : os.file : char(10)
+         error.text := 'If you typed something and it is not here, check that'
+         error.text := ' path exists.'
          goto end.program
       end
 
@@ -512,7 +522,39 @@ process.record:
       error.text = 'Could not find the operating-system path of ' : temp.file.name
       goto end.program
    end
-   os.file = hold.dir : ds : temp.record.name
+
+*  ***AND THEN CONVERTED, BECAUSE fileinfo() ANSWERS IN POSIX.***  Measured
+*  26 Aug 2026 with ANALYSE.FILE on an installed system:
+*
+*      Path name : /cygdrive/c/ProgramData/SD/sdsys/$hold
+*
+*  sd.conf holds "C:\ProgramData\SD\sdsys", so it is tempting to conclude the
+*  runtime keeps Windows paths and skip this.  IT DOES NOT: the MSYS2 runtime
+*  converts on the way in and SD works in POSIX from then on.
+*
+*  A POSIX PATH HANDED TO A WINDOWS PROGRAM IS NOT AN ERROR, WHICH IS WHY THIS
+*  COST A TEST RUN.  "/cygdrive/c/..." reads to Windows as a path from the
+*  root of the CURRENT DRIVE, so the editor neither refuses nor opens the
+*  record - it opens a new buffer somewhere else entirely.  micro says
+*  "parent dirs don't exist"; Microsoft Edit says nothing at all and the
+*  record reads back empty, which arrives as "Record is empty - not saved".
+*  A stray "C:" directory in the account was the only physical trace.
+*
+*  kernel(K$WINPATH) is the conversion - cygwin_conv_path(), op_kernel.c:628 -
+*  and it is the same one ELEVATE makes for its helper, whose header says it
+*  plainly: the scripts are POSIX "/" to SD and "C:\Program Files\SD" to
+*  PowerShell, WHICH CANNOT OPEN THE FORMER.
+*
+*  IT ANSWERS AN EMPTY STRING RATHER THAN A GUESS when the runtime cannot
+*  convert, so an empty answer is refused here rather than passed on.  A wrong
+*  pathname would put the user's work in a file nobody goes looking for.
+   posix.file = hold.dir : ds : temp.record.name
+   os.file = kernel(K$WINPATH, posix.file)
+   if os.file = '' then
+      error.text  = 'Could not turn the working copy path into a Windows one:'
+      error.text := char(10) : '   ' : posix.file
+      goto end.program
+   end
 
    crt @(-1) : 'Editing ' : trim(dict.text : ' ' : in.file.name) : ' ' :
    crt in.record.name

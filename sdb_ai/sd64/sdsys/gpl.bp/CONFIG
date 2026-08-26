@@ -151,14 +151,89 @@ report.params:
 
 * ======================================================================
 
+* 26 Aug 26 Windows port - BOTH OF THESE READ A VOC RECORD NOW, AND NEITHER
+*   SHELLS OUT.  Owner's ruling: the text CONFIG shows should be internal to SD
+*   rather than a file it reaches out to.
+*
+*   WHAT THEY USED TO BE:  execute "!less " : @sdsys:@ds:'licence'
+*
+*   THAT FAILED TWICE OVER ON WINDOWS and either half alone was enough.
+*   There is no "less" on a Windows machine and the install ships none - so
+*   the pager was never going to run.  And "!" is CPROC's shell escape, gated
+*   on OS.USERS field 1 (op_sh.c os_permitted), so an ordinary user was
+*   refused before that even mattered - with a message about the operating
+*   system shell, naming neither CONFIG nor the licence.  Displaying a licence
+*   must not require shell permission.
+*
+*   THE RECORDS ARE IN SDSYS's OWN VOC AND NOT IN NEWVOC.  voc_template is
+*   the administrative superset that becomes SDSYS's VOC; newvoc is what
+*   CREATEA copies into every account.  The licence is 44 KB, so in newvoc it
+*   would land in every account's VOC and be copied again by every
+*   UPDATE.ACCOUNT.  gplbld/mkvocdoc.py generates both records FROM the files
+*   that still ship in the data tree, so the two cannot drift; --check asserts
+*   it.
+*
+*   THE FILES STILL SHIP, and that is not redundancy: SD is GPL-3,
+*   sdsys/licence is the only copy of the licence in the distribution, and
+*   sd.iss has no LicenseFile - so a GPL program with no readable licence for
+*   anyone who has not started SD is what deleting it would produce.
+
 show.contrib:
-	* added contributor display (dsm) 2024-01-22 
-	execute "!less " : @sdsys:@ds:'contrib'
+   * added contributor display (dsm) 2024-01-22
+   doc.name = '$contrib'
+   gosub show.doc
 return
 
 show.gpl:
-   * changed to use man (dsm) 2024-01-24   
-   execute "!less " : @sdsys:@ds:'licence'
+   doc.name = '$licence'
+   gosub show.doc
+return
+
+* ----------------------------------------------------------------------
+* show.doc  -  print an X-type record from SDSYS's VOC, a field to a line.
+*
+* SDSYS's VOC RATHER THAN THIS ACCOUNT'S, so there is one copy on the system
+* and it is reachable from wherever CONFIG was typed.  The same @sdsys route
+* LOGIN uses for batch.jobs.
+*
+* PAGINATION IS SD's OWN.  Turning it on for the duration is what replaces the
+* pager, and it is put back afterwards whichever way this leaves - a verb that
+* silently changed the session's paging would be a worse bug than the one
+* being fixed.
+* ----------------------------------------------------------------------
+
+show.doc:
+   openpath @sdsys : @ds : 'voc' to sdsys.voc else
+      display 'Cannot open the SDSYS VOC, so ' : doc.name : ' cannot be shown.'
+      return
+   end
+
+   read doc.rec from sdsys.voc, doc.name else
+      close sdsys.voc
+      display doc.name : ' is not in the SDSYS VOC.'
+      return
+   end
+   close sdsys.voc
+
+   doc.lines = dcount(doc.rec, @fm)
+   if doc.lines < 2 then
+      display doc.name : ' holds no text.'
+      return
+   end
+
+*  THE SAME PAGINATION IDIOM CPROC USES (CPROC:525), not SETPU: SETPU takes a
+*  numeric PU$ key and a unit number and is for print units, while pagination
+*  is a kernel setting.  Read it, turn it on, put it back.
+   pagination.state = kernel(K$PAGINATE, -1)
+   i = kernel(K$PAGINATE, @true)
+
+   crt @(-1) :
+*  Field 1 is the record type, X.  The text starts at field 2.
+   for doc.i = 2 to doc.lines
+      print doc.rec<doc.i>
+   next doc.i
+
+   i = kernel(K$PAGINATE, pagination.state)
 return
 
 * ======================================================================

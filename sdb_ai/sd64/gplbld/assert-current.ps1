@@ -594,6 +594,22 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # and a pattern RE2 could not compile.
                   'mkbasicsyntax.py',
                   'checksyntax.py',
+                  # 26 Aug 26 - mkvocdoc.py, which builds the two X-type VOC
+                  # records CONFIG GPL and CONFIG CONTRIB display, from
+                  # sdsys/licence and sdsys/contrib.  Listed in the commit
+                  # that creates it, under section 7 step 7's rule.
+                  #
+                  # THE RECORDS IT WRITES ARE NOT ON THIS LIST AND MUST NOT
+                  # BE: they are in sdsys/voc_template, which is mirrored to
+                  # the install, so assert-current watches them like any other
+                  # shipped record.  This is the generator and ships nowhere.
+                  #
+                  # ITS --check MODE IS THE POINT.  The text exists twice on
+                  # purpose - the file has to keep shipping because SD is
+                  # GPL-3 and sdsys/licence is the distribution's only copy of
+                  # the licence - so the generator makes the record FROM the
+                  # file and --check asserts they still agree.
+                  'mkvocdoc.py',
                   # 26 Aug 26 - check-stale-leads.py, which reads
                   # PROJECT_STATUS.md and reports entries whose OPENING status
                   # claim is contradicted later in the same entry.  Listed IN

@@ -5,6 +5,37 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+26 Aug 26  CONFIG GPL AND CONFIG CONTRIB WORK AGAIN.
+
+           Both did nothing on Windows, and for two reasons either of which
+           was enough on its own:
+
+           * they ran an external pager, "less", which is not on a Windows
+             machine and which SD does not install; and
+           * they reached it through "!", the shell escape, so an ordinary
+             user was refused before that even mattered - with a message
+             about the operating system shell that named neither CONFIG nor
+             the licence.
+
+           SHOWING A LICENCE SHOULD NOT REQUIRE SHELL PERMISSION, so neither
+           command shells out now.  The text is held inside SD as a record in
+           the SDSYS VOC and printed with SD's own pagination, which works at
+           the console and over ssh alike and needs nothing installed.
+
+           THE LICENCE FILE STILL SHIPS, in the data tree as before.  That is
+           deliberate rather than left over: SD is GPL-3 and that file is the
+           only copy of the licence in the distribution, so it has to be
+           readable by somebody who has not started SD.
+
+           AND THE LICENCE TEXT NAMED A LICENCE SD DOES NOT USE.  It said the
+           install and delete scripts were under the Black Oak Model License
+           v1.0.0.  Those were the Linux shell scripts, which this port
+           replaced entirely; nothing in SD Core carries that licence and no
+           source file ever mentioned it.  The line is gone.
+
+           What is left is correct and unchanged: most of SD is GPL v3.0, the
+           API is LGPL v3.0, and anything not marked otherwise is GPL v3.0.
+
 26 Aug 26  THERE ARE FULL-SCREEN EDITORS AGAIN: EDIT AND MICRO.
 
            Two verbs, two editors, and they work the same way.  Each opens a
