@@ -146,9 +146,16 @@ if ($WithPassword) {
         # K$ADMINISTRATOR.  This runs on Setup's token.
         #
         # DECLINING STILL WORKS, and now says so itself: an empty password makes
-        # SET_ACC_PASSWORD:176 print "Password not changed." and stop.  The
+        # SET_ACC_PASSWORD:198 print "Password not changed." and stop.  The
         # message stays readable because this is OUR console, not one that
         # vanishes with the process.
+        #
+        # 26 Aug 26 - AND MISTYPING IT NO LONGER ENDS THE INSTALL WITH NO
+        # PASSWORD.  SET_ACC_PASSWORD gave one attempt at the pair and stopped
+        # on a mismatch; this window then moved straight on to the check with
+        # the account still passwordless.  It allows three now, and says which
+        # one you are on.  An empty entry still leaves at once and is not
+        # counted - that is a decision, not a mistake.
         #
         # A FRESH ACCOUNT IS THE EXPECTED CASE AND IS HANDLED: :152 prints
         # "has no password set.  Setting the first one", and :159 skips the

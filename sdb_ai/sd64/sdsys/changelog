@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+26 Aug 26  MISTYPING THE PASSWORD AT THE END OF AN INSTALL NO LONGER LEAVES
+           THE ACCOUNT WITHOUT ONE.
+
+           The installer finishes by opening SD so you can set a password.
+           Typing the two entries differently used to end it there - "Passwords
+           do not match.  Password not changed." - and the install carried on
+           to its check with no password set.  ONE MISTYPE, ONE CHANCE.
+
+           You now get three, and it tells you which attempt you are on.
+
+           PRESSING ENTER ON AN EMPTY LINE STILL DECLINES AT ONCE and is not
+           counted as an attempt.  Declining is a decision; being re-asked
+           would turn it into an argument.
+
+           NOTHING WAS EVER LOST BY IT.  SD asks again the first time you open
+           the account, and that prompt is bounded at three now as well.
+
 26 Aug 26  CONFIG GPL AND CONFIG CONTRIB WORK AGAIN.
 
            Both did nothing on Windows, and for two reasons either of which
