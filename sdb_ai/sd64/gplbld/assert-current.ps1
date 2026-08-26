@@ -568,7 +568,23 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # stopped working - both print a clean run.  Case [0] is a
                   # POSITIVE control: if the unmodified file does not pass,
                   # every injected failure below it proves nothing.
-                  'test-staleleads-units.py')
+                  'test-staleleads-units.py',
+                  # 26 Aug 26 - check-client-sync.py, which compares the API
+                  # client across the three trees: gplsrc/sdclilib is the
+                  # source, ../winsdclilib is its mirror, ../sdclilib32 builds
+                  # from this tree and holds no source.  Listed IN THE COMMIT
+                  # THAT CREATES IT, under section 7 step 7's rule.  It reads
+                  # those trees and writes nothing.
+                  #
+                  # IT EXISTS BECAUSE THE ABSENCE OF IT COST TWICE: the 32-bit
+                  # client that SHIPPED SENDING PASSWORDS IN CLEAR, built from
+                  # a mirror that had not moved since 15 Aug and had no SCRAM
+                  # in it; and the SV_EMSG_PAIR transposition that survived ten
+                  # days in three repositories at once.  Both were found by a
+                  # human running a grep on a hunch, neither by anything that
+                  # runs.  --self-test builds broken fixtures and requires a
+                  # rejection from each, so a clean run means something.
+                  'check-client-sync.py')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
