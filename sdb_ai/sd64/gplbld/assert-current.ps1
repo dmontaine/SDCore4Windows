@@ -480,22 +480,22 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # rather than carrying a copy, so the two cannot drift; both
                   # are on this list for the same reason and neither ships.
                   'cleanup-devlitter.ps1',
-                  # 26 Aug 26 - mkpdf.ps1, the PDF half of the documentation
-                  # toolchain: it prints mkdoc.py's HTML with headless Edge.
-                  # Listed in the commit that created it, per step 7's rule -
-                  # a script not on this list makes the tree report stale
-                  # because it EXISTS, and then every verifier refuses.
+                  # 26 Aug 26 - mkdoc.py AND mkpdf.ps1 WERE HERE AND ARE GONE
+                  # FROM THIS REPOSITORY.  Owner's ruling, 26 Aug 2026,
+                  # question 15: the documentation toolchain follows the
+                  # documentation into SDCoreWindowsDocs, so the doc repository
+                  # is self-contained and can build its own pages on any
+                  # machine without a checkout of sd4windows.  They now live at
+                  # <docs>/tools/mkdoc.py and <docs>/tools/mkpdf.ps1.
                   #
-                  # IT SHIPS NOWHERE AND MUST NOT.  The format ruling stands:
-                  # the user prints to PDF from the browser and no PDF goes in
-                  # the installer, because the no-binaries rule forbids
-                  # tracking one.  This writes PDFs OUTSIDE the repository,
-                  # into the hand-carried sdhelp tree, on the owner's
-                  # instruction of 26 Aug 2026 that the first tester document
-                  # set be delivered in both Markdown and PDF.  mkdoc.py is on
-                  # this list for the same reason and neither is named by
-                  # stage.py or sd.iss.
-                  'mkpdf.ps1',
+                  # DO NOT RE-ADD EITHER NAME.  An entry here for a file that
+                  # does not exist is not caught by anything - the list is only
+                  # filtered against what gplbld actually holds - so a stale
+                  # name would sit unnoticed and read as though the script were
+                  # still here.  If documentation ever ships from THIS
+                  # repository, stage.py names it and the $shipsAs cross-check
+                  # below puts it under the guard, which is the correct answer
+                  # from that moment.
                   # 21 Aug 26 - DELETE.ACCOUNT, both directions.  It calls this
                   # script and refuses on a non-zero exit, so leaving it out is
                   # the self-blocking shape the verify-accountacl.ps1 note above
@@ -550,19 +550,6 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # the failure it exists to catch is $cred landing on the
                   # replace list, after which every account is unreachable.
                   'test-upgradeiss-units.py',
-                  # 25 Aug 26 - mkdoc.py, the documentation renderer.  Listed
-                  # IN THE COMMIT THAT CREATES IT, under section 7 step 7's
-                  # rule.  It is a build-time tool: it reads .md and writes
-                  # .html, and neither stage.py nor sd.iss names it, so it
-                  # cannot make an installed tree differ from source.
-                  #
-                  # AND THE SELF-POLICING IS THE POINT HERE, not a caveat.  The
-                  # documentation format has not been ruled on yet; when it is,
-                  # stage.py will name this script and the cross-check below
-                  # will put it straight back under the guard, which is the
-                  # correct answer from that moment on.  Nothing has to
-                  # remember to remove this line.
-                  'mkdoc.py',
                   # 26 Aug 26 - check-stale-leads.py, which reads
                   # PROJECT_STATUS.md and reports entries whose OPENING status
                   # claim is contradicted later in the same entry.  Listed IN

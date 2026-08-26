@@ -1053,8 +1053,8 @@ Entries are newest first, by date, until there is a version to attach them to.
            * complete a SCRAM-SHA-256 exchange against a password held for
              that account - so an account with no password cannot connect
              at all;
-           * be a member of the "sdapi" group, which no account joins
-             unless you put it there; and
+           * be a member of the "sdapi" group, which an account joins
+             only when you give it API access; and
            * pass the account's own group check.
 
            A session that does get in is confined to the account it signed
@@ -1066,7 +1066,7 @@ Entries are newest first, by date, until there is a version to attach them to.
                powershell -File "C:\Program Files\SD\api-firewall.ps1" -Restrict
 
            and to turn the API off altogether, comment out the APIPORT line
-           in C:\ProgramData\SD\sdsys\sd.conf and restart SD.
+           in C:\ProgramData\SD\sd.conf and restart SD.
 
            Uninstalling SD removes the firewall rule it created.
 

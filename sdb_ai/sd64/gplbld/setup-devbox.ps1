@@ -126,11 +126,16 @@ $PacmanPackages = @(
     # 26 Aug 26 - python-markdown, ADDED FOR THE DOCUMENTATION PHASE (H.2) ON
     # THE OWNER'S RULING that the toolchain targets the MSYS2 python.
     #
-    # WHY IT IS HERE AT ALL.  gplbld/mkdoc.py is the ONLY thing in the whole
-    # build with a third-party import; every other import across the ten
-    # gplbld/*.py files is stdlib or local.  Step 17 proved this script RUNS;
-    # it had never been checked that it still installs everything the build
-    # uses, and this was the gap.
+    # WHY IT IS HERE AT ALL.  mkdoc.py is the ONLY thing this box runs with a
+    # third-party import; every import across the gplbld/*.py files is stdlib
+    # or local.  Step 17 proved this script RUNS; it had never been checked
+    # that it still installs everything the build uses, and this was the gap.
+    #
+    # IT IS NO LONGER IN THIS REPOSITORY, AND THE LINE STAYS ANYWAY.  Owner's
+    # ruling of 26 Aug 2026 (question 15) moved the documentation toolchain
+    # into SDCoreWindowsDocs, at <docs>/tools/mkdoc.py - but it is rendered on
+    # this same dev box, against this same MSYS2 python, so the package is
+    # still what a fresh box needs.  Nothing in sd4windows imports markdown.
     #
     # AND THE GAP WAS BIGGER THAN THE PACKAGE, WHICH IS WHY IT NEEDED A RULING.
     # python-markdown 3.10.2 was installed for the WINDOWS python (3.13.14),
