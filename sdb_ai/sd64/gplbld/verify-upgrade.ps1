@@ -64,7 +64,26 @@ param(
     [switch] $Compare,
 
     # Where the snapshot is kept between the two runs.
-    [string] $StatePath = (Join-Path $env:LOCALAPPDATA 'SD-verify\upgrade-snapshot.json')
+    #
+    # ***NOT %LOCALAPPDATA%, AND THAT IS MEASURED RATHER THAN PREFERRED.***
+    # -Snapshot and -Compare are often run by DIFFERENT processes, and one of
+    # them may be inside a packaged (MSIX) app - the agent's tooling is.  A
+    # packaged process has its %LOCALAPPDATA% WRITES redirected into
+    # ...\Packages\<pkg>\LocalCache\Local\, while READS of the same path fall
+    # through to the real location when nothing shadows them.  So a snapshot
+    # written by one lands somewhere the other cannot see, and -Compare reports
+    # "no snapshot" against a file that visibly exists.
+    #
+    # THAT COST A RUN ON 25 Aug 2026.  -Snapshot at 21:18 reported success and
+    # the file was readable back; -Compare from the owner's own elevated shell
+    # at 21:22:59 said the snapshot was not there.  Both were right.
+    # probe-redirection.ps1 settled it: a write to
+    # C:\Users\dmont\AppData\Local\SD-verify turned up under the package cache,
+    # while writes to C:\ProgramData\SD-verify and C:\Users\dmont\sdout did not.
+    #
+    # ProgramData is not redirected and this script already requires elevation,
+    # so it is writable and it is the same path for everybody.
+    [string] $StatePath = 'C:\ProgramData\SD-verify\upgrade-snapshot.json'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -320,7 +339,21 @@ if ($Snapshot) {
         PlantedChangelog = (-not $hadIt)
         AppChangelog   = (Test-Path -LiteralPath $appChangelog)
     }
+    $stateDir = Split-Path -Parent $StatePath
+    if (-not (Test-Path -LiteralPath $stateDir)) {
+        $null = New-Item -ItemType Directory -Path $stateDir -Force
+    }
     $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $StatePath -Encoding UTF8
+    # SAY WHAT LANDED, NOT WHAT WAS INTENDED.  A write that was redirected
+    # elsewhere still "succeeds" from in here; the length read back is the
+    # cheapest evidence that something is actually at that path.
+    if (Test-Path -LiteralPath $StatePath) {
+        Write-Output ("  read back: " + (Get-Item -LiteralPath $StatePath).Length + " bytes")
+    } else {
+        Write-Output '  WROTE IT AND IT IS NOT THERE - the path is being redirected.'
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
 
     Write-Output ''
     Write-Output ("=== snapshot written to " + $StatePath)
@@ -345,6 +378,23 @@ if (-not (Test-Path -LiteralPath $StatePath)) {
     Write-Output ''
     Write-Output ("verify-upgrade: CANNOT RUN - no snapshot at " + $StatePath)
     Write-Output '  Run -Snapshot BEFORE the upgrade.  There is nothing to compare against.'
+    # AND SAY WHAT IS ACTUALLY THERE.  "Not found" on its own sent a reader
+    # hunting for a file that existed the whole time, in a redirected copy of
+    # the directory - see the note on $StatePath.  Listing the directory turns
+    # that into one glance.
+    $stateDir = Split-Path -Parent $StatePath
+    Write-Output ''
+    Write-Output ("  contents of " + $stateDir + ":")
+    if (Test-Path -LiteralPath $stateDir) {
+        $found = @(Get-ChildItem -LiteralPath $stateDir -ErrorAction SilentlyContinue)
+        if ($found.Count -eq 0) {
+            Write-Output '    (empty)'
+        } else {
+            foreach ($f in $found) { Write-Output ('    ' + $f.Name + '  ' + $f.Length + ' bytes') }
+        }
+    } else {
+        Write-Output '    the directory does not exist either'
+    }
     try { Stop-Transcript | Out-Null } catch { }
     exit 2
 }
