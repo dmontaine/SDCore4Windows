@@ -15,9 +15,26 @@ Entries are newest first, by date, until there is a version to attach them to.
 
            You now get three, and it tells you which attempt you are on.
 
-           PRESSING ENTER ON AN EMPTY LINE STILL DECLINES AT ONCE and is not
-           counted as an attempt.  Declining is a decision; being re-asked
-           would turn it into an argument.
+           AND IT NOW TELLS YOU WHAT ENTER DOES BEFORE YOU PRESS IT.  The
+           prompt is preceded by:
+
+               Press Enter on an empty line to set no password for now.
+               The account then works only at this computer, from a
+               session run as administrator; ssh and the SD API will
+               refuse it until a password is set.  SD asks again the
+               first time you open the account.
+
+           Changing a password you already have says the other thing that
+           is true there instead: Enter leaves it unchanged.
+
+           THAT IS THE FIRST LINE ONLY, and the prompts look alike, so it is
+           worth saying: pressing Enter at "Repeat new password" is not
+           declining.  It simply fails to match and costs one of the three
+           attempts.
+
+           PRESSING ENTER ON AN EMPTY LINE DECLINES AT ONCE and is not counted
+           as an attempt.  Declining is a decision; being re-asked would turn
+           it into an argument.
 
            NOTHING WAS EVER LOST BY IT.  SD asks again the first time you open
            the account, and that prompt is bounded at three now as well.

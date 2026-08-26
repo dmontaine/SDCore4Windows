@@ -146,7 +146,7 @@ if ($WithPassword) {
         # K$ADMINISTRATOR.  This runs on Setup's token.
         #
         # DECLINING STILL WORKS, and now says so itself: an empty password makes
-        # SET_ACC_PASSWORD:198 print "Password not changed." and stop.  The
+        # SET_ACC_PASSWORD:227 print "Password not changed." and stop.  The
         # message stays readable because this is OUR console, not one that
         # vanishes with the process.
         #
