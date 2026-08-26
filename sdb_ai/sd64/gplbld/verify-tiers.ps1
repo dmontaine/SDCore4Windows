@@ -19,15 +19,28 @@
 #   ADMINISTRATOR  has both                        <- controls the omit list
 #
 # COUNT VOC IS THE PRIMARY INSTRUMENT, because it is exact and arithmetic
-# rather than a spot check.  Installed NEWVOC holds 394 names, of which "%t" is
+# rather than a spot check.  Installed NEWVOC holds 395 names, of which "%t" is
 # a dynamic-file artefact and not a record, and TIER.OMIT.STANDARD and
-# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 391 records
+# TIER.ADD.ADMINISTRATOR are lists that must never be copied - so 392 records
 # reach a full VOC.  CREATEA then adds four of its own ($COMMAND.STACK, $hold,
 # $savedlists, BP).  That gives:
 #
-#   ADMINISTRATOR  391 + 21 + 4 = 416
-#   PROGRAMMER     391      + 4 = 395
-#   STANDARD       391 - 41 + 4 = 354
+#   ADMINISTRATOR  392 + 21 + 4 = 417
+#   PROGRAMMER     392      + 4 = 396
+#   STANDARD       392 - 42 + 4 = 354
+#
+# 26 Aug 26 - BACK TO 392/417/396/354, AND THE ROUTE BACK IS THE 24 Aug ENTRY
+# BELOW RUN IN REVERSE.  The MICRO verb returned (owner's ruling, same day), so
+# NEWVOC gained a name and TIER.OMIT.STANDARD gained a line - PROGRAMMER and
+# ADMINISTRATOR each rise by one and ***STANDARD DOES NOT MOVE***, because
+# micro is withheld from STANDARD, so it joins both sides of "392 - 42" at
+# once.  micro fills the slot modify vacated, which is why the numbers are
+# exactly the pre-24-Aug ones rather than merely near them.
+#
+# ***THAT UNCHANGED 354 IS THE INSTRUMENT.*** It was measured on the 26 Aug
+# 14:50 install before these constants were touched: STANDARD read 354 while
+# PROGRAMMER and ADMINISTRATOR read 396 and 417, which is the arithmetic
+# confirming itself against a real VOC rather than against this comment.
 #
 # 24 Aug 26 - WAS 392/417/396/354 UNTIL MODIFY WAS REMOVED FROM SD CORE
 # (owner's ruling, same day).  NEWVOC lost one name and
@@ -118,8 +131,8 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 # The tiers, and what each account is expected to come out as.
 $Tiers = @(
     [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 354 }
-    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 395 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 416 }
+    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 417 }
 )
 
 # The 42 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
@@ -141,7 +154,7 @@ $Tiers = @(
 $Withheld = @(
     # P1 - compilers, editors, code catalogue
     'basic','catalog','catalogue','delete.catalog','delete.catalogue',
-    'compile.dict','cd','generate','phantom','run','map','debug','ed','edit',
+    'compile.dict','cd','generate','phantom','run','map','debug','ed','edit','micro',
     # P2 - file and index definition
     'create.file','delete.file','clear.file','configure.file',
     'analyse.file','analyze.file','fstat','hsm','set.trigger',
