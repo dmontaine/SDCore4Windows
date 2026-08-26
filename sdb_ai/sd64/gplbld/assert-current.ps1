@@ -224,6 +224,18 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 22 Aug 26 - verify-parsertokens.ps1, listed in the commit
                   # that created it under section 7 step 7's rule.
                   'verify-parsertokens.ps1',
+                  # 25 Aug 26 - verify-standalone.ps1, START HERE item 5's
+                  # measurement: whether a stand-alone install really opened no
+                  # port, wrote no firewall rule and installed no ssh server.
+                  # Listed in the commit that created it, same rule - and it
+                  # walked straight into the trap that rule exists for, refusing
+                  # its own first run because it was newer than the install.
+                  #
+                  # IT CANNOT RUN ON THIS MACHINE'S USUAL INSTALL AT ALL.  Every
+                  # check in it asks whether something is ABSENT, so it refuses
+                  # with exit 2 unless sdsys\$standalone is there; a full
+                  # install is not a failure for it, it is a different system.
+                  'verify-standalone.ps1',
                   # 22 Aug 26 - verify-batchjob.ps1, step 9's guard, same rule.
                   'verify-batchjob.ps1',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
