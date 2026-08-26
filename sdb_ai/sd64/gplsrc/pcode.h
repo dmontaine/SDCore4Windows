@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 15 Jun 24 mab - remove banner, login, pickmsg, ttyset, ttyget from pcode
+ * 25 Aug 26 Windows port - remove extendlist.  Its only caller was the VFS
+ *           and nothing in the C ever called pcode_extendlist.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -35,7 +37,6 @@ Pcode(cconv)     /* CCONV(SRC, CONV) */
 Pcode(chain)     /* CHAIN() */
 Pcode(data)      /* DATA(STRING) */
 Pcode(dellist)   /* DELLIST(NAME) */
-Pcode(extendlist) /* EXTENDLIST(ITEMS, LIST.NO) */
 Pcode(fold)      /* FOLD(STRING, WIDTH) */
 Pcode(formcsv)   /* FORMCSV(STR) */
 Pcode(formlst)   /* FORMLIST(SRC, LIST.NO) */

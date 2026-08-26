@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Aug 26 Windows port - dropped the FVAR.NET arm: it printed "(Networked)"
+*           for a file type nothing can produce since SDNet was removed.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -1255,8 +1257,6 @@ display.data.common:
                message := ' (Dynamic)'
             case n = FVAR.SEQ
                message := ' (Sequential)'
-            case n = FVAR.NET
-               message := ' (Networked)'
          end case
 
       case var.type = V$ARRAY

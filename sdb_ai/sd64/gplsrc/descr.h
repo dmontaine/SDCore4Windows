@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
+ * 25 Aug 26 Windows port - NET_FILE removed.  Its last reader went with
+ *           netfiles.c on 18 Aug 26 (sd.h) and it had no other.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -315,7 +317,6 @@ struct FILE_VAR {
 #define DIRECTORY_FILE 1
 #define DYNAMIC_FILE 2
 #define SEQ_FILE 3
-#define NET_FILE 4
   /* Tokens also in BP DEBUG.H */
   u_char flags;
 #define FV_RDONLY 0x01  /* Read only file */

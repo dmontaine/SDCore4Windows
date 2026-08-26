@@ -34,6 +34,14 @@ Entries are newest first, by date, until there is a version to attach them to.
            IF ONE OF YOUR PROGRAMS REFERS TO ANY OF THESE, it was testing for
            a state SD could not reach, and the test can be deleted.
 
+           TWO MORE UNREACHABLE PIECES WENT WITH IT.  SD used to install a
+           program called _EXTENDLIST into the SDSYS GPL.BP file and load it
+           at every start-up; it existed only to serve a virtual file system,
+           and nothing has ever called it.  It is gone.  And the debugger no
+           longer offers "(Networked)" as a file type - remote files over
+           SDNet were removed earlier in this port, so no file could report
+           it.
+
 25 Aug 26  THE FIVE PROGRAMS SD SHIPPED INTO THE SDSYS BP FILE ARE GONE.
 
            SD used to install PCL and PCL.GRID (printer control), U0032 and

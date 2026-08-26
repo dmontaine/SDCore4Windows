@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Aug 26 Windows port - removed FVAR.NET, mirroring NET_FILE going from
+*           DESCR.H.  SDNet was removed on 18 Aug 26.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -110,6 +112,5 @@ $define BRK$GOTO.LINE       10    ;* Continue execution at given line
 $define FVAR.DIRECTORY      1
 $define FVAR.DYNAMIC        2
 $define FVAR.SEQ            3
-$define FVAR.NET            4
 
 * END-CODE
