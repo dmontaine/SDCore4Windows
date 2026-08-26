@@ -236,6 +236,21 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # with exit 2 unless sdsys\$standalone is there; a full
                   # install is not a failure for it, it is a different system.
                   'verify-standalone.ps1',
+                  # 25 Aug 26 - verify-upgrade.ps1, START HERE item 3's
+                  # measurement: whether an install OVER an existing one really
+                  # replaces the shipped subset and preserves the rest.  Listed
+                  # here proactively rather than after it broke something -
+                  # verify-standalone.ps1 one line above had to learn it the
+                  # other way on its first run.
+                  #
+                  # IT DOES NOT CALL assert-current, so unlike its neighbours it
+                  # could not block ITSELF - it would make every OTHER verifier
+                  # refuse instead, which is the worse failure because the cause
+                  # is a file none of them mention.  It cannot call it: an
+                  # upgrade test needs the install to be the OLD build while
+                  # source is the NEW one, so between -Snapshot and -Compare the
+                  # tree is EXPECTED to be stale.
+                  'verify-upgrade.ps1',
                   # 22 Aug 26 - verify-batchjob.ps1, step 9's guard, same rule.
                   'verify-batchjob.ps1',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
