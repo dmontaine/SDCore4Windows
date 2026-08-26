@@ -41,6 +41,46 @@ Entries are newest first, by date, until there is a version to attach them to.
            an ssh session can never be elevated, so an administrator arriving
            that way needs an os.users entry the same as anybody else.
 
+           TO GRANT IT, from an elevated session:
+
+               logto sdsys
+               ed os.users don
+
+           Two lines and nothing else: field 1 is SH, field 2 is OS.EX.  "yes"
+           in field 2 is what the editors need.  The name is the WINDOWS login
+           name, not the SD account name, and the change takes effect on that
+           person's next command rather than at their next login.
+
+           WHAT THE EDITORS ARE GOOD FOR: BASIC source, VOC records and simple
+           dictionary records - anything whose content is lines of text.  SD
+           writes one field per line, so moving between fields is moving
+           between lines.
+
+           MULTIVALUES ARE TYPEABLE, AND THIS IS NEW.  A value mark is a
+           control character an editor cannot show, so:
+
+               Type ~~ where you want a value mark.
+
+           SD converts value marks to ~~ on the way into the editor and ~~
+           back to value marks on the way out.  SMITH~~JONES~~BROWN is a
+           three-value field.
+
+           * SUBVALUE MARKS ARE NOT CONVERTED.  A record containing one is not
+             safe to edit this way - use ED.
+           * IF THE RECORD ALREADY CONTAINS ~~ AS DATA you are asked first,
+             because the conversion back cannot tell the two apart.
+           * A compiled dictionary record is truncated to its first 15 fields
+             while you edit it and recompiled with CD when you save, which is
+             what MICRO always did.
+
+           ***GIVE THESE VERBS ONLY TO PEOPLE YOU TRUST.***  An editor can
+           write anywhere its user can write.  It opens the record you named,
+           but nothing then stops the person opening any other file on the
+           machine their Windows account may open, inside the SD data tree or
+           outside it.  That is not a hole in SD - it is what an editor is -
+           and it is why these verbs are behind OS.EXECUTE permission and not
+           merely behind the programmer tier.
+
            ED IS UNCHANGED and is still there.  If you preferred the line
            editor, nothing has been taken away.  What HAS changed is that
            "EDIT" used to be a second name for ED, so if you have been typing

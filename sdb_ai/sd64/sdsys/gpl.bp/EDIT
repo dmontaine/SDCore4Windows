@@ -15,6 +15,13 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 26 Aug 26 Windows port - MULTIVALUES ARE TYPEABLE: "~~" in the editor is a
+*           value mark in the record, both ways round.  Owner's idea.  A field
+*           mark is already a line break, so an editor handles fields on its
+*           own; a value mark is a control character it cannot show.  Subvalue
+*           marks are NOT converted and a record holding one is not safe to
+*           edit here.  A record that already contains "~~" as data is asked
+*           about rather than silently converted.  See process.record.
 * 26 Aug 26 Windows port - TWO GATES, NOT ONE.  Owner's ruling: "these commands
 *           will only work if the user has OS.EXECUTE privileges.  If not, they
 *           should get a message that the command is not available."  The VOC
@@ -81,6 +88,10 @@ $include int$keys.h
 
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
+
+*  The value-mark token.  See process.record for what it is for and what it
+*  cannot do.  One place, so the two conversions cannot disagree.
+   vm.token     = '~~'
 
    compiled.dict = @false
    files.opened  = @false
@@ -402,7 +413,44 @@ process.record:
       end
    end
 
-   write temp.record to temp.file, temp.record.name on error
+*  VALUE MARKS BECOME "~~" ON THE WAY OUT AND COME BACK ON THE WAY IN.
+*  Owner's idea, 26 Aug 2026.  A field mark is a line break, so a text editor
+*  handles fields on its own; a VALUE mark is a control character (@vm, x'FD')
+*  and an editor either draws it as a stray glyph or drops it.  This makes
+*  multivalues typeable: what the editor sees is text, and what SD stores is a
+*  value mark.
+*
+*  IT DOES NOT TOUCH SUBVALUE MARKS.  @sm has no token and still reaches the
+*  editor as a control character, so a record with subvalues is not safe to
+*  edit here.  Adding a second token would be one line; it is not done because
+*  nobody has asked for it and an unused convention is one more thing to get
+*  wrong.
+*
+*  AND A RECORD THAT ALREADY CONTAINS THE TOKEN AS DATA IS ASKED ABOUT,
+*  because the conversion back cannot tell the two apart.  Refusing outright
+*  would be worse - it would make such a record uneditable - so the user is
+*  told what will happen and chooses.
+   if index(temp.record, vm.token, 1) then
+      crt
+      crt 'This record already contains ' : vm.token : ' as data.'
+      crt 'Every ' : vm.token : ' in it will be saved as a value mark.'
+      prompt ''
+      response = ''
+      loop
+         crt 'Edit it anyway?  <Y>es, <N>o : ' :
+         input response, 1 :
+         crt
+         response = upcase(response)
+      until index('YN', response, 1) > 0 repeat
+      if response # 'Y' then
+         error.text = 'Not edited'
+         goto end.program
+      end
+   end
+
+   work.record = change(temp.record, @vm, vm.token)
+
+   write work.record to temp.file, temp.record.name on error
       error.text = 'Write error: the working copy could not be created in '
       error.text := temp.file.name
       goto end.program
@@ -430,13 +478,17 @@ process.record:
 
    crt @(-1) :
 
-   read temp.record from temp.file, temp.record.name else
+   read work.record from temp.file, temp.record.name else
       error.text = 'The working copy has gone - nothing was read back.'
       if rc # 0 then
          error.text := '  The editor exited ' : rc : '.'
       end
       goto end.program
    end
+
+*  Back the other way, so what is compared and what is written are both in
+*  SD's own representation.
+   temp.record = change(work.record, vm.token, @vm)
 return
 
 * ---------------------------------------------------------------------------
