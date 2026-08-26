@@ -812,7 +812,29 @@ require.credential:
 *  whitespace.
    display
 
+* 26 Aug 26 Windows port - THREE ATTEMPTS, NOT AN UNBOUNDED LOOP.  Owner,
+*   26 Aug 2026, after mistyping the password during an install and finding the
+*   session had left with none set.
+*
+*   WHAT HE ACTUALLY HIT, BECAUSE THE LOOP ALREADY RE-PROMPTED AND WOULD HAVE
+*   DONE SO FOR EVER.  After "The passwords do not match" it asked "New
+*   password:" again - and 10089's paragraph, which explains that Enter on an
+*   empty line means "no password for now", had scrolled away several lines
+*   earlier.  Pressing Enter there is the documented way out and at that moment
+*   it does not look like one.  So the count below is half the fix; SAYING
+*   WHICH ATTEMPT THIS IS, in 10092, is the half that stops somebody reaching
+*   for Enter to escape a loop they believe is endless.
+*
+*   AND BOUNDING IT RETIRES THE ORIGINAL REASON FOR THE EMPTY-LINE EXIT, which
+*   the note below gives as "otherwise a session that cannot set a credential
+*   would loop with no way to leave but killing the process".  That cannot
+*   happen now.  The exit stays because 10089 offers it as a deliberate choice,
+*   not because it is the only way out.
+   cred.max.tries = 3
+   cred.tries = 0
+
    loop
+      cred.tries += 1
       display sysmsg(10090) :  ;* New password:
       input pw1 HIDDEN
       display
@@ -845,7 +867,18 @@ require.credential:
 
          display sysmsg(10094, status()) ;* Unable to set the password, status %1
       end else
-         display sysmsg(10092) ;* The passwords do not match.
+*        Attempt N of M, so the loop is visibly finite from inside it.
+         display sysmsg(10092, cred.tries, cred.max.tries)
+
+         if cred.tries >= cred.max.tries then
+            cred.ok = @false
+*           A DIFFERENT MESSAGE FROM THE EMPTY-LINE EXIT BELOW, because they
+*           are different things: one is a choice, this is running out of
+*           tries.  Both end the session, and 10101 says so and says that the
+*           next login will ask again.
+            display sysmsg(10101, cred.max.tries)
+            return
+         end
       end
    repeat
 
