@@ -535,7 +535,27 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # will put it straight back under the guard, which is the
                   # correct answer from that moment on.  Nothing has to
                   # remember to remove this line.
-                  'mkdoc.py')
+                  'mkdoc.py',
+                  # 26 Aug 26 - check-stale-leads.py, which reads
+                  # PROJECT_STATUS.md and reports entries whose OPENING status
+                  # claim is contradicted later in the same entry.  Listed IN
+                  # THE COMMIT THAT CREATES IT, under section 7 step 7's rule.
+                  # It reads one markdown file and writes nothing; neither
+                  # stage.py nor sd.iss names it.
+                  #
+                  # WHY IT EXISTS: on 26 Aug 2026 the owner said "i have been
+                  # getting a different list of things left to do each time i
+                  # ask", and he was right.  FOUR entries that day led with a
+                  # superseded "still open" paragraph and carried their own
+                  # correction further down - section 4's ssh-options bullet,
+                  # step 3's limitssh bullet, step 14 ("WHAT IS STILL A
+                  # DECISION" 338 lines above "STEP 14 IS CLOSED"), and item
+                  # 5's own heading.  A reader stops at the first status
+                  # sentence, so the entry lies to everyone who does not read
+                  # all of it.  Three careful reads missed what this found in
+                  # one pass, which is the argument for a script over a
+                  # resolution to read more carefully.
+                  'check-stale-leads.py')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
