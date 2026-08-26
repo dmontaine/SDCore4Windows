@@ -33,9 +33,29 @@
 # 24 Aug defect when it was not - the rule alone cannot tell you which, and a
 # probe that flags both as failure is one people learn to ignore.  So the
 # caller states what was chosen in the wizard and this asserts against it.
+#
+# ***AND IT IS MANDATORY, WHICH IT WAS NOT UNTIL 26 Aug 2026. THE DEFAULT WAS
+# THE WHOLE BUG.*** "Required thinking" was written above a parameter that
+# defaulted to one of its own two answers, so omitting it did not prompt - it
+# silently asserted "Restricted".
+#
+# WHAT THAT COST, on VM VIRTUAL at 23:36:11 on 25 Aug 2026: the probe was run
+# bare on a guest where sshremote HAD been ticked, compared Any against
+# Restricted, and printed "[FAIL] ... port 22 is open to the local network.
+# This is the 24 Aug 2026 defect" - naming a defect that was not there, on a
+# correct installer.
+#
+# AND IT WAS NOT ONLY A WRONG VERDICT, IT CHANGED THE MACHINE.  The recovery
+# section runs ssh-firewall.ps1 -Installed -Restrict, which -Expect Open
+# deliberately SKIPS "rather than undoing the state it is measuring".  Reading
+# the default undid the very state the next step of the run book needed.
+#
+# A parameter that decides which of two opposite outcomes is a pass must not
+# have a default.  Mandatory prompts; a default guesses.
 param(
+    [Parameter(Mandatory = $true)]
     [ValidateSet('Restricted', 'Open')]
-    [string]$Expect = 'Restricted'
+    [string]$Expect
 )
 
 $ErrorActionPreference = 'Continue'
