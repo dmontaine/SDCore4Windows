@@ -135,6 +135,19 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
+# A CHECK THAT COULD NOT BE MADE IS NOT A CHECK THAT PASSED, and the whole
+# reason this exists is that the alternative - quietly dropping the row - is
+# the shape of every false green in this project's history.  It carries its
+# reason, it appears in the summary table, and the closing sentence refuses to
+# claim what was skipped.
+function Skip($check, $why) {
+    $null = $script:results.Add([pscustomobject]@{
+        Check = $check; Expected = '(not measurable here)'; Observed = $why
+        Result = 'SKIP'
+    })
+    Write-Output ("  [SKIP] {0}: {1}" -f $check, $why)
+}
+
 # BOUNDED, and the bound is not caution.  SD prompts from places a script cannot
 # predict, each in an unbounded "until yn = 'Y' or 'N'" loop; a hung pipe
 # returns nothing at all, so the cause is invisible, and the stuck sdwind then
@@ -164,12 +177,60 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
     return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
 }
 
-function Remove-GroupAccount {
+# CREATE.ACCOUNT GROUP MAKES THREE THINGS AND THIS HAS TO UNDO ALL THREE.  The
+# first version removed only the directory, so the second run met "Account
+# already exists" and section 7 failed against an installer that had done
+# nothing wrong.  The register entry is the one that bites, because nothing on
+# disk under group_accounts hints that it is still there.
+#
+# Write-Host throughout, not Write-Output: a function returns everything on the
+# output stream, so a stray Write-Output would make a caller's string an array.
+function Remove-GroupAccount([string]$why) {
+    Write-Host ('  teardown (' + $why + '):')
+
+    # 1. SD's account register.  DELETE.ACCOUNT prompts once to confirm; the
+    #    sentinel after it comes back as "not in your VOC" when nothing else
+    #    asked a question, which is verify-delaccount.ps1's technique for
+    #    proving the prompt sequence was the expected one.  The padding Ys are
+    #    harmless if unread.
+    $registered = $false
+    $lst = Invoke-SD @('LIST ACCOUNTS') 30
+    if ($lst -match [regex]::Escape($GroupAccount)) { $registered = $true }
+    if ($registered) {
+        $del = Invoke-SD @("DELETE.ACCOUNT $GroupAccount", 'Y', 'SDSASENTINEL', 'Y', 'Y') 60
+        if ($del -match 'not in your VOC') {
+            Write-Host ('    DELETE.ACCOUNT ' + $GroupAccount + ' - done')
+        } else {
+            Write-Host ('    DELETE.ACCOUNT ' + $GroupAccount +
+                        ' - the sentinel did NOT come back, so something else prompted:')
+            Write-Host $del
+        }
+    } else {
+        Write-Host ('    no ' + $GroupAccount + ' in the account register')
+    }
+
+    # 2. The Windows group.  CREATE.ACCOUNT GROUP names it sdg_<account> -
+    #    "Group:  sdg_sdsagroup created" in section 7's own output.
+    $winGroup = 'sdg_' + $GroupAccount
+    $g = Get-LocalGroup -Name $winGroup -ErrorAction SilentlyContinue
+    if ($null -eq $g) {
+        Write-Host ('    no Windows group ' + $winGroup)
+    } elseif ($g.Description -ne 'SD account group') {
+        # Refusing here is the point: a group this script did not make is
+        # somebody's, whatever it happens to be called.
+        Write-Host ('    REFUSING to remove ' + $winGroup +
+                    ' - its description is not "SD account group"')
+    } else {
+        Remove-LocalGroup -Name $winGroup
+        Write-Host ('    removed Windows group ' + $winGroup)
+    }
+
+    # 3. The directory.
     if (Test-Path -LiteralPath $grpDir) {
         Remove-Item -LiteralPath $grpDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host ('  cleanup: removed ' + $grpDir)
+        Write-Host ('    removed ' + $grpDir)
     } else {
-        Write-Host ('  cleanup: no ' + $grpDir)
+        Write-Host ('    no ' + $grpDir)
     }
 }
 
@@ -280,34 +341,71 @@ Note 'CONTROL: the firewall query returns rules' $true ($allRules.Count -gt 0)
 
 # ---------------------------------------------------------------------------
 Write-Output ''
-Write-Output '=== [5] No ssh server was installed or started ==================='
-# The stand-alone promise is specifically that no ssh server was installed and
-# no ssh configuration was changed.  sshd absent is the strong form; sshd
-# present but stopped would mean the [Run] gate leaked.
+Write-Output '=== [5] No ssh server was installed, no ssh config was changed ==='
+# ===========================================================================
+# CORRECTED 25 Aug 2026, AFTER THIS ROW FAILED AGAINST A CORRECT INSTALLER.
+#
+# It used to read `Note 'sshd is not running' $false ...`, and on the 21:00:35
+# run that scored FAIL on a stand-alone install that had done everything right.
+# sshd was Running because THIS MACHINE HAS HAD OpenSSH SINCE 14 Aug 10:34,
+# installed by an early cycle - and a stand-alone install neither installs an
+# ssh server nor removes one.  PROJECT_STATUS.md 5.9 is explicit that SD never
+# touches an ssh server it did not install.
+#
+# So "sshd is not running" is a valid expectation ONLY on a machine that never
+# had one, which is the same limitation probe-sshfirewall.ps1 carries and the
+# reason the defect it found sat unseen for eight days.
+#
+# WHAT THE PROMISE ACTUALLY IS: "No ssh server was installed, no ssh
+# configuration was changed, and no network port was opened."  The third is
+# section 4.  The second is measurable here in two independent ways.  The first
+# is NOT measurable once a server is already present - so it is SKIPPED and
+# said out loud, never silently scored as a pass.
+# ===========================================================================
 $sshd = Get-Service -Name 'sshd' -ErrorAction SilentlyContinue
 $sshdState = 'absent'
 if ($null -ne $sshd) { $sshdState = [string]$sshd.Status }
 Write-Output ("  sshd service: " + $sshdState)
 
-Note 'sshd is not running' $false ($sshdState -eq 'Running')
-# CONTROL: Get-Service can find a service that is certainly there.  Without it,
-# a broken call returns $null and "absent" for everything.
+# CONTROL first: Get-Service can find a service that is certainly there.  A
+# broken call returns $null, which would read as "absent" for everything.
 $control = Get-Service -Name 'Winmgmt' -ErrorAction SilentlyContinue
 Note 'CONTROL: Get-Service finds a service that exists' $true ($null -ne $control)
 
-# sshd_config must not have been given SD's AllowGroups block.  Absent file is
-# the expected state; a present one that names sdssh would mean ApplyAllowGroups
-# ran when it should have exited.
+if ($null -eq $sshd) {
+    # THE STRONG FORM, and it is only reachable on a machine that never had an
+    # ssh server.  Then "no ssh server was installed" is a real measurement.
+    Note 'no ssh server on this machine at all' $true $true
+} else {
+    Skip 'no ssh server was installed' ("sshd already existed (" + $sshdState +
+        "); a stand-alone install neither adds nor removes one, so this cannot" +
+        " be measured here - it needs a guest that never had OpenSSH")
+}
+
+# --- no ssh CONFIGURATION was changed: two independent measurements ---------
 $sshdConfig = Join-Path $env:ProgramData 'ssh\sshd_config'
-$allowGroups = 0
 if (Test-Path -LiteralPath $sshdConfig) {
+    # (a) SD's block is not there.  ApplyAllowGroups writes AllowGroups; the
+    #     uninstaller always strips it again (sd.iss, RemoveAllowGroups).
     $allowGroups = @(Get-Content -LiteralPath $sshdConfig -ErrorAction SilentlyContinue |
                      Where-Object { $_ -match '^\s*AllowGroups\b' }).Count
-    Write-Output ("  sshd_config present at " + $sshdConfig + ", AllowGroups lines: " + $allowGroups)
+    Write-Output ("  sshd_config: " + $sshdConfig + ", AllowGroups lines: " + $allowGroups)
+    Note 'sshd_config carries no AllowGroups' 0 $allowGroups
+
+    # (b) AND THE FILE PREDATES THE INSTALL, which is the direct form of "no ssh
+    #     configuration was changed" and does not depend on knowing what SD's
+    #     block looks like.  The data tree's CreationTime is the install moment
+    #     (assert-current.ps1 uses the same fact).  On a full install
+    #     ApplyAllowGroups rewrites this file, so it would be NEWER.
+    $installedAt = (Get-Item -LiteralPath $dataDir).CreationTime
+    $confAt      = (Get-Item -LiteralPath $sshdConfig).LastWriteTime
+    Write-Output ("  installed at " + $installedAt.ToString('dd MMM HH:mm:ss') +
+                  ", sshd_config last written " + $confAt.ToString('dd MMM HH:mm:ss'))
+    Note 'sshd_config was not written by this install' $true ($confAt -lt $installedAt)
 } else {
     Write-Output ("  no sshd_config at " + $sshdConfig)
+    Note 'no sshd_config to have been changed' $true $true
 }
-Note 'sshd_config carries no AllowGroups' 0 $allowGroups
 
 # ---------------------------------------------------------------------------
 Write-Output ''
@@ -348,10 +446,11 @@ Write-Output '=== [7] create.account GROUP still works =========================
 # CREATEA refusing everything, which would break the education case the
 # stand-alone option exists for.
 
-if (Test-Path -LiteralPath $grpDir) {
-    Write-Output ("  a directory already exists at " + $grpDir + " - removing this script's leftover")
-    Remove-GroupAccount
-}
+# THE FIRST OF THE TWO TEARDOWNS.  A leftover from an earlier run - in the
+# register, in the Windows groups, or on disk - makes CREATE.ACCOUNT answer
+# "Account already exists", and section 7 would then fail against a correct
+# installer.  That is exactly what happened on the 21:04:40 run.
+Remove-GroupAccount 'clearing any leftover from an earlier run'
 
 $outGroup = Invoke-SD @("CREATE.ACCOUNT GROUP $GroupAccount NO.QUERY")
 Write-Output '  --- raw output, printed every run ---'
@@ -377,9 +476,11 @@ catch {
 finally {
     Write-Output ''
     if ($Keep) {
-        Write-Output ("-Keep: leaving " + $grpDir + " behind.")
+        Write-Output ("-Keep: leaving the " + $GroupAccount + " account behind - register")
+        Write-Output ("  entry, Windows group sdg_" + $GroupAccount + ", and " + $grpDir + ".")
+        Write-Output '  The next run without -Keep removes all three before it starts.'
     } else {
-        Remove-GroupAccount
+        Remove-GroupAccount 'removing what this run made'
     }
 }
 
@@ -387,14 +488,26 @@ Write-Output ''
 Write-Output '=== summary ========================================================='
 $results | Format-Table -AutoSize | Out-String | Write-Output
 $passCount = @($results | Where-Object { $_.Result -eq 'PASS' }).Count
-Write-Output ("{0}/{1} checks passed" -f $passCount, $results.Count)
+$skipCount = @($results | Where-Object { $_.Result -eq 'SKIP' }).Count
+$failCount = @($results | Where-Object { $_.Result -eq 'FAIL' }).Count
+Write-Output ("{0} passed, {1} failed, {2} skipped, of {3} rows" -f
+    $passCount, $failCount, $skipCount, $results.Count)
 Write-Output ''
 if ($failed) {
     Write-Output 'verify-standalone: FAILED - read the rows above.'
 } else {
     Write-Output 'verify-standalone: PASSED - this stand-alone install opened no port,'
-    Write-Output '  wrote no firewall rule, installed no ssh server, refuses'
+    Write-Output '  wrote no firewall rule, changed no ssh configuration, refuses'
     Write-Output '  create.account user with sysmsg 10100, and still makes group accounts.'
+    if ($skipCount -gt 0) {
+        # THE PASS IS NARROWER THAN IT LOOKS AND HAS TO SAY SO.  A green run
+        # that quietly dropped a row it could not measure is the shape of every
+        # false green in this project's history.
+        Write-Output ''
+        Write-Output ("  BUT {0} CHECK(S) COULD NOT BE MADE ON THIS MACHINE and are NOT" -f $skipCount)
+        Write-Output '  covered by that sentence.  They are listed as SKIP above, with'
+        Write-Output '  the reason.  Read them before calling item 5 proven.'
+    }
 }
 
 try { Stop-Transcript | Out-Null } catch { }
