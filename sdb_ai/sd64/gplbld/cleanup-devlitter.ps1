@@ -201,7 +201,7 @@ Write-Output ''
 
 $users  = Get-LitterUsers  $rx
 $groups = Get-LitterGroups $rx
-$home_  = Get-HomeLitter
+$homeItems  = Get-HomeLitter
 
 # THE NULL CASE, OUT LOUD.  Every section below asks what is PRESENT, so a
 # machine with nothing on it reports a clean sweep having done nothing at all.
@@ -209,13 +209,13 @@ $home_  = Get-HomeLitter
 Write-Output '--- BEFORE ---'
 Write-Output ("  local users matching the pattern : {0}   (of {1} local users)" -f $users.Count, @(Get-LocalUser).Count)
 Write-Output ("  sdu_ groups matching             : {0}   (of {1} local groups)" -f $groups.Count, @(Get-LocalGroup).Count)
-Write-Output ("  sd* items in the home directory  : {0}" -f $home_.Count)
+Write-Output ("  sd* items in the home directory  : {0}" -f $homeItems.Count)
 $profBefore = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
                 Where-Object { (Split-Path $_.LocalPath -Leaf) -match $rx })
 Write-Output ("  profiles matching                : {0}   (of {1} profiles)" -f $profBefore.Count, @(Get-CimInstance Win32_UserProfile).Count)
 Write-Output ''
 
-if ($users.Count -eq 0 -and $groups.Count -eq 0 -and $home_.Count -eq 0 -and $profBefore.Count -eq 0) {
+if ($users.Count -eq 0 -and $groups.Count -eq 0 -and $homeItems.Count -eq 0 -and $profBefore.Count -eq 0) {
     Write-Output 'cleanup-devlitter: nothing matched in ANY section.'
     Write-Output '  That is either a clean machine or a pattern that has stopped matching.'
     Write-Output '  Run -SelfTest to tell the two apart before believing this.'
@@ -224,7 +224,7 @@ if ($users.Count -eq 0 -and $groups.Count -eq 0 -and $home_.Count -eq 0 -and $pr
 
 foreach ($u in $users)  { Write-Output ("  user   {0}" -f $u.Name) }
 foreach ($g in $groups) { Write-Output ("  group  {0}" -f $g.Name) }
-foreach ($h in $home_)  { Write-Output ("  home   {0}{1}" -f $h.Name, $(if ($h.PSIsContainer) { '\' } else { '' })) }
+foreach ($h in $homeItems)  { Write-Output ("  home   {0}{1}" -f $h.Name, $(if ($h.PSIsContainer) { '\' } else { '' })) }
 Write-Output ''
 
 if ($List) {
@@ -259,13 +259,13 @@ if ($sweepRc -ne 0) { $failed += "clean-test-profiles.ps1 exited $sweepRc" }
 
 # --- 4. THE HOME DIRECTORY --------------------------------------------------
 Write-Output '--- [4] home directory ---'
-foreach ($h in $home_) {
+foreach ($h in $homeItems) {
     try {
         Remove-Item -LiteralPath $h.FullName -Recurse -Force -ErrorAction Stop
         Write-Output ("  removed {0}" -f $h.Name)
     } catch { $failed += ("home {0} - {1}" -f $h.Name, $_.Exception.Message) }
 }
-if ($home_.Count -eq 0) { Write-Output '  none' }
+if ($homeItems.Count -eq 0) { Write-Output '  none' }
 
 # --- 5. THE SPENT VM CLONE --------------------------------------------------
 if ($IncludeVM) {
@@ -300,7 +300,7 @@ $pAfter = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
             Where-Object { (Split-Path $_.LocalPath -Leaf) -match $rx }).Count
 Write-Output ("  local users matching : {0} -> {1}" -f $users.Count, $uAfter)
 Write-Output ("  sdu_ groups matching : {0} -> {1}" -f $groups.Count, $gAfter)
-Write-Output ("  home sd* items       : {0} -> {1}" -f $home_.Count, $hAfter)
+Write-Output ("  home sd* items       : {0} -> {1}" -f $homeItems.Count, $hAfter)
 Write-Output ("  profiles matching    : {0} -> {1}" -f $profBefore.Count, $pAfter)
 Write-Output ("  sdout still present  : {0}   (must be True)" -f (Test-Path -LiteralPath (Join-Path $Home_ 'sdout')))
 Write-Output ''
