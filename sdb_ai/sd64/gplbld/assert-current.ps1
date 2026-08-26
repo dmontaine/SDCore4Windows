@@ -550,6 +550,25 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # the failure it exists to catch is $cred landing on the
                   # replace list, after which every account is unreachable.
                   'test-upgradeiss-units.py',
+                  # 26 Aug 26 - test-edittokens-units.py, the unit test for
+                  # gpl.bp/EDIT's mark tokens: @vm <-> "~~" and @sm <-> "~`".
+                  # Listed IN THE COMMIT THAT CREATES IT, under section 7 step
+                  # 7's rule.  It reads nothing and writes nothing.
+                  #
+                  # WHY IT EXISTS RATHER THAN A CYCLE FINDING OUT.  The
+                  # conversion is two change() calls each way and it LOOKS
+                  # obviously correct; it is not.  A literal "~" immediately
+                  # before a mark merges with the substitution and comes back
+                  # on the other side of it, and no token search would have
+                  # caught that.  The test models change() in Python - left to
+                  # right, non-overlapping, which is what str.replace does -
+                  # and asserts both directions on 14 records.
+                  #
+                  # IT REFUSES THE NULL CASE: it also asserts that some records
+                  # are editable AND some are refused, because a guard that
+                  # answered "refused" to everything would otherwise pass a
+                  # table of nothing but negatives.
+                  'test-edittokens-units.py',
                   # 26 Aug 26 - check-stale-leads.py, which reads
                   # PROJECT_STATUS.md and reports entries whose OPENING status
                   # claim is contradicted later in the same entry.  Listed IN

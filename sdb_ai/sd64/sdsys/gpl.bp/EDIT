@@ -15,13 +15,18 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
-* 26 Aug 26 Windows port - MULTIVALUES ARE TYPEABLE: "~~" in the editor is a
-*           value mark in the record, both ways round.  Owner's idea.  A field
-*           mark is already a line break, so an editor handles fields on its
-*           own; a value mark is a control character it cannot show.  Subvalue
-*           marks are NOT converted and a record holding one is not safe to
-*           edit here.  A record that already contains "~~" as data is asked
-*           about rather than silently converted.  See process.record.
+* 26 Aug 26 Windows port - MARKS ARE TYPEABLE: "~~" is a value mark and "~`" a
+*           subvalue mark, both ways round.  Owner's idea, and the subvalue
+*           token his correction of the same day - the first version converted
+*           value marks only and said a record with subvalues was not safe to
+*           edit here, which was true and was not a good enough answer.
+*
+*           THE GUARD IS A ROUND TRIP, NOT A SEARCH FOR THE TOKENS.  Converting
+*           back and comparing catches the case a token search misses: a
+*           literal "~" immediately before a mark, where the substitution
+*           merges with it and the tilde comes back on the other side.  A
+*           record that fails it is refused and ED is named.  See
+*           process.record.
 * 26 Aug 26 Windows port - TWO GATES, NOT ONE.  Owner's ruling: "these commands
 *           will only work if the user has OS.EXECUTE privileges.  If not, they
 *           should get a message that the command is not available."  The VOC
@@ -89,9 +94,14 @@ $include int$keys.h
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
 
-*  The value-mark token.  See process.record for what it is for and what it
-*  cannot do.  One place, so the two conversions cannot disagree.
+*  The mark tokens.  See process.record for what they are for and what they
+*  cannot do.  One place each, so the two conversions cannot disagree.
+*
+*  THE BACKTICK IS char(96) RATHER THAN TYPED, because a lone backtick inside
+*  a quoted string is the kind of character that survives one editor and not
+*  the next, and this record is edited by hand.
    vm.token     = '~~'
+   sm.token     = '~' : char(96)
 
    compiled.dict = @false
    files.opened  = @false
@@ -413,42 +423,48 @@ process.record:
       end
    end
 
-*  VALUE MARKS BECOME "~~" ON THE WAY OUT AND COME BACK ON THE WAY IN.
-*  Owner's idea, 26 Aug 2026.  A field mark is a line break, so a text editor
-*  handles fields on its own; a VALUE mark is a control character (@vm, x'FD')
-*  and an editor either draws it as a stray glyph or drops it.  This makes
-*  multivalues typeable: what the editor sees is text, and what SD stores is a
-*  value mark.
+*  MARKS BECOME TYPEABLE TEXT ON THE WAY OUT AND COME BACK ON THE WAY IN.
+*  Owner's idea, 26 Aug 2026, and the subvalue token the day after.  A FIELD
+*  mark is a line break, so a text editor handles fields on its own; a VALUE
+*  mark and a SUBVALUE mark are control characters (x'FD', x'FC') that an
+*  editor either draws as a stray glyph or drops.  So:
 *
-*  IT DOES NOT TOUCH SUBVALUE MARKS.  @sm has no token and still reaches the
-*  editor as a control character, so a record with subvalues is not safe to
-*  edit here.  Adding a second token would be one line; it is not done because
-*  nobody has asked for it and an unused convention is one more thing to get
-*  wrong.
+*      @vm  <->  ~~        multivalues
+*      @sm  <->  ~`        subvalues
 *
-*  AND A RECORD THAT ALREADY CONTAINS THE TOKEN AS DATA IS ASKED ABOUT,
-*  because the conversion back cannot tell the two apart.  Refusing outright
-*  would be worse - it would make such a record uneditable - so the user is
-*  told what will happen and chooses.
-   if index(temp.record, vm.token, 1) then
-      crt
-      crt 'This record already contains ' : vm.token : ' as data.'
-      crt 'Every ' : vm.token : ' in it will be saved as a value mark.'
-      prompt ''
-      response = ''
-      loop
-         crt 'Edit it anyway?  <Y>es, <N>o : ' :
-         input response, 1 :
-         crt
-         response = upcase(response)
-      until index('YN', response, 1) > 0 repeat
-      if response # 'Y' then
-         error.text = 'Not edited'
-         goto end.program
-      end
-   end
-
+*  TEXT MARKS ARE STILL NOT CONVERTED.  @tm is rare enough that nobody has
+*  asked, and the guard below refuses rather than mangling one, so its absence
+*  is safe rather than merely undocumented.
    work.record = change(temp.record, @vm, vm.token)
+   work.record = change(work.record, @sm, sm.token)
+
+*  ***AND THE ROUND TRIP IS TESTED RATHER THAN REASONED ABOUT.***
+*
+*  Two different records can produce the same editor text, and then the way
+*  back cannot be right for both.  The obvious case is a record that already
+*  contains "~~" as data.  THE ONE THAT IS NOT OBVIOUS, and that a check for
+*  the token alone would have missed: a literal "~" sitting immediately before
+*  a mark.  "a~" : @vm : "b" becomes "a~~~b", and reading that back left to
+*  right gives "a" : @vm : "~b" - the tilde has moved to the other side of the
+*  mark.
+*
+*  Rather than enumerate the cases, convert BACK and compare.  If the result
+*  is not the record we started with, this record cannot be represented in the
+*  editor without changing it, and the honest answer is to refuse and name ED.
+*  Three lines, and it catches every ambiguity including the ones nobody has
+*  thought of yet.
+   check.back = change(work.record, vm.token, @vm)
+   check.back = change(check.back, sm.token, @sm)
+
+   if check.back # temp.record then
+      error.text  = 'This record cannot be edited with ' : verb.text : '.'
+      error.text := char(10)
+      error.text := 'Its text and the ' : vm.token : ' and ' : sm.token
+      error.text := ' marks cannot be told apart, so saving it would change'
+      error.text := ' data you did not edit.' : char(10)
+      error.text := 'ed, the line editor, handles it without any of this.'
+      goto end.program
+   end
 
    write work.record to temp.file, temp.record.name on error
       error.text = 'Write error: the working copy could not be created in '
@@ -487,8 +503,11 @@ process.record:
    end
 
 *  Back the other way, so what is compared and what is written are both in
-*  SD's own representation.
+*  SD's own representation.  SAME ORDER AS THE WAY OUT - value mark first -
+*  because the guard above proved the round trip lossless in exactly that
+*  order and no other.
    temp.record = change(work.record, vm.token, @vm)
+   temp.record = change(temp.record, sm.token, @sm)
 return
 
 * ---------------------------------------------------------------------------

@@ -56,19 +56,24 @@ Entries are newest first, by date, until there is a version to attach them to.
            writes one field per line, so moving between fields is moving
            between lines.
 
-           MULTIVALUES ARE TYPEABLE, AND THIS IS NEW.  A value mark is a
-           control character an editor cannot show, so:
+           MULTIVALUES AND SUBVALUES ARE TYPEABLE, AND THIS IS NEW.  Value
+           and subvalue marks are control characters an editor cannot show, so
+           each has a token you type instead:
 
-               Type ~~ where you want a value mark.
+               ~~   a value mark
+               ~`   a subvalue mark
 
-           SD converts value marks to ~~ on the way into the editor and ~~
-           back to value marks on the way out.  SMITH~~JONES~~BROWN is a
-           three-value field.
+           SD converts marks to tokens on the way into the editor and back
+           again on the way out.  SMITH~~JONES~~BROWN is a three-value field;
+           RED~`BLUE~~GREEN is two values, the first with two subvalues.
 
-           * SUBVALUE MARKS ARE NOT CONVERTED.  A record containing one is not
-             safe to edit this way - use ED.
-           * IF THE RECORD ALREADY CONTAINS ~~ AS DATA you are asked first,
-             because the conversion back cannot tell the two apart.
+           * A RECORD THAT CANNOT BE WRITTEN THIS WAY IS REFUSED, NOT MANGLED.
+             One that already contains ~~ as data, or has a ~ immediately
+             before a mark, would come back different from how it went in.  SD
+             converts the record and converts it back before opening the
+             editor; if the result differs, the verb refuses and names ED.
+           * TEXT MARKS ARE NOT CONVERTED, and are covered by that same
+             refusal rather than being left to surprise you.
            * A compiled dictionary record is truncated to its first 15 fields
              while you edit it and recompiled with CD when you save, which is
              what MICRO always did.
