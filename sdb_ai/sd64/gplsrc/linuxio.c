@@ -89,6 +89,12 @@ Private void signal_handler(int signum);
 
 void set_term(bool trap_break);
 void set_old_tty_modes(void);
+
+/* 26 Aug 26 Windows port - gplsrc/win32vt.c.  Declared rather than included:
+   that file is the only place windows.h may appear, because this one includes
+   netdb.h and sys/socket.h and the two do not mix. */
+int enable_console_vt(void);
+void restore_console_vt(void);
 void set_new_tty_modes(void);
 bool negotiate_telnet_parameter(void);
 
@@ -269,6 +275,20 @@ bool init_console() {
   tio.dsp.lines_per_page = 36;
 
   if (connection_type == CN_CONSOLE) {
+    /* 26 Aug 26 Windows port - THE CONSOLE HAS TO BE ASKED TO READ THE ESCAPES
+       SD SENDS IT.  The terminal type is "windows", an xterm clone, so clear
+       and cursor positioning go out as ANSI - and a Windows console ignores
+       ANSI unless ENABLE_VIRTUAL_TERMINAL_PROCESSING is set on the screen
+       buffer.  cmd.exe sets it, Windows PowerShell 5.1 does not, and SD used
+       to inherit whichever it was launched from: the owner found @(-1) and
+       @(x,y) working from cmd and doing nothing from PowerShell.
+
+       Here rather than in main(), and inside the CN_CONSOLE test, because a
+       phantom and an API server have no console to set it on.  It answers 0
+       there and nothing is done.  See win32vt.c for why this is not the
+       Console API change that was reverted on 23 Aug 2026. */
+    (void)enable_console_vt();
+
     /* ----------------------- Keyboard ----------------------- */
 
     /* Fetch the current terminal settings and attempt to set new ones. */
@@ -358,6 +378,13 @@ void set_term(trap_break) bool trap_break; /* Treat break char as a break? */
 void shut_console() {
   if (connection_type == CN_CONSOLE) {
     set_old_tty_modes();
+
+    /* 26 Aug 26 Windows port - and hand the console mode back if init_console()
+       changed it.  The flag belongs to the WINDOW, which outlives this process,
+       so leaving it on would be changing something SD does not own.  It is a
+       no-op when the flag was already set, which is the common case under
+       cmd.exe. */
+    restore_console_vt();
 
     /* Remove signal handler for SIGIO */
 

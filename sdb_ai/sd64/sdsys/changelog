@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+26 Aug 26  CLEAR SCREEN AND CURSOR POSITIONING NOW WORK IN A POWERSHELL
+           WINDOW.
+
+           They already worked from cmd and in Windows Terminal.  Started from
+           PowerShell, "@(-1)" and "@(x,y)" did nothing at all - output ran
+           down the screen as though the terminal had no cursor control.
+
+           WHY, AND IT WAS NEVER ABOUT POWERSHELL ITSELF.  The default terminal
+           type is "windows", a clone of xterm, so SD draws with ANSI escape
+           sequences.  A Windows console only acts on those when the flag
+           ENABLE_VIRTUAL_TERMINAL_PROCESSING is set on it, and that flag
+           belongs to the WINDOW rather than to the program running in it.
+           cmd.exe sets it; Windows Terminal is built around it; Windows
+           PowerShell 5.1 does not set it.  SD had no opinion of its own - it
+           used whatever its launcher happened to leave behind.
+
+           SD NOW TURNS IT ON FOR ITSELF at start-up, and puts it back the way
+           it found it on the way out.  Nothing to configure, and no difference
+           between the three windows any more.
+
+           This does not apply to a session over ssh, which was never affected
+           - your ssh client interprets the escapes at your end.
+
 26 Aug 26  MISTYPING THE PASSWORD AT THE END OF AN INSTALL NO LONGER LEAVES
            THE ACCOUNT WITHOUT ONE.
 

@@ -78,6 +78,7 @@ win32sem
 win32audit
 win32s4u
 win32pipe
+win32vt
 sdtermlb
 strings
 sysdump
