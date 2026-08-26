@@ -401,6 +401,19 @@ if (-not (Test-Path -LiteralPath $StatePath)) {
 $state = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
 Write-Output ("  snapshot taken at " + $state.TakenAt)
 
+# SAY WHERE THE SNAPSHOT CAME FROM WHEN IT DID NOT COME FROM HERE.  A state
+# file that was moved into place is a legitimate input - $StatePath is a
+# parameter for exactly that - but a transcript that only prints the path it
+# read makes a MOVED snapshot indistinguishable from one -Snapshot wrote
+# there.  -Snapshot never writes this field, so its presence is the whole
+# signal, and it is carried in the file rather than passed on the command line
+# so it cannot be left off by whoever runs -Compare.
+if ($state.PSObject.Properties.Name -contains 'Provenance') {
+    Write-Output ''
+    Write-Output '  *** THIS SNAPSHOT WAS NOT WRITTEN AT THE PATH IT WAS READ FROM ***'
+    Write-Output ('  ' + $state.Provenance)
+}
+
 $results = New-Object System.Collections.ArrayList
 $failed  = $false
 
@@ -444,6 +457,17 @@ if ($keepThere -and $goneThere) {
 
 Write-Output ''
 Write-Output '=== [2] PRESERVED names must be byte-identical ==================='
+# AND THEIR CREATION TIME MUST NOT MOVE.  Get-Fingerprint records Created for
+# every name and until 26 Aug 2026 nothing ever read it back - the snapshot
+# carried the one measurement that separates "left alone" from "deleted and
+# recopied byte-identically", and -Compare scored on the hash alone.  Inno
+# gives a copied file its SOURCE file's timestamp, so a preserved directory
+# that was wrongly deleted and restored from the same build is byte-identical
+# and passes a hash check perfectly.  Its CREATION time is what gives it away.
+#
+# THIS DIRECTION IS SAFE TO SCORE HARD.  NTFS file-system tunneling can make a
+# deleted-and-recreated name keep its old creation time, which can only ever
+# HIDE a move - so a creation time that DID move is never a false alarm here.
 foreach ($n in $PRESERVE) {
     $before = $state.Preserve.$n
     $after  = Get-Fingerprint (Join-Path $sdsys $n)
@@ -452,6 +476,7 @@ foreach ($n in $PRESERVE) {
         continue
     }
     Note ("preserved unchanged: " + $n) $before.Hash $after.Hash
+    Note ("preserved not recreated: " + $n) $before.Created $after.Created
 }
 
 Write-Output ''
@@ -460,13 +485,35 @@ Write-Output '=== [3] REPLACED names must all still be present =================
 # identical bytes, so a difference is not expected and its absence proves
 # nothing.  What matters is that nothing was deleted and left uncopied - the
 # hollow pair stage.py refuses to emit.
+#
+# BOTH CHECKS IN HERE PASS TRIVIALLY ON AN UPGRADE THAT NEVER RAN, and that is
+# why the creation-time count below was added on 26 Aug 2026.  "It is present"
+# and "it is not empty" are both true of a tree nobody touched; only the probe
+# pair in [1] was carrying the whole weight of "did this actually happen".
+$movedCount = 0
+$sameCount  = 0
 foreach ($n in $REPLACE) {
-    $after = Get-Fingerprint (Join-Path $sdsys $n)
+    $before = $state.Replace.$n
+    $after  = Get-Fingerprint (Join-Path $sdsys $n)
     Note ("replaced present: " + $n) $true $after.Exists
     if ($after.Exists -and $after.Kind -eq 'dir') {
         Note ("replaced not empty: " + $n) $true ($after.Count -gt 0)
     }
+    if ($before -and $before.Created -and $after.Created) {
+        if ($before.Created -ne $after.Created) { $movedCount++ } else { $sameCount++ }
+    }
 }
+
+Write-Output ''
+Write-Output ("  creation times: " + $movedCount + " of " + ($movedCount + $sameCount) +
+              " replaced names were RECREATED, " + $sameCount + " kept the old time")
+# PER-NAME THIS IS NOT SCORED, AND THE REASON IS NTFS FILE-SYSTEM TUNNELING:
+# a name deleted and recreated in the same parent within the tunnel window can
+# inherit its own former creation time, so one name that did not move is not
+# evidence of anything.  IN AGGREGATE IT IS DECISIVE - tunneling cannot hide
+# every name across an install that takes minutes, so ZERO of them moving means
+# nothing was replaced at all.  That is the null case, and it is scored.
+Note 'at least one replaced name was actually recreated' $true ($movedCount -gt 0)
 
 Write-Output ''
 Write-Output '=== [4] UNNAMED names are protected by not being on a list ======='
