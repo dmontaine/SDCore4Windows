@@ -152,7 +152,19 @@ def main():
     # rc=0 and reads the COUNT LINE.  Asserting rc alone would be the fault
     # the section 8 case above was just repaired for.
     # =====================================================================
-    ANCHOR = "> ***WHAT IS GENUINELY UNMEASURED, AND IT IS COSMETIC.***"
+    # 26 Aug 26 - RE-ANCHORED WHEN PROJECT_STATUS WAS PRUNED FOR THE
+    # DOCUMENTATION PHASE.  The old anchor was item 5's line "WHAT IS GENUINELY
+    # UNMEASURED, AND IT IS COSMETIC", which H.5 closing WITHDREW - the pages
+    # were looked at and written down.  Restoring it to keep this control
+    # running would have put a withdrawn claim back in the handoff document,
+    # which is the exact fault the checker exists to find.
+    #
+    # SO THE ANCHOR MOVED AND THE FIXTURE DID NOT CHANGE SHAPE.  It still needs
+    # a line INSIDE item 5 that sits AFTER an OBSERVE_PAT line, so substituting
+    # a denial into it makes the pair phase 3 must catch.  Item 5 still records
+    # "The owner cycled choosing stand-alone" above it, which is what case [e]
+    # strips to prove the null-case guard.
+    ANCHOR = "> ***WHAT THE PAGES SHOWED IS WRITTEN DOWN, WHICH IS THE STEP THAT WAS MISSED"
     assert ANCHOR in base, "item 5's corrected wording is not where expected"
 
     # [a] THE REAL ONE, restored verbatim.  This is the sentence item 5

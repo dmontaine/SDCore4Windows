@@ -122,7 +122,29 @@ $PacmanPackages = @(
     # "the files differ" and carries on, and the build finished - but it is a
     # real missing dependency that only shows up as noise, so it was never
     # going to be noticed any other way than by watching a build.
-    'diffutils'
+    'diffutils',
+    # 26 Aug 26 - python-markdown, ADDED FOR THE DOCUMENTATION PHASE (H.2) ON
+    # THE OWNER'S RULING that the toolchain targets the MSYS2 python.
+    #
+    # WHY IT IS HERE AT ALL.  gplbld/mkdoc.py is the ONLY thing in the whole
+    # build with a third-party import; every other import across the ten
+    # gplbld/*.py files is stdlib or local.  Step 17 proved this script RUNS;
+    # it had never been checked that it still installs everything the build
+    # uses, and this was the gap.
+    #
+    # AND THE GAP WAS BIGGER THAN THE PACKAGE, WHICH IS WHY IT NEEDED A RULING.
+    # python-markdown 3.10.2 was installed for the WINDOWS python (3.13.14),
+    # not the MSYS2 python this script installs (3.12.13), so on a fresh box
+    # `python mkdoc.py` failed at the INTERPRETER, not at the import.
+    #
+    # A PACKAGE, NOT `pip install`.  Measured 26 Aug 2026: the MSYS2 python has
+    # NO pip at all ("No module named pip"), so the pip route would mean
+    # python-pip first and then an unpinned download outside pacman.
+    # msys/python-markdown is 3.10.2-1 - the SAME version the sample was
+    # rendered with - so this needs neither.  It is in the msys repo, not only
+    # the mingw ones; a `pacman -Ss python-markdown` that looks like it is
+    # mingw-only has been truncated.
+    'python-markdown'
 )
 
 # NOT PACKAGED FOR THE MSYS2 RUNTIME - only for mingw64/ucrt64/clang64, which
