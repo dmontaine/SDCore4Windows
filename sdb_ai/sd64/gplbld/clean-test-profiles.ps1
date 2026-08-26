@@ -303,5 +303,29 @@ foreach ($p in $targets) {
     }
 }
 
+# 26 Aug 26 - A PARTIAL SWEEP USED TO REPORT TOTAL SUCCESS, AND IT DID SO ON A
+# REAL RUN BEFORE ANYONE NOTICED.
+#
+# The stuck-hive "exit 1" above lives inside `if ($targets.Count -eq 0)`, so it
+# only ever fired when NOTHING was removable.  On 26 Aug 2026 the machine had
+# BOTH: 47 stale entries whose directories were long gone, and 30 whose hives
+# were still loaded.  It removed the 47, skipped the 30, printed
+# "removed 47, failed 0" - which is true - and exited 0.
+#
+# ITS CALLER THEN BELIEVED THE EXIT CODE.  cleanup-devlitter.ps1 treats a
+# non-zero exit here as a failed section; getting 0 it printed "done." over a
+# summary that said, three lines above, "profiles matching : 77 -> 30".
+#
+# SKIPPED IS NOT DONE.  A stuck hive is unfinished work with a known remedy -
+# the reboot printed above - so it sets the exit code whether or not anything
+# else succeeded.  "failed 0" refers to the removals ATTEMPTED and stays true;
+# what was missing was any accounting for the ones never attempted.
 if ($failed.Count -gt 0) { exit 1 }
+if ($skipLoadedStuck.Count -gt 0) {
+    Write-Output ''
+    Write-Output ("clean-test-profiles: INCOMPLETE - {0} removed, {1} still held by a loaded hive." -f $ok, $skipLoadedStuck.Count)
+    Write-Output '  Reboot and run this again.  Exiting non-zero so the caller does not'
+    Write-Output '  read a partial sweep as a finished one.'
+    exit 1
+}
 exit 0

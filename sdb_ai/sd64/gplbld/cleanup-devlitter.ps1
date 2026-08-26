@@ -213,6 +213,26 @@ Write-Output ("  sd* items in the home directory  : {0}" -f $homeItems.Count)
 $profBefore = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
                 Where-Object { (Split-Path $_.LocalPath -Leaf) -match $rx })
 Write-Output ("  profiles matching                : {0}   (of {1} profiles)" -f $profBefore.Count, @(Get-CimInstance Win32_UserProfile).Count)
+
+# 26 Aug 26 - SAY THE REBOOT UP FRONT.  A profile cannot be removed while its
+# registry hive is loaded, and after a suite run EVERY hive is still loaded:
+# 35 of 35 on 24 Aug, 30 of 30 on 26 Aug.  That is the normal state, not an
+# edge case, so section [3] removes nothing and the run exits 1.
+#
+# It used to be discovered by running the whole thing and reading the sweep's
+# output afterwards.  Now it is counted here, BEFORE anything is deleted, so
+# -List answers "do I need to reboot first" without touching the machine.
+$loadedNow = @($profBefore | Where-Object { $_.Loaded -and -not $_.Special })
+if ($loadedNow.Count -gt 0) {
+    Write-Output ''
+    Write-Output ("  *** {0} of those profiles have a LOADED registry hive." -f $loadedNow.Count)
+    Write-Output '  *** A loaded profile CANNOT be removed, so section [3] will skip them'
+    Write-Output '  *** and this run will end INCOMPLETE with everything else already done.'
+    Write-Output '  ***'
+    Write-Output '  *** REBOOT FIRST, then run this again.  A reboot unloads every hive.'
+    Write-Output '  *** Sections 1, 2, 4 and 5 are safe to run now and are not undone by'
+    Write-Output '  *** rebooting - they simply find nothing the second time.'
+}
 Write-Output ''
 
 if ($users.Count -eq 0 -and $groups.Count -eq 0 -and $homeItems.Count -eq 0 -and $profBefore.Count -eq 0) {
@@ -314,5 +334,23 @@ if ($failed.Count -gt 0) {
     Write-Output ("cleanup-devlitter: {0} failure(s)." -f $failed.Count)
     exit 1
 }
-Write-Output 'cleanup-devlitter: done.'
+
+# 26 Aug 26 - DO NOT SAY "done" OVER A SUMMARY THAT SAYS OTHERWISE.  The first
+# real run printed "cleanup-devlitter: done." three lines under
+# "profiles matching : 77 -> 30", because clean-test-profiles.ps1 had exited 0
+# on a PARTIAL sweep and this trusted the exit code over its own AFTER counts.
+# Both ends are fixed; this is the half that does not depend on the other.
+#
+# THE NUMBERS ARE ALREADY ON SCREEN - so judge on them.  An instrument that
+# prints a disagreement and then contradicts it in its closing line is worse
+# than one that prints nothing, because the closing line is what gets read.
+if ($pAfter -gt 0) {
+    Write-Output ("cleanup-devlitter: INCOMPLETE - {0} profile(s) remain." -f $pAfter)
+    Write-Output '  Almost always the loaded-hive case: a profile cannot be removed while'
+    Write-Output '  its registry hive is loaded, and after a suite run every one of them is.'
+    Write-Output '  REBOOT, then run this again - sections 1, 2, 4 and 5 will find nothing'
+    Write-Output '  left to do and section 3 will finish the job.'
+    exit 1
+}
+Write-Output 'cleanup-devlitter: done - every section reached zero.'
 exit 0
