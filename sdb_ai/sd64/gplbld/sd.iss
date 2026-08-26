@@ -314,8 +314,15 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ;   the task list.  That is the same argument gplbld/stage.py records for APIPORT
 ;   itself being active.
 ; ===========================================================================
+; 26 Aug 26 - GATED, matching sshremote two entries above.  A stand-alone
+; install writes an sd.conf with no APIPORT, so SD opens no socket at all and
+; ApplyApiFirewall exits: the box could never do anything.  Offering it two
+; screens after the mode page promised no port was opened is the fault, not
+; the firewall rule.  sshremote's Check also carries SshServerAbsent; there is
+; no equivalent condition here, so this one is the mode alone.
 Name: "apiremote"; Description: "Let other computers on your network connect to the SD API (port 4243)"; \
-    GroupDescription: "Remote access:"; Flags: unchecked
+    GroupDescription: "Remote access:"; Flags: unchecked; \
+    Check: not StandaloneChosen
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------

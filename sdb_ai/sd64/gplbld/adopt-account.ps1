@@ -156,6 +156,11 @@ function Invoke-Sd {
     $err = Join-Path $env:TEMP ("sd-adopt-err-$PID.txt")
     $p = Start-Process -FilePath $sd -ArgumentList $SdArgs -NoNewWindow -PassThru `
                        -RedirectStandardOutput $out -RedirectStandardError $err
+    # 26 Aug 26 - TOUCH THE HANDLE OR ExitCode COMES BACK $null.  See the same
+    # line and its measurement in upgrade-dicts.ps1's Invoke-Sd, which this one
+    # is the original of.  Only "sd -start exited {0}" logs it here, so nothing
+    # was judged on it, but a diagnostic that prints a blank is not one.
+    $null = $p.Handle
     $exited = $p.WaitForExit(120000)
     $text = ''
     foreach ($f in @($out, $err)) {

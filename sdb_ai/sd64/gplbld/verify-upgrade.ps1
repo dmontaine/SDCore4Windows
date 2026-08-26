@@ -553,7 +553,25 @@ if ($after -eq $state.SdExeHash) {
 
 Write-Output ''
 Write-Output '=== summary ========================================================='
-$results | Format-Table -AutoSize | Out-String | Write-Output
+# CHECK AND RESULT ONLY, AND THAT IS A FIX RATHER THAN A TRIM.  Format-Table
+# -AutoSize fits the console by TRUNCATING the last column, so on the 21:48:14
+# run every long row's Observed read "...e" or "...3" - a summary table whose
+# observed column is an ellipsis is not showing what it did.  The 64-character
+# hashes and ISO timestamps are already printed in full, per check, above; the
+# creation-time rows added the same day made it worse, so this is repairing
+# what that change broke.  Non-PASS rows are then printed in full underneath,
+# so nothing that needs reading can be the thing that got dropped.
+$results | Format-Table Check, Result -AutoSize | Out-String -Width 4096 | Write-Output
+$notPassed = @($results | Where-Object { $_.Result -ne 'PASS' })
+if ($notPassed.Count -gt 0) {
+    Write-Output '  rows that are not PASS, in full:'
+    foreach ($r in $notPassed) {
+        Write-Output ("    [{0}] {1}" -f $r.Result, $r.Check)
+        Write-Output ("        expected: " + $r.Expected)
+        Write-Output ("        observed: " + $r.Observed)
+    }
+    Write-Output ''
+}
 $passCount = @($results | Where-Object { $_.Result -eq 'PASS' }).Count
 $skipCount = @($results | Where-Object { $_.Result -eq 'SKIP' }).Count
 $failCount = @($results | Where-Object { $_.Result -eq 'FAIL' }).Count

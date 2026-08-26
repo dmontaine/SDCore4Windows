@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+26 Aug 26  THE STAND-ALONE INSTALLER NO LONGER OFFERS TO OPEN THE API PORT.
+
+           A stand-alone install opens no network port at all - it writes an
+           sd.conf with no APIPORT line, so SD never creates the socket.  The
+           installer's "Remote access" page was nevertheless still showing the
+           option "Let other computers on your network connect to the SD API
+           (port 4243)".
+
+           Ticking it did nothing, and nothing was ever left exposed by it:
+           the firewall step already checked the install mode and stopped.  But
+           the option appeared two screens after the mode page had said that no
+           port would be opened, which is a contradiction whether or not it has
+           any effect.  It is now hidden on a stand-alone install, the same way
+           the matching ssh option already was.
+
+           A full installation is unchanged and still offers both.
+
 25 Aug 26  VIRTUAL FILE SYSTEM SUPPORT IS GONE FROM THE LANGUAGE TOO.
 
            SD has never been able to open a virtual file system.  Nothing in

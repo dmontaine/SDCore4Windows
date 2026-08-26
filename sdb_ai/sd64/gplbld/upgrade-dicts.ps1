@@ -118,6 +118,15 @@ function Invoke-Sd {
     $err = Join-Path $env:TEMP ("sd-updict-err-$PID.txt")
     $p = Start-Process -FilePath $sd -ArgumentList $SdArgs -NoNewWindow -PassThru `
                        -RedirectStandardOutput $out -RedirectStandardError $err
+    # 26 Aug 26 - TOUCH THE HANDLE OR ExitCode COMES BACK $null.  Start-Process
+    # -PassThru returns a Process whose exit code is unreadable after
+    # WaitForExit unless the handle was cached first, and the log then prints
+    # "exit " with nothing after it - which is exactly what the 21:22:14 run of
+    # the first-ever upgrade wrote, for BOTH sd calls.  Measured with a control
+    # (a child exiting 7: null without this line, 7 with it).  Nothing was
+    # judged on it - this script anchors on WRITE_INSTALL_DICTS' own wording
+    # and record count - so the cost was diagnostic, not a wrong verdict.
+    $null = $p.Handle
     $exited = $p.WaitForExit($TimeoutMs)
     $text = ''
     foreach ($f in @($out, $err)) {
