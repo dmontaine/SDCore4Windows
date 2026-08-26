@@ -1,10 +1,14 @@
 # clean-test-profiles.ps1 - remove the Windows profiles left behind by the
 # verifiers that create accounts.  ELEVATED.
 #
+#   powershell -File clean-test-profiles.ps1 -SelfTest check the pattern only
 #   powershell -File clean-test-profiles.ps1 -List     show what would go
 #   powershell -File clean-test-profiles.ps1           remove them
 #
 # Exit 0 done (or nothing to do), 1 refused or failed.
+#
+# -SelfTest needs no elevation and touches nothing: it runs the name pattern
+# against fixtures and exits.  Run it after ANY change to the stem list.
 #
 # WHY THIS EXISTS.  A cycle deletes the DATA tree but not the Windows side -
 # PROJECT_STATUS.md section 6 - and verify-createaccount.ps1 deliberately leaves
@@ -35,7 +39,8 @@
 # would otherwise be inside the blast radius of a cleanup script.
 
 param(
-    [switch]$List
+    [switch]$List,
+    [switch]$SelfTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -94,7 +99,117 @@ $ErrorActionPreference = 'Stop'
 # to dmont and Public, and no ProfileList entry left behind. It needed a reboot
 # first - every one of the 35 hives was still loaded, which is the stuck-hive
 # case handled below.
-$rx = '^(sdacct|sdacctb|sdsshprobe|sdsshb|sdtiert|sdtapi|sdacl|sdrt|sdapia|sdapiidb|sdcatg|sddel)[0-9]*[a-z]?(\.[A-Za-z0-9-]+)?$'
+# 26 Aug 26 - THE PER-STEM "b" FIX WAS APPLIED TO THREE STEMS AND MISSED
+# ELEVEN, AND THAT IS MEASURED, NOT ARGUED.  Against this machine on 26 Aug the
+# old pattern reached 9 of the 30 sd* profile directories and 22 of the 77
+# Win32_UserProfile entries.  Composing "<stem>b99" for each of the fourteen
+# stems VerifyInstall2.ps1 actually builds, it matched THREE: sdacct, sdssh,
+# sdapiid - exactly the three the 24 Aug note b-ified, and nothing since.
+#
+# SO THE NOTE ABOVE IS OVERRIDDEN, DELIBERATELY, AND HERE IS WHY IT NO LONGER
+# HOLDS.  It rejected widening the suffix class because that "would have
+# widened the blast radius of every other stem at the same time", and chose to
+# take the "b" into the stem instead.  That route needs THIS list and
+# VerifyInstall2.ps1's -Run block to be kept in step BY HAND, and they drifted
+# the day after it was written: sdar, sdapin, sdapi and sdscram were never here
+# at all, and sdtiert, sdtapi, sdacl, sdrt, sdapia, sdcatg and sddel never got
+# their "b".  A fix that has to be repeated eleven times is a fix that will be
+# missed eleven times.
+#
+# AND THE REPLACEMENT IS NARROWER THAN WHAT IT REPLACES, NOT WIDER.  The old
+# suffix [0-9]*[a-z]? could be EMPTY, so every bare stem matched itself -
+# measured on the control, "sdacct", "sdrt" and "sdtapi" all matched with no
+# run token at all.  That did no harm while the stem list was what it was.
+#
+# IT WOULD START DOING HARM WITH THIS LIST, WHICH IS THE REASON THE SUFFIX IS
+# NOW REQUIRED RATHER THAN OPTIONAL.  Completing the stems adds "sdapi" and
+# "sdssh", and those are the names of REAL SD GROUPS - sdapi, sdssh, sdusers,
+# sdadmins and sdsshonly are the product's own.  Left optional, this pattern
+# would match two of them exactly.  Nothing here would act on that, because it
+# is only ever applied to profile directory NAMES and no profile is called
+# that; but the next thing to reuse this regex for a user or group sweep would
+# have gone straight at them.  So a run suffix is required, no bare stem
+# matches, and the two names that do legitimately appear bare - sdsshprobe and
+# sdnotyet - are spelled out as literals instead.
+#
+# THE SHAPE.  A run token is "<letter><digits>" (b41, b43) and a verifier may
+# append its own digit or letter to tell several accounts apart (sdtapib431,
+# sdarb43n).  So: an optional single leading letter, then AT LEAST ONE DIGIT,
+# then any run of letters and digits.  Requiring the digit is what keeps a
+# word-shaped real account out - "sdapiary" and "sdsshonly" both fail on it.
+# The letter is not written as a literal "b" on purpose: -Run only has to be
+# [a-z0-9]+, so a c-series or an x-series would re-open this exact hole.
+#
+# -SelfTest below is the part that makes this stay true.  It carries the eleven
+# shapes that were missed and the group names that must never match.
+$stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
+           'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
+           'sdrt', 'sdar')
+$bare  = @('sdsshprobe', 'sdnotyet')
+$rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
+      ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
+
+if ($SelfTest) {
+    # THE FIXTURES ARE THE POINT.  Every "must match" below is a name this
+    # machine or the suite has really produced; every "must not" is either a
+    # real SD group, a real account, or the word-shaped near-miss the narrow
+    # stem list exists to keep out.
+    $must = @(
+        # the three that already worked
+        'sdacctb43', 'sdsshb43', 'sdapiidb43',
+        # THE ELEVEN THAT DID NOT.  This is the regression list.
+        'sdtiertb431', 'sdscramb43', 'sdapiab43', 'sdapinb43', 'sdcatgb43',
+        'sdtapib431', 'sdaclb43', 'sddelb43s', 'sdapib43', 'sdrtb43s',
+        'sdarb43n',
+        # the pre-b-series shapes, which must keep working
+        'sdacct14', 'sdrt5s', 'sdacl2', 'sdapia2', 'sddel5', 'sdcatg1',
+        # the bare literals
+        'sdsshprobe', 'sdnotyet',
+        # and the .<COMPUTERNAME> form Windows creates when a stale
+        # ProfileList entry survives its directory
+        'sdacct19.GITORLI', 'sdsshprobe.GITORLI'
+    )
+    $mustNot = @(
+        # REAL SD GROUPS - the old pattern matched the first two.
+        'sdapi', 'sdssh', 'sdusers', 'sdadmins', 'sdsshonly', 'sdu_don',
+        # a bare stem is not litter on its own
+        'sdacct', 'sdrt', 'sdtapi',
+        # real things on this machine
+        'dmont', 'Public', 'sdout', 'sdclilib',
+        # word-shaped near-misses
+        'sdapiary', 'sdrtserver', 'sdaclmanager',
+        # the SD system account and the owner's
+        'sdsys', 'don'
+    )
+    $bad = 0
+    Write-Output ("clean-test-profiles -SelfTest: pattern under test")
+    Write-Output ("  {0}" -f $rx)
+    Write-Output ''
+    foreach ($n in $must) {
+        if ($n -notmatch $rx) { Write-Output ("  FAIL must match but does not : {0}" -f $n); $bad++ }
+    }
+    foreach ($n in $mustNot) {
+        if ($n -match $rx)    { Write-Output ("  FAIL must NOT match but does : {0}" -f $n); $bad++ }
+    }
+    # THE NULL-CASE GUARD.  A regex that matched nothing at all would pass every
+    # "must not" row and fail every "must" row; one that matched EVERYTHING
+    # would do the reverse.  Both counts are asserted so neither reads as clean.
+    $mHit = @($must    | Where-Object { $_ -match $rx }).Count
+    $nHit = @($mustNot | Where-Object { $_ -match $rx }).Count
+    Write-Output ("  must-match   : {0} of {1} matched" -f $mHit, $must.Count)
+    Write-Output ("  must-not     : {0} of {1} matched (0 is correct)" -f $nHit, $mustNot.Count)
+    if ($must.Count -eq 0 -or $mustNot.Count -eq 0) {
+        Write-Output '  REFUSED: a fixture list is empty, so this measured nothing.'
+        exit 1
+    }
+    Write-Output ''
+    if ($bad -gt 0) {
+        Write-Output ("clean-test-profiles -SelfTest: FAILED - {0} case(s)." -f $bad)
+        exit 1
+    }
+    Write-Output ("clean-test-profiles -SelfTest: PASSED - {0} of {0} must-match, {1} of {1} correctly rejected." -f $must.Count, $mustNot.Count)
+    exit 0
+}
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
         ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {

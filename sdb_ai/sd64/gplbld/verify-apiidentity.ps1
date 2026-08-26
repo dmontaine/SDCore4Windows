@@ -74,6 +74,10 @@ $ScramFinal  = 48
 
 $script:checks = @()
 $script:void   = $false
+# 26 Aug 26 - set by the teardown when the throwaway account did not fully go.
+# It does not gate the exit code; it stops the closing sentence claiming a run
+# that left nothing behind.  See the teardown for what that cost.
+$script:leftLitter = ''
 
 function Note($check, $expected, $got, $decisive = $true) {
     $pass = ($expected -eq $got)
@@ -987,18 +991,103 @@ finally {
             # ANCHOR ON THE STATE, NOT ON THE VERB'S OUTPUT.  "Removed" is a
             # claim about what is gone, so it is answered by looking, and the
             # raw output is printed whenever the claim fails.
-            $out = Invoke-SD @("DELETE.ACCOUNT " + $Prefix.ToUpper(), 'Y')
+            # 26 Aug 26 - THE 24 Aug FIX MADE THIS TELL THE TRUTH AND DID NOT
+            # STOP THE LEAK.  THE WARNING WAS PRINTED EVERY RUN AND NOBODY READ
+            # IT.  Run b43's transcript, section [9]:
+            #
+            #     :DELETE.ACCOUNT SDAPIIDB43 Y
+            #     Unexpected token (Y)
+            #
+            # THE CONFIRMATION WAS ON THE COMMAND LINE, and DELACC:104 rejects
+            # a further token with sysmsg 2018 before deleting anything - the
+            # SAME sysmsg, and the same "an extra word became an argument"
+            # shape, that the 24 Aug note above describes for "USER".  The verb
+            # did nothing: SD account record, Windows user, sdu_ group and
+            # profile all survived, every run from b33 to b43.
+            #
+            # THE CAUSE IS POWERSHELL PRECEDENCE, NOT SD.  This read
+            #
+            #     Invoke-SD @("DELETE.ACCOUNT " + $Prefix.ToUpper(), 'Y')
+            #
+            # and "A + B, C" parses as "A + (B, C)".  So the 'Y' never was a
+            # second element: it joined the ARRAY $Prefix.ToUpper(), 'Y', which
+            # a string + array then flattened with $OFS - one space - into the
+            # single line "DELETE.ACCOUNT SDAPIIDB43 Y".  Measured, not
+            # inferred: the expression as written returns .Count = 1.
+            #
+            # THE INTERPOLATED FORM HAS NO + AND NO PRECEDENCE TO GET WRONG,
+            # and it is what verify-apiadmin.ps1:682 has always used - which is
+            # why sdapia accounts leave nothing behind and sdapiid left EIGHT.
+            # b43's apiadmin transcript is the control: "Delete account
+            # SDAPIAB43, its directory and its Windows account sdapiab43
+            # (Y/N)? Y" then "Group: sdu_sdapiab43 Deleted", "OS User:
+            # sdapiab43 Deleted".  DELETE.ACCOUNT removes the Windows account
+            # and its profile (DELACC:46, :308-345) - it was never the verb.
+            $cmd = "DELETE.ACCOUNT " + $Prefix.ToUpper()
+            $lines = @($cmd, 'Y')
+            # REFUSE TO SEND WHAT WE DID NOT MEAN TO SEND.  This is the guard
+            # the fault itself asks for: the bug was a two-line sequence that
+            # silently became one, so assert the count before it goes anywhere.
+            # Cheap, and it fails loudly instead of leaving an account behind.
+            if ($lines.Count -ne 2) {
+                Write-Host ("   INTERNAL: the DELETE.ACCOUNT sequence collapsed to {0} line(s) - not sent." -f $lines.Count) -ForegroundColor Red
+                $out = '*** not sent - the command sequence was malformed'
+            } else {
+                Write-Host ("   sending: [0] <{0}>  [1] <{1}>" -f $lines[0], $lines[1])
+                $out = Invoke-SD $lines
+            }
+
+            # A NET UNDER THE VERB, NOT A REPLACEMENT FOR IT.  On the happy path
+            # DELETE.ACCOUNT has already taken the Windows user, its sdu_ group
+            # and its profile, and both blocks below find nothing and say
+            # nothing.  They exist because this teardown runs in a finally: it
+            # has to cope with the run that got here after SD became
+            # unreachable, or after DELETE.ACCOUNT refused for a reason nobody
+            # has met yet.  EIGHT accounts accumulated the last time the only
+            # cleanup path was one SD command that had quietly stopped working.
+            #
+            # Guarded rather than blind: Remove-LocalUser on a name that is not
+            # there is an error, and an error thrown in a finally would replace
+            # the verdict with a stack trace.
+            if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
+                try {
+                    Remove-LocalUser -Name $Prefix -ErrorAction Stop
+                    Write-Host "   cleanup: removed Windows user $Prefix"
+                } catch {
+                    Write-Host ("   cleanup: could NOT remove Windows user {0} - {1}" -f $Prefix, $_.Exception.Message) -ForegroundColor Yellow
+                }
+            }
+            $sdu = 'sdu_' + $Prefix
+            if (Get-LocalGroup -Name $sdu -ErrorAction SilentlyContinue) {
+                try {
+                    Remove-LocalGroup -Name $sdu -ErrorAction Stop
+                    Write-Host "   cleanup: removed group $sdu"
+                } catch {
+                    Write-Host ("   cleanup: could NOT remove group {0} - {1}" -f $sdu, $_.Exception.Message) -ForegroundColor Yellow
+                }
+            }
+
             $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
             $stillReg = Test-Path -LiteralPath $rec
             $stillWin = $null -ne (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue)
-            if ($stillReg -or $stillWin) {
+            $stillGrp = $null -ne (Get-LocalGroup -Name $sdu -ErrorAction SilentlyContinue)
+            if ($stillReg -or $stillWin -or $stillGrp) {
+                # 26 Aug 26 - AND THE VERDICT HAS TO CARRY IT.  This warning was
+                # printed on every run from b33 to b43 and read by nobody,
+                # because the closing line underneath it said PASSED and the
+                # exit code was 0.  A cleanup failure is not a product failure
+                # and must not gate the exit code - but the closing sentence
+                # can stop claiming a clean run, which is item 5's SKIP rule
+                # applied to litter instead of to a skipped check.
+                $script:leftLitter = "$Prefix (register:$stillReg user:$stillWin group:$stillGrp)"
                 Write-Host "   WARNING: $Prefix was NOT fully removed." -ForegroundColor Yellow
-                Write-Host ("     SD account record present: {0}    Windows user present: {1}" -f $stillReg, $stillWin)
+                Write-Host ("     SD account record present: {0}    Windows user present: {1}    group {2} present: {3}" -f $stillReg, $stillWin, $sdu, $stillGrp)
                 Write-Host '     --- what DELETE.ACCOUNT actually said ---'
                 @($out) | ForEach-Object { Write-Host "     | $_" }
-                Write-Host '     Clear it with gplbld\clean-test-profiles.ps1 before reusing the prefix.'
+                Write-Host '     Remove the Windows user by hand; clean-test-profiles.ps1 REFUSES'
+                Write-Host '     a profile whose account still exists, so it cannot clear this for you.'
             } else {
-                Write-Host "   account $Prefix removed - SD record and Windows user both gone"
+                Write-Host "   account $Prefix removed - SD record, Windows user and $sdu all gone"
             }
         }
         if (Test-Path -LiteralPath $base) {
@@ -1054,5 +1143,12 @@ if ($failed.Count -gt 0) {
     Write-Host '  the user.  That is a product finding, not a test fault.'
     exit 1
 }
-Write-Host 'verify-apiidentity: PASSED - the API session writes as the authenticated user.'
+if ($script:leftLitter) {
+    Write-Host 'verify-apiidentity: PASSED - the API session writes as the authenticated user.'
+    Write-Host ("  BUT IT LEFT LITTER: {0}" -f $script:leftLitter) -ForegroundColor Yellow
+    Write-Host '  The measurement stands; the cleanup did not finish.  Read section [9]'
+    Write-Host '  above for what DELETE.ACCOUNT said, and clear it before reusing the prefix.'
+    exit 0
+}
+Write-Host 'verify-apiidentity: PASSED - the API session writes as the authenticated user, and cleaned up after itself.'
 exit 0

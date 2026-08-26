@@ -444,9 +444,41 @@ finally {
                 Remove-LocalGroup -Name $g
                 Write-Host "   removed group $g"
             }
-            if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $Prefix))) {
-                Remove-Item -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $Prefix)) `
-                            -Recurse -Force -ErrorAction SilentlyContinue
+            # 26 Aug 26 - REMOVE THE PROFILE, NOT THE DIRECTORY.  Deleting
+            # C:\Users\<name> leaves the ProfileList registry entry standing,
+            # and Windows honours that entry the next time an account of the
+            # same name appears - by putting the profile at
+            # C:\Users\<name>.<COMPUTERNAME> instead.  That is where
+            # sdacct19.GITORLI and its three siblings came from;
+            # clean-test-profiles.ps1's header has the full account.
+            #
+            # THE PILE IS REAL AND IT WAS COUNTED: 47 ProfileList entries whose
+            # directories were already gone, on this machine on 26 Aug 2026,
+            # against 30 directories actually on disk.  A survey that counts
+            # C:\Users sees the 30 and misses the 47.
+            #
+            # Remove-CimInstance on Win32_UserProfile takes BOTH halves, which
+            # is why clean-test-profiles.ps1 uses it and why this now does too.
+            # The Remove-Item fallback is kept for a directory that has no
+            # ProfileList entry at all - a workdir left by a failed run is not
+            # a profile and CIM will not find it.
+            $prof = Join-Path $env:SystemDrive ('Users\' + $Prefix)
+            $ent  = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+                      Where-Object { $_.LocalPath -eq $prof })
+            foreach ($p in $ent) {
+                try {
+                    Remove-CimInstance -InputObject $p -ErrorAction Stop
+                    Write-Host "   removed profile $prof (directory and ProfileList entry)"
+                } catch {
+                    Write-Host ("   WARNING: profile {0} not removed - {1}" -f $prof, $_.Exception.Message) -ForegroundColor Yellow
+                }
+            }
+            if (Test-Path -LiteralPath $prof) {
+                if ($ent.Count -eq 0) {
+                    Remove-Item -LiteralPath $prof -Recurse -Force -ErrorAction SilentlyContinue
+                } else {
+                    Write-Host "   note: $prof still present after the profile went" -ForegroundColor Yellow
+                }
             }
             # The SD half is left deliberately, as verify-scramlogin.ps1 and
             # verify-apiport.ps1 leave theirs: removing the register record

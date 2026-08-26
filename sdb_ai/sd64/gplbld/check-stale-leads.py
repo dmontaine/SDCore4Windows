@@ -74,11 +74,13 @@ if sec7_a is None or sec7_b is None or sec7_b <= sec7_a:
 print("section 7 spans lines %d..%d" % (sec7_a + 1, sec7_b + 1))
 
 starts = []
+sec7_entry = set()
 for i, ln in enumerate(lines):
     if re.match(r"^> ### \d+[a-z]?\. ", ln):
         starts.append(i)                       # START HERE items, anywhere
     elif sec7_a < i < sec7_b and re.match(r"^\d+\. \*\*", ln):
         starts.append(i)                       # numbered steps, section 7 only
+        sec7_entry.add(i)
 starts = sorted(set(starts))
 starts.append(len(lines))
 
@@ -88,6 +90,22 @@ print("")
 flagged = 0
 for k in range(len(starts) - 1):
     a, b = starts[k], starts[k + 1]
+    # 26 Aug 26 - CLAMP A SECTION 7 ENTRY TO SECTION 7.  The LAST step in the
+    # section has no next entry inside it, so its range ran to the END OF THE
+    # FILE and it inherited every status word in sections 8 and 9.  Diagnosed
+    # the day step 18 was added - the checker reported it "leads with a
+    # closure" over a match inside section 8's preamble - and the diagnosis was
+    # written down without the code being changed, so it fired again on the
+    # very next edit to that entry, this time over "The LEFT ARROW in a Windows
+    # console is closed" 546 lines outside the section.
+    #
+    # A CHECKER THAT CRIES WOLF ON WHICHEVER ENTRY IS LAST TEACHES THE READER
+    # TO SKIP ITS OUTPUT, which is the one thing this file cannot afford:
+    # PROJECT_STATUS tells every session to run it before answering "what is
+    # left".  Clamping is done here rather than by adding sec7_b to `starts`,
+    # because a boundary in that list would also be walked as an entry.
+    if a in sec7_entry:
+        b = min(b, sec7_b)
     title = lines[a].strip()[:72]
     opens, closes = [], []
     for i in range(a, b):

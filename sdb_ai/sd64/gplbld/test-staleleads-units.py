@@ -122,11 +122,23 @@ def main():
     # in HISTORY".  Step 18 was reported as leading with a closure it does not
     # contain.  Planting a closure word immediately after section 8's heading
     # must NOT flag the last step.
+    #
+    # 26 Aug 26 - THIS CASE WAS PASSING WITHOUT MEASURING WHAT IT NAMES, and
+    # that is why the leak it was written for survived it.  It asserted rc=0
+    # and a PHASE 2 string; the leak is a PHASE 1 flag, and phase 1 does not
+    # touch the exit code.  So the bait could leak back, get flagged, and this
+    # still reported PASS - which it did, right up until the last section 7
+    # entry was edited and the checker cried wolf again in front of a reader.
+    #
+    # ANCHOR ON THE PHASE 1 COUNT INSTEAD.  "0 entr(ies)" is printed only when
+    # nothing was flagged, so the bait leaking back moves it to "1 entr(ies)"
+    # and this fails.  Verified by reverting the clamp in check-stale-leads.py
+    # and watching this case go red on its own.
     t = base.replace("## 8. Open questions",
                      "## 8. Open questions\n\nCLOSED DONE VERIFIED - bait.\n", 1)
     assert t != base, "could not find section 8's heading"
     case("closure text after section 8 must not leak back", t, tmp, 0,
-         "every row agrees with its entry")
+         "0 entr(ies) LEAD WITH AN OPEN CLAIM")
 
     # Section 7's heading renamed must REFUSE rather than scan everything.
     t = base.replace("## 7. Next steps", "## 7. Things to do", 1)

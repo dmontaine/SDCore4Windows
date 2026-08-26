@@ -317,8 +317,36 @@ function Remove-Made {
         Remove-LocalGroup -Name ('sdu_' + $Account)
         Write-Output ("cleanup: removed group sdu_" + $Account)
     }
-    if (Test-Path (Join-Path $env:SystemDrive ('Users\' + $Account))) {
-        Remove-Item -Recurse -Force (Join-Path $env:SystemDrive ('Users\' + $Account)) -ErrorAction SilentlyContinue
+    # 26 Aug 26 - REMOVE THE PROFILE, NOT THE DIRECTORY.  Deleting
+    # C:\Users\<name> leaves the ProfileList registry entry behind, and Windows
+    # then honours that entry when an account of the same name next appears, by
+    # creating the profile at C:\Users\<name>.<COMPUTERNAME>.  That is where
+    # sdacct19.GITORLI, sdacct20.GITORLI and sdacct27.GITORLI came from - THIS
+    # script's own prefix, so this line is where they came from too.
+    # clean-test-profiles.ps1's header carries the full account.
+    #
+    # Counted 26 Aug 2026: 47 ProfileList entries whose directories were
+    # already gone, against 30 directories on disk.  Remove-CimInstance takes
+    # both halves.  The Remove-Item fallback stays for a directory with no
+    # ProfileList entry - $workdir is one, and is handled separately below
+    # precisely because it is NOT a profile.
+    $prof = Join-Path $env:SystemDrive ('Users\' + $Account)
+    $ent  = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+              Where-Object { $_.LocalPath -eq $prof })
+    foreach ($p in $ent) {
+        try {
+            Remove-CimInstance -InputObject $p -ErrorAction Stop
+            Write-Output "cleanup: removed profile $prof (directory and ProfileList entry)"
+        } catch {
+            Write-Output ("cleanup: WARNING profile {0} not removed - {1}" -f $prof, $_.Exception.Message)
+        }
+    }
+    if (Test-Path -LiteralPath $prof) {
+        if ($ent.Count -eq 0) {
+            Remove-Item -Recurse -Force -LiteralPath $prof -ErrorAction SilentlyContinue
+        } else {
+            Write-Output "cleanup: note $prof still present after the profile went"
+        }
     }
     if (Test-Path $workdir) { Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue }
 }
