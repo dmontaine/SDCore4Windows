@@ -2923,8 +2923,8 @@ begin
                          'IF YOU SET NO PASSWORD, this account can be used ONLY at this ' +
                          'computer - at the keyboard, or through Remote Desktop or similar ' +
                          'remote-control software - and only from a session run as ' +
-                         'administrator. ssh and the SD API will refuse it until a password ' +
-                         'is set.' + #13#10#13#10;
+                         'administrator. ssh and the SD API will refuse to connect until a ' +
+                         'password is set.' + #13#10#13#10;
          end;
       { Lower case for the reason given at code 0 above. }
       2: AccountMsg := 'Your SD account, ' + Lowercase(ExpandConstant('{username}')) +
