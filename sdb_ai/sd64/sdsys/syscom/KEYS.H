@@ -3,6 +3,8 @@
       * Copyright (c) 2004, Ladybridge Systems, All Rights Reserved
       
       $list off
+      * 27 Aug 26 Windows port - ACC$PRIOR.TIER, field 6, and SUSPENDED as a
+      *                      fourth value of ACC$TIER.  See the ACCOUNTS block
       * 25 Aug 26 Windows port - removed FL$TYPE.VFS; FILEINFO never
       *                      returned it and VFS is gone from the C
       * rev 0.9-2 Mar 25 mab add sdpyobj
@@ -279,7 +281,35 @@
       *   14 Aug still carry a grant list there, and an installed tree is never
       *   upgraded (section 6), so a new meaning for field 4 would read those
       *   as data of the new kind.  Start at field 5.
-      $define ACC$TIER         5     ;* STANDARD, PROGRAMMER or ADMINISTRATOR
+      $define ACC$TIER         5     ;* STANDARD, PROGRAMMER, ADMINISTRATOR
+      *                              ;*   or SUSPENDED
+      $define ACC$PRIOR.TIER   6     ;* the tier SUSPENDED displaced
+      * 27 Aug 26 Windows port - SUSPENDED IS A FOURTH TIER, AND FIELD 6 IS WHAT
+      *   IT DISPLACED.  Owner, 27 Aug 2026: a fourth trust level "so that an
+      *   account can be temporarily denied access".  MODIFY.ACCOUNT sets it.
+      *
+      *   IT IS A TIER AND NOT A FLAG, which is his wording and decides the
+      *   shape: one field answers "what may this account do", so LIST ACCOUNTS
+      *   has one column and nobody has to combine two.  The cost is that the
+      *   tier it replaced would be lost, and field 6 is what stops that.
+      *
+      *   FIELD 6 IS WRITTEN ONLY ON THE WAY IN, and that rule is the whole of
+      *   why it is safe.  MODIFY.ACCOUNT writes it when the OLD tier is not
+      *   already SUSPENDED, and clears it on any move to a named tier.
+      *   Without the test, suspending an already-suspended account would store
+      *   SUSPENDED in field 6 and the account's real tier would be gone.
+      *
+      *   NOTHING READS IT TO ACT EXCEPT THE VOC DELTA.  Owner's ruling: there
+      *   is no "resume" keyword, so coming back always names the destination -
+      *   "modify.account x programmer".  What field 6 answers is the OTHER
+      *   half, which the caller cannot supply: which tier's VOC the account is
+      *   currently holding, and therefore what has to be added or removed.
+      *
+      *   BLANK IS NORMAL AND MEANS "not suspended".  It is also what every
+      *   account written before today carries, which reads correctly.
+      *
+      *   FIELD 6 IS NOT POISONED THE WAY FIELD 4 IS - nothing has ever written
+      *   it - so this is an ordinary first use rather than a reuse.
       * 17 Aug 26 Windows port - THE TIER IS RECORDED BECAUSE IT HAS TO OUTLIVE
       *   CREATE.ACCOUNT.  Section 8's VOC tiers were a create-time decision with
       *   nothing persisting them, and LOGIN's update.voc re-copies the whole of

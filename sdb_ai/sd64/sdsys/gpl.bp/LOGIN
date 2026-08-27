@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
+*           2026: MODIFY.ACCOUNT writes SUSPENDED to ACC$TIER and this is the
+*           front door that shuts.  One test after the case statement, covering
+*           both arms.  update.voc and get.acc.tier also resolve SUSPENDED to
+*           ACC$PRIOR.TIER, so a release update does not strip a suspended
+*           account's VOC to a standard one.
 * 24 Aug 26 Windows port - "sd <command>" NO LONGER ASKS FOR A PASSWORD.
 *           Owner's ruling: a command line is BATCH, so it is not interactive,
 *           so it must not prompt.  The 21 Aug rule below stands for an
@@ -265,7 +271,18 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 * 17 Aug 26 Windows port - the register record is already read, so the tier comes
 *   straight off it rather than through get.acc.tier - which would reopen
 *   ACCOUNTS underneath this very walk.  PROJECT_STATUS.md section 8.
+* 27 Aug 26 Windows port - AND A SUSPENDED ACCOUNT IS UPDATED AT THE TIER IT
+*   HELD, not at SUSPENDED.  This walk visits every account in the register,
+*   suspended ones included, and update.voc reads anything that is not blank,
+*   PROGRAMMER or ADMINISTRATOR as "apply the standard omit list".  Without
+*   this line a release update would quietly strip a suspended administrator's
+*   VOC to a standard one, and lifting the suspension would not put it back:
+*   the account would then be an administrator holding a standard VOC, which
+*   is exactly the failure the tier field was added to stop.
                            update.voc.tier = acc.rec<ACC$TIER>
+                           if upcase(update.voc.tier) = 'SUSPENDED' then
+                              update.voc.tier = acc.rec<ACC$PRIOR.TIER>
+                           end
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
@@ -437,6 +454,31 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    end case
 
    audit.account = initial.account
+
+* 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
+*   2026: a fourth tier "so that an account can be temporarily denied access".
+*   MODIFY.ACCOUNT writes SUSPENDED to ACC$TIER and this is the door it shuts.
+*
+*   AFTER THE CASE STATEMENT, NOT INSIDE IT, so it covers both arms with one
+*   test.  Both have acc.rec read by the time they leave, and both reach here;
+*   putting it in each arm would be two chances to add a third arm later and
+*   forget one.
+*
+*   NOTHING IS WITHDRAWN ON WINDOWS, so this test is the whole of the
+*   suspension for this route.  Owner's ruling: the group memberships are left
+*   exactly as they are, which is what makes lifting a suspension free - there
+*   is no prior state to record and restore.  The cost, stated rather than
+*   hidden: the ssh connection is still accepted and sd still starts, and the
+*   person is refused here rather than by sshd.
+*
+*   AND IT IS UNCONDITIONAL, elevation included.  "sd -internal" is forced to
+*   SDSYS by sd.c and MODIFY.ACCOUNT refuses to touch SDSYS at all (2202), so
+*   there is no account this can lock a bootstrap out of.
+   if upcase(trim(acc.rec<ACC$TIER>, ' ', 'B')) = 'SUSPENDED' then
+      display sysmsg(10107, initial.account) ;* Account %1 is suspended
+      audit.reason = 'the account is suspended'
+      goto terminate.connection
+   end
 
    acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
 
@@ -1159,6 +1201,17 @@ get.acc.tier:
    openpath @sdsys:@ds:'accounts' to tier.acc.f then
       read tier.acc.rec from tier.acc.f, upcase(tier.acc.name) then
          update.voc.tier = tier.acc.rec<ACC$TIER>
+
+*        27 Aug 26 Windows port - SUSPENDED IS NOT A VOC TIER, so resolve it to
+*        the tier it displaced.  The same substitution as the walk above, and
+*        it is here as well as there because these are two independent call
+*        sites and neither can see the other's.  A suspended account cannot
+*        reach LOGIN at all, but UPDATE.ACCOUNT can be run in an account that
+*        was suspended and un-suspended since, and the walk above reaches every
+*        account whatever its state.
+         if upcase(update.voc.tier) = 'SUSPENDED' then
+            update.voc.tier = tier.acc.rec<ACC$PRIOR.TIER>
+         end
       end
       close tier.acc.f
    end

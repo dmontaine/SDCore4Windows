@@ -5,6 +5,92 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+27 Aug 26  AN ACCOUNT'S TIER CAN BE CHANGED AFTER IT IS CREATED, AND THERE IS
+           A FOURTH ONE: SUSPENDED.
+
+           Until now the tier was fixed when the account was made.
+           MODIFY.ACCOUNT can now move it in either direction:
+
+               modify.account don programmer both
+               modify.account ann administrator
+               modify.account bob suspended
+               modify.account bob standard
+
+           The keyword says what the account IS, the same way SSH, API, BOTH
+           and NONE do, and the first three words are CREATE.ACCOUNT's.
+
+           SUSPENDED DENIES ACCESS WITHOUT CHANGING ANYTHING ELSE.  It is for
+           an account that should stop working for a while - somebody on
+           leave, a login being investigated - and it is refused at all three
+           ways in:
+
+               ssh or the console      Account BOB is suspended
+               logto from another      Account BOB is suspended
+               the API                 User not allowed in requested account
+
+           Nothing is taken away on Windows and the account's VOC is left
+           exactly as it is, so lifting a suspension puts the account back as
+           it was with nothing to remember.  The tier it displaced is kept, and
+           LIST ACCOUNTS shows both.
+
+           THERE IS NO "RESUME" KEYWORD.  Coming back always names the tier the
+           account is to have:
+
+               modify.account bob programmer
+
+           and no intermediate step is ever needed - an account can go
+           programmer, standard, suspended and back to any of them directly.
+
+           THE VOC CHANGES AT ONCE, not at the next login.  A downgrade removes
+           the verbs the lower tier does not get and an upgrade copies them in,
+           and the verb says how many of each:
+
+               Account ANN is now STANDARD
+               VOC: 0 records added, 41 removed, 1 left alone
+
+           "LEFT ALONE" IS THE ONE TO READ.  A record is only removed if it is
+           still exactly what SD put there.  Anything edited or replaced in the
+           account is counted and kept, because it is somebody's work under a
+           verb's name rather than the verb.
+
+           LEAVING ADMINISTRATOR TAKES AWAY MORE THAN THE VERBS, and one part
+           has to be spelt out:
+
+               the Windows Administrators group    removed
+               the OS.USERS record                 removed
+               ssh and the API                     you say
+
+           The first two were the account's BECAUSE it was an administrator.
+           ssh and the API are a rule for an administrator and a setting for
+           everybody else, so the command has to say which:
+
+               :modify.account don programmer
+               Say what remote access DON is to have: ssh, api, both or none
+               :modify.account don programmer both
+               DON may sign in over ssh and use the API
+               Account DON is now PROGRAMMER
+
+           WHAT IS REFUSED:
+
+             - Suspending your own account, or the one you are standing in.
+             - Making a group account an ADMINISTRATOR; there is no single
+               person behind it to put in a Windows group.
+             - SDSYS, which MODIFY.ACCOUNT has never accepted.
+
+           AN ELEVATED SESSION CAN STILL "LOGTO" A SUSPENDED ACCOUNT.  That is
+           deliberate: looking at a suspended account is the usual reason to
+           have one, and anyone elevated could lift the suspension anyway.  A
+           suspension denies the account's own user.
+
+           LIST ACCOUNTS NOW SHOWS THE TIER, and this changes its default
+           columns - the tier replaces the Windows group, which was always
+           "sdu_" or "sdg_" followed by the account name and told you nothing
+           the id did not.  Both are still there by name:
+
+               list accounts
+               list accounts path descr group tier
+               list accounts tier prior.tier
+
 27 Aug 26  AN ADMINISTRATOR NO LONGER HAS TO ELEVATE TO REACH THE OPERATING
            SYSTEM.
 
@@ -28,7 +114,8 @@ Entries are newest first, by date, until there is a version to attach them to.
            ADMINISTRATOR account, so this is the ordinary case rather than a
            special one.
 
-           IT IS A DEFAULT AND NOT A RULE, and there are now keywords for it:
+           FOR EVERY OTHER TIER IT IS A GRANT, and there are now keywords
+           for it:
 
                create.account user ann programmer sh-on
                create.account user bob programmer os-on
@@ -41,9 +128,15 @@ Entries are newest first, by date, until there is a version to attach them to.
            MODIFY.ACCOUNT needs an elevated session, as it always has - you
            elevate to grant somebody the right not to have to.
 
-           ssh and the API are still a rule rather than a default for an
-           administrator: MODIFY.ACCOUNT refuses to take either away.  This is
-           the one of the three that can be turned off again.
+           FOR AN ADMINISTRATOR ALL THREE ROUTES ARE A RULE, and MODIFY.ACCOUNT
+           refuses to change any of them:
+
+               :modify.account don os-off
+               don is an administrator and always reaches the operating system
+
+           ssh and the API have refused this since 21 Aug; the operating
+           system now refuses it too, in both directions.  The whole purpose of
+           the ADMINISTRATOR tier is that it grants unlimited access.
 
            The record itself is ordinary data and can also be edited by hand:
 

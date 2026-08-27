@@ -36,10 +36,18 @@
 *   fields "yes" when it is created, ADOPT included, so the installing user
 *   gets it too.  grant.os.access, and PRE_RELEASE_FIXES item 2.
 *
-*   IT IS A DEFAULT AND NOT A SECOND GATE.  No tier test was added beside
-*   OS.USERS: one list already answers "may this person reach the operating
-*   system", and two answers that can disagree is worse than one that can be
-*   edited.  An existing record is left exactly as it is.
+*   IT IS NOT A SECOND GATE.  No tier test was added beside OS.USERS: one list
+*   already answers "may this person reach the operating system", and two
+*   answers that can disagree is worse than one that can be edited.  An
+*   existing record is left exactly as it is.
+*
+*   BUT IT IS A RULE AND NOT A DEFAULT - corrected the same day, and the two
+*   are separate points.  This paragraph is about where the answer is STORED
+*   (one list, not a tier test); the rule is about who may CHANGE it, and
+*   MODIFY.ACCOUNT now refuses an administrator with 10106.  The call site
+*   below carries his words.  The cost the "one list" choice leaves standing is
+*   named in MODIFY.ACCOUNT's os.set banner: an existing "no" record survives
+*   ADOPT and no verb can now change it, so "ed os.users" is the way out.
 * 25 Aug 26 Windows port - CREATE.ACCOUNT USER is refused on a stand-alone
 *   system, which the installer marks with '$standalone' in SDSYS.  The USER
 *   form only: it makes a Windows user that is denied the console and Remote
@@ -163,6 +171,12 @@
 *    Without that record the reduction lasted only until the release stamp moved:
 *    LOGIN's update.voc re-copies the whole of NEWVOC, and it is reached from an
 *    ordinary login by a prompt anybody can answer Y to.
+*
+* 27 Aug 26 Windows port - AND THE TIER IS NO LONGER A CREATE-TIME PROPERTY.
+*    MODIFY.ACCOUNT sets all three of these words and a fourth, SUSPENDED, in
+*    any direction, and rebuilds the VOC to match at once.  THIS VERB STILL
+*    TAKES ONLY THE THREE: there is no reason to create an account already
+*    denied.  MODIFYA's tier.set and voc.delta.
 *
 *    NONE OF THE THREE IS A WALL.  An administrator can copy any verb into any
 *    account's VOC afterwards (owner, 17 Aug 2026), so the reduced VOC is the
@@ -1483,9 +1497,13 @@ more.args:
       access.api = @true
 * 27 Aug 26 Windows port - AND THE OPERATING SYSTEM, WITHOUT ELEVATING.  Owner,
 *   27 Aug 2026.  It sits with ssh and the API because it is the third of the
-*   three he named, but it is NOT the same kind of rule: those two cannot be
-*   taken away from an administrator (MODIFY.ACCOUNT refuses, 10083) and this
-*   can, with "os-off" or "sh-off".  A default, not a rule.
+*   three he named, AND IT IS THE SAME KIND OF RULE: none of the three can be
+*   taken away from an administrator.  MODIFY.ACCOUNT refuses "os-off" and
+*   "sh-off" with 10106, exactly as it refuses SSH/API/NONE with 10083.
+*
+*   THAT SENTENCE SAID THE OPPOSITE FOR ONE DAY - "a default, not a rule",
+*   committed earlier on the 27th - and he overruled it the same afternoon:
+*   "administrators have full access, there should be no way to turn it off."
       os.sh   = @true
       os.exec = @true
    end

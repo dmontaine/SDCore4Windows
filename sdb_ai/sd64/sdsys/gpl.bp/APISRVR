@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS REFUSED OVER THE API too.
+*           Owner, 27 Aug 2026.  vb.account, reusing sysmsg(10003) like every
+*           other refusal there, so the API does not tell a caller which of the
+*           three reasons applied.
 * 23 Aug 26 Windows port - THE SESSION BECOMES THE AUTHENTICATED USER.
 *           kernel(K$ASSUME.USER) in vb.scram.final, before logged.in is set,
 *           so a refusal leaves the caller authenticated into nothing.  The
@@ -465,17 +469,42 @@ end
 *   the ERRGEN trap in PROJECT_STATUS.md section 6 and what bootstrap.py
 *   line 229 refuses a build for.
 
+* 27 Aug 26 Windows port - acc.tier is read here for the same reason acc.group
+*   is, and initialised beside it: inside the block where acc.rec is known to
+*   be assigned.  See the note above.
 account.path = ''
 acc.group = ''
+acc.tier = ''
 openpath @sdsys:@ds:'accounts' to acc.f then
    read acc.rec from acc.f, new.account then
       account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
       acc.group = acc.rec<ACC$GROUP>
+      acc.tier = acc.rec<ACC$TIER>
    end
    close acc.f
 end
 
 if account.path = '' then
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   goto revert.to.old.account
+end
+
+* 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
+*   2026: a fourth tier "so that an account can be temporarily denied access".
+*   The third door, after LOGIN and CPROC's logto.authorised; an API caller
+*   reaches an account through neither.
+*
+*   IT REUSES sysmsg(10003), WHICH IS THE RULE HERE AND NOT LAZINESS.  Every
+*   refusal in this routine gives the same text, so a caller cannot tell "no
+*   such account" from "not granted" from "suspended" and the API does not
+*   enumerate the register's state for an attacker.  See the note below on the
+*   ACC$GROUP test, which says the same thing.
+*
+*   NO ELEVATION EXEMPTION, unlike CPROC's - there is nothing to exempt.  An
+*   API session runs as LocalSystem and never carries a person's elevation, so
+*   the bypass that reasoning rests on does not exist on this route.
+if upcase(trim(acc.tier, ' ', 'B')) = 'SUSPENDED' then
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account

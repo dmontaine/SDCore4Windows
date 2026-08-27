@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 27 Aug 26 Windows port - LOGTO REFUSES A SUSPENDED ACCOUNT.  Owner, 27 Aug
+*            2026.  logto.authorised, after the two privileged bypasses - an
+*            elevated or internal session can still enter one, which is a
+*            judgement call recorded at the site.
 * 19 Aug 26 Windows port - the $COMMAND.STACK VOC id is $command.stack; both
 *            spellings are read, so a pre-rename account keeps working.
 *            PROJECT_STATUS.md 5.12 (b).
@@ -3750,6 +3754,27 @@ logto.authorised:
 *   step - and asks UAC for nothing.
    if elev.obtained then
       logto.ok = @true
+      return
+   end
+
+* 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
+*   2026: a fourth tier "so that an account can be temporarily denied access".
+*   LOGIN shuts the front door; this is the other one, because an account
+*   reached with LOGTO never goes through LOGIN at all.
+*
+*   ***AFTER THE TWO PRIVILEGED BYPASSES ABOVE, AND THAT IS A JUDGEMENT CALL
+*   RATHER THAN HIS RULING.***  An elevated session and an internal one can
+*   still enter a suspended account.  The reasoning: he has ruled twice today
+*   that an administrator's access cannot be turned off, an administrator
+*   investigating a suspended account is the ordinary reason to look at one,
+*   and anyone elevated can lift the suspension anyway - so refusing them buys
+*   no security and costs the obvious diagnostic.  What a suspension denies is
+*   THE ACCOUNT'S OWN USER, which is the group test below.
+*
+*   IF THAT IS WRONG, THE FIX IS TO MOVE THIS BLOCK ABOVE THE INTERNAL TEST at
+*   the top of the routine, not to add a second test here.
+   if upcase(trim(acc.record<ACC$TIER>, ' ', 'B')) = 'SUSPENDED' then
+      display sysmsg(10107, new.account) ;* Account %1 is suspended
       return
    end
 
