@@ -15,6 +15,26 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 27 Aug 26 Windows port - ONE crt PER LINE at end.program.  Every message here
+*           is built with char(10) as a separator and a bare LF does not return
+*           to column 0, so one crt of the whole string staircased across a real
+*           console.  Fixed at the single print site rather than at the eight
+*           places that build the text.  PRE_RELEASE_FIXES item 1.
+* 27 Aug 26 Windows port - THE CONVERSION IS LOSSLESS, NOT REFUSABLE.  Owner,
+*           27 Aug 2026, after micro refused gpl.bp/EDIT itself: "the whole
+*           purpose of these editors is primarily to edit source code without
+*           having to use ED... the conversion of field, value and subvalue
+*           marks needs to be handled seamlessly, just like CRLF or LF".
+*
+*           THE OLD GUARD REFUSED ANY RECORD WHOSE TEXT COULD BE MISTAKEN FOR
+*           A TOKEN, and this record - which carries the token strings as
+*           constants - was the ONLY source record in the whole shipped tree
+*           that it turned away.  "~" is now an escape character: a tilde is
+*           written "~-" WHERE, AND ONLY WHERE, the reader could take it for a
+*           token, so ordinary text keeps its tildes readable.  escape.tildes,
+*           and the decode order in process.record.  Proved lossless before the
+*           cycle by gplbld/test-edittokens-units.py over 55,987 strings and
+*           all 197 shipped gpl.bp records.
 * 26 Aug 26 Windows port - MARKS ARE TYPEABLE: "~~" is a value mark and "~`" a
 *           subvalue mark, both ways round.  Owner's idea, and the subvalue
 *           token his correction of the same day - the first version converted
@@ -94,14 +114,16 @@ $include int$keys.h
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
 
-*  The mark tokens.  See process.record for what they are for and what they
-*  cannot do.  One place each, so the two conversions cannot disagree.
+*  The mark tokens and the escape.  See process.record for what they are for.
+*  One place each, so the two conversions cannot disagree.
 *
 *  THE BACKTICK IS char(96) RATHER THAN TYPED, because a lone backtick inside
 *  a quoted string is the kind of character that survives one editor and not
 *  the next, and this record is edited by hand.
+   bq           = char(96)
    vm.token     = '~~'
-   sm.token     = '~' : char(96)
+   sm.token     = '~' : bq
+   esc.token    = '~-'
 
    compiled.dict = @false
    files.opened  = @false
@@ -270,7 +292,23 @@ end.program:
    if error.text = '' then
       crt verb.text : ' ended normally'
    end else
-      crt error.text
+*     ***ONE crt PER LINE, NOT ONE crt OF A STRING WITH char(10) IN IT.***
+*     Every message in this program is built with char(10) as the line
+*     separator, and a bare LF moves DOWN a line without returning to column
+*     0, so a single crt of the whole thing staircases across the screen -
+*     confirmed on a real console by the owner, 26 and 27 Aug 2026:
+*
+*         edit is not available to don.
+*                                     It runs an editor outside SD, so it...
+*
+*     A PIPE HIDES IT, which is why it survived so long: down a pipe the LF
+*     *is* the separator and the same message reads perfectly.  Fixing it here
+*     rather than at the eight places that build the text means the next
+*     message written cannot reintroduce it.
+      err.lines = dcount(error.text, char(10))
+      for err.i = 1 to err.lines
+         crt field(error.text, char(10), err.i)
+      next err.i
    end
    stop
 
@@ -402,6 +440,53 @@ check.permitted:
 return
 
 * ---------------------------------------------------------------------------
+* escape.tildes  -  protect a literal "~" in work.record, but only where a
+* reader could mistake it for a token.
+*
+* ONLY WHERE IT IS AMBIGUOUS, because the alternative - escaping every tilde -
+* would show "~-" wherever the author wrote "~", and that is not seamless.  A
+* tilde is dangerous when the character after it is:
+*
+*     ~       it would pair into the value-mark token
+*     `       it would pair into the subvalue-mark token
+*     -       it would pair into this escape
+*     @vm     the mark becomes "~~" and the pair straddles it
+*     @sm     the same for "~`"
+*
+* "-" is in that list even though it is not a token on its own: without it a
+* literal "~-" in the data would come back as a bare "~".
+*
+* IT LOOKS FOR THE TILDES RATHER THAN WALKING THE RECORD.  count() and the
+* third argument of index() find the nth one directly, so a record with no
+* tilde in it - the ordinary case - costs one count() and nothing else.
+* ---------------------------------------------------------------------------
+escape.tildes:
+   tilde.count = count(work.record, '~')
+   if tilde.count = 0 then return
+
+   esc.in  = work.record
+   esc.out = ''
+   esc.last = 0
+   for esc.i = 1 to tilde.count
+      esc.p = index(esc.in, '~', esc.i)
+      esc.out := esc.in[esc.last + 1, esc.p - esc.last - 1]
+      esc.c = esc.in[esc.p + 1, 1]
+      begin case
+         case esc.c = '~'  ; esc.out := esc.token
+         case esc.c = bq   ; esc.out := esc.token
+         case esc.c = '-'  ; esc.out := esc.token
+         case esc.c = @vm  ; esc.out := esc.token
+         case esc.c = @sm  ; esc.out := esc.token
+         case 1            ; esc.out := '~'
+      end case
+      esc.last = esc.p
+   next esc.i
+   esc.out := esc.in[esc.last + 1, 999999]
+
+   work.record = esc.out
+return
+
+* ---------------------------------------------------------------------------
 * find.editor  -  ask Windows where the editor is, once.
 *
 * IT RETURNS THE RESOLVED PATH AND THE PATH IS WHAT IS RUN.  Asking
@@ -474,38 +559,46 @@ process.record:
 *
 *      @vm  <->  ~~        multivalues
 *      @sm  <->  ~`        subvalues
+*      ~    <->  ~-        a literal tilde, WHERE IT WOULD BE AMBIGUOUS
+*
+*  ***THE CONVERSION IS LOSSLESS, NOT REFUSABLE.***  Owner's ruling, 27 Aug
+*  2026, after micro refused gpl.bp/EDIT itself: "the whole purpose of these
+*  editors is primarily to edit source code... the conversion needs to be
+*  handled seamlessly, just like CRLF or LF".  The version this replaces
+*  converted the two marks and then checked the round trip, refusing any
+*  record whose own text could be mistaken for a token - and EDIT, which
+*  carries the token strings as constants, was the ONE source record in the
+*  whole shipped tree that its own guard turned away.
+*
+*  So "~" is an escape character now.  escape.tildes, below, protects a tilde
+*  only where a reader could take it for a token, which is why ordinary text
+*  keeps its tildes readable: "a~b" is still "a~b" in the editor.
 *
 *  TEXT MARKS ARE STILL NOT CONVERTED.  @tm is rare enough that nobody has
-*  asked, and the guard below refuses rather than mangling one, so its absence
-*  is safe rather than merely undocumented.
-   work.record = change(temp.record, @vm, vm.token)
+*  asked; it travels through unchanged, which is what MICRO did with all three.
+   work.record = temp.record
+   gosub escape.tildes
+   work.record = change(work.record, @vm, vm.token)
    work.record = change(work.record, @sm, sm.token)
 
-*  ***AND THE ROUND TRIP IS TESTED RATHER THAN REASONED ABOUT.***
-*
-*  Two different records can produce the same editor text, and then the way
-*  back cannot be right for both.  The obvious case is a record that already
-*  contains "~~" as data.  THE ONE THAT IS NOT OBVIOUS, and that a check for
-*  the token alone would have missed: a literal "~" sitting immediately before
-*  a mark.  "a~" : @vm : "b" becomes "a~~~b", and reading that back left to
-*  right gives "a" : @vm : "~b" - the tilde has moved to the other side of the
-*  mark.
-*
-*  Rather than enumerate the cases, convert BACK and compare.  If the result
-*  is not the record we started with, this record cannot be represented in the
-*  editor without changing it, and the honest answer is to refuse and name ED.
-*  Three lines, and it catches every ambiguity including the ones nobody has
-*  thought of yet.
+*  ***AND THE ROUND TRIP IS STILL TESTED RATHER THAN REASONED ABOUT.***  It is
+*  now expected never to fire: gplbld/test-edittokens-units.py runs this exact
+*  algorithm over every string of six characters drawn from ~ ` - @vm @sm and
+*  one ordinary letter - 55,987 of them - and over all 197 shipped gpl.bp
+*  records, and nothing is lost.  It stays because losing a user's data
+*  silently is the one outcome worth three lines of arithmetic to prevent, and
+*  because a failure here would now be a defect in THIS program rather than a
+*  property of the record.
    check.back = change(work.record, vm.token, @vm)
    check.back = change(check.back, sm.token, @sm)
+   check.back = change(check.back, esc.token, '~')
 
    if check.back # temp.record then
-      error.text  = 'This record cannot be edited with ' : verb.text : '.'
+      error.text  = verb.text : ' cannot represent this record safely, which is'
+      error.text := ' a fault in SD rather than anything wrong with the record.'
       error.text := char(10)
-      error.text := 'Its text and the ' : vm.token : ' and ' : sm.token
-      error.text := ' marks cannot be told apart, so saving it would change'
-      error.text := ' data you did not edit.' : char(10)
-      error.text := 'ed, the line editor, handles it without any of this.'
+      error.text := 'Nothing has been changed.  Please report it.' : char(10)
+      error.text := 'ed, the line editor, handles the record meanwhile.'
       goto end.program
    end
 
@@ -582,11 +675,17 @@ process.record:
    end
 
 *  Back the other way, so what is compared and what is written are both in
-*  SD's own representation.  SAME ORDER AS THE WAY OUT - value mark first -
-*  because the guard above proved the round trip lossless in exactly that
-*  order and no other.
+*  SD's own representation.
+*
+*  ***THE ORDER IS NOT ARBITRARY AND ALL THREE MATTER.***  Value mark first,
+*  or "~~`" - a value mark followed by a backtick - reads as a tilde followed
+*  by a subvalue mark.  Escape LAST, or an escaped tilde standing in front of
+*  a mark is unescaped before the mark is recognised.  The unit test walks
+*  every arrangement of these characters, which is the only reason to believe
+*  a sentence like that one.
    temp.record = change(work.record, vm.token, @vm)
    temp.record = change(temp.record, sm.token, @sm)
+   temp.record = change(temp.record, esc.token, '~')
 return
 
 * ---------------------------------------------------------------------------

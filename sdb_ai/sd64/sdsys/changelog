@@ -213,18 +213,23 @@ Entries are newest first, by date, until there is a version to attach them to.
 
                ~~   a value mark
                ~`   a subvalue mark
+               ~-   a literal ~, where one would otherwise be misread
 
            SD converts marks to tokens on the way into the editor and back
            again on the way out.  SMITH~~JONES~~BROWN is a three-value field;
            RED~`BLUE~~GREEN is two values, the first with two subvalues.
 
-           * A RECORD THAT CANNOT BE WRITTEN THIS WAY IS REFUSED, NOT MANGLED.
-             One that already contains ~~ as data, or has a ~ immediately
-             before a mark, would come back different from how it went in.  SD
-             converts the record and converts it back before opening the
-             editor; if the result differs, the verb refuses and names ED.
-           * TEXT MARKS ARE NOT CONVERTED, and are covered by that same
-             refusal rather than being left to surprise you.
+           * THE CONVERSION IS LOSSLESS.  No record is refused and none is
+             mangled, whatever it contains.  ~ is the escape character, and SD
+             writes a tilde as ~- only where the character after it would
+             otherwise make the pair look like a token - another ~, a
+             backtick, a hyphen, or a mark.  EVERYWHERE ELSE A TILDE IS LEFT
+             ALONE, so ordinary text reads exactly as you wrote it and a~b is
+             still a~b.  Type ~- yourself when you want a literal ~ in one of
+             those positions.
+           * TEXT MARKS ARE NOT CONVERTED.  A text mark is handed to the
+             editor as the control character it is, and what happens to it is
+             up to the editor.  Records containing one are for ED.
            * A compiled dictionary record is truncated to its first 15 fields
              while you edit it and recompiled with CD when you save, which is
              what MICRO always did.
