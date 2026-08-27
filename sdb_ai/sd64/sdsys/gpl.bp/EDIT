@@ -20,6 +20,24 @@
 *           to column 0, so one crt of the whole string staircased across a real
 *           console.  Fixed at the single print site rather than at the eight
 *           places that build the text.  PRE_RELEASE_FIXES item 1.
+* 27 Aug 26 Windows port - TEXT MARKS, AND A COMMA BETWEEN MARKS IN A RUN.
+*           Owner, 27 Aug 2026.  "~!" is a text mark, and consecutive marks are
+*           written with a comma between their tokens: text mark, text mark,
+*           value mark is "~!,~!,~~".  A literal comma standing in that exact
+*           position is written "~,", because "~~,~~" already means two value
+*           marks.
+*
+*           HIS FIRST PROPOSAL WAS "`~" AND HE WITHDREW IT HIMSELF, on the
+*           ground that it breaks the rule that every token starts with "~".
+*           That is not cosmetic: it would make the BACKTICK a second
+*           escape-introducing character needing its own escape, and "~`" and
+*           "`~" are anagrams, so a run of marks became unreadable.  See the
+*           grammar at the top.
+*
+*           THE DECODE STOPPED BEING change() CALLS AND BECAME A SCAN, because
+*           the run separator is a token that exists only by virtue of where it
+*           sits, and change() rewrites the whole string with no notion of
+*           where it is.  marks.out and marks.back.
 * 27 Aug 26 Windows port - THE CONVERSION IS LOSSLESS, NOT REFUSABLE.  Owner,
 *           27 Aug 2026, after micro refused gpl.bp/EDIT itself: "the whole
 *           purpose of these editors is primarily to edit source code without
@@ -31,10 +49,8 @@
 *           constants - was the ONLY source record in the whole shipped tree
 *           that it turned away.  "~" is now an escape character: a tilde is
 *           written "~-" WHERE, AND ONLY WHERE, the reader could take it for a
-*           token, so ordinary text keeps its tildes readable.  escape.tildes,
-*           and the decode order in process.record.  Proved lossless before the
-*           cycle by gplbld/test-edittokens-units.py over 55,987 strings and
-*           all 197 shipped gpl.bp records.
+*           token, so ordinary text keeps its tildes readable.  Proved lossless
+*           before the cycle by gplbld/test-edittokens-units.py.
 * 26 Aug 26 Windows port - MARKS ARE TYPEABLE: "~~" is a value mark and "~`" a
 *           subvalue mark, both ways round.  Owner's idea, and the subvalue
 *           token his correction of the same day - the first version converted
@@ -114,8 +130,22 @@ $include int$keys.h
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
 
-*  The mark tokens and the escape.  See process.record for what they are for.
-*  One place each, so the two conversions cannot disagree.
+*  ***THE MARK GRAMMAR.  EVERY TOKEN IS "~" PLUS ONE CHARACTER, AND "~" IS THE
+*  ONLY ESCAPE CHARACTER.***  See marks.out and marks.back.  One place each, so
+*  the two directions cannot disagree.
+*
+*      ~~   value mark          ~-   a literal "~"
+*      ~`   subvalue mark       ~,   a literal "," where one would be a separator
+*      ~!   text mark
+*
+*  THE TEXT MARK IS "~!" AND NOT "`~", which was the first proposal, and the
+*  owner spotted why on 27 Aug 2026: a token led by a backtick breaks the rule
+*  that every token starts with "~", and a broken rule is not cosmetic here.
+*  It would make the BACKTICK a second escape-introducing character, so a
+*  literal backtick before a tilde would need escaping too - a whole second
+*  mechanism - and "~`" and "`~" are anagrams, so a run of marks came out as
+*  "~``~" and could only be read by a strict left-to-right scanner.  With "~!"
+*  a backtick is an ordinary character again and needs nothing.
 *
 *  THE BACKTICK IS char(96) RATHER THAN TYPED, because a lone backtick inside
 *  a quoted string is the kind of character that survives one editor and not
@@ -123,7 +153,19 @@ $include int$keys.h
    bq           = char(96)
    vm.token     = '~~'
    sm.token     = '~' : bq
+   tm.token     = '~!'
    esc.token    = '~-'
+   comma.token  = '~,'
+
+*  The character after the "~" in each token, in one string, so the scanners
+*  can test membership with index() instead of five comparisons.
+   token.chars  = '~' : bq : '!-,'
+   mark.letters = '~' : bq : '!'
+   mark.chars   = @vm : @sm : @tm
+
+*  What a literal "~" has to be escaped in front of: anything that would make
+*  the pair look like a token, plus the three marks, whose tokens begin "~".
+   danger.chars = token.chars : mark.chars
 
    compiled.dict = @false
    files.opened  = @false
@@ -440,50 +482,164 @@ check.permitted:
 return
 
 * ---------------------------------------------------------------------------
-* escape.tildes  -  protect a literal "~" in work.record, but only where a
-* reader could mistake it for a token.
+* marks.out  -  temp.record (SD) -> work.record (what the editor is given).
 *
-* ONLY WHERE IT IS AMBIGUOUS, because the alternative - escaping every tilde -
-* would show "~-" wherever the author wrote "~", and that is not seamless.  A
-* tilde is dangerous when the character after it is:
+* A FIELD mark is a line break, so a text editor handles fields on its own.
+* The other three are control characters an editor either draws as a stray
+* glyph or drops, so each becomes a two-character token; see the grammar at
+* the top of the program.
 *
-*     ~       it would pair into the value-mark token
-*     `       it would pair into the subvalue-mark token
-*     -       it would pair into this escape
-*     @vm     the mark becomes "~~" and the pair straddles it
-*     @sm     the same for "~`"
+* ***CONSECUTIVE MARKS ARE SEPARATED BY A COMMA.***  Owner, 27 Aug 2026: a run
+* of marks written token against token cannot be read.  Text mark, text mark,
+* value mark is "~!,~!,~~" and not "~!~!~~".  A LITERAL COMMA STANDING IN THAT
+* EXACT POSITION - after a mark and before a mark - is therefore written "~,",
+* because "~~,~~" already means two value marks.  Nowhere else does a comma
+* need anything: they are far too common in real text to escape on sight.
 *
-* "-" is in that list even though it is not a token on its own: without it a
-* literal "~-" in the data would come back as a bare "~".
+* A LITERAL "~" IS WRITTEN "~-" ONLY WHERE THE NEXT CHARACTER WOULD MAKE THE
+* PAIR LOOK LIKE A TOKEN.  Escaping every tilde would be shorter and would
+* show "~-" wherever the author wrote "~", which is the complaint this whole
+* conversion exists to answer.  "a~b" is "a~b" in the editor.
 *
-* IT LOOKS FOR THE TILDES RATHER THAN WALKING THE RECORD.  count() and the
-* third argument of index() find the nth one directly, so a record with no
-* tilde in it - the ordinary case - costs one count() and nothing else.
+* IT COSTS FOUR count() CALLS ON A RECORD THAT HAS NONE OF THIS, which is
+* almost every BASIC source record.  The scan is per character otherwise, but
+* it appends whole runs of ordinary text rather than one character at a time.
 * ---------------------------------------------------------------------------
-escape.tildes:
-   tilde.count = count(work.record, '~')
-   if tilde.count = 0 then return
+marks.out:
+   work.record = temp.record
 
-   esc.in  = work.record
-   esc.out = ''
-   esc.last = 0
-   for esc.i = 1 to tilde.count
-      esc.p = index(esc.in, '~', esc.i)
-      esc.out := esc.in[esc.last + 1, esc.p - esc.last - 1]
-      esc.c = esc.in[esc.p + 1, 1]
+   n.special = count(work.record, '~')
+   n.special += count(work.record, @vm)
+   n.special += count(work.record, @sm)
+   n.special += count(work.record, @tm)
+   if n.special = 0 then return
+
+   m.s = work.record
+   m.w = ''
+   m.len = len(m.s)
+   m.run = 1                        ;* start of the plain run not yet appended
+   m.prev.mark = @false
+
+   for m.i = 1 to m.len
+      m.c  = m.s[m.i, 1]
+      m.nx = m.s[m.i + 1, 1]        ;* '' at the end of the record
+
+      m.tok = ''
+      m.is.mark = @false
       begin case
-         case esc.c = '~'  ; esc.out := esc.token
-         case esc.c = bq   ; esc.out := esc.token
-         case esc.c = '-'  ; esc.out := esc.token
-         case esc.c = @vm  ; esc.out := esc.token
-         case esc.c = @sm  ; esc.out := esc.token
-         case 1            ; esc.out := '~'
+         case m.c = @vm
+            m.tok = vm.token
+            m.is.mark = @true
+         case m.c = @sm
+            m.tok = sm.token
+            m.is.mark = @true
+         case m.c = @tm
+            m.tok = tm.token
+            m.is.mark = @true
+         case m.c = ','
+*           Only the comma that would be read back as a run separator.
+            if m.prev.mark and m.nx # '' then
+               if index(mark.chars, m.nx, 1) > 0 then m.tok = comma.token
+            end
+         case m.c = '~'
+            if m.nx # '' then
+               if index(danger.chars, m.nx, 1) > 0 then m.tok = esc.token
+            end
       end case
-      esc.last = esc.p
-   next esc.i
-   esc.out := esc.in[esc.last + 1, 999999]
 
-   work.record = esc.out
+      if m.tok # '' then
+         m.w := m.s[m.run, m.i - m.run]
+         if m.is.mark and m.prev.mark then m.w := ','
+         m.w := m.tok
+         m.run = m.i + 1
+      end
+      m.prev.mark = m.is.mark
+   next m.i
+
+   m.w := m.s[m.run, m.len - m.run + 1]
+   work.record = m.w
+return
+
+* ---------------------------------------------------------------------------
+* marks.back  -  work.record (what came back from the editor) -> temp.record.
+*
+* ***IT IS A LEFT-TO-RIGHT SCAN AND NOT A SEQUENCE OF change() CALLS.***  It
+* was three change() calls until 27 Aug 2026 and could not stay one: change()
+* rewrites the whole string for each token, so a token that only exists
+* because of where it sits - the run separator - cannot be expressed, and a
+* later pass can cut a token an earlier pass created.  A scan reads each
+* position once and decides there.
+*
+* EVERY TOKEN IS "~" PLUS ONE CHARACTER, so the scan only ever has to look at
+* a tilde; every other character is itself.  A record with no tilde in it
+* comes back unchanged for one count().
+* ---------------------------------------------------------------------------
+marks.back:
+   temp.record = work.record
+   if count(temp.record, '~') = 0 then return
+
+   m.s = temp.record
+   m.w = ''
+   m.len = len(m.s)
+   m.run = 1
+   m.prev.mark = @false
+   m.i = 1
+
+   loop
+   while m.i <= m.len
+      m.c  = m.s[m.i, 1]
+      m.nx = m.s[m.i + 1, 1]
+
+      m.hit = ''
+      m.drop = @false
+      m.is.mark = @false
+      m.step = 1
+
+      begin case
+         case m.c = '~' and m.nx # '' and index(token.chars, m.nx, 1) > 0
+            m.step = 2
+            begin case
+               case m.nx = '~'
+                  m.hit = @vm
+                  m.is.mark = @true
+               case m.nx = bq
+                  m.hit = @sm
+                  m.is.mark = @true
+               case m.nx = '!'
+                  m.hit = @tm
+                  m.is.mark = @true
+               case m.nx = '-'
+                  m.hit = '~'
+               case 1
+                  m.hit = ','
+            end case
+
+         case m.c = ',' and m.prev.mark and m.nx = '~'
+*           A comma between two mark tokens is the separator this program
+*           wrote, and it is not data.  The run continues across it.
+            m.after = m.s[m.i + 2, 1]
+            if m.after # '' then
+               if index(mark.letters, m.after, 1) > 0 then
+                  m.drop = @true
+                  m.is.mark = @true
+               end
+            end
+      end case
+
+      if m.hit # '' or m.drop then
+         m.w := m.s[m.run, m.i - m.run]
+         if not(m.drop) then m.w := m.hit
+         m.run = m.i + m.step
+         m.prev.mark = m.is.mark
+      end else
+         m.prev.mark = @false
+      end
+
+      m.i += m.step
+   repeat
+
+   m.w := m.s[m.run, m.len - m.run + 1]
+   temp.record = m.w
 return
 
 * ---------------------------------------------------------------------------
@@ -552,46 +708,38 @@ process.record:
    end
 
 *  MARKS BECOME TYPEABLE TEXT ON THE WAY OUT AND COME BACK ON THE WAY IN.
-*  Owner's idea, 26 Aug 2026, and the subvalue token the day after.  A FIELD
-*  mark is a line break, so a text editor handles fields on its own; a VALUE
-*  mark and a SUBVALUE mark are control characters (x'FD', x'FC') that an
-*  editor either draws as a stray glyph or drops.  So:
-*
-*      @vm  <->  ~~        multivalues
-*      @sm  <->  ~`        subvalues
-*      ~    <->  ~-        a literal tilde, WHERE IT WOULD BE AMBIGUOUS
+*  Owner's idea, 26 Aug 2026; the subvalue token the day after, and the text
+*  mark and the run separator on the 27th.  The grammar is at the top of the
+*  program and the two scanners are marks.out and marks.back.
 *
 *  ***THE CONVERSION IS LOSSLESS, NOT REFUSABLE.***  Owner's ruling, 27 Aug
 *  2026, after micro refused gpl.bp/EDIT itself: "the whole purpose of these
 *  editors is primarily to edit source code... the conversion needs to be
 *  handled seamlessly, just like CRLF or LF".  The version this replaces
-*  converted the two marks and then checked the round trip, refusing any
-*  record whose own text could be mistaken for a token - and EDIT, which
+*  converted two of the three marks and then checked the round trip, refusing
+*  any record whose own text could be mistaken for a token - and EDIT, which
 *  carries the token strings as constants, was the ONE source record in the
 *  whole shipped tree that its own guard turned away.
-*
-*  So "~" is an escape character now.  escape.tildes, below, protects a tilde
-*  only where a reader could take it for a token, which is why ordinary text
-*  keeps its tildes readable: "a~b" is still "a~b" in the editor.
-*
-*  TEXT MARKS ARE STILL NOT CONVERTED.  @tm is rare enough that nobody has
-*  asked; it travels through unchanged, which is what MICRO did with all three.
-   work.record = temp.record
-   gosub escape.tildes
-   work.record = change(work.record, @vm, vm.token)
-   work.record = change(work.record, @sm, sm.token)
+   gosub marks.out
 
 *  ***AND THE ROUND TRIP IS STILL TESTED RATHER THAN REASONED ABOUT.***  It is
-*  now expected never to fire: gplbld/test-edittokens-units.py runs this exact
-*  algorithm over every string of six characters drawn from ~ ` - @vm @sm and
-*  one ordinary letter - 55,987 of them - and over all 197 shipped gpl.bp
-*  records, and nothing is lost.  It stays because losing a user's data
-*  silently is the one outcome worth three lines of arithmetic to prevent, and
-*  because a failure here would now be a defect in THIS program rather than a
-*  property of the record.
-   check.back = change(work.record, vm.token, @vm)
-   check.back = change(check.back, sm.token, @sm)
-   check.back = change(check.back, esc.token, '~')
+*  now expected never to fire: gplbld/test-edittokens-units.py runs these two
+*  algorithms against each other over EVERY string up to six characters drawn
+*  from ~ ` ! - , @vm @sm @tm and one ordinary letter, and over all 197 shipped
+*  gpl.bp records, and nothing is lost.  It stays because losing a user's data
+*  silently is the one outcome worth a few lines to prevent, and because a
+*  failure here would now be a defect in THIS program rather than a property of
+*  the record.
+*
+*  IT COSTS A THIRD SCAN, and that is the price of the check being real: this
+*  runs marks.back on the actual text the editor is about to be given rather
+*  than reasoning about what it would produce.
+   check.keep  = temp.record
+   check.in    = work.record
+   gosub marks.back
+   check.back  = temp.record
+   temp.record = check.keep
+   work.record = check.in
 
    if check.back # temp.record then
       error.text  = verb.text : ' cannot represent this record safely, which is'
@@ -675,17 +823,10 @@ process.record:
    end
 
 *  Back the other way, so what is compared and what is written are both in
-*  SD's own representation.
-*
-*  ***THE ORDER IS NOT ARBITRARY AND ALL THREE MATTER.***  Value mark first,
-*  or "~~`" - a value mark followed by a backtick - reads as a tilde followed
-*  by a subvalue mark.  Escape LAST, or an escaped tilde standing in front of
-*  a mark is unescaped before the mark is recognised.  The unit test walks
-*  every arrangement of these characters, which is the only reason to believe
-*  a sentence like that one.
-   temp.record = change(work.record, vm.token, @vm)
-   temp.record = change(temp.record, sm.token, @sm)
-   temp.record = change(temp.record, esc.token, '~')
+*  SD's own representation.  This is also where anything the USER typed is
+*  interpreted, which is what makes the tokens a feature rather than only a
+*  transport.
+   gosub marks.back
 return
 
 * ---------------------------------------------------------------------------

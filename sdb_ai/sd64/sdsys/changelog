@@ -213,23 +213,32 @@ Entries are newest first, by date, until there is a version to attach them to.
 
                ~~   a value mark
                ~`   a subvalue mark
+               ~!   a text mark
                ~-   a literal ~, where one would otherwise be misread
+               ~,   a literal , where one would otherwise be a separator
 
-           SD converts marks to tokens on the way into the editor and back
-           again on the way out.  SMITH~~JONES~~BROWN is a three-value field;
-           RED~`BLUE~~GREEN is two values, the first with two subvalues.
+           EVERY TOKEN IS ~ AND ONE MORE CHARACTER, and ~ is the only escape
+           character.  SD converts marks to tokens on the way into the editor
+           and back again on the way out.  SMITH~~JONES~~BROWN is a
+           three-value field; RED~`BLUE~~GREEN is two values, the first with
+           two subvalues.
 
+           * MARKS IN A ROW ARE SEPARATED BY A COMMA.  Written token against
+             token a run of marks cannot be read, so a text mark, a text mark
+             and a value mark, one after another, is:
+
+                 ~!,~!,~~
+
+             Type the comma yourself when you enter marks in a row.  It is a
+             separator and not data, which is why a literal comma standing in
+             exactly that position - between two marks - is written ~,.
            * THE CONVERSION IS LOSSLESS.  No record is refused and none is
-             mangled, whatever it contains.  ~ is the escape character, and SD
-             writes a tilde as ~- only where the character after it would
-             otherwise make the pair look like a token - another ~, a
-             backtick, a hyphen, or a mark.  EVERYWHERE ELSE A TILDE IS LEFT
-             ALONE, so ordinary text reads exactly as you wrote it and a~b is
-             still a~b.  Type ~- yourself when you want a literal ~ in one of
-             those positions.
-           * TEXT MARKS ARE NOT CONVERTED.  A text mark is handed to the
-             editor as the control character it is, and what happens to it is
-             up to the editor.  Records containing one are for ED.
+             mangled, whatever it contains.  SD writes a tilde as ~- only
+             where the character after it would otherwise make the pair look
+             like a token - another ~, a backtick, a !, a hyphen, a comma, or
+             a mark.  EVERYWHERE ELSE A TILDE IS LEFT ALONE, so ordinary text
+             reads exactly as you wrote it and a~b is still a~b.  Type ~-
+             yourself when you want a literal ~ in one of those positions.
            * A compiled dictionary record is truncated to its first 15 fields
              while you edit it and recompiled with CD when you save, which is
              what MICRO always did.
