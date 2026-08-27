@@ -5,6 +5,49 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+26 Aug 26  SYSTEM(1010) SAID "Linux".  IT NOW SAYS "Windows".
+
+           A BASIC program asking SD what platform it was running on was told
+           Linux, on Windows.  The name was inherited from the Linux original,
+           where it is correct, and never changed - the same oversight as
+           SYSTEM(91), which was fixed on 17 Aug.
+
+           IT ALSO CHANGES A COMPILER TOKEN.  The BASIC compiler defines a
+           token from this name for use with $IFDEF, so what used to be
+           SD.LINUX is now SD.WINDOWS.  Nothing shipped with SD tests either
+           name, so no supplied program compiles differently - but if you have
+           written "$IFDEF SD.LINUX" against this port, it is now SD.WINDOWS,
+           which is the name you would have expected in the first place.
+
+           SYSTEM(91) - "is this Windows" - has answered 1 since 17 Aug and is
+           the one to use for a straight platform test.
+
+26 Aug 26  CONFIG() WITH A LONG NAME NO LONGER STOPS YOUR PROGRAM.
+
+           Configuration parameter names are at most eight characters.  Asking
+           for a longer one - CONFIG("NOSUCHKEY") is nine - used to abort the
+           program with "Data cannot be converted to a string", which named
+           nothing to do with the real problem.
+
+           It now does what an unknown eight-character name has always done:
+           returns an empty string and sets STATUS() to 1004, item not found.
+           A name that is too long is a name that does not exist, and you can
+           now test for it instead of guarding against it.
+
+           Names are also CASE SENSITIVE and upper case - CONFIG("NUMLOCKS")
+           answers, CONFIG("numlocks") does not.  That has not changed.
+
+26 Aug 26  SET.SOCKET.MODE CAN NOW TURN KEEP-ALIVE OFF.
+
+           SET.SOCKET.MODE(skt, SKT$INFO.KEEP.ALIVE, 0) returned 1, for
+           success, and switched keep-alive ON.  The value you passed was read
+           and then discarded.  SOCKET.INFO(skt, SKT$INFO.KEEP.ALIVE) was
+           telling the truth all along, so the two disagreed.
+
+           The setting is now whatever you asked for.  If you have code that
+           worked around this by not calling it, the workaround is no longer
+           needed.
+
 26 Aug 26  CLEAR SCREEN AND CURSOR POSITIONING NOW WORK IN A POWERSHELL
            WINDOW.
 

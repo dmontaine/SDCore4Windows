@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 26 Aug 26 Windows port - PLATFORM_NAME is "Windows".  See the comment at the
+ *           definition; it changes SYSTEM(1010) and BCOMP's platform token.
  * 24 Aug 26 Windows port - Newline is CRLF and NewlineBytes is 2.  A directory
  *           file's records are read and written by external programs, so they
  *           get the platform's line ending; DH files cannot be read from
@@ -40,7 +42,23 @@
 /* Platforms and derivations */
 
 #define PRODUCT_KEY 2
-#define PLATFORM_NAME "Linux"
+
+/* 26 Aug 26  Windows port - "Linux" here, inherited from sdb64 where it is
+   correct.  SAME BUG AS SYSTEM(91), fixed on this port 17 Aug 26 for the same
+   reason: a constant that is true upstream and false here, left answering user
+   code.  SYSTEM(1010) is the platform name, and it told every program on a
+   product called SD Core for Windows that it was running on Linux.
+
+   IT ALSO CHANGES A COMPILER TOKEN, WHICH IS WHY IT IS NOT PURELY COSMETIC.
+   BCOMP:706 is
+
+       add 'SD.':upcase(system(1010)), "10" to defined.tokens
+
+   so the token defined for $IFDEF moves from SD.LINUX to SD.WINDOWS.  Checked
+   before changing it: NOTHING in gplsrc or sdsys tests either name, so no
+   shipped program's compilation moves - and SD.WINDOWS is the token somebody
+   writing for this port would reach for anyway.  PROJECT_STATUS.md 5.10. */
+#define PLATFORM_NAME "Windows"
 #define NIX
 #define BSD
 #define FALLBACK

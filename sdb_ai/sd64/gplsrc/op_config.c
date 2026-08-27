@@ -21,6 +21,9 @@
  * rev 0.9.0 Jan 25 mab add CREATUSR allow create.account to create os user
  * 16 Aug 26 Windows port - CREATUSR removed.  config('CREATUSR') now takes
  *           the final else, so it returns "" with status ER_NOT_FOUND.
+ * 26 Aug 26 Windows port - a name longer than the 8 character buffer took the
+ *           early exit, which jumped over the only initialisation of result
+ *           and pushed an uninitialised descriptor.  UPSTREAM_FIXES.md 18.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -54,14 +57,33 @@ void op_config() {
 
   process.status = 0;
 
-  /* Get parameter name */
-
-  descr = e_stack - 1;
-  if (k_get_c_string(descr, param, 8) < 1)
-    goto exit_op_config;
+  /* 26 Aug 26  Windows port - INITIALISE BEFORE THE EARLY EXIT, NOT AFTER IT.
+     These two lines were below the k_get_c_string() test, and the test's
+     "goto exit_op_config" jumped straight over them to a tail that does
+     "*(e_stack++) = result" on an automatic that had never been written.  A
+     name longer than the 8 character buffer takes that path, so
+     CONFIG('NOSUCHKEY') - nine characters - pushed whatever the previous
+     e-stack user had left and the caller aborted with "Data cannot be
+     converted to a string".  An unknown EIGHT character name was already
+     well behaved: it reaches the final else and returns "" with
+     ER_NOT_FOUND, which is what a long one should do too - so the early exit
+     below returns the SAME shape as the final else, an empty string with
+     ER_NOT_FOUND, rather than the integer zero this initialisation sets.  A
+     name that is too long is a name that does not exist, and a caller should
+     not be able to tell those two apart.  UPSTREAM_FIXES.md 18. */
 
   InitDescr(&result, INTEGER);
   result.data.value = 0;
+
+  /* Get parameter name */
+
+  descr = e_stack - 1;
+  if (k_get_c_string(descr, param, 8) < 1) {
+    InitDescr(&result, STRING);
+    result.data.str.saddr = NULL;
+    process.status = ER_NOT_FOUND;
+    goto exit_op_config;
+  }
 
   /* !!CONFIG!! */
   if (!strcmp(param, "CMDSTACK"))

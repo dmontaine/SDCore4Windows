@@ -19,6 +19,9 @@
  * START-HISTORY:
  * rev 0.9-3 SIGPIPE Error in op_writeskt() (WRITE.SOCKET)  issue #89 / ScarletDME 
  * 31 Dec 23 SD launch - prior history suppressed
+ * 26 Aug 26 Windows port - SET.SOCKET.MODE's keep-alive case discarded the
+ *           caller's value and always enabled it, while returning success.
+ *           UPSTREAM_FIXES.md 19.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -54,6 +57,9 @@
  *   Keys:
  *      SKT$INFO.BLOCKING   Default blocking mode
  *      SKT$INFO.NO.DELAY   Nagle algorithm disabled?
+ *      SKT$INFO.KEEP.ALIVE Keep-alive enabled?   (26 Aug 26 - the code has
+ *                          always accepted this key; it was missing here, and
+ *                          until today it ignored the value.  See op_setskt.)
  *
  * var = SOCKET.INFO(skt, key)
  *   Keys:
@@ -63,6 +69,7 @@
  *      SKT$INFO.IP.ADDR    IP address
  *      SKT$INFO.BLOCKING   Default blocking mode
  *      SKT$INFO.NO.DELAY   Nagle algorithm disabled?
+ *      SKT$INFO.KEEP.ALIVE Keep-alive enabled?   (26 Aug 26 - as above)
  *      SKT$INFO.FAMILY     Network family: INET, INET6, UDP
  *
  * var = SERVER.ADDR(name)
@@ -670,7 +677,13 @@ void op_setskt() {
     case SKT_INFO_KEEP_ALIVE:
       GetInt(descr);
       n = (descr->data.value != 0);
-      n = TRUE;
+      /* 26 Aug 26  Windows port - "n = TRUE;" stood here and threw the line
+         above away, so SET.SOCKET.MODE(s, 6, 0) enabled keep-alive and
+         returned 1.  Measured before the change: the call returned 1 and
+         SOCKET.INFO(s, 6) - which reads the real option with getsockopt() -
+         then read 1.  The blocking and TCP_NODELAY cases either side both
+         honour their argument, so this was a debugging line left behind
+         rather than a decision.  UPSTREAM_FIXES.md 19. */
       setsockopt(sockvar->socket_handle, SOL_SOCKET, SO_KEEPALIVE, (char*)&n,
                  sizeof(int));
       break;
