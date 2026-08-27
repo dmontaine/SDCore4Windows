@@ -170,9 +170,28 @@ bool tsettermtype(termname) char* termname;
     goto exit_settermtype;
   }
 
-  free_terminfo(); /* Free any old dynamic structures */
-
   /* Read header */
+
+/* 26 Aug 26 Windows port - THE HEADER IS VALIDATED BEFORE THE OLD DEFINITION
+   IS THROWN AWAY.  free_terminfo() used to sit above this, immediately after
+   the open, and the two checks below could then each fail with the previous
+   terminal's capabilities ALREADY GONE - leaving the session with none at all
+   rather than with the type it had a moment earlier.
+
+   A MISSING FILE WAS NEVER THE PROBLEM and this does not change it: the open
+   above returns first, so "TERM vt320" on a machine with no vt320 entry has
+   always kept the current type, and TERM:246 compares what came back with what
+   was asked and says "Unrecognised terminal name".  What could strip a session
+   was a file that EXISTED and was corrupt or truncated - a half-copied
+   terminfo, a bad sdtic run - which is exactly the case where somebody is
+   least able to guess what happened.
+
+   IT IS A MOVE, NOT A REWRITE, AND THE WINDOW IS NARROWED RATHER THAN CLOSED.
+   Everything below writes into the global tinfo as it goes, so a k_alloc
+   failure after this point still leaves it half built; closing that properly
+   means loading into a temporary and swapping, which is a bigger change than
+   an out-of-memory path justifies.  These two checks cost nothing to move
+   because they read into a local buffer and touch tinfo not at all. */
 
   if (!read_shorts(fu, buff, 6) || (LOW_MSB(buff) != TERMINFO_MAGIC)) {
     process.status = ER_TI_MAGIC; /* Magic number check failed */
@@ -190,6 +209,8 @@ bool tsettermtype(termname) char* termname;
     process.status = ER_TI_INVHDR; /* Invalid header data */
     goto exit_settermtype;
   }
+
+  free_terminfo(); /* Free any old dynamic structures */
 
   /* ---------- Allocate memory for the string table */
 
