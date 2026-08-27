@@ -1,1 +1,1 @@
-%1 is an administrator, but os.users could not be updated, so the shell and\nOS.EXECUTE were not granted.  An administrator can add the record by hand.
+Unable to change operating-system access for %1; os.users could not be\nupdated, so nothing has changed.

@@ -18,6 +18,15 @@
 * 
 * 
 * START-HISTORY:
+* 27 Aug 26 Windows port - "sh-on" AND "os-on".  Owner, 27 Aug 2026: the two
+*   halves of OS.USERS get keywords of their own, on this verb and both ways
+*   round on MODIFY.ACCOUNT.  ON only here, because a new account has nothing
+*   to turn off.  They ADD to the ADMINISTRATOR default rather than replacing
+*   it, and they are two independent switches over two independent fields -
+*   unlike SSH/API/BOTH/NONE, which are four names for one absolute state.
+*
+*   THE HYPHEN IS HIS AND IT PARSES: PARSER's simple-token arm splits at a
+*   space, a comma, a bracket or a quote and at nothing else.
 * 27 Aug 26 Windows port - AN ADMINISTRATOR REACHES THE OPERATING SYSTEM
 *   WITHOUT ELEVATING.  Owner, 27 Aug 2026: administrators are to "have access
 *   to os.execute, ssh and api by default without escalating".  ssh and the API
@@ -225,6 +234,22 @@ deffun ps_script(script) calling '!ps_script'
 *   lookup table.  It replaced a boolean full.voc, which could not tell
 *   PROGRAMMER from ADMINISTRATOR at all.
    tier = 'STANDARD'
+* 27 Aug 26 Windows port - OPERATING-SYSTEM ACCESS IS A CREATE-TIME PROPERTY
+*   TOO, as remote access became one on 21 Aug.  Owner, 27 Aug 2026: "sh-on"
+*   and "os-on" on CREATE.ACCOUNT, and both ways round on MODIFY.ACCOUNT.
+*
+*   THE TWO ARE SEPARATE BECAUSE OS.USERS HAS TWO FIELDS AND THEY GATE
+*   DIFFERENT THINGS: field 1 is the SH verb and "!" at the prompt (CPROC),
+*   field 2 is OS.EXECUTE from a program, the SH verb's own execution and the
+*   two screen editors (op_sh.c os_permitted, EDIT check.permitted).
+*
+*   ON ONLY, ON THIS VERB.  An account is created with nothing, so there is
+*   nothing to turn off; MODIFY.ACCOUNT carries sh-off and os-off for later.
+*   An ADMINISTRATOR gets both without asking - see the block at the end of
+*   more.args - and can be narrowed afterwards, because this is a DEFAULT and
+*   not the rule that ssh and the API are.
+   os.sh   = @false
+   os.exec = @false
 * 14 Aug 26 Windows port - ADOPT attaches an SD account to an OS account that
 *   already exists, instead of creating one.  See more.args for what gates it.
    adopt = @false
@@ -942,15 +967,17 @@ secure.account.dir:
    return
 
 * ======================================================================
-* grant.os.access  -  an ADMINISTRATOR-tier USER account is added to OS.USERS
+* grant.os.access  -  write this account's OS.USERS record, if it is to have one
 *
-* 27 Aug 26 Windows port - the ruling is at the call site.  Both fields, because
-* OS.USERS has two and they are the two halves of one capability: field 1 is the
-* SH verb and "!" (CPROC), field 2 is OS.EXECUTE from a program, the SH verb's
-* own execution and the two screen editors (op_sh.c os_permitted, EDIT
-* check.permitted).  Granting one and not the other would leave an
-* administrator able to run "os.execute" from BASIC and refused at the prompt,
-* which is not what "unlimited access" means.
+* 27 Aug 26 Windows port - the ruling is at the call site.  os.sh and os.exec
+* are set by "sh-on" and "os-on" in more.args and BOTH are set for an
+* ADMINISTRATOR, so this routine does not test the tier itself: what it needs
+* to know is already in the two flags, and asking twice is how two answers
+* start to disagree.
+*
+* IT WRITES BOTH FIELDS EVEN WHEN ONLY ONE WAS ASKED FOR, "no" in the other.
+* A record with one field is a record whose second field a later reader has to
+* guess at, and both gates read them positionally.
 *
 * USER ACCOUNTS ONLY.  A GROUP account has no single person behind it and
 * acc.uname is never assigned on that arm.
@@ -963,13 +990,13 @@ secure.account.dir:
 * ======================================================================
 
 grant.os.access:
-   if tier # 'ADMINISTRATOR' then return
+   if not(os.sh) and not(os.exec) then return
    if upcase(acc.type) # 'USER' then return
    if trim(acc.uname, ' ', 'B') = '' then return
 
    openpath @sdsys : @ds : 'os.users' to osu.f else
       display sysmsg(10104, acc.uname)
-      * %1 is an administrator, but os.users could not be updated
+      * Unable to change operating-system access for %1
       return
    end
 
@@ -980,15 +1007,20 @@ grant.os.access:
       return
    end
 
-   osu.rec = 'yes'          ;* field 1 - SH
-   osu.rec<2> = 'yes'       ;* field 2 - OS.EXECUTE
+   osu.sh = 'no'
+   osu.ex = 'no'
+   if os.sh   then osu.sh = 'yes'
+   if os.exec then osu.ex = 'yes'
+   osu.rec    = osu.sh        ;* field 1 - SH
+   osu.rec<2> = osu.ex        ;* field 2 - OS.EXECUTE
+
    osu.written = @true
    write osu.rec to osu.f, acc.uname on error osu.written = @false
    close osu.f
 
    if osu.written then
-      display sysmsg(10102, acc.uname)
-      * %1 is an administrator: os.users now allows the shell and OS.EXECUTE
+      display sysmsg(10102, acc.uname, osu.sh, osu.ex)
+      * os.users: %1 has SH %2, OS.EXECUTE %3
    end else
       display sysmsg(10104, acc.uname)
    end
@@ -1335,6 +1367,25 @@ more.args:
             access.ssh = @false
             access.api = @false
 
+* 27 Aug 26 Windows port - THE OPERATING-SYSTEM PAIR.  Owner, 27 Aug 2026.
+*   Matched on the token text like every other keyword this verb added, and
+*   for the reason ADMINISTRATOR gives above: the KW$ table in SYSCOM/PARSER.H
+*   is positional and shared by every verb.
+*
+*   THE HYPHEN IS HIS AND IT PARSES.  PARSER's simple-token arm splits at a
+*   space, a comma, a bracket or a quote and at nothing else, so "os-on" is one
+*   token; it is then looked up in the VOC, finds nothing, and arrives here as
+*   plain text with keyword = -1.
+*
+*   THEY ADD, THEY DO NOT REPLACE.  Unlike SSH/API/BOTH/NONE, which are four
+*   alternatives naming an absolute state, these are two independent switches
+*   over two independent fields, so "sh-on os-on" is both and neither cancels
+*   the other.
+         case upcase(token) = 'SH-ON'
+            os.sh = @true
+         case upcase(token) = 'OS-ON'
+            os.exec = @true
+
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:
 *   NOTHING TAKES ITS PLACE ON THIS COMMAND LINE.  ssh and API access are set
@@ -1430,6 +1481,13 @@ more.args:
       access.given = @true
       access.ssh = @true
       access.api = @true
+* 27 Aug 26 Windows port - AND THE OPERATING SYSTEM, WITHOUT ELEVATING.  Owner,
+*   27 Aug 2026.  It sits with ssh and the API because it is the third of the
+*   three he named, but it is NOT the same kind of rule: those two cannot be
+*   taken away from an administrator (MODIFY.ACCOUNT refuses, 10083) and this
+*   can, with "os-off" or "sh-off".  A default, not a rule.
+      os.sh   = @true
+      os.exec = @true
    end
 return
 * ======================================================================

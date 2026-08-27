@@ -28,8 +28,24 @@ Entries are newest first, by date, until there is a version to attach them to.
            ADMINISTRATOR account, so this is the ordinary case rather than a
            special one.
 
-           IT IS A DEFAULT AND NOT A RULE.  The record is ordinary data in
-           OS.USERS and an administrator can change it:
+           IT IS A DEFAULT AND NOT A RULE, and there are now keywords for it:
+
+               create.account user ann programmer sh-on
+               create.account user bob programmer os-on
+               modify.account ann os-on
+               modify.account ann sh-off
+
+           sh-on and os-on on CREATE.ACCOUNT; sh-on, sh-off, os-on and os-off
+           on MODIFY.ACCOUNT.  They are four switches over two fields rather
+           than four names for one state, so sh-off leaves OS.EXECUTE alone.
+           MODIFY.ACCOUNT needs an elevated session, as it always has - you
+           elevate to grant somebody the right not to have to.
+
+           ssh and the API are still a rule rather than a default for an
+           administrator: MODIFY.ACCOUNT refuses to take either away.  This is
+           the one of the three that can be turned off again.
+
+           The record itself is ordinary data and can also be edited by hand:
 
                logto sdsys
                ed os.users don

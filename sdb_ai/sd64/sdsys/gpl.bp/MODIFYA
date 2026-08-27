@@ -19,6 +19,19 @@
 * 
 *
 * START-HISTORY:
+* 27 Aug 26 Windows port - "sh-on", "sh-off", "os-on" and "os-off" set this
+*   account's own Windows user's OS.USERS record - field 1 the SH verb, field 2
+*   OS.EXECUTE and the two screen editors.  Owner, 27 Aug 2026.  CREATE.ACCOUNT
+*   takes the two ON forms; the OFF forms only mean anything once an account
+*   exists, which is what this verb is for.  os.set.
+*
+*   THEY ARE FOUR SWITCHES OVER TWO FIELDS, not four names for one state as
+*   SSH/API/BOTH/NONE are, so "sh-off" leaves OS.EXECUTE alone.
+*
+*   AN ADMINISTRATOR IS NOT REFUSED, WHICH IS THE OPPOSITE OF route.set and is
+*   deliberate: ssh and the API are a RULE for an administrator and cannot be
+*   removed (10083), while operating-system access is a DEFAULT that
+*   CREATE.ACCOUNT grants and this verb can take back.
 * 21 Aug 26 Windows port - SSH, API, BOTH and NONE replace the SSH / NO.SSH /
 *   API / NO.API pairs added earlier the same day.  Owner's decision: the
 *   keyword says what the access IS, not what to change, and the same four
@@ -173,6 +186,33 @@ deffun valid_os_name(name) calling '!valid_os_name'
             gosub route.set
          case upcase(action) = 'NONE'
             gosub route.set
+
+* 27 Aug 26 Windows port - OPERATING-SYSTEM ACCESS, BOTH WAYS ROUND.  Owner,
+*   27 Aug 2026: "sh-on and sh-off", "os-on and os-off".  CREATE.ACCOUNT takes
+*   the two ON forms; the OFF forms are only meaningful once an account exists,
+*   which is what this verb is for.
+*
+*   FOUR KEYWORDS OVER TWO FIELDS, NOT AN ABSOLUTE STATE.  SSH/API/BOTH/NONE
+*   above name what the access IS and each one sets both groups; these are two
+*   independent switches, so "sh-off" says nothing about OS.EXECUTE and leaves
+*   it alone.  That is why os.set takes a field number rather than a pair of
+*   wants.
+         case upcase(action) = 'SH-ON'
+            os.field = 1
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'SH-OFF'
+            os.field = 1
+            os.want  = @false
+            gosub os.set
+         case upcase(action) = 'OS-ON'
+            os.field = 2
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'OS-OFF'
+            os.field = 2
+            os.want  = @false
+            gosub os.set
          case 1
             route.done = @false
       end case
@@ -241,7 +281,8 @@ deffun valid_os_name(name) calling '!valid_os_name'
          
          
       end else
-         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, SSH, API, BOTH or NONE'
+         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, SSH, API, BOTH, NONE,'
+         crt '   SH-ON, SH-OFF, OS-ON or OS-OFF'
       end
       end       ;* not(route.done)
 
@@ -386,6 +427,86 @@ route.set:
    end
 
    gosub say.access
+   return
+
+* ======================================================================
+* SH-ON / SH-OFF / OS-ON / OS-OFF - set ONE field of this account's own
+* Windows user's OS.USERS record to yes or no.
+*
+* 27 Aug 26 Windows port - owner, 27 Aug 2026.  os.field is 1 for SH - the SH
+* verb and "!" at the prompt, read by CPROC - and 2 for OS.EX, read by
+* op_sh.c's os_permitted() for OS.EXECUTE and by EDIT's check.permitted for the
+* two screen editors.
+*
+* ***AN ADMINISTRATOR IS NOT REFUSED HERE, WHICH IS THE OPPOSITE OF route.set
+* ABOVE, AND THE DIFFERENCE IS DELIBERATE.***  ssh and the API are a RULE for
+* an administrator - "the whole purpose of ADMINISTRATOR is that it gives
+* unlimited access", 21 Aug 2026, and 10083 refuses to touch them.  Operating-
+* system access is a DEFAULT: CREATE.ACCOUNT grants it to an administrator
+* without being asked, and this verb can take it away again.  If that ever
+* becomes a rule too, the guard from route.set is the four lines to copy.
+*
+* A MISSING RECORD READS AS "no" IN BOTH FIELDS, exactly as both gates read it,
+* so turning something off that was never on is "nothing changed" and writes
+* nothing.  The only way to get a record that says no twice is to have had one
+* say yes, which is a fact worth keeping rather than tidying away.
+*
+* READU AND RELEASE, because two administrators editing OS.USERS at once is
+* rare and silent corruption of a permission list is not a thing to leave to
+* chance.  The no-op path releases without writing.
+os.set:
+   if group.name[1,4] = 'sdg_' then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
+      return
+   end
+
+   gosub account.user
+   if not(user.ok) then return
+
+   openpath @sdsys : @ds : 'os.users' to osu.f else
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10104, acc.user) ;* Unable to change operating-system access
+      return
+   end
+
+   readu osu.rec from osu.f, acc.user else osu.rec = ''
+
+   os.was = (upcase(trim(osu.rec<os.field>, ' ', 'B')) = 'YES')
+   if os.was = os.want then
+      release osu.f, acc.user
+      close osu.f
+      crt sysmsg(10080, acc.user) ;* %1 already had that access; nothing changed
+      return
+   end
+
+   os.new = 'no'
+   if os.want then os.new = 'yes'
+   osu.rec<os.field> = os.new
+
+*  BOTH FIELDS ARE REWRITTEN, in the two spellings this program uses, so a
+*  record hand-edited to "YES" or "Yes" or "y" comes out of here saying what
+*  the gates will actually read.  The gates fold case and compare to "yes"; a
+*  record that says "y" has always meant no and would otherwise keep looking
+*  as though it meant something.
+   osu.sh = 'no'
+   osu.ex = 'no'
+   if upcase(trim(osu.rec<1>, ' ', 'B')) = 'YES' then osu.sh = 'yes'
+   if upcase(trim(osu.rec<2>, ' ', 'B')) = 'YES' then osu.ex = 'yes'
+   osu.rec = osu.sh
+   osu.rec<2> = osu.ex
+
+   osu.ok = @true
+   write osu.rec to osu.f, acc.user on error osu.ok = @false
+   close osu.f
+
+   if not(osu.ok) then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10104, acc.user)
+      return
+   end
+
+   crt sysmsg(10102, acc.user, osu.sh, osu.ex) ;* os.users: %1 has SH %2, OS.EXECUTE %3
    return
 
 * ======================================================================

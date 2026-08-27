@@ -1,1 +1,1 @@
-%1 is an administrator: os.users now allows the shell and OS.EXECUTE
+os.users: %1 has SH %2, OS.EXECUTE %3
