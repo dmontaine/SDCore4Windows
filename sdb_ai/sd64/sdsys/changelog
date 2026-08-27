@@ -5,6 +5,50 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+27 Aug 26  AN ADMINISTRATOR NO LONGER HAS TO ELEVATE TO REACH THE OPERATING
+           SYSTEM.
+
+           An SD account made with the ADMINISTRATOR tier is now added to the
+           SD system file OS.USERS as it is created, with both fields set to
+           "yes".  That is the list SD reads to decide who may use the shell
+           and who may run a program outside SD, so from an ordinary,
+           unelevated session an administrator can now use:
+
+               sh  and  !                the shell
+               OS.EXECUTE                from a BASIC program
+               edit  and  micro          the full-screen editors
+
+           ssh and the API already worked this way - an administrator has had
+           both since 21 Aug and no keyword can take either away.  OS.EXECUTE
+           was the one route still asking for elevation, and on a fresh
+           install OS.USERS was empty, so the person who installed SD was
+           refused the editors in their own account.
+
+           IT APPLIES TO THE ACCOUNT THE INSTALLER MAKES FOR YOU, which is an
+           ADMINISTRATOR account, so this is the ordinary case rather than a
+           special one.
+
+           IT IS A DEFAULT AND NOT A RULE.  The record is ordinary data in
+           OS.USERS and an administrator can change it:
+
+               logto sdsys
+               ed os.users don
+
+           Field 1 is SH and field 2 is OS.EXECUTE, each "yes" or anything
+           else.  The name is the WINDOWS login name, not the SD account name,
+           because the permission belongs to the person and does not change
+           when they LOGTO somewhere else.
+
+           AN ACCOUNT OF ANY OTHER TIER IS UNCHANGED: no record, and no
+           operating system, until an administrator adds one.  An elevated
+           session still passes whatever the file says, so an empty OS.USERS
+           cannot lock the machine's own administrator out.
+
+           AND DELETE.ACCOUNT NOW TAKES THE RECORD AWAY AGAIN, but only when
+           it is deleting the Windows account itself.  Deleting an SD account
+           whose Windows login stays behind leaves the person's permission
+           alone, which is the right way round for a list keyed by person.
+
 26 Aug 26  SYSTEM(1010) SAID "Linux".  IT NOW SAYS "Windows".
 
            A BASIC program asking SD what platform it was running on was told

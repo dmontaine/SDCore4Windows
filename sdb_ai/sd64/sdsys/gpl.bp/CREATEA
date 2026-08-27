@@ -18,6 +18,19 @@
 * 
 * 
 * START-HISTORY:
+* 27 Aug 26 Windows port - AN ADMINISTRATOR REACHES THE OPERATING SYSTEM
+*   WITHOUT ELEVATING.  Owner, 27 Aug 2026: administrators are to "have access
+*   to os.execute, ssh and api by default without escalating".  ssh and the API
+*   already held (21 Aug, below); OS.EXECUTE did not, because OS.USERS ships
+*   empty and both gates that read it fall back to elevation.  An
+*   ADMINISTRATOR-tier USER account now gets an OS.USERS record with both
+*   fields "yes" when it is created, ADOPT included, so the installing user
+*   gets it too.  grant.os.access, and PRE_RELEASE_FIXES item 2.
+*
+*   IT IS A DEFAULT AND NOT A SECOND GATE.  No tier test was added beside
+*   OS.USERS: one list already answers "may this person reach the operating
+*   system", and two answers that can disagree is worse than one that can be
+*   edited.  An existing record is left exactly as it is.
 * 25 Aug 26 Windows port - CREATE.ACCOUNT USER is refused on a stand-alone
 *   system, which the installer marks with '$standalone' in SDSYS.  The USER
 *   form only: it makes a Windows user that is denied the console and Remote
@@ -846,6 +859,31 @@ PW.TRY.AGAIN:
 
    gosub secure.account.dir
 
+* 27 Aug 26 Windows port - AN ADMINISTRATOR REACHES THE OPERATING SYSTEM
+*   WITHOUT ELEVATING.  Owner, 27 Aug 2026: administrators are to "have access
+*   to os.execute, ssh and api by default without escalating".
+*
+*   TWO OF THE THREE ALREADY HELD.  more.args below gives an ADMINISTRATOR both
+*   ssh and the API and no keyword can take either away - his rule of 21 Aug
+*   2026, and MODIFY.ACCOUNT refuses to remove them for the same reason (10083).
+*   OS.EXECUTE was the one that did not, and it is the one he met: an
+*   UNELEVATED session belonging to the ADMINISTRATOR-tier account the installer
+*   creates was refused "edit is not available to don", because EDIT's
+*   check.permitted and op_sh.c's os_permitted() both fall back to OS.USERS and
+*   OS.USERS ships empty.  PRE_RELEASE_FIXES item 2.
+*
+*   THE GRANT IS DATA, NOT A SECOND GATE, and that is the decision worth
+*   keeping.  There is already one list answering "may this person reach the
+*   operating system"; it is readable and editable by an administrator, and a
+*   tier test beside it would make the answer depend on two things that can
+*   disagree.  A DEFAULT, NOT A RULE: edit the record to change it.
+*
+*   IT IS KEYED BY THE WINDOWS LOGIN NAME, because OS.USERS is - the permission
+*   belongs to the person and does not move when they LOGTO somewhere else
+*   (CPROC, "@logname, NOT the account").  acc.uname is that name on both the
+*   create path and the ADOPT path.
+   gosub grant.os.access
+
    @system.return.code = 0
    return
 
@@ -899,6 +937,60 @@ secure.account.dir:
    sad.rc = ps_script(sad.ps)
    if sad.rc # 0 then
       display sysmsg(10055, pathname, sad.rc) ;* Could not secure %1 (%2)
+   end
+
+   return
+
+* ======================================================================
+* grant.os.access  -  an ADMINISTRATOR-tier USER account is added to OS.USERS
+*
+* 27 Aug 26 Windows port - the ruling is at the call site.  Both fields, because
+* OS.USERS has two and they are the two halves of one capability: field 1 is the
+* SH verb and "!" (CPROC), field 2 is OS.EXECUTE from a program, the SH verb's
+* own execution and the two screen editors (op_sh.c os_permitted, EDIT
+* check.permitted).  Granting one and not the other would leave an
+* administrator able to run "os.execute" from BASIC and refused at the prompt,
+* which is not what "unlimited access" means.
+*
+* USER ACCOUNTS ONLY.  A GROUP account has no single person behind it and
+* acc.uname is never assigned on that arm.
+*
+* AN EXISTING RECORD IS LEFT EXACTLY AS IT IS.  A "no" already in the file is
+* somebody's decision and a create-time default has no business overruling it.
+* It says so out loud rather than passing in silence, because "the
+* administrator still cannot use the shell" is otherwise a question with
+* nothing to read.
+* ======================================================================
+
+grant.os.access:
+   if tier # 'ADMINISTRATOR' then return
+   if upcase(acc.type) # 'USER' then return
+   if trim(acc.uname, ' ', 'B') = '' then return
+
+   openpath @sdsys : @ds : 'os.users' to osu.f else
+      display sysmsg(10104, acc.uname)
+      * %1 is an administrator, but os.users could not be updated
+      return
+   end
+
+   read osu.rec from osu.f, acc.uname then
+      close osu.f
+      display sysmsg(10103, acc.uname)
+      * %1 already has an os.users record, so it was left exactly as it was
+      return
+   end
+
+   osu.rec = 'yes'          ;* field 1 - SH
+   osu.rec<2> = 'yes'       ;* field 2 - OS.EXECUTE
+   osu.written = @true
+   write osu.rec to osu.f, acc.uname on error osu.written = @false
+   close osu.f
+
+   if osu.written then
+      display sysmsg(10102, acc.uname)
+      * %1 is an administrator: os.users now allows the shell and OS.EXECUTE
+   end else
+      display sysmsg(10104, acc.uname)
    end
 
    return

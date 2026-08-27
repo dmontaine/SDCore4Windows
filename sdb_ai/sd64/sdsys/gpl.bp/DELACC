@@ -341,6 +341,26 @@ deffun is_sd_user(username) calling '!is_sd_user'
                   case stat = 0
                      crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
 
+* 27 Aug 26 Windows port - AND THE OS.USERS RECORD GOES WITH THE WINDOWS USER.
+*   CREATEA grants one to every ADMINISTRATOR-tier USER account it makes (27
+*   Aug 2026, grant.os.access), so without this a deleted account leaves a
+*   person still listed as permitted to reach the operating system - and the
+*   verify suite, which makes an ADMINISTRATOR account every run, would leave
+*   one behind each time.
+*
+*   ONLY WHERE SD HAS JUST DELETED THE WINDOWS USER ITSELF.  The record is keyed
+*   by the PERSON and not by the account, so removing it for a login that still
+*   exists would take a permission away from somebody who still has a reason to
+*   hold it.  This branch is reached only for an account SD created and has now
+*   removed.
+*
+*   A MISSING RECORD IS THE ORDINARY CASE, not an error: only administrators
+*   get one, and most accounts are not administrators.
+                     openpath @sdsys : @ds : 'os.users' to osu.f then
+                        delete osu.f, del.user on error null
+                        close osu.f
+                     end
+
                   * The account went and the profile did not.  Said plainly
                   * rather than as a deletion failure, because the account
                   * really is gone and re-running cannot retry the profile -
