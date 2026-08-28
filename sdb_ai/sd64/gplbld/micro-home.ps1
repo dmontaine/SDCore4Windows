@@ -45,17 +45,19 @@
 # inheriting their settings into SD's editor - is a collision in both
 # directions.  ".micro" belongs to SD and meets neither.
 #
-# ***%USERPROFILE%, NEVER C:\Users\<login>.***  Measured on this host: the login
+# ***THE PROFILE IS NOT C:\Users\<login>.***  Measured on this host: the login
 # name is "don" and the profile is "C:\Users\dmont".  Building the path from the
 # account name would be wrong SILENTLY - it would make a second directory nobody
 # reads and leave micro with nowhere writable, which is the bug this fixes.
+# PRE_RELEASE #32 is the same fault from the other end: a recreated account gets
+# "C:\Users\<name>.<DOMAIN>" and anything holding the old path breaks.
 #
 # THE FALLBACK IS NOT DECORATION.  An SD account that only ever arrives over ssh
 # may have no populated profile: the C:\Users\sd* directories left behind on the
 # build host are empty stubs with no NTUSER.DAT, so "an ssh account has a
-# profile" is UNMEASURED.  Rather than block the fix on it, TEMP is tried when
-# the profile cannot be written.  Both candidates are per-user and private, so
-# the plugin question above is answered whichever one wins.
+# profile" is UNMEASURED.  Rather than block the fix on it, local application
+# data and then TEMP are tried.  Every candidate is per-user and private, so the
+# plugin question above is answered whichever one wins.
 #
 # WRITABILITY IS TESTED BY WRITING.  Test-Path answers whether a directory
 # exists, which is not the question; a profile directory can exist and refuse a
@@ -80,14 +82,64 @@ if ($Master -eq '') { $Master = Join-Path $PSScriptRoot 'micro' }
 $masterSyntax = Join-Path $Master 'syntax'
 
 # --- the candidates, in order ----------------------------------------------
+#
+# ***ASK WINDOWS, DO NOT READ THE ENVIRONMENT.  MEASURED 27 Aug 2026 FROM INSIDE
+# SD's os.execute, WHICH IS THE ONLY PLACE THIS EVER RUNS:***
+#
+#     $env:USERPROFILE                                []      empty
+#     $env:TEMP                                       []      empty
+#     $HOME                                           []      empty
+#     [Environment]::GetFolderPath('UserProfile')     C:\Users\dmont
+#     [Environment]::GetFolderPath('LocalApplicationData')
+#                                                     C:\Users\dmont\AppData\Local
+#
+# The child SD launches does not inherit a user environment block, so the first
+# version of this script - which read $env:USERPROFILE and $env:TEMP - refused
+# every time it was called the way it is actually called.  It only appeared to
+# work when run by hand from a console, where those variables exist.
+#
+# ***AND [System.IO.Path]::GetTempPath() IS NOT A FALLBACK, IT IS A TRAP.***  It
+# consults TMP then TEMP then the Windows directory, so with both unset it
+# answers "C:\WINDOWS\" - measured.  Unelevated that fails; ELEVATED it would
+# quietly create C:\WINDOWS\sd-micro.  It is deliberately not used.
+#
+# GetFolderPath goes to the shell API with this process's token, so it answers
+# for whoever SD is running as without needing anything inherited.
+function Folder([string]$name) {
+    try { return [Environment]::GetFolderPath($name) } catch { return '' }
+}
+
 $candidates = @()
-if ($env:USERPROFILE) { $candidates += (Join-Path $env:USERPROFILE '.micro') }
-if ($env:TEMP)        { $candidates += (Join-Path $env:TEMP 'sd-micro') }
+$profileDir = Folder 'UserProfile'
+$localApp = Folder 'LocalApplicationData'
+
+if ($profileDir) { $candidates += (Join-Path $profileDir '.micro') }
+# Only if the API came back empty - never in preference to it.
+if ($env:USERPROFILE -and -not $profileDir) {
+    $candidates += (Join-Path $env:USERPROFILE '.micro')
+}
+if ($localApp) { $candidates += (Join-Path $localApp 'SD\micro') }
+if ($env:TEMP) { $candidates += (Join-Path $env:TEMP 'sd-micro') }
+
+# NOTHING UNDER THE WINDOWS DIRECTORY, whatever answered.  An elevated session
+# can create it, and then the configuration home is a place ordinary users
+# cannot write and administrators share - both of the things this script exists
+# to avoid.
+$winDir = Folder 'Windows'
+if ($winDir) {
+    $candidates = @($candidates | Where-Object {
+        -not $_.StartsWith($winDir, [StringComparison]::OrdinalIgnoreCase)
+    })
+}
+$candidates = @($candidates | Select-Object -Unique)
 
 if ($candidates.Count -eq 0) {
-    Say 'neither USERPROFILE nor TEMP is set - there is nowhere to put a writable configuration home'
+    Say 'Windows reports no profile and no local application data for this'
+    Say 'account, and TEMP is unset - there is nowhere to put a writable'
+    Say 'configuration home.'
     exit 1
 }
+Say ('candidates: ' + ($candidates -join ' | '))
 
 function Test-Writable([string]$dir) {
     # Create it if it is not there, then prove a file can be made in it.  A

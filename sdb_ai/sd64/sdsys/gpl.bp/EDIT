@@ -744,9 +744,25 @@ micro.home:
    home.cmd = '& ' : q : home.ps1 : q
    os.execute home.cmd capturing home.out
 
-   home.lines = dcount(home.out, char(10))
+*  ***THE CAPTURE IS @fm-SEPARATED AND EVERY LINE ENDS IN CR. THERE IS NO LF IN
+*  IT AT ALL.***  Measured 27 Aug 2026 with a probe that counted the characters
+*  rather than assuming: two lines of output came back
+*  FM=7 VM=0 CR=8 LF=0, the bytes reading "... 13 254 ..." between lines.
+*
+*  THE FIRST VERSION OF THIS SPLIT ON char(10) AND THEREFORE SAW ONE FIELD - so
+*  it never found MICROHOME=, and the verb refused with the script's own
+*  successful output quoted underneath it, which is how the mistake was caught.
+*  find.editor gets away with convert(char(13):char(10), '  ', ...) only because
+*  its answer is a single line.
+*
+*  Normalising all three to one separator rather than splitting on @fm keeps it
+*  right if a future capture ever does carry LF.  Empty fields cannot match.
+   home.sep  = char(10)
+   home.norm = convert(@fm : char(13), home.sep : home.sep, home.out)
+
+   home.lines = dcount(home.norm, home.sep)
    for home.i = 1 to home.lines
-      home.line = trim(field(home.out, char(10), home.i), ' ', 'B')
+      home.line = trim(field(home.norm, home.sep, home.i), ' ', 'B')
       if home.line[1, 10] = 'MICROHOME=' then
          editor.cfg = home.line[11, len(home.line) - 10]
       end
@@ -760,7 +776,7 @@ micro.home:
       error.text := ' it can write to, and micro reports every save as'
       error.text := ' "Permission denied" without one.' : char(10)
       error.text := 'micro-home.ps1 said:' : char(10)
-      error.text := trim(convert(char(13), '', home.out), char(10), 'B')
+      error.text := trim(home.norm, home.sep, 'B')
       error.text := char(10) : 'ed, the line editor, needs none of this.'
    end
 return
