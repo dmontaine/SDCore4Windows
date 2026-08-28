@@ -15,13 +15,26 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
-* 27 Aug 26 Windows port - micro IS LAUNCHED WITH "-backup off".  Its default
-*           auto-backup MkdirAll's into MICRO_CONFIG_HOME/backups, which is under
-*           C:\Program Files\SD\micro (Users:RX), so an unelevated account could
-*           not save at all.  Owner's ruling, 27 Aug 2026: suppress the backup at
-*           the launch site rather than move the config home.  editor.args, set
-*           per editor in the case statement - Microsoft Edit takes no such
-*           switch.  PRE_RELEASE_FIXES item 29.
+* 27 Aug 26 Windows port - MICRO_CONFIG_HOME IS PER USER AND WRITABLE, and the
+*           "-backup off" that was here earlier the same day is gone entirely.
+*           micro writes to its configuration home when it saves; pointing it at
+*           C:\Program Files\SD\micro (Users:RX) made every unelevated save
+*           print "Permission denied.  Save with sudo not supported on Windows"
+*           - and write the file anyway.  PRE_RELEASE_FIXES item 29.
+*
+*           THE FIRST FIX WAS REASONED AND WRONG, WHICH IS THE PART WORTH
+*           KEEPING.  It blamed micro's auto-backup and passed "-backup off".
+*           Measured afterwards, four runs with one variable: a read-only home
+*           errors with no flags, with "-backup off", and with "-backup false
+*           -savehistory false"; a writable home is clean.  No option suppresses
+*           it, so nothing but a writable home was ever going to work.
+*
+*           THE HOME IS THE USER'S OWN - owner's ruling, 27 Aug 2026, and it is
+*           where micro looks anyway.  micro-home.ps1 resolves it, falls back to
+*           TEMP, and copies the syntax file in; see micro.home below and that
+*           script's header.  It must be PER USER: micro executes Lua plugins
+*           from its configuration home, so one shared writable directory would
+*           let any SD user run code in every other user's editor session.
 * 27 Aug 26 Windows port - ONE crt PER LINE at end.program.  Every message here
 *           is built with char(10) as a separator and a bare LF does not return
 *           to column 0, so one crt of the whole string staircased across a real
@@ -212,40 +225,19 @@ $include int$keys.h
          editor.exe  = 'micro.exe'
          editor.name = 'micro'
          editor.get  = 'winget install -e --id zyedidia.micro --scope machine'
-*        -backup off, BECAUSE micro's DEFAULT AUTO-BACKUP CANNOT WRITE.  micro
-*        2.0.15 ships "backup" true and "backupdir" empty, and an empty
-*        backupdir sends the backup to MICRO_CONFIG_HOME/backups - which is
-*        under C:\Program Files\SD\micro, BUILTIN\Users:(RX).  micro MkdirAll's
-*        that directory on the first save; unelevated it fails and micro aborts
-*        the save with "Permission denied.  Save with sudo not supported on
-*        Windows", so an ordinary account cannot save at all.  PRE_RELEASE 29.
-*
-*        THE SAFETY NET IS THIN HERE ANYWAY: this program prompts "Save?" per
-*        record, keeps the $hold working copy until every exit, and the mark
-*        round trip is byte-checked before the editor is handed anything.  A
-*        writable config home is the larger fix and buys nothing over those.
-         editor.args = ' -backup off'
-*        MICRO HIGHLIGHTS SD BASIC, AND THIS IS HOW IT FINDS THE RULES.
-*        micro reads its configuration from $MICRO_CONFIG_HOME, then
-*        $XDG_CONFIG_HOME/micro, then ~/.config/micro (micro's options.md).
-*        Only the first is any use here: the other two are per-profile, and
-*        accounts SD creates cannot log in to Windows, so a syntax file in a
-*        profile is one they could never be given.  SD ships its own
-*        configuration directory instead and names it for the child.
-*
-*        kernel(K$WINPATH) because the directory is "/micro" to SD and
-*        "C:\Program Files\SD\micro" to PowerShell, which cannot open the
-*        first - the same conversion ELEVATE makes for its helper.
-         editor.cfg  = kernel(K$WINPATH, '/micro')
+*        MICRO NEEDS A CONFIGURATION HOME IT CAN WRITE TO, AND IT IS RESOLVED
+*        PER USER AT RUN TIME - see micro.home below.  Only the flag that this
+*        verb wants one is set here; the path is not known until then.
+         needs.cfg = @true
       case 1
          editor.exe  = 'edit.exe'
          editor.name = 'Microsoft Edit'
          editor.get  = 'winget install -e --id Microsoft.Edit --scope machine'
-*        Microsoft Edit has no syntax highlighting to configure, and it takes
-*        none of micro's switches - it must be launched with the file alone.
-         editor.cfg  = ''
-         editor.args = ''
+*        Microsoft Edit has nothing to configure and takes none of micro's
+*        switches - it is launched with the file alone.
+         needs.cfg = @false
    end case
+   editor.cfg = ''
 
    if upcase(trim(cmd<2>, ' ', 'B')) = 'DICT' then
       in.file.name   = cmd<3>
@@ -304,6 +296,14 @@ $include int$keys.h
 
    gosub find.editor
    if editor.path = '' then goto end.program
+
+*  BEFORE THE WORKING COPY IS WRITTEN, like the two gates above: a session that
+*  cannot be given a writable configuration home is told so rather than handed
+*  an editor that will cry "Permission denied" over every save.
+   if needs.cfg then
+      gosub micro.home
+      if editor.cfg = '' then goto end.program
+   end
 
    gosub open.files
    if not(files.opened) then goto end.program
@@ -697,6 +697,75 @@ find.editor:
 return
 
 * ---------------------------------------------------------------------------
+* micro.home  -  ask micro-home.ps1 for a configuration home THIS USER can
+* write, and refuse if there is not one.
+*
+* ***WHY MICRO NEEDS ONE AT ALL, AND WHY IT IS NOT A FLAG.***  micro writes to
+* its configuration home when it saves.  This program used to point
+* MICRO_CONFIG_HOME at C:\Program Files\SD\micro - BUILTIN\Users:(RX) - and
+* every save from an unelevated account printed, in red,
+*
+*     Permission denied.  Save with sudo not supported on Windows
+*
+* and then wrote the file anyway.  A false alarm rather than data loss, and the
+* wording says the opposite.  PRE_RELEASE_FIXES #29.
+*
+* MEASURED FOUR WAYS, 27 Aug 2026, one variable: same file in a writable
+* directory, unelevated, micro launched straight from PowerShell with only
+* MICRO_CONFIG_HOME differing.  A read-only home errors with no flags, with
+* "-backup off", and with "-backup false -savehistory false"; a writable home
+* is clean.  NO OPTION SUPPRESSES IT.  An earlier version of this program
+* passed "-backup off" on reasoning alone and fixed nothing - the whole of that
+* change is gone.
+*
+* THE PATH IS NOT BUILT HERE, AND THAT IS DELIBERATE.  Choosing it needs
+* %USERPROFILE% - which is NOT C:\Users\<login>, measured: the login "don" has
+* the profile "C:\Users\dmont" - a fallback when a profile cannot be written,
+* and a copy of the syntax file.  micro-home.ps1 does all of it and prints one
+* line; its header carries the reasoning, including why the home must be per
+* user rather than one shared directory (micro executes Lua plugins from it).
+*
+* IT ANCHORS ON THE SUCCESS WORDING.  "MICROHOME=" is printed by that script on
+* one path only - after it has proved the directory writable BY WRITING TO IT -
+* so it cannot be matched out of an echoed argument or an error message.  The
+* diagnostics all begin "micro-home:" and are deliberately a different string.
+* ---------------------------------------------------------------------------
+micro.home:
+   editor.cfg = ''
+
+   home.ps1 = kernel(K$WINPATH, '/micro-home.ps1')
+   if home.ps1 = '' then
+      error.text  = 'Could not locate micro-home.ps1, which prepares the'
+      error.text := ' editor''s configuration directory.' : char(10)
+      error.text := 'ed, the line editor, needs none of this.'
+      return
+   end
+
+   home.cmd = '& ' : q : home.ps1 : q
+   os.execute home.cmd capturing home.out
+
+   home.lines = dcount(home.out, char(10))
+   for home.i = 1 to home.lines
+      home.line = trim(field(home.out, char(10), home.i), ' ', 'B')
+      if home.line[1, 10] = 'MICROHOME=' then
+         editor.cfg = home.line[11, len(home.line) - 10]
+      end
+   next home.i
+
+*  PRINT WHAT THE INSTRUMENT DID WHEN IT FAILED.  The script's own diagnostics
+*  name the candidates it tried and why each was refused, and they are the only
+*  thing that makes this diagnosable rather than mysterious.
+   if editor.cfg = '' then
+      error.text  = verb.text : ' could not be given a configuration directory'
+      error.text := ' it can write to, and micro reports every save as'
+      error.text := ' "Permission denied" without one.' : char(10)
+      error.text := 'micro-home.ps1 said:' : char(10)
+      error.text := trim(convert(char(13), '', home.out), char(10), 'B')
+      error.text := char(10) : 'ed, the line editor, needs none of this.'
+   end
+return
+
+* ---------------------------------------------------------------------------
 * open.files  -  the record's file, and $hold for the working copy.
 * ---------------------------------------------------------------------------
 open.files:
@@ -829,7 +898,7 @@ process.record:
    if editor.cfg # '' then
       cmd := '$env:MICRO_CONFIG_HOME = ' : q : editor.cfg : q : '; '
    end
-   cmd := '& ' : q : editor.path : q : editor.args : ' ' : q : os.file : q
+   cmd := '& ' : q : editor.path : q : ' ' : q : os.file : q
    cmd := '; exit $LASTEXITCODE'
    os.execute cmd
    rc = os.error()

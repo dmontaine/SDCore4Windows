@@ -1032,6 +1032,14 @@ def main():
                    # unaffected.  It was install-edit.ps1 for part of one day,
                    # before the second editor existed.
                    'install-editors.ps1',
+                   # 27 Aug 26 - micro-home.ps1, PRE_RELEASE_FIXES #29.  It
+                   # gives the calling user a micro configuration home they can
+                   # WRITE to and prints where it is; gpl.bp/EDIT runs it before
+                   # launching micro.  Without it every unelevated save printed
+                   # "Permission denied" and wrote the file anyway.  It SHIPS,
+                   # so assert-current watches it like the rest of these - do
+                   # NOT add it to that script's $neverShipped list.
+                   'micro-home.ps1',
                    'adopt-account.ps1', 'install-service.ps1',
                    # 22 Aug 26 - the POST-INSTALL CHECK, offered as a
                    # checkbox on the installer's last page.  It ships, so
@@ -1120,12 +1128,18 @@ def main():
     # 26 Aug 26 - micro's configuration directory, which is what gives the
     # MICRO verb syntax highlighting for SD BASIC.
     #
-    # IT HAS TO BE MACHINE-WIDE AND micro OFFERS EXACTLY ONE WAY TO DO THAT.
-    # micro reads $MICRO_CONFIG_HOME, then $XDG_CONFIG_HOME/micro, then
-    # ~/.config/micro.  The last two are per-profile and accounts SD creates
-    # cannot log in to Windows at all, so a syntax file in a profile is one
-    # they could never be given.  gpl.bp/EDIT names this directory in
-    # MICRO_CONFIG_HOME when it launches micro.
+    # 27 Aug 26 - IT IS THE READ-ONLY MASTER NOW, NOT THE CONFIGURATION HOME
+    # ITSELF.  This comment used to say the per-profile routes were useless
+    # because "accounts SD creates cannot log in to Windows, so a syntax file in
+    # a profile is one they could never be given".  THAT IS ONLY TRUE OF A FILE
+    # NOBODY PUTS THERE: micro-home.ps1 copies this one into the calling user's
+    # own configuration home, 5,450 bytes, refreshed when this master is newer.
+    #
+    # AND THE OLD ARRANGEMENT WAS A DEFECT.  micro WRITES to its configuration
+    # home when it saves, and this directory is Users:(RX), so every unelevated
+    # save reported "Permission denied" - PRE_RELEASE_FIXES #29.  The home has
+    # to be per user and writable; this stays the single source of the syntax
+    # file, owned by the install and writable by nobody who runs the editor.
     #
     # PROGRAM FILES, NOT THE DATA TREE, for the reason the helper scripts are
     # there: the data tree is writable by every member of sdusers, and this is

@@ -7,13 +7,31 @@ Entries are newest first, by date, until there is a version to attach them to.
 
 27 Aug 26  TWO EDITOR AND TERMINAL FIXES.
 
-           MICRO CAN NOW SAVE FROM AN ORDINARY ACCOUNT.  micro keeps an
-           automatic backup of each file as you save it, and was trying to
-           write it into its configuration directory under Program Files, which
-           ordinary accounts cannot write to - so the save failed with
-           "Permission denied".  SD now runs micro with that automatic backup
-           turned off.  Saving from an elevated session was never affected.
-           The EDIT verb - Microsoft Edit - never had this problem.
+           MICRO NO LONGER REPORTS "Permission denied" WHEN YOU SAVE.  Every
+           save from an ordinary account showed
+
+               Permission denied. Save with sudo not supported on Windows
+
+           in red at the bottom of the screen.  YOUR WORK WAS ACTUALLY SAVED
+           EVERY TIME - the message was wrong, not the save - but there was no
+           way to know that from the screen.
+
+           The cause was where micro kept its settings.  It was told to use a
+           directory under Program Files, which ordinary accounts can read and
+           not write, and micro writes there whenever it saves.  It now uses
+           one in your own home directory instead:
+
+               C:\Users\<you>\.micro
+
+           created for you the first time you run "micro", with SD's BASIC
+           syntax colouring copied into it.  Nothing to set up, and your micro
+           settings now persist between sessions.  If your account has no
+           writable home directory, SD uses a temporary one instead, and the
+           editor still works.
+
+           An elevated session was never affected, which is why this went
+           unnoticed at first.  The EDIT verb - Microsoft Edit - never had the
+           problem at all.
 
            TERM DEFAULT NOW RESTORES 120 x 36, not 20 x 24.  "term default"
            was setting the page to the smallest size SD allows, which wrapped
