@@ -508,6 +508,40 @@ $steps = @(
 # IT IS OPT-IN, NOT THE DEFAULT.  Changing what a suite prints in the middle of
 # an investigation is how evidence goes missing, and today has already cost
 # three runs to changes made around this file rather than in it.
+# 28 Aug 26 - CLOSE WHAT A STEP LEFT OPEN, AND SAY SO.  PRE_RELEASE 40.
+#
+# A verifier that calls Start-Transcript and exits without stopping it leaves it
+# open ON THIS PROCESS - the steps run in the runner's own session - so it goes
+# on recording every verifier that follows.  Measured 27 Aug 2026:
+# verify-sshonly-20260827-232336.log carried verify-apiadmin's two [FAIL] rows
+# and the whole suite's summary from six verifiers later, and a wrong
+# per-verifier count was issued and withdrawn on exactly that.
+#
+# ***FIXED HERE RATHER THAN IN FIFTEEN VERIFIERS, ON PURPOSE.***  The entry
+# proposed a try/finally around each verifier's body; this is one place, it
+# cannot be forgotten by the next verifier somebody writes, and it also covers
+# the case a try/finally does not - a step that dies outright.
+#
+# ***THIS RUNNER HAS NO TRANSCRIPT OF ITS OWN***, so every one closed here is a
+# leak and there is nothing to restore.  (VerifyInstall1 does have one, and its
+# copy of this restores it with -Append.)  Checked, not assumed: the only two
+# mentions of Start-Transcript in this file are in the comment above.
+#
+# AND IT REPORTS RATHER THAN TIDYING SILENTLY.  A leak is a defect in the step
+# that leaked, and a fix that hides it would leave nobody any way to find out
+# which one.  Write-Host, not Write-Output, so the note reaches the screen in
+# both branches and is not captured into the step's own redirected file.
+function Close-LeakedTranscripts([string]$stepName) {
+    $leaked = 0
+    while ($true) {
+        try { Stop-Transcript -ErrorAction Stop | Out-Null; $leaked++ } catch { break }
+    }
+    if ($leaked -gt 0) {
+        Write-Host ("  NOTE: {0} left {1} transcript(s) open - PRE_RELEASE 40. Closed." -f
+                    $stepName, $leaked)
+    }
+}
+
 $lines  = @()
 $failed = 0
 $i      = 0
@@ -523,6 +557,7 @@ foreach ($s in $steps) {
         Write-Output ('===== ' + $s.Name + ' ' + $shown + ' =====')
         & $path @splat
         $code = $LASTEXITCODE
+        Close-LeakedTranscripts $s.Name
         $lines += ('{0,-28} {1,-22} exit {2}' -f $s.Name, $shown, $code)
         if ($code -ne 0) { $failed++ }
         continue
@@ -536,6 +571,7 @@ foreach ($s in $steps) {
     # which is why it is caught here and would not have been in 2.0.
     & $path @splat *> $stepLog
     $code = $LASTEXITCODE
+    Close-LeakedTranscripts $s.Name
 
     # Surfaced from the file, never from a pipe the file did not also get.
     # '[FAIL]' is the marker most verifiers use per check; the summary tables

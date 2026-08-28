@@ -270,7 +270,7 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
         $out += "*** Stop-Process the sdwind PID it names."
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 # CREATE.ACCOUNT GROUP MAKES THREE THINGS AND THIS HAS TO UNDO ALL THREE.  The

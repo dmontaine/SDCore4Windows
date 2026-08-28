@@ -224,7 +224,68 @@ $all = @(Get-CimInstance Win32_UserProfile | Where-Object {
     (Split-Path $_.LocalPath -Leaf) -match $rx
 })
 
-if ($all.Count -eq 0) { Write-Output 'clean-test-profiles: nothing to do.'; exit 0 }
+# 28 Aug 26 - THE DIRECTORY SCAN, BECAUSE THE PROFILE LIST CANNOT SEE ITS OWN
+# BLIND SPOT.  PRE_RELEASE 41.
+#
+# ***$all IS BOTH THE WORK LIST AND THE MEASUREMENT, AND THAT IS THE DEFECT.***
+# Get-CimInstance Win32_UserProfile enumerates from the ProfileList registry
+# key.  A directory whose entry has been removed is not a Win32_UserProfile
+# object at all, so it is invisible TWICE: this sweep cannot clean it, and the
+# BEFORE/AFTER block in cleanup-devlitter.ps1 cannot count it.  The AFTER figure
+# was never a measurement of the machine - it was a measurement of the same list
+# the cleaner had just emptied, and it can only ever read zero.
+#
+# MEASURED 28 Aug 2026: "profiles matching : 7 -> 0" and "every section reached
+# zero", with sdapiab49, sdapiidb49 and sdapinb49 still on disk and their
+# Windows accounts already gone.  ***THE NAMES WERE NEVER THE PROBLEM*** - all
+# three match $rx, which this script prints at the top of its own run.  Only the
+# SOURCE of the list missed them.
+#
+# ***IT REPORTS AND DOES NOT DELETE.***  Whether these should be removed is a
+# separate decision - PRE_RELEASE 36 is where the lifecycle is being ruled on -
+# and the instrument rule's demand is narrower than that: what it must not do is
+# report zero.  So they are named, with the reason, and they set the exit code,
+# because "skipped" is not "done" and this file already says so twice above.
+#
+# IT RUNS BEFORE THE "nothing to do" RETURN ON PURPOSE.  The measured case had
+# $all.Count going to zero with three directories still there; an unreachable
+# scan placed after that return would have been skipped in exactly the run that
+# needed it.
+$profilePaths = @($all | ForEach-Object { $_.LocalPath })
+$usersDir     = Join-Path $env:SystemDrive 'Users'
+# ***REPARSE POINTS ARE EXCLUDED, AND THAT IS A SAFETY GUARD.***  Found by the
+# positive control on 28 Aug 2026: with a permissive pattern this list includes
+# "All Users", which is a JUNCTION TO C:\ProgramData - where SD's whole data
+# tree lives - and the block below prints a "Remove-Item -Recurse -Force" line
+# for whatever is in it.  The stem pattern cannot match that name today, so
+# nothing was at risk; the guard is here because the suggestion is generated
+# from this list.  A profile directory is never a reparse point.
+$unreachable  = @(Get-ChildItem -LiteralPath $usersDir -Directory -Force -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -match $rx -and
+                                 $profilePaths -notcontains $_.FullName -and
+                                 -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) })
+
+if ($unreachable.Count -gt 0) {
+    Write-Output ''
+    Write-Output ("  {0} UNREACHABLE director(ies): they match the pattern and are on disk," -f $unreachable.Count)
+    Write-Output '  but have no ProfileList entry, so nothing that enumerates profiles can'
+    Write-Output '  see them - this sweep included.  They are reported, not deleted:'
+    foreach ($d in $unreachable) { Write-Output ("    " + $d.FullName) }
+    Write-Output '  Remove by hand when nothing needs them, elevated:'
+    Write-Output ('    Remove-Item -LiteralPath "' + $unreachable[0].FullName + '" -Recurse -Force')
+}
+
+if ($all.Count -eq 0) {
+    if ($unreachable.Count -gt 0) {
+        Write-Output ''
+        Write-Output 'clean-test-profiles: nothing this sweep can reach, but the machine is NOT'
+        Write-Output '  clean - see the unreachable directories above.  Exiting non-zero so the'
+        Write-Output '  caller does not read "nothing to do" as "nothing left".'
+        exit 1
+    }
+    Write-Output 'clean-test-profiles: nothing to do.'
+    exit 0
+}
 
 # 24 Aug 26 - THE "loaded" SKIP USED TO ASSERT A CAUSE IT HAD NOT CHECKED.
 # It printed "loaded, someone is signed in" for all 35 orphans, about accounts
@@ -321,6 +382,18 @@ foreach ($p in $targets) {
 # else succeeded.  "failed 0" refers to the removals ATTEMPTED and stays true;
 # what was missing was any accounting for the ones never attempted.
 if ($failed.Count -gt 0) { exit 1 }
+# 28 Aug 26 - AND THE UNREACHABLE ONES COUNT HERE TOO.  PRE_RELEASE 41.  Without
+# this a run that removed everything it could see would exit 0 with directories
+# still on disk, which is the reported-zero defect in its other form: not a
+# wrong count, but a right count of the wrong set.
+if ($unreachable.Count -gt 0) {
+    Write-Output ''
+    Write-Output ("clean-test-profiles: INCOMPLETE - {0} removed, {1} unreachable (no ProfileList entry)." -f
+                  $ok, $unreachable.Count)
+    Write-Output '  They are listed above.  Exiting non-zero so the caller does not read a'
+    Write-Output '  sweep of what it could see as a sweep of the machine.'
+    exit 1
+}
 if ($skipLoadedStuck.Count -gt 0) {
     Write-Output ''
     Write-Output ("clean-test-profiles: INCOMPLETE - {0} removed, {1} still held by a loaded hive." -f $ok, $skipLoadedStuck.Count)

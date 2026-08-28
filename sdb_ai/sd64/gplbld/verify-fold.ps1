@@ -119,7 +119,7 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
         $out += "*** seen on 18 Aug 2026.  Stop-Process the sdwind PID it names."
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 # "0 record(s) counted" is success; "File not found" is the defect.  Both are

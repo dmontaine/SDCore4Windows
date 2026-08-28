@@ -296,7 +296,7 @@ function Invoke-SD([string[]]$commands) {
     # The elevation this script already requires is what makes the LOGTO pass.
     $body = "`n" + ((@('LOGTO SDSYS') + $commands + @('OFF')) -join "`n") + "`n"
     $out = $body | & $sdExe
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 function Test-Member($group, $name) {

@@ -175,6 +175,61 @@ if (Test-Path -LiteralPath $cmdaudit) {
     Row 'verify-cmdaudit.ps1' 'the file exists' $false $true
 }
 
+# ---------------------------------------------------------------------------
+# 28 Aug 26 - THE DEAD ANSI STRIP MUST NOT COME BACK.  PRE_RELEASE 10.
+#
+# ``$out -replace "`e\[[0-9]*[A-Za-z]"`` looks like it strips escape sequences
+# and does not: **Windows PowerShell 5.1 has no `e escape** - it arrived in
+# PowerShell 6 - so the pattern is the literal letter "e" followed by "[", and
+# it has never removed anything.  verify-osusers.ps1:126 has the measurement:
+# TERM 200,9999 comes back as "TERM<ESC>[7G200,9999".
+#
+# ***IT WAS IN 23 FILES, NOT THE TWO PRE_RELEASE 10 NAMED***, and it spread by
+# being copied: three of the 23 were written on 28 Aug 2026 by copying
+# probe-catprivate.ps1's Invoke-SD "unchanged".  ***THAT IS WHY THIS IS A TEST
+# AND NOT 23 COMMENTS.*** A comment warns whoever reads that file; this fails
+# for whoever copies any of them.
+#
+# THE CHECK IS ON THE WHOLE DIRECTORY, not a list of names, because a list is
+# the thing that was wrong last time - PRE_RELEASE 10 said "two verifiers".
+#
+# ***IT TOKENISES RATHER THAN GREPS, AND THAT IS NOT FASTIDIOUSNESS.***  The
+# first version read the raw text and failed on TWO FILES THAT ARE CORRECT:
+# verify-osusers.ps1, whose comment quotes the dead form while explaining it,
+# and THIS FILE, whose comment above does the same.  A checker that cannot tell
+# code from a comment about code would have forced the explanations out of the
+# tree to make itself pass - which is the wrong way round.  The parser knows
+# the difference, and it is already loaded here.
+$deadStrip = @(Get-ChildItem (Join-Path $gplbld '*.ps1') |
+    Where-Object {
+        $tk = $null; $er = $null
+        $null = [System.Management.Automation.Language.Parser]::ParseFile(
+                    $_.FullName, [ref]$tk, [ref]$er)
+        # A backtick, an e, then \[ - built from char codes so this file cannot
+        # contain the literal it is banning inside a STRING and match itself.
+        $needle = ([char]96) + 'e\['
+        $hit = @($tk | Where-Object {
+            $_.Kind -ne [System.Management.Automation.Language.TokenKind]::Comment -and
+            $_.Text -ne $null -and $_.Text.Contains($needle) })
+        $hit.Count -gt 0
+    } | ForEach-Object { $_.Name })
+
+Row '(all)' 'no script carries the dead `e ANSI strip' $deadStrip.Count 0
+if ($deadStrip.Count -gt 0) {
+    Write-Host ('    still dead in: ' + ($deadStrip -join ', '))
+    Write-Host '    Use ([char]27 + ''\[[0-9]*[A-Za-z]'') - see verify-osusers.ps1:126.'
+}
+
+# AND THE POSITIVE CONTROL, because zero is suspicious rather than clean: if
+# the live form is nowhere either, the strip was deleted rather than fixed and
+# this row would read as a pass.
+$liveStrip = @(Get-ChildItem (Join-Path $gplbld '*.ps1') |
+    Where-Object {
+        $src = Get-Content -LiteralPath $_.FullName -Raw
+        $src -ne $null -and $src.Contains('[char]27')
+    })
+Row '(all)' 'the live [char]27 strip is present somewhere' ($liveStrip.Count -gt 0) $true
+
 Write-Host ''
 $rows | Format-Table -AutoSize | Out-String | Write-Host
 

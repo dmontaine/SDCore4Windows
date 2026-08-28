@@ -84,7 +84,7 @@ function Invoke-SD([string[]]$commands) {
     # with a newline, so it lands on that empty line and cannot eat a verb, and
     # the caller asserts "at most one" rather than trusting it.
     $out = $body | & $sdExe 2>&1
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 '== snapshot BEFORE =='

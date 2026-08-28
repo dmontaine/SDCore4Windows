@@ -107,6 +107,40 @@ function Get-LitterUsers([string]$rx) {
     @(Get-LocalUser -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $rx })
 }
 
+# 28 Aug 26 - COUNT THE DISK, NOT THE REGISTRY.  PRE_RELEASE 41.
+#
+# ***THE BEFORE/AFTER PROFILE COUNTS CANNOT SEE THEIR OWN BLIND SPOT.***  Both
+# use Get-CimInstance Win32_UserProfile, which enumerates from the ProfileList
+# registry key - the SAME list clean-test-profiles.ps1 works from.  A directory
+# whose entry has been removed is not a Win32_UserProfile object, so it is
+# invisible to the cleaner AND to the counter that is supposed to check the
+# cleaner.  The AFTER figure could only ever read zero.
+#
+# MEASURED 28 Aug 2026: "profiles matching : 7 -> 0" and "every section reached
+# zero", with sdapiab49, sdapiidb49 and sdapinb49 still on disk.
+#
+# THIS IS A SECOND, INDEPENDENT INSTRUMENT and that is the whole point: it
+# reaches the thing the first one cannot, so the two disagreeing is the signal.
+# It reports; the removal decision is PRE_RELEASE 36's.
+# ***REPARSE POINTS ARE EXCLUDED, AND THAT IS A SAFETY GUARD, NOT TIDINESS.***
+# Found by the positive control on 28 Aug 2026: run with a pattern of '.', this
+# returns "All Users", "Default User", "Default" and "Public" - and "All Users"
+# is a JUNCTION TO C:\ProgramData, which is where SD's whole data tree lives.
+# The caller prints a "Remove-Item -Recurse -Force" line for whatever comes back
+# here.  The stem pattern cannot match those names today, so nothing was ever
+# at risk; the guard is here because the suggestion is generated from this list
+# and must be safe whatever the pattern later becomes.  A profile directory is
+# never a reparse point.
+function Get-OrphanDirs([string]$rx) {
+    $known = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+               ForEach-Object { $_.LocalPath })
+    return @(Get-ChildItem -LiteralPath (Join-Path $env:SystemDrive 'Users') -Directory -Force `
+                           -ErrorAction SilentlyContinue |
+             Where-Object { $_.Name -match $rx -and
+                            $known -notcontains $_.FullName -and
+                            -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) })
+}
+
 function Get-HomeLitter {
     @(Get-ChildItem -LiteralPath $Home_ -Filter 'sd*' -Force -ErrorAction SilentlyContinue |
       Where-Object { $KeepInHome -notcontains $_.Name })
@@ -213,6 +247,8 @@ Write-Output ("  sd* items in the home directory  : {0}" -f $homeItems.Count)
 $profBefore = @(Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
                 Where-Object { (Split-Path $_.LocalPath -Leaf) -match $rx })
 Write-Output ("  profiles matching                : {0}   (of {1} profiles)" -f $profBefore.Count, @(Get-CimInstance Win32_UserProfile).Count)
+$orphBefore = @(Get-OrphanDirs $rx)
+Write-Output ("  C:\Users dirs with NO profile    : {0}   (PRE_RELEASE 41 - the line above cannot see these)" -f $orphBefore.Count)
 
 # 26 Aug 26 - SAY THE REBOOT UP FRONT.  A profile cannot be removed while its
 # registry hive is loaded, and after a suite run EVERY hive is still loaded:
@@ -322,6 +358,9 @@ Write-Output ("  local users matching : {0} -> {1}" -f $users.Count, $uAfter)
 Write-Output ("  sdu_ groups matching : {0} -> {1}" -f $groups.Count, $gAfter)
 Write-Output ("  home sd* items       : {0} -> {1}" -f $homeItems.Count, $hAfter)
 Write-Output ("  profiles matching    : {0} -> {1}" -f $profBefore.Count, $pAfter)
+$orphAfter = @(Get-OrphanDirs $rx)
+Write-Output ("  C:\Users, no profile : {0} -> {1}" -f $orphBefore.Count, $orphAfter.Count)
+foreach ($d in $orphAfter) { Write-Output ("      still there: " + $d.FullName) }
 Write-Output ("  sdout still present  : {0}   (must be True)" -f (Test-Path -LiteralPath (Join-Path $Home_ 'sdout')))
 Write-Output ''
 
@@ -350,6 +389,21 @@ if ($pAfter -gt 0) {
     Write-Output '  its registry hive is loaded, and after a suite run every one of them is.'
     Write-Output '  REBOOT, then run this again - sections 1, 2, 4 and 5 will find nothing'
     Write-Output '  left to do and section 3 will finish the job.'
+    exit 1
+}
+# 28 Aug 26 - AND THE SECOND INSTRUMENT GETS THE SAME AUTHORITY AS THE FIRST.
+# PRE_RELEASE 41.  "every section reached zero" was printed on 28 Aug 2026 over
+# three directories that were still on disk, because every section was counted
+# with the one enumeration that could not see them.  A closing line that can
+# only ever agree with the cleaner is not a check.
+if ($orphAfter.Count -gt 0) {
+    Write-Output ("cleanup-devlitter: INCOMPLETE - {0} director(ies) in C:\Users match the" -f $orphAfter.Count)
+    Write-Output '  pattern and have NO ProfileList entry, so nothing that enumerates profiles'
+    Write-Output '  can remove them - this tool included.  They are named above.'
+    Write-Output '  Remove by hand when nothing needs them, elevated:'
+    Write-Output ('    Remove-Item -LiteralPath "' + $orphAfter[0].FullName + '" -Recurse -Force')
+    Write-Output '  A reboot does NOT clear these: it unloads hives, and these have no entry'
+    Write-Output '  to unload.  PRE_RELEASE 36 is where the lifecycle is being ruled on.'
     exit 1
 }
 Write-Output 'cleanup-devlitter: done - every section reached zero.'

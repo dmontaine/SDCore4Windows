@@ -130,7 +130,7 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
         $out += "*** verify-fold.ps1's copy of this note."
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 # TWO TEARDOWNS, NOT ONE, AND THE SPLIT IS LOAD-BEARING.  The account debris and

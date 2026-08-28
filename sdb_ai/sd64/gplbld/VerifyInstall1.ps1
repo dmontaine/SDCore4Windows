@@ -353,6 +353,38 @@ foreach ($s in $steps) {
     $splat = $s.P
     & $path @splat
     $code = $LASTEXITCODE
+
+    # 28 Aug 26 - CLOSE WHAT THE STEP LEFT OPEN, AND SAY SO.  PRE_RELEASE 40.
+    #
+    # A verifier that calls Start-Transcript and exits without stopping it leaves
+    # it open ON THIS PROCESS - the steps run in the runner's own session - so it
+    # goes on recording every verifier that follows.  Measured 27 Aug 2026:
+    # verify-sshonly-20260827-232336.log carried verify-apiadmin's two [FAIL]
+    # rows and the whole suite's summary from six verifiers later, and a wrong
+    # per-verifier count was issued and withdrawn on exactly that.
+    #
+    # ***FIXED HERE RATHER THAN IN FIFTEEN VERIFIERS, ON PURPOSE.***  The entry
+    # proposed a try/finally around each verifier's body; this is one place, it
+    # cannot be forgotten by the next verifier somebody writes, and it also
+    # covers the case a try/finally does not - a step that dies outright.
+    #
+    # AND IT REPORTS RATHER THAN TIDYING SILENTLY.  A leak is a defect in the
+    # step that leaked, and a fix that hides it would leave nobody any way to
+    # find out which one.  Stop-Transcript throws when none is running: that is
+    # the loop's exit condition, not an error.
+    $leaked = 0
+    while ($true) {
+        try { Stop-Transcript -ErrorAction Stop | Out-Null; $leaked++ } catch { break }
+    }
+    # THE RUNNER'S OWN TRANSCRIPT IS AMONG THEM and has to come back, or every
+    # step after the first would go unrecorded.  -Append, so the file is one
+    # continuous record rather than being truncated per step.
+    try { Start-Transcript -Path $transcript -Append | Out-Null } catch { }
+    if ($leaked -gt 1) {
+        Write-Output ("  NOTE: {0} left {1} transcript(s) open - PRE_RELEASE 40. Closed." -f
+                      $s.Name, ($leaked - 1))
+    }
+
     if ($code -ne 0) { $failed++ }
     $lines += ('{0,-28} exit {1}' -f $s.Name, $code)
 

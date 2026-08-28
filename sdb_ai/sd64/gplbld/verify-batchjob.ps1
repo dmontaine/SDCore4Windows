@@ -186,7 +186,7 @@ function Invoke-SdCommand([string[]]$words, [int]$TimeoutSec = 60) {
         $out += '*** TIMED OUT - it is sitting at a prompt.'
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') | Out-String)
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') | Out-String)
 }
 
 # THE INTERACTIVE PATH, WHICH THIS CHANGE DOES NOT TOUCH.  Only the COMMAND
@@ -209,7 +209,7 @@ function Invoke-SdPiped([string[]]$commands, [int]$TimeoutSec = 60) {
         $out += '*** TIMED OUT - it is sitting at a prompt.'
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') | Out-String)
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') | Out-String)
 }
 
 # Message fragments, each wholly inside ONE line of its message - 10096, 10097

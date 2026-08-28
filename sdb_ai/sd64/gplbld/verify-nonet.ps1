@@ -84,7 +84,7 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
         $out += "*** SD did not finish in $TimeoutSec s - Stop-Process the sdwind PID."
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 & (Join-Path $PSScriptRoot 'assert-current.ps1')

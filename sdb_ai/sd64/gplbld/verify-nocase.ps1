@@ -151,7 +151,7 @@ function Remove-Probe {
 try {
     $body = "`n" + (@('BASIC BP SDNOCASE', 'RUN BP SDNOCASE', 'OFF') -join "`n") + "`n"
     $raw  = $body | & $sdExe 2>&1
-    $out  = ($raw -replace "`e\[[0-9]*[A-Za-z]", '')
+    $out  = ($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')
 }
 catch {
     Write-Output "verify-nocase: could not drive sd.exe: $($_.Exception.Message)"

@@ -162,7 +162,7 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
         $out += "*** start.  Stop-Process the sdwind PID it names."
     }
     Remove-Job $job -Force
-    return (($out -replace "`e\[[0-9]*[A-Za-z]", '') -join "`n")
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 # --- fixtures: CREATE.FILE, source, BASIC ---------------------------------

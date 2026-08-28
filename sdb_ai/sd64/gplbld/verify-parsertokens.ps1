@@ -112,7 +112,7 @@ finally {
     Pop-Location
 }
 
-$text = (($raw -replace "`e\[[0-9]*[A-Za-z]", '') | Out-String)
+$text = (($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') | Out-String)
 
 # A SESSION THAT NEVER STARTED MUST NOT READ AS A MEASUREMENT.  With no
 # "not found" line at all there is nothing to score, and scoring absence would
