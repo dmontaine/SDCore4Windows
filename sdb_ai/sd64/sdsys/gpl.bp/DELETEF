@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - NO.QUERY is honoured by check.sdsys.file instead of
+*            prompting into a pipe (PRE_RELEASE_FIXES.md 14, UPSTREAM 23), and
+*            the DATA and DICT path comparisons are case-insensitive so a name
+*            typed in lower case stops producing two spurious prompts
+*            (PRE_RELEASE_FIXES.md 26, UPSTREAM 27).  New message 10117.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -230,7 +235,18 @@ delete.upcased.file:
 
             default.path = file.name
 
-            if data.path # default.path then
+* 28 Aug 26 Windows port - COMPARE THE TWO PATHS WITHOUT CASE.  CREATEF
+* upper-cases the name before storing it in the VOC; file.name is whatever the
+* caller typed, and is only upcased on the fallback path at :157 where the
+* record was NOT found as typed.  So on the ordinary path the two differ
+* whenever the verb was typed in lower case, and the "OK to delete DATA
+* portion" prompt fired for a file that is exactly where it should be.
+* ***THE LOWER-CASE HOUSE STYLE IS WHAT MAKES THIS OURS TO WORRY ABOUT*** -
+* step 7.8 made lower case the way commands are written here and the
+* documentation teaches it, so upstream's convention hides the same code.
+* PRE_RELEASE_FIXES.md 26, UPSTREAM_FIXES.md 27.
+
+            if upcase(data.path) # upcase(default.path) then
                if not(force) then
                   loop
                      display sysmsg(6135, data.path) :  ;* OK to delete DATA portion 'xx'?
@@ -304,7 +320,10 @@ delete.dict:
 
          default.path = file.name : ".DIC"
 
-         if dict.path # default.path then
+* 28 Aug 26 Windows port - and the DICT half of the same comparison, for the
+* reason given at the DATA one above.  PRE_RELEASE_FIXES.md 26.
+
+         if upcase(dict.path) # upcase(default.path) then
             if not(force) then
                loop
                   display sysmsg(6140, dict.path) : ;* OK to delete DICT portion 'xx'?
@@ -356,6 +375,30 @@ write.voc:
 * ======================================================================
 
 check.sdsys.file:
+
+* 28 Aug 26 Windows port - NO.QUERY TAKES THE SAFE BRANCH INSTEAD OF ASKING.
+* This routine prompted unconditionally, so "delete.file zzak force no.query"
+* stopped dead on a question nobody was there to answer.  Down a pipe it is
+* worse than a hang: the prompt EATS THE FOLLOWING COMMANDS as answers, and
+* the session that found this had to be killed, leaving a user-table slot that
+* needed an elevated "sd -cleanup" to clear.  Anything that drives SD without
+* a terminal is exposed - a build script, a test harness, the verify suite.
+*
+* THE BRANCH TAKEN IS THE CONSERVATIVE ONE, WHICH IS 'N' AND NOT 'Y'.  It
+* deletes the VOC reference and leaves the file in the system account alone,
+* because NO.QUERY says "do not ask me", not "assume yes to a question about
+* other accounts' data".  6145's own wording is what the two answers mean.
+* AND IT SAYS SO RATHER THAN GOING QUIET - a caller who wanted the file gone
+* needs to know it is still there.  PRE_RELEASE_FIXES.md 14, UPSTREAM_FIXES.md
+* 23.
+
+   if no.query then
+      display sysmsg(6145, part) ;* Warning re part in SDSYS account
+      display sysmsg(10117, part) ;* NO.QUERY: VOC reference deleted, file kept
+      skip.part = @true
+      return
+   end
+
    display sysmsg(6145, part) ;* Warning re part in SDSYS account
    loop
       display sysmsg(6146) :  ;* Delete the file from the system account (Y/N)?

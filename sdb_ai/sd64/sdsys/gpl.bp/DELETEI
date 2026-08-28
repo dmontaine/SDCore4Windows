@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - match an index name typed in lower case, as
+*            LIST.INDEX already does.  PRE_RELEASE_FIXES.md 15,
+*            UPSTREAM_FIXES.md 22.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -125,6 +128,32 @@ not.all.keyword:
    ak.names = indices(fu)
    num.aks = dcount(ak.names, @fm)
    if num.aks = 0 then stop sysmsg(2603) ;* File has no indices
+
+* 28 Aug 26 Windows port - CORRECT THE CASE OF THE SUPPLIED NAMES, exactly as
+* LISTI:147 does, and for the same reason.  The scan below locates each of the
+* file's REAL index names in the caller's list, and the real names are held
+* upper case, so "delete.index zzak f1" matched nothing and answered
+* "Unrecognised index name (f1)" while "list.index zzak f1" found it.
+*
+* A NAME THAT MATCHES NOTHING IS LEFT EXACTLY AS TYPED, deliberately: it falls
+* through to the report at the end of the scan, which must show the caller what
+* THEY wrote rather than an upcased version of it.  LISTI stops on the first
+* bad name; this verb reports them all at the end, and that difference is kept.
+* PRE_RELEASE_FIXES.md 15, UPSTREAM_FIXES.md 22.
+
+   if not(delete.all) then
+      u.ak.names = upcase(ak.names)
+      num.ak.list = dcount(ak.list, @fm)
+      for j = 1 to num.ak.list
+         s = ak.list<j>
+         locate s in ak.names<1> setting pos else
+            s = upcase(s)
+            locate s in u.ak.names<1> setting pos then
+               ak.list<j> = ak.names<pos>    ;* Correct casing
+            end
+         end
+      next j
+   end
 
    dim ak.details(num.aks)
    for i = 1 to num.aks

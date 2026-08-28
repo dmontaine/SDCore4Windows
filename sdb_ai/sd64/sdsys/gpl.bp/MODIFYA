@@ -19,6 +19,9 @@
 * 
 *
 * START-HISTORY:
+* 28 Aug 26 Windows port - the ADD and DELETE arms write a K$AUDIT record, as
+*   GRANT and REVOKE already did.  The same group edit through two verbs left
+*   a trail through only one of them.  PRE_RELEASE_FIXES.md 27.
 * 27 Aug 26 Windows port - THE TIER IS SETTABLE, AND SUSPENDED IS A FOURTH ONE.
 *   Owner, 27 Aug 2026: "an administrator account should be able to be
 *   downgraded to programmer or standard", and a fourth trust level "so that an
@@ -368,6 +371,15 @@ deffun valid_os_name(name) calling '!valid_os_name'
                   stat = os_group("ADDMEM", group.name, user.name)
                   * --------------------
                   if stat = 0 then
+* 28 Aug 26 Windows port - AUDIT IT, the way GRANTA:208 does.  This arm makes
+* the identical os_group('ADDMEM', ...) call that GRANT makes and wrote
+* nothing, so who may enter an account could be changed by two verbs and only
+* one of them left a trail.  AFTER the edit and inside "stat = 0", so it
+* records what happened rather than what was attempted.  The verb is named in
+* the text because the two routes are otherwise indistinguishable in the audit
+* file.  The identity is stamped by audit_message() in k_error.c and is not
+* passed from here, so a caller cannot forge it.  PRE_RELEASE_FIXES.md 27.
+                     void kernel(K$AUDIT, 'MODIFY.ACCOUNT ADD account=' : acc.name : ' to=' : user.name)
                      crt sysmsg(10018,user.name,group.name)  ;* %1 added to group %2
                   end else
                      crt sysmsg(10019,user.name,group.name,stat) ;* Unable to add user %1 to group %s status: %2
@@ -391,6 +403,9 @@ deffun valid_os_name(name) calling '!valid_os_name'
                stat = os_group("DELMEM", group.name, user.name)
                * --------------------
                   if stat = 0 then
+* 28 Aug 26 Windows port - and the DELETE arm, for the reason given at the ADD
+* one above.  GRANTA:233 is the model.  PRE_RELEASE_FIXES.md 27.
+                     void kernel(K$AUDIT, 'MODIFY.ACCOUNT DELETE account=' : acc.name : ' from=' : user.name)
                      crt sysmsg(10021,user.name,group.name) ;*  %1 removed from group %2
                   end else
                      crt sysmsg(10022,user.name,group.name,stat) ;* Unable to remove user %1 from group %s status: %2

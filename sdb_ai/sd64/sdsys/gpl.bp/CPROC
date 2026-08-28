@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - ".D name" folds case like .L and .R, and reports
+*            5043 instead of falling through with a stale voc.rec.
+*            PRE_RELEASE_FIXES.md 5.
 * 27 Aug 26 Windows port - LOGTO REFUSES A SUSPENDED ACCOUNT.  Owner, 27 Aug
 *            2026.  logto.authorised, after the two privileged bypasses - an
 *            elevated or internal session can still enter one, which is a
@@ -1119,13 +1122,32 @@ stack.manipulation:
             if n > stack.depth or n = 0 then goto stack.position.error
             del command.stack<n>
          end else                                     ;* .D name
+* 28 Aug 26 Windows port - TRY downcase TOO, AND SAY SO WHEN NOTHING MATCHES.
+* This tried the name as typed and then upcase only, where .L (:1180) and .R
+* (:1208) try as typed, then downcase, then upcase.  A paragraph saved as
+* "daily" could therefore be listed and recalled by typing "DAILY" and COULD
+* NOT BE DELETED by it.  Ours rather than upstream's: upstream's CPROC has no
+* downcase calls at all and this port's has 15, so §5.12's fold missed a site.
+*
+* AND THE FALL-THROUGH WAS THE WORSE HALF.  When both reads failed, voc.rec
+* KEPT ITS PREVIOUS VALUE and was then tested for S/PA, so .D on a name that
+* does not exist behaved according to whatever was last read.  There was no
+* "not found" message on this path either; .L has one and .D did not.  It now
+* takes 5043 and leaves, which is what .L does.  PRE_RELEASE_FIXES.md 5.
             at.command = trimf(trimb(at.command))
             readu voc.rec from voc, at.command else
                release voc, at.command
-               readu voc.rec from voc, upcase(at.command) then
-                  at.command = upcase(at.command)
+               readu voc.rec from voc, downcase(at.command) then
+                  at.command = downcase(at.command)
                end else
-                  release voc, at.command
+                  release voc, downcase(at.command)
+                  readu voc.rec from voc, upcase(at.command) then
+                     at.command = upcase(at.command)
+                  end else
+                     release voc, upcase(at.command)
+                     display sysmsg(5043, at.command) ;* xx not found in VOC
+                     goto exit.stack.command
+                  end
                end
             end
 

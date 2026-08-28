@@ -5,6 +5,48 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+28 Aug 26  SEVEN FIXES TO EVERYDAY COMMANDS.
+
+           NO.QUERY IS NOW HONOURED WHEN A FILE LIVES IN THE SYSTEM ACCOUNT.
+           "delete.file <name> no.query" could still stop and ask whether to
+           delete the file from the system account.  Typed at a terminal that
+           was merely surprising; driven from a script it was worse, because
+           the question read the script's next line as its answer.  NO.QUERY
+           now takes the safe answer - the VOC reference goes, the file in the
+           system account stays - and says that is what it did.
+
+           DELETE.FILE NO LONGER ASKS TWICE ABOUT A NAME TYPED IN LOWER CASE.
+           The file name is stored upper case and was compared against the name
+           you typed, so "delete.file zzwork" asked "OK to delete DATA portion"
+           and "OK to delete DICT portion" about a file that was exactly where
+           it should be.  The comparison now ignores case.
+
+           DELETE.INDEX ACCEPTS AN INDEX NAME IN LOWER CASE.  "list.index zzak
+           f1" found the index and "delete.index zzak f1" answered
+           "Unrecognised index name (f1)".  Both now match the way LIST.INDEX
+           always did.  A name that really is unknown is still reported exactly
+           as you typed it.
+
+           ".D name" FINDS A RECORD SAVED IN LOWER CASE.  A paragraph saved as
+           "daily" could be listed with ".L DAILY" and recalled with ".R DAILY"
+           but not deleted with ".D DAILY".  It also now says "not found in
+           VOC" when there is no such record, instead of silently doing
+           something based on whatever it had read last.
+
+           QSELECT SAYS WHICH LIST IT FILLED.  Every successful QSELECT ended
+           with "records selected to select list " and no number.
+
+           MODIFY.ACCOUNT ADD AND DELETE ARE NOW AUDITED.  Adding or removing
+           somebody's access to an account with MODIFY.ACCOUNT wrote no record
+           in SD's audit file, while GRANT and REVOKE - which make the same
+           change - always did.  Both routes now leave a trail.
+
+           CREATE.ACCOUNT NO LONGER SEEMS TO CONTRADICT ITSELF.  It printed
+           "<name> may sign in over ssh only" and then "<name> may sign in over
+           ssh and use the API", which cannot both be true of one thing.  They
+           were about two different things: how you reach the COMPUTER, and
+           which SD ROUTES the account has.  Each line now names its subject.
+
 27 Aug 26  DELETE.ACCOUNT NOW CLEARS THE WINDOWS PROFILE RECORD TOO.
 
            If you deleted an account and then created another one with the
