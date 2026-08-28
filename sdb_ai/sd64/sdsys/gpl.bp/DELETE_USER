@@ -80,13 +80,22 @@
 *    place that records where the directory is.
 *
 *    STATUS 6 AND 7 BOTH MEAN THE ACCOUNT WENT AND SOMETHING OF THE PROFILE
-*    DID NOT, and the difference is the whole point of separating them:
+*    DID NOT.  ***NEITHER OF THEM IS HARMLESS, AND THE FIRST VERSION OF THIS
+*    COMMENT SAID 6 WAS.***  It read "it costs disk and nothing else - the
+*    registry entry is gone, so an account created with this name later gets
+*    its proper home".  MEASURED FALSE THE SAME DAY, on the install that
+*    carried the registry fix: delete.account b49home removed the entry
+*    correctly, left the DIRECTORY, and the recreated account still landed at
+*    C:\Users\b49home.GITORLI - because Windows will not put a new profile
+*    where a directory already sits either.
 *
-*      6  the DIRECTORY is left.  It costs disk and nothing else - the registry
-*         entry is gone, so an account created with this name later gets its
-*         proper home.
-*      7  the REGISTRY ENTRY is left.  This is the one that silently moves a
-*         recreated account's home directory.
+*      6  the DIRECTORY is left.  A later account of the same name is pushed
+*         to a suffixed home, exactly as 7 does it.
+*      7  the REGISTRY ENTRY is left.  Same consequence by the other route.
+*
+*    BOTH HALVES ARE THEREFORE REMOVED IN THEIR OWN RIGHT, and the two statuses
+*    survive only to say WHICH one could not be removed, because the way out
+*    differs: a directory needs deleting, a registry entry needs clearing.
 *
 *    Neither is the same failure as 1 and the caller says so: the account is
 *    deleted either way, so re-running would report "does not exist" and never
@@ -150,6 +159,14 @@ deffun valid_os_name(name) calling '!valid_os_name'
    ps := 'Remove-CimInstance -ErrorAction Stop } catch { }; '
    ps := 'if (Test-Path -LiteralPath $key) { try { Remove-Item -LiteralPath $key '
    ps := '-Recurse -Force -ErrorAction Stop } catch { } }; '
+   * 27 Aug 26 - AND THE DIRECTORY IN ITS OWN RIGHT TOO, for the reason
+   * MEASURED an hour after the registry half was fixed: a directory left at
+   * C:\Users\<name> makes Windows give the NEXT account of that name the
+   * suffixed home just as surely as a stale registry entry does.  Both halves
+   * cause the same symptom, so removing only one of them fixes only half the
+   * defect - see the note above.
+   ps := 'if (($dir -ne "") -and (Test-Path -LiteralPath $dir)) { '
+   ps := 'try { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop } catch { } }; '
    * Test for each half rather than conclude from which call threw: a thrown
    * Remove-CimInstance does not say what it removed before it threw.
    ps := 'if (Test-Path -LiteralPath $key) { exit 7 }; '

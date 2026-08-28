@@ -18,15 +18,19 @@ Entries are newest first, by date, until there is a version to attach them to.
            Removing the profile has two halves - the folder, and a record
            Windows keeps of where that folder is - and when the folder could
            not be removed, which is normal if anybody had used the account
-           recently, NEITHER half was removed.  The record left behind is what
-           Windows honours the next time an account of that name appears.
+           recently, NEITHER half was removed.
 
-           The record is now removed in its own right, so recreating an
-           account under an old name gives it the home directory you would
-           expect.  If either half cannot be removed, DELETE.ACCOUNT says
-           which one, because only one of them matters: a folder left behind
-           costs disk space, and a record left behind moves the next account's
-           home.  The warning for that case names it and says how to clear it.
+           EITHER HALF ON ITS OWN IS ENOUGH TO CAUSE THIS.  Windows will not
+           put a new profile where a record already points, and it will not put
+           one where a folder already sits; in both cases it adds a suffix to
+           the name instead.  So both halves are now removed in their own
+           right, and recreating an account under an old name gives it the home
+           directory you would expect.
+
+           If either half cannot be removed - a folder still in use is the
+           usual reason - DELETE.ACCOUNT says which one and what to do about
+           it.  Neither warning is cosmetic: until that half is cleared, the
+           next account of the same name will still be pushed elsewhere.
 
 27 Aug 26  TWO EDITOR AND TERMINAL FIXES.
 

@@ -370,15 +370,16 @@ deffun is_sd_user(username) calling '!is_sd_user'
                   * really is gone and re-running cannot retry the profile -
                   * the name no longer resolves to a SID.
                   *
-                  * 27 Aug 26 Windows port - TWO CASES NOW, AND THE ONE THAT
-                  *   MATTERS IS 7.  PRE_RELEASE_FIXES.md 32.  6 is the profile
-                  *   DIRECTORY left behind: it costs disk and nothing else.
-                  *   7 is the ProfileList REGISTRY ENTRY left behind, and that
-                  *   silently moves the home directory of any account created
-                  *   with this name afterwards - which is how an account
-                  *   recreated under its old name loses its ssh keys.  They
-                  *   get different warnings because the reader has to do
-                  *   something about one of them and not the other.
+                  * 27 Aug 26 Windows port - TWO CASES NOW, AND BOTH MATTER.
+                  *   PRE_RELEASE_FIXES.md 32 and 35.  6 is the profile
+                  *   DIRECTORY left behind, 7 the ProfileList REGISTRY ENTRY.
+                  *   ***EITHER ONE pushes the next account of this name to a
+                  *   suffixed home directory***, which is how an account
+                  *   recreated under its old name loses its ssh keys - so the
+                  *   two warnings differ in what has to be cleaned up, not in
+                  *   whether anything does.  An earlier version of this
+                  *   comment called 6 harmless; that was measured false on the
+                  *   very install that fixed 7.
                   case stat = 6
                      crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
                      crt sysmsg(10075,del.user) ;* Warning: the profile directory for %1 was left behind
