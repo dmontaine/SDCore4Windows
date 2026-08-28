@@ -245,7 +245,59 @@ if ($Phase -eq 'Create') {
         Write-Output ''
     }
 
-    $pw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+    # ***THE ALPHABET IS NOT A STYLE CHOICE, AND THIS COST A Create PHASE.***
+    # 28 Aug 2026: the first version used GeneratePassword(24, 6), copied from
+    # verify-tiers.ps1 and verify-acctmsgs.ps1 - neither of which sends a
+    # password through ssh.  This one does, and SSH_ASKPASS is a cmd.exe batch
+    # doing "echo %SDPROBEPW%".  ***cmd EXPANDS THE VARIABLE AND THEN PARSES THE
+    # RESULT***, so a "^" in the value is cmd's escape character and is EATEN.
+    #
+    # MEASURED, not reasoned: 'a);uoYHY90^;w%kkm[K}q]co' went in at 24
+    # characters and came out at 23, as 'a);uoYHY90;w%kkm[K}q]co'.  ssh would
+    # then be handed a password that is not the account's, the LOGIN door would
+    # be refused in the CONTROL leg, and the run would stop having measured
+    # nothing - for a reason with no connection to suspension at all.
+    #
+    # ***AND THE ANSWER WAS ALREADY IN THE TREE.***  verify-createaccount.ps1:403
+    # carries this exact alphabet with the comment "nothing cmd.exe treats
+    # specially, because it passes through the askpass helper", and
+    # verify-sshonly.ps1 uses the same one.  Kept identical to theirs on purpose:
+    # three files now depend on the same property and should fail together if it
+    # is ever wrong.  The '-Aa9' suffix guarantees the character classes a
+    # complexity policy asks for, whatever the random draw gives.
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+    $bytes = New-Object byte[] 20
+    ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
+    $pw = (-join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })) + '-Aa9'
+
+    # ***AND THE ALPHABET IS CHECKED RATHER THAN TRUSTED, BEFORE ANYTHING IS
+    # CREATED.***  The comment above explains why the safe alphabet is used; this
+    # measures that it worked, against the very mechanism that mangles it.  A
+    # rule nothing tests is how the first version passed review in my head and
+    # then ate a character.  It runs BEFORE CREATE.ACCOUNT so a failure costs
+    # nothing and leaves no account behind.
+    $probeDir = Join-Path $env:TEMP 'sd-doors-pwcheck'
+    if (-not (Test-Path -LiteralPath $probeDir)) { New-Item -ItemType Directory -Path $probeDir | Out-Null }
+    $probeCmd = Join-Path $probeDir 'askpass.cmd'
+    Set-Content -Path $probeCmd -Encoding ascii -Value @('@echo off', 'echo %SDPROBEPW%')
+    $env:SDPROBEPW = $pw
+    $echoed = ''
+    try { $echoed = ((& cmd.exe /c $probeCmd) -join '') } finally {
+        Remove-Item Env:\SDPROBEPW -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Note 'the password survives the askpass batch byte for byte' $true ($echoed -ceq $pw) $true
+    if ($echoed -cne $pw) {
+        Write-Output ''
+        Write-Output ("  The generated password is {0} characters and cmd.exe echoed back {1}." -f
+                      $pw.Length, $echoed.Length)
+        Write-Output '  ssh would be handed a password that is not the account''s, the LOGIN door'
+        Write-Output '  would be refused in the CONTROL leg, and the run would stop having'
+        Write-Output '  measured nothing.  Nothing has been created.  This is a defect in the'
+        Write-Output '  alphabet above, not on the machine - see verify-createaccount.ps1:403.'
+        Write-Verdict 'verify-doors-admin'
+        exit 2
+    }
 
     Show-SD 'create the account' @(
         ('CREATE.ACCOUNT USER ' + $acct + ' PROGRAMMER BOTH'), $pw, $pw) @($pw)
