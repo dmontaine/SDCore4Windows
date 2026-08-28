@@ -696,7 +696,11 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 28 Aug 26 - test-acctmsgs-units.ps1, added with the policy
                   # -aware rewrite of entry 22's refusal arm.  Same rule, same
                   # commit.  It reads the password policy and changes nothing.
-                  'test-acctmsgs-units.ps1')
+                  'test-acctmsgs-units.ps1',
+                  # 28 Aug 26 - verify-tierchange.ps1, PROJECT_STATUS item 5.5
+                  # and the three rows of PRE_RELEASE 19 that verify-tiers
+                  # section 6 does not cover.  Same rule, same commit.
+                  'verify-tierchange.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
