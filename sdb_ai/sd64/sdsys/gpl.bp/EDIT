@@ -15,6 +15,13 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 27 Aug 26 Windows port - micro IS LAUNCHED WITH "-backup off".  Its default
+*           auto-backup MkdirAll's into MICRO_CONFIG_HOME/backups, which is under
+*           C:\Program Files\SD\micro (Users:RX), so an unelevated account could
+*           not save at all.  Owner's ruling, 27 Aug 2026: suppress the backup at
+*           the launch site rather than move the config home.  editor.args, set
+*           per editor in the case statement - Microsoft Edit takes no such
+*           switch.  PRE_RELEASE_FIXES item 29.
 * 27 Aug 26 Windows port - ONE crt PER LINE at end.program.  Every message here
 *           is built with char(10) as a separator and a bare LF does not return
 *           to column 0, so one crt of the whole string staircased across a real
@@ -205,6 +212,19 @@ $include int$keys.h
          editor.exe  = 'micro.exe'
          editor.name = 'micro'
          editor.get  = 'winget install -e --id zyedidia.micro --scope machine'
+*        -backup off, BECAUSE micro's DEFAULT AUTO-BACKUP CANNOT WRITE.  micro
+*        2.0.15 ships "backup" true and "backupdir" empty, and an empty
+*        backupdir sends the backup to MICRO_CONFIG_HOME/backups - which is
+*        under C:\Program Files\SD\micro, BUILTIN\Users:(RX).  micro MkdirAll's
+*        that directory on the first save; unelevated it fails and micro aborts
+*        the save with "Permission denied.  Save with sudo not supported on
+*        Windows", so an ordinary account cannot save at all.  PRE_RELEASE 29.
+*
+*        THE SAFETY NET IS THIN HERE ANYWAY: this program prompts "Save?" per
+*        record, keeps the $hold working copy until every exit, and the mark
+*        round trip is byte-checked before the editor is handed anything.  A
+*        writable config home is the larger fix and buys nothing over those.
+         editor.args = ' -backup off'
 *        MICRO HIGHLIGHTS SD BASIC, AND THIS IS HOW IT FINDS THE RULES.
 *        micro reads its configuration from $MICRO_CONFIG_HOME, then
 *        $XDG_CONFIG_HOME/micro, then ~/.config/micro (micro's options.md).
@@ -221,8 +241,10 @@ $include int$keys.h
          editor.exe  = 'edit.exe'
          editor.name = 'Microsoft Edit'
          editor.get  = 'winget install -e --id Microsoft.Edit --scope machine'
-*        Microsoft Edit has no syntax highlighting to configure.
+*        Microsoft Edit has no syntax highlighting to configure, and it takes
+*        none of micro's switches - it must be launched with the file alone.
          editor.cfg  = ''
+         editor.args = ''
    end case
 
    if upcase(trim(cmd<2>, ' ', 'B')) = 'DICT' then
@@ -807,7 +829,7 @@ process.record:
    if editor.cfg # '' then
       cmd := '$env:MICRO_CONFIG_HOME = ' : q : editor.cfg : q : '; '
    end
-   cmd := '& ' : q : editor.path : q : ' ' : q : os.file : q
+   cmd := '& ' : q : editor.path : q : editor.args : ' ' : q : os.file : q
    cmd := '; exit $LASTEXITCODE'
    os.execute cmd
    rc = os.error()

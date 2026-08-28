@@ -3,6 +3,9 @@
       * Copyright (c) 2004, Ladybridge Systems, All Rights Reserved
       
       $list off
+      * 27 Aug 26 Windows port - corrected the ACC$PRIOR.TIER note: the equality
+      *                      guard, not an inner test, is what keeps field 6
+      *                      write-once (PRE_RELEASE 21)
       * 27 Aug 26 Windows port - ACC$PRIOR.TIER, field 6, and SUSPENDED as a
       *                      fourth value of ACC$TIER.  See the ACCOUNTS block
       * 25 Aug 26 Windows port - removed FL$TYPE.VFS; FILEINFO never
@@ -294,10 +297,13 @@
       *   tier it replaced would be lost, and field 6 is what stops that.
       *
       *   FIELD 6 IS WRITTEN ONLY ON THE WAY IN, and that rule is the whole of
-      *   why it is safe.  MODIFY.ACCOUNT writes it when the OLD tier is not
-      *   already SUSPENDED, and clears it on any move to a named tier.
-      *   Without the test, suspending an already-suspended account would store
-      *   SUSPENDED in field 6 and the account's real tier would be gone.
+      *   why it is safe.  MODIFY.ACCOUNT's EQUALITY GUARD is what enforces it:
+      *   a second "suspended" on an already-suspended account returns at that
+      *   guard (sysmsg 10110) and never reaches the field-6 write, so SUSPENDED
+      *   cannot displace the real prior tier.  Any move to a named tier clears
+      *   field 6, because it has then been used.  (An inner "old tier is not
+      *   SUSPENDED" test at the write was unreachable and was removed -
+      *   PRE_RELEASE 21.)
       *
       *   NOTHING READS IT TO ACT EXCEPT THE VOC DELTA.  Owner's ruling: there
       *   is no "resume" keyword, so coming back always names the destination -

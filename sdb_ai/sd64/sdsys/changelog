@@ -5,6 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+27 Aug 26  TWO EDITOR AND TERMINAL FIXES.
+
+           MICRO CAN NOW SAVE FROM AN ORDINARY ACCOUNT.  micro keeps an
+           automatic backup of each file as you save it, and was trying to
+           write it into its configuration directory under Program Files, which
+           ordinary accounts cannot write to - so the save failed with
+           "Permission denied".  SD now runs micro with that automatic backup
+           turned off.  Saving from an elevated session was never affected.
+           The EDIT verb - Microsoft Edit - never had this problem.
+
+           TERM DEFAULT NOW RESTORES 120 x 36, not 20 x 24.  "term default"
+           was setting the page to the smallest size SD allows, which wrapped
+           every standard report.  It now sets the documented default width and
+           depth, the same size a session starts with when nothing else tells
+           it otherwise.
+
 27 Aug 26  AN ACCOUNT'S TIER CAN BE CHANGED AFTER IT IS CREATED, AND THERE IS
            A FOURTH ONE: SUSPENDED.
 

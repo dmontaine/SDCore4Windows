@@ -704,10 +704,13 @@ os.set:
 * register first would leave the opposite: a record claiming a tier the account
 * does not have, which is the failure ACC$TIER exists to prevent.
 *
-* FIELD 6 IS WRITTEN ONLY ON THE WAY IN TO SUSPENDED.  See SYSCOM/KEYS.H: with
-* no such test, suspending an already-suspended account would store SUSPENDED
-* as the prior tier and the real one would be gone.  Any move to a named tier
-* clears it, because it has then been used.
+* FIELD 6 IS WRITTEN ONLY ON THE WAY IN TO SUSPENDED, and it is the EQUALITY
+* GUARD at the top of tier.set that makes that true - a second
+* "modify.account x suspended" returns there (sysmsg 10110) and never reaches
+* the field-6 write, so it cannot overwrite the real prior tier with SUSPENDED.
+* Any move to a named tier clears it, because it has then been used.  There was
+* an inner "if old.tier # 'SUSPENDED'" at the write as well; it was unreachable
+* and is gone (PRE_RELEASE 21).  See SYSCOM/KEYS.H.
 *
 * NOTHING IS WITHDRAWN ON WINDOWS FOR A SUSPENSION, which is the owner's
 * ruling and is what makes lifting one free.  The stated cost is in LOGIN
@@ -718,6 +721,9 @@ tier.set:
    prior.tier = upcase(trim(acc.rec<ACC$PRIOR.TIER>, ' ', 'B'))
    grp.acct   = (group.name[1,4] = 'sdg_')
 
+*  THE EQUALITY GUARD.  It also protects field 6: a second suspend of an
+*  already-suspended account returns here, so the field-6 write below never
+*  sees old.tier = 'SUSPENDED'.  PRE_RELEASE 21.
    if old.tier = want.tier then
       crt sysmsg(10110, acc.name, want.tier) ;* %1 is already %2; nothing changed
       return
@@ -894,7 +900,10 @@ tier.set:
 
    tier.rec.new<ACC$TIER> = want.tier
    if want.tier = 'SUSPENDED' then
-      if old.tier # 'SUSPENDED' then tier.rec.new<ACC$PRIOR.TIER> = old.tier
+*     old.tier is necessarily NOT 'SUSPENDED' here: the equality guard at the
+*     top of tier.set returned already if it were.  That guard, not an inner
+*     test, is what stops a second suspend overwriting field 6.  PRE_RELEASE 21.
+      tier.rec.new<ACC$PRIOR.TIER> = old.tier
    end else
       tier.rec.new<ACC$PRIOR.TIER> = ''
    end

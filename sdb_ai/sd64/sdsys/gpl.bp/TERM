@@ -18,6 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 27 Aug 26 Windows port - TERM DEFAULT now sets DEFAULT.WIDTH / DEFAULT.DEPTH
+*           (120 x 36), not MIN.WIDTH and a hard-coded depth 24.  The verb is
+*           named DEFAULT; INT$KEYS.H puts DEFAULT.WIDTH six lines from
+*           MIN.WIDTH and LOGIN:213-221 uses the DEFAULT pair, so this arm was
+*           reaching for the wrong constant.  It set 20 x 24 - the narrowest SD
+*           accepts - and every 120-column report then wrapped.  The sdterm
+*           depth-25 special case went with it: a default that varies by
+*           terminal type is not a default.  PRE_RELEASE 23 / UPSTREAM 24.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -162,8 +170,9 @@ $include syscom terminfo.h
          k = T$USER9                ; s = 'u9    : User 9  @(-109) (synchronous command)' ; gosub show
 
       case keyword = KW$DEFAULT                  ;* TERM DEFAULT
-         width = MIN.WIDTH
-         depth = if @term.type = 'sdterm' then 25 else 24
+*        120 x 36, the documented default - see START-HISTORY and UPSTREAM #24.
+         width = DEFAULT.WIDTH
+         depth = DEFAULT.DEPTH
          call @parser(parser$get.token, token.type, token, keyword)
          if token.type # PARSER$END then stop sysmsg(2018) ;* Unexpected token (XX)
 
