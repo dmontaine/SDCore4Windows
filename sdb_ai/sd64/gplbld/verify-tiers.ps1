@@ -556,9 +556,16 @@ $text = Invoke-SD @(('LOGTO ' + $suspName), 'UPDATE.ACCOUNT', 'COUNT VOC',
                     ("LIST VOC " + (($Withheld + $AdminVerbs |
                         ForEach-Object { "'" + $_ + "'" }) -join ' ')))
 Note 'suspended COUNT VOC after UPDATE.ACCOUNT' $susp.Count (Get-VocCount $text)
-Note 'suspended: the 42 withheld are still PRESENT' 0 `
+# 28 Aug 26 - THE COUNTS IN THESE TWO LABELS ARE INTERPOLATED, NOT TYPED.  They
+# read "the 42 withheld" and "the 21 administration verbs" when they were
+# written, and the 00:53:34 run printed "the 21 administration verbs are still
+# ABSENT ... 20 20 PASS" - a passing row whose own name contradicted it, because
+# PRE_RELEASE 25 removed encrypt.field.  A label carrying a constant is a second
+# place for the number to live and it drifts silently; the row above it derives
+# everything, so this one does too.
+Note ("suspended: the " + $Withheld.Count + " withheld are still PRESENT") 0 `
      ((Get-Missing $text $Withheld) | Measure-Object).Count
-Note 'suspended: the 21 administration verbs are still ABSENT' $AdminVerbs.Count `
+Note ("suspended: the " + $AdminVerbs.Count + " administration verbs are still ABSENT") $AdminVerbs.Count `
      ((Get-Missing $text $AdminVerbs) | Measure-Object).Count
 
 # RESTORE, AND IT IS A CHECK RATHER THAN TIDYING UP.  Naming a tier on a
