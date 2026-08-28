@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - a failed set_passwd() now says WHICH failure it was,
+*   from the status !set_passwd already set.  New messages 10118-10121.
+*   PRE_RELEASE_FIXES.md 22.
 * 27 Aug 26 Windows port - "sh-on" AND "os-on".  Owner, 27 Aug 2026: the two
 *   halves of OS.USERS get keywords of their own, on this verb and both ways
 *   round on MODIFY.ACCOUNT.  ON only here, because a new account has nothing
@@ -497,6 +500,33 @@ deffun ps_script(script) calling '!ps_script'
 PW.TRY.AGAIN:
            if not(set_passwd(acc.uname)) then
            *  password failed
+* 28 Aug 26 Windows port - SAY WHICH FAILURE IT WAS.  10008 offered a retry and
+*   named no reason, and the two likeliest causes need opposite responses: a
+*   mistyped confirmation is fixed by typing it again, and a password Windows
+*   REFUSED will be refused for ever no matter how carefully it is retyped.
+*   Somebody hitting the second case could retype a matching pair all day.
+*
+*   !set_passwd ALREADY KNEW - the caller was throwing it away.  SET_PASSWD's
+*   START-DESCRIPTION documents the values and it sets them with set.status
+*   before every failing return: 1 Windows refused it, 2 not a valid OS user
+*   name, 3 nothing entered or the two differed, 5 SD is not elevated.  Read
+*   immediately, because anything else here would overwrite it.
+*
+*   THE RETRY IS LEFT ALONE except in the one case where it cannot work: a
+*   session that is not elevated will not become elevated by answering Y, so
+*   10120 says so rather than letting the loop offer it.  Changing the control
+*   flow is a bigger question than this entry.  PRE_RELEASE_FIXES.md 22.
+              pw.stat = status()
+              begin case
+                 case pw.stat = 3
+                    crt sysmsg(10118) ;* The two passwords did not match
+                 case pw.stat = 1
+                    crt sysmsg(10119, acc.uname) ;* Windows refused that password
+                 case pw.stat = 5
+                    crt sysmsg(10120) ;* Not elevated - retrying will not help
+                 case 1
+                    crt sysmsg(10121, pw.stat) ;* Could not be set (status %1)
+              end case
               crt sysmsg(10008): ;* 'Warning, user created but password not set, Retry (Y/N)'
               input yn
               if upcase(yn) = 'Y' then goto PW.TRY.AGAIN

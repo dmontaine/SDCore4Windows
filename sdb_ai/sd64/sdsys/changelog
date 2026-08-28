@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+28 Aug 26  ENCRYPT.FIELD IS NO LONGER IN AN ADMINISTRATOR'S VOC.
+
+           The verb was in every administrator account and could not work:
+           it points at a program called $CRYPTO which is not part of this
+           distribution, so typing it answered
+
+               Unable to load '$CRYPTO' object code at line 1550 of $CPROC
+
+           which names neither the verb you typed nor anything you could act
+           on.  "Verb not found" is the honest answer, and that is what you get
+           now.  Nothing in the documentation referred to the verb, and field
+           encryption was not available through it before.
+
+           An ADMINISTRATOR account's VOC therefore holds 416 records rather
+           than 417.  STANDARD (354) and PROGRAMMER (396) are unchanged.
+
+28 Aug 26  CREATE.ACCOUNT SAYS WHY A PASSWORD WAS NOT SET.
+
+           It warned that the account was created but the password was not,
+           offered a retry, and gave no reason.  The two likeliest causes need
+           opposite responses: if the two entries simply did not match, typing
+           them again fixes it, but if WINDOWS refused the password for not
+           meeting the machine's policy, retyping the same one will fail for
+           ever.  Each case now says which it was, and a session that is not
+           running elevated is told that retrying cannot help.
+
 28 Aug 26  SEVEN FIXES TO EVERYDAY COMMANDS.
 
            NO.QUERY IS NOW HONOURED WHEN A FILE LIVES IN THE SYSTEM ACCOUNT.

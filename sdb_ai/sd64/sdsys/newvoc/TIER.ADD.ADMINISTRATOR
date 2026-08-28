@@ -9,7 +9,6 @@ revoke
 list.grants
 unlock
 modify.password
-encrypt.field
 config
 listu
 list.readu

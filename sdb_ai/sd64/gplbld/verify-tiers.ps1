@@ -29,6 +29,21 @@
 #   PROGRAMMER     392      + 4 = 396
 #   STANDARD       392 - 42 + 4 = 354
 #
+# 28 Aug 26 - ADMINISTRATOR IS 416, AND ONLY ADMINISTRATOR MOVED.  encrypt.field
+# was deleted from voc_template and from TIER.ADD.ADMINISTRATOR: it is a V
+# record pointing at $CRYPTO, which does not exist anywhere in the tree, so
+# every administrator account shipped with a verb that could only ever answer
+# "Unable to load '$CRYPTO' object code".  PRE_RELEASE_FIXES.md 25.
+#
+# RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, as this block requires:
+# newvoc holds 395 names, less "%t" and the two list records = 392;
+# TIER.ADD.ADMINISTRATOR is now 21 lines, 1 description + 20 verbs;
+# TIER.OMIT.STANDARD is unchanged at 43 lines, 1 + 42.  So
+# ADMINISTRATOR 392 + 20 + 4 = 416, PROGRAMMER 392 + 4 = 396 and STANDARD
+# 392 - 42 + 4 = 354.  ***STANDARD AND PROGRAMMER DO NOT MOVE***, and that is
+# the check on the arithmetic rather than a coincidence: the verb was only ever
+# ADMINISTRATOR's, so it leaves one of the three sums and not the other two.
+#
 # 26 Aug 26 - BACK TO 392/417/396/354, AND THE ROUTE BACK IS THE 24 Aug ENTRY
 # BELOW RUN IN REVERSE.  The MICRO verb returned (owner's ruling, same day), so
 # NEWVOC gained a name and TIER.OMIT.STANDARD gained a line - PROGRAMMER and
@@ -140,7 +155,7 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $Tiers = @(
     [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 354 }
     [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 417 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 416 }
 )
 
 # The 42 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the
@@ -184,7 +199,7 @@ $Withheld = @(
 $AdminVerbs = @(
     # A1 - account and grant administration
     'create.account','delete.account','modify.account','update.account','clean.account',
-    'grant','revoke','list.grants','unlock','modify.password','encrypt.field',
+    'grant','revoke','list.grants','unlock','modify.password',
     # A2 - system-wide state
     'config','listu','list.readu','list.locks','clear.locks','lock','logout','set.date',
     # A3 - shell escapes
