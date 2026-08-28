@@ -76,6 +76,14 @@
 # the same routine is reached from an ordinary login by the $RELEASE prompt, so
 # this is the half that has to hold.
 #
+# 28 Aug 26 - SECTION 6 ADDS SUSPENDED, AND ONLY THE HALF THIS FILE CAN REACH.
+# PRE_RELEASE 38 named this verifier for the ssh and logto doors; it cannot
+# test either, because the logto check sits after CPROC's elevated bypass and
+# this script refuses to run unelevated.  Section 6 covers the record, the
+# write-once guard on ACC$PRIOR.TIER that PRE_RELEASE 21 left unmeasured, and
+# the VOC across UPDATE.ACCOUNT.  It says out loud that the doors are untested
+# rather than scoring them.  The reasoning is at the section.
+#
 # DRIVING SD FROM POWERSHELL has two traps, both from verify-createaccount.ps1
 # and both in PROJECT_STATUS.md section 6: input must be PIPED, not redirected,
 # and the pipe prepends a BOM to the first line, so a blank sacrificial line
@@ -252,6 +260,53 @@ function Get-AccountTier($name) {
     return $f[4]
 }
 
+# 28 Aug 26 - ACC$PRIOR.TIER, field 6 (SYSCOM/KEYS.H:289) - the tier SUSPENDED
+# displaced.  Section 6 is the only reader; it is what proves a restore read the
+# record rather than defaulting to something that happens to look right.
+function Get-AccountPriorTier($name) {
+    $rec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $name.ToUpper())
+    if (-not (Test-Path -LiteralPath $rec)) { return '<no ACCOUNTS record>' }
+    $f = Get-Content -LiteralPath $rec
+    if ($f.Count -lt 6) { return '<blank>' }
+    if ([string]::IsNullOrEmpty($f[5])) { return '<blank>' }
+    return $f[5]
+}
+
+# 28 Aug 26 - ANCHOR ON THE SUCCESS WORDING, AND REFUSE IF A FAILURE WORDING IS
+# ALSO PRESENT.  CLAUDE.md, "a check must anchor on the SUCCESS wording": the
+# account name and the tier keyword are in SD's echo of the command and in
+# every refusal, so matching either proves nothing.  $positive must be text the
+# verb prints ONLY when it did the thing - here sysmsg 10109 "Account %1 is now
+# %2" - and $bad are the refusals that would otherwise hide underneath a match.
+# Returns a string so Note can compare it, and so a failure names WHICH refusal.
+function Get-Said($text, [string]$positive, [string[]]$bad) {
+    foreach ($b in $bad) {
+        if ($text -match $b) { return ('refused: ' + $b) }
+    }
+    if ($text -match $positive) { return 'said' }
+    return 'not said'
+}
+
+# Rule 1 of the instrument section: print what the tool actually did, every
+# time, not only when the verdict looks wrong.  A subtle refusal is one no
+# conditional print catches, because the condition is the thing that was wrong.
+#
+# 28 Aug 26 - WHAT THIS PRINTS IS POST-ANSI-STRIP, SO ECHOES CAN LOOK MANGLED.
+# Invoke-SD removes escape sequences before returning, and SD redraws its
+# command line as it echoes, so the two halves of a redraw arrive joined: the
+# 00:07:29 run printed "MODIFY.ACSDTIER2 PROGRAMMER" one line above the real
+# "MODIFY.ACCOUNT SDTIER2 PROGRAMMER".  ***THAT IS THIS FUNCTION'S RENDERING,
+# NOT SD'S OUTPUT, AND NO CHECK READS IT*** - every Note anchors on a sysmsg
+# the verb prints on its own line.  Do not go looking for a parser bug in SD.
+# If a run ever needs the true bytes, the fix is in Invoke-SD, which is where
+# the stripping happens.
+function Show-Raw($label, $text) {
+    Write-Output ('    --- ' + $label + ' said: ---')
+    foreach ($line in ($text -split "`n")) {
+        if ($line.Trim() -ne '') { Write-Output ('    | ' + $line.TrimEnd()) }
+    }
+}
+
 function Remove-Made {
     foreach ($t in $Tiers) {
         if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) {
@@ -400,6 +455,120 @@ $text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNT', 'COUNT V
                     ("LIST VOC " + (($Withheld | ForEach-Object { "'" + $_ + "'" }) -join ' ')))
 Note 'standard COUNT VOC after UPDATE.ACCOUNT' $std.Count (Get-VocCount $text)
 Note 'standard withheld still MISSING after UPDATE.ACCOUNT' $Withheld.Count ((Get-Missing $text $Withheld) | Measure-Object).Count
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 6. SUSPENDED: the record, the write-once guard, and the VOC ==========='
+
+# 28 Aug 26 - PRE_RELEASE 38 asked for SUSPENDED coverage and named this file
+# for the ssh and logto doors.  ***THAT PART OF 38 IS WRONG AND THIS SECTION
+# DELIBERATELY DOES NOT ATTEMPT IT.***  CPROC's logto.authorised puts the
+# suspension test AFTER two privileged bypasses (CPROC:3729 elevated,
+# CPROC:3755 elevation just obtained), which is a recorded judgement call at
+# CPROC:3765, not an oversight.  This verifier REFUSES to run unelevated -
+# CREATE.ACCOUNT is gated on K$ADMINISTRATOR - so every LOGTO it issues takes
+# the bypass.  A door test written here would enter a suspended account, and
+# report a product fault that is the design working.  What the doors need is
+# an UNELEVATED session as a user the suspension actually denies; the shape is
+# in PRE_RELEASE 38.
+#
+# WHAT IS HONESTLY TESTABLE FROM AN ELEVATED SESSION IS THE OTHER HALF OF THE
+# FEATURE, and it is the half with a write-once rule and a VOC in it:
+#
+#   the record      ACC$TIER goes to SUSPENDED and ACC$PRIOR.TIER keeps the
+#                   tier it displaced (SYSCOM/KEYS.H:287,289)
+#   the guard       a second suspend returns at the equality test (10110) and
+#                   so never reaches the field-6 write - PRE_RELEASE 21 says
+#                   that guard is the whole write-once mechanism now that the
+#                   unreachable inner test is deleted, and nothing measured it
+#   the VOC         "SUSPENDED denies access and changes nothing else"
+#                   (MODIFYA:98).  UPDATE.ACCOUNT on a suspended account must
+#                   resolve SUSPENDED to ACC$PRIOR.TIER (LOGIN:283, :1212) or
+#                   a release update strips a suspended account's verbs - the
+#                   exact failure section 5 exists for, on the tier that has
+#                   no VOC of its own
+#
+# THE PROGRAMMER ACCOUNT IS USED ON PURPOSE.  Restoring to PROGRAMMER proves
+# field 6 was READ; a STANDARD account would be restored to the value a
+# defaulting bug would also produce, and would pass either way.
+$susp     = $Tiers[1]
+$suspName = $susp.Name.ToUpper()
+$suspRe   = [regex]::Escape($suspName)
+
+# The refusals that must not be hiding under a positive match.  10114 "Unable
+# to change the tier", 10110 "is already", 10112 "cannot suspend your own",
+# 10108 "no record of the tier it held".
+$tierBad = @('Unable to change the tier', 'is already', 'cannot suspend',
+             'no record of the tier')
+
+$cmd = 'MODIFY.ACCOUNT ' + $suspName + ' SUSPENDED'
+Write-Output ('  ' + $cmd)
+$out = Invoke-SD @($cmd)
+Show-Raw $cmd $out
+Note 'suspend says 10109 "Account X is now SUSPENDED"' 'said' `
+     (Get-Said $out ('Account\s+' + $suspRe + '\s+is now\s+SUSPENDED') $tierBad)
+Note ($susp.Name + ' ACC$TIER after suspend') 'SUSPENDED' (Get-AccountTier $susp.Name)
+Note ($susp.Name + ' ACC$PRIOR.TIER holds the displaced tier') 'PROGRAMMER' `
+     (Get-AccountPriorTier $susp.Name)
+
+# THE WRITE-ONCE GUARD, WHICH IS THE ONE PRE_RELEASE 21 LEFT UNMEASURED.  Run
+# the identical command a second time: it must stop at the equality test with
+# 10110 and NOT write field 6, because at that point old.tier IS SUSPENDED and
+# a write would overwrite PROGRAMMER with it - losing the only record of what
+# the account was, permanently.  The second Note is the one that matters; the
+# first only says the guard was the thing that stopped it.
+Write-Output ('  ' + $cmd + '   (again - the equality guard, PRE_RELEASE 21)')
+$out2 = Invoke-SD @($cmd)
+Show-Raw 'second suspend' $out2
+Note 'second suspend says 10110 "is already"' 'said' `
+     (Get-Said $out2 ($suspRe + '\s+is already\s+SUSPENDED') @('is now', 'Unable to change the tier'))
+Note ($susp.Name + ' ACC$PRIOR.TIER survived the second suspend') 'PROGRAMMER' `
+     (Get-AccountPriorTier $susp.Name)
+
+# THE VOC IS UNTOUCHED, AND THIS ALSO REFUSES THE NULL CASE.  If the LOGTO had
+# been refused the session would still be standing in SDSYS and COUNT VOC would
+# answer with SDSYS's VOC, which is not 396 - so a test that measured nothing
+# FAILS here rather than passing quietly.  The elevated bypass is asserted
+# rather than worked around: if CPROC:3765 is ever changed, this check is what
+# says so.
+$text = Invoke-SD @(('LOGTO ' + $suspName), 'COUNT VOC')
+Note 'elevated LOGTO enters a suspended account (CPROC:3765)' $susp.Count (Get-VocCount $text)
+
+# AND UPDATE.ACCOUNT MUST NOT STRIP IT.  Section 5 asks this of a standard
+# account; a suspended one is the harder case, because SUSPENDED is not a VOC
+# tier and update.voc has to resolve it to field 6 to know what to copy.
+$text = Invoke-SD @(('LOGTO ' + $suspName), 'UPDATE.ACCOUNT', 'COUNT VOC',
+                    ("LIST VOC " + (($Withheld + $AdminVerbs |
+                        ForEach-Object { "'" + $_ + "'" }) -join ' ')))
+Note 'suspended COUNT VOC after UPDATE.ACCOUNT' $susp.Count (Get-VocCount $text)
+Note 'suspended: the 42 withheld are still PRESENT' 0 `
+     ((Get-Missing $text $Withheld) | Measure-Object).Count
+Note 'suspended: the 21 administration verbs are still ABSENT' $AdminVerbs.Count `
+     ((Get-Missing $text $AdminVerbs) | Measure-Object).Count
+
+# RESTORE, AND IT IS A CHECK RATHER THAN TIDYING UP.  Naming a tier on a
+# suspended account lifts the suspension into that tier (MODIFYA:94), and 10108
+# - "has no record of the tier it held" - is the disqualifier that says field 6
+# was lost somewhere above.
+$cmdR = 'MODIFY.ACCOUNT ' + $suspName + ' PROGRAMMER'
+Write-Output ('  ' + $cmdR)
+$outR = Invoke-SD @($cmdR)
+Show-Raw $cmdR $outR
+Note 'restore says 10109 "Account X is now PROGRAMMER"' 'said' `
+     (Get-Said $outR ('Account\s+' + $suspRe + '\s+is now\s+PROGRAMMER') $tierBad)
+Note ($susp.Name + ' ACC$TIER after restore') 'PROGRAMMER' (Get-AccountTier $susp.Name)
+
+Write-Output ''
+Write-Output '  THE THREE DOORS ARE NOT TESTED ABOVE, AND THIS IS NOT A PASS:'
+Write-Output '    LOGIN (ssh/console)  LOGIN:477 -> 10107.  Needs a real ssh login as the'
+Write-Output '                         suspended account.  verify-sshonly.ps1 has the'
+Write-Output '                         SSH_ASKPASS machinery; this file does not.'
+Write-Output '    logto                CPROC:3776 -> 10107.  UNTESTABLE FROM HERE - the'
+Write-Output '                         check sits after the elevated bypass asserted above.'
+Write-Output '    the API              APISRVR:507 -> 10003, which reads identically to'
+Write-Output '                         "no such account" and "not granted", so only a'
+Write-Output '                         controlled pair on one account can tell them apart.'
+Write-Output '  PRE_RELEASE 38 carries the shape.  Nothing here counts them as covered.'
 
 # ---------------------------------------------------------------------------
 Write-Output ''
