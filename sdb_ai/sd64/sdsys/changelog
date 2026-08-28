@@ -27,10 +27,18 @@ Entries are newest first, by date, until there is a version to attach them to.
            right, and recreating an account under an old name gives it the home
            directory you would expect.
 
-           If either half cannot be removed - a folder still in use is the
-           usual reason - DELETE.ACCOUNT says which one and what to do about
-           it.  Neither warning is cosmetic: until that half is cleared, the
-           next account of the same name will still be pushed elsewhere.
+           THE FOLDER OFTEN CANNOT BE REMOVED, AND THAT IS WINDOWS RATHER THAN
+           SD.  If the account has ever signed in, Windows keeps its registry
+           settings mounted afterwards, which locks a file inside the folder;
+           while that lasts the folder cannot be deleted or even renamed, by
+           anybody, however privileged.  Only restarting the computer releases
+           it.
+
+           So DELETE.ACCOUNT says which half was left and what to do about it,
+           and neither warning is cosmetic: until that half is cleared, the
+           next account of the same name will still be pushed elsewhere.  For
+           an account that never signed in there is nothing mounted and both
+           halves go cleanly.
 
 27 Aug 26  TWO EDITOR AND TERMINAL FIXES.
 
