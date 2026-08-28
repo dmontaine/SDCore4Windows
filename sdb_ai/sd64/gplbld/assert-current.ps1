@@ -692,7 +692,11 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # and create only fixtures they remove again.
                   'verify-vocverbs.ps1',
                   'verify-acctmsgs.ps1',
-                  'test-vocverbs-units.ps1')
+                  'test-vocverbs-units.ps1',
+                  # 28 Aug 26 - test-acctmsgs-units.ps1, added with the policy
+                  # -aware rewrite of entry 22's refusal arm.  Same rule, same
+                  # commit.  It reads the password policy and changes nothing.
+                  'test-acctmsgs-units.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

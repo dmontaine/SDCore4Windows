@@ -56,11 +56,20 @@
 #      It is left here corrected rather than deleted, because the next session
 #      will otherwise reason its way to the same password.
 #
-#      WHAT WOULD ACTUALLY EXERCISE IT: a machine whose policy refuses
-#      something - minimum length, complexity, or history - or a deliberate,
-#      temporary policy change on this one.  ***THAT IS THE OWNER'S CALL AND
-#      THIS SCRIPT DOES NOT MAKE IT***: changing a machine's password policy to
-#      make a test pass is a change to the machine, not to the test.
+#      ***SO THE PASSWORD IS NOW CHOSEN FROM THE POLICY RATHER THAN GUESSED***
+#      (28 Aug 2026, owner's decision to change the policy for the test).
+#      Get-PasswordPolicy reads MinimumPasswordLength and PasswordComplexity
+#      with "secedit /export" - locale-independent, unlike parsing the prose
+#      "net accounts" prints - and arm B then breaks whichever rule is in force:
+#      one character short of the minimum, or a single character class against
+#      complexity.  With NO rule in force there is nothing to break, and the arm
+#      says so and SKIPs.
+#
+#      ***THIS SCRIPT STILL DOES NOT CHANGE THE POLICY, AND THAT IS DELIBERATE.***
+#      It reads it and adapts.  Changing a machine's password policy to make a
+#      test pass is a change to the MACHINE, not to the test, and it has to be
+#      somebody's decision, made once, in the open, and reverted afterwards.
+#      PROJECT_STATUS.md START HERE carries the three commands.
 #
 #      ***THE SKIP IS THE POINT.***  A test that passes because it did nothing
 #      must not pass.  SET_PASSWD's generated script catches any Set-LocalUser
@@ -237,6 +246,65 @@ function Test-WinUser([string]$name) {
     try { $null = Get-LocalUser -Name $name -ErrorAction Stop; return $true } catch { return $false }
 }
 
+# ------------------------------------------------------- the password policy
+#
+# ***ARM B CANNOT PICK ITS PASSWORD WITHOUT READING THIS.***  The first version
+# guessed - a 150-character password, on the reasoning that 127 is a hard SAM
+# limit - and Set-LocalUser accepted it, so the arm recorded SKIP having proved
+# nothing.  A refusal has to be MANUFACTURED against the rule that is actually
+# in force, and the only way to know that is to read it.
+#
+# secedit RATHER THAN "net accounts", because "net accounts" is parsed out of
+# LOCALISED prose and this must not quietly stop working on a machine that is
+# not English.  secedit needs an elevated token, which this script already
+# refuses to run without.  "net accounts" stays as the fallback, and an
+# unreadable policy is reported as unreadable rather than assumed to be lax.
+#
+# IT WRITES NOTHING AND CHANGES NOTHING - /export only.  Changing a machine's
+# password policy to make a test pass is a change to the MACHINE, not to the
+# test, and this script does not make it.
+function Get-PasswordPolicy {
+    $out = [pscustomobject]@{ MinLength = -1; Complexity = -1; Source = 'unreadable' }
+    $cfg = Join-Path $env:TEMP ('verify-acctmsgs-secpol-' + [Guid]::NewGuid().ToString('N') + '.inf')
+
+    # A NATIVE EXE WRITING TO stderr KILLS THE SCRIPT under ErrorActionPreference
+    # Stop in Windows PowerShell 5.1, and it does so SILENTLY.  Lowered around
+    # the call and restored immediately.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & secedit /export /areas SECURITYPOLICY /cfg $cfg | Out-Null } catch { }
+    $ErrorActionPreference = $prev
+
+    if (Test-Path -LiteralPath $cfg) {
+        # 5.1 writes this file as UTF-16; -Raw plus the default reader handles
+        # the BOM.  Read, then delete - it is a dump of the security policy and
+        # has no business surviving the run.
+        $text = ''
+        try { $text = Get-Content -LiteralPath $cfg -Raw } catch { }
+        Remove-Item -LiteralPath $cfg -Force -ErrorAction SilentlyContinue
+        if ($text -match 'MinimumPasswordLength\s*=\s*(\d+)') {
+            $out.MinLength = [int]$Matches[1]; $out.Source = 'secedit'
+        }
+        if ($text -match 'PasswordComplexity\s*=\s*(\d+)') { $out.Complexity = [int]$Matches[1] }
+    }
+
+    if ($out.MinLength -lt 0) {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $na = ''
+        try { $na = (& net accounts | Out-String) } catch { }
+        $ErrorActionPreference = $prev
+        if ($na -match '(?m):\s*(\d+)\s*$' -and $na -match 'assword') {
+            # Deliberately weak, and labelled so: this only fires when secedit
+            # gave nothing, and it is why the source is reported on its own row.
+            if ($na -match '(?im)^.*password length.*?(\d+)\s*$') {
+                $out.MinLength = [int]$Matches[1]; $out.Source = 'net accounts'
+            }
+        }
+    }
+    return $out
+}
+
 # ------------------------------------------------------------- preconditions
 
 if ($Prefix -eq '') {
@@ -319,13 +387,62 @@ $pw1  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 $pw2  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 $pwOk = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 $pwU  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-# 150 characters, plain alphanumerics, under TERM's 200-column width so the
-# line cannot be truncated on its way in.  ***MEASURED 28 Aug 2026: ACCEPTED.***
-# It was chosen believing 127 was a hard SAM limit for a local account; it is
-# not one Set-LocalUser enforces here.  See arm B in the header - the length is
-# kept because it costs nothing and may refuse on another machine, but nothing
-# in this script should be read as expecting it to.
-$pwLong = ('Aa1' * 50)
+# ***ARM B'S PASSWORD IS CHOSEN FROM THE POLICY, NOT GUESSED.***  Three cases,
+# in the order of how certain the refusal is:
+#
+#   MinLength >= 2   one character SHORT of the minimum.  A length rule is
+#                    arithmetic and cannot be argued with, so this is the case
+#                    to prefer whenever it exists.
+#   Complexity = 1   lower-case letters only, at the minimum length or 14,
+#                    whichever is larger.  Complexity wants three of four
+#                    character classes, so one class fails it while length
+#                    cannot be the reason.
+#   otherwise        150 characters, and EXPECTED TO BE ACCEPTED.  Measured
+#                    28 Aug 2026 on this host: it was.  Kept only so the arm
+#                    attempts something and reports SKIP honestly.
+#
+# EVERY BRANCH PRINTS WHAT IT READ AND WHAT IT SENT.  A refusal is only evidence
+# if the rule it broke is on the record beside it - otherwise 10119 could as
+# easily be some unrelated Set-LocalUser failure.
+# PURE, so test-acctmsgs-units.ps1 can lift it by AST and drive it with policy
+# values this machine does not have.  It picks a password; it reads nothing and
+# sets nothing.
+function Select-RefusedPassword([int]$min, [int]$complexity) {
+    if ($min -ge 2) {
+        # Clamped: Windows caps the minimum at 20 today, but a Substring past
+        # the end of the seed would throw, and a guard costs one line.
+        $seed = 'Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8'
+        $want = [Math]::Min($min - 1, $seed.Length * 20)
+        return [pscustomobject]@{
+            Password = ($seed * 20).Substring(0, $want)
+            Why      = ('one character short of the minimum of ' + $min)
+            Expect   = 'refused'
+        }
+    }
+    if ($complexity -eq 1) {
+        $n = [Math]::Max($min, 14)
+        return [pscustomobject]@{
+            Password = ('a' * $n)
+            Why      = ("$n lower-case letters, which fails complexity on character classes, not on length")
+            Expect   = 'refused'
+        }
+    }
+    return [pscustomobject]@{
+        Password = ('Aa1' * 50)
+        Why      = '150 characters - NO RULE IS IN FORCE TO BREAK, so this is expected to be ACCEPTED and the arm to SKIP'
+        Expect   = 'accepted'
+    }
+}
+
+$policy = Get-PasswordPolicy
+Write-Output ("  policy  minimum length {0}, complexity {1} (read by {2})" -f
+              $policy.MinLength, $policy.Complexity, $policy.Source)
+
+$choice = Select-RefusedPassword $policy.MinLength $policy.Complexity
+$pwLong = $choice.Password
+$pwWhy  = $choice.Why
+Write-Output ("  arm B   sending a password of " + $pwLong.Length + " characters: " + $pwWhy)
+Write-Output ("  arm B   expects Windows to have " + $choice.Expect + " it")
 
 # --------------------------------- 22 arm A: the two passwords did not match
 
@@ -395,10 +512,20 @@ if (Test-Say $a22b 'Windows refused that password') {
          (Test-Say $a22b 'An account must have a password\. Nothing was created\.') $true
 } else {
     Skip '22B: Windows refused the password' `
-         ('this machine accepted a ' + $pwLong.Length + '-character password, so the refusal arm never ran')
+         ('this machine accepted a ' + $pwLong.Length + '-character password (' + $pwWhy + ')')
     Write-Output '    Entry 22 arm B measured NOTHING on this host.  The mismatch arm above is'
-    Write-Output '    unaffected - it never reaches Windows.  To exercise this arm, run it on a'
-    Write-Output '    machine whose password policy refuses something, and say which rule it was.'
+    Write-Output '    unaffected - it never reaches Windows.'
+    Write-Output ("    The policy read was: minimum length " + $policy.MinLength +
+                  ", complexity " + $policy.Complexity + ", by " + $policy.Source + '.')
+    if ($policy.MinLength -lt 2 -and $policy.Complexity -ne 1) {
+        Write-Output '    NO PASSWORD RULE IS IN FORCE, so there is nothing here for Windows to'
+        Write-Output '    refuse.  Exercising this arm needs a machine that has one - which is a'
+        Write-Output '    change to the MACHINE and is not this script''s to make.'
+    } else {
+        Write-Output '    A RULE IS IN FORCE AND THE PASSWORD BROKE IT, AND WINDOWS TOOK IT ANYWAY.'
+        Write-Output '    That is a finding in its own right: read the raw output above before'
+        Write-Output '    concluding anything about CREATE.ACCOUNT.'
+    }
     Write-Output ''
     # ***THE ACCOUNT IS REAL NOW.***  The password was accepted, so CREATE.ACCOUNT
     # ran to completion and the trailing N was a stray line at TCL rather than an
