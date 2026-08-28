@@ -707,7 +707,23 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # need opposite tokens - the fixture is elevated, the logto
                   # measurement must not be.
                   'verify-doors.ps1',
-                  'verify-doors-admin.ps1')
+                  'verify-doors-admin.ps1',
+                  # 28 Aug 26 - verify-doors-suite.ps1 was WIRED INTO
+                  # VerifyInstall1 on 28 Aug and never added here, so the -Run
+                  # b50 run's own assert-current listed it under "newer than
+                  # the install".  It is the third member of the same pair and
+                  # ships no more than the other two do.  The omission is the
+                  # exact trap the entries above describe: an unlisted script
+                  # makes the tree report stale merely by existing, and then
+                  # every verifier that calls this first refuses.
+                  'verify-doors-suite.ps1',
+                  # 28 Aug 26 - test-doorsargv-units.ps1, the unit test for the
+                  # suite's elevation argument list, after Suspend and Remove
+                  # died before their UAC prompt on the b50 run.  Needs no
+                  # install, no elevation and no account, so it is the cheap
+                  # guard the suite itself cannot be: the suite costs three UAC
+                  # prompts and a single-use prefix to find out.
+                  'test-doorsargv-units.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

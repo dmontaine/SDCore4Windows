@@ -250,12 +250,36 @@ foreach ($line in ($out -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) 
 Write-Output ''
 
 $logtoSuspended = Test-Say $out 'is suspended'
-# WHO answers with the account the session is standing in, so it is the
-# positive evidence that the LOGTO landed rather than being refused quietly.
-$logtoEntered   = Test-Say $out ([regex]::Escape($acctU))
+
+# ***THE ANCHOR IS WHO'S ANSWER, NOT THE NAME ANYWHERE IN THE TEXT.***  The
+# session ECHOES what it is fed, so ':LOGTO SDDRB50A' puts the account name in
+# the transcript whether the LOGTO landed or not, and the old
+# "Test-Say $out $acctU" therefore reported success on the failure path.
+#
+# MEASURED ON THE -Run b50 CONTROL LEG, 28 Aug 2026: SD printed 5161 "Unable
+# to change to new directory", WHO answered "91 DON" - the session never left
+# DON - and this check said PASS.  It also said PASS on sddr2 the same day,
+# which is what "logto ADMITTED" in PROJECT_STATUS rests on.
+#
+# newvoc/who is "Verb to show user number and account", so WHO's answer is
+# "<number> <ACCOUNT>" and the account must be the WHOLE of the second field
+# on a line whose first field is a number.  Nothing the caller typed can
+# produce that shape.
+$logtoEntered = $false
+foreach ($l in ($out -split "`n")) {
+    if ($l -match ('^\s*\d+\s+' + [regex]::Escape($acctU) + '\s*$')) { $logtoEntered = $true }
+}
+
+# ***CONTROL: THE FAILURE WORDING IS A DISQUALIFIER IN ITS OWN RIGHT.***  5161
+# is the chdir failing AFTER the register and group checks have both passed,
+# so it is not a refusal and none of the "was NOT refused" rows below see it.
+# A leg where the positive anchor matched AND this matched is not a pass.
+$logtoNoDir = Test-Say $out 'Unable to change to new directory'
 
 if ($Phase -eq 'Control') {
     Note 'logto: entered the account before suspension' $true $logtoEntered $true
+    Note 'logto: SD did NOT report 5161 "Unable to change to new directory"' `
+         $false $logtoNoDir $true
     Note 'logto: SD did NOT say "is suspended"' $false $logtoSuspended $true
     # THE OTHER REFUSAL THIS COULD BE.  If the caller is not in the account's
     # group, logto is refused for a reason that has nothing to do with the

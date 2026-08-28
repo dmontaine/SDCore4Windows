@@ -109,15 +109,45 @@ function Invoke-ElevatedPhase([string]$Phase, [string]$Password) {
     Write-Output ("      {0} -Prefix {1} -Phase {2}" -f $admin, $Prefix, $Phase)
     Write-Output ("      output -> {0}" -f $out)
 
+    # ***ONE EMPTY ELEMENT REJECTS THE WHOLE LIST.***  Start-Process's
+    # -ArgumentList carries [ValidateNotNullOrEmpty()], and on a COLLECTION
+    # that validates every ELEMENT, not just the collection: a single '' fails
+    # with "The argument is null or empty" and NOTHING ELEVATES.  Suspend and
+    # Remove take no password - verify-doors-admin.ps1:58 defaults it - so the
+    # pair is OMITTED rather than passed empty.  This is the idiom
+    # sd-elevate.ps1:118 already uses for its optional -LogFile.
+    #
+    # Measured 28 Aug 2026 on the -Run b50 suite run: Create carried a
+    # password and elevated; Suspend and Remove carried '' and died here, so
+    # the account was left unsuspended and the Refused leg could not run.
+    $psArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
+                '-Admin',  $admin,
+                '-Prefix', $Prefix,
+                '-Phase',  $Phase,
+                '-Out',    $out)
+    if ($Password -ne '') { $psArgs += @('-Password', $Password) }
+
+    # RULE 1: print the arguments really being passed, and REFUSE THE NULL
+    # CASE OUT LOUD rather than leaving it to a parameter-binding message that
+    # names no element.  The count is printed because an array built with '+'
+    # is exactly where an element goes missing or gets folded in two.
+    $shown = $psArgs.Clone()
+    if ($Password -ne '') { $shown[$shown.Count - 1] = '<password>' }
+    Write-Output ("      argv ({0}): {1}" -f $psArgs.Count, ($shown -join ' '))
+
+    $empties = @(0..($psArgs.Count - 1) | Where-Object { [string]::IsNullOrEmpty($psArgs[$_]) })
+    if ($empties.Count -gt 0) {
+        Write-Output ('  REFUSING - argv element(s) ' + ($empties -join ', ') +
+                      ' are empty; Start-Process would reject the entire list.')
+        Write-Output '  Nothing was measured by this leg.'
+        $script:phaseExit = 2
+        return
+    }
+
     $script:phaseExit = 2
     try {
-        $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList @(
-                 '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
-                 '-Admin',    $admin,
-                 '-Prefix',   $Prefix,
-                 '-Phase',    $Phase,
-                 '-Password', $Password,
-                 '-Out',      $out)
+        $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru `
+                 -ArgumentList $psArgs
         $script:phaseExit = $p.ExitCode
     } catch {
         Write-Output ('  elevation did not happen: ' + $_.Exception.Message)
