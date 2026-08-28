@@ -16,7 +16,12 @@ $ErrorActionPreference = 'Stop'
 # machine-specific path would make it a script only one clone can run - which
 # is the sort of thing setup-devbox.ps1 exists to stop being true.
 $gplbld  = $PSScriptRoot
-$targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1', 'verify-cmdaudit.ps1')
+# 28 Aug 26 - verify-vocverbs.ps1 and verify-acctmsgs.ps1 join the list in the
+# commit that creates them.  Each carries the same "kept BYTE-FOR-BYTE
+# IDENTICAL" comment as the other three, and a copy that claims that without
+# anything checking it is a comment that rots on the first edit.
+$targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1', 'verify-cmdaudit.ps1',
+             'verify-vocverbs.ps1', 'verify-acctmsgs.ps1')
 
 # Collected so the two copies can be compared to each other, not just tested
 # apart.  See the identical-copies assertion at the end.

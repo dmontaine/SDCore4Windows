@@ -673,7 +673,26 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 127.0.0.1" has only ever been READ, never shown to refuse
                   # anybody.  -SelfTest proves the dialer tells connect,
                   # refuse and time-out apart without needing a guest.
-                  'probe-sshremote.ps1')
+                  'probe-sshremote.ps1',
+                  # 28 Aug 26 - verify-vocverbs.ps1, verify-acctmsgs.ps1 and
+                  # test-vocverbs-units.ps1, the witnesses for the eight
+                  # PRE_RELEASE fixes that shipped into the 28 Aug 00:53:34
+                  # install and that nothing had run.  Listed IN THE COMMIT
+                  # THAT CREATES THEM, under section 7 step 7's rule - a script
+                  # not on this list makes the tree report stale because it
+                  # EXISTS, and then every verifier refuses on the strength of
+                  # its own newness.  verify-standalone.ps1 walked into exactly
+                  # that on its first run.
+                  #
+                  # AND THE TIMING IS THE WHOLE REASON THEY ARE HERE AT ALL:
+                  # the eight fixes are installed NOW, so they can be witnessed
+                  # without spending a cycle - but only while this script still
+                  # answers 0, which it cannot do if these three are watched.
+                  # None is named in stage.py or sd.iss; they read the install
+                  # and create only fixtures they remove again.
+                  'verify-vocverbs.ps1',
+                  'verify-acctmsgs.ps1',
+                  'test-vocverbs-units.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
