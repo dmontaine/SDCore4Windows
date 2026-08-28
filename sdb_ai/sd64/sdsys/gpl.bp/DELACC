@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 27 Aug 26 Windows port - the profile warning splits in two: the directory
+*           left behind (6) and the ProfileList registry entry left behind
+*           (7), which is the one that moves a recreated account's home.
+*           PRE_RELEASE_FIXES.md 32.
 * 21 Aug 26 Windows port - ONE CONFIRMATION, and it names what will actually
 *           go.  Owner's decision: the directory and the Windows account go
 *           together, after a single Y/N, replacing the directory-only prompt
@@ -365,9 +369,23 @@ deffun is_sd_user(username) calling '!is_sd_user'
                   * rather than as a deletion failure, because the account
                   * really is gone and re-running cannot retry the profile -
                   * the name no longer resolves to a SID.
+                  *
+                  * 27 Aug 26 Windows port - TWO CASES NOW, AND THE ONE THAT
+                  *   MATTERS IS 7.  PRE_RELEASE_FIXES.md 32.  6 is the profile
+                  *   DIRECTORY left behind: it costs disk and nothing else.
+                  *   7 is the ProfileList REGISTRY ENTRY left behind, and that
+                  *   silently moves the home directory of any account created
+                  *   with this name afterwards - which is how an account
+                  *   recreated under its old name loses its ssh keys.  They
+                  *   get different warnings because the reader has to do
+                  *   something about one of them and not the other.
                   case stat = 6
                      crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
-                     crt sysmsg(10075,del.user) ;* Warning: the Windows profile for %1 was left behind
+                     crt sysmsg(10075,del.user) ;* Warning: the profile directory for %1 was left behind
+
+                  case stat = 7
+                     crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
+                     crt sysmsg(10116,del.user) ;* Warning: the profile registry entry for %1 was left behind
 
                   case 1
                      crt sysmsg(10029,del.user, stat) ;* Warning unable to delete OS User: %1 error: %2

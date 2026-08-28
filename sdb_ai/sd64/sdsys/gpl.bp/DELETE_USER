@@ -19,6 +19,8 @@
 * START-HISTORY:
 * 14 Aug 26 Windows port - Remove-LocalUser replaces userdel
 * 21 Aug 26 Windows port - and it takes the user PROFILE with it now
+* 27 Aug 26 Windows port - and the ProfileList REGISTRY ENTRY even when
+*           Remove-CimInstance fails.  PRE_RELEASE_FIXES.md 32.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -32,7 +34,8 @@
 *      1 the account could not be removed
 *      2 the name is not a valid OS user name
 *      5 access denied: SD is not running elevated
-*      6 the account went, the PROFILE did not - see below
+*      6 the account went, the profile DIRECTORY did not - see below
+*      7 the account went, the ProfileList REGISTRY ENTRY did not - see below
 *
 *    THE PROFILE GOES TOO, AND THIS REVERSES WHAT THIS COMMENT USED TO SAY.
 *    It said the directory was left alone because "C:\Users\<name> is the
@@ -54,14 +57,45 @@
 *    Remove-CimInstance on Win32_UserProfile takes both halves; Remove-Item
 *    would take the worse one.
 *
+*    27 Aug 26 - AND WHEN Remove-CimInstance FAILS IT TAKES NEITHER, WHICH IS
+*    THE CASE THIS ROUTINE USED TO LEAVE BEHIND.  The catch below exited 6 and
+*    stopped, so a profile whose hive was still loaded - the ordinary state
+*    after a session - kept its registry entry, and the next account of that
+*    name got the suffixed home.  MEASURED 27 Aug 2026, PRE_RELEASE_FIXES.md
+*    32: C:\Users\sdsshb48 AND C:\Users\sdsshb48.GITORLI on the same host, with
+*    53 stale ProfileList entries for accounts Get-LocalUser says do not exist.
+*    THE SYMPTOM WAS NOT A MISSING DIRECTORY: it was ssh public-key
+*    authentication refused, because sshd reads authorized_keys under the
+*    profile Windows assigns and the key was under the other one.
+*
+*    SO THE REGISTRY ENTRY IS NOW REMOVED IN ITS OWN RIGHT, after the CIM call
+*    rather than instead of it.  Remove-CimInstance is still tried first and is
+*    still the right tool - it takes both halves and it does the bookkeeping -
+*    but its failure no longer decides anything.
+*
 *    THE SID IS READ BEFORE THE ACCOUNT IS DELETED, and the order is not
 *    incidental: a profile is keyed by SID, and once the account is gone the
-*    name can no longer be resolved to one.
+*    name can no longer be resolved to one.  THE PROFILE PATH IS READ BEFORE
+*    THE ENTRY IS REMOVED, for the same kind of reason: the entry is the only
+*    place that records where the directory is.
 *
-*    STATUS 6 MEANS THE ACCOUNT WENT AND THE PROFILE DID NOT.  That is not the
-*    same failure as 1 and the caller says so: the account is deleted either
-*    way, so re-running would report "does not exist" and never retry the
-*    profile.  gplbld/clean-test-profiles.ps1 sweeps what is left.
+*    STATUS 6 AND 7 BOTH MEAN THE ACCOUNT WENT AND SOMETHING OF THE PROFILE
+*    DID NOT, and the difference is the whole point of separating them:
+*
+*      6  the DIRECTORY is left.  It costs disk and nothing else - the registry
+*         entry is gone, so an account created with this name later gets its
+*         proper home.
+*      7  the REGISTRY ENTRY is left.  This is the one that silently moves a
+*         recreated account's home directory.
+*
+*    Neither is the same failure as 1 and the caller says so: the account is
+*    deleted either way, so re-running would report "does not exist" and never
+*    retry the profile.  gplbld/clean-test-profiles.ps1 sweeps what is left.
+*
+*    BOTH HALVES ARE MEASURED RATHER THAN INFERRED FROM WHICH CALL THREW.  A
+*    thrown Remove-CimInstance does not tell you what it managed to remove
+*    first, so the script tests for each half after the attempt instead of
+*    concluding from the exception.
 *
 * END-DESCRIPTION
 *
@@ -89,14 +123,37 @@ deffun valid_os_name(name) calling '!valid_os_name'
    * name cannot be resolved to one after the account has gone.
    ps := 'try { $sid = (Get-LocalUser -Name $n -ErrorAction Stop).SID.Value } '
    ps := 'catch { exit 1 }; '
+   * The profile's registry entry, named while the SID is still in hand.
+   ps := '$key = Join-Path '
+   ps := '"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $sid; '
+   * AND ITS DIRECTORY, READ BEFORE ANYTHING IS REMOVED.  That entry is the
+   * only record of where the directory is, and it is about to go.  The value
+   * may be a REG_EXPAND_SZ, so it is expanded rather than trusted as written -
+   * an unexpanded %SystemDrive% would make Test-Path answer false and report a
+   * directory that is still there as gone.
+   ps := '$dir = ""; '
+   ps := 'try { $dir = (Get-ItemProperty -LiteralPath $key -Name ProfileImagePath '
+   ps := '-ErrorAction Stop).ProfileImagePath } catch { }; '
+   ps := 'if ($dir -ne "") { $dir = [Environment]::ExpandEnvironmentVariables($dir) }; '
    ps := 'try { Remove-LocalUser -Name $n -ErrorAction Stop } catch { exit 1 }; '
    * An account that never signed in has no profile, and that is not a
    * failure: Where-Object simply matches nothing and Remove-CimInstance is
    * handed an empty pipeline.  Special profiles are excluded on principle
    * rather than because one could match - a local account's SID never is one.
+   *
+   * 27 Aug 26 - THIS CATCH NO LONGER EXITS, and that one word is the fix.
+   * It used to exit 6 here, which left the registry entry behind with the
+   * directory - see the note above.  The failure is allowed to fall through
+   * so the entry is dealt with in its own right below.
    ps := 'try { Get-CimInstance Win32_UserProfile | '
    ps := 'Where-Object { $_.SID -eq $sid -and -not $_.Special } | '
-   ps := 'Remove-CimInstance -ErrorAction Stop } catch { exit 6 }; '
+   ps := 'Remove-CimInstance -ErrorAction Stop } catch { }; '
+   ps := 'if (Test-Path -LiteralPath $key) { try { Remove-Item -LiteralPath $key '
+   ps := '-Recurse -Force -ErrorAction Stop } catch { } }; '
+   * Test for each half rather than conclude from which call threw: a thrown
+   * Remove-CimInstance does not say what it removed before it threw.
+   ps := 'if (Test-Path -LiteralPath $key) { exit 7 }; '
+   ps := 'if (($dir -ne "") -and (Test-Path -LiteralPath $dir)) { exit 6 }; '
    ps := 'exit 0'
 
    os.execute ps
@@ -111,9 +168,13 @@ deffun valid_os_name(name) calling '!valid_os_name'
       * as a failure would be wrong twice: the account really is gone, and the
       * caller would offer to retry something that can never succeed now,
       * because the name no longer resolves to a SID.
-      case stat = 6
+      *
+      * 27 Aug 26 - AND 7 IS THE SAME SHAPE FOR THE SERIOUS HALF.  Kept as a
+      * separate status rather than folded into 6 because the caller's warning
+      * has to differ: 6 costs disk, 7 moves a recreated account's home.
+      case stat = 6 or stat = 7
          user_deleted = @true
-         set.status 6
+         set.status stat
 
       case 1
          set.status stat

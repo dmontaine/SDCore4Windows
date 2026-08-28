@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+27 Aug 26  DELETE.ACCOUNT NOW CLEARS THE WINDOWS PROFILE RECORD TOO.
+
+           If you deleted an account and then created another one with the
+           SAME NAME, the new account quietly got a DIFFERENT home directory -
+           C:\Users\<name> with a suffix added, rather than C:\Users\<name>.
+           Anything kept in the old home was then not where the account looked
+           for it, and the clearest symptom was ssh: a key that had worked
+           stopped being accepted, with a message that said nothing about why.
+
+           Deleting an account removes the Windows account and its profile.
+           Removing the profile has two halves - the folder, and a record
+           Windows keeps of where that folder is - and when the folder could
+           not be removed, which is normal if anybody had used the account
+           recently, NEITHER half was removed.  The record left behind is what
+           Windows honours the next time an account of that name appears.
+
+           The record is now removed in its own right, so recreating an
+           account under an old name gives it the home directory you would
+           expect.  If either half cannot be removed, DELETE.ACCOUNT says
+           which one, because only one of them matters: a folder left behind
+           costs disk space, and a record left behind moves the next account's
+           home.  The warning for that case names it and says how to clear it.
+
 27 Aug 26  TWO EDITOR AND TERMINAL FIXES.
 
            MICRO NO LONGER REPORTS "Permission denied" WHEN YOU SAVE.  Every

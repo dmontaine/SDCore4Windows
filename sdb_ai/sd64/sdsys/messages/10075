@@ -1,1 +1,1 @@
-Warning: the Windows profile for %1 was left behind
+Warning: the Windows profile directory for %1 was left behind.\n\nIts registry entry was removed, so an account created with this name later\nwill still get its proper home directory.  The directory itself can be\ndeleted by hand once nothing needs what is in it.

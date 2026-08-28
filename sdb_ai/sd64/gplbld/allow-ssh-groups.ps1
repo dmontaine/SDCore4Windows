@@ -1,11 +1,17 @@
 # allow-ssh-groups.ps1 - the second layer of the ssh-only model: decide who may
 # ssh into this machine at all.  PROJECT_STATUS.md 5.6.2.
 #
-#   powershell -File allow-ssh-groups.ps1            write the block and restart sshd
+#   powershell -File allow-ssh-groups.ps1 -Installed write the block and restart sshd
 #   powershell -File allow-ssh-groups.ps1 -Check     print what it would write, touch nothing
 #   powershell -File allow-ssh-groups.ps1 -Remove    take SD's block back out
 #
 # Exit 0 done (or nothing to do), 1 failed, 2 refused - see "WHEN IT REFUSES".
+#
+# 27 Aug 26 - -Installed ADDED TO THE FIRST LINE ABOVE, WHICH HAD BEEN WRONG
+# since the 21 Aug change of what that switch asserts.  The bare form documented
+# here writes nothing: the test at the foot of this file exits 2 without it.
+# -Check and -Remove return before that test and are right as written.
+# PRE_RELEASE_FIXES.md 33.
 #
 # The deny rights in deny-logon.ps1 say where an account may NOT log in.  This
 # says who may ssh.  Two independent controls: an account has to be in an
