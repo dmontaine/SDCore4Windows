@@ -1,0 +1,335 @@
+# verify-doors.ps1 - the UNELEVATED half of the SUSPENDED door test.  It
+# measures the three doors and creates nothing.  PRE_RELEASE 19's last row and
+# PRE_RELEASE 38.
+#
+#   powershell -File verify-doors.ps1 -Prefix sddr1 -Password '<pw>' -Phase Control
+#   powershell -File verify-doors.ps1 -Prefix sddr1 -Password '<pw>' -Phase Refused
+#
+# Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
+# could not be run.  verify-doors-admin.ps1 is the other half and prints these
+# commands with the password filled in.
+#
+# ***IT REFUSES TO RUN ELEVATED, AND THAT IS THE POINT OF THE FILE.***
+# CPROC's logto.authorised puts the suspension test AFTER two privileged
+# bypasses (CPROC:3729 elevated, CPROC:3755 elevation just obtained) - a
+# recorded judgement call at CPROC:3765, not an oversight.  An elevated session
+# therefore ENTERS a suspended account, correctly.  verify-tiers.ps1 section 6
+# says so in its own output and declines to test the door for exactly this
+# reason; this file is the session that can.
+#
+# ***THE THREE DOORS, AND WHAT EACH ONE'S REFUSAL ACTUALLY LOOKS LIKE.***
+#
+#   LOGIN   LOGIN:477 -> 10107.  ssh AUTHENTICATES FINE - suspension moves no
+#           Windows group, so sdssh still admits the account and sshd's
+#           ForceCommand still starts SD.  It is SD that says no, so the
+#           evidence is 10107 IN THE SESSION OUTPUT, not an ssh failure.  A run
+#           where ssh itself failed would be measuring the wrong thing.
+#   logto   CPROC:3776 -> 10107, from this unelevated session.
+#   API     APISRVR:507 -> 10003, and ***10003 IS DELIBERATELY WHAT "no such
+#           account" AND "not granted" ALSO ANSWER***, so no wording can
+#           identify it.  Only the CONTROLLED PAIR can: the same account, the
+#           same password, the same call, admitted in the Control phase and
+#           refused in the Refused phase.  The one variable between the two runs
+#           is the suspension.  This file says that out loud rather than
+#           pretending the refusal identifies itself.
+#
+# ***WHICH IS WHY THE Control PHASE IS NOT A FORMALITY.***  If a door refuses
+# before the suspension, its refusal afterwards proves nothing at all - and the
+# likeliest causes are mundane: a wrong password, or the caller not being in the
+# account's group.  A failed Control phase is a stop, not a curiosity.
+#
+# IT CHANGES NOTHING.  No account, no group, no sd.conf, no service.  The only
+# side effect is a profile directory Windows creates when the account signs in
+# over ssh for the first time, which the admin half's Remove phase reports.
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)] [string] $Prefix,
+    [Parameter(Mandatory = $true)] [string] $Password,
+    [Parameter(Mandatory = $true)] [ValidateSet('Control', 'Refused')] [string] $Phase,
+    [int]    $Port      = 4243,
+    [string] $SdConnect = 'C:\Users\dmont\Projects\sdclilib32\sd-connect.exe'
+)
+
+$ErrorActionPreference = 'Stop'
+
+$sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
+$accts  = Join-Path $env:ProgramData  'SD\sdsys\accounts'
+$acct   = $Prefix + 'a'
+$acctU  = $acct.ToUpper()
+$workdir = Join-Path $env:TEMP 'sd-doors-probe'
+$askpass = Join-Path $workdir 'askpass.cmd'
+
+$results = New-Object System.Collections.ArrayList
+$fatal   = $false
+
+function Note($step, $expected, $got, $decisive) {
+    $pass = ($expected -eq $got)
+    $null = $results.Add([pscustomobject]@{
+        Check    = $step
+        Expected = $expected
+        Observed = $got
+        Result   = $(if ($pass) { 'PASS' } else { 'FAIL' })
+        Decisive = $(if ($decisive) { 'yes' } else { 'no' })
+    })
+    if ($decisive -and -not $pass) { $script:fatal = $true }
+    Write-Output ("  [{0}] {1}: expected {2}, got {3}" -f $(if ($pass) { 'PASS' } else { 'FAIL' }), $step, $expected, $got)
+}
+
+function Skip($step, $why) {
+    $null = $results.Add([pscustomobject]@{
+        Check = $step; Expected = 'measured'; Observed = 'NOT MEASURED'
+        Result = 'SKIP'; Decisive = 'no' })
+    Write-Output ("  [SKIP] {0}: {1}" -f $step, $why)
+}
+
+# 24 Aug 26 - THE VERDICT LINE.  Kept BYTE-FOR-BYTE IDENTICAL to the other
+# copies; test-verdict-units.ps1 asserts that across all of them.
+function Write-Verdict($name) {
+    $all      = @($script:results)
+    $decisive = @($all | Where-Object { $_.Decisive -eq 'yes' })
+    $failed   = @($decisive | Where-Object { $_.Result -ne 'PASS' })
+
+    Write-Output ""
+    if ($decisive.Count -eq 0) {
+        Write-Output ("{0}: FAILED - NO DECISIVE CHECK RAN, so this run proves nothing." -f $name)
+        Write-Output ("  {0} row(s) recorded, none of them decisive." -f $all.Count)
+        $script:fatal = $true
+        return
+    }
+    if ($failed.Count -gt 0) {
+        Write-Output ("{0}: FAILED - {1} of {2} decisive checks failed:" -f $name, $failed.Count, $decisive.Count)
+        $failed | ForEach-Object { Write-Output ("    " + $_.Check) }
+        $script:fatal = $true
+        return
+    }
+    Write-Output ("{0}: PASSED - {1} of {1} decisive checks passed, {2} row(s) in all." -f
+                  $name, $decisive.Count, $all.Count)
+}
+
+function Test-Say([string]$text, [string]$pattern) {
+    if ([string]::IsNullOrEmpty($text)) { return $false }
+    return ([regex]::IsMatch($text, $pattern, [Text.RegularExpressions.RegexOptions]::Multiline))
+}
+
+# ------------------------------------------------------------------ Invoke-SD
+#
+# ***NO "LOGTO SDSYS" PREAMBLE, UNLIKE EVERY OTHER VERIFIER.***  That is
+# administrator-only, and this session is deliberately not.  The session starts
+# in the caller's own account and the LOGTO under test is the only one issued.
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
+    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
+    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
+                     -ArgumentList $sdExe, $body
+    if (Wait-Job $job -Timeout $TimeoutSec) {
+        $out = Receive-Job $job
+    } else {
+        Stop-Job $job
+        $out = Receive-Job $job
+        $out += ''
+        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
+        $out += "*** Stop-Process the sdwind PID it names."
+    }
+    Remove-Job $job -Force
+    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+}
+
+# COPIED FROM verify-sshonly.ps1 UNCHANGED.  Start-Process keeps stdout and
+# stderr in separate files and hands back a real exit code: under
+# ErrorActionPreference Stop an ErrorRecord from a native exe is TERMINATING,
+# and ssh writes "Warning: Permanently added ..." to stderr ON SUCCESS.
+# Stdin comes from a file so anything that prompts gets EOF rather than hanging.
+function Invoke-Native {
+    param([string]$Exe, [string[]]$CmdArgs, [string]$StdIn = '')
+    $so = Join-Path $workdir 'native.out'
+    $se = Join-Path $workdir 'native.err'
+    $si = Join-Path $workdir 'native.in'
+    if ($StdIn -eq '') { Set-Content -Path $si -Value $null -Encoding ascii }
+    else { [IO.File]::WriteAllText($si, $StdIn) }
+    $p = Start-Process -FilePath $Exe -ArgumentList $CmdArgs -NoNewWindow -Wait -PassThru `
+             -RedirectStandardOutput $so -RedirectStandardError $se -RedirectStandardInput $si
+    $outTxt = ''
+    $errTxt = ''
+    if (Test-Path $so) { $outTxt = ((Get-Content $so) -join "`n").Trim() }
+    if (Test-Path $se) { $errTxt = ((Get-Content $se) -join "`n").Trim() }
+    return [pscustomobject]@{ ExitCode = $p.ExitCode; Out = $outTxt; Err = $errTxt }
+}
+
+# ------------------------------------------------------------- preconditions
+
+$id = [Security.Principal.WindowsIdentity]::GetCurrent()
+$pr = New-Object Security.Principal.WindowsPrincipal($id)
+if ($pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Output 'verify-doors: this must run UNELEVATED and this session is elevated.'
+    Write-Output '  CPROC:3765 puts the suspension test AFTER the elevated bypass, so an'
+    Write-Output '  elevated session ENTERS a suspended account - correctly.  Measuring the'
+    Write-Output '  logto door from here would report the design working as a fault, which is'
+    Write-Output '  the exact mistake verify-tiers.ps1 section 6 declines to make.'
+    Write-Output '  Run verify-doors-admin.ps1 elevated; run THIS in an ordinary prompt.'
+    exit 2
+}
+
+& (Join-Path $PSScriptRoot 'assert-current.ps1') -Quiet | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Output 'verify-doors: the installed tree does not match source - run a cycle first.'
+    exit 2
+}
+
+if (-not (Test-Path -LiteralPath (Join-Path $accts $acctU))) {
+    Write-Output ("verify-doors: no ACCOUNTS record for {0}." -f $acctU)
+    Write-Output '  Run verify-doors-admin.ps1 -Phase Create, ELEVATED, first.'
+    exit 2
+}
+
+$sshExe = Get-Command ssh.exe -ErrorAction SilentlyContinue
+if ($null -eq $sshExe) {
+    Write-Output 'verify-doors: ssh.exe is not on PATH - the LOGIN door cannot be measured.'
+    exit 2
+}
+if (-not (Test-Path -LiteralPath $workdir)) { New-Item -ItemType Directory -Path $workdir | Out-Null }
+
+$expect = $(if ($Phase -eq 'Control') { 'admitted' } else { 'refused' })
+
+Write-Output ("verify-doors: as {0}, UNELEVATED, -Phase {1}" -f $id.Name, $Phase)
+Write-Output ("  account  {0}" -f $acct)
+Write-Output ("  expecting every door to be {0}" -f $expect.ToUpper())
+Write-Output ("  ssh      {0}" -f $sshExe.Source)
+Write-Output ("  api      {0}  ->  127.0.0.1:{1}" -f $SdConnect, $Port)
+Write-Output ''
+
+# ============================================================ door 1: LOGIN
+
+Write-Output '=== door 1: LOGIN (ssh) - LOGIN:477 -> 10107 =============================='
+
+# ***SUSPENSION MOVES NO WINDOWS GROUP***, so ssh authenticates in BOTH phases
+# and sshd's ForceCommand starts SD in both.  The difference is what SD says.
+$sshCommon = @('-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=NUL',
+               '-o', 'ConnectTimeout=20', '-o', 'LogLevel=ERROR')
+$env:SDPROBEPW = $Password
+Set-Content -Path $askpass -Encoding ascii -Value @('@echo off', 'echo %SDPROBEPW%')
+$env:SSH_ASKPASS = $askpass
+$env:SSH_ASKPASS_REQUIRE = 'force'
+$env:DISPLAY = 'localhost:0'
+try {
+    $r = Invoke-Native $sshExe.Source ($sshCommon + @(
+             '-o', 'PreferredAuthentications=password',
+             '-o', 'NumberOfPasswordPrompts=1',
+             ($acct + '@localhost'), 'whoami')) -StdIn "OFF`n"
+} finally {
+    Remove-Item Env:\SSH_ASKPASS, Env:\SSH_ASKPASS_REQUIRE, Env:\DISPLAY, Env:\SDPROBEPW -ErrorAction SilentlyContinue
+    Remove-Item $askpass -ErrorAction SilentlyContinue
+}
+$sshText = ($r.Out + "`n" + $r.Err)
+Write-Output ("  ssh exit {0}" -f $r.ExitCode)
+Write-Output '  --- ssh said: ---'
+foreach ($line in ($sshText -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
+Write-Output ''
+
+$sshSuspended = Test-Say $sshText 'is suspended'
+
+if ($Phase -eq 'Control') {
+    # ADMITTED means SD came up: either whoami answered, or SD's banner did.
+    $ok = ($r.ExitCode -eq 0) -or (Test-Say $sshText 'SD Core for Windows') -or
+          (Test-Say $sshText ([regex]::Escape($acct)))
+    Note 'ssh: the account is admitted before suspension' $true $ok $true
+    Note 'ssh: SD did NOT say "is suspended"' $false $sshSuspended $true
+} else {
+    # ***THE ANCHOR IS SD'S WORDING, NOT AN ssh FAILURE.***  ssh failing would
+    # mean the account had lost a Windows group, which is a different defect
+    # and would score a false pass on "refused".
+    Note 'ssh: SD refused it with 10107 "is suspended"' $true $sshSuspended $true
+}
+
+# ============================================================ door 2: logto
+
+Write-Output '=== door 2: logto - CPROC:3776 -> 10107 ==================================='
+
+$out = Invoke-SD @(('LOGTO ' + $acctU), 'WHO')
+Write-Output '  --- SD said: ---'
+foreach ($line in ($out -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
+Write-Output ''
+
+$logtoSuspended = Test-Say $out 'is suspended'
+# WHO answers with the account the session is standing in, so it is the
+# positive evidence that the LOGTO landed rather than being refused quietly.
+$logtoEntered   = Test-Say $out ([regex]::Escape($acctU))
+
+if ($Phase -eq 'Control') {
+    Note 'logto: entered the account before suspension' $true $logtoEntered $true
+    Note 'logto: SD did NOT say "is suspended"' $false $logtoSuspended $true
+    # THE OTHER REFUSAL THIS COULD BE.  If the caller is not in the account's
+    # group, logto is refused for a reason that has nothing to do with the
+    # suspension - and would be refused in the second phase too.
+    Note 'logto: it was NOT refused for group membership' $false `
+         (Test-Say $out 'not allowed in requested account') $true
+} else {
+    Note 'logto: refused with 10107 "is suspended"' $true $logtoSuspended $true
+    Note 'logto: it was NOT the group-membership refusal instead' $false `
+         (Test-Say $out 'not allowed in requested account') $true
+}
+
+# ============================================================== door 3: API
+
+Write-Output '=== door 3: the API - APISRVR:507 -> 10003 ================================'
+
+$tcp = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue -InformationLevel Quiet
+if (-not (Test-Path -LiteralPath $SdConnect)) {
+    Skip 'API door' ("sd-connect.exe not found at " + $SdConnect)
+} elseif (-not $tcp) {
+    Skip 'API door' ("nothing is listening on 127.0.0.1:" + $Port + " - APIPORT is off")
+} else {
+    # sd-connect exits 0 for a connect, 1 for a refusal, 2 for bad usage.  ***2
+    # IS A BROKEN CALL AND MUST NEVER BE READ AS A REFUSAL*** - that is
+    # verify-tierapi.ps1's rule and the same trap applies here, where a refusal
+    # is what the Refused phase is hoping to see.
+    $o  = & $SdConnect '127.0.0.1' "$Port" $acct $Password $acctU 2>&1
+    $rc = $LASTEXITCODE
+    Write-Output ("  sd-connect exit {0}" -f $rc)
+    foreach ($line in (($o -join "`n") -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
+    Write-Output ''
+
+    if ($rc -eq 2) {
+        Skip 'API door' 'sd-connect rejected its arguments - a bug in this call, not a refusal'
+    } elseif ($Phase -eq 'Control') {
+        Note 'API: connected before suspension' 0 $rc $true
+    } else {
+        Note 'API: refused after suspension' 1 $rc $true
+        Write-Output '  NOTE: APISRVR:507 answers 10003, which is ALSO what "no such account"'
+        Write-Output '  and "not granted" answer - deliberately.  Nothing in this refusal'
+        Write-Output '  identifies the suspension.  What identifies it is the CONTROL run:'
+        Write-Output '  same account, same password, same call, admitted then refused, with the'
+        Write-Output '  suspension the only thing changed in between.'
+    }
+}
+
+# ---------------------------------------------------------------------- report
+
+Write-Output ''
+$results | Format-Table -AutoSize -Wrap | Out-String | Write-Output
+
+$skipped = @($results | Where-Object { $_.Result -eq 'SKIP' })
+if ($skipped.Count -gt 0) {
+    Write-Output ("{0} row(s) were NOT MEASURED and are not counted as passes:" -f $skipped.Count)
+    $skipped | ForEach-Object { Write-Output ('    ' + $_.Check) }
+}
+
+if ($Phase -eq 'Control') {
+    Write-Output ''
+    if ($fatal) {
+        Write-Output '  *** STOP.  A door refused BEFORE the suspension, so its refusal after'
+        Write-Output '  one would prove nothing.  The likeliest causes are mundane: the wrong'
+        Write-Output '  password, or the caller not in the account group.  Fix that first.'
+    } else {
+        Write-Output '  NEXT - ELEVATED:'
+        Write-Output ('    ' + (Join-Path $PSScriptRoot 'verify-doors-admin.ps1') + ' -Prefix ' + $Prefix + ' -Phase Suspend')
+    }
+} else {
+    Write-Output ''
+    Write-Output '  NEXT - ELEVATED, to take the fixture away:'
+    Write-Output ('    ' + (Join-Path $PSScriptRoot 'verify-doors-admin.ps1') + ' -Prefix ' + $Prefix + ' -Phase Remove')
+}
+
+Write-Verdict 'verify-doors'
+
+if ($fatal) { exit 1 }
+exit 0

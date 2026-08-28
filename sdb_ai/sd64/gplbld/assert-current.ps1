@@ -700,7 +700,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 28 Aug 26 - verify-tierchange.ps1, PROJECT_STATUS item 5.5
                   # and the three rows of PRE_RELEASE 19 that verify-tiers
                   # section 6 does not cover.  Same rule, same commit.
-                  'verify-tierchange.ps1')
+                  'verify-tierchange.ps1',
+                  # 28 Aug 26 - verify-doors.ps1 and verify-doors-admin.ps1, the
+                  # SUSPENDED door pair: PRE_RELEASE 19's last row and 38.  Same
+                  # rule, same commit.  They are a PAIR because the two halves
+                  # need opposite tokens - the fixture is elevated, the logto
+                  # measurement must not be.
+                  'verify-doors.ps1',
+                  'verify-doors-admin.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {

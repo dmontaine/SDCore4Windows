@@ -21,7 +21,8 @@ $gplbld  = $PSScriptRoot
 # IDENTICAL" comment as the other three, and a copy that claims that without
 # anything checking it is a comment that rots on the first edit.
 $targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1', 'verify-cmdaudit.ps1',
-             'verify-vocverbs.ps1', 'verify-acctmsgs.ps1', 'verify-tierchange.ps1')
+             'verify-vocverbs.ps1', 'verify-acctmsgs.ps1', 'verify-tierchange.ps1',
+             'verify-doors.ps1', 'verify-doors-admin.ps1')
 
 # Collected so the two copies can be compared to each other, not just tested
 # apart.  See the identical-copies assertion at the end.
