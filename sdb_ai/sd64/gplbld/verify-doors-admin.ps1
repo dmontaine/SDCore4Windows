@@ -311,6 +311,41 @@ if ($Phase -eq 'Create') {
     Note 'ACC$TIER is PROGRAMMER' 'PROGRAMMER' (Get-AccountTier $acct) $true
     Note 'the Windows account exists' $true (Test-WinUser $acct) $true
 
+    # ***THE API DOOR NEEDS AN SD PASSWORD AND CREATE.ACCOUNT DOES NOT SET ONE.***
+    # Measured 28 Aug 2026, the FIRST run of this pair: the CONTROL leg admitted
+    # ssh and logto and sd-connect answered "Invalid username or password", with
+    # sddr1a already in sdapi, sdssh and sdusers - so APISRVR:1362's group door
+    # was open and the refusal was a credential, not a route.  The two doors
+    # authenticate against DIFFERENT stores: CREATE.ACCOUNT prompts for the
+    # WINDOWS password, which is what sshd checks, while the API does SCRAM
+    # against a PBKDF2 verifier in sdsys\$cred that ONLY MODIFY.PASSWORD writes.
+    # verify-apiidentity.ps1:446 has always done this and is why it could reach
+    # the API at all; this file was written without it and could never have
+    # passed its own Control leg.  The product side is PRE_RELEASE 42.
+    #
+    # ONE STRING FOR BOTH so the measuring half keeps a single -Password.  They
+    # remain separate credentials - this sets them to the same value, it does
+    # not merge them.
+    Show-SD 'set the SD password the API authenticates against' @(
+        ('MODIFY.PASSWORD ' + $acctU), $pw, $pw) @($pw)
+    # ANCHOR ON THE SUCCESS WORDING, CASE-SENSITIVELY.  SET_ACC_PASSWORD:252
+    # prints "Password set for account X"; :153 prints "has no password set" on
+    # a path that has NOT set one, so a match on "Password set" alone would be
+    # the false positive this project keeps paying for.
+    Note 'MODIFY.PASSWORD set the SD password' $true `
+         (Test-Say $lastSD 'Password set for account') $true
+    # THE DISQUALIFIERS, from the same file: :167/:226/:241 "Password not
+    # changed.", :238 "Passwords do not match.", :255 "Unable to set password".
+    Note 'MODIFY.PASSWORD was not refused' $false `
+         (Test-Say $lastSD 'Password not changed|Passwords do not match|Unable to set password') $true
+    if (-not (Test-Say $lastSD 'Password set for account')) {
+        Write-Output '  The account exists but has no SD password, so the API door can never be'
+        Write-Output '  ADMITTED in the Control leg and the pair would measure nothing.  Take the'
+        Write-Output '  fixture away with -Phase Remove before trying again.'
+        Write-Verdict 'verify-doors-admin'
+        exit 2
+    }
+
     Show-SD 'permit the caller into it' @(('MODIFY.ACCOUNT ' + $acctU + ' ADD ' + $me)) @()
     Note ('10018: ' + $me + ' added to the group') $true `
          (Test-Say $lastSD ([regex]::Escape($me) + ' added to group')) $true
