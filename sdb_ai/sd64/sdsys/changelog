@@ -5,6 +5,33 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+28 Aug 26  CREATE.ACCOUNT NOW SETS THE PASSWORD FOR THE API AS WELL AS ssh.
+
+           The password you are asked for when an account is created is used
+           for both ways in.  Before, it was set only as the Windows password,
+           which is what ssh checks; SD keeps its own credential for the API,
+           and nothing wrote one until MODIFY.PASSWORD was run.  So a new
+           account created with BOTH was told
+
+               SD routes for <name>: ssh and the API.
+
+           and the API then refused it, with a message that could not say why:
+           the same refusal covers "no such account" and "you were not granted
+           this account", deliberately, so the API does not tell an outsider
+           which accounts exist.
+
+           If you have an account that the API refuses and ssh admits, run
+
+               modify.password <name>
+
+           as an administrator and it will work.  Accounts created from now on
+           need nothing.
+
+           The two are still separate credentials, and MODIFY.PASSWORD still
+           changes SD's without touching the Windows one.  Creation simply
+           gives them the same value, which is what typing "the password for
+           this account" is meant to mean.
+
 28 Aug 26  ENCRYPT.FIELD IS NO LONGER IN AN ADMINISTRATOR'S VOC.
 
            The verb was in every administrator account and could not work:

@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - the creation prompt now sets SD's own credential as
+*   well as the Windows one, in !set_passwd, so 10078's "ssh and the API" is
+*   true of a new account.  New status 6 and message 10122.  Owner's ruling,
+*   PRE_RELEASE_FIXES.md 42.
 * 28 Aug 26 Windows port - a failed set_passwd() now says WHICH failure it was,
 *   from the status !set_passwd already set.  New messages 10118-10121.
 *   PRE_RELEASE_FIXES.md 22.
@@ -524,6 +528,14 @@ PW.TRY.AGAIN:
                     crt sysmsg(10119, acc.uname) ;* Windows refused that password
                  case pw.stat = 5
                     crt sysmsg(10120) ;* Not elevated - retrying will not help
+* 28 Aug 26 Windows port - status 6 is the HALF-SET case, and it is new because
+*   the same prompt now sets both credentials.  Windows took the password and
+*   $cred did not, which is the one failure that leaves an account ssh will
+*   admit and the API will refuse - exactly the state PRE_RELEASE 42 was about.
+*   The retry is left offered: unlike 5, a $cred write can fail transiently,
+*   and answering N unwinds the whole account as it does for every other arm.
+                 case pw.stat = 6
+                    crt sysmsg(10122, acc.uname) ;* Windows set, $cred not
                  case 1
                     crt sysmsg(10121, pw.stat) ;* Could not be set (status %1)
               end case

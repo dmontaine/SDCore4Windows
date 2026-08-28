@@ -18,6 +18,10 @@
 * 
 *
 * START-HISTORY:
+* 28 Aug 26 Windows port - the same prompt now also writes SD's own credential
+*           through !CRED_SET, so an account is usable over the API as well as
+*           ssh the moment it is created.  New status 6.  Owner's ruling on
+*           PRE_RELEASE_FIXES.md 42
 * 14 Aug 26 Windows port - prompt inside SD and set the password through
 *           Set-LocalUser, replacing the interactive passwd(1)
 * rev 0.9.0 Jan 25 mab initial commit
@@ -56,6 +60,8 @@
 *   2 the name is not a valid OS user name
 *   3 no password entered, or the two did not match
 *   5 access denied: SD is not running elevated
+*   6 the Windows password was set, but SD's own credential could not be
+*     written - the account would be reachable over ssh and refused by the API
 *
 * END-DESCRIPTION
 *
@@ -122,7 +128,42 @@ end
    ps := @fm : 'exit 0'
 
    stat = ps_script(ps)
-   pw1 = '' ; pw2 = '' ; safe.pw = '' ; ps = ''
+   safe.pw = '' ; ps = ''
+
+* 28 Aug 26 Windows port - SET SD'S OWN CREDENTIAL FROM THE SAME PROMPT.
+*   Owner's ruling, 28 Aug 2026, on PRE_RELEASE_FIXES.md 42.  Setting the
+*   Windows password left $cred empty, so CREATE.ACCOUNT printed 10078 - "SD
+*   routes for %1: ssh and the API" - over an account the API could not
+*   authenticate.  sshd checks the WINDOWS password; the API does SCRAM
+*   against $cred, and only MODIFY.PASSWORD ever wrote one.
+*
+*   MEASURED 28 Aug 2026 on sddr1a, which was in sdapi, sdssh AND sdusers -
+*   route granted, credential absent - and the refusal names nothing, because
+*   APISRVR:507 answers 10003 for "no such account" and "not granted" too.
+*   The account had to be repaired with MODIFY.PASSWORD before the API door
+*   could be measured at all.
+*
+*   THIS FILE'S CALLER ALREADY BELIEVED IT.  CREATEA:537 says an account whose
+*   user has no password has "no $cred, which under the SCRAM login is an
+*   account nothing can ever connect to" - true of the intent, false of the
+*   code, until now.
+*
+*   ONE PROMPT SETS BOTH.  They remain separate credentials in separate stores;
+*   this gives them the same value, which is what an administrator typing "the
+*   password for this account" means.  MODIFY.PASSWORD still changes the SD one
+*   on its own, and is still the only way to make them differ.
+*
+*   ORDER MATTERS: Windows first, then $cred.  A $cred written for an account
+*   whose Windows user was refused would be a credential for a login that
+*   cannot happen.  pw1 is therefore cleared BELOW this block rather than with
+*   safe.pw above it.
+   if stat = 0 then
+      cred.ok = @false
+      call !CRED_SET(username, pw1, cred.ok)
+      if not(cred.ok) then stat = 6
+   end
+
+   pw1 = '' ; pw2 = ''
 
 if stat = 0 then
   pass_set = @TRUE 

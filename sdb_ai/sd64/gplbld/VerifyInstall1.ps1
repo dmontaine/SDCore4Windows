@@ -337,6 +337,47 @@ $steps = @(
     @{ Name = 'verify-batchjob.ps1';     P = @{} }
 )
 
+# 28 Aug 26 - THE SUSPENDED DOOR PAIR, AS ONE STEP.  PRE_RELEASE 38, on the
+# owner's ruling of 28 Aug 2026.  It is LAST, and it is CONDITIONAL on -Run.
+#
+# WHY IT IS IN THIS RUNNER AND NOT THE ELEVATED ONE.  Its five phases need
+# ALTERNATING tokens - Create elevated, Control ordinary, Suspend elevated,
+# Refused ordinary, Remove elevated - and an elevated parent cannot make an
+# ordinary child (line 70 above: runas /trustlevel gives a RESTRICTED token,
+# not this user's normal one).  So the ordinary half has to be the PARENT, and
+# that is this file.  verify-doors-suite.ps1 raises the three elevated children.
+#
+# LAST, because it is the only step here that creates a Windows account, and
+# every step before it should see the tree the cycle left rather than one this
+# runner has churned - the same reason this runner precedes VerifyInstall2.
+#
+# ***CONDITIONAL, AND THE REASON IS NOT TIDINESS.***  The prefix becomes an
+# account name, and it is SINGLE-USE: the Control leg signs in over ssh, which
+# leaves a profile directory DELETE.ACCOUNT cannot remove while its hive is
+# mounted (PRE_RELEASE 35/36), and Windows gives a rebuilt account a SUFFIXED
+# home instead.  Without -Run there is no token to derive a fresh name from,
+# and calling a Mandatory -Prefix with nothing would PROMPT - which inside a
+# runner is a hang, not an error.  That trap cost a run on 28 Aug 2026.
+#
+# IT ADDS THREE UAC PROMPTS to this runner's five.
+if ($Run) {
+    # 28 Aug 26 - BUILT AND COUNTED, not appended with a bare +.  A hashtable
+    # on the right of + is folded into the array as one element only if it is
+    # wrapped first; the count is asserted below rather than assumed.
+    $doorStep = @{ Name = 'verify-doors-suite.ps1'; P = @{ Prefix = "sddr$Run" } }
+    $before = @($steps).Count
+    $steps  = @($steps) + @($doorStep)
+    if (@($steps).Count -ne ($before + 1)) {
+        Write-Output ("VerifyInstall1: the step list is {0} after adding one to {1}." -f
+                      @($steps).Count, $before)
+        exit 2
+    }
+} else {
+    Write-Output 'VerifyInstall1: no -Run, so the SUSPENDED door pair is NOT in this run.'
+    Write-Output '  It creates a Windows account and its prefix is single-use, so it needs a'
+    Write-Output '  token to derive a fresh name from.  Add -Run <token> to include it.'
+}
+
 $lines  = @()
 $failed = 0
 foreach ($s in $steps) {

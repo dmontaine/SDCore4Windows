@@ -49,6 +49,14 @@
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
     [Parameter(Mandatory = $true)] [ValidateSet('Create', 'Suspend', 'Remove')] [string] $Phase,
+
+    # -Phase Create only.  Empty means "generate one", which is the hand-run
+    # path: the phase prints it and the person carries it to the unelevated
+    # legs.  verify-doors-suite.ps1 supplies one instead, because it is the
+    # UNELEVATED parent and cannot read this elevated child's stdout without
+    # writing it to a file.  Checked against the askpass mechanism either way.
+    [string] $Password = '',
+
     [int] $Port = 4243
 )
 
@@ -266,9 +274,25 @@ if ($Phase -eq 'Create') {
     # is ever wrong.  The '-Aa9' suffix guarantees the character classes a
     # complexity policy asks for, whatever the random draw gives.
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
-    $bytes = New-Object byte[] 20
-    ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
-    $pw = (-join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })) + '-Aa9'
+    if ($Password -ne '') {
+        # 28 Aug 2026 - THE ORCHESTRATOR SUPPLIES IT so nothing has to be parsed
+        # back out of an elevated child's stdout.  verify-doors-suite.ps1 runs
+        # this phase as an elevated child and then needs the same password in
+        # the UNELEVATED parent for the Control and Refused legs; scraping it
+        # from the child's output would mean redirecting that output to a file,
+        # which is the one copy nobody deletes.  Passing it IN keeps the value
+        # in the parent, where it was made.
+        #
+        # THE ALPHABET CHECK BELOW STILL RUNS ON IT.  A supplied password is
+        # checked against the askpass mechanism exactly as a generated one is -
+        # it is the caller's alphabet that would be wrong, and the whole point
+        # of that check is that it measures rather than trusts.
+        $pw = $Password
+    } else {
+        $bytes = New-Object byte[] 20
+        ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
+        $pw = (-join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })) + '-Aa9'
+    }
 
     # ***AND THE ALPHABET IS CHECKED RATHER THAN TRUSTED, BEFORE ANYTHING IS
     # CREATED.***  The comment above explains why the safe alphabet is used; this
@@ -355,17 +379,30 @@ if ($Phase -eq 'Create') {
     Write-Output ''
     Write-Output '==========================================================================='
     Write-Output ('  ACCOUNT : ' + $acct)
-    Write-Output ('  PASSWORD: ' + $pw)
-    Write-Output '  It is a throwaway on an account -Phase Remove deletes.  It is printed'
-    Write-Output '  here and written nowhere: the measuring half needs it for the ssh and'
-    Write-Output '  API doors, and putting it in a file would be the one copy nobody deletes.'
-    Write-Output ''
-    Write-Output '  NEXT - in an ORDINARY, UNELEVATED PowerShell:'
-    Write-Output ''
-    Write-Output ('    ' + $measure + ' -Prefix ' + $Prefix + " -Password '" + $pw + "' -Phase Control")
-    Write-Output ''
-    Write-Output '  It must report all three doors ADMITTED.  If any is refused, stop - the'
-    Write-Output '  refusals after the suspension would prove nothing.'
+    if ($Password -ne '') {
+        # ***THE PASSWORD IS NOT PRINTED WHEN IT WAS SUPPLIED, AND THAT IS THE
+        # POINT OF THE BRANCH.***  verify-doors-suite.ps1 runs this phase as an
+        # elevated child and CAPTURES its output to a transcript so the run can
+        # be read afterwards - and a transcript is a file.  Printing the
+        # password here would put it on disk, which is exactly what the
+        # hand-run path below refuses to do.  The caller already has it.
+        Write-Output '  PASSWORD: supplied by the caller - not printed, because a caller that'
+        Write-Output '            passes one is capturing this output to a transcript.'
+        Write-Output ''
+        Write-Output '  The orchestrator drives the remaining phases; no command is printed.'
+    } else {
+        Write-Output ('  PASSWORD: ' + $pw)
+        Write-Output '  It is a throwaway on an account -Phase Remove deletes.  It is printed'
+        Write-Output '  here and written nowhere: the measuring half needs it for the ssh and'
+        Write-Output '  API doors, and putting it in a file would be the one copy nobody deletes.'
+        Write-Output ''
+        Write-Output '  NEXT - in an ORDINARY, UNELEVATED PowerShell:'
+        Write-Output ''
+        Write-Output ('    ' + $measure + ' -Prefix ' + $Prefix + " -Password '" + $pw + "' -Phase Control")
+        Write-Output ''
+        Write-Output '  It must report all three doors ADMITTED.  If any is refused, stop - the'
+        Write-Output '  refusals after the suspension would prove nothing.'
+    }
     Write-Output '==========================================================================='
 }
 
