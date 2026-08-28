@@ -18,11 +18,25 @@
 # all.  The script refuses to run elevated for the same reason
 # verify-credacl.ps1 does.
 #
-# IT WILL ASK FOR ELEVATION TWICE, and cannot avoid it.  Writing the record and
-# removing it again need an administrator - that ACL is the entire protection
-# (gplbld/secure-osusers.ps1) - while the measurement must not have one.  The
-# two halves cannot share a token, so the unelevated half drives and elevates
-# for the two writes.  Elevating is easy; de-elevating faithfully is not.
+# IT WILL ASK FOR ELEVATION TWICE - OR THREE TIMES if @LOGNAME starts on the
+# list.  Writing the record and removing it again need an administrator - that
+# ACL is the entire protection (gplbld/secure-osusers.ps1) - while the
+# measurement must not have one.  The two halves cannot share a token, so the
+# unelevated half drives and elevates for the writes.  Elevating is easy;
+# de-elevating faithfully is not.
+#
+# @LOGNAME MAY ALREADY BE ON THE LIST, AND THAT IS NORMAL NOW.  CREATEA and
+# adopt-account write an OS.USERS record ("yes","yes") for every
+# ADMINISTRATOR-tier account as it is created (PRE_RELEASE 2, 27 Aug 2026), and
+# the account the installer adopts - the one the person running this suite holds
+# - is always ADMINISTRATOR.  So the "unlisted" baseline this test needs is not
+# the state of a fresh install.  When it finds @LOGNAME already listed it SAVES
+# the record's bytes, has the elevated half remove it for the baseline (the
+# extra third prompt), runs the whole transition, and RESTORES the saved bytes
+# at the end - so the tree is left exactly as found, automatic record included.
+# The refuse-if-present guard this replaced was written when a pre-existing
+# record could only be a person's manual decision; now it is the installer's,
+# its content is known, and putting it back is safe.
 #
 # WHAT IS DECISIVE IS THE MARKER FILE, NOT THE MESSAGE.  Each SH probe runs a
 # command whose only job is to create a file, and the file is what is scored:
@@ -41,6 +55,7 @@
 #
 # THE CONTROLS, and none of the admits mean anything without them:
 #
+#   (if @LOGNAME starts listed: save its bytes, elevate, remove it)
 #   unelevated, unlisted   SH refused 10053, no marker    <- before
 #   ELEVATED,   unlisted   SH admitted                    <- elevation still
 #                                                            passes on its own
@@ -50,6 +65,7 @@
 #   unelevated, LISTED     SH with a pipe admitted        <- the ban is lifted
 #   unelevated, unlisted   SH refused 10053 again         <- and it was the
 #                                                            record that did it
+#   (if a record was saved: elevate, write the saved bytes back)
 #
 # The last row is what stops a pass being read into an install that admits
 # everybody: the permission has to go away again when the record does.
@@ -62,12 +78,15 @@
 
 [CmdletBinding()]
 param(
-    # Internal.  The two elevated halves re-enter this script through
+    # Internal.  The elevated halves re-enter this script through
     # Start-Process -Verb RunAs; nobody types these.
-    [ValidateSet('', 'Grant', 'GrantOsx', 'Revoke')] [string] $Phase = '',
+    [ValidateSet('', 'Unlist', 'Grant', 'GrantOsx', 'Revoke')] [string] $Phase = '',
     [string] $LogName = '',
     [string] $ResultFile = '',
-    [string] $MarkerDir = ''
+    [string] $MarkerDir = '',
+    # Where the Unlist phase parks @LOGNAME's pre-existing record and the Revoke
+    # phase reads it back from.  Empty when @LOGNAME started unlisted.
+    [string] $SaveFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -164,6 +183,33 @@ if ($Phase -ne '') {
     }
     Say 'RESULT: elevated=yes'
 
+    # SAVE @LOGNAME's AUTOMATIC RECORD AND CLEAR IT FOR THE BASELINE.  Only runs
+    # when step 0 found the account already listed (an ADMINISTRATOR - see the
+    # header).  The bytes are copied verbatim, not reconstructed, so the Revoke
+    # phase can put back exactly what was there - two "yes" fields, a hand-edited
+    # third, whatever.  A missing $SaveFile target dir would strand the record,
+    # so this refuses rather than proceed if the copy did not land.
+    if ($Phase -eq 'Unlist') {
+        if (-not (Test-Path -LiteralPath $record)) {
+            Say 'RESULT: unlisted=already'
+            Write-ResultFile
+            exit 0
+        }
+        Copy-Item -LiteralPath $record -Destination $SaveFile -Force
+        if (-not (Test-Path -LiteralPath $SaveFile)) {
+            Say 'RESULT: unlisted=no'
+            Say 'RESULT: saved=no'
+            Write-ResultFile
+            exit 2
+        }
+        Remove-Item -LiteralPath $record -Force
+        Say ('RESULT: saved=' + $(if (Test-Path -LiteralPath $SaveFile) { 'yes' } else { 'no' }))
+        Say ('RESULT: unlisted=' + $(if (Test-Path -LiteralPath $record) { 'no' } else { 'yes' }))
+        Say "RESULT: savefile=$SaveFile"
+        Write-ResultFile
+        exit 0
+    }
+
     if ($Phase -eq 'Grant') {
         # THE TWO ELEVATED CONTROLS, TAKEN WHILE THE LIST IS STILL EMPTY.  They
         # have to be taken here and now: once the record exists this session is
@@ -212,9 +258,23 @@ if ($Phase -ne '') {
         Say ('RESULT: osxgranted=' + $(if (Test-Path -LiteralPath $record) { 'yes' } else { 'no' }))
     }
 
+    # REMOVE THE TEST RECORD, THEN PUT BACK WHATEVER WAS THERE BEFORE.  If the
+    # Unlist phase saved a record, restoring it IS the end state this test
+    # promises - "the tree is left as it was found".  If nothing was saved the
+    # end state is no record, exactly as before.  revoked= reports the test
+    # record is gone; restored= reports the original is back (or n/a).
     if ($Phase -eq 'Revoke') {
         if (Test-Path -LiteralPath $record) { Remove-Item -LiteralPath $record -Force }
         Say ('RESULT: revoked=' + $(if (Test-Path -LiteralPath $record) { 'no' } else { 'yes' }))
+
+        if ($SaveFile -ne '' -and (Test-Path -LiteralPath $SaveFile)) {
+            Copy-Item -LiteralPath $SaveFile -Destination $record -Force
+            $ok = (Test-Path -LiteralPath $record)
+            Say ('RESULT: restored=' + $(if ($ok) { 'yes' } else { 'no' }))
+            if ($ok) { Remove-Item -LiteralPath $SaveFile -Force }
+        } else {
+            Say 'RESULT: restored=n/a'
+        }
     }
 
     Write-ResultFile
@@ -255,13 +315,19 @@ if ($pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output '  elevated run is admitted by elevation and says nothing about'
     Write-Output '  the list. Run it from an ordinary window, as the account'
     Write-Output '  holder whose shell is in question. It will prompt for the'
-    Write-Output '  elevation it needs, twice.'
+    Write-Output '  elevation it needs - twice, or three times if the account is'
+    Write-Output '  already listed (an administrator always is).'
     try { Stop-Transcript | Out-Null } catch { }
     exit 2
 }
 
 $results = New-Object System.Collections.ArrayList
 $fatal   = $false
+
+# Set by step 0a when @LOGNAME started listed and its record was parked.  Every
+# early exit runs through Stop-Here, which restores it; a '' here means there is
+# nothing to put back.  Declared now so a precondition Stop-Here sees a value.
+$script:saveFile = ''
 
 function Note($step, $expected, $got, $decisive) {
     $pass = ($expected -eq $got)
@@ -280,6 +346,32 @@ function Stop-Here([int]$code, [string]$why) {
     Write-Output "verify-osusers: $why"
     try { Stop-Transcript | Out-Null } catch { }
     exit $code
+}
+
+# PUT @LOGNAME's PARKED RECORD BACK.  A no-op unless step 0a saved one and it is
+# not already back.  Called only from the finally block, which every path after
+# step 0a runs through (Stop-Here's `exit` triggers it - measured, PS 5.1).
+# Idempotent: a second call sees the save file gone and returns.
+function Restore-SavedRecord {
+    if (-not $script:saveFile -or -not (Test-Path -LiteralPath $script:saveFile)) { return }
+    Write-Output ''
+    Write-Output "verify-osusers: restoring $logNameValue's parked OS.USERS record"
+    $rf = Join-Path $logDir ('verify-osusers-restore-' + $stamp + '.txt')
+    Invoke-ElevatedPhase 'Revoke' $rf
+    Read-ElevResults $rf
+    if ($script:elevResults['restored'] -eq 'yes') {
+        Write-Output "  restored - $record is back as it was found"
+        $script:saveFile = ''
+    } else {
+        Write-Output ''
+        Write-Output "verify-osusers: WARNING - could NOT restore $record automatically."
+        Write-Output "  Its bytes are saved at:"
+        Write-Output "      $script:saveFile"
+        Write-Output "  Put them back from an ELEVATED prompt:"
+        Write-Output "      Copy-Item `"$script:saveFile`" `"$record`""
+        Write-Output "  or regenerate it: elevated 'sd', then  modify.account $logNameValue administrator"
+        $script:fatal = $true
+    }
 }
 
 # ---------------------------------------------------------------- preconditions
@@ -441,22 +533,120 @@ $recBefore    = if ($probeText -match 'REC=(\S*)') { $Matches[1] } else { '(no l
 
 Write-Output "  @LOGNAME is $logNameValue"
 Note 'unelevated OPENPATH of OS.USERS succeeds' 'yes' $(if ($openedOk) { 'yes' } else { 'no' }) $true
-Note 'record present before the test'           '(none)' $recBefore $false
+
+# NOT SCORED AS PASS/FAIL.  An empty result is the fresh-standalone case; a
+# present one is the ADMINISTRATOR's automatic entry, handled at 0a.  Either is
+# a legitimate starting point now, so this just records which one it was.
+Write-Output "  record present before the test: $recBefore"
 
 $record = Join-Path $osUsers $logNameValue
 
-# ASKED TWICE, AND THE SECOND ONE IS NOT REDUNDANT.  This script REMOVES the
-# record when it finishes, so a record that was already there would be
-# destroyed - somebody's real shell permission, taken away by a test.  SD
-# answering "(none)" is one witness; if its READ failed for any reason other
-# than absence it would say the same thing.  OS.USERS is (RX) to sdusers, so
-# the filesystem can be asked directly, and it is.
-if ($recBefore -ne '(none)' -or (Test-Path -LiteralPath $record)) {
-    Remove-Probe
-    Stop-Here 2 ("refusing - $logNameValue is ALREADY on the list. This measures the transition, " +
-                 "so it has to start with the name absent - and it would remove $record " +
-                 'when it finished, which is not this test''s to do. Take it off from an ' +
-                 'elevated prompt and run this again.')
+# --------------------------------------------------- the elevated-phase plumbing
+# Defined here, not just before step 3, because step 0a below needs it too.
+#
+# NONE OF THESE RETURNS A VALUE, AND THAT IS DELIBERATE.  A PowerShell function
+# returns EVERYTHING it writes, so a helper that both prints and returns hands
+# its caller an array with the printed lines in front of the answer - $rc would
+# be a string array and "$rc -ne 0" would be a comparison nobody meant.  Both of
+# these print, so both report through a script-scope variable and return nothing.
+$stamp              = Get-Date -Format 'yyyyMMdd-HHmmss'
+$script:elevExit    = -1
+$script:elevResults = @{}
+
+function Invoke-ElevatedPhase([string]$phase, [string]$resultPath) {
+    $script:elevExit = -1
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
+           '-File',       ('"' + $PSCommandPath + '"'),
+           '-Phase',      $phase,
+           '-LogName',    $logNameValue,
+           '-ResultFile', ('"' + $resultPath + '"'),
+           '-MarkerDir',  ('"' + $markerDir + '"'))
+    # Only the Unlist/Revoke phases need it, and only when a record was parked.
+    if ($script:saveFile -ne '') { $a += @('-SaveFile', ('"' + $script:saveFile + '"')) }
+    try {
+        $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $a -Verb RunAs -Wait -PassThru
+        $script:elevExit = $p.ExitCode
+    }
+    catch {
+        # A declined or unavailable UAC prompt.  Over ssh there is no interactive
+        # desktop to draw one on at all - sd-elevate.ps1 says why.
+        Write-Output "verify-osusers: elevation for $phase did not happen: $($_.Exception.Message)"
+    }
+}
+
+function Read-ElevResults([string]$resultPath) {
+    $h = @{}
+    if (-not (Test-Path -LiteralPath $resultPath)) {
+        Write-Output '  (the elevated half wrote no result file)'
+        $script:elevResults = $h
+        return
+    }
+    $text = Get-Content -LiteralPath $resultPath
+    Write-Output '--- from the elevated half ---'
+    $text | ForEach-Object { Write-Output ('  ' + $_) }
+    Write-Output '------------------------------'
+    foreach ($line in $text) {
+        if ($line -match '^RESULT: (\w+)=(.*)$') { $h[$Matches[1]] = $Matches[2] }
+    }
+    $script:elevResults = $h
+}
+
+# ===========================================================================
+# ONE try FROM HERE, closed by the finally after step 5.  It is what guarantees
+# the parked record (step 0a) and the test record (step 3) are cleaned up on
+# EVERY exit, Stop-Here included - `exit` inside a try still runs finally in
+# PS 5.1 (measured).  The body is left unindented: re-indenting ~200 lines to
+# wrap them would be all risk and no behaviour.
+# ===========================================================================
+$granted = $false
+try {
+
+# --------------------------------- 0a. if @LOGNAME starts listed, park the record
+# CREATEA/adopt-account list every ADMINISTRATOR account (PRE_RELEASE 2), and the
+# adopted account is who runs this suite - so "already on the list" is the normal
+# case now, not a person's manual grant.  Save the bytes, have the elevated half
+# remove the record for the baseline, and step 5 writes them back.  Asked of both
+# SD and the filesystem, as before: OS.USERS is (RX) to sdusers.
+$startedListed = ($recBefore -ne '(none)' -or (Test-Path -LiteralPath $record))
+
+if ($startedListed) {
+    Write-Output ''
+    Write-Output '=== 0a. Elevating to park the automatic record for the baseline =========='
+    Write-Output "  $logNameValue is already listed - $record"
+    Write-Output '  That is what CREATEA/adopt-account do for an ADMINISTRATOR account.'
+    Write-Output '  Saving its bytes, removing it for the baseline, restoring it at step 5.'
+
+    $script:saveFile = Join-Path $logDir ('verify-osusers-saved-' + $stamp + '.rec')
+    $unlistFile      = Join-Path $logDir ('verify-osusers-unlist-' + $stamp + '.txt')
+    Invoke-ElevatedPhase 'Unlist' $unlistFile
+    $urc = $script:elevExit
+    Read-ElevResults $unlistFile
+    $ul = $script:elevResults
+
+    if ($urc -ne 0 -or ($ul['unlisted'] -ne 'yes' -and $ul['unlisted'] -ne 'already')) {
+        # Keep saveFile set IF the phase saved the bytes before it failed - the
+        # finally then restores, which is safe whether or not the record went.
+        # Only clear it when there is provably nothing to put back.
+        if (-not (Test-Path -LiteralPath $script:saveFile)) { $script:saveFile = '' }
+        Remove-Probe
+        Stop-Here 2 ("could not park $logNameValue's automatic record for the baseline " +
+                     "(exit $urc). The finally block will put it back if it moved.")
+    }
+    if ($ul['unlisted'] -eq 'already') {
+        # Nothing was there after all - drop the save path so nothing restores.
+        if (Test-Path -LiteralPath $script:saveFile) { Remove-Item -LiteralPath $script:saveFile -Force }
+        $script:saveFile = ''
+    }
+
+    if ($script:saveFile -ne '') {
+        $recheck = Invoke-Probe
+        $recNow  = if ($recheck -match 'REC=(\S*)') { $Matches[1] } else { '(no line)' }
+        Note 'baseline: the automatic record is now gone' '(none)' $recNow $true
+        if ($recNow -ne '(none)') {
+            Remove-Probe
+            Stop-Here 2 "the record is still readable after the Unlist phase - the baseline is not clean."
+        }
+    }
 }
 
 # ------------------------------------------------------ 1. the ACL, decisively
@@ -543,59 +733,12 @@ Note 'unlisted: OS.EXECUTE from a program is refused' 'refused' $osxUnlisted $tr
 
 Write-Output ''
 Write-Output '=== 3. Elevating to put the name on the list =============================='
-Write-Output '  UAC will prompt. The elevated half also takes the two controls that can'
-Write-Output '  only be taken while the list is still empty.'
+Write-Output '  UAC will prompt (the second time, or third if step 0a ran). The elevated'
+Write-Output '  half also takes the two controls that can only be taken while the list'
+Write-Output '  is still empty.'
 
-# NEITHER OF THESE RETURNS A VALUE, AND THAT IS DELIBERATE.  A PowerShell
-# function returns EVERYTHING it writes, so a helper that both prints and
-# returns hands its caller an array with the printed lines in front of the
-# answer - $rc would be a string array and "$rc -ne 0" would be a comparison
-# nobody meant.  Both of these print, so both report through a script-scope
-# variable instead and have no return value at all.
-$script:elevExit    = -1
-$script:elevResults = @{}
-
-function Invoke-ElevatedPhase([string]$phase, [string]$resultPath) {
-    $script:elevExit = -1
-    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
-           '-File',       ('"' + $PSCommandPath + '"'),
-           '-Phase',      $phase,
-           '-LogName',    $logNameValue,
-           '-ResultFile', ('"' + $resultPath + '"'),
-           '-MarkerDir',  ('"' + $markerDir + '"'))
-    try {
-        $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $a -Verb RunAs -Wait -PassThru
-        $script:elevExit = $p.ExitCode
-    }
-    catch {
-        # A declined or unavailable UAC prompt.  Over ssh there is no interactive
-        # desktop to draw one on at all - sd-elevate.ps1 says why.
-        Write-Output "verify-osusers: elevation for $phase did not happen: $($_.Exception.Message)"
-    }
-}
-
-function Read-ElevResults([string]$resultPath) {
-    $h = @{}
-    if (-not (Test-Path -LiteralPath $resultPath)) {
-        Write-Output '  (the elevated half wrote no result file)'
-        $script:elevResults = $h
-        return
-    }
-    $text = Get-Content -LiteralPath $resultPath
-    Write-Output '--- from the elevated half ---'
-    $text | ForEach-Object { Write-Output ('  ' + $_) }
-    Write-Output '------------------------------'
-    foreach ($line in $text) {
-        if ($line -match '^RESULT: (\w+)=(.*)$') { $h[$Matches[1]] = $Matches[2] }
-    }
-    $script:elevResults = $h
-}
-
-$stamp      = Get-Date -Format 'yyyyMMdd-HHmmss'
 $resultFile = Join-Path $logDir ('verify-osusers-grant-' + $stamp + '.txt')
-$granted    = $false
 
-try {
     Invoke-ElevatedPhase 'Grant' $resultFile
     $rc = $script:elevExit
     Read-ElevResults $resultFile
@@ -674,7 +817,8 @@ finally {
     if ($granted) {
         Write-Output ''
         Write-Output '=== 5. Elevating to take the name off again =============================='
-        Write-Output '  UAC will prompt a second time. The tree is left as it was found.'
+        Write-Output '  UAC will prompt again. The tree is left exactly as it was found -'
+        Write-Output '  the test record removed, and any record step 0a parked put back.'
 
         $revokeFile = Join-Path $logDir ('verify-osusers-revoke-' + $stamp + '.txt')
         # ---------------------------------------------------- 4a. the mirror
@@ -702,6 +846,9 @@ finally {
              $(if (Test-Path -LiteralPath $mOsxSh) { 'yes' } else { 'no' }) $true
         Remove-Marker $mOsxSh
 
+        # THE REVOKE PHASE REMOVES THE TEST RECORD AND, IF STEP 0a PARKED ONE,
+        # WRITES THE SAVED BYTES BACK - so on this path the restore happens here,
+        # not through Stop-Here.
         Invoke-ElevatedPhase 'Revoke' $revokeFile
         $rc2 = $script:elevExit
         Read-ElevResults $revokeFile
@@ -709,16 +856,36 @@ finally {
 
         if ($rc2 -ne 0 -or $rev['revoked'] -ne 'yes') {
             Write-Output ''
-            Write-Output 'verify-osusers: WARNING - THE RECORD IS STILL THERE. Remove it from an elevated prompt:'
+            Write-Output 'verify-osusers: WARNING - THE TEST RECORD IS STILL THERE. Remove it from an elevated prompt:'
             Write-Output "    del `"$record`""
             $script:fatal = $true
+        }
+        elseif ($script:saveFile -ne '') {
+            # @LOGNAME started listed: the end state is the SAVED record back,
+            # not an empty list.  The loop closes a different way - the shell
+            # tracked the TEST record's SH field at step 4a (yes->no, refused),
+            # and now the account's own record is readable again.
+            if ($rev['restored'] -eq 'yes') {
+                Note 'the parked record was restored' 'yes' 'yes' $true
+                if (Test-Path -LiteralPath $script:saveFile) { Remove-Item -LiteralPath $script:saveFile -Force }
+                $script:saveFile = ''
+                $probeEnd = Invoke-Probe
+                $recEnd = if ($probeEnd -match 'REC=(\S*)') { $Matches[1] } else { '(no line)' }
+                Note 'SD reads the restored record back' 'yes' $recEnd $false
+            } else {
+                Write-Output ''
+                Write-Output "verify-osusers: WARNING - could NOT restore $record."
+                Write-Output "  Bytes saved at:  $script:saveFile"
+                Write-Output "  Elevated:  Copy-Item `"$script:saveFile`" `"$record`""
+                $script:fatal = $true
+            }
         }
         else {
             Note 'the record was removed again' 'yes' 'yes' $false
 
-            # THE LOOP CLOSES HERE.  Everything above is equally consistent with
-            # an install that admits everybody; what rules that out is the shell
-            # going away again with the record.
+            # THE LOOP CLOSES HERE, when @LOGNAME started unlisted.  Everything
+            # above is equally consistent with an install that admits everybody;
+            # what rules that out is the shell going away again with the record.
             $mEnd = Join-Path $markerDir 'end-plain'
             Remove-Marker $mEnd
             $end = Invoke-SD @((New-ProbeCmd $mEnd $false))
@@ -730,6 +897,10 @@ finally {
             Remove-Marker $mEnd
         }
     }
+
+    # EVERY OTHER PATH INTO finally: Grant never ran (so no test record to
+    # revoke) but step 0a may have parked the account's record.  Put it back.
+    if (-not $granted) { Restore-SavedRecord }
 
     Remove-Probe
 }
