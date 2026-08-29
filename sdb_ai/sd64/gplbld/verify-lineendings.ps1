@@ -1,8 +1,20 @@
 # verify-lineendings.ps1 - PROJECT_STATUS.md section 7 step 16 (a).
 #
-#   powershell -File verify-lineendings.ps1
+#   VerifyInstall1.ps1 -Run <token>           the only supported way to run it
 #
 # Exit 0 all decisive checks passed, 1 a check failed, 2 refused/VOID.
+#
+# ***IT RUNS AS A THROWAWAY NON-ADMINISTRATOR ACCOUNT SINCE 29 Aug 2026 -
+# PRE_RELEASE 59.***  It used to plant its fixtures in don's bp and drive
+# sd.exe down a local pipe.  PRE_RELEASE 56 ended that: an administrator is
+# elevated at LOGIN and lands in SDSYS, so on b59, b60 and b61 the fixtures were
+# planted correctly and the compile happened somewhere else - "Cannot read
+# source record 'ZZLETEST'".  It refused rather than scoring a pass, three runs
+# running, which is the only reason this is a repair and not a retraction.
+#
+# THE ACCOUNT IS PROGRAMMER TIER AND THAT IS NOT INCIDENTAL: sdsys/newvoc/
+# TIER.OMIT.STANDARD withholds 'basic' and 'run' from a standard account, and
+# this compiles a probe.  sdtestuser.ps1 carries the measurement.
 #
 # WHAT IT ASKS.  A directory file exists so that EXTERNAL EDITORS can edit its
 # records.  On Windows those editors write CRLF.  Before this fix, every
@@ -32,15 +44,51 @@
 # the same commit that creates this file (section 7 step 7's rule).
 
 param(
-    [switch]$Keep
+    [switch]$Keep,
+    # PRE_RELEASE 59.  NOT Mandatory, deliberately: inside a runner a Mandatory
+    # parameter with nothing to bind PROMPTS, which is a hang rather than an
+    # error, and that trap cost a run on 28 Aug 2026.  The refusal below is the
+    # guard and it must be reachable.
+    [string]$TestUser = '',
+    [string]$TestPassword = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $Gplbld 'sdtestuser.ps1')
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
-$acct   = 'C:\ProgramData\SD\user_accounts\don'
-$bp     = Join-Path $acct 'bp'
+
+# ***THIS RAN AS THE INVOKING USER UNTIL 29 Aug 2026, AND $acct WAS THE STRING
+# "C:\ProgramData\SD\user_accounts\don".***  PRE_RELEASE 56 ended that: an
+# administrator is elevated at LOGIN and lands in SDSYS, so on b59, b60 and b61
+# it planted its fixtures in don's bp and then compiled in SDSYS - "Cannot read
+# source record 'ZZLETEST'", and it refused rather than scoring a pass.
+#
+# REFUSE WITHOUT THE TEST ACCOUNT, AND BEFORE assert-current.  A missing
+# argument measures nothing, so it needs no current install to report - and
+# putting it first is what lets a unit test drive this branch with no install
+# at all.  Falling back to the invoking user is the one thing that must never
+# happen: it would measure SDSYS while the report named an ordinary account.
+if ($TestUser -eq '' -or $TestPassword -eq '') {
+    Write-Host 'verify-lineendings: refusing - no test account was supplied.'
+    Write-Host ("  -TestUser '{0}', -TestPassword {1}" -f
+                $TestUser, $(if ($TestPassword -eq '') { '(empty)' } else { '(given)' }))
+    Write-Host ''
+    Write-Host '  Since PRE_RELEASE 56 an administrator is elevated at LOGIN and lands in'
+    Write-Host '  SDSYS, so there is no ordinary account for this to run as any more.  It'
+    Write-Host '  needs a real non-administrator one, which VerifyInstall1 makes once for'
+    Write-Host '  the whole unelevated half and passes in.  Run it that way:'
+    Write-Host ''
+    Write-Host '      C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\VerifyInstall1.ps1 -Run <token>'
+    Write-Host ''
+    Write-Host '  ORDINARY, UNELEVATED PowerShell.  The token is single-use.'
+    exit 2
+}
+
+$acctName = $TestUser.ToLower()
+$acct     = Get-SdTestUserHome -Name $acctName
+$bp       = Join-Path $acct 'bp'
 
 $script:checks = @()
 function Note($check, $expected, $got, $decisive = $true) {
@@ -58,12 +106,23 @@ function Step($n, $m) { Write-Host ''; Write-Host "== [$n] $m" }
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - the install does not match source.' }
 if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no sd.exe at $sdExe" }
+
+# CAN THIS PROCESS ACTUALLY WRITE IN THE ACCOUNT.  An account directory grants
+# Modify to SYSTEM, Administrators and its own sdu_ group only, and an
+# unelevated token has none of the three; sdtestuser-admin.ps1 -Action Create
+# adds an ACE for the invoking user.  Every fixture below is planted through
+# the file system, so a grant that did not land must stop the run here rather
+# than surfacing as six unreadable records.
+try { $null = Assert-SdTestUserHomeWritable -Name $acctName }
+catch { Fail $_.Exception.Message }
+
 if (-not (Test-Path -LiteralPath $bp))    { Fail "no account bp directory at $bp" }
 
 Write-Host 'verify-lineendings - section 7 step 16, BOTH halves'
 Write-Host '  (a) the readers accept CRLF and keep a lone CR as data'
 Write-Host '  (b) the writers emit CRLF on everything externally readable'
 Write-Host "  sd.exe : $sdExe"
+Write-Host "  account: $acctName   (a throwaway non-administrator, PRE_RELEASE 59)"
 Write-Host "  bp dir : $bp"
 
 # ---- fixtures -------------------------------------------------------------
@@ -222,19 +281,44 @@ CSV.TEST:
 [System.IO.File]::WriteAllBytes((Join-Path $bp 'ZZLETEST'),
     [Text.Encoding]::ASCII.GetBytes((($prog -split "`r?`n") -join "`n") + "`n"))
 
-$body = "`n" + (@('BASIC BP ZZLETEST', 'RUN BP ZZLETEST', 'OFF') -join "`n") + "`n"
-$job = Start-Job -ScriptBlock { param($e, $t) $t | & $e } -ArgumentList $sdExe, $body
-if (Wait-Job $job -Timeout 120) { $raw = Receive-Job $job } else { Stop-Job $job; $raw = Receive-Job $job; $raw += '*** TIMED OUT' }
-Remove-Job $job -Force
-$esc = [char]27
-$out = (($raw -replace "$esc\[[0-9]*[A-Za-z]", '') | Out-String)
+# ***DRIVEN OVER ssh AS THE TEST ACCOUNT, NOT DOWN A LOCAL PIPE.***  A local
+# pipe runs sd.exe as the INVOKING user, and under PRE_RELEASE 56 that is an
+# administrator elevated at LOGIN into SDSYS - the wrong BP, which is exactly
+# what "Cannot read source record 'ZZLETEST'" was on b59, b60 and b61 while the
+# fixtures sat correctly in the account's own bp.
+#
+# ssh IS THE ROUTE BECAUSE runas CANNOT BE: accounts SD creates are in
+# sdsshonly, which carries SeDenyInteractiveLogonRight (5.6.2), so an
+# interactive logon as one is refused by Windows - the product working.
+# Invoke-SdAsTestUser sends TERM 200,9999 first and appends OFF.
+$r   = Invoke-SdAsTestUser -Name $acctName -Password $TestPassword `
+           -Commands @('BASIC BP ZZLETEST', 'RUN BP ZZLETEST')
+$out = ($r.Out | Out-String)
 
+Write-Host ("   ssh exit {0}, {1} characters of output" -f $r.ExitCode, $out.Length)
+if ($r.Err -ne '') {
+    Write-Host '   --- ssh stderr ---'
+    foreach ($l in ($r.Err -split "`r?`n")) { if ($l.Trim()) { Write-Host "   | $l" } }
+}
 Write-Host '   --- raw output ---'
 foreach ($l in ($out -split "`r?`n")) { if ($l.Trim()) { Write-Host "   | $l" } }
 
 # REFUSE THE NULL CASE: if the program never ran, every -notmatch below would
 # "pass" by absence.  This is the check that stops a dead run scoring green.
 if ($out -notmatch 'REC ZZLECRLF') {
+    # SAY WHICH LAYER, because over ssh the same silence has causes that have
+    # nothing to do with the probe and each needs a different fix.
+    Write-Host ("   ssh exit {0}; the account is {1}" -f $r.ExitCode, $acctName)
+    if ($r.ExitCode -ne 0) {
+        Write-Host '   A NON-ZERO ssh EXIT IS THE SESSION, NOT THE PROBE - check sshd, that the'
+        Write-Host '   account is in sdsshonly and sdssh, and that the password matches.'
+    } elseif ($out -match 'is not in your VOC') {
+        Write-Host '   "not in your VOC" IS THE TIER: TIER.OMIT.STANDARD withholds basic and run,'
+        Write-Host '   so the account must be PROGRAMMER.  Check the CREATE.ACCOUNT line.'
+    } elseif ($out -match 'Cannot read source record') {
+        Write-Host '   THE PROBE WAS NOT WHERE SD LOOKED.  The fixtures are planted through the'
+        Write-Host '   file system, so this points at the account directory rather than at SD.'
+    }
     Remove-Fixtures
     Fail 'the instrument produced no readings - the compile or the RUN failed. Nothing was measured, and that is NOT a pass.'
 }

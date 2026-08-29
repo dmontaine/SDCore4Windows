@@ -277,37 +277,71 @@ foreach ($o in $old) {
 }
 if ($old.Count -gt 0) { Write-Output ('  swept ' + $old.Count + ' fixture(s) left by earlier runs') }
 
-# --------------------------------------------- the verifier's own refusal path
+# --------------------------------------------- the verifiers' own refusal path
 Write-Output ''
-Write-Output '== 8. verify-nocase.ps1 REFUSES with no test account'
-Write-Output '   (the shortcut it must never take is falling back to the invoking user,'
+Write-Output '== 8. every CONVERTED verifier REFUSES with no test account'
+Write-Output '   (the shortcut none of them may take is falling back to the invoking user,'
 Write-Output '    who under PRE_RELEASE 56 is elevated at LOGIN and lands in SDSYS)'
 
-# RUN THE REAL SCRIPT.  It reaches this branch BEFORE assert-current, so it
-# needs no install - which is the whole reason that check was put first.
-$nocase = Join-Path $here 'verify-nocase.ps1'
-if (-not (Test-Path -LiteralPath $nocase)) {
-    Note 'verify-nocase.ps1 is beside this test' $true $false
-} else {
-    $refusal = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $nocase 2>&1 |
-                Out-String)
+# ***DRIVEN AS A TABLE, SO ADDING A VERIFIER ADDS A ROW RATHER THAN A COPY.***
+# The reason is the one PRE_RELEASE 59 keeps making: four near-identical
+# conversions are four chances for one of them to be subtly wrong, and a check
+# written once cannot drift between them.  Each entry names the wording only
+# THAT script's refusal emits, and the readings only a real run would print.
+$refusers = @(
+    @{ File = 'verify-nocase.ps1';      Measured = 'DIRFILE' },
+    @{ File = 'verify-lineendings.ps1'; Measured = 'REC ZZLECRLF' }
+)
+
+foreach ($rf in $refusers) {
+    $path = Join-Path $here $rf.File
+    Write-Output ''
+    Write-Output ('  --- ' + $rf.File + ' ---')
+    if (-not (Test-Path -LiteralPath $path)) {
+        Note ($rf.File + ' is beside this test') $true $false
+        continue
+    }
+    # RUN THE REAL SCRIPT.  Each reaches this branch BEFORE assert-current, so
+    # it needs no install - which is the whole reason that check was put first.
+    $refusal = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $path 2>&1 | Out-String)
     $rc = $LASTEXITCODE
     Write-Output ('  exit ' + $rc + ', ' + $refusal.Length + ' characters')
     foreach ($l in ($refusal -split "`n")) {
         if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) }
     }
-    Note 'verify-nocase with no -TestUser exits 2 (could not run), not 0 or 1' 2 $rc
+    Note ($rf.File + ' with no -TestUser exits 2 (could not run), not 0 or 1') 2 $rc
 
     # ANCHOR ON WORDING ONLY THE REFUSAL EMITS.  "test account" appears in the
     # help text too; "no test account was supplied" is printed on this path and
     # nowhere else.
-    NoteTrue 'it names what is missing, in its own words' `
+    NoteTrue ($rf.File + ': it names what is missing, in its own words') `
              ($refusal -match 'no test account was supplied')
 
-    # AND THE DISQUALIFIERS: it must NOT have gone on to measure anything.
-    NoteTrue 'it did not reach the probe (no DIRFILE/PASSED/FAILED in the output)' `
-             ($refusal -notmatch 'DIRFILE|verify-nocase: PASSED|verify-nocase: FAILED')
+    # AND THE DISQUALIFIER: it must NOT have gone on to measure anything.  The
+    # string is the one that script prints ONLY when its probe really ran.
+    NoteTrue ($rf.File + ': it did not reach the probe (no ' + $rf.Measured + ')') `
+             ($refusal -notmatch [regex]::Escape($rf.Measured))
 }
+
+# ***AND THE TABLE MUST MATCH THE RUNNER'S OWN LIST.***  A verifier converted
+# and not added here would be untested; one added here and not wired into
+# VerifyInstall1 would be skipped at run time.  Both are silent, so the two
+# lists are compared rather than trusted - read out of the runner's source, not
+# restated.
+$vi1 = [IO.File]::ReadAllText((Join-Path $here 'VerifyInstall1.ps1'))
+$declared = @()
+if ($vi1 -match '(?m)^\$needsTestUser\s*=\s*@\(([^)]*)\)') {
+    $declared = @([regex]::Matches($Matches[1], "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+}
+Write-Output ''
+Write-Output ('  VerifyInstall1 $needsTestUser: ' + ($declared -join ', '))
+NoteTrue 'the runner declares at least one verifier (an empty list passes everything)' `
+         ($declared.Count -gt 0)
+$tested = @($refusers | ForEach-Object { $_.File })
+Note 'every verifier the runner passes the account to is refusal-tested here' `
+     '' (@($declared | Where-Object { $tested -notcontains $_ }) -join ',')
+Note 'and nothing is tested here that the runner does not pass it to' `
+     '' (@($tested | Where-Object { $declared -notcontains $_ }) -join ',')
 
 # ------------------------------------------------- strict mode must not leak
 Write-Output ''

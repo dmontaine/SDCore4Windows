@@ -500,15 +500,22 @@ if ($Run) {
     Write-Output '  derive a fresh one from.  Add -Run <token> to include them.'
 }
 
-# THE FIVE STEPS THAT NEED IT, AND ONLY ONE IS CONVERTED SO FAR.  The
-# recommendation this follows is written into PRE_RELEASE 59 and the reason
-# matters more than the order: prove the pattern on the SMALLEST verifier
-# first, because "a broken verifier that PASSES is the worst outcome this file
-# records, and replicating an unproven pattern four times is how that happens".
-# verify-nocase.ps1 is 211 lines.  lcnames, lineendings and batchjob follow
-# once this has been seen to work; verify-osusers.ps1 is 931 lines with 32
-# references to the person's own identity and is deliberately NOT in the group.
-$needsTestUser = @('verify-nocase.ps1')
+# THE FIVE STEPS THAT NEED IT.  The recommendation this followed is written
+# into PRE_RELEASE 59, and the reason mattered more than the order: prove the
+# pattern on the SMALLEST verifier first, because "a broken verifier that
+# PASSES is the worst outcome this file records, and replicating an unproven
+# pattern four times is how that happens".
+#
+# ***verify-nocase WENT GREEN ON b61, SO THE PATTERN IS PROVEN AND THE CAUTION
+# HAS BEEN PAID OFF.***  3 of 3 decisive checks, including the DHFILE=0 control
+# that is the point of that test - the first measurement this project has taken
+# as a real non-administrator.  verify-lineendings.ps1 follows it now.
+#
+# STILL OUT: verify-lcnames.ps1 (1049 lines) and verify-batchjob.ps1 (368,
+# with its own two-prompt elevation dance).  verify-osusers.ps1 is 931 lines
+# with 32 references to the person's own identity in os.users and is
+# deliberately NOT in this group at all.
+$needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1')
 
 # AN ArrayList RATHER THAN "$kept += $s", and the door step above says why in
 # its own words: a hashtable on the right of + is folded into an array as one
