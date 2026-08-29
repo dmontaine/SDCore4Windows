@@ -197,9 +197,17 @@ deffun errtext(err) calling '!errtext'
 * 14 Aug 26 Windows port - restored with the ACC$GROUP test in logto.authorised
 deffun is_grp_member(user,group) calling '!is_grp_member'
 * 16 Aug 26 Windows port - entering SDSYS obtains OS privilege for the session
-* and leaving it gives that privilege up.  This is !elevate's only caller, and
-* there is deliberately no verb: PROJECT_STATUS.md 7 step 4.
+* and leaving it gives that privilege up.  There is deliberately no verb:
+* PROJECT_STATUS.md 7 step 4.
+* 29 Aug 26 Windows port - this said "!elevate's only caller".  LOGIN is the
+* second now, because an administrator is elevated AT LOGIN and lands in
+* SDSYS.  PRE_RELEASE_FIXES 56; ELEVATE's own header carries the reasoning.
 deffun elevate(action,arg) calling '!elevate'
+* 29 Aug 26 Windows port - the tier ordering on grants, PRE_RELEASE_FIXES 57.
+* logto.authorised is the LOAD-BEARING caller: the grant is a Windows group
+* membership, so it can be made outside SD entirely, and a tier can move after
+* a legal grant with nothing revisiting the group.
+deffun tier_allows(user,account) calling '!tier_allows'
 * rev 0.9.0 *
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
@@ -3840,6 +3848,35 @@ logto.authorised:
 
    if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then
       display sysmsg(10003) ;* User not allowed in requested account
+      return
+   end
+
+* 29 Aug 26 Windows port - AND THE GRANT MUST NOT GO UPWARD.  Owner's rule,
+*   29 Aug 2026: "standard accounts can not be given access to programmer
+*   accounts, programmer accounts can be given access to standard accounts."
+*   PRE_RELEASE_FIXES 57.
+*
+*   ***THIS IS THE GATE.  GRANTA'S COPY IS COURTESY AND THIS ONE IS LOAD
+*   BEARING.***  The grant IS Windows group membership, so an administrator
+*   can add somebody to sdu_<name> with "net localgroup" without going near
+*   SD; and MODIFY.ACCOUNT can promote an account long after a legal grant was
+*   made, with nothing revisiting the group afterwards.  Neither of those
+*   reaches a check at grant time.  Both reach this one.
+*
+*   AFTER THE GROUP TEST, NOT BEFORE, so only somebody who was actually
+*   granted learns anything from the refusal.  A caller who was never granted
+*   still gets the undifferentiated 10003 above and cannot use this message to
+*   probe tiers.
+*
+*   THE PRIVILEGED BYPASSES ABOVE ARE UNAFFECTED and must be: an administrator
+*   never reaches here, so "only Windows administrators can enter SDSYS" is
+*   not this test's job - int.logto refuses SDSYS to a non-administrator
+*   before the register is even read.  !tier_allows refuses SDSYS by name as
+*   well, which is belt and braces rather than the mechanism.
+   if not(tier_allows(@logname, new.account)) then
+      display sysmsg(10126, new.account, ~
+                     upcase(trim(acc.record<ACC$TIER>, ' ', 'B')), @logname)
+      void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=tier')
       return
    end
 

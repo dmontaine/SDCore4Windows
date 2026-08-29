@@ -77,6 +77,11 @@
 *   PROJECT_STATUS.md section 8.  Nothing is recorded in ACCOUNTS: the group
 *   membership IS the property.
 * 19 Aug 26 Windows port - SDSYS accounts is lower case on disk.  5.12 (a).
+* 29 Aug 26 Windows port - the ADD arm takes the tier ordering, because it
+*                      makes the identical group change GRANT does and would
+*                      otherwise be the way round the rule.  DELETE is not
+*                      guarded: taking access away is always allowed.
+*                      PRE_RELEASE_FIXES 57
 * rev 0.9.0 Jan 25 mab initial release
 * END-HISTORY
 *
@@ -152,6 +157,10 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun os_group(action,group,member) calling '!os_group'
 deffun is_group(group) calling '!is_group'
 deffun valid_os_name(name) calling '!valid_os_name'
+* 29 Aug 26 Windows port - the tier ordering on grants, PRE_RELEASE_FIXES 57.
+* The ADD arm below makes the same group change GRANT does, so it takes the
+* same refusal; logto.authorised in CPROC is the gate that actually holds.
+deffun tier_allows(user,account) calling '!tier_allows'
 
    prompt ''
 
@@ -353,7 +362,38 @@ deffun valid_os_name(name) calling '!valid_os_name'
          end
          
          if (upcase(action) = 'ADD') then
-            * Add user to group        
+
+* 29 Aug 26 Windows port - THE TIER ORDERING APPLIES HERE TOO, AND LEAVING IT
+*   OUT WOULD HAVE MADE THIS VERB THE WAY ROUND IT.  Owner's rule, 29 Aug
+*   2026, PRE_RELEASE_FIXES 57: a grant may go down or sideways, never up.
+*   This arm makes the identical os_group('ADDMEM', ...) call GRANT makes -
+*   which is exactly why PRE_RELEASE 27 had to give it the same audit record -
+*   so it needs the same refusal for the same reason.  Two verbs that change
+*   who may enter an account must not disagree about who may.
+*
+*   BEFORE THE sdusers AND "already a member" TESTS.  A membership that should
+*   not exist must not be reported as a cheerful "already", which is the one
+*   answer that stops anybody looking at it.
+*
+*   DELETE IS DELIBERATELY NOT GUARDED: taking access away is always allowed,
+*   and refusing a revoke would strand exactly the memberships this rule wants
+*   removed.
+            if not(tier_allows(user.name, acc.name)) then
+               ma.why = status()
+               @system.return.code = -ER$FAILED
+               begin case
+                  case ma.why = 4
+                     stop sysmsg(10126, acc.name, 'SDSYS', user.name)
+                  case ma.why = 2
+                     stop sysmsg(10127, user.name)
+                  case 1
+                     stop sysmsg(10126, acc.name, ~
+                                 upcase(trim(acc.rec<ACC$TIER>, ' ', 'B')), ~
+                                 user.name)
+               end case
+            end
+
+            * Add user to group
             * does user belong to sdusers?
             if is_grp_member(user.name,'sdusers') then
             * this user looks legit, add to group

@@ -78,6 +78,10 @@
 * 17 Aug 26 Windows port - vb.account applies the ACC$GROUP grant check that
 *           LOGTO applies, which step 6a's credential model made meaningful.
 *           Only the group test transfers from logto.authorised; see there.
+* 29 Aug 26 Windows port - and the TIER ordering with it, for the same reason
+*           that check is here at all: this route reaches an account through
+*           neither LOGIN nor logto.authorised, so a rule applied only there
+*           would not bind it.  PRE_RELEASE_FIXES 57
 * END-HISTORY
 *
 *
@@ -152,6 +156,13 @@ deffun valid_os_name(name) calling '!valid_os_name'
 *   EARLIER in the flow but LATER in the file - so leaving the declaration
 *   where it was would compile today and break the moment either routine moved.
 deffun is_grp_member(user,group) calling '!is_grp_member'
+* 29 Aug 26 Windows port - the tier ordering on grants, PRE_RELEASE_FIXES 57.
+* The API is a door of its own and reaches an account through neither LOGIN
+* nor logto.authorised, so the rule has to be applied here too or this verb is
+* the way round it.  !tier_allows is $internal, which is what lets it read
+* @sdsys/accounts from a network session - net_path_permitted's allow-list
+* does not include that file.
+deffun tier_allows(user,account) calling '!tier_allows'
 
 * If this is the first time through, initialise various things in
 * the SYSCOM common block.
@@ -593,6 +604,33 @@ if acc.group = '' then
 end
 
 if not(is_grp_member(kernel(K$USERNAME, 0), acc.group)) then
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   goto revert.to.old.account
+end
+
+* 29 Aug 26 Windows port - AND THE TIER ORDERING, PRE_RELEASE_FIXES 57.  Owner's
+*   rule, 29 Aug 2026: a grant may go down or sideways, never up.
+*
+*   ***THIS IS THE FOURTH DOOR AND IT WOULD HAVE BEEN THE WAY ROUND THE
+*   RULE.***  The same reasoning that put the ACC$GROUP test here on 17 Aug
+*   applies unchanged: an API session reaches an account through neither LOGIN
+*   nor CPROC's logto.authorised, so a rule enforced only there is not enforced
+*   for this route.  A granted standard user could have reached a programmer
+*   account over the API and had its whole verb set.
+*
+*   THE IDENTITY IS kernel(K$USERNAME,0), the same one the group test above
+*   uses, and for the same reason: it is what K$SET.USERNAME wrote after the
+*   SCRAM proof and what audit_message() stamps records with.  A tier check
+*   able to disagree with the grant check about WHO is being tested would be
+*   worse than no check.
+*
+*   IT REUSES sysmsg(10003) LIKE EVERY OTHER REFUSAL IN THIS ROUTINE, which is
+*   the rule here and not laziness - a caller cannot tell "no such account"
+*   from "not granted" from "suspended" from this, so the API does not
+*   enumerate the register's state for an attacker.  CPROC says more because a
+*   local caller has already proved who they are.
+if not(tier_allows(kernel(K$USERNAME, 0), new.account)) then
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account

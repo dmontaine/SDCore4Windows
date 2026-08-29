@@ -1,0 +1,1 @@
+%1 has no SD account, so there is no tier to compare against.\n\nA grant is permitted only when the person's own tier is at least the tier of\nthe account being granted, so somebody with no account of their own cannot be\ngranted access to one.\n\nWindows administrators are the exception and need no grant: they may enter any\naccount already.

@@ -21,6 +21,11 @@
 * 15 Aug 26 Windows port - written.  PROJECT_STATUS.md 7 step 5.
 * 16 Aug 26 Windows port - step 5f: GRANT and REVOKE write the audit record,
 *                      now that step 4 has given them a file to write to
+* 29 Aug 26 Windows port - a grant may go DOWN or SIDEWAYS, never up, and
+*                      SDSYS is never granted.  Owner's rule; the refusal here
+*                      is the courtesy one and logto.authorised is the gate,
+*                      because the grant is a Windows group membership and can
+*                      be made without SD.  PRE_RELEASE_FIXES 57
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -75,6 +80,9 @@ $include err.h
 deffun os_group(action,group,member) calling '!os_group'
 deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun is_user(uname) calling '!is_user'
+* 29 Aug 26 Windows port - the tier ordering, PRE_RELEASE_FIXES 57.  The
+* COURTESY caller; logto.authorised in CPROC is the one that holds.
+deffun tier_allows(user,account) calling '!tier_allows'
 
    prompt ''
 
@@ -189,6 +197,36 @@ get.user:
 do.grant:
    if not(is_user(user)) then
       stop sysmsg(10045, user) ;* There is no Windows account named %1
+   end
+
+* 29 Aug 26 Windows port - A GRANT MAY GO DOWN OR SIDEWAYS, NEVER UP.  Owner's
+*   rule, 29 Aug 2026: "standard accounts can not be given access to programmer
+*   accounts, programmer accounts can be given access to standard accounts.
+*   Only windows administrators can enter SDSYS, rights to SDSYS can not be
+*   granted to programmers or standard accounts."  PRE_RELEASE_FIXES 57.
+*
+*   THIS IS THE COURTESY REFUSAL AND CPROC's IS THE GATE.  Refusing here is
+*   what lets the administrator making the grant find out immediately, instead
+*   of the user discovering it at LOGTO; but it CANNOT be the whole of the
+*   rule, because the grant is a Windows group membership and "net localgroup"
+*   makes one without SD's knowledge.  logto.authorised carries the load.
+*
+*   BEFORE THE "already a member" TEST, deliberately.  A membership that
+*   should not exist - made outside SD, or left behind by a promotion - must
+*   not be reported as a cheerful "already", which is the one answer that
+*   would stop anybody looking at it.
+   if not(tier_allows(user, acc.name)) then
+      tg.why = status()
+      @system.return.code = -ER$FAILED
+      begin case
+         case tg.why = 4
+            stop sysmsg(10126, acc.name, 'SDSYS', user)
+         case tg.why = 2
+            stop sysmsg(10127, user)  ;* %1 has no SD account, so no tier
+         case 1
+            stop sysmsg(10126, acc.name, ~
+                        upcase(trim(acc.rec<ACC$TIER>, ' ', 'B')), user)
+      end case
    end
 
 *  !os_group ADDMEM is idempotent and would report success either way.  Asking

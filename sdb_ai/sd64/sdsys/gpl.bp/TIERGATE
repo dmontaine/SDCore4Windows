@@ -1,0 +1,164 @@
+* TIERGATE
+* May this person be granted entry to this account?  Tier ordering.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 29 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 57.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    ok = !tier_allows(user, account)
+*
+*    status()  0  allowed
+*              1  the ACCOUNT has no usable tier, or is not in the register
+*              2  the USER has no usable tier, or is not in the register
+*              3  refused: the user's tier is below the account's
+*              4  refused: SDSYS is never granted to anybody
+*
+*    OWNER'S RULE, 29 Aug 2026: "standard accounts can not be given access to
+*    programmer accounts, programmer accounts can be given access to standard
+*    accounts.  Only windows administrators can enter SDSYS, rights to SDSYS
+*    can not be granted to programmers or standard accounts."
+*
+*    SO A GRANT MAY GO DOWN OR SIDEWAYS, NEVER UP.  STANDARD 1, PROGRAMMER 2,
+*    ADMINISTRATOR 3, and entry is permitted when the person's rank is at
+*    least the account's.  Equal ranks pass, which is the ordinary case of two
+*    people sharing an account and is not what the rule is aimed at.
+*
+*    ONE PLACE THE DECISION IS MADE, which is why this is a catalogued
+*    function and not a test copied into three programs.  It has three callers
+*    - CPROC's logto.authorised, GRANTA, and MODIFY.ACCOUNT's add/delete - and
+*    LOGIN's own note says why that matters: "one door, one place the decision
+*    is made, instead of two that had drifted apart".
+*
+*    THE REAL GATE IS THE ONE IN CPROC AND THE OTHER TWO ARE COURTESY.  The
+*    grant IS Windows group membership (GRANTA), so an administrator can put
+*    somebody in sdu_<name> with "net localgroup" and never come near SD.  A
+*    check only at grant time would also go stale by itself: MODIFY.ACCOUNT
+*    can promote an account after a legal grant was made, and nothing revisits
+*    a Windows group afterwards.  Refusing at LOGTO is what actually holds.
+*
+*    SUSPENDED IS RESOLVED THROUGH FIELD 6, NOT TREATED AS A TIER OF ITS OWN.
+*    ACC$PRIOR.TIER exists precisely so the displaced tier is not lost, so a
+*    suspended person keeps their rank here and a grant made while they are
+*    suspended is still the right one when the suspension lifts.  Their access
+*    is denied by LOGIN and by logto.authorised, which is where a suspension
+*    belongs; making it a rank as well would refuse grants for a second reason
+*    and leave the administrator re-granting after every unsuspend.
+*
+*    AN UNKNOWN OR EMPTY TIER IS REFUSED, NOT DEFAULTED, and the direction is
+*    deliberate.  It is the rule GRANTA already applies to an empty ACC$GROUP
+*    - "refused rather than guessed" - and the OPPOSITE of NEWVOC's tier
+*    lists, where a missing record means the FULL VOC.  Do not carry that
+*    convention across.
+*
+*    SDSYS IS REFUSED BY NAME AS WELL AS BY TIER, and the belt is worth the
+*    braces.  Its shipped ACCOUNTS record carries THREE fields - path,
+*    description, group - and no ACC$TIER at all, so the rank test below
+*    already refuses it.  But that is an accident of the seed record rather
+*    than a statement of the rule, and the same is true of the other thing
+*    standing in the way: ACC$GROUP is "sdsys", which is not a Windows group,
+*    so is_grp_member can never pass.  Both would evaporate if somebody gave
+*    SDSYS a tier or created a Windows group of that name.  The owner's rule
+*    is absolute, so it is written down as an absolute.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$flags trusted
+
+function tier_allows(user, account)
+$catalog !tier_allows
+
+$include keys.h
+$include int$keys.h
+
+   set.status 0
+
+   acct = upcase(trim(account, ' ', 'B'))
+   who  = upcase(trim(user, ' ', 'B'))
+
+*  SDSYS IS NEVER GRANTED.  Owner's rule; see the description above for why
+*  this is stated rather than left to the two accidents that also stop it.
+   if acct = 'SDSYS' then
+      set.status 4
+      return @false
+   end
+
+   if acct = '' or who = '' then
+      set.status 1
+      return @false
+   end
+
+   openpath @sdsys:@ds:'accounts' to tg.acc.f else
+      set.status 1
+      return @false
+   end
+
+   read tg.tgt.rec from tg.acc.f, acct else
+      close tg.acc.f
+      set.status 1
+      return @false
+   end
+
+   read tg.own.rec from tg.acc.f, who else
+      close tg.acc.f
+      set.status 2
+      return @false
+   end
+
+   close tg.acc.f
+
+*  THE ORDER IS THE RANK.  Position in this list is the number compared below,
+*  so adding a tier means putting it in the right place rather than editing a
+*  case statement somewhere else as well.
+   tg.tiers = 'STANDARD' : @fm : 'PROGRAMMER' : @fm : 'ADMINISTRATOR'
+
+   tg.t = upcase(trim(tg.tgt.rec<ACC$TIER>, ' ', 'B'))
+   if tg.t = 'SUSPENDED' then
+      tg.t = upcase(trim(tg.tgt.rec<ACC$PRIOR.TIER>, ' ', 'B'))
+   end
+   locate tg.t in tg.tiers<1> setting tg.tgt.rank else tg.tgt.rank = 0
+
+   tg.t = upcase(trim(tg.own.rec<ACC$TIER>, ' ', 'B'))
+   if tg.t = 'SUSPENDED' then
+      tg.t = upcase(trim(tg.own.rec<ACC$PRIOR.TIER>, ' ', 'B'))
+   end
+   locate tg.t in tg.tiers<1> setting tg.own.rank else tg.own.rank = 0
+
+   if tg.tgt.rank = 0 then
+      set.status 1
+      return @false
+   end
+
+   if tg.own.rank = 0 then
+      set.status 2
+      return @false
+   end
+
+   if tg.own.rank < tg.tgt.rank then
+      set.status 3
+      return @false
+   end
+
+   set.status 0
+   return @true
+
+* END-CODE

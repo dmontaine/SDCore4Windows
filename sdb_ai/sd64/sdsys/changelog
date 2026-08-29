@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+29 Aug 26  ACCESS TO AN ACCOUNT CAN NO LONGER BE GRANTED UPWARDS, AND SDSYS
+           CANNOT BE GRANTED AT ALL.
+
+           Accounts have a tier - standard, programmer or administrator - and
+           a grant may now go down or sideways, never up.  A programmer may be
+           given access to a standard account; a standard user may not be
+           given access to a programmer account.  Where that was allowed
+           before, standing in the other account gave you its whole verb set,
+           so a grant could hand somebody more than their own tier permits.
+
+           Entry to SDSYS is never granted to anybody, whatever their tier.
+           It belongs to Windows administrators, who reach it by signing in or
+           with LOGTO.
+
+           The rule is applied in three places and they are not equivalent.
+           GRANT and MODIFY.ACCOUNT ... ADD refuse at the time you ask, so you
+           find out immediately.  LOGTO refuses at the door, and that is the
+           one that actually holds - a grant is membership of a Windows group,
+           so it can be made outside SD, and an account's tier can be raised
+           after a grant was legitimately given.  An existing membership that
+           the rule no longer permits therefore stops working at LOGTO rather
+           than being quietly honoured.
+
+           REVOKE and MODIFY.ACCOUNT ... DELETE are unaffected.  Taking access
+           away is always allowed.
+
 28 Aug 26  A DELETED ACCOUNT'S WINDOWS PROFILE IS NOW CLEARED UP BY ITSELF,
            AND CREATE.ACCOUNT REFUSES A NAME WHOSE OLD PROFILE IS STILL THERE.
 
