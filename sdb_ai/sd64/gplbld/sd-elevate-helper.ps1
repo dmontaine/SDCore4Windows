@@ -1,9 +1,9 @@
 # sd-elevate-helper.ps1 - the elevated half of an SD administrator session
 #
 # Launched by sd-elevate.ps1 through Start-Process -Verb RunAs, which is where
-# the UAC prompt appears.  Serves one SD session until told to stop or until
-# that session's process disappears, running the PowerShell scripts SD hands
-# it and returning their exit codes.
+# the UAC prompt appears.  Serves every SD session belonging to one user until
+# the last of them stops or disappears, running the PowerShell scripts SD
+# hands it and returning their exit codes.
 #
 # PROJECT_STATUS.md 7 step 4 and 5.6.  Owner's decisions, 16 Aug 2026:
 # elevation comes from entering SDSYS and from nowhere else, and there is no
@@ -22,9 +22,18 @@
 # SID is also the security boundary: no other user can reach this pipe, which
 # matters because the data tree is writable by every member of sdusers.
 #
-# IT DIES WITH ITS SESSION.  A privileged process outliving the session that
-# asked for it is the thing to avoid above all, so the owning pid is checked
-# both while idle and between requests.
+# IT DIES WITH ITS SESSIONS - PLURAL SINCE 29 Aug 26, AND THAT IS THE ONLY
+# PART OF THIS RULE THAT MOVED.  A privileged process outliving the sessions
+# that asked for it is still the thing to avoid above all, and the owning pids
+# are still checked both while idle and between requests.  What changed is how
+# many there are: PRE_RELEASE_FIXES 56 elevates an administrator AT LOGIN, so
+# a helper scoped to one sd.exe meant a UAC prompt per COMMAND.  One helper
+# now serves every session of one user and exits when the last of them goes.
+#
+# THE NAME WIDENED AND THE ACL DID NOT, which is what makes that safe.  The
+# pipe is "sd-elev-<logname>" rather than "...-<userno>", and the DACL below
+# still grants exactly one SID - this user's.  No other account can reach the
+# pipe, so no other account can register a pid with it or send it a script.
 
 param(
     [Parameter(Mandatory = $true)][string]$PipeName,
@@ -57,8 +66,35 @@ Say "helper up, pid $PID, serving session $OwnerPid"
 
 $me = [Security.Principal.WindowsIdentity]::GetCurrent().User
 
+# 29 Aug 26 - ONE HELPER PER USER, SO THERE IS A SET OF OWNERS AND NOT ONE.
+# PRE_RELEASE_FIXES 56.  The rule in the header is UNCHANGED IN SUBSTANCE -
+# this still dies with its sessions - but it now has more than one, so "the
+# owner is gone" becomes "every owner is gone".  Each -Start and -Run
+# registers a pid through PING and -Stop deregisters one; the last one out
+# turns the light off.
+#
+# A HASHTABLE AND NOT AN ARRAY, DELIBERATELY.  PowerShell's "+" on an array is
+# the trap that splits one element into two or folds two into one depending on
+# which side the literal is; keying by pid cannot do either, and Remove() on a
+# pid that was never registered is silently fine, which is what a duplicate
+# STOP needs.
+#
+# ONLY THIS USER CAN REGISTER, and that is the pipe DACL rather than anything
+# here: it grants this user's SID and nobody else's, so no other account can
+# reach the pipe to add a pid to this set.
+$owners = @{}
+if ($OwnerPid -gt 0) { $owners[$OwnerPid] = $true }
+
 function Test-OwnerAlive {
-    return [bool](Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue)
+    # Prune first, then answer.  A snapshot of the keys, because removing from
+    # a hashtable while enumerating it throws.
+    foreach ($p in @($owners.Keys)) {
+        if (-not (Get-Process -Id $p -ErrorAction SilentlyContinue)) {
+            $owners.Remove($p)
+            Say "session $p has gone; $($owners.Count) left"
+        }
+    }
+    return ($owners.Count -gt 0)
 }
 
 try {
@@ -77,7 +113,7 @@ try {
         while (-not $connected) {
             if ($iar.AsyncWaitHandle.WaitOne(2000)) { $connected = $true; break }
             if (-not (Test-OwnerAlive)) {
-                Say "session $OwnerPid has gone - exiting"
+                Say "every session has gone - exiting"
                 $server.Dispose()
                 exit 0
             }
@@ -90,18 +126,57 @@ try {
 
         $req = $reader.ReadLine()
 
-        if ($req -eq 'PING') {
+        # 29 Aug 26 - PING AND STOP NOW CARRY A PID.  PRE_RELEASE_FIXES 56.
+        # Split once here rather than in two places; anything else is a script
+        # path and must not be touched, because a path can contain a space and
+        # SD's are "$PS.TMP.<userno>" under a data tree the user can name.
+        $verb = $req
+        $argPid = 0
+        if ($req -match '^(PING|STOP) +([0-9]+)$') {
+            $verb = $Matches[1]
+            $argPid = [int]$Matches[2]
+        }
+
+        if ($verb -eq 'PING') {
             # Answers what the caller actually needs to know: that something
             # ELEVATED is on the other end.  sd-elevate.ps1 refuses to trust an
             # exit code from a helper that is not.
+            #
+            # AND REGISTERS THE ASKER, which is what makes one helper per user
+            # safe: a session that found this helper instead of starting one
+            # has no other moment to say it is here.  Re-registering an
+            # already-known pid is a no-op.
+            if ($argPid -gt 0 -and -not $owners.ContainsKey($argPid)) {
+                $owners[$argPid] = $true
+                Say "session $argPid registered; $($owners.Count) now"
+            }
             $writer.WriteLine('ELEVATED')
             $server.Dispose()
             continue
         }
 
-        if ($req -eq 'STOP') {
+        if ($verb -eq 'STOP') {
+            # ONE SESSION LEAVING IS NOT THE HELPER STOPPING.  CPROC calls
+            # elevate('STOP') every time a session leaves SDSYS, and with one
+            # helper serving every session of a user that must not take the
+            # privilege away from the others.  Exit only when the last owner
+            # has gone.
+            #
+            # A BARE STOP - no pid - still stops it outright.  That is what a
+            # diagnostic or a cleanup means by STOP, and it is what this
+            # message meant before there was anything to deregister.
+            if ($argPid -gt 0) {
+                $owners.Remove($argPid)
+                Say "session $argPid deregistered; $($owners.Count) left"
+                $writer.WriteLine('0')
+                $server.Dispose()
+                if ($owners.Count -gt 0) { continue }
+                Say "last session left - exiting"
+                break
+            }
+
             $writer.WriteLine('0')
-            Say "stop requested"
+            Say "stop requested outright"
             $server.Dispose()
             break
         }

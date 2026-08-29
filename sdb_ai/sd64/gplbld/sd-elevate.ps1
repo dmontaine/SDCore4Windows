@@ -12,7 +12,15 @@
 #   0  done
 #   1  the operation failed
 #   5  not elevated / elevation refused or unavailable
-#   9  no helper is running for this session
+#   9  no helper is running for this user
+#
+# 29 Aug 26 - ONE HELPER PER USER, NOT PER SESSION.  PRE_RELEASE_FIXES 56.
+# With an administrator elevated AT LOGIN, a helper scoped to one sd.exe meant
+# ONE UAC PROMPT PER COMMAND; the pipe is now "sd-elev-<logname>" and a second
+# session finds the first one's helper and asks for nothing.  Every mode sends
+# its pid on PING so the helper knows who is using it, and -Stop deregisters
+# one session rather than stopping the helper others still need.  The DACL is
+# unchanged and is what keeps users apart - a wider NAME is not a wider reach.
 #
 # PROJECT_STATUS.md 7 step 4.  Owner's decisions, 16 Aug 2026: elevation comes
 # from entering SDSYS and nowhere else, and admins are highly trusted - this
@@ -90,7 +98,20 @@ function Send-Request([string]$message, [int]$timeoutMs = 10000) {
 
 function Test-Helper {
     # Short timeout: this asks "is one there", not "wait for one".
-    return ((Send-Request 'PING' 1500) -eq 'ELEVATED')
+    #
+    # 29 Aug 26 - AND IT REGISTERS THIS SESSION WHILE IT ASKS.  PRE_RELEASE 56
+    # widened the helper from one-per-session to one-per-user, so a session
+    # that finds an existing helper must tell it so - otherwise the helper
+    # exits when whichever session happened to START it goes, and takes every
+    # other session's privilege with it.  PING is the only message every mode
+    # sends, which is why the registration rides on it rather than on a
+    # message of its own.
+    #
+    # A BARE PING STILL WORKS and registers nothing, so a diagnostic probe of
+    # "is something elevated on this pipe" does not extend the helper's life.
+    $msg = 'PING'
+    if ($OwnerPid -gt 0) { $msg = "PING $OwnerPid" }
+    return ((Send-Request $msg 1500) -eq 'ELEVATED')
 }
 
 try {
@@ -148,7 +169,19 @@ try {
 
     if ($Stop) {
         if (-not (Test-Helper)) { exit 0 }   # nothing to stop is success
-        Send-Request 'STOP' 5000 | Out-Null
+
+        # 29 Aug 26 - STOP DEREGISTERS THIS SESSION; THE HELPER DECIDES WHETHER
+        # TO EXIT.  PRE_RELEASE 56 made the helper serve every session of one
+        # user, so CPROC's elevate('STOP') on the way out of SDSYS must not be
+        # able to take the privilege away from sessions still using it.  The
+        # helper drops this pid and exits only when its last owner has gone.
+        #
+        # A BARE STOP still stops it outright, which is what a diagnostic or a
+        # cleanup wants, and is what this sent before there was anything to
+        # deregister.
+        $msg = 'STOP'
+        if ($OwnerPid -gt 0) { $msg = "STOP $OwnerPid" }
+        Send-Request $msg 5000 | Out-Null
         exit 0
     }
 

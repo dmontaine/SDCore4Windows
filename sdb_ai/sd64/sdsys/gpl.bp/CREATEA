@@ -199,6 +199,15 @@
 *    CREATE.ACCOUNT OTHER acc.name pathname {NO.QUERY} - account created in pathname, maintained for backwards compatiblilty. This will require manual editing
 *                                                        of the accounts record to specify linux group the account belongs to.
 *
+* 29 Aug 26 Windows port - an ADMINISTRATOR-tier account is no longer written
+*                      into os.users.  It is not a withdrawal of access: 56
+*                      elevates an administrator at login into SDSYS, where
+*                      USR_ADMIN answers os_permitted() before the file is
+*                      read.  Writing it here leaked OS.EXECUTE past a LOGTO,
+*                      because os.users is keyed on the PERSON.  ssh and the
+*                      API are unaffected - both are connection-time group
+*                      tests and cannot follow a LOGTO.  PRE_RELEASE_FIXES 56
+*                      and 2
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -1589,8 +1598,35 @@ more.args:
 *   THAT SENTENCE SAID THE OPPOSITE FOR ONE DAY - "a default, not a rule",
 *   committed earlier on the 27th - and he overruled it the same afternoon:
 *   "administrators have full access, there should be no way to turn it off."
-      os.sh   = @true
-      os.exec = @true
+*
+* 29 Aug 26 Windows port - AND THE TWO OS.USERS LINES ARE GONE FROM HERE.
+*   PRE_RELEASE_FIXES 56 and 2.
+*
+*   ***THIS DOES NOT REVERSE THE 27 Aug RULING ABOVE.  IT IS THE SAME RULING
+*   ARRIVING BY THE ROUTE THE NEW MODEL GIVES IT.***  He still has full access
+*   and there is still no way to turn it off - an administrator is now elevated
+*   AT LOGIN into SDSYS, where USR_ADMIN is set, and os_permitted() returns
+*   TRUE on that flag at op_sh.c:161 BEFORE it ever reads os.users.  The
+*   operating system comes from being an administrator, which nothing can take
+*   away, instead of from a line in a file that can be edited.
+*
+*   ***AND WRITING IT HERE ACTIVELY BROKE THE NEW MODEL, WHICH IS WHY IT HAD
+*   TO GO RATHER THAN MERELY BECOMING UNNECESSARY.***  os.users is keyed on
+*   the PERSON - process.username, the Windows login - and a LOGTO never
+*   changes it (op_sh.c:167).  So an administrator listed here kept OS.EXECUTE
+*   in EVERY account they moved to, which is exactly what the owner's rule of
+*   29 Aug 2026 takes away: "if they logto another account, they have the
+*   rights of that account."
+*
+*   ssh AND THE API STAY, and the difference is not arbitrary.  Both are
+*   Windows group memberships tested when the CONNECTION is made - sshd's
+*   AllowGroups, and APISRVR's sdapi check inside the SCRAM handshake - so
+*   neither is reachable after a LOGTO and neither can follow one.  os.users
+*   was the only one of the three that leaked.
+*
+*   os.users IS NOT DEAD and must not be removed with this: it is still how a
+*   NON-administrator is granted the operating system, and the ACL that
+*   gplbld/secure-osusers.ps1 puts on it is still the whole of the protection.
    end
 return
 * ======================================================================

@@ -102,10 +102,23 @@ $include int$keys.h
       return rc
    end
 
-*  One helper per session.  @logname keeps two users' helpers apart even if
-*  SD gives them the same user number at different times; the pipe's own ACL
-*  is what actually stops one reaching the other's.
-   pipe = 'sd-elev-' : @logname : '-' : @userno
+*  29 Aug 26 Windows port - ONE HELPER PER USER, NOT PER SESSION.  Owner's
+*  instruction; PRE_RELEASE_FIXES 56.  @userno used to be in this name, so
+*  every sd.exe got a helper of its own and therefore a UAC prompt of its own.
+*  With 56 elevating an administrator AT LOGIN that became one consent per
+*  command, which is the thing CLAUDE.md's "remove the need for a prompt, not
+*  the step" section exists to prevent.  Dropping @userno lets the second
+*  session find the first one's helper through PING and ask for nothing.
+*
+*  @logname STILL KEEPS TWO USERS APART, and the pipe's own ACL is what
+*  actually enforces it - the helper grants its own user's SID and nobody
+*  else's, so a wider NAME does not widen who can reach it.
+*
+*  THE LIFETIME RULE IS NOT WEAKENED, ONLY GENERALISED.  The helper still dies
+*  with its sessions; it just has more than one now.  Each START and RUN
+*  registers this session's pid with it and STOP deregisters, so it exits when
+*  the LAST session using it has gone.  See sd-elevate-helper.ps1.
+   pipe = 'sd-elev-' : @logname
 
    q = char(39)
 
@@ -127,9 +140,21 @@ $include int$keys.h
          end
          cmd := ' -Run -PipeName ' : q : pipe : q
          cmd := ' -Script ' : q : arg : q
+* 29 Aug 26 Windows port - RUN CARRIES THE PID TOO, and that is not tidiness.
+*   A session that reaches SDSYS while a helper is ALREADY running never calls
+*   -Start, because START short-circuits on finding one - so RUN is the only
+*   place some sessions ever announce themselves.  Without this the helper
+*   would exit when the session that happened to start it left, taking the
+*   privilege of every other session with it.  PRE_RELEASE_FIXES 56.
+         cmd := ' -OwnerPid ' : kernel(K$WINPID, 0)
 
       case action = 'STOP'
          cmd := ' -Stop -PipeName ' : q : pipe : q
+* 29 Aug 26 Windows port - AND STOP DEREGISTERS ONE SESSION RATHER THAN
+*   STOPPING THE HELPER.  With one helper per user, CPROC's elevate('STOP') on
+*   the way out of SDSYS would otherwise tear down the helper that other
+*   sessions are still using.  The helper exits when its LAST owner goes.
+         cmd := ' -OwnerPid ' : kernel(K$WINPID, 0)
 
       case 1
          set.status 1
