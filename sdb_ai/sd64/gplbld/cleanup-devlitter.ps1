@@ -48,6 +48,16 @@ $ErrorActionPreference = 'Stop'
 $Home_       = 'C:\Users\dmont'
 $KeepInHome  = @('sdout')
 $Sweep       = Join-Path $PSScriptRoot 'clean-test-profiles.ps1'
+# 28 Aug 26 - THIS NAME IS SPENT AND IS DELIBERATELY NOT REPOINTED.
+#   sshRemoteTest-C1 was deleted by the 7.18 cleanup and no longer exists;
+#   VBoxManage lists Beardog, "Windows 11 - Template" and sdStandalone-C1.
+#   ***THE ONE THAT DOES EXIST IS NOT A SUBSTITUTE***: PROJECT_STATUS records
+#   that sdStandalone-C1 carries the stand-alone install that closed H.5 and is
+#   to be deleted BY HAND when nobody needs it, so pointing -IncludeVM at it
+#   would turn a documented manual decision into a side effect of a sweep.
+#   What was wrong was the REPORTING - the header line said "left alone" about
+#   a VM that is not there, which reads as "still present" - so the line below
+#   now says whether it exists.
 $VMName      = 'sshRemoteTest-C1'
 $VBoxManage  = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
 
@@ -230,7 +240,17 @@ Write-Output ("  mode            : {0}" -f $(if ($List) { 'LIST ONLY - nothing w
 Write-Output ("  pattern source  : {0}" -f $Sweep)
 Write-Output ("  pattern         : {0}" -f $rx)
 Write-Output ("  home directory  : {0}   (keeping: {1})" -f $Home_, ($KeepInHome -join ', '))
-Write-Output ("  VM clone        : {0}" -f $(if ($IncludeVM) { "$VMName WILL be deleted" } else { "$VMName left alone (-IncludeVM to delete)" }))
+# ***SAY WHETHER IT IS THERE, NOT JUST WHAT WOULD HAPPEN TO IT.***  "left
+# alone" about a VM that does not exist reads as "still present", which is a
+# stale lead in an instrument's own output.
+$vmKnown = $false
+if (Test-Path -LiteralPath $VBoxManage) {
+    try { $vmKnown = ((& $VBoxManage list vms 2>$null) -join "`n") -match [regex]::Escape($VMName) } catch { }
+}
+$vmState = $(if (-not $vmKnown) { "$VMName is NOT registered - nothing to delete" }
+             elseif ($IncludeVM) { "$VMName WILL be deleted" }
+             else                { "$VMName left alone (-IncludeVM to delete)" })
+Write-Output ("  VM clone        : {0}" -f $vmState)
 Write-Output ''
 
 $users  = Get-LitterUsers  $rx
