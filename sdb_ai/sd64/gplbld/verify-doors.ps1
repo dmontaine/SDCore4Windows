@@ -374,8 +374,24 @@ foreach ($l in ($local -split "`n")) {
 Write-Output '  --- and the same LOGTO from THIS session, for comparison: ---'
 foreach ($line in ($local -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
 Write-Output ''
-Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
-     (Test-Say $local 'Unable to change to new directory') $false
+# ***THE 5161 CLAIM IS CONTROL-ONLY, AND THE b53 RUN IS WHY.***  In the
+# Refused phase this session's LOGTO is stopped by the SUSPENSION at
+# logto.authorised (CPROC:2679) and never reaches the chdir at :2691, so 5161
+# correctly does NOT appear - and the row asserting it did printed a [FAIL]
+# inside an otherwise green leg.  Non-decisive, so it changed no verdict, but a
+# failure line in a passing run is noise that teaches people to skim.
+#
+# **IT IS ALSO A SECOND WITNESS TO THE ORDERING**, which is why the refusal
+# half of every door is trustworthy: the suspension is checked BEFORE the
+# token-dependent chdir, so the Refused leg cannot be fooled by 44.
+if ($Phase -eq 'Control') {
+    Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
+         (Test-Say $local 'Unable to change to new directory') $false
+} else {
+    Note ('PRE_RELEASE 44: the suspension stops it BEFORE 5161 can (CPROC:2679 < :2691)') $true `
+         ((Test-Say $local 'is suspended') -and -not (Test-Say $local 'Unable to change to new directory')) $false
+}
+# THIS ONE HOLDS IN BOTH PHASES: whatever stopped it, this session never got in.
 Note ('PRE_RELEASE 44: this session''s own LOGTO did NOT enter') $false $localEntered $false
 
 # ============================================================== door 3: API
