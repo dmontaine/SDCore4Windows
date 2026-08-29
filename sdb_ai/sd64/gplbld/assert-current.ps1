@@ -262,7 +262,7 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # one nothing could vouch for.  Listed in the commit that
                   # created it, under step 7's rule.
                   'verify-profiledir.ps1',
-                  # 28 Aug 26 - test-sysmsg-units.ps1, PRE_RELEASE_FIXES.md 45.
+                  # 28 Aug 26 - test-sysmsg-units.ps1, PRE_RELEASE_FIXES.md 51.
                   # Get-SysMsgPattern has gone blind three times in three ways,
                   # each found by a run rather than a test; this is the test.
                   # No elevation, no run number, no accounts - it reads the
@@ -270,6 +270,21 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # the AST.  Listed in the commit that created it, under step
                   # 7's rule.
                   'test-sysmsg-units.ps1',
+                  # 28 Aug 26 - test-fixlist-units.ps1, the checker for
+                  # PRE_RELEASE_FIXES.md's own index.  Owner's instruction after
+                  # a session filed three entries onto numbers the table had
+                  # been using for a week, and reported 36 open when 18 were.
+                  # Reads files only - no install, no elevation, no run number.
+                  # Listed in the commit that created it, under step 7's rule.
+                  'test-fixlist-units.ps1',
+                  # 28 Aug 26 - gen_includes.py, found by listing what in this
+                  # directory is on NEITHER this list nor stage.py's.  It is not
+                  # a fault today only because nobody has edited it since the
+                  # install: the moment somebody does, the tree reports STALE
+                  # for a build helper that ships nothing, and every verifier
+                  # refuses.  That is the trap the entries above were each
+                  # added for, sitting unsprung.
+                  'gen_includes.py',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
                   # listed in the commit that created it under the same rule.
                   # It is a RUNNER and not a verifier, so it ships no more than

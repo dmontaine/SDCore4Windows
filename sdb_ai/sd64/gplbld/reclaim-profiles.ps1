@@ -50,7 +50,7 @@
 #     directory                                           with Windows
 #
 # THERE IS NO OWNER ROW IN THAT LIST AND ITS ABSENCE IS DELIBERATE - the
-# owner's ruling on PRE_RELEASE 43, 28 Aug 2026.  See Get-RefusalReason.
+# owner's ruling on PRE_RELEASE 50, 28 Aug 2026.  See Get-RefusalReason.
 #
 # A record that fails any of them is skipped BY NAME and left where it is, so
 # the next run reports it again rather than a person having to notice a silence.
@@ -172,7 +172,7 @@ function Get-RefusalReason([string]$fileName, $rec,
                         'defaultuser0', 'systemprofile', 'LocalService',
                         'NetworkService')
 
-    # THERE IS NO OWNER CHECK, AND THAT IS THE OWNER'S RULING ON PRE_RELEASE 43
+    # THERE IS NO OWNER CHECK, AND THAT IS THE OWNER'S RULING ON PRE_RELEASE 50
     # (28 Aug 2026), NOT AN OVERSIGHT.
     #
     # It used to refuse any record not owned by S-1-5-18 or S-1-5-32-544.  That
@@ -283,7 +283,7 @@ if (-not (Test-Path -LiteralPath $Path)) {
 
 # --- the records -----------------------------------------------------------
 
-# NOT SilentlyContinue - PRE_RELEASE 42.  The store is granted to SYSTEM and
+# NOT SilentlyContinue - PRE_RELEASE 49.  The store is granted to SYSTEM and
 # Administrators only, so an unelevated -List gets UnauthorizedAccessException
 # here.  Swallowing it produced an empty array, and the empty-store branch below
 # then announced "nothing was left behind to reclaim" as a fact.  Two different

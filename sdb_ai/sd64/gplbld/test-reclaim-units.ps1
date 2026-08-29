@@ -9,7 +9,7 @@
 #              feature - and it is the one part that cannot be exercised by
 #              running the thing, because every path through it ends in "and
 #              then nothing happened".
-# 28 Aug 2026  PRE_RELEASE_FIXES.md 43, owner's ruling: the owner check is gone
+# 28 Aug 2026  PRE_RELEASE_FIXES.md 50, owner's ruling: the owner check is gone
 #              from the sweep and the two OWNER rows are turned round.  This
 #              file scored 39/39 against a sweep that could not reclaim a single
 #              record, because every accepted case handed in SYSTEM or
@@ -136,7 +136,7 @@ function Rec($sid, $account, $directory) {
 }
 
 # Every call names its arguments in the same order the sweep used to take them.
-# GET-REFUSALREASON NO LONGER TAKES THE OWNER - PRE_RELEASE 43 - so this wrapper
+# GET-REFUSALREASON NO LONGER TAKES THE OWNER - PRE_RELEASE 50 - so this wrapper
 # accepts it and does not forward it.  The parameter is kept HERE, and only
 # here, so that every call site below still reads as "this record, owned by
 # this identity", which is what each row is about; the sweep still reads and
@@ -162,7 +162,7 @@ $r = Why $SID $SYSTEM (Rec $SID 'sdacct1' 'D:\TestUsers\sdacct1\') $ROOT '' 'D:\
 Note ($r -eq '') 'a trailing separator and a doubled one still compare equal' $r
 
 Write-Host ''
-Write-Host 'THE OWNER: evidence, not a gate - the rows PRE_RELEASE 43 turned round'
+Write-Host 'THE OWNER: evidence, not a gate - the rows PRE_RELEASE 50 turned round'
 
 # ***THIS IS THE ROW WHOSE ABSENCE MADE 39/39 MEAN NOTHING.***  Every accepted
 # case above hands in SYSTEM or Administrators.  Not one row ever handed in what

@@ -132,7 +132,7 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 # the feature worked.  20 Aug 2026, verify-rdpaccount.ps1's own history.
 #
 # 28 Aug 26 - AND A LITERAL RUN IS MATCHED LOOSELY NOW.  PRE_RELEASE_FIXES.md
-# 45.  The message FILES hold literal backslash-n rather than newlines, and SD
+# 51.  The message FILES hold literal backslash-n rather than newlines, and SD
 # renders each as a line break, so escaping the text as it stands produces a
 # pattern hunting a literal backslash the output never contains - a multi-line
 # message could not be matched at all.  Nothing THIS script names is

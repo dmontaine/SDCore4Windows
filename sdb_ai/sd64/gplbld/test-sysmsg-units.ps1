@@ -12,7 +12,7 @@
                    verify-rdpaccount.ps1 named STARTS with %1, so the pattern
                    was the empty string and six checks reported FAIL on a run
                    where the feature worked perfectly.
-      28 Aug 2026  PRE_RELEASE_FIXES.md 45.  The message FILES hold literal
+      28 Aug 2026  PRE_RELEASE_FIXES.md 51.  The message FILES hold literal
                    backslash-n rather than newlines - sixteen in 10124 - and SD
                    renders each as a line break, so escaping the text as it
                    stands produced a pattern hunting a literal backslash the

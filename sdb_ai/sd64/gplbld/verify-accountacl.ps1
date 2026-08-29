@@ -141,7 +141,7 @@ function Show-Acl([string]$label, [string]$path) {
 # fixed version of this function and the note.)
 #
 # 28 Aug 26 - AND A LITERAL RUN IS MATCHED LOOSELY NOW.  PRE_RELEASE_FIXES.md
-# 45, and it is the THIRD time this function has gone blind in a new way.  The
+# 51, and it is the THIRD time this function has gone blind in a new way.  The
 # message FILES hold literal backslash-n rather than newlines - sixteen in
 # 10124 - and SD renders each as a line break, so escaping the text as it
 # stands produces a pattern hunting a literal backslash the output never

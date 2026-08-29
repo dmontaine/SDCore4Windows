@@ -142,7 +142,7 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 #
 # 28 Aug 26 - AND A LITERAL RUN IS NOW MATCHED LOOSELY, BECAUSE ESCAPING IT AS
 # IT STANDS MADE TWO CHECKS HERE INCAPABLE OF THEIR JOB.  PRE_RELEASE_FIXES.md
-# 45.  The message FILE holds literal backslash-n, not newlines - fourteen in
+# 51.  The message FILE holds literal backslash-n, not newlines - fourteen in
 # 10075, sixteen in 10123 - and SD renders each as a line break.  Escaped
 # as-is, the pattern looks for a literal backslash-n that the output never
 # contains, so line 553's "10075 NOT shown" passed whatever was printed and
