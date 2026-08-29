@@ -40,7 +40,6 @@
 # the backstop for the case where it is not, and each line answers a way a
 # planted record could do harm:
 #
-#   the file is not owned by SYSTEM or Administrators   an ordinary user wrote it
 #   the file name is not the SID inside it              a record was renamed
 #   the SID is not a local-account SID (S-1-5-21-..)    a well-known identity
 #   a live local account still holds that SID           not an orphan at all
@@ -49,6 +48,9 @@
 #   the leaf is Default, Public, All Users, ...         a standard profile
 #   a ProfileList entry exists and names a DIFFERENT    the record disagrees
 #     directory                                           with Windows
+#
+# THERE IS NO OWNER ROW IN THAT LIST AND ITS ABSENCE IS DELIBERATE - the
+# owner's ruling on PRE_RELEASE 43, 28 Aug 2026.  See Get-RefusalReason.
 #
 # A record that fails any of them is skipped BY NAME and left where it is, so
 # the next run reports it again rather than a person having to notice a silence.
@@ -162,7 +164,7 @@ function Norm($p) {
 # constants, for the same reason: a copy in the test would be a copy that can
 # go stale, and this one cannot.
 
-function Get-RefusalReason([string]$fileName, [string]$ownerSid, $rec,
+function Get-RefusalReason([string]$fileName, $rec,
                            [string]$rootNorm, [string]$liveAccount,
                            [string]$entryPath) {
 
@@ -170,13 +172,26 @@ function Get-RefusalReason([string]$fileName, [string]$ownerSid, $rec,
                         'defaultuser0', 'systemprofile', 'LocalService',
                         'NetworkService')
 
-    # An ordinary user wrote it.  The store's ACL is what should have made this
-    # impossible; this is the backstop for the store that was created before
-    # secure-reclaim.ps1 ran, or by somebody who got there first.
-    if ($ownerSid -ne 'S-1-5-18' -and $ownerSid -ne 'S-1-5-32-544') {
-        if ($ownerSid -eq '') { return 'owned by an unreadable identity, not SYSTEM or Administrators' }
-        return ('owned by {0}, not SYSTEM or Administrators' -f $ownerSid)
-    }
+    # THERE IS NO OWNER CHECK, AND THAT IS THE OWNER'S RULING ON PRE_RELEASE 43
+    # (28 Aug 2026), NOT AN OVERSIGHT.
+    #
+    # It used to refuse any record not owned by S-1-5-18 or S-1-5-32-544.  That
+    # refused EVERY record DELETE_USER will ever write: a file created by an
+    # elevated process is owned by THE CREATOR'S OWN SID, not by
+    # BUILTIN\Administrators, and DELETE_USER runs in the session that issued
+    # DELETE.ACCOUNT - an administrator's.  Measured on the 28 Aug 20:48:24
+    # install: five genuine records, five refusals, nothing reclaimable on any
+    # machine.  The producer could never satisfy the consumer.
+    #
+    # THE CONTAINMENT IS THE STORE'S ACL, AND THIS SCRIPT ASSERTS IT ITSELF a
+    # few lines above - /inheritance:r, SYSTEM and Administrators only, at every
+    # boot, BEFORE a single record is read.  An ordinary user cannot create a
+    # file in there to be the owner of.  The removed check was standing in for
+    # that ACL and its own comment said as much.
+    #
+    # The owner is still read and still LOGGED against every record: rule 1 of
+    # the instrument section wants what was actually seen.  It is evidence now,
+    # not a gate.
 
     if ($null -eq $rec) { return 'could not be parsed' }
 
@@ -268,7 +283,20 @@ if (-not (Test-Path -LiteralPath $Path)) {
 
 # --- the records -----------------------------------------------------------
 
-$records = @(Get-ChildItem -LiteralPath $Path -File -ErrorAction SilentlyContinue)
+# NOT SilentlyContinue - PRE_RELEASE 42.  The store is granted to SYSTEM and
+# Administrators only, so an unelevated -List gets UnauthorizedAccessException
+# here.  Swallowing it produced an empty array, and the empty-store branch below
+# then announced "nothing was left behind to reclaim" as a fact.  Two different
+# states - nothing recorded, and not allowed to look - must not arrive at the
+# same sentence.  REFUSE, and say which one this is.
+
+try {
+    $records = @(Get-ChildItem -LiteralPath $Path -File -ErrorAction Stop)
+} catch {
+    Log ('reclaim-profiles: CANNOT READ the store at {0} - {1}' -f $Path, $_.Exception.Message)
+    Log 'reclaim-profiles: this is NOT an empty store - nothing was measured and nothing was changed.  The store is granted to SYSTEM and Administrators only, so -List needs an ELEVATED shell.'
+    exit 2
+}
 
 # REFUSE THE NULL CASE OUT LOUD.  An empty store is the ordinary state and it
 # must not read as "swept everything" in a log somebody skims a month later.
@@ -346,7 +374,7 @@ foreach ($f in $records) {
     $entryPath = ''
     if ($sid -ne '') { $entryPath = Get-ProfileEntryPath $sid }
 
-    $why = Get-RefusalReason $f.Name $ownerSid $rec $rootNorm $liveAccount $entryPath
+    $why = Get-RefusalReason $f.Name $rec $rootNorm $liveAccount $entryPath
     if ($why -ne '') {
         Log ('    REFUSED: {0}.  The record is left where it is, so the next run reports it again.' -f $why)
         $refused++

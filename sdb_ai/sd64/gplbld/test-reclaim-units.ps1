@@ -9,6 +9,14 @@
 #              feature - and it is the one part that cannot be exercised by
 #              running the thing, because every path through it ends in "and
 #              then nothing happened".
+# 28 Aug 2026  PRE_RELEASE_FIXES.md 43, owner's ruling: the owner check is gone
+#              from the sweep and the two OWNER rows are turned round.  This
+#              file scored 39/39 against a sweep that could not reclaim a single
+#              record, because every accepted case handed in SYSTEM or
+#              Administrators and none handed in what DELETE_USER actually
+#              writes - a file owned by the administrator who ran it.  The rows
+#              that matter now are the ones asserting ACCEPTANCE; the control
+#              for them is -Sweep at the pre-43 copy, where they go red 37/2.
 # END-HISTORY
 #
 # ***WHAT IT GUARDS.***  reclaim-profiles.ps1 is started by sdsvc.exe as
@@ -127,10 +135,15 @@ function Rec($sid, $account, $directory) {
     return @{ 'sid' = $sid; 'account' = $account; 'directory' = $directory }
 }
 
-# Every call names its arguments in the same order the sweep does:
+# Every call names its arguments in the same order the sweep used to take them.
+# GET-REFUSALREASON NO LONGER TAKES THE OWNER - PRE_RELEASE 43 - so this wrapper
+# accepts it and does not forward it.  The parameter is kept HERE, and only
+# here, so that every call site below still reads as "this record, owned by
+# this identity", which is what each row is about; the sweep still reads and
+# logs the owner, it just no longer refuses on it.
 #   fileName, ownerSid, rec, rootNorm, liveAccount, entryPath
 function Why($fileName, $ownerSid, $rec, $root, $live, $entry) {
-    return (Get-RefusalReason $fileName $ownerSid $rec $root $live $entry)
+    return (Get-RefusalReason $fileName $rec $root $live $entry)
 }
 
 Write-Host ''
@@ -149,14 +162,32 @@ $r = Why $SID $SYSTEM (Rec $SID 'sdacct1' 'D:\TestUsers\sdacct1\') $ROOT '' 'D:\
 Note ($r -eq '') 'a trailing separator and a doubled one still compare equal' $r
 
 Write-Host ''
-Write-Host 'THE OWNER: only elevated code may name a directory for the sweep'
+Write-Host 'THE OWNER: evidence, not a gate - the rows PRE_RELEASE 43 turned round'
 
-$r = Why $SID 'S-1-5-21-1111111111-2222222222-3333333333-1001' $good $ROOT '' ''
-Note ($r -ne '') 'a record owned by an ordinary user is refused' 'accepted'
-Note ($r -like '*not SYSTEM or Administrators*') '  and it says so' $r
+# ***THIS IS THE ROW WHOSE ABSENCE MADE 39/39 MEAN NOTHING.***  Every accepted
+# case above hands in SYSTEM or Administrators.  Not one row ever handed in what
+# DELETE_USER ACTUALLY PRODUCES - a file owned by the administrator who ran
+# DELETE.ACCOUNT, because on Windows an elevated process owns what it creates by
+# its own SID.  The suite drove every way the guard said no and never the one
+# path where it had to say yes, so it scored 39/39 against a sweep that could
+# not reclaim anything.  Measured 28 Aug 2026: five genuine records, five
+# refusals.  A test that only exercises the refusals passes when the feature
+# does nothing.
+$adminOwn = 'S-1-5-21-1111111111-2222222222-3333333333-1001'
+$r = Why $SID $adminOwn $good $ROOT '' ''
+Note ($r -eq '') 'a record owned by the ADMINISTRATOR who ran DELETE.ACCOUNT is ACCEPTED' $r
 
+# The containment is the store's ACL - SYSTEM and Administrators only,
+# re-asserted by the sweep at every boot before a record is read - so an
+# unreadable owner is not by itself a reason to leave an orphan on the disk.
 $r = Why $SID '' $good $ROOT '' ''
-Note ($r -ne '') 'a record whose owner cannot be read is refused' 'accepted'
+Note ($r -eq '') 'a record whose owner cannot be read is accepted - the ACL is the gate' $r
+
+# AND THE REST OF THE TABLE MUST STILL BITE ON A RECORD OWNED THAT WAY, or this
+# ruling would have quietly disabled the other six rules along with the owner
+# one.  Same ordinary-user owner, one broken field.
+$r = Why 'S-1-5-21-9-9-9-1007' $adminOwn $good $ROOT '' ''
+Note ($r -ne '') '  and a renamed record owned the same way is still refused' 'accepted'
 
 Write-Host ''
 Write-Host 'THE RECORD ITSELF'
