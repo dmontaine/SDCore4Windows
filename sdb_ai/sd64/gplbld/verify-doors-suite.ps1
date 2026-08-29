@@ -57,6 +57,10 @@ $ErrorActionPreference = 'Stop'
 $admin   = Join-Path $PSScriptRoot 'verify-doors-admin.ps1'
 $measure = Join-Path $PSScriptRoot 'verify-doors.ps1'
 $acct    = $Prefix + 'a'
+# The helper account - PRE_RELEASE 44.  Its ssh session is the only one whose
+# token can carry sdu_<acct>, so it is the only session that can reach the
+# logto door.  verify-doors-admin.ps1 creates and removes it.
+$helper  = $Prefix + 'b'
 $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
@@ -198,35 +202,41 @@ foreach ($p in @($admin, $measure)) {
 }
 
 Write-Output ("verify-doors-suite: as {0}, UNELEVATED" -f $id.Name)
-Write-Output ("  account   {0}" -f $acct)
+Write-Output ("  account   {0}   (suspended and measured)" -f $acct)
+Write-Output ("  helper    {0}   (ssh's in and issues the LOGTO - PRE_RELEASE 44)" -f $helper)
 Write-Output ("  logs      {0}" -f $logDir)
 Write-Output '  three elevated phases, two ordinary ones, and THREE UAC prompts'
+Write-Output '  TWO accounts are created and TWO profile directories are left behind'
 Write-Output ''
 
-# ***THE NAME MUST BE WHOLLY FREE, AND ALL FOUR ARE CHECKED.***  The profile
-# directory is the one that bites: the other three are cleared by
-# DELETE.ACCOUNT and it is not.
+# ***BOTH NAMES MUST BE WHOLLY FREE, AND ALL FOUR THINGS ARE CHECKED FOR
+# EACH.***  The profile directory is the one that bites: the other three are
+# cleared by DELETE.ACCOUNT and it is not.  28 Aug 2026 - the helper name is
+# checked here as well, because a run that found `a` free and `b` taken would
+# create the first account and then stop, leaving a live one behind.
 $taken = @()
-if (Get-LocalUser  -Name $acct              -ErrorAction SilentlyContinue) { $taken += 'a Windows user' }
-if (Get-LocalGroup -Name ('sdu_' + $acct)   -ErrorAction SilentlyContinue) { $taken += 'an sdu_ group' }
-if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $acct.ToUpper()))) {
-    $taken += 'an ACCOUNTS record'
-}
-if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $acct))) {
-    $taken += 'a Windows PROFILE DIRECTORY (PRE_RELEASE 35/36 - only a restart releases it)'
+foreach ($n in @($acct, $helper)) {
+    if (Get-LocalUser  -Name $n            -ErrorAction SilentlyContinue) { $taken += ($n + ': a Windows user') }
+    if (Get-LocalGroup -Name ('sdu_' + $n) -ErrorAction SilentlyContinue) { $taken += ($n + ': an sdu_ group') }
+    if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $n.ToUpper()))) {
+        $taken += ($n + ': an ACCOUNTS record')
+    }
+    if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $n))) {
+        $taken += ($n + ': a Windows PROFILE DIRECTORY (PRE_RELEASE 35/36 - only a restart releases it)')
+    }
 }
 if ($taken.Count -gt 0) {
-    Write-Output ("verify-doors-suite: {0} is not free - it already has:" -f $acct)
+    Write-Output ("verify-doors-suite: {0} is not free - it already has:" -f $Prefix)
     $taken | ForEach-Object { Write-Output ('    ' + $_) }
     Write-Output ''
-    Write-Output '  A PREFIX IS SINGLE-USE.  The Control leg signs in over ssh and leaves a'
-    Write-Output '  profile Windows will not overwrite; a rebuilt account gets a SUFFIXED home,'
-    Write-Output '  which puts an unmeasured variable into a test whose whole point is that the'
-    Write-Output '  suspension is the only thing that changes.  Use a fresh -Run token.'
-    Write-Output '  NOTHING WAS CREATED.'
+    Write-Output '  A PREFIX IS SINGLE-USE, AND IT COVERS BOTH ITS NAMES.  Each account signs'
+    Write-Output '  in over ssh and leaves a profile Windows will not overwrite; a rebuilt'
+    Write-Output '  account gets a SUFFIXED home, which puts an unmeasured variable into a test'
+    Write-Output '  whose whole point is that the suspension is the only thing that changes.'
+    Write-Output '  Use a fresh -Run token.  NOTHING WAS CREATED.'
     exit 2
 }
-Write-Output ("  {0} is free: no Windows user, no sdu_ group, no ACCOUNTS record, no profile" -f $acct)
+Write-Output ("  {0} and {1} are both free: no Windows user, no sdu_ group, no ACCOUNTS record, no profile" -f $acct, $helper)
 
 # ***THE SAME ALPHABET AS verify-doors-admin.ps1 AND verify-createaccount.ps1:403.***
 # Nothing cmd.exe treats specially, because it passes through the SSH_ASKPASS
@@ -299,7 +309,7 @@ $legs | Format-Table -AutoSize | Out-String | Write-Output
 if ($stopped -ne '') {
     Write-Output ('  STOPPED: ' + $stopped)
 }
-Write-Output ("  The profile directory C:\Users\{0} is expected to remain - PRE_RELEASE 35/36." -f $acct)
+Write-Output ("  The profile directories C:\Users\{0} and C:\Users\{1} are expected to remain - PRE_RELEASE 35/36." -f $acct, $helper)
 Write-Output '  It is not a failure of this run, and the name cannot be used again until a restart.'
 
 $all    = @($legs)

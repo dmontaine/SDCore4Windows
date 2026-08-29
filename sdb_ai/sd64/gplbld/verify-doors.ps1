@@ -57,6 +57,20 @@ $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $accts  = Join-Path $env:ProgramData  'SD\sdsys\accounts'
 $acct   = $Prefix + 'a'
 $acctU  = $acct.ToUpper()
+
+# ***THE SECOND ACCOUNT, AND IT IS WHAT MAKES THE logto DOOR MEASURABLE AT
+# ALL.***  28 Aug 2026, PRE_RELEASE 44.  `A` signs in over ssh and issues
+# `LOGTO B` from inside that session.  The point is the TOKEN: Windows fixes
+# group membership at logon, so the session that CREATED B - and was added to
+# `sdu_B` a moment later - cannot carry that SID, and its chdir into B's
+# directory is denied with 5161 even though SD's own authorisation passed.
+# A fresh ssh logon carries the group, so this is the only session that can
+# reach the door.  The door table in PRE_RELEASE_FIXES.md specified this shape
+# before it was built; the first implementation ran LOGTO in the caller's own
+# session and scored a false pass for a day.
+$helper  = $Prefix + 'b'
+$helperU = $helper.ToUpper()
+
 $workdir = Join-Path $env:TEMP 'sd-doors-probe'
 $askpass = Join-Path $workdir 'askpass.cmd'
 
@@ -155,6 +169,34 @@ function Invoke-Native {
     return [pscustomobject]@{ ExitCode = $p.ExitCode; Out = $outTxt; Err = $errTxt }
 }
 
+# ***ONE ssh SESSION, USED BY TWO DOORS.***  The LOGIN door signs in as the
+# account under test; the logto door signs in as the helper and drives SD down
+# stdin.  sshd's ForceCommand starts SD either way, so the remote "command" is
+# decoration and stdin is the real input - which is why $StdIn carries the SD
+# lines and the argument stays 'whoami'.
+#
+# The askpass file is written and deleted around every call, and the password
+# lives in an environment variable of THIS process only.
+function Invoke-SshSession([string]$User, [string]$Pw, [string]$StdIn) {
+    $sshCommon = @('-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=NUL',
+                   '-o', 'ConnectTimeout=20', '-o', 'LogLevel=ERROR')
+    $env:SDPROBEPW = $Pw
+    Set-Content -Path $askpass -Encoding ascii -Value @('@echo off', 'echo %SDPROBEPW%')
+    $env:SSH_ASKPASS = $askpass
+    $env:SSH_ASKPASS_REQUIRE = 'force'
+    $env:DISPLAY = 'localhost:0'
+    try {
+        return Invoke-Native $sshExe.Source ($sshCommon + @(
+                   '-o', 'PreferredAuthentications=password',
+                   '-o', 'NumberOfPasswordPrompts=1',
+                   ($User + '@localhost'), 'whoami')) -StdIn $StdIn
+    } finally {
+        Remove-Item Env:\SSH_ASKPASS, Env:\SSH_ASKPASS_REQUIRE, Env:\DISPLAY, Env:\SDPROBEPW `
+                    -ErrorAction SilentlyContinue
+        Remove-Item $askpass -ErrorAction SilentlyContinue
+    }
+}
+
 # ------------------------------------------------------------- preconditions
 
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -175,10 +217,14 @@ if ($LASTEXITCODE -ne 0) {
     exit 2
 }
 
-if (-not (Test-Path -LiteralPath (Join-Path $accts $acctU))) {
-    Write-Output ("verify-doors: no ACCOUNTS record for {0}." -f $acctU)
-    Write-Output '  Run verify-doors-admin.ps1 -Phase Create, ELEVATED, first.'
-    exit 2
+foreach ($n in @($acctU, $helperU)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $accts $n))) {
+        Write-Output ("verify-doors: no ACCOUNTS record for {0}." -f $n)
+        Write-Output '  Run verify-doors-admin.ps1 -Phase Create, ELEVATED, first - it makes'
+        Write-Output ('  BOTH accounts: {0} is the one under test and {1} is the helper whose' -f $acctU, $helperU)
+        Write-Output '  ssh session carries the group SID this one cannot (PRE_RELEASE 44).'
+        exit 2
+    }
 }
 
 $sshExe = Get-Command ssh.exe -ErrorAction SilentlyContinue
@@ -191,7 +237,8 @@ if (-not (Test-Path -LiteralPath $workdir)) { New-Item -ItemType Directory -Path
 $expect = $(if ($Phase -eq 'Control') { 'admitted' } else { 'refused' })
 
 Write-Output ("verify-doors: as {0}, UNELEVATED, -Phase {1}" -f $id.Name, $Phase)
-Write-Output ("  account  {0}" -f $acct)
+Write-Output ("  account  {0}   (the one under test)" -f $acct)
+Write-Output ("  helper   {0}   (its ssh session issues the LOGTO - PRE_RELEASE 44)" -f $helper)
 Write-Output ("  expecting every door to be {0}" -f $expect.ToUpper())
 Write-Output ("  ssh      {0}" -f $sshExe.Source)
 Write-Output ("  api      {0}  ->  127.0.0.1:{1}" -f $SdConnect, $Port)
@@ -203,22 +250,7 @@ Write-Output '=== door 1: LOGIN (ssh) - LOGIN:477 -> 10107 =====================
 
 # ***SUSPENSION MOVES NO WINDOWS GROUP***, so ssh authenticates in BOTH phases
 # and sshd's ForceCommand starts SD in both.  The difference is what SD says.
-$sshCommon = @('-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=NUL',
-               '-o', 'ConnectTimeout=20', '-o', 'LogLevel=ERROR')
-$env:SDPROBEPW = $Password
-Set-Content -Path $askpass -Encoding ascii -Value @('@echo off', 'echo %SDPROBEPW%')
-$env:SSH_ASKPASS = $askpass
-$env:SSH_ASKPASS_REQUIRE = 'force'
-$env:DISPLAY = 'localhost:0'
-try {
-    $r = Invoke-Native $sshExe.Source ($sshCommon + @(
-             '-o', 'PreferredAuthentications=password',
-             '-o', 'NumberOfPasswordPrompts=1',
-             ($acct + '@localhost'), 'whoami')) -StdIn "OFF`n"
-} finally {
-    Remove-Item Env:\SSH_ASKPASS, Env:\SSH_ASKPASS_REQUIRE, Env:\DISPLAY, Env:\SDPROBEPW -ErrorAction SilentlyContinue
-    Remove-Item $askpass -ErrorAction SilentlyContinue
-}
+$r = Invoke-SshSession $acct $Password "OFF`n"
 $sshText = ($r.Out + "`n" + $r.Err)
 Write-Output ("  ssh exit {0}" -f $r.ExitCode)
 Write-Output '  --- ssh said: ---'
@@ -244,8 +276,20 @@ if ($Phase -eq 'Control') {
 
 Write-Output '=== door 2: logto - CPROC:3776 -> 10107 ==================================='
 
-$out = Invoke-SD @(('LOGTO ' + $acctU), 'WHO')
-Write-Output '  --- SD said: ---'
+# ***THE MEASUREMENT IS THE HELPER'S ssh SESSION, NOT THIS ONE.***  PRE_RELEASE
+# 44: this process's token was built at logon and cannot carry `sdu_<acct>`,
+# which was created minutes ago, so its chdir into the account is denied with
+# 5161 no matter what SD authorises.  The helper signs in fresh and its token
+# carries the group.  Both are run, and only the helper's is decisive - the
+# local one stays as a NON-DECISIVE witness of 44 in the same transcript, so
+# the reason the door needs two accounts is visible rather than remembered.
+Write-Output ('  the LOGTO is issued from ' + $helper + "'s ssh session - see PRE_RELEASE 44")
+Write-Output ''
+
+$rl = Invoke-SshSession $helper $Password ("TERM 200,9999`nLOGTO " + $acctU + "`nWHO`nOFF`n")
+$out = ($rl.Out + "`n" + $rl.Err)
+Write-Output ("  ssh exit {0}   (as {1})" -f $rl.ExitCode, $helper)
+Write-Output '  --- SD said, in the helper session: ---'
 foreach ($line in ($out -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
 Write-Output ''
 
@@ -281,7 +325,7 @@ if ($Phase -eq 'Control') {
     Note 'logto: SD did NOT report 5161 "Unable to change to new directory"' `
          $false $logtoNoDir $true
     Note 'logto: SD did NOT say "is suspended"' $false $logtoSuspended $true
-    # THE OTHER REFUSAL THIS COULD BE.  If the caller is not in the account's
+    # THE OTHER REFUSAL THIS COULD BE.  If the helper is not in the account's
     # group, logto is refused for a reason that has nothing to do with the
     # suspension - and would be refused in the second phase too.
     Note 'logto: it was NOT refused for group membership' $false `
@@ -290,7 +334,30 @@ if ($Phase -eq 'Control') {
     Note 'logto: refused with 10107 "is suspended"' $true $logtoSuspended $true
     Note 'logto: it was NOT the group-membership refusal instead' $false `
          (Test-Say $out 'not allowed in requested account') $true
+    # ***AND NOT 5161 EITHER.***  A suspended account is refused at
+    # logto.authorised (CPROC:2679), BEFORE the chdir at :2691, so a Refused
+    # leg that reports 5161 has been stopped by the token rather than by the
+    # suspension - the same false pass as the Control leg's, wearing the other
+    # face.
+    Note 'logto: it was NOT 5161 instead of the suspension' $false $logtoNoDir $true
 }
+
+# ***THE NON-DECISIVE WITNESS FOR PRE_RELEASE 44.***  The same LOGTO from THIS
+# session, whose token predates the group.  It is expected to fail, it decides
+# nothing, and it is here so the transcript carries the evidence for why the
+# helper exists - a comment saying so would be a claim, and this is a
+# measurement.
+$local = Invoke-SD @(('LOGTO ' + $acctU), 'WHO')
+$localEntered = $false
+foreach ($l in ($local -split "`n")) {
+    if ($l -match ('^\s*\d+\s+' + [regex]::Escape($acctU) + '\s*$')) { $localEntered = $true }
+}
+Write-Output '  --- and the same LOGTO from THIS session, for comparison: ---'
+foreach ($line in ($local -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
+Write-Output ''
+Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
+     (Test-Say $local 'Unable to change to new directory') $false
+Note ('PRE_RELEASE 44: this session''s own LOGTO did NOT enter') $false $localEntered $false
 
 # ============================================================== door 3: API
 

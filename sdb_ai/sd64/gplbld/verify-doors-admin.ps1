@@ -208,24 +208,51 @@ Add-Type -AssemblyName System.Web
 
 $acct    = $Prefix + 'a'
 $acctU   = $acct.ToUpper()
+
+# ***THE HELPER ACCOUNT, AND WHY THE TEST NEEDS TWO - PRE_RELEASE 44.***  The
+# logto door cannot be measured from the session that created the account:
+# Windows fixes group membership in the token at logon, so this session cannot
+# carry `sdu_<acct>` however promptly MODIFY.ACCOUNT ADD puts it there, and the
+# chdir is denied with 5161 after SD's own authorisation has passed.  So the
+# measuring half signs in over ssh AS THE HELPER - a fresh logon, a fresh
+# token - and issues `LOGTO <acct>` from inside that session.
+#
+# ***THIS IS THE SHAPE PRE_RELEASE_FIXES' DOOR TABLE SPECIFIED BEFORE ANY OF IT
+# WAS BUILT***: "grant user A into account B, suspend B, then ssh as A and
+# LOGTO B".  The first implementation ran the LOGTO locally and scored a false
+# pass for a day.  Owner's ruling, 28 Aug 2026, choosing this over dropping the
+# door: two accounts, as the door table says.
+#
+# ***IT COSTS A SECOND PROFILE DIRECTORY PER RUN*** - the helper signs in over
+# ssh too - and that is PRE_RELEASE 35/36 until the reclaim sweep is built.
+$helper  = $Prefix + 'b'
+$helperU = $helper.ToUpper()
+
 $measure = Join-Path $PSScriptRoot 'verify-doors.ps1'
 
 Write-Output ("verify-doors-admin: as {0}, ELEVATED, -Phase {1}" -f $id.Name, $Phase)
-Write-Output ("  account {0}" -f $acct)
-Write-Output ("  caller  {0}   (added to the account's group so logto is permitted)" -f $me)
+Write-Output ("  account {0}   (the one suspended and measured)" -f $acct)
+Write-Output ("  helper  {0}   (ssh's in and issues the LOGTO - PRE_RELEASE 44)" -f $helper)
+Write-Output ("  caller  {0}   (added to the account's group too, for the non-decisive witness)" -f $me)
 Write-Output ''
 
 # ===========================================================================
 if ($Phase -eq 'Create') {
 
-    $taken = @()
-    if (Test-WinUser $acct)                                       { $taken += 'Windows account' }
-    if (Test-Path -LiteralPath (Join-Path $accts $acctU))          { $taken += 'SD ACCOUNTS record' }
-    if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $acct))) { $taken += 'profile directory' }
-    if ($taken.Count -gt 0) {
-        Write-Output ("verify-doors-admin: " + $acct + " already exists as: " + ($taken -join ', '))
-        Write-Output '  Use a fresh prefix.'
-        exit 2
+    # BOTH names are checked, and BEFORE either is created.  A prefix whose
+    # helper name is free but whose account name is not is not a usable prefix.
+    foreach ($n in @($acct, $helper)) {
+        $taken = @()
+        if (Test-WinUser $n)                                  { $taken += 'Windows account' }
+        if (Test-Path -LiteralPath (Join-Path $accts $n.ToUpper())) { $taken += 'SD ACCOUNTS record' }
+        if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $n))) { $taken += 'profile directory' }
+        if (Get-LocalGroup -Name ('sdu_' + $n) -ErrorAction SilentlyContinue)    { $taken += 'sdu_ group' }
+        if ($taken.Count -gt 0) {
+            Write-Output ("verify-doors-admin: " + $n + " already exists as: " + ($taken -join ', '))
+            Write-Output '  Use a fresh prefix.  A prefix is single-use once either of its accounts'
+            Write-Output '  has signed in over ssh - the profile directory outlives the account.'
+            exit 2
+        }
     }
 
     # ***THE CALLER MUST BE IN sdusers OR THE CONTROL LEG IS UNTESTABLE.***
@@ -376,9 +403,51 @@ if ($Phase -eq 'Create') {
     Note 'it did NOT refuse for sdusers membership (10020)' $false `
          (Test-Say $lastSD 'is not a member of sdusers') $true
 
+    # ------------------------------------------------------- the helper account
+    #
+    # ***THE HELPER IS WHAT MAKES THE logto DOOR REACHABLE - PRE_RELEASE 44.***
+    # It needs only ssh, so it is created SSH rather than BOTH: no API route and
+    # no $cred entry to leave behind.  Its Windows password is the same string,
+    # which keeps the measuring half on a single -Password; they are still two
+    # separate accounts with two separate credentials.
+    Show-SD 'create the helper account' @(
+        ('CREATE.ACCOUNT USER ' + $helper + ' PROGRAMMER SSH'), $pw, $pw) @($pw)
+    Note 'the helper ACCOUNTS record exists' $true `
+         (Test-Path -LiteralPath (Join-Path $accts $helperU)) $true
+    Note 'the helper Windows account exists' $true (Test-WinUser $helper) $true
+    if (-not (Test-WinUser $helper)) {
+        Write-Output '  Without the helper the logto door cannot be measured at all - this'
+        Write-Output '  session''s own token cannot carry the group (PRE_RELEASE 44).  Take the'
+        Write-Output '  fixture away with -Phase Remove before trying again.'
+        Write-Verdict 'verify-doors-admin'
+        exit 2
+    }
+
+    # ***AND THE GRANT THAT THE WHOLE DOOR TURNS ON.***  Without it the helper's
+    # LOGTO is refused for group membership - 10003, "not allowed in requested
+    # account" - in BOTH legs, and the refusal after the suspension would prove
+    # nothing.  The measuring half checks for that wording separately for the
+    # same reason.
+    Show-SD 'permit the helper into the account under test' @(
+        ('MODIFY.ACCOUNT ' + $acctU + ' ADD ' + $helper)) @()
+    Note ('10018: ' + $helper + ' added to the group') $true `
+         (Test-Say $lastSD ([regex]::Escape($helper) + ' added to group')) $true
+    Note 'the helper grant was NOT refused for sdusers membership (10020)' $false `
+         (Test-Say $lastSD 'is not a member of sdusers') $true
+
+    # THE GROUP IS READ BACK FROM WINDOWS, not inferred from what SD printed.
+    # 10018 is SD reporting its own intent; this is the machine agreeing.
+    $helperInGroup = $false
+    try {
+        $helperInGroup = @(Get-LocalGroupMember -Group ('sdu_' + $acct) -ErrorAction Stop |
+                           Where-Object { $_.Name -match ('\\' + [regex]::Escape($helper) + '$') }).Count -gt 0
+    } catch { }
+    Note ('Windows agrees: ' + $helper + ' is in sdu_' + $acct) $true $helperInGroup $true
+
     Write-Output ''
     Write-Output '==========================================================================='
-    Write-Output ('  ACCOUNT : ' + $acct)
+    Write-Output ('  ACCOUNT : ' + $acct + '   (suspended and measured)')
+    Write-Output ('  HELPER  : ' + $helper + '   (issues the LOGTO over ssh)')
     if ($Password -ne '') {
         # ***THE PASSWORD IS NOT PRINTED WHEN IT WAS SUPPLIED, AND THAT IS THE
         # POINT OF THE BRANCH.***  verify-doors-suite.ps1 runs this phase as an
@@ -449,30 +518,49 @@ if ($Phase -eq 'Suspend') {
 # ===========================================================================
 if ($Phase -eq 'Remove') {
 
-    if (-not (Test-Path -LiteralPath (Join-Path $accts $acctU))) {
-        Write-Output ("  no ACCOUNTS record for {0} - nothing to remove." -f $acctU)
-    } else {
-        Show-SD 'delete the account' @(('DELETE.ACCOUNT ' + $acct), 'Y') @()
+    # ***BOTH ACCOUNTS, AND THE HELPER GOES FIRST.***  It is the one holding a
+    # membership of the other's group; taking the account away first would leave
+    # the helper pointing at a group that no longer exists.  Neither delete is
+    # allowed to stop the other - a Remove that abandoned the second account
+    # would leave a live, ssh-reachable account behind, which is exactly the
+    # residue the b50 run left when its Remove leg never ran at all.
+    foreach ($n in @($helper, $acct)) {
+        $nU = $n.ToUpper()
+        if (-not (Test-Path -LiteralPath (Join-Path $accts $nU))) {
+            Write-Output ("  no ACCOUNTS record for {0} - nothing to remove." -f $nU)
+        } else {
+            Show-SD ('delete ' + $n) @(('DELETE.ACCOUNT ' + $n), 'Y') @()
+        }
+        Note ('the Windows account ' + $n + ' is gone') $false (Test-WinUser $n) $true
+        Note ('the ACCOUNTS record for ' + $nU + ' is gone') $false `
+             (Test-Path -LiteralPath (Join-Path $accts $nU)) $true
     }
-
-    Note 'the Windows account is gone' $false (Test-WinUser $acct) $true
-    Note 'the ACCOUNTS record is gone' $false `
-         (Test-Path -LiteralPath (Join-Path $accts $acctU)) $true
 
     # Read from disk, not from what DELETE.ACCOUNT said - PRE_RELEASE 41.
     $litter = @()
-    $d = Join-Path $env:SystemDrive ('Users\' + $acct)
-    if (Test-Path -LiteralPath $d) { $litter += $d }
-    foreach ($g in @('sdu_' + $acct)) {
-        if (Get-LocalGroup -Name $g -ErrorAction SilentlyContinue) { $litter += ('group ' + $g) }
+    foreach ($n in @($acct, $helper)) {
+        $d = Join-Path $env:SystemDrive ('Users\' + $n)
+        if (Test-Path -LiteralPath $d) { $litter += $d }
+        if (Get-LocalGroup -Name ('sdu_' + $n) -ErrorAction SilentlyContinue) {
+            $litter += ('group sdu_' + $n)
+        }
+    }
+    # AND THE THREE SHARED GROUPS, which a delete can leave an orphan SID in.
+    foreach ($g in @('sdusers', 'sdssh', 'sdapi')) {
+        try {
+            $orphans = @(Get-LocalGroupMember -Group $g -ErrorAction Stop |
+                         Where-Object { $_.Name -match '^S-1-' })
+            if ($orphans.Count -gt 0) { $litter += ("{0}: {1} orphan SID(s)" -f $g, $orphans.Count) }
+        } catch { }
     }
     if ($litter.Count -gt 0) {
         Write-Output '  *** LEFT BEHIND - read from disk, not from what the delete reported:'
         $litter | ForEach-Object { Write-Output ('      ' + $_) }
-        Write-Output '  This account DID sign in over ssh, so a profile directory here is'
-        Write-Output '  PRE_RELEASE 35/36 and expected until that is built.'
+        Write-Output '  BOTH accounts sign in over ssh, so TWO profile directories here are'
+        Write-Output '  PRE_RELEASE 35/36 and expected until that is built.  A group or an'
+        Write-Output '  orphan SID in this list is NOT expected and is a real leak.'
     } else {
-        Write-Output ('  nothing left behind for ' + $acct)
+        Write-Output ('  nothing left behind for ' + $acct + ' or ' + $helper)
     }
 }
 
