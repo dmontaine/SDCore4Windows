@@ -1,0 +1,1 @@
+The members of group %1 could not be read, so the grants on account %2 have\nnot been checked.\n\nThe tier change itself succeeded. What is not known is whether it stopped\nanybody's grant from working - so this is NOT a report that nobody was\naffected. Run list.grants %2 when the group can be read again.

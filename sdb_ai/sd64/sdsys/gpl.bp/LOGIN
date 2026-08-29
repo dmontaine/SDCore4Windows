@@ -18,6 +18,15 @@
 * 
 * 
 * START-HISTORY:
+* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56 CLAUSE 2, REVERSED.  The
+*           administrator's personal account is restored, so the sdusers gate
+*           loses its administrator exemption and becomes uniform across all
+*           three tiers, and the SDSYS case tests "did this session START
+*           elevated" (the K$ADMINISTRATOR seed) instead of "is this person an
+*           administrator".  An unelevated administrator now lands in their own
+*           account and reaches SDSYS by LOGTO, which is one of the owner's two
+*           explicit routes; the other is starting SD already elevated.
+*           Administrators keep ssh, which the morning's model had taken.
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
 *           2026: MODIFY.ACCOUNT writes SUSPENDED to ACC$TIER and this is the
 *           front door that shuts.  One test after the case statement, covering
@@ -376,26 +385,33 @@ deffun elevate(action,arg) calling '!elevate'
 *   a strictly harder test than sdusers membership before reaching this line.
 *   See PROJECT_STATUS.md section 5.6.
 
-* 29 Aug 26 Windows port - AND AN ADMINISTRATOR IS EXEMPT TOO.
-*   PRE_RELEASE_FIXES 56.  ***WITHOUT THIS THE WHOLE MODEL IS DEAD AT THE
-*   DOOR***, which is why it is here rather than filed as a later tidy: this
-*   gate runs BEFORE the account is chosen below, and the model gives an
-*   administrator no account of their own - so nothing ever puts them in
-*   sdusers, and they would be refused here before reaching the case that
-*   sends them to SDSYS.  Found by reading, not by a cycle.
+* 29 Aug 26 Windows port - THE ADMINISTRATOR EXEMPTION THAT STOOD HERE IS GONE,
+*   AND THE GATE IS NOW UNIFORM ACROSS ALL THREE TIERS.  PRE_RELEASE_FIXES 56
+*   clause 2, reversed by the owner the same day it was written.
 *
-*   IT OPENS NO HOLE, AND THE ARGUMENT IS THE ONE THE INTERNAL EXEMPTION
-*   ABOVE ALREADY MAKES.  An administrator exempted here can reach exactly one
-*   place - SDSYS, by the case below, which asks UAC - and consent at UAC is a
-*   strictly harder test than membership of a group.  The other two arms are
-*   closed to them: "sd -Aname" is refused for any account that is not your
-*   own (10051), and an administrator with no account has none to name.
+*   IT WAS ADDED BY 56 AND ITS REASON WAS 56.  The exemption existed because
+*   the model of that morning gave an administrator NO ACCOUNT OF THEIR OWN, so
+*   nothing ever put them in sdusers and this gate - which runs before the
+*   account is chosen below - would have refused them at the door.  The owner
+*   then restored the personal account: "that is precisely why administrators
+*   also had a personal account.  They got SDSYS in one of two ways, by
+*   starting SD in an elevated session or by logging to SD after logging into
+*   their personal account."  An administrator has an account again, so they
+*   are in sdusers again, and the exemption has nothing left to fix.
 *
-*   THE EXEMPTION IS THE RIGHT SHAPE, NOT "ADD ADMINISTRATORS TO sdusers AT
-*   INSTALL".  That alternative covers only the administrators who existed
-*   when the installer ran; one promoted afterwards would be refused by SD for
-*   a reason nobody would think to look for.  This asks Windows every time.
-     if not(kernel(K$INTERNAL,-1)) and not(kernel(K$OS.ADMINISTRATOR,0)) then
+*   AND REMOVING IT IS WHAT MAKES HIS OTHER SENTENCE TRUE, so this is a
+*   feature rather than a tidy: "if any are built outside of sd they do not
+*   have access to sd until a matching standard or programmer account is
+*   created in SD."  That property already held for STANDARD and PROGRAMMER -
+*   this line is what enforces it - and the exemption was the single reason it
+*   did not hold for administrators.  A Windows administrator created outside
+*   SD now gets 5009 here, exactly as anybody else made outside SD does.
+*
+*   BE HONEST ABOUT WHAT IT BUYS.  A Windows administrator can add themselves
+*   to sdusers, read the data tree, or run as SYSTEM, so this is AN EXPLICIT
+*   ACT AND AN AUDIT TRAIL, NOT A BOUNDARY THAT HOLDS AGAINST THEM.  The owner
+*   was shown that before ruling.
+     if not(kernel(K$INTERNAL,-1)) then
         if not(is_grp_member(lgn.id,'sdusers')) then
            display sysmsg(5009) ;* This user is not registered for SD use
            audit.reason = 'not a member of sdusers'
@@ -489,28 +505,67 @@ deffun elevate(action,arg) calling '!elevate'
 *   answers it differently - an administrator's LOGIN *is* the elevation, so
 *   there is no "before" left to protect.
 *
-*   IT IS NOT THE CASE THAT WAS DELETED, THOUGH, AND THE DIFFERENCE MATTERS.
-*   The old one tested K$ADMINISTRATOR - "did this person open an elevated
-*   terminal" - and prompted for nothing.  This tests K$OS.ADMINISTRATOR,
-*   "is this person an administrator at all", and ASKS UAC.  So an
-*   administrator no longer has to know to elevate their terminal first.
+* 29 Aug 26 Windows port - AND THE TEST IS BACK TO "IS THIS SESSION ELEVATED".
+*   PRE_RELEASE_FIXES 56 clause 2, reversed by the owner the same day.  For
+*   one afternoon this case tested K$OS.ADMINISTRATOR - "is this person an
+*   administrator at all" - and asked UAC on their behalf, because the model
+*   of that morning left them nowhere else to land.  The personal account is
+*   restored, so there are TWO EXPLICIT ROUTES INTO SDSYS AND NOT ONE
+*   AUTOMATIC ONE, in his words: "they got SDSYS in one of two ways, by
+*   starting SD in an elevated session or by logging to SD after logging into
+*   their personal account."
 *
-*   ***AND IT COSTS ADMINISTRATORS ssh.  THAT IS A CONSEQUENCE, NOT A
-*   CHOICE.***  UAC draws its consent dialog on the interactive desktop and an
-*   ssh session has none, so elevate('START') fails there and this refuses -
-*   and under the model above the administrator has no account of their own to
-*   fall back to.  An administrator who wants to reach SD over ssh creates a
-*   personal account and grants it rights, like anyone else (his clause 3).
-*   Consistent with 5.6.2, "local terminal access is for administrators".
+*   SO AN UNELEVATED ADMINISTRATOR FALLS THROUGH TO "case 1" AND LANDS IN
+*   THEIR OWN ACCOUNT, and reaches SDSYS from there with LOGTO SDSYS, which
+*   asks UAC in CPROC.  Elevating the terminal first is the other route.
+*
+*   ***K$ADMINISTRATOR HERE IS THE PROCESS-START SEED AND THAT IS THE WHOLE
+*   MECHANISM.***  kernel.c:240 sets USR_ADMIN from IsElevated() && not
+*   CN_SOCKET, and NOTHING HAS TOUCHED IT YET at this point: the only writers
+*   in the BASIC layer are :615 below and CPROC:2769/:2781, and both CPROC
+*   sites are in the LOGTO path, which cannot run before LOGIN.  So reading it
+*   here asks "did this session START elevated", which is a question no other
+*   key answers.
+*
+*   MEASURED 29 Aug 2026 RATHER THAN ASSUMED, with gplbld/probe-osadmin.ps1
+*   run twice from the same account.  The two keys differ in exactly the place
+*   this case needs them to:
+*
+*                          unelevated   elevated
+*     IsAdmin()               TRUE        TRUE     -> K$OS.ADMINISTRATOR
+*     IsElevated()            FALSE       TRUE     -> K$ADMINISTRATOR seed
+*
+*   ***SO K$OS.ADMINISTRATOR COULD NOT CARRY THIS ON ITS OWN*** - it is TRUE
+*   for an unelevated administrator, which is the case that must NOT come
+*   here.  Do not "simplify" this back to one key.
+*
+*   BOTH ARE TESTED, AND THE SECOND IS BELT TO THE FIRST'S BRACES.  Elevation
+*   implies administrator in every ordinary case, so K$OS.ADMINISTRATOR adds
+*   nothing on the happy path; it closes the case where a token carries
+*   BUILTIN\Administrators for an account that is not a member of it, where
+*   the seed would say "elevated" of somebody Windows does not call an
+*   administrator.  It costs one kernel call at login.
+*
+*   ADMINISTRATORS KEEP ssh NOW, WHICH THE MORNING'S MODEL HAD TAKEN.  An ssh
+*   session is never elevated - UAC has no desktop there - so it falls through
+*   to case 1 and lands in the administrator's personal account, like anybody
+*   else.  It is the account's rights that apply, not SDSYS's, which is the
+*   whole point of clause 3.
 *
 *   THE REGISTER IS READ BEFORE UAC IS ASKED.  A broken install should not
 *   draw a consent dialog to then refuse the login anyway.
+*
+*   elevate('START') IS KEPT EVEN THOUGH THIS SESSION IS ALREADY ELEVATED, and
+*   it prompts for nothing: sd-elevate.ps1:119 short-circuits with exit 0 when
+*   the process token is already an administrator's.  It stays because it is
+*   what registers the session with the per-user helper, and because a failure
+*   here is the honest way to refuse an elevation that cannot be served.
 *
 *   NOTHING IS LEAKED IF A LATER STEP FAILS.  The helper carries -OwnerPid and
 *   exits when this session's process goes, waking periodically while idle, so
 *   a refusal further down releases it without CPROC's logto.privilege.undo
 *   dance.  Checked in sd-elevate-helper.ps1 rather than assumed.
-      case kernel(K$OS.ADMINISTRATOR, 0)
+      case kernel(K$ADMINISTRATOR, -1) and kernel(K$OS.ADMINISTRATOR, 0)
          initial.account = 'SDSYS'
 
          read acc.rec from acc.f, initial.account else

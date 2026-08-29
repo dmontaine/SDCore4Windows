@@ -2973,9 +2973,19 @@ begin
         adopt-account.ps1 ships beside sd.exe and is what the installer itself
         ran, so naming it gives the user the SAME code path rather than a
         second, hand-driven one - and it keeps the verb out of sight. }
+      { 29 Aug 26 - WHICH REFUSAL YOU GET DEPENDS ON HOW FAR ADOPT GOT, so it is
+        no longer named.  This said "your account is not in the register", which
+        is one of two messages now: PRE_RELEASE_FIXES 56 clause 2 removed
+        LOGIN's administrator exemption from the sdusers gate, so a failed adopt
+        that never reached the group is refused earlier, with "this user is not
+        registered for SD use" instead.  THE RECOVERY IS UNCHANGED AND STILL
+        WORKS - adopt-account.ps1 goes in through "sd -internal", which is
+        exempt from that gate by design and is the reason this branch is a
+        setback rather than a lockout. }
       AccountMsg := 'SD could NOT give you an account automatically (code ' +
-                    IntToStr(AdoptCode) + '). Until one exists, "sd" will answer that your ' +
-                    'account is not in the register. Put it right from an ELEVATED ' +
+                    IntToStr(AdoptCode) + '). Until one exists, "sd" will refuse you: ' +
+                    'being a Windows administrator is not by itself an SD account, and ' +
+                    'there is no exception for one. Put it right from an ELEVATED ' +
                     'PowerShell prompt:' + #13#10#13#10 +
                     '    powershell -File "' + ExpandConstant('{app}') + '\adopt-account.ps1" -User ' +
                     ExpandConstant('{username}') + #13#10#13#10 +

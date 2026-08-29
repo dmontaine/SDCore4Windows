@@ -5,6 +5,60 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+29 Aug 26  AN ADMINISTRATOR NOW SIGNS IN TO THEIR OWN ACCOUNT, AND REACHES
+           SDSYS BY ELEVATING - NOT AUTOMATICALLY.
+
+           There are two ways into SDSYS and both are deliberate acts.  Start
+           SD from a terminal you have already elevated and you land in SDSYS.
+           Otherwise you land in your own account, exactly like anybody else,
+           and type "logto sdsys" when you want it - which asks for consent at
+           that point.
+
+           What changed is the second case.  Being an administrator was enough
+           on its own for a moment: any administrator starting SD was sent to
+           SDSYS and asked to consent, whether they meant to go there or not.
+           Now it is the session that decides, not who you are, so ordinary
+           work happens in your own account and administrator rights are
+           something you ask for.
+
+           Two consequences worth knowing:
+
+             * Administrators can use ssh again.  An ssh session cannot be
+               elevated - the consent dialog has nowhere to appear - so it
+               lands in your own account and uses that account's rights.
+
+             * A Windows administrator with no SD account of their own is now
+               refused, with "this user is not registered for SD use".  That
+               already applied to everybody else; it applies to
+               administrators too.  Create an account for them with
+               create.account, as you would for anyone.
+
+           Be clear about what the last one is worth: a Windows administrator
+           can put themselves back in the group, read the database directly,
+           or run as the system account.  It is an explicit step and a record
+           of who took it, not a wall.
+
+29 Aug 26  CHANGING AN ACCOUNT'S TIER NOW TELLS YOU WHOSE ACCESS IT BROKE.
+
+           Raising an account's tier can strand a grant.  If b is a standard
+           account that alice has been given access to, "modify.account b
+           programmer" leaves alice a member of the account's Windows group -
+           so nothing looks wrong - while logto refuses her, because a grant
+           may go down or sideways and never up.
+
+           modify.account now lists the people whose access it has just made
+           useless, and says what to do about it: raise their tier, or revoke
+           the grant so the membership does not outlive the access.
+
+           It reports only what that command changed.  A membership that was
+           already refused before you ran it - one made outside SD, or left by
+           an earlier promotion - is not listed, because it is not this
+           command's doing.  Lowering a tier strands nobody and says nothing.
+
+           If the account's group cannot be read, it says so.  Silence means
+           "nobody was affected", so the one case where nothing could be
+           checked is spelled out rather than looking like good news.
+
 29 Aug 26  ACCESS TO AN ACCOUNT CAN NO LONGER BE GRANTED UPWARDS, AND SDSYS
            CANNOT BE GRANTED AT ALL.
 

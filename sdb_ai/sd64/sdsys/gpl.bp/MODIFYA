@@ -19,6 +19,14 @@
 * 
 *
 * START-HISTORY:
+* 29 Aug 26 Windows port - A TIER CHANGE NAMES THE GRANTS IT VOIDED.  Owner,
+*   29 Aug 2026, PRE_RELEASE_FIXES 57's last piece: "Proceed, and print what it
+*   voided."  Promoting an account left every lower-tier member of its Windows
+*   group holding a membership that logto would refuse, with nothing said at
+*   the moment it stopped working.  promo.snapshot and promo.report ask
+*   tier_allows either side of the register write, so the report is a
+*   before-and-after measurement rather than rank arithmetic copied out of
+*   TIERGATE.  Messages 10128 and 10129.
 * 28 Aug 26 Windows port - the ADD and DELETE arms write a K$AUDIT record, as
 *   GRANT and REVOKE already did.  The same group edit through two verbs left
 *   a trail through only one of them.  PRE_RELEASE_FIXES.md 27.
@@ -205,6 +213,21 @@ deffun tier_allows(user,account) calling '!tier_allows'
    voc.removed        = 0
    voc.kept           = 0
    voc.skipped        = @false
+*  29 Aug 26 Windows port - the promotion report, PRE_RELEASE_FIXES 57.  Here
+*  for the reason the banner above gives: promo.report reads what
+*  promo.snapshot sets, and both stand textually BELOW tier.set, which is what
+*  BCOMP counts as unassigned.  promo.readable is @false so a path that never
+*  reached the snapshot reports "not checked" rather than a confident zero.
+   promo.was          = ''
+   promo.lost         = ''
+   promo.n            = 0
+   promo.checked      = 0
+   promo.readable     = @false
+   promo.mem          = ''
+   promo.rc           = 0
+   promo.count        = 0
+   promo.i            = 0
+   promo.who          = ''
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
    
@@ -950,6 +973,11 @@ tier.set:
       return
    end
 
+*  ---- WHO CAN ENTER THIS ACCOUNT TODAY?  The BEFORE half of the promotion
+*  ---- report, taken while the register still says the OLD tier.  It must be
+*  ---- the last thing before the write and it changes nothing.
+   gosub promo.snapshot
+
 *  ---- The register, last.
    readu tier.rec.new from acc.f, acc.name else tier.rec.new = acc.rec
 
@@ -982,6 +1010,114 @@ tier.set:
       crt sysmsg(10113, voc.added, voc.removed, voc.kept)
       * VOC: %1 records added, %2 removed, %3 left alone
    end
+
+*  ---- The AFTER half.  Last, because it is a consequence of the change and
+*  ---- the change should be reported before its consequences.
+   gosub promo.report
+
+   return
+
+* ======================================================================
+* promo.snapshot / promo.report  -  name the grants this tier change voided.
+*
+* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 57's last piece.  Put to the owner
+* as two options - refuse the promotion while lower-tier members remain, or let
+* it proceed and say what it broke - and answered in five words on 29 Aug 2026:
+* "Proceed, and print what it voided."
+*
+* WHAT IT IS FOR.  "modify.account b programmer" raises the account's rank, and
+* every standard-tier member of sdu_b is then somebody LOGTO will refuse.  The
+* gate holds - that is what TIERGATE is for - but the membership sits in
+* Windows looking perfectly valid and simply stops working, with nothing said
+* at the moment it stopped.
+*
+* ***IT IS MEASURED ACROSS THE WRITE, NOT PREDICTED FROM THE RANKS.***
+* tier_allows reads ACC$TIER out of the register, so the SAME call answers
+* differently either side of the register write above.  That makes "what did
+* this command void" a genuine before-and-after comparison instead of rank
+* arithmetic duplicated out of TIERGATE - which is the copy that would go
+* stale, and TIERGATE's own note says why one place has to decide.
+*
+* SO IT CLAIMS ONLY WHAT THIS COMMAND CHANGED.  A membership that was ALREADY
+* refused before the command ran - made with "net localgroup", or left behind
+* by an earlier promotion - is not this command's doing and is not listed as
+* though it were.  GRANTA's note on the same subject is why such memberships
+* exist at all.
+*
+* A DEMOTION VOIDS NOTHING AND PRINTS NOTHING, and that falls out rather than
+* being special-cased: lowering the account's rank cannot turn an allowed
+* member into a refused one, so the comparison is empty.  Nothing here tests
+* the direction of the move, which is one fewer thing to get wrong.
+*
+* ***AND THE NULL CASE IS REFUSED OUT LOUD.***  "No grant was voided" and "the
+* group could not be read" are the same silence otherwise, and the second is
+* the one somebody needs to hear, because it means the quiet is not evidence.
+* promo.readable is tested before promo.n for exactly that reason.
+
+promo.snapshot:
+   promo.was      = ''
+   promo.lost     = ''
+   promo.n        = 0
+   promo.checked  = 0
+   promo.readable = @false
+
+*  An account with no group has no grants to void.  Not an error, and not a
+*  "could not read" either - there is nothing to read.  Reported as readable
+*  with an empty list, which is the truth.
+   if group.name = '' then
+      promo.readable = @true
+      return
+   end
+
+   promo.mem = ''
+   promo.rc  = os_group('LISTMEM', group.name, promo.mem)
+   if promo.rc # 0 then return
+
+   promo.readable = @true
+
+*  dcount('') IS 1, NOT 0.  GRANTA's do.list carries the same two lines for
+*  the same reason; without the correction an empty group reports one member
+*  whose name is the empty string.
+   promo.count = dcount(promo.mem, @fm)
+   if promo.mem = '' then promo.count = 0
+
+   for promo.i = 1 to promo.count
+      promo.who = trim(promo.mem<promo.i>, ' ', 'B')
+      if promo.who # '' then
+         if tier_allows(promo.who, acc.name) then
+            promo.was<-1> = promo.who
+         end
+      end
+   next promo.i
+
+   return
+
+promo.report:
+   if not(promo.readable) then
+      crt sysmsg(10129, group.name, acc.name)
+      * The members of %1 could not be read, so grants on %2 are unchecked
+      return
+   end
+
+   promo.checked = dcount(promo.was, @fm)
+   if promo.was = '' then promo.checked = 0
+
+   for promo.i = 1 to promo.checked
+      promo.who = promo.was<promo.i>
+      if not(tier_allows(promo.who, acc.name)) then
+         promo.lost<-1> = promo.who
+      end
+   next promo.i
+
+   promo.n = dcount(promo.lost, @fm)
+   if promo.lost = '' then promo.n = 0
+
+   if promo.n = 0 then return
+
+   crt sysmsg(10128, promo.n, acc.name, want.tier)
+   for promo.i = 1 to promo.n
+      crt '   ' : promo.lost<promo.i>
+   next promo.i
 
    return
 
