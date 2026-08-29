@@ -35,7 +35,25 @@
 # unrecognised token.  Standard is also the tier these verifiers want - the
 # least-privileged thing that can hold an account.
 
-Set-StrictMode -Version Latest
+# ***NO Set-StrictMode HERE, AND THAT IS DELIBERATE - IT WAS HERE AND IT LEAKED.***
+# Measured 29 Aug 2026, not assumed: Set-StrictMode applies to the CURRENT scope
+# and its children, and dot-sourcing runs in the CALLER's scope - so this file
+# was silently turning strict mode on inside VerifyInstall1.ps1 and
+# verify-nocase.ps1, neither of which was written under it.  A probe that
+# dot-sourced this file went from "undefined variable: allowed" to
+# "THREW - RuntimeException" on the line after, and a missing property threw
+# PropertyNotFoundException.
+#
+# THAT WAS NOT THEORETICAL.  VerifyInstall1.ps1's fallback for a missing sd.exe
+# reads the uninstall keys with "$_.DisplayName -like 'SD *' -and
+# $_.InstallLocation", and uninstall keys routinely carry neither - under strict
+# mode that is a terminating error, in the branch whose whole job is to explain
+# a broken install in one line rather than twenty-four.
+#
+# SO EACH FUNCTION SETS IT FOR ITSELF.  A function's scope is a CHILD of its
+# caller's, so Set-StrictMode inside one binds that function and escapes
+# nowhere.  The strictness is kept exactly where it was wanted - over this
+# module's own code - and is not imposed on anything that dot-sources it.
 
 # The safe alphabet, and the reason is not aesthetic: SSH_ASKPASS is a cmd.exe
 # batch file, and cmd eats %, &, ^, | and friends.  Kept identical to
@@ -50,6 +68,7 @@ function New-SdTestPassword {
         verify-doors-admin's first version passed review and then ate a
         character; this runs before CREATE.ACCOUNT so a failure costs nothing
         and leaves no account behind.  #>
+    Set-StrictMode -Version Latest
     $bytes = New-Object byte[] 20
     ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
     $pw = (-join ($bytes | ForEach-Object { $script:SdTestAlphabet[$_ % $script:SdTestAlphabet.Length] })) + '-Aa9'
@@ -85,6 +104,7 @@ function New-SdTestPassword {
 # a file so anything that prompts gets EOF rather than hanging.
 function Invoke-SdTestNative {
     param([string]$Exe, [string[]]$CmdArgs, [string]$StdIn = '', [string]$WorkDir)
+    Set-StrictMode -Version Latest
     $so = Join-Path $WorkDir 'native.out'
     $se = Join-Path $WorkDir 'native.err'
     $si = Join-Path $WorkDir 'native.in'
@@ -122,6 +142,7 @@ function Invoke-SdAsTestUser {
         [string[]]$Commands = @(),
         [string]$WorkDir = ''
     )
+    Set-StrictMode -Version Latest
 
     # REFUSE THE NULL CASE, OUT LOUD.  An empty command list would open a
     # session, send nothing and come back "successful" - a measurement of
@@ -175,9 +196,97 @@ function Get-SdTestUserHome {
     <#  Where the account's files are, for the verifiers that work on the
         filesystem side rather than through SD.  Derived, not guessed: the
         installer's DataDir is {commonappdata}\SD and CREATE.ACCOUNT puts user
-        accounts under user_accounts\<name>, lower case (5.12).  #>
+        accounts under user_accounts\<name>, lower case (5.12).
+
+        ***THE PATH RESOLVING IS NOT THE SAME AS THE PATH BEING REACHABLE, AND
+        WHEN THIS WAS WRITTEN IT WAS NOT.***  Measured 29 Aug 2026 against the
+        10:35:46 install: each account directory is PROTECTED and grants Modify
+        to SYSTEM, Administrators and ITS OWN sdu_<account> GROUP ONLY.  The
+        unelevated parent is in none of those - Administrators is deny-only in
+        a filtered token - so an "ls" of SDACCTB59 answered "Permission denied"
+        and so did a touch.  All four of the verifiers this module exists for
+        plant their probes THROUGH THE FILE SYSTEM (verify-lcnames alone does
+        it in nine places), so without a grant this function names a directory
+        none of them can use.
+
+        sdtestuser-admin.ps1 -Action Create therefore adds one inheritable ACE
+        for the invoking user, and Assert-SdTestUserHomeWritable below is what
+        proves it landed rather than assuming it.  #>
     param([Parameter(Mandatory = $true)][string]$Name)
+    Set-StrictMode -Version Latest
     return (Join-Path $env:ProgramData ('SD\user_accounts\' + $Name.ToLower()))
+}
+
+function Test-SdDirWritable {
+    <#  Can THIS process write in $Path.  A real write, a real read-back and a
+        real delete - not Get-Acl arithmetic.
+
+        ***THE ACL IS NOT THE CLAIM AND THAT DISTINCTION IS THE WHOLE
+        FUNCTION.***  An ACE that is present and an ACE that is effective are
+        different things, and only the second is what four verifiers are about
+        to rely on.  The read-back is there for the same reason: a write that
+        lands somewhere else, or short, is not a write.
+
+        SPLIT OUT FROM THE ASSERT BELOW SO IT CAN BE DRIVEN BOTH WAYS WITHOUT
+        AN INSTALL.  The assert resolves a path under ProgramData that a unit
+        test cannot create; this takes any directory, so the test can hand it
+        one it can write (the positive control, which is the direction the
+        reclaim suite got wrong on 28 Aug - "every accepted row handed in
+        SYSTEM or Administrators and none handed in what the producer actually
+        writes") and one it cannot.
+
+        Returns $true or $false and THROWS NOTHING, so a caller can report.  #>
+    param([Parameter(Mandatory = $true)][string]$Path)
+    Set-StrictMode -Version Latest
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return $false }
+    $probe = Join-Path $Path ('ZZWRITE-' + $PID + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.tmp')
+    $token = 'sdtestuser-writable-' + [guid]::NewGuid().ToString('N')
+    $ok = $false
+    try {
+        [IO.File]::WriteAllText($probe, $token)
+        $ok = ([IO.File]::ReadAllText($probe) -ceq $token)
+    } catch {
+        $ok = $false
+    } finally {
+        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+    }
+    return $ok
+}
+
+function Assert-SdTestUserHomeWritable {
+    <#  REFUSE THE NULL CASE, ONCE AND LOUDLY.  The grant sdtestuser-admin.ps1
+        makes is applied by an ELEVATED CHILD and used by an UNELEVATED PARENT,
+        so nothing in the child's own process proves it worked - an elevated
+        write goes through Administrators\FullControl either way.  If the grant
+        silently did not land, every converted verifier would fail on its own
+        probe with its own wording and four different-looking failures would
+        have one cause.
+
+        It names the ACL it found when it fails, because "could not write"
+        without the ACL is a verdict with no evidence.  #>
+    param([Parameter(Mandatory = $true)][string]$Name)
+    Set-StrictMode -Version Latest
+
+    $dir = Get-SdTestUserHome -Name $Name
+    if (-not (Test-Path -LiteralPath $dir)) {
+        throw ("Assert-SdTestUserHomeWritable: $dir does not exist. " +
+               'CREATE.ACCOUNT did not make it, or the name is wrong.')
+    }
+
+    if (-not (Test-SdDirWritable -Path $dir)) {
+        $acl = '      (could not be read either)'
+        try {
+            $acl = ((Get-Acl -LiteralPath $dir).Access |
+                    ForEach-Object { '      ' + $_.IdentityReference + ' ' + $_.FileSystemRights }) -join "`n"
+        } catch { }
+        throw ("Assert-SdTestUserHomeWritable: cannot write inside $dir." +
+               "`n  An account directory grants Modify to SYSTEM, Administrators and sdu_$Name" +
+               "`n  ONLY, and an unelevated token has none of the three - Administrators is" +
+               "`n  present but DENY-ONLY in a filtered token.  sdtestuser-admin.ps1 -Action" +
+               "`n  Create adds an ACE for the invoking user; it did not land.  The ACL now:`n" + $acl)
+    }
+    return $dir
 }
 
 function New-SdTestUserScript {
@@ -197,6 +306,7 @@ function New-SdTestUserScript {
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$Password
     )
+    Set-StrictMode -Version Latest
     return @(('CREATE.ACCOUNT USER ' + $Name + ' SSH'), $Password, $Password)
 }
 
@@ -216,5 +326,6 @@ function Remove-SdTestUserScript {
         (DELACC:249), so a blank line does not escape it - it spins.  Y is
         therefore a required line, not a convenience. #>
     param([Parameter(Mandatory = $true)][string]$Name)
+    Set-StrictMode -Version Latest
     return @(('DELETE.ACCOUNT ' + $Name), 'Y')
 }

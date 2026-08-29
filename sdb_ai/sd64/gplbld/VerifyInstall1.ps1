@@ -20,12 +20,20 @@
 # because it is believed.  The others are indifferent to the token; this one
 # decides the rule, so the gate below is unconditional.
 #
-# IT SPENDS NO PREFIXES, which is the other reason to run it often.  Every step
-# in VerifyInstall2.ps1 burns a single-use account name, so re-running it
-# to check something costs seven names and an argument list.  Nothing here
-# creates a Windows account: the probes live inside the invoking user's own SD
-# account, or in a temporary copy of a config file, and each step cleans up
-# after itself.  Run it as many times as you like.
+# IT SPENDS NO PREFIXES WITHOUT -Run, which is the other reason to run it often.
+# Every step in VerifyInstall2.ps1 burns a single-use account name, so
+# re-running it to check something costs seven names and an argument list.
+# Without -Run nothing here creates a Windows account: the probes live inside
+# the invoking user's own SD account, or in a temporary copy of a config file,
+# and each step cleans up after itself.
+#
+# 29 Aug 26 - THAT SENTENCE SAID "IT SPENDS NO PREFIXES" FLATLY AND HAD BEEN
+# UNTRUE SINCE 28 Aug, when the door pair arrived and derived sddr<Run> from
+# the token.  PRE_RELEASE 59 adds a second, sdtu<Run>.  BOTH NAMES ARE
+# SINGLE-USE - an ssh sign-in leaves a profile directory DELETE.ACCOUNT cannot
+# remove while its hive is mounted (PRE_RELEASE 35/36) - so a -Run token is
+# spent by this runner as surely as by the elevated one, and re-using one is
+# refused rather than being made to work.  WITH -Run, run it once per token.
 #
 # WHAT IT COVERS NOW, LATER THE SAME DAY: EVERYTHING.  This said "eight
 # verifiers need elevation and are still not in either runner - apiport,
@@ -183,8 +191,10 @@ if (-not $Yes) {
     Write-Output '  BEFORE YOU SAY YES, it will:'
     Write-Output '    * take several minutes, and look idle for stretches of it'
     Write-Output '    * CREATE AND DELETE Windows user accounts and groups, named from -Run'
+    Write-Output '      including a NON-ADMINISTRATOR test account the ordinary-user checks'
+    Write-Output '      run as, made once at the start and removed at the end'
     Write-Output '    * RESTART THE SD SERVICE more than once, so log anyone else out first'
-    Write-Output '    * ask for elevation about four times - it is not unattended'
+    Write-Output '    * ask for elevation about six times - it is not unattended'
     Write-Output ('    * write what it finds under ' + (Join-Path $env:LOCALAPPDATA 'SD-verify'))
     Write-Output ''
     Write-Output '  It puts back what it changes.  Nothing here alters your own data.'
@@ -378,8 +388,172 @@ if ($Run) {
     Write-Output '  token to derive a fresh name from.  Add -Run <token> to include it.'
 }
 
+# ---------------------------------------------------------------------------
+# 29 Aug 26 - THE NON-ADMINISTRATOR TEST ACCOUNT.  PRE_RELEASE 59.
+#
+# WHY THIS RUNNER OWNS IT.  Five steps here - lcnames, osusers, nocase,
+# lineendings, batchjob - meant "run sd as an ordinary user", and that only ever
+# worked because the owner is an administrator WITH an ordinary account.
+# PRE_RELEASE 56 abolished that combination: an administrator is elevated at
+# LOGIN and lands in SDSYS, so on -Run b59 all five found SDSYS's files where
+# they expected the account's.  Every one refused the null case rather than
+# scoring a false pass, which is the only reason this is a repair and not a
+# retraction.
+#
+# ***ONE ACCOUNT FOR THE WHOLE HALF, MADE ONCE HERE.***  Creating it needs
+# elevation, so it costs a UAC prompt; five verifiers each making their own
+# would cost five.  CLAUDE.md's rule is to remove the need for a prompt rather
+# than to skip the step, and this is the removal it asks for.
+#
+# IT COSTS TWO PROMPTS, ONE AT EACH END, AND THAT IS NOT THE FLOOR.
+# verify-doors-suite.ps1 serves its three elevated legs from ONE consent
+# through sd-elevate.ps1's resident helper.  Reusing that here would take this
+# to one - but it is ~150 lines of machinery in that file, and this whole
+# mechanism has never run, so a second unproven thing is not layered on the
+# first.  Filed as the follow-up in PRE_RELEASE 59.
+#
+# CONDITIONAL ON -Run, for the door step's reason exactly: the name becomes a
+# Windows account and is SINGLE-USE, because an ssh sign-in leaves a profile
+# directory DELETE.ACCOUNT cannot remove while its hive is mounted
+# (PRE_RELEASE 35/36).  Without a token there is no fresh name to derive.
+#
+# BEFORE THE STEP LIST, NOT AFTER IT, which is the opposite of the door step
+# and for a reason: nocase is in the MIDDLE of the list, so the account has to
+# exist before the loop starts.  Checked rather than assumed that this does not
+# disturb the steps that run before it - credacl, pcodeacl and sysdiracl ask
+# what an ordinary token can write in the SYSTEM directories and cannot see an
+# extra user account; lcnames takes an -Account and resolves exactly one
+# directory out of the listing (verify-lcnames.ps1:133); nothing here counts
+# accounts.
+. (Join-Path $PSScriptRoot 'sdtestuser.ps1')
+
+$testUser = ''
+$testPw   = ''
+if ($Run) {
+    $testUser = "sdtu$Run"
+    $admin = Join-Path $PSScriptRoot 'sdtestuser-admin.ps1'
+    if (-not (Test-Path -LiteralPath $admin)) {
+        Write-Output ("VerifyInstall1: {0} is not there - cannot make the test account." -f $admin)
+        exit 2
+    }
+
+    Write-Output ''
+    Write-Output '===== the non-administrator test account (PRE_RELEASE 59) ====='
+    Write-Output ("  name: {0}" -f $testUser)
+    Write-Output '  EXPECT A UAC PROMPT NOW - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
+
+    # GENERATED HERE AND KEPT HERE.  New-SdTestPassword measures that the value
+    # survives the askpass batch BEFORE anything is created, so a bad draw costs
+    # nothing and leaves no account behind.  It is passed to the elevated child
+    # as an argument rather than scraped out of its output, for the reason
+    # verify-doors-suite.ps1 records: the alternative is redirecting an elevated
+    # child's stdout to a file, which is the one copy nobody deletes.
+    $testPw = New-SdTestPassword
+
+    # -LogFile, because -RedirectStandardOutput CANNOT be used with -Verb and
+    # the elevated window closes with its scrollback.  Without it the create
+    # would be a verdict with no evidence.
+    $tuLog = Join-Path $logDir ('testuser-create-' + $stamp + '.log')
+    try {
+        $tuChild = Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $admin,
+                            '-Action', 'Create', '-Name', $testUser,
+                            '-Password', $testPw, '-LogFile', $tuLog) `
+            -Verb RunAs -Wait -PassThru -ErrorAction Stop
+    } catch {
+        Write-Output ('VerifyInstall1: the test account could not be created - ' + $_.Exception.Message)
+        Write-Output '  Either the UAC prompt was declined, or this shell has no desktop to show one on.'
+        exit 2
+    }
+    if (Test-Path -LiteralPath $tuLog) {
+        Get-Content -LiteralPath $tuLog | ForEach-Object { Write-Output ('  ' + $_) }
+    }
+    if ($tuChild.ExitCode -ne 0) {
+        Write-Output ("VerifyInstall1: sdtestuser-admin Create exited {0} - stopping." -f $tuChild.ExitCode)
+        Write-Output '  The five steps that need it would each fail with their own wording for'
+        Write-Output '  one cause, which is worse than one refusal here.'
+        exit 2
+    }
+
+    # ***THE DECISIVE CHECK, AND IT HAS TO BE MADE BY THIS PROCESS.***  The
+    # grant is applied by an ELEVATED child and used by an UNELEVATED parent,
+    # so nothing the child can do proves it worked - an elevated write goes
+    # through Administrators\FullControl whether the ACE landed or not.  This
+    # token is the only one that can answer.
+    try {
+        $tuHome = Assert-SdTestUserHomeWritable -Name $testUser
+        Write-Output ('  writable by this unelevated process: ' + $tuHome)
+    } catch {
+        Write-Output ''
+        Write-Output ('VerifyInstall1: ' + $_.Exception.Message)
+        Write-Output ''
+        Write-Output '  The account exists and this process cannot plant a probe in it, so the'
+        Write-Output '  five steps that need it would all fail for a reason none of them names.'
+        Write-Output ("  REMOVE IT BY HAND - the name is single-use and is now spent:")
+        Write-Output ("      {0} -Action Remove -Name {1}    (ELEVATED PowerShell)" -f $admin, $testUser)
+        exit 2
+    }
+} else {
+    Write-Output 'VerifyInstall1: no -Run, so there is NO non-administrator test account.'
+    Write-Output '  The five steps that need one are NOT in this run - PRE_RELEASE 59.  They'
+    Write-Output '  create a Windows account whose name is single-use, so they need a token to'
+    Write-Output '  derive a fresh one from.  Add -Run <token> to include them.'
+}
+
+# THE FIVE STEPS THAT NEED IT, AND ONLY ONE IS CONVERTED SO FAR.  The
+# recommendation this follows is written into PRE_RELEASE 59 and the reason
+# matters more than the order: prove the pattern on the SMALLEST verifier
+# first, because "a broken verifier that PASSES is the worst outcome this file
+# records, and replicating an unproven pattern four times is how that happens".
+# verify-nocase.ps1 is 211 lines.  lcnames, lineendings and batchjob follow
+# once this has been seen to work; verify-osusers.ps1 is 931 lines with 32
+# references to the person's own identity and is deliberately NOT in the group.
+$needsTestUser = @('verify-nocase.ps1')
+
+# AN ArrayList RATHER THAN "$kept += $s", and the door step above says why in
+# its own words: a hashtable on the right of + is folded into an array as one
+# element only if it is wrapped first, and getting that wrong is silent.  The
+# counts are asserted below rather than assumed.
+$kept    = New-Object System.Collections.ArrayList
+$skipped = 0
+foreach ($s in $steps) {
+    if ($needsTestUser -contains $s.Name) {
+        if ($testUser -eq '') {
+            Write-Output ("VerifyInstall1: SKIPPING {0} - it needs the test account." -f $s.Name)
+            $skipped++
+            continue
+        }
+        $s.P['TestUser']     = $testUser
+        $s.P['TestPassword'] = $testPw
+    }
+    $null = $kept.Add($s)
+}
+if (($kept.Count + $skipped) -ne @($steps).Count) {
+    Write-Output ("VerifyInstall1: the step list is {0} kept + {1} skipped from {2}." -f
+                  $kept.Count, $skipped, @($steps).Count)
+    exit 2
+}
+$steps = $kept.ToArray()
+
 $lines  = @()
 $failed = 0
+
+# 29 Aug 26 - THE STEP LOOP IS IN A try SO THE TEST ACCOUNT IS ALWAYS REMOVED.
+# PRE_RELEASE 59.
+#
+# ***THIS IS NOT BELT AND BRACES, IT IS THE FAILURE ALREADY IN THE RECORD.***
+# sddrb50a is on this machine now - "STILL LIVE, ENABLED AND UNSUSPENDED in
+# sdusers, sdssh and sdapi, its Remove leg never ran" - because the run it
+# belonged to stopped at a failing step.  The loop below has a "break" on
+# exactly that path, so a removal written after it would be skipped by the case
+# it is most needed in.  A finally is skipped by nothing: break, a thrown
+# error and Ctrl-C all run it.
+#
+# THE LOOP BODY IS NOT RE-INDENTED, DELIBERATELY.  Wrapping fifty lines in a
+# level of indentation would make the diff unreadable for a review whose whole
+# question is "what changed here", and PowerShell does not care.
+try {
+
 foreach ($s in $steps) {
     $path = Join-Path $PSScriptRoot $s.Name
     if (-not (Test-Path -LiteralPath $path)) {
@@ -434,6 +608,44 @@ foreach ($s in $steps) {
         Write-Output ("VerifyInstall1: STOPPING - {0} exited {1}." -f $s.Name, $code)
         Write-Output '  Re-run with -ContinueOnFailure to see the rest anyway.'
         break
+    }
+}
+
+} finally {
+    if ($testUser -ne '') {
+        Write-Output ''
+        Write-Output ('===== removing the test account ' + $testUser + ' =====')
+        Write-Output '  EXPECT A UAC PROMPT - DELETE.ACCOUNT is gated on K$ADMINISTRATOR.'
+        $rmLog = Join-Path $logDir ('testuser-remove-' + $stamp + '.log')
+        $rmCode = -1
+        try {
+            $rmChild = Start-Process -FilePath 'powershell.exe' `
+                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                                (Join-Path $PSScriptRoot 'sdtestuser-admin.ps1'),
+                                '-Action', 'Remove', '-Name', $testUser,
+                                '-LogFile', $rmLog) `
+                -Verb RunAs -Wait -PassThru -ErrorAction Stop
+            $rmCode = $rmChild.ExitCode
+        } catch {
+            Write-Output ('  the removal did not start - ' + $_.Exception.Message)
+        }
+        if (Test-Path -LiteralPath $rmLog) {
+            Get-Content -LiteralPath $rmLog | ForEach-Object { Write-Output ('  ' + $_) }
+        }
+        # ***SAY IT LOUDLY, BECAUSE A LEFT-BEHIND ACCOUNT IS LIVE AND ENABLED.***
+        # It is in sdusers and sdssh with a password nothing has written down -
+        # this process generated it and is about to end.  The name is spent
+        # either way (PRE_RELEASE 35/36), so the next run needs a new -Run token
+        # whatever happens here.
+        if ($rmCode -ne 0) {
+            Write-Output ''
+            Write-Output ("  *** {0} WAS NOT REMOVED (exit {1}). IT IS LIVE AND ENABLED. ***" -f
+                          $testUser, $rmCode)
+            Write-Output '  Its password was generated in this process and is not written down.'
+            Write-Output '  From an ELEVATED PowerShell:'
+            Write-Output ('      {0} -Action Remove -Name {1}' -f
+                          (Join-Path $PSScriptRoot 'sdtestuser-admin.ps1'), $testUser)
+        }
     }
 }
 

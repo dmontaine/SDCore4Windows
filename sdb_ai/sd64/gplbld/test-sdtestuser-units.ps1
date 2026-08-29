@@ -142,6 +142,146 @@ NoteTrue 'control: the NO.QUERY rule REJECTS the line that says it' `
 NoteTrue 'control: the delete line-count rule REJECTS a script with no Y' `
          (-not ($badDeleteLines.Count -eq 2))
 
+# ------------------------------------------------------- the writability gate
+Write-Output ''
+Write-Output '== 7. Test-SdDirWritable - BOTH DIRECTIONS, with real directories'
+Write-Output '   (29 Aug 2026: the account directory is NOT reachable by the unelevated'
+Write-Output '    parent by default, which is what this gate exists to catch)'
+
+# THE POSITIVE CONTROL FIRST, AND IT IS THE ONE THAT MATTERS.  A gate that only
+# ever says no passes every negative row and is still useless - PRE_RELEASE 43,
+# where 39 accepted rows all drove the refusal and none drove the one path that
+# had to succeed.  So: a directory this process really can write.
+$okDir = Join-Path $env:TEMP ('sdtu-units-ok-' + $PID)
+if (-not (Test-Path -LiteralPath $okDir)) { $null = New-Item -ItemType Directory -Path $okDir }
+Write-Output ('  writable fixture:  ' + $okDir)
+NoteTrue 'Test-SdDirWritable says YES to a directory this process can write' `
+         (Test-SdDirWritable -Path $okDir)
+
+# AND IT MUST LEAVE NOTHING BEHIND.  A probe file that survives would be
+# planted inside a real account directory on every run.
+$leftovers = @(Get-ChildItem -LiteralPath $okDir -Force -ErrorAction SilentlyContinue)
+Note 'Test-SdDirWritable leaves no probe file behind' 0 $leftovers.Count
+
+# THE NEGATIVE, WITH A DIRECTORY THAT DENIES THIS USER.  Built by DENYING the
+# current user rather than by naming one that does not exist, so it fails the
+# way a real account directory fails - on the ACL, not on Test-Path.
+$noDir = Join-Path $env:TEMP ('sdtu-units-deny-' + $PID)
+if (-not (Test-Path -LiteralPath $noDir)) { $null = New-Item -ItemType Directory -Path $noDir }
+$denied = $false
+try {
+    $acl = Get-Acl -LiteralPath $noDir
+    $acl.SetAccessRuleProtection($true, $false)
+    $me = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    # Read, so the directory can still be removed by its owner afterwards, and
+    # an explicit DENY on write, which beats the owner's implicit rights.
+    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $me, 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
+    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $me, 'CreateFiles, Write', 'ContainerInherit, ObjectInherit', 'None', 'Deny')))
+    Set-Acl -LiteralPath $noDir -AclObject $acl
+    $denied = $true
+} catch {
+    Write-Output ('  could not build the denied fixture: ' + $_.Exception.Message)
+}
+Write-Output ('  denied fixture:    ' + $noDir)
+
+# ***REFUSE THE NULL CASE: IF THE FIXTURE WAS NOT BUILT, FAIL - DO NOT SKIP.***
+# A negative row that passes because nothing denied anything is the "test that
+# passes because it did nothing" the instrument rule forbids.
+NoteTrue 'the denied fixture was actually built (a row that cannot fail is not a test)' $denied
+if ($denied) {
+    NoteTrue 'Test-SdDirWritable says NO to a directory this process is denied' `
+             (-not (Test-SdDirWritable -Path $noDir))
+}
+
+# AND A PATH THAT IS NOT THERE AT ALL IS ALSO NO, NOT AN EXCEPTION.
+NoteTrue 'Test-SdDirWritable says NO to a path that does not exist' `
+         (-not (Test-SdDirWritable -Path (Join-Path $env:TEMP ('sdtu-units-absent-' + $PID))))
+
+foreach ($d in @($okDir, $noDir)) {
+    if (Test-Path -LiteralPath $d) {
+        try {
+            $a = Get-Acl -LiteralPath $d
+            $a.SetAccessRuleProtection($false, $true)
+            $a.Access | Where-Object { $_.AccessControlType -eq 'Deny' } |
+                ForEach-Object { $null = $a.RemoveAccessRule($_) }
+            Set-Acl -LiteralPath $d -AclObject $a
+        } catch { }
+        Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# --------------------------------------------- the verifier's own refusal path
+Write-Output ''
+Write-Output '== 8. verify-nocase.ps1 REFUSES with no test account'
+Write-Output '   (the shortcut it must never take is falling back to the invoking user,'
+Write-Output '    who under PRE_RELEASE 56 is elevated at LOGIN and lands in SDSYS)'
+
+# RUN THE REAL SCRIPT.  It reaches this branch BEFORE assert-current, so it
+# needs no install - which is the whole reason that check was put first.
+$nocase = Join-Path $here 'verify-nocase.ps1'
+if (-not (Test-Path -LiteralPath $nocase)) {
+    Note 'verify-nocase.ps1 is beside this test' $true $false
+} else {
+    $refusal = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $nocase 2>&1 |
+                Out-String)
+    $rc = $LASTEXITCODE
+    Write-Output ('  exit ' + $rc + ', ' + $refusal.Length + ' characters')
+    foreach ($l in ($refusal -split "`n")) {
+        if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) }
+    }
+    Note 'verify-nocase with no -TestUser exits 2 (could not run), not 0 or 1' 2 $rc
+
+    # ANCHOR ON WORDING ONLY THE REFUSAL EMITS.  "test account" appears in the
+    # help text too; "no test account was supplied" is printed on this path and
+    # nowhere else.
+    NoteTrue 'it names what is missing, in its own words' `
+             ($refusal -match 'no test account was supplied')
+
+    # AND THE DISQUALIFIERS: it must NOT have gone on to measure anything.
+    NoteTrue 'it did not reach the probe (no DIRFILE/PASSED/FAILED in the output)' `
+             ($refusal -notmatch 'DIRFILE|verify-nocase: PASSED|verify-nocase: FAILED')
+}
+
+# ------------------------------------------------- strict mode must not leak
+Write-Output ''
+Write-Output '== 9. dot-sourcing sdtestuser.ps1 must NOT turn strict mode on in the caller'
+Write-Output '   (it did until 29 Aug 2026, and VerifyInstall1.ps1 dot-sources it)'
+
+# ***THE CALLER IS A SEPARATE PROCESS, BECAUSE THIS ONE IS ALREADY STRICT.***
+# test-sdtestuser-units.ps1 sets Set-StrictMode -Version Latest at the top, so
+# a check made here would pass whatever the module does - the "test that passes
+# because it did nothing" in its exact form.  The probe below starts lax.
+$leakProbe = Join-Path $env:TEMP ('sdtu-units-leak-' + $PID + '.ps1')
+$mod = (Join-Path $here 'sdtestuser.ps1') -replace '\\', '/'
+Set-Content -LiteralPath $leakProbe -Encoding ascii -Value @(
+    '$ErrorActionPreference = ''Continue''',
+    'try { $a = $NoSuchVariable; Write-Output "BEFORE=lax" } catch { Write-Output "BEFORE=strict" }',
+    (". '" + $mod + "'"),
+    'try { $b = $StillNoSuchVariable; Write-Output "AFTER=lax" } catch { Write-Output "AFTER=strict" }',
+    '$o = [pscustomobject]@{ DisplayName = ''SD 1.0'' }',
+    'try { $null = $o.InstallLocation; Write-Output "PROP=lax" } catch { Write-Output "PROP=strict" }'
+)
+$leakOut = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $leakProbe 2>&1 | Out-String)
+Remove-Item -LiteralPath $leakProbe -Force -ErrorAction SilentlyContinue
+foreach ($l in ($leakOut -split "`n")) { if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) } }
+
+# THE NULL CASE FIRST: if the probe did not start, BEFORE is missing and every
+# row below would pass on an empty string.
+NoteTrue 'the leak probe actually ran (BEFORE line present)' ($leakOut -match 'BEFORE=')
+NoteTrue 'the probe starts lax, so the AFTER rows can mean something' ($leakOut -match 'BEFORE=lax')
+NoteTrue 'an undefined variable is still allowed after dot-sourcing' ($leakOut -match 'AFTER=lax')
+NoteTrue 'a missing property is still allowed after dot-sourcing' ($leakOut -match 'PROP=lax')
+
+# AND THE STRICTNESS IS STILL THERE WHERE IT WAS WANTED: the functions set it
+# for themselves, so a bad reference inside one is still caught.  Driven
+# through the real function rather than asserted about the source.
+$strictKept = $false
+try   { $null = Invoke-SdTestNative -Exe 'x' -CmdArgs @() -WorkDir '' }
+catch { $strictKept = $true }
+NoteTrue 'the module''s own functions still fail loudly on a bad call' $strictKept
+
 Write-Output ''
 Write-Output ("test-sdtestuser-units: {0} passed, {1} failed" -f $script:pass, $script:fail)
 if ($script:fail -gt 0) { exit 1 }

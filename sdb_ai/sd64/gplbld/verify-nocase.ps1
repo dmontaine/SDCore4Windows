@@ -4,14 +4,34 @@
 # and SYSTEM(91) answering Windows (the BASIC layer, which is what lets QPROC
 # treat a directory file's ids as case insensitive).
 #
-#   powershell -File verify-nocase.ps1        run the checks
+#   VerifyInstall1.ps1 -Run <token>           the only supported way to run it
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.
 #
-# RUN IT AS AN ORDINARY SD USER.  It needs no elevation: the probe opens two
-# files in the invoking user's OWN account and asks SD about them.  Elevation
-# is not refused either, because nothing here depends on the token.
+# ***IT RUNS AS A THROWAWAY NON-ADMINISTRATOR ACCOUNT SINCE 29 Aug 2026, AND
+# THAT IS PRE_RELEASE 59.***  It used to drive sd.exe down a pipe as the
+# invoking user, whose probe landed in their own account's BP.  PRE_RELEASE 56
+# ended that: an administrator is elevated at LOGIN and lands in SDSYS, so on
+# -Run b59 this found SDSYS's BP where it expected the account's and said so -
+# "the probe did not run - no DIRFILE line", a refusal rather than a false
+# pass.  The account it needs is not the invoking user's any more, because
+# under 56 an administrator has none.
+#
+# ***THE OBVIOUS SHORTCUT IS A TRAP.***  Adding "LOGTO DON" here would pass
+# today and break the moment adopt-account goes, which is ruled and pending
+# (56's last piece).  A test standing on an account that exists only because
+# the installer adopted the installing user is a test with a countdown on it.
+#
+# WHAT IT NEEDS, AND WHERE IT COMES FROM.  VerifyInstall1.ps1 creates ONE
+# non-administrator account for the whole unelevated half before its step list
+# and removes it after, and passes it here as -TestUser / -TestPassword.  This
+# script does not make it, does not remove it, and REFUSES WITHOUT IT rather
+# than falling back to the invoking user - the fallback is the false pass.
+#
+# NO ELEVATION.  Reaching the account is ssh, and the probe is planted through
+# the file system into a directory the runner had an ACE added to at create
+# time.  Nothing here depends on this process's token.
 #
 # WHAT IT MEASURES.  dh_open.c:529 sets DHF_NOCASE on directory files, which
 # this tree now does unconditionally - it used to sit under
@@ -43,22 +63,67 @@
 #       CRT 'DHFILE=':FILEINFO(F.DH, 1008)
 #       CRT 'ISWIN=':SYSTEM(91)
 #
-# then pipe "BASIC BP SDNOCASE", "RUN BP SDNOCASE", "OFF" into sd.exe.  1008 is
-# FL$NOCASE (SYSCOM KEYS.H), written as a literal so the probe does not depend
-# on the include path from a user account.  pterm() CANNOT be used from a user
-# account - it is internal-only and compiles as an undimensioned array - which
-# is why SYSTEM() is the route to these.
+# then send "BASIC BP SDNOCASE", "RUN BP SDNOCASE", "OFF" into an ssh session
+# as that account.  ***NOT A LOCAL PIPE INTO sd.exe, WHICH IS WHAT THIS LINE
+# SAID UNTIL 29 Aug 2026*** - a local pipe runs as the invoking user, and if
+# that user is an administrator PRE_RELEASE 56 puts them in SDSYS, so the two
+# FILEINFO answers would be about SDSYS's BP and VOC.  1008 is FL$NOCASE
+# (SYSCOM KEYS.H), written as a literal so the probe does not depend on the
+# include path from a user account.  pterm() CANNOT be used from a user account
+# - it is internal-only and compiles as an undimensioned array - which is why
+# SYSTEM() is the route to these.
 #
 # MEASURED BEFORE THE CHANGES, both by hand: DIRFILE=0 and DHFILE=0 on the
 # 17:36:21 install, ISWIN=0 on the 20:10:31 one.  Those are the readings this
 # script exists to see move - and DHFILE is the one that must NOT.
 
 [CmdletBinding()]
-param()
+param(
+    # NOT Mandatory, DELIBERATELY, and the reason is the one written into
+    # sdtestuser.ps1's Invoke-SdAsTestUser: Mandatory makes PowerShell's
+    # parameter BINDER handle the empty case before this script's body runs -
+    # and inside a runner a Mandatory parameter with nothing to bind PROMPTS,
+    # which is a hang rather than an error.  That trap cost a run on 28 Aug
+    # 2026 (VerifyInstall1.ps1's door-step comment).  The refusal below is the
+    # guard; it must be reachable.
+    [string] $TestUser = '',
+    [string] $TestPassword = ''
+)
 
 $ErrorActionPreference = 'Stop'
 
-# A CURRENT INSTALL FIRST.  This measures a C change (gplsrc/dh_open.c), so a
+. (Join-Path $PSScriptRoot 'sdtestuser.ps1')
+
+# ***REFUSE WITHOUT THE TEST ACCOUNT, OUT LOUD, AND BEFORE assert-current.***
+# The line further down used to be "$account = $env:USERNAME.ToLower()" and
+# falling back to it would be the worst available outcome: under PRE_RELEASE 56
+# the invoking user is an administrator, LOGIN elevates them into SDSYS, and
+# the probe would measure SDSYS's BP while the report said it had measured an
+# ordinary account's.  A refusal that names what is missing beats a number that
+# is about something else.
+#
+# IT COMES BEFORE assert-current DELIBERATELY, AND THAT IS NOT A RELAXATION OF
+# THE RULE.  assert-current guards MEASUREMENTS - "compiling is not running" -
+# and a missing argument measures nothing.  Putting it first also means the
+# refusal can be driven by a unit test with NO INSTALL AT ALL, which is the
+# only way this branch will ever be exercised regularly.
+if ($TestUser -eq '' -or $TestPassword -eq '') {
+    Write-Output 'verify-nocase: refusing - no test account was supplied.'
+    Write-Output ("  -TestUser '{0}', -TestPassword {1}" -f
+                  $TestUser, $(if ($TestPassword -eq '') { '(empty)' } else { '(given)' }))
+    Write-Output ''
+    Write-Output '  Since PRE_RELEASE 56 an administrator is elevated at LOGIN and lands in'
+    Write-Output '  SDSYS, so there is no ordinary account for this to run as any more.  It'
+    Write-Output '  needs a real non-administrator one, which VerifyInstall1 makes once for'
+    Write-Output '  the whole unelevated half and passes in.  Run it that way:'
+    Write-Output ''
+    Write-Output '      C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\VerifyInstall1.ps1 -Run <token>'
+    Write-Output ''
+    Write-Output '  ORDINARY, UNELEVATED PowerShell.  The token is single-use.'
+    exit 2
+}
+
+# A CURRENT INSTALL NEXT.  This measures a C change (gplsrc/dh_open.c), so a
 # stale install answers for the binary that change replaced - which is exactly
 # the reading being tested against.  CLAUDE.md: compiling is not running.
 & (Join-Path $PSScriptRoot 'assert-current.ps1')
@@ -70,13 +135,8 @@ if ($LASTEXITCODE -ne 0) {
 
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
-# THE SD ACCOUNT IS THE WINDOWS NAME IN LOWER CASE, since 22 Aug 2026 - step 8's
-# account-name half landed and CREATEA now downcases the register key (5.12).
-# This line said .ToUpper() until then, and its comment said it would have to
-# change when that happened; it is only because NTFS is case-insensitive that
-# the stale form kept resolving to the same directory rather than failing.
-$account = $env:USERNAME.ToLower()
-$acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $account)
+$account = $TestUser.ToLower()
+$acctDir = Get-SdTestUserHome -Name $account
 
 $results = New-Object System.Collections.ArrayList
 $fatal   = $false
@@ -93,13 +153,31 @@ function Note($step, $expected, $got, $decisive) {
 
 # ---------------------------------------------------------------- preconditions
 
+# A PRESENCE CHECK, NOT THE DRIVER.  Nothing here runs sd.exe any more - the
+# session is ssh's, and sshd's ForceCommand starts SD at the far end.  The path
+# is still worth asserting because "SD is not installed" and "the flag reads 0"
+# should not look alike.
 if (-not (Test-Path -LiteralPath $sdExe)) {
     Write-Output "verify-nocase: refusing - no $sdExe"
     exit 2
 }
 if (-not (Test-Path -LiteralPath $acctDir)) {
     Write-Output "verify-nocase: refusing - $account has no SD account at $acctDir"
-    Write-Output '  Only an account holder can run this; the probe lives in their own BP.'
+    Write-Output '  VerifyInstall1 said it created it; CREATE.ACCOUNT made no directory.'
+    exit 2
+}
+
+# ***AND CAN THIS PROCESS ACTUALLY WRITE THERE.***  Measured 29 Aug 2026 and it
+# is not a formality: an account directory is PROTECTED and grants Modify to
+# SYSTEM, Administrators and its own sdu_<account> group ONLY - an unelevated
+# token has none of the three, and a plain "ls" of one answered "Permission
+# denied".  sdtestuser-admin.ps1 -Action Create adds an ACE for the invoking
+# user; this is where a grant that did not land stops being four verifiers
+# failing on four different wordings for one cause.
+try {
+    $null = Assert-SdTestUserHomeWritable -Name $account
+} catch {
+    Write-Output ('verify-nocase: refusing - ' + $_.Exception.Message)
     exit 2
 }
 
@@ -109,7 +187,8 @@ if (-not (Test-Path -LiteralPath $bp)) {
     exit 2
 }
 
-Write-Output "verify-nocase: probing as SD account $account"
+Write-Output "verify-nocase: probing as SD account $account (a throwaway non-administrator)"
+Write-Output ("  account directory: " + $acctDir)
 Write-Output ''
 
 # ------------------------------------------------------------------- the probe
@@ -144,28 +223,64 @@ function Remove-Probe {
     }
 }
 
-# THE LEADING BLANK LINE IS A BOM SINK, not a stray newline.  The pipe prepends
-# a BOM to the first line whatever $OutputEncoding says, and SD answers that it
-# is not in your VOC; landing it on a line that was empty anyway costs one
-# harmless complaint instead of eating a real command.  PROJECT_STATUS.md 6.
+# ***DRIVEN OVER ssh AS THE TEST ACCOUNT, NOT DOWN A LOCAL PIPE.***  A local
+# pipe runs sd.exe as the INVOKING user, and under PRE_RELEASE 56 that is an
+# administrator who is elevated at LOGIN into SDSYS - the wrong BP, which is
+# exactly the failure this conversion repairs.
+#
+# ssh IS THE ROUTE BECAUSE runas CANNOT BE.  Accounts SD creates are in
+# sdsshonly, which carries SeDenyInteractiveLogonRight (5.6.2), so an
+# interactive logon as one is refused BY WINDOWS - and that refusal is the
+# product working correctly, not an obstacle to route around.
+#
+# Invoke-SdAsTestUser sends TERM 200,9999 first and appends OFF, so nothing
+# wraps (PRE_RELEASE 40, which cost a wrong verdict by counting a wrapped line
+# twice) and the session ends rather than waiting on stdin.  The BOM sink the
+# old local pipe needed is gone with the pipe: ssh's stdin is a file written
+# with WriteAllText and carries no BOM.
 try {
-    $body = "`n" + (@('BASIC BP SDNOCASE', 'RUN BP SDNOCASE', 'OFF') -join "`n") + "`n"
-    $raw  = $body | & $sdExe 2>&1
-    $out  = ($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')
+    $r = Invoke-SdAsTestUser -Name $account -Password $TestPassword `
+             -Commands @('BASIC BP SDNOCASE', 'RUN BP SDNOCASE')
+    $out = $r.Out
 }
 catch {
-    Write-Output "verify-nocase: could not drive sd.exe: $($_.Exception.Message)"
+    Write-Output "verify-nocase: could not drive SD as $account : $($_.Exception.Message)"
     Remove-Probe
     exit 2
 }
 
 $text = ($out | Out-String)
 
+# PRINT WHAT THE INSTRUMENT ACTUALLY DID, NOT ONLY WHAT IT CONCLUDED.  The ssh
+# leg has three ways to come back empty that look alike from the numbers - a
+# refused password, sshd not running, ForceCommand not starting SD - and none
+# of them is "the flag reads 0".
+Write-Output ("  ssh exit {0}, {1} characters of output" -f $r.ExitCode, $text.Length)
+if ($r.Err -ne '') {
+    Write-Output '  --- ssh stderr ---'
+    foreach ($l in ($r.Err -split "`n")) { if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) } }
+}
+
 # A COMPILE FAILURE MUST NOT READ AS A MEASUREMENT.  If the probe did not
 # build there is no FILEINFO line to find, and a missing line would otherwise
 # be scored as "not 1" - a FAIL that blames the C change for a broken probe.
 if ($text -notmatch 'DIRFILE=') {
     Write-Output 'verify-nocase: the probe did not run - no DIRFILE line in the output.'
+    # 29 Aug 26 - AND SAY WHICH OF THE THREE IT WAS.  Over ssh the same silence
+    # has causes that are nothing to do with the probe, and this used to print
+    # the raw output and leave the reader to tell them apart.  Each of these is
+    # a fact about the run, not a guess about it.
+    Write-Output ("  ssh exit {0}; the account is {1}" -f $r.ExitCode, $account)
+    if ($r.ExitCode -ne 0) {
+        Write-Output '  A NON-ZERO ssh EXIT MEANS THE SESSION, NOT THE PROBE.  Check that sshd is'
+        Write-Output ("  running, that {0} is in sdsshonly and sdssh, and that the password" -f $account)
+        Write-Output '  VerifyInstall1 generated is the one CREATE.ACCOUNT was given.'
+    } elseif ($text.Trim() -eq '') {
+        Write-Output '  ssh SUCCEEDED AND SD PRINTED NOTHING, which points at ForceCommand not'
+        Write-Output '  starting SD rather than at the probe failing to compile.'
+    } else {
+        Write-Output '  SD answered and did not reach the CRT lines, so read the compile below.'
+    }
     Write-Output '  Raw output follows.'
     Write-Output $text
     Remove-Probe

@@ -277,6 +277,27 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # Reads files only - no install, no elevation, no run number.
                   # Listed in the commit that created it, under step 7's rule.
                   'test-fixlist-units.ps1',
+                  # 29 Aug 26 - the PRE_RELEASE 59 trio: the throwaway
+                  # non-administrator account the unelevated half runs as.
+                  # sdtestuser.ps1 is DOT-SOURCED and not run, sdtestuser-admin
+                  # .ps1 is its elevated half, and test-sdtestuser-units.ps1
+                  # needs no install, no elevation, no account and no ssh.
+                  # None of the three ships; stage.py and sd.iss name none of
+                  # them, which the check below re-derives rather than trusting
+                  # this comment.
+                  #
+                  # ***THEY WERE WRITTEN ON 29 Aug AND NOT LISTED, AND THIS
+                  # SCRIPT WAS ALREADY EXITING 1 BECAUSE OF IT.***  Measured,
+                  # not predicted: after the 10:35:46 install it named all
+                  # three under "STALE: 3 source file(s) are newer than the
+                  # install" and refused - so verify-nocase, verify-lcnames and
+                  # every other verifier that calls it would have refused too,
+                  # on the strength of three files' mtimes.  That is precisely
+                  # the trap the entries above were each added for, and it had
+                  # already sprung.  The rule is section 7 step 7's: LIST IT IN
+                  # THE COMMIT THAT CREATES IT.
+                  'sdtestuser.ps1', 'sdtestuser-admin.ps1',
+                  'test-sdtestuser-units.ps1',
                   # 28 Aug 26 - gen_includes.py, found by listing what in this
                   # directory is on NEITHER this list nor stage.py's.  It is not
                   # a fault today only because nobody has edited it since the
