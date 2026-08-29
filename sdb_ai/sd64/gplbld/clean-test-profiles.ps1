@@ -142,9 +142,18 @@ $ErrorActionPreference = 'Stop'
 #
 # -SelfTest below is the part that makes this stay true.  It carries the eleven
 # shapes that were missed and the group names that must never match.
+# 28 Aug 26 - "sddr" ADDED, AND IT HAD BEEN MISSING SINCE THE DOOR PAIR WAS
+#   WRITTEN THE SAME DAY.  verify-doors-admin.ps1 makes sddr1a, sddr2a,
+#   sddrb50a, sddrb51a/b - four families of litter this pattern could not see,
+#   so cleanup-devlitter.ps1 and this script both reported a clean machine over
+#   them.  ***THAT IS PRE_RELEASE 41's LESSON WITH A DIFFERENT BLIND SPOT***:
+#   41 was a counter that could not see a directory whose ProfileList entry had
+#   gone; this was a pattern that could not see the name at all.  A new test
+#   that invents a name family has to add its stem HERE in the same commit, or
+#   its litter is invisible to the only thing that sweeps it up.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
-           'sdrt', 'sdar')
+           'sdrt', 'sdar', 'sddr')
 $bare  = @('sdsshprobe', 'sdnotyet')
 $rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
       ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
@@ -163,6 +172,10 @@ if ($SelfTest) {
         'sdarb43n',
         # the pre-b-series shapes, which must keep working
         'sdacct14', 'sdrt5s', 'sdacl2', 'sdapia2', 'sddel5', 'sdcatg1',
+        # 28 Aug 26 - THE DOOR PAIR'S FOUR FAMILIES, every one of them a name
+        # really on this machine when the stem was found missing.  Both
+        # suffixes matter: the door test makes an "a" account and a "b" helper.
+        'sddr1a', 'sddr2a', 'sddrb50a', 'sddrb51a', 'sddrb51b',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -177,7 +190,7 @@ if ($SelfTest) {
         # real things on this machine
         'dmont', 'Public', 'sdout', 'sdclilib',
         # word-shaped near-misses
-        'sdapiary', 'sdrtserver', 'sdaclmanager',
+        'sdapiary', 'sdrtserver', 'sdaclmanager', 'sddriver', 'sddrive',
         # the SD system account and the owner's
         'sdsys', 'don'
     )

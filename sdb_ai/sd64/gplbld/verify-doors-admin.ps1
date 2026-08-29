@@ -524,16 +524,39 @@ if ($Phase -eq 'Remove') {
     # allowed to stop the other - a Remove that abandoned the second account
     # would leave a live, ssh-reachable account behind, which is exactly the
     # residue the b50 run left when its Remove leg never ran at all.
+    $stranded = @()
     foreach ($n in @($helper, $acct)) {
-        $nU = $n.ToUpper()
-        if (-not (Test-Path -LiteralPath (Join-Path $accts $nU))) {
+        $nU     = $n.ToUpper()
+        $hadRec = Test-Path -LiteralPath (Join-Path $accts $nU)
+        if (-not $hadRec) {
             Write-Output ("  no ACCOUNTS record for {0} - nothing to remove." -f $nU)
+            # ***"NOTHING TO REMOVE" AND "NOTHING IS THERE" ARE DIFFERENT
+            # SENTENCES, AND THIS IS WHERE THEY COME APART.***  Measured 28 Aug
+            # 2026 on sddrb50a: a CYCLE ran between the Create leg and this
+            # one, and cycle.ps1 deletes BOTH trees - so the ACCOUNTS record
+            # went with the data tree while the Windows account, its sdu_ group
+            # and its memberships of sdusers, sdssh and sdapi all survived.
+            # DELETE.ACCOUNT cannot reach an account SD has no record of, so
+            # this phase can no longer clean up after itself and says so
+            # instead of reporting a tidy pass.  That is PRE_RELEASE 39.
+            if (Test-WinUser $n) { $stranded += $n }
         } else {
             Show-SD ('delete ' + $n) @(('DELETE.ACCOUNT ' + $n), 'Y') @()
         }
         Note ('the Windows account ' + $n + ' is gone') $false (Test-WinUser $n) $true
         Note ('the ACCOUNTS record for ' + $nU + ' is gone') $false `
              (Test-Path -LiteralPath (Join-Path $accts $nU)) $true
+    }
+
+    if ($stranded.Count -gt 0) {
+        Write-Output ''
+        Write-Output '  *** STRANDED: a Windows account SD no longer has a record of.'
+        $stranded | ForEach-Object { Write-Output ('      ' + $_) }
+        Write-Output '  A cycle or an uninstall removed the data tree and left the Windows side'
+        Write-Output '  standing - PRE_RELEASE 39.  DELETE.ACCOUNT cannot reach these, so the'
+        Write-Output '  removal is a Windows one and is deliberately NOT done here: this script'
+        Write-Output '  deletes accounts it can see SD records for, and nothing else.'
+        Write-Output '  cleanup-devlitter.ps1 owns that job (ELEVATED, -List first).'
     }
 
     # Read from disk, not from what DELETE.ACCOUNT said - PRE_RELEASE 41.
