@@ -139,20 +139,40 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 # hard-coded, so a reworded message fails the check that names it instead of
 # going blind.  Positional, because [regex]::Split loses which %n it split on -
 # every message used here numbers its placeholders in order.
+#
+# 28 Aug 26 - AND A LITERAL RUN IS NOW MATCHED LOOSELY, BECAUSE ESCAPING IT AS
+# IT STANDS MADE TWO CHECKS HERE INCAPABLE OF THEIR JOB.  PRE_RELEASE_FIXES.md
+# 45.  The message FILE holds literal backslash-n, not newlines - fourteen in
+# 10075, sixteen in 10123 - and SD renders each as a line break.  Escaped
+# as-is, the pattern looks for a literal backslash-n that the output never
+# contains, so line 553's "10075 NOT shown" passed whatever was printed and
+# line 568's "10075 shown" would have FAILED every time the keep-both branch
+# ran.  It has not run on this host yet, which is the only reason it was not
+# seen here first.
+function Esc-Loose([string]$s) {
+    $runs = [regex]::Split($s, '(?:\\n|\s)+')
+    $out = ''
+    for ($i = 0; $i -lt $runs.Count; $i++) {
+        if ($i -gt 0) { $out += '\s+' }
+        $out += [regex]::Escape($runs[$i])
+    }
+    return $out
+}
+
 function Get-SysMsgPattern([int]$n, [string[]]$vals) {
     $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
     $t = ((Get-Content -LiteralPath $f -Raw)).Trim()
     if ($t -eq '') { return '' }
     $parts = [regex]::Split($t, '%\d')
-    $pat = [regex]::Escape($parts[0])
+    $pat = Esc-Loose $parts[0]
     for ($i = 1; $i -lt $parts.Count; $i++) {
         if ($vals -and $vals.Count -ge $i -and $vals[$i - 1] -ne '') {
             $pat += [regex]::Escape($vals[$i - 1])
         } else {
             $pat += '.*'
         }
-        $pat += [regex]::Escape($parts[$i])
+        $pat += Esc-Loose $parts[$i]
     }
     return $pat
 }

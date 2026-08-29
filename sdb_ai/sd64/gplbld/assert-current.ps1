@@ -253,6 +253,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-upgrade.ps1',
                   # 22 Aug 26 - verify-batchjob.ps1, step 9's guard, same rule.
                   'verify-batchjob.ps1',
+                  # 28 Aug 26 - verify-profiledir.ps1, PRE_RELEASE_FIXES.md 36's
+                  # last unexercised leg: CREATE.ACCOUNT refusing a name whose
+                  # profile directory is still on the disk (10124).  b56 and b57
+                  # both ran the whole suite and neither log mentions 10124 or
+                  # 10125, because every other verifier is careful to use a
+                  # fresh name - so the one rule that had never fired was the
+                  # one nothing could vouch for.  Listed in the commit that
+                  # created it, under step 7's rule.
+                  'verify-profiledir.ps1',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
                   # listed in the commit that created it under the same rule.
                   # It is a RUNNER and not a verifier, so it ships no more than
