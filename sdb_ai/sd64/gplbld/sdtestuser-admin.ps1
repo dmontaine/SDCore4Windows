@@ -34,7 +34,21 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('Create', 'Remove')][string]$Action,
     [Parameter(Mandatory = $true)][string]$Name,
     [string]$Password = '',
-    [string]$LogFile = ''
+    [string]$LogFile = '',
+
+    # ***SWEEP STRAY TEST ACCOUNTS FROM INTERRUPTED RUNS. OWNER'S RULING,
+    # 29 Aug 2026, asked and answered: "sweep".***
+    #
+    # It runs inside the elevated child that Create already raises, so it costs
+    # NO extra UAC prompt - CLAUDE.md's rule, "pursue it by removing the need
+    # for a prompt, not by skipping the step".
+    #
+    # WHY IT IS NEEDED AT ALL: a console Ctrl-C does not run VerifyInstall1's
+    # finally (measured on b62, 29 Aug 2026), so an interrupted run leaves its
+    # account LIVE AND ENABLED in sdusers and sdssh with a password that
+    # existed only in the dead process.  Nothing in-process can be made to
+    # survive Ctrl-C, so the recovery belongs at the start of the NEXT run.
+    [switch]$Sweep
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +61,75 @@ function Say([string]$m) {
     if ($LogFile -ne '') {
         try { Add-Content -LiteralPath $LogFile -Value $m } catch { }
     }
+}
+
+function Invoke-SdAdmin([string[]]$SdLines) {
+    <#  Run SD lines in an ELEVATED session and hand back what it printed.
+
+        ***INPUT TO sd.exe MUST BE PIPED. A FILE HANDLE IS REFUSED, AND THE
+        FIRST VERSION OF THIS FILE USED ONE.***  Measured on -Run b60, 29 Aug
+        2026: SD printed its banner, then ":Process terminated", and created
+        nothing.  That is sysmsg 5020 at CPROC:473, the K$LOGOUT arm - a forced
+        logout, not a refusal of the command, which is why nothing echoed
+        "CREATE.ACCOUNT" at all.
+
+        ***IT WAS ALREADY WRITTEN DOWN, DATED 14 Aug 2026***, in
+        verify-createaccount.ps1's header and PROJECT_STATUS.md section 6:
+        "Input must be PIPED.  Start-Process -RedirectStandardInput hands SD a
+        file handle and SD answers 'Process terminated' and exits, the same way
+        the '<' redirect does."  A run was spent rediscovering it.
+
+        NOTE THE DISTINCTION, because sdtestuser.ps1 still uses the file form
+        and is RIGHT to: Invoke-SdTestNative drives ssh.exe, which takes a file
+        handle happily, and SD is at the FAR END of the connection where it sees
+        the ssh channel rather than a file.  The rule is about handing sd.exe
+        its own stdin.
+
+        LOGTO SDSYS FIRST, matching verify-doors-admin.ps1, verify-tiers.ps1 and
+        verify-createaccount.ps1 - every elevated script here that has ever
+        created an account carries it, and all were green on b59, which is
+        post-56.  Under 56 an administrator should already land in SDSYS at
+        LOGIN, so this ought to be a no-op re-entry; it stays because this is
+        SETUP, and setup that quietly depends on a product change is a hidden
+        test of it.
+
+        TERM after it, so nothing wraps: a wrapped line is counted twice by
+        anything grepping the transcript - PRE_RELEASE 40, which cost a wrong
+        verdict.
+
+        AND THE LEADING BLANK LINE IS A BOM SINK, not a stray newline.  The pipe
+        prepends a BOM to the first line whatever $OutputEncoding says, and SD
+        answers that it is not in your VOC; landing it on a line that was empty
+        anyway costs one harmless complaint instead of eating a real command.
+
+        ***AND A TIMEOUT, WHICH MATTERS MORE HERE THAN IN THE SCRIPT THIS WAS
+        COPIED FROM.***  This runs in an ELEVATED window raised by
+        Start-Process -Verb RunAs, and the unelevated parent is sitting on
+        -Wait.  A prompt nobody answers would hang BOTH, with the reason on a
+        console the parent cannot read.  The job form turns that into a message.
+        PRE_RELEASE 14 is the case: a piped answer missing its prompt ate the
+        following commands and hung, costing a session and an elevated
+        "sd -cleanup".
+
+        FACTORED OUT 29 Aug 2026 when the sweep arrived, so there is ONE copy of
+        this reasoning rather than two.  Everything above is why each line is
+        the way it is; changing one of them in one caller only is the failure
+        this shape prevents.  #>
+    $timeoutSec = 120
+    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $SdLines + @('OFF')) -join "`n") + "`n"
+    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
+                     -ArgumentList $sdExe, $body
+    if (Wait-Job $job -Timeout $timeoutSec) {
+        $raw = Receive-Job $job
+    } else {
+        Stop-Job $job
+        $raw = Receive-Job $job
+        $raw += ''
+        $raw += ("*** SD DID NOT FINISH IN {0}s - it is waiting for input." -f $timeoutSec)
+        $raw += '*** Nothing below this line was answered.  Check for a stray sd.exe.'
+    }
+    Remove-Job $job -Force
+    return (($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 $elevated = ([Security.Principal.WindowsPrincipal](
@@ -70,6 +153,89 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 if (-not (Test-Path -LiteralPath $sdExe)) {
     Say ('sdtestuser-admin: no sd.exe at ' + $sdExe)
     exit 2
+}
+
+# ---------------------------------------------------------------- the sweep
+#
+# ***OWNER'S RULING, 29 Aug 2026, ASKED AND ANSWERED: "sweep".***  Stray test
+# accounts from an interrupted run are removed here, in the elevated child
+# Create already raises, so it costs no extra UAC prompt.
+#
+# ***THE CANDIDATE LIST IS BUILT HERE, IN THE ELEVATED PROCESS, AND IS NOT
+# PASSED IN.***  This is code that DELETES WINDOWS ACCOUNTS.  A list of names
+# arriving as an argument would be a list of accounts a caller could choose;
+# deriving it from the machine means the only thing the parent controls is
+# whether to sweep, not what.
+#
+# THREE CONDITIONS, ALL REQUIRED, AND EACH ONE IS PRINTED:
+#
+#   1. the name matches ^sdtu[a-z0-9]+$ - the runner's own naming, "sdtu" plus
+#      a -Run token that VerifyInstall1 already validates as [a-z0-9]+;
+#   2. it is NOT the account about to be created - a reused token must still
+#      hit the single-use refusal below, because the PROFILE is what makes the
+#      name unusable and no sweep can remove that (PRE_RELEASE 35/36);
+#   3. it is in sdusers - which ties it to an account SD made.  A human account
+#      that merely started with those four letters is not swept.
+#
+# ANYTHING FAILING A CONDITION IS NAMED AND SKIPPED, not silently ignored: a
+# sweep that passes over something has to say so, or the next person is left
+# with the orphan and no reason.
+if ($Action -eq 'Create' -and $Sweep) {
+    Say ''
+    Say 'sdtestuser-admin: sweeping stray test accounts from interrupted runs'
+
+    $sdusers = @()
+    try {
+        $sdusers = @(Get-LocalGroupMember -Group 'sdusers' -ErrorAction Stop |
+                     ForEach-Object { ($_.Name -split '\\')[-1] })
+    } catch {
+        Say ('  could not read the sdusers group (' + $_.Exception.Message + ') - sweeping nothing.')
+    }
+
+    $candidates = @(Get-LocalUser -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -like 'sdtu*' } |
+                    ForEach-Object { $_.Name })
+    Say ('  candidates matching sdtu*: ' + $(if ($candidates.Count) { $candidates -join ', ' } else { '(none)' }))
+
+    $swept = 0
+    foreach ($c in $candidates) {
+        if ($c -ceq $Name -or $c -ieq $Name) {
+            Say ('  ' + $c + ': SKIPPED - it is the name this run is creating.')
+            continue
+        }
+        if ($c -notmatch '^sdtu[a-z0-9]+$') {
+            Say ('  ' + $c + ': SKIPPED - does not match ^sdtu[a-z0-9]+$, so it is not one of ours.')
+            continue
+        }
+        if ($sdusers -notcontains $c) {
+            Say ('  ' + $c + ': SKIPPED - not in sdusers, so SD did not make it.')
+            continue
+        }
+
+        Say ('  ' + $c + ': removing (DELETE.ACCOUNT, so the record, the group and the')
+        Say '     Windows account go together rather than one half of a pair)'
+        $swOut = Invoke-SdAdmin (Remove-SdTestUserScript -Name $c)
+        foreach ($l in ($swOut -split "`n")) {
+            $t = $l.TrimEnd()
+            if ($t -ne '') { Say ('     | ' + $t) }
+        }
+        # THE ARTEFACT, BEFORE AND AFTER - the same rule the main action obeys.
+        # SD's wording is not the check; whether the thing is gone is.
+        $swRec = Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $c.ToUpper()))
+        $swWin = $false
+        try { $null = Get-LocalUser -Name $c -ErrorAction Stop; $swWin = $true } catch { $swWin = $false }
+        if ((-not $swRec) -and (-not $swWin)) {
+            Say ('     ' + $c + ' is gone - record and Windows user both.')
+            $swept++
+        } else {
+            Say ('     *** ' + $c + ' SURVIVED (record=' + $swRec + ', windows=' + $swWin + ') ***')
+            Say '     The sweep did not fail the run - but it is still here, and'
+            Say '     the next run will report it again.'
+        }
+    }
+    Say ('  swept ' + $swept + ' of ' + $candidates.Count + ' candidate(s).')
+    Say '  (their Windows PROFILE directories stay until a restart - PRE_RELEASE 35/36)'
+    Say ''
 }
 
 if ($Action -eq 'Create') {
@@ -123,61 +289,8 @@ foreach ($l in $lines) {
     else { Say ('    ' + $l) }
 }
 
-# ***INPUT TO sd.exe MUST BE PIPED. A FILE HANDLE IS REFUSED, AND THE FIRST
-# VERSION OF THIS FILE USED ONE.***  Measured on -Run b60, 29 Aug 2026: SD
-# printed its banner, then ":Process terminated", and created nothing.  That is
-# sysmsg 5020 at CPROC:473, the K$LOGOUT arm - a forced logout, not a refusal of
-# the command, which is why nothing said "CREATE.ACCOUNT" at all.
-#
-# ***IT WAS ALREADY WRITTEN DOWN, DATED 14 Aug 2026***, in
-# verify-createaccount.ps1's header and PROJECT_STATUS.md section 6:
-# "Input must be PIPED.  Start-Process -RedirectStandardInput hands SD a file
-# handle and SD answers 'Process terminated' and exits, the same way the '<'
-# redirect does."  A run was spent rediscovering it.
-#
-# NOTE THE DISTINCTION, because sdtestuser.ps1 still uses the file form and is
-# RIGHT to: Invoke-SdTestNative drives ssh.exe, which takes a file handle
-# happily, and SD is at the FAR END of the connection where it sees the ssh
-# channel rather than a file.  The rule is about handing sd.exe its own stdin.
-#
-# LOGTO SDSYS FIRST, matching verify-doors-admin.ps1, verify-tiers.ps1 and
-# verify-createaccount.ps1 - every elevated script here that has ever created an
-# account carries it, and all of them were green on b59, which is post-56.
-# Under PRE_RELEASE 56 an administrator should already land in SDSYS at LOGIN, so this
-# ought to be a no-op re-entry; it stays because this is SETUP, and setup that
-# quietly depends on a product change is a hidden test of it.
-#
-# TERM after it, so nothing wraps: a wrapped line is counted twice by anything
-# grepping the transcript, which is PRE_RELEASE 40 and cost a wrong verdict.
-#
-# AND THE LEADING BLANK LINE IS A BOM SINK, not a stray newline.  The pipe
-# prepends a BOM to the first line whatever $OutputEncoding says, and SD answers
-# that it is not in your VOC; landing it on a line that was empty anyway costs
-# one harmless complaint instead of eating a real command.
-$body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $lines + @('OFF')) -join "`n") + "`n"
-
-# ***AND A TIMEOUT, WHICH MATTERS MORE HERE THAN IN THE SCRIPT THIS IS COPIED
-# FROM.***  This runs in an ELEVATED window raised by Start-Process -Verb RunAs,
-# and the unelevated parent is sitting on -Wait.  A prompt nobody answers would
-# hang BOTH, with the reason on a console the parent cannot read.  The job form
-# turns that into a message.  PRE_RELEASE 14 is the case: a piped answer missing
-# its prompt ate the following commands and hung, costing a session and an
-# elevated "sd -cleanup".
-$timeoutSec = 120
 try {
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $timeoutSec) {
-        $raw = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $raw = Receive-Job $job
-        $raw += ''
-        $raw += ("*** SD DID NOT FINISH IN {0}s - it is waiting for input." -f $timeoutSec)
-        $raw += '*** Nothing below this line was answered.  Check for a stray sd.exe.'
-    }
-    Remove-Job $job -Force
-    $out = (($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    $out = Invoke-SdAdmin $lines
 
     Say '  --- SD said ---'
     foreach ($l in ($out -split "`n")) {

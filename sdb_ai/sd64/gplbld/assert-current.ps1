@@ -298,6 +298,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # THE COMMIT THAT CREATES IT.
                   'sdtestuser.ps1', 'sdtestuser-admin.ps1',
                   'test-sdtestuser-units.ps1',
+                  # 29 Aug 26 - clean-deadvoc.ps1, PRE_RELEASE 60's one-shot:
+                  # it removes the <ACCT>BP.OUT records verify-catgate left in
+                  # SDSYS's VOC, one per suite run since b59.  Listed IN THE
+                  # COMMIT THAT CREATES IT, which is the rule the sdtestuser
+                  # trio above was added without and paid for - assert-current
+                  # was exiting 1 on their mtimes, and every verifier that
+                  # calls it refuses on that.
+                  'clean-deadvoc.ps1',
                   # 28 Aug 26 - gen_includes.py, found by listing what in this
                   # directory is on NEITHER this list nor stage.py's.  It is not
                   # a fault today only because nobody has edited it since the

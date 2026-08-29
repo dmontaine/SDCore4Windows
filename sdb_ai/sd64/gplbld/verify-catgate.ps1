@@ -167,6 +167,29 @@ function Remove-Fixtures {
     if (Test-Path -LiteralPath $ctlDir) {
         $null = Invoke-SD @("DELETE.FILE $ctlFile FORCE")
     }
+
+    # ***THE OBJECT FILE HAS A VOC ENTRY OF ITS OWN, AND FOR FOUR RUNS NOTHING
+    # DELETED IT — PRE_RELEASE 60, owner's ruling 29 Aug 2026 ("delete dead
+    # voc").***  "BASIC $ctlFile $ctlName" creates <ACCT>BP.OUT and names it in
+    # SDSYS's VOC, exactly as CREATE.FILE does for <ACCT>BP.  The line above
+    # removes <ACCT>BP through SD and the loop below then removed <ACCT>BP.OUT
+    # with Remove-Item — WHICH IS THE THING THE COMMENT ON THIS FUNCTION
+    # FORBIDS, one line further up: "deleting the directory alone would leave
+    # SDSYS's VOC naming a file that is not there."
+    #
+    # MEASURED, NOT ARGUED: LISTF in SDSYS showed SDCATGB59BP.OUT and
+    # SDCATGB60BP.OUT, both "Err 30" — one dead record per suite run since b59,
+    # accumulating, and verify-lcnames reads LISTF.
+    #
+    # IT IS CONDITIONAL ON THE DIRECTORY, like the line above, so a run where
+    # BASIC never got that far does not issue a DELETE.FILE for something that
+    # was never made.  FORCE for the same reason as above: DELETEF prompts
+    # separately for the DATA and DICT parts in an unbounded "until yn" loop,
+    # and a piped "Y" that misses its prompt is PRE_RELEASE 14.
+    if (Test-Path -LiteralPath ($ctlDir + '.OUT')) {
+        $null = Invoke-SD @("DELETE.FILE $ctlFile.OUT FORCE")
+    }
+
     foreach ($p in @($ctlDir, ($ctlDir + '.OUT'), ($ctlDir + '.DIC'), (Join-Path $gcat ('$' + $ctlName)))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
     }

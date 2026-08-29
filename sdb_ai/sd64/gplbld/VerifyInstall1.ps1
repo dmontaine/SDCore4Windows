@@ -448,11 +448,21 @@ if ($Run) {
     # run then hits the single-use guard and reports "ALREADY EXISTS", which is
     # correct and tells nobody that a DIFFERENT run left something behind.
     #
-    # THIS REPORTS AND DOES NOT ACT.  Deleting a Windows account nobody asked
-    # about is not this script's call, and an orphan is evidence about the run
-    # that made it.  Naming it, with the command, is what turns "stuck" into
-    # "one line to run" - the failure mode being cured here is a person staring
-    # at a refusal that is about the wrong thing.
+    # ***IT SWEEPS THEM NOW. OWNER'S RULING, 29 Aug 2026, asked and answered.***
+    # This block reported and did not act for one commit; the owner's answer to
+    # "report or sweep?" was "sweep".
+    #
+    # THE REMOVAL HAPPENS IN THE ELEVATED CHILD THAT CREATE ALREADY RAISES, so
+    # it costs no extra UAC prompt - CLAUDE.md's rule, "pursue it by removing
+    # the need for a prompt, not by skipping the step".  And the child builds
+    # its OWN candidate list rather than taking one from here: this is code that
+    # deletes Windows accounts, so the only thing this side controls is whether
+    # to sweep, not what.  The guard and its three conditions are in
+    # sdtestuser-admin.ps1 beside the deletion.
+    #
+    # THIS SIDE STILL SCANS, and that is not redundant: it is what puts the list
+    # in the UNELEVATED transcript, which is the one a person is reading. The
+    # elevated child's window closes with its scrollback.
     $orphans = @()
     foreach ($u in @(Get-LocalUser -ErrorAction SilentlyContinue |
                      Where-Object { $_.Name -like 'sdtu*' -and $_.Name -ne $testUser })) {
@@ -468,17 +478,15 @@ if ($Run) {
     }
     if ($orphans.Count -gt 0) {
         Write-Output ''
-        Write-Output ("  *** {0} TEST ACCOUNT(S) FROM AN EARLIER RUN ARE STILL HERE ***" -f $orphans.Count)
+        Write-Output ("  {0} TEST ACCOUNT(S) FROM AN EARLIER RUN ARE STILL HERE:" -f $orphans.Count)
+        foreach ($o in $orphans) { Write-Output ('      ' + $o) }
         Write-Output '  An interrupted run (Ctrl-C) does not reach the removal, so these are live'
-        Write-Output '  and enabled with passwords nothing wrote down.  This run does NOT need them'
-        Write-Output '  gone - its own name is different - but they should not be left.'
+        Write-Output '  and enabled with passwords nothing wrote down.  THE ELEVATED CHILD BELOW'
+        Write-Output '  WILL REMOVE THEM, in the same prompt it uses to create this run''s account.'
+        Write-Output '  It re-derives the list itself and prints what it skipped and why.'
         Write-Output ''
-        Write-Output '  From an ELEVATED PowerShell:'
-        foreach ($o in $orphans) {
-            Write-Output ("      powershell -NoProfile -ExecutionPolicy Bypass -File {0} -Action Remove -Name {1}" -f
-                          $admin, $o.ToLower())
-        }
-        Write-Output ''
+    } else {
+        Write-Output '  no stray test accounts from earlier runs.'
     }
 
     Write-Output '  EXPECT A UAC PROMPT NOW - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
@@ -499,7 +507,7 @@ if ($Run) {
         $tuChild = Start-Process -FilePath 'powershell.exe' `
             -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $admin,
                             '-Action', 'Create', '-Name', $testUser,
-                            '-Password', $testPw, '-LogFile', $tuLog) `
+                            '-Password', $testPw, '-LogFile', $tuLog, '-Sweep') `
             -Verb RunAs -Wait -PassThru -ErrorAction Stop
     } catch {
         Write-Output ('VerifyInstall1: the test account could not be created - ' + $_.Exception.Message)
