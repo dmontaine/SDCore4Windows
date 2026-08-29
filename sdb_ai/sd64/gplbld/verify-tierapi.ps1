@@ -14,7 +14,7 @@
 
       - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
         over SCRAM and attach to their own account
-      - what each tier can DO once in, as a VOC count: 354 / 396 / 417.  A
+      - what each tier can DO once in, as a VOC count: 354 / 396 / 416.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
       - a wrong password is refused, so the successes mean something
@@ -134,7 +134,25 @@ if (-not (Test-Path -LiteralPath $SdConnect)) {
 $Tiers = @(
     [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 354 }
     [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 396 }
-    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 417 }
+    # 28 Aug 26 - 417 -> 416, AND THIS FILE WAS THE ONE LEFT BEHIND.
+    #   PRE_RELEASE 25 deleted encrypt.field from voc_template and from
+    #   TIER.ADD.ADMINISTRATOR - a V record pointing at $CRYPTO, which is
+    #   nowhere in the tree - so ADMINISTRATOR lost a verb and the other two
+    #   tiers did not.  verify-tiers.ps1 was re-derived from the directory the
+    #   same day and this constant was not, so THE TWO VERIFIERS DISAGREED
+    #   ABOUT THE SAME FACT for a day.  It surfaced on -Run b52, the first
+    #   suite run to reach step 19 against an install carrying 25's change.
+    #
+    #   RE-DERIVED FROM THE DIRECTORY RATHER THAN COPIED FROM THE OTHER FILE:
+    #   newvoc holds 395 names, less "%t" and the two list records = 392;
+    #   TIER.ADD.ADMINISTRATOR is 21 lines, 1 description + 20 verbs.  So
+    #   392 + 20 + 4 = 416, while PROGRAMMER 392 + 4 = 396 and STANDARD
+    #   392 - 42 + 4 = 354 do not move - which is the check on the arithmetic,
+    #   since the verb was only ever ADMINISTRATOR's.
+    #
+    #   test-tiercounts-units.ps1 now asserts the two files agree WITH EACH
+    #   OTHER and with the directory, so this cannot drift again unnoticed.
+    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 416 }
 )
 foreach ($t in $Tiers) {
     if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }

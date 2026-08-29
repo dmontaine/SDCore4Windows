@@ -306,12 +306,30 @@ $logtoSuspended = Test-Say $out 'is suspended'
 # which is what "logto ADMITTED" in PROJECT_STATUS rests on.
 #
 # newvoc/who is "Verb to show user number and account", so WHO's answer is
-# "<number> <ACCOUNT>" and the account must be the WHOLE of the second field
-# on a line whose first field is a number.  Nothing the caller typed can
-# produce that shape.
+# "<number> <ACCOUNT>" and the account must be the second field on a line whose
+# first field is a number.  Nothing the caller typed can produce that shape:
+# the echo is ":LOGTO <ACCT>", which does not begin with a digit.
+#
+# ***AND THE FIRST FIX ANCHORED THAT ON `\s*$`, WHICH WAS THE SAME TRAP FROM
+# THE OTHER SIDE.***  Measured on -Run b52: the LOGTO SUCCEEDED and WHO
+# answered "91 SDDRB52A from SDDRB52B" - the "from <account>" clause appears
+# ONLY when the session has logto'd, so an end-of-line anchor matched only the
+# case where it had NOT.  The original check matched the name anywhere and
+# passed on the failure path; its replacement matched only at end of line and
+# failed on the success path.  ***BOTH WERE WRITTEN FROM A TRANSCRIPT OF THE
+# WRONG PATH*** - the lesson is not "anchor tighter", it is LOOK AT THE OUTPUT
+# THE TOOL PRINTS WHEN IT SUCCEEDS.
 $logtoEntered = $false
+$logtoFromHelper = $false
 foreach ($l in ($out -split "`n")) {
-    if ($l -match ('^\s*\d+\s+' + [regex]::Escape($acctU) + '\s*$')) { $logtoEntered = $true }
+    if ($l -match ('^\s*\d+\s+' + [regex]::Escape($acctU) + '\b')) { $logtoEntered = $true }
+    # ***THE "from" CLAUSE IS THE STRONGER EVIDENCE AND IT IS FREE.***  It says
+    # the session ARRIVED here rather than started here, which is the entire
+    # claim the Control leg makes.  A session that had simply begun in the
+    # account would print the account and no "from".
+    if ($l -match ('^\s*\d+\s+' + [regex]::Escape($acctU) + '\s+from\s+' + [regex]::Escape($helperU) + '\b')) {
+        $logtoFromHelper = $true
+    }
 }
 
 # ***CONTROL: THE FAILURE WORDING IS A DISQUALIFIER IN ITS OWN RIGHT.***  5161
@@ -322,6 +340,7 @@ $logtoNoDir = Test-Say $out 'Unable to change to new directory'
 
 if ($Phase -eq 'Control') {
     Note 'logto: entered the account before suspension' $true $logtoEntered $true
+    Note ('logto: WHO says it arrived from ' + $helperU) $true $logtoFromHelper $true
     Note 'logto: SD did NOT report 5161 "Unable to change to new directory"' `
          $false $logtoNoDir $true
     Note 'logto: SD did NOT say "is suspended"' $false $logtoSuspended $true

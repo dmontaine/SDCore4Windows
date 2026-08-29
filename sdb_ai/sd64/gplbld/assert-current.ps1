@@ -723,7 +723,16 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # install, no elevation and no account, so it is the cheap
                   # guard the suite itself cannot be: the suite costs three UAC
                   # prompts and a single-use prefix to find out.
-                  'test-doorsargv-units.ps1')
+                  'test-doorsargv-units.ps1',
+                  # 28 Aug 26 - test-tiercounts-units.ps1, after -Run b52 step
+                  # 19 found verify-tierapi.ps1 claiming ADMINISTRATOR = 417
+                  # while verify-tiers.ps1 claimed 416 and the tree said 416.
+                  # One fact in two files with nothing comparing them.  It
+                  # re-derives all three counts from sdsys/newvoc and checks
+                  # both files against the TREE rather than against each other,
+                  # because two files agreeing on a wrong number is exactly as
+                  # broken as two disagreeing.  No install, no elevation.
+                  'test-tiercounts-units.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
