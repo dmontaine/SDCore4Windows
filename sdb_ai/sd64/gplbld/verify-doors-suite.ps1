@@ -369,7 +369,15 @@ Write-Output ("verify-doors-suite: as {0}, UNELEVATED" -f $id.Name)
 Write-Output ("  account   {0}   (suspended and measured)" -f $acct)
 Write-Output ("  helper    {0}   (ssh's in and issues the LOGTO - PRE_RELEASE 44)" -f $helper)
 Write-Output ("  logs      {0}" -f $logDir)
-Write-Output '  three elevated phases, two ordinary ones, and THREE UAC prompts'
+# ***SAY THE PROMPT COUNT THE RUN WILL ACTUALLY ASK FOR.***  This line said
+# "THREE UAC prompts" and stayed saying it through the b54 run, which asked for
+# one - a header describing the route the run is NOT taking is the same kind of
+# stale lead as the VM line in cleanup-devlitter.  The helper has not started
+# yet at this point, so this says what is INTENDED and the start itself reports
+# what happened.
+Write-Output ('  three elevated phases, two ordinary ones, and ' +
+              $(if ($NoHelper) { 'THREE UAC prompts (-NoHelper)' }
+                else           { 'ONE UAC prompt if the helper starts, three if it cannot' }))
 Write-Output '  TWO accounts are created and TWO profile directories are left behind'
 Write-Output ''
 
