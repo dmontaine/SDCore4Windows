@@ -374,6 +374,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # section 7 step 7's rule.  PowerShell only, so no build
                   # product to list alongside it.
                   'probe-sessionfork.ps1',
+                  # 29 Aug 26 - probe-osadmin, START HERE step 1's instrument:
+                  # what do IsAdmin() and IsElevated() answer for an UNELEVATED
+                  # administrator, which is what PRE_RELEASE 56 clause 2 needs
+                  # LOGIN to be able to tell apart.  Same three parts and the
+                  # same reason as the probe- entries above: the runner COMPILES
+                  # ON EVERY RUN, so an unlisted .exe would report the tree stale
+                  # the moment anybody used the instrument.  Listed in the commit
+                  # that creates it, under section 7 step 7's rule.
+                  'probe-osadmin.c', 'probe-osadmin.ps1', 'probe-osadmin.exe',
                   # 24 Aug 26 - probe-catprivate.ps1, section 7 step 15's
                   # one owed measurement: after the sdusers:(RX) lock on
                   # sdsys\cat, does CATALOG (private) still write the record.
