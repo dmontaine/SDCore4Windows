@@ -181,14 +181,28 @@ function Remove-Fixtures {
     # SDCATGB60BP.OUT, both "Err 30" — one dead record per suite run since b59,
     # accumulating, and verify-lcnames reads LISTF.
     #
-    # IT IS CONDITIONAL ON THE DIRECTORY, like the line above, so a run where
-    # BASIC never got that far does not issue a DELETE.FILE for something that
-    # was never made.  FORCE for the same reason as above: DELETEF prompts
-    # separately for the DATA and DICT parts in an unbounded "until yn" loop,
-    # and a piped "Y" that misses its prompt is PRE_RELEASE 14.
-    if (Test-Path -LiteralPath ($ctlDir + '.OUT')) {
-        $null = Invoke-SD @("DELETE.FILE $ctlFile.OUT FORCE")
-    }
+    # ***"DELETE VOC <name>", NOT "DELETE.FILE". MEASURED 29 Aug 2026.***  The
+    # first fix here used DELETE.FILE and it does NOT work: an object file has a
+    # DATA portion and no DICT, and DELETEF answered
+    #
+    #     Error deleting DATA portion 'SDCATGB59BP.OUT'
+    #     DICT part of file does not exist
+    #
+    # for all four records, changing nothing.  What has to go is the VOC RECORD;
+    # the directory itself is removed by the loop below, which already worked.
+    #
+    # NO PROMPT ON THIS PATH, and that is read from DELETE's source rather than
+    # hoped for: with record names given explicitly it takes the "num.ids > 0"
+    # branch and goes straight to delete.record.  Both of DELETE's "input reply"
+    # prompts are in the OTHER branches - an active select list (2050) and the
+    # ALL keyword (3220) - which naming ids makes unreachable.  So NO.QUERY is
+    # not needed here even though DELETE accepts it, and an unneeded token is
+    # what PRE_RELEASE 14 was.
+    #
+    # IT IS UNCONDITIONAL, unlike the line above.  The VOC record can outlive
+    # the directory - that is the whole defect - so keying the cleanup on the
+    # directory existing is what let these accumulate in the first place.
+    $null = Invoke-SD @("DELETE VOC $ctlFile.OUT")
 
     foreach ($p in @($ctlDir, ($ctlDir + '.OUT'), ($ctlDir + '.DIC'), (Join-Path $gcat ('$' + $ctlName)))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }

@@ -41,7 +41,7 @@ Set-StrictMode -Version Latest
 
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
-# ELEVATION IS REQUIRED AND IS CHECKED OUT LOUD.  DELETE.FILE in SDSYS is gated,
+# ELEVATION IS REQUIRED AND IS CHECKED OUT LOUD.  Writing SDSYS's VOC is gated,
 # and an unelevated run would fail per record with SD's refusal rather than with
 # one line saying why.
 $elevated = ([Security.Principal.WindowsPrincipal](
@@ -109,20 +109,45 @@ if ($dead.Count -eq 0) {
     exit 0
 }
 
+# ***THE COMMAND LIST IS BUILT ONCE, ABOVE THE -WhatIf BRANCH.***  It was built
+# twice - once for -WhatIf to print and once to run - and the two then said
+# different things the moment the verb changed on 29 Aug 2026: -WhatIf would
+# have gone on promising DELETE.FILE while the run issued DELETE.  A preview
+# that can disagree with the action is worse than no preview.
+
+# ***"DELETE VOC <name>", NOT "DELETE.FILE". MEASURED, 29 Aug 2026.***  The
+# first version of this script used DELETE.FILE and it changed nothing:
+#
+#     Error deleting DATA portion 'SDCATGB59BP.OUT'
+#     DICT part of file does not exist
+#
+# on all four records.  DELETEF wants to remove a FILE, and the file these
+# records name is already gone - which is the definition of the thing being
+# cleaned up.  What has to go is the VOC RECORD itself.
+#
+# NO PROMPT ON THIS PATH, read from gpl.bp/DELETE rather than hoped for: with
+# record names given explicitly it takes the "num.ids > 0" branch straight to
+# delete.record, and both of DELETE's "input reply" prompts are in the other
+# branches - an active select list (2050) and the ALL keyword (3220) - which
+# naming ids makes unreachable.  NO.QUERY is therefore not needed, and DELETE
+# does accept it; an unneeded token is what PRE_RELEASE 14 was.
+#
+# ***AND SD's SUCCESS WORDING IS NOT USABLE AS THE ANCHOR HERE.***  DELETE ends
+# with sysmsg 3221, "%1 record(s) deleted", printed UNCONDITIONALLY - so
+# "0 record(s) deleted" appears on the failure path too and a match on
+# "record(s) deleted" would be a false positive with a check's name on it.
+# The verdict below is the second LISTF, which is the artefact.
+$cmds = @()
+foreach ($d in $dead) { $cmds += ('DELETE VOC ' + $d) }
+
 if ($WhatIf) {
     Write-Output ''
     Write-Output '  -WhatIf: would issue, in one SDSYS session:'
-    foreach ($d in $dead) { Write-Output ('      DELETE.FILE ' + $d + ' FORCE') }
+    foreach ($c in $cmds) { Write-Output ('      ' + $c) }
     Write-Output '  Nothing was changed.'
     exit 0
 }
 
-# FORCE, NOT A PIPED "Y".  DELETEF prompts separately for the DATA and DICT
-# parts, each in an unbounded "until yn = 'Y' or 'N'" loop, so a piped answer
-# that misses its prompt is eaten by the next command and the session hangs -
-# PRE_RELEASE 14, which cost a session and an elevated "sd -cleanup".
-$cmds = @()
-foreach ($d in $dead) { $cmds += ('DELETE.FILE ' + $d + ' FORCE') }
 Write-Output ''
 Write-Output '  --- SD session ---'
 foreach ($c in $cmds) { Write-Output ('    > ' + $c) }
