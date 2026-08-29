@@ -49,7 +49,19 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
-    [int] $Port = 4243
+    [int] $Port = 4243,
+
+    # ***THREE UAC PROMPTS BECOME ONE - OWNER'S RULING, 28 Aug 2026.***  The
+    # default routes the three elevated legs through ONE resident elevated
+    # helper (sd-elevate.ps1, which SD's own ELEVATE verb uses), so consent is
+    # given once at the start instead of once per leg.
+    #
+    # ***-NoHelper KEEPS THE PROVEN PATH, AND THAT IS THE POINT OF THE SWITCH.***
+    # The Start-Process -Verb RunAs route is what -Run b53 went green on. A
+    # rework of how a suite elevates should not be the only way to run it the
+    # week it lands, so the old mechanism stays reachable and stays tested -
+    # test-doorsargv-units.ps1 drives BOTH.
+    [switch] $NoHelper
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,8 +78,24 @@ $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 
-$work = Join-Path $env:TEMP ('sd-doors-suite-' + $stamp)
-New-Item -ItemType Directory -Path $work | Out-Null
+# ***CREATED LATER, AND NAMED SO TWO RUNS CANNOT COLLIDE.***  Both halves were
+# defects, found 28 Aug 2026 by running the suite twice inside one second:
+#
+#   1. $stamp is yyyyMMdd-HHmmss, so a second run in the SAME SECOND hit
+#      "An item with the specified name ... already exists" and died with an
+#      unhandled exception - exit 1 from a script whose refusal code is 2.
+#   2. It was created HERE, above the residue check, and the refusal path exits
+#      before the try/finally that removes it.  FOUR leaked directories were on
+#      disk when this was found, one per refused run.
+#
+# ***THE SECOND ONE MATTERS MORE THAN IT LOOKS NOW.***  With the helper route
+# this directory holds the Create launcher, and that launcher carries the
+# password.  On the refusal path it was empty, so nothing leaked - but a
+# directory that outlives the run is the wrong place to keep that property by
+# luck.  So: unique name, and created only when there is something to put in
+# it.
+$work = Join-Path $env:TEMP ('sd-doors-suite-' + $stamp + '-' +
+                             [guid]::NewGuid().ToString('N').Substring(0, 6))
 
 $legs = New-Object System.Collections.ArrayList
 
@@ -94,6 +122,122 @@ function Add-Leg($name, $expected, $got) {
 }
 
 # ---------------------------------------------------------------------------
+# THE HELPER ROUTE.  One consent for the whole run.
+#
+# ***IT REUSES sd-elevate.ps1 RATHER THAN GROWING A SECOND ELEVATION HELPER.***
+# That file ships and SD's ELEVATE verb drives it, so it is the most exercised
+# elevation path in the project; a gplbld-local twin would be a second copy of
+# security-sensitive code with nothing comparing them, which is the defect
+# class PRE_RELEASE 46 was.  Nothing here modifies it - it is called exactly as
+# SD calls it, and editing it would make the tree stale and cost a cycle.
+#
+# ***THE 300-SECOND PER-REQUEST TIMEOUT IS WHY ONLY THE DOOR LEGS GO THIS WAY.***
+# sd-elevate.ps1 hard-codes it, each door leg finishes well inside it, and
+# VerifyInstall1's own elevation of VerifyInstall2 does NOT - that half runs 19
+# verifiers. So the suite run goes from FOUR prompts to TWO, not to one, and
+# taking it to one means changing a shipped file.  Owner's call, not assumed.
+$script:helperPipe = ''
+
+function Start-ElevationHelper {
+    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
+    if (-not (Test-Path -LiteralPath $elev)) {
+        Write-Output ('  no sd-elevate.ps1 beside this script - falling back to a prompt per leg')
+        return $false
+    }
+    $pipe = 'sddoors-' + [guid]::NewGuid().ToString('N')
+    Write-Output ''
+    Write-Output '  *** ONE UAC PROMPT IS COMING, AND IT IS THE ONLY ONE THIS STEP ASKS FOR.'
+    Write-Output ('      {0} -Start -PipeName {1} -OwnerPid {2}' -f $elev, $pipe, $PID)
+    & $elev -Start -PipeName $pipe -OwnerPid $PID | Out-Null
+    $rc = $LASTEXITCODE
+    if ($rc -ne 0) {
+        Write-Output ("  the helper did not start (exit {0}) - falling back to a prompt per leg." -f $rc)
+        Write-Output '  5 means consent was refused or unavailable; anything else is a failure to launch.'
+        return $false
+    }
+    $script:helperPipe = $pipe
+    Write-Output ('  helper is serving on pipe {0}; the three elevated legs need no further consent.' -f $pipe)
+    return $true
+}
+
+function Stop-ElevationHelper {
+    if ([string]::IsNullOrEmpty($script:helperPipe)) { return }
+    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
+    & $elev -Stop -PipeName $script:helperPipe | Out-Null
+    Write-Output ('  elevation helper stopped (pipe {0}).' -f $script:helperPipe)
+    $script:helperPipe = ''
+}
+
+# ***THE LAUNCHER IS SELF-CONTAINED HERE, BECAUSE THE HELPER PASSES NO
+# ARGUMENTS*** - it runs a script path with Get-Content | Invoke-Expression.
+# So the password is baked in rather than passed, and the old comment that said
+# "the launcher carries no secret" had it backwards:
+#
+#   MEASURED 28 Aug 2026.  A command line IS readable by any same-user process
+#   - Win32_Process.CommandLine returned the marker argument verbatim - while a
+#   file in %TEMP% carries SYSTEM, Administrators and the user and nobody else.
+#   The same three principals either way, except the file can be DELETED, and
+#   $work is removed in the finally below whatever happens.  So this is not a
+#   step down from passing it as an argument; it is a step up.
+# ***THIS FUNCTION MUST NOT PRINT, AND THE FIRST VERSION DID.***  The block at
+# the top of this file says why: a PowerShell function's return value is its
+# whole OUTPUT STREAM, so one that Write-Outputs AND returns hands the caller an
+# ARRAY with the value on the end.  The refusal path did exactly that and the
+# unit test caught it by failing to bind an array to a [bool] parameter - the
+# warning was thirty lines above the code that ignored it.  The reason goes in
+# a script-scope variable and the CALLER prints it.
+$script:launcherError = ''
+function New-SelfContainedLauncher([string]$Phase, [string]$Password, [string]$Out) {
+    $script:launcherError = ''
+    $launcher = Join-Path $work ("helper-" + $Phase + ".ps1")
+    # ***REFUSE THE QUOTING HAZARD OUT LOUD RATHER THAN GENERATING A BROKEN
+    # SCRIPT.***  Every value below is embedded in a single-quoted PowerShell
+    # string, which processes no escapes - so a backslash in a path is safe and
+    # an apostrophe is not.  The generated alphabet has none, and this asserts
+    # that rather than trusting it.
+    foreach ($v in @($admin, $Prefix, $Phase, $Password, $Out)) {
+        if ($v -match "'") {
+            $script:launcherError = 'a value contains an apostrophe and would break the launcher quoting'
+            return ''
+        }
+    }
+    $call = "& '$admin' -Prefix '$Prefix' -Phase '$Phase'"
+    if ($Password -ne '') { $call += " -Password '$Password'" }
+    $call += " *> '$Out'"
+    Set-Content -LiteralPath $launcher -Encoding ascii -Value @($call, 'exit $LASTEXITCODE')
+    return $launcher
+}
+
+function Invoke-PhaseViaHelper([string]$Phase, [string]$Password, [string]$Out) {
+    $launcher = New-SelfContainedLauncher $Phase $Password $Out
+    if ([string]::IsNullOrEmpty($launcher)) {
+        Write-Output ('  REFUSING - ' + $script:launcherError + '.')
+        Write-Output '  Nothing was measured by this leg.'
+        $script:phaseExit = 2
+        return
+    }
+
+    # RULE 1: say what is really being sent.  The launcher's CONTENTS are not
+    # printed - the Create one carries the password - but its path and the
+    # command shape are, with the secret masked.
+    $shown = "& '$admin' -Prefix '$Prefix' -Phase '$Phase'"
+    if ($Password -ne '') { $shown += " -Password '<password>'" }
+    Write-Output ('      via helper: ' + $shown)
+    Write-Output ('      launcher  : ' + $launcher)
+
+    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
+    & $elev -Run -PipeName $script:helperPipe -Script $launcher | Out-Null
+    $rc = $LASTEXITCODE
+    if ($rc -eq 9) {
+        Write-Output '  the helper is gone - it answers 9 when no elevated server is on the pipe.'
+        Write-Output '  Nothing was measured by this leg.'
+        $script:phaseExit = 2
+        return
+    }
+    $script:phaseExit = $rc
+}
+
+# ---------------------------------------------------------------------------
 # THE ELEVATED LEG.  Returns the child's exit code, and prints what it did.
 function Invoke-ElevatedPhase([string]$Phase, [string]$Password) {
     $out      = Join-Path $logDir ("verify-doors-admin-{0}-{1}.log" -f $Phase.ToLower(), $stamp)
@@ -109,9 +253,29 @@ function Invoke-ElevatedPhase([string]$Phase, [string]$Password) {
 
     Write-Output ''
     Write-Output ("  --- {0} (ELEVATED) --------------------------------------------" -f $Phase.ToUpper())
-    Write-Output '  *** A UAC PROMPT IS COMING.  It is this suite asking, not something else.'
+    if ([string]::IsNullOrEmpty($script:helperPipe)) {
+        Write-Output '  *** A UAC PROMPT IS COMING.  It is this suite asking, not something else.'
+    }
     Write-Output ("      {0} -Prefix {1} -Phase {2}" -f $admin, $Prefix, $Phase)
     Write-Output ("      output -> {0}" -f $out)
+
+    # ***THE HELPER ROUTE WHEN ONE IS SERVING, THE PROVEN ROUTE OTHERWISE.***
+    # Which one ran is printed above by each, so a transcript never leaves it
+    # ambiguous which mechanism produced the exit code.
+    # ***IsNullOrEmpty, NOT -ne ''.***  An UNSET variable is $null, and
+    # "$null -ne ''" is TRUE - so a plain comparison sends an uninitialised
+    # run down the helper branch.  Caught by the unit test, which lifts this
+    # function without the initialiser above it; the same shape as the
+    # "an empty Get-Content is null, not ''" trap already in the record.
+    if (-not [string]::IsNullOrEmpty($script:helperPipe)) {
+        Invoke-PhaseViaHelper $Phase $Password $out
+        if (Test-Path -LiteralPath $out) {
+            foreach ($line in (Get-Content -LiteralPath $out)) { Write-Output ('  | ' + $line) }
+        } else {
+            Write-Output '  | (no output file - the child did not start)'
+        }
+        return
+    }
 
     # ***ONE EMPTY ELEMENT REJECTS THE WHOLE LIST.***  Start-Process's
     # -ArgumentList carries [ValidateNotNullOrEmpty()], and on a COLLECTION
@@ -253,6 +417,21 @@ $pw = (-join ($bytes | ForEach-Object { $alphabet[$_ % $alphabet.Length] })) + '
 $created = $false
 $stopped = ''
 
+# THE WORK DIRECTORY, made only now that the run is really going ahead - see
+# the comment where $work is named.  Everything that writes into it runs below
+# this line, and the finally removes it.
+New-Item -ItemType Directory -Path $work | Out-Null
+
+# ***START THE HELPER BEFORE ANYTHING IS CREATED.***  If consent is refused
+# this falls back to a prompt per leg rather than failing the run: the point of
+# the helper is fewer prompts, and a run that cannot have fewer should still be
+# able to happen.
+if (-not $NoHelper) {
+    if (-not (Start-ElevationHelper)) { $script:helperPipe = '' }
+} else {
+    Write-Output '  -NoHelper: a UAC prompt per elevated leg, the route -Run b53 went green on.'
+}
+
 try {
     Invoke-ElevatedPhase 'Create' $pw
     if ($script:phaseExit -eq 0) { $created = $true }
@@ -298,7 +477,13 @@ finally {
         Write-Output '  Create left nothing behind, so there is nothing to remove.'
     }
     $pw = ''
+    # ***$work GOES FIRST AND IT CARRIES THE SECRET.***  The helper route bakes
+    # the password into the Create launcher, so this removal is not tidiness -
+    # it is the deletion the measurement above relies on when it argues a file
+    # beats a command line.  Recurse/Force, and in finally so a step that dies
+    # outright does not leave it.
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    Stop-ElevationHelper
 }
 
 # ------------------------------------------------------------------- report

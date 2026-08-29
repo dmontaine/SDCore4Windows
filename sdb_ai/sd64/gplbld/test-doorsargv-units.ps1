@@ -127,6 +127,13 @@ function Start-Process {
     return [pscustomobject]@{ ExitCode = 0 }
 }
 
+# ***SET EXPLICITLY, BECAUSE THE LIFT DOES NOT BRING THE INITIALISER.***  Only
+# the FUNCTION is parsed out of the suite, so the script-scope state it reads
+# has to be built here.  An unset $helperPipe is $null, and the suite's guard
+# is IsNullOrEmpty precisely so that a run in that state does not take the
+# helper branch - this file is what found that.  Empty means "no helper is
+# serving", which is the route the argv rows below are about.
+$script:helperPipe = ''
 $stamp  = 'unittest'
 $admin  = Join-Path $PSScriptRoot 'verify-doors-admin.ps1'
 $Prefix = 'sddrunit'
@@ -182,9 +189,67 @@ try {
              ("{0}: -Out names this phase's log" -f $ph) $(if ($j -ge 0) { $argv[$j + 1] } else { 'absent' })
     }
 
+    # --- 5b. THE HELPER ROUTE'S LAUNCHER ------------------------------------
+    # 28 Aug 2026.  The default route sends a SELF-CONTAINED launcher to a
+    # resident elevated helper, because that helper passes no arguments.  The
+    # argv rows above stop covering the default path the moment it changes, so
+    # the generator gets its own rows: the secret must be present (it cannot be
+    # passed any other way), the -Password switch must be ABSENT for the two
+    # phases that take none, and the apostrophe guard must refuse rather than
+    # emit a broken script.
+    $genFn = $ast.FindAll({ param($n)
+            $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $n.Name -eq 'New-SelfContainedLauncher' }, $true) | Select-Object -First 1
+    Note ($null -ne $genFn) 'New-SelfContainedLauncher found in the file'
+    if ($null -ne $genFn) {
+        Invoke-Expression $genFn.Extent.Text
+
+        $outC = Join-Path $logDir 'create.log'
+        $lC   = New-SelfContainedLauncher 'Create' $pw $outC
+        Note ($lC -ne '') 'helper/Create: a launcher was written'
+        if ($lC -ne '') {
+            $body = (Get-Content -LiteralPath $lC -Raw)
+            Note ($body -like "*$pw*") 'helper/Create: the password IS in the launcher' `
+                 'it cannot be an argument - the helper passes none'
+            Note ($body -like '*-Password*') 'helper/Create: -Password is named'
+            Note ($body -like "*$outC*")     'helper/Create: output is redirected to this phase''s log'
+            $t2 = $null; $e2 = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+                        ($lC -replace '\\', '/'), [ref]$t2, [ref]$e2)
+            Note ($e2.Count -eq 0) 'helper/Create: the launcher parses' ("{0} error(s)" -f $e2.Count)
+        }
+
+        foreach ($ph in @('Suspend', 'Remove')) {
+            $outX = Join-Path $logDir ($ph + '.log')
+            $lX   = New-SelfContainedLauncher $ph '' $outX
+            Note ($lX -ne '') ("helper/{0}: a launcher was written" -f $ph)
+            if ($lX -ne '') {
+                $b = (Get-Content -LiteralPath $lX -Raw)
+                Note (-not ($b -like '*-Password*')) ("helper/{0}: -Password is omitted entirely" -f $ph)
+                Note ($b -like "*-Phase '$ph'*")     ("helper/{0}: -Phase carries its own name" -f $ph)
+                $t3 = $null; $e3 = $null
+                $null = [System.Management.Automation.Language.Parser]::ParseFile(
+                            ($lX -replace '\\', '/'), [ref]$t3, [ref]$e3)
+                Note ($e3.Count -eq 0) ("helper/{0}: the launcher parses" -f $ph) ("{0} error(s)" -f $e3.Count)
+            }
+        }
+
+        # THE GUARD, EXERCISED.  A refusal that has never been triggered is a
+        # branch nobody has run - and this file exists because two checks in a
+        # row were shipped without being watched fail.
+        $bad = New-SelfContainedLauncher 'Create' "pw'with'quote" (Join-Path $logDir 'bad.log')
+        # [string]::IsNullOrEmpty, not "-eq ''", and the FIRST version of this
+        # row is why: the function printed its refusal AND returned, so $bad
+        # came back as an ARRAY and would not bind to Note's [bool].  That is
+        # the trap the suite's own header warns about, and this row found it.
+        Note ([string]::IsNullOrEmpty($bad)) 'helper: an apostrophe in a value is REFUSED, not quoted badly'
+        Note ($script:launcherError -ne '') 'helper: the refusal says WHY, in a variable rather than the return' `
+             $script:launcherError
+    }
+
     # --- 6. The launcher it wrote is a loadable script -----------------------
     $launchers = @(Get-ChildItem -LiteralPath $work -Filter 'launch-*.ps1')
-    Note ($launchers.Count -eq 3) 'three launchers were written' ("got {0}" -f $launchers.Count)
+    Note ($launchers.Count -eq 3) 'three -NoHelper launchers were written' ("got {0}" -f $launchers.Count)
     foreach ($l in $launchers) {
         $lt = $null; $le = $null
         $null = [System.Management.Automation.Language.Parser]::ParseFile(
