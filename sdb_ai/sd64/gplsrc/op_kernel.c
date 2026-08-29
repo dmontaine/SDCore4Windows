@@ -21,6 +21,8 @@
  * 28 Jul 24 mab remove op_cnctport() / CONNECT.PORT not supported
  * 17 Aug 26 Windows port - K_SET_USERNAME added, gated on HDR_INTERNAL;
  *           op_login() fails closed now that login_user() is gone.
+ * 29 Aug 26 Windows port - K_OS_ADMINISTRATOR added, with kernel.c's
+ *           CN_SOCKET guard.  PRE_RELEASE_FIXES 56.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -417,6 +419,43 @@ void op_kernel() {
         }
       }
       result.data.value = (my_uptr->flags & USR_ADMIN) != 0;
+      break;
+
+    /* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56, the owner's access model.
+       Is the SIGNED-IN PERSON an administrator?  The case above is the session
+       flag and this is the person; keys.h has the two side by side, and the
+       names are close enough that reading them together is worth the minute.
+
+       WHY IT EXISTS.  The model makes entering SDSYS the only source of
+       administrator rights, and LOGIN the place it happens - so "may this
+       person be in SDSYS" carries far more weight than it did when SDSYS was
+       somewhere you stepped into.  Measured 29 Aug 26: nothing asked that
+       question anywhere.  elevate('START') gates on Start-Process -Verb RunAs
+       succeeding (gplbld/sd-elevate.ps1:120), which gives an administrator a
+       CONSENT prompt and a standard user a CREDENTIAL prompt - so a
+       non-administrator holding an administrator's password reached SDSYS,
+       and the trail then named the person who did NOT consent, because
+       @logname and audit_message() still read the signed-in user.
+
+       IsAdmin() ASKS getgrouplist(), WHICH IS THE RIGHT HALF OF THE PAIR.
+       linuxlb.c has both: getgrouplist() is "is this ACCOUNT an
+       administrator", getgroups() is "is this PROCESS elevated".  This gate
+       wants the first - an administrator who has not elevated is still an
+       administrator, and elevation is what the UAC prompt is for.
+
+       THE CN_SOCKET GUARD IS NOT OPTIONAL AND IS THE WHOLE REASON THIS IS NOT
+       A ONE-LINE CASE.  IsAdmin() reads getpwuid(getuid()) - the REAL uid.  An
+       API session is fork()ed by the LocalSystem service and AssumeUserIdentity()
+       (win32s4u.c) changes only the EFFECTIVE uid, so getuid() stays SYSTEM,
+       whose token carries BUILTIN\Administrators, and IsAdmin() would answer
+       TRUE for every remote client.  That is the identical shape of the hole
+       kernel.c:240 closed on 21 Aug 26, where IsElevated() was true for every
+       API session for exactly the same reason; this copies its guard rather
+       than inventing a second discriminator that could drift away from it. */
+
+    case K_OS_ADMINISTRATOR:
+      result.data.value =
+          (IsAdmin() && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
       break;
 
     case K_FILESTATS:

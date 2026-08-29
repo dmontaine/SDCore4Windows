@@ -142,6 +142,13 @@
       $define K$SET.USERNAME    60       ;* Set the session user name ($internal)
       $define K$ASSUME.USER     61       ;* Become the authenticated user ($internal)
       $define K$IMPERSONATING   62       ;* <1> identity Windows says, <2> token held?
+* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  IS THE SIGNED-IN PERSON AN
+*   ADMINISTRATOR - not "is this session elevated", which is K$ADMINISTRATOR
+*   (26) and is a different question with a near-identical name.  26 is the
+*   SESSION flag, set on entering SDSYS and cleared on the way out; this one
+*   is the PERSON, asked of Windows each time, and a LOGTO does not move it.
+*   Nothing in SD can set or forge it.  keys.h carries the same note.
+      $define K$OS.ADMINISTRATOR 63      ;* Is the signed-in person an OS administrator?
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

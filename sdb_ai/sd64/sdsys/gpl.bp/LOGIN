@@ -80,6 +80,12 @@
 *                      PROJECT_STATUS.md section 8
 * 24 Aug 26 Windows port - the sign-on banner says "SD Core", to tell this
 *                      build apart from regular SD
+* 29 Aug 26 Windows port - AN ADMINISTRATOR IS ELEVATED AT LOGIN AND LANDS IN
+*                      SDSYS, needing no account of their own.  Reverses the
+*                      15 Aug 2026 rule "nobody logs in to an account but
+*                      their own", knowingly, on the owner's model; and it
+*                      costs administrators ssh, which UAC decides rather
+*                      than a test here.  PRE_RELEASE_FIXES 56
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -117,8 +123,17 @@ $include keycode.h
 * 14 Aug 26 Windows port - is_grp_member is back.  The sdusers gate and the
 *   per-account group test below both call it.  See PROJECT_STATUS.md 5.6.
 deffun is_grp_member(user,group) calling '!is_grp_member'
+* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  THE SECOND CALLER OF
+*   !elevate, and until today there was deliberately only one.  ELEVATE's own
+*   header says "the only caller of START and STOP is CPROC's LOGTO handling";
+*   that sentence is amended there rather than left to be discovered here.
+*   The owner's rule it rests on - "there should never be an elevation from
+*   within a normal session" - is untouched: this is not within a session, it
+*   is what decides which account the session begins in.
+deffun elevate(action,arg) calling '!elevate'
 
    ok = @false
+   admin.login = @false
 
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Every refusal below
 *   leaves through terminate.connection, so the audit record is written there
@@ -361,7 +376,26 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   a strictly harder test than sdusers membership before reaching this line.
 *   See PROJECT_STATUS.md section 5.6.
 
-     if not(kernel(K$INTERNAL,-1)) then
+* 29 Aug 26 Windows port - AND AN ADMINISTRATOR IS EXEMPT TOO.
+*   PRE_RELEASE_FIXES 56.  ***WITHOUT THIS THE WHOLE MODEL IS DEAD AT THE
+*   DOOR***, which is why it is here rather than filed as a later tidy: this
+*   gate runs BEFORE the account is chosen below, and the model gives an
+*   administrator no account of their own - so nothing ever puts them in
+*   sdusers, and they would be refused here before reaching the case that
+*   sends them to SDSYS.  Found by reading, not by a cycle.
+*
+*   IT OPENS NO HOLE, AND THE ARGUMENT IS THE ONE THE INTERNAL EXEMPTION
+*   ABOVE ALREADY MAKES.  An administrator exempted here can reach exactly one
+*   place - SDSYS, by the case below, which asks UAC - and consent at UAC is a
+*   strictly harder test than membership of a group.  The other two arms are
+*   closed to them: "sd -Aname" is refused for any account that is not your
+*   own (10051), and an administrator with no account has none to name.
+*
+*   THE EXEMPTION IS THE RIGHT SHAPE, NOT "ADD ADMINISTRATORS TO sdusers AT
+*   INSTALL".  That alternative covers only the administrators who existed
+*   when the installer ran; one promoted afterwards would be refused by SD for
+*   a reason nobody would think to look for.  This asks Windows every time.
+     if not(kernel(K$INTERNAL,-1)) and not(kernel(K$OS.ADMINISTRATOR,0)) then
         if not(is_grp_member(lgn.id,'sdusers')) then
            display sysmsg(5009) ;* This user is not registered for SD use
            audit.reason = 'not a member of sdusers'
@@ -442,6 +476,60 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   above.  An administrator arrives in their own account like everybody else
 *   and types LOGTO SDSYS.
 
+* 29 Aug 26 Windows port - AN ADMINISTRATOR IS ELEVATED HERE AND LANDS IN
+*   SDSYS.  Owner's model, 29 Aug 2026, PRE_RELEASE_FIXES 56: "Administrators
+*   get an elevation prompt at login and are logged in as SDSYS.
+*   Administrators do not have a regular account of their own."
+*
+*   ***THIS REVERSES THE 15 Aug 2026 RULE QUOTED DIRECTLY ABOVE***, which
+*   deleted this very case - "'sd' elevated with no account named went to
+*   SDSYS.  The second case is deleted outright."  He was shown that and took
+*   it knowingly.  The 15 Aug reasoning was "an administrator has access to
+*   all accounts, once they have logged into SD, not before"; the new model
+*   answers it differently - an administrator's LOGIN *is* the elevation, so
+*   there is no "before" left to protect.
+*
+*   IT IS NOT THE CASE THAT WAS DELETED, THOUGH, AND THE DIFFERENCE MATTERS.
+*   The old one tested K$ADMINISTRATOR - "did this person open an elevated
+*   terminal" - and prompted for nothing.  This tests K$OS.ADMINISTRATOR,
+*   "is this person an administrator at all", and ASKS UAC.  So an
+*   administrator no longer has to know to elevate their terminal first.
+*
+*   ***AND IT COSTS ADMINISTRATORS ssh.  THAT IS A CONSEQUENCE, NOT A
+*   CHOICE.***  UAC draws its consent dialog on the interactive desktop and an
+*   ssh session has none, so elevate('START') fails there and this refuses -
+*   and under the model above the administrator has no account of their own to
+*   fall back to.  An administrator who wants to reach SD over ssh creates a
+*   personal account and grants it rights, like anyone else (his clause 3).
+*   Consistent with 5.6.2, "local terminal access is for administrators".
+*
+*   THE REGISTER IS READ BEFORE UAC IS ASKED.  A broken install should not
+*   draw a consent dialog to then refuse the login anyway.
+*
+*   NOTHING IS LEAKED IF A LATER STEP FAILS.  The helper carries -OwnerPid and
+*   exits when this session's process goes, waking periodically while idle, so
+*   a refusal further down releases it without CPROC's logto.privilege.undo
+*   dance.  Checked in sd-elevate-helper.ps1 rather than assumed.
+      case kernel(K$OS.ADMINISTRATOR, 0)
+         initial.account = 'SDSYS'
+
+         read acc.rec from acc.f, initial.account else
+            display sysmsg(5018, initial.account) ;* Account %1 not in register
+            audit.account = initial.account
+            audit.reason = 'SDSYS is not in the register'
+            goto terminate.connection
+         end
+
+         if elevate('START', '') # 0 then
+            display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+            audit.account = initial.account
+            audit.reason = 'elevation refused or unavailable'
+            goto terminate.connection
+         end
+
+         void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
+         admin.login = @true
+
       case 1
          initial.account = upcase(@logname)
 
@@ -517,6 +605,15 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    end
 
    who = initial.account
+
+* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  AFTER THE MOVE, NOT INSIDE
+*   THE CASE, and for the reason CPROC:2723 gives at the same moment: the
+*   directory change above can still fail, and the flag must not outlive a
+*   move that did not happen.  The elevation is obtained early because the
+*   case has to know whether it succeeded; the RIGHTS are granted here.
+   if admin.login then
+      void kernel(K$ADMINISTRATOR, 1)
+   end
    close acc.f
 
    * Set @TTY

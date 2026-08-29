@@ -36,9 +36,20 @@
 *
 *    THERE IS NO ELEVATE VERB AND THERE MUST NOT BE.  Owner's rule, 16 Aug
 *    2026: "there should never be an elevation from within a normal session".
-*    Privilege comes from entering SDSYS and from nowhere else, so the only
-*    caller of START and STOP is CPROC's LOGTO handling.  This is a
+*    Privilege comes from entering SDSYS and from nowhere else.  This is a
 *    subroutine, not a command, and nothing puts it in a VOC.
+*
+*    29 Aug 26 Windows port - THERE ARE NOW TWO CALLERS, NOT ONE.  This said
+*    "the only caller of START and STOP is CPROC's LOGTO handling"; LOGIN is
+*    the second, because the owner's model of 29 Aug 2026 elevates an
+*    administrator AT LOGIN and lands them in SDSYS.  PRE_RELEASE_FIXES 56.
+*
+*    THE RULE ABOVE IS UNTOUCHED BY THAT.  "Within a normal session" is what
+*    it forbids, and LOGIN runs before there is a session to be within: it is
+*    deciding which account the session begins in.  Privilege still comes from
+*    entering SDSYS and from nowhere else - only the door has moved.  If a
+*    THIRD caller is ever proposed, that is the sentence to weigh it against,
+*    and the answer is very probably no.
 *
 *    WHY A HELPER PROCESS RATHER THAN AN ELEVATED SD.  A Windows process's
 *    token is fixed when the process is created and nothing can elevate a

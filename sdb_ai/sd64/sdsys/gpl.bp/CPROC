@@ -68,6 +68,10 @@
 * 16 Aug 26 Windows port - and logto.authorised accepts the privilege it just
 *                      obtained, without which the LOGTO refused itself; the
 *                      four failure exits between the two give it back up
+* 29 Aug 26 Windows port - LOGTO SDSYS is refused unless the SIGNED-IN PERSON
+*                      is an administrator.  Until now a standard user with an
+*                      administrator's password reached SDSYS and the trail
+*                      named the wrong person.  PRE_RELEASE_FIXES 56
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2594,6 +2598,40 @@ int.logto:
 *   fails there and this refuses - enforced by Windows rather than by a test
 *   here that could drift out of step with the rule.
    if upcase(new.account) = "SDSYS" then
+
+* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  A NON-ADMINISTRATOR IS NOT
+*   ADMITTED TO SDSYS, AND UNTIL NOW ONE COULD BE.  Owner's question, 29 Aug
+*   2026: "a non administrative user is never allowed into SDSYS?"  He was
+*   describing what he believed the product did.
+*
+*   IT DID NOT.  elevate('START') gates on Start-Process -Verb RunAs
+*   succeeding and tests NOBODY'S IDENTITY.  That verb gives an administrator
+*   a CONSENT prompt and a standard user a CREDENTIAL prompt - so a standard
+*   user holding an administrator's password reached SDSYS.  The IsInRole
+*   test at sd-elevate.ps1:103 is the "already elevated, nothing to launch"
+*   shortcut and is not a gate.
+*
+*   AND THE TRAIL NAMED THE WRONG PERSON WHEN IT HAPPENED: the helper runs as
+*   the administrator whose credentials were typed, while @logname and
+*   audit_message() still read the signed-in user, so ELEVATION GRANTED was
+*   recorded against somebody who did not consent.
+*
+*   BEFORE THE PROMPT, NOT AFTER.  A refusal that arrives after UAC has drawn
+*   its dialog has already asked a person for a password it was never going to
+*   accept, which teaches them to type it somewhere it is not wanted.
+*
+*   NO K$INTERNAL BYPASS, DELIBERATELY, and the next reader will wonder.  The
+*   internal paths that reach here are all elevated already - "sd -internal"
+*   is behind check_admin(), which asks IsElevated() - so the person behind
+*   them passes this test on its own.  A bypass would be an untested branch
+*   that only ever weakens the gate.
+      if not(kernel(K$OS.ADMINISTRATOR, 0)) then
+         display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+         void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=not an administrator')
+         unwinding = 2
+         return
+      end
+
       elev.rc = elevate('START', '')
       if elev.rc = 0 then
          elev.obtained = @true

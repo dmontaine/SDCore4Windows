@@ -25,6 +25,7 @@
  * rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
  * 
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
+ * 29 Aug 26 Windows port - K_OS_ADMINISTRATOR added.  PRE_RELEASE_FIXES 56
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -189,6 +190,24 @@
    which @logname already exposes, and a diagnostic no ordinary program may
    run is one nobody runs.                                                   */
 #define K_IMPERSONATING      62
+
+/* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56, the owner's access model.
+   IS THE SIGNED-IN PERSON AN ADMINISTRATOR?  Not "is this session elevated",
+   which is K_ADMINISTRATOR (26) above and is a different question with an
+   almost identical name - READ THE NOTE ON THAT ONE BEFORE USING THIS ONE.
+
+     K_ADMINISTRATOR     the SESSION flag, USR_ADMIN.  Set on entering SDSYS,
+                         cleared on the way out (CPROC), settable $internal.
+     K_OS_ADMINISTRATOR  the PERSON, asked of Windows every time.  Nothing in
+                         SD can set, clear or forge it, and a LOGTO does not
+                         move it.
+
+   Read-only, so it is NOT gated on HDR_INTERNAL, for K_IMPERSONATING's reason
+   above: it reports a fact about the signed-in user that Windows already
+   exposes, and reading it grants nothing.  BCOMP refuses KERNEL to anything
+   not $internal in any case.  See op_kernel.c for the CN_SOCKET guard, which
+   is not optional.                                                          */
+#define K_OS_ADMINISTRATOR   63
 
 /* PTERM() function action keys */
 #define PT_BREAK              1
