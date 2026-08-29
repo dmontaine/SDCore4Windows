@@ -1,0 +1,127 @@
+* PROFILE_DIR(USERNAME)
+* Is there already a Windows profile directory sitting on this account's name?
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 28 Aug 26 Windows port - new, so CREATE.ACCOUNT can refuse instead of
+*           silently taking a suffixed home.  PRE_RELEASE_FIXES.md 36.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    dir = !profile_dir(username)
+*
+*    The profile directory Windows would give an account of this name, IF
+*    something is already sitting there.  Empty when the path is clear, which
+*    is the ordinary case.
+*
+*      status 0   answered - the return value is the path, or empty
+*      status 2   the name is not a valid OS user name
+*      status 1   PowerShell could not be run, so nothing was measured
+*
+*    ***AN EMPTY RETURN WITH A NON-ZERO STATUS MEANS "NOT MEASURED", NOT "THE
+*    PATH IS CLEAR".***  The two are indistinguishable in the return value and
+*    the caller must read STATUS() before acting on the empty, or it will
+*    report a clear path on a run that never looked.
+*
+*    WHY THIS EXISTS.  A directory left at C:\Users\<name> makes Windows put
+*    the NEXT account of that name at C:\Users\<name>.<COMPUTERNAME> instead -
+*    silently.  Anything under the old home, ssh authorized_keys included, is
+*    then not where the account looks for it, and the symptom that reaches the
+*    user is "public-key authentication is refused", days later and nowhere
+*    near the cause.  PRE_RELEASE_FIXES.md 36: the ruling is that
+*    CREATE.ACCOUNT refuses and names the directory, rather than creating an
+*    account that is wrong in a way nothing says out loud.
+*
+*    IT CANNOT CLEAR THE PATH ITSELF AND DOES NOT TRY.  The usual reason a
+*    directory survives its account is that Windows still has the profile's
+*    registry hive mounted, which locks a file inside it - and nothing short of
+*    a restart releases that.  So this reports, and DELETE_USER's reclaim
+*    record plus the boot sweep (gplbld/reclaim-profiles.ps1) are what
+*    eventually remove it.
+*
+*    THE ROOT IS READ, NOT ASSUMED.  ProfilesDirectory under the ProfileList
+*    key is where Windows keeps it, it is a REG_EXPAND_SZ, and it is not always
+*    C:\Users - a machine that has moved its profiles elsewhere would otherwise
+*    have every one of these checks answer about a directory nobody uses.
+*    C:\Users is the fallback for a machine that has no value at all.
+*
+*    NO ELEVATION.  Reading the key and testing a path need none, so this is a
+*    plain OS.EXECUTE ... CAPTURING rather than !ps_script - which also means
+*    it works in an ordinary session, before CREATE.ACCOUNT has asked anybody
+*    for anything.  OS_GROUP's LISTMEM makes the same call for the same reason:
+*    !ps_script returns an exit code and this needs the script's OUTPUT.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function profile_dir(username)
+$catalog !profile_dir
+
+deffun valid_os_name(name) calling '!valid_os_name'
+
+   dir = ''
+   set.status 0
+
+* The name is interpolated into the command below, so it is validated first -
+* !valid_os_name permits letters, digits, dot, underscore and hyphen only, so
+* it cannot carry a quote out of the string.
+   if not(valid_os_name(username)) then
+      set.status 2
+      return dir
+   end
+
+   ps = '$root = ""; '
+   ps := '$pl = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"; '
+   ps := 'try { $root = (Get-ItemProperty -LiteralPath $pl -Name ProfilesDirectory '
+   ps := '-ErrorAction Stop).ProfilesDirectory } catch { }; '
+   ps := 'if ($root -eq "") { $root = Join-Path $env:SystemDrive "Users" }; '
+* REG_EXPAND_SZ, so %SystemDrive%\Users arrives unexpanded.  Joined and tested
+* as written it would answer false for a directory that is really there.
+   ps := '$root = [Environment]::ExpandEnvironmentVariables($root); '
+   ps := '$d = Join-Path $root "' : username : '"; '
+   ps := 'if (Test-Path -LiteralPath $d) { Write-Output $d }; '
+   ps := 'exit 0'
+
+   os.execute ps capturing out
+
+   rc = os.error()
+   if rc # 0 then
+      set.status 1
+      return dir
+   end
+
+* THE CARRIAGE RETURN HAS TO COME OFF and TRIM does not take it - it removes
+* spaces.  PowerShell ends every line CRLF and the capture splits on the LF,
+* so the path arrives with a CR still on it; OS_GROUP's LISTMEM carries the
+* same conversion and the measurement behind it.  A path with a CR on the end
+* would be printed by the caller as a blank line after the message.
+   lines = dcount(out, @fm)
+   for ln = 1 to lines
+      nm = out<ln>
+      convert char(13) : char(10) to '' in nm
+      nm = trim(nm)
+      if nm # '' and dir = '' then dir = nm
+   next ln
+
+return dir
+end
+
+* END-CODE

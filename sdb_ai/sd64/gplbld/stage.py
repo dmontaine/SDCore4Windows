@@ -1077,6 +1077,19 @@ def main():
                    # SHIPS, so assert-current watches it like the rest of
                    # these - do NOT add it to that script's $neverShipped list.
                    'upgrade-dicts.ps1',
+                   # 28 Aug 26 - PRE_RELEASE_FIXES #36, and this pair is the
+                   # half of that ruling that says something comes back for a
+                   # profile SD could not remove.  secure-reclaim.ps1 creates
+                   # the record store with an ACL of its own at install time -
+                   # inherited, it would be a list of directories every SD user
+                   # can edit and LocalSystem later deletes.  reclaim-profiles
+                   # is the sweep itself, and it is run by sdsvc.exe at every
+                   # service start, which is every boot: it MUST ship, or the
+                   # records DELETE_USER writes are never read by anything.
+                   # Both SHIP, so assert-current watches them like the rest of
+                   # these - do NOT add either to that script's $neverShipped
+                   # list.
+                   'secure-reclaim.ps1', 'reclaim-profiles.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

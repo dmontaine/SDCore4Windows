@@ -724,6 +724,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # guard the suite itself cannot be: the suite costs three UAC
                   # prompts and a single-use prefix to find out.
                   'test-doorsargv-units.ps1',
+                  # 28 Aug 26 - test-reclaim-units.ps1, the unit test for
+                  # reclaim-profiles.ps1's refusal table (PRE_RELEASE_FIXES 36).
+                  # Listed in the commit that created it, under step 7's rule.
+                  # THE SWEEP ITSELF SHIPS AND IS NOT ON THIS LIST, nor is
+                  # secure-reclaim.ps1 - stage.py names both.  Only the test
+                  # stays out: it needs no install, no elevation and no store,
+                  # which is exactly why it can guard a script whose real path
+                  # runs as LocalSystem at boot and cannot be exercised by hand.
+                  'test-reclaim-units.ps1',
                   # 28 Aug 26 - test-tiercounts-units.ps1, after -Run b52 step
                   # 19 found verify-tierapi.ps1 claiming ADMINISTRATOR = 417
                   # while verify-tiers.ps1 claimed 416 and the tree said 416.

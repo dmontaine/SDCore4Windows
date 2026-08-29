@@ -649,6 +649,36 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-psdir.ps1"" -Path ""{#DataDir}\sdsys\pstmp"""; \
     Flags: runhidden; StatusMsg: "Securing the script directory..."
 
+; WHERE DELETE_USER RECORDS A PROFILE IT COULD NOT REMOVE.  28 Aug 26,
+; PRE_RELEASE_FIXES.md 36.  A Windows profile cannot be deleted while its
+; registry hive is still mounted, so gpl.bp/DELETE_USER keeps both halves of
+; the profile and writes a record here; sdsvc.exe runs reclaim-profiles.ps1 at
+; every service start - which is every boot, as LocalSystem - and that is when
+; the pair finally goes.
+;
+; SAME REASON AS THE ENTRY ABOVE, AND IT IS THE SERIOUS HALF AGAIN.  The
+; icacls that secures the data tree grants sdusers:(OI)(CI)M to everything
+; underneath.  Left to inherit, this store would be A LIST OF DIRECTORIES
+; EVERY SD USER CAN EDIT AND LocalSystem LATER DELETES.  secure-reclaim.ps1
+; breaks inheritance and grants SYSTEM and Administrators only.
+;
+; ORDER: after the icacls, as above, or inheritance puts the Modify back.
+;
+; WHY IT IS DONE HERE AND NOT LEFT TO DELETE_USER, which creates the directory
+; with the same ACL if it is missing: the parent is writable by every SD user,
+; so one of them could create this directory FIRST and own it, and
+; DELETE_USER's "create it if absent" would then find it already there and
+; leave their ACL alone.  Creating it during the install closes that window.
+; The sweep re-asserts the ACL at every boot as the third line of defence, and
+; refuses any record file not owned by SYSTEM or Administrators.
+;
+; A FAILURE HERE IS NOT FATAL and the exit code is not checked: no store means
+; DELETE_USER reports status 8 - "left behind and nothing is coming back for
+; it" - which is a warning with instructions, not a broken install.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-reclaim.ps1"" -Path ""{#DataDir}\profile-reclaim"""; \
+    Flags: runhidden; StatusMsg: "Securing the profile reclaim store..."
+
 ; NOT OPTIONAL SINCE 16 Aug 2026 - see the note in [Tasks].  The Check is the
 ; whole of the condition now: install one if this machine has none, and never
 ; touch one it already has.

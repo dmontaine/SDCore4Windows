@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 28 Aug 26 Windows port - run gplbld/reclaim-profiles.ps1 before "sd -start",
+ *           so the profiles DELETE_USER could not remove are reclaimed on the
+ *           boot that finally unmounts their hives.  PRE_RELEASE_FIXES.md 36.
  * 16 Aug 26 Windows port - do not report RUNNING without checking that sdwind
  *           is actually up; log to ProgramData\SD\sdsvc.log; clear the segment
  *           behind a failed start; drop CREATE_NO_WINDOW
@@ -51,6 +54,31 @@
  * is stage 2.  This runs sdwind under whatever identity the service is
  * configured with and changes nothing about who owns the files.
  *
+ * THE ONE THING IT DOES BESIDES THE LIFECYCLE, AND WHY IT IS HERE.
+ *
+ * 28 Aug 26 Windows port, PRE_RELEASE_FIXES.md 36.  Deleting a Windows account
+ * cannot delete its profile while Windows still has that profile's registry
+ * hive mounted - the hive locks a file inside the directory - so gpl.bp/
+ * DELETE_USER keeps both halves of the profile and records the pair under
+ * ProgramData\SD\profile-reclaim.  Something has to come back for them, and
+ * the only moment the lock is reliably gone is a boot.
+ *
+ * THIS IS THE ONLY THING SD RUNS AT EVERY BOOT, which is the whole reason the
+ * sweep hangs off it: the service is start=auto and runs as LocalSystem, so it
+ * is elevated - and removing a directory under C:\Users and a key under HKLM
+ * both need that.  The alternative considered and rejected was Windows' own
+ * "delete profiles older than N days on restart" policy: it is machine-wide
+ * rather than scoped to SD, its granularity is days so it does not cure the
+ * symptom, and it ages profiles off a recorded unload time that our case - a
+ * hive that never unloaded cleanly - is least likely to carry.
+ *
+ * IT IS BEST EFFORT AND NEVER BLOCKS SD.  The sweep is not part of starting the
+ * database, so a sweep that fails, hangs or is missing entirely must not stop
+ * SD coming up.  It is given a bounded wait, the SCM is kept patient while it
+ * runs, and its exit code is logged either way.  What it did is in its own log,
+ * ProgramData\SD\reclaim-profiles.log - a service has nobody watching, so the
+ * script writes its own record rather than relying on being seen.
+ *
  * END-DESCRIPTION
  *
  * START-CODE
@@ -77,6 +105,15 @@
    its way out, and, far worse, skipped the cleanup below and left the segment
    for the installer to trip over.  Existence is not survival.               */
 #define SDWIND_SETTLE_MS 5000
+
+/* How long to let the profile reclaim sweep run before giving up on WAITING
+   for it.  Not a kill: the process is left to finish and write its own log,
+   because a sweep interrupted half way through a Remove-Item is worse than a
+   sweep nobody waited for.  Generous, because it deletes directories on a
+   machine that has just booted and may be busy, and cheap, because the usual
+   case is an empty store and an exit within a second.                       */
+#define SWEEP_WAIT_MS 120000
+#define SWEEP_SCRIPT "reclaim-profiles.ps1"
 
 static SERVICE_STATUS_HANDLE svc_status_handle = NULL;
 static SERVICE_STATUS svc_status;
@@ -185,6 +222,45 @@ static BOOL sd_exe_path(char *buf, DWORD len) {
   if (strlen(buf) + strlen("\\sd.exe") + 1 > len)
     return FALSE;
   strcat(buf, "\\sd.exe");
+
+  return TRUE;
+}
+
+/* ======================================================================
+   And where the reclaim sweep is.
+
+   28 Aug 26 Windows port.  The shipped .ps1 files live in the install root and
+   this program lives two directories below it - sd.iss puts the binaries in
+   {app}\usr\bin and everything else in {app} - so this walks up two levels
+   from our own directory rather than from PATH or the registry, for exactly
+   the reason sd_exe_path() gives: anything that depends on the environment
+   works when tested by hand and fails at boot.
+
+   FAILS RATHER THAN GUESSES.  A tree that is not the shape this expects makes
+   this return FALSE and the caller skip the sweep with a line in the log,
+   which is the safe direction - the alternative is running an arbitrary
+   .ps1 found somewhere else, as LocalSystem.                              */
+
+static BOOL sweep_script_path(char *buf, DWORD len) {
+  DWORD n;
+  char *slash;
+  int i;
+
+  n = GetModuleFileNameA(NULL, buf, len);
+  if (n == 0 || n >= len)
+    return FALSE;
+
+  /* sdsvc.exe, then bin, then usr.  Three cuts to reach {app}. */
+  for (i = 0; i < 3; i++) {
+    slash = strrchr(buf, '\\');
+    if (slash == NULL)
+      return FALSE;
+    *slash = '\0';
+  }
+
+  if (strlen(buf) + strlen("\\" SWEEP_SCRIPT) + 1 > len)
+    return FALSE;
+  strcat(buf, "\\" SWEEP_SCRIPT);
 
   return TRUE;
 }
@@ -341,6 +417,117 @@ static void report(DWORD state, DWORD win32_exit, DWORD wait_hint) {
     SetServiceStatus(svc_status_handle, &svc_status);
 }
 
+/* ======================================================================
+   Reclaim the profiles the delete path had to leave behind.
+
+   28 Aug 26 Windows port, PRE_RELEASE_FIXES.md 36.  See the description at the
+   top of this file for why it is here at all.  This function is about one
+   thing: doing it without ever putting SD's start-up at risk.
+
+   NOTHING HERE IS FATAL.  No script, no PowerShell, a non-zero exit, a sweep
+   that outlasts its wait - every one of them logs a line and returns.  A
+   database that will not start because a housekeeping script was missing would
+   be a far worse defect than the one this fixes.
+
+   AND THE SCM IS KEPT PATIENT WHILE IT RUNS.  A service that goes quiet for a
+   minute is killed and reported as hung, so the wait is a loop that renews the
+   START_PENDING hint rather than a single long block.  The usual case is an
+   empty store and an exit inside a second; the loop matters on the boot after
+   a suite run left two dozen directories behind.
+
+   ITS OWN LOG, NOT OURS.  reclaim-profiles.ps1 writes
+   ProgramData\SD\reclaim-profiles.log and says what it measured, refused and
+   removed.  This records only that it ran and what it exited with, which is
+   the part that belongs to the service.                                   */
+
+static void run_sweep(void) {
+  char script[MAX_PATH];
+  char cmd[MAX_PATH * 2 + 160];
+  char shell[MAX_PATH];
+  STARTUPINFOA si;
+  PROCESS_INFORMATION pi;
+  DWORD n;
+  DWORD rc = 0;
+  DWORD waited = 0;
+  DWORD w;
+
+  if (!sweep_script_path(script, sizeof(script))) {
+    svc_log("profile reclaim skipped: could not work out where " SWEEP_SCRIPT
+            " is from our own path");
+    return;
+  }
+
+  if (GetFileAttributesA(script) == INVALID_FILE_ATTRIBUTES) {
+    /* An install predating this, or a partial one.  Said plainly and once. */
+    svc_log("profile reclaim skipped: no %s", script);
+    return;
+  }
+
+  n = GetEnvironmentVariableA("SystemRoot", shell, sizeof(shell));
+  if (n == 0 || n >= sizeof(shell))
+    strcpy(shell, "C:\\Windows");
+  if (strlen(shell) + strlen("\\System32\\WindowsPowerShell\\v1.0\\powershell.exe") + 1 >
+      sizeof(shell)) {
+    svc_log("profile reclaim skipped: cannot build the PowerShell path");
+    return;
+  }
+  strcat(shell, "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+
+  /* -ExecutionPolicy Bypass because this is a .ps1 FILE and a machine policy
+     would otherwise refuse it - the same reason every shipped script is
+     launched this way from sd.iss.  Both paths are quoted: the default install
+     location contains a space.                                            */
+  if (snprintf(cmd, sizeof(cmd),
+               "\"%s\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"%s\"",
+               shell, script) >= (int)sizeof(cmd)) {
+    svc_log("profile reclaim skipped: command line too long");
+    return;
+  }
+
+  /* Rule 1 of the instrument section in CLAUDE.md: the command actually run,
+     resolved, not the one intended.                                        */
+  svc_log("profile reclaim: %s", cmd);
+
+  ZeroMemory(&si, sizeof(si));
+  si.cb = sizeof(si);
+  ZeroMemory(&pi, sizeof(pi));
+
+  if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+    svc_log("profile reclaim: could not start it - CreateProcess error %lu",
+            (unsigned long)GetLastError());
+    return;
+  }
+
+  for (;;) {
+    w = WaitForSingleObject(pi.hProcess, 1000);
+    if (w == WAIT_OBJECT_0)
+      break;
+
+    waited += 1000;
+    if (waited >= SWEEP_WAIT_MS) {
+      /* Left running on purpose - see SWEEP_WAIT_MS.  It writes its own log,
+         so nothing is lost by not waiting; SD is what must not wait.       */
+      svc_log("profile reclaim: still running after %d seconds - going on "
+              "without it (see reclaim-profiles.log for what it did)",
+              SWEEP_WAIT_MS / 1000);
+      CloseHandle(pi.hProcess);
+      CloseHandle(pi.hThread);
+      return;
+    }
+
+    report(SERVICE_START_PENDING, NO_ERROR, 30000); /* keep the SCM patient */
+  }
+
+  GetExitCodeProcess(pi.hProcess, &rc);
+  CloseHandle(pi.hProcess);
+  CloseHandle(pi.hThread);
+
+  /* 0 nothing pending, 1 something still pending, 2 could not be attempted.
+     None of the three is a reason not to start SD, and 1 is a state rather
+     than a fault - a hive still up at this boot comes down at the next.    */
+  svc_log("profile reclaim: exited with %lu", (unsigned long)rc);
+}
+
 static void WINAPI svc_ctrl(DWORD ctrl) {
   switch (ctrl) {
     case SERVICE_CONTROL_STOP:
@@ -381,6 +568,15 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
     report(SERVICE_STOPPED, GetLastError(), 0);
     return;
   }
+
+  /* 28 Aug 26 Windows port - BEFORE SD, NOT AFTER.  PRE_RELEASE_FIXES.md 36.
+     Two reasons, and the second is the one that decides it: the hives whose
+     locks this is waiting on are down at boot and there is no reason to give
+     anything a chance to reload one; and a profile directory in the way is
+     what makes the NEXT CREATE.ACCOUNT refuse, so clearing it before the
+     database is reachable means nobody meets the refusal for a directory that
+     was about to go anyway.  It cannot fail SD - see run_sweep().          */
+  run_sweep();
 
   /* A NON-ZERO EXIT IS NOT ALWAYS A FAILURE.  "sd -start" exits 1 when SD is
      already running, which at boot means somebody started it by hand first -

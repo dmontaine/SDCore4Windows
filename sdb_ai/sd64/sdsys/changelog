@@ -5,6 +5,46 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+28 Aug 26  A DELETED ACCOUNT'S WINDOWS PROFILE IS NOW CLEARED UP BY ITSELF,
+           AND CREATE.ACCOUNT REFUSES A NAME WHOSE OLD PROFILE IS STILL THERE.
+
+           Windows cannot delete a user profile while it still has that
+           profile's registry settings loaded, which is the ordinary state
+           after somebody has signed in - so DELETE.ACCOUNT could remove the
+           account and not its home directory under C:\Users.  Only a restart
+           releases it.
+
+           What that cost was invisible and turned up much later.  Windows
+           will not put a new profile where one already sits: an account
+           created again under the same name was given a DIFFERENT home
+           directory - the name with your computer's name added - and
+           anything in the old one, ssh keys included, was not found there.
+           The symptom people met was ssh refusing a key that had been
+           working, days after the deletion, with nothing connecting the two.
+
+           Two changes:
+
+             * DELETE.ACCOUNT now keeps both halves of a profile it cannot
+               remove and records it.  THE NEXT TIME THE COMPUTER STARTS, the
+               SD service clears the directory and the registry entry
+               together, without being asked.  Nothing has to be done by
+               hand, and no restart is asked for at the time - it rides the
+               next one that happens anyway.
+
+             * CREATE.ACCOUNT refuses to create an account whose profile
+               directory is still sitting there, and names the directory,
+               rather than quietly giving the account the wrong home.  On a
+               machine where SD deleted the old account, restarting and
+               trying again is the whole of the answer.
+
+           DELETE.ACCOUNT says which of the three states it reached, and one
+           of them still needs a person: if SD could not record the profile
+           for clearing, it says so and tells you what to remove.
+
+           There is also a new folder, C:\ProgramData\SD\profile-reclaim.  It
+           holds those records and nothing else, it is readable only by
+           administrators, and it is normally empty.
+
 28 Aug 26  CREATE.ACCOUNT NOW SETS THE PASSWORD FOR THE API AS WELL AS ssh.
 
            The password you are asked for when an account is created is used

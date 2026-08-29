@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - a third profile warning (8), for the pair that was
+*           left behind AND could not be recorded for reclaim.  6 now says the
+*           next restart clears it, because it does.  PRE_RELEASE_FIXES.md 36.
 * 27 Aug 26 Windows port - the profile warning splits in two: the directory
 *           left behind (6) and the ProfileList registry entry left behind
 *           (7), which is the one that moves a recreated account's home.
@@ -380,13 +383,31 @@ deffun is_sd_user(username) calling '!is_sd_user'
                   *   whether anything does.  An earlier version of this
                   *   comment called 6 harmless; that was measured false on the
                   *   very install that fixed 7.
+                  *
+                  * 28 Aug 26 Windows port - THREE NOW, AND THE QUESTION THE
+                  *   USER IS ACTUALLY ASKING HAS CHANGED.  PRE_RELEASE_FIXES.md
+                  *   36: !delete_user keeps the two halves TOGETHER when the
+                  *   directory cannot go and records the pair for the sweep
+                  *   that runs at every SD service start.  So 6 is no longer
+                  *   "here is a mess, go and clear it" - it is "this will clear
+                  *   itself at the next restart", and 10075 says so.
+                  *
+                  *   8 IS THE ONE THAT STILL NEEDS A PERSON, and it exists
+                  *   precisely so that the reassurance in 10075 is never
+                  *   printed about a pair nothing is coming back for.  A single
+                  *   status covering both would have made the common message a
+                  *   promise the uncommon case cannot keep.
                   case stat = 6
                      crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
-                     crt sysmsg(10075,del.user) ;* Warning: the profile directory for %1 was left behind
+                     crt sysmsg(10075,del.user) ;* Warning: profile kept, reclaimed at the next restart
 
                   case stat = 7
                      crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
                      crt sysmsg(10116,del.user) ;* Warning: the profile registry entry for %1 was left behind
+
+                  case stat = 8
+                     crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
+                     crt sysmsg(10123,del.user) ;* Warning: profile left behind and NOT recorded
 
                   case 1
                      crt sysmsg(10029,del.user, stat) ;* Warning unable to delete OS User: %1 error: %2

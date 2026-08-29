@@ -62,6 +62,16 @@
     in VOC_TEMPLATE, so in the ordinary case they land harmlessly as unknown
     verbs.
 
+    28 Aug 26 - THE PROFILE ASSERTION IS ABOUT THE PAIR NOW, NOT THE ENTRY.
+    PRE_RELEASE_FIXES.md 36 reversed part of 32 on the owner's ruling:
+    DELETE_USER removes the DIRECTORY first and the ProfileList entry only if
+    that succeeded, because removing the entry over a directory that is still
+    there leaves a folder nothing on the machine can find by profile.  So step 3
+    branches on which state it actually reached - both halves gone, or both
+    halves kept and RECORDED under ProgramData\SD\profile-reclaim - and asserts
+    the right thing in each.  A single "the entry is gone" would now score the
+    correct keep-both behaviour as a failure.
+
 .PARAMETER Prefix
     Stem for two throwaway accounts: <prefix>s, which SD creates and must
     delete, and <prefix>b, which already exists and must be left alone.  Use a
@@ -373,14 +383,19 @@ if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
 #
 # Shown() answers $false for a message file it cannot read, and several checks
 # below EXPECT $false - so a missing or emptied message would score them as
-# passes on a run that measured nothing.  10037, 10075 and 10085 are asserted
-# absent on at least one leg, so nothing else would catch it.  (6029 stood here
-# until 21 Aug 2026; Phase 2 retired the message and it left $needMsgs with it.)
+# passes on a run that measured nothing.  10037, 10075, 10085 and 10123 are
+# asserted absent on at least one leg, so nothing else would catch it.  (6029
+# stood here until 21 Aug 2026; Phase 2 retired the message and it left
+# $needMsgs with it.)
 # That is
 # the "absent marker read as an answer" shape this project has paid for five
 # times (PROJECT_STATUS.md, "THE RULE THAT WAS PAID FOR FIVE TIMES"): assert the
 # marker is readable before believing what its absence means.
-$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085)
+#
+# 28 Aug 26 - 10123 joins them, PRE_RELEASE_FIXES.md 36.  It is the "left
+# behind AND not recorded" warning, and step 3's keep-both branch asserts it
+# ABSENT - which an unreadable message would have scored as a pass.
+$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085, 10123)
 $missing  = @($needMsgs | Where-Object { (Get-SysMsgPattern $_ $null) -eq '' })
 if ($missing.Count -gt 0) {
     Fail ('checks here name these messages and the install has none of them: ' +
@@ -515,9 +530,44 @@ try {
         # name appears by putting the new profile at C:\Users\<name>.<COMPUTER>.
         # That is where the four .GITORLI profiles in DELETE_USER's history
         # came from, so the registry entry is the half worth asserting on.
-        Note 'ProfileList entry is gone'    $false ([bool](Get-ProfileEntry $sdSid))
+        #
+        # 28 Aug 26 - RE-SCOPED FROM "THE ENTRY IS GONE" TO "THE ENTRY IS GONE
+        # WHEN THE DIRECTORY WENT", and the change is deliberate rather than a
+        # weakening.  PRE_RELEASE_FIXES.md 36: DELETE_USER now removes the
+        # DIRECTORY first and the entry only if that succeeded, because
+        # removing the entry over a directory that is still there destroys the
+        # only handle any later sweep has - measured, three folders on this
+        # host that nothing could find by profile.
+        #
+        # SO THE PAIR IS THE ASSERTION NOW, and BOTH directions are checked:
+        # the old check would have scored a build that keeps the entry
+        # unconditionally as a pass on the ordinary path and a fail on the
+        # hive-still-up path, which is the wrong way round in both.
+        $dirGone = -not (Test-Path -LiteralPath $sdProf)
+        $entryGone = -not [bool](Get-ProfileEntry $sdSid)
+
         Note 'profile directory is gone'    $false (Test-Path -LiteralPath $sdProf)
-        Note 'message 10075 NOT shown (profile left behind)' $false (Shown $out 10075 @($sdAcc))
+
+        if ($dirGone) {
+            Note 'ProfileList entry is gone (the directory went)' $true $entryGone
+            Note 'message 10075 NOT shown (nothing was left behind)' $false (Shown $out 10075 @($sdAcc))
+        } else {
+            # The hive was still up.  This is not a failure of the delete - it
+            # is the state the ruling was written for - but it is only correct
+            # if BOTH halves survived and the pair was recorded.
+            Write-Host ('   the hive was still up: {0} survived, so this leg measures the KEEP-BOTH path' -f $sdProf)
+            Note 'ProfileList entry was KEPT with the directory' $true (-not $entryGone)
+
+            $reclaimRec = Join-Path $env:ProgramData ('SD\profile-reclaim\' + $sdSid)
+            Note 'the pair was recorded for reclaim'  $true (Test-Path -LiteralPath $reclaimRec)
+            if (Test-Path -LiteralPath $reclaimRec) {
+                $rr = @(Get-Content -LiteralPath $reclaimRec -ErrorAction SilentlyContinue)
+                Write-Host ('   record: ' + ($rr -join ' | '))
+                Note 'the record names the directory' $true (@($rr | Where-Object { $_ -eq ('directory=' + $sdProf) }).Count -eq 1)
+            }
+            Note 'message 10075 shown (kept, reclaimed at the next restart)' $true (Shown $out 10075 @($sdAcc))
+            Note 'message 10123 NOT shown (nothing came back for it)'        $false (Shown $out 10123 @($sdAcc))
+        }
     }
 
     # -----------------------------------------------------------------------

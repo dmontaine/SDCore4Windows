@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 28 Aug 26 Windows port - REFUSE when a Windows profile directory is already
+*   sitting on the name, rather than silently take the suffixed home Windows
+*   would assign.  New messages 10124 and 10125, and !profile_dir.  Owner's
+*   ruling, PRE_RELEASE_FIXES.md 36.
 * 28 Aug 26 Windows port - the creation prompt now sets SD's own credential as
 *   well as the Windows one, in !set_passwd, so 10078's "ssh and the API" is
 *   true of a new account.  New status 6 and message 10122.  Owner's ruling,
@@ -226,6 +230,8 @@ deffun set_passwd(uname)  calling '!set_passwd'
 *   cannot be created without one (owner's rule), and the Windows user is made
 *   BEFORE the password is asked for, so refusing has to take it back.
 deffun delete_user(uname) calling '!delete_user'
+* 28 Aug 26 Windows port - for the refusal below.  PRE_RELEASE_FIXES.md 36.
+deffun profile_dir(uname) calling '!profile_dir'
 deffun valid_os_name(name) calling '!valid_os_name'
 deffun valid_os_path(path) calling '!valid_os_path'
 deffun ps_script(script) calling '!ps_script'
@@ -476,6 +482,43 @@ deffun ps_script(script) calling '!ps_script'
 *   still prints it; nothing consults it here any more.
        * sd convention is os user names are lowercase, if you don't want this, pre create the os user
          acc.uname = downcase(acc.uname)
+
+* 28 Aug 26 Windows port - LOOK BEFORE LEAPING.  Owner's ruling,
+*   PRE_RELEASE_FIXES.md 36: a leftover profile directory on this name used to
+*   produce a suffixed home SILENTLY, and the symptom that reached the user was
+*   ssh public-key authentication refused - days later, nowhere near the cause,
+*   because sshd reads authorized_keys under the home Windows assigned and the
+*   key was under the other one.  Refusing converts a silent wrong answer into
+*   an explained one.
+*
+*   AFTER THE downcase, NOT BEFORE.  The directory Windows will use is named
+*   after the name this verb is about to create, and that is settled one line
+*   above; testing the name as typed would ask about a path that will not be
+*   used, and answer "clear" for a directory that is really in the way.
+*
+*   IT CANNOT CLEAR THE PATH AND DOES NOT PRETEND TO.  The hive is still
+*   mounted, which is why the directory outlived its account; the message says
+*   what has to happen instead.  !delete_user records the pair and the SD
+*   service reclaims it at the next restart, so on a machine where SD made the
+*   mess the answer is genuinely just "restart, then try again".
+*
+*   STATUS() IS READ, AND THAT IS NOT DEFENSIVE PADDING.  !profile_dir returns
+*   empty both for "the path is clear" and for "PowerShell would not run", and
+*   acting on the empty alone would report a clear path on a check that never
+*   looked - the shape this project has paid for repeatedly.  A check that
+*   could not run must not be scored as a pass, so it stops the creation too:
+*   the directory is exactly the thing that cannot be undone afterwards.
+         prof.dir = profile_dir(acc.uname)
+         prof.stat = status()
+         if prof.stat # 0 then
+           @system.return.code = -ER$NOT.CREATED
+           stop sysmsg(10125, acc.uname, prof.stat) ;* could not check for a leftover profile
+         end
+         if prof.dir # '' then
+           @system.return.code = -ER$NOT.CREATED
+           stop sysmsg(10124, acc.uname, prof.dir) ;* a profile directory is already there
+         end
+
 		 * Check INVERT/NOINVERT STATUS (1=INVERT on)
          PVAL = SYSTEM(1001)
          IF PVAL = 1 THEN

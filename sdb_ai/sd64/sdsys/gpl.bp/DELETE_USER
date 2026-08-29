@@ -21,6 +21,9 @@
 * 21 Aug 26 Windows port - and it takes the user PROFILE with it now
 * 27 Aug 26 Windows port - and the ProfileList REGISTRY ENTRY even when
 *           Remove-CimInstance fails.  PRE_RELEASE_FIXES.md 32.
+* 28 Aug 26 Windows port - THE DIRECTORY FIRST, and the registry entry only if
+*           the directory went.  Both halves are KEPT together on failure and
+*           recorded for the boot sweep to reclaim.  PRE_RELEASE_FIXES.md 36.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -34,8 +37,12 @@
 *      1 the account could not be removed
 *      2 the name is not a valid OS user name
 *      5 access denied: SD is not running elevated
-*      6 the account went, the profile DIRECTORY did not - see below
-*      7 the account went, the ProfileList REGISTRY ENTRY did not - see below
+*      6 the account went, the profile DIRECTORY did not, so the ProfileList
+*        entry was KEPT with it and the pair is recorded for reclaim - below
+*      7 the account and the directory went, the ProfileList REGISTRY ENTRY
+*        did not - see below
+*      8 as 6, and the reclaim record could NOT be written, so nothing will
+*        come back for the pair on its own - see below
 *
 *    THE PROFILE GOES TOO, AND THIS REVERSES WHAT THIS COMMENT USED TO SAY.
 *    It said the directory was left alone because "C:\Users\<name> is the
@@ -73,6 +80,53 @@
 *    still the right tool - it takes both halves and it does the bookkeeping -
 *    but its failure no longer decides anything.
 *
+*    28 Aug 26 - AND THE ORDER IS NOW THE OTHER WAY ROUND, WHICH REVERSES PART
+*    OF WHAT 27 Aug DID.  Owner's ruling, PRE_RELEASE_FIXES.md 36: try the
+*    DIRECTORY first, and remove the ProfileList entry ONLY IF THAT SUCCEEDED.
+*
+*    THE REASON IS THAT THE ENTRY IS THE HANDLE, AND 27 Aug's ORDER THREW IT
+*    AWAY.  Everything that cleans up a profile finds it through ProfileList:
+*    Win32_UserProfile enumerates from that key, so no entry means no object,
+*    and gplbld/clean-test-profiles.ps1 inherits the blindness because it
+*    sweeps with Remove-CimInstance.  Removing the entry while the directory
+*    is still there therefore left an anonymous folder under C:\Users that
+*    NOTHING on the machine could find by profile.
+*
+*    MEASURED, NOT REASONED, 28 Aug 2026: C:\Users\sdapiab49, sdapiidb49 and
+*    sdapinb49 were on this host with a directory and NO ProfileList entry, and
+*    a predicted-in-advance sweep skipped all three exactly as predicted while
+*    removing the seven orphans that still had entries.  They had to be deleted
+*    by hand.  That is the cost of the old order in one sentence.
+*
+*    SO ON FAILURE BOTH HALVES ARE KEPT TOGETHER.  The pair stays consistent,
+*    the profile stays visible to Win32_UserProfile, and the account name is
+*    blocked either way - which it already was, because either half on its own
+*    pushes the next account of that name to a suffixed home.  Nothing is lost
+*    by keeping the entry and the only handle is kept.
+*
+*    AND SOMETHING COMES BACK FOR IT.  The pair is recorded under
+*    C:\ProgramData\SD\profile-reclaim, one file per SID, and
+*    gplbld/reclaim-profiles.ps1 sweeps that directory when the SD service
+*    starts - which is every boot, as LocalSystem, by which time the previous
+*    boot's hives are down and the directory can finally be deleted.  The
+*    record names the DIRECTORY as well as the SID, so the sweep does not have
+*    to enumerate ProfileList and cannot inherit the blindness above.
+*
+*    THE RECORD DIRECTORY IS CREATED WITH ITS OWN ACL AND THAT IS NOT
+*    TIDINESS.  C:\ProgramData\SD grants sdusers:(OI)(CI)M, inherited by
+*    everything underneath, so a reclaim store created without breaking
+*    inheritance would be a list of directories that every SD user can edit and
+*    that LocalSystem later deletes - a local privilege escalation of exactly
+*    the shape PS_SCRIPT's header records for SDSYS\PSTMP.  Inheritance is
+*    broken in the same command as the grants, SYSTEM and Administrators only.
+*    gplbld/secure-reclaim.ps1 does the same thing at install time so the
+*    directory already exists with the right ACL before any SD user could
+*    create it first, and the sweep re-asserts it at every boot.
+*
+*    THE RESTART STAYS OUT OF THIS PATH.  Also the owner's ruling: the reclaim
+*    rides the next boot that happens anyway.  DELETE.ACCOUNT does not ask for
+*    one, does not schedule one, and says what it left behind instead.
+*
 *    THE SID IS READ BEFORE THE ACCOUNT IS DELETED, and the order is not
 *    incidental: a profile is keyed by SID, and once the account is gone the
 *    name can no longer be resolved to one.  THE PROFILE PATH IS READ BEFORE
@@ -89,17 +143,27 @@
 *    C:\Users\b49home.GITORLI - because Windows will not put a new profile
 *    where a directory already sits either.
 *
-*      6  the DIRECTORY is left.  A later account of the same name is pushed
-*         to a suffixed home, exactly as 7 does it.
-*      7  the REGISTRY ENTRY is left.  Same consequence by the other route.
+*      6  the DIRECTORY is left, and the registry entry is left WITH it on
+*         purpose.  A later account of the same name is pushed to a suffixed
+*         home, exactly as 7 does it.  Recorded for reclaim; the next SD
+*         service start takes both halves.
+*      7  the REGISTRY ENTRY is left and the directory went.  Same consequence
+*         by the other route.  Recorded too - a lone entry is the half a sweep
+*         can always clear.
+*      8  as 6, and NOTHING IS COMING BACK FOR IT.  The record could not be
+*         written, so the pair will sit there until somebody removes it by
+*         hand.  A separate status because the way out is different: 6 needs a
+*         restart and nothing else, 8 needs a person.
 *
-*    BOTH HALVES ARE THEREFORE REMOVED IN THEIR OWN RIGHT, and the two statuses
-*    survive only to say WHICH one could not be removed, because the way out
-*    differs: a directory needs deleting, a registry entry needs clearing.
+*    28 Aug 26 - THE STATUSES NOW SAY WHAT WAS LEFT AND WHETHER ANYTHING WILL
+*    COME BACK FOR IT, which is what the caller has to tell the user.  They
+*    used to say only which half could not be removed, from a version that
+*    removed the two independently.
 *
-*    Neither is the same failure as 1 and the caller says so: the account is
-*    deleted either way, so re-running would report "does not exist" and never
-*    retry the profile.  gplbld/clean-test-profiles.ps1 sweeps what is left.
+*    None of the three is the same failure as 1 and the caller says so: the
+*    account is deleted either way, so re-running would report "does not exist"
+*    and never retry the profile.  gplbld/reclaim-profiles.ps1 is what returns
+*    for 6 and 7; gplbld/clean-test-profiles.ps1 remains the development sweep.
 *
 *    BOTH HALVES ARE MEASURED RATHER THAN INFERRED FROM WHICH CALL THREW.  A
 *    thrown Remove-CimInstance does not tell you what it managed to remove
@@ -157,20 +221,55 @@ deffun valid_os_name(name) calling '!valid_os_name'
    ps := 'try { Get-CimInstance Win32_UserProfile | '
    ps := 'Where-Object { $_.SID -eq $sid -and -not $_.Special } | '
    ps := 'Remove-CimInstance -ErrorAction Stop } catch { }; '
-   ps := 'if (Test-Path -LiteralPath $key) { try { Remove-Item -LiteralPath $key '
-   ps := '-Recurse -Force -ErrorAction Stop } catch { } }; '
    * 27 Aug 26 - AND THE DIRECTORY IN ITS OWN RIGHT TOO, for the reason
    * MEASURED an hour after the registry half was fixed: a directory left at
    * C:\Users\<name> makes Windows give the NEXT account of that name the
    * suffixed home just as surely as a stale registry entry does.  Both halves
    * cause the same symptom, so removing only one of them fixes only half the
    * defect - see the note above.
+   *
+   * 28 Aug 26 - AND IT GOES FIRST NOW.  The two removals used to be
+   * independent and in the other order, which meant a machine that could not
+   * release the directory still lost the registry entry - and the entry is the
+   * only handle any sweep has.  PRE_RELEASE_FIXES.md 36.
    ps := 'if (($dir -ne "") -and (Test-Path -LiteralPath $dir)) { '
    ps := 'try { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop } catch { } }; '
-   * Test for each half rather than conclude from which call threw: a thrown
+   * Test for the half rather than conclude from which call threw: a thrown
    * Remove-CimInstance does not say what it removed before it threw.
-   ps := 'if (Test-Path -LiteralPath $key) { exit 7 }; '
-   ps := 'if (($dir -ne "") -and (Test-Path -LiteralPath $dir)) { exit 6 }; '
+   ps := '$dirleft = (($dir -ne "") -and (Test-Path -LiteralPath $dir)); '
+   * 28 Aug 26 - THE ENTRY ONLY IF THE DIRECTORY WENT.  This one condition is
+   * the whole of the owner's ruling: keep both halves together rather than
+   * leave a folder nothing can enumerate.
+   ps := 'if ((-not $dirleft) -and (Test-Path -LiteralPath $key)) { '
+   ps := 'try { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction Stop } catch { } }; '
+   ps := '$keyleft = (Test-Path -LiteralPath $key); '
+   * 28 Aug 26 - AND RECORD WHAT WAS LEFT, so the boot sweep has something to
+   * come back for.  The SID names the file and the DIRECTORY is written into
+   * it: the sweep must not have to enumerate ProfileList, or it inherits the
+   * blindness that left three folders on this host nothing could find.
+   *
+   * THE ACL IS APPLIED WHERE THE DIRECTORY IS CREATED, not left to
+   * inheritance.  C:\ProgramData\SD grants sdusers Modify to everything
+   * underneath, and this is a list of directories LocalSystem later deletes.
+   * gplbld/secure-reclaim.ps1 does the same at install time and the sweep
+   * re-asserts it at every boot; this is the third place because the delete
+   * path must be safe on a tree that predates either of them.
+   ps := '$rec = $false; '
+   ps := 'if ($dirleft -or $keyleft) { try { '
+   ps := '$pd = $env:ProgramData; if (($pd -eq $null) -or ($pd -eq "")) { $pd = "C:\ProgramData" }; '
+   ps := '$rd = Join-Path $pd "SD\profile-reclaim"; '
+   ps := 'if (-not (Test-Path -LiteralPath $rd)) { '
+   ps := 'New-Item -ItemType Directory -Path $rd -Force -ErrorAction Stop | Out-Null; '
+   ps := '& "$env:SystemRoot\System32\icacls.exe" $rd /inheritance:r '
+   ps := '/grant "*S-1-5-18:(OI)(CI)F" /grant "*S-1-5-32-544:(OI)(CI)F" | Out-Null }; '
+   ps := 'Set-Content -LiteralPath (Join-Path $rd $sid) -Encoding ASCII -ErrorAction Stop -Value @('
+   ps := '("sid=" + $sid), ("account=" + $n), ("directory=" + $dir), '
+   ps := '("recorded=" + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))); '
+   ps := '$rec = $true } catch { } }; '
+   * 6 and 8 differ in one thing only and it is the thing the user has to act
+   * on: whether a restart is enough, or whether a person has to come back.
+   ps := 'if ($dirleft) { if ($rec) { exit 6 } else { exit 8 } }; '
+   ps := 'if ($keyleft) { exit 7 }; '
    ps := 'exit 0'
 
    os.execute ps
@@ -189,7 +288,11 @@ deffun valid_os_name(name) calling '!valid_os_name'
       * 27 Aug 26 - AND 7 IS THE SAME SHAPE FOR THE SERIOUS HALF.  Kept as a
       * separate status rather than folded into 6 because the caller's warning
       * has to differ: 6 costs disk, 7 moves a recreated account's home.
-      case stat = 6 or stat = 7
+      *
+      * 28 Aug 26 - AND 8 JOINS THEM.  It is 6 with nothing coming back for it,
+      * and the caller's warning differs again for the same reason: a restart
+      * settles 6, only a person settles 8.
+      case stat = 6 or stat = 7 or stat = 8
          user_deleted = @true
          set.status stat
 
