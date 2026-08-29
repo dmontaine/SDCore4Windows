@@ -98,6 +98,21 @@ if ($Action -eq 'Create' -and ($recBefore -or $winBefore)) {
          ', windows=' + $winBefore + ').')
     Say '  The name is single-use - an ssh sign-in leaves a profile Windows will not'
     Say '  reuse, so a rebuilt account gets a suffixed home.  Use a fresh -Run token.'
+
+    # ***AND SAY WHAT TO DO ABOUT THE ONE THAT IS ALREADY THERE.***  Measured on
+    # b62, 29 Aug 2026: a Ctrl-C does not reach VerifyInstall1's removal, so the
+    # account survives - and this refusal then fired twice in a row while saying
+    # nothing about how to clear it or that a fresh token was needed for a
+    # reason other than tidiness.  A refusal that leaves the reader stuck is
+    # half a refusal.
+    Say ''
+    Say '  IT IS LIVE AND ENABLED, with a password that existed only in the run that'
+    Say '  made it.  To take it away, from an ELEVATED PowerShell:'
+    Say ('      powershell -NoProfile -ExecutionPolicy Bypass -File ' + $PSCommandPath +
+         ' -Action Remove -Name ' + $Name.ToLower())
+    Say ''
+    Say '  THAT DOES NOT FREE THE NAME.  The Windows profile stays until a restart'
+    Say '  (PRE_RELEASE 35/36), so the next run still needs a NEW -Run token.'
     exit 2
 }
 

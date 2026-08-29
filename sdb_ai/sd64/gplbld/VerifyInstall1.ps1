@@ -440,6 +440,47 @@ if ($Run) {
     Write-Output ''
     Write-Output '===== the non-administrator test account (PRE_RELEASE 59) ====='
     Write-Output ("  name: {0}" -f $testUser)
+
+    # ***LOOK FOR ORPHANS FROM AN INTERRUPTED RUN, AND NAME THEM.***  A Ctrl-C
+    # does NOT run the finally below - measured on b62, 29 Aug 2026 - so an
+    # interrupted run leaves its test account live and enabled in sdusers and
+    # sdssh, with a password that existed only in the dead process.  The next
+    # run then hits the single-use guard and reports "ALREADY EXISTS", which is
+    # correct and tells nobody that a DIFFERENT run left something behind.
+    #
+    # THIS REPORTS AND DOES NOT ACT.  Deleting a Windows account nobody asked
+    # about is not this script's call, and an orphan is evidence about the run
+    # that made it.  Naming it, with the command, is what turns "stuck" into
+    # "one line to run" - the failure mode being cured here is a person staring
+    # at a refusal that is about the wrong thing.
+    $orphans = @()
+    foreach ($u in @(Get-LocalUser -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -like 'sdtu*' -and $_.Name -ne $testUser })) {
+        $orphans += $u.Name
+    }
+    # THE ACCOUNTS RECORD TOO, because either half alone is a broken account and
+    # a record with no Windows user is the one nothing else would notice.
+    foreach ($r in @(Get-ChildItem (Join-Path $env:ProgramData 'SD\sdsys\accounts') `
+                        -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -like 'SDTU*' })) {
+        if (($orphans -notcontains $r.Name) -and
+            ($r.Name -ne $testUser.ToUpper())) { $orphans += $r.Name }
+    }
+    if ($orphans.Count -gt 0) {
+        Write-Output ''
+        Write-Output ("  *** {0} TEST ACCOUNT(S) FROM AN EARLIER RUN ARE STILL HERE ***" -f $orphans.Count)
+        Write-Output '  An interrupted run (Ctrl-C) does not reach the removal, so these are live'
+        Write-Output '  and enabled with passwords nothing wrote down.  This run does NOT need them'
+        Write-Output '  gone - its own name is different - but they should not be left.'
+        Write-Output ''
+        Write-Output '  From an ELEVATED PowerShell:'
+        foreach ($o in $orphans) {
+            Write-Output ("      powershell -NoProfile -ExecutionPolicy Bypass -File {0} -Action Remove -Name {1}" -f
+                          $admin, $o.ToLower())
+        }
+        Write-Output ''
+    }
+
     Write-Output '  EXPECT A UAC PROMPT NOW - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
 
     # GENERATED HERE AND KEPT HERE.  New-SdTestPassword measures that the value
@@ -553,8 +594,25 @@ $failed = 0
 # sdusers, sdssh and sdapi, its Remove leg never ran" - because the run it
 # belonged to stopped at a failing step.  The loop below has a "break" on
 # exactly that path, so a removal written after it would be skipped by the case
-# it is most needed in.  A finally is skipped by nothing: break, a thrown
-# error and Ctrl-C all run it.
+# it is most needed in.  A finally covers break and a thrown error.
+#
+# ***BUT IT DOES NOT COVER Ctrl-C, AND THIS FILE CLAIMED IT DID.***  The
+# sentence here read "a finally is skipped by nothing: break, a thrown error and
+# Ctrl-C all run it", and that was written without measuring.  MEASURED TWICE,
+# 29 Aug 2026, and the two disagree:
+#
+#   * a pipeline stop from Stop-Job DOES run the finally - a probe that wrote a
+#     marker file in one wrote it every time;
+#   * the b62 run at 12:58:50 was Ctrl-C'd at the console and DID NOT.  Its
+#     transcript carries six "The pipeline has been stopped." lines, no
+#     "removing the test account" line, no "WAS NOT REMOVED" line, and no
+#     testuser-remove log was written at all.  sdtub62 was left live and
+#     enabled, and the next two runs were refused by the single-use guard.
+#
+# ***SO THE DURABLE FIX IS RECOVERY AT THE START OF THE NEXT RUN, NOT STRONGER
+# CLEANUP AT THE END OF THIS ONE.***  Nothing in-process is guaranteed against
+# Ctrl-C, so the orphan check above this loop is the half that always runs.
+# Keep the finally - it covers the common cases - but do not rely on it alone.
 #
 # THE LOOP BODY IS NOT RE-INDENTED, DELIBERATELY.  Wrapping fifty lines in a
 # level of indentation would make the diff unreadable for a review whose whole
