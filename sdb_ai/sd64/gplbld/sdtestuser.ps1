@@ -29,11 +29,34 @@
 # step list and removes it after - CLAUDE.md's rule, "pursue it by removing the
 # need for a prompt, not by skipping the step".
 #
-# THE ACCOUNT IS STANDARD TIER, DELIBERATELY, and the create line says so by
-# SAYING NOTHING: 'STANDARD' is not a keyword, it is the default (CREATEA:272),
-# and only PROGRAMMER and ADMINISTRATOR are keywords.  Naming it would pass an
-# unrecognised token.  Standard is also the tier these verifiers want - the
-# least-privileged thing that can hold an account.
+# ***THE ACCOUNT IS PROGRAMMER TIER, AND THAT IS MEASURED RATHER THAN CHOSEN.
+# DO NOT "TIDY" IT BACK TO STANDARD ON LEAST-PRIVILEGE GROUNDS.***
+#
+# This said STANDARD until 29 Aug 2026, with the reasoning "standard is also the
+# tier these verifiers want - the least-privileged thing that can hold an
+# account".  That was wrong, and -Run b60 said so in SD's own words:
+#
+#     :BASIC BP SDNOCASE
+#     BASIC is not in your VOC
+#     :RUN BP SDNOCASE
+#     RUN is not in your VOC
+#
+# sdsys/newvoc/TIER.OMIT.STANDARD lists the 42 verbs a standard account does not
+# get, and 'basic' and 'run' are both on it - as are 'ed', 'edit', 'micro',
+# 'create.file', 'copy', 'delete' and 'rename'.  ***ALL FOUR VERIFIERS THIS
+# EXISTS FOR COMPILE AND RUN A BASIC PROBE***, so STANDARD cannot host any of
+# them.  Read from the record itself, not inferred from the failure.
+#
+# ***IT IS STILL A REAL NON-ADMINISTRATOR, WHICH IS THE WHOLE POINT OF 59.***
+# The tier that matters is ADMINISTRATOR: that is the one LOGIN elevates into
+# SDSYS under PRE_RELEASE 56, and it is what these verifiers must not be.
+# PROGRAMMER is not it - verify-doors creates its accounts PROGRAMMER for
+# exactly this reason and its logto is subject to every ordinary gate.
+#
+# PROGRAMMER IS A KEYWORD; STANDARD IS NOT.  Only PROGRAMMER and ADMINISTRATOR
+# are (CREATEA:272), standard being the default - so naming STANDARD would pass
+# an unrecognised token, which is why the line below could not simply be
+# corrected by swapping one word for another when it was written.
 
 # ***NO Set-StrictMode HERE, AND THAT IS DELIBERATE - IT WAS HERE AND IT LEAKED.***
 # Measured 29 Aug 2026, not assumed: Set-StrictMode applies to the CURRENT scope
@@ -156,7 +179,18 @@ function Invoke-SdAsTestUser {
         throw 'Invoke-SdAsTestUser: no ssh.exe on PATH; the test account can only be reached over ssh.'
     }
 
-    if ($WorkDir -eq '') { $WorkDir = Join-Path $env:TEMP ('sd-testuser-' + $PID) }
+    # ***THE WORK DIRECTORY IS REMOVED AGAIN WHEN THIS FUNCTION MADE IT.***
+    # Measured 29 Aug 2026: it was not, and %TEMP%\sd-testuser-<pid> was found
+    # holding native.in (the SD command lines), native.out (609 bytes of SD's
+    # answer) and native.err after a run.  PRE_RELEASE 47 is the same shape.
+    # The askpass file was always deleted, so no password was in it - but the
+    # commands and the transcript were, once per verifier per run.
+    #
+    # ONLY WHEN THIS FUNCTION MADE IT.  A caller that passes -WorkDir owns the
+    # directory and may want the files kept for a post-mortem; deleting a
+    # caller's directory would be a surprise, and one that eats evidence.
+    $ownWorkDir = ($WorkDir -eq '')
+    if ($ownWorkDir) { $WorkDir = Join-Path $env:TEMP ('sd-testuser-' + $PID) }
     if (-not (Test-Path -LiteralPath $WorkDir)) {
         New-Item -ItemType Directory -Path $WorkDir | Out-Null
     }
@@ -189,6 +223,11 @@ function Invoke-SdAsTestUser {
         Remove-Item Env:\SSH_ASKPASS, Env:\SSH_ASKPASS_REQUIRE, Env:\DISPLAY, Env:\SDPROBEPW `
                     -ErrorAction SilentlyContinue
         Remove-Item $askpass -ErrorAction SilentlyContinue
+        # The output has already been read into $r by Invoke-SdTestNative, so
+        # there is nothing left in here the caller still needs.
+        if ($ownWorkDir) {
+            Remove-Item -LiteralPath $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -299,15 +338,18 @@ function New-SdTestUserScript {
         stdin, which is why the password appears as two bare lines after the
         command rather than as an argument.
 
-        NO TIER KEYWORD: 'STANDARD' is the default and is NOT a keyword
-        (CREATEA:272), so naming it would pass an unrecognised token.
+        PROGRAMMER, because STANDARD does not get 'basic' or 'run' and all four
+        verifiers compile a probe - the header above has the measurement.  Never
+        STANDARD, which is the default and is NOT a keyword (CREATEA:272), so
+        naming it would pass an unrecognised token.
+
         SSH is the route - the account needs no API access to be driven here. #>
     param(
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$Password
     )
     Set-StrictMode -Version Latest
-    return @(('CREATE.ACCOUNT USER ' + $Name + ' SSH'), $Password, $Password)
+    return @(('CREATE.ACCOUNT USER ' + $Name + ' PROGRAMMER SSH'), $Password, $Password)
 }
 
 function Remove-SdTestUserScript {

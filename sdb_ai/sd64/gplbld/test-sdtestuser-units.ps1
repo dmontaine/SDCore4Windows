@@ -64,13 +64,42 @@ foreach ($l in $mk) {
 # lines where three were meant and the password prompt then eats the next
 # command.
 Note 'create: line count' 3 $mk.Count
-Note 'create: the command' 'CREATE.ACCOUNT USER sdtub60 SSH' $mk[0]
+Note 'create: the command' 'CREATE.ACCOUNT USER sdtub60 PROGRAMMER SSH' $mk[0]
 Note 'create: password supplied twice' $true (($mk[1] -ceq 'PwPwPw-Aa9') -and ($mk[2] -ceq 'PwPwPw-Aa9'))
 NoteTrue 'create: does NOT name the STANDARD tier (it is the default, not a keyword)' `
          ($mk[0] -notmatch '\bSTANDARD\b')
 NoteTrue 'create: names the SSH route' ($mk[0] -match '\bSSH\b')
-NoteTrue 'create: does NOT grant ADMINISTRATOR or PROGRAMMER' `
-         ($mk[0] -notmatch '\b(ADMINISTRATOR|PROGRAMMER)\b')
+
+# ***THIS ROW SAID "does NOT grant ADMINISTRATOR or PROGRAMMER" UNTIL b60, AND
+# THE ROW WAS THE BUG.***  It encoded the STANDARD choice as a rule, so the test
+# would have defended the mistake against a correction.  b60 measured it: SD
+# answered "BASIC is not in your VOC" and "RUN is not in your VOC", and
+# sdsys/newvoc/TIER.OMIT.STANDARD lists both verbs among the 42 a standard
+# account does not get.  All four verifiers compile a probe.
+#
+# SPLIT IN TWO, because the two halves are not the same claim.  ADMINISTRATOR is
+# the one that must never appear - it is what LOGIN elevates into SDSYS under
+# PRE_RELEASE 56, and an administrator test account would measure SDSYS while
+# reporting an ordinary account, which is the whole failure 59 exists to fix.
+NoteTrue 'create: grants PROGRAMMER, because STANDARD has no basic or run' `
+         ($mk[0] -match '\bPROGRAMMER\b')
+NoteTrue 'create: NEVER grants ADMINISTRATOR - that would land the session in SDSYS' `
+         ($mk[0] -notmatch '\bADMINISTRATOR\b')
+
+# AND THE TIER IS CHECKED AGAINST THE SHIPPED RECORD, NOT AGAINST THIS COMMENT.
+# TIER.OMIT.STANDARD is what the product actually reads, so if a future change
+# gives standard accounts 'basic' back, this row says the tier can be lowered
+# again rather than leaving the reason to fade into a paragraph nobody re-reads.
+$omitRec = Join-Path (Split-Path $here -Parent) 'sdsys\newvoc\TIER.OMIT.STANDARD'
+if (Test-Path -LiteralPath $omitRec) {
+    $omit = ([IO.File]::ReadAllText($omitRec) -split '\r?\n') | ForEach-Object { $_.Trim() }
+    Write-Output ('  TIER.OMIT.STANDARD: ' + @($omit | Where-Object { $_ -ne '' }).Count + ' lines')
+    NoteTrue 'the record really withholds basic from standard (else the tier could drop)' `
+             ($omit -contains 'basic')
+    NoteTrue 'and run' ($omit -contains 'run')
+} else {
+    Note 'TIER.OMIT.STANDARD is where this expects it' $true $false
+}
 
 # ---------------------------------------------------------------- delete
 Write-Output ''
@@ -166,20 +195,30 @@ Note 'Test-SdDirWritable leaves no probe file behind' 0 $leftovers.Count
 # THE NEGATIVE, WITH A DIRECTORY THAT DENIES THIS USER.  Built by DENYING the
 # current user rather than by naming one that does not exist, so it fails the
 # way a real account directory fails - on the ACL, not on Test-Path.
+#
+# ***icacls, NOT Set-Acl, AND THAT IS MEASURED.***  The first version used
+# Get-Acl / SetAccessRuleProtection / Set-Acl and it FAILED ON THE OWNER'S
+# MACHINE while passing here: "The process does not possess the
+# 'SeSecurityPrivilege' privilege which is required for this operation."
+# PowerShell's Get-Acl hands back a security object carrying more sections than
+# the DACL, and Set-Acl then tries to write all of them - which needs a
+# privilege an ordinary token does not hold.  icacls /deny touches the DACL
+# alone, needs no privilege, and is what every other ACL check in this
+# directory already uses.
+#
+# THE ROW BELOW CAUGHT IT RATHER THAN SKIPPING IT, which is why the failure was
+# one clear line instead of a silently absent negative control.
 $noDir = Join-Path $env:TEMP ('sdtu-units-deny-' + $PID)
 if (-not (Test-Path -LiteralPath $noDir)) { $null = New-Item -ItemType Directory -Path $noDir }
+$mySid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $denied = $false
 try {
-    $acl = Get-Acl -LiteralPath $noDir
-    $acl.SetAccessRuleProtection($true, $false)
-    $me = [Security.Principal.WindowsIdentity]::GetCurrent().User
-    # Read, so the directory can still be removed by its owner afterwards, and
-    # an explicit DENY on write, which beats the owner's implicit rights.
-    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $me, 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
-    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
-        $me, 'CreateFiles, Write', 'ContainerInherit, ObjectInherit', 'None', 'Deny')))
-    Set-Acl -LiteralPath $noDir -AclObject $acl
+    # The SID form ("*S-1-5-...") rather than a name: it needs no lookup and
+    # cannot be confused by a domain prefix.  (OI)(CI) so it reaches anything
+    # underneath, (W) so the write is refused; an explicit DENY beats every
+    # inherited allow, including the owner's.
+    $ic = (& icacls.exe $noDir /deny ("*$mySid" + ':(OI)(CI)(W)') 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw ('icacls exit ' + $LASTEXITCODE + ': ' + $ic.Trim()) }
     $denied = $true
 } catch {
     Write-Output ('  could not build the denied fixture: ' + $_.Exception.Message)
@@ -199,18 +238,44 @@ if ($denied) {
 NoteTrue 'Test-SdDirWritable says NO to a path that does not exist' `
          (-not (Test-SdDirWritable -Path (Join-Path $env:TEMP ('sdtu-units-absent-' + $PID))))
 
+# TAKE THE DENY OFF BEFORE DELETING.  A deny that outlives the run leaves an
+# UNDELETABLE directory in %TEMP% on every invocation - PRE_RELEASE 47 is
+# exactly that shape, four leaked temp directories nobody noticed because each
+# run made only one.
+#
+# ***/reset, NOT /remove:d, AND THAT IS MEASURED TOO.***  The first fix used
+# "icacls /remove:d *<sid>" and it did NOT remove the ACE - six leaked
+# directories were on disk before anybody looked, each still carrying
+# "GITORLI\don:(OI)(CI)(DENY)(WD,AD,WEA,WA)", and Remove-Item answered "Access
+# to the path is denied" because -Force clears attributes and WA is denied.
+# /reset drops every explicit ACE and restores inheritance in one step.  The
+# owner can always rewrite a DACL, which is why the deny never locked this out.
+#
+# AND ITS OUTPUT IS READ RATHER THAN SILENCED.  The version that leaked sent
+# icacls to *> $null and then trusted it - the instrument rule, broken in the
+# cleanup path of the file that enforces it.
 foreach ($d in @($okDir, $noDir)) {
-    if (Test-Path -LiteralPath $d) {
-        try {
-            $a = Get-Acl -LiteralPath $d
-            $a.SetAccessRuleProtection($false, $true)
-            $a.Access | Where-Object { $_.AccessControlType -eq 'Deny' } |
-                ForEach-Object { $null = $a.RemoveAccessRule($_) }
-            Set-Acl -LiteralPath $d -AclObject $a
-        } catch { }
-        Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    if (-not (Test-Path -LiteralPath $d)) { continue }
+    $reset = (& icacls.exe $d /reset 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { Write-Output ('  icacls /reset exit ' + $LASTEXITCODE + ': ' + $reset.Trim()) }
+    Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# ***AND THE REMOVAL IS A CHECKED ROW, NOT A HOPEFUL ONE.***  This was a bare
+# "WARNING:" line, which is how six directories accumulated unnoticed: nothing
+# failed, so nothing was read.  A FAIL cannot be skimmed past.
+$stillThere = @(@($okDir, $noDir) | Where-Object { Test-Path -LiteralPath $_ })
+foreach ($s in $stillThere) { Write-Output ('  STILL PRESENT: ' + $s) }
+Note 'the fixtures were removed - a denied one that survives is undeletable' 0 $stillThere.Count
+
+# AND SWEEP UP WHAT EARLIER RUNS LEAKED, so the count above is about this run.
+$old = @(Get-ChildItem $env:TEMP -Directory -Force -ErrorAction SilentlyContinue |
+         Where-Object { $_.Name -like 'sdtu-units-*' })
+foreach ($o in $old) {
+    & icacls.exe $o.FullName /reset *>$null
+    Remove-Item -LiteralPath $o.FullName -Recurse -Force -ErrorAction SilentlyContinue
+}
+if ($old.Count -gt 0) { Write-Output ('  swept ' + $old.Count + ' fixture(s) left by earlier runs') }
 
 # --------------------------------------------- the verifier's own refusal path
 Write-Output ''
