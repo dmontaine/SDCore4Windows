@@ -262,6 +262,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # one nothing could vouch for.  Listed in the commit that
                   # created it, under step 7's rule.
                   'verify-profiledir.ps1',
+                  # 28 Aug 26 - test-sysmsg-units.ps1, PRE_RELEASE_FIXES.md 45.
+                  # Get-SysMsgPattern has gone blind three times in three ways,
+                  # each found by a run rather than a test; this is the test.
+                  # No elevation, no run number, no accounts - it reads the
+                  # installed messages and lifts the shipped functions out of
+                  # the AST.  Listed in the commit that created it, under step
+                  # 7's rule.
+                  'test-sysmsg-units.ps1',
                   # 22 Aug 26 - VerifyInstall1.ps1, the second runner,
                   # listed in the commit that created it under the same rule.
                   # It is a RUNNER and not a verifier, so it ships no more than

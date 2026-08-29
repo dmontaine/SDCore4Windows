@@ -106,20 +106,38 @@ function Said($label, $out) {
 # hard-coded, so a reworded message fails the check that names it instead of
 # going blind.  Copied from verify-delaccount.ps1, whose header records why the
 # substitution is positional.
+#
+# 28 Aug 26 - AND A LITERAL RUN IS MATCHED LOOSELY NOW.  PRE_RELEASE_FIXES.md
+# 45.  The message FILES hold literal backslash-n rather than newlines and SD
+# renders each as a line break, so escaping the text as it stands produces a
+# pattern hunting a literal backslash the output never contains - a multi-line
+# message could not be matched at all.  Nothing THIS script names is
+# multi-line, so no check here was affected; applied so the copy does not drift
+# from the one in verify-delaccount.ps1 it came from.
+function Esc-Loose([string]$s) {
+    $runs = [regex]::Split($s, '(?:\\n|\s)+')
+    $out = ''
+    for ($i = 0; $i -lt $runs.Count; $i++) {
+        if ($i -gt 0) { $out += '\s+' }
+        $out += [regex]::Escape($runs[$i])
+    }
+    return $out
+}
+
 function Get-SysMsgPattern([int]$n, [string[]]$vals) {
     $f = Join-Path $Data ('sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
     $t = ((Get-Content -LiteralPath $f -Raw)).Trim()
     if ($t -eq '') { return '' }
     $parts = [regex]::Split($t, '%\d')
-    $pat = [regex]::Escape($parts[0])
+    $pat = Esc-Loose $parts[0]
     for ($i = 1; $i -lt $parts.Count; $i++) {
         if ($vals -and $vals.Count -ge $i -and $vals[$i - 1] -ne '') {
             $pat += [regex]::Escape($vals[$i - 1])
         } else {
             $pat += '.*'
         }
-        $pat += [regex]::Escape($parts[$i])
+        $pat += Esc-Loose $parts[$i]
     }
     return $pat
 }

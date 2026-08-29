@@ -130,13 +130,32 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 # from took the text before the first '%', and every message here BEGINS with
 # %1 - so the pattern was the empty string and six checks failed on a run where
 # the feature worked.  20 Aug 2026, verify-rdpaccount.ps1's own history.
+#
+# 28 Aug 26 - AND A LITERAL RUN IS MATCHED LOOSELY NOW.  PRE_RELEASE_FIXES.md
+# 45.  The message FILES hold literal backslash-n rather than newlines, and SD
+# renders each as a line break, so escaping the text as it stands produces a
+# pattern hunting a literal backslash the output never contains - a multi-line
+# message could not be matched at all.  Nothing THIS script names is
+# multi-line, so no check here was affected; applied anyway, because the note
+# above records what happened the last time this function was left as a working
+# accident.
+function Esc-Loose([string]$s) {
+    $runs = [regex]::Split($s, '(?:\\n|\s)+')
+    $out = ''
+    for ($i = 0; $i -lt $runs.Count; $i++) {
+        if ($i -gt 0) { $out += '\s+' }
+        $out += [regex]::Escape($runs[$i])
+    }
+    return $out
+}
+
 function Get-SysMsgPattern([int]$n) {
     $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
     $t = ((Get-Content -LiteralPath $f -Raw)).Trim()
     if ($t -eq '') { return '' }
     $parts = [regex]::Split($t, '%\d')
-    return (($parts | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+    return (($parts | ForEach-Object { Esc-Loose $_ }) -join '.*')
 }
 
 function Shown($out, [int]$n) {

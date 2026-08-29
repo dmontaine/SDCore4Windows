@@ -139,13 +139,32 @@ function Show-Acl([string]$label, [string]$path) {
 # here too rather than left as a working accident.  (That script went with
 # RDPACCOUNT on 21 Aug 2026; verify-routes.ps1 replaced it and carries the
 # fixed version of this function and the note.)
+#
+# 28 Aug 26 - AND A LITERAL RUN IS MATCHED LOOSELY NOW.  PRE_RELEASE_FIXES.md
+# 45, and it is the THIRD time this function has gone blind in a new way.  The
+# message FILES hold literal backslash-n rather than newlines - sixteen in
+# 10124 - and SD renders each as a line break, so escaping the text as it
+# stands produces a pattern hunting a literal backslash the output never
+# contains: a multi-line message could not be matched at all.  Nothing THIS
+# script names is multi-line, so no check here was affected; the fix is applied
+# anyway so the next message to grow a second line does not repeat 20 Aug.
+function Esc-Loose([string]$s) {
+    $runs = [regex]::Split($s, '(?:\\n|\s)+')
+    $out = ''
+    for ($i = 0; $i -lt $runs.Count; $i++) {
+        if ($i -gt 0) { $out += '\s+' }
+        $out += [regex]::Escape($runs[$i])
+    }
+    return $out
+}
+
 function Get-SysMsgPattern([int]$n) {
     $f = Join-Path $env:ProgramData ('SD\sdsys\messages\' + $n)
     if (-not (Test-Path -LiteralPath $f)) { return '' }
     $t = ((Get-Content -LiteralPath $f -Raw)).Trim()
     if ($t -eq '') { return '' }
     $parts = [regex]::Split($t, '%\d')
-    return (($parts | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+    return (($parts | ForEach-Object { Esc-Loose $_ }) -join '.*')
 }
 
 # An identity that cannot be resolved to a SID must not abort the run - it is
