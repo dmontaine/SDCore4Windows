@@ -108,23 +108,61 @@ foreach ($l in $lines) {
     else { Say ('    ' + $l) }
 }
 
-# TERM first, so nothing wraps: a wrapped line is counted twice by anything
+# ***INPUT TO sd.exe MUST BE PIPED. A FILE HANDLE IS REFUSED, AND THE FIRST
+# VERSION OF THIS FILE USED ONE.***  Measured on -Run b60, 29 Aug 2026: SD
+# printed its banner, then ":Process terminated", and created nothing.  That is
+# sysmsg 5020 at CPROC:473, the K$LOGOUT arm - a forced logout, not a refusal of
+# the command, which is why nothing said "CREATE.ACCOUNT" at all.
+#
+# ***IT WAS ALREADY WRITTEN DOWN, DATED 14 Aug 2026***, in
+# verify-createaccount.ps1's header and PROJECT_STATUS.md section 6:
+# "Input must be PIPED.  Start-Process -RedirectStandardInput hands SD a file
+# handle and SD answers 'Process terminated' and exits, the same way the '<'
+# redirect does."  A run was spent rediscovering it.
+#
+# NOTE THE DISTINCTION, because sdtestuser.ps1 still uses the file form and is
+# RIGHT to: Invoke-SdTestNative drives ssh.exe, which takes a file handle
+# happily, and SD is at the FAR END of the connection where it sees the ssh
+# channel rather than a file.  The rule is about handing sd.exe its own stdin.
+#
+# LOGTO SDSYS FIRST, matching verify-doors-admin.ps1, verify-tiers.ps1 and
+# verify-createaccount.ps1 - every elevated script here that has ever created an
+# account carries it, and all of them were green on b59, which is post-56.
+# Under PRE_RELEASE 56 an administrator should already land in SDSYS at LOGIN, so this
+# ought to be a no-op re-entry; it stays because this is SETUP, and setup that
+# quietly depends on a product change is a hidden test of it.
+#
+# TERM after it, so nothing wraps: a wrapped line is counted twice by anything
 # grepping the transcript, which is PRE_RELEASE 40 and cost a wrong verdict.
-$body = "`n" + ((@('TERM 200,9999') + $lines + @('OFF')) -join "`n") + "`n"
+#
+# AND THE LEADING BLANK LINE IS A BOM SINK, not a stray newline.  The pipe
+# prepends a BOM to the first line whatever $OutputEncoding says, and SD answers
+# that it is not in your VOC; landing it on a line that was empty anyway costs
+# one harmless complaint instead of eating a real command.
+$body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $lines + @('OFF')) -join "`n") + "`n"
 
-$work = Join-Path $env:TEMP ('sd-testuser-admin-' + $PID)
-if (-not (Test-Path -LiteralPath $work)) { New-Item -ItemType Directory -Path $work | Out-Null }
-$si = Join-Path $work 'in.txt'
-$so = Join-Path $work 'out.txt'
-$se = Join-Path $work 'err.txt'
-
+# ***AND A TIMEOUT, WHICH MATTERS MORE HERE THAN IN THE SCRIPT THIS IS COPIED
+# FROM.***  This runs in an ELEVATED window raised by Start-Process -Verb RunAs,
+# and the unelevated parent is sitting on -Wait.  A prompt nobody answers would
+# hang BOTH, with the reason on a console the parent cannot read.  The job form
+# turns that into a message.  PRE_RELEASE 14 is the case: a piped answer missing
+# its prompt ate the following commands and hung, costing a session and an
+# elevated "sd -cleanup".
+$timeoutSec = 120
 try {
-    [IO.File]::WriteAllText($si, $body)
-    $p = Start-Process -FilePath $sdExe -NoNewWindow -Wait -PassThru `
-             -RedirectStandardInput $si -RedirectStandardOutput $so -RedirectStandardError $se
-    $out = ''
-    if (Test-Path $so) { $o = Get-Content $so; if ($null -ne $o) { $out = ($o -join "`n") } }
-    $out = ($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')
+    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
+                     -ArgumentList $sdExe, $body
+    if (Wait-Job $job -Timeout $timeoutSec) {
+        $raw = Receive-Job $job
+    } else {
+        Stop-Job $job
+        $raw = Receive-Job $job
+        $raw += ''
+        $raw += ("*** SD DID NOT FINISH IN {0}s - it is waiting for input." -f $timeoutSec)
+        $raw += '*** Nothing below this line was answered.  Check for a stray sd.exe.'
+    }
+    Remove-Job $job -Force
+    $out = (($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 
     Say '  --- SD said ---'
     foreach ($l in ($out -split "`n")) {
@@ -275,5 +313,20 @@ try {
         exit 1
     }
 } finally {
-    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    # ***NOTHING TO CLEAN UP ANY MORE, AND THAT IS THE POINT OF SAYING SO.***
+    # This removed a %TEMP% work directory holding in/out/err files - the stdin
+    # file being the one that carried the PASSWORD to disk.  The pipe form above
+    # keeps the whole body in memory, so there is no file to leak and none to
+    # delete.  PRE_RELEASE 47 is the case for not simply deleting this block:
+    # every refused run there leaked a temp directory, because the directory was
+    # created above the check that refused.
+    #
+    # THE JOB IS THE THING THAT CAN SURVIVE NOW.  Remove-Job -Force runs on the
+    # normal path; this catches a run that died between Start-Job and it.
+    Get-Job -ErrorAction SilentlyContinue |
+        Where-Object { $_.State -ne 'Completed' } |
+        ForEach-Object {
+            try { Stop-Job $_ -ErrorAction Stop } catch { }
+            try { Remove-Job $_ -Force -ErrorAction Stop } catch { }
+        }
 }

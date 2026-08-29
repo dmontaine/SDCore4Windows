@@ -282,6 +282,57 @@ try   { $null = Invoke-SdTestNative -Exe 'x' -CmdArgs @() -WorkDir '' }
 catch { $strictKept = $true }
 NoteTrue 'the module''s own functions still fail loudly on a bad call' $strictKept
 
+# --------------------------------------------- sd.exe stdin must be a PIPE
+Write-Output ''
+Write-Output '== 10. sd.exe is driven by a PIPE, never a redirected file handle'
+Write-Output '   (b60, 29 Aug 2026: the file form made SD print ":Process terminated"'
+Write-Output '    - sysmsg 5020, CPROC:473 - and create nothing.  Written down 14 Aug.)'
+
+# ***TOKENISED, NOT GREPPED, AND THAT IS NOT FASTIDIOUSNESS.***  The fix wrote a
+# comment block that correctly QUOTES "-RedirectStandardInput" to explain why it
+# is wrong, so a grep for the dead form finds the warning about it and fails a
+# file that is right.  test-verdict-units.ps1 hit exactly this on 28 Aug - "the
+# first version failed on two files whose comments correctly quote the dead
+# form" - so only real CommandParameter tokens are counted here.
+function Get-ParamTokens([string]$path) {
+    $t = $null; $e = $null
+    $null = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$t, [ref]$e)
+    return @($t | Where-Object { $_.Kind -eq 'Parameter' } | ForEach-Object { $_.Text })
+}
+
+$adminPath = Join-Path $here 'sdtestuser-admin.ps1'
+$modPath   = Join-Path $here 'sdtestuser.ps1'
+
+# REFUSE THE NULL CASE: a parse that found no parameters at all would make every
+# "-notcontains" row below pass on an empty list.
+$adminParams = Get-ParamTokens $adminPath
+$modParams   = Get-ParamTokens $modPath
+Write-Output ('  sdtestuser-admin.ps1: ' + $adminParams.Count + ' parameter tokens')
+Write-Output ('  sdtestuser.ps1:       ' + $modParams.Count + ' parameter tokens')
+NoteTrue 'the admin half was tokenised at all (an empty list passes everything)' `
+         ($adminParams.Count -gt 0)
+NoteTrue 'the module was tokenised at all' ($modParams.Count -gt 0)
+
+NoteTrue 'sdtestuser-admin.ps1 uses NO -RedirectStandardInput (it drives sd.exe)' `
+         (-not ($adminParams -contains '-RedirectStandardInput'))
+
+# THE CONTROL, and it is the row that proves the check is not vacuous: the
+# module DOES use the file form, legitimately, because it drives ssh.exe - which
+# takes a file handle happily, and puts SD at the far end of the connection
+# where it sees the ssh channel rather than a file.  If this row ever fails, the
+# check above has stopped being able to see the thing it is looking for.
+NoteTrue 'control: sdtestuser.ps1 DOES use it, for ssh - so the check can see it' `
+         ($modParams -contains '-RedirectStandardInput')
+
+# AND THE POSITIVE HALF: the piped shape and the LOGTO are actually there.
+$adminSrc = [IO.File]::ReadAllText($adminPath)
+NoteTrue 'the admin half pipes into sd.exe ($text | & $exe)' `
+         ($adminSrc -match '\$text\s*\|\s*&\s*\$exe')
+NoteTrue 'the admin half issues LOGTO SDSYS first, as every proven elevated script does' `
+         ($adminSrc -match "'LOGTO SDSYS'")
+NoteTrue 'the admin half bounds the wait, so a prompt is a message and not a hang' `
+         ($adminSrc -match 'Wait-Job .* -Timeout')
+
 Write-Output ''
 Write-Output ("test-sdtestuser-units: {0} passed, {1} failed" -f $script:pass, $script:fail)
 if ($script:fail -gt 0) { exit 1 }
