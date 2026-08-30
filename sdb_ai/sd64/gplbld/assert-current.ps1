@@ -558,6 +558,12 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # the new file - which is exactly how verify-tiers.ps1 cost a
                   # run on 25 Aug.
                   'capture-state.ps1',
+                  # 30 Aug 26 - verify-sdsyswrite.ps1, PRE_RELEASE 73's verifier:
+                  # can a session that reached SDSYS by LOGTO from an UNELEVATED
+                  # start write $cred and os.users?  Nothing had ever asked, which
+                  # is the hole 68 lived in.  Runs from VerifyInstall1, ships
+                  # nowhere.
+                  'verify-sdsyswrite.ps1',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.
