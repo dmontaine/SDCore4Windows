@@ -549,6 +549,15 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # worked threw away the $cred measurement on its way out.
                   'verify-apiadmin.ps1', 'apiadminprobe.sb',
                   'apiosexecprobe.sb',
+                  # 30 Aug 26 - capture-state.ps1, PRE_RELEASE 39's instrument.
+                  # IT RUNS IN THE GUEST, NOT HERE, reached over the xfer shared
+                  # folder, so it is installed nowhere and ships nowhere.  On the
+                  # list for the trap this list exists for: a gplbld script that
+                  # is not named here is newer than the install the moment it is
+                  # written, and assert-current then refuses the tree BECAUSE of
+                  # the new file - which is exactly how verify-tiers.ps1 cost a
+                  # run on 25 Aug.
+                  'capture-state.ps1',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.
