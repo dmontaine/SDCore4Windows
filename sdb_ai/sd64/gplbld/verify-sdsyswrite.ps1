@@ -95,16 +95,29 @@ $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $results = New-Object System.Collections.ArrayList
 $script:failed = $false
 
+# 30 Aug 26 - EVERY ROW CARRIES ITS OWN VERDICT, AND THAT IS NOT TIDINESS.
+# The first version derived the tally by testing Expected -ne 'n/a', which
+# compares a BOOLEAN to a STRING: PowerShell converts the string to the left
+# operand's type, [bool]'n/a' is $true, so every "expected True" row read as a
+# skip.  THE FIRST REAL RUN REPORTED "2 PASS / 0 FAIL / 5 SKIP" ON A RUN WITH
+# FIVE PASSES AND TWO GENUINE FAILURES - a false green on the one line a human
+# reads, on a script written to catch false greens.  The exit code was right the
+# whole time, which is what makes it the dangerous kind of wrong.
 function Note($check, $expected, $got) {
     $pass = ($expected -eq $got)
     if (-not $pass) { $script:failed = $true }
-    $null = $results.Add([pscustomobject]@{ Check = $check; Expected = $expected; Observed = $got })
+    $null = $results.Add([pscustomobject]@{
+        Check = $check; Expected = $expected; Observed = $got
+        Verdict = $(if ($pass) { 'PASS' } else { 'FAIL' })
+    })
     Write-Host ("  [{0}] {1}: expected {2}, got {3}" -f
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
 function Skip($check, $why) {
-    $null = $results.Add([pscustomobject]@{ Check = $check; Expected = 'n/a'; Observed = $why })
+    $null = $results.Add([pscustomobject]@{
+        Check = $check; Expected = 'n/a'; Observed = $why; Verdict = 'SKIP'
+    })
     Write-Host ("  [SKIP] {0}: {1}" -f $check, $why) -ForegroundColor Yellow
 }
 
@@ -407,9 +420,19 @@ finally {
 Write-Host ''
 Write-Host '=== summary ===' -ForegroundColor Cyan
 $results | Format-Table -AutoSize | Out-String | Write-Host
-$p = @($results | Where-Object { $_.Expected -ne 'n/a' -and $_.Expected -eq $_.Observed }).Count
-$f = @($results | Where-Object { $_.Expected -ne 'n/a' -and $_.Expected -ne $_.Observed }).Count
-$s = @($results | Where-Object { $_.Expected -eq 'n/a' }).Count
+# COUNTED FROM THE VERDICT EACH ROW RECORDED, never re-derived by comparing
+# Expected to Observed here - see the note on Note() above.
+$p = @($results | Where-Object { $_.Verdict -eq 'PASS' }).Count
+$f = @($results | Where-Object { $_.Verdict -eq 'FAIL' }).Count
+$s = @($results | Where-Object { $_.Verdict -eq 'SKIP' }).Count
+# AND THE TALLY MUST ACCOUNT FOR EVERY ROW.  If it does not, the counting is
+# wrong and the line above is not to be believed - which is exactly what
+# happened on the first run.
+if (($p + $f + $s) -ne $results.Count) {
+    Write-Host ("verify-sdsyswrite: TALLY IS BROKEN - {0}+{1}+{2} != {3} rows. Do not trust the summary." -f
+                $p, $f, $s, $results.Count) -ForegroundColor Red
+    exit 2
+}
 Write-Host ("verify-sdsyswrite: {0} PASS / {1} FAIL / {2} SKIP" -f $p, $f, $s)
 Write-Host ''
 Write-Host 'A FAIL on the two unelevated write rows is PRE_RELEASE 68 and 73, not a' -ForegroundColor Yellow
