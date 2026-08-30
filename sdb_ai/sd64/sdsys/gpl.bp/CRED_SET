@@ -162,11 +162,24 @@ deffun ps_script(script) calling '!ps_script'
       write.ok = @false
    end
 
+* 30 Aug 26 Windows port - CLOSE BEFORE THE ELEVATED WRITE, AND RE-OPEN TO READ
+*   BACK.  The first version of this fix kept cred.f open across the outside
+*   write and read back through the same file variable, and it FAILED on
+*   -Run sdswa3 while the identical change in MODIFYA passed - which is what
+*   named the difference.  MODIFYA closes first and its own comment says why:
+*   letting another process write the file while SD holds it open is a view SD
+*   believes in and Windows knows nothing about.  The rule was applied in one
+*   file and not the other on the same day.
+   close cred.f
+
    if not(write.ok) then
       cred.path = kernel(K$WINPATH, @sdsys : @ds : '$cred' : @ds : account)
       if cred.path = '' then
-         close cred.f
-         set.status ER$PERM
+*        NOT ER$PERM.  The path could not be built, which is not a permissions
+*        failure, and the first version reported all four of these the same way
+*        - so the status said 3035 and could not say WHICH stage failed.  That
+*        is the fault this file's own header criticises in its caller.
+         set.status ER$ARGS
          return
       end
 
@@ -186,7 +199,7 @@ deffun ps_script(script) calling '!ps_script'
       ps := @fm : 'exit 0'
 
       if ps_script(ps) # 0 then
-         close cred.f
+*        ER$PERM here and ONLY here: the elevated write itself was refused.
          set.status ER$PERM
          return
       end
@@ -200,23 +213,35 @@ deffun ps_script(script) calling '!ps_script'
 *  it would be found at the next login rather than here.  So the record is read
 *  back through SD's own reader and BOTH keys are compared - the same fields
 *  !CRED_VERIFY will use.
+*  RE-OPENED, because the file was closed above before anything outside SD was
+*  allowed to touch it.  A fresh open is also the only way to be sure this reads
+*  the bytes on disk rather than anything SD was holding.
    check.rec = ''
-   read check.rec from cred.f, account else check.rec = ''
+   openpath @sdsys:@ds:'$cred' to chk.f else
+      set.status ER$NVR
+      return
+   end
+   read check.rec from chk.f, account else check.rec = ''
+   close chk.f
 
+*  ER$WRITE.ERROR, NOT ER$PERM.  Reaching here means a write reported success
+*  and the record does not read back as what was meant to be stored - which is
+*  a different fault from being refused, and the caller's message should not
+*  say "permissions" about it.
    if check.rec<CRED$STOREDKEY> # stored.key then
-      close cred.f
-      set.status ER$PERM
+      set.status ER$WRITE.ERROR
       return
    end
 
    if check.rec<CRED$SERVERKEY> # server.key then
-      close cred.f
-      set.status ER$PERM
+      set.status ER$WRITE.ERROR
       return
    end
 
+*  NO close HERE.  cred.f was closed unconditionally before the elevated write,
+*  and chk.f was closed after the read-back, so both handles are already shut by
+*  every path that reaches this line.
    ok = @true
-   close cred.f
 
    return
 end
