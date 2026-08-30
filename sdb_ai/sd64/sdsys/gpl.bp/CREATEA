@@ -220,6 +220,12 @@
 *                      API are unaffected - both are connection-time group
 *                      tests and cannot follow a LOGTO.  PRE_RELEASE_FIXES 56
 *                      and 2
+* 30 Aug 26 Windows port - THE ROLLBACK'S RESULT IS READ.  "void
+*                      delete_user(...)" threw it away and 10086 said "Nothing
+*                      was created" whether or not the removal had worked; on
+*                      the unelevated LOGTO path it had not, and the account
+*                      survived unconfined and invisible to every sweep.  New
+*                      message 10130 for that outcome.  PRE_RELEASE_FIXES 72
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -623,9 +629,31 @@ PW.TRY.AGAIN:
 *   THE PASSWORD RULE IS THE USER ARM'S ALONE.  A GROUP account reaches neither
 *   create_user() nor set_passwd() - it has no Windows user - and "no password"
 *   there means the idea does not apply, not that a requirement was waived.
-              void delete_user(acc.uname)
+* 30 Aug 26 Windows port - THE RESULT IS READ NOW.  PRE_RELEASE_FIXES 72.
+*
+*   IT WAS "void delete_user(acc.uname)" AND THE void WAS THE DEFECT.  10086
+*   below says "Nothing was created", which is a CLAIM ABOUT WHAT JUST HAPPENED,
+*   and it was printed whether or not the removal worked.
+*
+*   MEASURED 30 Aug 2026 ON THE OWNER'S VM.  A create.account run from a session
+*   that reached SDSYS by LOGTO from an unelevated start failed at the $cred
+*   write (PRE_RELEASE 68), the owner answered N, this line ran, and the Windows
+*   account SURVIVED - in no group, so never confined by sdsshonly, and
+*   invisible to remove-sdaccounts.ps1, whose candidate set is sdusers
+*   membership.  It outlived the uninstall as an ordinary enabled login.
+*   DELETE_USER's own os.execute -> ps_script change is the other half of this.
+*
+*   A FAILED ROLLBACK IS NOT A WARNING, IT IS A DIFFERENT OUTCOME, so it gets a
+*   different message rather than a quieter version of the same one: 10086 keeps
+*   its promise and is printed only when the promise is true.
+              rollback.ok = delete_user(acc.uname)
               @system.return.code = -ER$NOT.CREATED
-              stop sysmsg(10086) ;* An account must have a password. Nothing was created.
+              if rollback.ok then
+                 stop sysmsg(10086) ;* An account must have a password. Nothing was created.
+              end else
+                 stop sysmsg(10130, acc.uname)
+                 * The Windows account %1 could not be removed and is still there
+              end
            end
          end
      end case

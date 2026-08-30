@@ -24,6 +24,11 @@
 * 28 Aug 26 Windows port - THE DIRECTORY FIRST, and the registry entry only if
 *           the directory went.  Both halves are KEPT together on failure and
 *           recorded for the boot sweep to reclaim.  PRE_RELEASE_FIXES.md 36.
+* 30 Aug 26 Windows port - ps_script instead of os.execute, so the removal runs
+*           through the ELEVATED HELPER.  os.execute spawns PowerShell at the SD
+*           process's own privilege, so from a session that reached SDSYS by
+*           LOGTO from an unelevated start Remove-LocalUser was denied and the
+*           account survived.  PRE_RELEASE_FIXES.md 72.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -179,6 +184,7 @@ function delete_user(username)
 $catalog !delete_user
 
 deffun valid_os_name(name) calling '!valid_os_name'
+deffun ps_script(script) calling '!ps_script'
 
    user_deleted = @false
    set.status 0
@@ -272,9 +278,36 @@ deffun valid_os_name(name) calling '!valid_os_name'
    ps := 'if ($keyleft) { exit 7 }; '
    ps := 'exit 0'
 
-   os.execute ps
-
-   stat = os.error()
+* 30 Aug 26 Windows port - ps_script, NOT os.execute.  PRE_RELEASE_FIXES 72.
+*
+*   THIS ROUTINE CHANGES WINDOWS STATE - it removes a local user, its profile
+*   and its ProfileList key - and os.execute runs PowerShell DIRECTLY, at the
+*   privilege of the SD process.  !ps_script routes through the elevated helper
+*   when K$ADMINISTRATOR is set (PS_SCRIPT:166).  Every other routine here that
+*   changes Windows state already used it: CREATE_USER:104, SET_PASSWD:130 and
+*   OS_GROUP.  This one was the exception and nothing had noticed.
+*
+*   WHY IT MATTERED, AND NOTHING REFUSED.  After LOGTO SDSYS, CPROC:2769 sets
+*   K$ADMINISTRATOR - which IS USR_ADMIN - so os_permitted() returns TRUE at
+*   op_sh.c:161 and os.execute is ALLOWED.  But the PowerShell it spawns
+*   inherits the SD process token, and from a session that reached SDSYS by
+*   LOGTO from an unelevated start that token is not elevated, so
+*   Remove-LocalUser was denied and this returned non-zero.
+*
+*   ITS CALLER THEN THREW THAT AWAY.  CREATEA's rollback was "void
+*   delete_user(...)" followed by 10086, "An account must have a password.
+*   Nothing was created." - so the account SURVIVED and the message said it had
+*   not.  Measured 30 Aug 2026: the owner's "john" outlived a failed
+*   create.account on the VM, in no group, unconfined, invisible to the sweep in
+*   remove-sdaccounts.ps1 because that reads sdusers.
+*
+*   THE READ-ONLY QUERIES AROUND HERE STAY ON os.execute AND SHOULD.
+*   IS_USER, IS_GROUP, IS_GRP_MEMBER, IS_SD_USER and PROFILE_DIR only ASK
+*   Windows things; they need no privilege and routing them through the helper
+*   would buy a round trip for nothing.  The rule this file now follows is the
+*   one the tree already followed everywhere else: CHANGE state through
+*   ps_script, READ state with os.execute.
+   stat = ps_script(ps)
    begin case
       case stat = 0
          user_deleted = @true

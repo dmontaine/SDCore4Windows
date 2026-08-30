@@ -5,6 +5,35 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+30 Aug 26  A FAILED CREATE.ACCOUNT NO LONGER LEAVES A WINDOWS ACCOUNT BEHIND
+           WITHOUT SAYING SO.
+
+           When CREATE.ACCOUNT could not set the password and you answered N,
+           it said "An account must have a password. Nothing was created." It
+           was meant to remove the Windows account it had just made, and it
+           tried - but it never looked at whether that worked, and printed the
+           same sentence either way.
+
+           From a session that reached SDSYS with LOGTO rather than by starting
+           SD elevated, the removal was refused by Windows and the account
+           stayed. It was in none of SD's groups, so nothing in SD could see
+           it, DELETE.ACCOUNT could not remove it, and the account clean-up an
+           uninstall offers could not find it either. It was also not confined
+           the way accounts SD finishes creating are, so it could sign in to
+           Windows with the password that had been set for it.
+
+           Two changes. The removal now runs the same way every other change
+           SD makes to Windows runs, so it works from either kind of session.
+           And the result is checked: if the account really cannot be removed,
+           SD says so, names it, and says what is true about it - rather than
+           telling you nothing was created.
+
+           IF YOU HAVE ONE OF THESE ALREADY, SD cannot help you find it. Look
+           for a Windows account with an SD-shaped name that is in none of the
+           sd groups, and remove it with Windows' own tools - or run
+           CREATE.ACCOUNT for the same name from an elevated session, which
+           takes it over and finishes the job.
+
 29 Aug 26  AN ADMINISTRATOR REACHES THE OPERATING SYSTEM AGAIN WITHOUT
            ELEVATING.
 
