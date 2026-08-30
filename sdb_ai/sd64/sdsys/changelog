@@ -5,6 +5,37 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+29 Aug 26  AN ADMINISTRATOR REACHES THE OPERATING SYSTEM AGAIN WITHOUT
+           ELEVATING.
+
+           An administrator who had not elevated could not use SH, the !
+           prefix, OS.EXECUTE, or the full screen editors - EDIT reads the
+           same permission. They had to start SD from an elevated terminal to
+           get any of it. That was not intended: an administrator is meant to
+           have the operating system, ssh and the API by default.
+
+           It happened because the permission record an ADMINISTRATOR account
+           used to be given was removed while SD briefly put administrators
+           straight into SDSYS at login, where the permission came from being
+           elevated instead. That arrangement was withdrawn the same day and
+           the record was not put back. It is back now: creating an
+           ADMINISTRATOR account writes it again, with both fields set.
+
+           WORTH KNOWING, BECAUSE IT IS DELIBERATE. The record is keyed on the
+           Windows user, not on the SD account, and LOGTO does not change the
+           Windows user. So an administrator who logs to another account KEEPS
+           the operating system there, even though the account itself may not
+           have it. ssh and the API do not behave that way - both are checked
+           when the connection is made, so neither follows a LOGTO.
+
+           You can still turn it off for a person by editing or removing their
+           OS.USERS record; that is what the file is for, and an existing
+           record is never overwritten.
+
+           You will see this on a new installation. Installing does not
+           overwrite an existing database, so a system that already has one
+           keeps the permissions it already has.
+
 29 Aug 26  LISTF NOW DESCRIBES SDSYS'S OWN FILES INSTEAD OF PRINTING "F".
 
            In the SDSYS account, LISTF printed a bare F in the Description

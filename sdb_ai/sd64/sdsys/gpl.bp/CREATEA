@@ -199,6 +199,18 @@
 *    CREATE.ACCOUNT OTHER acc.name pathname {NO.QUERY} - account created in pathname, maintained for backwards compatiblilty. This will require manual editing
 *                                                        of the accounts record to specify linux group the account belongs to.
 *
+* 29 Aug 26 Windows port - AND IT IS WRITTEN AGAIN, the same day, on the
+*                      owner's ruling.  The removal below rested on 56 clause
+*                      2 - "an administrator is elevated at login into SDSYS"
+*                      - and af5490e reversed that four hours after this
+*                      landed.  An unelevated administrator lands in their own
+*                      account, USR_ADMIN is false, and the empty os.users
+*                      refuses them: measured on -Run b68, message 10053 and
+*                      "OS.EXECUTE from a program is refused", @logname don.
+*                      ***THE LOGTO LEAK NAMED BELOW IS ACCEPTED, NOT FIXED***
+*                      - the owner was shown it and the session-flag
+*                      alternative and chose this.  Do not reverse it without
+*                      a ruling.  PRE_RELEASE_FIXES 2
 * 29 Aug 26 Windows port - an ADMINISTRATOR-tier account is no longer written
 *                      into os.users.  It is not a withdrawal of access: 56
 *                      elevates an administrator at login into SDSYS, where
@@ -1598,17 +1610,41 @@ more.args:
 *   THAT SENTENCE SAID THE OPPOSITE FOR ONE DAY - "a default, not a rule",
 *   committed earlier on the 27th - and he overruled it the same afternoon:
 *   "administrators have full access, there should be no way to turn it off."
+      os.sh   = @true
+      os.exec = @true
 *
-* 29 Aug 26 Windows port - AND THE TWO OS.USERS LINES ARE GONE FROM HERE.
-*   PRE_RELEASE_FIXES 56 and 2.
+* 29 Aug 26 Windows port - THE TWO LINES ABOVE WERE REMOVED THIS MORNING AND
+*   ARE RESTORED THIS EVENING, ON THE OWNER'S RULING.  PRE_RELEASE_FIXES 2.
 *
-*   ***THIS DOES NOT REVERSE THE 27 Aug RULING ABOVE.  IT IS THE SAME RULING
-*   ARRIVING BY THE ROUTE THE NEW MODEL GIVES IT.***  He still has full access
-*   and there is still no way to turn it off - an administrator is now elevated
-*   AT LOGIN into SDSYS, where USR_ADMIN is set, and os_permitted() returns
-*   TRUE on that flag at op_sh.c:161 BEFORE it ever reads os.users.  The
-*   operating system comes from being an administrator, which nothing can take
-*   away, instead of from a line in a file that can be edited.
+*   ***THE REMOVAL'S PREMISE WAS CLAUSE 2, AND CLAUSE 2 WAS REVERSED FOUR HOURS
+*   LATER.***  It reasoned that writing them was unnecessary "because 56
+*   elevates an administrator at login into SDSYS, where USR_ADMIN answers
+*   os_permitted() before the file is read".  af5490e reversed that at 14:58
+*   the same day: an unelevated administrator lands in their OWN account, where
+*   USR_ADMIN is FALSE, so op_sh.c:161 never short-circuits and the empty
+*   os.users refuses them.  MEASURED on -Run b68 - "unlisted: refused with
+*   message 10053 ... expected don, got don", and "OS.EXECUTE from a program is
+*   refused".  The 27 Aug ruling above was left unsatisfied by a change that
+*   believed it was preserving it.
+*
+*   ***THE LOGTO LEAK IS REAL AND IS NOW AN ACCEPTED COST, NOT AN OVERSIGHT.***
+*   The paragraph below is kept because every word of it is still true:
+*   os.users is keyed on the PERSON and a LOGTO never changes it, so an
+*   administrator listed here keeps OS.EXECUTE in every account they move to.
+*   The owner was shown that, and the alternative - carrying the grant on the
+*   session flag, which CPROC:2781 already clears on a LOGTO - and chose this.
+*   ***SO DO NOT "FIX" IT BACK.***  If it is to change, it changes on a ruling.
+*
+*   AND THE FLAG ROUTE HAS A TRAP WORTH KEEPING WRITTEN DOWN, for whoever
+*   revisits it: LOGIN:568 is "case kernel(K$ADMINISTRATOR, -1) and
+*   kernel(K$OS.ADMINISTRATOR, 0)", so setting that flag for an unelevated
+*   administrator AT LOGIN sends them straight back into SDSYS and undoes the
+*   reversal.  Any such fix must land AFTER that branch has decided.
+*
+*   AN EXISTING INSTALL DOES NOT GAIN THE RECORD.  grant.os.access runs at
+*   CREATE.ACCOUNT time and the installer never overwrites an existing data
+*   tree, so this reaches a machine on a NEW install, where AdoptAccount
+*   re-creates the installing user's account.  The changelog says so.
 *
 *   ***AND WRITING IT HERE ACTIVELY BROKE THE NEW MODEL, WHICH IS WHY IT HAD
 *   TO GO RATHER THAN MERELY BECOMING UNNECESSARY.***  os.users is keyed on
