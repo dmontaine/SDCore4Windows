@@ -599,17 +599,38 @@ try {
              'the probe never reached the attempt, so a refusal cannot be distinguished from a no-show'
     }
 
-    # AND THE CONTROL THAT MAKES THAT MEAN SOMETHING, which is the inversion
-    # worth naming: a LOCAL ELEVATED session standing in the SAME account is
-    # REFUSED.  It starts in SDSYS with USR_ADMIN set and gives the flag up on
-    # the way out (CPROC, "administrator rights belong to SDSYS"), so by the
-    # time it reaches the probe os_permitted() says no.  The API session never
-    # leaves anywhere, so it keeps the flag.  Same account, same program, and
-    # the remote client is the one that gets the operating system.
+    # 29 Aug 26 - THIS ROW CHANGED POLARITY ON THE OWNER'S RULING, AND THE ROW
+    # IT REPLACES IS THE PART TO READ FIRST.  It used to assert that a LOCAL
+    # ELEVATED session in the SAME account was REFUSED, and it named the
+    # inversion that made the API finding sharp: "same account, same program,
+    # and the remote client is the one that gets the operating system".  It
+    # starts in SDSYS with USR_ADMIN set and gives the flag up on the way out
+    # (CPROC, "administrator rights belong to SDSYS"), so os_permitted() used
+    # to say no by the time it reached the probe.
+    #
+    # THAT INVERSION IS GONE, AND IT WENT DELIBERATELY - PRE_RELEASE 64.
+    # PRE_RELEASE 2 restored os.sh/os.exec to CREATEA's ADMINISTRATOR arm
+    # (CREATEA:1613), so the person running this suite is listed in os.users.
+    # THAT LOOKUP IS KEYED ON THE PERSON AND A LOGTO DOES NOT CHANGE IT
+    # (op_sh.c:167), so the local session now falls through USR_ADMIN into the
+    # file and keeps OS.EXECUTE into whatever account it moves to.  The owner
+    # was shown the leak and the session-flag alternative and ruled twice that
+    # the rights stay as they are - 29 Aug on entry 2, and again when this row
+    # raised it as entry 64.  SO THIS ASSERTS THE RULED BEHAVIOUR.
+    #
+    # IT IS NOT A FLIPPED EXPECTED VALUE, WHICH ENTRY 64 FORBIDS.  The check is
+    # a different claim with a different name, and it now does the job the row
+    # above was missing: THE POSITIVE CONTROL.  "API session CANNOT run
+    # OS.EXECUTE" is read off a REFUSAL, and a refusal is only evidence if this
+    # probe could have seen a success - while BOTH legs were refused, nothing
+    # in the run ever demonstrated that it could, so that row could pass with a
+    # blind probe.  This leg is the demonstration: same program, same probe,
+    # permitted route, and OS.EXECUTE RUNS.  A FAIL here disqualifies the row
+    # above rather than standing on its own.
     if ($localTriedOsExec) {
-        Note 'control: local elevated session refused OS.EXECUTE' $false $localRanOsExec
+        Note 'control: the probe CAN see OS.EXECUTE run (local, listed administrator)' $true $localRanOsExec
     } else {
-        Skip 'control: local elevated session refused OS.EXECUTE' `
+        Skip 'control: the probe CAN see OS.EXECUTE run (local, listed administrator)' `
              'the probe never reached the attempt'
     }
 
@@ -625,6 +646,13 @@ try {
         Write-Host ("It reported its identity as: " + $apiWho) -ForegroundColor Red
         Write-Host 'op_sh.c os_permitted() returns TRUE on USR_ADMIN, and kernel.c:195' -ForegroundColor Red
         Write-Host 'seeds USR_ADMIN from IsElevated() with no test of connection type.' -ForegroundColor Red
+        # 29 Aug 26 - STILL CORRECT AND NOW RARE, WHICH IS WHY IT SAYS SO.  The
+        # control above expects the local leg to RUN, so this arm no longer
+        # fires on an ordinary run.  It is kept because the inversion it names
+        # is a real and much worse state than the API finding alone: if the
+        # local leg is ever refused while the API leg runs, the remote client
+        # has something the operator at the keyboard does not, and that is
+        # worth printing in full whatever the ruling on os.users says.
         if (-not $localRanOsExec) {
             Write-Host '' -ForegroundColor Red
             Write-Host 'AND THE INVERSION IS THE SHARP PART: the LOCAL ELEVATED control,' -ForegroundColor Red
