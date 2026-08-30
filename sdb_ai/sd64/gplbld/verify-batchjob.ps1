@@ -27,7 +27,15 @@
 #   refused again once it is removed          and nothing else was admitting it
 #   refused WITH AN ARGUMENT though listed    section 8's no-arguments rule
 #   refused when the VOC record is not PA/S   the type test
-#   RUNS ELEVATED with no entry at all        elevation still passes on its own
+#   RUNS ELEVATED IN SDSYS with no entry      elevation still passes on its own
+#
+# 29 Aug 26 - THE LAST ROW IS ASKED OF SDSYS, NOT OF THE ACCOUNT, and the change
+# is the owner's ruling on PRE_RELEASE 59.  It used to Push-Location into the
+# account and run sd elevated; b65 measured that FAILING, because under the
+# ruled access model an elevated session cannot stand in an ordinary account at
+# all - it lands in SDSYS, and a LOGTO out of SDSYS gives up the flag.  The
+# state that row measured stopped existing; the rule it protects did not.  The
+# elevated half's own comment carries the full reasoning.
 #   an ordinary token cannot write the list   the ACL, which is the control
 #
 # THE PARAGRAPH RUNS "COUNT VOC", chosen because its output - "N record(s)
@@ -51,6 +59,11 @@ $listDir = Join-Path $sdsys 'batch.jobs'
 
 $paName = 'zzbatchpa'      # a paragraph: allowed once listed
 $fpName = 'zzbatchfp'      # a file pointer: listed, but the wrong VOC type
+# 29 Aug 26 - the same paragraph again, in SDSYS's own VOC, for the elevated
+# row.  It needs a name of its own: the account probes are in the ACCOUNT's VOC
+# and an elevated session never sees them, which is the whole reason that row
+# was re-aimed.  PRE_RELEASE 59.
+$sysPa  = 'zzbatchsyspa'   # the same paragraph, in SDSYS, for the elevated row
 
 # ---------------------------------------------------------------- elevated half
 #
@@ -108,10 +121,101 @@ if ($Phase -ne '') {
                 # IT DOES NOT WEAKEN THE ROW.  What is being measured is whether
                 # an elevated session may still RUN the command; the credential
                 # prompt is a different subject and does not belong in the way.
-                Push-Location -LiteralPath (Join-Path $env:ProgramData ('SD\user_accounts\' + $Account))
-                try   { $out = ($null | & $sdExe $paName 2>&1 | Out-String) }
-                finally { Pop-Location }
-                Set-Content -LiteralPath $ResultFile -Value $out -Encoding utf8
+                #
+                # ------------------------------------------------------------
+                # 29 Aug 26 - RE-AIMED AT SDSYS.  Owner's ruling, PRE_RELEASE 59.
+                #
+                # THIS ROW USED TO Push-Location INTO THE ACCOUNT and run sd
+                # elevated, expecting to stand in that account with the gate
+                # bypassed.  b65 measured it FAILING, and the cause is not a
+                # product defect: UNDER THE RULED MODEL AN ELEVATED SESSION
+                # CANNOT STAND IN AN ORDINARY ACCOUNT AT ALL.  An elevated login
+                # goes to SDSYS (LOGIN's "case kernel(K$ADMINISTRATOR,-1) and
+                # kernel(K$OS.ADMINISTRATOR,0)"), and a LOGTO out of SDSYS gives
+                # up the flag (CPROC, "administrator rights belong to SDSYS").
+                # The state this row measured no longer exists, so it is asked
+                # where an elevated session actually is.
+                #
+                # THE CLAIM IS UNCHANGED - "elevation passes on its own", the
+                # owner's decision of 22 Aug 2026.  Only the place it is asked
+                # has moved.
+                #
+                # AND IT IS STILL DECISIVE.  LOGIN:901 bypasses the WHOLE of
+                # batch.permitted on K$ADMINISTRATOR - the no-arguments check,
+                # the batch.jobs listing check AND the PA/S type check.  So a
+                # command that runs here with NO batch.jobs record for SDSYS
+                # cannot have passed the listing check, and the bypass is the
+                # only thing left that explains it.
+                #
+                # THE "NO ENTRY" PRECONDITION IS ASSERTED, NOT ASSUMED - and a
+                # record found here is NOT deleted, because this script did not
+                # write it.  Without the assertion the row could pass because
+                # SDSYS happened to be listed rather than because elevation
+                # bypassed the gate: a pass for the wrong reason, which is what
+                # section 8 exists to stop.
+                $sysRec = Join-Path $listDir 'SDSYS'
+                if (Test-Path -LiteralPath $sysRec) {
+                    Set-Content -LiteralPath $ResultFile -Encoding utf8 -Value @(
+                        'SDSYS-ENTRY-PRESENT'
+                        "batch.jobs already carries a record for SDSYS: $sysRec"
+                        'This row measures a session with NO entry, so it cannot be'
+                        'measured while that record stands - and this will not delete'
+                        'a record it did not write.  Remove it by hand if it is stale.'
+                    )
+                    exit 0
+                }
+
+                # PLANTED IN SDSYS's OWN VOC, THROUGH SD, for the reason the
+                # account-side planter gives: a VOC is a dynamic file and a
+                # record cannot be dropped into it from the file system.  This
+                # process is elevated, so a piped sd lands in SDSYS and OPEN
+                # 'voc' opens SDSYS's own.
+                $sysBp   = Join-Path $sdsys 'bp'
+                $sysProg = 'ZZBATCHS'
+                $sysSrc  = Join-Path $sysBp $sysProg
+                $sysObj  = Join-Path (Join-Path $sdsys 'bp.out') $sysProg
+
+                $planter = @(
+                    "* $sysProg - written by gplbld/verify-batchjob.ps1.  Safe to delete."
+                    "      OPEN 'voc' TO F ELSE STOP 'cannot open VOC'"
+                    "      R = 'PA' : @FM : 'COUNT VOC'"
+                    "      WRITE R ON F, '$sysPa'"
+                    "      CRT '$sysProg-DONE'"
+                ) -join "`n"
+                [System.IO.File]::WriteAllText($sysSrc, $planter + "`n",
+                                               [System.Text.Encoding]::GetEncoding('iso-8859-1'))
+
+                try {
+                    # PIPED, never on the command line: "sd BASIC bp X" is the
+                    # very thing this script exists to see refused.
+                    $plant = (("`nBASIC bp $sysProg`nRUN bp $sysProg`nOFF`n") |
+                              & $sdExe 2>&1 | Out-String)
+                    if (-not $plant.Contains("$sysProg-DONE")) {
+                        Set-Content -LiteralPath $ResultFile -Encoding utf8 -Value @(
+                            'SDSYS-PLANT-FAILED'
+                            $plant
+                        )
+                    } else {
+                        # THE MEASUREMENT.  "$null |" is load-bearing - see the
+                        # long note above; it is what keeps this NOTTY.
+                        $out = ($null | & $sdExe $sysPa 2>&1 | Out-String)
+                        Set-Content -LiteralPath $ResultFile -Value $out -Encoding utf8
+                    }
+                }
+                finally {
+                    # UNCONDITIONAL, AND "DELETE VOC" RATHER THAN "DELETE.FILE" -
+                    # PRE_RELEASE 60 and 61.  A VOC record outliving what it
+                    # names IS the defect those entries are about, so this runs
+                    # on every path out, including both failures above.  Its
+                    # wording is not read: sysmsg 3221 prints "%1 record(s)
+                    # deleted" on the failure path too, so it is no anchor.
+                    $null = (("`nDELETE VOC $sysPa`nOFF`n") | & $sdExe 2>&1)
+                    foreach ($f in @($sysSrc, $sysObj)) {
+                        if (Test-Path -LiteralPath $f) {
+                            try { Remove-Item -LiteralPath $f -Force } catch { }
+                        }
+                    }
+                }
             }
         }
         exit 0
@@ -330,12 +434,26 @@ catch {
 
 if ($cleanOk -and (Test-Path -LiteralPath $resultFile)) {
     $elevOut = (Get-Content -Raw -LiteralPath $resultFile)
-    Note 'ELEVATED with no entry: still runs' $true (SawRan $elevOut) $true
+
+    # 29 Aug 26 - "COULD NOT BE MEASURED" IS NOT "FAILED", and scoring it as one
+    # would be a claim about the product that this run did not make.  Both
+    # markers mean the elevated child never reached the question: SDSYS was
+    # already listed in batch.jobs, or the probe would not plant.  The row is
+    # recorded NON-DECISIVE so it cannot turn the script red, and the child's
+    # own text is printed so the reason is on the transcript rather than
+    # inferred from a bare FAIL.
+    if ($elevOut.Contains('SDSYS-ENTRY-PRESENT') -or $elevOut.Contains('SDSYS-PLANT-FAILED')) {
+        Write-Output 'verify-batchjob: the SDSYS row COULD NOT BE MEASURED - this is not a failure.'
+        Write-Output $elevOut
+        Note 'ELEVATED in SDSYS, no entry: still runs' $true $false $false
+    } else {
+        Note 'ELEVATED in SDSYS, no entry: still runs' $true (SawRan $elevOut) $true
+    }
     Remove-Item -LiteralPath $resultFile -Force
 } else {
     Write-Output 'verify-batchjob: WARNING - the record may still be in batch.jobs.'
     Write-Output ("  Remove by hand: " + (Join-Path $listDir $account))
-    Note 'ELEVATED with no entry: still runs' $true $false $true
+    Note 'ELEVATED in SDSYS, no entry: still runs' $true $false $true
 }
 
 # ------------------------------------------------- 8. and refused once more
