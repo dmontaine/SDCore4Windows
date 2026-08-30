@@ -29,6 +29,12 @@
 *           LOGTO from an unelevated start is refused by Windows however
 *           administrator SD believes it is.  The record is then READ BACK and
 *           both keys compared before success is reported.  PRE_RELEASE_FIXES 68
+* 30 Aug 26 Windows port - the read-back moved to the PRIVILEGED side for the
+*           fallback path.  $cred grants sdusers nothing, so the process that
+*           needs the fallback cannot read the record back either, and
+*           "read ... else" scored that denial as corruption - status 3037 on
+*           -Prefix sdswa4.  The helper now verifies its own write and returns
+*           2 to say so.  PRE_RELEASE_FIXES 68
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -192,55 +198,109 @@ deffun ps_script(script) calling '!ps_script'
       ps :=                   q : cred.rec<CRED$STOREDKEY> : q : ','
       ps :=                   q : cred.rec<CRED$SERVERKEY> : q : ')'
       ps := @fm : '$nl = [char]13 + [char]10'
+      ps := @fm : '$want = ($l -join $nl) + $nl'
       ps := @fm : 'try {'
-      ps := @fm : '  [System.IO.File]::WriteAllText($p, ($l -join $nl) + $nl,'
+      ps := @fm : '  [System.IO.File]::WriteAllText($p, $want,'
       ps := @fm : '     [System.Text.Encoding]::ASCII)'
       ps := @fm : '} catch { exit 1 }'
+      ps := @fm : 'try {'
+      ps := @fm : '  $got = [System.IO.File]::ReadAllText($p,'
+      ps := @fm : '     [System.Text.Encoding]::ASCII)'
+      ps := @fm : '} catch { exit 2 }'
+      ps := @fm : 'if ($got -cne $want) { exit 2 }'
       ps := @fm : 'exit 0'
 
-      if ps_script(ps) # 0 then
+      rc = ps_script(ps)
+
+* 30 Aug 26 Windows port - THE READ-BACK MOVED TO THE PRIVILEGED SIDE, AND THAT
+*   IS THE WHOLE OF THE sdswa4 FAILURE.  PRE_RELEASE_FIXES 68.
+*
+*   $cred GRANTS sdusers NOTHING - NOT WRITE, AND NOT READ EITHER.
+*   secure-cred.ps1 grants SYSTEM and Administrators and stops, and its own
+*   comment says why: "sdusers is granted NOTHING here.  That is the entire
+*   point."  So the unelevated process that NEEDS this fallback cannot read
+*   $cred back afterwards any more than it could write it.
+*
+*   THE READ-BACK BELOW WAS COPIED FROM MODIFYA, WHERE IT IS VALID.
+*   secure-osusers.ps1 grants sdusers (OI)(CI)(RX) - READ-ONLY - so MODIFYA's
+*   unelevated read-back genuinely works, and os.users passed on sdswa4 by the
+*   identical route while $cred failed.  The two stores have DIFFERENT ACLs and
+*   the pattern does not carry across.  Same shape of error as the
+*   close-before-write rule and in the same week: a rule lifted from the file
+*   where it holds into the file where it does not.
+*
+*   AND "read ... else" HID IT.  A permission denial and a missing record take
+*   the SAME else branch, so this reported "wrote it and it did not read back"
+*   - ER$WRITE.ERROR, status 3037 - when the truth was "wrote it and could not
+*   look".  MEASURED: -Prefix sdswa4, 30 Aug 2026, 6 PASS / 1 FAIL, all three
+*   controls green, os.users green on the same route.
+*
+*   SO THE HELPER VERIFIES ITS OWN WRITE, being the only party that can read
+*   the file.  -cne AND NOT -ne: PowerShell's default comparison is
+*   case-INSENSITIVE and every value here is base64, which is case-SIGNIFICANT,
+*   so -ne would accept a record differing from the intended one in case alone
+*   and report it verified.
+      if rc = 2 then
+*        ER$WRITE.ERROR: the helper wrote the file and read back something that
+*        is not what it was handed.  Not a permissions fault - do not say so.
+         set.status ER$WRITE.ERROR
+         return
+      end
+
+      if rc # 0 then
 *        ER$PERM here and ONLY here: the elevated write itself was refused.
+*        ps_script returns -1 when the helper could not be run at all, which
+*        lands here too and is the right answer for it.
          set.status ER$PERM
          return
       end
    end
 
-*  ***THE READ-BACK IS THE POINT, NOT A COURTESY.*** Either path above can
-*  report success and leave a record this side cannot use: the direct write can
-*  be refused, and the elevated one goes through a PowerShell script whose exit
-*  code says the FILE was written and nothing about whether SD can parse it.
-*  An unusable $cred record is an account that authenticates against nothing, and
-*  it would be found at the next login rather than here.  So the record is read
-*  back through SD's own reader and BOTH keys are compared - the same fields
-*  !CRED_VERIFY will use.
-*  RE-OPENED, because the file was closed above before anything outside SD was
-*  allowed to touch it.  A fresh open is also the only way to be sure this reads
-*  the bytes on disk rather than anything SD was holding.
-   check.rec = ''
-   openpath @sdsys:@ds:'$cred' to chk.f else
-      set.status ER$NVR
-      return
-   end
-   read check.rec from chk.f, account else check.rec = ''
-   close chk.f
+*  ***THE READ-BACK IS THE POINT, NOT A COURTESY.*** A write can report success
+*  and leave a record this side cannot use, and an unusable $cred record is an
+*  account that authenticates against nothing - found at the next login rather
+*  than here.  So the record is read back and BOTH keys are compared, the same
+*  fields !CRED_VERIFY will use.
+*
+*  ONLY ON THE DIRECT-WRITE PATH, AND THAT IS NOT AN OPTIMISATION.  Reaching
+*  here with write.ok means THIS process wrote the file, so it demonstrably has
+*  access and can read it back through SD's OWN reader - the better check of
+*  the two, because it is SD's reader that has to parse this at the next login.
+*  When the fallback ran instead, this process has no access to $cred at all
+*  and the helper has already made the equivalent comparison; repeating it here
+*  would read nothing and score it as corruption.  That is exactly what it did
+*  on sdswa4 - see the note on the fallback above.
+*  RE-OPENED, because cred.f was closed above before anything outside SD was
+*  allowed to touch it.  A fresh open is also the only way to be sure this
+*  reads the bytes on disk rather than anything SD was holding.
+   if write.ok then
+      check.rec = ''
+      openpath @sdsys:@ds:'$cred' to chk.f else
+         set.status ER$NVR
+         return
+      end
+      read check.rec from chk.f, account else check.rec = ''
+      close chk.f
 
-*  ER$WRITE.ERROR, NOT ER$PERM.  Reaching here means a write reported success
-*  and the record does not read back as what was meant to be stored - which is
-*  a different fault from being refused, and the caller's message should not
-*  say "permissions" about it.
-   if check.rec<CRED$STOREDKEY> # stored.key then
-      set.status ER$WRITE.ERROR
-      return
-   end
+*     ER$WRITE.ERROR, NOT ER$PERM.  Reaching here means a write reported
+*     success and the record does not read back as what was meant to be stored
+*     - a different fault from being refused, and the caller's message should
+*     not say "permissions" about it.
+      if check.rec<CRED$STOREDKEY> # stored.key then
+         set.status ER$WRITE.ERROR
+         return
+      end
 
-   if check.rec<CRED$SERVERKEY> # server.key then
-      set.status ER$WRITE.ERROR
-      return
+      if check.rec<CRED$SERVERKEY> # server.key then
+         set.status ER$WRITE.ERROR
+         return
+      end
    end
 
 *  NO close HERE.  cred.f was closed unconditionally before the elevated write,
-*  and chk.f was closed after the read-back, so both handles are already shut by
-*  every path that reaches this line.
+*  and chk.f is opened ONLY on the direct-write path and closed there straight
+*  after the read, so every path that reaches this line has both handles shut
+*  and the fallback path never opened chk.f at all.
    ok = @true
 
    return
