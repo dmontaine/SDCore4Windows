@@ -230,15 +230,42 @@ function Invoke-SDElevated([string[]]$commands, [string]$why) {
         # The body is written as a file and PIPED by the launcher - sd.exe must
         # have a PIPE on stdin, not a redirected file handle, or it prints
         # "Process terminated" and runs nothing.
-        Set-Content -LiteralPath $sdIn -Value (($expanded + @('OFF')) -join "`r`n") -Encoding ascii
+        #
+        # LF ONLY, AND WRITTEN WITHOUT Set-Content.  MEASURED 30 Aug 2026: joined
+        # with CRLF, SD TAKES THE \r AS A LINE OF ITS OWN, so every command is
+        # followed by an empty one.  The transcript shows it plainly - a ":"
+        # prompt with nothing on it after each line - and the damage is not
+        # cosmetic: the blanks push the ANSWERS one out of step, so
+        # "New Windows password:" was fed the empty line, "Repeat password:" got
+        # the first password, the second fell through to the command prompt as
+        # "<password> is not in your VOC", and CREATE.ACCOUNT refused with "The
+        # two passwords did not match, or none was entered".
+        #
+        # Set-Content is avoided for the same reason twice over: it appends a
+        # terminator of its own, and on Windows that terminator is CRLF - so
+        # joining with "`n" and then writing with Set-Content still ends the
+        # body with a stray \r.  WriteAllText puts down exactly these bytes.
+        $body = (($expanded + @('OFF')) -join "`n") + "`n"
+        # THE GUARD IS THE FIX, NOT THE JOIN ABOVE.  A stray \r anywhere in this
+        # body silently feeds SD an extra blank line per command and pushes every
+        # ANSWER one out of step - which presents as "the two passwords did not
+        # match" and looks like a password problem.  Assert it mechanically.
+        if ($body.Contains([char]13)) {
+            Fail 'the SD body contains a CR - it would feed a blank line per command (see the comment above)'
+        }
+        [System.IO.File]::WriteAllText($sdIn, $body, [System.Text.Encoding]::ASCII)
 
+        # The LAUNCHER is PowerShell source, so its own line endings are free -
+        # but it reads the body -Raw and pipes it, so whatever bytes went into
+        # $sdIn are what sd.exe sees.  & on the quoted exe path, because a quoted
+        # path at the start of a line is a string expression and runs nothing.
         $launcher = Join-Path $work 'run.ps1'
         $ls = @(
             ('$b = Get-Content -LiteralPath ' + "'" + $sdIn + "'" + ' -Raw'),
             ('$o = $b | & ' + "'" + $sdExe + "'"),
             ('$o | Out-File -LiteralPath ' + "'" + $sdOut + "'" + ' -Encoding utf8')
         ) -join "`r`n"
-        Set-Content -LiteralPath $launcher -Value $ls -Encoding ascii
+        [System.IO.File]::WriteAllText($launcher, $ls + "`r`n", [System.Text.Encoding]::ASCII)
 
         Write-Host ('      elevated: ' + $why)
         if ([string]::IsNullOrEmpty($script:helperPipe)) {
