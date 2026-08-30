@@ -385,23 +385,53 @@ $steps = @(
 # and calling a Mandatory -Prefix with nothing would PROMPT - which inside a
 # runner is a hang, not an error.  That trap cost a run on 28 Aug 2026.
 #
-# IT ADDS THREE UAC PROMPTS to this runner's five.
+# IT ADDS THREE UAC PROMPTS to this runner's five, and PRE_RELEASE 73's verifier
+# below adds a fourth - one, not one per leg, because it shares SD's own helper.
 if ($Run) {
     # 28 Aug 26 - BUILT AND COUNTED, not appended with a bare +.  A hashtable
     # on the right of + is folded into the array as one element only if it is
     # wrapped first; the count is asserted below rather than assumed.
     $doorStep = @{ Name = 'verify-doors-suite.ps1'; P = @{ Prefix = "sddr$Run" } }
+
+    # 30 Aug 26 - PRE_RELEASE 73's verifier, and it belongs in THIS runner rather
+    # than the elevated one for a sharper version of the gate at the top of this
+    # file.  It asks whether a session that reached SDSYS by LOGTO from an
+    # UNELEVATED start can write $cred and os.users; run elevated it would pass
+    # every row and prove the opposite.  IT CANNOT BE DELEGATED TO VerifyInstall2
+    # EITHER - an elevated parent cannot make an ordinary child, because
+    # runas /trustlevel yields a RESTRICTED token rather than the user's own.
+    #
+    # ONE MORE CONSENT, NOT ONE PER LEG.  It starts the helper on SD'S OWN pipe
+    # name - gpl.bp/ELEVATE:121 builds 'sd-elev-' : @logname - so SD's own
+    # elevate('START') inside LOGTO SDSYS finds one already serving and asks for
+    # nothing further.
+    #
+    # ***EXPECT IT RED UNTIL 68 IS FIXED, AND THAT IS THE POINT OF ADDING IT.***
+    # Two rows fail by design, the unelevated $cred and os.users writes, and
+    # three controls prove the probe is sound: setup created the account, the
+    # unelevated session reached SDSYS and READ it, and the same write from an
+    # ELEVATED session succeeded.  A GREEN run before 68 is fixed means the probe
+    # is broken, not that the product is well.
+    #
+    # IT GOES LAST DELIBERATELY.  A failing step stops this runner unless
+    # -ContinueOnFailure is given, so a known-red step anywhere else would hide
+    # every step behind it.  Last, it hides nothing.
+    $writeStep = @{ Name = 'verify-sdsyswrite.ps1'; P = @{ Prefix = "sdsw$Run" } }
+
     $before = @($steps).Count
-    $steps  = @($steps) + @($doorStep)
-    if (@($steps).Count -ne ($before + 1)) {
-        Write-Output ("VerifyInstall1: the step list is {0} after adding one to {1}." -f
+    $steps  = @($steps) + @($doorStep) + @($writeStep)
+    if (@($steps).Count -ne ($before + 2)) {
+        Write-Output ("VerifyInstall1: the step list is {0} after adding two to {1}." -f
                       @($steps).Count, $before)
         exit 2
     }
 } else {
-    Write-Output 'VerifyInstall1: no -Run, so the SUSPENDED door pair is NOT in this run.'
-    Write-Output '  It creates a Windows account and its prefix is single-use, so it needs a'
-    Write-Output '  token to derive a fresh name from.  Add -Run <token> to include it.'
+    Write-Output 'VerifyInstall1: no -Run, so the SUSPENDED door pair is NOT in this run,'
+    Write-Output '  and neither is verify-sdsyswrite.ps1 (PRE_RELEASE 73).'
+    Write-Output '  Both create a Windows account and both prefixes are single-use, so they need'
+    Write-Output '  a token to derive a fresh name from.  Add -Run <token> to include them.'
+    Write-Output '  WITHOUT THEM THIS RUNNER CANNOT SEE PRE_RELEASE 68 AT ALL - a clean run with'
+    Write-Output '  no -Run is not evidence that the LOGTO-reached SDSYS can write its stores.'
 }
 
 # ---------------------------------------------------------------------------
