@@ -231,24 +231,19 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 22 Aug 26 - verify-parsertokens.ps1, listed in the commit
                   # that created it under section 7 step 7's rule.
                   'verify-parsertokens.ps1',
-                  # 25 Aug 26 - verify-standalone.ps1, START HERE item 5's
-                  # measurement: whether a stand-alone install really opened no
-                  # port, wrote no firewall rule and installed no ssh server.
-                  # Listed in the commit that created it, same rule - and it
-                  # walked straight into the trap that rule exists for, refusing
-                  # its own first run because it was newer than the install.
-                  #
-                  # IT CANNOT RUN ON THIS MACHINE'S USUAL INSTALL AT ALL.  Every
-                  # check in it asks whether something is ABSENT, so it refuses
-                  # with exit 2 unless sdsys\$standalone is there; a full
-                  # install is not a failure for it, it is a different system.
-                  'verify-standalone.ps1',
+                  # 30 Aug 26 - verify-standalone.ps1 IS DELETED, and its entry
+                  # with it.  PRE_RELEASE_FIXES 75 removed the stand-alone mode,
+                  # so every check in it asked about a system that can no longer
+                  # be installed.  A name left here would have been harmless and
+                  # wrong: this list is what stops a NEW script failing the
+                  # freshness check, and a name in it that matches no file is a
+                  # claim nobody can check.
                   # 25 Aug 26 - verify-upgrade.ps1, START HERE item 3's
                   # measurement: whether an install OVER an existing one really
                   # replaces the shipped subset and preserves the rest.  Listed
                   # here proactively rather than after it broke something -
-                  # verify-standalone.ps1 one line above had to learn it the
-                  # other way on its first run.
+                  # verify-standalone.ps1 had to learn it the other way on its
+                  # first run, before it was deleted.
                   #
                   # IT DOES NOT CALL assert-current, so unlike its neighbours it
                   # could not block ITSELF - it would make every OTHER verifier

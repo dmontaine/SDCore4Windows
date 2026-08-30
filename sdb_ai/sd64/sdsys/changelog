@@ -5,6 +5,59 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+30 Aug 26  THE INSTALLER ASKS ABOUT ssh PROPERLY, AND THE STAND-ALONE
+           INSTALLATION IS GONE.
+
+           Installing the ssh server and letting other computers reach it are
+           two separate questions now, and you are asked both.
+
+           If this machine has no ssh server, you are offered one - and the
+           "let other computers connect" box sits underneath it, greyed out
+           until you ask for the server. It cannot be ticked on its own,
+           because without a server there is nothing to allow.
+
+           If this machine ALREADY has an ssh server, you are asked the second
+           question on its own. That question was not asked at all before: the
+           installer silently left the firewall exactly as it found it, so a
+           machine that already had ssh could not be limited to loopback during
+           an install. It can now. The box starts out MATCHING THE FIREWALL
+           RULE THIS COMPUTER ALREADY HAS, so if you leave it alone nothing
+           changes - tick it to let others in, untick it to limit ssh to this
+           machine. SD still does not touch the configuration of an ssh server
+           it did not install.
+
+           Declining the ssh server no longer installs one anyway. It used to:
+           the ssh box only ever controlled the firewall, so leaving it blank
+           still downloaded the OpenSSH capability, started it and rewrote
+           sshd_config. An install with no ssh server means nobody can sign in
+           to an SD account, including at this keyboard - accounts reach SD by
+           "ssh localhost" - so you use SD yourself, as an administrator, by
+           typing "sd".
+
+           THE STAND-ALONE INSTALLATION HAS BEEN REMOVED. It offered no ssh,
+           no API and a quick install, and it is now what you get by leaving
+           both boxes unticked - the same result without a separate choice, and
+           without the one decision this installer made that could not be
+           undone afterwards. To add ssh or the API later, run the installer
+           again and tick the boxes.
+
+           "create.account user" is no longer refused outright on a system with
+           no ssh server. It used to be, because such an account could sign in
+           nowhere. You already have to say how each account is reached - SSH,
+           API, BOTH or NONE - so that is now decided per account, where it is
+           actually known, instead of for the whole installation.
+
+           THE API BOX MEANS SOMETHING DIFFERENT. It used to decide who could
+           reach a listener that was always started. It now decides whether SD
+           opens one at all: unticked, SD installs a configuration with no
+           APIPORT and listens on nothing. Note that there is no longer a
+           "listening, but only to this machine" setting - if a program on THIS
+           computer talks to SD over the API, tick the box.
+
+           If you had a stand-alone installation, it keeps working. The
+           $standalone file in SDSYS is now ignored rather than deleted; its
+           own text explains what it used to do.
+
 30 Aug 26  SETTING A PASSWORD WORKS FROM SDSYS WHICHEVER WAY YOU REACHED IT.
 
            There are two ways into SDSYS: start SD from an elevated session, or

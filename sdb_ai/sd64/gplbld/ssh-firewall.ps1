@@ -50,7 +50,23 @@ param(
     [switch]$Installed,
     [switch]$Restrict,
     [switch]$Open,
-    [switch]$Show
+    [switch]$Show,
+
+    # 30 Aug 26 - PRE_RELEASE_FIXES 76.  Write "open" or "restricted" to this
+    # path and exit, changing nothing.  The installer needs the CURRENT scope
+    # before it draws the wizard, because it is the default state of the "allow
+    # remote access" checkbox on a machine that already has an ssh server: the
+    # owner's ruling is that the box shows the truth, so that leaving it alone
+    # changes nothing in either direction.
+    #
+    # A FILE RATHER THAN stdout, because Inno's Exec cannot capture stdout and
+    # this file's own record warns off the alternative: sd.iss:712 documents an
+    # inline -Command that "carried a brace bug for its entire life".
+    # ssh-preflight.ps1 -ReasonFile is the precedent being copied.
+    #
+    # IT IS READ-ONLY AND SO IT DOES NOT TAKE THE -Installed GATE.  Reading the
+    # scope of a server SD did not install is not reconfiguring it (5.9).
+    [string]$ScopeFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +92,28 @@ function Write-State($rule) {
 
 try {
     $rule = Get-SshRule
+
+    # -ScopeFile IS ANSWERED FIRST, BEFORE THE "no rule" EXIT BELOW, because it
+    # has to answer even when there is no rule.  A missing rule is not an error
+    # for this question: it means nothing is open, which is exactly what the
+    # caller needs to know, and exiting 2 here would leave the installer with no
+    # answer at all for a case that has a perfectly good one.
+    if ($ScopeFile -ne '') {
+        if ($null -eq $rule) {
+            $verdict = 'restricted'
+        } else {
+            # A LIST, NOT A SCALAR.  RemoteAddress can hold several entries, so
+            # this asks whether ANY of them is the unrestricted one rather than
+            # comparing the joined string.  Case-insensitive on purpose here:
+            # Windows' own spelling is "Any" and this is a keyword, not data.
+            $addrs = ($rule | Get-NetFirewallAddressFilter).RemoteAddress
+            if ($addrs -contains 'Any') { $verdict = 'open' } else { $verdict = 'restricted' }
+        }
+        [System.IO.File]::WriteAllText($ScopeFile, $verdict, [System.Text.Encoding]::ASCII)
+        Write-Output ("ssh-firewall: current scope is " + $verdict)
+        exit 0
+    }
+
     if ($null -eq $rule) {
         Write-Output "ssh-firewall: no inbound OpenSSH rule found - the capability has probably not finished registering it, which a restart completes"
         exit 2
@@ -86,8 +124,21 @@ try {
         exit 0
     }
 
+    # 30 Aug 26 - THE GATE STAYS, ITS REASON IS NARROWED.  PRE_RELEASE_FIXES 76.
+    # It used to mean "SD installed this server, so SD may reconfigure it" (5.9).
+    # The owner's ruling of 30 Aug 2026 is that the installer must also offer the
+    # scope choice on a server SD did NOT install, so the flag now means the
+    # weaker and more accurate thing: THE CALLER HAS ESTABLISHED THAT IT MAY
+    # CHANGE THIS RULE.  For the installer that means the reader was shown a
+    # checkbox pre-set to the rule's current scope, so an untouched box changes
+    # nothing; for a person at a prompt it means they typed it deliberately.
+    #
+    # THE NAME IS KEPT ON PURPOSE.  It appears in the installer's own closing
+    # text and in the documentation as the command to re-run by hand, so
+    # renaming it would silently invalidate instructions already given to users.
+    # What 5.9 still forbids is untouched: nothing here edits sshd_config.
     if (-not $Installed) {
-        Write-Output "ssh-firewall: -Installed not given - SD only changes the firewall rule of an ssh server it installed itself (5.9)"
+        Write-Output "ssh-firewall: -Installed not given - it is the deliberate-action gate, and this script will not change a firewall rule without it"
         exit 2
     }
 

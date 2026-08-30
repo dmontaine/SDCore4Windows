@@ -111,55 +111,72 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from any directory"; \
     GroupDescription: "System integration:"
 
-; THE ssh SERVER IS NO LONGER A TASK.  Owner's decision, 16 Aug 2026, reversing
-; the opt-in of 14 Aug 2026.
+; ===========================================================================
+; ssh IS TWO SEPARATE CHOICES AGAIN, AND THE SECOND DEPENDS ON THE FIRST.
+; Owner's ruling, 30 Aug 2026, superseding the 16 Aug 2026 decision that made
+; the server unconditional:
 ;
-; WHY IT REVERSED.  SD accounts sign in over ssh and nothing else (5.6.2) and
-; the API is carried over ssh as well (8, posture B, which already said in as
-; many words that this makes the ssh install path load-bearing).  So an install
-; without an ssh server is one that nobody but the installing user can use: every
-; account CREATE.ACCOUNT makes is denied the console and Remote Desktop, and
-; without ssh it has no way in at all.  That is true even with no network -
-; a local user reaches SD by ssh'ing to localhost, which is the case that
-; decided it.
+;   "if an ssh server is installed, the user should have a separate choice to
+;    allow remote access.  If a server is not installed the user should have
+;    two choices, install the server, and allow remote access.  Allowing remote
+;    access should not be an option if they choose not to install the ssh
+;    server."
 ;
-; It is installed whenever this machine does not already have one.  If it does,
-; SD leaves it completely alone: "we never reconfigure or restart an ssh server
-; we did not install" (5.9) is a SEPARATE rule from whether ours is optional,
-; and it survives this change untouched.  SshServerAbsent is what enforces it.
+; THAT IS THREE REQUIREMENTS AND THEY DO NOT FIT ONE [Tasks] ENTRY, which is
+; why there are four below for what a reader sees as at most two boxes.
 ;
-; WHAT IS OPTIONAL NOW IS THE EXPOSURE, WHICH IS WHERE THE RISK ACTUALLY WAS.
-; Installing the capability creates OpenSSH-Server-In-TCP and enables it for any
-; remote address - measured on this machine, 16 Aug 2026 - so an unconditional
-; install would open port 22 to the whole local network EVERY time, including
-; for the local-only user whose case made ssh mandatory in the first place.
-; ssh-firewall.ps1 scopes the rule to loopback unless this is ticked, which
-; leaves the risk attached to the decision that carries it.
-; 25 Aug 26 - AND NOT ON A STAND-ALONE INSTALL, WHICH INSTALLS NO ssh SERVER
-; FOR THIS TO EXPOSE.
+;   server ABSENT   -> "sshserver" (install it) and, INDENTED UNDER IT,
+;                      "sshserver\sshremote" (allow remote access).
+;   server PRESENT  -> the remote box alone, because there is nothing to
+;                      install; this is PRE_RELEASE 76, where the installer
+;                      previously asked nothing at all and set no firewall.
 ;
-; ***THE Check: IS BELT, NOT BRACES, AND THE BRACES ARE ApplySshFirewall.***
-; Inno's documentation says only that "Setup MIGHT call each check function
-; several times" and says nothing about re-evaluating a [Tasks] check when the
-; Select Tasks page is shown.  Measured 25 Aug 2026 with probe-taskcheck.iss:
-; InitializeWizard runs first, so StandaloneChosen is never nil here - but the
-; check fired ONCE, straight after the wizard was built, which in an interactive
-; run is BEFORE the reader has touched the mode page.  If that single call is
-; all there is, this reads the DEFAULT (full install) and the box stays visible.
+; ***THE DEPENDENCY IS INNO'S, NOT OURS, AND THAT IS THE POINT.***  A child
+; task written "parent\child" is greyed AND unchecked by Inno whenever the
+; parent is unchecked.  So "allowing remote access should not be an option if
+; they choose not to install the ssh server" is enforced as a UI STATE the
+; reader can see, not as an error message after the fact.  Do not replace this
+; with a validation check in NextButtonClick: that would let the box be ticked
+; and then complain, which is the thing the owner asked against.
 ;
-; SO THE SAFETY DOES NOT LIVE HERE.  ApplySshFirewall exits on StandaloneChosen,
-; at install time, where the answer is certainly right.  The worst this line can
-; do is fail to hide a checkbox; it cannot cause a firewall rule to be written.
+; WHY A CHILD CANNOT SERVE BOTH CASES.  Inno does not create a child whose
+; parent's Check is False, so the "server present" case cannot reuse
+; sshserver\sshremote - the parent is not there to hang it on.  Hence the two
+; flat entries below it, whose Checks are mutually exclusive with the child's.
 ;
-; LOOK AT THE TASKS PAGE ON A STAND-ALONE RUN OF THE NEXT CYCLE.  If the box is
-; still there, the single-call reading is correct and the fix is to move this
-; choice onto the mode page as a sub-option of the full install - which is
-; arguably where it belonged anyway, since this file's own InitializeWizard
-; comment complains that the ssh exposure checkbox is "a decision they were
-; being asked to take with no context at all".
-Name: "sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    GroupDescription: "Remote access:"; Flags: unchecked; \
-    Check: SshServerAbsent and not StandaloneChosen
+; ***AND THE TWO FLAT ONES DIFFER ONLY IN THEIR DEFAULT, WHICH IS READ FROM THE
+; MACHINE.***  Owner's ruling, 30 Aug 2026, on what an unticked box should do to
+; an ssh server SD did not install: the box shows the CURRENT firewall scope, so
+; leaving it alone changes nothing in either direction.  Ticking an unticked box
+; opens; unticking a ticked box restricts.  The alternative - always defaulting
+; unchecked and restricting on apply - would silently loopback-lock the ssh a
+; site already uses for its own administration, because OpenSSH-Server-In-TCP is
+; Windows' shared rule and not one of ours.  SshCurrentlyOpen reads it.
+;
+; THE GROUP IS "ssh:" RATHER THAN "Remote access:" because the first box is not
+; about remote access at all - it is about whether the service exists.
+Name: "sshserver"; Description: "Install the OpenSSH server (SD accounts sign in over ssh and nothing else)"; \
+    GroupDescription: "ssh:"; \
+    Check: SshServerAbsent
+
+Name: "sshserver\sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
+    Flags: unchecked; \
+    Check: SshServerAbsent
+
+; PRESENT AND CURRENTLY LOOPBACK-ONLY - default unticked, so doing nothing keeps
+; it loopback-only.
+Name: "sshremoteshut"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
+    GroupDescription: "ssh:"; Flags: unchecked; \
+    Check: (not SshServerAbsent) and (not SshCurrentlyOpen)
+
+; PRESENT AND CURRENTLY OPEN - default TICKED, so doing nothing leaves the
+; site's existing exposure exactly as it was.  Unticking it is then a deliberate
+; act, and it is the one PRE_RELEASE 76 asked for: "the ssh server is installed
+; but the user might want it limited to loopback so still want to deny remote
+; access."
+Name: "sshremoteopen"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
+    GroupDescription: "ssh:"; \
+    Check: (not SshServerAbsent) and SshCurrentlyOpen
 
 ; ===========================================================================
 ; 25 Aug 26 - THIS IS NO LONGER A TASK.  THERE IS NO CHECKBOX.  The work still
@@ -320,9 +337,18 @@ Name: "sshremote"; Description: "Let other computers on your network connect to 
 ; screens after the mode page promised no port was opened is the fault, not
 ; the firewall rule.  sshremote's Check also carries SshServerAbsent; there is
 ; no equivalent condition here, so this one is the mode alone.
-Name: "apiremote"; Description: "Let other computers on your network connect to the SD API (port 4243)"; \
-    GroupDescription: "Remote access:"; Flags: unchecked; \
-    Check: not StandaloneChosen
+; 30 Aug 26 - THIS IS A SERVICE SWITCH NOW, NOT A FIREWALL SWITCH.
+; PRE_RELEASE_FIXES 75, the owner's ruling of 30 Aug 2026: "the api box
+; unchecked should mean not provide the service at all - the port should not be
+; left open."  So it no longer decides who may reach a listener that exists
+; regardless; it decides whether SD opens one at all, by choosing which sd.conf
+; is installed ([Files]).  The firewall then FOLLOWS the service rather than
+; gating it.
+;
+; NO Check: AT ALL ANY MORE.  It used to carry "not StandaloneChosen"; the mode
+; that condition referred to is gone, and this box is what replaced it.
+Name: "apiremote"; Description: "Provide the SD API (port 4243) and let other computers on your network reach it"; \
+    GroupDescription: "SD API:"; Flags: unchecked
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -356,6 +382,14 @@ Source: "{#Stage}\ProgramFiles\*"; DestDir: "{app}"; \
 ; would silently embed every script in the staged tree in the installer twice
 ; and nobody would notice the size.
 Source: "{#Stage}\ProgramFiles\ssh-preflight.ps1"; Flags: dontcopy
+
+; 30 Aug 26 - AND ssh-firewall.ps1 FOR THE SAME REASON, PRE_RELEASE_FIXES 76.
+; InitializeSetup asks it -ScopeFile for the CURRENT firewall scope, because
+; that is the default state of the "allow remote access" checkbox and a [Tasks]
+; Check is evaluated while the wizard is being built.  Same shape as the line
+; above: a second embedded copy for ExtractTemporaryFile, with the {app} copy
+; further up still the one an administrator re-runs by hand.
+Source: "{#Stage}\ProgramFiles\ssh-firewall.ps1"; Flags: dontcopy
 
 ; --- C:\ProgramData\SD\ ----------------------------------------------------
 ; THE DATA TREE IS INSTALLED ONCE AND NEVER TOUCHED AGAIN.
@@ -400,15 +434,30 @@ Source: "{#Stage}\ProgramData\sdsys\*"; DestDir: "{#DataDir}\sdsys"; \
 ; checks are evaluated during the install step, long after the wizard - the same
 ; timing DataTreeAbsent above has always relied on.
 ;
-; ONE OF THE TWO ALWAYS FIRES AND NEVER BOTH: StandaloneChosen is a single
-; Boolean and these are its two branches.  onlyifdoesntexist still applies to
-; each, so neither overwrites a configuration the user has edited, and an
-; upgrade rewrites nothing either way.
+; ONE OF THE TWO ALWAYS FIRES AND NEVER BOTH: ApiWanted is a single Boolean and
+; these are its two branches.  onlyifdoesntexist still applies to each, so
+; neither overwrites a configuration the user has edited, and an upgrade
+; rewrites nothing either way.
+;
+; 30 Aug 26 - RE-KEYED FROM StandaloneChosen TO THE API BOX.  PRE_RELEASE_FIXES
+; 75.  The two files are unchanged and so is the mechanism; what changed is the
+; question that picks between them.  sd-standalone.conf is SD_CONF with APIPORT
+; commented out, and stage.py:499 records why that is the real switch rather
+; than a firewall rule: "open_api_listener() returns -1 for 'no listener' when
+; the port is <= 0".  So an unticked API box now means NO LISTENER, which is
+; what the owner asked for - "the port should not be left open" - rather than a
+; listener with a closed port in front of it.
+;
+; ***THE FILE NAME IS NOW WRONG AND IS DELIBERATELY NOT RENAMED.***  There is no
+; stand-alone mode any more, but sd-standalone.conf is generated by stage.py and
+; renaming it would touch the staging script, the upgrade branch and this entry
+; for no behavioural gain, in the same change that already moves the meaning.
+; stage.py's own comment now says what it is: the no-listener configuration.
 Source: "{#Stage}\ProgramData\sd.conf"; DestDir: "{#DataDir}"; \
-    Flags: onlyifdoesntexist uninsneveruninstall; Check: not StandaloneChosen
+    Flags: onlyifdoesntexist uninsneveruninstall; Check: ApiWanted
 Source: "{#Stage}\ProgramData\sd-standalone.conf"; DestDir: "{#DataDir}"; \
     DestName: "sd.conf"; \
-    Flags: onlyifdoesntexist uninsneveruninstall; Check: StandaloneChosen
+    Flags: onlyifdoesntexist uninsneveruninstall; Check: not ApiWanted
 
 ; --- THE UPGRADE BRANCH, GENERATED --------------------------------------------
 ; 25 Aug 26.  gplbld/stage.py writes <stage>\upgrade.iss from SDSYS_SHIP +
@@ -716,8 +765,14 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; also answers correctly when the capability was already installed.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1"""; \
-    Flags: runhidden skipifdoesntexist; Check: SshServerAbsent and not StandaloneChosen; \
+    Flags: runhidden skipifdoesntexist; Check: SshServerWanted; \
     StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
+; 30 Aug 26 - THE GATE IS THE BOX NOW, NOT THE MACHINE.  PRE_RELEASE_FIXES 67.
+; It used to read "SshServerAbsent and not StandaloneChosen", which is the whole
+; of the defect that entry recorded: the reader could leave every ssh box blank
+; and still get the capability installed, sshd started and sshd_config rewritten,
+; because this line never tested a box at all.  SshServerWanted IS the box, and
+; it can only be true when the server was absent - that is its own Check.
 
 ; THE FULL-SCREEN EDITORS, 26 Aug 2026, and this is not a task either.  There
 ; are two verbs and two editors: EDIT runs Microsoft Edit, which ships IN
@@ -827,6 +882,19 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 30 Aug 26 - PRE_RELEASE_FIXES 76.  Was the EXISTING ssh server's firewall
+    rule already open to the network when we arrived?  Sampled once in
+    InitializeSetup, for the same reason as the two above and for one more of
+    its own: it is the DEFAULT STATE of a checkbox, and a [Tasks] Check is
+    evaluated while the wizard is being built, so it has to be a plain Boolean
+    by then and not a shell-out.
+
+    ONLY MEANINGFUL WHEN SshWasAbsent IS FALSE.  When SD installs the server
+    itself the rule does not exist yet, and install-ssh.ps1 creates it open -
+    which is why the absent case defaults its box UNCHECKED and this one does
+    not.  Left False in that case and never read; the [Tasks] Checks that use
+    it all carry "not SshServerAbsent" first. }
+  SshRuleWasOpen: Boolean;
   { 29 Aug 26 - PRE_RELEASE_FIXES 39.  Where the account sweep was stashed at
     usUninstall, or empty if it could not be.  It has to be COPIED out of the
     application directory before that directory is deleted: the sweep is
@@ -836,14 +904,8 @@ var
     instead.  Empty means "do not offer it", so a failed copy costs the prompt
     rather than producing one whose Yes cannot do anything. }
   SdAccountsScript: String;
-  { 25 Aug 26 - WAS THIS ALREADY A STAND-ALONE SYSTEM?  Sampled once in
-    InitializeSetup for exactly the reason the two above are, and the reason is
-    sharper here: THIS INSTALLER CREATES THE MARKER ITSELF, at ssPostInstall.  A
-    live FileExists would therefore answer False for the whole wizard and True
-    for everything after the marker is written - a Check that changes its mind
-    part way through the install, which is the shape of the bug that silently
-    skipped ~3,260 files and still exited 0. }
-  StandaloneWasMarked: Boolean;
+  { 30 Aug 26 - StandaloneWasMarked IS GONE WITH THE MODE IT RECORDED.
+    PRE_RELEASE_FIXES 75.  Nothing reads the '$standalone' marker any more. }
   { 22 Aug 26 - THE FINISHING STEP RUNS AFTER THE WIZARD HAS GONE, so what it
     needs to know has to outlive the procedure that learns it.  Both are set at
     ssPostInstall and read in DeinitializeSetup.
@@ -859,6 +921,73 @@ var
     reader wondering what became of the step it promised them. }
   InstallReachedPostInstall: Boolean;
   PasswordStepWanted: Boolean;
+
+{ 30 Aug 26 - IS THE EXISTING ssh SERVER'S FIREWALL RULE ALREADY OPEN TO THE
+  NETWORK?  PRE_RELEASE_FIXES 76.  Called once from InitializeSetup, and only
+  when a server was already here; the answer becomes the default state of the
+  "allow remote access" checkbox, so that leaving the box alone changes nothing.
+
+  ***EVERY FAILURE PATH ANSWERS False, AND THAT IS THE SAFE DIRECTION.***  The
+  box this feeds OPENS a port when ticked, so "we could not find out" must not
+  pre-tick it.  There are four ways to get nothing - the extract fails, the
+  script will not start, it exits non-zero, or the file it should have written
+  is missing or says something else - and all four land on False.
+
+  IT IS READ-ONLY.  -ScopeFile carries no -Installed gate because reading the
+  scope of a server SD did not install is not reconfiguring it (5.9). }
+function GetSshRuleIsOpen: Boolean;
+var
+  Ps, ScriptPath, ScopePath: String;
+  Scope: AnsiString;
+  Code: Integer;
+begin
+  Result := False;
+
+  ExtractTemporaryFile('ssh-firewall.ps1');
+  Ps         := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  ScriptPath := ExpandConstant('{tmp}\ssh-firewall.ps1');
+  ScopePath  := ExpandConstant('{tmp}\ssh-firewall-scope.txt');
+
+  if not Exec(Ps,
+              '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+              ScriptPath + '" -ScopeFile "' + ScopePath + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Log('SD: ssh-firewall.ps1 -ScopeFile could not be started; ' +
+        'the remote-ssh box defaults to unticked.');
+    Exit;
+  end;
+
+  if Code <> 0 then
+  begin
+    Log('SD: ssh-firewall.ps1 -ScopeFile exited ' + IntToStr(Code) +
+        '; the remote-ssh box defaults to unticked.');
+    Exit;
+  end;
+
+  if not FileExists(ScopePath) then
+  begin
+    Log('SD: ssh-firewall.ps1 -ScopeFile wrote no file; ' +
+        'the remote-ssh box defaults to unticked.');
+    Exit;
+  end;
+
+  Scope := '';
+  LoadStringFromFile(ScopePath, Scope);
+
+  { MATCHED ON THE POSITIVE WORD ONLY.  "restricted" CONTAINS neither "open"
+    nor anything else this tests, so there is no wording shared by the two
+    answers - the trap CLAUDE.md's "anchor on the SUCCESS wording" section is
+    about.  Anything unrecognised is False. }
+  Result := (Trim(String(Scope)) = 'open');
+  if Result then
+    Log('SD: existing ssh firewall scope read as "' + Trim(String(Scope)) +
+        '"; the remote-ssh box starts TICKED, so leaving it alone keeps the ' +
+        'exposure this machine already had.')
+  else
+    Log('SD: existing ssh firewall scope read as "' + Trim(String(Scope)) +
+        '"; the remote-ssh box starts unticked.');
+end;
 
 function InitializeSetup: Boolean;
 var
@@ -898,17 +1027,33 @@ begin
      here, exactly as the data tree above is. *)
   SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
 
-  (* 25 Aug 26 - AND WHETHER THIS MACHINE IS ALREADY A STAND-ALONE SYSTEM.
-     Asked here, before the marker this installer may write exists, for the
-     reason recorded where the variable is declared.
+  (* 30 Aug 26 - AND, IF ONE IS ALREADY HERE, HOW EXPOSED IT ALREADY IS.
+     PRE_RELEASE_FIXES 76.  This is the default state of the "allow remote
+     access" box on a machine SD is not installing ssh onto, and the owner's
+     ruling is that the box shows the truth so that leaving it alone changes
+     nothing: "default the box to the current scope".
 
-     THE MARKER IS NOT IN ANY SHIP LIST, WHICH IS WHY AN UPGRADE PRESERVES IT.
-     stage.py's generated upgrade.iss can only delete names stage.py itself put
-     in the tree, so '$standalone' - written by the installer at ssPostInstall
-     and by nothing else - is out of its reach by construction.  That is the
-     same default that protects voc, $map and errlog, and it is what makes a
-     stand-alone system STAY stand-alone across an upgrade. *)
-  StandaloneWasMarked := FileExists(ExpandConstant('{#DataDir}\sdsys\$standalone'));
+     ONLY ASKED WHEN THERE IS SOMETHING TO ASK ABOUT.  On a machine with no ssh
+     server there is no rule to read, netsh would answer nothing useful, and the
+     cost would be paid on every install for an answer nobody reads.
+
+     ssh-firewall.ps1 -Show IS READ-ONLY AND NEEDS NO ELEVATION - it is the one
+     mode of that script that does not carry the -Installed gate, precisely
+     because it changes nothing.  Its line is
+       ssh-firewall: OpenSSH-Server-In-TCP  Enabled=True  Profile=Private  RemoteAddress=Any
+     and "RemoteAddress=Any" is the whole of what is being asked.  Anything else
+     - a loopback literal, a subnet, a list - is not "open to the network", so
+     the test is for Any and everything else counts as restricted.
+
+     A FAILURE TO READ IT MUST DEFAULT TO RESTRICTED, NOT OPEN.  If the query
+     does not run, or the rule is missing because the capability has not
+     finished registering it, the safe default for a checkbox that OPENS a port
+     is unticked.  GetSshRuleIsOpen returns False on every error path and says
+     so in its own comment. *)
+  if not SshWasAbsent then
+    SshRuleWasOpen := GetSshRuleIsOpen
+  else
+    SshRuleWasOpen := False;
 
   (* SD DOES NOT SUPPORT UNATTENDED INSTALLATION.  Owner's ruling, 23 Aug 2026,
      in his own words: "unattended deployment is not supported in sd - install
@@ -1062,6 +1207,63 @@ begin
   Result := SshWasAbsent;
 end;
 
+{ 30 Aug 26 - THE THREE ANSWERS THE ssh BOXES PRODUCE.  PRE_RELEASE_FIXES 67
+  and 76.  They exist so that no other part of this file has to know that one
+  reader-facing question is spelled with four [Tasks] entries. }
+
+{ 30 Aug 26 - DOES THIS INSTALL PROVIDE THE API AT ALL?  PRE_RELEASE_FIXES 75.
+  One box, two consequences, and they must not drift apart: it picks which
+  sd.conf is installed ([Files]) and therefore whether SD opens a listener, and
+  it is what ApplyApiFirewall then follows.  A single function so that both read
+  the same answer. }
+function ApiWanted: Boolean;
+begin
+  Result := WizardIsTaskSelected('apiremote');
+end;
+
+{ Was the rule already open when we arrived?  Only meaningful when a server was
+  already here - see the variable's own comment. }
+function SshCurrentlyOpen: Boolean;
+begin
+  Result := SshRuleWasOpen;
+end;
+
+{ ***DOES THIS MACHINE END THE INSTALL WITH AN ssh SERVER?***  Either it already
+  had one, or the reader ticked the box to install one.  This is what the
+  capability install is gated on now, and it is the owner's ruling of 30 Aug
+  2026 replacing "install it whenever it is absent": PRE_RELEASE 67's complaint
+  was that declining ssh still installed the server, because the install step
+  tested SshServerAbsent and never tested the box at all. }
+function SshServerWanted: Boolean;
+begin
+  Result := WizardIsTaskSelected('sshserver');
+end;
+
+function SshServerPresentAfterwards: Boolean;
+begin
+  Result := (not SshWasAbsent) or SshServerWanted;
+end;
+
+{ ***MAY OTHER COMPUTERS REACH IT?***  Three entries can carry this answer and
+  exactly one of them can be visible on any given run, because their Checks
+  partition on SshServerAbsent and then on SshCurrentlyOpen.  ORed rather than
+  chosen by re-testing those conditions here: re-deriving which box SHOULD have
+  been shown would be a second copy of the partition, and the two copies would
+  drift.  Asking all three asks the wizard what it actually displayed.
+
+  AND IT CANNOT BE TRUE WITHOUT A SERVER.  sshserver\sshremote is a child task,
+  so Inno unchecks it whenever its parent is unchecked - which is the whole of
+  "allowing remote access should not be an option if they choose not to install
+  the ssh server".  The AND below is belt to that brace, and it is cheap: it
+  makes the property hold even if somebody later flattens the child. }
+function SshRemoteWanted: Boolean;
+begin
+  Result := (WizardIsTaskSelected('sshserver\sshremote') or
+             WizardIsTaskSelected('sshremoteshut') or
+             WizardIsTaskSelected('sshremoteopen'))
+            and SshServerPresentAfterwards;
+end;
+
 { Registered by the OpenSSH capability, not by us.  Its absence just after an
   install is what "a restart is outstanding" looks like from here - measured
   14 Aug 2026, when Add-WindowsCapability completed and the service did not
@@ -1077,75 +1279,45 @@ end;
   --------------------------------------------------------------------------- }
 
 var
-  ModePage: TWizardPage;
-  FullRadio: TNewRadioButton;
-  StandaloneRadio: TNewRadioButton;
-  ModeMemo: TNewMemo;
   SummaryPage: TOutputMsgMemoWizardPage;
 
-(* 25 Aug 26 - THE STAND-ALONE OPTION, AND WHY IT IS A PAGE OF ITS OWN RATHER
-   THAN A BOX ON THE TASKS PAGE.  Owner's request, in his words: "another option
-   for users, a stand-alone system option.  No ssh, no api, just the ability to
-   quickly install", for "education, hobby use where the intent is to learn the
-   language or test some code, not have a production system".
+(* 30 Aug 26 - THE MODE PAGE IS GONE, AND WITH IT ModePage, FullRadio,
+   StandaloneRadio, ModeMemo, StandaloneChosen, StandaloneWasMarked,
+   WriteStandaloneMarker and the '$standalone' marker.  PRE_RELEASE_FIXES 75,
+   the owner's ruling of 30 Aug 2026:
 
-   ITS POSITION IS DECIDED BY THE DISCLOSURE PAGE, NOT BY TASTE.  "Before you
-   install" describes the OpenSSH install, the forced ssh command and the cost
-   to scp and sftp - none of which a stand-alone install does.  wpSelectTasks
-   comes AFTER that page, so a checkbox there would have let the reader agree to
-   a page describing an install they were about to decline.  SummaryPage is
-   re-anchored on ModePage.ID below for the same reason, and DisclosureText
-   takes the mode as an argument so the page cannot describe the other one.
+     "we should remove the standalone option - if the user does a full install
+      and leaves both ssh and api unchecked, there will be no ssh server install
+      and is basically the same as a standalone install"
 
-   BOTH DESCRIPTIONS ARE ON SCREEN AT ONCE, IN ONE MEMO, and neither is revealed
-   by clicking.  A reader who never clicks the second radio button would
-   otherwise never read what they were turning down - and this choice cannot be
-   changed from inside SD afterwards, so it is not one to discover later.
+   THE THREE DIFFERENCES IT USED TO CARRY ARE ALL ANSWERED ELSEWHERE NOW.
+   (1) The ssh server: PRE_RELEASE 67, the sshserver box gates the capability
+       install, so leaving it blank installs none.
+   (2) CREATE.ACCOUNT's blanket refusal with message 10100: removed from
+       CREATEA, which is what read the marker.
+   (3) APIPORT: the apiremote box now picks between the two sd.conf variants,
+       so an unticked box means no listener at all - "the api box unchecked
+       should mean not provide the service at all - the port should not be left
+       open."
 
-   A MEMO RATHER THAN A LABEL UNDER EACH OPTION, and the reason is measured
-   elsewhere in this file rather than assumed: FinishedLabel was given more text
-   than it had been sized for and Windows drew none of the overflow - "the
-   Caption assignment succeeds and the words are just not drawn", at
-   CurPageChanged.  A memo with a scrollbar cannot clip, at any DPI, font size
-   or wizard style.  It is the same property the disclosure memo is built on. *)
-(* THE ONE PLACE THAT ANSWERS "IS THIS A STAND-ALONE INSTALL?", and it has three
-   sources in a deliberate order.
+   ***AND WITH THE PAGE GOES THE ONLY IRREVERSIBLE DECISION THE INSTALLER ASKED
+   ANYONE TO MAKE***, the one its own memo had to warn "cannot be changed from
+   inside SD afterwards".  The replacement path is the owner's: "redoing the
+   install to allow ssh or api - better path than the existing standalone to
+   full."
 
-   1. AN EXISTING MARKER WINS OVER ANYTHING THE WIZARD SAYS.  A machine that was
-      installed stand-alone stays stand-alone: sd.conf is onlyifdoesntexist and
-      would keep its unset APIPORT whatever this returned, so a "full" upgrade
-      of a stand-alone box would install an ssh server and force its command for
-      an API that is still switched off.  Half-converted is worse than either.
-   2. ON ANY OTHER UPGRADE, FULL - the shape every install before today had.
-   3. ON A FIRST INSTALL, WHAT THE READER CHOSE.
+   ONE WRINKLE THAT PATH HITS, AND IT IS THE API HALF ONLY.  sd.conf is
+   onlyifdoesntexist, precisely so a reinstall never discards a configuration
+   the user edited - so a reinstall does NOT turn APIPORT back on by itself.
+   The ssh half needs nothing, because the ssh boxes read machine state.  Left
+   as documentation rather than code: the installer does not edit a config file
+   the administrator owns, and uncommenting one APIPORT line is a smaller and
+   more visible act than a silent rewrite.  Recorded in PRE_RELEASE 75. *)
 
-   NIL-SAFE BECAUSE IT IS READ FROM Check: PARAMETERS.  InitializeWizard always
-   runs first (measured 25 Aug 2026 with probe-taskcheck.iss) and a silent
-   install is refused in InitializeSetup, so nil is unreachable today; it
-   answers "full" if it is ever reached, which is the safe direction - it can
-   only ever install MORE than was asked for, never promise more than it
-   installed. *)
-function StandaloneChosen: Boolean;
-begin
-  if StandaloneWasMarked then
-    Result := True
-  else if not DataTreeWasAbsent then
-    Result := False
-  else if StandaloneRadio = nil then
-    Result := False
-  else
-    Result := StandaloneRadio.Checked;
-end;
-
-(* THE MODE PAGE IS A FIRST-INSTALL QUESTION AND IS NOT ASKED TWICE.  On an
-   upgrade the existing tree already carries the answer - the marker, and an
-   sd.conf that onlyifdoesntexist will not rewrite - so showing the page would
-   offer a choice that changes nothing, which is the same false promise a
-   checkbox that cannot be unticked was removed for on 25 Aug 2026. *)
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := (PageID = ModePage.ID) and (not DataTreeWasAbsent);
-end;
+(* 30 Aug 26 - ShouldSkipPage IS GONE TOO, AND ITS ABSENCE IS THE WHOLE OF IT.
+   It existed only to hide the mode page on an upgrade; with no mode page there
+   is nothing it could skip, and an event function that always answers False is
+   the same as not defining one.  PRE_RELEASE_FIXES 75. *)
 
 (* AFTER THE MODE PAGE AND BEFORE THE TASKS PAGE, AND THAT ORDER IS THE POINT.
 
@@ -1191,7 +1363,11 @@ end;
    that genuinely differ.  Two whole copies of this page was the alternative,
    and keeping two copies of a text with this history in step is not a thing to
    take on. *)
-function DisclosureText(Standalone: Boolean): String;
+{ 30 Aug 26 - THE Standalone PARAMETER IS GONE.  PRE_RELEASE_FIXES 75.  It took
+  the mode as an argument "so the page cannot describe the other one"; with one
+  mode there is no other one, and the three branches it fed have collapsed to
+  their surviving arm. }
+function DisclosureText: String;
 var
   M: String;
 begin
@@ -1249,10 +1425,7 @@ begin
     stays empty for the life of the install.  "Accounts SD creates go in it",
     on a system that creates none, would have been the fifth false statement
     this page has carried. }
-  if Standalone then
-    M := M + 'Creates the group "sdsshonly" and puts nothing in it. On a stand-alone system nothing is ever added to it, because SD does not create Windows accounts here. It exists because one installer serves both kinds of system. Your own account is not in it.' + #13#10#13#10
-  else
-    M := M + 'Creates the group "sdsshonly" and denies its members the right to sign in at the console or over Remote Desktop. Accounts SD creates go in it. Your own account does not.' + #13#10#13#10;
+  M := M + 'Creates the group "sdsshonly" and denies its members the right to sign in at the console or over Remote Desktop. Accounts SD creates go in it. Your own account does not.' + #13#10#13#10;
 
   M := M +
        'PERMISSIONS ON THE DATABASE' + #13#10#13#10 +
@@ -1271,31 +1444,28 @@ begin
      THE FULL BRANCH IS THE EXISTING TEXT, WORD FOR WORD.  The owner has read it
      on screen and it has been reworded four times to catch up with behaviour;
      it is not re-drafted here to make the two branches look alike. *)
-  if Standalone then
+  { 30 Aug 26 - ONE ARM NOW, AND ITS ssh SECTION IS REWRITTEN RATHER THAN
+    TRIMMED.  PRE_RELEASE_FIXES 67, 75 and 76.  The stand-alone arm went with
+    the mode; what was left said "INSTALLED, NOT OPTIONAL" and "that option is
+    not offered", and both of those became false on the same day.  A page whose
+    whole purpose is to be believed cannot carry either. }
     M := M +
-       'NO SSH SERVER, NO NETWORK PORT, ONE ACCOUNT' + #13#10#13#10 +
-       'SD installs no ssh server and changes no ssh configuration. If this computer already has one, SD leaves it exactly as it is. scp and sftp go on working - on a full installation they stop working for everyone, and that is the single biggest difference between the two.' + #13#10#13#10 +
-       'SD OPENS NO NETWORK PORT AT ALL. The SD API is not available, so no program and no other computer can connect to SD here. This is not a firewall rule somebody can open later: SD is not listening on anything.' + #13#10#13#10 +
-       'THERE IS ONE SD ACCOUNT AND IT IS YOURS. You use SD at this computer, as yourself, by typing "sd". Nobody signs in from anywhere else, because there is nowhere to sign in from.' + #13#10#13#10 +
-       'MAKING SD ACCOUNTS FOR OTHER PEOPLE IS REFUSED, and SD says why when you try it. "create.account user" makes a Windows account that is denied the console and Remote Desktop, on the assumption it will sign in over ssh; with no ssh server it could sign in nowhere at all. Rather than make an account nobody can ever use, SD declines.' + #13#10#13#10 +
-       'YOU CAN STILL KEEP SEPARATE WORK SEPARATE, which is what an account is for in a system like this. "create.account group myproject" makes one, and "logto myproject" moves into it from an SD session run as administrator. No Windows account and no sign-in is involved in either.' + #13#10#13#10 +
-       'THIS CHOICE IS MADE NOW, AND NOT FROM INSIDE SD AFTERWARDS. Nothing in SD turns a stand-alone system into a full one later. If anyone else will ever use this SD, or a program needs to reach it over the API, go back one page and choose the full installation.' + #13#10#13#10
-  else
-    M := M +
-       'OPENSSH SERVER - INSTALLED, NOT OPTIONAL' + #13#10#13#10 +
+       'OPENSSH SERVER - YOUR CHOICE, AND SD NEEDS IT TO BE USEFUL' + #13#10#13#10 +
        'Accounts SD creates sign in over ssh and nothing else. That is true even ' +
        'with no network: on a machine used by one person, you reach SD by ' +
-       'connecting with ssh to "localhost". So SD installs an OpenSSH server if ' +
-       'this machine has none.' + #13#10#13#10 +
-       'It is downloaded from Windows Update and CAN TAKE SEVERAL MINUTES with ' +
-       'nothing on screen. Do not stop it part way.' + #13#10#13#10 +
-       'IT USUALLY NEEDS A RESTART. Until you restart, no SD account except your ' +
-       'own can sign in at all.' + #13#10#13#10 +
-       'IF SD INSTALLS IT, it can be reached only from this machine by default, ' +
-       'and the options page can open it to other computers on your network. ' +
-       'IF THIS MACHINE ALREADY HAS WINDOWS'' SSH SERVER, SD DOES NOT CHANGE ITS ' +
-       'FIREWALL RULE - who may reach it stays as you have it, and that option is ' +
-       'not offered.' + #13#10#13#10 +
+       'connecting with ssh to "localhost". So without an ssh server, nobody can ' +
+       'sign in to an SD account at all - you would use SD yourself, as an ' +
+       'administrator, by typing "sd".' + #13#10#13#10 +
+       'IF THIS MACHINE HAS NO SSH SERVER, the options page offers to install ' +
+       'one. It is downloaded from Windows Update and CAN TAKE SEVERAL MINUTES ' +
+       'with nothing on screen. Do not stop it part way, and IT USUALLY NEEDS A ' +
+       'RESTART - until you restart, no SD account except your own can sign in.' + #13#10#13#10 +
+       'WHO MAY REACH IT IS A SECOND, SEPARATE CHOICE on the same page, and it ' +
+       'is offered whether SD installs the server or finds one already here. ' +
+       'A server SD installs is reachable only from this machine unless you ask ' +
+       'otherwise. For a server that is already here, the box STARTS OUT ' +
+       'MATCHING THIS COMPUTER''S CURRENT FIREWALL RULE, so leaving it alone ' +
+       'changes nothing either way.' + #13#10#13#10 +
        'IF THIS MACHINE ALREADY HAS A DIFFERENT SSH SERVER, SD WILL NOT INSTALL ' +
        'AT ALL. It says so and stops, before changing anything. SD needs to know ' +
        'how the ssh server is configured, and it can only know that about the one ' +
@@ -1324,10 +1494,11 @@ begin
     whichever way the new prompt is answered, which is why it is fixed with it
     rather than after it. }
   M := M + 'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10;
-  if Standalone then
-    M := M + 'Your database, the sdusers group, and the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles. SD installed no ssh server here, so there is none to be left behind. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10
-  else
-    M := M + 'Your database, the ssh server, the sdusers group, and the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
+  { 30 Aug 26 - "the ssh server" IS HEDGED NOW RATHER THAN BRANCHED.  There is
+    one arm, and whether an ssh server was installed is a box on the tasks page
+    rather than a mode, so the sentence says "if SD installed one" instead of
+    asserting it either way.  PRE_RELEASE_FIXES 67 and 75. }
+    M := M + 'Your database, the ssh server if SD installed one, the sdusers group, and the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
          'Accounts you keep are ordinary Windows accounts once SD is gone: they keep their passwords, and the ssh confinement that limited them to SD is removed with the rest of SD''s configuration. Your own account is never removed by that prompt.' + #13#10#13#10;
 
   { KEPT COMMON, DELIBERATELY.  It is true of a stand-alone system too - the
@@ -1345,90 +1516,36 @@ begin
   Result := M;
 end;
 
-(* THE TEXT OF THE CHOICE ITSELF.  Both descriptions, complete, in one memo -
-   the owner asked for "text explaining what each option offers (complete
-   description, not a one liner)", and for both of them to be readable without
-   clicking anything.
-
-   THE PARAGRAPH RULE FROM DisclosureText APPLIES HERE UNCHANGED: one source
-   line per paragraph, no hand-wrapping, no indents.  The memo word-wraps to
-   whatever width it has.  And no line starts with "#". *)
-function ModeChoiceText: String;
-begin
-  Result :=
-    'FULL INSTALLATION' + #13#10#13#10 +
-    'For a system more than one person will use, or that a program will connect to. This is what this installer has always done, and it is the shape a working system needs.' + #13#10#13#10 +
-    'Other people can have SD accounts. "create.account user fred" makes a Windows account and an SD account together, and Windows is what holds the password.' + #13#10#13#10 +
-    'Those accounts sign in over ssh and nothing else - not at this computer, not over Remote Desktop. An ssh session goes straight into SD and never reaches a command prompt, so an SD account cannot get a shell on this machine.' + #13#10#13#10 +
-    'SD installs the OpenSSH server that comes with Windows if this computer has none. It is downloaded from Windows Update, CAN TAKE SEVERAL MINUTES with nothing on screen, and usually wants a restart before anyone can sign in.' + #13#10#13#10 +
-    'THE COST, AND IT FALLS ON EVERYONE: scp and sftp STOP WORKING on this computer, for every user, because every ssh session is forced into SD and there is no file-transfer subsystem left to run.' + #13#10#13#10 +
-    'The SD API listens on port 4243 so that programs can connect to SD, and Setup adds a firewall rule for it. Only this computer can reach it unless you say otherwise: BOTH remote options on the next page are off until you tick them, the API and ssh alike.' + #13#10#13#10 +
-    'SD will not install at all if this computer has an ssh server that is not the one Windows ships, or if somebody has already changed how that one is configured. It says so and stops without changing anything.' + #13#10#13#10 +
-
-    'STAND-ALONE INSTALLATION' + #13#10#13#10 +
-    'For one person, at this computer, to learn SD or to try some code out. It is deliberately not a production system, and it is quicker to install because most of what is above does not happen.' + #13#10#13#10 +
-    'NO SSH SERVER IS INSTALLED and no ssh configuration is touched. If this computer already has an ssh server, of any make, SD leaves it alone. scp and sftp go on working.' + #13#10#13#10 +
-    'NO NETWORK PORT IS OPENED. The SD API is not available - SD is not listening on anything, so there is no rule to open and nothing to reach from another computer.' + #13#10#13#10 +
-    'THERE IS ONE SD ACCOUNT AND IT IS YOURS. You use SD here, as yourself, by typing "sd".' + #13#10#13#10 +
-    '"create.account user" is refused, and SD explains why when you try it. The Windows account it would make is denied this computer and Remote Desktop because it is meant to arrive over ssh - and with no ssh server it could sign in nowhere at all.' + #13#10#13#10 +
-    'YOU CAN STILL DIVIDE YOUR WORK UP, which is what an account is for in a system like this. "create.account group myproject" makes one and "logto myproject" moves into it, from an SD session run as administrator. No Windows account and no sign-in is involved.' + #13#10#13#10 +
-    'NOTHING ELSE IS CUT DOWN. Same SD, same language, same database, same commands. What is missing is the ways in from somewhere else.' + #13#10#13#10 +
-
-    'IF YOU ARE NOT SURE' + #13#10#13#10 +
-    'Choose the full installation. A stand-alone system cannot be turned into a full one from inside SD, and the things it leaves out - other people, ssh, the API - are the ones that are awkward to add later.';
-end;
+(* 30 Aug 26 - ModeChoiceText IS GONE WITH THE PAGE IT FILLED.
+   PRE_RELEASE_FIXES 75.  Its "FULL INSTALLATION" half described what every
+   install now does and is said by DisclosureText; its "STAND-ALONE" half
+   described a mode that no longer exists.  Two things it carried are worth
+   keeping and have been moved rather than dropped: the ssh cost to scp and
+   sftp, which DisclosureText already states, and the sentence about what an
+   install with no ssh server can and cannot do, which is now in SshReport's
+   closing text where it is true of a real install rather than of a mode. *)
 
 procedure InitializeWizard;
 begin
-  (* SIZES AND POSITIONS COME FROM THE PAGE, NEVER FROM A NUMBER I CHOSE.
-     SurfaceWidth and SurfaceHeight are what the wizard actually gave us at this
-     DPI and wizard style, so the memo is as big as there is room for and the
-     text inside it scrolls rather than being clipped.  The one literal here is
-     the gap between the radio buttons and the memo, through ScaleY. *)
-  ModePage := CreateCustomPage(wpWelcome,
-      'How this computer will use SD',
-      'Two installations. Read both - this cannot be changed from inside SD afterwards.');
+  (* 30 Aug 26 - THE MODE PAGE AND ITS TWO RADIO BUTTONS ARE GONE, AND THE
+     DISCLOSURE PAGE IS BACK ON wpWelcome WHERE IT SAT BEFORE 25 Aug 2026.
+     PRE_RELEASE_FIXES 75.  There is one installation now, so there is nothing
+     to choose between here and no reason to make the reader read two
+     descriptions of it.
 
-  FullRadio := TNewRadioButton.Create(ModePage);
-  FullRadio.Parent  := ModePage.Surface;
-  FullRadio.Left    := 0;
-  FullRadio.Top     := 0;
-  FullRadio.Width   := ModePage.SurfaceWidth;
-  FullRadio.Height  := ScaleY(17);
-  { Owner's wording, 25 Aug 2026, given on seeing the page. }
-  FullRadio.Caption := 'Full installation - multiple users, optional remote ssh, optional remote API access';
-  FullRadio.Checked := True;
-
-  StandaloneRadio := TNewRadioButton.Create(ModePage);
-  StandaloneRadio.Parent  := ModePage.Surface;
-  StandaloneRadio.Left    := 0;
-  StandaloneRadio.Top     := FullRadio.Top + FullRadio.Height + ScaleY(2);
-  StandaloneRadio.Width   := ModePage.SurfaceWidth;
-  StandaloneRadio.Height  := ScaleY(17);
-  StandaloneRadio.Caption := 'Stand-alone installation - one person at this computer, for learning and testing';
-
-  ModeMemo := TNewMemo.Create(ModePage);
-  ModeMemo.Parent     := ModePage.Surface;
-  ModeMemo.Left       := 0;
-  ModeMemo.Top        := StandaloneRadio.Top + StandaloneRadio.Height + ScaleY(8);
-  ModeMemo.Width      := ModePage.SurfaceWidth;
-  ModeMemo.Height     := ModePage.SurfaceHeight - ModeMemo.Top;
-  ModeMemo.ReadOnly   := True;
-  ModeMemo.WordWrap   := True;
-  ModeMemo.ScrollBars := ssVertical;
-  ModeMemo.Lines.Text := ModeChoiceText;
-
-  (* ANCHORED ON ModePage.ID, NOT ON wpWelcome, so the disclosure page comes
-     after the choice rather than beside it.  Seeded with the FULL text because
-     that is what the radio button above starts on; CurPageChanged rewrites it
-     from the live answer every time the page is shown, so a reader who goes
-     Back, changes their mind and comes forward again sees the other one. *)
-  SummaryPage := CreateOutputMsgMemoPage(ModePage.ID,
+     THE ORDER THAT MATTERED IS PRESERVED BY THE MOVE, NOT BROKEN BY IT.  The
+     disclosure page had to come AFTER the mode choice, because it describes an
+     ssh install a stand-alone reader was about to decline.  With the choice
+     gone the page describes what every install does, so wpWelcome is the right
+     anchor again - and it still lands BEFORE wpSelectTasks, which is what the
+     ssh boxes need: the reader is told what SD does to ssh before being asked
+     how far to open it. *)
+  SummaryPage := CreateOutputMsgMemoPage(wpWelcome,
       'Before you install',
       'What SD changes on this computer',
       'Setup changes Windows itself, not only its own folders. All of it is listed below. ' +
       'Nothing has happened yet - Cancel stops without changing anything.',
-      DisclosureText(False));
+      DisclosureText);
 end;
 
 { ---------------------------------------------------------------------------
@@ -1570,8 +1687,15 @@ begin
 
     IT RETURNS '' RATHER THAN A MESSAGE.  There is nothing to report about work
     that was correctly not done; SshReport says the one thing worth saying about
-    ssh on a stand-alone system, in one place. }
-  if StandaloneChosen then
+    an install with no ssh server, in one place. }
+
+  { 30 Aug 26 - RE-KEYED FROM StandaloneChosen.  PRE_RELEASE_FIXES 67 and 75.
+    The question this asked has not changed - "is there an ssh server here for
+    SD to configure?" - only the thing that answers it.  It used to be the mode;
+    it is now the machine plus the sshserver box, which is the same question
+    asked directly.  With no server there is no sshd_config to write, and
+    writing one would be configuring a service that does not exist. }
+  if not SshServerPresentAfterwards then
     Exit;
   { 25 Aug 26 - THE TASK GATE IS GONE BECAUSE THE TASK IS GONE.  This used to
     read "if not WizardIsTaskSelected('limitssh') then Exit", and before that
@@ -1645,20 +1769,39 @@ var
 begin
   Result := '';
 
-  { 25 Aug 26 - THIS EXIT IS THE ONE CARRYING THE STAND-ALONE PROMISE ABOUT ssh,
-    and it is deliberately not the [Tasks] Check.  That check may be evaluated
-    once, before the mode page has been seen (measured; see the comment on the
-    sshremote entry), so the checkbox may still be visible.  This runs at
-    install time, where StandaloneChosen is certainly right.  A visible checkbox
-    is untidy; a firewall rule written on an install that promised none would be
-    a lie with consequences. }
-  if StandaloneChosen then
+  { 30 Aug 26 - THERE IS NOTHING TO SCOPE IF THERE IS NO SERVER.
+    PRE_RELEASE_FIXES 67.  The reader can now decline the capability, and on
+    that install port 22 belongs to nobody: writing a rule for a service that
+    does not exist would be the same lie in the other direction. }
+  if not SshServerPresentAfterwards then
     Exit;
 
-  if not SshWasAbsent then
-    Exit;
+  { 30 Aug 26 - AND THE "not SshWasAbsent" EXIT IS GONE, WHICH IS THE WHOLE OF
+    PRE_RELEASE_FIXES 76.  It used to return here whenever the machine already
+    had a server, so on a reinstall - or on any machine with ssh already on it -
+    the installer asked nothing and set nothing, and whatever scope the rule
+    happened to carry simply persisted.  The owner's ruling of 30 Aug 2026 is
+    that the choice must be offered in that case too:
 
-  Wanted := WizardIsTaskSelected('sshremote');
+      "if an ssh server is installed, the user should have a separate choice to
+       allow remote access."
+
+    ***5.9 IS NARROWED, NOT ABANDONED, AND THE NARROWING IS WHAT MAKES IT SAFE.***
+    "We never reconfigure or restart an ssh server we did not install" exists to
+    stop SD breaking a server a site runs for its own reasons.  That risk is real
+    here - OpenSSH-Server-In-TCP is Windows' shared rule, not one of ours, so
+    restricting it would cut off the site's own ssh - and it is answered by the
+    DEFAULT rather than by refusing to act: the box is pre-set from the rule's
+    current scope (GetSshRuleIsOpen), so an installer who touches nothing changes
+    nothing.  A rule that was open stays open; one that was loopback-only stays
+    loopback-only.  Only a deliberate click moves it, which is exactly the
+    decision 76 said there was no way to make.
+
+    WHAT IS STILL NOT DONE TO A FOREIGN SERVER: its configuration.  sshd_config
+    is ApplyAllowGroups' business and it keeps its own rules; this is the
+    firewall alone. }
+
+  Wanted := SshRemoteWanted;
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\ssh-firewall.ps1') + '" -Installed';
@@ -1728,10 +1871,25 @@ begin
     api-firewall.ps1 -Restrict is NOT harmless-and-tidy here for that reason:
     it would leave behind a rule naming port 4243 that the uninstaller then has
     to remove, on a system that never had the API. }
-  if StandaloneChosen then
+  { 30 Aug 26 - RE-KEYED FROM StandaloneChosen TO THE API BOX ITSELF, AND THE
+    EXIT NOW MEANS THE SAME THING IT ALWAYS DID.  PRE_RELEASE_FIXES 75.  An
+    unticked box no longer means "the listener exists but keep others off it";
+    it means SD installs the no-listener sd.conf and opens no socket at all, so
+    there is again no service for a rule to describe - which is exactly what the
+    comment above says about writing one.
+
+    ***THIS IS ALSO WHERE THE RULING COSTS SOMETHING, AND IT IS RECORDED RATHER
+    THAN QUIETLY ACCEPTED.***  There used to be a third state - listener up,
+    firewall restricted - which is what a local application talking to the API
+    on 127.0.0.1 relied on.  Collapsing the box to "provide it or do not" takes
+    that away: a local-only API consumer now needs the box ticked, and ticking
+    it also opens port 4243 to the network.  Filed in PRE_RELEASE 75 for the
+    owner; implemented as ruled because the ruling is explicit - "the api box
+    unchecked should mean not provide the service at all". }
+  if not ApiWanted then
     Exit;
 
-  Wanted := WizardIsTaskSelected('apiremote');
+  Wanted := ApiWanted;
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\api-firewall.ps1') + '"';
@@ -1791,25 +1949,43 @@ begin
     IT ALSO NAMES THE WAY OUT.  Reinstalling is the only route to a full
     system, and it is better read here - once, at the end, while they still
     have the installer - than discovered later. }
-  if StandaloneChosen then
+  { 30 Aug 26 - RE-KEYED FROM StandaloneChosen.  PRE_RELEASE_FIXES 67 and 75.
+    The reader who declined the ssh server gets this instead of the old
+    stand-alone paragraph, and it says the same operational things because they
+    are the same install - which is the owner's whole argument for removing the
+    mode.  What has gone from it is the claim that the decision is irreversible:
+    ticking the box on a later run of this installer is now all it takes,
+    because the ssh boxes read machine state rather than a marker. }
+  if not SshServerPresentAfterwards then
   begin
-    Result := 'THIS IS A STAND-ALONE INSTALLATION. No ssh server was installed, no ssh ' +
-              'configuration was changed, and no network port was opened. scp and sftp are ' +
+    Result := 'NO ssh SERVER WAS INSTALLED, because you did not ask for one. No ssh ' +
+              'configuration was changed and no ssh port was opened. scp and sftp are ' +
               'unaffected on this computer.' + #13#10#13#10 +
-              'SD is yours alone here: use it by typing "sd". "create.account user" is ' +
-              'refused and says why; "create.account group <name>" still works, and ' +
-              '"logto <name>" moves into one from a session run as administrator.' + #13#10#13#10 +
-              'To let other people or programs reach this SD later, uninstall and install ' +
-              'again choosing the full installation. Nothing inside SD makes that change.' + #13#10#13#10;
+              'SD accounts sign in over ssh and nothing else, so nobody can sign in to an ' +
+              'SD account on this machine - including at this keyboard, where an account is ' +
+              'reached by "ssh localhost". Use SD by typing "sd" as an administrator.' + #13#10#13#10 +
+              'To let people reach this SD later, install OpenSSH Server and run this ' +
+              'installer again, ticking the ssh boxes.' + #13#10#13#10;
     Exit;
   end;
 
+  { 30 Aug 26 - THIS TEXT WAS TRUE UNTIL TODAY AND IS NOW HALF FALSE.
+    PRE_RELEASE_FIXES 76.  It promised that SD "left both its configuration and
+    its firewall rule exactly as they were" on a machine that already had ssh.
+    The configuration half still holds - nothing here writes sshd_config for a
+    server SD did not install - but the firewall half no longer does, because
+    the owner's ruling of 30 Aug 2026 is that the scope choice must be offered
+    in exactly this case.  The box is pre-set from the rule's current scope, so
+    a reader who touched nothing still changed nothing; saying so is the honest
+    version, and claiming SD kept its hands off the rule would now be a lie. }
   if not SshWasAbsent then
   begin
     Result := 'This machine already had an OpenSSH server. SD did not install, restart or ' +
-              'reconfigure one, and left both its configuration and its firewall rule exactly ' +
-              'as they were. SD accounts sign in over ssh, so check that yours will accept ' +
-              'them.' + #13#10#13#10;
+              'reconfigure one, and it did not change its configuration. Who may reach it ' +
+              'was set from the ssh box on the tasks page, which started out matching this ' +
+              'computer''s existing firewall rule - so if you left it alone, nothing about ' +
+              'that changed either. SD accounts sign in over ssh, so check that yours will ' +
+              'accept them.' + #13#10#13#10;
     Exit;
   end;
 
@@ -1935,70 +2111,19 @@ begin
   end;
 end;
 
-(* 25 Aug 26 - THE MARKER THAT MAKES THE CHOICE OUTLIVE THE WIZARD.
-   sdsys\$standalone is what GPL.BP/CREATEA reads to refuse
-   CREATE.ACCOUNT USER, and it is the only record an installed system keeps of
-   which install it was.  The pattern is adopt-account.ps1's $adopt.<user>: a
-   file in SDSYS, tested with ospath(..., OS$EXISTS).
+(* 30 Aug 26 - THE '$standalone' MARKER AND WriteStandaloneMarker ARE GONE.
+   PRE_RELEASE_FIXES 75.  The marker existed for one reader - CREATEA, which
+   used it to refuse CREATE.ACCOUNT USER - and that refusal is removed with it,
+   on the owner's ruling that it is redundant now the ssh server is a per-install
+   choice answered per route rather than a mode.
 
-   IT IS NOT ONE-SHOT, WHICH IS THE ONE WAY IT DIFFERS FROM $adopt.  CREATEA
-   deletes the adopt marker when it accepts the keyword, because that marker
-   authorises a single act.  This one describes the installation and must
-   survive for its life, so nothing deletes it - and nothing in any ship list
-   names it, so the generated upgrade.iss cannot delete it either.
-
-   ITS CONTENT IS FOR A HUMAN, and CREATEA does not read it - only whether the
-   file is there.  Somebody finding an unfamiliar file in SDSYS should be able
-   to learn what it does without the source.
-
-   FAILURE IS REPORTED, NOT SWALLOWED.  A stand-alone install whose marker did
-   not get written is a system that will cheerfully create dead accounts after
-   its own installer promised it would refuse to.  That is worth a paragraph in
-   the closing dialog, and it is why this returns a String like its neighbours
-   rather than a Boolean nobody reads. *)
-function WriteStandaloneMarker: String;
-var
-  Path: String;
-begin
-  Result := '';
-  if not StandaloneChosen then
-    Exit;
-
-  Path := ExpandConstant('{#DataDir}\sdsys\$standalone');
-
-  { Already there on an upgrade of a stand-alone system; nothing to do, and
-    rewriting it would only risk turning a good marker into a failed write. }
-  if StandaloneWasMarked then
-  begin
-    Log('SD: stand-alone marker already present at ' + Path);
-    Exit;
-  end;
-
-  if SaveStringToFile(Path,
-      'This file marks a STAND-ALONE SD installation.' + #13#10#13#10 +
-      'It was written by the SD installer because the stand-alone option was' + #13#10 +
-      'chosen. SD reads it to refuse "create.account user", which on a system' + #13#10 +
-      'with no ssh server would make an account that could sign in nowhere.' + #13#10#13#10 +
-      '"create.account group <name>" is unaffected and is how work is kept' + #13#10 +
-      'separate here.' + #13#10#13#10 +
-      'Deleting this file does NOT turn this into a full installation. No ssh' + #13#10 +
-      'server was installed and sd.conf sets no APIPORT, so the accounts it' + #13#10 +
-      'would then let you create still could not sign in. To get a full' + #13#10 +
-      'installation, uninstall SD and install it again choosing that option.' + #13#10,
-      False) then
-  begin
-    Log('SD: wrote the stand-alone marker at ' + Path);
-    Exit;
-  end;
-
-  Log('SD: FAILED to write the stand-alone marker at ' + Path);
-  Result := 'THE STAND-ALONE MARKER COULD NOT BE WRITTEN, and one thing this install ' +
-            'promised is therefore not in place. SD will NOT refuse "create.account user" ' +
-            'on this machine, and an account created that way cannot sign in anywhere, ' +
-            'because no ssh server was installed. Everything else about the install is ' +
-            'as described. To put it right, create an empty file at:' + #13#10#13#10 +
-            '    ' + Path + #13#10#13#10;
-end;
+   NOTHING IS LEFT TO CLEAN UP ON AN EXISTING SYSTEM.  A machine installed
+   stand-alone before today still has the file; CREATEA no longer reads it, and
+   no ship list has ever named it, so the generated upgrade.iss will not delete
+   it either.  It becomes an inert text file in SDSYS whose own contents explain
+   what it used to do - which is the reason it was written for a human in the
+   first place, and is a better outcome than an upgrade silently removing a file
+   somebody may have noticed. *)
 
 function AdoptAccount: Integer;
 var
@@ -2863,14 +2988,10 @@ begin
     { Same rule - an unattended install must still end with a usable account. }
     AdoptCode := AdoptAccount;
 
-    { 25 Aug 26 - THE MARKER GOES DOWN AFTER THE INSTALL'S OWN ACCOUNT STEP, and
-      that ordering is defence in depth rather than a requirement.  CREATEA's
-      refusal is scoped to exclude ADOPT, and AdoptAccount runs
-      'CREATE.ACCOUNT USER <name> ADOPT' - so the two are already compatible.
-      Writing it afterwards means that even if that scoping were ever got wrong,
-      the installer could still create its own account: the marker it would trip
-      over does not exist yet.  Nothing else in the install reads it. }
-    MarkerMsg := WriteStandaloneMarker;
+    { 30 Aug 26 - THE MARKER STEP IS GONE.  PRE_RELEASE_FIXES 75.  MarkerMsg is
+      kept as an empty string rather than being unpicked from the closing
+      dialog, so the paragraph it used to contribute simply is not there. }
+    MarkerMsg := '';
 
     { AFTER Adopt, so the account it has just made is stamped on this very
       install rather than on the next one.  See SecureAccountDirs. }
@@ -2933,13 +3054,18 @@ begin
              that cost two sessions in Aug 2026 - for the sake of saving one
              prompt.  Saying plainly that it is optional here, and why somebody
              might still want it, is the honest version of the same saving. }
-           if StandaloneChosen then
+           { 30 Aug 26 - RE-KEYED FROM StandaloneChosen TO THE TWO BOXES THAT NOW
+             DECIDE THE SAME THING.  PRE_RELEASE_FIXES 67 and 75.  The condition
+             this branch cares about was never really "is this stand-alone" - it
+             was "can anything reach this account from another machine", and that
+             is now answered directly: no ssh server and no API listener. }
+           if (not SshServerPresentAfterwards) and (not ApiWanted) then
              AccountMsg := AccountMsg +
-                         '    1. SD opens so you can give that account a password. ON A ' +
-                         'STAND-ALONE SYSTEM YOU DO NOT NEED ONE: nothing can reach this ' +
-                         'account from another machine, because no ssh server was installed ' +
-                         'and the SD API is switched off. Set one anyway if you may later ' +
-                         'reinstall as a full system. It closes by itself either way.' + #13#10#13#10
+                         '    1. SD opens so you can give that account a password. YOU DO ' +
+                         'NOT NEED ONE HERE: nothing can reach this account from another ' +
+                         'machine, because no ssh server was installed and the SD API is ' +
+                         'switched off. Set one anyway if you may later install again with ' +
+                         'ssh or the API. It closes by itself either way.' + #13#10#13#10
            else
              AccountMsg := AccountMsg +
                          '    1. SD opens so you can give that account a password. You do ' +
@@ -3256,7 +3382,7 @@ begin
      RichEditViewer.Lines.Text IS WRITABLE - checked by compiling it rather than
      by reading the help, with a control that fails on the same line. *)
   if CurPageID = SummaryPage.ID then
-    SummaryPage.RichEditViewer.Lines.Text := DisclosureText(StandaloneChosen);
+    SummaryPage.RichEditViewer.Lines.Text := DisclosureText;
 
   { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
     in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with
@@ -3278,13 +3404,12 @@ begin
   if WizardSilent then
     Exit;
 
-  { 25 Aug 26 - AND NOT ON A STAND-ALONE INSTALL, where every sentence of it is
-    false.  It says "SD WILL NOW CONFIGURE IT, and this is not optional" about
-    an ssh server a stand-alone install does not touch at all.  Gated here
-    rather than reworded: there is nothing this box needs to say to somebody who
-    has just chosen an install that leaves ssh alone, and the mode page has
-    already told them scp and sftp keep working. }
-  if (CurPageID = wpSelectTasks) and (not SshServerAbsent) and (not StandaloneChosen) then
+  { 30 Aug 26 - THE STAND-ALONE GATE IS GONE WITH THE MODE, AND THE CONDITION IS
+    NOW JUST "THIS MACHINE ALREADY HAS ssh".  PRE_RELEASE_FIXES 75 and 76.  The
+    reader who wants no ssh server does not reach this branch, because on a
+    machine that already has one there is no server for them to decline - the
+    sshserver box is not even shown. }
+  if (CurPageID = wpSelectTasks) and (not SshServerAbsent) then
     { Notify rather than offer, which is what the repository owner asked for:
       the option is not available and the reason is stated.
 
@@ -3339,10 +3464,11 @@ begin
            'kept beside it as sshd_config.before-sd. Uninstalling SD removes ' +
            'its block and restarts the ssh server, which leaves the file as it ' +
            'was; the copy is there if you would rather put it back yourself.' + #13#10#13#10 +
-           'SD WILL NOT CHANGE ITS FIREWALL RULE, because SD did not install this ' +
-           'server - who may reach port 22 stays your decision. That is why the ' +
-           'option about reaching ssh from other computers is absent from this ' +
-           'page.' + #13#10#13#10 +
+           'WHO MAY REACH IT IS YOURS TO SET, ON THIS PAGE. The ssh box below ' +
+           'starts out matching this computer''s current firewall rule, so if ' +
+           'you leave it alone nothing about who can reach port 22 changes. ' +
+           'Tick it to let other computers in; untick it to limit ssh to this ' +
+           'machine only.' + #13#10#13#10 +
            'Accounts SD creates sign in over ssh, so make sure your server ' +
            'accepts them.',
            mbInformation, MB_OK);

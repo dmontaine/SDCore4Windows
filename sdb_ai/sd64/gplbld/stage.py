@@ -539,13 +539,24 @@ def _active_apiport(text):
 
 
 def sd_conf_standalone():
-    """SD_CONF with APIPORT commented out.  Refuses if the line is not there."""
+    """SD_CONF with APIPORT commented out - the NO-LISTENER configuration.
+
+    30 Aug 26 - THE NAME IS NOW HISTORICAL AND THE FILE IS NOT.
+    PRE_RELEASE_FIXES 75 removed the stand-alone install mode; this variant
+    survives it because the mechanism was never about the mode.  It is what
+    sd.iss installs when the API box is left unticked, which is the owner's
+    ruling that "the api box unchecked should mean not provide the service at
+    all - the port should not be left open".  Kept under its old name rather
+    than renamed in the same change that moved its meaning: the name appears in
+    sd.iss, in the generated upgrade branch and in this file, and a rename buys
+    nothing behavioural.
+    """
     if len(_active_apiport(SD_CONF)) != 1:
-        die('SD_CONF must contain exactly one active %r line - the stand-alone '
+        die('SD_CONF must contain exactly one active %r line - the no-listener '
             'sd.conf is derived from it by commenting that line out, and a '
-            'silent miss would ship a stand-alone install with the API '
-            'listening, which is the one thing its wizard page promises it '
-            'does not do' % APIPORT_LINE)
+            'silent miss would ship an install whose API box was left unticked '
+            'with the API listening anyway, which is the one thing that box '
+            'now promises it does not do' % APIPORT_LINE)
     out = SD_CONF.replace(APIPORT_LINE + '\n', STANDALONE_APIPORT + '\n', 1)
     if _active_apiport(out):
         die('the stand-alone sd.conf still carries an active %r line'

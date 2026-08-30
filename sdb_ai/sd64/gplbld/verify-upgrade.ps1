@@ -145,9 +145,15 @@ $REPLACE  = @('gpl.bp', 'syscom', 'newvoc', 'voc_template', 'messages',
               'pcode.out', 'bin', 'terminfo', 'terminfo.src')
 
 # Named by NO ship list, and protected by that alone.  voc is a dynamic file
-# made by "sd -i" and declared nowhere; $standalone is the mode marker and
-# errlog is the log.  If the upgrade ever reaches these, the default that
-# protects them has stopped working.
+# made by "sd -i" and declared nowhere; errlog is the log.  If the upgrade ever
+# reaches these, the default that protects them has stopped working.
+#
+# 30 Aug 26 - $standalone IS KEPT IN THIS LIST THOUGH THE MODE IS GONE.
+# PRE_RELEASE_FIXES 75 removed stand-alone installs and nothing writes or reads
+# the marker any more - but machines installed BEFORE today still carry the
+# file, and the property being tested is unchanged: an upgrade must not delete
+# something no ship list names.  A file that is now inert is still the clearest
+# possible case of that, so it goes on earning its place here.
 $UNNAMED  = @('voc', '$standalone', 'errlog')
 
 Write-Output ''
