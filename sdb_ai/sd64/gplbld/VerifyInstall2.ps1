@@ -126,6 +126,10 @@ param(
     [string]$ScramPrefix = '',   # verify-scramlogin.ps1 - one account
     [string]$TierApiPrefix = '', # verify-tierapi.ps1   - one account per tier
     [string]$ApiIdPrefix = '',   # verify-apiidentity.ps1 - one account
+    # 29 Aug 26 - verify-sdsysgate.ps1, PRE_RELEASE 62.  One throwaway
+    # non-administrator account, created and removed inside the step.  Lower
+    # case only, same derivation as the rest: it becomes a Windows account name.
+    [string]$GatePrefix  = '',   # verify-sdsysgate.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -160,6 +164,7 @@ if ($Run) {
     if (-not $ScramPrefix)   { $ScramPrefix   = "sdscram$Run" }
     if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
     if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
+    if (-not $GatePrefix)  { $GatePrefix  = "sdgate$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -387,6 +392,20 @@ $steps = @(
     # SD twice), which is why those two are where they are and this one is
     # simply where it landed.
     @{ Name = 'verify-accountacl.ps1';    P = @{ Prefix  = $AclPrefix } },
+    # 29 Aug 26 - PRE_RELEASE 62's verifier, and it is in THIS runner rather
+    # than the other for verify-cmdaudit's reason exactly: the decisive reading
+    # is the AUDIT REASON, and the trail is locked to SYSTEM and Administrators.
+    #
+    # ***sysmsg 10002 IS NOT A USABLE ANCHOR HERE AND THAT IS WHY THE STEP
+    # EXISTS AT ALL.***  CPROC prints it on BOTH refusal paths - the identity
+    # gate at :2637 and the failed elevation at :2651 - and the session is
+    # reached over ssh, which has no desktop, so elevate('START') would fail
+    # there anyway.  A check anchored on 10002 would pass with the gate DELETED.
+    # Only 'reason=not an administrator' in the audit tells them apart.
+    #
+    # It makes and removes its own account: VerifyInstall1's test account
+    # belongs to the unelevated half and is gone before this runner starts.
+    @{ Name = 'verify-sdsysgate.ps1';     P = @{ Prefix  = $GatePrefix } },
     # 21 Aug 26 - the two route/rule verifiers, added when phase 4 rewrote the
     # first and wrote the second.  Both were run by hand until now, which is
     # exactly the shape this file exists to remove.

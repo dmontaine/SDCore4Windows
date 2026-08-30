@@ -191,6 +191,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-osusers.ps1', 'verify-catgate.ps1',
                   'verify-fold.ps1', 'verify-nonet.ps1',
                   'verify-lcnames.ps1', 'VerifyInstall2.ps1',
+                  # 29 Aug 26 - verify-sdsysgate.ps1, PRE_RELEASE 62's verifier.
+                  # Listed in the commit that creates it, under step 7's rule
+                  # and the trap directly above: a gplbld script not on this
+                  # list makes the tree report STALE merely because it exists,
+                  # and then every verifier that calls this script refuses.
+                  # Session 79 paid for that with three scripts at once.
+                  'verify-sdsysgate.ps1',
                   'verify-keys.ps1', 'probe-keys.ps1',
                   # 24 Aug 26 - probe-syswrites.ps1, section 7 step 15's
                   # measurement: which of the eight remaining sdusers:(M)
