@@ -90,6 +90,11 @@
 *                      otherwise be the way round the rule.  DELETE is not
 *                      guarded: taking access away is always allowed.
 *                      PRE_RELEASE_FIXES 57
+* 30 Aug 26 Windows port - the os.users write falls back to the ELEVATED HELPER
+*                      and is then READ BACK, the same shape CRED_SET took the
+*                      same day.  os.users is read-only to sdusers, so the write
+*                      was refused for a session that reached SDSYS by LOGTO
+*                      from an unelevated start.  PRE_RELEASE_FIXES 68
 * rev 0.9.0 Jan 25 mab initial release
 * END-HISTORY
 *
@@ -165,6 +170,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun os_group(action,group,member) calling '!os_group'
 deffun is_group(group) calling '!is_group'
 deffun valid_os_name(name) calling '!valid_os_name'
+deffun ps_script(script) calling '!ps_script'
 * 29 Aug 26 Windows port - the tier ordering on grants, PRE_RELEASE_FIXES 57.
 * The ADD arm below makes the same group change GRANT does, so it takes the
 * same refusal; logto.authorised in CPROC is the gate that actually holds.
@@ -756,6 +762,54 @@ os.set:
    osu.ok = @true
    write osu.rec to osu.f, acc.user on error osu.ok = @false
    close osu.f
+
+* 30 Aug 26 Windows port - AND THE SAME FALLBACK CRED_SET HAS.  PRE_RELEASE 68.
+*
+*   os.users is READ-ONLY to sdusers - secure-osusers.ps1 grants (OI)(CI)(RX) -
+*   so this write is refused by Windows for a session that reached SDSYS with
+*   LOGTO from an unelevated start, however administrator SD believes it is
+*   after CPROC:2769.  Same cause as the $cred write, same route out: ps_script
+*   hands the work to the elevated helper when K$ADMINISTRATOR is set
+*   (PS_SCRIPT:166) and falls back to os.execute when it is not, so an ordinary
+*   caller behaves exactly as before.  The long version of the reasoning is in
+*   CRED_SET, including why CRLF and why ASCII are both measured facts.
+*
+*   AFTER close, DELIBERATELY.  The readu above holds an update lock and close
+*   releases it; letting an outside process write the file while SD holds a lock
+*   on the record would be a lock SD believes in and Windows knows nothing about.
+   if not(osu.ok) then
+      osu.path = kernel(K$WINPATH, @sdsys : @ds : 'os.users' : @ds : acc.user)
+      if osu.path # '' then
+         q = char(39)
+         ps =       '$p = ' : q : osu.path : q
+         ps := @fm : '$l = @(' : q : osu.sh : q : ',' : q : osu.ex : q : ')'
+         ps := @fm : '$nl = [char]13 + [char]10'
+         ps := @fm : 'try {'
+         ps := @fm : '  [System.IO.File]::WriteAllText($p, ($l -join $nl) + $nl,'
+         ps := @fm : '     [System.Text.Encoding]::ASCII)'
+         ps := @fm : '} catch { exit 1 }'
+         ps := @fm : 'exit 0'
+
+         if ps_script(ps) = 0 then osu.ok = @true
+      end
+   end
+
+*  READ BACK BEFORE REPORTING, for CRED_SET's reason: the elevated path runs a
+*  script whose exit code says the FILE was written and nothing about whether SD
+*  can read it back, and this file is the whole of the OS.EXECUTE gate.
+   if osu.ok then
+      osu.ok = @false
+      openpath @sdsys : @ds : 'os.users' to osu.chk then
+         read osu.back from osu.chk, acc.user then
+            if upcase(trim(osu.back<1>, ' ', 'B')) = upcase(osu.sh) then
+               if upcase(trim(osu.back<2>, ' ', 'B')) = upcase(osu.ex) then
+                  osu.ok = @true
+               end
+            end
+         end
+         close osu.chk
+      end
+   end
 
    if not(osu.ok) then
       @system.return.code = -ER$FAILED
