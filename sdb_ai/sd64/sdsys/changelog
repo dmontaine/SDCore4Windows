@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+30 Aug 26  SETTING A PASSWORD WORKS FROM SDSYS WHICHEVER WAY YOU REACHED IT.
+
+           There are two ways into SDSYS: start SD from an elevated session, or
+           log in to your own account and use LOGTO SDSYS. Only the first could
+           set a password. From the second, CREATE.ACCOUNT and MODIFY.PASSWORD
+           set the Windows password and then failed with "status 3035" or
+           "SD's own credential could not be written", leaving the account
+           unfinished - ssh would let it in and the API would refuse it.
+
+           Windows was refusing the write, and it was right to. SD's credential
+           store is readable only by the system and by administrators, and
+           LOGTO does not change what Windows thinks your session is allowed to
+           do, however much authority SD itself has after it. The half of the
+           work that changes the Windows password already went through SD's
+           elevation helper; the half that writes the credential did not.
+
+           It does now, and the record is read back and checked before SD tells
+           you the password is set - so "Password set for account X" means the
+           credential is there and can be read, not merely that a write was
+           attempted.
+
 30 Aug 26  A FAILED CREATE.ACCOUNT NO LONGER LEAVES A WINDOWS ACCOUNT BEHIND
            WITHOUT SAYING SO.
 

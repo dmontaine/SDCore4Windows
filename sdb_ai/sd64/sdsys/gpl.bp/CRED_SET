@@ -24,6 +24,11 @@
 *           cannot supply that.  docs/SCRAM_AUTH.md
 * 19 Aug 26 Windows port - the credential store is $cred on disk.  5.12 (a).
 * 13 Aug 26 Windows port - written for the account credential model
+* 30 Aug 26 Windows port - the write falls back to the ELEVATED HELPER, because
+*           $cred grants sdusers nothing and a session that reached SDSYS by
+*           LOGTO from an unelevated start is refused by Windows however
+*           administrator SD believes it is.  The record is then READ BACK and
+*           both keys compared before success is reported.  PRE_RELEASE_FIXES 68
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -55,6 +60,8 @@ $catalog !CRED_SET
 $include int$keys.h
 $include keys.h
 $include err.h
+
+deffun ps_script(script) calling '!ps_script'
 
    ok = @false
    set.status 0
@@ -111,8 +118,100 @@ $include err.h
    cred.rec<CRED$STOREDKEY> = stored.key
    cred.rec<CRED$SERVERKEY> = server.key
 
+* 30 Aug 26 Windows port - THE WRITE FALLS BACK TO THE ELEVATED HELPER, AND IS
+*   THEN READ BACK BEFORE IT IS BELIEVED.  PRE_RELEASE_FIXES 68.
+*
+*   WHY THE DIRECT WRITE IS NOT ENOUGH.  $cred is locked to SYSTEM and
+*   Administrators and grants sdusers NOTHING (gplbld/secure-cred.ps1).  A
+*   session that reached SDSYS with LOGTO from an unelevated start has
+*   K$ADMINISTRATOR set - CPROC:2769 sets it, and it IS USR_ADMIN - so SD is
+*   correctly convinced it is administrator; but the PROCESS TOKEN never
+*   changed, so this write is refused by Windows.  MEASURED 30 Aug 2026 by
+*   gplbld/verify-sdsyswrite.ps1: "Unable to set password for SDSWA2, status
+*   3035", and err.h:145 is ER_PERM, "Permissions error (os.errno)".
+*
+*   THE OPEN SUCCEEDS AND THE WRITE DOES NOT, which is why the failure arrives
+*   late - the caller has already collected both passwords by then.
+*
+*   ps_script IS THE ROUTE THE REST OF THE TREE ALREADY USES for work that needs
+*   privilege: PS_SCRIPT:166 hands the script to the elevated helper when
+*   K$ADMINISTRATOR is set, and falls back to os.execute when it is not, so an
+*   ordinary caller behaves exactly as before.  SET_PASSWD's Windows half has
+*   gone this way since 27 Aug.
+*
+*   IT IS SAFE TO PUT CREDENTIAL MATERIAL THROUGH IT.  PS_SCRIPT writes into
+*   SDSYS\pstmp, which secure-psdir.ps1 gives CREATOR OWNER (OI)(IO)(F) with
+*   sdusers holding directory rights only - so a script there is readable by its
+*   creator, SYSTEM and Administrators and by nobody else.  That ACL was added
+*   16 Aug 2026 for exactly this reason: !set_passwd's script already carries a
+*   new Windows password in clear.
+*
+*   ***CRLF, AND IT IS MEASURED RATHER THAN ASSUMED.*** A directory-file record
+*   is a file and a field mark is a line ending; on disk SD writes CRLF - od -c
+*   on sdsys/os.users/don reads "y e s \r \n y e s \r \n".  Writing LF-only from
+*   PowerShell would put a record here that SD reads back with the wrong field
+*   count, silently, in the credential store.  [char]13 and [char]10 are used
+*   rather than an escape so nothing depends on how the script survives being
+*   written to a file and Invoke-Expression'd.
+*
+*   ASCII IS SAFE BECAUSE EVERY VALUE IS BASE64.  gplsrc/sd_scram.c:26 - "EVERY
+*   BINARY VALUE HERE IS BASE64, in and out" - so the salt and both keys are
+*   text, and none of them can contain the quote this builds with.
+   write.ok = @true
    write cred.rec to cred.f, account on error
+      write.ok = @false
+   end
+
+   if not(write.ok) then
+      cred.path = kernel(K$WINPATH, @sdsys : @ds : '$cred' : @ds : account)
+      if cred.path = '' then
+         close cred.f
+         set.status ER$PERM
+         return
+      end
+
+      q = char(39)
+      ps =       '$p = ' : q : cred.path : q
+      ps := @fm : '$l = @(' : q : cred.rec<CRED$VERSION>   : q : ','
+      ps :=                   q : cred.rec<CRED$MECH>      : q : ','
+      ps :=                   q : cred.rec<CRED$SALT>      : q : ','
+      ps :=                   q : cred.rec<CRED$ITER>      : q : ','
+      ps :=                   q : cred.rec<CRED$STOREDKEY> : q : ','
+      ps :=                   q : cred.rec<CRED$SERVERKEY> : q : ')'
+      ps := @fm : '$nl = [char]13 + [char]10'
+      ps := @fm : 'try {'
+      ps := @fm : '  [System.IO.File]::WriteAllText($p, ($l -join $nl) + $nl,'
+      ps := @fm : '     [System.Text.Encoding]::ASCII)'
+      ps := @fm : '} catch { exit 1 }'
+      ps := @fm : 'exit 0'
+
+      if ps_script(ps) # 0 then
+         close cred.f
+         set.status ER$PERM
+         return
+      end
+   end
+
+*  ***THE READ-BACK IS THE POINT, NOT A COURTESY.*** Either path above can
+*  report success and leave a record this side cannot use: the direct write can
+*  be refused, and the elevated one goes through a PowerShell script whose exit
+*  code says the FILE was written and nothing about whether SD can parse it.
+*  An unusable $cred record is an account that authenticates against nothing, and
+*  it would be found at the next login rather than here.  So the record is read
+*  back through SD's own reader and BOTH keys are compared - the same fields
+*  !CRED_VERIFY will use.
+   check.rec = ''
+   read check.rec from cred.f, account else check.rec = ''
+
+   if check.rec<CRED$STOREDKEY> # stored.key then
       close cred.f
+      set.status ER$PERM
+      return
+   end
+
+   if check.rec<CRED$SERVERKEY> # server.key then
+      close cred.f
+      set.status ER$PERM
       return
    end
 
