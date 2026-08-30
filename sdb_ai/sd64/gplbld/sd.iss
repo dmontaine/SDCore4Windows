@@ -3309,12 +3309,48 @@ begin
       MsgBox(SshLimit, mbInformation, MB_OK);
 
     if not DataTreeAbsent then
-      { Said out loud, because silently keeping the old data would look like
-        the upgrade had worked. }
+      { 30 Aug 26 - REWRITTEN, BECAUSE IT SAID THE OPPOSITE OF WHAT HAD JUST
+        HAPPENED.  PRE_RELEASE_FIXES 77.
+
+        IT FIRED ON THE CONDITION THAT MAKES IT FALSE, which is what made it
+        provable rather than arguable: this branch is "not DataTreeAbsent", and
+        DataTreeUpgrade is "not DataTreeWasAbsent" - THE SAME PREDICATE - and
+        that is what gates the generated upgrade branch's [InstallDelete] and
+        [Files].  So "the newly built system files were NOT installed over it"
+        was printed at precisely the moment they were.  "Upgrading an existing
+        database in place is not yet supported" had been false since 25 Aug
+        2026, when the owner ruled "preserve the user's own files, replace all
+        the shipped ones" and it was built and verified (task table H.3).
+
+        THE ORIGINAL PURPOSE WAS SOUND AND IS KEPT: say out loud what was and
+        was not touched, so that nobody has to guess.  What changed is that the
+        answer is now the other way round.
+
+        MEASURED BEFORE IT WAS REWORDED, on the owner's own 30 Aug reinstall:
+        voc.dic, dict.dic, accounts.dic, $map.dic and three os.users.dic
+        records all carried the install's timestamp, in the tree this box had
+        just called untouched.
+
+        THE THIRD PARAGRAPH IS NOT PADDING.  sd.conf being onlyifdoesntexist is
+        why re-running the installer does NOT turn the API back on, which cost
+        the owner a confused half hour on 30 Aug 2026.  Saying it here is the
+        cheapest place it can be said.
+
+        EVERY CLAIM BELOW COMES FROM stage.py's OWN LISTS - SDSYS_PRESERVE for
+        what is kept, SDSYS_SHIP minus it for what is replaced.  Check it there
+        rather than against this comment if either list moves. }
       MsgBox('An existing SD database was found at ' + ExpandConstant('{#DataDir}\sdsys') + '.' + #13#10#13#10 +
-             'It has been left exactly as it was, and the newly built system files were NOT installed over it. ' +
-             'Your accounts and data are untouched.' + #13#10#13#10 +
-             'Upgrading an existing database in place is not yet supported.',
+             'YOUR DATA IS UNTOUCHED: your accounts and their passwords, the account ' +
+             'register, anything you catalogued, the print queue, held output, and any ' +
+             'programs you wrote in SDSYS''s own BP.' + #13#10#13#10 +
+             'SD''S OWN SYSTEM FILES WERE REPLACED - the BASIC source and its compiled ' +
+             'objects, the VOC templates, the messages and the dictionaries. That is ' +
+             'what upgrading in place means, and it is why you are seeing this rather ' +
+             'than being asked to uninstall first.' + #13#10#13#10 +
+             'YOUR CONFIGURATION WAS NOT CHANGED. sd.conf is left exactly as it is, so ' +
+             'settings you edited survive - and re-running this installer will not ' +
+             'change them back. To turn the SD API on or off, edit sd.conf and restart ' +
+             'the SD service.',
              mbInformation, MB_OK);
 
     { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
