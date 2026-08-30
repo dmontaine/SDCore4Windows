@@ -127,6 +127,60 @@ $body = & {
         Write-Output ('NOT PRESENT: ' + $cfg)
     }
 
+    # 30 Aug 26 - PRE_RELEASE 67 AND 75 ARE MEASURED HERE RATHER THAN READ OUT OF
+    # sd.iss.  67 says a full install puts the OpenSSH server on even when the ssh
+    # box is left unchecked, because sd.iss:719 gates on SshServerAbsent and never
+    # tests the task; 75 says the api box only shuts the firewall and leaves SD
+    # listening, because APIPORT stays active in the full sd.conf.  Both were
+    # reasoned from the installer source and neither had been observed on a
+    # machine.  These three readings are what turn them into observations - so
+    # take this capture on an install where BOTH boxes were left unchecked.
+    Section 'OpenSSH server (PRE_RELEASE 67)'
+    $sshd = Join-Path $env:SystemRoot 'System32\OpenSSH\sshd.exe'
+    if (Test-Path -LiteralPath $sshd) {
+        Write-Output ('  PRESENT  ' + $sshd)
+        try {
+            $svc = Get-Service -Name sshd -ErrorAction Stop
+            Write-Output ('  service sshd: status=' + $svc.Status + ' startup=' + $svc.StartType)
+        } catch {
+            Write-Output ('  service sshd: NOT REGISTERED or not readable: ' + $_.Exception.Message)
+        }
+    } else {
+        Write-Output ('  absent   ' + $sshd)
+        Write-Output '  (no OpenSSH server on this machine)'
+    }
+
+    # THE ACTIVE-LINE COUNT IS THE READING, not the presence of the word.  The
+    # stand-alone conf carries APIPORT commented out, and sdwind.c's
+    # open_api_listener() returns -1 for "no listener" when the port is <= 0, so
+    # a commented line and a missing line mean the same thing and an ACTIVE one
+    # means SD is listening.
+    Section 'sd.conf APIPORT (PRE_RELEASE 75)'
+    $sdconf = Join-Path $env:ProgramData 'SD\sd.conf'
+    if (Test-Path -LiteralPath $sdconf) {
+        Write-Output ('present: ' + $sdconf)
+        $api = @(Get-Content -LiteralPath $sdconf | Where-Object { $_ -match 'APIPORT' })
+        if ($api.Count -eq 0) { Write-Output '  NO APIPORT line at all' }
+        $api | ForEach-Object { Write-Output ('  ' + $_) }
+        $active = @($api | Where-Object { $_ -match '^\s*APIPORT\s*=' })
+        Write-Output ('  ACTIVE APIPORT lines: ' + $active.Count + '   (0 = no listener)')
+    } else {
+        Write-Output ('NOT PRESENT: ' + $sdconf)
+    }
+
+    Section 'firewall rules for the two remote routes'
+    try {
+        $r = @(Get-NetFirewallRule -ErrorAction Stop |
+               Where-Object { $_.DisplayName -match 'SD |OpenSSH|SSH|4243' })
+        Write-Output ('matching rules: ' + $r.Count)
+        $r | ForEach-Object {
+            Write-Output ('  {0,-44} enabled={1} dir={2}' -f $_.DisplayName, $_.Enabled, $_.Direction)
+        }
+        if ($r.Count -eq 0) { Write-Output '  (none matched - the enumeration succeeded)' }
+    } catch {
+        Write-Output ('COULD NOT ENUMERATE: ' + $_.Exception.Message)
+    }
+
     Section 'SD trees'
     foreach ($p in 'C:\Program Files\SD', 'C:\ProgramData\SD', 'C:\ProgramData\SD\sdsys', 'C:\ProgramData\SD\user_accounts') {
         if (Test-Path -LiteralPath $p) {
