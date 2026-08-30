@@ -5,6 +5,40 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+29 Aug 26  UNINSTALLING NOW OFFERS TO REMOVE THE WINDOWS ACCOUNTS SD CREATED,
+           AND SAYS SO EITHER WAY.
+
+           Uninstalling removes SD's ssh configuration - the AllowGroups that
+           said who could connect and the ForceCommand that put an ssh session
+           into SD rather than at a shell prompt. It did not remove the
+           Windows accounts SD had created. So those accounts stayed, with
+           their passwords, and became ordinary accounts with a shell on the
+           machine: the confinement went and the accounts did not.
+
+           Nothing said so. The closing page listed what uninstalling keeps as
+           your database, the ssh server and the sdusers group, and never
+           mentioned the accounts.
+
+           Two changes:
+
+             * A second question, after the one about the database and like
+               it defaulting to No: remove the Windows accounts SD created,
+               with their sdu_ and sdg_ groups and their profiles.
+
+             * The closing page now names the accounts in what uninstalling
+               keeps, whichever way you answer.
+
+           YOUR OWN ACCOUNT IS NEVER REMOVED by that prompt, and the question
+           names it so you can see which one is being kept before you answer.
+           The sweep also refuses outright if it would remove the last account
+           able to sign in to Windows as an administrator - that refusal
+           overrides a Yes.
+
+           It records what it removed and what it kept in a log file, and
+           names it when it finishes. A profile whose registry settings are
+           still loaded cannot be deleted until the next restart; the log
+           names any that were left behind.
+
 29 Aug 26  A COMMIT INSIDE ANOTHER TRANSACTION NO LONGER THROWS AWAY THE
            OUTER TRANSACTION'S WRITES.
 

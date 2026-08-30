@@ -827,6 +827,15 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 29 Aug 26 - PRE_RELEASE_FIXES 39.  Where the account sweep was stashed at
+    usUninstall, or empty if it could not be.  It has to be COPIED out of the
+    application directory before that directory is deleted: the sweep is
+    offered at usPostUninstall, to follow the database question the owner's
+    ruling says it follows, and by then everything under the app directory has
+    gone - which is the same reason RemoveAllowGroups runs at usUninstall
+    instead.  Empty means "do not offer it", so a failed copy costs the prompt
+    rather than producing one whose Yes cannot do anything. }
+  SdAccountsScript: String;
   { 25 Aug 26 - WAS THIS ALREADY A STAND-ALONE SYSTEM?  Sampled once in
     InitializeSetup for exactly the reason the two above are, and the reason is
     sharper here: THIS INSTALLER CREATES THE MARKER ITSELF, at ssPostInstall.  A
@@ -1308,11 +1317,18 @@ begin
        'leaves the file as it was; the copy is there if you would rather put it ' +
        'back yourself.' + #13#10#13#10;
 
+  { 29 Aug 26 - THE ACCOUNTS ARE NAMED HERE NOW.  PRE_RELEASE_FIXES 39: this
+    listed the database, the ssh server and sdusers, and said nothing about the
+    Windows accounts CREATE.ACCOUNT had made - so an administrator reading it
+    had no reason to think there was anything else to clean up.  It was wrong
+    whichever way the new prompt is answered, which is why it is fixed with it
+    rather than after it. }
   M := M + 'WHAT UNINSTALLING DOES NOT REMOVE' + #13#10#13#10;
   if Standalone then
-    M := M + 'Your database and the sdusers group. SD installed no ssh server here, so there is none to be left behind. Removing the database is offered separately and defaults to keeping it.' + #13#10#13#10
+    M := M + 'Your database, the sdusers group, and the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles. SD installed no ssh server here, so there is none to be left behind. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10
   else
-    M := M + 'Your database, the ssh server, and the sdusers group. Removing the database is offered separately and defaults to keeping it.' + #13#10#13#10;
+    M := M + 'Your database, the ssh server, the sdusers group, and the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
+         'Accounts you keep are ordinary Windows accounts once SD is gone: they keep their passwords, and the ssh confinement that limited them to SD is removed with the rest of SD''s configuration. Your own account is never removed by that prompt.' + #13#10#13#10;
 
   { KEPT COMMON, DELIBERATELY.  It is true of a stand-alone system too - the
     installing user is one member of sdusers and an administrator can add
@@ -3445,12 +3461,37 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+(* Copy the account sweep somewhere that outlives the application directory.
+
+   PRE_RELEASE_FIXES 39.  The sweep is offered AFTER the database question, and
+   that question is at usPostUninstall - by which point {app} and everything in
+   it is gone.  So the script is taken now, while it still exists.
+
+   A FAILED COPY LEAVES SdAccountsScript EMPTY AND THE PROMPT IS NOT OFFERED.
+   Asking a question whose Yes cannot be carried out is worse than not asking.
+
+   Not brace-delimited - see RemoveFromPath. *)
+procedure StashAccountSweep;
+var
+  Src, Dst: String;
+begin
+  SdAccountsScript := '';
+  Src := ExpandConstant('{app}\remove-sdaccounts.ps1');
+  if not FileExists(Src) then
+    Exit;
+  Dst := ExpandConstant('{tmp}\remove-sdaccounts.ps1');
+  if FileCopy(Src, Dst, False) then
+    SdAccountsScript := Dst;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  DataPath: String;
+  DataPath, Ps, LogPath, KeepUser: String;
+  Code: Integer;
 begin
   if CurUninstallStep = usUninstall then
   begin
+    StashAccountSweep;
     RemoveAllowGroups;
     RemoveApiFirewall;
     RemoveFromPath;
@@ -3502,6 +3543,71 @@ begin
       MsgBox('Some files under ' + DataPath + ' could not be removed. ' +
              'They may be in use by a running SD process.', mbError, MB_OK);
   end;
+
+  { ------------------------------------------------------------------------
+    THE SECOND QUESTION - the Windows accounts.  PRE_RELEASE_FIXES 39, owner's
+    ruling 29 Aug 2026.  The question above removes the SD-side records; this
+    one removes the Windows accounts themselves, and until it existed
+    uninstalling left every one of them enabled while REMOVING the sshd_config
+    ForceCommand that confined them to SD.
+
+    SEPARATE, AND DEFAULTING TO No, exactly like the database question - the
+    ruling asked for "a second separate prompt".
+
+    IT NAMES THE ACCOUNT IT IS KEEPING, IN THE QUESTION.  The ruling requires
+    the installing user to be excluded "by construction", and the instrument
+    rule applies to an uninstaller too: a wrong answer has to be visible while
+    it can still be refused, not discovered at the next sign-in.
+    ------------------------------------------------------------------------ }
+
+  if SdAccountsScript = '' then
+    Exit;
+
+  KeepUser := ExpandConstant('{username}');
+  if KeepUser = '' then
+    Exit;
+
+  if MsgBox('Remove the Windows accounts SD created as well?' + #13#10#13#10 +
+            'These are the accounts CREATE.ACCOUNT made, with their sdu_ and ' +
+            'sdg_ groups and their profiles. They are Windows accounts: they ' +
+            'keep their passwords and stay able to sign in after SD is gone, ' +
+            'and the ssh confinement that limited them to SD has just been ' +
+            'removed with the rest of SD''s configuration.' + #13#10#13#10 +
+            'The account ' + KeepUser + ' WILL BE KEPT, so you can still sign ' +
+            'in to Windows. If that is not the account you expect, choose No.' + #13#10#13#10 +
+            'Choose No to keep them all, which is the safe choice.',
+            mbConfirmation, MB_YESNO or MB_DEFBUTTON2) <> IDYES then
+    Exit;
+
+  { THROUGH cmd SO THE OUTPUT IS KEPT.  The sweep prints what it removed and
+    what it kept, and Exec cannot capture that; a window that closes is the
+    same as no report at all.  The log is named back to the user below.
+
+    THE SCRIPT REFUSES ON ITS OWN if -Keep names nobody in sdusers, or if the
+    sweep would take the last local administrator - so a wrong answer here
+    stops there rather than in the middle of the accounts. }
+  LogPath := ExpandConstant('{%TEMP|C:\Windows\Temp}\sd-remove-accounts.log');
+  Ps := ExpandConstant('{sys}\cmd.exe');
+  Exec(Ps, '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') +
+           '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+           SdAccountsScript + '" -Remove -Keep "' + KeepUser + '" > "' + LogPath + '" 2>&1"',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+
+  if Code = 0 then
+    MsgBox('The Windows accounts SD created have been removed, and ' + KeepUser +
+           ' was kept.' + #13#10#13#10 +
+           'What was removed and what was kept is recorded in:' + #13#10 +
+           LogPath + #13#10#13#10 +
+           'A profile whose registry hive is still loaded cannot be deleted ' +
+           'until the next restart; the log names any that were left.',
+           mbInformation, MB_OK)
+  else
+    MsgBox('The Windows accounts were NOT removed.' + #13#10#13#10 +
+           'The sweep refused rather than act on something it could not check - ' +
+           'for example if it would have removed the last account able to sign ' +
+           'in to Windows.' + #13#10#13#10 +
+           'Its reason is in:' + #13#10 + LogPath,
+           mbInformation, MB_OK);
 end;
 
 function NotOnPath(Dir: String): Boolean;

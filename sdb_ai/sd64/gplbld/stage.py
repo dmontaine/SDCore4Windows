@@ -1006,6 +1006,18 @@ def main():
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
                    'sync-route-groups.ps1',
                    'ssh-firewall.ps1',
+                   # 29 Aug 26 - remove-sdaccounts.ps1, PRE_RELEASE_FIXES 39's
+                   # ruling.  The uninstaller offers to take away the Windows
+                   # accounts CREATE.ACCOUNT made; until it did, uninstalling
+                   # left every one of them enabled while REMOVING the
+                   # sshd_config ForceCommand that confined them to SD.
+                   #
+                   # IT SHIPS, so assert-current watches it like the rest of
+                   # these - do NOT add it to that script's $neverShipped list.
+                   # sd.iss copies it to {tmp} at usUninstall, because the
+                   # prompt that runs it is at usPostUninstall by which time
+                   # this directory has gone.
+                   'remove-sdaccounts.ps1',
                    # 25 Aug 26 - ssh-preflight.ps1 decides whether SD may
                    # install here at all, and it is the one script the
                    # installer runs BEFORE any file is written.  sd.iss
