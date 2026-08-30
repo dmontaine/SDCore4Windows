@@ -168,13 +168,30 @@ $body = & {
         Write-Output ('NOT PRESENT: ' + $sdconf)
     }
 
+    # 30 Aug 26 - RemoteAddress IS THE READING, AND THE FIRST VERSION OF THIS
+    # SECTION DID NOT TAKE IT.  It printed DisplayName, Enabled and Direction,
+    # and on the 11:00 capture that showed "OpenSSH SSH Server (sshd)
+    # enabled=True dir=Inbound" - which I read as "port 22 is open" and used to
+    # claim PRE_RELEASE 67 was worse than filed.  IT PROVES NOTHING OF THE KIND.
+    # ssh-firewall.ps1:150 restricts the rule with
+    # "Set-NetFirewallRule -RemoteAddress '127.0.0.1' -Enabled True", so a
+    # correctly RESTRICTED install looks EXACTLY like an open one on those three
+    # fields.  The scope is the whole question and it was the one thing not read.
+    #
+    # Noise is dropped too: matching on 'SSH' pulled in twelve Network Discovery
+    # rules that have nothing to do with either route.
     Section 'firewall rules for the two remote routes'
     try {
         $r = @(Get-NetFirewallRule -ErrorAction Stop |
-               Where-Object { $_.DisplayName -match 'SD |OpenSSH|SSH|4243' })
+               Where-Object { $_.Name -match 'OpenSSH|sshd' -or $_.DisplayName -match 'OpenSSH|SD API|4243' })
         Write-Output ('matching rules: ' + $r.Count)
-        $r | ForEach-Object {
-            Write-Output ('  {0,-44} enabled={1} dir={2}' -f $_.DisplayName, $_.Enabled, $_.Direction)
+        foreach ($x in $r) {
+            $addr = '<unreadable>'
+            try { $addr = (($x | Get-NetFirewallAddressFilter -ErrorAction Stop).RemoteAddress -join ',') } catch { }
+            Write-Output ('  {0}' -f $x.DisplayName)
+            Write-Output ('      name={0} enabled={1} dir={2} profile={3}' -f
+                          $x.Name, $x.Enabled, $x.Direction, $x.Profile)
+            Write-Output ('      RemoteAddress={0}   <- 127.0.0.1 = restricted, Any = open to the network' -f $addr)
         }
         if ($r.Count -eq 0) { Write-Output '  (none matched - the enumeration succeeded)' }
     } catch {
