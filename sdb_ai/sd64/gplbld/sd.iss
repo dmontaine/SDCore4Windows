@@ -155,12 +155,41 @@ Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from a
 ;
 ; THE GROUP IS "ssh:" RATHER THAN "Remote access:" because the first box is not
 ; about remote access at all - it is about whether the service exists.
+; ***THE TWO FLAGS BELOW ARE THE WHOLE OF THE THREE STATES, AND LEAVING THEM OFF
+; PRODUCED TWO WRONG ONES.  Measured 30 Aug 2026 by the owner at the wizard, and
+; then read out of Inno's own help (ISetup.chm, "Tasks section") rather than
+; guessed a second time:***
+;
+;   dontinheritcheck - "Specifies that the task should not automatically become
+;                       checked when its parent is checked."
+;   checkablealone   - "Specifies that the task can be checked when none of its
+;                       children are.  BY DEFAULT, if no Tasks parameter
+;                       directly references the task, unchecking all of the
+;                       task's children will cause the task to become
+;                       unchecked."
+;
+; WITHOUT THEM THE OWNER SAW EXACTLY WHAT THE DEFAULTS PROMISE: ticking the
+; server ticked the remote box with it, and unticking the remote box untick the
+; SERVER - so "install the server, no remote access" could not be expressed at
+; all.  The three states he asked for are:
+;
+;   parent off                -> no server, and the child cannot be selected
+;                                ("A child task can't be selected if its parent
+;                                task isn't selected" - same help topic)
+;   parent on, child off      -> server, no remote access   <- needs BOTH flags
+;   parent on, child on       -> server with remote access
+;
+; ***AND THE `Check:` ON THE [Run] ENTRY IS NOT THE `Tasks:` PARAMETER THE HELP
+; MEANS.***  The exemption reads "unless a Tasks parameter DIRECTLY REFERENCES
+; the parent task"; install-ssh.ps1 carries `Check: SshServerWanted`, which is a
+; Check and not a Tasks parameter, so the exemption does not apply here and
+; checkablealone is doing real work rather than being belt-and-braces.
 Name: "sshserver"; Description: "Install the OpenSSH server (SD accounts sign in over ssh and nothing else)"; \
-    GroupDescription: "ssh:"; \
+    GroupDescription: "ssh:"; Flags: checkablealone; \
     Check: SshServerAbsent
 
 Name: "sshserver\sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    Flags: unchecked; \
+    Flags: unchecked dontinheritcheck; \
     Check: SshServerAbsent
 
 ; PRESENT AND CURRENTLY LOOPBACK-ONLY - default unticked, so doing nothing keeps
