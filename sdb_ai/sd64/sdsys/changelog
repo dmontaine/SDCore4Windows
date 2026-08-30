@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+29 Aug 26  LISTF NOW DESCRIBES SDSYS'S OWN FILES INSTEAD OF PRINTING "F".
+
+           In the SDSYS account, LISTF printed a bare F in the Description
+           column for ten of the sixteen files it lists - $hold, accounts,
+           bp, bp.out, gpl.bp, gpl.bp.out, messages, newvoc, os.users and
+           qfile. The other six showed real text.
+
+           F is the file's type code, not a description. It appeared because
+           the description is looked up in NEWVOC, the vocabulary a newly
+           created account is given, and those ten files belong to SDSYS
+           alone - so they are not in it, and with nothing to look up the
+           display fell back to showing the type code.
+
+           The ten now carry a description of their own. Nothing else about
+           them changes, and no account gains access to anything it did not
+           have before.
+
+           Two verb entries, EDIT and MICRO, carried their description where
+           the type code goes. Both worked - a type code may be followed by
+           comment text - but they were the last two entries inconsistent
+           with every other verb, and they are now a plain V like the rest.
+
+           You will see this on a new installation. Installing does not
+           overwrite an existing database, so a system that already has one
+           keeps the vocabulary it already has.
+
 29 Aug 26  UNINSTALLING NOW OFFERS TO REMOVE THE WINDOWS ACCOUNTS SD CREATED,
            AND SAYS SO EITHER WAY.
 
