@@ -383,6 +383,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # the moment anybody used the instrument.  Listed in the commit
                   # that creates it, under section 7 step 7's rule.
                   'probe-osadmin.c', 'probe-osadmin.ps1', 'probe-osadmin.exe',
+                  # 29 Aug 26 - verify-txn.ps1, the regression guard for
+                  # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
+                  # orphan the outer transaction's cache and lose its writes
+                  # with no message.  A silent data-loss defect is the kind
+                  # that comes back unnoticed, which is why it gets a verifier
+                  # rather than a one-off probe.  Listed in the commit that
+                  # creates it, under section 7 step 7's rule.
+                  'verify-txn.ps1',
                   # 24 Aug 26 - probe-catprivate.ps1, section 7 step 15's
                   # one owed measurement: after the sdusers:(RX) lock on
                   # sdsys\cat, does CATALOG (private) still write the record.

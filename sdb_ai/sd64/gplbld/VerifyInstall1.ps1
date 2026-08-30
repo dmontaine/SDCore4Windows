@@ -344,7 +344,23 @@ $steps = @(
     # because an elevated session passes the batch gate on its own.  IT RAISES
     # TWO UAC PROMPTS ITSELF, for the two steps that write SDSYS batch.jobs -
     # so this runner now costs about five in total rather than three.
-    @{ Name = 'verify-batchjob.ps1';     P = @{} }
+    @{ Name = 'verify-batchjob.ps1';     P = @{} },
+    # 29 Aug 26 - PRE_RELEASE 11 / UPSTREAM 17's regression guard: a nested
+    # COMMIT used to orphan the outer transaction's cache and lose its writes
+    # with no message at all.  A SILENT data-loss defect is the kind that comes
+    # back unnoticed, which is why it earns a standing verifier rather than the
+    # one-off probe that found it.
+    #
+    # IT BELONGS IN THIS RUNNER: no elevation, no prefix, no account of its own
+    # and NO UAC PROMPT - it compiles and runs a probe in the caller's own SD
+    # account and removes it again, so it does not change what this runner costs
+    # a person to sit through.  It REFUSES an elevated shell, because an
+    # elevated session lands in SDSYS where the probe is not.
+    #
+    # Measured on the 18:36:04 install before being added - 9 of 9 PASS - so it
+    # is not being wired in untested, which is the rule verify-lineendings above
+    # records.
+    @{ Name = 'verify-txn.ps1';          P = @{} }
 )
 
 # 28 Aug 26 - THE SUSPENDED DOOR PAIR, AS ONE STEP.  PRE_RELEASE 38, on the

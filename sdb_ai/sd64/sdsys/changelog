@@ -5,6 +5,30 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+29 Aug 26  A COMMIT INSIDE ANOTHER TRANSACTION NO LONGER THROWS AWAY THE
+           OUTER TRANSACTION'S WRITES.
+
+           If you began a transaction, wrote a record, began a second
+           transaction inside it, and committed that inner one, the outer
+           transaction was quietly abandoned at that point. Its writes were
+           then lost when you committed it - no error, no warning, nothing in
+           the log. The inner records landed and the outer ones did not.
+
+           That is the one thing a transaction exists to prevent, so if you
+           have avoided nesting transactions because results looked
+           inconsistent, this is why.
+
+           A commit now ends only its own transaction and puts you back in
+           the one that contained it, which is what a rollback has always
+           done.
+
+           system(1008), the transaction nesting level, is also correct
+           again. It only ever counted upwards before - it was raised when a
+           transaction began and never lowered when one was committed - so
+           after your first commit it could not be used to ask whether you
+           were inside a transaction. system(1007) was unaffected and stays
+           the reliable test on older releases.
+
 29 Aug 26  AN ADMINISTRATOR NOW SIGNS IN TO THEIR OWN ACCOUNT, AND REACHES
            SDSYS BY ELEVATING - NOT AUTOMATICALLY.
 

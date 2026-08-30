@@ -17,6 +17,15 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 29 Aug 26 Windows port - op_txncmt() now leaves the transaction level it
+ *           commits.  PRE_RELEASE_FIXES 11, UPSTREAM_FIXES 17: it undid
+ *           neither half of what op_txnbgn() did, so txn_depth only ever
+ *           climbed and a NESTED commit orphaned the outer transaction's
+ *           cache on txn_stack - the outer COMMIT then wrote an empty cache
+ *           and its records were lost silently.  The reinstate-and-decrement
+ *           block is lifted out of rollback() into end_txn_level() and called
+ *           from both, because having it in one place with one caller is what
+ *           the defect was.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -70,6 +79,7 @@ Private TXN_STACK* txn_stack = NULL;
 
 Private TXN_CACHE* alloc_txn(int16_t id_len);
 Private void rollback(void);
+Private void end_txn_level(void);
 Private void clear_parent(int16_t fno, char* id, int16_t id_len);
 
 /* ======================================================================
@@ -221,6 +231,28 @@ void op_txncmt() {
   /* Release all locks acquired during this transaction */
 
   unlock_txn(commit_txn_id);
+
+  /* 29 Aug 26 Windows port - AND NOW LEAVE THE TRANSACTION LEVEL, WHICH THIS
+     FUNCTION NEVER DID.  PRE_RELEASE_FIXES 11, UPSTREAM_FIXES 17.  Without it
+     txn_depth only ever climbed (so SYSTEM(1008) was useless) and, far worse, a
+     NESTED commit left the outer transaction's cache orphaned on txn_stack -
+     process.txn_id was zeroed above, so the outer COMMIT then committed an
+     empty cache and its writes vanished with no message.  See end_txn_level().
+
+     DELIBERATELY BEFORE THE LABEL, SO THE ERROR PATHS DO NOT REACH IT.  The
+     three "goto exit_op_txncmt" above are write and delete failures that have
+     already called k_error(); the transaction is broken at that point and the
+     level must not be popped as though it had committed.
+
+     THAT LEAVES A SEPARATE, PRE-EXISTING GAP AND THIS DOES NOT WIDEN IT: on
+     those error paths process.txn_id has already been set to 0 at the top of
+     this function, so txn_abort() and op_txnrbk() both test it, find nothing,
+     and roll nothing back - the level stays counted and the stack stays
+     orphaned.  That is a different defect from this one; it is filed rather
+     than fixed here, because a commit that failed half way needs a decision
+     about what to do with the records already written, not a decrement.     */
+
+  end_txn_level();
 
 exit_op_txncmt:
   return;
@@ -534,7 +566,6 @@ Private TXN_CACHE* alloc_txn(int16_t id_len) {
    rollback()  -  Roll back top level transaction                         */
 
 Private void rollback() {
-  TXN_STACK* stk;
   TXN_CACHE* txn;
   TXN_CACHE* next_txn;
   FILE_VAR* fvar;
@@ -576,6 +607,42 @@ Private void rollback() {
   unlock_txn(process.txn_id);
 
   /* Exit from this transaction */
+
+  end_txn_level();
+}
+
+/* ======================================================================
+   end_txn_level()  -  Leave one transaction level, reinstating the parent
+
+   29 Aug 26 Windows port - LIFTED OUT OF rollback() SO THAT COMMIT CAN DO IT
+   TOO.  PRE_RELEASE_FIXES 11, UPSTREAM_FIXES 17.
+
+   THE BUG THIS FIXES WAS THAT ONLY ONE PATH DID THIS.  op_txnbgn() does two
+   things - it increments txn_depth, and if a transaction is already running it
+   pushes that one onto txn_stack.  rollback() undid both; op_txncmt() undid
+   NEITHER, and BCOMP's st.commit jumps past the OP.TXNEND that would have
+   called rollback(), so on the committed path nothing ever reversed them.
+
+   TWO SYMPTOMS, AND THE SECOND IS THE ONE THAT MATTERS.  SYSTEM(1008) climbed
+   for ever, so a program could not ask "am I in a transaction"; and a NESTED
+   commit set process.txn_id = 0 while leaving the outer transaction's cache
+   orphaned on txn_stack, so the outer COMMIT then committed an EMPTY cache and
+   its writes were lost with no message.  Part of a transaction landing and
+   part not is the one outcome a transaction exists to prevent.
+
+   IT IS ONE FUNCTION RATHER THAN TWO COPIES BECAUSE THE DEFECT WAS EXACTLY
+   THAT THE BOOKKEEPING LIVED IN ONE PLACE AND ONE CALLER.  A second copy in
+   op_txncmt() would be the same shape of thing waiting to drift again.
+
+   THE unlock STAYS WITH THE CALLER and is not moved in here, because the two
+   pass different ids: rollback() unlocks process.txn_id, which is still the
+   running transaction at that point, while op_txncmt() has already zeroed
+   process.txn_id (so the close action does not loop) and unlocks the saved
+   commit_txn_id.  Folding that in would have to re-derive which id to use,
+   which is how a shared helper becomes wrong for one of its callers.        */
+
+Private void end_txn_level() {
+  TXN_STACK* stk;
 
   if ((stk = txn_stack) != NULL) /* Reinstate nested transaction */
   {
