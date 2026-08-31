@@ -1079,6 +1079,27 @@ def main():
                    # BOTH SHIP, so assert-current watches them - do NOT add
                    # either to that script's $neverShipped list.
                    'restart-sd.ps1', 'remove-ssh.ps1',
+                   # 31 Aug 26 - sd-path.ps1, PRE_RELEASE_FIXES 89 and the
+                   # owner's ruling of the same day.  An upgrade is to skip the
+                   # tasks page and fire none of its actions, which left the
+                   # `addtopath` tickbox with no way to be changed afterwards:
+                   # "we do not have a user command to change the path.  If we
+                   # skip page, fire nothing on upgrade we need to have that
+                   # option available as a command."
+                   #
+                   # SPLIT OUT OF THE VERB FOR THE REASON api-listener.ps1
+                   # RECORDS: a script can be parse-checked, byte-checked and
+                   # unit-tested on its own, and BASIC embedded in a verb
+                   # cannot.  test-sdpath-units.ps1 lifts its three pure
+                   # functions by AST and drives them against synthetic PATHs -
+                   # including the 23-empties case of 16 Aug 2026 - so the one
+                   # setting that breaks the whole machine is never rehearsed
+                   # on the real value.
+                   #
+                   # IT SHIPS, so assert-current watches it like the rest of
+                   # these - do NOT add it to that script's $neverShipped list.
+                   # Its unit test does NOT ship and IS on that list.
+                   'sd-path.ps1',
                    # 26 Aug 26 - the EDIT and MICRO verbs each need a
                    # terminal full-screen editor.  Most machines already carry
                    # Microsoft Edit (System32\edit.exe); micro is always a

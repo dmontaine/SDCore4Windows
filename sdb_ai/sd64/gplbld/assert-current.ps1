@@ -918,7 +918,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # nothing.  Leg 2 writes a previous-selection value under its
                   # OWN throwaway HKCU key and removes it again; SD's key is
                   # read-only throughout.
-                  'probe-taskflags.ps1', 'probe-taskflags.iss')
+                  'probe-taskflags.ps1', 'probe-taskflags.iss',
+                  # 31 Aug 26 - test-sdpath-units.ps1, the unit test for
+                  # sd-path.ps1 (PRE_RELEASE 89).  A test-*-units.ps1 has never
+                  # shipped.  ***sd-path.ps1 ITSELF SHIPS AND IS DELIBERATELY
+                  # NOT HERE*** - it is in stage.py's list, which records why:
+                  # the verb drives it, so it has to be on the user's machine.
+                  'test-sdpath-units.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
