@@ -202,7 +202,15 @@ $Withheld = @(
     'analyse.file','analyze.file','fstat','hsm','set.trigger',
     'create.index','delete.index','build.index','make.index','list.index',
     # P3 - bulk record edit
-    'copy','copyp','delete','rename','reformat','sreformat','sort.item','delete.common','cname',
+    # 30 Aug 26 - sort.item LEFT THIS LIST WITH THE SHIPPED ONE, PRE_RELEASE 7.
+    #   Caught by this file's OWN cross-check at the bottom - "shipped
+    #   TIER.OMIT.STANDARD matches this test: expected 0, got 1" on -Run b77 -
+    #   which is the check written for exactly this and the reason it is here.
+    #   ***test-tiercounts-units DID NOT CATCH IT AND CANNOT***: it reconciles
+    #   the COUNTS each verifier claims against the tree, and both counts were
+    #   already right.  This list is a set of NAMES, a second copy of the
+    #   shipped record, and nothing outside this file compares it.
+    'copy','copyp','delete','rename','reformat','sreformat','delete.common','cname',
     # P4 - process introspection
     'pstat','pdebug','pdump','dump'
 )
