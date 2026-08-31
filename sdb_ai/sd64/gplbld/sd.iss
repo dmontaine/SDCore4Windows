@@ -3315,9 +3315,20 @@ begin
         IT FIRED ON THE CONDITION THAT MAKES IT FALSE, which is what made it
         provable rather than arguable: this branch is "not DataTreeAbsent", and
         DataTreeUpgrade is "not DataTreeWasAbsent" - THE SAME PREDICATE - and
-        that is what gates the generated upgrade branch's [InstallDelete] and
-        [Files].  So "the newly built system files were NOT installed over it"
-        was printed at precisely the moment they were.  "Upgrading an existing
+        that is what gates the generated upgrade branch's [InstallDelete]
+        and [Files] entries.  So "the newly built system files were NOT
+        installed over it" was printed at precisely the moment they were.
+
+        ***AND THE LINE ABOVE IS WRAPPED THE WAY IT IS ON PURPOSE.***  ISCC
+        splits the file into sections BEFORE any Pascal comment is understood,
+        so a bracketed word that starts a line is read as a SECTION TAG even
+        inside braces.  This comment first said "... [InstallDelete] and" /
+        "[Files].  So ..." and cost a cycle step: "Error on line 3319: Invalid
+        section tag.  Compile aborted."  Same class as the "#" hazard the
+        SuppressibleMsgBox comment above records - a character that means
+        something to a layer that runs before the one you are writing for.
+        NEVER LET A LINE IN THIS FILE BEGIN WITH [Anything] UNLESS IT IS
+        MEANT AS A SECTION HEADER.  "Upgrading an existing
         database in place is not yet supported" had been false since 25 Aug
         2026, when the owner ruled "preserve the user's own files, replace all
         the shipped ones" and it was built and verified (task table H.3).
