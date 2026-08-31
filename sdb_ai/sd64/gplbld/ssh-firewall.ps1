@@ -84,6 +84,19 @@ function Get-SshRule {
     return $r
 }
 
+# 30 Aug 26 - ONE PLACE DECIDES OPEN OR SHUT, AND THAT IS DELIBERATE.
+# -ScopeFile and -Show both need this answer, and on 30 Aug 2026 verify-tiers
+# cost a run for exactly the shape of mistake two copies invite: the Count was
+# updated and the list beside it was not.  A LIST, NOT A SCALAR - RemoteAddress
+# can hold several entries, so this asks whether ANY of them is the
+# unrestricted one rather than comparing a joined string.  Case-insensitive on
+# purpose: "Any" is Windows' own keyword, not data.
+function Test-RuleOpen($rule) {
+    if ($null -eq $rule) { return $false }
+    $addrs = ($rule | Get-NetFirewallAddressFilter).RemoteAddress
+    return ($addrs -contains 'Any')
+}
+
 function Write-State($rule) {
     $addr = ($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ','
     Write-Output ("ssh-firewall: " + $rule.Name + "  Enabled=" + $rule.Enabled +
@@ -99,16 +112,7 @@ try {
     # caller needs to know, and exiting 2 here would leave the installer with no
     # answer at all for a case that has a perfectly good one.
     if ($ScopeFile -ne '') {
-        if ($null -eq $rule) {
-            $verdict = 'restricted'
-        } else {
-            # A LIST, NOT A SCALAR.  RemoteAddress can hold several entries, so
-            # this asks whether ANY of them is the unrestricted one rather than
-            # comparing the joined string.  Case-insensitive on purpose here:
-            # Windows' own spelling is "Any" and this is a keyword, not data.
-            $addrs = ($rule | Get-NetFirewallAddressFilter).RemoteAddress
-            if ($addrs -contains 'Any') { $verdict = 'open' } else { $verdict = 'restricted' }
-        }
+        if (Test-RuleOpen $rule) { $verdict = 'open' } else { $verdict = 'restricted' }
         [System.IO.File]::WriteAllText($ScopeFile, $verdict, [System.Text.Encoding]::ASCII)
         Write-Output ("ssh-firewall: current scope is " + $verdict)
         exit 0
@@ -121,6 +125,18 @@ try {
 
     if ($Show) {
         Write-State $rule
+        # 30 Aug 26 - AND SAY WHAT IT MEANS.  "remote.ssh" with no keyword runs
+        # this, and until now an administrator asking who may reach ssh got a
+        # firewall rule dumped at them rather than an answer.  api-listener.ps1
+        # -Show ends on a plain sentence and this now matches it.  The test is
+        # Test-RuleOpen, the SAME function -ScopeFile uses, so the reported
+        # state and the state the installer defaults its checkbox from cannot
+        # disagree.
+        if (Test-RuleOpen $rule) {
+            Write-Output 'ssh-firewall: state is ON - other computers on your network may connect over ssh'
+        } else {
+            Write-Output 'ssh-firewall: state is OFF - only this computer may connect over ssh'
+        }
         exit 0
     }
 

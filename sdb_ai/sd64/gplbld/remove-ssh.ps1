@@ -81,7 +81,12 @@ if ($null -eq $cap) {
 }
 
 Say ("state      : " + $cap.State)
-Report 'before'
+
+# 30 Aug 26 - "before" IS A LIE ON THE -Show PATH, because nothing comes after
+# it.  "ssh.server" with no keyword runs -Show, and the first thing it printed
+# to the owner on 30 Aug 2026 was a line labelled "before" that was the whole
+# output.  A label that promises a second half has to deliver one.
+Report $(if ($Show) { 'state' } else { 'before' })
 
 if ($Show) { exit 0 }
 
