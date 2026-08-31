@@ -130,6 +130,14 @@ param(
     # non-administrator account, created and removed inside the step.  Lower
     # case only, same derivation as the rest: it becomes a Windows account name.
     [string]$GatePrefix  = '',   # verify-sdsysgate.ps1 - one account
+    # 30 Aug 26 - verify-profiledir.ps1, PRE_RELEASE_FIXES 54.  It was in
+    # NEITHER runner, so 36's last leg had never fired since the day it was
+    # written.  VerifyInstall2 is the right runner and VerifyInstall1 is not,
+    # and its cost is lower than verify-doors-suite, already a suite step: one
+    # control account, created and deleted, and it never logs in - so it leaves
+    # no profile directory, which is the thing that makes the doors fixture
+    # single-use and expensive.
+    [string]$ProfPrefix  = '',   # verify-profiledir.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -165,6 +173,11 @@ if ($Run) {
     if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
     if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
     if (-not $GatePrefix)  { $GatePrefix  = "sdgate$Run" }
+    # THE PREFIX MUST COME FROM THE -Run TOKEN, as sdacctb48/sdtiertb48 already
+    # do and as 54 says in as many words.  verify-profiledir.ps1 refuses a spent
+    # stem by design, so a FIXED prefix would pass once and fail on every later
+    # run on the same machine - which reads like a product fault and is not one.
+    if (-not $ProfPrefix)  { $ProfPrefix  = "sdprof$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -434,6 +447,10 @@ $steps = @(
     # ProfileList entry behind; both subjects are named from -DelPrefix, so
     # the next cycle needs a fresh one either way.
     @{ Name = 'verify-delaccount.ps1';    P = @{ Prefix  = $DelPrefix } },
+    # 30 Aug 26 - PRE_RELEASE_FIXES 54.  Placed after verify-delaccount because
+    # both make and remove one account, so a failure here reads next to the
+    # other account-lifecycle rows rather than among the ACL ones.
+    @{ Name = 'verify-profiledir.ps1';    P = @{ Prefix  = $ProfPrefix } },
     # 22 Aug 26 - the ssh-only account model (section 5.6.2).  LAST OF THE
     # ACCOUNT STEPS and still before verify-peerlog, same error-log reason.
     #

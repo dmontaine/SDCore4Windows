@@ -933,7 +933,19 @@ PW.TRY.AGAIN:
           void os_group("ADDMEM", "sdsshonly", acc.uname)
           stat = OS.ERROR()
           if stat = 0 then
-            crt sysmsg(10034,acc.uname)   ;* %1 may sign in over ssh only
+* 30 Aug 26 Windows port - 10034 NO LONGER ASSERTS ssh.  PRE_RELEASE_FIXES 69.
+*   It is printed here, unconditionally, whenever the account joins sdsshonly -
+*   and sdsshonly is about the WINDOWS LOGON RIGHT, which is true for all four
+*   route values.  Its old wording added "may reach this computer only over
+*   ssh", which is true for SSH and BOTH and FALSE for API and NONE: the owner
+*   measured "create.account user james api" printing that sentence and then,
+*   immediately below it, "SD routes for JAMES: the API only, not ssh".
+*
+*   THE ROUTE LINE IS THE OTHER GATE AND IT IS ALREADY RIGHT, so the fix is for
+*   this message to stop making a claim that is not its to make and to point at
+*   the line that is.  37 prescribed the old wording against a sample that
+*   contained only SSH and BOTH - the two values it is true for.
+            crt sysmsg(10034,acc.uname)   ;* %1 is denied console and Remote Desktop
           end else
             @system.return.code = -ER$FAILED
             stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2

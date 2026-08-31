@@ -1527,7 +1527,25 @@ begin
     one arm, and whether an ssh server was installed is a box on the tasks page
     rather than a mode, so the sentence says "if SD installed one" instead of
     asserting it either way.  PRE_RELEASE_FIXES 67 and 75. }
-    M := M + 'Your database, the ssh server if SD installed one, the sdusers group, and the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
+    { 30 Aug 26 - ALL FOUR GROUPS ARE NAMED NOW, NOT ONE.  PRE_RELEASE_FIXES 74.
+      Measured in the after-capture of the real uninstall that closed 39:
+      sdusers, sdssh, sdapi and sdsshonly ALL still exist afterwards, and this
+      sentence named only sdusers - so three of the four were unstated in the
+      one document whose whole job is to be complete about what is left behind.
+
+      sdsshonly IS WORTH NAMING ON ITS OWN ACCOUNT.  It carries
+      SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight
+      (deny-logon.ps1:29), so it is a deny-logon group left on the machine by
+      software that has removed itself.  Harmless while empty, and exactly the
+      thing an administrator auditing the box afterwards would want told.
+
+      NAMING THEM IS NOT THE WHOLE FIX AND THIS DOES NOT PRETEND IT IS.  The
+      entry offers "either remove the three, or name them"; REMOVING them is a
+      behaviour change and the owner's call, and sdusers has a stated reason to
+      stay that the other three do not share (sd.iss:3506 - deleting it "would
+      orphan the permissions on their own database"). }
+    M := M + 'Your database, the ssh server if SD installed one, the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles - and FOUR GROUPS: sdusers, sdssh, sdapi and sdsshonly. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
+         'sdusers stays because deleting it would orphan the permissions on your database. The other three are left because SD does not assume they are its to remove; sdsshonly still denies its members console and Remote Desktop sign-in, so remove it by hand if you want that gone.' + #13#10#13#10 +
          'Accounts you keep are ordinary Windows accounts once SD is gone: they keep their passwords, and the ssh confinement that limited them to SD is removed with the rest of SD''s configuration. Your own account is never removed by that prompt.' + #13#10#13#10;
 
   { KEPT COMMON, DELIBERATELY.  It is true of a stand-alone system too - the

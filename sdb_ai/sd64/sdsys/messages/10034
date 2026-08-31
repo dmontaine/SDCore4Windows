@@ -1,1 +1,1 @@
-%1 may reach this computer only over ssh - the console and Remote Desktop are denied to it.
+%1 is denied sign-in at the console and over Remote Desktop. The next line says which ways in it has.
