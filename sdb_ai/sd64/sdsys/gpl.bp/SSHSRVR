@@ -1,0 +1,170 @@
+* SSHSRVR
+* SSH.SERVER verb
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 30 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 78.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*    SSH.SERVER INSTALL | REMOVE
+*
+*    Adds or removes the Windows OpenSSH SERVER on this machine.
+*
+*    With no keyword it reports whether one is present and changes nothing.
+*
+* ***WHY THIS MATTERS MORE THAN IT LOOKS.***  Accounts SD creates sign in over
+* ssh and nothing else - deny-logon.ps1:29 denies them the console and Remote
+* Desktop - so removing the server takes away the only way in for every SD
+* account, including at this keyboard, where they arrive by "ssh localhost".
+* That is why REMOVE asks before it acts.
+*
+* ***THE REMOVAL IS STAGED BEHIND A REBOOT AND THE VERB SAYS SO.***  Measured on
+* the development host 30 Aug 2026: after Remove-WindowsCapability reported
+* success, sshd.exe was still on disk, the sshd service was still Running and
+* RebootPending was True.  An administrator who runs this, sees ssh still
+* working and reports a bug is what not saying it produces.
+*
+* ***INSTALL IS SLOW AND SILENT.***  The capability comes from Windows Update
+* and can take several minutes with nothing on screen; install-ssh.ps1 carries
+* that warning and the installer's own status message says the same.
+*
+* ***THE CLIENT IS NOT TOUCHED.***  ssh.exe, scp.exe and sftp.exe are a separate
+* Windows capability.  This verb is about who can reach THIS machine.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+
+program $ssh.server
+$catalog $SSHSRVR
+
+* int$keys.h carries K$ADMINISTRATOR and K$WINPATH; the other three are the set
+* MODIFY.ACCOUNT and DELETE.ACCOUNT take.
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+
+   deffun ps_script(script) calling '!ps_script'
+
+   prompt ''
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+*  Assigned for BCOMP, and every value is the safe one - no action, no change.
+   action = ''
+   script = ''
+   arg    = ''
+   rc     = 0
+   yn     = ''
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* Verb ssh.server
+   call @parser(PARSER$GET.TOKEN, token.type, action, keyword)  ;* INSTALL | REMOVE
+
+   action = upcase(trim(action))
+
+*  NO KEYWORD REPORTS AND STOPS.  remove-ssh.ps1 -Show reads the capability
+*  state, which is the same question for both directions, so one script answers
+*  it whichever way the administrator is thinking of going.
+   if token.type = PARSER$END or action = '' then
+      script = '/remove-ssh.ps1'
+      arg    = ' -Show'
+      gosub run.script
+      if rc # 0 then
+         crt sysmsg(10143, 'SHOW', rc)  ;* Could not read the ssh server state
+      end
+      stop
+   end
+
+   begin case
+      case action = 'INSTALL'
+         script = '/install-ssh.ps1'
+         arg    = ''
+      case action = 'REMOVE'
+         script = '/remove-ssh.ps1'
+         arg    = ''
+      case @true
+         stop sysmsg(10141)  ;* ssh.server install | remove
+   end case
+
+*  ***REMOVE IS CONFIRMED, INSTALL IS NOT.***  Adding a server takes nothing
+*  away; removing one strands every SD account, and the question names that
+*  rather than asking a bare "are you sure".
+   if action = 'REMOVE' then
+*     ***THE PROMPT SAYS WHICH ANSWER ENTER GIVES, AND ENTER GIVES IT.***
+*     Owner's rule, 30 Aug 2026: "scripts need to indicate which is the default
+*     using <y>/n or y/<n>".  N here, and it is the safe one - this is the
+*     prompt standing between an administrator and every account's only way in.
+      loop
+         display sysmsg(10144) :   ;* SD accounts sign in over ssh only (y/<n>)?
+         input yn
+         yn = upcase(trim(yn))
+         if yn = '' then yn = 'N'
+         until yn = 'Y' or yn = 'N'
+      repeat
+      if yn = 'N' then
+         stop sysmsg(10145)  ;* Nothing was changed
+      end
+   end
+
+   gosub run.script
+
+*  ***EXIT 2 IS "NOTHING TO DO", NOT A FAILURE, AND THE TWO READ DIFFERENTLY.***
+*  remove-ssh.ps1 exits 2 when the capability is not installed, and
+*  install-ssh.ps1 exits 2 when the capability was added but the service is not
+*  registered yet - the restart case.  Reporting either as an error would send
+*  an administrator looking for a fault that is not there.
+   if rc = 2 then
+      if action = 'REMOVE' then
+         stop sysmsg(10146)  ;* There was no ssh server on this machine to remove
+      end
+      stop sysmsg(10142)     ;* Installed, and a restart is needed before it runs
+   end
+
+   if rc # 0 then
+      stop sysmsg(10143, action, rc)  ;* Could not change the ssh server
+   end
+
+   if action = 'INSTALL' then
+      crt sysmsg(10147)  ;* The OpenSSH server is installed
+   end else
+      crt sysmsg(10148)  ;* Removal accepted - it completes when Windows restarts
+   end
+
+   stop
+
+* ===========================================================================
+
+run.script:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, script) : char(39) : arg
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+   return
+
+end
+
+* END-CODE

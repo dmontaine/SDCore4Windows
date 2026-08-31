@@ -5,6 +5,47 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+30 Aug 26  THREE NEW ADMINISTRATOR COMMANDS: remote.api, remote.ssh AND
+           ssh.server.
+
+           Until now, whether this machine offered the SD API or accepted ssh
+           from other computers could only be decided while installing. These
+           change it afterwards, from inside SD. They are administrator
+           commands and are refused to anyone else.
+
+               remote.api on | local | off
+               remote.ssh on | off
+               ssh.server install | remove
+
+           Each reports the current setting if you give it no keyword, and
+           changes nothing when it does.
+
+           REMOTE.API HAS THREE SETTINGS, not two. ON means SD listens on port
+           4243 and other computers may connect. LOCAL means SD listens and
+           only this computer may connect - which is what an application on
+           this machine needs. OFF means SD opens no API socket at all.
+
+           ON and OFF change whether SD opens a socket, and SD decides that
+           when it starts, so they offer to restart SD. THE RESTART ENDS EVERY
+           SD SESSION INCLUDING YOURS, and the question says so before you
+           answer it. LOCAL and ON differ only in the firewall and take effect
+           at once.
+
+           REMOTE.SSH takes effect immediately and disconnects nobody. OFF does
+           not stop the ssh server, it limits it to this computer - SD accounts
+           sign in at this keyboard by connecting to "localhost", so that has
+           to keep working.
+
+           SSH.SERVER INSTALL downloads the server from Windows Update. It can
+           take several minutes with nothing on screen and usually needs a
+           restart afterwards. SSH.SERVER REMOVE asks first, because accounts
+           SD creates sign in over ssh and nothing else, so removing it leaves
+           them no way in at all - and the removal only completes when Windows
+           next restarts, so ssh going on working until then is expected.
+
+           None of these touches the ssh client. ssh, scp and sftp are a
+           separate part of Windows and are left alone.
+
 30 Aug 26  THE INSTALLER ASKS ABOUT ssh PROPERLY, AND THE STAND-ALONE
            INSTALLATION IS GONE.
 

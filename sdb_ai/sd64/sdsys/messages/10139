@@ -1,0 +1,1 @@
+Could not set remote ssh access to %1 (status %2). Nothing was changed.\n\nStatus 1 means the firewall rule could not be written; status -1 means the\nhelper could not be run at all. The rule is Windows' own OpenSSH-Server-In-TCP\nand only administrators may change it.

@@ -1,0 +1,1 @@
+Could not set the SD API to %1 (status %2). Nothing was changed.\n\nStatus 1 means sd.conf could not be written; status 2 means the question could\nnot be answered - the file is missing, unreadable, or carries no APIPORT line\nfor SD to recognise. Status -1 means the helper could not be run at all.\n\nsd.conf is in C:\ProgramData\SD and only administrators may write it.

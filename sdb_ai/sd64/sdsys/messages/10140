@@ -1,0 +1,1 @@
+There is no ssh server on this machine, so there is nothing to open or shut.\n\nWindows registers a firewall rule for its OpenSSH server when the server is\ninstalled, and none is there. Install one with:\n\n    ssh.server install\n\nUntil then no SD account can sign in, including at this keyboard - accounts SD\ncreates reach SD over ssh and nothing else.

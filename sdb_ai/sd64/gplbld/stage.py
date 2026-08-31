@@ -1060,6 +1060,25 @@ def main():
                    # IT SHIPS, so assert-current watches it like the rest of
                    # these - do NOT add it to that script's $neverShipped list.
                    'api-listener.ps1',
+                   # 30 Aug 26 - restart-sd.ps1 and remove-ssh.ps1, the other
+                   # two halves of PRE_RELEASE_FIXES 78's three verbs.
+                   #
+                   # restart-sd.ps1 is NOT Restart-Service, and cycle.ps1:299
+                   # records why: "Stop-Service returns before the SCM has
+                   # finished and before sdwind has gone", and sdwind is what
+                   # holds the shared segment.  A Restart-Service here would
+                   # report success while the OLD configuration went on
+                   # running, which for "remote.api" means telling somebody the
+                   # API is on when no socket was reopened.
+                   #
+                   # remove-ssh.ps1 mirrors install-ssh.ps1 and exists mostly to
+                   # SAY things: the removal is staged behind a reboot, and
+                   # C:\ProgramData\ssh is left behind, which makes the next SD
+                   # install refuse if sshd_config outlives sshd_config_default.
+                   #
+                   # BOTH SHIP, so assert-current watches them - do NOT add
+                   # either to that script's $neverShipped list.
+                   'restart-sd.ps1', 'remove-ssh.ps1',
                    # 26 Aug 26 - the EDIT and MICRO verbs each need a
                    # terminal full-screen editor.  Most machines already carry
                    # Microsoft Edit (System32\edit.exe); micro is always a

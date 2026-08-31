@@ -35,14 +35,25 @@
 # every administrator account shipped with a verb that could only ever answer
 # "Unable to load '$CRYPTO' object code".  PRE_RELEASE_FIXES.md 25.
 #
-# RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, as this block requires:
+# 30 Aug 26 - ADMINISTRATOR IS 419, AND ONLY ADMINISTRATOR MOVED.
+# PRE_RELEASE_FIXES 78 adds three administrator verbs - remote.api, remote.ssh
+# and ssh.server - so the owner can change after an install what only the
+# installer could change before.  They go in voc_template ONLY and are listed in
+# TIER.ADD.ADMINISTRATOR, which is stage.py's rule for an administrative verb:
+# "putting it in newvoc hands it to every account SD creates".
+#
+# RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY THREE, as this block requires:
 # newvoc holds 395 names, less "%t" and the two list records = 392;
-# TIER.ADD.ADMINISTRATOR is now 21 lines, 1 description + 20 verbs;
+# TIER.ADD.ADMINISTRATOR is now 24 lines, 1 description + 23 verbs;
 # TIER.OMIT.STANDARD is unchanged at 43 lines, 1 + 42.  So
-# ADMINISTRATOR 392 + 20 + 4 = 416, PROGRAMMER 392 + 4 = 396 and STANDARD
+# ADMINISTRATOR 392 + 23 + 4 = 419, PROGRAMMER 392 + 4 = 396 and STANDARD
 # 392 - 42 + 4 = 354.  ***STANDARD AND PROGRAMMER DO NOT MOVE***, and that is
-# the check on the arithmetic rather than a coincidence: the verb was only ever
-# ADMINISTRATOR's, so it leaves one of the three sums and not the other two.
+# the check on the arithmetic rather than a coincidence: the three verbs are
+# only ever ADMINISTRATOR's, so they leave one of the three sums and not the
+# other two.  A run where PROGRAMMER or STANDARD also moved would mean one of
+# them reached newvoc, which is the mistake stage.py's comment warns about.
+#
+# (Was: 21 lines, 1 + 20, ADMINISTRATOR 392 + 20 + 4 = 416.)
 #
 # 26 Aug 26 - BACK TO 392/417/396/354, AND THE ROUTE BACK IS THE 24 Aug ENTRY
 # BELOW RUN IN REVERSE.  The MICRO verb returned (owner's ruling, same day), so
@@ -155,7 +166,7 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $Tiers = @(
     [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 354 }
     [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 416 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 419 }
 )
 
 # The 42 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the

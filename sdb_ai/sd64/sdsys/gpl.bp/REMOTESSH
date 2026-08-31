@@ -1,0 +1,126 @@
+* REMOTESSH
+* REMOTE.SSH verb
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 30 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 78.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*    REMOTE.SSH ON | OFF
+*
+*    Says who may reach this machine's ssh server.
+*
+*       ON   other computers on the network may connect over ssh
+*       OFF  only this computer may connect
+*
+*    With no keyword it reports the current setting and changes nothing.
+*
+* ***IT TAKES EFFECT AT ONCE AND NEEDS NO RESTART***, which is the difference
+* from REMOTE.API: this moves a firewall rule, not a setting SD reads when it
+* starts.  Nobody is disconnected.
+*
+* ***OFF DOES NOT STOP THE SERVER, IT SCOPES THE RULE.***  ssh-firewall.ps1
+* sets RemoteAddress on OpenSSH-Server-In-TCP rather than disabling it, and its
+* own header says why: disabling would also break "ssh localhost", which is how
+* an SD account signs in AT THIS KEYBOARD.  deny-logon.ps1:29 denies SD accounts
+* the console and Remote Desktop, so ssh to localhost is their only local route
+* and it must keep working.
+*
+* ***THIS IS NOT HOW YOU REMOVE THE SERVER.***  That is SSH.SERVER REMOVE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+
+program $remote.ssh
+$catalog $REMOTESSH
+
+* int$keys.h carries K$ADMINISTRATOR and K$WINPATH; the other three are the set
+* MODIFY.ACCOUNT and DELETE.ACCOUNT take.
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+
+   deffun ps_script(script) calling '!ps_script'
+
+   prompt ''
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+*  Assigned for BCOMP, and every value is the safe one - no action, no change.
+   action = ''
+   want   = ''
+   rc     = 0
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* Verb remote.ssh
+   call @parser(PARSER$GET.TOKEN, token.type, action, keyword)  ;* ON | OFF
+
+   action = upcase(trim(action))
+
+   if token.type = PARSER$END or action = '' then
+      want = '-Show'
+   end else
+      begin case
+         case action = 'ON'
+            want = '-Installed -Open'
+         case action = 'OFF'
+            want = '-Installed -Restrict'
+         case @true
+            stop sysmsg(10137)  ;* remote.ssh on | off
+      end case
+   end
+
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/ssh-firewall.ps1') : char(39) : ' ' : want
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+
+   if want = '-Show' then
+      if rc # 0 then
+         crt sysmsg(10139, 'SHOW', rc)  ;* Could not read who may reach ssh
+      end
+      stop
+   end
+
+*  ***EXIT 2 IS ITS OWN ANSWER AND MUST NOT READ AS A GENERAL FAILURE.***
+*  ssh-firewall.ps1 exits 2 when there is no inbound OpenSSH rule to scope,
+*  which on this machine means no ssh server - a different thing from a refused
+*  write, and the administrator's next step is SSH.SERVER INSTALL rather than
+*  a retry.
+   if rc = 2 then
+      stop sysmsg(10140)  ;* There is no ssh server on this machine
+   end
+
+   if rc # 0 then
+      stop sysmsg(10139, action, rc)  ;* Could not change who may reach ssh
+   end
+
+   crt sysmsg(10138, action)  ;* Remote ssh access is now %1
+
+end
+
+* END-CODE

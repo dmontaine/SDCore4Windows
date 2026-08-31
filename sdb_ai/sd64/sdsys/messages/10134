@@ -1,0 +1,1 @@
+The API listener was set to %1, but the firewall rule was NOT changed (status %2).\n\nSD will open the port when it next starts, and who may reach it is whatever\nthe firewall already said. Run "remote.api %1" again, or set the rule by hand:\n\n    powershell -File "C:\Program Files\SD\api-firewall.ps1" -Open\n    powershell -File "C:\Program Files\SD\api-firewall.ps1" -Restrict

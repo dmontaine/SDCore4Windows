@@ -1,0 +1,1 @@
+The OpenSSH server is installed and running.\n\nWho may reach it is a separate setting - use "remote.ssh" to see or change it.

@@ -9,6 +9,9 @@ revoke
 list.grants
 unlock
 modify.password
+remote.api
+remote.ssh
+ssh.server
 config
 listu
 list.readu

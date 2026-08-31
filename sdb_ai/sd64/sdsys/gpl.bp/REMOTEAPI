@@ -1,0 +1,236 @@
+* REMOTEAPI
+* REMOTE.API verb
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 30 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 78, owner's request:
+*           "we need three new administrator commands REMOTE.API ON|OFF,
+*           REMOTE.SSH ON|OFF and SSH.SERVER INSTALL|REMOVE".
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*    REMOTE.API ON | LOCAL | OFF
+*
+*    Says whether this machine provides the SD API, and who may reach it.
+*
+*       ON     SD listens on port 4243 and other computers may connect
+*       LOCAL  SD listens on port 4243 and only this computer may connect
+*       OFF    SD opens no API socket at all
+*
+*    With no keyword it reports the current setting and changes nothing.
+*
+* ***THERE ARE TWO AXES AND THIS VERB SETS BOTH.***  APIPORT in sd.conf decides
+* whether SD opens a socket; the firewall rule decides who may reach it.  LOCAL
+* exists because they are separate - listener up, firewall shut - and it is the
+* state PRE_RELEASE 75 removed from the installer when the API box became a
+* service switch.  The owner ruled it back in here on 30 Aug 2026, which is why
+* it is three keywords and not the two he first named.
+*
+* ***THE LISTENER ONLY OPENS AT START-UP, SO ON AND OFF NEED A RESTART.***
+* gplbld/stage.py:499 records it: open_api_listener() returns -1 for "no
+* listener" when the port is <= 0, read once as SD starts.  LOCAL and ON differ
+* only in the firewall when the listener is already up, so the restart is asked
+* for ONLY when APIPORT itself moved - api-listener.ps1 reports "already ON" or
+* "already OFF" and this reads that.
+*
+* ***THE RESTART DISCONNECTS THE CALLER, AND THAT IS WHY THE WARNING COMES
+* FIRST.***  Measured in the C on 30 Aug 2026: stop_sd() (gplsrc/sysseg.c:766)
+* walks the user table and SIGTERMs every entry with a uid and a pid > 0.  It
+* has no "are users logged in" check - cycle.ps1's comment saying it refuses is
+* wrong.  So the administrator running this verb is one of the sessions it
+* ends, and they will not be here to read a message printed afterwards.  The
+* Y/N question therefore states the consequence, and nothing is printed after
+* the restart that matters.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+
+program $remote.api
+$catalog $REMOTEAPI
+
+* THE SAME FOUR MODIFY.ACCOUNT AND DELETE.ACCOUNT TAKE, and int$keys.h is not
+* optional here: K$ADMINISTRATOR (:101) and K$WINPATH (:140) are BOTH defined
+* there and in neither of the others.  Leaving it out compiles to an
+* unknown-symbol failure that costs a whole cycle to discover.
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+
+   deffun ps_script(script) calling '!ps_script'
+
+   prompt ''
+
+*  ADMINISTRATOR ONLY, THE SAME GATE MODIFY.ACCOUNT USES (MODIFYA:181).  This
+*  changes what the machine offers the network; it is not an ordinary user's.
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+*  ASSIGNED HERE FOR BCOMP, NOT FOR THE LOGIC.  bootstrap.py fails the WHOLE
+*  bootstrap on an "is not assigned a value" warning, and BCOMP reads the
+*  source in order.  Every value is also the safe one: no action, no change.
+   action     = ''
+   want.port  = ''
+   want.fw    = ''
+   port.moved = @false
+   rc         = 0
+   yn         = ''
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* Verb remote.api
+   call @parser(PARSER$GET.TOKEN, token.type, action, keyword)  ;* ON | LOCAL | OFF
+
+   action = upcase(trim(action))
+
+*  NO KEYWORD IS A REPORT, NOT AN ERROR.  Asking what the setting is should
+*  never be able to change it, so this path runs api-listener.ps1 -Show and
+*  stops before anything else.
+   if token.type = PARSER$END or action = '' then
+      gosub report.state
+      stop
+   end
+
+   begin case
+      case action = 'ON'
+         want.port = '-On'
+         want.fw   = '-Open'
+      case action = 'LOCAL'
+         want.port = '-On'
+         want.fw   = '-Restrict'
+      case action = 'OFF'
+         want.port = '-Off'
+         want.fw   = '-Restrict'
+      case @true
+         stop sysmsg(10131)  ;* remote.api on | local | off
+   end case
+
+*  ---------------------------------------------------------------------------
+*  1.  THE LISTENER.  api-listener.ps1 edits APIPORT in sd.conf and reads the
+*      record back before reporting; see its own header for why it is a script
+*      rather than BASIC in here.
+*
+*      EXIT 0 MEANS "the file now says what was asked", which includes the case
+*      where it already did - so a second "remote.api on" is not an error.  It
+*      prints "already ON" and this verb learns from the SECOND script, below,
+*      whether anything actually needs restarting.
+*  ---------------------------------------------------------------------------
+   gosub run.listener
+   if rc # 0 then
+      stop sysmsg(10133, action, rc)  ;* Could not change the API listener
+   end
+
+*  ---------------------------------------------------------------------------
+*  2.  THE FIREWALL.  api-firewall.ps1 is the installer's own script and is
+*      already shipped and re-runnable; -Open and -Restrict are its two states.
+*  ---------------------------------------------------------------------------
+   gosub run.firewall
+   if rc # 0 then
+      stop sysmsg(10134, action, rc)  ;* The listener was set but the firewall was not
+   end
+
+   crt sysmsg(10132, action)  ;* The SD API is now %1
+
+*  ---------------------------------------------------------------------------
+*  3.  THE RESTART, AND ONLY IF THE LISTENER ACTUALLY MOVED.
+*
+*      GOING TO OR FROM "OFF" IS WHAT NEEDS IT.  ON and LOCAL differ only in the
+*      firewall, which takes effect at once, so an administrator moving between
+*      those two is not asked to disconnect anybody.  port.moved is set by
+*      run.listener from what the script reported rather than from what was
+*      asked for, so "remote.api on" twice asks once.
+*  ---------------------------------------------------------------------------
+   if not(port.moved) then
+      stop
+   end
+
+*  ***THE PROMPT SAYS WHICH ANSWER ENTER GIVES, AND ENTER GIVES IT.***  Owner's
+*  rule, 30 Aug 2026: "scripts need to indicate which is the default using
+*  <y>/n or y/<n>".  The default here is N, and it is the safe one - it changes
+*  nothing that has not already been written and disconnects nobody.  The two
+*  halves have to agree: a prompt that shows a default and then loops on an
+*  empty answer is worse than one that shows none.
+   loop
+      display sysmsg(10135) :   ;* Restart SD now? Every session ends (y/<n>)?
+      input yn
+      yn = upcase(trim(yn))
+      if yn = '' then yn = 'N'
+      until yn = 'Y' or yn = 'N'
+   repeat
+
+   if yn = 'N' then
+      stop sysmsg(10136)  ;* Not restarted - it takes effect when SD is next started
+   end
+
+*  NOTHING AFTER THIS LINE IS SEEN BY THE CALLER, and that is by design rather
+*  than by accident - restart-sd.ps1 runs in the elevated helper, which is not
+*  in SD's user table and so survives, while this session is SIGTERMed with the
+*  rest.  The Y/N above is the last thing they read.
+   gosub run.restart
+   stop
+
+* ===========================================================================
+
+report.state:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-listener.ps1') : char(39) : ' -Show'
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+   if rc # 0 then
+      crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API listener setting
+   end
+   return
+
+run.listener:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-listener.ps1') : char(39) : ' ' : want.port
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+
+*  ***"ALREADY" IS NOT VISIBLE THROUGH AN EXIT CODE, SO IT IS ASKED SEPARATELY.***
+*  ps_script returns the status and nothing else, so this cannot read the
+*  script's own "already ON" line.  Rather than guess, it asks the machine what
+*  it wants to know: was the listener in the wanted state BEFORE this ran?  The
+*  -Show call above the change would have answered that, so it is made again
+*  here only when the change succeeded, and the two are compared.
+*
+*  SIMPLER AND HONEST: a restart is offered whenever the listener was asked to
+*  move to or from OFF and the write succeeded.  Offering it once too often
+*  costs a question; never offering it leaves a setting that does not take.
+   port.moved = (rc = 0) and (action = 'ON' or action = 'OFF')
+   return
+
+run.firewall:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-firewall.ps1') : char(39) : ' ' : want.fw
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+   return
+
+run.restart:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/restart-sd.ps1') : char(39)
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+   return
+
+end
+
+* END-CODE

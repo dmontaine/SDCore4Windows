@@ -1,0 +1,1 @@
+The OpenSSH server was installed, and Windows needs a restart before it runs.\n\nUntil this computer is restarted the ssh service does not exist, so no SD\naccount can sign in yet. Nothing else needs doing afterwards.
