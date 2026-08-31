@@ -433,6 +433,14 @@ $steps = @(
     # Measured on the 15:14:28 install before being added, 17/17 PASS,
     # so it is not being wired in untested.
     @{ Name = 'verify-lineendings.ps1'; P = @{} },
+    # 31 Aug 26 - PRE_RELEASE 91's guard, and it is in THIS runner because an
+    # ELEVATED one could not measure it at all: an elevated session lands in
+    # SDSYS, and "an administrator AS THEMSELVES" is the entire property.  It
+    # needs the test account for two different jobs at once - as a target the
+    # caller was never granted, and as the non-administrator control - so it
+    # goes next to the other two that take it.  Creates nothing, spends no
+    # prefix, raises no prompt.
+    @{ Name = 'verify-logtoaccess.ps1'; P = @{} },
     # 22 Aug 26 - section 7 step 12's guard.  It belongs in THIS runner rather
     # than VerifyInstall2: it spends no prefix, creates nothing, and needs no
     # elevation, which is this file's whole entry condition.
@@ -708,7 +716,8 @@ if ($Run) {
 # with its own two-prompt elevation dance).  verify-osusers.ps1 is 931 lines
 # with 32 references to the person's own identity in os.users and is
 # deliberately NOT in this group at all.
-$needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1')
+$needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1',
+                   'verify-logtoaccess.ps1')
 
 # AN ArrayList RATHER THAN "$kept += $s", and the door step above says why in
 # its own words: a hashtable on the right of + is folded into an array as one

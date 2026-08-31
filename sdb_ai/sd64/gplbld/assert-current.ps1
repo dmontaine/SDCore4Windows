@@ -198,6 +198,13 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # and then every verifier that calls this script refuses.
                   # Session 79 paid for that with three scripts at once.
                   'verify-sdsysgate.ps1',
+                  # 31 Aug 26 - verify-logtoaccess.ps1, PRE_RELEASE 91's
+                  # verifier.  Listed in the commit that creates it, for the
+                  # reason the entry directly above spells out: a gplbld script
+                  # not on this list makes the tree report STALE merely because
+                  # it exists, and then every verifier - this one included -
+                  # refuses.  Session 79 paid for that with three at once.
+                  'verify-logtoaccess.ps1',
                   'verify-keys.ps1', 'probe-keys.ps1',
                   # 24 Aug 26 - probe-syswrites.ps1, section 7 step 15's
                   # measurement: which of the eight remaining sdusers:(M)
