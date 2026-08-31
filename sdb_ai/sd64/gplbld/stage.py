@@ -1044,6 +1044,22 @@ def main():
                    # it is watched by assert-current like the rest of these -
                    # do NOT add it to that script's $neverShipped list.
                    'api-firewall.ps1',
+                   # 30 Aug 26 - api-listener.ps1, PRE_RELEASE_FIXES 78.  The
+                   # half of "remote.api on|local|off" that edits sd.conf, split
+                   # out of the verb for the reason install-ssh.ps1 records: a
+                   # script can be parse-checked, byte-checked and run on its
+                   # own, and BASIC embedded in a verb cannot.
+                   #
+                   # THE TWO AXES ARE DELIBERATELY TWO SCRIPTS.  APIPORT decides
+                   # whether SD opens a socket; api-firewall.ps1 above decides
+                   # who may reach it.  Keeping them apart is what lets
+                   # "remote.api local" exist - listener on, firewall shut -
+                   # which is the state 75 removed from the installer and the
+                   # owner ruled back in on 30 Aug 2026.
+                   #
+                   # IT SHIPS, so assert-current watches it like the rest of
+                   # these - do NOT add it to that script's $neverShipped list.
+                   'api-listener.ps1',
                    # 26 Aug 26 - the EDIT and MICRO verbs each need a
                    # terminal full-screen editor.  Most machines already carry
                    # Microsoft Edit (System32\edit.exe); micro is always a
