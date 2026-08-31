@@ -92,98 +92,40 @@ $internal
 function ps_script(script)
 $catalog !ps_script
 
-$include int$keys.h
+* int$keys.h is GONE with the body: K$ADMINISTRATOR was its only use here and
+* that test now lives in PS_SCRIPTO.  Checked rather than assumed - the symbol
+* appears nowhere else in this file.
 
-* 16 Aug 26 Windows port - the session's elevated helper, when it has one.
-deffun elevate(action, arg) calling '!elevate'
-
-   set.status 0
-   rc = -1
-
-   if script = '' then
-      set.status 1
-      return rc
-   end
-
-   id = '$PS.TMP.' : @userno
-
-* 16 Aug 26 Windows port - NOT THE ACCOUNT DIRECTORY, WHICH EVERY SD USER CAN
-*   WRITE.  This used to be openpath '.', so an SDSYS session wrote its scripts
-*   into C:\ProgramData\SD\sdsys, where the data tree's sdusers:Modify is
-*   inherited by every file - checked on the installed tree, 16 Aug 2026.
+* 31 Aug 26 Windows port - THE BODY THAT WAS HERE NOW LIVES IN PS_SCRIPTO, AND
+*   THIS IS A WRAPPER.  PRE_RELEASE_FIXES 90.  Nothing about what this function
+*   does has changed: same one argument, same return, same status(), same
+*   silence.  What moved is where the code is, so that the reporting form -
+*   !ps_script_out, which brings the script's OUTPUT back as well - shares this
+*   logic instead of holding a second copy of the PSTMP rules.  A second copy is
+*   exactly the thing that rots, and the rules it would copy are the ones that
+*   keep a password out of another user's reach.
 *
-*   The disclosure was the obvious half: !set_passwd's script carries a new
-*   Windows password in clear until it is deleted a moment later.  THE SERIOUS
-*   HALF IS ELEVATION: any SD user could rewrite another user's pending script
-*   between this write and the helper executing it, and the helper runs what it
-*   finds with full privilege.  PSTMP is created by the installer
-*   (gplbld/secure-psdir.ps1) so that each script is owned by, and readable
-*   only by, the session that wrote it - plus Administrators, which is how the
-*   helper reads it.
+*   THE SECURITY REASONING IS STILL ABOVE, in this file's START-DESCRIPTION,
+*   because this is the function everything calls and the header is where
+*   anybody looks.  The implementation comments went with the implementation.
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
+*  FALSE, ALWAYS, AND THAT IS THE POINT OF THE SPLIT.  !create_user,
+*  !set_passwd and !os_group all arrive here, and showing helper output
+*  unconditionally would put the internals of account creation on screen during
+*  an install.  Every existing caller keeps the silence it was written for; only
+*  the four reporting verbs ask for output, and they call !ps_script_out direct.
 *
-*   NO K$WINPATH HERE, AND THAT IS WHY THIS IS SHORTER THAN IT WAS.  @sdsys is
-*   already a Windows pathname - sd.conf carries "SDSYS=C:\ProgramData\SD\sdsys"
-*   and @ds is the backslash - so the name below is one PowerShell can open as
-*   it stands.  The ospath/K$WINPATH pair this replaces existed only to convert
-*   a POSIX working directory.
-   ps.dir = @sdsys : @ds : 'pstmp'
-   ps.path = ps.dir : @ds : id
-
-*  FAIL CLOSED IF IT IS MISSING.  An install that predates this step, or one
-*  where secure-psdir.ps1 did not run, must not silently fall back to writing
-*  privileged scripts somewhere every SD user can edit them.
-   openpath ps.dir to sys.f else
-      set.status 1
-      return rc
-   end
-
-   write script to sys.f, id on error
-      set.status 1
-      return rc
-   end
-
-*  SH1 names PowerShell, so the command IS PowerShell.  Single quotes, so the
-*  leading $ of the name is literal to PowerShell.
-   q = char(39)
-
-* 16 Aug 26 Windows port - AN ELEVATED SESSION SENDS THE SCRIPT TO ITS HELPER
-*   INSTEAD OF RUNNING IT HERE.  PROJECT_STATUS.md 7 step 4.  Entering SDSYS
-*   obtains privilege for the session (CPROC, !elevate) and this is where the
-*   privileged half of CREATE.ACCOUNT actually uses it - !create_user,
-*   !set_passwd and !os_group all arrive through here.
+*  FIELD 1 IS THE VALUE THIS HAS ALWAYS RETURNED.  PS_SCRIPTO returns
+*  rc : @fm : text; the text is empty here because want.out is false.
 *
-*   ASKED ONLY WHEN THE SESSION HAS ADMINISTRATOR RIGHTS, so an ordinary
-*   session pays nothing: the test is a flag read, not a process.  A session
-*   that is genuinely elevated already - the installer's own account step, a
-*   bootstrap, "sd -internal" - has no helper, gets 9 back and runs the script
-*   itself, which is the behaviour this file has always had.
-*
-*   THE HELPER NEEDS A WINDOWS PATHNAME, and ps.path already is one - it is
-*   built from @sdsys.  It is a separate process and does not inherit this
-*   working directory, so a relative name would mean nothing to it; that is
-*   what the conversion removed above used to be for.
-   if kernel(K$ADMINISTRATOR, -1) then
-      rc = elevate('RUN', ps.path)
-*     9 is "no helper for this session", and is the only answer that
-*     means "not handled" rather than a result.  Anything else, success
-*     or failure, is the script's own and is returned as it stands.
-      if rc # 9 then
-         delete sys.f, id
-         close sys.f
-         return rc
-      end
-   end
-
-*  A FULL PATHNAME NOW, not a name relative to the working directory: the
-*  script no longer lives in the account directory the child inherits.  Single
-*  quotes still, so the leading $ of the name stays literal to PowerShell.
-   os.execute 'Get-Content -LiteralPath ' : q : ps.path : q : ' -Raw | Invoke-Expression'
-   rc = os.error()
-
-   delete sys.f, id
-   close sys.f
-
-return rc
+*  ON status(): PS_SCRIPTO sets it exactly where this used to - 0 normally, 1
+*  when the script could not be written at all - but whether it survives the
+*  return through this wrapper is NOT asserted, because nothing depends on it:
+*  checked 31 Aug 2026, NO CALLER of ps_script reads status() afterwards, in
+*  any of the fourteen.  They all test the returned rc.  If one ever needs it,
+*  measure it before relying on it rather than trusting this line.
+   return field(ps_script_out(script, @false), @fm, 1)
 end
 
 * END-CODE

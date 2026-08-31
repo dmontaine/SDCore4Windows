@@ -64,6 +64,9 @@ $include err.h
 
    deffun ps_script(script) calling '!ps_script'
 
+* 31 Aug 26 Windows port - the reporting form, PRE_RELEASE_FIXES 90.
+   deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
    prompt ''
 
    if not(kernel(K$ADMINISTRATOR, -1)) then
@@ -74,6 +77,8 @@ $include err.h
    action = ''
    want   = ''
    rc     = 0
+   report = ''
+   both   = ''
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -97,9 +102,24 @@ $include err.h
 
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/ssh-firewall.ps1') : char(39) : ' ' : want
    ps := @fm : 'exit $LASTEXITCODE'
-   rc = ps_script(ps)
+
+*  ***THE REPORT KEEPS THE OUTPUT; THE TWO ACTIONS DO NOT.***
+*  PRE_RELEASE_FIXES 90.  "With no keyword it reports" printed NOTHING - this
+*  verb is administrator-gated, so ps_script always reached the elevated helper,
+*  which returned a status and threw the script's output away.  ON and OFF keep
+*  ps_script because 10138 already says what they did.
+   if want = '-Show' then
+      both   = ps_script_out(ps, @true)
+      rc     = field(both, @fm, 1)
+      report = field(both, @fm, 2, 9999)
+   end else
+      rc = ps_script(ps)
+   end
 
    if want = '-Show' then
+      if report # '' then
+         crt report
+      end
       if rc # 0 then
          crt sysmsg(10139, 'SHOW', rc)  ;* Could not read who may reach ssh
       end

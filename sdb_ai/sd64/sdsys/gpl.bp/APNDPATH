@@ -88,7 +88,12 @@ $include int$keys.h
 $include parser.h
 $include err.h
 
-   deffun ps_script(script) calling '!ps_script'
+*  THE REPORTING FORM, PRE_RELEASE_FIXES 90.  ps_script returns a status and
+*  throws the script's output away, so the -Show path printed NOTHING - this
+*  verb is administrator-gated, so it always reaches the elevated helper and
+*  never the fall-through that would have reached the terminal.  Measured on
+*  the installed tree 31 Aug 2026, and remote.api does the same.
+   deffun ps_script_out(script, want.out) calling '!ps_script_out'
 
    prompt ''
 
@@ -104,6 +109,8 @@ $include err.h
    action = ''
    arg    = ''
    rc     = 0
+   report = ''
+   both   = ''
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -117,7 +124,10 @@ $include err.h
 *  else.  -Show is also the one mode that needs no elevation.
    if token.type = PARSER$END or action = '' then
       arg = ' -Show'
-      gosub run.script
+      gosub run.report
+      if report # '' then
+         crt report
+      end
       if rc # 0 then
          crt sysmsg(10153, 'SHOW', rc)  ;* Could not read the system PATH
       end
@@ -133,14 +143,23 @@ $include err.h
          stop sysmsg(10152)  ;* append.sd.path on | off
    end case
 
-   gosub run.script
+*  ***CAPTURED EVEN THOUGH THE SUCCESS PATH PRINTS NONE OF IT.***  sd-path.ps1
+*  says WHY when it declines, and message 10155 below promises the reader those
+*  lines - a promise that was false until PRE_RELEASE_FIXES 90, because the
+*  elevated helper threw the output away.  Captured here and shown only when
+*  something went wrong, so a successful "on" stays one line.
+   gosub run.report
+
+   if rc # 0 and report # '' then
+      crt report
+   end
 
 *  ***EXIT 2 IS A REFUSAL, NOT A FAILURE, AND THE SCRIPT HAS ALREADY SAID WHY.***
 *  sd-path.ps1 exits 2 when it declines to act - the directory does not exist,
 *  the system PATH came back empty, or its own guard found the rebuilt value was
 *  not what was intended.  In every one of those it printed the reason and wrote
 *  nothing.  Restating it here would either duplicate the script or, worse,
-*  paraphrase it wrongly, so this points at what is already on screen.
+*  paraphrase it wrongly, so this points at what is now genuinely on screen.
    if rc = 2 then
       stop sysmsg(10155)  ;* Nothing was changed - the reason is above
    end
@@ -162,10 +181,19 @@ $include err.h
 
 * ===========================================================================
 
-run.script:
+*  ***ONE ENTRY POINT, AND IT ALWAYS CAPTURES.***  There was a second that
+*  called ps_script and discarded the output; both paths want the output now -
+*  the report to print it, the action to explain a refusal - so it was removed
+*  rather than left to read as a supported alternative.
+*
+*  Field 1 is the status ps_script would have returned; fields 2 onwards are
+*  what the script printed.
+run.report:
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/sd-path.ps1') : char(39) : arg
    ps := @fm : 'exit $LASTEXITCODE'
-   rc = ps_script(ps)
+   both   = ps_script_out(ps, @true)
+   rc     = field(both, @fm, 1)
+   report = field(both, @fm, 2, 9999)
    return
 
 end

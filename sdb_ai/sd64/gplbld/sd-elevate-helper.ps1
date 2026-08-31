@@ -210,13 +210,43 @@ try {
         # end in "exit 0" / "exit 1" / "exit 5", and run in-process that would
         # terminate the helper itself and take the session's privilege with it.
         # The child's exit code is the script's own answer.
+        # ***THE CHILD'S OUTPUT WENT NOWHERE, AND FOUR SHIPPED VERBS DEPENDED ON
+        # IT.***  PRE_RELEASE_FIXES 90.  Every "with no keyword it reports" verb
+        # - remote.api, remote.ssh, ssh.server, append.sd.path - is
+        # administrator-gated, so it always arrives HERE rather than taking
+        # !ps_script's unelevated fall-through, and printed nothing at all.
+        # Measured 31 Aug 2026 on the installed tree, twice.
+        #
+        # ***THE CALLER ASKS BY PRE-CREATING THE FILE. THAT IS NOT A TRICK, IT
+        # IS THE ONLY THING THE ACL ALLOWS.***  secure-psdir.ps1:31 withholds
+        # DeleteChild on PSTMP so one SD user cannot delete another's, and
+        # sdusers holds NO rights on files it did not create - CREATOR OWNER is
+        # what gives each file to its writer.  A file created HERE would belong
+        # to the elevated helper, and the SD session could then neither read it
+        # nor delete it: an unreadable report and a permanent litter file.
+        # Created by the SESSION first, it belongs to the session, and
+        # Administrators keep (OI)(CI)(F) so this child can still write into it.
+        #
+        # It doubles as the opt-in flag, so the pipe protocol is untouched:
+        # sd-elevate.ps1:91 still reads ONE line and :37's "the reply to a
+        # request is an exit code" still holds.
+        $outFile = $req + '.out'
+        $capture = Test-Path -LiteralPath $outFile
+
         $code = 1
         try {
-            $p = Start-Process powershell -Wait -PassThru -WindowStyle Hidden `
-                -ArgumentList @('-NoProfile', '-NonInteractive',
-                                '-ExecutionPolicy', 'Bypass',
-                                '-Command',
-                                "Get-Content -LiteralPath '$req' -Raw | Invoke-Expression")
+            $psArgs = @('-NoProfile', '-NonInteractive',
+                        '-ExecutionPolicy', 'Bypass',
+                        '-Command',
+                        "Get-Content -LiteralPath '$req' -Raw | Invoke-Expression")
+            if ($capture) {
+                Say "capturing output to $outFile"
+                $p = Start-Process powershell -Wait -PassThru -WindowStyle Hidden `
+                    -RedirectStandardOutput $outFile -ArgumentList $psArgs
+            } else {
+                $p = Start-Process powershell -Wait -PassThru -WindowStyle Hidden `
+                    -ArgumentList $psArgs
+            }
             $code = $p.ExitCode
         } catch {
             Say "run failed: $($_.Exception.Message)"

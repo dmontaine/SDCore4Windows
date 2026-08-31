@@ -79,6 +79,11 @@ $include err.h
 
    deffun ps_script(script) calling '!ps_script'
 
+* 31 Aug 26 Windows port - the reporting form, PRE_RELEASE_FIXES 90.  Only
+*   report.state uses it; the listener, firewall and restart calls keep
+*   ps_script, because each already has a message of its own for what it did.
+   deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
    prompt ''
 
 *  ADMINISTRATOR ONLY, THE SAME GATE MODIFY.ACCOUNT USES (MODIFYA:181).  This
@@ -96,6 +101,8 @@ $include err.h
    port.moved = @false
    rc         = 0
    yn         = ''
+   report     = ''
+   both       = ''
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -192,10 +199,25 @@ $include err.h
 
 * ===========================================================================
 
+*  ***THIS PRINTED NOTHING UNTIL 31 Aug 2026.  PRE_RELEASE_FIXES 90.***  The
+*  description above promises "with no keyword it reports the current setting",
+*  and ps_script returns a status while the elevated helper threw the script's
+*  output away.  This verb is administrator-gated, so it ALWAYS took that
+*  branch - the unelevated fall-through that would have reached the terminal is
+*  unreachable here.  Measured on the installed tree: "remote.api" in SDSYS
+*  printed nothing at all.
+*
+*  Field 1 is the status ps_script would have returned; fields 2 onwards are
+*  what the script printed.
 report.state:
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-listener.ps1') : char(39) : ' -Show'
    ps := @fm : 'exit $LASTEXITCODE'
-   rc = ps_script(ps)
+   both   = ps_script_out(ps, @true)
+   rc     = field(both, @fm, 1)
+   report = field(both, @fm, 2, 9999)
+   if report # '' then
+      crt report
+   end
    if rc # 0 then
       crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API listener setting
    end

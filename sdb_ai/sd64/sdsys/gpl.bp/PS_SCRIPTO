@@ -1,0 +1,175 @@
+* PS_SCRIPTO
+* !ps_script_out - run a PowerShell script, optionally returning its output
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 31 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 90.  This is
+*           !ps_script's body, MOVED here rather than copied, with the capture
+*           added; !ps_script is now a wrapper that calls it with capture off.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*    result = !ps_script_out(script, want.out)
+*
+*    script   - PowerShell text.  Lines are field marks.
+*    want.out - true to bring the script's OUTPUT back as well as its status.
+*
+*    Returns rc : @fm : the captured text.  Field 1 is exactly what
+*    !ps_script has always returned; fields 2 onwards are the output, one
+*    line per field, and are empty unless want.out was true.
+*
+* ***WHY IT RETURNS BOTH IN ONE VALUE.***  A function returns one thing, and
+* the two callers want different halves: !ps_script wants the status and
+* nothing else, the reporting verbs want both.  Threading the text through
+* status() is not possible - status is numeric - and a second catalogued
+* function would mean two copies of the PSTMP logic below, which is the part
+* that must not rot.
+*
+* ***WHY THE OUTPUT NEEDED CATCHING AT ALL.***  PRE_RELEASE_FIXES 90: four
+* shipped verbs promise "with no keyword it reports the current setting" and
+* every one printed NOTHING.  They are administrator-gated, so they always take
+* the elevated-helper branch below, and the helper returned a status and threw
+* the child's stdout away.  Measured on the installed tree 31 Aug 2026 with
+* append.sd.path and again with remote.api.
+*
+* ***THE SESSION PRE-CREATES THE OUTPUT FILE, AND THE ACL IS THE REASON.***
+* secure-psdir.ps1 withholds DeleteChild on PSTMP so one SD user cannot delete
+* another's file, and sdusers holds no rights at all on files it did not
+* create - CREATOR OWNER is what gives each file to its writer.  So a file
+* created by the ELEVATED HELPER would belong to the helper, and this session
+* could neither read it nor delete it: an unreadable report AND a litter file
+* nothing can remove.  Created here first, it belongs to us; Administrators
+* keep (OI)(CI)(F), so the helper's child can still write into it.
+*
+* IT DOUBLES AS THE OPT-IN FLAG.  sd-elevate-helper.ps1 redirects only when it
+* finds the file already there, so the pipe protocol is untouched - the reply
+* to a request is still one line and still an exit code.
+*
+* ***AND IT IS OPT-IN ON PURPOSE, NOT FOR TIDINESS.***  !ps_script also carries
+* !create_user, !set_passwd and !os_group.  Showing helper output
+* unconditionally would put the internals of account creation on screen during
+* an install, and PS_SCRIPT's own header records that scripts are written to a
+* file precisely to keep a password off a command line.  Every existing caller
+* keeps the old silence because !ps_script passes want.out FALSE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function ps_script_out(script, want.out)
+$catalog !ps_script_out
+
+$include int$keys.h
+
+* 16 Aug 26 Windows port - the session's elevated helper, when it has one.
+deffun elevate(action, arg) calling '!elevate'
+
+*  ASSIGNED HERE FOR BCOMP, NOT FOR THE LOGIC.  bootstrap.py fails the WHOLE
+*  bootstrap on an "is not assigned a value" warning, and BCOMP reads the source
+*  in order.  Every value is also the safe one.
+*  sys.f is NOT pre-assigned: it is a FILE variable, "openpath ... to sys.f"
+*  is what assigns it, and seeding it with a string would be a type error
+*  rather than a safe default.
+   set.status 0
+   rc     = -1
+   out    = ''
+   cmd    = ''
+   out.id = ''
+
+   if script = '' then
+      set.status 1
+      return rc : @fm : out
+   end
+
+*  PSTMP, NOT THE ACCOUNT DIRECTORY, and this FAILS CLOSED if it is absent
+*  rather than falling back.  gpl.bp/PS_SCRIPT's header carries the full
+*  reasoning: the account directory is sdusers:(M) and inherited, so every
+*  other SD user could read the script - which for !set_passwd is a password
+*  in clear - or rewrite it between the write and the helper reading it, which
+*  is a local privilege escalation.
+   id      = '$PS.TMP.' : @userno
+   out.id  = id : '.out'
+   ps.dir  = @sdsys : @ds : 'pstmp'
+   ps.path = ps.dir : @ds : id
+
+   openpath ps.dir to sys.f else
+      set.status 1
+      return rc : @fm : out
+   end
+
+   write script to sys.f, id on error
+      set.status 1
+      return rc : @fm : out
+   end
+
+*  THE PRE-CREATED FILE IS THE REQUEST.  See the header: it makes this session
+*  the owner, which is the only way the output can be read back and the only
+*  way the file can ever be deleted again.
+   if want.out then
+      write '' to sys.f, out.id on error
+*        Not fatal - the script still runs, it just cannot be quoted back.
+         want.out = @false
+      end
+   end
+
+   q = char(39)
+
+*  AN ELEVATED SESSION SENDS THE SCRIPT TO ITS HELPER INSTEAD OF RUNNING IT
+*  HERE.  9 is "no helper for this session" and is the only answer that means
+*  "not handled" rather than a result.
+   if kernel(K$ADMINISTRATOR, -1) then
+      rc = elevate('RUN', ps.path)
+      if rc # 9 then
+         if want.out then
+            read out from sys.f, out.id else out = ''
+            delete sys.f, out.id
+         end
+         delete sys.f, id
+         close sys.f
+         return rc : @fm : out
+      end
+   end
+
+*  THE FALL-THROUGH: a session with no helper runs it here, and here the
+*  output has always been reachable - "capturing" is what EDIT:684 uses for
+*  its editor probe.  Taking it rather than letting it reach the terminal
+*  keeps BOTH branches behaving the same way, which is the whole point.
+*  Built into a variable first, which is the shape EDIT:684 uses -
+*  "os.execute probe capturing probe.out".  An inline concatenation followed by
+*  CAPTURING would probably parse, but this is not the file to find out in.
+   cmd = 'Get-Content -LiteralPath ' : q : ps.path : q : ' -Raw | Invoke-Expression'
+   if want.out then
+      os.execute cmd capturing out
+   end else
+      os.execute cmd
+   end
+   rc = os.error()
+
+   if want.out then
+      delete sys.f, out.id
+   end
+   delete sys.f, id
+   close sys.f
+
+return rc : @fm : out
+end
+
+* END-CODE

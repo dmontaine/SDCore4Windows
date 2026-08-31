@@ -67,6 +67,16 @@ $include err.h
 
    deffun ps_script(script) calling '!ps_script'
 
+* 31 Aug 26 Windows port - THE REPORTING FORM.  PRE_RELEASE_FIXES 90.  This
+*   verb's own description promises "with no keyword it reports whether one is
+*   present and changes nothing", and it printed NOTHING: ps_script returns a
+*   status and the elevated helper threw the script's output away.  The verb is
+*   administrator-gated, so it always took that branch.  Measured 31 Aug 2026.
+*   ONLY THE REPORT PATH CHANGED - the INSTALL and REMOVE paths still discard
+*   output, because their own messages (10142, 10146, 10147, 10148) already say
+*   what happened and showing the script underneath would say it twice.
+   deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
    prompt ''
 
    if not(kernel(K$ADMINISTRATOR, -1)) then
@@ -79,6 +89,8 @@ $include err.h
    arg    = ''
    rc     = 0
    yn     = ''
+   report = ''
+   both   = ''
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -93,7 +105,10 @@ $include err.h
    if token.type = PARSER$END or action = '' then
       script = '/remove-ssh.ps1'
       arg    = ' -Show'
-      gosub run.script
+      gosub run.report
+      if report # '' then
+         crt report
+      end
       if rc # 0 then
          crt sysmsg(10143, 'SHOW', rc)  ;* Could not read the ssh server state
       end
@@ -163,6 +178,16 @@ run.script:
    ps  =       '& ' : char(39) : kernel(K$WINPATH, script) : char(39) : arg
    ps := @fm : 'exit $LASTEXITCODE'
    rc = ps_script(ps)
+   return
+
+*  THE SAME CALL, KEEPING THE OUTPUT.  Field 1 is the status ps_script would
+*  have returned; fields 2 onwards are what the script printed.
+run.report:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, script) : char(39) : arg
+   ps := @fm : 'exit $LASTEXITCODE'
+   both   = ps_script_out(ps, @true)
+   rc     = field(both, @fm, 1)
+   report = field(both, @fm, 2, 9999)
    return
 
 end
