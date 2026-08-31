@@ -90,6 +90,30 @@ param(
     # Passed to VerifyInstall2.ps1 -Run.  Ignored without -ThenElevated.
     [string] $Run = '',
 
+    # 30 Aug 26 - RUN ONLY THE NAMED STEP(S).  Owner's ruling, 30 Aug 2026,
+    # after b73, b74 and b75 each cost about twenty minutes: "add -Only, and
+    # drop the full run to milestones".
+    #
+    #     VerifyInstall1.ps1 -Only verify-lcnames
+    #     VerifyInstall1.ps1 -Only verify-nocase,verify-lineendings
+    #
+    # Comma or semicolon separated, with or without .ps1, case-insensitive.
+    # THE FILTER IS SHARED WITH VerifyInstall2 (suite-only.ps1) rather than
+    # written twice - see its header for why, and for what it refuses.
+    #
+    # ***A PARTIAL RUN SAYS SO, EVERYWHERE IT REPORTS.***  The banner, the
+    # summary and the closing line all carry PARTIAL, and the closing line never
+    # reads "every step exited 0" on one.  A partial green that reads like a
+    # full one is the exact shape this project keeps being caught by.
+    #
+    # IT DOES NOT COMBINE WITH -ThenElevated, deliberately, and the check below
+    # says so with both commands spelled out.  The two halves own different step
+    # names, so a single -Only would have to be validated against a list this
+    # runner cannot see without starting the other one - and "name not in THIS
+    # half" and "name not in EITHER half" are different answers that must not be
+    # guessed between.  Run the elevated half directly for a targeted step.
+    [string] $Only = '',
+
     # 22 Aug 26 - Skip the "are you sure" prompt.  For anything that is not a
     # person at a keyboard: a scripted run, or the installer, which cannot
     # answer a Read-Host and would hang for ever waiting to.
@@ -112,6 +136,22 @@ if ($ThenElevated -and (-not $Run)) {
 if ($Run -and ($Run -notmatch '^[a-z0-9]+$')) {
     Write-Output ("VerifyInstall1: -Run is '{0}'." -f $Run)
     Write-Output '  Lower case letters and digits only - it becomes part of a Windows account name.'
+    exit 2
+}
+
+# 30 Aug 26 - CHECKED HERE FOR THE SAME REASON -ThenElevated IS: before anything
+# is spent.  See the -Only parameter comment for why the two do not combine.
+if ($Only -and $ThenElevated) {
+    Write-Output 'VerifyInstall1: -Only and -ThenElevated do not combine.'
+    Write-Output '  The two halves own different step names, so one -Only cannot be checked'
+    Write-Output '  against both without starting the other runner - and "not in this half"'
+    Write-Output '  and "not in either half" are different answers to guess between.'
+    Write-Output ''
+    Write-Output '  For a step in THIS half, unelevated:'
+    Write-Output '      VerifyInstall1.ps1 -Only <step>'
+    Write-Output ''
+    Write-Output '  For a step in the ELEVATED half, from an ELEVATED PowerShell:'
+    Write-Output '      VerifyInstall2.ps1 -Run <token> -Only <step>'
     exit 2
 }
 
@@ -662,6 +702,24 @@ if (($kept.Count + $skipped) -ne @($steps).Count) {
 }
 $steps = $kept.ToArray()
 
+# 30 Aug 26 - -Only, LAST, so it filters the list the runner would actually have
+# run: after the door and write steps are appended and after the test-account
+# skips.  Filtering earlier would let -Only name a step this run was never going
+# to reach and call that a match.
+. (Join-Path $PSScriptRoot 'suite-only.ps1')
+$sel = Select-SuiteSteps -Steps $steps -Only $Only -Runner 'VerifyInstall1'
+if ($sel.Error -ne '') { Write-Output $sel.Error; exit 2 }
+$partial   = $sel.Partial
+$fullCount = @($steps).Count
+$steps     = @($sel.Steps)
+if ($partial) {
+    Write-Output ''
+    Write-Output ('***** PARTIAL RUN - {0} of {1} step(s), because -Only was given *****' -f
+                  @($steps).Count, $fullCount)
+    Write-Output ('      ' + (($steps | ForEach-Object { $_.Name }) -join ', '))
+    Write-Output '      This run says NOTHING about the steps it did not run.'
+}
+
 $lines  = @()
 $failed = 0
 
@@ -794,7 +852,12 @@ foreach ($s in $steps) {
 }
 
 Write-Output ''
-Write-Output '===== post-cycle-unelevated summary ====='
+if ($partial) {
+    Write-Output ('===== post-cycle-unelevated summary - PARTIAL, {0} of {1} step(s) =====' -f
+                  @($steps).Count, $fullCount)
+} else {
+    Write-Output '===== post-cycle-unelevated summary ====='
+}
 $lines | ForEach-Object { Write-Output $_ }
 $lines | Set-Content -LiteralPath $summary -Encoding utf8
 Write-Output ''
@@ -807,6 +870,14 @@ if ($failed -gt 0) {
         Write-Output '  re-run with -ContinueOnFailure to hand over anyway.'
         if (-not $ContinueOnFailure) { exit 1 }
     } else { exit 1 }
+} elseif ($partial) {
+    # 30 Aug 26 - NEVER "every step exited 0" ON A PARTIAL RUN.  That sentence is
+    # a claim about the whole half, and on a -Only run it would be false in the
+    # one direction that matters: it would read as a clean suite to anyone who
+    # skimmed the last line, which is how these logs are read.
+    Write-Output ("VerifyInstall1: PARTIAL - {0} of {1} step(s) run, all exited 0." -f
+                  @($steps).Count, $fullCount)
+    Write-Output '  The other steps were NOT run and this says nothing about them.'
 } else {
     Write-Output 'VerifyInstall1: every step exited 0.'
 }

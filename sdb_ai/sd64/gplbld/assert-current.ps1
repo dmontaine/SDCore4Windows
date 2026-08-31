@@ -231,6 +231,18 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # 22 Aug 26 - verify-parsertokens.ps1, listed in the commit
                   # that created it under section 7 step 7's rule.
                   'verify-parsertokens.ps1',
+                  # 30 Aug 26 - suite-only.ps1 and its unit test, the -Only step
+                  # filter both runners dot-source.  Owner's ruling, 30 Aug 2026,
+                  # dropping the full suite to milestones.  Listed in the commit
+                  # that created them, per section 7 step 7's rule - and THIS
+                  # LIST IS WHY THAT RULE EXISTS: both files were written, both
+                  # were correct, and assert-current went RED purely because
+                  # they were new, demanding a twenty-minute cycle that would
+                  # have changed nothing.  Neither ships: suite-only.ps1 is dev
+                  # tooling dot-sourced by VerifyInstall1/2, which are on this
+                  # list themselves, and a test-*-units.ps1 has never shipped.
+                  'suite-only.ps1',
+                  'test-suiteonly-units.ps1',
                   # 30 Aug 26 - verify-standalone.ps1 IS DELETED, and its entry
                   # with it.  PRE_RELEASE_FIXES 75 removed the stand-alone mode,
                   # so every check in it asked about a system that can no longer

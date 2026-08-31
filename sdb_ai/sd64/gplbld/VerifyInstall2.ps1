@@ -144,6 +144,27 @@ param(
     # progress line per step, plus every failing check, on the screen.  The file
     # is unfiltered; only the screen is selected.  See the loop for why that
     # distinction is load-bearing, and for what -Quiet costs.
+    # 30 Aug 26 - RUN ONLY THE NAMED STEP(S).  Owner's ruling, 30 Aug 2026:
+    # "add -Only, and drop the full run to milestones".  The elevated half is
+    # 15 of the suite's ~20 minutes, and the one step that decides a change is
+    # usually 30 to 90 seconds of it.
+    #
+    #     VerifyInstall2.ps1 -Run b76 -Only verify-delaccount
+    #     VerifyInstall2.ps1 -Run b76 -Only verify-tiers,verify-tierapi
+    #
+    # Comma or semicolon separated, with or without .ps1, case-insensitive.
+    # The filter is shared with VerifyInstall1 (suite-only.ps1); its header
+    # records why it is one file and what it refuses.
+    #
+    # ***-Run IS STILL REQUIRED AND STILL DERIVES EVERY PREFIX.***  That is the
+    # whole reason to run a single step THROUGH the runner rather than by hand:
+    # a fixed prefix passes once and fails every later run, which reads like a
+    # product fault (PRE_RELEASE 54).
+    #
+    # ***A PARTIAL RUN SAYS SO WHEREVER IT REPORTS***, and the closing line never
+    # reads "all N steps exited 0" on one.
+    [string]$Only = '',
+
     [switch]$Quiet
 )
 
@@ -530,6 +551,23 @@ $steps = @(
     @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } }
 )
 
+# 30 Aug 26 - -Only.  Shared filter, see suite-only.ps1.  It runs AFTER the
+# whole list is built, so a name is checked against the steps this run would
+# actually have made.
+. (Join-Path $PSScriptRoot 'suite-only.ps1')
+$sel = Select-SuiteSteps -Steps $steps -Only $Only -Runner 'VerifyInstall2'
+if ($sel.Error -ne '') { Write-Output $sel.Error; exit 2 }
+$partial   = $sel.Partial
+$fullCount = @($steps).Count
+$steps     = @($sel.Steps)
+if ($partial) {
+    Write-Output ''
+    Write-Output ('***** PARTIAL RUN - {0} of {1} step(s), because -Only was given *****' -f
+                  @($steps).Count, $fullCount)
+    Write-Output ('      ' + (($steps | ForEach-Object { $_.Name }) -join ', '))
+    Write-Output '      This run says NOTHING about the steps it did not run.'
+}
+
 # ---------------------------------------------------------------------------
 # 22 Aug 26 - -Quiet: FULL OUTPUT TO A FILE PER STEP, PROGRESS AND FAILURES ON
 # THE SCREEN.  Seventeen verbose steps is several thousand lines, and the
@@ -664,7 +702,12 @@ foreach ($s in $steps) {
 }
 
 Write-Output ''
-Write-Output '===== post-cycle summary ====='
+if ($partial) {
+    Write-Output ('===== post-cycle summary - PARTIAL, {0} of {1} step(s) =====' -f
+                  @($steps).Count, $fullCount)
+} else {
+    Write-Output '===== post-cycle summary ====='
+}
 $lines | ForEach-Object { Write-Output $_ }
 $lines | Set-Content -LiteralPath $summary -Encoding utf8
 Write-Output ''
@@ -673,7 +716,21 @@ if ($Quiet) {
     Write-Output ("per-step output:    " + (Join-Path $logDir ($stamp + '-NN-verify-*.log')))
 }
 if ($failed -gt 0) {
-    Write-Output ("VerifyInstall2: {0} of {1} step(s) did not exit 0." -f $failed, $steps.Count)
+    if ($partial) {
+        Write-Output ("VerifyInstall2: PARTIAL - {0} of {1} step(s) run, {2} did not exit 0." -f
+                      $steps.Count, $fullCount, $failed)
+    } else {
+        Write-Output ("VerifyInstall2: {0} of {1} step(s) did not exit 0." -f $failed, $steps.Count)
+    }
     exit 1
 }
-Write-Output ("VerifyInstall2: all {0} steps exited 0." -f $steps.Count)
+# 30 Aug 26 - NEVER "all N steps exited 0" ON A PARTIAL RUN.  On a -Only run that
+# sentence would be a claim about the whole half, and the last line is how these
+# logs get read.
+if ($partial) {
+    Write-Output ("VerifyInstall2: PARTIAL - {0} of {1} step(s) run, all exited 0." -f
+                  $steps.Count, $fullCount)
+    Write-Output '  The other steps were NOT run and this says nothing about them.'
+} else {
+    Write-Output ("VerifyInstall2: all {0} steps exited 0." -f $steps.Count)
+}
