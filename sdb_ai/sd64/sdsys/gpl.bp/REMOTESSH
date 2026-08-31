@@ -79,6 +79,7 @@ $include err.h
    rc     = 0
    report = ''
    both   = ''
+   r.i    = 0
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -117,8 +118,12 @@ $include err.h
    end
 
    if want = '-Show' then
+*     FIELD BY FIELD.  !ps_script_out returns one line per FIELD, and crt of a
+*     dynamic array prints the field marks themselves.
       if report # '' then
-         crt report
+         for r.i = 1 to dcount(report, @fm)
+            crt report<r.i>
+         next r.i
       end
       if rc # 0 then
          crt sysmsg(10139, 'SHOW', rc)  ;* Could not read who may reach ssh

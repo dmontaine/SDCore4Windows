@@ -141,6 +141,7 @@ deffun elevate(action, arg) calling '!elevate'
          if want.out then
             read out from sys.f, out.id else out = ''
             delete sys.f, out.id
+            gosub tidy.out
          end
          delete sys.f, id
          close sys.f
@@ -164,12 +165,41 @@ deffun elevate(action, arg) calling '!elevate'
    rc = os.error()
 
    if want.out then
+      gosub tidy.out
       delete sys.f, out.id
    end
    delete sys.f, id
    close sys.f
 
 return rc : @fm : out
+
+* ===========================================================================
+
+*  ***ONE LINE PER FIELD, WHATEVER ROUTE IT CAME BY - AND THE TWO ROUTES DID
+*  NOT AGREE.***  Found 31 Aug 2026 the first time a report reached a terminal:
+*  it arrived as one long line studded with boxes.
+*
+*    - the HELPER route reads a directory-file record, and SD turns each
+*      newline into a FIELD MARK on the way in.  CR survives, so every field
+*      ended with one.
+*    - the FALL-THROUGH route captures the child's stdout as raw text, CRLF
+*      and all, with no field marks at all.  EDIT:686 shows the same thing from
+*      the other side - it converts char(13):char(10) by hand.
+*
+*  Returning whichever the branch happened to produce would make every caller
+*  handle both.  So both are normalised HERE, to the SD-idiomatic form: lines
+*  separated by field marks, no CR anywhere.  A caller prints field by field.
+tidy.out:
+*  CR first, so a CRLF pair cannot leave a stray CR at the end of a field.
+   out = convert(char(13), '', out)
+   out = change(out, char(10), @fm)
+*  A trailing newline becomes a trailing empty field, which prints as a blank
+*  line the script never wrote.
+   loop while out[-1, 1] = @fm
+      out = out[1, len(out) - 1]
+   repeat
+   return
+
 end
 
 * END-CODE

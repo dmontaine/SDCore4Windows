@@ -91,6 +91,7 @@ $include err.h
    yn     = ''
    report = ''
    both   = ''
+   r.i    = 0
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -106,9 +107,7 @@ $include err.h
       script = '/remove-ssh.ps1'
       arg    = ' -Show'
       gosub run.report
-      if report # '' then
-         crt report
-      end
+      gosub print.report
       if rc # 0 then
          crt sysmsg(10143, 'SHOW', rc)  ;* Could not read the ssh server state
       end
@@ -188,6 +187,16 @@ run.report:
    both   = ps_script_out(ps, @true)
    rc     = field(both, @fm, 1)
    report = field(both, @fm, 2, 9999)
+   return
+
+*  FIELD BY FIELD.  !ps_script_out returns one line per FIELD, and crt of a
+*  dynamic array prints the field marks themselves.
+print.report:
+   if report # '' then
+      for r.i = 1 to dcount(report, @fm)
+         crt report<r.i>
+      next r.i
+   end
    return
 
 end

@@ -111,6 +111,7 @@ $include err.h
    rc     = 0
    report = ''
    both   = ''
+   r.i    = 0
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -125,9 +126,7 @@ $include err.h
    if token.type = PARSER$END or action = '' then
       arg = ' -Show'
       gosub run.report
-      if report # '' then
-         crt report
-      end
+      gosub print.report
       if rc # 0 then
          crt sysmsg(10153, 'SHOW', rc)  ;* Could not read the system PATH
       end
@@ -150,8 +149,8 @@ $include err.h
 *  something went wrong, so a successful "on" stays one line.
    gosub run.report
 
-   if rc # 0 and report # '' then
-      crt report
+   if rc # 0 then
+      gosub print.report
    end
 
 *  ***EXIT 2 IS A REFUSAL, NOT A FAILURE, AND THE SCRIPT HAS ALREADY SAID WHY.***
@@ -194,6 +193,18 @@ run.report:
    both   = ps_script_out(ps, @true)
    rc     = field(both, @fm, 1)
    report = field(both, @fm, 2, 9999)
+   return
+
+*  ***FIELD BY FIELD, NOT "crt report".***  !ps_script_out returns the script's
+*  output with one line per FIELD, and crt of a dynamic array prints the field
+*  marks themselves - which on 31 Aug 2026 put the whole report on one line
+*  studded with boxes, the first time one ever reached a terminal.
+print.report:
+   if report # '' then
+      for r.i = 1 to dcount(report, @fm)
+         crt report<r.i>
+      next r.i
+   end
    return
 
 end
