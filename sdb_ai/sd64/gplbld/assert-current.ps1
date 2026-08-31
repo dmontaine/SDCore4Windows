@@ -895,7 +895,30 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   #                        for "sd -cleanup".
                   #   check-msglen.py      whether a message fits k_error()'s
                   #                        buffer once sysmsg() has expanded it.
-                  'probe-nolockmsg.ps1', 'probe-tasklock.ps1', 'check-msglen.py')
+                  'probe-nolockmsg.ps1', 'probe-tasklock.ps1', 'check-msglen.py',
+                  # 31 Aug 26 - probe-taskflags, PRE_RELEASE 85 and 67's
+                  # instrument.  Listed in the commit that creates it, under
+                  # section 7 step 7's rule.  BOTH names are needed: the
+                  # freshness scan walks every file in the tree and matches on
+                  # NAME, so the .iss would report the tree stale exactly as a
+                  # .ps1 would.
+                  #
+                  # ***IT RETIRES "ONLY A PERSON CAN JUDGE THE TASKS PAGE".***
+                  # That sentence is written into 67 and 85 and it cost four
+                  # builds and three hand-offs, the last of which reached a
+                  # WRONG conclusion.  This drives the checkboxes through
+                  # Inno's own click path (TNewCheckListBox.CheckItem) and
+                  # reads the states back, unelevated, in about ten seconds,
+                  # with no cycle, no install and no run token.  It still does
+                  # not judge LAYOUT - wording, order, indentation - so eyes
+                  # are retired from the STATE question only.
+                  #
+                  # It compiles a probe installer with no [Files], no [Run] and
+                  # no app dir, which aborts at the tasks page, so it installs
+                  # nothing.  Leg 2 writes a previous-selection value under its
+                  # OWN throwaway HKCU key and removes it again; SD's key is
+                  # read-only throughout.
+                  'probe-taskflags.ps1', 'probe-taskflags.iss')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
