@@ -199,21 +199,37 @@ $Withheld = @(
     'pstat','pdebug','pdump','dump'
 )
 
-# The 21 only an administrator gets.  MODIFY.PASSWORD joined on 17 Aug 2026 -
+# The 23 only an administrator gets.  MODIFY.PASSWORD joined on 17 Aug 2026 -
 # owner's ruling, and an administrator can add it to a user's VOC if they want
 # users setting their own.  The program already tells the two cases apart:
 # your own password needs the current one, anyone else's needs admin rights.
-# 24 Aug 26 - GREW FROM 10 TO 21 with the owner's split ruling.  The A2
-# system-state and A3 shell-escape verbs moved out of NEWVOC entirely because
+# 24 Aug 26 - GREW FROM 10 TO 21 with the owner's split ruling.  The A3
+# system-state and A4 shell-escape verbs moved out of NEWVOC entirely because
 # a PROGRAMMER should not have sh, !, config, listu, list.readu, list.locks,
 # clear.locks, lock, logout, set.date, or clean.account either.
+#
+# 30 Aug 26 - AND FROM 20 TO 23 with PRE_RELEASE 78's three verbs.  They are
+# administrator-only for the same reason config and lock are: they change what
+# the MACHINE offers - the ssh server, the API listener, who may reach either -
+# rather than what one account sees.
+#
+# ***THIS LIST AND THE Count IN $Tiers ARE TWO PLACES AND BOTH MOVE.***  On
+# 30 Aug 2026 I changed ADMINISTRATOR 416 -> 419 and did NOT change this list,
+# and section 0 caught it on the next run: "shipped TIER.ADD.ADMINISTRATOR
+# matches this test: expected 0, got 3", naming all three, followed by "add
+# list length: expected 20, got 23".  That is this test working exactly as the
+# comment below it promises - it exists so that nobody gets away with "updating
+# the record and not the test, or the other way about" - and it is why the
+# SHIPPED record is compared against rather than trusted.
 $AdminVerbs = @(
     # A1 - account and grant administration
     'create.account','delete.account','modify.account','update.account','clean.account',
     'grant','revoke','list.grants','unlock','modify.password',
-    # A2 - system-wide state
+    # A2 - the machine's network services
+    'remote.api','remote.ssh','ssh.server',
+    # A3 - system-wide state
     'config','listu','list.readu','list.locks','clear.locks','lock','logout','set.date',
-    # A3 - shell escapes
+    # A4 - shell escapes
     'sh','!'
 )
 
