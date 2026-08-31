@@ -391,10 +391,41 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; rule RESTRICTED to this computer.  Opening 4243 to the network is a second,
 ; deliberate click rather than a side effect of wanting the API at all.
 ; remote.api on|local|off (entry 78) changes it afterwards either way.
+; 31 Aug 26 - THE THREE FLAGS THAT MAKE THE PAIR BEHAVE.  PRE_RELEASE_FIXES 85,
+; RE-OPENED because the entry was struck on "ISCC compiled it" and the owner
+; then watched the wizard: "the two API entries are linked together like the ssh
+; entries were before they were fixed.  If you select or delete one, you select
+; or delete both."
+;
+; ***THAT REVERSED THE ENTIRE POINT OF 85.***  Without dontinheritcheck, Inno
+; ticks the child whenever the parent is ticked - so asking for the API re-ticked
+; "let other computers reach it" and the default opened 4243 to the network
+; again, which is the exact cost this entry exists to remove.
+;
+; THE SAME TWO FLAGS 67 ALREADY PAID FOR, READ OUT OF ISetup.chm RATHER THAN
+; ASSUMED A THIRD TIME.  dontinheritcheck - "the task should not automatically
+; become checked when its parent is checked".  checkablealone - "the task can be
+; checked when none of its children are", because by default "unchecking all of
+; the task's children will cause the task to become unchecked", which is what
+; made unticking the child also untick the parent on the ssh pair.
+;
+; THE PARENT KEEPS unchecked AND THE ssh PARENT DOES NOT, AND THAT IS THE
+; RULING RATHER THAN AN INCONSISTENCY: 75 says an unticked API box means SD
+; opens no socket at all, so the API defaults OFF; the ssh server defaults ON
+; when the machine has none.
+;
+; AND THE CHILD'S GroupDescription IS GONE.  The ssh child carries none - the
+; parent's heading covers the group - and a second copy on the child is what
+; made this pair render unlike the one it was copied from.
+;
+; ***ONLY THE WIZARD CAN JUDGE THIS.  ISCC CHECKS THAT TASKS COMPILE, NOT THAT
+; THEY BEHAVE*** - it passed the broken version - and no cycle or suite run ever
+; sees this page.  cycle.ps1 -SkipInstall builds the installer without touching
+; the tree; running the .exe to the tasks page and cancelling writes nothing.
 Name: "apiremote"; Description: "Provide the SD API (port 4243)"; \
-    GroupDescription: "SD API:"; Flags: unchecked
+    GroupDescription: "SD API:"; Flags: unchecked checkablealone
 Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
-    GroupDescription: "SD API:"; Flags: unchecked
+    Flags: unchecked dontinheritcheck
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
