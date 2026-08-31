@@ -43,6 +43,37 @@
     reissue.  The assertion sits OUTSIDE the profile branch for exactly that
     reason: the grant must go whichever way the profile went.
 
+    AND THERE IS A THIRD SUBJECT BECAUSE -Run b73 PROVED THE OTHER TWO CANNOT
+    REACH THE ARM THAT MATTERS.  Step 3's os.users check passed and printed
+    "status 0 - CONFIRMATORY, not decisive": step 2 builds its profile with
+    CreateProfile, which never loads a hive, so Remove-Item on C:\Users\<name>
+    always succeeds and DELETE_USER:282 always reaches exit 0.  The arm 65's
+    defect lived in was the one arm this file could never exercise, and
+    re-running would have printed that line for ever.
+
+    STEP 6 PINS <prefix>h's PROFILE OPEN AND DELETES IT.  Deleting a file needs
+    FILE_SHARE_DELETE from every other handle on it, so a FileShare.Read stream
+    on one file inside the profile blocks Remove-Item on the directory above it
+    - which is the state a loaded hive produces, without interop, a logon or a
+    password.  DELETE_USER then returns 6 and the keep-both branch runs.
+
+    THE RIG IS CHECKED BEFORE THE PRODUCT IS.  If the pin does not bite, the run
+    is back on status 0 and every check after it would be about the arm step 3
+    already covers - so that outcome is reported as a failure OF THE RIG, named
+    as such, rather than as a green branch or a product fault.
+
+    IT RETIRES A SECOND NEVER-RUN ARM.  The paragraph below about 10075 says the
+    keep-both branch "has not run on this host yet"; that was still true after
+    b73, so 36's reclaim-record assertions had never fired either.  One rig, two
+    entries.  <prefix>h's profile directory and ProfileList entry are LEFT
+    BEHIND on purpose - that is what status 6 means, and the next SD service
+    start reclaims the pair.
+
+    A THIRD ACCOUNT RATHER THAN PINNING THE FIRST, owner's call 30 Aug 2026.
+    Pinning <prefix>s would have cost nothing extra per run and traded status
+    0's coverage away for 6/7/8's; this pays for one more account and loses
+    neither.  Step 3 and its checks are untouched.
+
     WHICH IS WHY THE SD-MADE SUBJECT IS AN ADMINISTRATOR.  Only an
     ADMINISTRATOR-tier USER account is ever given an os.users record (CREATEA,
     grant.os.access), so a STANDARD subject would have scored "the record is
@@ -470,8 +501,12 @@ if ($missing.Count -gt 0) {
 
 $sdAcc     = $Prefix + 's'   # SD makes this one.  It must go, Windows account and all.
 $borrowAcc = $Prefix + 'b'   # somebody else's.  It must be left standing.
+# 30 Aug 26 - the third subject, PRE_RELEASE_FIXES.md 65 and 36.  Same as <p>s
+# except that its profile is pinned open while DELETE.ACCOUNT runs, which is the
+# only way this file can reach DELETE_USER's keep-both arm.  See step 6.
+$heldAcc   = $Prefix + 'h'   # pinned open, so the profile CANNOT go.
 
-foreach ($a in @($sdAcc, $borrowAcc)) {
+foreach ($a in @($sdAcc, $borrowAcc, $heldAcc)) {
     if (Get-LocalUser -Name $a -ErrorAction SilentlyContinue) {
         Fail "$a already exists as a Windows account - use a fresh -Prefix."
     }
@@ -529,6 +564,11 @@ Add-Type -AssemblyName System.Web
 
 $sentinel = 'SDDELSENTINEL'
 $made     = @()   # Windows accounts this script is responsible for
+
+# 30 Aug 26 - declared HERE, not where it is opened.  The finally block closes
+# it, and a run that throws before step 6 must not then die in its own cleanup
+# on an unassigned variable - which under Set-StrictMode is what would happen.
+$holdStream = $null
 
 # ---------------------------------------------------------------------------
 try {
@@ -812,6 +852,141 @@ try {
     Note 'the SD account was still removed'  $false (Test-Path -LiteralPath $bRec)
     Note 'sdu_ group is gone'                $false ([bool](Get-LocalGroup -Name ('sdu_' + $borrowAcc) -ErrorAction SilentlyContinue))
     Note 'account directory is gone'         $false (Test-Path -LiteralPath $bDir)
+
+    # -----------------------------------------------------------------------
+    Step 6 "THE KEEP-BOTH PATH: DELETE.ACCOUNT $heldAcc with its profile pinned open"
+
+    # 30 Aug 26 - A THIRD SUBJECT, AND IT EXISTS BECAUSE -Run b73 PROVED THE
+    # OTHER TWO CANNOT REACH THIS BRANCH.  PRE_RELEASE_FIXES.md 65 and 36.
+    #
+    # WHAT b73 MEASURED.  Step 3's os.users check passed and printed "status 0 -
+    # CONFIRMATORY, not decisive", because step 2 builds its profile with
+    # CreateProfile, which never loads a hive: Remove-Item on C:\Users\<name>
+    # always succeeds and DELETE_USER:282 always reaches exit 0.  So the arm
+    # 65's defect actually lived in - the removal was inside "case stat = 0" -
+    # was the one arm the verifier could never exercise.  Re-running would have
+    # printed the same line for ever.
+    #
+    # WHY A THIRD ACCOUNT RATHER THAN PINNING THE FIRST.  Pinning <prefix>s costs
+    # nothing extra per run and would have traded status 0's coverage away for
+    # 6/7/8's.  Owner's call, 30 Aug 2026: pay for the account and lose neither.
+    # Step 3 and its 15 checks are untouched.
+    #
+    # AND IT RETIRES A SECOND NEVER-RUN ARM.  This file's header has said "It has
+    # not run on this host yet" about the keep-both branch since 28 Aug, so 36's
+    # reclaim-record assertions and 10075's rendering have never fired either.
+    # One rig, two entries.
+    #
+    # HOW THE PIN WORKS, AND IT IS THE FILE SYSTEM RATHER THAN A HIVE.  Deleting
+    # a file needs FILE_SHARE_DELETE from every other open handle on it.  A
+    # FileShare.Read handle therefore blocks Remove-Item on the file, which
+    # blocks -Recurse on the directory above it, which is exactly the state a
+    # loaded hive produces - $dirleft at DELETE_USER:277.  It needs no interop,
+    # no logon and no password, and it releases the moment the stream closes.
+    $heldRec  = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $heldAcc.ToUpper())
+    $hpw      = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
+    $out      = Invoke-SD @("CREATE.ACCOUNT USER $heldAcc ADMINISTRATOR BOTH", $hpw, $hpw)
+    $made    += $heldAcc
+
+    if (-not (Test-Path -LiteralPath $heldRec)) {
+        Write-Host $out
+        Fail "CREATE.ACCOUNT did not register $heldAcc"
+    }
+    Note 'the pinned subject is registered'   $true (Test-Path -LiteralPath $heldRec)
+
+    # The same null-case guard step 1 carries: the preflight required this record
+    # ABSENT, so a pass here is the verb writing it and nothing else.
+    $hOsu = Get-OsUsersRecord $heldAcc
+    Note 'CREATE.ACCOUNT wrote its os.users record' $true ([bool]$hOsu)
+    if (-not $hOsu) {
+        Fail ("CREATE.ACCOUNT USER $heldAcc ADMINISTRATOR made no os.users record.  " +
+              'This leg exists to watch that record go, so it stops rather than ' +
+              'reporting a green branch that measured nothing.')
+    }
+    Write-Host ("   os.users\{0}: {1}" -f $hOsu.Name, ((Get-OsUsersFields $hOsu) -join ' | '))
+
+    $hSid  = Get-Sid $heldAcc
+    $hProf = New-TestProfile $heldAcc $hpw
+    if ($hProf -eq '') {
+        # NOT a Skip.  A skipped profile here is a leg that cannot pin anything,
+        # and the checks below would then all be about status 0 again - which is
+        # the situation this step was written to escape.
+        Fail ("no profile could be made for $heldAcc ($script:profileWhy), so the " +
+              'keep-both branch cannot be reached and this leg would repeat b73.')
+    }
+    Write-Host ("   profile: {0}  (via {1})" -f $hProf, $script:profileHow)
+
+    $holdPath = Join-Path $hProf 'sd-verify-delaccount-hold.tmp'
+    try {
+        $holdStream = [System.IO.File]::Open(
+            $holdPath, [System.IO.FileMode]::Create,
+            [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+        $holdStream.WriteByte(0)
+        $holdStream.Flush()
+    } catch {
+        Fail ("could not pin $holdPath open - $($_.Exception.Message).  Without the " +
+              'pin the profile deletes cleanly and this leg measures status 0, ' +
+              'which b73 already did.')
+    }
+    # RECORDED, NOT ASSERTED.  A Note here could only ever pass - the Fail above
+    # is what handles the other outcome - and a check that cannot fail inflates
+    # the count while teaching nothing.  What IS asserted is whether the pin
+    # BIT, below, which is a different question and can go either way.
+    Write-Host ("   pinned: {0}  (FileShare.Read - no FILE_SHARE_DELETE)" -f $holdPath)
+
+    $out = Invoke-SD @("DELETE.ACCOUNT $heldAcc", 'Y', $sentinel, 'Y', 'Y')
+    Write-Host $out
+
+    $hDirLeft   = Test-Path -LiteralPath $hProf
+    $hEntryLeft = [bool](Get-ProfileEntry $hSid)
+    $h10075     = Shown $out 10075 @($heldAcc)
+
+    # ***THE RIG IS CHECKED BEFORE THE PRODUCT IS.***  If the pin did not bite,
+    # DELETE_USER returned 0 and every check below would be about the arm b73
+    # already covered - so that outcome is reported as a failure OF THE RIG,
+    # naming it, rather than as a green branch or as a product fault.
+    if (-not $hDirLeft) {
+        Note 'the pin blocked the profile removal (this leg is decisive)' $true $false
+        Write-Host ('   THE PIN DID NOT BITE: ' + $hProf + ' went anyway, so DELETE_USER ' +
+                    'returned 0 and this leg measured the same arm as step 3.') -ForegroundColor Red
+    } else {
+        Note 'the pin blocked the profile removal (this leg is decisive)' $true $true
+        Write-Host '   65: status 6/7/8 - the os.users check below is DECISIVE' -ForegroundColor Cyan
+
+        # 36's contract, and this is the first time any run has been in a
+        # position to assert it: the entry is kept WITH the directory, because
+        # removing it over a directory that is still there destroys the only
+        # handle a later sweep has.
+        Note 'the login went even though the profile could not' $true (Shown $out 10028 @($heldAcc))
+        Note 'Windows account is gone'      $false ([bool](Get-LocalUser -Name $heldAcc -ErrorAction SilentlyContinue))
+        Note 'the profile directory was KEPT'                $true $hDirLeft
+        Note 'the ProfileList entry was KEPT with it'        $true $hEntryLeft
+        Note 'message 10075 shown (kept, reclaimed at the next restart)' $true $h10075
+        Note 'message 10123 NOT shown (something IS coming back for it)' $false (Shown $out 10123 @($heldAcc))
+
+        $hReclaim = Join-Path $env:ProgramData ('SD\profile-reclaim\' + $hSid)
+        Note 'the pair was recorded for reclaim' $true (Test-Path -LiteralPath $hReclaim)
+        if (Test-Path -LiteralPath $hReclaim) {
+            $hr = @(Get-Content -LiteralPath $hReclaim -ErrorAction SilentlyContinue)
+            Write-Host ('   record: ' + ($hr -join ' | '))
+            Note 'the record names the directory' $true (@($hr | Where-Object { $_ -eq ('directory=' + $hProf) }).Count -eq 1)
+        }
+    }
+
+    # ***THE DECISIVE CHECK.***  Asserted on both branches deliberately - if the
+    # pin failed this still has to hold, it just proves less.  PRE_RELEASE 65:
+    # the grant must go with the LOGIN, and the login is gone in 0, 6, 7 and 8
+    # alike.
+    $hOsuAfter = Get-OsUsersRecord $heldAcc
+    if ($hOsuAfter) {
+        Write-Host ("   os.users\{0} SURVIVED the delete: {1}" -f $hOsuAfter.Name,
+                    ((Get-OsUsersFields $hOsuAfter) -join ' | ')) -ForegroundColor Yellow
+    }
+    Note 'os.users record is gone (the DECISIVE one)' $false ([bool]$hOsuAfter)
+
+    Write-Host ''
+    Write-Host ('   LEFT BEHIND ON PURPOSE: ' + $hProf + ' and its ProfileList entry.') -ForegroundColor Yellow
+    Write-Host '   That IS status 6 - the next SD service start reclaims the pair.'
 }
 catch {
     $script:failed = $true
@@ -822,8 +997,19 @@ catch {
         Check = 'the run completed without throwing'; Expected = $true; Observed = $false })
 }
 finally {
+    # 30 Aug 26 - FIRST, AND OUTSIDE THE -Keep TEST.  The pin is a live file
+    # handle in this process; leaving it open would keep C:\Users\<p>h
+    # undeletable for the reclaim sweep that status 6 promises will take it, and
+    # -Keep is about not deleting things, not about holding them hostage.
+    if ($holdStream) {
+        try { $holdStream.Close(); $holdStream.Dispose()
+              Write-Host ''
+              Write-Host '   released the profile pin' } catch { }
+        $holdStream = $null
+    }
+
     if (-not $Keep) {
-        Step 6 'Putting the system back'
+        Step 7 'Putting the system back'
 
         # Everything here is litter by definition: if the verb behaved, only
         # the borrowed account is left, and it is left BECAUSE the verb was
@@ -832,7 +1018,7 @@ finally {
         foreach ($x in $made) {
             $u = Get-LocalUser -Name $x -ErrorAction SilentlyContinue
             if ($u) {
-                if ($x -eq $sdAcc) {
+                if ($x -eq $sdAcc -or $x -eq $heldAcc) {
                     Write-Host "   NOTE: $x survived DELETE.ACCOUNT and should not have" -ForegroundColor Yellow
                 }
                 $sid = $u.SID.Value

@@ -101,8 +101,9 @@ param(
     # the prefix, so lower case only, validated with the two above.
     [string]$RoutePrefix = 'sdrt5',
     [string]$RulesPrefix = 'sdar1',
-    # 21 Aug 26 - verify-delaccount.ps1's two throwaway accounts, <prefix>s and
+    # 21 Aug 26 - verify-delaccount.ps1's throwaway accounts, <prefix>s and
     # <prefix>b.  Lower case only, same derivation as the two above.
+    # 30 Aug 26 - THREE NOW: <prefix>h joins them, PRE_RELEASE_FIXES.md 65.
     #
     # WIRED IN ON THE OWNER'S INSTRUCTION, 21 Aug 2026, AND THE REASON IS THE
     # ONE FAILURE THIS FILE CANNOT OTHERWISE CATCH.  It was the only verifier
@@ -259,7 +260,14 @@ foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account';     V
                  @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix },
                  @{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
     # -Name "<p>*" catches the derived forms too: verify-routes makes <p>s and
-    # <p>a, verify-delaccount <p>s and <p>b, verify-tiers <p>1..3.
+    # <p>a, verify-delaccount <p>s, <p>b and <p>h, verify-tiers <p>1..3.
+    #
+    # 30 Aug 26 - <p>h is the third one, PRE_RELEASE_FIXES.md 65 and 36.  It is
+    # the subject whose profile is pinned open, so DELETE.ACCOUNT reaches
+    # DELETE_USER's keep-both arm - and it therefore LEAVES C:\Users\<p>h and a
+    # ProfileList entry on purpose.  The wildcard already covered it; naming it
+    # here is so the next reader of a "<p>h already exists" refusal knows which
+    # verifier to look at.
     $u = @(Get-LocalUser  -Name ($p.V + '*')        -ErrorAction SilentlyContinue)
     $g = @(Get-LocalGroup -Name ('sdu_' + $p.V + '*') -ErrorAction SilentlyContinue)
     if ($u.Count -or $g.Count) {
