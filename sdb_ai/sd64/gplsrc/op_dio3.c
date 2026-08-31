@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 31 Aug 26 Windows port - a WRITE refused for want of a lock reported
+ *           "Error 3023 (o/s 0) writing record (Possible full disk?)".  The
+ *           disk is not involved and nothing was written; message 10151 says
+ *           what happened and how to fix it.  PRE_RELEASE_FIXES.md 12,
+ *           UPSTREAM_FIXES.md 20.
  * 24 Aug 26 Windows port - a directory-file record written by an external
  *           editor with CRLF read back with a trailing CR on EVERY field: the
  *           mapping loop turned the LF into a field mark and left the CR.
@@ -850,7 +855,26 @@ exit_op_write:
       unlock_record(fvar, lock_id, id_len);
     }
   } else if (!(op_flags & P_ON_ERROR)) {
-    k_error(sysmsg(1407), -process.status, process.os_error);
+/* 31 Aug 26 Windows port - ER_NOLOCK GETS ITS OWN MESSAGE.  PRE_RELEASE_FIXES
+   12 / UPSTREAM_FIXES 20.  1407 ends "(Possible full disk?)", and every failure
+   arriving here rendered through it - so a WRITE refused at :776 because the
+   caller held no lock told the user to go and look at the disk.  The disk was
+   never touched: :776 is reached BEFORE the switch that writes anything, so
+   nothing was written and the stored record is unchanged.
+
+   IT IS THE COMMONEST OF THEM, WHICH IS WHY IT IS THE ONE SPLIT OUT.  The test
+   at :775 fires whenever MUSTLOCK=1 or the write is inside a transaction, and
+   a transaction is the ordinary case in application code.
+
+   THE OTHER STATUSES ARRIVING HERE STILL USE 1407 AND ARE STILL WRONG ABOUT
+   THE DISK - ER_RDONLY, ER_IID and ER_TRIGGER among them - but each wants its
+   own text rather than a shared one, and ER_RDONLY already logs separately via
+   log_permissions_error().  Left deliberately, and said out loud here so the
+   next reader knows it was seen rather than missed.                        */
+    if (process.status == -ER_NOLOCK)
+      k_error(sysmsg(10151), -process.status);
+    else
+      k_error(sysmsg(1407), -process.status, process.os_error);
   }
 }
 

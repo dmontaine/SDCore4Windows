@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 31 Aug 26 Windows port - remove_user() gave away the dead session's file,
+ *                      record and group locks but never its TASK locks: the
+ *                      loop tested process.user_no where the three loops
+ *                      below it test user_no.  PRE_RELEASE_FIXES.md 24,
+ *                      UPSTREAM_FIXES.md 25
  * 31 Dec 23 SD Launch - prior history suppressed
  * END-HISTORY
  *
@@ -296,8 +301,24 @@ Private void remove_user(USER_ENTRY* uptr) {
 
   /* Give away process locks */
 
+/* 31 Aug 26 Windows port - user_no, NOT process.user_no.  PRE_RELEASE_FIXES.md
+   24 / UPSTREAM_FIXES.md 25.  This is the only loop in remove_user() that did
+   not test the uid it was handed: the file, record and group loops below all
+   use user_no, taken from uptr->uid above.
+
+   WHY IT RELEASED NOTHING RATHER THAN THE WRONG THING.  remove_user() is
+   reached from cleanup(), which tidies up on behalf of OTHER sessions and
+   never becomes a user itself, so process.user_no is 0.  A FREE task lock
+   slot is also 0.  So the test matched exactly the slots that were already
+   empty, cleared them again, and left every held lock held - which is why
+   this never presented as corruption, only as a lock nothing could shift.
+
+   THE CONSEQUENCE IS THE RECOVERY THIS PORT DOCUMENTS EVERYWHERE.  "run an
+   elevated sd -cleanup" is the answer PROJECT_STATUS gives for a dead
+   session, and for task locks it was not one.  See PRE_RELEASE_FIXES.md 16,
+   which is about the same dead session from the user's side.             */
   for (i = 0; i < 64; i++) {
-    if (sysseg->task_locks[i] == process.user_no)
+    if (sysseg->task_locks[i] == user_no)
       sysseg->task_locks[i] = 0;
   }
 

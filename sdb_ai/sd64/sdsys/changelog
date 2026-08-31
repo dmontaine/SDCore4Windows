@@ -5,6 +5,29 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+31 Aug 26  A WRITE THAT NEEDED A LOCK NO LONGER BLAMES THE DISK.
+
+           Writing a record without holding its lock - which a WRITE inside a
+           transaction always needs, and so does any system set to MUSTLOCK=1
+           - reported "Error 3023 (o/s 0) writing record (Possible full
+           disk?)".  The disk was never involved and nothing had been written.
+
+           It now says that no lock is held, that the stored record is
+           unchanged, and that READU takes the lock (READVU for a single
+           field).  The old wording is still used for real write failures,
+           where a full disk genuinely is one of the causes.
+
+31 Aug 26  "sd -cleanup" NOW RELEASES A DEAD SESSION'S TASK LOCKS.
+
+           It already gave back the file, record and group locks a lost
+           session was holding, but never its task locks - so a LOCK taken by
+           a program that was then killed stayed taken, and no recovery an
+           administrator had would shift it.  A nightly job guarded by LOCK 3
+           would not run again until SD was restarted.
+
+           If you have been restarting SD to clear a stuck task lock, you
+           should not need to any more.
+
 30 Aug 26  PRESSING ENTER AT A Y/N QUESTION NOW ANSWERS IT, AND THE PROMPT
            SAYS WHICH ANSWER YOU GET.
 
