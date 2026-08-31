@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 31 Aug 26 Windows port - k_error() truncated every message at about 84
+ *                      characters: the vsnprintf bound read MAX_ERROR_LINES +
+ *                      MAX_EMSG_LEN where the buffer is sized on the PRODUCT.
+ *                      Now sizeof(s) - n, which also accounts for the offset
+ *                      prefix already written.  PRE_RELEASE_FIXES.md 87
  * 16 Aug 26 Windows port - audit_message() writes the audit trail.  Separate
  *                      from log_message() because errlog DISCARDS its oldest
  *                      half and an audit trail may not lose records
@@ -222,7 +227,21 @@ void k_error(char* message, ...) {
 
   va_start(arg_ptr, message);
   /* Fix for Issue #13.  Converted a vsprintf() to vsnprintf(). -gwb */
-  vsnprintf(&(s[n]), (MAX_ERROR_LINES + MAX_EMSG_LEN) + 1,  message, arg_ptr);
+/* 31 Aug 26 Windows port - THE LIMIT WAS "LINES + LEN" WHERE THE BUFFER IS
+   "LINES * LEN".  PRE_RELEASE_FIXES.md 87 / UPSTREAM_FIXES.md 28.  s is
+   (MAX_ERROR_LINES * MAX_EMSG_LEN) + 1 = 241 bytes; the bound below said
+   (MAX_ERROR_LINES + MAX_EMSG_LEN) + 1 = 84, so every k_error() message was
+   truncated at about 84 characters instead of the three 80-column lines the
+   buffer was sized for.  Found by measuring PRE_RELEASE 12: message 10151
+   rendered as "...A WRITE must already hold an u", cut mid-word, so the half
+   that tells the reader what to DO never reached them.
+
+   sizeof(s) - n, NOT the corrected product.  n is already 10 bytes of
+   "%08X: " offset prefix written above, so passing the full 241 here would
+   let vsnprintf write up to n + 241 into a 241-byte buffer.  The obvious
+   repair of the typo - turning the + into a * - introduces a buffer overflow
+   where there was only a truncation.                                      */
+  vsnprintf(&(s[n]), sizeof(s) - n,  message, arg_ptr);
   va_end(arg_ptr);
 
   if (c_base == NULL) /* No object currently loaded */
