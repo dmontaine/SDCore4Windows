@@ -18,6 +18,16 @@
 * 
 * 
 * START-HISTORY:
+* 31 Aug 26 Windows port - THE SDSYS LANDING CASE TESTS THE SD TIER TOO.
+*           PRE_RELEASE_FIXES 91, PROJECT_STATUS.md 5.22.  The two keys it
+*           already tested ask Windows and nothing else, so a person made a
+*           Windows administrator OUTSIDE SD - a domain group, a policy - landed
+*           in SDSYS holding a STANDARD or PROGRAMMER account.  A third term,
+*           !sd_admin_tier(@logname), requires the ADMINISTRATOR tier on their
+*           own register entry; they now fall through to case 1 and land in
+*           their own account.  Owner's ruling: close this with int.logto's
+*           SDSYS gate, which had the same gap.  New function in gpl.bp/SDADMIN.
+*           "sd -internal" is unaffected - it is taken by the case at :442.
 * 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56 CLAUSE 2, REVERSED.  The
 *           administrator's personal account is restored, so the sdusers gate
 *           loses its administrator exemption and becomes uniform across all
@@ -140,6 +150,12 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   within a normal session" - is untouched: this is not within a session, it
 *   is what decides which account the session begins in.
 deffun elevate(action,arg) calling '!elevate'
+* 31 Aug 26 Windows port - the SD half of "administrator", PRE_RELEASE_FIXES 91.
+* ***HALF OF A TEST: ALWAYS WRITE kernel(K$OS.ADMINISTRATOR, 0) BESIDE IT.***
+* 5.22 - "both a windows administrator and an sd administrator".  SDADMIN's
+* header says why the Windows half cannot be folded in.  One gate here, the
+* landing case below; CPROC has the other two.
+deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
    ok = @false
    admin.login = @false
@@ -570,7 +586,34 @@ deffun elevate(action,arg) calling '!elevate'
 *   exits when this session's process goes, waking periodically while idle, so
 *   a refusal further down releases it without CPROC's logto.privilege.undo
 *   dance.  Checked in sd-elevate-helper.ps1 rather than assumed.
-      case kernel(K$ADMINISTRATOR, -1) and kernel(K$OS.ADMINISTRATOR, 0)
+* 31 Aug 26 Windows port - AND THE THIRD TERM IS THE SD HALF.  Owner's ruling,
+*   31 Aug 2026, PRE_RELEASE_FIXES 91: close this and int.logto's SDSYS gate
+*   together.  ***THE TWO KEYS ABOVE ASK WINDOWS AND NOTHING ELSE***, so a
+*   person made a Windows administrator OUTSIDE SD - a domain group, a policy,
+*   a hand "net localgroup" - landed in SDSYS holding a STANDARD or PROGRAMMER
+*   account, with no SD grant anywhere in it.  5.22 says administrator means
+*   BOTH, and this is where the landing is decided.
+*
+*   ***IT DOES NOT LOCK THEM OUT: THEY FALL THROUGH TO "case 1" AND LAND IN
+*   THEIR OWN ACCOUNT***, exactly as an unelevated administrator does.  What
+*   they lose is SDSYS and the restricted verbs, which is what 5.22's table
+*   already said they should never have had.
+*
+*   THE BOOTSTRAP IS NOT AFFECTED, CHECKED RATHER THAN ASSUMED: "sd -internal"
+*   sets K$FORCED.ACCOUNT and is taken by the FIRST case at :442, which never
+*   reaches this one.  That matters because the installing administrator's
+*   account does not exist yet when the install first runs SD.
+*
+*   ***AND IT RUNS FOR EVERY LOGIN, BECAUSE AND DOES NOT SHORT-CIRCUIT.***
+*   CREATEA:382 records that in terms, and the defect it cost went unnoticed
+*   from 10 June to 21 Aug 2026.  So the register read below happens for every
+*   user who signs in, administrator or not - one open, one read, one close on
+*   a file this routine already opens at :358.  ***IT CANNOT ABORT THE WAY
+*   CREATEA'S DID***: that one passed an UNASSIGNED variable, and @logname is
+*   always set by the time this case is reached.  A person with no record in
+*   the register gets @false, not a run-time error.
+      case kernel(K$ADMINISTRATOR, -1) and kernel(K$OS.ADMINISTRATOR, 0) and ~
+           sd_admin_tier(@logname)
          initial.account = 'SDSYS'
 
          read acc.rec from acc.f, initial.account else

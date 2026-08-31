@@ -1,0 +1,129 @@
+* SDADMIN
+* Does this person's register entry carry the ADMINISTRATOR tier?
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 31 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 91.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    yes = !sd_admin_tier(user)
+*
+*    status()  0  the person's register entry carries the ADMINISTRATOR tier
+*              1  the register cannot be opened
+*              2  no record for this person
+*              3  the record carries some other tier, or none
+*
+*    ***THIS IS HALF OF A TEST AND THE NAME SAYS WHICH HALF.***  Owner, 31 Aug
+*    2026: "an administrator has to be both a windows administrator and an sd
+*    administrator" - PROJECT_STATUS.md 5.22.  This answers the SD half only.
+*    The Windows half is kernel(K$OS.ADMINISTRATOR, 0), and every caller must
+*    write it out beside this call:
+*
+*      if kernel(K$OS.ADMINISTRATOR, 0) and sd_admin_tier(@logname) then
+*
+*    ***THE WINDOWS HALF IS DELIBERATELY NOT FOLDED IN HERE, AND THAT IS NOT
+*    TASTE.***  K$OS.ADMINISTRATOR asks Windows about the REAL uid of THIS
+*    process - it takes no user and cannot be asked about anybody else.  A
+*    function that took a "user" argument and then answered partly about the
+*    caller would give a confident wrong answer to sd_admin_tier('someone.else')
+*    and nothing would show.  So the argument means exactly what it says, and
+*    the conjunction stays visible at each gate where a reader can see the whole
+*    rule.  LOGIN:573 makes the same choice for the same reason and its comment
+*    says "Do not simplify this back to one key".
+*
+*    ***IT IS CALLED EVEN WHEN THE WINDOWS HALF IS FALSE, BECAUSE AND DOES NOT
+*    SHORT-CIRCUIT.***  CREATEA:382 records that property, and the defect it
+*    cost there went unnoticed from 10 June to 21 Aug 2026.  So every gate that
+*    writes the conjunction pays one open, one read and one close per call,
+*    including for ordinary users - which is why this refuses cheaply and never
+*    aborts: a missing register, an empty name and an absent record are all
+*    ordinary @false returns with a status, not errors.  A caller may not
+*    assume the argument was even looked at first.
+*
+*    ONE PLACE THE REGISTER LOGIC LIVES, which is why this is a catalogued
+*    function.  There are three gates and they are in two programs: LOGIN's
+*    landing case, CPROC's "LOGTO SDSYS" gate, and CPROC's logto.authorised.
+*    A predicate copied into two programs is the shape that drifts - a third
+*    copy of the administrator verb list cost twenty minutes of a suite run on
+*    31 Aug 2026, and that was only a test.
+*
+*    ***SUSPENDED IS NOT RESOLVED THROUGH ACC$PRIOR.TIER, WHICH IS THE OPPOSITE
+*    OF TIERGATE AND IS ON PURPOSE.***  !tier_allows keeps a suspended person's
+*    RANK so that a grant made while they are suspended is still the right one
+*    when it lifts.  This asks whether somebody is an administrator RIGHT NOW,
+*    and a suspended one is not.  LOGIN refuses a suspended account at the
+*    front door, so the only session this can reach is one that was already
+*    running when the suspension landed - which is the case worth denying.
+*
+*    AN UNKNOWN, EMPTY OR UNREADABLE TIER IS REFUSED, NOT DEFAULTED.  TIERGATE's
+*    rule and GRANTA's before it: a missing register must not promote everybody.
+*    Note this is the OPPOSITE of NEWVOC's tier lists, where a missing record
+*    means the FULL VOC.  Do not carry that convention across.
+*
+*    ITS OWN FILE VARIABLE, deliberately, and LOGIN's get.acc.tier records why:
+*    a caller may have ACCOUNTS open with a select list active on channel 12,
+*    and reusing that handle would end the walk part way through "with no error
+*    and no sign of it".  CPROC's LOGTO has already closed its own handle by the
+*    time logto.authorised runs, so there is nothing to reuse there either.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$flags trusted
+
+function sd_admin_tier(user)
+$catalog !sd_admin_tier
+
+$include keys.h
+$include int$keys.h
+
+   set.status 0
+
+   sa.who = upcase(trim(user, ' ', 'B'))
+
+   if sa.who = '' then
+      set.status 2
+      return @false
+   end
+
+   openpath @sdsys:@ds:'accounts' to sa.acc.f else
+      set.status 1
+      return @false
+   end
+
+   sa.rec = ''
+   read sa.rec from sa.acc.f, sa.who else
+      close sa.acc.f
+      set.status 2
+      return @false
+   end
+
+   close sa.acc.f
+
+   if upcase(trim(sa.rec<ACC$TIER>, ' ', 'B')) # 'ADMINISTRATOR' then
+      set.status 3
+      return @false
+   end
+
+   set.status 0
+   return @true
+
+* END-CODE

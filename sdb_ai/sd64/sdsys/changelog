@@ -5,6 +5,50 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+31 Aug 26  AN ADMINISTRATOR IS NO LONGER SHUT OUT OF ACCOUNTS BY LOGTO.
+
+           Administrators may enter any account without being granted access
+           to it, and that had stopped working in two ways.  Signed in as
+           yourself, the very first LOGTO was refused with "User not allowed
+           in requested account" - which is every session reached over ssh,
+           because ssh sessions are never elevated.  Starting elevated, the
+           first LOGTO worked and every one after it was refused, including
+           going back to SDSYS.
+
+           The cause was that LOGTO asked whether the SESSION still held
+           administrative privilege, and leaving SDSYS deliberately gives that
+           privilege up.  Entering an account and being allowed to run the
+           restricted commands are separate questions, and giving up the
+           second no longer takes the first away.
+
+           If you had been reconnecting to get back in, you should not need to
+           any more.
+
+31 Aug 26  BEING A WINDOWS ADMINISTRATOR IS NO LONGER ENOUGH ON ITS OWN TO
+           REACH SDSYS.
+
+           SD administration needs BOTH: membership of the Windows
+           Administrators group, and an SD account created with the
+           ADMINISTRATOR tier.  Until now only the Windows half was checked
+           when deciding where a session lands, so somebody added to
+           Administrators outside SD - by a domain group or a policy - arrived
+           in SDSYS even though SD had never granted them anything, and could
+           then enter any account.
+
+           They now land in their own account like anybody else, keeping
+           everything that account allows.  What they lose is SDSYS and the
+           restricted administrator commands.
+
+           NOTHING CHANGES FOR ACCOUNTS SD CREATED.  CREATE.ACCOUNT ...
+           ADMINISTRATOR is what adds someone to the Administrators group in
+           the first place, and it writes the tier at the same time, so both
+           halves have always agreed for accounts made through SD.  The
+           account the installer adopts is an ADMINISTRATOR account too.
+
+           If an administrator finds themselves in their own account instead
+           of SDSYS after this, their SD account is not an ADMINISTRATOR one:
+           MODIFY.ACCOUNT sets the tier.
+
 31 Aug 26  ERROR MESSAGES ARE NO LONGER CUT OFF AFTER THE FIRST LINE.
 
            Anything SD reported as a program error was truncated at about 84

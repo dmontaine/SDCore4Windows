@@ -18,6 +18,21 @@
 * 
 * 
 * START-HISTORY:
+* 31 Aug 26 Windows port - AN ADMINISTRATOR'S ACCESS SURVIVES A LOGTO, AND
+*            "ADMINISTRATOR" NOW MEANS BOTH HALVES AT EVERY GATE.
+*            PRE_RELEASE_FIXES.md 91, PROJECT_STATUS.md 5.22.  logto.authorised
+*            answered "may this person enter this account" with K$ADMINISTRATOR,
+*            a PRIVILEGE flag that :2825 clears on the way out of SDSYS and that
+*            LOGIN never sets for an unelevated administrator - so an
+*            administrator was refused with 10003 on their second logto, or on
+*            their first if they signed in as themselves.  That bare bypass is
+*            DELETED and replaced by a test on the PERSON: K$OS.ADMINISTRATOR,
+*            which a logto cannot move, AND !sd_admin_tier - the ADMINISTRATOR
+*            tier on their own register entry.  int.logto's SDSYS gate gains
+*            the same pair, on the owner's ruling to close it with LOGIN:573:
+*            it asked Windows alone, so somebody made a Windows administrator
+*            OUTSIDE SD reached SDSYS with a STANDARD account.  New shared
+*            function in gpl.bp/SDADMIN; three gates, two programs, one copy.
 * 30 Aug 26 Windows port - three owner rulings, PRE_RELEASE_FIXES.md 8, 9, 44.
 *            F1 prints 10149 instead of doing nothing; a LOGTO whose grant is
 *            in place but whose chdir was refused adds 10150 after 5161, which
@@ -202,6 +217,13 @@ deffun errtext(err) calling '!errtext'
 * rev 0.9.0 *
 * 14 Aug 26 Windows port - restored with the ACC$GROUP test in logto.authorised
 deffun is_grp_member(user,group) calling '!is_grp_member'
+* 31 Aug 26 Windows port - the SD half of "administrator", PRE_RELEASE_FIXES 91.
+* ***HALF OF A TEST: ALWAYS WRITE kernel(K$OS.ADMINISTRATOR, 0) BESIDE IT.***
+* 5.22 - "both a windows administrator and an sd administrator".  SDADMIN's
+* header says why the Windows half cannot be folded in.  Two gates here use it,
+* int.logto's SDSYS test and logto.authorised, and LOGIN's landing case is the
+* third.
+deffun sd_admin_tier(user) calling '!sd_admin_tier'
 * 16 Aug 26 Windows port - entering SDSYS obtains OS privilege for the session
 * and leaving it gives that privilege up.  There is deliberately no verb:
 * PROJECT_STATUS.md 7 step 4.
@@ -2659,7 +2681,20 @@ int.logto:
 *   is behind check_admin(), which asks IsElevated() - so the person behind
 *   them passes this test on its own.  A bypass would be an untested branch
 *   that only ever weakens the gate.
-      if not(kernel(K$OS.ADMINISTRATOR, 0)) then
+* 31 Aug 26 Windows port - AND THE SD HALF TOO.  Owner's ruling, 31 Aug 2026,
+*   on PRE_RELEASE_FIXES 91: close this and LOGIN:573 together.  This test was
+*   K$OS.ADMINISTRATOR alone, which asks Windows and nothing else, so a person
+*   made a Windows administrator OUTSIDE SD - a domain group, a policy, a hand
+*   "net localgroup" - reached SDSYS with a STANDARD or PROGRAMMER account.
+*   5.22 says administrator means BOTH, and this is the second of the three
+*   places that has to say so.
+*
+*   ***THE ORDER MATTERS: BOTH HALVES ARE ASKED BEFORE !elevate.***  LOGIN's
+*   note at the same test - "a broken install should not draw a consent dialog
+*   to then refuse the login anyway" - applies here with more force, because a
+*   refusal AFTER UAC has asked for a password teaches somebody to type one
+*   where it was never going to be accepted.
+      if not(kernel(K$OS.ADMINISTRATOR, 0) and sd_admin_tier(@logname)) then
          display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
          void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=not an administrator')
          unwinding = 2
@@ -3850,20 +3885,45 @@ logto.authorised:
       return
    end
 
-* AN ELEVATED SESSION PASSES, for the same reason LOGIN gives at the same test:
-* ACCOUNTS/SDSYS names a group that does not exist on Windows, so testing the
-* group would refuse administration to everybody.  Elevation IS the
-* authorisation, and root does not pass the group test on Linux either.
+* 31 Aug 26 Windows port - ***THE BARE "if kernel(K$ADMINISTRATOR,-1)" BYPASS
+* THAT STOOD HERE IS DELETED.  OWNER'S RULING, 31 Aug 2026, PRE_RELEASE_FIXES
+* 91: close this and LOGIN:573 together.***  It read the SESSION's privilege
+* flag and admitted the holder to every account.
 *
-* This absorbs the test for standing in SDSYS that used to be here.  You can
-* only be in SDSYS if you were elevated when you logged in - LOGIN is the only
-* thing that puts anybody there, and nothing clears the flag afterwards - so a
-* separate test on @who would now be unreachable code.
-
-   if kernel(K$ADMINISTRATOR,-1) then
-      logto.ok = @true
-      return
-   end
+* WHAT IT SAID FOR ITSELF, KEPT BECAUSE IT WAS TRUE OF THE MODEL IT WAS WRITTEN
+* FOR: an elevated session passes, because ACCOUNTS/SDSYS names a group that
+* does not exist on Windows, so testing the group would refuse administration
+* to everybody - elevation IS the authorisation, and root does not pass the
+* group test on Linux either.  It also absorbed an older test for standing in
+* SDSYS, on the reasoning that LOGIN is the only thing that puts anybody there.
+*
+* ***TWO THINGS KILLED IT, AND THE FIRST IS WHY 91 EXISTS.***  Its comment also
+* said "and nothing clears the flag afterwards", which was false from 16 Aug
+* 2026: the LOGTO path clears K$ADMINISTRATOR at :2825 on the way OUT of SDSYS,
+* so the first LOGTO silently disarmed every later one and the administrator
+* was refused with 10003 on their second.  And LOGIN sets that flag only on its
+* SDSYS case, so an administrator signing in AS THEMSELVES never had it at all
+* and was refused on their FIRST.
+*
+* ***THE SECOND IS THE OWNER'S, AND IT IS WHY THE REPLACEMENT IS NOT SIMPLY
+* WIDER: "a windows administrator does not have access unless they are granted
+* access and to grant access they have to have a personal account first."***
+* Three lines of CREATEA make that so - :821 adds the person to sdusers WHEN
+* THEIR ACCOUNT IS CREATED, so passing LOGIN:417's gate means an account
+* exists; :1441 sets make.admin ONLY under the ADMINISTRATOR keyword and :847
+* is what joins BUILTIN\Administrators, so SD makes a Windows administrator
+* only when it also writes the ADMINISTRATOR tier; :1617 forces that tier on
+* ADOPT.  ***SO FOR ANYBODY SD CREATED, BOTH HALVES MOVE TOGETHER AND THE TEST
+* BELOW ADMITS EVERYONE THIS ONE DID.***  What the deletion actually removes is
+* the one case where they diverge: a person made a Windows administrator
+* OUTSIDE SD - a domain group, a policy, a hand "net localgroup" - holding a
+* STANDARD or PROGRAMMER account.  Under 5.22 they are not an SD administrator.
+*
+* ***DO NOT RESTORE IT TO FIX A LOCKOUT.  THE GATE THAT DECIDES WHO REACHES
+* SDSYS IS int.logto's, AND LOGIN:573 IS THE OTHER ONE*** - both now ask the
+* same two halves this does, so a session standing in SDSYS necessarily passes
+* the test below.  Restoring this line would re-open the divergence at the one
+* place it cannot be seen.
 
 * 16 Aug 26 Windows port - AND SO DOES A SESSION THAT HAS JUST OBTAINED
 *   PRIVILEGE.  This is what was missing when elevation was built on 16 Aug
@@ -3886,6 +3946,76 @@ logto.authorised:
 *   ALREADY elevated - a bootstrap, "sd -internal", the installer's account
 *   step - and asks UAC for nothing.
    if elev.obtained then
+      logto.ok = @true
+      return
+   end
+
+* 31 Aug 26 Windows port - AND SO DOES AN ADMINISTRATOR AS THEMSELVES.
+*   PRE_RELEASE_FIXES 91, PROJECT_STATUS.md 5.22.  Owner, 31 Aug 2026:
+*   "Administrators logged in as themselves need to have full access to
+*   everything EXCEPT the ability to issue the restricted administrator
+*   commands."  Entering an account is access, not a restricted command, so it
+*   is on the "as themselves" side of that line.
+*
+*   ***THE TWO TESTS ABOVE CANNOT ANSWER THIS, AND UNTIL TODAY NOTHING DID.***
+*   Both read session state.  K$ADMINISTRATOR is cleared at :2825 on the way
+*   out of SDSYS - the owner's ruling of 16 Aug 2026, "LOGTO ends the elevated
+*   session" - so an administrator who came in elevated lost the master key on
+*   their FIRST logto and was refused with 10003 on their second.  And the
+*   unelevated route never had it: LOGIN sets the flag only on its SDSYS case
+*   (:591, :674), so an administrator signing in AS THEMSELVES - which is the
+*   only thing an ssh session can do, because UAC has no desktop there - was
+*   refused on their first logto and every one after it.
+*
+*   ***ACCESS AND PRIVILEGE ARE DIFFERENT QUESTIONS.***  Which accounts a
+*   person may ENTER must not be answered with the flag that says what the
+*   session may DO: dropping the second must not drop the first.  os_permitted()
+*   at op_sh.c:167 is the shape to copy - it keys on process.username, the
+*   person who connected, which is why OS.EXECUTE already survives a LOGTO.
+*
+*   ***DO NOT REUSE LOGIN:573's PAIR HERE.***  It reads kernel(K$ADMINISTRATOR,
+*   -1) AND kernel(K$OS.ADMINISTRATOR, 0), and its first half is the very flag
+*   :2825 clears and LOGIN never sets for an unelevated administrator - so the
+*   pair is FALSE in both of the cases this exists to admit, and would fix
+*   nothing.  LOGIN asks "did this session START elevated, so should it land in
+*   SDSYS"; this asks "may this person enter this account".  Same words,
+*   different questions - LOGIN's own note at :543 says so from the other side,
+*   that K$OS.ADMINISTRATOR is true for the unelevated administrator it must
+*   NOT send to SDSYS.  That is exactly the person this must admit.
+*
+*   BOTH HALVES ARE ASKED OF THE PERSON, WHICH IS THE WHOLE POINT.
+*   K$OS.ADMINISTRATOR is asked of Windows on every call and a LOGTO cannot
+*   move it (keys.h:201); it carries op_kernel.c's CN_SOCKET guard, so an API
+*   session cannot claim it.  The SD half is the tier on the person's OWN
+*   account in the register - "an administrator has to be both a windows
+*   administrator and an sd administrator", 5.22 - and that register entry is
+*   the only thing in the system that says SD administrator.  The sdadmins
+*   Windows group is NOT it: the installer creates it and nothing reads it.
+*
+*   SUSPENDED IS NOT RESOLVED THROUGH ACC$PRIOR.TIER HERE, AND THAT IS THE
+*   OPPOSITE OF TIERGATE ON PURPOSE.  TIERGATE keeps a suspended person's RANK
+*   so a grant survives the suspension; this asks whether they are an
+*   administrator right now, and a suspended one is not.  LOGIN refuses them at
+*   the front door, so the only session this can reach is one already running
+*   when the suspension landed - which is the case worth denying.
+*
+*   REFUSED RATHER THAN GUESSED on every unreadable case - no register, no
+*   record for the person, an empty or unknown tier.  TIERGATE's rule, and
+*   GRANTA's before it.  A missing register must not promote everybody.
+*
+*   ***THREE GATES ASK THIS NOW, SO THE REGISTER READ IS A CATALOGUED
+*   FUNCTION AND NOT A TEST WRITTEN OUT HERE.***  It was inline for one hour,
+*   when there was one caller; the owner's ruling of 31 Aug 2026 made it three
+*   across two programs - int.logto's SDSYS gate above, LOGIN's landing case,
+*   and this - which is exactly TIERGATE's "one place the decision is made".
+*   !sd_admin_tier carries the SUSPENDED policy, the refuse-rather-than-guess
+*   rule and its own file variable; SDADMIN's header has all three.
+*
+*   ***THE CONJUNCTION STAYS WRITTEN OUT, AND SDADMIN SAYS WHY IT MUST BE.***
+*   K$OS.ADMINISTRATOR asks Windows about THIS process and takes no user, so
+*   folding it into a function with a "user" argument would make that argument
+*   a lie.  Both halves, at every gate, where a reader can see the whole rule.
+   if kernel(K$OS.ADMINISTRATOR, 0) and sd_admin_tier(@logname) then
       logto.ok = @true
       return
    end
