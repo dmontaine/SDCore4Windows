@@ -858,7 +858,27 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # both files against the TREE rather than against each other,
                   # because two files agreeing on a wrong number is exactly as
                   # broken as two disagreeing.  No install, no elevation.
-                  'test-tiercounts-units.ps1')
+                  'test-tiercounts-units.ps1',
+                  # 31 Aug 26 - test-stemcoverage-units.ps1, PRE_RELEASE 86's
+                  # checker.  ***LISTED AFTER IT SPRANG THE TRAP, NOT BEFORE,
+                  # AND THAT IS THE POINT OF WRITING IT DOWN AGAIN.*** It was
+                  # created on 31 Aug at 00:14:57 against a 30 Aug 22:42:46
+                  # install and not listed, so the very next unelevated run
+                  # refused: "STALE: 1 source file(s) are newer than the
+                  # install", naming this file, and verify-sdsyswrite exited 2
+                  # having measured nothing.  A step that was green in the same
+                  # run is what made the tree stale for the step after it.
+                  #
+                  # THE COST WAS ONE RUN TOKEN, WHICH IS THE CHEAP VERSION -
+                  # session 79 paid it with three scripts at once and the
+                  # sdtestuser trio paid it again.  The rule those entries state
+                  # is section 7 step 7's and it has now been broken four times:
+                  # LIST IT IN THE COMMIT THAT CREATES IT.  A gplbld script that
+                  # does not ship makes the tree report STALE merely by
+                  # existing, and then every verifier that calls this script
+                  # refuses - so the failure never looks like a missing list
+                  # entry, it looks like the tree needing a cycle.
+                  'test-stemcoverage-units.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
