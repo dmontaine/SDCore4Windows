@@ -14,7 +14,7 @@
 
       - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
         over SCRAM and attach to their own account
-      - what each tier can DO once in, as a VOC count: 354 / 396 / 419.  A
+      - what each tier can DO once in, as a VOC count: 355 / 396 / 420.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
       - a wrong password is refused, so the successes mean something
@@ -177,7 +177,31 @@ $Tiers = @(
     #
     #   ***SO RUN test-tiercounts-units.ps1 BEFORE ANY SUITE RUN THAT FOLLOWS
     #   A CHANGE TO EITHER TIER LIST.***  It is free; a suite step is not.
-    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 419 }
+    # 31 Aug 26 - 419 -> 420.  PRE_RELEASE 89 adds append.sd.path to
+    #   TIER.ADD.ADMINISTRATOR, the fourth administrator verb.
+    #
+    #   ***AND THIS TIME THE FILE WAS NOT LEFT BEHIND, BECAUSE THE GUARD WAS
+    #   RUN.***  test-tiercounts-units.ps1 was run immediately after
+    #   verify-tiers.ps1 was updated and said, in under a second:
+    #   "verify-tierapi.ps1: ADMINISTRATOR -- claims 419, tree says 420".
+    #   Third time for this constant, first time it cost nothing - no suite
+    #   run, no install, no run token.  The entry above is right that what the
+    #   guard cannot do is invoke itself; running it is the habit.
+    #
+    #   RE-DERIVED FROM THE DIRECTORY, NOT COPIED FROM THE OTHER FILE:
+    #   newvoc still holds 395 names, less "%t" and the two list records = 392,
+    #   and that it did NOT move is the proof the verb went to voc_template;
+    #   TIER.ADD.ADMINISTRATOR is 25 lines, 1 description + 24 verbs.  So
+    #   392 + 24 + 4 = 420, while PROGRAMMER 392 + 4 = 396 and STANDARD
+    #   392 - 41 + 4 = 355 do not move.
+    #
+    #   ***THE 25 Aug ARITHMETIC ABOVE HAS TIER.OMIT.STANDARD WRONG.***  It
+    #   says "392 - 42 + 4 = 354"; the file is 42 lines, 1 + 41 verbs, and the
+    #   STANDARD constant in this file and in verify-tiers.ps1 has always been
+    #   355.  Stale comment, not a stale constant - nothing was failing - but a
+    #   re-derivation that trusted it would come out one short and read as a
+    #   regression.  Corrected in verify-tiers.ps1's block too.
+    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 420 }
 )
 foreach ($t in $Tiers) {
     if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }

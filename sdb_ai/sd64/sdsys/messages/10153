@@ -1,0 +1,1 @@
+Could not %1 the system PATH (status %2). Nothing was changed.\n\nStatus 1 means Windows refused the change or SD is not running elevated;\nstatus -1 means the helper could not be run at all. The system PATH cannot be\nchanged without administrator rights.

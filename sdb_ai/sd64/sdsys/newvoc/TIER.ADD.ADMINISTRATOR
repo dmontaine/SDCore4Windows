@@ -12,6 +12,7 @@ modify.password
 remote.api
 remote.ssh
 ssh.server
+append.sd.path
 config
 listu
 list.readu

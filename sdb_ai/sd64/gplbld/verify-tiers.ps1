@@ -35,7 +35,30 @@
 # every administrator account shipped with a verb that could only ever answer
 # "Unable to load '$CRYPTO' object code".  PRE_RELEASE_FIXES.md 25.
 #
-# 30 Aug 26 - ADMINISTRATOR IS 419, AND ONLY ADMINISTRATOR MOVED.
+# 31 Aug 26 - ADMINISTRATOR IS 420, AND ONLY ADMINISTRATOR MOVED.
+# PRE_RELEASE_FIXES 89 adds a fourth administrator verb, append.sd.path, so the
+# system PATH can be changed after an install - the gap the owner found in his
+# own ruling that an upgrade shows no tasks page.  voc_template ONLY and listed
+# in TIER.ADD.ADMINISTRATOR, the same rule the three below follow.
+#
+# RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, as this block requires:
+# newvoc still holds 395 names, less "%t" and the two list records = 392 - and
+# that it did NOT move is the proof the verb went to voc_template rather than
+# newvoc; TIER.ADD.ADMINISTRATOR is now 25 lines, 1 description + 24 verbs;
+# TIER.OMIT.STANDARD is untouched at 42 lines, 1 + 41.  So
+# ADMINISTRATOR 392 + 24 + 4 = 420, PROGRAMMER 392 + 4 = 396 and STANDARD
+# 392 - 41 + 4 = 355.
+#
+# ***AND THE 30 Aug BLOCK BELOW HAD TIER.OMIT.STANDARD WRONG - CORRECTED HERE
+# RATHER THAN LEFT TO BE ARGUED WITH.***  It says "43 lines, 1 + 42" and
+# "STANDARD 392 - 42 + 4 = 354".  The file is 42 lines, 1 + 41, and the coded
+# STANDARD count above has always been 355.  The arithmetic was stale, not the
+# code - nothing was ever failing - but a re-derivation that trusted that line
+# would come out one short and look like a real regression.  Counted with
+# awk 'END{print NR}', which counts a final line whether or not it ends in a
+# newline; this file does end in one.
+#
+# 30 Aug 26 - ADMINISTRATOR WAS 419, AND ONLY ADMINISTRATOR MOVED.
 # PRE_RELEASE_FIXES 78 adds three administrator verbs - remote.api, remote.ssh
 # and ssh.server - so the owner can change after an install what only the
 # installer could change before.  They go in voc_template ONLY and are listed in
@@ -174,7 +197,7 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $Tiers = @(
     [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 355 }
     [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
-    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 419 }
+    [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 420 }
 )
 
 # The 42 a standard account does not get.  NEWVOC/TIER.OMIT.STANDARD is the

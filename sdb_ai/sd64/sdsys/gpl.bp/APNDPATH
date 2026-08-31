@@ -1,0 +1,173 @@
+* APNDPATH
+* APPEND.SD.PATH verb
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 31 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 89, and the name is the
+*           owner's: "append.sd.path on|off".
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*    APPEND.SD.PATH ON | OFF
+*
+*    Says whether SD's program directory is on the Windows system PATH, so
+*    that "sd" runs from any directory instead of only from its own.
+*
+*       ON   put it on the system PATH
+*       OFF  take it off
+*
+*    With no keyword it reports the current setting and changes nothing.
+*
+* ***WHY THIS VERB EXISTS, AND IT IS NOT SYMMETRY WITH THE OTHERS.***  The
+* installer's tickbox could set this once and never again: nothing removed the
+* entry except the uninstaller, so clearing the box on a later run did nothing
+* at all (PRE_RELEASE_FIXES 89, defect B).  The owner then ruled that an upgrade
+* shows no tasks page whatsoever - "if the admin wants to make additional
+* choices, we have given them the command line tools" - and found the gap in his
+* own ruling the same day: "we do not have a user command to change the path."
+* This is that command.  Without it the ruling would leave the setting with no
+* way to be changed after the first install.
+*
+* ***THE NAME AVOIDS A REAL COLLISION AND WAS CHOSEN FOR IT.***  Inside SD
+* "path" already means the ACCOUNT's path - pathname is a VOC keyword, WHERE
+* prints "account pathname", @PATH holds it - so SET.PATH would read as setting
+* that.  OS.PATH collides with VALID_OS_PATH, which means a host filesystem
+* path.  APPEND.SD.PATH cannot be read as either.
+*
+* ***IT IS THE SYSTEM PATH, NOT THE USER'S.***  The value lives in HKLM, under
+* Session Manager\Environment, so the change applies to every account on the
+* machine - which is what the installer always did, and is why this is
+* administrator-only.
+*
+* ***THE WORK IS IN sd-path.ps1 AND DELIBERATELY NOT IN HERE.***  Same reason
+* api-listener.ps1 records: a script can be parse-checked, byte-checked and
+* unit-tested on its own, and BASIC embedded in a verb cannot.  Editing PATH is
+* the one setting on this machine that breaks everything if it is got wrong, so
+* test-sdpath-units.ps1 drives its logic against synthetic values - 24 checks,
+* including the accumulated-empties case of 16 Aug 2026 - rather than
+* rehearsing on the real one.
+*
+* ***NO CONFIRMATION ON OFF, UNLIKE SSH.SERVER REMOVE.***  That verb asks
+* because removing the server strands every SD account with no way in.  This
+* one takes away a convenience: "sd" still runs, from its own directory or by
+* full path, and APPEND.SD.PATH ON puts it straight back.  A prompt standing in
+* front of a reversible change teaches people to answer prompts without reading
+* them.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+
+program $append.sd.path
+$catalog $APNDPATH
+
+* int$keys.h carries K$ADMINISTRATOR and K$WINPATH, and is not optional: both
+* are defined there and in neither of the others.  Leaving it out compiles to
+* an unknown-symbol failure that costs a whole cycle to discover.
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+
+   deffun ps_script(script) calling '!ps_script'
+
+   prompt ''
+
+*  ADMINISTRATOR ONLY, THE SAME GATE REMOTE.API AND SSH.SERVER USE.  The system
+*  PATH is machine-wide; it is not an ordinary user's to change.
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+*  ASSIGNED HERE FOR BCOMP, NOT FOR THE LOGIC.  bootstrap.py fails the WHOLE
+*  bootstrap on an "is not assigned a value" warning, and BCOMP reads the source
+*  in order.  Every value is also the safe one: no action, no change.
+   action = ''
+   arg    = ''
+   rc     = 0
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* Verb append.sd.path
+   call @parser(PARSER$GET.TOKEN, token.type, action, keyword)  ;* ON | OFF
+
+   action = upcase(trim(action))
+
+*  NO KEYWORD IS A REPORT, NOT AN ERROR.  Asking what the setting is should
+*  never be able to change it, so this runs -Show and stops before anything
+*  else.  -Show is also the one mode that needs no elevation.
+   if token.type = PARSER$END or action = '' then
+      arg = ' -Show'
+      gosub run.script
+      if rc # 0 then
+         crt sysmsg(10153, 'SHOW', rc)  ;* Could not read the system PATH
+      end
+      stop
+   end
+
+   begin case
+      case action = 'ON'
+         arg = ' -Add'
+      case action = 'OFF'
+         arg = ' -Remove'
+      case @true
+         stop sysmsg(10152)  ;* append.sd.path on | off
+   end case
+
+   gosub run.script
+
+*  ***EXIT 2 IS A REFUSAL, NOT A FAILURE, AND THE SCRIPT HAS ALREADY SAID WHY.***
+*  sd-path.ps1 exits 2 when it declines to act - the directory does not exist,
+*  the system PATH came back empty, or its own guard found the rebuilt value was
+*  not what was intended.  In every one of those it printed the reason and wrote
+*  nothing.  Restating it here would either duplicate the script or, worse,
+*  paraphrase it wrongly, so this points at what is already on screen.
+   if rc = 2 then
+      stop sysmsg(10155)  ;* Nothing was changed - the reason is above
+   end
+
+   if rc # 0 then
+      stop sysmsg(10153, action, rc)  ;* Could not change the system PATH
+   end
+
+*  ***THE SCRIPT ALREADY SAID "OPEN A NEW TERMINAL", SO THIS DOES NOT.***  An
+*  existing shell keeps the PATH it started with, and sd-path.ps1 prints that on
+*  both the add and the remove path.
+   if action = 'ON' then
+      crt sysmsg(10154)  ;* SD's program directory is on the system PATH
+   end else
+      crt sysmsg(10156)  ;* SD's program directory is off the system PATH
+   end
+
+   stop
+
+* ===========================================================================
+
+run.script:
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/sd-path.ps1') : char(39) : arg
+   ps := @fm : 'exit $LASTEXITCODE'
+   rc = ps_script(ps)
+   return
+
+end
+
+* END-CODE

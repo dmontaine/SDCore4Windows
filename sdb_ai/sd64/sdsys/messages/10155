@@ -1,0 +1,1 @@
+Nothing was changed. The reason is in the lines above - the directory was not\nfound, the system PATH came back empty, or the rebuilt value did not pass the\ncheck that every other entry survives untouched.

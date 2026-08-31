@@ -1,0 +1,1 @@
+SD's program directory is no longer on the system PATH. "sd" still runs from\nits own directory, or by full path, and append.sd.path on puts it back.
