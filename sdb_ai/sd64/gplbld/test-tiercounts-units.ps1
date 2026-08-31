@@ -160,6 +160,46 @@ foreach ($f in $files) {
     }
 }
 
+# ---------------------------------------------------------------------------
+# 31 Aug 26 - AND THE LIST ITSELF, NOT ONLY THE COUNTS.  PRE_RELEASE 89/90.
+#
+# ***THIS GUARD PASSED WHILE THE SUITE FAILED, AND THAT IS THE HOLE IT LEAVES.***
+# append.sd.path was added to TIER.ADD.ADMINISTRATOR; the two COUNT constants
+# were re-derived and this test went green, because counts were all it read.
+# verify-tiers.ps1 carries a THIRD copy - $AdminVerbs, an independent
+# transcription of the record - and nothing compared it, so the drift surfaced
+# 20 minutes into a suite run as "add list length: expected 23, got 24".
+#
+# verify-tiers.ps1 compares $AdminVerbs against the INSTALLED record, which is
+# right for a verifier and useless before a cycle.  This compares it against
+# SOURCE, which is what makes it free.
+$tiersPath = Join-Path $PSScriptRoot 'verify-tiers.ps1'
+$addRecSrc = Join-Path $PSScriptRoot '..\sdsys\newvoc\TIER.ADD.ADMINISTRATOR'
+
+if ((Test-Path -LiteralPath $tiersPath) -and (Test-Path -LiteralPath $addRecSrc)) {
+    $tok = $null; $errs = $null
+    $tAst = [System.Management.Automation.Language.Parser]::ParseFile(
+                (Resolve-Path $tiersPath), [ref]$tok, [ref]$errs)
+    $assign = $tAst.Find({
+        param($n)
+        $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+        $n.Left.Extent.Text -eq '$AdminVerbs'
+    }, $true)
+
+    if ($null -eq $assign) {
+        # REFUSE THE NULL CASE: not finding the list must not read as agreement.
+        Note $false 'verify-tiers.ps1: $AdminVerbs found' 'no such assignment - it was renamed or removed'
+    } else {
+        $claimed  = @(& ([scriptblock]::Create($assign.Right.Extent.Text)))
+        $shipped  = @(Get-Content -LiteralPath $addRecSrc | Select-Object -Skip 1)
+        $diff     = @(Compare-Object $shipped $claimed -SyncWindow 100)
+        Note ($claimed.Count -gt 0) 'verify-tiers.ps1: $AdminVerbs is not empty' "$($claimed.Count) name(s)"
+        Note ($diff.Count -eq 0) 'verify-tiers.ps1: $AdminVerbs matches source TIER.ADD.ADMINISTRATOR' `
+             $(if ($diff.Count -eq 0) { "$($claimed.Count) names agree" }
+               else { ($diff | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; ' })
+    }
+}
+
 Write-Output ''
 if ($fail -eq 0 -and $pass -gt 0) {
     Write-Output ("test-tiercounts-units: PASSED - {0} of {0} checks passed." -f $pass)

@@ -266,6 +266,9 @@ $AdminVerbs = @(
     'grant','revoke','list.grants','unlock','modify.password',
     # A2 - the machine's network services
     'remote.api','remote.ssh','ssh.server',
+    # A2b - the machine's command search path.  Windows state like A2, but not
+    # a network service, so it does not belong in that line.  PRE_RELEASE 89.
+    'append.sd.path',
     # A3 - system-wide state
     'config','listu','list.readu','list.locks','clear.locks','lock','logout','set.date',
     # A4 - shell escapes
