@@ -112,7 +112,21 @@ param(
     # runner cannot see without starting the other one - and "name not in THIS
     # half" and "name not in EITHER half" are different answers that must not be
     # guessed between.  Run the elevated half directly for a targeted step.
-    [string] $Only = '',
+    #
+    # 31 Aug 26 - [string[]] SO BOTH SHELL FORMS BIND.  As [string] this refused
+    # the documented multi-name form outright: PowerShell parses "a,b" in
+    # argument position as an ARRAY before binding, so -Only a,b died with
+    # "Cannot process argument transformation on parameter 'Only'" and only
+    # -Only 'a,b' worked.  CLAUDE.md documents "-Only <step[,step]>" with every
+    # example single-name, so the quoting requirement appeared nowhere and cost
+    # a round trip the first time the two-name form was used in anger.
+    #
+    # THE FILTER IS UNCHANGED AND STILL TAKES A STRING.  The array is joined
+    # with a comma at the call site below and suite-only.ps1 splits on [,;] as
+    # it always did - one copy of the filter, and its 48 unit tests still drive
+    # exactly what runs.  An empty array and @('') are both falsy in PowerShell
+    # and both join to '', so -Only and -Only '' stay pass-throughs.
+    [string[]] $Only = @(),
 
     # 22 Aug 26 - Skip the "are you sure" prompt.  For anything that is not a
     # person at a keyboard: a scripted run, or the installer, which cannot
@@ -726,7 +740,7 @@ $steps = $kept.ToArray()
 # skips.  Filtering earlier would let -Only name a step this run was never going
 # to reach and call that a match.
 . (Join-Path $PSScriptRoot 'suite-only.ps1')
-$sel = Select-SuiteSteps -Steps $steps -Only $Only -Runner 'VerifyInstall1'
+$sel = Select-SuiteSteps -Steps $steps -Only ($Only -join ',') -Runner 'VerifyInstall1'
 if ($sel.Error -ne '') { Write-Output $sel.Error; exit 2 }
 $partial   = $sel.Partial
 $fullCount = @($steps).Count

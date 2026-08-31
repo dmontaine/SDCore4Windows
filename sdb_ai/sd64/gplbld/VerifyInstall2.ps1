@@ -163,7 +163,18 @@ param(
     #
     # ***A PARTIAL RUN SAYS SO WHEREVER IT REPORTS***, and the closing line never
     # reads "all N steps exited 0" on one.
-    [string]$Only = '',
+    #
+    # 31 Aug 26 - [string[]] SO BOTH SHELL FORMS BIND, the same change and the
+    # same reason as VerifyInstall1.ps1, which carries the full write-up:
+    # PowerShell parses "a,b" in argument position as an ARRAY before binding,
+    # so as [string] this refused the documented multi-name form with "Cannot
+    # process argument transformation on parameter 'Only'".  Changed here in the
+    # same commit BECAUSE THE TWO RUNNERS MUST NOT DISAGREE ABOUT HOW A
+    # DOCUMENTED FLAG IS TYPED - a form that works on one and not the other is
+    # worse than one that works on neither, since it teaches the wrong habit.
+    # The filter is untouched: the array is joined at the call site and
+    # suite-only.ps1 still splits a string on [,;].
+    [string[]]$Only = @(),
 
     [switch]$Quiet
 )
@@ -555,7 +566,7 @@ $steps = @(
 # whole list is built, so a name is checked against the steps this run would
 # actually have made.
 . (Join-Path $PSScriptRoot 'suite-only.ps1')
-$sel = Select-SuiteSteps -Steps $steps -Only $Only -Runner 'VerifyInstall2'
+$sel = Select-SuiteSteps -Steps $steps -Only ($Only -join ',') -Runner 'VerifyInstall2'
 if ($sel.Error -ne '') { Write-Output $sel.Error; exit 2 }
 $partial   = $sel.Partial
 $fullCount = @($steps).Count
