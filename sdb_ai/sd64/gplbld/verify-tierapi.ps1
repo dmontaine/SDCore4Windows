@@ -14,7 +14,7 @@
 
       - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
         over SCRAM and attach to their own account
-      - what each tier can DO once in, as a VOC count: 354 / 396 / 416.  A
+      - what each tier can DO once in, as a VOC count: 354 / 396 / 419.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
       - a wrong password is refused, so the successes mean something
@@ -145,14 +145,33 @@ $Tiers = @(
     #
     #   RE-DERIVED FROM THE DIRECTORY RATHER THAN COPIED FROM THE OTHER FILE:
     #   newvoc holds 395 names, less "%t" and the two list records = 392;
-    #   TIER.ADD.ADMINISTRATOR is 21 lines, 1 description + 20 verbs.  So
-    #   392 + 20 + 4 = 416, while PROGRAMMER 392 + 4 = 396 and STANDARD
+    #   TIER.ADD.ADMINISTRATOR is 24 lines, 1 description + 23 verbs.  So
+    #   392 + 23 + 4 = 419, while PROGRAMMER 392 + 4 = 396 and STANDARD
     #   392 - 42 + 4 = 354 do not move - which is the check on the arithmetic,
-    #   since the verb was only ever ADMINISTRATOR's.
+    #   since the verbs were only ever ADMINISTRATOR's.
     #
     #   test-tiercounts-units.ps1 now asserts the two files agree WITH EACH
     #   OTHER and with the directory, so this cannot drift again unnoticed.
-    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 416 }
+    #
+    # 30 Aug 26 - 416 -> 419, AND THIS FILE WAS THE ONE LEFT BEHIND. AGAIN.
+    #   PRE_RELEASE 78 added remote.api, remote.ssh and ssh.server to
+    #   TIER.ADD.ADMINISTRATOR; verify-tiers.ps1 was re-derived and this
+    #   constant was not - the SAME file, the SAME way, second time in three
+    #   days.  It surfaced on -Run b70 step 21, a whole suite run.
+    #
+    #   ***AND THE LINE ABOVE IS WRONG ABOUT WHY.***  "this cannot drift again
+    #   unnoticed" was never true: test-tiercounts-units.ps1 catches it in
+    #   under a second with no install, no elevation and no run token, and it
+    #   caught THIS the moment it was finally run - "verify-tierapi.ps1:
+    #   ADMINISTRATOR -- claims 416, tree says 419".  What it cannot do is run
+    #   itself.  NOTHING INVOKES IT: it is in neither VerifyInstall1 nor
+    #   VerifyInstall2, so the guard written for exactly this failure sat
+    #   unrun while exactly this failure happened again.  Filed as
+    #   PRE_RELEASE 82.
+    #
+    #   ***SO RUN test-tiercounts-units.ps1 BEFORE ANY SUITE RUN THAT FOLLOWS
+    #   A CHANGE TO EITHER TIER LIST.***  It is free; a suite step is not.
+    [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 419 }
 )
 foreach ($t in $Tiers) {
     if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }
