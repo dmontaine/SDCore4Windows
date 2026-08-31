@@ -1424,10 +1424,17 @@ begin
     'SETUP HAS NOT ASKED ABOUT ssh OR THE API, AND WILL NOT CHANGE THEM.' + NewLine +
     'Who may reach this machine, whether the API is provided, and whether "sd"' + NewLine +
     'runs from any directory are all left exactly as they are now.' + NewLine + NewLine +
-    'To change any of them afterwards, in SD as an administrator:' + NewLine + NewLine +
+    'NEW COMMANDS DO NOT APPEAR IN AN EXISTING ACCOUNT ON THEIR OWN.' + NewLine +
+    'An upgrade replaces the shipped vocabulary but does not rebuild the one' + NewLine +
+    'each account is using. Sign in and run this ONCE IN EACH ACCOUNT that' + NewLine +
+    'needs the new commands, SDSYS included:' + NewLine + NewLine +
+    Space + 'update.account' + NewLine + NewLine +
+    'It takes no argument and refreshes the account you are in, keeping to' + NewLine +
+    'that account''s tier.' + NewLine + NewLine +
+    'To change the settings above, in SDSYS as an administrator:' + NewLine + NewLine +
     Space + 'remote.ssh on | off' + NewLine +
     Space + 'remote.api on | local | off' + NewLine +
-    Space + 'ssh.server install' + NewLine +
+    Space + 'ssh.server install | remove' + NewLine +
     Space + 'append.sd.path on | off' + NewLine + NewLine +
     'Each reports its current setting, and changes nothing, when given no' + NewLine +
     'keyword.';
@@ -3273,12 +3280,18 @@ begin
         nothing when given no keyword. }
       UpgMsg := 'YOUR ssh AND API SETTINGS WERE LEFT EXACTLY AS THEY WERE.' + #13#10#13#10 +
                 'This is an upgrade, so SD did not ask about them again and has changed ' +
-                'nothing about who may reach this machine. To change any of it, in SD as ' +
-                'an administrator:' + #13#10#13#10 +
-                '    remote.ssh on | off        who may reach ssh' + #13#10 +
+                'nothing about who may reach this machine.' + #13#10#13#10 +
+                'FIRST, GIVE EACH ACCOUNT THE NEW COMMANDS. An upgrade replaces the ' +
+                'shipped vocabulary but does not rebuild the one each account is using, so ' +
+                'a command added by this release cannot be typed until you refresh it. ' +
+                'Sign in and run this once in each account that needs them, SDSYS ' +
+                'included - it takes no argument and keeps to that account''s tier:' + #13#10#13#10 +
+                '    update.account' + #13#10#13#10 +
+                'THEN, to change the settings above, in SDSYS as an administrator:' + #13#10#13#10 +
+                '    remote.ssh on | off           who may reach ssh' + #13#10 +
                 '    remote.api on | local | off   whether the API is provided, and to whom' + #13#10 +
-                '    ssh.server install         add the OpenSSH server' + #13#10 +
-                '    append.sd.path on | off    whether "sd" runs from any directory' + #13#10#13#10 +
+                '    ssh.server install | remove   add or take away the OpenSSH server' + #13#10 +
+                '    append.sd.path on | off       whether "sd" runs from any directory' + #13#10#13#10 +
                 'Each of them reports the current setting, and changes nothing, when you ' +
                 'give it no keyword.' + #13#10#13#10;
     end;
