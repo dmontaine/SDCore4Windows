@@ -168,6 +168,34 @@ function Count-Arrivals([string]$text, [string]$acct) {
     return $n
 }
 
+# ***"from" NAMES THE SESSION'S HOME ACCOUNT, NOT THE PREVIOUS HOP - MEASURED
+# ON -Run b83, 31 Aug 2026, BY GETTING IT WRONG.***  The first version of this
+# file counted the return to the caller's own account with Count-Arrivals and
+# scored 0 against an expected 1, because WHO answered a bare "78 DON".  The
+# three hops settle which reading is right: hop 1 and hop 3 both said
+# "78 SDTUB83 from DON", and hop 2 - whose previous account was SDTUB83 - said
+# "78 DON" with no clause at all.  A "previous hop" reading would have printed
+# "from SDTUB83" there.  So the clause means "this session's home is X and it is
+# somewhere else"; at home there is nothing to print.
+#
+# verify-doors.ps1 says the same thing in its own words - "a session that had
+# simply begun in the account would print the account and no from" - and this
+# file was written having read that line.  THE LESSON IS THE ONE ITS HEADER
+# ALREADY DREW: look at the output the tool prints on the path you are actually
+# measuring, not the one next to it.
+#
+# END-ANCHORED, WHICH IS RIGHT HERE AND WAS WRONG THERE.  The doors pair was
+# caught by anchoring the ARRIVAL shape on end-of-line, which matched only the
+# case where the logto had NOT happened.  This counts the AT-HOME shape, and
+# end-of-line is exactly what distinguishes it from an arrival.
+function Count-AtHome([string]$text, [string]$acct) {
+    $n = 0
+    foreach ($l in ($text -split "`n")) {
+        if ($l -match ('^\s*\d+\s+' + [regex]::Escape($acct) + '\s*$')) { $n++ }
+    }
+    return $n
+}
+
 Write-Output '===== verify-logtoaccess - PRE_RELEASE 91 ====='
 Write-Output ''
 
@@ -311,7 +339,7 @@ foreach ($line in ($out1 -split "`n")) { Write-Output ("  | " + $line.TrimEnd())
 Write-Output ''
 
 $arrivalsTarget = Count-Arrivals $out1 $targetU
-$arrivalsHome   = Count-Arrivals $out1 $meU
+$arrivalsHome   = Count-AtHome   $out1 $meU
 $refused10003   = Test-Say $out1 'not allowed in requested account'
 $noDir5161      = Test-Say $out1 'Unable to change to new directory'
 
@@ -320,7 +348,8 @@ $noDir5161      = Test-Say $out1 'Unable to change to new directory'
 # defect - refused on the first.
 Note ('arrivals into ' + $targetU + ' (0 = refused first, 1 = the flag was cleared)') `
      2 $arrivalsTarget $true
-Note ('arrival back into ' + $meU + ', so the session really moved') 1 $arrivalsHome $true
+Note ('back at home in ' + $meU + ' between them, so hop 3 is a real re-entry') `
+     1 $arrivalsHome $true
 Note 'SD did NOT say 10003 "not allowed in requested account"' $false $refused10003 $true
 
 # A DISQUALIFIER, NOT A REFUSAL.  5161 is the chdir failing AFTER SD's
@@ -339,7 +368,15 @@ Write-Output '--- session 2: THE CONTROL - the non-administrator test account --
 
 $ctlCmds = @(('LOGTO ' + $meU), 'WHO')
 Write-Output ('  as ' + $TestUser + ', commands: ' + ($ctlCmds -join ' ; '))
-$out2 = Invoke-SdAsTestUser -Name $TestUser -Password $TestPassword -Commands $ctlCmds
+# ***.Out, NOT THE OBJECT.***  Invoke-SdAsTestUser returns
+# [pscustomobject]@{ ExitCode; Out; Err } (sdtestuser.ps1:144), not a string.
+# The first version passed the object straight to the matchers and the rows
+# still passed - PowerShell stringified it to "@{ExitCode=0; Out=...; Err=}"
+# and the patterns happened to match inside that.  ***A ROW THAT PASSES THROUGH
+# AN ACCIDENTAL COERCION IS ONE THAT WILL STOP PASSING FOR A REASON NOBODY CAN
+# SEE***, so the field is named.  Seen in the b83 transcript, which printed the
+# whole wrapper.
+$out2 = (Invoke-SdAsTestUser -Name $TestUser -Password $TestPassword -Commands $ctlCmds).Out
 
 Write-Output '  --- SD said: ---'
 foreach ($line in ($out2 -split "`n")) { Write-Output ("  | " + $line.TrimEnd()) }
