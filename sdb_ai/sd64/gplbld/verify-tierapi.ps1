@@ -316,7 +316,18 @@ finally {
             # The SD half is left deliberately, as the other verifiers leave
             # theirs: removing the register records here would hide a
             # CREATE.ACCOUNT that had half failed.  $CRED keeps its records too.
+            #
+            # 30 Aug 26 - AND SO DOES os.users, WHICH THIS LINE DID NOT NAME.
+            # PRE_RELEASE_FIXES.md 65.  The ADMINISTRATOR subject above is given
+            # an os.users record at create time and this block removes the
+            # Windows LOGIN without it, so the residue includes a yes|yes keyed
+            # on a name that no longer resolves - the one leftover that is a
+            # PERMISSION rather than a register entry.  Left for the same reason
+            # as the others, but not left unsaid.  DELETE.ACCOUNT takes it as of
+            # the same entry's fix to DELACC; before that fix it did not.
             Write-Host '   ACCOUNTS and $CRED records left in place - remove with DELETE.ACCOUNT'
+            Write-Host ('   sdsys\os.users record for ' + $Tiers[2].Name +
+                        ' left in place too - the same DELETE.ACCOUNT takes it')
         }
     } else {
         Write-Host ''

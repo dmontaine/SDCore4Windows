@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 30 Aug 26 Windows port - the os.users record now goes whenever the Windows
+*           login has gone, not only on status 0.  !delete_user returns true
+*           for 0, 6, 7 and 8 - the login is deleted in all four and only the
+*           PROFILE differs - and the half-removed account (lookup.stat # 0)
+*           clears it too, which is the arm every "remove it with
+*           DELETE.ACCOUNT" note lands in.  PRE_RELEASE_FIXES.md 65.
 * 28 Aug 26 Windows port - a third profile warning (8), for the pair that was
 *           left behind AND could not be recorded for reclaim.  6 now says the
 *           next restart clears it, because it does.  PRE_RELEASE_FIXES.md 36.
@@ -328,7 +334,21 @@ deffun is_sd_user(username) calling '!is_sd_user'
                * side outliving the OS side - and it is the state a failed
                * creation reaches too, so it is reported rather than warned
                * about: there is nothing wrong and nothing to do.
+               *
+               * 30 Aug 26 Windows port - EXCEPT THE os.users RECORD, WHICH IS
+               *   THE ONE THING THERE IS TO DO HERE.  PRE_RELEASE_FIXES.md 65.
+               *   This is the arm every "remove it with DELETE.ACCOUNT" note in
+               *   the harness lands in - verify-tierapi.ps1 and verify-routes.ps1
+               *   both Remove-LocalUser and leave the SD side - so the documented
+               *   recovery for the leak did not clear the leak.
+               *
+               *   THE CAUTION IN drop.os.access IS SATISFIED BY MEASUREMENT
+               *   HERE, not by assumption: is_sd_user has just reported that no
+               *   Windows login of this name exists, so there is nobody to take
+               *   a permission away from - and a yes|yes keyed on a name Windows
+               *   may one day reissue is the reason to take it away now.
                crt sysmsg(10037,os.user) ;* Windows account %1 does not exist
+               gosub drop.os.access
 
             case sd.made.it
 * 21 Aug 26 Windows port - THE Y/N PROMPT IS GONE.  Owner's decision, 21 Aug
@@ -348,12 +368,7 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *   the ORDINARY case - which is exactly why the gate has to be a test and not
 *   a question.
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo userdel ":username
-               void delete_user(del.user)
-               stat = status()
-               begin case
-                  case stat = 0
-                     crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
-
+*
 * 27 Aug 26 Windows port - AND THE OS.USERS RECORD GOES WITH THE WINDOWS USER.
 *   CREATEA grants one to every ADMINISTRATOR-tier USER account it makes (27
 *   Aug 2026, grant.os.access), so without this a deleted account leaves a
@@ -361,18 +376,28 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *   verify suite, which makes an ADMINISTRATOR account every run, would leave
 *   one behind each time.
 *
-*   ONLY WHERE SD HAS JUST DELETED THE WINDOWS USER ITSELF.  The record is keyed
-*   by the PERSON and not by the account, so removing it for a login that still
-*   exists would take a permission away from somebody who still has a reason to
-*   hold it.  This branch is reached only for an account SD created and has now
-*   removed.
+* 30 Aug 26 Windows port - AND IT LEFT ONE BEHIND EVERY RUN ANYWAY, BECAUSE THE
+*   REMOVAL SAT IN THE WRONG ARM.  PRE_RELEASE_FIXES.md 65.  It was inside
+*   "case stat = 0", and !delete_user returns TRUE for 0, 6, 7 AND 8: the login
+*   is gone in all four and only the PROFILE differs.  6, 7 and 8 are the
+*   ORDINARY outcome for an account somebody has just used, because a loaded
+*   hive is what makes a profile unremovable - so the case that was covered was
+*   the rarer one.
 *
-*   A MISSING RECORD IS THE ORDINARY CASE, not an error: only administrators
-*   get one, and most accounts are not administrators.
-                     openpath @sdsys : @ds : 'os.users' to osu.f then
-                        delete osu.f, del.user on error null
-                        close osu.f
-                     end
+*   IT WAS "void delete_user(...)" AND THE void WAS AGAIN THE DEFECT, exactly as
+*   at CREATEA:643 (PRE_RELEASE_FIXES.md 72).  The function already answers the
+*   question this code needs - is the login gone - and the answer was discarded,
+*   so the caller re-derived it from a status and got it wrong.
+*
+*   IT KEYS ON THE FUNCTION'S ANSWER AND NOT ON A LIST OF STATUSES.  Writing
+*   "0, 6, 7 or 8" here would be a second opinion about what !delete_user did,
+*   and one of the two would go stale the next time a status is added - which is
+*   how 8 came to exist in the first place.
+               login.gone = delete_user(del.user)
+               stat = status()
+               begin case
+                  case stat = 0
+                     crt sysmsg(10028,del.user) ;* OS User: %1 Deleted
 
                   * The account went and the profile did not.  Said plainly
                   * rather than as a deletion failure, because the account
@@ -419,6 +444,13 @@ deffun is_sd_user(username) calling '!is_sd_user'
                      crt sysmsg(10029,del.user, stat) ;* Warning unable to delete OS User: %1 error: %2
                end case
 
+               * 30 Aug 26 Windows port - AFTER the case and not inside any arm
+               *   of it, because the arms are about the PROFILE and this is
+               *   about the LOGIN.  login.gone is false only for status 1 and
+               *   2, where the login is still there and its grant still has an
+               *   owner.  PRE_RELEASE_FIXES.md 65.
+               if login.gone then gosub drop.os.access
+
             case 1
                * It exists and SD did not make it.  Not offered, not asked
                * about - said plainly, so whoever wants it gone knows they are
@@ -438,6 +470,35 @@ deffun is_sd_user(username) calling '!is_sd_user'
    delete acc.f, acc.name
 
    @system.return.code = 0
+   return
+
+* ======================================================================
+* drop.os.access  -  take away this person's operating-system grant
+*
+* 30 Aug 26 Windows port - PRE_RELEASE_FIXES.md 65.  Lifted out of the
+*   "case stat = 0" arm so that both callers reach it: the login SD has just
+*   deleted, and the login that had already gone before the verb ran.  One
+*   place and two callers, which is the shape entry 11 settled on after the
+*   opposite arrangement lost a transaction.
+*
+* THE RECORD IS KEYED BY THE PERSON AND NOT BY THE ACCOUNT, so this may only
+*   run where the Windows login itself is gone.  Both callers establish that
+*   before the gosub - one from !delete_user's own answer, one from
+*   !is_sd_user's lookup - and nothing here re-derives it.  Deleting the
+*   record for a login that still exists would take a permission away from
+*   somebody who still has a reason to hold it.
+*
+* A MISSING RECORD IS THE ORDINARY CASE, not an error: only an
+*   ADMINISTRATOR-tier USER account is ever given one (CREATEA,
+*   grant.os.access), and most accounts are not administrators.  Hence
+*   "on error null", and no message on either outcome.
+* ======================================================================
+
+drop.os.access:
+   openpath @sdsys : @ds : 'os.users' to osu.f then
+      delete osu.f, os.user on error null
+      close osu.f
+   end
    return
 
 * ======================================================================

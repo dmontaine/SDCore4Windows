@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+30 Aug 26  delete.account NOW TAKES AWAY OPERATING-SYSTEM ACCESS WHENEVER IT
+           TAKES AWAY THE WINDOWS LOGIN.
+
+           An administrator-tier account is given permission to reach the
+           operating system, recorded against the person's Windows login name.
+           delete.account removed that permission only when it had also managed
+           to remove the account's Windows profile - and a profile cannot be
+           removed while its registry hive is still loaded, which is the usual
+           state for someone who has recently signed in. So on the ordinary
+           path the permission outlived the login it named.
+
+           That mattered because the permission is keyed by NAME. Windows will
+           happily issue the same name to a different person later, and they
+           would have inherited it.
+
+           It is also taken away now when delete.account finds the Windows
+           login already gone - the half-removed account, where the SD side
+           outlived the Windows side. Nothing else about the verb changes, and
+           an account whose Windows login SD did not create is untouched as
+           before.
+
 30 Aug 26  THREE NEW ADMINISTRATOR COMMANDS: remote.api, remote.ssh AND
            ssh.server.
 

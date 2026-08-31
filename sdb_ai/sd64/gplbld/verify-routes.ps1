@@ -485,7 +485,15 @@ finally {
             $prof = Join-Path $env:SystemDrive ('Users\' + $x)
             if (Test-Path -LiteralPath $prof) { Remove-Item -LiteralPath $prof -Recurse -Force -ErrorAction SilentlyContinue }
         }
+        # 30 Aug 26 - AND THE os.users RECORD IS NAMED NOW.  PRE_RELEASE_FIXES.md
+        # 65: the ADMINISTRATOR-tier subject is given one at create time, this
+        # block removes the Windows LOGIN and not the grant, and the line below
+        # listed only the register - so the one artefact that is a PERMISSION
+        # went unmentioned.  DELETE.ACCOUNT clears it as of the same entry's fix
+        # to DELACC; before that fix the recovery named here did not.
         Write-Host '   ACCOUNTS records left in place - remove with DELETE.ACCOUNT'
+        Write-Host ('   sdsys\os.users records left in place too, for any ADMINISTRATOR-tier ' +
+                    'subject - the same DELETE.ACCOUNT takes them')
     } else {
         Write-Host ''
         Write-Host ("-Keep: " + ($made -join ', ') + " are still there.") -ForegroundColor Yellow

@@ -34,6 +34,24 @@
     and the second run went 38 of 38 - so the profile half is now measured, not
     assumed.
 
+    AND THE os.users GRANT IS THE FOURTH THING THE LOGIN TAKES WITH IT.
+    PRE_RELEASE_FIXES.md 65, 30 Aug 2026.  DELACC removed that record inside
+    "case stat = 0" only, and !delete_user reports 0, 6, 7 AND 8 as a deleted
+    login - 6, 7 and 8 differing from 0 in the PROFILE alone.  So on the
+    ordinary path for an account somebody has just used, where a loaded hive
+    keeps the profile, a yes|yes survived keyed on a name Windows may one day
+    reissue.  The assertion sits OUTSIDE the profile branch for exactly that
+    reason: the grant must go whichever way the profile went.
+
+    WHICH IS WHY THE SD-MADE SUBJECT IS AN ADMINISTRATOR.  Only an
+    ADMINISTRATOR-tier USER account is ever given an os.users record (CREATEA,
+    grant.os.access), so a STANDARD subject would have scored "the record is
+    gone" by never having had one - the same vacuous pass the profile half
+    above was redesigned to refuse.  Three states are required rather than one:
+    ABSENT before the run (preflight), PRESENT after CREATE.ACCOUNT (step 1),
+    ABSENT again after DELETE.ACCOUNT (step 3).  The control account in step 4
+    is deliberately left a plain one.
+
     THE ACCOUNT DIRECTORY AND THE PROFILE ARE DIFFERENT THINGS, and since
     21 Aug 2026 one confirmation covers both.  ProgramData\SD\user_accounts\
     <name> is the SD account's DATA; C:\Users\<name> is the Windows profile and
@@ -374,6 +392,34 @@ function Get-Description($name) {
     return '<no such account>'
 }
 
+# 30 Aug 26 - the os.users record for a person, or $null.  PRE_RELEASE_FIXES.md
+# 65.
+#
+# ENUMERATED RATHER THAN Test-Path'd ON A BUILT NAME, so the caller can PRINT
+# the key it actually found.  A record is keyed by whatever case the account
+# name was typed in - the live file holds "don" beside "SDTAPIB703" - and the
+# match here is deliberately case-INSENSITIVE, which is PowerShell's default
+# for -eq: NTFS would not distinguish them either, so a case-only difference
+# is the same record and must not be reported as an absence.  That is the
+# opposite of the rule this tree uses for hashes, and it is written down so
+# nobody tightens it to -ceq and turns a found record into a clean bill.
+$osuDir = Join-Path $env:ProgramData 'SD\sdsys\os.users'
+function Get-OsUsersRecord([string]$name) {
+    if (-not (Test-Path -LiteralPath $osuDir)) { return $null }
+    $f = @(Get-ChildItem -LiteralPath $osuDir -File -ErrorAction SilentlyContinue |
+           Where-Object { $_.Name -eq $name })
+    if ($f.Count -eq 0) { return $null }
+    return $f[0]
+}
+
+# Its fields as an array, for printing and for the two value checks.  A record
+# is one field per line on this platform - "yes<CRLF>yes", 10 bytes, measured
+# on the live os.users\don.
+function Get-OsUsersFields($rec) {
+    if (-not $rec) { return @() }
+    return @(Get-Content -LiteralPath $rec.FullName -ErrorAction SilentlyContinue)
+}
+
 # ---------------------------------------------------------------------------
 # Preflight
 # ---------------------------------------------------------------------------
@@ -436,6 +482,15 @@ foreach ($a in @($sdAcc, $borrowAcc)) {
         Fail ("C:\Users\$a already exists - a profile from an earlier run.  " +
               'Sweep it with clean-test-profiles.ps1, or use a fresh -Prefix.')
     }
+    # 30 Aug 26 - PRE_RELEASE_FIXES.md 65.  This is the BEFORE state, and
+    # without it step 1's "CREATE.ACCOUNT wrote one" could be satisfied by a
+    # record an earlier run left, which is the very leak this leg measures.
+    $stale = Get-OsUsersRecord $a
+    if ($stale) {
+        Fail ("os.users\" + $stale.Name + ' is still there from an earlier run - ' +
+              'use a fresh -Prefix.  Step 1 has to watch the verb WRITE this record, ' +
+              'so a leftover would make the whole leg vacuous.')
+    }
 }
 
 if (-not (Start-SD)) { Fail 'sdwind did not appear within 15 seconds - SD will not start.' }
@@ -478,10 +533,20 @@ $made     = @()   # Windows accounts this script is responsible for
 # ---------------------------------------------------------------------------
 try {
     # -----------------------------------------------------------------------
-    Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc"
+    Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR BOTH"
 
+    # 30 Aug 26 - ADMINISTRATOR, and the keyword is the whole of the change.
+    # PRE_RELEASE_FIXES.md 65: only an ADMINISTRATOR-tier USER account is ever
+    # given an os.users record (CREATEA, grant.os.access), so a STANDARD
+    # subject cannot measure whether that record goes.  Keywords are order-free
+    # - more.args is a loop over tokens - and DELETE.ACCOUNT does not read the
+    # tier, so nothing else in this file changes meaning.  What it does change
+    # is real and is stated rather than hidden: the subject is a member of
+    # Windows Administrators for the seconds it exists, because since
+    # PROJECT_STATUS.md 5.6.1 that is what the tier IS.  Step 4's control is
+    # deliberately not given it.
     $pw  = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc BOTH", $pw, $pw)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR BOTH", $pw, $pw)
     $made += $sdAcc
 
     $sdRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $sdAcc.ToUpper())
@@ -497,6 +562,34 @@ try {
     # rests on it.  Compared with -ceq, as IS_SD_USER does, so a description
     # differing only in case would read as somebody else's.
     Note 'description is exactly "SD account"' $true ((Get-Description $sdAcc) -ceq 'SD account')
+
+    # 30 Aug 26 - THE GRANT EXISTS BEFORE ANYTHING CLAIMS IT WENT.
+    # PRE_RELEASE_FIXES.md 65.  The preflight required this record to be ABSENT,
+    # so a pass here is the verb writing it and nothing else; step 3 then
+    # requires it gone.  Three states, because two of them would be satisfied
+    # by a run that never had a record at all.
+    #
+    # THE TIER IS ASSERTED THROUGH THE ARTEFACT IT PRODUCES, not by reading
+    # ACCOUNTS field 5: if grant.os.access ever stopped running, the tier would
+    # still read ADMINISTRATOR and this leg would silently have nothing to
+    # measure again.  The record is what step 3 is about, so the record is what
+    # is checked.
+    $osuRec = Get-OsUsersRecord $sdAcc
+    Note 'CREATE.ACCOUNT wrote an os.users record' $true ([bool]$osuRec)
+    if ($osuRec) {
+        $osuF = Get-OsUsersFields $osuRec
+        Write-Host ("   os.users\{0}: {1}" -f $osuRec.Name, ($osuF -join ' | '))
+        # BOTH fields, because grant.os.access writes both even when one was
+        # asked for and both gates read them positionally.  Field 2 is the one
+        # that matters - OS.EXECUTE - and a one-field record would leave it to
+        # a later reader to guess at.
+        Note 'os.users field 1 (SH) is yes'         'yes' ($osuF[0])
+        Note 'os.users field 2 (OS.EXECUTE) is yes' 'yes' ($osuF[1])
+    } else {
+        Fail ("CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR made no os.users record.  " +
+              'Step 3 cannot measure that the record goes when there was none to go, ' +
+              'so this stops rather than reporting a green leg that tested nothing.')
+    }
 
     # -----------------------------------------------------------------------
     Step 2 "Give it a profile, so the profile half is not tested vacuously"
@@ -540,6 +633,26 @@ try {
     Note 'ACCOUNTS record is gone'      $false (Test-Path -LiteralPath $sdRec)
     Note 'account directory is gone'    $false (Test-Path -LiteralPath $sdDir)
 
+    # 30 Aug 26 - AND THE GRANT GOES WITH THE LOGIN.  PRE_RELEASE_FIXES.md 65.
+    #
+    # OUTSIDE THE PROFILE BRANCH BELOW, DELIBERATELY.  That is the whole defect:
+    # the removal sat inside DELACC's "case stat = 0", and !delete_user answers
+    # "the login is gone" for 0, 6, 7 AND 8 - the three others differing in the
+    # PROFILE alone.  So on the keep-both path, which is the ORDINARY one for an
+    # account with a loaded hive, a yes|yes survived a login that no longer
+    # exists.  A check placed inside either branch would measure one of those
+    # two worlds and call it the answer.
+    #
+    # WHAT IT SURVIVED ON IS PRINTED, not summarised, because "the record is
+    # still there" and "the record is still there and says yes|yes" are
+    # different findings and only the second names the exposure.
+    $osuAfter = Get-OsUsersRecord $sdAcc
+    if ($osuAfter) {
+        Write-Host ("   os.users\{0} SURVIVED the delete: {1}" -f
+                    $osuAfter.Name, ((Get-OsUsersFields $osuAfter) -join ' | ')) -ForegroundColor Yellow
+    }
+    Note 'os.users record is gone'      $false ([bool]$osuAfter)
+
     if ($sdProf -eq '') {
         Skip 'ProfileList entry is gone'  'no profile was made - see step 2'
         Skip 'profile directory is gone'  'no profile was made - see step 2'
@@ -571,11 +684,23 @@ try {
         if ($dirGone) {
             Note 'ProfileList entry is gone (the directory went)' $true $entryGone
             Note 'message 10075 NOT shown (nothing was left behind)' $false (Shown $out 10075 @($sdAcc))
+            # 30 Aug 26 - status 0, which is the arm that always removed the
+            # os.users record.  So this run has NOT exercised
+            # PRE_RELEASE_FIXES.md 65's fix, and says so rather than letting a
+            # green summary imply it did.  The keep-both branch is the decisive
+            # one; getting there needs a subject whose hive is still loaded.
+            Write-Host '   65: status 0 - the os.users check above is CONFIRMATORY, not decisive' -ForegroundColor Yellow
         } else {
             # The hive was still up.  This is not a failure of the delete - it
             # is the state the ruling was written for - but it is only correct
             # if BOTH halves survived and the pair was recorded.
             Write-Host ('   the hive was still up: {0} survived, so this leg measures the KEEP-BOTH path' -f $sdProf)
+            # 30 Aug 26 - AND THIS IS THE ARM PRE_RELEASE_FIXES.md 65 WAS ABOUT.
+            # The "os.users record is gone" check above is decisive on a run
+            # that lands here and merely confirmatory on one that does not, so
+            # the transcript has to say which one this was.  A green run that
+            # took the other branch has not tested the fix.
+            Write-Host '   65: the os.users check above is DECISIVE on this branch (status 6/7/8)' -ForegroundColor Cyan
             Note 'ProfileList entry was KEPT with the directory' $true (-not $entryGone)
 
             $reclaimRec = Join-Path $env:ProgramData ('SD\profile-reclaim\' + $sdSid)

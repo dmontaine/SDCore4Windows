@@ -32,6 +32,12 @@
 #   - the SD account register   deliberately left by seven verifiers, and all of
 #                               it is one run's residue that the next cycle
 #                               deletes with the tree.  Nothing to clean.
+#                               30 Aug 26 - AND sdsys\os.users, which this line
+#                               did not name (PRE_RELEASE_FIXES.md 65).  Same
+#                               tree, same cycle, same reasoning - but it holds
+#                               a PERMISSION rather than a register entry, so
+#                               "nothing to clean" is a claim worth being
+#                               explicit about.  DELETE.ACCOUNT clears one.
 #   - ..\winsdclilib, ..\sdclilib32   the real client repositories, one level up
 #                               from this tree.  Never in scope.
 #   - sdadmins, sdapi, sdssh, sdsshonly, sdusers, sdu_don, sdu_test1
