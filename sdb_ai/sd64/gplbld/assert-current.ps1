@@ -878,7 +878,24 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # existing, and then every verifier that calls this script
                   # refuses - so the failure never looks like a missing list
                   # entry, it looks like the tree needing a cycle.
-                  'test-stemcoverage-units.ps1')
+                  'test-stemcoverage-units.ps1',
+                  # 31 Aug 26 - the three that measured PRE_RELEASE 12, 24 and
+                  # 87.  LISTED IN THE COMMIT THAT ADDS THEM, which is the rule
+                  # the entry above was added for after breaking it.
+                  #
+                  # THEY ARE PROBES, NOT SUITE STEPS, AND THAT IS DELIBERATE.
+                  # Neither is wired into a runner: promoting them costs two
+                  # more steps against a full run the owner has asked to keep
+                  # short, and that is his call.  They are here so the work is
+                  # not lost with the session that wrote it - each is
+                  # re-runnable by hand and each closed an entry.
+                  #   probe-nolockmsg.ps1  12 and 87.  Unelevated, seconds, no
+                  #                        run token.  It is the cheap one.
+                  #   probe-tasklock.ps1   24.  Raises one consent of its own
+                  #                        for "sd -cleanup".
+                  #   check-msglen.py      whether a message fits k_error()'s
+                  #                        buffer once sysmsg() has expanded it.
+                  'probe-nolockmsg.ps1', 'probe-tasklock.ps1', 'check-msglen.py')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
