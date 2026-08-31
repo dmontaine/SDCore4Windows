@@ -842,7 +842,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; also answers correctly when the capability was already installed.
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1"""; \
-    Flags: runhidden skipifdoesntexist; Check: SshServerWanted; \
+    Flags: runhidden skipifdoesntexist; Check: SshServerWanted and not TrueUpgrade; \
     StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
 ; 30 Aug 26 - THE GATE IS THE BOX NOW, NOT THE MACHINE.  PRE_RELEASE_FIXES 67.
 ; It used to read "SshServerAbsent and not StandaloneChosen", which is the whole
@@ -959,6 +959,23 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 31 Aug 26 - PRE_RELEASE_FIXES 88.  Was SD ALREADY INSTALLED when we
+    arrived - not merely "is there a data tree"?
+
+    ***IT MUST BE SAMPLED ONCE, LIKE THE TWO ABOVE, AND FOR A SHARPER REASON:
+    THE INSTALLER WRITES THIS KEY ITSELF.***  Inno creates the uninstall entry
+    at the END of the install, so a live query later in the same run would
+    start answering TRUE and the wizard would contradict itself.  Read in
+    InitializeSetup, before anything is written.
+
+    WHY IT IS NOT DataTreeUpgrade.  That asks about C:\ProgramData\SD\sdsys,
+    which the UNINSTALLER DELIBERATELY KEEPS - so uninstall-then-install looks
+    identical to an upgrade by that test, while the uninstaller has already
+    torn down RemoveAllowGroups, RemoveApiFirewall and RemoveFromPath.  Skipping
+    the tasks page there would leave the reader no way to put any of it back and
+    never ask.  The uninstall key is the discriminator: the uninstaller removes
+    it, so present means SD is genuinely installed right now. }
+  SdWasInstalled: Boolean;
   { 30 Aug 26 - PRE_RELEASE_FIXES 76.  Was the EXISTING ssh server's firewall
     rule already open to the network when we arrived?  Sampled once in
     InitializeSetup, for the same reason as the two above and for one more of
@@ -1084,6 +1101,45 @@ begin
      whole set consistently and so looks identical either way.  Only a genuine
      first install exposes it.  Measured 14 Aug 2026. *)
   DataTreeWasAbsent := not DirExists(ExpandConstant('{#DataDir}\sdsys'));
+
+  (* 31 Aug 26 - IS SD INSTALLED RIGHT NOW?  PRE_RELEASE_FIXES 88.  Sampled
+     here and never again, because Inno writes this very key at the end of the
+     install - see the variable's own comment.
+
+     ***THE APPID IS SPELLED OUT, AND THE FIRST ATTEMPT ASKED ISPP FOR IT AND
+     DID NOT COMPILE - TWICE OVER.***  A preprocessor call in the string was
+     one failure; writing the preprocessor function's NAME in this very comment
+     was the other, because ISPP expands a brace-hash sequence wherever it
+     finds one, comments included, and a bare call with no arguments is
+     "Insufficient parameters" pointing at a line of English.  Same family as
+     the hash-13 trap recorded at the closing message box.  So the literal
+     appears twice in this file, here and in [Setup], and a reader comparing
+     them sees the same characters.
+
+     ***HKLM64, NOT HKLM, AND THAT IS MEASURED RATHER THAN REASONED - PLAIN
+     HKLM FINDS NOTHING HERE.***  Setup is a 32-BIT process, so an unqualified
+     HKLM from [Code] is redirected to SOFTWARE\WOW6432Node, and SD's key is
+     not there.  A throwaway Inno probe asked all three on this machine, with
+     SD installed as the control:
+
+         HKLM   -> not found      HKLM32 -> not found      HKLM64 -> FOUND
+
+     ***THIS IS THE FAILURE THAT WOULD HAVE LOOKED LIKE A PASS.***  It compiles
+     clean, SdWasInstalled is simply always False, TrueUpgrade never fires, and
+     the whole of 88 does nothing while every test of it reports success.
+     Asking WOW6432Node explicitly does not help either: from a redirected
+     process that resolves to WOW6432Node\WOW6432Node.
+
+     The 32-bit view is still asked, second, so a hypothetical 32-bit install
+     is not missed; IsWin64 guards it because HKxx64 is only valid on 64-bit
+     Windows. *)
+  if IsWin64 then
+    SdWasInstalled :=
+      RegKeyExists(HKLM64, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9F2B7C41-3D6A-4E58-9B0F-5C7A1E2D8B34}_is1') or
+      RegKeyExists(HKLM32, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9F2B7C41-3D6A-4E58-9B0F-5C7A1E2D8B34}_is1')
+  else
+    SdWasInstalled :=
+      RegKeyExists(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9F2B7C41-3D6A-4E58-9B0F-5C7A1E2D8B34}_is1');
 
   (* AND THE SAME TREATMENT FOR ssh AS OF 16 Aug 2026, FOR A REASON THAT ONLY
      ARRIVED WITH THE MANDATORY INSTALL.
@@ -1277,6 +1333,46 @@ end;
 function DataTreeUpgrade: Boolean;
 begin
   Result := not DataTreeWasAbsent;
+end;
+
+(* 31 Aug 26 - AN INSTALL OVER A LIVE SD, WHICH IS NOT THE SAME QUESTION.
+   PRE_RELEASE_FIXES 88.  Owner's ruling: "on an upgrade, just skip this page
+   entirely.  If the admin wants to make additional choices, we have given them
+   the command line tools."
+
+   ***BOTH HALVES, AND THE SECOND IS THE ONE THAT WAS NEARLY MISSED.***
+   DataTreeUpgrade alone would also be true after an UNINSTALL, because the
+   uninstaller keeps the data tree on purpose - and by then it has already run
+   RemoveAllowGroups, RemoveApiFirewall and RemoveFromPath.  Skipping the page
+   there would hand the reader a machine whose ssh confinement, 4243 rule and
+   PATH entry had just been removed, with nothing to put them back and no
+   question asked.  So that case SHOWS the page, and the owner checked the
+   consequence himself: with a server still present the reader simply gets the
+   open-the-port question, defaulted from the live scope.
+
+   AND ON THAT PATH THE DEFAULTS ARE HONEST TOO: the uninstall key is gone, so
+   UsePreviousTasks has nothing to restore and the boxes come up as declared
+   rather than as the last install's answers. *)
+function TrueUpgrade: Boolean;
+begin
+  Result := DataTreeUpgrade and SdWasInstalled;
+end;
+
+(* THE PAGE ITSELF.  ShouldSkipPage was removed on 30 Aug 2026 with the mode
+   page (see the note further down); this brings it back for the tasks page
+   alone.
+
+   ***SKIPPING THE PAGE IS ONLY HALF OF THE RULING, AND ON ITS OWN IT WOULD BE
+   WORSE THAN THE DEFECT.***  Inno still initialises every task from its
+   declared default PLUS the UsePreviousTasks restoration, and
+   WizardIsTaskSelected keeps answering - so hiding the page without gating the
+   ACTIONS would turn "visible but inert" into INVISIBLE BUT ACTIVE: firewall
+   rules moving from state nobody saw, and install-ssh.ps1 able to install a
+   server silently.  The gates are at the [Run] entry, the [Registry] entry and
+   the two ApplyXxxFirewall call sites, each carrying "not TrueUpgrade". *)
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = wpSelectTasks) and TrueUpgrade;
 end;
 
 function SshServerAbsent: Boolean;
@@ -3022,6 +3118,11 @@ var
   SshFw: String;
   ApiFw: String;
   SshMsg: String;
+  { 31 Aug 26 - PRE_RELEASE_FIXES 88.  What the closing box says INSTEAD of the
+    ssh and API paragraphs on an upgrade.  Without it those paragraphs simply
+    vanish and the reader is told nothing at all about the two settings the
+    installer just declined to touch. }
+  UpgMsg: String;
   RouteMsg: String;
   AdoptCode: Integer;
   AccountMsg: String;
@@ -3092,14 +3193,49 @@ begin
       is only the message about it that a silent install skips.  The firewall
       goes first - it decides who can reach the server at all, and the two
       steps are independent, so the more fundamental one is done first. }
-    SshFw := ApplySshFirewall;
-    SshMsg := SshReport;
+    { 31 Aug 26 - NOT ON AN UPGRADE.  PRE_RELEASE_FIXES 88.  The tasks page was
+      never shown, so SshRemoteWanted is answering from whatever
+      UsePreviousTasks restored - and ApplySshFirewall ALWAYS acts, -Open or
+      -Restrict, so letting it run would move port 22 on the strength of a box
+      nobody saw.  ***AND THE "SAFE" DIRECTION IS NOT SAFE EITHER***: a false
+      SshRemoteWanted means -Restrict, which would silently CLOSE a port the
+      site had deliberately opened.  Doing nothing is the ruling and is also
+      the only answer that cannot be wrong.  remote.ssh on|off changes it. }
+    if not TrueUpgrade then
+    begin
+      SshFw := ApplySshFirewall;
+      SshMsg := SshReport;
+    end
+    else
+    begin
+      { SAY SO, rather than letting two paragraphs quietly disappear.  The
+        commands are named because the ruling rests on them: "if the admin
+        wants to make additional choices, we have given them the command line
+        tools."  Run in SD as an administrator; each reports and changes
+        nothing when given no keyword. }
+      UpgMsg := 'YOUR ssh AND API SETTINGS WERE LEFT EXACTLY AS THEY WERE.' + #13#10#13#10 +
+                'This is an upgrade, so SD did not ask about them again and has changed ' +
+                'nothing about who may reach this machine. To change any of it, in SD as ' +
+                'an administrator:' + #13#10#13#10 +
+                '    remote.ssh on | off        who may reach ssh' + #13#10 +
+                '    remote.api on | local | off   whether the API is provided, and to whom' + #13#10 +
+                '    ssh.server install         add the OpenSSH server' + #13#10 +
+                '    append.sd.path on | off    whether "sd" runs from any directory' + #13#10#13#10 +
+                'Each of them reports the current setting, and changes nothing, when you ' +
+                'give it no keyword.' + #13#10#13#10;
+    end;
 
     { The other remote route, and the same reasoning about ordering: it decides
       who may reach the API port at all, and it depends on nothing above it.
       Owner's decision of 21 Aug 2026 makes this a route in its own right
       rather than something carried inside an ssh tunnel. }
-    ApiFw := ApplyApiFirewall;
+    { 31 Aug 26 - AND THE SAME FOR THE API, for the same reason and with the
+      same asymmetry: ApplyApiFirewall follows ApiNetworkWanted, which on a
+      skipped page is the previous install's answer.  Running it would either
+      re-open 4243 to the network unasked or shut a port the site had opened.
+      remote.api on|local|off is the way to change it. }
+    if not TrueUpgrade then
+      ApiFw := ApplyApiFirewall;
 
     { STRICTLY BEFORE ApplyAllowGroups.  That step points sshd at the sdssh
       group; this one creates it and seeds it from sdusers, which is the set
@@ -3355,6 +3491,10 @@ begin
            SshMsg +
            SshFw +
            ApiFw +
+           { 31 Aug 26 - EMPTY ON A FIRST INSTALL, and it is the three above
+             that are empty on an upgrade.  PRE_RELEASE_FIXES 88: exactly one
+             of the two sets is ever non-empty. }
+           UpgMsg +
            { 25 Aug 26 - EMPTY ON EVERY INSTALL THAT WENT RIGHT, and it sits
              beside the ssh pair for the same reason they do: if the marker did
              not get written, the account advice below is describing rules this
@@ -3945,6 +4085,13 @@ end;
 ; MSYS2 DLLs beside sd.exe are the ones found, which is the answer to Git for
 ; Windows shipping a rival msys-2.0.dll: Windows searches the executable's own
 ; directory first, and nothing on PATH can displace it.
+;
+; 31 Aug 26 - "and not TrueUpgrade", PRE_RELEASE_FIXES 88.  The tasks page is
+; not shown on an upgrade, so the box behind this entry carries whatever
+; UsePreviousTasks restored rather than anything the reader chose.  NotOnPath
+; already makes it a no-op on the ordinary upgrade - the entry is there - but
+; that is a coincidence of state, not a decision, and the ruling is that an
+; upgrade changes none of these.  append.sd.path on is the way back.
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
     ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\usr\bin"; \
-    Tasks: addtopath; Check: NotOnPath('{app}\usr\bin')
+    Tasks: addtopath; Check: NotOnPath('{app}\usr\bin') and not TrueUpgrade
