@@ -284,6 +284,31 @@ Write-Output ("transcript: " + $transcript)
 # comment for why this is a hashtable and not an array: an array binds
 # POSITIONALLY and silently gave verify-tiers.ps1 a $Prefix of "-Prefix".
 $steps = @(
+    # 30 Aug 26 - FIRST, AND IT IS THE ONLY STEP THAT COULD BE.
+    # PRE_RELEASE_FIXES 82.  It is not a verifier: it reads
+    # ..\sdsys\newvoc in the SOURCE tree and the two tier verifiers beside it,
+    # re-derives all three VOC counts, and checks each file against the
+    # directory.  No install, no elevation, no account, no prefix, no run
+    # token, and under a second.
+    #
+    # WHY IT IS WORTH A STEP AT ALL.  A stale tier count does not fail here -
+    # it fails at verify-tiers and verify-tierapi, two of the most expensive
+    # steps in the suite, one of them LAST in the elevated half.  On 30 Aug 2026
+    # -Run b70 was spent discovering that verify-tierapi still carried 416 after
+    # 78 took ADMINISTRATOR to 419; this file, run afterwards, named it in under
+    # a second.  It had been written on 28 Aug for that exact failure and was
+    # wired into nothing, so the guard sat unrun while the failure it was
+    # written for happened again.
+    #
+    # ***IT DOES NOT WEAKEN verify-credacl's CLAIM TO BE FIRST***, which the
+    # comment above states and which matters: credacl fails if this session is
+    # somehow privileged, and must do so before passing steps suggest the tree
+    # is fine.  This step cannot pass or fail on privilege - it never looks at a
+    # token, an ACL or the installed tree - so a green line from it says nothing
+    # about the thing credacl is guarding.  It says the SOURCE is
+    # self-consistent, which is a different claim and is a precondition for
+    # believing either tier step later.
+    @{ Name = 'test-tiercounts-units.ps1'; P = @{} },
     @{ Name = 'verify-credacl.ps1';     P = @{} },
     # 23 Aug 26 - section 7 step 15's guard, and it sits DIRECTLY BESIDE
     # verify-credacl for that step's reason: both ask what an ORDINARY token
