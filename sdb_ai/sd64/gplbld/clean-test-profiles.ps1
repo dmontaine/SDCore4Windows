@@ -161,9 +161,23 @@ $ErrorActionPreference = 'Stop'
 #   ***AND THE 25 WERE INVISIBLE THE QUIET WAY***: every one of them HAS a
 #   ProfileList entry, so nothing refused them and nothing reported them - the
 #   sweep simply reported success over a machine still carrying them.
+# 30 Aug 26 - "sdprof" AND "sdsw" ADDED, AND THIS PAIR IS THE ARGUMENT FOR THE
+#   CHECKER RATHER THAN ANOTHER NOTE.  test-stemcoverage-units.ps1 was written
+#   the same day as the recommendation PRE_RELEASE 86 left unbuilt, and it found
+#   these two on its FIRST run: verify-profiledir.ps1 (sdprof<Run>, from
+#   VerifyInstall2) and verify-sdsyswrite.ps1 (sdsw<Run>, from VerifyInstall1)
+#   both compose names this list did not cover.  ***THAT IS FOUR FAMILIES MISSED
+#   ACROSS THREE SEPARATE OCCASIONS*** - sddr (45), sdgate and sdtu (86), and now
+#   these - so the note above asking each new test to add its own stem has been
+#   followed exactly none of the four times it mattered.
+#   ***THE CHECKER IS FREE, NEEDS NO INSTALL AND IS THE THING TO RUN, NOT THIS
+#   COMMENT.*** Neither of these had left litter yet, which is the other half of
+#   why they were invisible: sdsw's account is deleted in a finally and sdprof
+#   makes a fixture directory rather than an account, so C:\Users showed nothing
+#   to count.  A hole nobody has fallen into is still a hole.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
-           'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu')
+           'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw')
 $bare  = @('sdsshprobe', 'sdnotyet')
 $rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
       ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
@@ -190,6 +204,10 @@ if ($SelfTest) {
         # Real names off C:\Users when the gap was found, both shapes present:
         # verify-sdsysgate's single account and the suite's sdtu<Run> test user.
         'sdgateb68', 'sdgateb77', 'sdtub60', 'sdtub77',
+        # 30 Aug 26 - the two test-stemcoverage-units.ps1 found on its first run.
+        # sdswa1..a5 are real spent tokens from PRE_RELEASE 73's own runs, so the
+        # bare-letter shape is covered as well as the b-series.
+        'sdprofb78', 'sdswb78', 'sdswa1', 'sdswa5',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -208,6 +226,10 @@ if ($SelfTest) {
         # 30 Aug 26 - the near-misses the two new stems open up.  Both fail on
         # the required digit, which is the guard the shape note above describes.
         'sdgateway', 'sdgatekeeper', 'sdtutorial', 'sdtuning',
+        # 30 Aug 26 - and the ones sdprof/sdsw open up.  "sdsweep" is the sharp
+        # one: it starts with the stem AND continues with letters, so it is the
+        # shape that would match if the required digit were ever relaxed.
+        'sdprofile', 'sdprofiler', 'sdsweep', 'sdswitch',
         # the SD system account and the owner's
         'sdsys', 'don'
     )

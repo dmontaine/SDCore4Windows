@@ -36,6 +36,14 @@
 # is administrator for everything routed through the helper; only file I/O
 # notices that the token never changed.
 #
+# 30 Aug 26 - THE THIRD STORE IS A POSITIVE CONTROL ON THE SESSION, AND WITHOUT
+# IT THE OTHER TWO ROWS ARE AMBIGUOUS.  A session that can write NOTHING scores
+# identically to one that cannot write THOSE TWO STORES, and only the second is
+# 68.  The three ACLs differ on purpose: secure-cred.ps1 grants sdusers nothing,
+# secure-osusers.ps1 read-only, secure-audit.ps1 "(AD,RA,S)" - so the audit trail
+# SHOULD take a write from the same session, and step 6 is where that is proved.
+# A failure there is a finding about the session rather than about $cred.
+#
 # ===========================================================================
 # WHY IT IS SHAPED LIKE THIS
 # ===========================================================================
@@ -301,6 +309,74 @@ function Invoke-SDElevated([string[]]$commands, [string]$why) {
 }
 
 # ---------------------------------------------------------------------------
+# THE AUDIT TRAIL HAS TO BE READ FROM THE ELEVATED SIDE, AND THAT IS THE ACL
+# TALKING RATHER THAN CAUTION.  secure-audit.ps1 grants sdusers "(AD,RA,S)" -
+# AppendData, ReadAttributes, Synchronize - and deliberately NOT ReadData, so
+# that an ordinary SD user cannot read back the refusal reasons and enumerate
+# accounts with them (PROJECT_STATUS.md, the SCRAM audit entry).
+#
+# SO THE SESSION UNDER TEST CAN APPEND AND CANNOT VERIFY, and the leg is three
+# steps rather than one: measure ELEVATED, append UNELEVATED, measure ELEVATED
+# again.  A one-step version would have to read from the unelevated side, which
+# the ACL forbids - it would fail on a working product.
+function Invoke-PSElevated([string]$body, [string]$why) {
+    $work = Join-Path $env:TEMP ('sdsw-ps-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $null = New-Item -ItemType Directory -Path $work
+    try {
+        $res      = Join-Path $work 'result.txt'
+        $launcher = Join-Path $work 'probe.ps1'
+        # $OUT is substituted, not passed: the elevated child gets no arguments
+        # through the helper pipe, which takes a script path and nothing else.
+        $src = $body.Replace('$OUT', ("'" + $res + "'"))
+        [System.IO.File]::WriteAllText($launcher, $src + "`r`n", [System.Text.Encoding]::ASCII)
+
+        Write-Host ('      elevated: ' + $why)
+        if ([string]::IsNullOrEmpty($script:helperPipe)) {
+            $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru `
+                    -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                                    '-File', $launcher)
+            $null = $p
+        } else {
+            $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
+            & $elev -Run -PipeName $script:helperPipe -OwnerPid $PID -Script $launcher | Out-Null
+        }
+        if (Test-Path -LiteralPath $res) { return ((Get-Content -LiteralPath $res) -join "`n") }
+        return ''
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Reads the audit file's length and whether $token appears in it, ELEVATED.
+# .Contains() rather than Select-String -SimpleMatch or a -match: an
+# interpolated pattern silently changes what is searched for and reports a
+# PRESENT string as absent, which here would read as "the append never landed".
+function Get-AuditState([string]$path, [string]$token, [string]$why) {
+    $out = Invoke-PSElevated @"
+`$p = '$path'
+`$t = '$token'
+`$exists = Test-Path -LiteralPath `$p
+`$len = -1
+`$hit = `$false
+if (`$exists) {
+    `$len = (Get-Item -LiteralPath `$p).Length
+    `$txt = [System.IO.File]::ReadAllText(`$p)
+    `$hit = `$txt.Contains(`$t)
+}
+@(('exists=' + `$exists), ('len=' + `$len), ('token=' + `$hit)) |
+    Out-File -LiteralPath `$OUT -Encoding ascii
+"@ $why
+    $st = [pscustomobject]@{ Exists = $false; Length = -1; Token = $false; Raw = $out }
+    foreach ($line in ($out -split "`n")) {
+        $l = $line.Trim()
+        if ($l -like 'exists=*') { $st.Exists = ($l.Substring(7) -eq 'True') }
+        if ($l -like 'len=*')    { $st.Length = [int64]$l.Substring(4) }
+        if ($l -like 'token=*')  { $st.Token  = ($l.Substring(6) -eq 'True') }
+    }
+    return $st
+}
+
+# ---------------------------------------------------------------------------
 # ANCHORS.  Match the wording the tool prints on the POSITIVE path, never the
 # argument passed in - the account name appears in the echoed command, in the
 # refusal and in the error framing, so matching on it reports success three ways
@@ -402,6 +478,87 @@ try {
         Write-Host 'through the elevated helper (PS_SCRIPT:166); the credential half is a' -ForegroundColor Red
         Write-Host 'plain write by the SD process, whose token never changed.' -ForegroundColor Red
     }
+
+    # -----------------------------------------------------------------------
+    Step 6 'THE POSITIVE CONTROL ON THE SESSION: the audit trail, appended unelevated'
+    # WITHOUT THIS ROW THE TWO FAILURES ABOVE ARE AMBIGUOUS.  A session that
+    # cannot write ANYTHING scores exactly the same as one that cannot write
+    # THOSE TWO STORES, and only the second is 68.  secure-audit.ps1 grants
+    # sdusers AppendData while secure-cred.ps1 grants nothing and
+    # secure-osusers.ps1 grants read-only, so this write SHOULD succeed from the
+    # same session - and if it does not, the finding is about the session rather
+    # than about $cred.
+    #
+    # THE TRIGGER IS A REFUSED LOGTO, AND IT IS CHOSEN FOR THREE REASONS.
+    # CPROC:2738 calls kernel(K$AUDIT, 'LOGTO REFUSED account=<NAME> reason=not
+    # in the register') - so it needs no program compiled into the account, it
+    # is a refusal and therefore changes nothing else, and the record carries a
+    # name THIS RUN chose.  That last one is what makes the leg decisive: size
+    # alone cannot tell our append from a concurrent one.
+    #
+    # K$AUDIT IS UNGATED (op_kernel.c:652, "Returns 0 always - there is no
+    # failure a caller could sensibly act on"), so nothing here depends on the
+    # administrator flag the LOGTO set.
+    $auditPath  = Join-Path $env:ProgramData 'SD\sdsys\audit'
+    $auditToken = 'ZZAUD' + ([guid]::NewGuid().ToString('N').Substring(0, 12)).ToUpper()
+    Write-Host ('      audit file : ' + $auditPath)
+    Write-Host ('      probe name : ' + $auditToken + '   (upper case - CPROC upcases it)')
+
+    $before = Get-AuditState $auditPath $auditToken 'read the audit trail BEFORE'
+    Write-Host ('      before     : exists=' + $before.Exists + ' len=' + $before.Length +
+                ' token=' + $before.Token)
+
+    Note 'control: the audit trail exists' $true $before.Exists
+    if (-not $before.Exists) {
+        Write-Host ''
+        Write-Host '  The audit trail is not there, so the rows below would compare nothing' -ForegroundColor Yellow
+        Write-Host '  against nothing.  That is a finding about the install, not about 68.' -ForegroundColor Yellow
+    }
+
+    # THE NEGATIVE CONTROL.  A token already present would score the decisive row
+    # PASS before anything was written.  It is a fresh GUID per run so it cannot
+    # pre-exist - and asserting that is the difference between knowing and
+    # assuming, which is the whole subject of this file.
+    Note 'control: the probe name is ABSENT from the trail beforehand' $false $before.Token
+
+    # AND THE ACL ITSELF, ECHOED RATHER THAN DESCRIBED - the shape of this leg
+    # only makes sense if sdusers really does hold AD without RD.
+    $acl = & icacls.exe $auditPath 2>&1
+    Said 'icacls on the audit trail' (($acl | Out-String).Trim())
+
+    $canRead = $true
+    try { $null = [System.IO.File]::ReadAllText($auditPath) } catch { $canRead = $false }
+    Note 'control: this unelevated process CANNOT read the trail (AD without RD)' $false $canRead
+
+    $ap = Invoke-SD @('LOGTO SDSYS', ('LOGTO ' + $auditToken))
+    Said 'unelevated LOGTO SDSYS then LOGTO <unregistered>' $ap
+
+    $after = Get-AuditState $auditPath $auditToken 'read the audit trail AFTER'
+    Write-Host ('      after      : exists=' + $after.Exists + ' len=' + $after.Length +
+                ' token=' + $after.Token)
+
+    $grew = ($after.Length -gt $before.Length)
+    Note 'the unelevated SDSYS session appended to the audit trail (it grew)' $true $grew
+    Note 'the append is THIS run''s, by name (the DECISIVE one)' $true $after.Token
+
+    if ($grew -and (-not $after.Token)) {
+        Write-Host ''
+        Write-Host '  The trail grew but does not carry this run''s name, so something else' -ForegroundColor Yellow
+        Write-Host '  wrote it.  Size alone is not evidence here - read the decisive row.' -ForegroundColor Yellow
+    }
+    if (-not $grew) {
+        Write-Host ''
+        Write-Host '  NOTHING WAS APPENDED, so this row measured the PROBE and not the' -ForegroundColor Yellow
+        Write-Host '  product.  Check the SD output above actually reached SDSYS and that' -ForegroundColor Yellow
+        Write-Host '  the LOGTO was refused with 10003 - a name that IS in the register' -ForegroundColor Yellow
+        Write-Host '  takes a different branch and audits nothing.' -ForegroundColor Yellow
+    }
+    if ($after.Token -and (-not $credOkUnelevated)) {
+        Write-Host ''
+        Write-Host 'AND THAT IS THE POINT OF THIS STEP: the same unelevated session that' -ForegroundColor Cyan
+        Write-Host 'could not write $cred DID write the audit trail.  The session is not' -ForegroundColor Cyan
+        Write-Host 'inert - the two failures above are about those two stores.' -ForegroundColor Cyan
+    }
 }
 finally {
     Step 9 'CLEANUP'
@@ -436,7 +593,13 @@ if (($p + $f + $s) -ne $results.Count) {
 Write-Host ("verify-sdsyswrite: {0} PASS / {1} FAIL / {2} SKIP" -f $p, $f, $s)
 Write-Host ''
 Write-Host 'A FAIL on the two unelevated write rows is PRE_RELEASE 68 and 73, not a' -ForegroundColor Yellow
-Write-Host 'broken probe - provided the two control rows passed.  Read those first.' -ForegroundColor Yellow
+Write-Host 'broken probe - provided the control rows passed.  Read those first.' -ForegroundColor Yellow
+Write-Host ''
+Write-Host 'READ STEP 6 BEFORE BELIEVING EITHER VERDICT.  It is the positive control on' -ForegroundColor Yellow
+Write-Host 'the SESSION: the audit trail is the one protected store sdusers may append' -ForegroundColor Yellow
+Write-Host 'to, so a session that reached SDSYS should write it.  If step 6 is GREEN the' -ForegroundColor Yellow
+Write-Host 'session works and any failure above is about $cred and os.users.  If step 6' -ForegroundColor Yellow
+Write-Host 'is RED the session itself is the problem and the rows above say nothing.' -ForegroundColor Yellow
 
 if ($script:failed) { exit 1 }
 exit 0

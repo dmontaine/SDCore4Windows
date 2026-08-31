@@ -349,6 +349,25 @@ $steps = @(
     # self-consistent, which is a different claim and is a precondition for
     # believing either tier step later.
     @{ Name = 'test-tiercounts-units.ps1'; P = @{} },
+    # 30 Aug 26 - PRE_RELEASE 86's unbuilt recommendation, and it is here for the
+    # REASON THE STEP ABOVE GIVES, not by analogy with it: a guard that exists
+    # and runs nowhere is what let 86 happen at all.  clean-test-profiles.ps1
+    # carries a hand-kept stem list, a verifier that invents a name family must
+    # add its stem there, and that has now been missed FOUR TIMES over three
+    # occasions - sddr (45), sdgate and sdtu (86), sdprof and sdsw (found by this
+    # file on its first run).
+    #
+    # ***IT FAILS THE QUIET WAY, WHICH IS WHY IT HAS TO BE A STEP.*** An
+    # uncovered name is not refused and not counted; the sweep never sees it, so
+    # cleanup-devlitter.ps1 reports a clean run over a machine still carrying the
+    # litter and nothing anywhere goes red.  86 was only ever found because
+    # somebody counted C:\Users against the pattern by hand, once.
+    #
+    # SAME STANDING AS THE STEP ABOVE with respect to verify-credacl: it reads
+    # two source files and compares them, and never looks at a token, an ACL or
+    # the installed tree - so it cannot pass or fail on privilege and does not
+    # dilute credacl's claim to be the first thing that can.
+    @{ Name = 'test-stemcoverage-units.ps1'; P = @{} },
     @{ Name = 'verify-credacl.ps1';     P = @{} },
     # 23 Aug 26 - section 7 step 15's guard, and it sits DIRECTLY BESIDE
     # verify-credacl for that step's reason: both ask what an ORDINARY token
