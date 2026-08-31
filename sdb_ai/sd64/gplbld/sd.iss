@@ -1375,6 +1375,64 @@ begin
   Result := (PageID = wpSelectTasks) and TrueUpgrade;
 end;
 
+(* 31 Aug 26 - AND THE READY PAGE HAD TO GO WITH IT.  PRE_RELEASE_FIXES 88.
+
+   ***SKIPPING THE TASKS PAGE LEFT THE TASKS SELECTED, AND "Ready to Install"
+   LISTS SELECTED TASKS.***  So an upgrade showed a memo promising to add SD to
+   the PATH, open port 22 and provide the API - four things the gates above
+   make certain it will NOT do.  The owner ran it and said the page "talks
+   about additional tasks, but doesn't really explain anything.  Not sure why
+   it is there."  He was being generous: it was not merely unexplained, it was
+   FALSE, and it is 5.21's rule showing up one page later - a control, or here
+   a promise, that cannot act.
+
+   THE TASK MEMO IS DROPPED RATHER THAN THE TASKS DESELECTED.  Deselecting
+   would empty the memo too, and would even make the five gates redundant - but
+   it works by reaching into the wizard's state to fix a display problem, and
+   anything reading WizardIsTaskSelected afterwards would get an answer the
+   reader never gave.  The gates say what happens; this says what happens.  Two
+   statements of the same fact are better than one statement and one silence.
+
+   A FIRST INSTALL IS UNTOUCHED, deliberately: there the task list is accurate,
+   it is the only summary of what was chosen, and Inno's default assembly is
+   what every other page on that path was written against. *)
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
+  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+begin
+  if not TrueUpgrade then
+  begin
+    { ***ALL SIX, IN INNO'S ORDER, AND NOT JUST THE TWO THIS INSTALLER HAPPENS
+      TO USE.***  Defining this function REPLACES the default assembly
+      outright, so naming only Dir and Tasks would silently drop anything a
+      later [Components] or [Types] section produced - a regression nobody
+      would see, because it removes information rather than adding it.  Written
+      to reproduce the default exactly. }
+    Result := '';
+    if MemoUserInfoInfo   <> '' then Result := Result + MemoUserInfoInfo   + NewLine + NewLine;
+    if MemoDirInfo        <> '' then Result := Result + MemoDirInfo        + NewLine + NewLine;
+    if MemoTypeInfo       <> '' then Result := Result + MemoTypeInfo       + NewLine + NewLine;
+    if MemoComponentsInfo <> '' then Result := Result + MemoComponentsInfo + NewLine + NewLine;
+    if MemoGroupInfo      <> '' then Result := Result + MemoGroupInfo      + NewLine + NewLine;
+    if MemoTasksInfo      <> '' then Result := Result + MemoTasksInfo      + NewLine + NewLine;
+    Exit;
+  end;
+
+  Result :=
+    'Upgrading the SD already installed on this computer.' + NewLine + NewLine +
+    Space + 'The program files are replaced.' + NewLine +
+    Space + 'Your database, your accounts and your settings are kept.' + NewLine + NewLine +
+    'SETUP HAS NOT ASKED ABOUT ssh OR THE API, AND WILL NOT CHANGE THEM.' + NewLine +
+    'Who may reach this machine, whether the API is provided, and whether "sd"' + NewLine +
+    'runs from any directory are all left exactly as they are now.' + NewLine + NewLine +
+    'To change any of them afterwards, in SD as an administrator:' + NewLine + NewLine +
+    Space + 'remote.ssh on | off' + NewLine +
+    Space + 'remote.api on | local | off' + NewLine +
+    Space + 'ssh.server install' + NewLine +
+    Space + 'append.sd.path on | off' + NewLine + NewLine +
+    'Each reports its current setting, and changes nothing, when given no' + NewLine +
+    'keyword.';
+end;
+
 function SshServerAbsent: Boolean;
 begin
   Result := SshWasAbsent;
