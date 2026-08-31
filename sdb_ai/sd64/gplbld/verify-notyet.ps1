@@ -104,6 +104,36 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
+# 30 Aug 26 - EVERY PHRASE MATCH IN THIS FILE GOES THROUGH THIS.
+# PRE_RELEASE_FIXES.md 84.
+#
+# check-install writes CONSOLE output and the console wraps it at whatever width
+# the run happens to have.  On -Run b74 the sentence arrived as
+#
+#     [not yet] You are in the "sdusers" group, but this sign-in does not have
+#     it
+#     yet.
+#
+# so a literal match for "...does not have it yet" found nothing and the check
+# FAILED against a build that was printing exactly the right sentence.  It had
+# passed on b73 at a different width, which is the worst property a check can
+# have: correct by luck.
+#
+# ***THE CHECKS THAT PASSED WERE NO BETTER OFF, AND THAT IS WHY ALL SIX MOVED.***
+# Four of them assert a phrase ABSENT.  A wrapped line is absent to a literal
+# pattern too, so those would have passed just as happily on output that DID
+# contain the thing they exist to rule out - PROJECT_STATUS.md's "absent marker
+# read as an answer", again.  Repairing only the one that went red would have
+# left four blind and looked like a fix.
+#
+# Same cure PRE_RELEASE 51 applied to Get-SysMsgPattern's Esc-Loose: escape the
+# literal runs, join them with \s+.  A line break is whitespace, so the pattern
+# stops caring where the console chose to put one.
+function Wrapped([string]$phrase) {
+    $runs = [regex]::Split($phrase.Trim(), '\s+')
+    return (($runs | ForEach-Object { [regex]::Escape($_) }) -join '\s+')
+}
+
 # EVERY LINE HERE IS Write-Host, NOT Write-Output.  A PowerShell function
 # returns everything it writes to the output stream, so a Write-Output beside
 # the return makes the caller's $ok an ARRAY - and `if ($array)` is true for a
@@ -397,19 +427,28 @@ try {
 
     Note 'check-install finished at all' $true ($null -eq $stale.Crash)
 
+    # 30 Aug 26 - THE POSITIVE CONTROL FOR THE MATCHER, before anything trusts
+    # it.  PRE_RELEASE_FIXES.md 84.  The fixture is the b74 output verbatim,
+    # wrapped where the console wrapped it; the literal pattern this replaced
+    # cannot match it.  If this ever goes red, every phrase check below is blind
+    # and none of their verdicts mean anything.
+    $wrapFixture = "in the `"sdusers`" group, but this sign-in does not have`nit`nyet."
+    Note 'control: the phrase matcher survives a wrapped line' $true `
+        ($wrapFixture -match (Wrapped 'in the "sdusers" group, but this sign-in does not have it yet'))
+
     Note 'says the sign-in has not got it yet' $true `
-        ($t -match 'in the "sdusers" group, but this sign-in does not have it yet')
+        ($t -match (Wrapped 'in the "sdusers" group, but this sign-in does not have it yet'))
 
     # THE FALSE PASS.  The other [not yet] would also contain "[not yet]", and
     # would mean the test measured a broken Get-LocalGroupMember instead.
     Note 'did NOT fall back to "could not read the group"' $false `
-        ($t -match 'Could not read the "sdusers" group')
+        ($t -match (Wrapped 'Could not read the "sdusers" group'))
 
     Note 'did NOT report it as [ok]' $false `
-        ($t -match 'group and this sign-in has it')
+        ($t -match (Wrapped 'group and this sign-in has it'))
 
     Note 'did NOT report it as [PROBLEM]' $false `
-        ($t -match 'You are not a member of the "sdusers" group')
+        ($t -match (Wrapped 'You are not a member of the "sdusers" group'))
 
     # The reason the third outcome exists at all.
     Note 'a [not yet] is not a failure - exit code' 0 $stale.Code
@@ -417,7 +456,7 @@ try {
     # The tree is unreadable on this token, so the catalogue count cannot be
     # answered either.  It must defer, not accuse.
     Note 'the catalogue check defers rather than accusing' $true `
-        (($t -match '\[not yet\]') -and -not ($t -match '\[PROBLEM\]'))
+        (($t -match (Wrapped '[not yet]')) -and -not ($t -match (Wrapped '[PROBLEM]')))
 
     Write-Output ""
     Write-Output "=== 3. the control: same account, a token taken AFTER the add ========"
@@ -439,9 +478,9 @@ try {
         $fresh = Invoke-CheckInstall $freshTok 'token F (fresh)'
         $f = $fresh.Text
         Note 'control: fresh token reports [ok]' $true `
-            ($f -match 'group and this sign-in has it')
+            ($f -match (Wrapped 'group and this sign-in has it'))
         Note 'control: no "does not have it yet"' $false `
-            ($f -match 'does not have it yet')
+            ($f -match (Wrapped 'does not have it yet'))
         Note 'control: exit code' 0 $fresh.Code
     }
 }
