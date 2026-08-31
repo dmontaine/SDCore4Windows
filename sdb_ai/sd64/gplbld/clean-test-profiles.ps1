@@ -151,9 +151,19 @@ $ErrorActionPreference = 'Stop'
 #   gone; this was a pattern that could not see the name at all.  A new test
 #   that invents a name family has to add its stem HERE in the same commit, or
 #   its litter is invisible to the only thing that sweeps it up.
+# 30 Aug 26 - "sdgate" AND "sdtu" ADDED, AND THIS IS THE THIRD TIME THE NOTE
+#   ABOVE HAS BEEN PROVED BY A MISS RATHER THAN READ BEFORE ONE.  Measured
+#   against C:\Users on 30 Aug: 268 sd* directories, of which this pattern
+#   matched 243 and walked past 25 - sdgateb68..b77 (9, verify-sdsysgate) and
+#   sdtub60..b77 (16, the sdtu<Run> test account VerifyInstall1 creates and
+#   DELETE.ACCOUNT removes).  Both families were invented after the 28 Aug
+#   sweep and neither added its stem, exactly as sddr had not.
+#   ***AND THE 25 WERE INVISIBLE THE QUIET WAY***: every one of them HAS a
+#   ProfileList entry, so nothing refused them and nothing reported them - the
+#   sweep simply reported success over a machine still carrying them.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
-           'sdrt', 'sdar', 'sddr')
+           'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu')
 $bare  = @('sdsshprobe', 'sdnotyet')
 $rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
       ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
@@ -176,6 +186,10 @@ if ($SelfTest) {
         # really on this machine when the stem was found missing.  Both
         # suffixes matter: the door test makes an "a" account and a "b" helper.
         'sddr1a', 'sddr2a', 'sddrb50a', 'sddrb51a', 'sddrb51b',
+        # 30 Aug 26 - THE TWO FAMILIES THE 28 Aug LIST STILL COULD NOT SEE.
+        # Real names off C:\Users when the gap was found, both shapes present:
+        # verify-sdsysgate's single account and the suite's sdtu<Run> test user.
+        'sdgateb68', 'sdgateb77', 'sdtub60', 'sdtub77',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -191,6 +205,9 @@ if ($SelfTest) {
         'dmont', 'Public', 'sdout', 'sdclilib',
         # word-shaped near-misses
         'sdapiary', 'sdrtserver', 'sdaclmanager', 'sddriver', 'sddrive',
+        # 30 Aug 26 - the near-misses the two new stems open up.  Both fail on
+        # the required digit, which is the guard the shape note above describes.
+        'sdgateway', 'sdgatekeeper', 'sdtutorial', 'sdtuning',
         # the SD system account and the owner's
         'sdsys', 'don'
     )
