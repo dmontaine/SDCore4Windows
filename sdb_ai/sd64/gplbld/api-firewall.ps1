@@ -108,7 +108,21 @@ try {
         exit 0
     }
 
-    $remote = if ($Open) { 'Any' } else { @('127.0.0.1', '::1') }
+    # ***NO '::1'.  WINDOWS REFUSES ANY IPv6 LOOPBACK LITERAL IN -RemoteAddress***
+    # - "An unspecified, multicast, broadcast, or loopback IPv6 address was
+    # specified" - and the rule is then LEFT AT RemoteAddress=Any, which is the
+    # exact exposure this script exists to prevent.
+    #
+    # ssh-firewall.ps1 HIT THIS FIRST AND FIXED IT; THIS FILE DID NOT GET THE
+    # FIX, and it stayed broken until "remote.api local" ran it in front of the
+    # owner on 30 Aug 2026.  Its sibling's comment describes this defect word
+    # for word.  Third time in one week that a rule was applied in one file and
+    # not the other - see CRED_SET and MODIFYA on close-before-write.
+    #
+    # LOOPBACK IS NOT FILTERED BY WINDOWS FIREWALL AT ALL, so 127.0.0.1 alone
+    # loses nothing: an IPv6 loopback connection is not matched against this
+    # rule in the first place.  What the scope governs is off-box traffic.
+    $remote = if ($Open) { 'Any' } else { '127.0.0.1' }
 
     # IDEMPOTENT, because the installer runs it on every install including a
     # reinstall over the top.  An existing rule is UPDATED rather than removed
@@ -129,13 +143,48 @@ try {
         Write-Output "api-firewall: updated $ruleName for port $Port"
     }
 
+    # ***THE VERDICT IS GATED ON A READ-BACK, NOT ON HAVING MADE THE CALL.***
+    # PRE_RELEASE_FIXES 81.  On 30 Aug 2026 this script printed
+    #
+    #   Set-NetFirewallRule : An unspecified, multicast, broadcast, or loopback
+    #   IPv6 address was specified.
+    #   api-firewall: updated SD-API-In-TCP for port 4243
+    #   api-firewall: the SD API is reachable FROM THIS MACHINE ONLY
+    #     rule: ... RemoteAddress Any
+    #
+    # - a failure, then two claims of success, then its own evidence
+    # contradicting them, then exit 0.  "remote.api local" duly reported "The
+    # SD API is now LOCAL" while the port was open to the network.
+    #
+    # THE THROW/CATCH BELOW WAS SUPPOSED TO PREVENT THAT AND DID NOT.  The CIM
+    # error came back NON-TERMINATING despite ErrorActionPreference = 'Stop',
+    # so execution simply carried on.  Relying on a cmdlet to throw is
+    # therefore not enough, and ssh-firewall.ps1 relies on exactly the same
+    # thing - it is given the same gate in the same commit.
+    #
+    # SO THE RULE IS RE-READ AND COMPARED WITH WHAT WAS ASKED FOR.  This is
+    # CLAUDE.md's instrument rule applied to a firewall: a step that did
+    # nothing must fail rather than pass, and the state it compared has to be
+    # the state on the machine rather than the state it intended to set.
+    $applied = Get-ApiRule
+    $addrs   = @($applied | Get-NetFirewallAddressFilter).RemoteAddress
+    $isOpen  = ($addrs -contains 'Any')
+
+    if ($isOpen -ne [bool]$Open) {
+        Write-Output ('api-firewall: FAILED - the rule was NOT changed.  Asked for ' +
+                      $(if ($Open) { 'Any' } else { $remote }) +
+                      ', the rule still reads ' + ($addrs -join ','))
+        Write-State $applied
+        exit 1
+    }
+
     if ($Open) {
         Write-Output "api-firewall: other computers MAY reach the SD API on port $Port"
     } else {
         Write-Output "api-firewall: the SD API is reachable FROM THIS MACHINE ONLY"
     }
 
-    Write-State (Get-ApiRule)
+    Write-State $applied
     exit 0
 }
 catch {

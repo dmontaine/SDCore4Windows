@@ -218,7 +218,31 @@ try {
         Write-Output "ssh-firewall: ssh is reachable FROM THIS MACHINE ONLY"
     }
 
-    Write-State (Get-NetFirewallRule -Name $rule.Name)
+    # ***THE VERDICT IS GATED ON A READ-BACK, NOT ON HAVING MADE THE CALL.***
+    # PRE_RELEASE_FIXES 81.  This script already avoids the '::1' literal that
+    # made the call throw - the comment above records it - but it still trusted
+    # the throw/catch to catch a failure, and api-firewall.ps1 proved on
+    # 30 Aug 2026 that the CIM error can come back NON-TERMINATING despite
+    # ErrorActionPreference = 'Stop': it printed the error, carried on, claimed
+    # "reachable FROM THIS MACHINE ONLY", printed RemoteAddress=Any underneath
+    # and exited 0.
+    #
+    # NOTHING IS KNOWN TO BE WRONG HERE, and that is the point of adding it
+    # anyway: the two scripts do the same job and one of them was found lying
+    # about it, so both now check the machine instead of assuming the call
+    # worked.  Test-RuleOpen is the same function -Show and -ScopeFile use.
+    $applied = Get-NetFirewallRule -Name $rule.Name
+    $wantOpen = [bool]$Open
+    if ((Test-RuleOpen $applied) -ne $wantOpen) {
+        Write-Output ('ssh-firewall: FAILED - the rule was NOT changed.  Asked for ' +
+                      $(if ($wantOpen) { 'Any' } else { '127.0.0.1' }) +
+                      ', the rule still reads ' +
+                      ((($applied | Get-NetFirewallAddressFilter).RemoteAddress) -join ','))
+        Write-State $applied
+        exit 1
+    }
+
+    Write-State $applied
     exit 0
 }
 catch {
