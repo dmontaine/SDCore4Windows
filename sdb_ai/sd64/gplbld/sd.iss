@@ -3358,10 +3358,20 @@ begin
              'objects, the VOC templates, the messages and the dictionaries. That is ' +
              'what upgrading in place means, and it is why you are seeing this rather ' +
              'than being asked to uninstall first.' + #13#10#13#10 +
+             { 30 Aug 26 - THE LAST SENTENCE WENT STALE BETWEEN BEING WRITTEN AND
+               BEING READ, WHICH IS THIS FILE'S OLDEST HABIT.  It said "edit
+               sd.conf and restart the SD service", which was the only way when
+               77 was fixed a few hours earlier - and PRE_RELEASE 78 shipped
+               "remote.api on|local|off" in the SAME install, which does exactly
+               that and reads the file back afterwards.  Caught by looking at
+               the rendered box rather than at the source.  The tasks-page
+               message above carries the same warning from 21 and 25 Aug: "each
+               time the text went on asserting the old shape until somebody
+               noticed." }
              'YOUR CONFIGURATION WAS NOT CHANGED. sd.conf is left exactly as it is, so ' +
              'settings you edited survive - and re-running this installer will not ' +
-             'change them back. To turn the SD API on or off, edit sd.conf and restart ' +
-             'the SD service.',
+             'change them back. To turn the SD API on or off afterwards, use the ' +
+             '"remote.api" command inside SD.',
              mbInformation, MB_OK);
 
     { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
