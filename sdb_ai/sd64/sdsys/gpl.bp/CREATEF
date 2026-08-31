@@ -291,6 +291,9 @@ $define default.split.load 80
                         * Convert to multifile named "%1,%1" (Y/N)?
                      input yn
                      yn = upcase(yn)
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.
+                     if yn = '' then yn = 'N'
                   until yn = 'Y' or yn = 'N'
                   repeat
                   if yn = 'N' then stop

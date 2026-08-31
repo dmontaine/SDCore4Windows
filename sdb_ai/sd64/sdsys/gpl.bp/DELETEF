@@ -401,9 +401,12 @@ check.sdsys.file:
 
    display sysmsg(6145, part) ;* Warning re part in SDSYS account
    loop
-      display sysmsg(6146) :  ;* Delete the file from the system account (Y/N)?
+      display sysmsg(6146) :  ;* Delete the file from the system account (y/<n>)?
       input yn
       yn = upcase(yn[1,1])
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.
+      if yn = '' then yn = 'N'
    until yn = 'Y' or yn = 'N'
    repeat
    

@@ -680,9 +680,12 @@ reparse:
                      continue
                   end then
                      loop
-                        display sysmsg(6521) :  ;* Record already exists. Overwrite (y/n)?
+                        display sysmsg(6521) :  ;* Record already exists. Overwrite (y/<n>)?
                         input yn
                         yn = upcase(yn)
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.
+                        if yn = '' then yn = 'N'
                      until yn = 'Y' or yn = 'N'
                      repeat
 
@@ -2703,7 +2706,11 @@ unrecognised:
    message = sysmsg(6587) ;* Error - Unrecognised command
    gosub error
    loop
-      display sysmsg(6588) :  ;* Did you mean to insert this text (Y/N)?
+* 30 Aug 26 Windows port - WORDING ONLY, NO CODE CHANGE.  PRE_RELEASE_FIXES 79.
+*   This loop already accepts an empty answer - "until x = 'Y' or x = 'N' or
+*   x = ''" - and the test after it is "if x = 'Y'", so Enter already meant N.
+*   It is the one prompt in the sweep that had a default and never said so.
+      display sysmsg(6588) :  ;* Did you mean to insert this text (y/<n>)?
       input x
       x = upcase(x)
    until x = 'Y' or x = 'N' or x = ''
@@ -3422,9 +3429,15 @@ save.record:
          * Not writing to original location. Check if target already exists
 
          loop
-            display sysmsg(6521) :  ;* Record already exists. Overwrite (y/n)?
+            display sysmsg(6521) :  ;* Record already exists. Overwrite (y/<n>)?
             input yn
             yn = upcase(yn)
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.
+*   THE SECOND OF TWO USES OF 6521 IN THIS FILE - the other is in the SAVE
+*   path further up.  Both had to move together or the same prompt would
+*   answer differently depending on which one printed it.
+            if yn = '' then yn = 'N'
          until yn = 'Y' or yn = 'N'
          repeat
 

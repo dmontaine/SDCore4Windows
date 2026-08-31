@@ -273,9 +273,14 @@ deffun elevate(action,arg) calling '!elevate'
 
       if @who = 'SDSYS' and kernel(K$ADMINISTRATOR,-1) then
          loop
-            display sysmsg(5003) :  ;* Update VOC in all registered accounts (Y/N)?
+            display sysmsg(5003) :  ;* Update VOC in all registered accounts (y/<n>)?
             input yn
             yn = upcase(yn)
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.  N is
+*   the conservative answer and matters more here than most: this rewrites the
+*   VOC of every registered account, so an accidental Enter must not start it.
+            if yn = '' then yn = 'N'
          until yn = 'Y' or yn = 'N'
          repeat
 

@@ -115,8 +115,13 @@ $include err.h
       open file.name to map.f else stop 'Cannot open ' : file.name
 
       if file.name # '$MAP' then
-         display sysmsg(3044, file.name) :  ;* File xx will be cleared and overwritten. Continue (Y/N)?
+         display sysmsg(3044, file.name) :  ;* File xx will be cleared and overwritten. Continue (y/<n>)?
          input yn
+* 30 Aug 26 Windows port - NO CODE CHANGE NEEDED HERE, ONLY THE WORDING.
+*   PRE_RELEASE_FIXES 79.  "anything that is not Y" already means no, so an
+*   empty answer already aborted; the prompt simply never said so.  The rule
+*   the owner gave is about telling the user which answer Enter gives, and
+*   this one was giving the right answer silently.
          if upcase(yn) # 'Y' then stop sysmsg(3045) ;* Mapping aborted
       end
 

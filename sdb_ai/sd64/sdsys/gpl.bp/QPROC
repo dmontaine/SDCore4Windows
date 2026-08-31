@@ -648,8 +648,13 @@ parse.default.phrase:
       openseq csv.pathname to csv.f then
          if not(csv.append) and not(csv.no.query) then
             loop
-               display sysmsg(7305, csv.pathname) : ;* %1 already exists. Overwrite(Y/N)?
+               display sysmsg(7305, csv.pathname) : ;* %1 already exists. Overwrite(y/<n>)?
                input yn upcase
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.  N
+*   reaches the goto on the next line, so an empty answer leaves the existing
+*   file alone, which is the conservative half of an overwrite question.
+               if yn = '' then yn = 'N'
                if yn = 'N' then goto exit.qproc
             until yn = 'Y'
                display sysmsg(7279) ;* Y or N required

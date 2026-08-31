@@ -600,7 +600,10 @@ PW.TRY.AGAIN:
                  case 1
                     crt sysmsg(10121, pw.stat) ;* Could not be set (status %1)
               end case
-              crt sysmsg(10008): ;* 'Warning, user created but password not set, Retry (Y/N)'
+* 30 Aug 26 Windows port - WORDING ONLY, NO CODE CHANGE.  PRE_RELEASE_FIXES 79.
+*   The test below is "= 'Y' then retry", so anything else - an empty answer
+*   included - already falls through to the unwind.  The prompt now says so.
+              crt sysmsg(10008): ;* 'Warning, user created but password not set, Retry (y/<n>)'
               input yn
               if upcase(yn) = 'Y' then goto PW.TRY.AGAIN
 * 21 Aug 26 Windows port - AND ANSWERING N NOW UNWINDS.  Owner's rule, 21 Aug

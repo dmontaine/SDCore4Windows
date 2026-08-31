@@ -248,6 +248,12 @@ deffun is_sd_user(username) calling '!is_sd_user'
       end
       input yn
       yn = upcase(yn)
+* 30 Aug 26 Windows port - ENTER TAKES THE DEFAULT THE PROMPT ADVERTISES.
+*   Owner's rule, 30 Aug 2026: "scripts need to indicate which is the default
+*   using <y>/n or y/<n>".  N here, and it is the conservative answer - this is
+*   the prompt standing between somebody and their data, which the comment
+*   above already says.  Before this, an empty answer simply re-asked.
+      if yn = '' then yn = 'N'
       until yn = 'Y' or yn = 'N'
    repeat
 

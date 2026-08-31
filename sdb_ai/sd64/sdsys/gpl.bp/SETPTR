@@ -553,10 +553,15 @@ reparse:
          end
 
          loop
-            crt sysmsg(7109) :  ;* OK to set new parameters (Y/N)?
+            crt sysmsg(7109) :  ;* OK to set new parameters (y/<n>)?
             prompt ''
             input yn
             yn = upcase(yn)
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.  N
+*   reaches the "stop" on the next line, which is what an empty answer should
+*   do here: nothing is set and the verb ends.
+            if yn = '' then yn = 'N'
             if yn = 'N' then stop
          until yn = 'Y'
          repeat
