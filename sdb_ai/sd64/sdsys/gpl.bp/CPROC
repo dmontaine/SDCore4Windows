@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 30 Aug 26 Windows port - three owner rulings, PRE_RELEASE_FIXES.md 8, 9, 44.
+*            F1 prints 10149 instead of doing nothing; a LOGTO whose grant is
+*            in place but whose chdir was refused adds 10150 after 5161, which
+*            is shared with SETACC and is left alone; int.umask is documented as
+*            dead-and-kept, because the dispatch is positional and deleting slot
+*            35 would renumber six live verbs.
 * 28 Aug 26 Windows port - ".D name" folds case like .L and .R, and reports
 *            5043 instead of falling through with a stale voc.rec.
 *            PRE_RELEASE_FIXES.md 5.
@@ -2533,10 +2539,30 @@ int.status:
 *****************************************************************************
 * INT.HELP  -  HELP (Internal verb 14)
 
+* 30 Aug 26 Windows port - F1 SAYS SOMETHING NOW.  PRE_RELEASE_FIXES.md 8.
+*   Both labels fell through to "return", so F1 at the command prompt did
+*   nothing at all - not an error, not a message, nothing - and a key that
+*   silently does nothing reads as a broken keyboard rather than a missing
+*   feature.
+*
+*   IT DOES NOT POINT AT DOCUMENTATION, AND THAT IS MEASURED RATHER THAN
+*   MODEST.  Nothing under C:\Program Files\SD is documentation: the install is
+*   scripts, the changelog and the two editors.  A message naming a manual that
+*   does not ship would be exactly the kind of false sentence this project keeps
+*   filing entries about, so 10149 names only things that exist on the machine -
+*   the account's own VOC, and the Start Menu installation check whose wording
+*   is copied from check-install.ps1's own output.
+*
+*   int.help IS STILL UNREACHABLE AS A VERB and is left wired to the same
+*   message deliberately.  No VOC record points at internal verb 14, so "help"
+*   answers "help is not in your VOC"; if one is ever added, the verb and the
+*   key should say the same thing rather than diverging.
   int.help:
 *   call @parser(PARSER$GET.REST, token.type, s, keyword)
   f1.help:
 *   if kernel(K$HELP, s) then display sysmsg(5130) ;* Unable to access the help system
+
+   crt sysmsg(10149) ;* SD has no built-in help system - list voc, and the Start Menu check
 
    return
 
@@ -2736,6 +2762,24 @@ int.logto:
 
    if not(ospath(acc.rec, OS$CD)) then
       display sysmsg(5161) ;* Unable to change to new directory
+* 30 Aug 26 Windows port - AND NOW IT SAYS WHY.  PRE_RELEASE_FIXES.md 44.
+*   5161 alone is what a real administrator hits straight after create.account,
+*   and it explains nothing: "Unable to change to new directory", with no
+*   mention of the group, the token, or signing out.
+*
+*   ***5161 ITSELF IS DELIBERATELY UNCHANGED, BECAUSE IT IS SHARED.***  SETACC:67
+*   prints it too, for a different cause, so rewording it would make one call
+*   site clearer by making the other one wrong.  The explanation goes in a
+*   message printed only HERE, where the cause is known.
+*
+*   WHAT IS KNOWN HERE, AND IT IS NARROW: logto.authorised has just passed, so
+*   the grant EXISTS on the machine, and only the chdir failed.  That is the
+*   token-lag case almost every time - Windows fixes group membership at logon
+*   and create.account adds the group afterwards.  10150 says so, and then says
+*   what to look at if signing in again does not help, rather than asserting the
+*   cause it cannot actually rule out.  It names the path SD tried.
+      display sysmsg(10150, acc.rec)
+      * The grant is in place, but this sign-in cannot use it yet
       gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
@@ -3369,6 +3413,27 @@ int.set:
 
 *****************************************************************************
 * INT.UMASK  -  UMASK verb (Internal verb 35)
+*
+* 30 Aug 26 Windows port - UNREACHABLE ON PURPOSE, AND KEPT ON PURPOSE.
+*   PRE_RELEASE_FIXES.md 9.  Nothing can type this: the owner ruled UMASK out of
+*   the product on 24 Aug 2026 - "POSIX file-mode-bits call, essentially inert
+*   on Windows where security is ACL-based" - and sdsys/voc_template/umask was
+*   deleted in d913eac.  It is absent from newvoc and voc_template today, so no
+*   VOC record names internal verb 35.
+*
+*   ***DO NOT DELETE THE SLOT ABOVE, AND THAT IS WHY THE ROUTINE STAYS TOO.***
+*   The dispatch is positional - "on voc.rec<3> gosub int.quit, int.clr, ..." -
+*   so removing entry 35 renumbers PDUMP, PAUSE, CLEAR.ABORT, SET.EXIT.STATUS,
+*   REPORT.STYLE and LOGMSG, every one of which is named by NUMBER in a shipped
+*   VOC record.  Deleting ten dead lines would mean editing six live records and
+*   getting all of them right, for no user-visible gain.
+*
+*   THE PRECEDENT IS THE TREE'S OWN, and d913eac names it: op_umask and this
+*   routine "stay compiled but callerless", as $MICRO and $NLS do.
+*
+*   ***THE UMASK() BASIC FUNCTION IS LIVE - DO NOT REMOVE IT WITH THIS.***
+*   op_umask (gplsrc/op_misc.c:1503, opcode 0xCF0B) is called at every start-up
+*   by CPROC:325, "if umask(002) then null".  Only this VERB is dead.
 
 int.umask:
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)

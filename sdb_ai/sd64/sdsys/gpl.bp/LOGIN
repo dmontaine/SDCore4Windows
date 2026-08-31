@@ -1305,6 +1305,12 @@ update.voc:
                   loop
                      input yn
                      yn = upcase(yn)
+* 30 Aug 26 Windows port - ENTER TAKES THE DEFAULT, AND IT IS N.
+*   PRE_RELEASE_FIXES.md 79.  Three-way (Yes/No/All, 5058), which is why the
+*   entry left it - but A is "yes to this and every one after it", so it is
+*   further from the conservative answer than Y is, not nearer.  N keeps the
+*   VOC record this account already has, which is the arm that changes nothing.
+                     if yn = '' then yn = 'N'
                   until yn = 'Y' or yn = 'N' or yn = 'A'
                     display sysmsg(5058) : ;* Replace record (Yes/No/All)?
                   repeat

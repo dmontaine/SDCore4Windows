@@ -17,6 +17,13 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 30 Aug 26 Windows port - Remove-CimInstance moves BEHIND the directory
+*            removal and inside the "-not $dirleft" guard.  It removes both
+*            halves in Windows' own order, so on a machine that could not
+*            release the directory the ProfileList entry had already gone -
+*            the exact split 36 exists to prevent, and the guard could not
+*            undo it.  Measured on -Run b74 and b75, the first runs ever to
+*            reach the arm.  PRE_RELEASE_FIXES.md 83.
 * 14 Aug 26 Windows port - Remove-LocalUser replaces userdel
 * 21 Aug 26 Windows port - and it takes the user PROFILE with it now
 * 27 Aug 26 Windows port - and the ProfileList REGISTRY ENTRY even when
@@ -224,9 +231,24 @@ deffun ps_script(script) calling '!ps_script'
    * It used to exit 6 here, which left the registry entry behind with the
    * directory - see the note above.  The failure is allowed to fall through
    * so the entry is dealt with in its own right below.
-   ps := 'try { Get-CimInstance Win32_UserProfile | '
-   ps := 'Where-Object { $_.SID -eq $sid -and -not $_.Special } | '
-   ps := 'Remove-CimInstance -ErrorAction Stop } catch { }; '
+   * 30 Aug 26 - ***THE Remove-CimInstance MOVED BELOW THE DIRECTORY REMOVAL,
+   * AND THAT IS PRE_RELEASE_FIXES.md 83.***  It used to run HERE, first, and it
+   * removes BOTH halves in Windows' own order - so on a machine that could not
+   * release the directory, the ProfileList entry had already gone by the time
+   * anything tested for it.  The guard below ("the entry only if the directory
+   * went") governs only SD's OWN second removal and could never undo that.
+   *
+   * MEASURED, NOT REASONED, ON -Run b74 AND b75 - the first runs ever to reach
+   * this arm, with the profile pinned open by verify-delaccount step 6.  Two
+   * independent instruments agreed: the verifier read "ProfileList entry was
+   * KEPT with it: expected True, got False" straight after the verb, and
+   * reclaim-profiles.log wrote "before: directory present, ProfileList entry
+   * gone" four minutes later.
+   *
+   * SO THE COMMENT BELOW - "AND IT GOES FIRST NOW" - WAS TRUE OF THE WRONG PAIR.
+   * It reordered the two EXPLICIT removals and left the call that does both
+   * ahead of them, which is why the invariant read as satisfied in source and
+   * was not in fact.  The directory genuinely goes first now.
    * 27 Aug 26 - AND THE DIRECTORY IN ITS OWN RIGHT TOO, for the reason
    * MEASURED an hour after the registry half was fixed: a directory left at
    * C:\Users\<name> makes Windows give the NEXT account of that name the
@@ -246,8 +268,21 @@ deffun ps_script(script) calling '!ps_script'
    * 28 Aug 26 - THE ENTRY ONLY IF THE DIRECTORY WENT.  This one condition is
    * the whole of the owner's ruling: keep both halves together rather than
    * leave a folder nothing can enumerate.
-   ps := 'if ((-not $dirleft) -and (Test-Path -LiteralPath $key)) { '
-   ps := 'try { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction Stop } catch { } }; '
+   *
+   * 30 Aug 26 - AND Remove-CimInstance IS NOW INSIDE IT, PRE_RELEASE_FIXES.md 83.
+   *   It is still the sanctioned way to deregister a profile - clean-test-
+   *   profiles.ps1 uses it for exactly that - so it is not replaced, only moved
+   *   behind the test it was defeating.  Deregistering a profile whose directory
+   *   has already gone is the ordinary case for it and leaves nothing dangling.
+   *   The explicit Remove-Item on the key stays after it as the fallback for a
+   *   CIM call that failed without throwing, which this tree has already been
+   *   caught by once (PRE_RELEASE_FIXES.md 81).
+   ps := 'if (-not $dirleft) { '
+   ps := 'try { Get-CimInstance Win32_UserProfile | '
+   ps := 'Where-Object { $_.SID -eq $sid -and -not $_.Special } | '
+   ps := 'Remove-CimInstance -ErrorAction Stop } catch { }; '
+   ps := 'if (Test-Path -LiteralPath $key) { '
+   ps := 'try { Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction Stop } catch { } } }; '
    ps := '$keyleft = (Test-Path -LiteralPath $key); '
    * 28 Aug 26 - AND RECORD WHAT WAS LEFT, so the boot sweep has something to
    * come back for.  The SID names the file and the DIRECTORY is written into

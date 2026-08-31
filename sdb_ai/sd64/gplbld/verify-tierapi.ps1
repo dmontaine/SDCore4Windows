@@ -132,7 +132,13 @@ if (-not (Test-Path -LiteralPath $SdConnect)) {
 }
 
 $Tiers = @(
-    [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 354 }
+    # 30 Aug 26 - STANDARD 354 -> 355, PRE_RELEASE_FIXES.md 7.  sort.item left
+    #   TIER.OMIT.STANDARD; it and list.item are $QPROC verbs 11 and 10, one
+    #   program, and the 24 Aug ruling named only list.item.
+    #   ***THIS FILE IS THE ONE THAT GETS LEFT BEHIND*** - twice now, 28 and 30
+    #   Aug - so test-tiercounts-units.ps1 was run before the suite this time
+    #   and is step 1 of VerifyInstall1 precisely to catch it in a second.
+    [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 355 }
     [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 396 }
     # 28 Aug 26 - 417 -> 416, AND THIS FILE WAS THE ONE LEFT BEHIND.
     #   PRE_RELEASE 25 deleted encrypt.field from voc_template and from

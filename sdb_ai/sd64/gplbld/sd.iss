@@ -376,7 +376,24 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ;
 ; NO Check: AT ALL ANY MORE.  It used to carry "not StandaloneChosen"; the mode
 ; that condition referred to is gone, and this box is what replaced it.
-Name: "apiremote"; Description: "Provide the SD API (port 4243) and let other computers on your network reach it"; \
+; 30 Aug 26 - THE THIRD STATE IS BACK, AS A CHILD TASK.  PRE_RELEASE_FIXES 75.
+; The ruling above stands untouched - an unticked parent still means SD opens no
+; socket at all - and the cost the entry recorded is what this removes: with one
+; box, a program on THIS machine talking to 127.0.0.1:4243 had to tick it, and
+; ticking it also opened the port to the network.
+;
+; ***THE SHAPE IS THE ONE ALREADY RULED FOR ssh, NOT A NEW IDEA.***  sshserver /
+; sshremote is a parent and a child, and Inno greys and unchecks a child whose
+; parent is unchecked - so "you cannot let the network in without providing the
+; service" is a state the reader SEES rather than a message after the fact.
+;
+; AND THE DEFAULT MOVES THE SAFE WAY: ticking the parent alone now leaves the
+; rule RESTRICTED to this computer.  Opening 4243 to the network is a second,
+; deliberate click rather than a side effect of wanting the API at all.
+; remote.api on|local|off (entry 78) changes it afterwards either way.
+Name: "apiremote"; Description: "Provide the SD API (port 4243)"; \
+    GroupDescription: "SD API:"; Flags: unchecked
+Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
     GroupDescription: "SD API:"; Flags: unchecked
 
 [Files]
@@ -1250,6 +1267,22 @@ begin
   Result := WizardIsTaskSelected('apiremote');
 end;
 
+{ 30 Aug 26 - MAY OTHER COMPUTERS REACH IT?  PRE_RELEASE_FIXES 75.
+
+  SEPARATE FROM ApiWanted ON PURPOSE, and the two answer different questions:
+  ApiWanted decides whether SD opens a socket at all (which sd.conf is
+  installed), this decides only the FIREWALL SCOPE of a socket that exists.
+  Collapsing them is what cost the local-only state in the first place.
+
+  NO PARENT TEST HERE.  Inno unchecks a child whose parent is unchecked, so
+  this cannot be true while ApiWanted is false - and re-deriving the parent
+  would be a second opinion that could disagree with the wizard the user
+  actually saw. }
+function ApiNetworkWanted: Boolean;
+begin
+  Result := WizardIsTaskSelected('apiremote\apinetwork');
+end;
+
 { Was the rule already open when we arrived?  Only meaningful when a server was
   already here - see the variable's own comment. }
 function SshCurrentlyOpen: Boolean;
@@ -1925,18 +1958,26 @@ begin
     there is again no service for a rule to describe - which is exactly what the
     comment above says about writing one.
 
-    ***THIS IS ALSO WHERE THE RULING COSTS SOMETHING, AND IT IS RECORDED RATHER
-    THAN QUIETLY ACCEPTED.***  There used to be a third state - listener up,
-    firewall restricted - which is what a local application talking to the API
-    on 127.0.0.1 relied on.  Collapsing the box to "provide it or do not" takes
-    that away: a local-only API consumer now needs the box ticked, and ticking
-    it also opens port 4243 to the network.  Filed in PRE_RELEASE 75 for the
-    owner; implemented as ruled because the ruling is explicit - "the api box
-    unchecked should mean not provide the service at all". }
+    ***THE COST THIS USED TO CARRY IS PAID OFF, 30 Aug 2026 - PRE_RELEASE 75.***
+    There used to be a third state - listener up, firewall restricted - which is
+    what a local application talking to the API on 127.0.0.1 relied on, and
+    collapsing the box to "provide it or do not" took it away: a local-only
+    consumer had to tick the box, and ticking it also opened 4243 to the
+    network.  The child task apiremote\apinetwork restores it, on the same
+    parent/child shape already ruled for ssh.
+
+    THE OWNER'S RULING IS UNTOUCHED.  "The api box unchecked should mean not
+    provide the service at all" is still exactly what the Exit below does; what
+    changed is only the SCOPE applied when the service IS provided. }
   if not ApiWanted then
     Exit;
 
-  Wanted := ApiWanted;
+  { 30 Aug 26 - THE SCOPE FOLLOWS THE CHILD, NOT THE PARENT, and that one line
+    is the whole of 75's fix.  Parent alone -> -Restrict, this computer only.
+    Parent and child -> -Open.  It was ApiWanted, which could only ever be true
+    here, so the else arm was dead and every install that provided the API
+    opened it to the network. }
+  Wanted := ApiNetworkWanted;
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\api-firewall.ps1') + '"';
@@ -1958,8 +1999,20 @@ begin
       Result := 'Other computers on your network CAN now connect to the SD API on port 4243. ' +
                 'They still need an SD account with a password and API access.' + #13#10#13#10
     else
+      { 30 Aug 26 - THIS ARM WAS UNREACHABLE UNTIL NOW.  PRE_RELEASE_FIXES 75:
+        Wanted was ApiWanted, which is always true by the time we get here, so
+        every install that provided the API took the branch above.  It is the
+        DEFAULT arm now - parent ticked, child not - so its wording matters.
+
+        AND IT NAMES THE VERB FIRST, not the script.  remote.api shipped with
+        entry 78; telling the reader to run a PowerShell file when SD has a
+        command for it is exactly the staleness 77 was filed for.  The script
+        stays as the second line because remote.api needs SD running and an
+        administrator signed in, and this text is read at install time. }
       Result := 'The SD API can be reached FROM THIS COMPUTER ONLY. To let other computers ' +
-                'connect later, run this from an elevated prompt:' + #13#10#13#10 +
+                'connect later, sign in to SD as an administrator and run:' + #13#10#13#10 +
+                '    remote.api on' + #13#10#13#10 +
+                'or, from an elevated prompt:' + #13#10#13#10 +
                 '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
   end
   else

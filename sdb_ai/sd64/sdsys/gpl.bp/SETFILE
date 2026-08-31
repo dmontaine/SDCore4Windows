@@ -152,6 +152,12 @@ prompting = @true
          loop
             display sysmsg(2060) :  ;* Overwrite (Y/N/Q)?
             input yn upcase
+* 30 Aug 26 Windows port - ENTER TAKES THE DEFAULT, AND IT IS N.
+*   PRE_RELEASE_FIXES.md 79.  A multi-way prompt, which is why the entry left it:
+*   Q is not simply "not yes".  But the DEFAULT is still a two-way question -
+*   does Enter act or not - and N is the arm that leaves the existing Q-pointer
+*   alone.  Q remains a thing you have to type, and still stops the verb.
+            if yn = '' then yn = 'N'
          until yn = 'Y' or yn = 'N'
             if yn = 'Q' then
                @system.return.code = -ER$STOPPED

@@ -34,7 +34,6 @@ delete
 rename
 reformat
 sreformat
-sort.item
 delete.common
 cname
 pstat

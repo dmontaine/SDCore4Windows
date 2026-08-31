@@ -3546,6 +3546,18 @@ release.chunks:
 yes.no:
    input response
    response = upcase(response[1,1])
+* 30 Aug 26 Windows port - ENTER TAKES THE DEFAULT, AND IT IS N.
+*   PRE_RELEASE_FIXES.md 79.  An empty answer used to fall to the "Please answer
+*   Y or N" arm and ask again for ever.
+*
+*   ***ALL SIX CALLERS WERE READ BEFORE THIS WENT IN, WHICH IS WHY IT COULD.***
+*   The entry deliberately left this subroutine alone because a default here
+*   changes five prompts nobody had looked at.  Looked at now - :1080 copy
+*   block, :1135 delete the entire record, :1189 delete block, :1340 delete the
+*   entire record, :2066 move lines, :2603 overwrite an existing record - and
+*   every one is "gosub yes.no / if no then return".  N declines the destructive
+*   action at all six, so one default is right for all of them.
+   if response = '' then response = 'N'
    begin case
       case response = "Y"
          no = @false

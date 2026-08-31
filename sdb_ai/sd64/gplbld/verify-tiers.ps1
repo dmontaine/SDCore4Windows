@@ -163,8 +163,16 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
 # The tiers, and what each account is expected to come out as.
+#
+# 30 Aug 26 - STANDARD 354 -> 355, PRE_RELEASE_FIXES.md 7.  sort.item left
+#   TIER.OMIT.STANDARD (43 lines -> 42, so 42 names -> 41) on the owner's
+#   ruling: it and list.item are one program - $QPROC verbs 11 and 10 - and the
+#   24 Aug read-only-inspector ruling named list.item and not its twin, so the
+#   omission was never a decision.  ***PROGRAMMER 396 AND ADMINISTRATOR 419 MUST
+#   NOT MOVE***: only STANDARD is derived by subtracting this list, so either of
+#   the others moving would mean the name reached newvoc instead.
 $Tiers = @(
-    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 354 }
+    [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 355 }
     [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
     [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 419 }
 )

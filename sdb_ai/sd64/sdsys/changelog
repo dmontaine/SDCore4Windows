@@ -5,6 +5,56 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+30 Aug 26  PRESSING ENTER AT A Y/N QUESTION NOW ANSWERS IT, AND THE PROMPT
+           SAYS WHICH ANSWER YOU GET.
+
+           Prompts are written (y/<n>) or (<y>/n) - the answer in angle
+           brackets is what Enter gives you. Before this, several of them
+           simply asked again until you typed a letter.
+
+           The default is the cautious answer everywhere it could be: N at
+           every question that deletes, overwrites, or replaces something. In
+           the editor that covers copying and moving blocks, deleting a block,
+           deleting the whole record, and overwriting an existing one.
+
+           Two questions with more than two answers work the same way. Enter
+           declines; Q to quit and A for "all" still have to be typed.
+
+30 Aug 26  F1 AT THE COMMAND PROMPT NO LONGER DOES NOTHING.
+
+           It now tells you that SD has no built-in help system, and points at
+           the two things on this machine that can answer questions instead:
+           "list voc" for the commands this account has, and the Start Menu
+           entry SD -> Check the SD installation.
+
+30 Aug 26  A STANDARD ACCOUNT GETS sort.item.
+
+           It has always had list.item, and the two are the same program - one
+           sorts and one does not - so withholding only one of them achieved
+           nothing. A standard account now has 355 commands rather than 354.
+           Programmer and administrator accounts are unchanged.
+
+30 Aug 26  THE SD API CAN AGAIN BE PROVIDED WITHOUT OPENING IT TO THE NETWORK.
+
+           The installer's API question is now two boxes. The first provides
+           the API on port 4243; the second, underneath it, lets other
+           computers reach it. Tick only the first and the port is open to this
+           computer alone, which is what a program running on this machine
+           needs.
+
+           Leaving both unticked still means SD opens no API socket at all.
+           remote.api on | local | off changes any of this afterwards.
+
+30 Aug 26  A LOGTO THAT IS REFUSED THE DIRECTORY NOW EXPLAINS ITSELF.
+
+           "Unable to change to new directory" is still printed, and is now
+           followed by the reason it is nearly always true: Windows fixes your
+           group membership when you sign in, so a group create.account added
+           afterwards is not in your current sign-in yet. Sign out and back in.
+
+           If that is not it, the message says so and names the directory SD
+           tried, rather than insisting on a cause it cannot check.
+
 30 Aug 26  delete.account NOW TAKES AWAY OPERATING-SYSTEM ACCESS WHENEVER IT
            TAKES AWAY THE WINDOWS LOGIN.
 

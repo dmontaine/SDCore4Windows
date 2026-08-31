@@ -6493,6 +6493,13 @@ get.label.yn:
       display txt : ':  ' :
       input n
       n = upcase(n)
+* 30 Aug 26 Windows port - ENTER TAKES THE DEFAULT, AND IT IS N.
+*   PRE_RELEASE_FIXES.md 79.  One caller, :867, "Omit blank data lines" - so N
+*   means show the data as it is, which is the answer that changes nothing about
+*   what the report contains.  The entry left this open on the grounds that the
+*   question has no conservative answer; it has, once you notice that one arm
+*   REMOVES lines from the output and the other does not.
+      if n = '' then n = 'N'
    until n = 'Y' or n = 'N'
       display sysmsg(7279) ;* Y or N required
    repeat

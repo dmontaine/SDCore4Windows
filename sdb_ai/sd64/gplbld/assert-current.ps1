@@ -243,6 +243,16 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # list themselves, and a test-*-units.ps1 has never shipped.
                   'suite-only.ps1',
                   'test-suiteonly-units.ps1',
+                  # 30 Aug 26 - reword-yn-prompts.ps1, the one-shot byte-level
+                  # rewording that closed PRE_RELEASE_FIXES 79's wording half.
+                  # It is kept rather than deleted because it records exactly
+                  # which ten messages moved and how each was checked, and it
+                  # re-runs clean (every edit asserts its old text appears
+                  # exactly once, so a second run refuses rather than
+                  # double-applying).  It edits the SOURCE tree and must never
+                  # ship - listed in the commit that created it, and this is the
+                  # second time in one session that rule has paid for itself.
+                  'reword-yn-prompts.ps1',
                   # 30 Aug 26 - verify-standalone.ps1 IS DELETED, and its entry
                   # with it.  PRE_RELEASE_FIXES 75 removed the stand-alone mode,
                   # so every check in it asked about a system that can no longer
