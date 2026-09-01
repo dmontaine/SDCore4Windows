@@ -381,16 +381,39 @@ Write-Output ''
 # inside an otherwise green leg.  Non-decisive, so it changed no verdict, but a
 # failure line in a passing run is noise that teaches people to skim.
 #
-# **IT IS ALSO A SECOND WITNESS TO THE ORDERING**, which is why the refusal
+# **IT WAS ALSO A SECOND WITNESS TO THE ORDERING**, which is why the refusal
 # half of every door is trustworthy: the suspension is checked BEFORE the
 # token-dependent chdir, so the Refused leg cannot be fooled by 44.
-if ($Phase -eq 'Control') {
-    Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
-         (Test-Say $local 'Unable to change to new directory') $false
-} else {
-    Note ('PRE_RELEASE 44: the suspension stops it BEFORE 5161 can (CPROC:2679 < :2691)') $true `
-         ((Test-Say $local 'is suspended') -and -not (Test-Say $local 'Unable to change to new directory')) $false
-}
+#
+# 31 Aug 26 - ***THE PHASE SPLIT IS GONE: BOTH PHASES NOW BEHAVE THE SAME FOR
+# THIS CALLER, AND PRE_RELEASE 91 IS WHY.***  91 put a test on the PERSON in
+# logto.authorised ABOVE the SUSPENDED block, so an administrator as themselves
+# is admitted there exactly as an elevated session always was.  DON therefore
+# never reaches the suspension in either phase and is stopped by the
+# token-dependent chdir in both.  Measured on -Run b84 and again on b85: WHO
+# answered "107 DON" and the leg saw 5161, not 10107.  PRE_RELEASE_FIXES 92.
+#
+# ***THE ORDERING CLAIM IS NOT LOST, AND THAT IS WHAT MAKES THIS SAFE TO
+# RETIRE HERE.***  It is still made at the decisive row above - "logto: it was
+# NOT 5161 instead of the suspension" - on the HELPER, which is a caller the
+# suspension does apply to.  This row was the SECOND witness to it, on a caller
+# that can no longer reach the test at all.
+#
+# ***AND THIS IS NOT ENTRY 64's FORBIDDEN FLIP.***  That is changing $true to
+# $false on the SAME observation, which leaves a row passing without measuring
+# anything.  The SUBJECT changed here: DON is an administrator who now
+# legitimately gets past the suspension, so the row measures what he actually
+# does - and gains the disqualifier below, which nothing had before.
+Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
+     (Test-Say $local 'Unable to change to new directory') $false
+
+# ***THE CONTROL, AND IT IS THE HALF THAT EARNS ITS PLACE.***  If 10107 ever
+# appears here, 91's administrator bypass has regressed and DON is being
+# refused by the suspension again - which is the one way this row could go back
+# to reading FAIL for a reason that matters.  Non-decisive like its neighbours,
+# because this session is the witness and the helper is the measurement.
+Note ('PRE_RELEASE 92: and NOT by the suspension - 91''s bypass admitted it') $false `
+     (Test-Say $local 'is suspended') $false
 # THIS ONE HOLDS IN BOTH PHASES: whatever stopped it, this session never got in.
 Note ('PRE_RELEASE 44: this session''s own LOGTO did NOT enter') $false $localEntered $false
 
