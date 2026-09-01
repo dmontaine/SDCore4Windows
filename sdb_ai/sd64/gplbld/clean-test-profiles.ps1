@@ -175,9 +175,21 @@ $ErrorActionPreference = 'Stop'
 #   why they were invisible: sdsw's account is deleted in a finally and sdprof
 #   makes a fixture directory rather than an account, so C:\Users showed nothing
 #   to count.  A hole nobody has fallen into is still a hole.
+# 31 Aug 26 - "sdtc" ADDED.  FIFTH FAMILY, FOURTH OCCASION, AND THE FIRST ONE
+#   THE CHECKER CAUGHT IN A RUNNER RATHER THAN A PERSON CAUGHT BY HAND.
+#   PRE_RELEASE 107 wired verify-tierchange.ps1 into VerifyInstall2 the same day
+#   and did not add its stem, so the gap was created and detected within one
+#   session: VerifyInstall2.ps1:229 composes "sdtc$Run" and verify-tierchange
+#   appends "a" (:281), giving sdtc<Run>a.  ***THIS IS WHY THE CHECKER IS A STEP
+#   AND NOT A COMMENT*** - the four notes above all say the same thing and were
+#   read by nobody; test-stemcoverage-units.ps1 stopped the suite at step 2 of
+#   -Run b88 and named the family.  No litter had accrued yet (sdtc1a's run was
+#   28 Aug and C:\Users showed 0 sdtc* on 31 Aug), so counting could not have
+#   found it - only the source-to-source comparison does.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
-           'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw')
+           'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
+           'sdtc')
 $bare  = @('sdsshprobe', 'sdnotyet')
 $rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
       ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
@@ -208,6 +220,11 @@ if ($SelfTest) {
         # sdswa1..a5 are real spent tokens from PRE_RELEASE 73's own runs, so the
         # bare-letter shape is covered as well as the b-series.
         'sdprofb78', 'sdswb78', 'sdswa1', 'sdswa5',
+        # 31 Aug 26 - verify-tierchange's family (PRE_RELEASE 108).  Both real
+        # shapes: sdtc1a is the account the 28 Aug run really made (-Prefix
+        # sdtc1, 28 PASS / 0 FAIL), and sdtcb88a is what VerifyInstall2 now
+        # composes.  The trailing "a" is verify-tierchange.ps1:281, not a typo.
+        'sdtc1a', 'sdtcb88a',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -230,6 +247,13 @@ if ($SelfTest) {
         # one: it starts with the stem AND continues with letters, so it is the
         # shape that would match if the required digit were ever relaxed.
         'sdprofile', 'sdprofiler', 'sdsweep', 'sdswitch',
+        # 31 Aug 26 - the near-misses "sdtc" opens up, and the first one is a
+        # REAL FILE IN THIS PROJECT rather than an invented word: tools\sdtcl.ps1
+        # measures the TCL pages.  "sdtcl.ps1" is the sharp case because it also
+        # exercises the optional .<suffix> branch the .<COMPUTERNAME> form needs,
+        # so it is the shape that would be swept if the required digit were ever
+        # relaxed.  All three fail on that digit.
+        'sdtcl', 'sdtcl.ps1', 'sdtcp',
         # the SD system account and the owner's
         'sdsys', 'don'
     )
