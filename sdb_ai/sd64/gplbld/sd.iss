@@ -30,7 +30,22 @@
   #define AppVer "W1.0-0"
 #endif
 
-#define AppName    "SD"
+; 1 Sep 26 - THE PRODUCT IS "SD Core", AND THE WIZARD SAID "SD".  Owner, on
+; reading the caption during the guest run: "the title of the sd setup dialog
+; should be SD Core W1.0-0 (the word Core is missing)".  sd.exe's own banner has
+; said "SD Core for Windows" throughout, so the installer was the odd one out.
+; AppVerName is {#AppName} {#AppVer}, so this one define fixes the caption AND
+; the Apps & Features entry, which read "SD W1.0-0".
+;
+; WHAT ELSE MOVES, TRACED RATHER THAN ASSUMED.  DefaultGroupName is {#AppName}
+; too, so a FRESH install's Start Menu folder becomes "SD Core"; an upgrade
+; keeps the old one, because UsePreviousGroup defaults to yes.  DefaultDirName
+; is the literal {autopf}\SD and does NOT move - the install path stays
+; C:\Program Files\SD, which the disclosure page promises is fixed.  AppId is
+; untouched, so upgrades are still recognised.  The two scripts that find the
+; install by name both still match: VerifyInstall1.ps1:252 and sdtestuser.ps1
+; use -like 'SD *', and capture-state.ps1:217 uses -match 'SD'.
+#define AppName    "SD Core"
 #define AppPublisher "String Database"
 #define DataDir    "{commonappdata}\SD"
 
@@ -2002,7 +2017,20 @@ begin
       most often appears on there was no ssh server at all ten minutes earlier -
       the file was created by the OpenSSH install, not by them.  "Any existing"
       is true either way. }
-    Result := 'ssh is now limited to members of "sdusers" and the administrators group. ' +
+    { 1 Sep 26 - "sdssh", NOT "sdusers".  PRE_RELEASE_FIXES 117.  This line said
+      sdusers and had done since before 21 Aug 2026, when allow-ssh-groups.ps1
+      was deliberately changed the other way: :130 writes @('sdssh', admins)
+      under a comment at :118 reading "sdssh, NOT sdusers".  The message was
+      left behind by that change, and read back off the guest on 1 Sep the live
+      file says AllowGroups sdssh VIRTUAL\sdssh Administrators VIRTUAL\...
+      IT MATTERED MORE THAN A NAME.  The 21 Aug ruling split "may read SD's
+      files" from "may ssh into this machine" so ssh could be withdrawn without
+      taking the database away - create.account joins both, modify.account
+      <account> no.ssh removes only sdssh.  Naming sdusers here re-welds them,
+      and since EVERY SD account is in sdusers a reader who believed it would
+      both over-read who can reach the machine and add the wrong group when
+      granting access. }
+    Result := 'ssh is now limited to members of "sdssh" and the administrators group. ' +
               'Any existing sshd_config was kept as sshd_config.before-sd.'
   else if Code = 2 then
     { The common case on a machine that has just been told to restart: sshd

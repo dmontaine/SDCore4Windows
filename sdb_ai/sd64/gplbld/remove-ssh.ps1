@@ -119,12 +119,35 @@ if ($r.RestartNeeded -or (Test-Path -LiteralPath $Sshd)) {
 }
 
 if (Test-Path -LiteralPath $SshDir) {
+    # 1 Sep 26 - SAY WHICH INSTALL.  PRE_RELEASE_FIXES 116.  This paragraph used
+    # to read "SD will REFUSE to install here again", and it is printed at an SD
+    # prompt to somebody who has just typed "ssh.server remove" - so "install
+    # here again" attaches to the ssh server, which is the one thing it does NOT
+    # mean.  The refusal is ssh-preflight.ps1's, and sd.iss is its only caller;
+    # SSHSRVR maps INSTALL to install-ssh.ps1, which calls no script at all.
+    # MEASURED ON THE GUEST, 1 Sep 2026, in exactly this state: ssh.server
+    # install was NOT refused and put the server back, while ssh-preflight.ps1
+    # returned exit 2 - so both halves of the old sentence were wrong about
+    # which install they governed.  It had already misled two readers with the
+    # source open (entry 78 and PROJECT_STATUS's HANDOFF 8).
+    #
+    # AND IT IS "STOPS", NOT "REFUSES".  The branch that fires is the middle one,
+    # "CANNOT DETERMINE", which the script treats as a refusal - the outcome is
+    # the same and the reason is different, and the reason is what tells the
+    # reader how to clear it.
     Say ''
     Say ('NOTE: ' + $SshDir + ' has been left in place. It holds the host keys and')
-    Say 'sshd_config. Windows does not remove it with the capability, and SD will'
-    Say 'REFUSE to install here again while sshd_config is present without the'
-    Say 'copy Windows ships beside it. If you do not intend to run an ssh server'
-    Say 'on this machine again, remove that directory as well.'
+    Say 'sshd_config. Windows does not remove it with the capability.'
+    Say ''
+    Say 'That matters for ONE thing: running the SD INSTALLER on this machine'
+    Say 'again. Setup compares sshd_config against the copy Windows ships,'
+    Say 'sshd_config_default - and that copy went WITH the capability. Without'
+    Say 'it Setup cannot tell whether the configuration has been edited, so it'
+    Say 'stops rather than guess.'
+    Say ''
+    Say '"ssh.server install" is NOT affected: it puts the server back, and'
+    Say 'sshd_config_default comes back with it. If you do not intend to run an'
+    Say 'ssh server on this machine again, remove that directory as well.'
 }
 
 exit 0
