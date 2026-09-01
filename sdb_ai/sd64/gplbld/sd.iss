@@ -123,7 +123,7 @@ ChangesEnvironment=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from any directory"; \
+Name: "addtopath"; Description: "Add SD Core to the system PATH so ""sd"" runs from any directory"; \
     GroupDescription: "System integration:"
 
 ; ===========================================================================
@@ -199,7 +199,7 @@ Name: "addtopath"; Description: "Add SD to the system PATH so ""sd"" runs from a
 ; the parent task"; install-ssh.ps1 carries `Check: SshServerWanted`, which is a
 ; Check and not a Tasks parameter, so the exemption does not apply here and
 ; checkablealone is doing real work rather than being belt-and-braces.
-Name: "sshserver"; Description: "Install the OpenSSH server (SD accounts sign in over ssh and nothing else)"; \
+Name: "sshserver"; Description: "Install the OpenSSH server (SD Core accounts sign in over ssh and nothing else)"; \
     GroupDescription: "ssh:"; Flags: checkablealone; \
     Check: SshServerAbsent
 
@@ -437,8 +437,8 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; THEY BEHAVE*** - it passed the broken version - and no cycle or suite run ever
 ; sees this page.  cycle.ps1 -SkipInstall builds the installer without touching
 ; the tree; running the .exe to the tasks page and cancelling writes nothing.
-Name: "apiremote"; Description: "Provide the SD API (port 4243)"; \
-    GroupDescription: "SD API:"; Flags: unchecked checkablealone
+Name: "apiremote"; Description: "Provide the SD Core API (port 4243)"; \
+    GroupDescription: "SD Core API:"; Flags: unchecked checkablealone
 Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
     Flags: unchecked dontinheritcheck
 
@@ -605,11 +605,11 @@ Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 ; sign-in can reach SD; an administrator token reads the data tree through the
 ; Administrators ACE and would pass regardless.  The script detects elevation
 ; and says what the answer is worth, but that is the backstop, not the intent.
-Name: "{group}\Check the SD installation"; \
+Name: "{group}\Check the SD Core installation"; \
     Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\check-install.ps1"""; \
     WorkingDir: "{app}"; \
-    Comment: "Check that SD is installed and working. It only looks; it changes nothing."
+    Comment: "Check that SD Core is installed and working. It only looks; it changes nothing."
 
 [Run]
 ; ORDER MATTERS.  The group has to exist before icacls can grant to it, and the
