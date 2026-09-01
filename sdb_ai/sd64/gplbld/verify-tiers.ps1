@@ -409,6 +409,23 @@ function Remove-Made {
     # half failed.  A rerun is refused by CREATE.ACCOUNT itself, which is the
     # right way round.
     Write-Output '  ACCOUNTS register records left in place - remove with DELETE.ACCOUNT'
+
+    # 31 Aug 26 - AND THE os.users RECORD, WHICH THIS FILE ALONE DID NOT NAME.
+    # PRE_RELEASE_FIXES.md 65.  verify-routes.ps1 and verify-tierapi.ps1 both
+    # gained this disclosure on 30 Aug and this one was missed, which is why 65
+    # lists those two and not this - it was written from the files that had
+    # already been read.  MEASURED on -Run b85: sdsys\os.users held SDTIERTB853
+    # alongside SDRTB85A and SDTAPIB853, all three "yes|yes" with all three
+    # Windows accounts ABSENT to Get-LocalUser.
+    #
+    # ***THE RESIDUE IS DELIBERATE AND THE RECOVERY IS THE POINT OF SAYING SO.***
+    # The block above removes the Windows LOGIN and not the grant, so what is
+    # left is the one artefact that is a PERMISSION rather than a register
+    # entry, keyed on a name that no longer resolves - in the directory whose
+    # ACL is the whole of the protection.
+    $adminSubject = $Tiers[2].Name
+    Write-Output ("  sdsys\os.users record for " + $adminSubject +
+                  " left in place too - the same DELETE.ACCOUNT takes it")
 }
 
 if ($Cleanup) { Remove-Made; exit 0 }
