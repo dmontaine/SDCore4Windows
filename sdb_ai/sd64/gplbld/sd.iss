@@ -1227,14 +1227,14 @@ begin
      the line, and that is where installation lives too. *)
   if WizardSilent then
   begin
-    Log('SD: refusing a silent install - SD does not support unattended ' +
+    Log('SD: refusing a silent install - SD Core does not support unattended ' +
         'installation.  The install ends by asking for a password and there ' +
         'is nobody to ask.');
     SuppressibleMsgBox(
-      'SD cannot be installed silently.' + #13#10#13#10 +
+      'SD Core cannot be installed silently.' + #13#10#13#10 +
       'Installing ends by asking for a password, and a silent install has ' +
       'nobody to ask. It would finish with NO password set for any account, ' +
-      'which means ssh and the SD API could not be used at all, and SD could ' +
+      'which means ssh and the SD Core API could not be used at all, and SD Core could ' +
       'be used only at this computer from a session run as administrator.' + #13#10#13#10 +
       'Run the installer normally instead. You can do that at this computer''s ' +
       'keyboard, or through Remote Desktop or similar remote-control software - ' +
@@ -1287,9 +1287,9 @@ begin
        exit 2. *)
     Log('SD: refusing - ssh-preflight.ps1 could not be started.');
     SuppressibleMsgBox(
-      'SD could not check this computer''s ssh server, so it has not installed ' +
+      'SD Core could not check this computer''s ssh server, so it has not installed ' +
       'anything.' + #13#10#13#10 +
-      'SD needs the OpenSSH server that ships with Windows, and it checks first ' +
+      'SD Core needs the OpenSSH server that ships with Windows, and it checks first ' +
       'that no other ssh server is present and that nobody has already changed ' +
       'how this one is configured. That check could not be run.' + #13#10#13#10 +
       'Nothing on this computer has been changed.',
@@ -1310,10 +1310,10 @@ begin
         this one: ISPP reads a leading '#' as a preprocessor directive, and
         cycle.ps1 refuses the build for it.  It caught exactly that here on
         25 Aug 2026 - before ISCC ran, which is what that guard is for. }
-      'SD has not been installed, because of this computer''s ssh server.' + #13#10#13#10 +
+      'SD Core has not been installed, because of this computer''s ssh server.' + #13#10#13#10 +
       String(PreflightReason) + #13#10 +
-      'Why this matters: accounts SD creates sign in over ssh and nothing else, ' +
-      'and SD configures the ssh server so that those accounts land in SD and ' +
+      'Why this matters: accounts SD Core creates sign in over ssh and nothing else, ' +
+      'and SD Core configures the ssh server so that those accounts land in SD Core and ' +
       'cannot get a command prompt. It can only promise that on a server it ' +
       'installed and configured itself.' + #13#10#13#10 +
       'What you can do: remove the other ssh server, or return this computer''s ' +
@@ -1433,7 +1433,7 @@ begin
   end;
 
   Result :=
-    'Upgrading the SD already installed on this computer.' + NewLine + NewLine +
+    'Upgrading the SD Core already installed on this computer.' + NewLine + NewLine +
     Space + 'The program files are replaced.' + NewLine +
     Space + 'Your database, your accounts and your settings are kept.' + NewLine + NewLine +
     'SETUP HAS NOT ASKED ABOUT ssh OR THE API, AND WILL NOT CHANGE THEM.' + NewLine +
@@ -1684,7 +1684,7 @@ begin
        'WINDOWS GROUPS, AND ONE THING YOU MUST DO AFTERWARDS' + #13#10#13#10 +
        'Creates the group "sdusers" and adds you to it. That membership is what ' +
        'grants access to the database. Windows only applies a new group when you ' +
-       'sign in, so YOU MUST SIGN OUT AND BACK IN, or restart, before SD will ' +
+       'sign in, so YOU MUST SIGN OUT AND BACK IN, or restart, before SD Core will ' +
        'run. Until then it reports that it cannot open its files.' + #13#10#13#10;
 
   { THE sdsshonly PARAGRAPH IS MODE-SPECIFIC BECAUSE THE GROUP'S JOB IS.  It
@@ -1694,7 +1694,7 @@ begin
     stays empty for the life of the install.  "Accounts SD creates go in it",
     on a system that creates none, would have been the fifth false statement
     this page has carried. }
-  M := M + 'Creates the group "sdsshonly" and denies its members the right to sign in at the console or over Remote Desktop. Accounts SD creates go in it. Your own account does not.' + #13#10#13#10;
+  M := M + 'Creates the group "sdsshonly" and denies its members the right to sign in at the console or over Remote Desktop. Accounts SD Core creates go in it. Your own account does not.' + #13#10#13#10;
 
   M := M +
        'PERMISSIONS ON THE DATABASE' + #13#10#13#10 +
@@ -1703,9 +1703,9 @@ begin
        'be readable by anyone with an account on this machine.' + #13#10#13#10 +
 
        'SERVICE AND PATH' + #13#10#13#10 +
-       'Installs a Windows service that runs SD and starts it again after every ' +
+       'Installs a Windows service that runs SD Core and starts it again after every ' +
        'restart. There is nothing to start by hand.' + #13#10#13#10 +
-       'Adds SD to the system PATH, unless you clear that option.' + #13#10#13#10;
+       'Adds SD Core to the system PATH, unless you clear that option.' + #13#10#13#10;
 
   (* THE ssh AND NETWORK SECTION - the half the two installs genuinely disagree
      about, and the reason this function takes an argument at all.
@@ -1719,40 +1719,40 @@ begin
     not offered", and both of those became false on the same day.  A page whose
     whole purpose is to be believed cannot carry either. }
     M := M +
-       'OPENSSH SERVER - YOUR CHOICE, AND SD NEEDS IT TO BE USEFUL' + #13#10#13#10 +
-       'Accounts SD creates sign in over ssh and nothing else. That is true even ' +
-       'with no network: on a machine used by one person, you reach SD by ' +
+       'OPENSSH SERVER - YOUR CHOICE, AND SD Core NEEDS IT TO BE USEFUL' + #13#10#13#10 +
+       'Accounts SD Core creates sign in over ssh and nothing else. That is true even ' +
+       'with no network: on a machine used by one person, you reach SD Core by ' +
        'connecting with ssh to "localhost". So without an ssh server, nobody can ' +
-       'sign in to an SD account at all - you would use SD yourself, as an ' +
+       'sign in to an SD Core account at all - you would use SD Core yourself, as an ' +
        'administrator, by typing "sd".' + #13#10#13#10 +
        'IF THIS MACHINE HAS NO SSH SERVER, the options page offers to install ' +
        'one. It is downloaded from Windows Update and CAN TAKE SEVERAL MINUTES ' +
        'with nothing on screen. Do not stop it part way, and IT USUALLY NEEDS A ' +
-       'RESTART - until you restart, no SD account except your own can sign in.' + #13#10#13#10 +
+       'RESTART - until you restart, no SD Core account except your own can sign in.' + #13#10#13#10 +
        'WHO MAY REACH IT IS A SECOND, SEPARATE CHOICE on the same page, and it ' +
-       'is offered whether SD installs the server or finds one already here. ' +
-       'A server SD installs is reachable only from this machine unless you ask ' +
+       'is offered whether SD Core installs the server or finds one already here. ' +
+       'A server SD Core installs is reachable only from this machine unless you ask ' +
        'otherwise. For a server that is already here, the box STARTS OUT ' +
        'MATCHING THIS COMPUTER''S CURRENT FIREWALL RULE, so leaving it alone ' +
        'changes nothing either way.' + #13#10#13#10 +
-       'IF THIS MACHINE ALREADY HAS A DIFFERENT SSH SERVER, SD WILL NOT INSTALL ' +
-       'AT ALL. It says so and stops, before changing anything. SD needs to know ' +
+       'IF THIS MACHINE ALREADY HAS A DIFFERENT SSH SERVER, SD Core WILL NOT INSTALL ' +
+       'AT ALL. It says so and stops, before changing anything. SD Core needs to know ' +
        'how the ssh server is configured, and it can only know that about the one ' +
        'Windows ships. The same applies if somebody has already changed how this ' +
        'computer''s Windows ssh server is configured.' + #13#10#13#10 +
 
-       'EVERY SSH SESSION GOES STRAIGHT INTO SD, AND THIS IS NOT AN OPTION' + #13#10#13#10 +
-       'SD limits ssh to SD users and administrators, and puts every ssh session ' +
-       'straight into SD instead of a command prompt. That is the whole point of ' +
-       'the ssh-only model: an account SD creates cannot get a shell on this ' +
+       'EVERY SSH SESSION GOES STRAIGHT INTO SD Core, AND THIS IS NOT AN OPTION' + #13#10#13#10 +
+       'SD Core limits ssh to SD Core users and administrators, and puts every ssh session ' +
+       'straight into SD Core instead of a command prompt. That is the whole point of ' +
+       'the ssh-only model: an account SD Core creates cannot get a shell on this ' +
        'computer.' + #13#10#13#10 +
        'THE COST, SAID PLAINLY: scp and sftp STOP WORKING FOR EVERYONE on this ' +
        'computer, because the command is forced and there is no subsystem left to ' +
        'run. Remote-control tools that copy files are unaffected, and so are the ' +
        'console and Remote Desktop.' + #13#10#13#10 +
-       'SD''s settings go in a marked block of their own, and any existing ' +
+       'SD Core''s settings go in a marked block of their own, and any existing ' +
        'sshd_config is kept beside it as sshd_config.before-sd. ' +
-       'Uninstalling SD removes its block and restarts the ssh server, which ' +
+       'Uninstalling SD Core removes its block and restarts the ssh server, which ' +
        'leaves the file as it was; the copy is there if you would rather put it ' +
        'back yourself.' + #13#10#13#10;
 
@@ -1784,9 +1784,9 @@ begin
       behaviour change and the owner's call, and sdusers has a stated reason to
       stay that the other three do not share (sd.iss:3506 - deleting it "would
       orphan the permissions on their own database"). }
-    M := M + 'Your database, the ssh server if SD installed one, the Windows accounts SD created - with their sdu_ and sdg_ groups and their profiles - and FOUR GROUPS: sdusers, sdssh, sdapi and sdsshonly. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
-         'sdusers stays because deleting it would orphan the permissions on your database. The other three are left because SD does not assume they are its to remove; sdsshonly still denies its members console and Remote Desktop sign-in, so remove it by hand if you want that gone.' + #13#10#13#10 +
-         'Accounts you keep are ordinary Windows accounts once SD is gone: they keep their passwords, and the ssh confinement that limited them to SD is removed with the rest of SD''s configuration. Your own account is never removed by that prompt.' + #13#10#13#10;
+    M := M + 'Your database, the ssh server if SD Core installed one, the Windows accounts SD Core created - with their sdu_ and sdg_ groups and their profiles - and FOUR GROUPS: sdusers, sdssh, sdapi and sdsshonly. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
+         'sdusers stays because deleting it would orphan the permissions on your database. The other three are left because SD Core does not assume they are its to remove; sdsshonly still denies its members console and Remote Desktop sign-in, so remove it by hand if you want that gone.' + #13#10#13#10 +
+         'Accounts you keep are ordinary Windows accounts once SD Core is gone: they keep their passwords, and the ssh confinement that limited them to SD Core is removed with the rest of SD Core''s configuration. Your own account is never removed by that prompt.' + #13#10#13#10;
 
   { KEPT COMMON, DELIBERATELY.  It is true of a stand-alone system too - the
     installing user is one member of sdusers and an administrator can add
@@ -1794,9 +1794,9 @@ begin
     of "there is probably only one person here". }
   M := M +
        'ONE LIMIT WORTH KNOWING BEFORE YOU RELY ON IT' + #13#10#13#10 +
-       'SD users are not isolated from each other. Every SD process opens the ' +
-       'database as the person running it, so anyone who can use SD on this ' +
-       'machine can read another account''s files outside SD. Do not use SD ' +
+       'SD Core users are not isolated from each other. Every SD Core process opens the ' +
+       'database as the person running it, so anyone who can use SD Core on this ' +
+       'machine can read another account''s files outside SD Core. Do not use SD Core ' +
        'accounts as a privacy boundary between people who should not see each ' +
        'other''s data.';
 
@@ -1829,7 +1829,7 @@ begin
      how far to open it. *)
   SummaryPage := CreateOutputMsgMemoPage(wpWelcome,
       'Before you install',
-      'What SD changes on this computer',
+      'What SD Core changes on this computer',
       'Setup changes Windows itself, not only its own folders. All of it is listed below. ' +
       'Nothing has happened yet - Cancel stops without changing anything.',
       DisclosureText);
@@ -1895,9 +1895,9 @@ begin
   if Code = 0 then
     Exit;
 
-  Result := 'SD accounts were NOT confined to ssh (code ' + IntToStr(Code) + '). ' +
+  Result := 'SD Core accounts were NOT confined to ssh (code ' + IntToStr(Code) + '). ' +
             'They can sign in at the console and over Remote Desktop like any other ' +
-            'Windows account. SD itself is installed and working. To apply it, from an ' +
+            'Windows account. SD Core itself is installed and working. To apply it, from an ' +
             'ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" sdsshonly' + #13#10#13#10;
 end;
@@ -1942,7 +1942,7 @@ begin
 
   Result := 'The ssh and API access groups were NOT set up (code ' + IntToStr(Code) + '). ' +
             'sshd allows the group "sdssh", so until it has members, ssh will be ' +
-            'refused to everyone except administrators. SD itself is installed and ' +
+            'refused to everyone except administrators. SD Core itself is installed and ' +
             'working. To repair it, from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '"' + #13#10#13#10;
 end;
@@ -2006,7 +2006,7 @@ begin
                   ' -SdExe "' + ExpandConstant('{app}\usr\bin\sd.exe') + '"',
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
-    Result := 'ssh could NOT be limited to SD users and administrators: the script did not run.';
+    Result := 'ssh could NOT be limited to SD Core users and administrators: the script did not run.';
     Exit;
   end;
 
@@ -2208,7 +2208,7 @@ begin
 
   if not Exec(Ps, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
-    Result := 'Who may reach the SD API could NOT be set: the script did not run. ' +
+    Result := 'Who may reach the SD Core API could NOT be set: the script did not run. ' +
               'No firewall rule was created, so other computers cannot reach port 4243.' + #13#10#13#10;
     Exit;
   end;
@@ -2216,8 +2216,8 @@ begin
   if Code = 0 then
   begin
     if Wanted then
-      Result := 'Other computers on your network CAN now connect to the SD API on port 4243. ' +
-                'They still need an SD account with a password and API access.' + #13#10#13#10
+      Result := 'Other computers on your network CAN now connect to the SD Core API on port 4243. ' +
+                'They still need an SD Core account with a password and API access.' + #13#10#13#10
     else
       { 30 Aug 26 - THIS ARM WAS UNREACHABLE UNTIL NOW.  PRE_RELEASE_FIXES 75:
         Wanted was ApiWanted, which is always true by the time we get here, so
@@ -2229,14 +2229,14 @@ begin
         command for it is exactly the staleness 77 was filed for.  The script
         stays as the second line because remote.api needs SD running and an
         administrator signed in, and this text is read at install time. }
-      Result := 'The SD API can be reached FROM THIS COMPUTER ONLY. To let other computers ' +
-                'connect later, sign in to SD as an administrator and run:' + #13#10#13#10 +
+      Result := 'The SD Core API can be reached FROM THIS COMPUTER ONLY. To let other computers ' +
+                'connect later, sign in to SD Core as an administrator and run:' + #13#10#13#10 +
                 '    remote.api on' + #13#10#13#10 +
                 'or, from an elevated prompt:' + #13#10#13#10 +
                 '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
   end
   else
-    Result := 'Setting who may reach the SD API FAILED, so no rule was created and other ' +
+    Result := 'Setting who may reach the SD Core API FAILED, so no rule was created and other ' +
               'computers cannot reach port 4243. Run this from an elevated prompt to see why:' + #13#10#13#10 +
               '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
 end;
@@ -2281,10 +2281,10 @@ begin
     Result := 'NO ssh SERVER WAS INSTALLED, because you did not ask for one. No ssh ' +
               'configuration was changed and no ssh port was opened. scp and sftp are ' +
               'unaffected on this computer.' + #13#10#13#10 +
-              'SD accounts sign in over ssh and nothing else, so nobody can sign in to an ' +
-              'SD account on this machine - including at this keyboard, where an account is ' +
-              'reached by "ssh localhost". Use SD by typing "sd" as an administrator.' + #13#10#13#10 +
-              'To let people reach this SD later, install OpenSSH Server and run this ' +
+              'SD Core accounts sign in over ssh and nothing else, so nobody can sign in to an ' +
+              'SD Core account on this machine - including at this keyboard, where an account is ' +
+              'reached by "ssh localhost". Use SD Core by typing "sd" as an administrator.' + #13#10#13#10 +
+              'To let people reach this SD Core later, install OpenSSH Server and run this ' +
               'installer again, ticking the ssh boxes.' + #13#10#13#10;
     Exit;
   end;
@@ -2300,23 +2300,23 @@ begin
     version, and claiming SD kept its hands off the rule would now be a lie. }
   if not SshWasAbsent then
   begin
-    Result := 'This machine already had an OpenSSH server. SD did not install, restart or ' +
+    Result := 'This machine already had an OpenSSH server. SD Core did not install, restart or ' +
               'reconfigure one, and it did not change its configuration. Who may reach it ' +
               'was set from the ssh box on the tasks page, which started out matching this ' +
               'computer''s existing firewall rule - so if you left it alone, nothing about ' +
-              'that changed either. SD accounts sign in over ssh, so check that yours will ' +
+              'that changed either. SD Core accounts sign in over ssh, so check that yours will ' +
               'accept them.' + #13#10#13#10;
     Exit;
   end;
 
   if not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe')) then
   begin
-    Result := 'OPENSSH SERVER COULD NOT BE INSTALLED, and SD needs it. Windows downloads it ' +
+    Result := 'OPENSSH SERVER COULD NOT BE INSTALLED, and SD Core needs it. Windows downloads it ' +
               'on demand, so this is usually a policy that blocks optional features, a metered ' +
               'connection, or no connection at all.' + #13#10#13#10 +
-              'SD itself is installed and works for you. But accounts created with ' +
+              'SD Core itself is installed and works for you. But accounts created with ' +
               'CREATE.ACCOUNT sign in over ssh and nothing else, so until there is an ssh ' +
-              'server NOBODY BUT YOU CAN USE THIS SD. Put it right from an elevated ' +
+              'server NOBODY BUT YOU CAN USE THIS SD Core. Put it right from an elevated ' +
               'PowerShell prompt:' + #13#10#13#10 +
               '    powershell -File "' + ExpandConstant('{app}') + '\install-ssh.ps1"' + #13#10#13#10;
     Exit;
@@ -2325,8 +2325,8 @@ begin
   if not SshServiceRegistered then
   begin
     Result := 'OpenSSH Server was installed and NEEDS A RESTART before it will run. This is ' +
-              'normal and is Windows'' doing, not SD''s - SD itself needs no restart.' + #13#10#13#10 +
-              'Until you restart, the ssh service does not exist, so no SD account except ' +
+              'normal and is Windows'' doing, not SD Core''s - SD Core itself needs no restart.' + #13#10#13#10 +
+              'Until you restart, the ssh service does not exist, so no SD Core account except ' +
               'your own can sign in.' + #13#10#13#10;
     Exit;
   end;
@@ -2397,9 +2397,9 @@ begin
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
     Result := 'The dictionary update step could not be started, so this ' +
-              'upgrade kept the dictionaries it already had. SD works; a ' +
+              'upgrade kept the dictionaries it already had. SD Core works; a ' +
               'field added by this release may not be recognised. Run ' +
-              'upgrade-dicts.ps1 from the SD program folder, as an ' +
+              'upgrade-dicts.ps1 from the SD Core program folder, as an ' +
               'administrator.' + #13#10#13#10;
     Exit;
   end;
@@ -2409,10 +2409,10 @@ begin
     that fell through silently is how a step of this shape hides. }
   case Code of
     0: ;
-    3: Result := 'SD would not start during the upgrade, so the dictionaries ' +
+    3: Result := 'SD Core would not start during the upgrade, so the dictionaries ' +
                  'were not updated. Everything else installed. Run ' +
-                 'upgrade-dicts.ps1 from the SD program folder, as an ' +
-                 'administrator, once SD is running.' + #13#10#13#10;
+                 'upgrade-dicts.ps1 from the SD Core program folder, as an ' +
+                 'administrator, once SD Core is running.' + #13#10#13#10;
     { DO NOT LET A #13 START A LINE, even in the middle of an expression: ISPP
       reads a leading "#" as a preprocessor directive and answers "Unknown
       preprocessor directive", naming a line that looks like ordinary Pascal.
@@ -2425,9 +2425,9 @@ begin
                  'build rather than on this computer - please report it.' + #13#10#13#10;
   else
     Result := 'The dictionaries could not be brought up to date for this ' +
-              'release, so this upgrade kept the ones it already had. SD ' +
+              'release, so this upgrade kept the ones it already had. SD Core ' +
               'works; a field added by this release may not be recognised. ' +
-              'upgrade-dicts.log in the SD data folder says what happened.' + #13#10#13#10;
+              'upgrade-dicts.log in the SD Core data folder says what happened.' + #13#10#13#10;
   end;
 end;
 
@@ -2660,7 +2660,7 @@ begin
     anyone can edit is not a permission list, and nothing else in the install
     would reveal it. }
   Result := 'The shell permission list was NOT locked (code ' + IntToStr(Code) + '). ' +
-            'Until it is, any SD user can add themselves to it and obtain a command shell. ' +
+            'Until it is, any SD Core user can add themselves to it and obtain a command shell. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
             '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
@@ -2725,8 +2725,8 @@ begin
     that is the whole of a control fails silently, and nothing else in the
     install would reveal it. }
   Result := 'The account directories were NOT locked (code ' + IntToStr(Code) + '). ' +
-            'Until they are, any SD user can read and rewrite any other account''s ' +
-            'files outside SD. Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            'Until they are, any SD Core user can read and rewrite any other account''s ' +
+            'files outside SD Core. Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
             '    powershell -File "' + PerAccount + '" -Root "' + Root + '"' + #13#10#13#10;
 end;
@@ -2789,7 +2789,7 @@ begin
     Exit;
 
   Result := 'The batch command list was NOT locked (code ' + IntToStr(Code) + '). ' +
-            'Until it is, any SD user can add commands to their own record and run them ' +
+            'Until it is, any SD Core user can add commands to their own record and run them ' +
             'from the command line.  Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
             '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
@@ -2829,7 +2829,7 @@ begin
   { NAMED, NOT BURIED, like the credential store and the shell list: this ACL
     is the whole of a control and it fails silently if the step does not run. }
   Result := 'The global catalogue was NOT locked (code ' + IntToStr(Code) + '). ' +
-            'Until it is, any SD user can replace the programs SD runs for every session. ' +
+            'Until it is, any SD Core user can replace the programs SD Core runs for every session. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
 end;
@@ -2867,7 +2867,7 @@ begin
     ACL is the whole of a control and it fails silently if the step does not
     run. }
   Result := 'The pcode library was NOT locked (code ' + IntToStr(Code) + '). ' +
-            'Until it is, any SD user can replace the interpreter every session runs. ' +
+            'Until it is, any SD Core user can replace the interpreter every session runs. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
 end;
@@ -2963,10 +2963,10 @@ begin
     ACL is the whole of a control and it fails silently if the step does not
     run.  The path that failed is named because seven were attempted and the
     manual command below is only worth anything if it says which one. }
-  Result := 'An SD system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
+  Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. ' +
-            'Until it is, any SD user can rewrite the account register, the system ' +
-            'programs SDSYS runs, or the configuration SD reads at start-up. ' +
+            'Until it is, any SD Core user can rewrite the account register, the system ' +
+            'programs SDSYS runs, or the configuration SD Core reads at start-up. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
 end;
@@ -3041,7 +3041,7 @@ begin
     do is finish quietly.  The recovery is the same script the installer
     itself ran, so the user gets the same code path rather than a hand-built
     icacls line that could grant something subtly different. }
-  Result := 'The credential store was NOT locked (code ' + IntToStr(Code) + ').  Until it is, any SD ' +
+  Result := 'The credential store was NOT locked (code ' + IntToStr(Code) + ').  Until it is, any SD Core ' +
             'user can overwrite another account''s stored password and then sign in as them. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10#13#10;
@@ -3307,7 +3307,7 @@ begin
         tools."  Run in SD as an administrator; each reports and changes
         nothing when given no keyword. }
       UpgMsg := 'YOUR ssh AND API SETTINGS WERE LEFT EXACTLY AS THEY WERE.' + #13#10#13#10 +
-                'This is an upgrade, so SD did not ask about them again and has changed ' +
+                'This is an upgrade, so SD Core did not ask about them again and has changed ' +
                 'nothing about who may reach this machine.' + #13#10#13#10 +
                 'FIRST, GIVE EACH ACCOUNT THE NEW COMMANDS. An upgrade replaces the ' +
                 'shipped vocabulary but does not rebuild the one each account is using, so ' +
@@ -3386,7 +3386,7 @@ begin
              expected", pointing at a line that looks like English.  Same class
              as the square bracket the AdoptAccount comment warns about, and it
              cost a compile here on 23 Aug 2026. }
-           AccountMsg := 'You also have an SD account of your own, named ' +
+           AccountMsg := 'You also have an SD Core account of your own, named ' +
                          Lowercase(ExpandConstant('{username}')) + '.' + #13#10#13#10;
            { REPLACED "Type sd to use it; there is no password to set, because
              Windows has already authenticated you."  The second half stopped
@@ -3427,14 +3427,14 @@ begin
              is now answered directly: no ssh server and no API listener. }
            if (not SshServerPresentAfterwards) and (not ApiWanted) then
              AccountMsg := AccountMsg +
-                         '    1. SD opens so you can give that account a password. YOU DO ' +
+                         '    1. SD Core opens so you can give that account a password. YOU DO ' +
                          'NOT NEED ONE HERE: nothing can reach this account from another ' +
-                         'machine, because no ssh server was installed and the SD API is ' +
+                         'machine, because no ssh server was installed and the SD Core API is ' +
                          'switched off. Set one anyway if you may later install again with ' +
                          'ssh or the API. It closes by itself either way.' + #13#10#13#10
            else
              AccountMsg := AccountMsg +
-                         '    1. SD opens so you can give that account a password. You do ' +
+                         '    1. SD Core opens so you can give that account a password. You do ' +
                          'not need one at this machine - Windows has already authenticated ' +
                          'you - it is what reaches the account from ANOTHER machine, over ' +
                          'ssh or the API. It closes by itself once you have set it.' + #13#10#13#10;
@@ -3444,7 +3444,7 @@ begin
                          'you what it found. It only reads; it changes nothing, and it ' +
                          'asks before it starts.' + #13#10#13#10 +
                          'The password step can run now, before you sign out, because it ' +
-                         'borrows the installer''s rights. If you skip it, SD asks again ' +
+                         'borrows the installer''s rights. If you skip it, SD Core asks again ' +
                          'the first time you open the account.' + #13#10#13#10 +
       { 23 Aug 26 - WHAT SKIPPING ACTUALLY COSTS, owner's instruction the same
         day.  The paragraph above named ssh and the API and stopped there, which
@@ -3461,11 +3461,11 @@ begin
                          'IF YOU SET NO PASSWORD, this account can be used ONLY at this ' +
                          'computer - at the keyboard, or through Remote Desktop or similar ' +
                          'remote-control software - and only from a session run as ' +
-                         'administrator. ssh and the SD API will refuse to connect until a ' +
+                         'administrator. ssh and the SD Core API will refuse to connect until a ' +
                          'password is set.' + #13#10#13#10;
          end;
       { Lower case for the reason given at code 0 above. }
-      2: AccountMsg := 'Your SD account, ' + Lowercase(ExpandConstant('{username}')) +
+      2: AccountMsg := 'Your SD Core account, ' + Lowercase(ExpandConstant('{username}')) +
                        ', was already there and has been left alone.' + #13#10#13#10;
     else
       { Named rather than buried: without an account the person who just
@@ -3490,9 +3490,9 @@ begin
         WORKS - adopt-account.ps1 goes in through "sd -internal", which is
         exempt from that gate by design and is the reason this branch is a
         setback rather than a lockout. }
-      AccountMsg := 'SD could NOT give you an account automatically (code ' +
+      AccountMsg := 'SD Core could NOT give you an account automatically (code ' +
                     IntToStr(AdoptCode) + '). Until one exists, "sd" will refuse you: ' +
-                    'being a Windows administrator is not by itself an SD account, and ' +
+                    'being a Windows administrator is not by itself an SD Core account, and ' +
                     'there is no exception for one. Put it right from an ELEVATED ' +
                     'PowerShell prompt:' + #13#10#13#10 +
                     '    powershell -File "' + ExpandConstant('{app}') + '\adopt-account.ps1" -User ' +
@@ -3530,7 +3530,7 @@ begin
       being a MsgBox.  A MsgBox is captioned "Setup" and cannot be told
       otherwise, so the body had to say it; a TSetupForm has a caption of its
       own and saying it twice wasted the first line of a box being shortened. }
-    ShowSummaryBox('SD is installed',
+    ShowSummaryBox('SD Core is installed',
            { EMPTY ON EVERY HEALTHY INSTALL, and first when it is not.  This is
              the one line in the box that reports a hole rather than a setting,
              so it is read before the sign-out instruction rather than after
@@ -3555,9 +3555,9 @@ begin
              everyone but administrators and the person needs to know now. }
            RouteMsg +
            'You have been added to the "sdusers" group, which is what grants ' +
-           'access to the SD database.' + #13#10#13#10 +
+           'access to the SD Core database.' + #13#10#13#10 +
            'Windows only applies group membership when you sign in, so you must ' +
-           'SIGN OUT AND BACK IN (or restart) before SD will run. Until then it ' +
+           'SIGN OUT AND BACK IN (or restart) before SD Core will run. Until then it ' +
            'will report that it cannot open its files.' + #13#10#13#10 +
            { TRIMMED 16 Aug 2026, owner: "it is even longer".  Fair - the first
              page was added to move things EARLIER and then three paragraphs were
@@ -3691,11 +3691,11 @@ begin
         EVERY CLAIM BELOW COMES FROM stage.py's OWN LISTS - SDSYS_PRESERVE for
         what is kept, SDSYS_SHIP minus it for what is replaced.  Check it there
         rather than against this comment if either list moves. }
-      MsgBox('An existing SD database was found at ' + ExpandConstant('{#DataDir}\sdsys') + '.' + #13#10#13#10 +
+      MsgBox('An existing SD Core database was found at ' + ExpandConstant('{#DataDir}\sdsys') + '.' + #13#10#13#10 +
              'YOUR DATA IS UNTOUCHED: your accounts and their passwords, the account ' +
              'register, anything you catalogued, the print queue, held output, and any ' +
              'programs you wrote in SDSYS''s own BP.' + #13#10#13#10 +
-             'SD''S OWN SYSTEM FILES WERE REPLACED - the BASIC source and its compiled ' +
+             'SD Core''S OWN SYSTEM FILES WERE REPLACED - the BASIC source and its compiled ' +
              'objects, the VOC templates, the messages and the dictionaries. That is ' +
              'what upgrading in place means, and it is why you are seeing this rather ' +
              'than being asked to uninstall first.' + #13#10#13#10 +
@@ -3711,8 +3711,8 @@ begin
                noticed." }
              'YOUR CONFIGURATION WAS NOT CHANGED. sd.conf is left exactly as it is, so ' +
              'settings you edited survive - and re-running this installer will not ' +
-             'change them back. To turn the SD API on or off afterwards, use the ' +
-             '"remote.api" command inside SD.',
+             'change them back. To turn the SD Core API on or off afterwards, use the ' +
+             '"remote.api" command inside SD Core.',
              mbInformation, MB_OK);
 
     { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
@@ -3788,11 +3788,11 @@ begin
       that used to indent the continuation of each numbered item fought with it
       and made the clipping worse.  Only the breaks BETWEEN items are explicit. }
     WizardForm.FinishedLabel.Caption :=
-      'Setup has finished installing SD on your computer.' + #13#10#13#10 +
+      'Setup has finished installing SD Core on your computer.' + #13#10#13#10 +
       'When you click Finish, one window opens and does two things in turn:' + #13#10#13#10 +
-      '1. SD asks you to set a password for your SD account. It closes by itself once you have set it.' + #13#10#13#10 +
+      '1. SD Core asks you to set a password for your SD Core account. It closes by itself once you have set it.' + #13#10#13#10 +
       '2. The same window then checks the installation and reports what it found. It only reads, and it asks before it starts.' + #13#10#13#10 +
-      'This is expected. Setting up SD is not finished until that window says so.';
+      'This is expected. Setting up SD Core is not finished until that window says so.';
   end;
 
   (* 25 Aug 26 - THE DISCLOSURE PAGE IS RE-TEXTED EVERY TIME IT IS SHOWN, from
@@ -3879,16 +3879,16 @@ begin
       only reader who now sees this box is one with Windows' own OpenSSH
       installed and nobody having touched its configuration, and what they need
       to know is what SD is about to do to it, not which box to untick. }
-    MsgBox('OpenSSH Server is already installed on this machine, and SD will use ' +
+    MsgBox('OpenSSH Server is already installed on this machine, and SD Core will use ' +
            'it rather than installing another.' + #13#10#13#10 +
-           'SD has checked it: nothing has changed how it is configured, which is ' +
-           'why this install is going ahead. If somebody had changed it, SD would ' +
+           'SD Core has checked it: nothing has changed how it is configured, which is ' +
+           'why this install is going ahead. If somebody had changed it, SD Core would ' +
            'have stopped before this point.' + #13#10#13#10 +
-           'SD WILL NOW CONFIGURE IT, and this is not optional: ssh is limited to ' +
-           'SD users and administrators, and every ssh session goes straight into ' +
-           'SD rather than a command prompt. scp and sftp stop working for ' +
+           'SD Core WILL NOW CONFIGURE IT, and this is not optional: ssh is limited to ' +
+           'SD Core users and administrators, and every ssh session goes straight into ' +
+           'SD Core rather than a command prompt. scp and sftp stop working for ' +
            'everyone on this computer as a result. Your existing sshd_config is ' +
-           'kept beside it as sshd_config.before-sd. Uninstalling SD removes ' +
+           'kept beside it as sshd_config.before-sd. Uninstalling SD Core removes ' +
            'its block and restarts the ssh server, which leaves the file as it ' +
            'was; the copy is there if you would rather put it back yourself.' + #13#10#13#10 +
            'WHO MAY REACH IT IS YOURS TO SET, ON THIS PAGE. The ssh box below ' +
@@ -3896,7 +3896,7 @@ begin
            'you leave it alone nothing about who can reach port 22 changes. ' +
            'Tick it to let other computers in; untick it to limit ssh to this ' +
            'machine only.' + #13#10#13#10 +
-           'Accounts SD creates sign in over ssh, so make sure your server ' +
+           'Accounts SD Core creates sign in over ssh, so make sure your server ' +
            'accepts them.',
            mbInformation, MB_OK);
 end;
@@ -4086,18 +4086,18 @@ begin
 
   { Defaults to No - MB_DEFBUTTON2 - and names exactly what it destroys and
     where.  "Do you want to remove your settings?" is how people lose data. }
-  if MsgBox('Remove the SD database as well?' + #13#10#13#10 +
+  if MsgBox('Remove the SD Core database as well?' + #13#10#13#10 +
             DataPath + #13#10#13#10 +
-            'This permanently deletes EVERY SD account, every password and all ' +
+            'This permanently deletes EVERY SD Core account, every password and all ' +
             'data stored in them, including the SDSYS account and your ' +
             'configuration file.' + #13#10#13#10 +
             'Choose No to keep them, which is the normal choice - reinstalling ' +
-            'SD later will find them again.',
+            'SD Core later will find them again.',
             mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
   begin
     if not DelTree(DataPath, True, True, True) then
       MsgBox('Some files under ' + DataPath + ' could not be removed. ' +
-             'They may be in use by a running SD process.', mbError, MB_OK);
+             'They may be in use by a running SD Core process.', mbError, MB_OK);
   end;
 
   { ------------------------------------------------------------------------
@@ -4123,12 +4123,12 @@ begin
   if KeepUser = '' then
     Exit;
 
-  if MsgBox('Remove the Windows accounts SD created as well?' + #13#10#13#10 +
+  if MsgBox('Remove the Windows accounts SD Core created as well?' + #13#10#13#10 +
             'These are the accounts CREATE.ACCOUNT made, with their sdu_ and ' +
             'sdg_ groups and their profiles. They are Windows accounts: they ' +
-            'keep their passwords and stay able to sign in after SD is gone, ' +
-            'and the ssh confinement that limited them to SD has just been ' +
-            'removed with the rest of SD''s configuration.' + #13#10#13#10 +
+            'keep their passwords and stay able to sign in after SD Core is gone, ' +
+            'and the ssh confinement that limited them to SD Core has just been ' +
+            'removed with the rest of SD Core''s configuration.' + #13#10#13#10 +
             'The account ' + KeepUser + ' WILL BE KEPT, so you can still sign ' +
             'in to Windows. If that is not the account you expect, choose No.' + #13#10#13#10 +
             'Choose No to keep them all, which is the safe choice.',
@@ -4150,7 +4150,7 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 
   if Code = 0 then
-    MsgBox('The Windows accounts SD created have been removed, and ' + KeepUser +
+    MsgBox('The Windows accounts SD Core created have been removed, and ' + KeepUser +
            ' was kept.' + #13#10#13#10 +
            'What was removed and what was kept is recorded in:' + #13#10 +
            LogPath + #13#10#13#10 +
