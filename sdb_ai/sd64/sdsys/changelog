@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  delete.file NO LONGER REPORTS A FAILED INDEX DELETE ON A FILE THAT
+           NEVER HAD AN INDEX.
+
+           Deleting an ordinary file printed "Failed to delete index directory"
+           and set an error return code, even though the delete had completely
+           succeeded.  A file that really did have an index deleted quietly and
+           correctly, so the message appeared on exactly the files it did not
+           apply to.
+
+           SD was asking where the index directory would live, getting an
+           answer for every file, and then treating "there was nothing there to
+           delete" as "the delete was refused".
+
+           It now checks whether the directory is actually there first, and
+           reports a failure only when one exists and cannot be removed.  A
+           delete that worked no longer hands a script an error code.
+
 01 Sep 26  A FAILURE WHILE EXTENDING AN INDEX NO LONGER DAMAGES THE INDEX.
 
            When SD needed a new block for an alternate key index and could not

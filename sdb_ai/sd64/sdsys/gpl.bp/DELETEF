@@ -18,6 +18,16 @@
 * 
 * 
 * START-HISTORY:
+*  1 Sep 26 Windows port - the 31 Aug fix below reported a failure on the
+*            ORDINARY path: FL$AKPATH comes back non-empty for a file that
+*            never had an index, so the delete failed because there was
+*            nothing there and "nothing to delete" was reported as "could not
+*            delete" - and @system.return.code was set on a delete that had
+*            fully succeeded.  Both sites now test OS$EXISTS first, so 2636 is
+*            reported only when the directory IS there and the delete still
+*            fails (PRE_RELEASE_FIXES.md 113).  MKINDX:355 was checked at the
+*            same time and does NOT carry this: it is guarded by
+*            "if ak.path.created".
 * 31 Aug 26 Windows port - a relocated alternate-key index directory is no
 *            longer orphaned in silence: both "dummy = ospath(akpath,
 *            OS$DELETE)" sites now take the answer and report a failure with
@@ -283,10 +293,23 @@ delete.upcased.file:
 *              UPSTREAM 34).  MKINDX:355 already tests the same call and
 *              reports it with the same message; the portions below report a
 *              failed delete with @system.return.code, and this now does both.
+*
+*              ***AND OS$EXISTS IS TESTED FIRST, BECAUSE THE LINE ABOVE IS NOT
+*              A TEST FOR "THERE IS AN INDEX".***  FL$AKPATH answers with the
+*              path an index WOULD live at, and it is non-empty for an ordinary
+*              file that never had one - so without this, every such delete
+*              printed 2636 and set an error return code on a success.  1 Sep
+*              2026, PRE_RELEASE_FIXES.md 113: measured with DELETE.FILE on two
+*              directory files that had no index, both of which reported
+*              failure, while the one file that DID have a built index reported
+*              none.  "Absent" and "refused" are different answers, which is
+*              the other half of taking one.
                if akpath # '' then
-                  if not(ospath(akpath, OS$DELETE)) then
-                     display sysmsg(2636) ;* Failed to delete index directory
-                     @system.return.code = -status()
+                  if ospath(akpath, OS$EXISTS) then
+                     if not(ospath(akpath, OS$DELETE)) then
+                        display sysmsg(2636) ;* Failed to delete index directory
+                        @system.return.code = -status()
+                     end
                   end
                end
 
@@ -364,11 +387,15 @@ delete.dict:
 
          if ospath(dict.path, OS$DELETE) then
 *           The DICT half of the same fix - see the DATA portion above
-*           (PRE_RELEASE_FIXES.md 104, UPSTREAM 34).
+*           (PRE_RELEASE_FIXES.md 104, UPSTREAM 34), including the OS$EXISTS
+*           guard and why FL$AKPATH being non-empty does not mean an index
+*           directory is there (PRE_RELEASE_FIXES.md 113).
             if akpath # '' then
-               if not(ospath(akpath, OS$DELETE)) then
-                  display sysmsg(2636) ;* Failed to delete index directory
-                  @system.return.code = -status()
+               if ospath(akpath, OS$EXISTS) then
+                  if not(ospath(akpath, OS$DELETE)) then
+                     display sysmsg(2636) ;* Failed to delete index directory
+                     @system.return.code = -status()
+                  end
                end
             end
 

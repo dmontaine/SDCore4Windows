@@ -142,9 +142,13 @@ param(
     # 31 Aug 26 - verify-tierchange.ps1, PRE_RELEASE_FIXES 107, on the owner's
     # ruling.  SAME STORY AS $ProfPrefix DIRECTLY ABOVE and found the same way:
     # it was in NEITHER runner, so the three rows of PRE_RELEASE 19 it covers
-    # had never fired since the day it was written - and because it RAISES
-    # verify-acctmsgs.ps1 and verify-vocverbs.ps1, three verifiers went unrun
-    # together rather than one.
+    # had never fired since the day it was written.
+    #
+    # THIS USED TO ADD "and because it RAISES verify-acctmsgs.ps1 and
+    # verify-vocverbs.ps1, three verifiers went unrun together rather than
+    # one."  ***THAT WAS FALSE - IT RAISES NEITHER, AND BOTH ARE STILL RUN BY
+    # NOTHING.***  Corrected 1 Sep 2026, PRE_RELEASE_FIXES 112; the measurement
+    # is in the longer note beside the step itself, below.
     #
     # THIS RUNNER AND NOT THE OTHER: its own header says the middle three rows
     # need "an elevated piped session", and it takes a -Prefix for a throwaway
@@ -447,9 +451,26 @@ $steps = @(
     # IT WAS IN NEITHER RUNNER UNTIL TODAY, found by re-deriving
     # VerifyInstall1's header counts from the directory rather than adjusting
     # them by one - the check that file's header demands after the same
-    # invariant broke on 24 Aug 2026.  ***AND IT IS THE PARENT OF TWO MORE***:
-    # it raises verify-acctmsgs.ps1 and verify-vocverbs.ps1, so wiring this one
-    # step in puts THREE verifiers back into the suite.
+    # invariant broke on 24 Aug 2026.
+    #
+    # ***IT IS THE PARENT OF NOTHING, AND THIS COMMENT USED TO SAY IT WAS THE
+    # PARENT OF TWO.  WIRING IT IN PUT ONE VERIFIER BACK, NOT THREE.***
+    # Corrected 1 Sep 2026, PRE_RELEASE_FIXES 112.  The claim was that it
+    # "raises verify-acctmsgs.ps1 and verify-vocverbs.ps1".  Measured rather
+    # than re-read: verify-tierchange.ps1 names those two ONLY in comments
+    # (:94, :120), and the one external script it actually invokes is
+    # assert-current.ps1 (:261).
+    #
+    # ***SO BOTH OF THEM ARE STILL RUN BY NOTHING***: neither appears as a
+    # Name = '...' step in EITHER runner.  Their only other mentions are
+    # assert-current.ps1's roster, which checks that they exist rather than
+    # running them, and test-acctmsgs-units / test-vocverbs-units, which lift
+    # functions out of them without driving an install.
+    #
+    # THE COST OF THE OLD WORDING IS ON THE RECORD: -Only verify-tierchange was
+    # handed over as PRE_RELEASE 100's deciding step BECAUSE of this comment,
+    # ran green at 28 of 28, and drove no index at all.  A comment naming what
+    # a step covers gets read as evidence, and nobody re-derives a signpost.
     @{ Name = 'verify-tierchange.ps1';    P = @{ Prefix  = $TcPrefix } },
     # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
     # CREATE.ACCOUNT, so it belongs BEFORE verify-peerlog for the error-log
