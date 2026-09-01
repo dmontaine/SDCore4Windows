@@ -17,8 +17,13 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ *  1 Sep 26 Windows port - dh_flush_header() clears FILE_UPDATED on success
+ *           instead of before the attempt, so a failed flush stays dirty and
+ *           retries and a successful one is not re-flushed; the read_at and
+ *           write_at failure paths now log.  PRE_RELEASE_FIXES 95,
+ *           UPSTREAM_FIXES 29.
  * 31 Dec 23 SD launch - prior history suppressed
- * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
+ * rev 0.9.0 Jan 25 mab change dyn file prefix to %
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -498,7 +503,23 @@ bool dh_flush_header(DH_FILE* dh_file) {
   fptr = FPtr(dh_file->file_id);
   if (((dh_file->flags & FILE_UPDATED) || fptr->stats.reset) &&
       !(dh_file->flags & DHF_RDONLY)) {
-    dh_file->flags &= ~FILE_UPDATED;
+    /* 1 Sep 26 Windows port - THE FLAG IS CLEARED WHEN THE FLUSH SUCCEEDS, NOT
+       BEFORE IT IS ATTEMPTED.  PRE_RELEASE 95, UPSTREAM_FIXES 29.
+
+       IT USED TO CLEAR FILE_UPDATED HERE, and the three "return FALSE" paths
+       below all sit above the flag line at the end of the function - so the two
+       outcomes were the wrong way round.  A flush that FAILED left the file
+       marked clean and was never retried; a flush that SUCCEEDED fell through
+       to "flags |= FILE_UPDATED" and left it marked dirty, to be flushed again
+       redundantly.  Exactly inverted.
+
+       WHAT RIDES ON IT is what a query later reports: free_chain and
+       record_count are written into the on-disk header below.
+
+       IT SELF-HEALS ALMOST EVERYWHERE, which is why this is an M - every write
+       path sets FILE_UPDATED again, so the next update re-flushes.  THE ONE
+       PLACE IT DOES NOT is dh_close.c:45, where by definition there is no next
+       write: the file closed with a stale header and nothing was told. */
 
     if (!ValidFileHandle(dh_file->sf[PRIMARY_SUBFILE].fu)) {
       if (!FDS_open(dh_file, PRIMARY_SUBFILE)) {
@@ -514,6 +535,12 @@ bool dh_flush_header(DH_FILE* dh_file) {
 
     if (!read_at(dh_file->sf[PRIMARY_SUBFILE].fu, (int64)0, (char*)(&header),
                  DH_HEADER_SIZE)) {
+      /* 1 Sep 26 - said out loud, PRE_RELEASE 95.  This path and the write_at
+         one below returned silently while the FDS-open path above logged; six
+         of the seven callers discard the bool, so silence here was the whole
+         of the report. */
+      log_printf("DH_FLUSH_HEADER: header read failure %d (dh_err %d) on %s.\n",
+                 process.os_error, (int)dh_err, fptr->pathname);
       return FALSE;
     }
 
@@ -535,6 +562,9 @@ bool dh_flush_header(DH_FILE* dh_file) {
 
     if (!write_at(dh_file->sf[PRIMARY_SUBFILE].fu, (int64)0, (char*)(&header),
                   DH_HEADER_SIZE)) {
+      /* 1 Sep 26 - see the read_at path above.  PRE_RELEASE 95. */
+      log_printf("DH_FLUSH_HEADER: header write failure %d (dh_err %d) on %s.\n",
+                 process.os_error, (int)dh_err, fptr->pathname);
       return FALSE;
     }
 
@@ -542,9 +572,14 @@ bool dh_flush_header(DH_FILE* dh_file) {
       dh_fsync(dh_file, PRIMARY_SUBFILE);
       dh_fsync(dh_file, OVERFLOW_SUBFILE);
     }
-  }
 
-  dh_file->flags |= FILE_UPDATED;
+    /* 1 Sep 26 - THE HEADER IS NOW ON DISK, so the file no longer needs
+       flushing.  This is the ONLY clear of FILE_UPDATED in the tree; the other
+       twelve sites all set it (dh_clear, dh_del x2, dh_file:459 and :763,
+       dh_selct x2, dh_split x2, dh_write x3 - counted, not quoted; entry 95
+       says fourteen and that number is wrong).  PRE_RELEASE 95. */
+    dh_file->flags &= ~FILE_UPDATED;
+  }
 
   return TRUE;
 }

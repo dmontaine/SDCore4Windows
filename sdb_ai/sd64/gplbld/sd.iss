@@ -4005,7 +4005,10 @@ begin
   if not FileExists(Src) then
     Exit;
   Dst := ExpandConstant('{tmp}\remove-sdaccounts.ps1');
-  if FileCopy(Src, Dst, False) then
+  { 1 Sep 26 - CopyFile, not FileCopy.  Inno renamed the support function and
+    warns "Support function FileCopy has been renamed. Use CopyFile instead" on
+    every build; identical signature (SourceFile, DestFile, FailIfExists). }
+  if CopyFile(Src, Dst, False) then
     SdAccountsScript := Dst;
 end;
 

@@ -17,6 +17,12 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ *  1 Sep 26 Windows port - the directory-file delete at commit now tests
+ *           remove() and the S_IFREG guard, copying the non-transactional
+ *           twin (op_dio3.c).  It was a bare remove() with its return
+ *           discarded - the only arm of the four that checked nothing - so a
+ *           delete that failed inside a transaction was reported as done and
+ *           the record stayed on disk.  PRE_RELEASE_FIXES 101, UPSTREAM_FIXES 31.
  * 29 Aug 26 Windows port - op_txncmt() now leaves the transaction level it
  *           commits.  PRE_RELEASE_FIXES 11, UPSTREAM_FIXES 17: it undid
  *           neither half of what op_txnbgn() did, so txn_depth only ever
@@ -127,6 +133,7 @@ void op_txncmt() {
   DH_FILE* dh_file;
   char path[MAX_PATHNAME_LEN + 1];
   STRING_CHUNK* str;
+  struct stat statbuf; /* 1 Sep 26 - the S_IFREG guard below, PRE_RELEASE 101 */
 
   if (sysseg->flags & SSF_SUSPEND)
     suspend_updates();
@@ -193,8 +200,52 @@ void op_txncmt() {
                          DS, txn->id) >= (MAX_PATHNAME_LEN + 1)) {
                /* TODO should log more detail here */
                k_error("Overflowed path/filename length in op_txncmt()!");
-            } else
-              remove(path);
+            } else {
+              /* 1 Sep 26 Windows port - THE DELETE IS TESTED.  PRE_RELEASE 101,
+                 UPSTREAM_FIXES 31.  This was a bare remove(path) with its
+                 return discarded, and it was the WHOLE of the directory-file
+                 delete at commit.
+
+                 IT WAS THE ONLY ARM OF THE FOUR THAT CHECKED NOTHING:
+                 TXN_WRITE/DYNAMIC_FILE tests dh_write and raises 1422,
+                 TXN_WRITE/DIRECTORY_FILE tests dir_write and raises 1422, and
+                 TXN_DELETE/DYNAMIC_FILE - twenty lines above - tests dh_delete
+                 and raises 1423.  So the shape below is this switch's own, not
+                 something imported.
+
+                 AND THE NON-TRANSACTIONAL TWIN IS THE SAME OPCODE.  op_delete()
+                 branches at op_dio3.c:380: in a transaction it defers to here,
+                 outside one it does the three things copied below.  The same
+                 DELETE therefore reported ER_PERM and logged it outside a
+                 transaction and could not fail inside one.
+
+                 WHAT THE SILENCE COST: the delete did not happen, clear_parent()
+                 ran anyway, the cache was freed, the locks released and the level
+                 popped - so the next READ, SELECT or LIST returned a record the
+                 administrator had been told was deleted, with nothing in the
+                 trail.  It needs no induced fault on Windows: a read-only file,
+                 an ACL denial, or a file held open by a scanner is enough.
+
+                 ENOENT IS TOLERATED, exactly as DHE_RECORD_NOT_FOUND is in the
+                 dh_delete arm: the record is gone, which is what was asked for. */
+
+              /* 0408 Check that this really is a file, not CON, COMn, LPTn */
+              if (!stat(path, &statbuf) && !(statbuf.st_mode & S_IFREG)) {
+                process.status = -ER_IID;
+                k_error(sysmsg(1423));
+                goto exit_op_txncmt;
+              }
+
+              if (remove(path) < 0) {
+                process.os_error = errno;
+                if (process.os_error != ENOENT) {
+                  process.status = -ER_PERM;
+                  log_permissions_error(fvar);
+                  k_error(sysmsg(1423));
+                  goto exit_op_txncmt;
+                }
+              }
+            }
             break;
         }
 
@@ -240,9 +291,11 @@ void op_txncmt() {
      empty cache and its writes vanished with no message.  See end_txn_level().
 
      DELIBERATELY BEFORE THE LABEL, SO THE ERROR PATHS DO NOT REACH IT.  The
-     three "goto exit_op_txncmt" above are write and delete failures that have
+     five "goto exit_op_txncmt" above are write and delete failures that have
      already called k_error(); the transaction is broken at that point and the
-     level must not be popped as though it had committed.
+     level must not be popped as though it had committed.  (Three until
+     1 Sep 26; PRE_RELEASE 101 added the two in the directory-file delete, which
+     until then could not fail at all.  Same shape, same reasoning.)
 
      THAT LEAVES A SEPARATE, PRE-EXISTING GAP AND THIS DOES NOT WIDEN IT: on
      those error paths process.txn_id has already been set to 0 at the top of
@@ -250,7 +303,16 @@ void op_txncmt() {
      and roll nothing back - the level stays counted and the stack stays
      orphaned.  That is a different defect from this one; it is filed rather
      than fixed here, because a commit that failed half way needs a decision
-     about what to do with the records already written, not a decrement.     */
+     about what to do with the records already written, not a decrement.
+     PRE_RELEASE 102 tracks it.
+
+     1 Sep 26 - AND 101 GIVES THAT GAP TWO MORE WAYS IN, WHICH IS WORTH SAYING
+     PLAINLY RATHER THAN LEAVING FOR SOMEBODY TO FIND.  A directory-file delete
+     that fails now takes the error path instead of being silently skipped, so
+     it lands in the same unrolled-back state the dh_delete arm already could.
+     The gap is unchanged in kind and it is reached more often.  That trade was
+     made deliberately: the alternative is the commit reporting a deletion that
+     did not happen, which is the worse of the two and is why 101 is a B.     */
 
   end_txn_level();
 

@@ -19,6 +19,12 @@
 *
 *
 * START-HISTORY:
+*  1 Sep 26 Windows port - K$SET.USERNAME's answer is taken and compared to the
+*           name asked for, refusing on a mismatch (10160).  It was discarded,
+*           so the session identity that @logname, K$USERNAME and the audit
+*           trail read was set by a call whose only success signal was thrown
+*           away; what saved it was K$ASSUME.USER's guard thirty lines below.
+*           PRE_RELEASE_FIXES 99.
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS REFUSED OVER THE API too.
 *           Owner, 27 Aug 2026.  vb.account, reusing sysmsg(10003) like every
 *           other refusal there, so the API does not tell a caller which of the
@@ -1521,7 +1527,40 @@ vb.scram.final:
                * between.  K$SET.USERNAME is refused to a caller that is not
                * $internal; this program is.
                logname = scram.user
-               void kernel(K$SET.USERNAME, scram.user)
+*  1 Sep 26 Windows port - TAKE THE ANSWER.  PRE_RELEASE_FIXES.md 99.
+*
+*   This was "void kernel(K$SET.USERNAME, scram.user)", and the return is the
+*   DESIGNED AND ONLY channel: op_kernel.c:257 sets process.username and
+*   my_uptr->username only when the string is non-empty AND the caller is
+*   $internal, then reports "the name as it actually stands, so a refused
+*   caller is simply told what it still is rather than getting an error".
+*   A refusal is not an error and is not logged.  Discarding the answer
+*   discarded the entire report.
+*
+*   WHAT RIDES ON IT, from that case's own banner: process.username and
+*   my_uptr->username are what @logname, K$USERNAME and THE AUDIT TRAIL read.
+*
+*   THE REACHABLE HALF NEEDS NO BUILD CHANGE AND NO HOSTILE INPUT.
+*   k_get_c_string() returns -1 for an overlength name (k_funcs.c:361) while
+*   still copying the truncated bytes, so the "> 0" guard fails and nothing is
+*   set - and MAX_USERNAME_LEN is 32 (sddefs.h:285), which an ordinary UPN or a
+*   long domain account passes without trying.  ($internal is the other half
+*   and this program carries it, line 113.)
+*
+*   WHAT SAVED IT WAS THE NEIGHBOUR, NOT THIS LINE.  K$ASSUME.USER thirty lines
+*   below carries the identical guard and IS tested, so the same name failed
+*   there and the login was refused.  That is a real safety net and it is
+*   somebody else's: it could be moved, made conditional, or drift from this
+*   call, and none of those edits would look like they touched identity.
+*   Testing here makes this line answerable for its own outcome.
+               set.name = kernel(K$SET.USERNAME, scram.user)
+               if set.name # scram.user then
+                  scram.refuse.reason = 'the session user name could not be set'
+                  abort.message = sysmsg(10160)
+                  * Authentication succeeded but the session could not take your user name
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
 
                scram.storedkey = ''
                scram.serverkey = ''
