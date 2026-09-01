@@ -59,23 +59,24 @@
 # AND THE ARITHMETIC NO LONGER CLOSES, which is the point of re-deriving:
 #
 #     44 verify-*.ps1 in the directory
-#     17 named in this file   (16 before verify-basicfuncs)
-#     21 named in VerifyInstall2.ps1
-#     -- 38 accounted for, SIX not named in either table
+#     17 named in this file           (16 before verify-basicfuncs)
+#     22 named in VerifyInstall2.ps1  (21 before verify-tierchange)
+#     -- 39 accounted for, FIVE not named in either table, AND ALL FIVE ARE
+#        CORRECTLY OUT - checked one at a time rather than counted:
 #
-# FOUR OF THE SIX ARE FINE AND TWO ARE NOT, checked one at a time rather than
-# counted:  verify-doors.ps1 and verify-doors-admin.ps1 are CHILDREN raised by
-# verify-doors-suite.ps1, which is a step; verify-acctmsgs.ps1 and
-# verify-vocverbs.ps1 are children raised in turn by those and by
-# verify-tierchange.ps1; and verify-upgrade.ps1 CANNOT be a step at all - it is
-# a two-phase hand-run instrument (-Snapshot, install over the top, -Compare)
-# that brackets an installer run.
+#   verify-doors.ps1, verify-doors-admin.ps1  CHILDREN of verify-doors-suite.ps1
+#   verify-acctmsgs.ps1, verify-vocverbs.ps1  children of those and of
+#                                             verify-tierchange.ps1
+#   verify-upgrade.ps1                        CANNOT be a step: a two-phase
+#                                             hand-run (-Snapshot, install over
+#                                             the top, -Compare) that brackets
+#                                             an installer run
 #
-# ***verify-tierchange.ps1 IS THE ONE THAT IS ACTUALLY ORPHANED***, and it is
-# the parent of the other two children, so THREE verifiers never run.  It wants
-# the ELEVATED runner - its own header says "an elevated piped session CAN
-# reach" - and adding a step there is the owner's to approve, so it is FILED as
-# PRE_RELEASE 107 rather than wired in here.  Do not fix it by editing a number.
+# ***THE SIXTH WAS verify-tierchange.ps1 AND IT IS NOW WIRED INTO
+# VerifyInstall2*** (PRE_RELEASE 107, owner's ruling 31 Aug 2026).  It was
+# genuinely orphaned and it is the PARENT of the two children above, so one
+# step put THREE verifiers back.  Do not fix a mismatch here by editing a
+# number - re-derive all three from the directory, which is how 107 was found.
 #
 # THAT IS A PROPERTY TO KEEP, NOT A SCORE.  The failure this file was written
 # for - a guard nobody runs has already stopped guarding - returns the moment a

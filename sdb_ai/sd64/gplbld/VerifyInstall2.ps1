@@ -139,6 +139,18 @@ param(
     # no profile directory, which is the thing that makes the doors fixture
     # single-use and expensive.
     [string]$ProfPrefix  = '',   # verify-profiledir.ps1 - one account
+    # 31 Aug 26 - verify-tierchange.ps1, PRE_RELEASE_FIXES 107, on the owner's
+    # ruling.  SAME STORY AS $ProfPrefix DIRECTLY ABOVE and found the same way:
+    # it was in NEITHER runner, so the three rows of PRE_RELEASE 19 it covers
+    # had never fired since the day it was written - and because it RAISES
+    # verify-acctmsgs.ps1 and verify-vocverbs.ps1, three verifiers went unrun
+    # together rather than one.
+    #
+    # THIS RUNNER AND NOT THE OTHER: its own header says the middle three rows
+    # need "an elevated piped session", and it takes a -Prefix for a throwaway
+    # account.  Lower case only, like the prefixes above, because CREATEA
+    # downcases the name and the directory takes it verbatim.
+    [string]$TcPrefix    = '',   # verify-tierchange.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -211,6 +223,10 @@ if ($Run) {
     # stem by design, so a FIXED prefix would pass once and fail on every later
     # run on the same machine - which reads like a product fault and is not one.
     if (-not $ProfPrefix)  { $ProfPrefix  = "sdprof$Run" }
+    # 31 Aug 26 - and verify-tierchange.ps1's, for the reason directly above:
+    # it creates a throwaway account, so a FIXED prefix would pass once and
+    # collide on every later run on the same machine.
+    if (-not $TcPrefix)    { $TcPrefix    = "sdtc$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -219,7 +235,14 @@ if ($Run) {
 # fresh literals here would just add six more to that pile.
 foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $SshPrefix },
                  @{ N = 'NamePrefix'; V = $NamePrefix }, @{ N = 'PortPrefix'; V = $PortPrefix },
-                 @{ N = 'ScramPrefix'; V = $ScramPrefix }, @{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
+                 @{ N = 'ScramPrefix'; V = $ScramPrefix }, @{ N = 'TierApiPrefix'; V = $TierApiPrefix },
+                 # 31 Aug 26 - verify-tierchange.ps1's, added with the step.
+                 # It is listed HERE and not only above because a prefix that
+                 # is empty at this point reaches CREATE.ACCOUNT as a bare
+                 # "sd" name; refusing by name costs nothing and the step
+                 # cannot then fail several minutes later looking like a
+                 # product fault.
+                 @{ N = 'TcPrefix'; V = $TcPrefix })) {
     if (-not $p.V) {
         Write-Output ("VerifyInstall2: -{0} was not given and -Run was not either." -f $p.N)
         Write-Output '  Simplest: VerifyInstall2.ps1 -Run <token nobody has used>'
@@ -412,6 +435,22 @@ $steps = @(
     @{ Name = 'verify-cmdaudit.ps1';      P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
     @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
+    # 31 Aug 26 - PRE_RELEASE_FIXES 107, on the owner's ruling.  DIRECTLY AFTER
+    # verify-tiers BECAUSE IT IS THE REST OF THE SAME QUESTION: PRE_RELEASE 19
+    # lists seven things the tier change needs proved, verify-tiers section 6
+    # covers four and SAYS IN ITS OWN OUTPUT that it does not cover the rest.
+    # This is the middle three - the required access keyword, what leaves with
+    # ADMINISTRATOR, and the "left alone" count.  (The three DOORS are still
+    # covered by neither; they need an unelevated session, an ssh login and an
+    # API pair, which is PRE_RELEASE 38.)
+    #
+    # IT WAS IN NEITHER RUNNER UNTIL TODAY, found by re-deriving
+    # VerifyInstall1's header counts from the directory rather than adjusting
+    # them by one - the check that file's header demands after the same
+    # invariant broke on 24 Aug 2026.  ***AND IT IS THE PARENT OF TWO MORE***:
+    # it raises verify-acctmsgs.ps1 and verify-vocverbs.ps1, so wiring this one
+    # step in puts THREE verifiers back into the suite.
+    @{ Name = 'verify-tierchange.ps1';    P = @{ Prefix  = $TcPrefix } },
     # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
     # CREATE.ACCOUNT, so it belongs BEFORE verify-peerlog for the error-log
     # reason the routes/rules comment below spells out.
