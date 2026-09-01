@@ -54,6 +54,29 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 31 Aug 26 - RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, on adding
+# verify-basicfuncs.ps1 (PRE_RELEASE 106).  THE NUMBERS ABOVE WERE STALE AGAIN
+# AND THE ARITHMETIC NO LONGER CLOSES, which is the point of re-deriving:
+#
+#     44 verify-*.ps1 in the directory
+#     17 named in this file   (16 before verify-basicfuncs)
+#     21 named in VerifyInstall2.ps1
+#     -- 38 accounted for, SIX not named in either table
+#
+# FOUR OF THE SIX ARE FINE AND TWO ARE NOT, checked one at a time rather than
+# counted:  verify-doors.ps1 and verify-doors-admin.ps1 are CHILDREN raised by
+# verify-doors-suite.ps1, which is a step; verify-acctmsgs.ps1 and
+# verify-vocverbs.ps1 are children raised in turn by those and by
+# verify-tierchange.ps1; and verify-upgrade.ps1 CANNOT be a step at all - it is
+# a two-phase hand-run instrument (-Snapshot, install over the top, -Compare)
+# that brackets an installer run.
+#
+# ***verify-tierchange.ps1 IS THE ONE THAT IS ACTUALLY ORPHANED***, and it is
+# the parent of the other two children, so THREE verifiers never run.  It wants
+# the ELEVATED runner - its own header says "an elevated piped session CAN
+# reach" - and adding a step there is the owner's to approve, so it is FILED as
+# PRE_RELEASE 107 rather than wired in here.  Do not fix it by editing a number.
+#
 # THAT IS A PROPERTY TO KEEP, NOT A SCORE.  The failure this file was written
 # for - a guard nobody runs has already stopped guarding - returns the moment a
 # verifier is added without a row in one of the two tables.  Add the row in the
@@ -466,7 +489,33 @@ $steps = @(
     # Measured on the 18:36:04 install before being added - 9 of 9 PASS - so it
     # is not being wired in untested, which is the rule verify-lineendings above
     # records.
-    @{ Name = 'verify-txn.ps1';          P = @{} }
+    @{ Name = 'verify-txn.ps1';          P = @{} },
+
+    # 31 Aug 26 - DOES THE LANGUAGE ITSELF ANSWER CORRECTLY?  PRE_RELEASE 106,
+    # on the owner's ruling of 31 Aug 2026.  §5.24.  The §5.23 sweeps asked
+    # whether a status was discarded; this asks the question underneath them,
+    # and nothing else in the tree asks it: no other step checks that ABS,
+    # OCONV, LOCATE or the operators return the right values, so a pcode or
+    # opcode change that broke one would have surfaced as a wrong report from a
+    # user rather than as a red step here.
+    #
+    # IT IS THE SAME SHAPE AS verify-txn ABOVE, which is why it sits beside it:
+    # no elevation, no prefix, no account of its own and NO UAC PROMPT - it
+    # compiles and runs a probe in the caller's own SD account and removes it
+    # again, so it does not change what this runner costs a person to sit
+    # through.  About 20 seconds.
+    #
+    # THE STRUCTURAL HALF IS NOT HERE AND DOES NOT NEED TO BE.  Whether the
+    # compiler and the runtime agree about opcode numbers is settled at build
+    # time - gplsrc/opcodes.h is an X-macro table that kernel.c:75 turns into
+    # dispatch[] by #include, and gen_includes.py generates gpl.bp/OPCODES.H
+    # from the same file - so there is nothing for a runtime step to catch.
+    # §5.24 records that measurement so it is not repeated by hand.
+    #
+    # Measured on the 13:33:28 install before being added - 169 of 169 cases,
+    # 0 failures - so it is not being wired in untested, which is the rule
+    # verify-txn and verify-lineendings above both record.
+    @{ Name = 'verify-basicfuncs.ps1';   P = @{} }
 )
 
 # 28 Aug 26 - THE SUSPENDED DOOR PAIR, AS ONE STEP.  PRE_RELEASE 38, on the
