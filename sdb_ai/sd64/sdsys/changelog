@@ -5,6 +5,19 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+31 Aug 26  DELETE.FILE NOW SAYS SO WHEN IT CANNOT REMOVE A RELOCATED INDEX.
+
+           If a file's alternate key indexes had been moved into a directory
+           of their own, DELETE.FILE removed the data and dictionary portions
+           and reported each of them, then tried to remove the index directory
+           without looking at the result.  A directory it failed to remove was
+           left on disk in silence.
+
+           It now prints "Failed to delete index directory" and sets a
+           non-zero status, which is what it already did for a data or
+           dictionary portion it could not remove.  The file itself was, and
+           still is, deleted correctly - what was missing was the report.
+
 31 Aug 26  AN ADMINISTRATOR IS NO LONGER SHUT OUT OF ACCOUNTS BY LOGTO.
 
            Administrators may enter any account without being granted access

@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 31 Aug 26 Windows port - a relocated alternate-key index directory is no
+*            longer orphaned in silence: both "dummy = ospath(akpath,
+*            OS$DELETE)" sites now take the answer and report a failure with
+*            sysmsg 2636, the message MKINDX:355 already uses for the same
+*            call (PRE_RELEASE_FIXES.md 104, UPSTREAM 34).
 * 28 Aug 26 Windows port - NO.QUERY is honoured by check.sdsys.file instead of
 *            prompting into a pipe (PRE_RELEASE_FIXES.md 14, UPSTREAM 23), and
 *            the DATA and DICT path comparisons are case-insensitive so a name
@@ -272,7 +277,18 @@ delete.upcased.file:
             end
 
             if ospath(data.path, OS$DELETE) then
-               if akpath # '' then dummy = ospath(akpath, OS$DELETE)
+*              Take the answer.  This was "dummy = ospath(...)", which threw
+*              away the only report that the relocated index directory had not
+*              gone, leaving it orphaned silently (PRE_RELEASE_FIXES.md 104,
+*              UPSTREAM 34).  MKINDX:355 already tests the same call and
+*              reports it with the same message; the portions below report a
+*              failed delete with @system.return.code, and this now does both.
+               if akpath # '' then
+                  if not(ospath(akpath, OS$DELETE)) then
+                     display sysmsg(2636) ;* Failed to delete index directory
+                     @system.return.code = -status()
+                  end
+               end
 
                display sysmsg(6136, data.path) ;* DATA portion 'xx' deleted
 
@@ -347,7 +363,14 @@ delete.dict:
          end
 
          if ospath(dict.path, OS$DELETE) then
-            if akpath # '' then dummy = ospath(akpath, OS$DELETE)
+*           The DICT half of the same fix - see the DATA portion above
+*           (PRE_RELEASE_FIXES.md 104, UPSTREAM 34).
+            if akpath # '' then
+               if not(ospath(akpath, OS$DELETE)) then
+                  display sysmsg(2636) ;* Failed to delete index directory
+                  @system.return.code = -status()
+               end
+            end
 
             voc.rec<3> = ""
             display sysmsg(6141, dict.path) ;* DICT portion 'xx' deleted
