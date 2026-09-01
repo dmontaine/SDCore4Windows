@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  A TIER CHANGE NO LONGER REPORTS A REMOVAL THAT DID NOT HAPPEN.
+
+           MODIFY.ACCOUNT removes things when an account moves down a tier:
+           the VOC records the higher tier had, and the os.users record an
+           administrator gets.  Both removals were reported as done without
+           anything checking that they had been.
+
+           So a VOC record that could not be deleted was still counted in
+           "VOC: n records added, n removed, n left alone", leaving the
+           account holding a command it should have lost while being told the
+           tier had changed.  And a grant record that could not be deleted
+           still produced "os.users: the record for X is removed".
+
+           Both now report what actually happened.  A record that could not be
+           removed is counted separately and named - it is not folded into
+           "left alone", which means something else - and the os.users failure
+           says so instead of claiming the record went.
+
 01 Sep 26  CREATE.ACCOUNT NOW NOTICES WHEN A GROUP MEMBERSHIP WAS NOT ADDED.
 
            Making an account puts the new user into several Windows groups -

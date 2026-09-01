@@ -19,6 +19,14 @@
 * 
 *
 * START-HISTORY:
+* 31 Aug 26 Windows port - TWO "delete ... on error null" SITES TOOK THE
+*   ANSWER.  Both asserted the delete had happened with nothing reading
+*   status(): :1390 incremented voc.removed, which 10113 reports, and :1442
+*   printed 10115 "the record for %1 is removed".  A failed delete therefore
+*   left the account holding the higher tier's verb, or left the os.users
+*   grant in place, while the administrator was told otherwise.  New counter
+*   voc.failed and new message 10157; the os.users failure reuses 10104.
+*   PRE_RELEASE_FIXES.md 97, and 65's symptom by a second route.
 * 29 Aug 26 Windows port - A TIER CHANGE NAMES THE GRANTS IT VOIDED.  Owner,
 *   29 Aug 2026, PRE_RELEASE_FIXES 57's last piece: "Proceed, and print what it
 *   voided."  Promoting an account left every lower-tier member of its Windows
@@ -218,6 +226,7 @@ deffun tier_allows(user,account) calling '!tier_allows'
    voc.added          = 0
    voc.removed        = 0
    voc.kept           = 0
+   voc.failed         = 0
    voc.skipped        = @false
 *  29 Aug 26 Windows port - the promotion report, PRE_RELEASE_FIXES 57.  Here
 *  for the reason the banner above gives: promo.report reads what
@@ -1009,6 +1018,7 @@ tier.set:
    voc.added   = 0
    voc.removed = 0
    voc.kept    = 0
+   voc.failed  = 0
    voc.skipped = @false
 
    if old.tier = 'SUSPENDED' and prior.tier = '' then
@@ -1063,6 +1073,15 @@ tier.set:
    end else
       crt sysmsg(10113, voc.added, voc.removed, voc.kept)
       * VOC: %1 records added, %2 removed, %3 left alone
+   end
+
+*  31 Aug 26 Windows port - PRE_RELEASE_FIXES.md 97.  Reported OUTSIDE the
+*  voc.skipped branch above, because a delete that failed has to be said
+*  whether or not the counts were printed, and 10113 has no field for it.
+   if voc.failed then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10157, voc.failed, acc.name)
+      * VOC: %1 record(s) could not be removed, so %2 still has them
    end
 
 *  ---- The AFTER half.  Last, because it is a consequence of the change and
@@ -1387,8 +1406,23 @@ tier.del.one:
    if tier.got then
       read tier.old.rec from tvoc.f, tier.id then
          if tier.old.rec = tier.rec then
-            delete tvoc.f, tier.id on error null
-            voc.removed = voc.removed + 1
+*           31 Aug 26 Windows port - TAKE THE ANSWER.  PRE_RELEASE_FIXES.md 97.
+*           This was "delete ... on error null" followed by an UNCONDITIONAL
+*           voc.removed increment, so a delete that failed was counted as a
+*           removal and 10113 reported it as one: the account kept the higher
+*           tier's verb while :1058 printed 10109 "Account %1 is now %2".
+*           The read above has already established the record exists, so the
+*           "on error null" was not absorbing "not found" - it was absorbing a
+*           real failure.  A failure is NOT voc.kept: that bucket means
+*           deliberately left alone because it differs from the tier build.
+*           The flag idiom is this file's own - see tier.os.write at :1420.
+            tier.del.ok = @true
+            delete tvoc.f, tier.id on error tier.del.ok = @false
+            if tier.del.ok then
+               voc.removed = voc.removed + 1
+            end else
+               voc.failed = voc.failed + 1
+            end
          end else
             voc.kept = voc.kept + 1
          end
@@ -1439,10 +1473,26 @@ tier.os.remove:
       return
    end
 
-   delete tosu.f, acc.user on error null
+*  31 Aug 26 Windows port - TAKE THE ANSWER.  PRE_RELEASE_FIXES.md 97.  This
+*  was "delete ... on error null" with nothing between it and the 10115 below
+*  but a close, so a failed delete left the grant record in place while the
+*  administrator was told it was gone - 65's symptom by a second route.
+*  The failure message is the one the openpath branch above already uses:
+*  10104 is scoped to os.users and "so nothing has changed" is true of it.
+*  DELACC:499 keeps its bare "on error null" deliberately and is NOT this
+*  defect - it asserts nothing, so it states no falsehood.
+   tosu.ok = @true
+   delete tosu.f, acc.user on error tosu.ok = @false
    close tosu.f
 
-   crt sysmsg(10115, acc.user) ;* os.users: the record for %1 is removed
+   if tosu.ok then
+      crt sysmsg(10115, acc.user) ;* os.users: the record for %1 is removed
+   end else
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10104, acc.user)
+      * Unable to change operating-system access for %1; os.users could not
+      * be updated, so nothing has changed.
+   end
    return
 
 * ======================================================================
