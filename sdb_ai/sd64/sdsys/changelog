@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+31 Aug 26  WEOFSEQ AND OPENSEQ ... OVERWRITE NO LONGER REPORT SUCCESS WHEN
+           THEY FAILED TO SHORTEN THE FILE.
+
+           Both of these do their work by truncating a file, and neither
+           looked at whether the truncate had worked.
+
+           WEOFSEQ put 0 - success - on the stack whatever happened, so a
+           program had no way to find out.  What this costs is a stale tail:
+           the old content past the new end survives, so a file written by a
+           later and shorter run can still carry rows from an earlier, longer
+           one.  A file produced that way is the answer somebody takes away,
+           which is why this was worth fixing even though nobody has reported
+           it.
+
+           OPENSEQ ... OVERWRITE promises the previous content is gone.  If
+           the truncate failed the old file stayed as it was, and later writes
+           replaced only the front of it.
+
+           Both now report the failure the way the rest of these statements
+           already do: STATUS() gives the I/O error, an ON ERROR clause runs,
+           and a statement written without one stops rather than carrying on.
+           Nothing that used to work behaves differently - the change is only
+           visible when the truncate actually fails, which needs a read-only
+           file, a mandatory lock or a full disk.
+
 31 Aug 26  DELETE.FILE NOW SAYS SO WHEN IT CANNOT REMOVE A RELOCATED INDEX.
 
            If a file's alternate key indexes had been moved into a directory

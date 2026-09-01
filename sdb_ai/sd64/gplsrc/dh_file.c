@@ -828,9 +828,17 @@ int OpenFile(char* path, int mode, int rights) {
 /* ======================================================================
    SetFileSize()  -  Change file size                                     */
 
+/* Composer AI - 2026/08/31
+   This was "chsize64(fu, bytes); return TRUE;" - a function typed to report a
+   status whose entire body was the call and an unconditional success.  It
+   could not fail because it did not look, and its two callers in dh_clear.c
+   therefore could not check it even had they wanted to.  chsize64 returns
+   non-zero on failure with errno set - sdfix.c:2493 is the control, the one
+   site in the tree that already tests it - so the status was there to be
+   returned all along.  PRE_RELEASE_FIXES.md 103, UPSTREAM_FIXES.md 33.       */
+
 bool SetFileSize(OSFILE fu, int64 bytes) {
-  chsize64(fu, bytes);
-  return TRUE;
+  return chsize64(fu, bytes) == 0;
 }
 
 /* END-CODE */

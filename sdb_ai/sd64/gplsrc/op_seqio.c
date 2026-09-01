@@ -800,7 +800,19 @@ Private void openseq(bool map_name) {
     {
       if (ValidFileHandle(fu)) {
         Seek(fu, sq_file->posn, SEEK_SET);
-        chsize64(fu, sq_file->posn);
+        /* Composer AI - 2026/08/31
+           OVERWRITE promises the old content is gone.  A discarded truncate
+           left the old file in place, so later writes overwrote only the
+           front and the stale tail survived past the new end.  Failing the
+           open is the honest answer, and it is safe here: the file variable
+           is not set until below, so the cleanup at exit_op_openseq frees
+           fvar and sq_file and k_error(sysmsg(1416)) fires for a bare
+           OPENSEQ.  PRE_RELEASE_FIXES.md 103, UPSTREAM_FIXES.md 33.        */
+        if (chsize64(fu, sq_file->posn) != 0) {
+          process.status = -ER_IOE;
+          process.os_error = OSError;
+          goto exit_op_openseq;
+        }
         sq_file->base = -1;
       }
     }
@@ -1539,7 +1551,19 @@ void op_weofseq() {
   flush_seq(fvar, FALSE);
 
   Seek(fu, sq_file->posn, SEEK_SET);
-  chsize64(fu, sq_file->posn);
+  /* Composer AI - 2026/08/31
+     WEOFSEQ is nothing BUT this truncate, so a discarded return meant the
+     opcode pushed 0 and the k_error(sysmsg(1420)) below could never fire: a
+     bare WEOFSEQ aborted loudly on every failure it detected, and this was
+     the one it did not detect.  QPROC:673 is "weofseq csv.f", so a CSV export
+     could carry trailing rows from a previous, longer run - the stale tail
+     surviving past the new end.  The status must be NEGATIVE for the k_error
+     to fire; positive codes here are the ones handed back to the program.
+     PRE_RELEASE_FIXES.md 103, UPSTREAM_FIXES.md 33.                          */
+  if (chsize64(fu, sq_file->posn) != 0) {
+    process.status = -ER_IOE;
+    process.os_error = OSError;
+  }
   sq_file->base = -1;
 
 exit_op_weofseq:
