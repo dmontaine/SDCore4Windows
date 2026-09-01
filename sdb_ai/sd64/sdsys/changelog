@@ -5,6 +5,24 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  CREATE.ACCOUNT NOW NOTICES WHEN A GROUP MEMBERSHIP WAS NOT ADDED.
+
+           Making an account puts the new user into several Windows groups -
+           sdusers, sdsshonly, and sdssh or sdapi depending on the access it
+           was given.  Each of those was reported as having worked without
+           anything checking whether it had.
+
+           The check that was there looked at the wrong thing.  It read the
+           last operating-system error, which had been a sound test when this
+           code ran an external command, and stopped meaning anything when
+           that was replaced with a direct call.  It could sit at zero - "no
+           error" - through any number of failed additions.
+
+           The additions themselves were never broken, and nothing about a
+           successful CREATE.ACCOUNT changes.  What changes is that a failure
+           is now reported instead of being announced as a success, with the
+           status code the call actually returned.
+
 31 Aug 26  WEOFSEQ AND OPENSEQ ... OVERWRITE NO LONGER REPORT SUCCESS WHEN
            THEY FAILED TO SHORTEN THE FILE.
 

@@ -18,6 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 31 Aug 26 Windows port - THE FIVE GROUP ADDS TAKE os_group'S OWN ANSWER
+*   instead of reading OS.ERROR() after it.  Upstream's version really runs an
+*   os.execute, so OS.ERROR() is a sound witness there; the port replaced it
+*   with a helper that routes writing actions through ps_script and left the
+*   check in place, where it had no causal connection to the group add and
+*   sat at whatever an earlier, unrelated call had left.  Every surrounding
+*   test is unchanged because os_group returns 0 on success.
+*   PRE_RELEASE_FIXES.md 94.  Not an upstream defect - nothing to file there.
 * 28 Aug 26 Windows port - REFUSE when a Windows profile directory is already
 *   sitting on the name, rather than silently take the suffixed home Windows
 *   would assign.  New messages 10124 and 10125, and !profile_dir.  Owner's
@@ -818,9 +826,17 @@ PW.TRY.AGAIN:
              crt sysmsg(10012,acc.uname,2) ;* Warning unable to add user to sdusers, user: %1 status: %2
           end else
 * 14 Aug 26 Windows port - was: os.execute "sudo usermod -aG sdusers ":acc.uname
-          void os_group("ADDMEM", "sdusers", acc.uname)
-          * --------------------
-          stat = OS.ERROR()
+* 31 Aug 26 Windows port - TAKE THE FUNCTION'S ANSWER.  PRE_RELEASE_FIXES 94,
+*   and the line directly above is the change that broke it, recorded in plain
+*   sight.  Upstream really does run an os.execute here, so ITS "stat =
+*   OS.ERROR()" is a sound witness; the port swapped in a helper that routes
+*   every writing action through ps_script (OS_GROUP:109-112, os.execute is
+*   only in the LISTMEM branch) and left the check behind.  OS.ERROR() had NO
+*   causal connection to the group add whatever - it was a stale value from an
+*   earlier, unrelated call, measured at 0 through a thousand additions.
+*   os_group returns 0 on success, so the test below is unchanged.
+*   GRANTA:240 and MODIFYA:440 are the house style this returns to.
+          stat = os_group("ADDMEM", "sdusers", acc.uname)
           if stat = 0 then
             crt sysmsg(10013,acc.uname)   ;* %1 added to sdusers'
           end else
@@ -845,8 +861,8 @@ PW.TRY.AGAIN:
 *   carry Administrators in their token, so they need sdusers to reach the data
 *   tree exactly as an ordinary user does.
         if make.admin then
-          void os_group("ADDMEM", "S-1-5-32-544", acc.uname)
-          stat = OS.ERROR()
+*         PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+          stat = os_group("ADDMEM", "S-1-5-32-544", acc.uname)
           if stat = 0 then
             crt sysmsg(10032,acc.uname)   ;* %1 is now an SD administrator
           end else
@@ -930,8 +946,8 @@ PW.TRY.AGAIN:
         if adopt or is_grp_member(acc.uname, "S-1-5-32-544") then
           crt sysmsg(10040,acc.uname)   ;* %1 keeps the Windows sign-in rights it already had
         end else
-          void os_group("ADDMEM", "sdsshonly", acc.uname)
-          stat = OS.ERROR()
+*         PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+          stat = os_group("ADDMEM", "sdsshonly", acc.uname)
           if stat = 0 then
 * 30 Aug 26 Windows port - 10034 NO LONGER ASSERTS ssh.  PRE_RELEASE_FIXES 69.
 *   It is printed here, unconditionally, whenever the account joins sdsshonly -
@@ -1776,8 +1792,8 @@ return
 * re-check, and the failure would surface later as "the client cannot connect".
 set.access:
    if access.ssh then
-      void os_group("ADDMEM", "sdssh", acc.uname)
-      stat = OS.ERROR()
+*     PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+      stat = os_group("ADDMEM", "sdssh", acc.uname)
       if stat # 0 then
          @system.return.code = -ER$FAILED
          stop sysmsg(10081,acc.uname,stat) ;* Unable to change remote access for %1
@@ -1785,8 +1801,8 @@ set.access:
    end
 
    if access.api then
-      void os_group("ADDMEM", "sdapi", acc.uname)
-      stat = OS.ERROR()
+*     PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+      stat = os_group("ADDMEM", "sdapi", acc.uname)
       if stat # 0 then
          @system.return.code = -ER$FAILED
          stop sysmsg(10081,acc.uname,stat) ;* Unable to change remote access for %1
