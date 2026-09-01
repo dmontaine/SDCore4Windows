@@ -301,10 +301,34 @@ try {
     Copy-Item -LiteralPath (Join-Path $Gplbld 'apiosexecprobe.sb') `
               -Destination (Join-Path $bpDir 'APIOSEXECPROBE') -Force
 
-    $out = Invoke-SDIn $Prefix.ToUpper() @('BASIC BP APIADMINPROBE', 'BASIC BP APIOSEXECPROBE')
+    # ***ANCHOR ON THE SUCCESS WORDING, NOT ON THE ARGUMENTS PASSED IN.***
+    # PRE_RELEASE 105.  The old check was the two probe NAMES plus a
+    # disqualifier, and BOTH NAMES ARE PRINTED ON THE FAILURE PATH TOO:
+    # sysmsg 2812 "Compiling %1 %2" prints them BEFORE bcomp is called, and
+    # sysmsg 2612 "Compilation error in %1" prints them when it fails.  So the
+    # names proved the compile was ATTEMPTED and never that it worked, leaving
+    # -notmatch as the only term doing work - and a check made of disqualifiers
+    # passes whenever the thing it disqualifies was never printed.  A compile
+    # that never reached BCOMP:1540 scored TRUE.
+    #
+    # The positive half of the SAME message is the anchor, and it already
+    # exists: BCOMP:1540 is "if not(is.ctype) then display sysmsg(2995, errors)"
+    # - "%1 error(s)" - printed once per record on both paths, so requiring one
+    # "0 error(s)" PER PROBE fails a run that printed no count at all.  That is
+    # the null case the instrument rules demand.
+    #
+    # The count is derived from $probes rather than typed, so adding a probe
+    # cannot leave the expectation behind.  "\b0" cannot match the "0" inside
+    # "10 error(s)" - there is no word boundary between two digits - so the
+    # positive and negative terms cannot both be satisfied by one line.
+    $probes   = @('APIADMINPROBE', 'APIOSEXECPROBE')
+    $out      = Invoke-SDIn $Prefix.ToUpper() @($probes | ForEach-Object { "BASIC BP $_" })
     Write-Host $out
-    $compiled = ($out -match 'APIADMINPROBE') -and ($out -match 'APIOSEXECPROBE') `
-                -and ($out -notmatch '[1-9][0-9]* error')
+    $okCount  = ([regex]::Matches($out, '\b0 error\(s\)')).Count
+    $errSeen  = ($out -match '[1-9][0-9]* error')
+    $compiled = ($okCount -eq $probes.Count) -and (-not $errSeen)
+    Write-Host ("    compile: {0} of {1} probe(s) said '0 error(s)'; an error count was {2}" -f
+                $okCount, $probes.Count, $(if ($errSeen) { 'SEEN' } else { 'absent' }))
     Note 'probe compiled' $true $compiled
     if (-not $compiled) { Fail 'A probe did not compile - the output above says why.' }
 
