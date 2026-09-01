@@ -829,6 +829,17 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-vocverbs.ps1',
                   'verify-acctmsgs.ps1',
                   'test-vocverbs-units.ps1',
+                  #  1 Sep 26 - probe-akwrite.ps1, the normal-path measurement
+                  # PRE_RELEASE 100 owed.  Same rule, same commit, and listed
+                  # here BEFORE it was run: measured this session, a gplbld
+                  # script with no roster line takes assert-current to exit 1,
+                  # which is what :818 above says and is now confirmed rather
+                  # than quoted.  It reads the install, builds its fixture
+                  # inside DON's own account and deletes it again; nothing in
+                  # stage.py or sd.iss names it.  IT IS IN NEITHER RUNNER ON
+                  # PURPOSE - wiring it in is the owner's ruling, exactly as
+                  # entries 54, 82, 106 and 107 were.  PRE_RELEASE 100, 112.
+                  'probe-akwrite.ps1',
                   # 28 Aug 26 - test-acctmsgs-units.ps1, added with the policy
                   # -aware rewrite of entry 22's refusal arm.  Same rule, same
                   # commit.  It reads the password policy and changes nothing.

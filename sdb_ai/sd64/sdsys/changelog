@@ -5,6 +5,25 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  A FAILURE WHILE EXTENDING AN INDEX NO LONGER DAMAGES THE INDEX.
+
+           When SD needed a new block for an alternate key index and could not
+           get one - a disk error, a full disk, a file held open by something
+           else - it carried on and used block zero.  Block zero is the index
+           header.  The write went over it, and the index was then permanently
+           damaged: every select, list or query on that key read from a header
+           that had a data block written on top of it.
+
+           The error was always reported, but only after the damage was done,
+           so the message named a temporary problem and left a permanent one.
+
+           SD now stops the operation and reports the error before writing
+           anything.  The index is left as it was.
+
+           A healthy disk never reached this, and nothing about normal indexing
+           changes.  If you have an index that has been behaving oddly after a
+           disk problem, rebuild it.
+
 01 Sep 26  A DELETE THAT FAILS INSIDE A TRANSACTION IS NO LONGER REPORTED AS
            DONE.
 

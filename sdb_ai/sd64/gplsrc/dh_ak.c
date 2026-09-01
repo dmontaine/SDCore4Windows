@@ -17,6 +17,17 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ *  1 Sep 26 Windows port - every caller of get_ak_node() now tests its answer
+ *           and aborts on 0.  All seven used the value untested, and 0 is not
+ *           a spare node - it is the AK header (dh_file.c:331 maps it
+ *           deliberately), so a transient read or write failure inside
+ *           get_ak_node() had the caller write a terminal, internal or
+ *           big-record node OVER the index header.  Nothing re-heals that, and
+ *           the index is what SELECT, LIST and every query on that key are
+ *           answered from.  get_ak_node() itself also returned a NON-ZERO node
+ *           number on one of its three failure paths, which would have left
+ *           the new guards with a hole; it now returns 0 on all three.
+ *           PRE_RELEASE_FIXES 100, UPSTREAM_FIXES 30.
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
  * END-HISTORY
@@ -2214,6 +2225,10 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   /* Create leftmost new node */
 
   new_node1_num = get_ak_node(dh_file, subfile);
+  if (new_node1_num == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a node */
+    goto exit_ak_write;
+  }
+
   new_node1 = (DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
   memset((char *)new_node1, '\0', DH_AK_NODE_SIZE);
   new_node1->node_type = AK_TERM_NODE;
@@ -2235,6 +2250,10 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   /* Create new node to right */
 
   new_node2_num = get_ak_node(dh_file, subfile);
+  if (new_node2_num == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a node */
+    goto exit_ak_write;
+  }
+
   new_node2 = (DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
   memset((char *)new_node2, '\0', DH_AK_NODE_SIZE);
   new_node2->node_type = AK_TERM_NODE;
@@ -2363,6 +2382,10 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
 
   if (rec_offset < used_bytes) {
     new_node3_num = get_ak_node(dh_file, subfile);
+    if (new_node3_num == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a node */
+      goto exit_ak_write;
+    }
+
     new_node3 = (DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
     memset((char *)new_node3, '\0', DH_AK_NODE_SIZE);
     new_node3->node_type = AK_TERM_NODE;
@@ -2683,6 +2706,30 @@ Private void copy_ak_record(DH_FILE *dh_file,
 /* ======================================================================
    Read AK header to get free chain and create new node                   */
 
+/* 1 Sep 26 Windows port - THE ANSWER IS 0 ON EVERY FAILURE PATH, AND THE SEVEN
+   CALLERS NOW TEST IT.  PRE_RELEASE_FIXES 100, UPSTREAM_FIXES 30.
+
+   0 IS NOT A SPARE SLOT, IT IS THE AK HEADER.  dh_file.c:331 maps node 0 to
+   offset 0 deliberately - "if (group) { ... } else offset = 0" - and byte 0 of
+   an AK subfile is the block holding free_chain and itype_ptr, i.e. the very
+   block this function reads at the top of itself.  So a caller that takes 0 as
+   a node number writes its terminal, internal or big-record node over the
+   index header.  The error IS reported - dh_read_group/dh_write_group set
+   dh_err and op_akwrite/op_akdelete copy it to process.status - but it is
+   reported AFTER the header has been overwritten, and nothing re-heals it.
+
+   THE CONTRAST IS INSIDE ONE CALLER: write_ak_big_rec() catches k_alloc()
+   returning NULL and catches dh_write_group() failing, and did not catch this.
+   The one allocation that is not memory was the one not checked.
+
+   AND ONE OF THE THREE FAILURE PATHS DID NOT RETURN 0.  The free-chain branch
+   below read the free node with new_node_num ALREADY set from the forward
+   link; when that read failed it jumped to the exit and returned that non-zero
+   number - a node still on the free chain, since ak_header->free_chain had not
+   been advanced - so the caller would have been handed a node the file also
+   believes is free.  Testing for 0 at the call sites cannot see that, so the
+   convention is made total here rather than guarded there. */
+
 Private int32_t get_ak_node(DH_FILE *dh_file, int16_t subfile) {
   int32_t new_node_num = 0;
   DH_AK_HEADER *ak_header = NULL;
@@ -2703,6 +2750,8 @@ Private int32_t get_ak_node(DH_FILE *dh_file, int16_t subfile) {
   } else {
     new_node_num = GetAKFwdLink(dh_file, ak_header->free_chain);
     if (!dh_read_group(dh_file, subfile, new_node_num, (char *)&ak_node, DH_FREE_NODE_SIZE)) {
+      new_node_num = 0; /* PRE_RELEASE 100: the free chain was not advanced, so
+                           this node is still free.  Do not hand it out. */
       goto exit_get_ak_node;
     }
 
@@ -3338,6 +3387,7 @@ Private bool update_internal_node(DH_FILE *dh_file,  /* DH file affected and... 
   int16_t key_len;              /* Space required for key data */
   int16_t key_diff;             /* Difference from previous space requirement */
   int32_t new_node_num;         /* Offset of new node if we split */
+  int32_t old_root_node_num;    /* New home for the old root node (PRE_RELEASE 100) */
   DH_INT_NODE *new_node = NULL; /* Pointer to new node buffer */
   NODE *root_node;              /* Pointer to new root NODE structure */
   int16_t moved_children;
@@ -3405,6 +3455,10 @@ Private bool update_internal_node(DH_FILE *dh_file,  /* DH file affected and... 
        the right half.                                                     */
 
     new_node_num = get_ak_node(dh_file, subfile);
+    if (new_node_num == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a node */
+      goto exit_update_internal_node;
+    }
+
     new_node = (DH_INT_NODE *)k_alloc(55, DH_AK_NODE_SIZE);
     /* Modified by Composer AI - 2026/06/10.
        k_alloc() can return NULL; abort the split on allocation failure. */
@@ -3457,7 +3511,16 @@ Private bool update_internal_node(DH_FILE *dh_file,  /* DH file affected and... 
     {
       /* Write out the old root internal node into a new position */
 
-      node_ptr->node_num = get_ak_node(dh_file, subfile);
+      /* PRE_RELEASE 100: taken into a temporary and tested BEFORE it is stored.
+         Assigning the answer straight into node_ptr->node_num would put 0 -
+         the AK header - into the node structure, and the test would then be
+         reading a value it had already committed to. */
+      old_root_node_num = get_ak_node(dh_file, subfile);
+      if (old_root_node_num == 0) {
+        goto exit_update_internal_node;
+      }
+
+      node_ptr->node_num = old_root_node_num;
 
       /* Create a new root internal node to point to the old and new
          child nodes.                                                 */
@@ -3829,6 +3892,12 @@ Private int32_t write_ak_big_rec(DH_FILE *dh_file, int16_t subfile, STRING_CHUNK
   }
 
   head = get_ak_node(dh_file, subfile);
+  if (head == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a node.  This
+                      function already reports failure as head == 0, and
+                      ak_write() already tests it (:1990). */
+    goto exit_write_ak_big_rec;
+  }
+
   node_num = head;
 
   memset((char *)buff, '\0', DH_AK_NODE_SIZE);
@@ -3863,6 +3932,14 @@ Private int32_t write_ak_big_rec(DH_FILE *dh_file, int16_t subfile, STRING_CHUNK
     if (data_len != 0) /* More */
     {
       next_node_num = get_ak_node(dh_file, subfile);
+      if (next_node_num == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a
+                                   node.  Untested, this was also stored as a
+                                   forward link, so the chain would have pointed
+                                   at the header too. */
+        head = 0;
+        goto exit_write_ak_big_rec;
+      }
+
       buff->next = SetAKFwdLink(dh_file, next_node_num);
     }
 
