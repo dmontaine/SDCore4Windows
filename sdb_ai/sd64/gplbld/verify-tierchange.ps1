@@ -408,8 +408,19 @@ Note 'ACC$TIER is PROGRAMMER again' 'PROGRAMMER' (Get-AccountTier $acct) $true
 # each of these is a transition and not merely an absence.
 Note 'downgraded: no longer a Windows administrator' $false (Test-LocalAdmin $acct) $true
 Note 'downgraded: the os.users record is gone'       $false (Test-OsUser $acct) $true
+# .ToUpper() IS LOAD-BEARING, AND ITS ABSENCE COST A FALSE FAIL ON b89.
+# Test-Say is deliberately case-sensitive (see its note above), MODIFYA prints
+# the account upcased - "os.users: the record for SDTCB89A is removed" - and
+# -Prefix is required to be lower case (:243, -cnotmatch).  So a pattern built
+# from $acct raw can NEVER match, whatever the product does.  Every other
+# account-naming check here already upcases (:381, :387, :404); this one did
+# not, and reported "expected True, got False" against an output carrying the
+# message in full.  ***THAT IS THE FAILURE-WORDING TRAP RUN BACKWARDS***: the
+# CLAUDE.md rule guards against a pattern the failure path also matches, and
+# this is a pattern the SUCCESS path cannot match - a false FAIL rather than a
+# false PASS.  Both come of not reading the tool's real output once.
 Note 'downgraded: it SAID the os.users record went (10115)' $true `
-     (Test-Say $dOut ('os\.users: the record for ' + [regex]::Escape($acct) + ' is removed')) $true
+     (Test-Say $dOut ('os\.users: the record for ' + [regex]::Escape($acct.ToUpper()) + ' is removed')) $true
 
 # THE "LEFT ALONE" RULE.
 $delta = Get-VocDelta $dOut
