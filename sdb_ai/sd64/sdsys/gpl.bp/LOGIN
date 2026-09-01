@@ -18,6 +18,16 @@
 * 
 * 
 * START-HISTORY:
+* 31 Aug 26 Windows port - THE ELEVATION AUDIT MOVED TO THE GRANT, AND THE
+*           GRANT'S ANSWER IS TAKEN.  "ELEVATION GRANTED account=SDSYS" was
+*           written 85 lines before kernel(K$ADMINISTRATOR, 1) granted
+*           anything, with two reachable abort paths in between, so the trail
+*           could assert a privilege event that never happened and contradict
+*           its own LOGIN REFUSED for the same session.  The record is now
+*           written after the rights exist, the grant's return value is
+*           tested rather than discarded, and the ospath(OS$CD) refusal sets
+*           audit.reason instead of leaving it "unspecified".
+*           PRE_RELEASE_FIXES.md 98.
 * 31 Aug 26 Windows port - THE SDSYS LANDING CASE TESTS THE SD TIER TOO.
 *           PRE_RELEASE_FIXES 91, PROJECT_STATUS.md 5.22.  The two keys it
 *           already tested ask Windows and nothing else, so a person made a
@@ -630,7 +640,16 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
             goto terminate.connection
          end
 
-         void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
+*        31 Aug 26 Windows port - THE AUDIT RECORD MOVED TO THE GRANT.  It was
+*        written here, 85 lines before kernel(K$ADMINISTRATOR, 1) grants
+*        anything, and TWO abort paths an SDSYS login really reaches lie
+*        between with admin.login already @true: the SUSPENDED test and the
+*        ospath(OS$CD) test below.  Neither reaches the grant, so the trail
+*        could carry ELEVATION GRANTED *and* LOGIN REFUSED for the same
+*        session - and the false half was the privilege half.  :955 states the
+*        rule this broke, in this very file: "the single point at which a
+*        login has succeeded ... everything above can still refuse."
+*        PRE_RELEASE_FIXES.md 98.
          admin.login = @true
 
       case 1
@@ -675,6 +694,10 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
    if not(ospath(acc.path, OS$CD)) then
       display sysmsg(5019, acc.path) ;* Unable to change to directory xx
+*     31 Aug 26 Windows port - the trail recorded reason=unspecified here (the
+*     :169 initialiser) for a failure whose real reason 5019 had just put on
+*     the screen.  PRE_RELEASE_FIXES.md 98.
+      audit.reason = 'the account directory could not be entered'
       goto terminate.connection
    end
 
@@ -715,7 +738,25 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   move that did not happen.  The elevation is obtained early because the
 *   case has to know whether it succeeded; the RIGHTS are granted here.
    if admin.login then
-      void kernel(K$ADMINISTRATOR, 1)
+*     31 Aug 26 Windows port - TAKE THE ANSWER.  op_kernel.c:395 sets or
+*     clears USR_ADMIN only under HDR_INTERNAL and then reports the flag AS IT
+*     ACTUALLY STANDS, under its own comment: "a caller that tried to grant
+*     itself rights is simply told it has none."  That return is BY DESIGN the
+*     only signal there is, and all three call sites discarded it.  LOGIN
+*     carries $internal at :122 so the gate is not reachable today - but a
+*     login that did not get the rights must not carry on as though it had.
+      admin.granted = kernel(K$ADMINISTRATOR, 1)
+      if not(admin.granted) then
+         display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+         audit.reason = 'the elevation was not granted'
+         goto terminate.connection
+      end
+
+*     AND THE RECORD IS WRITTEN HERE, after the rights exist, which is what
+*     CPROC:2868 already says out loud: "written after the move has actually
+*     happened ... and after the administrator flag is set, so the record and
+*     the rights it describes cannot disagree."  PRE_RELEASE_FIXES.md 98.
+      void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
    end
    close acc.f
 

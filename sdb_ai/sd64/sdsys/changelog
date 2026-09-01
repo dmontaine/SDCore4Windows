@@ -5,6 +5,25 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  THE AUDIT TRAIL NO LONGER RECORDS AN ELEVATION THAT DID NOT HAPPEN.
+
+           When an administrator signs in and is put into SDSYS, the trail
+           recorded "ELEVATION GRANTED" at the point the elevation was
+           obtained - which is well before the rights are actually given, and
+           two things can still refuse the login in between: SDSYS being
+           suspended, and its directory being unreadable.
+
+           Either of those produced a trail carrying both "ELEVATION GRANTED"
+           and "LOGIN REFUSED" for the same session.  The record contradicted
+           itself, and the false half was the half about privilege.
+
+           The record is now written after the rights exist, so it cannot
+           disagree with them.  If granting them does not work the login is
+           refused rather than continuing as though it had.
+
+           A refused login whose account directory could not be entered also
+           records why, instead of "reason=unspecified".
+
 01 Sep 26  A TIER CHANGE NO LONGER REPORTS A REMOVAL THAT DID NOT HAPPEN.
 
            MODIFY.ACCOUNT removes things when an account moves down a tier:
