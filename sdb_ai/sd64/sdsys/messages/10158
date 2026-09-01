@@ -1,0 +1,1 @@
+Deleting %1 removes everything the account holds. Its files and the data in\nthem go with it, and this cannot be undone.\n\nIf you only want to stop %1 using SD, suspend it instead:\n\n    modify.account %1 suspended\n\nA suspended account keeps its files and can be given a tier again later.\n

@@ -608,6 +608,21 @@ $out = Invoke-SD @($cmd)
 Show-Raw $cmd $out
 Note 'suspend says 10109 "Account X is now SUSPENDED"' 'said' `
      (Get-Said $out ('Account\s+' + $suspRe + '\s+is now\s+SUSPENDED') $tierBad)
+#  1 Sep 26 - PRE_RELEASE_FIXES.md 111.  10109 says what the tier IS; 10159 says
+#  what that MEANS, and the half an administrator gets wrong is the Windows half
+#  - entry 20 stood for months on the assumption that losing SD access must also
+#  withdraw Windows administrator rights.  Both halves are asserted separately,
+#  because a message carrying only the first would read as confirming that
+#  assumption rather than correcting it.
+#
+#  ANCHORED ON WORDING ONLY 10159 CARRIES.  "has lost all access to SD" and
+#  "Nothing on Windows has changed" appear in no other message and in none of
+#  the refusals $tierBad names, so neither can match a run where the suspend was
+#  refused - which is the trap CLAUDE.md records against matching an argument.
+Note 'suspend says what it took (10159)' 'said' `
+     (Get-Said $out ($suspRe + '\s+has lost all access to SD') $tierBad)
+Note 'and says Windows is untouched (10159)' 'said' `
+     (Get-Said $out 'Nothing on Windows has changed' $tierBad)
 Note ($susp.Name + ' ACC$TIER after suspend') 'SUSPENDED' (Get-AccountTier $susp.Name)
 Note ($susp.Name + ' ACC$PRIOR.TIER holds the displaced tier') 'PROGRAMMER' `
      (Get-AccountPriorTier $susp.Name)

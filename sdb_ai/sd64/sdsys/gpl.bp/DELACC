@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+*  1 Sep 26 Windows port - the confirmation is preceded by 10158, which says
+*           the DATA goes and offers "modify.account x suspended" instead.
+*           10084 and 10085 named the objects and not the consequence.
+*           PRE_RELEASE_FIXES.md 110.
 * 30 Aug 26 Windows port - the os.users record now goes whenever the Windows
 *           login has gone, not only on status 0.  !delete_user returns true
 *           for 0, 6, 7 and 8 - the login is deleted in all four and only the
@@ -246,6 +250,24 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *   or one a GROUP account never had, would be asking the caller to confirm
 *   something that is not going to happen - and this is the prompt that stands
 *   between somebody and their data.
+*
+*  1 Sep 26 Windows port - AND NOW IT SAYS THAT TO THE PERSON, NOT ONLY IN THIS
+*   COMMENT.  PRE_RELEASE_FIXES.md 110, owner's ruling 1 Sep 2026: "the admin
+*   can be given a confirmation warning that deleting the user deletes their
+*   data as well and suggest suspending if that is not what is wanted."
+*
+*   10084 and 10085 name the OBJECTS that go - the account, its directory, the
+*   Windows account - which is the mechanism rather than the consequence.
+*   Neither says that everything the account holds goes with them, and neither
+*   says there is another way.
+*
+*   A SEPARATE MESSAGE rather than a rewording of the two prompts, so each keeps
+*   its meaning and the warning is not duplicated in both.  OUTSIDE the loop, so
+*   a mistyped answer re-asks the question without repeating the warning.  The
+*   y/<n> default below is untouched: n is still the conservative answer.
+   crt sysmsg(10158, acc.name)
+   * deleting takes the data with it; suspend instead
+
    loop
       if del.user # '' then
          display sysmsg(10084, acc.name, del.user) : ;* account, directory and Windows account

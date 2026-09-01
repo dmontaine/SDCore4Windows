@@ -19,6 +19,10 @@
 * 
 *
 * START-HISTORY:
+*  1 Sep 26 Windows port - a suspend now prints 10159: all SD access is gone
+*   (local login, ssh, the API, LOGTO) and nothing on Windows changed.  The
+*   boundary is the half an administrator gets wrong - entry 20 got it wrong
+*   for months.  PRE_RELEASE_FIXES.md 111.
 * 31 Aug 26 Windows port - TWO "delete ... on error null" SITES TOOK THE
 *   ANSWER.  Both asserted the delete had happened with nothing reading
 *   status(): :1390 incremented voc.removed, which 10113 reports, and :1442
@@ -1082,6 +1086,31 @@ tier.set:
       @system.return.code = -ER$FAILED
       crt sysmsg(10157, voc.failed, acc.name)
       * VOC: %1 record(s) could not be removed, so %2 still has them
+   end
+
+*  1 Sep 26 Windows port - SUSPENDED SAYS WHAT IT DID *AND WHAT IT DID NOT DO*.
+*  PRE_RELEASE_FIXES.md 111, owner's ruling 1 Sep 2026: "suspend an account and
+*  all sd access is unavailable - nothing happens at the windows level is
+*  correct - a message to the administrator to that effect might be good."
+*
+*  THE BOUNDARY IS EXACTLY THE THING PEOPLE GET WRONG.  Entry 20 stood for
+*  months on the assumption that an account losing SD access must also lose its
+*  Windows administrator rights.  If it read that way to the people who wrote
+*  it, it reads that way to an administrator suspending somebody in a hurry.
+*
+*  EVERY CLAIM IN 10159 IS FROM THE CODE, not from the name of the tier.  All
+*  SD access goes: LOGIN:687 covers local login AND ssh, since both arrive
+*  through LOGIN; APISRVR:518 covers the API; CPROC:4039 covers LOGTO.  Nothing
+*  on Windows changes - entry 20's ruling, and it is correct.  And the elevated
+*  door is shut too: LOGIN:625 gates the SDSYS landing case on
+*  sd_admin_tier(@logname), which SDADMIN:121 refuses unless ACC$TIER is exactly
+*  ADMINISTRATOR, so a suspended administrator falls through to an ordinary
+*  login and :687 refuses that.  The message must not imply otherwise.
+*
+*  SUSPENDED ONLY.  Every other tier's consequences are obvious from its name.
+   if want.tier = 'SUSPENDED' then
+      crt sysmsg(10159, acc.name)
+      * what suspending took, what it left alone, and what lifts it
    end
 
 *  ---- The AFTER half.  Last, because it is a consequence of the change and

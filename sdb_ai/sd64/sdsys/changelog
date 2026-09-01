@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  DELETING AN ACCOUNT NOW WARNS THAT THE DATA GOES TOO, AND OFFERS
+           SUSPENDING INSTEAD.
+
+           The confirmation named what would be removed - the account, its
+           directory, the Windows login - but not that everything the account
+           holds goes with them, and it did not mention that there is another
+           way.
+
+           It now says both, before it asks.  The question and its default
+           answer of "no" are unchanged.
+
+           If you only want to stop somebody using SD, suspend the account
+           instead.  Suspending keeps everything.
+
+01 Sep 26  SUSPENDING AN ACCOUNT NOW SAYS WHAT IT DOES NOT DO.
+
+           A suspended account loses all access to SD - local login, ssh, the
+           API and logto.  Nothing at the Windows level changes: the Windows
+           account, its password and its group memberships are all left alone,
+           including administrator rights.
+
+           That is correct and has not changed.  What is new is that suspending
+           says so at the time, rather than leaving an administrator to assume
+           one way or the other.  It also says how to lift it.
+
 01 Sep 26  AN EMPTY DIRECTORY NAMED AFTER A DRIVE LETTER IS NO LONGER LEFT IN
            THE DATA TREE.
 

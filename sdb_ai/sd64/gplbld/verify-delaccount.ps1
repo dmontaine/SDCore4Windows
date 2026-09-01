@@ -492,7 +492,12 @@ if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
 # 28 Aug 26 - 10123 joins them, PRE_RELEASE_FIXES.md 36.  It is the "left
 # behind AND not recorded" warning, and step 3's keep-both branch asserts it
 # ABSENT - which an unreadable message would have scored as a pass.
-$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085, 10123)
+# 1 Sep 26 - 10158 joins them, PRE_RELEASE_FIXES.md 110.  It is the warning that
+# the DATA goes and that suspending is the alternative, and it is asserted
+# PRESENT on both delete legs below, so an unreadable message would fail those
+# checks rather than pass them.  Listed here anyway, because "the install has
+# none of them" is a far better diagnosis than two unexplained FAILs.
+$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085, 10123, 10158)
 $missing  = @($needMsgs | Where-Object { (Get-SysMsgPattern $_ $null) -eq '' })
 if ($missing.Count -gt 0) {
     Fail ('checks here name these messages and the install has none of them: ' +
@@ -662,6 +667,11 @@ try {
     # out del.user before the question was that the prompt cannot over-promise.
     Note 'confirmation named the Windows account (10084)' $true  (Shown $out 10084 @($sdAcc.ToUpper(), $sdAcc))
     Note 'the shorter wording was NOT used (10085)'       $false (Shown $out 10085 @($sdAcc.ToUpper()))
+    #  1 Sep 26 - PRE_RELEASE_FIXES.md 110.  The prompts name the OBJECTS that
+    #  go; 10158 is the only thing that says the DATA goes with them and that
+    #  suspending is the alternative.  It precedes both prompts, so it is
+    #  asserted on both legs.
+    Note 'the data warning preceded it (10158)'           $true  (Shown $out 10158 @($sdAcc.ToUpper()))
     Note 'the sentinel reached the VOC (5051)'        $true  (Shown $out 5051 @($sentinel))
     Note 'message 10028 shown (OS User deleted)'      $true  (Shown $out 10028 @($sdAcc))
     Note 'message 10025 shown (group deleted)'        $true  (Shown $out 10025 @('sdu_' + $sdAcc))
@@ -829,6 +839,9 @@ try {
     # confirm a deletion that !is_sd_user then refused to perform.
     Note 'confirmation used the shorter wording (10085)' $true  (Shown $out 10085 @($borrowAcc.ToUpper()))
     Note 'it did NOT offer the Windows account (10084)'  $false (Shown $out 10084 @($borrowAcc.ToUpper(), $borrowAcc))
+    # 1 Sep 26 - PRE_RELEASE_FIXES.md 110.  The warning does not depend on which
+    # of the two prompts follows it, so it is asserted on this leg too.
+    Note 'the data warning preceded it (10158)'          $true  (Shown $out 10158 @($borrowAcc.ToUpper()))
     Note 'the sentinel reached the VOC (5051)'         $true  (Shown $out 5051 @($sentinel))
     Note 'message 10036 shown (not created by SD)'     $true  (Shown $out 10036 @($borrowAcc))
     Note 'message 10028 NOT shown (OS User deleted)'   $false (Shown $out 10028 @($borrowAcc))
