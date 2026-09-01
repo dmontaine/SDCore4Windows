@@ -850,6 +850,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # positive control showed LIST.READU cannot see a held lock
                   # from the same session.  Same rule, same commit.
                   'probe-txnlock.ps1',
+                  #  1 Sep 26 - vm-shares.ps1.  HOST-SIDE VM TOOLING, not part
+                  # of the product: it adds the three PERMANENT shared folders
+                  # (sdout, xfer, gplbld) a guest needs, and refuses a running
+                  # VM out loud because a running VM is locked and a permanent
+                  # add fails on it.  Nothing installs it and it reads nothing
+                  # from the install.  Same rule, same commit.  PRE_RELEASE 74,
+                  # 76, 78, 88 all run through the rig it sets up.
+                  'vm-shares.ps1',
                   # 28 Aug 26 - test-acctmsgs-units.ps1, added with the policy
                   # -aware rewrite of entry 22's refusal arm.  Same rule, same
                   # commit.  It reads the password policy and changes nothing.
