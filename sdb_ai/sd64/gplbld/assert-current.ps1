@@ -840,6 +840,16 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # PURPOSE - wiring it in is the owner's ruling, exactly as
                   # entries 54, 82, 106 and 107 were.  PRE_RELEASE 100, 112.
                   'probe-akwrite.ps1',
+                  #  1 Sep 26 - probe-txnlock.ps1, PRE_RELEASE 102.  THE ONLY
+                  # THING IN THE TREE THAT CAN MAKE A COMMIT FAIL: it holds the
+                  # victim record's file open with FileShare.Read, so the
+                  # remove() inside op_txncmt() really is refused and 1423
+                  # really is raised.  Read the header before reusing it - it
+                  # proves the fault fires and the session survives, and it
+                  # DELIBERATELY DOES NOT SCORE the lock state, because a
+                  # positive control showed LIST.READU cannot see a held lock
+                  # from the same session.  Same rule, same commit.
+                  'probe-txnlock.ps1',
                   # 28 Aug 26 - test-acctmsgs-units.ps1, added with the policy
                   # -aware rewrite of entry 22's refusal arm.  Same rule, same
                   # commit.  It reads the password policy and changes nothing.

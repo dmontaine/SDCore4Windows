@@ -17,6 +17,19 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ *  1 Sep 26 Windows port - a commit that fails half way no longer holds its
+ *           record locks for the life of the process.  k_error() longjmps to
+ *           K_ABORT rather than returning, so the five "goto exit_op_txncmt"
+ *           paths skipped unlock_txn() entirely and nothing else released
+ *           them: txn_abort() gates on process.txn_id, which op_txncmt() sets
+ *           to 0 before the loop.  txn_abort() now also releases
+ *           commit_txn_id, which is the id the commit was running under, and
+ *           op_txncmt() clears it on the success path so the two cannot
+ *           overlap.  Fixed in txn_abort() and not at the five call sites
+ *           BECAUSE THAT IS THE CLASS: a sixth error path added to the loop
+ *           later is covered without anybody remembering to cover it.
+ *           PRE_RELEASE_FIXES 102 (the lock half; the half-applied records
+ *           still need a ruling), UPSTREAM_FIXES 32.
  *  1 Sep 26 Windows port - the directory-file delete at commit now tests
  *           remove() and the S_IFREG guard, copying the non-transactional
  *           twin (op_dio3.c).  It was a bare remove() with its return
@@ -65,7 +78,15 @@ Private int16_t txn_cproc_level;
 Private bool journalled_txn; /* Journalled update in this txn? */
 
 int txn_depth = 0;           /* Also accessed by op_sys.c */
-u_int32_t commit_txn_id; /* Also needed by dh_jnl.c */
+
+/* 1 Sep 26 Windows port - THE COMMENT HERE SAID "Also needed by dh_jnl.c" AND
+   THAT FILE DOES NOT EXIST IN THIS TREE.  Checked before relying on it, because
+   the whole of PRE_RELEASE 102's lock fix turns on whether this variable's
+   lifetime is ours to manage: grep says txn.c is the only user.  It is now
+   load-bearing - NON-ZERO MEANS "a commit is in flight under this id", which is
+   what lets txn_abort() release the locks op_txncmt() could not.  Explicitly
+   initialised for the same reason; the guard depends on it starting at 0.    */
+u_int32_t commit_txn_id = 0;
 
 typedef struct TXN_STACK TXN_STACK;
 struct TXN_STACK {
@@ -283,6 +304,15 @@ void op_txncmt() {
 
   unlock_txn(commit_txn_id);
 
+  /* 1 Sep 26 Windows port - AND THE COMMIT IS NO LONGER IN FLIGHT.  This clear
+     is what keeps txn_abort()'s new release honest: without it commit_txn_id
+     would still name the transaction that has just committed successfully, and
+     a LATER, UNRELATED abort - a K_TERMINATE or K_LOGOUT, which also reach
+     txn_abort() - would call unlock_txn() on an id whose locks are already gone
+     and which the allocator may since have handed out again.  PRE_RELEASE 102. */
+
+  commit_txn_id = 0;
+
   /* 29 Aug 26 Windows port - AND NOW LEAVE THE TRANSACTION LEVEL, WHICH THIS
      FUNCTION NEVER DID.  PRE_RELEASE_FIXES 11, UPSTREAM_FIXES 17.  Without it
      txn_depth only ever climbed (so SYSTEM(1008) was useless) and, far worse, a
@@ -305,6 +335,16 @@ void op_txncmt() {
      than fixed here, because a commit that failed half way needs a decision
      about what to do with the records already written, not a decrement.
      PRE_RELEASE 102 tracks it.
+
+     1 Sep 26 - HALF OF THAT GAP IS NOW CLOSED AND THIS PARAGRAPH WOULD
+     OTHERWISE READ AS THOUGH NONE OF IT WERE.  txn_abort() releases
+     commit_txn_id's record locks, so the failed commit no longer holds them
+     for the life of the process; see the comment there for why the fix is on
+     the far side of the longjmp rather than at the five call sites.  WHAT IS
+     STILL OPEN is the part that needs the ruling: the level stays counted, the
+     cache stays orphaned on txn_stack, and the records already written stay
+     written.  unlock_txn(commit_txn_id) below still runs on the SUCCESS path
+     only, and that is correct - it is the abort path that had nothing.
 
      1 Sep 26 - AND 101 GIVES THAT GAP TWO MORE WAYS IN, WHICH IS WORTH SAYING
      PLAINLY RATHER THAN LEAVING FOR SOMEBODY TO FIND.  A directory-file delete
@@ -347,6 +387,45 @@ void op_txnrbk() {
    txn_abort()  -  Roll back at abort/logout/terminate/etc                */
 
 void txn_abort() {
+  /* 1 Sep 26 Windows port - RELEASE THE LOCKS A FAILED COMMIT LEFT HELD.
+     PRE_RELEASE_FIXES 102, UPSTREAM_FIXES 32.
+
+     op_txncmt() saves process.txn_id into commit_txn_id and sets
+     process.txn_id to 0 before its loop, so that a close action taken during
+     the commit does not recurse.  If a write or delete in that loop then
+     fails it calls k_error(), and K_ERROR DOES NOT RETURN - k_error.c sets
+     k_exit_cause = K_ABORT and longjmps to the setjmp in kernel.c, which is
+     what calls this function.  Everything after the loop is therefore skipped,
+     unlock_txn(commit_txn_id) included, and THE LOCKS WERE NEVER RELEASED BY
+     ANYTHING: the test below finds process.txn_id == 0 and does nothing, and
+     rollback() - the only other caller of unlock_txn() - is not reached
+     either.  The records stayed locked for the life of the process, which on a
+     server session means until somebody killed it.
+
+     THE FIVE "goto exit_op_txncmt" IN THAT LOOP ARE DEAD CODE, which is why
+     the fix cannot go there or at any label after them: k_error() has already
+     jumped.  It has to be on the far side of the longjmp, and this is the far
+     side.
+
+     AND IT IS HERE RATHER THAN BEFORE EACH k_error() ON PURPOSE.  Guarding the
+     five call sites would fix those five; a sixth error path added to the loop
+     later would leak again and nothing would say so.  PRE_RELEASE 101 added two
+     of the five this way in one day.  One release on the abort path covers the
+     loop however it grows, and covers K_TERMINATE and K_LOGOUT too.
+
+     WHAT THIS DELIBERATELY DOES NOT DO: it does not pop the transaction level,
+     and it does not touch the records the failed commit already wrote.  A
+     half-applied commit needs a ruling on those, which is the other half of
+     PRE_RELEASE 102 and is not a decrement.  Releasing the locks does not
+     depend on that ruling and should not have waited for it - the partial
+     state is already on disk and visible; the locks only stopped anybody
+     reaching it, including whoever came to repair it.                        */
+
+  if (commit_txn_id != 0) {
+    unlock_txn(commit_txn_id);
+    commit_txn_id = 0;
+  }
+
   if (process.txn_id) {
     tio_printf(sysmsg(1426));
     while (process.txn_id)
