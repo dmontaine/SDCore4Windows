@@ -588,6 +588,18 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # is the hole 68 lived in.  Runs from VerifyInstall1, ships
                   # nowhere.
                   'verify-sdsyswrite.ps1',
+                  # 31 Aug 26 - verify-basicfuncs.ps1 and its probe, the §5.23
+                  # audit's value check: do the intrinsic functions and the
+                  # operators return the RIGHT ANSWERS?  The six sweeps asked
+                  # whether a status was discarded; this asks the question
+                  # underneath them.  THE PROBE SHIPS NOWHERE - it is copied
+                  # into the caller's own bp, compiled, run unelevated and
+                  # removed again, on PRE_RELEASE 94's model.  Listed here the
+                  # same day it was written, because the file's own driver calls
+                  # assert-current first and would otherwise refuse the tree
+                  # BECAUSE of itself - which is the trap this list exists for
+                  # and which it cost one run to rediscover.
+                  'verify-basicfuncs.ps1', 'basicfuncs.sb',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.

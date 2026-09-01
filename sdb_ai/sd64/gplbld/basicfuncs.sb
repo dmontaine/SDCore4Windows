@@ -1,0 +1,333 @@
+* BASICFUNCS - does each SD BASIC intrinsic return the RIGHT ANSWER?
+*
+* 31 Aug 26 Windows port - written for the §5.23 audit.  The six sweeps asked
+* whether a status was discarded; this asks the question underneath all of
+* them, which is whether the language itself answers correctly.  A function
+* that returns the wrong value is "an administrator receiving an answer that is
+* wrong" at the deepest level there is - every query in the system is built out
+* of these.
+*
+* COMPILED AND RUN IN A THROWAWAY ACCOUNT'S BP BY gplbld/verify-basicfuncs.ps1,
+* which removes it afterwards.  Nothing here writes to a file, opens a socket
+* or touches the terminal, deliberately - see the exclusion list below.
+*
+* IT PRINTS EVERY CASE, NOT ONLY THE FAILURES.  PROJECT_STATUS.md's instrument
+* rules: a verdict with no evidence of what was measured is not a result.  Each
+* line carries the function, what it got and what was wanted, so a wrong
+* EXPECTATION in this file is as visible as a wrong answer from the product.
+*
+* AND IT REFUSES THE NULL CASE.  The last line is TOTAL|<cases>|FAILS|<n>.  A
+* run that compiled but executed nothing prints TOTAL|0 and the driver treats
+* that as a failure rather than "no failures found".
+*
+* WHAT IS DELIBERATELY NOT TESTED HERE, AND WHY - so the coverage claim is
+* honest rather than implied:
+*   blocking on the terminal   KEYIN KEYINC KEYINR KEYREADY INPUTBLK KEYCODE
+*   sockets                    OPEN.SOCKET READ.SOCKET WRITE.SOCKET SOCKET.INFO
+*                              ACCEPT.SOCKET.CONNECTION CREATE.SERVER.SOCKET
+*                              SERVER.ADDR SET.SOCKET.MODE
+*   need a file or select list FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
+*                              TRANS RTRANS XLATE ITYPE OBJECT OBJINFO SUBR CCALL
+*                              OUTERJOIN - it joins ACROSS FILES and its arity is
+*                              not satisfiable with literals; measured 31 Aug 26,
+*                              the literal form is a compile error, not a value.
+*   session or host state      DATE TIME TIMEDATE SYSTEM STATUS ENV OS.ERROR
+*                              SENTENCE ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
+*   terminal or printer state  TERMINFO SAVE.SCREEN GETPU PRINTER.SETTING BINDKEY
+*                              GET.PORT.PARAMS SET.PORT.PARAMS GETNLS
+*   change the process         CHGPHANT CHANGE CONFIG UMASK CATALOGUED DELETE DIR
+*                              GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT
+* Everything else in BCOMP's intrinsics table is exercised below.
+
+program basicfuncs
+
+   cases = 0
+   fails = 0
+
+* ---------------------------------------------------------------- arithmetic
+
+   n = 'ABS' ; g = abs(-3)          ; w = 3          ; gosub check
+   n = 'ABS.0' ; g = abs(0)         ; w = 0          ; gosub check
+   n = 'INT' ; g = int(7.9)         ; w = 7          ; gosub check
+   n = 'INT.neg' ; g = int(-7.9)    ; w = -7         ; gosub check
+   n = 'MOD' ; g = mod(17, 5)       ; w = 2          ; gosub check
+   n = 'MOD.neg' ; g = mod(-17, 5)  ; w = 3          ; gosub check
+   n = 'REM' ; g = rem(17, 5)       ; w = 2          ; gosub check
+   n = 'IDIV' ; g = idiv(17, 5)     ; w = 3          ; gosub check
+   n = 'DIV' ; g = div(18, 3)       ; w = 6          ; gosub check
+   n = 'RDIV' ; g = rdiv(17, 5)     ; w = 3          ; gosub check
+   n = 'PWR' ; g = pwr(2, 10)       ; w = 1024       ; gosub check
+   n = 'NEG' ; g = neg(5)           ; w = -5         ; gosub check
+   n = 'MAX' ; g = max(3, 9)        ; w = 9          ; gosub check
+   n = 'MIN' ; g = min(3, 9)        ; w = 3          ; gosub check
+   n = 'SQRT' ; g = sqrt(16)        ; w = 4          ; gosub check
+   n = 'NUM.yes' ; g = num('123')   ; w = 1          ; gosub check
+   n = 'NUM.no' ; g = num('12a')    ; w = 0          ; gosub check
+   n = 'ALPHA.yes' ; g = alpha('abc') ; w = 1        ; gosub check
+   n = 'ALPHA.no' ; g = alpha('ab1') ; w = 0         ; gosub check
+
+* ------------------------------------------------------------ transcendental
+* SCALED TO INTEGERS, NOT FORMATTED WITH MD.  The first draft of this file used
+* oconv(x,'MDn') and every one of these "failed": MD does not round to n places,
+* it INSERTS the point n digits from the right, so sin(30)=0.5 printed as
+* 0.0001 and asin(0.5)=30 printed as 0.30.  The functions were right and the
+* expectation was wrong - measured 31 Aug 26.  int(x*10000+0.5) compares the
+* value itself and cannot be fooled that way.
+* The angle functions take and return DEGREES, which these cases also pin.
+
+   n = 'SIN' ; g = int(sin(30) * 10000 + 0.5)  ; w = 5000  ; gosub check
+   n = 'COS' ; g = int(cos(60) * 10000 + 0.5)  ; w = 5000  ; gosub check
+   n = 'TAN' ; g = int(tan(45) * 10000 + 0.5)  ; w = 10000 ; gosub check
+   n = 'ASIN' ; g = int(asin(0.5) * 100 + 0.5) ; w = 3000  ; gosub check
+   n = 'ACOS' ; g = int(acos(0.5) * 100 + 0.5) ; w = 6000  ; gosub check
+   n = 'ATAN' ; g = int(atan(1) * 100 + 0.5)   ; w = 4500  ; gosub check
+   n = 'EXP' ; g = int(exp(0) * 100 + 0.5)     ; w = 100   ; gosub check
+   n = 'LN' ; g = int(ln(1) * 100 + 0.5)       ; w = 0     ; gosub check
+   n = 'EXP.1' ; g = int(exp(1) * 1000 + 0.5)  ; w = 2718  ; gosub check
+
+* ------------------------------------------------------------------- bitwise
+
+   n = 'BITAND' ; g = bitand(12, 10)  ; w = 8    ; gosub check
+   n = 'BITOR' ; g = bitor(12, 10)    ; w = 14   ; gosub check
+   n = 'BITXOR' ; g = bitxor(12, 10)  ; w = 6    ; gosub check
+   n = 'BITNOT' ; g = bitnot(0)       ; w = -1   ; gosub check
+   n = 'BITSET' ; g = bitset(0, 3)    ; w = 8    ; gosub check
+   n = 'BITRESET' ; g = bitreset(15, 3) ; w = 7  ; gosub check
+   n = 'BITTEST.1' ; g = bittest(8, 3) ; w = 1   ; gosub check
+   n = 'BITTEST.0' ; g = bittest(7, 3) ; w = 0   ; gosub check
+* SHIFT's SIGN IS THE OPPOSITE WAY ROUND from the C operators: a POSITIVE count
+* shifts RIGHT.  Measured 31 Aug 26 - shift(1,4) is 0, not 16.  Pinned here in
+* both directions so a change of convention cannot pass unnoticed.
+   n = 'SHIFT.r' ; g = shift(16, 4)   ; w = 1    ; gosub check
+   n = 'SHIFT.l' ; g = shift(1, -4)   ; w = 16   ; gosub check
+* DTX RETURNS LOWER CASE, and that is Ladybridge's choice rather than a port
+* artefact: op_misc.c's sprintf is "%x" and the upstream file is byte-identical.
+* XTD accepts either case, so the round trip holds; pinned both ways.
+   n = 'DTX' ; g = dtx(255)           ; w = 'ff' ; gosub check
+   n = 'XTD.uc' ; g = xtd('FF')       ; w = 255  ; gosub check
+   n = 'XTD.lc' ; g = xtd('ff')       ; w = 255  ; gosub check
+   n = 'DTX.XTD.rt' ; g = xtd(dtx(48879)) ; w = 48879 ; gosub check
+
+* -------------------------------------------------------------------- string
+
+   n = 'LEN' ; g = len('hello')          ; w = 5        ; gosub check
+   n = 'LEN.empty' ; g = len('')         ; w = 0        ; gosub check
+   n = 'UPCASE' ; g = upcase('aBc')      ; w = 'ABC'    ; gosub check
+   n = 'DOWNCASE' ; g = downcase('AbC')  ; w = 'abc'    ; gosub check
+   n = 'SWAPCASE' ; g = swapcase('AbC')  ; w = 'aBc'    ; gosub check
+   n = 'CHAR' ; g = char(65)             ; w = 'A'      ; gosub check
+   n = 'SEQ' ; g = seq('A')              ; w = 65       ; gosub check
+* ASCII() takes EBCDIC IN, so ascii(char(65)) is meaningless - 65 is ASCII 'A'
+* but EBCDIC 65 is not.  EBCDIC 'A' is 0xC1 = 193, which is the real case.
+   n = 'ASCII' ; g = ascii(char(193))    ; w = 'A'      ; gosub check
+   n = 'EBCDIC' ; g = seq(ebcdic('A'))   ; w = 193      ; gosub check
+   n = 'EBCDIC.rt' ; g = ascii(ebcdic('A')) ; w = 'A'   ; gosub check
+   n = 'SPACE' ; g = len(space(7))       ; w = 7        ; gosub check
+   n = 'STR' ; g = str('ab', 3)          ; w = 'ababab' ; gosub check
+   n = 'TRIM' ; g = trim('  a  b  ')     ; w = 'a b'    ; gosub check
+   n = 'TRIMF' ; g = trimf('  ab  ')     ; w = 'ab  '   ; gosub check
+   n = 'TRIMB' ; g = trimb('  ab  ')     ; w = '  ab'   ; gosub check
+   n = 'TRIM.char' ; g = trim('xxaxx', 'x') ; w = 'a'   ; gosub check
+   n = 'INDEX.1' ; g = index('abcabc', 'b', 1) ; w = 2  ; gosub check
+   n = 'INDEX.2' ; g = index('abcabc', 'b', 2) ; w = 5  ; gosub check
+   n = 'INDEX.none' ; g = index('abc', 'z', 1) ; w = 0  ; gosub check
+   n = 'COUNT' ; g = count('a,b,c', ',')  ; w = 2       ; gosub check
+   n = 'DCOUNT' ; g = dcount('a,b,c', ',') ; w = 3      ; gosub check
+   n = 'DCOUNT.empty' ; g = dcount('', ',') ; w = 0     ; gosub check
+   n = 'FIELD' ; g = field('a,b,c', ',', 2) ; w = 'b'   ; gosub check
+   n = 'FIELD.n' ; g = field('a,b,c,d', ',', 2, 2) ; w = 'b,c' ; gosub check
+   n = 'FIELDSTORE' ; g = fieldstore('a,b,c', ',', 2, 1, 'X') ; w = 'a,X,c' ; gosub check
+* SUBSTITUTE replaces whole ELEMENTS of a dynamic array, not substrings - so
+* the operand has to carry marks or nothing matches.  CROP removes TRAILING
+* empty elements, not internal ones; both pinned as measured 31 Aug 26.
+* SUBSTITUTE's FOURTH operand DOES NOT SPLIT THE SOURCE - three drafts assumed
+* it did.  gpl.bp/_SUBST is the implementation and it settles it: the source is
+* split by SYSTEM MARKS ("s = remove(str, delim)"), and the delimiter splits the
+* OLD and NEW LISTS instead, through listindex() and field().  So a source with
+* no marks is one element whatever delimiter is passed.  All three shapes are
+* pinned: mark-split source with a list, a single old/new pair, and the
+* no-marks case that legitimately changes nothing.
+   n = 'SUBSTITUTE' ; g = substitute('a':@vm:'b':@vm:'c', 'a,c', 'X,Z', ',') ; w = 'X':@vm:'b':@vm:'Z' ; gosub check
+   n = 'SUBSTITUTE.vm' ; g = substitute('a':@vm:'b':@vm:'a', 'a', 'Z', @vm) ; w = 'Z':@vm:'b':@vm:'Z' ; gosub check
+   n = 'SUBSTITUTE.nomark' ; g = substitute('a,b,a', 'a', 'Z', ',') ; w = 'a,b,a' ; gosub check
+   n = 'CROP.trailing' ; g = crop('a':@vm:'b':@vm) ; w = 'a':@vm:'b' ; gosub check
+   n = 'CROP.internal' ; g = crop('a':@vm:@vm:'b') ; w = 'a':@vm:@vm:'b' ; gosub check
+   n = 'QUOTE' ; g = quote('ab')         ; w = '"ab"'   ; gosub check
+   n = 'DQUOTE' ; g = dquote('ab')       ; w = '"ab"'   ; gosub check
+   n = 'SQUOTE' ; g = squote('ab')       ; w = "'ab'"   ; gosub check
+   n = 'FOLD' ; g = fold('aaa bbb', 3)   ; w = 'aaa':@fm:'bbb' ; gosub check
+   n = 'SOUNDEX' ; g = soundex('Robert') ; w = 'R163'   ; gosub check
+   n = 'COMPARE.lt' ; g = compare('a', 'b') ; w = -1    ; gosub check
+   n = 'COMPARE.eq' ; g = compare('a', 'a') ; w = 0     ; gosub check
+   n = 'COMPARE.gt' ; g = compare('b', 'a') ; w = 1     ; gosub check
+   n = 'CHECKSUM' ; g = (checksum('abc') = checksum('abc')) ; w = 1 ; gosub check
+   n = 'CHECKSUM.diff' ; g = (checksum('abc') = checksum('abd')) ; w = 0 ; gosub check
+* CONVERT()'s argument order is (from, to, string) - NOT (string, from, to).
+* The first draft had it the other way and got 'XZ' back, which is the correct
+* answer to the question it actually asked.  Measured 31 Aug 26.
+   n = 'CONVERT' ; g = convert('ac', 'XZ', 'abc') ; w = 'XbZ' ; gosub check
+* CSVDQ SPLITS a CSV line into a dynamic array, it does not add quotes.
+   n = 'CSVDQ' ; g = csvdq('a,b')        ; w = 'a':@fm:'b' ; gosub check
+   n = 'CSVDQ.quoted' ; g = csvdq('"a,b",c') ; w = 'a,b':@fm:'c' ; gosub check
+   n = 'MATCHFIELD' ; g = matchfield('abc123', '3A3N', 1) ; w = 'abc' ; gosub check
+
+* ------------------------------------------------------------ dynamic arrays
+
+   r = 'a':@vm:'b':@vm:'c'
+   n = 'EXTRACT' ; g = extract(r, 1, 2, 0) ; w = 'b'    ; gosub check
+   n = 'REPLACE' ; g = replace(r, 1, 2, 0, 'Z') ; w = 'a':@vm:'Z':@vm:'c' ; gosub check
+   n = 'INSERT' ; g = insert(r, 1, 2, 0, 'Z') ; w = 'a':@vm:'Z':@vm:'b':@vm:'c' ; gosub check
+   n = 'DELETE.fn' ; g = delete(r, 1, 2, 0) ; w = 'a':@vm:'c' ; gosub check
+* LOCATE arr<1> SEARCHES FIELDS, NOT VALUES.  Two drafts fed it a value-marked
+* string and got the ELSE branch, which was the right answer to the wrong
+* question: with no @fm the whole string is field 1 and does not equal 'b'.
+* ACOMP:707 is the codebase's own usage and it builds its array with
+* "ins x before label.names<1>" - fields.  Both shapes are pinned below so the
+* distinction cannot quietly change.  -1 marks "not found", so a miss can never
+* be confused with a hit at position 0.
+   rf = 'a':@fm:'b':@fm:'c'
+
+   n = 'LOCATE.field'
+   locate 'b' in rf<1> setting p then g = p else g = -1
+   w = 2 ; gosub check
+
+   n = 'LOCATE.field.first'
+   locate 'a' in rf<1> setting p then g = p else g = -1
+   w = 1 ; gosub check
+
+   n = 'LOCATE.value'
+   locate 'b' in r<1,1> setting p then g = p else g = -1
+   w = 2 ; gosub check
+
+   n = 'LOCATE.miss'
+   locate 'z' in rf<1> setting p then g = p else g = -1
+   w = -1 ; gosub check
+   n = 'INMAT.reuse' ; g = reuse(1)      ; w = 1        ; gosub check
+   n = 'SUM' ; g = sum(1:@vm:2:@vm:3)    ; w = 6        ; gosub check
+   n = 'SUMMATION' ; g = summation(1:@vm:2:@vm:3) ; w = 6 ; gosub check
+* VSLICE takes value N of every FIELD - a vertical slice down the fields, which
+* needs @fm in the operand.  The first draft fed it a single field and got that
+* field's value 1 back, which was the right answer to the wrong question.
+   n = 'VSLICE' ; g = vslice('a':@vm:'b':@fm:'c':@vm:'d', 1) ; w = 'a':@fm:'c' ; gosub check
+   n = 'VSLICE.2' ; g = vslice('a':@vm:'b':@fm:'c':@vm:'d', 2) ; w = 'b':@fm:'d' ; gosub check
+   n = 'SPLICE' ; g = splice('a':@vm:'b', '-', 'x':@vm:'y') ; w = 'a-x':@vm:'b-y' ; gosub check
+   n = 'REMOVE' ; s = 'a':@vm:'b' ; g = remove(s, d) ; w = 'a' ; gosub check
+
+* ------------------------------------------------ the S-suffix (vector) forms
+
+   v = 1:@vm:2:@vm:3
+   n = 'ABSS' ; g = abss(-1:@vm:-2)      ; w = 1:@vm:2  ; gosub check
+   n = 'NEGS' ; g = negs(1:@vm:2)        ; w = -1:@vm:-2 ; gosub check
+   n = 'LENS' ; g = lens('a':@vm:'bb')   ; w = 1:@vm:2   ; gosub check
+   n = 'NUMS' ; g = nums('1':@vm:'x')    ; w = 1:@vm:0   ; gosub check
+   n = 'CATS' ; g = cats('a':@vm:'b', 'X':@vm:'Y') ; w = 'aX':@vm:'bY' ; gosub check
+   n = 'ADDS.via.SUM' ; g = sum(v)       ; w = 6         ; gosub check
+   n = 'COUNTS' ; g = counts('aa':@vm:'aaa', 'a') ; w = 2:@vm:3 ; gosub check
+   n = 'EQS' ; g = eqs(1:@vm:2, 1:@vm:9) ; w = 1:@vm:0   ; gosub check
+   n = 'NES' ; g = nes(1:@vm:2, 1:@vm:9) ; w = 0:@vm:1   ; gosub check
+   n = 'GTS' ; g = gts(2:@vm:1, 1:@vm:2) ; w = 1:@vm:0   ; gosub check
+   n = 'LTS' ; g = lts(1:@vm:2, 2:@vm:1) ; w = 1:@vm:0   ; gosub check
+   n = 'GES' ; g = ges(1:@vm:2, 1:@vm:3) ; w = 1:@vm:0   ; gosub check
+   n = 'LES' ; g = les(1:@vm:3, 1:@vm:2) ; w = 1:@vm:0   ; gosub check
+   n = 'ANDS' ; g = ands(1:@vm:0, 1:@vm:1) ; w = 1:@vm:0 ; gosub check
+   n = 'ORS' ; g = ors(1:@vm:0, 0:@vm:0) ; w = 1:@vm:0   ; gosub check
+   n = 'NOTS' ; g = nots(1:@vm:0)        ; w = 0:@vm:1   ; gosub check
+   n = 'MODS' ; g = mods(17:@vm:18, 5:@vm:5) ; w = 2:@vm:3 ; gosub check
+   n = 'IFS' ; g = ifs(1:@vm:0, 'y':@vm:'y', 'n':@vm:'n') ; w = 'y':@vm:'n' ; gosub check
+   n = 'STRS' ; g = strs('a':@vm:'b', 2) ; w = 'aa':@vm:'bb' ; gosub check
+   n = 'TRIMS' ; g = trims(' a ':@vm:' b ') ; w = 'a':@vm:'b' ; gosub check
+   n = 'TRIMFS' ; g = trimfs(' a':@vm:' b') ; w = 'a':@vm:'b' ; gosub check
+   n = 'TRIMBS' ; g = trimbs('a ':@vm:'b ') ; w = 'a':@vm:'b' ; gosub check
+   n = 'FOLDS' ; g = (len(folds('aaa bbb':@vm:'c', 3)) > 0) ; w = 1 ; gosub check
+   n = 'SOUNDEXS' ; g = soundexs('Robert':@vm:'Rupert') ; w = 'R163':@vm:'R163' ; gosub check
+   n = 'INDEXS' ; g = indexs('abc':@vm:'xbz', 'b', 1) ; w = 2:@vm:2 ; gosub check
+   n = 'FIELDS' ; g = fields('a,b':@vm:'c,d', ',', 2) ; w = 'b':@vm:'d' ; gosub check
+   n = 'SUBSTRINGS' ; g = substrings('abcd':@vm:'efgh', 2, 2) ; w = 'bc':@vm:'fg' ; gosub check
+   n = 'MAXIMUM' ; g = maximum(3:@vm:9:@vm:5) ; w = 9   ; gosub check
+   n = 'MINIMUM' ; g = minimum(3:@vm:9:@vm:5) ; w = 3   ; gosub check
+   n = 'SPACES' ; g = lens(spaces(2:@vm:3)) ; w = 2:@vm:3 ; gosub check
+* RAISE promotes a mark one level UP (@vm to @fm); LOWER demotes it.  The first
+* draft had RAISE the wrong way round.
+   n = 'RAISE' ; g = (raise('a':@vm:'b') = 'a':@fm:'b') ; w = 1 ; gosub check
+   n = 'LOWER' ; g = (lower('a':@vm:'b') = 'a':@sm:'b') ; w = 1 ; gosub check
+   n = 'RAISE.LOWER.rt' ; g = (lower(raise('a':@vm:'b')) = 'a':@vm:'b') ; w = 1 ; gosub check
+
+* --------------------------------------------------------------- conversions
+
+   n = 'OCONV.MD2' ; g = oconv(1234, 'MD2')   ; w = '12.34'  ; gosub check
+   n = 'ICONV.MD2' ; g = iconv('12.34', 'MD2') ; w = 1234    ; gosub check
+   n = 'OCONV.MCU' ; g = oconv('abc', 'MCU')  ; w = 'ABC'    ; gosub check
+   n = 'OCONV.MCL' ; g = oconv('ABC', 'MCL')  ; w = 'abc'    ; gosub check
+   n = 'ICONV.D.rt' ; g = oconv(iconv('01 JAN 2000', 'D'), 'D-YMD[4,2,2]') ; w = '2000-01-01' ; gosub check
+* MTH's am/pm CASE IS AN OPTION, not a constant: op_oconv.c:2516 picks "AM"/"PM"
+* when OptAMPMUpcase is set and "am"/"pm" otherwise, and lower case is the
+* default.  Identical upstream.  Pinned as the default so a change of default
+* shows up here rather than in somebody's report.
+   n = 'ICONV.MT.rt' ; g = oconv(iconv('12:30', 'MT'), 'MTH') ; w = '12:30pm' ; gosub check
+   n = 'ICONV.MT.val' ; g = iconv('12:30', 'MT') ; w = 45000 ; gosub check
+   n = 'OCONVS' ; g = oconvs(1234:@vm:5678, 'MD2') ; w = '12.34':@vm:'56.78' ; gosub check
+   n = 'ICONVS' ; g = iconvs('12.34':@vm:'56.78', 'MD2') ; w = 1234:@vm:5678 ; gosub check
+   n = 'FMT.R' ; g = fmt('7', 'R%3')          ; w = '007'    ; gosub check
+   n = 'FMT.L' ; g = fmt('ab', 'L#4')         ; w = 'ab  '   ; gosub check
+   n = 'FMTS' ; g = fmts('7':@vm:'8', 'R%3')  ; w = '007':@vm:'008' ; gosub check
+   n = 'VARTYPE.num' ; g = (vartype(1) # '')  ; w = 1        ; gosub check
+
+* ------------------------------------------------------------------ operators
+
+   n = 'OP.add' ; g = 2 + 3            ; w = 5          ; gosub check
+   n = 'OP.sub' ; g = 7 - 2            ; w = 5          ; gosub check
+   n = 'OP.mul' ; g = 6 * 7            ; w = 42         ; gosub check
+   n = 'OP.div' ; g = 20 / 4           ; w = 5          ; gosub check
+   n = 'OP.cat' ; g = 'a' : 'b'        ; w = 'ab'       ; gosub check
+   n = 'OP.prec' ; g = 2 + 3 * 4       ; w = 14         ; gosub check
+   n = 'OP.paren' ; g = (2 + 3) * 4    ; w = 20         ; gosub check
+   n = 'OP.eq' ; g = (1 = 1)           ; w = 1          ; gosub check
+   n = 'OP.ne' ; g = (1 # 2)           ; w = 1          ; gosub check
+   n = 'OP.lt' ; g = (1 < 2)           ; w = 1          ; gosub check
+   n = 'OP.gt' ; g = (2 > 1)           ; w = 1          ; gosub check
+   n = 'OP.le' ; g = (2 <= 2)          ; w = 1          ; gosub check
+   n = 'OP.ge' ; g = (2 >= 2)          ; w = 1          ; gosub check
+   n = 'OP.and' ; g = (1 and 0)        ; w = 0          ; gosub check
+   n = 'OP.or' ; g = (1 or 0)          ; w = 1          ; gosub check
+   n = 'OP.not' ; g = not(0)           ; w = 1          ; gosub check
+   n = 'OP.matches' ; g = ('abc' matches '3A') ; w = 1  ; gosub check
+   n = 'OP.matches.no' ; g = ('ab1' matches '3A') ; w = 0 ; gosub check
+   n = 'OP.strcmp' ; g = ('a' < 'b')   ; w = 1          ; gosub check
+   n = 'OP.numstr' ; g = ('10' > '9')  ; w = 1          ; gosub check
+   n = 'OP.uminus' ; g = -(3)          ; w = -3         ; gosub check
+   n = 'OP.fmt.dyn' ; g = 'a':@fm:'b'<1,1> ; w = 'a':@fm:'b' ; gosub check
+
+* ------------------------------------------------------------------- summary
+
+   crt 'TOTAL|' : cases : '|FAILS|' : fails
+   crt 'PROBE.DONE'
+   stop
+
+* ======================================================================
+* check - record one case.  Compared as STRINGS deliberately: a numeric
+* compare would call 0 and '0.0' equal and hide a formatting regression.
+
+* The marks are converted to visible letters IN PLACE rather than through a
+* helper function: CONVERT is one-for-one, so F, V and S each stand for exactly
+* one mark and a mark-versus-space difference stays readable in the transcript
+* instead of being invisible.
+
+check:
+   cases += 1
+   sg = g : ''
+   sw = w : ''
+   convert @fm to 'F' in sg
+   convert @vm to 'V' in sg
+   convert @sm to 'S' in sg
+   convert @fm to 'F' in sw
+   convert @vm to 'V' in sw
+   convert @sm to 'S' in sw
+   if sg = sw then
+      crt 'OK|' : n : '|' : sg
+   end else
+      fails += 1
+      crt 'FAIL|' : n : '|got=' : sg : '|want=' : sw
+   end
+   return
+
+end
