@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
+ *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
  * END-HISTORY      
  *
  * START-DESCRIPTION:
@@ -612,7 +614,18 @@ bool make_path(char *tgt) {
   p = path;
   q = new_path;
 
-  if (*p == DS) /* 0355 */
+  /* 1 Sep 26 Windows port - A DRIVE LETTER IS PART OF THE ROOT, NOT A PATH
+   * COMPONENT.  Second copy of the same fault; the reasoning and the
+   * measurement are written up once, at make_path() in op_dio2.c.  Without
+   * this, a drive-lettered ak_path (sdidx.c:215) makes a directory called
+   * "C:" - on NTFS U+0043 U+F03A - in whatever the current directory is. */
+
+  if (((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z')) && (p[1] == ':')) {
+    *(q++) = *p;
+    *(q++) = ':';
+    *(q++) = DS;
+    p += 2;
+  } else if (*p == DS) /* 0355 */
   {
     *(q++) = DS;
     p++;

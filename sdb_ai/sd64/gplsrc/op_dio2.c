@@ -20,6 +20,8 @@
  * 31 Dec 23 SD launch - prior history suppressed
  * 21 Aug 26 Windows port - net_path_permitted(), the containment root for a
  *           network session, and the read/write axis on the shared entries
+ *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
+ *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -1550,7 +1552,37 @@ bool make_path(char* tgt) {
 
   q = new_path;
 
-  if (*p == DS) /* 0355 */
+  /* 1 Sep 26 Windows port - A DRIVE LETTER IS PART OF THE ROOT, NOT A PATH
+   * COMPONENT.  This is where sdsys/"C:" came from (PRE_RELEASE 6), and it
+   * needs both halves to see it:
+   *
+   * fullpath() emits "C:/ProgramData/SD/..." for anything drive-lettered -
+   * sdrealpath() treats the drive as the root, measured 21 Aug 26 and recorded
+   * at net_normalise() below - so CREATEA hands us a path whose FIRST token
+   * under strtok_r(DSS) is the bare two characters "C:".
+   *
+   * The MSYS2 runtime does not read a bare "C:" as a drive.  It reads it as a
+   * RELATIVE FILENAME, so stat() answers ENOENT and MakeDirectory() then
+   * creates a directory of that name IN THE PROCESS'S CURRENT DIRECTORY,
+   * written to NTFS as U+0043 U+F03A - 'C' plus the Cygwin private-use
+   * mapping of a colon, which is how the runtime spells a character NTFS
+   * forbids.  CREATE.ACCOUNT runs with SDSYS as its cwd, so the litter landed
+   * in the data tree, once, on the first account creation after an install.
+   * Measured end to end with a standalone probe built by the MSYS2 gcc: the
+   * name it produces is byte-identical to the one found in sdsys.
+   *
+   * Carrying the drive into new_path as the root makes the first stat() ask
+   * about "C:/ProgramData", which exists.  Same shape as the leading-DS case.
+   *
+   * A path of exactly "C:" leaves nothing for strtok_r() and returns TRUE
+   * without creating anything, which is right - a drive root always exists. */
+
+  if (((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z')) && (p[1] == ':')) {
+    *(q++) = *p;
+    *(q++) = ':';
+    *(q++) = DS;
+    p += 2;
+  } else if (*p == DS) /* 0355 */
   {
     *(q++) = DS;
     p++;

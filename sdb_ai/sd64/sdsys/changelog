@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  AN EMPTY DIRECTORY NAMED AFTER A DRIVE LETTER IS NO LONGER LEFT IN
+           THE DATA TREE.
+
+           Creating an account left a stray, empty directory beside the system
+           files, named "C:" after the drive letter of the account's own path.
+           It appeared once per installation, on the first account created,
+           and nothing used it.
+
+           It was hard to see, which is why it lasted: a colon cannot appear
+           in a Windows file name, so anything that asked for this directory
+           by name was told it did not exist.  Listing the folder showed it.
+
+           An existing one is not removed by the upgrade, only never made
+           again.  Deleting it by hand is safe.
+
 01 Sep 26  THE AUDIT TRAIL NO LONGER RECORDS AN ELEVATION THAT DID NOT HAPPEN.
 
            When an administrator signs in and is put into SDSYS, the trail

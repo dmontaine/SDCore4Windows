@@ -943,7 +943,14 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # shipped.  ***sd-path.ps1 ITSELF SHIPS AND IS DELIBERATELY
                   # NOT HERE*** - it is in stage.py's list, which records why:
                   # the verb drives it, so it has to be on the user's machine.
-                  'test-sdpath-units.ps1')
+                  'test-sdpath-units.ps1',
+                  #  1 Sep 26 - check-datatree-litter.ps1, PRE_RELEASE 6's
+                  # after-the-cycle check.  Listed in the commit that creates
+                  # it, under the same rule as verify-sdsysgate.ps1 above: it
+                  # reads C:\ProgramData\SD and ships nowhere, so without this
+                  # line its mere existence reports the tree STALE and every
+                  # verifier that calls this script then refuses.
+                  'check-datatree-litter.ps1')
 
 $shipEvidence = ''
 foreach ($f in @('stage.py', 'sd.iss')) {
