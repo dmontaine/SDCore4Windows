@@ -15,8 +15,14 @@
 # guestcontrol is deliberately NOT used anywhere: it needs guest credentials and
 # is forbidden by the record (HISTORY 5407).
 
+# 02 Sep 26 - -Vm IS MANDATORY, AND IT USED TO DEFAULT TO 'Windows 11 - Test 1'.
+# That guest was deleted on 2 Sep 2026, so the default named a machine that does
+# not exist - but replacing it with a live name would have been the wrong fix.
+# This script CHANGES VM CONFIGURATION, and a default on such a script is an
+# invitation to configure whichever guest the default happens to name rather
+# than the one meant.  Being asked for the name is the point.
 [CmdletBinding()]
-param([string]$Vm = 'Windows 11 - Test 1')
+param([Parameter(Mandatory = $true)][string]$Vm)
 
 $ErrorActionPreference = 'Stop'
 $vb = Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe'
