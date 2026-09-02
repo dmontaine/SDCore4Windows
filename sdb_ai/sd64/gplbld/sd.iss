@@ -1817,8 +1817,8 @@ begin
       behaviour change and the owner's call, and sdusers has a stated reason to
       stay that the other three do not share (sd.iss:3506 - deleting it "would
       orphan the permissions on their own database"). }
-    M := M + 'Your database, the ssh server if SD Core installed one, the Windows accounts SD Core created - with their sdu_ and sdg_ groups and their profiles - and FOUR GROUPS: sdusers, sdssh, sdapi and sdsshonly. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
-         'sdusers stays because deleting it would orphan the permissions on your database. The other three are left because SD Core does not assume they are its to remove; sdsshonly still denies its members console and Remote Desktop sign-in, so remove it by hand if you want that gone.' + #13#10#13#10 +
+    M := M + 'Your database, the ssh server if SD Core installed one, the Windows accounts SD Core created - with their sdu_ and sdg_ groups and their profiles - and ONE GROUP: sdusers. Removing the database is offered separately and defaults to keeping it, and removing the accounts is offered separately after it, also defaulting to keeping them.' + #13#10#13#10 +
+         'sdusers stays because deleting it would orphan the permissions on your database. The other three groups SD Core made - sdssh, sdapi and sdsshonly - ARE removed, without asking, because nothing reads them once SD Core is gone. That matters most for sdsshonly: it denied its members the console and Remote Desktop, so any account you keep gets those back and becomes an ordinary Windows account, which is what the rest of this page describes.' + #13#10#13#10 +
          'Accounts you keep are ordinary Windows accounts once SD Core is gone: they keep their passwords, and the ssh confinement that limited them to SD Core is removed with the rest of SD Core''s configuration. Your own account is never removed by that prompt.' + #13#10#13#10;
 
   { KEPT COMMON, DELIBERATELY.  It is true of a stand-alone system too - the
@@ -4109,6 +4109,55 @@ begin
     SdAccountsScript := Dst;
 end;
 
+(* REMOVE SD CORE'S THREE ROUTE GROUPS AT UNINSTALL.  PRE_RELEASE_FIXES 74,
+   owner's ruling 2 Sep 2026: "remove the groups at uninstall".
+
+   THREE, NOT FOUR.  sdusers STAYS and its reason is unchanged: deleting it
+   would orphan the permissions on the database, which this uninstall
+   deliberately leaves behind unless the user asked otherwise.
+
+   sdsshonly IS THE ONE THAT MATTERS, AND REMOVING IT CHANGES BEHAVIOUR RATHER
+   THAN JUST TIDYING.  It carries SeDenyInteractiveLogonRight and
+   SeDenyRemoteInteractiveLogonRight (deny-logon.ps1:29), so an account KEPT by
+   the question above is, until now, still denied the console and Remote Desktop
+   by a group belonging to software that has uninstalled itself.  Removing it
+   gives those accounts the console back - which is the model the closing page
+   already states, "accounts you keep are ordinary Windows accounts once SD Core
+   is gone".  A deny that outlives the thing that imposed it was never part of
+   that promise.
+
+   UNCONDITIONAL, AND CALLED BEFORE THE TWO QUESTIONS RATHER THAN AFTER THEM.
+   The obvious placement is "after the account sweep", and it is wrong: that
+   block Exits early three times - no stashed script, no {username}, or the user
+   answering No - so a call at the end would be SKIPPED on exactly the common
+   path, where the accounts are kept.  These groups go whatever is answered
+   about accounts and about the database, so they go where nothing can skip
+   them.
+
+   REMOVING THEM FIRST DOES NOT DISTURB THE SWEEP: remove-sdaccounts.ps1 finds
+   its candidates through sdusers, which stays, and deleting an account drops
+   its memberships anyway.
+
+   net.exe RATHER THAN A SCRIPT, because by usPostUninstall {app} and
+   everything in it is gone - the same constraint that makes StashAccountSweep
+   copy its script to {tmp} first.  net.exe is in {sys} and is always there.
+
+   A GROUP THAT IS ALREADY ABSENT IS NOT AN ERROR, and the exit code is
+   deliberately not tested: net returns non-zero for "does not exist", and a
+   stand-alone install never created sdssh or sdapi at all.  An uninstaller that
+   reported a failure for work it did not need to do would be worse than one
+   that says nothing.  Not brace-delimited - see RemoveFromPath. *)
+procedure RemoveSdGroups;
+var
+  Net: String;
+  Code: Integer;
+begin
+  Net := ExpandConstant('{sys}\net.exe');
+  Exec(Net, 'localgroup sdssh /delete',     '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec(Net, 'localgroup sdapi /delete',     '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath, Ps, LogPath, KeepUser: String;
@@ -4125,6 +4174,10 @@ begin
 
   if CurUninstallStep <> usPostUninstall then
     Exit;
+
+  { PRE_RELEASE_FIXES 74 - see RemoveSdGroups.  Here, not further down, because
+    everything below this point can Exit early. }
+  RemoveSdGroups;
 
   { The sdusers group is deliberately NOT removed.  CREATE.ACCOUNT adds every
     SD user to it, and a data tree the user chose to keep is ACL'd to it, so
