@@ -3508,11 +3508,11 @@ begin
         REMOTE DESKTOP IS NAMED because it is the case people get wrong: it
         feels like connecting from another computer and is not.  5.6.2 puts it
         with the physical console, on the administrator's side of the line. }
-                         'IF YOU SET NO PASSWORD, this account can be used ONLY at this ' +
-                         'computer - at the keyboard, or through Remote Desktop or similar ' +
-                         'remote-control software - and only from a session run as ' +
-                         'administrator. ssh and the SD Core API will refuse to connect until a ' +
-                         'password is set.' + #13#10#13#10;
+                         'A PASSWORD IS REQUIRED. Until this account has one it cannot be used ' +
+                         'at all - not here at the keyboard, not over ssh, and not through the ' +
+                         'SD Core API. Skipping the step does not leave you a keyboard-only ' +
+                         'account; SD Core asks again the first time you open it, and will not ' +
+                         'let a session go on without one.' + #13#10#13#10;
          end;
       { Lower case for the reason given at code 0 above. }
       2: AccountMsg := 'Your SD Core account, ' + Lowercase(ExpandConstant('{username}')) +

@@ -5,6 +5,23 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+02 Sep 26  SD NO LONGER OFFERS TO SET "NO PASSWORD FOR NOW". A PASSWORD IS
+           REQUIRED, AND THE MESSAGES NOW SAY SO.
+
+           The password prompt used to offer an empty line as a way to skip the
+           step, and said the account would still work at this computer from an
+           administrator session - just not over ssh or the API. That account
+           could never exist. SD asks for a password every time you sign in
+           until one is set, and ends the session if you do not give one, so
+           there was no way to reach it.
+
+           Nothing about what SD does has changed: the empty line ended the
+           session before and still does. What changed is that the prompt, the
+           refusal, and the installer's closing page now describe that instead
+           of describing something else. Until an account has a password it
+           cannot be used at all - not at the keyboard, not over ssh, and not
+           through the SD API.
+
 01 Sep 26  ssh.server install NOW WARNS ABOUT THE DOWNLOAD TIME AND ASKS BEFORE
            IT STARTS.
 

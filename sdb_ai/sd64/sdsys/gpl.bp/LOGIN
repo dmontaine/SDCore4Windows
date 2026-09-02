@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 02 Sep 26 Windows port - the "press Enter for no password" offer is retired
+*           from 10089/10095/10101; the behaviour is unchanged and only the
+*           wording moved.  PRE_RELEASE_FIXES.md 130.
 * 31 Aug 26 Windows port - THE ELEVATION AUDIT MOVED TO THE GRANT, AND THE
 *           GRANT'S ANSWER IS TAKEN.  "ELEVATION GRANTED account=SDSYS" was
 *           written 85 lines before kernel(K$ADMINISTRATOR, 1) granted
@@ -1111,8 +1114,25 @@ require.credential:
 *   AND BOUNDING IT RETIRES THE ORIGINAL REASON FOR THE EMPTY-LINE EXIT, which
 *   the note below gives as "otherwise a session that cannot set a credential
 *   would loop with no way to leave but killing the process".  That cannot
-*   happen now.  The exit stays because 10089 offers it as a deliberate choice,
-*   not because it is the only way out.
+*   happen now.
+*
+* 02 Sep 26 Windows port - AND THE EXIT IS NO LONGER OFFERED AS A CHOICE.
+*   PRE_RELEASE_FIXES.md 130.  This note used to end "the exit stays because
+*   10089 offers it as a deliberate choice, not because it is the only way
+*   out", and 10089 described the account you would get: usable at the
+*   keyboard, from an elevated session, just not over ssh or the API.
+*
+*   THAT ACCOUNT CANNOT EXIST, AND IT WAS THE OWNER WHO RULED THE WORDING OUT
+*   RATHER THAN THE BEHAVIOUR IN.  This prompt fires on every login until a
+*   credential is set, and every route through it without one lands on
+*   sysmsg(10095) and ends the session - so there is no way to REACH a
+*   passwordless account that works anywhere.  Walked into on a guest,
+*   2 Sep 2026, at the keyboard in an elevated session: exactly the case the
+*   old text said still worked.
+*
+*   SO THE BEHAVIOUR IS UNCHANGED AND ONLY THE MESSAGES MOVED.  The empty line
+*   still ends the session; 10089, 10095 and 10101 now say that is what it
+*   does.  Do not restore the offer without making it true first.
    cred.max.tries = 3
    cred.tries = 0
 

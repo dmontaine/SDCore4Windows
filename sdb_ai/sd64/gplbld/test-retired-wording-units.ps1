@@ -56,6 +56,17 @@ Write-Host "test-retired-wording-units: messages $msgDir"
 # Replacement = must appear somewhere (the positive control that proves the fix
 # is real and the scan reaches it).  Ref names the PRE_RELEASE_FIXES entry.
 $RETIRED = @(
+    # 130 - the account this described could never exist: LOGIN demands a
+    # credential on every login and ends the session without one, so there was
+    # no way to REACH a passwordless account that "works only at this computer".
+    # Registered because the claim had SEVEN copies across messages, sd.iss and
+    # hard-coded crt lines, which is how one gets missed.
+    @{ Ref = '130'
+       Retired     = 'set no password for now'
+       Replacement = 'A password is required' }
+    @{ Ref = '130b'
+       Retired     = 'works only at this computer'
+       Replacement = 'cannot be used at all' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }
