@@ -43,15 +43,34 @@ try {
     }
 
     $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
-    if ($cap.State -ne 'Installed') {
-        Write-Output "install-ssh: installing OpenSSH Server (this downloads from Windows Update and can take several minutes)"
+    if ($cap.State -eq 'Installed') {
+        Write-Output "install-ssh: OpenSSH Server was already installed"
+    } else {
+        # SAY WHY WE ARE DOWNLOADING WHEN THE SERVER IS PLAINLY STILL HERE.
+        # PRE_RELEASE_FIXES 122.  An earlier "ssh.server remove" only STAGES the
+        # removal - it completes on the next reboot - so until then the
+        # capability reads UninstallPending (measured 1 Sep 2026) while sshd.exe
+        # is still present and the service still Running.  Re-adding the
+        # capability is the only SUPPORTED way to cancel that pending removal,
+        # and it re-downloads the payload from Windows Update because OpenSSH
+        # Server is a Feature-on-Demand: Windows keeps no local copy after
+        # install, so there is nothing on disk to re-enable from.  Measured on
+        # the host that day: ~19 minutes, after which State returned to Installed
+        # and the reboot no longer removes the server.  There is no cheaper
+        # supported cancel, so name the reason rather than let a ~19-minute
+        # download look like a fresh install of a server that is still running.
+        if ($cap.State -eq 'UninstallPending') {
+            Write-Output "install-ssh: OpenSSH Server is UninstallPending - an earlier 'ssh.server remove' staged a removal that a reboot would complete."
+            Write-Output "install-ssh: the server is still present and running until then; re-adding it now cancels that pending removal,"
+            Write-Output "install-ssh: which re-downloads the payload from Windows Update (a Feature-on-Demand keeps no local copy) and can take several minutes."
+        } else {
+            Write-Output "install-ssh: installing OpenSSH Server (this downloads from Windows Update and can take several minutes)"
+        }
         $r = Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
         if ($r.RestartNeeded) {
             Write-Output "install-ssh: installed, RESTART REQUIRED before the service can start"
             exit 2
         }
-    } else {
-        Write-Output "install-ssh: OpenSSH Server was already installed"
     }
 
     # The service is registered by the capability, not by us.  If it is not
