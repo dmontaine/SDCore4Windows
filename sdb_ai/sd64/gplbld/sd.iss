@@ -3477,17 +3477,20 @@ begin
              is now answered directly: no ssh server and no API listener. }
            if (not SshServerPresentAfterwards) and (not ApiWanted) then
              AccountMsg := AccountMsg +
-                         '    1. SD Core opens so you can give that account a password. YOU DO ' +
-                         'NOT NEED ONE HERE: nothing can reach this account from another ' +
-                         'machine, because no ssh server was installed and the SD Core API is ' +
-                         'switched off. Set one anyway if you may later install again with ' +
-                         'ssh or the API. It closes by itself either way.' + #13#10#13#10
+                         '    1. SD Core opens so you can give that account a password. A ' +
+                         'PASSWORD IS REQUIRED even here: SD Core asks for one every time you ' +
+                         'open the account and will not let a session go on without it. ' +
+                         'Nothing can reach this account from another machine - no ssh server ' +
+                         'was installed and the SD Core API is switched off - but that decides ' +
+                         'WHO could use it, not whether it needs a password. It closes by ' +
+                         'itself once you have set one.' + #13#10#13#10
            else
              AccountMsg := AccountMsg +
-                         '    1. SD Core opens so you can give that account a password. You do ' +
-                         'not need one at this machine - Windows has already authenticated ' +
-                         'you - it is what reaches the account from ANOTHER machine, over ' +
-                         'ssh or the API. It closes by itself once you have set it.' + #13#10#13#10;
+                         '    1. SD Core opens so you can give that account a password. A ' +
+                         'PASSWORD IS REQUIRED: SD Core asks for one every time you open the ' +
+                         'account and will not let a session go on without it. It is also what ' +
+                         'reaches the account from ANOTHER machine, over ssh or the API. It ' +
+                         'closes by itself once you have set it.' + #13#10#13#10;
 
            AccountMsg := AccountMsg +
                          '    2. The same window then checks the installation and tells ' +

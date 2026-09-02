@@ -67,6 +67,18 @@ $RETIRED = @(
     @{ Ref = '130b'
        Retired     = 'works only at this computer'
        Replacement = 'cannot be used at all' }
+    # 130c/130d - TWO COPIES THE FIRST SWEEP MISSED, found on a screen rather
+    # than by grep.  They said the same false thing in different words, so
+    # searching for "no password" and "works only at this computer" walked
+    # straight past them.  THE LESSON IS ABOUT THE LINT ITSELF: it proves the
+    # PHRASES registered here are gone, never that the CLAIM is - a copy worded
+    # differently escapes it, and only reading the screen caught these.
+    @{ Ref = '130c'
+       Retired     = 'NOT NEED ONE HERE'
+       Replacement = 'PASSWORD IS REQUIRED even here' }
+    @{ Ref = '130d'
+       Retired     = 'not need one at this machine'
+       Replacement = 'will not let a session go on without it' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }
