@@ -127,9 +127,25 @@ $include err.h
          stop sysmsg(10141)  ;* ssh.server install | remove
    end case
 
-*  ***REMOVE IS CONFIRMED, INSTALL IS NOT.***  Adding a server takes nothing
-*  away; removing one strands every SD account, and the question names that
-*  rather than asking a bare "are you sure".
+*  ***BOTH ARE CONFIRMED NOW, FOR DIFFERENT REASONS.***  PRE_RELEASE_FIXES 126.
+*  REMOVE strands every account that has only ssh, and its prompt names that.
+*  INSTALL takes nothing away, but it starts a Windows Update download that can
+*  run for up to about an hour with little on screen, so it confirms the time
+*  cost and lets the administrator abort rather than be committed unawares.
+*  Both default to N; an aborted verb changes nothing (10145).
+   if action = 'INSTALL' then
+      loop
+         display sysmsg(10163) :   ;* Install downloads from WU, up to ~an hour; install now (y/<n>)?
+         input yn
+         yn = upcase(trim(yn))
+         if yn = '' then yn = 'N'
+         until yn = 'Y' or yn = 'N'
+      repeat
+      if yn = 'N' then
+         stop sysmsg(10145)  ;* Nothing was changed
+      end
+   end
+
    if action = 'REMOVE' then
 *     ***THE PROMPT SAYS WHICH ANSWER ENTER GIVES, AND ENTER GIVES IT.***
 *     Owner's rule, 30 Aug 2026: "scripts need to indicate which is the default

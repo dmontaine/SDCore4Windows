@@ -5,6 +5,15 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  ssh.server install NOW WARNS ABOUT THE DOWNLOAD TIME AND ASKS BEFORE
+           IT STARTS.
+
+           Installing the OpenSSH server pulls it from Windows Update, which can
+           take from a few minutes to about an hour with little on screen. The
+           command now says so and waits for a yes before starting, so it can be
+           aborted rather than appearing to hang. (ssh.server remove already
+           confirmed; now install does too.)
+
 01 Sep 26  create.account / modify.account NOW WARN WHEN AN ACCOUNT HAS NO WAY
            TO SIGN IN YET.
 
