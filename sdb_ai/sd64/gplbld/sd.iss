@@ -4152,6 +4152,30 @@ var
   Net: String;
   Code: Integer;
 begin
+  { 02 Sep 26 - NOT ON A SILENT UNINSTALL.  Owner, 2 Sep 2026: "if we don't
+    allow silent installs, we should not allow silent uninstalls."  Refusing
+    them outright is not available - cycle.ps1:497 runs the uninstaller with
+    /VERYSILENT and the development cycle would stop - but the principle
+    applies to THIS step, and it is the step that needed it.
+
+    REMOVING sdsshonly IS A SECURITY-POSTURE CHANGE, NOT TIDYING.  It gives any
+    KEPT account the console and Remote Desktop back.  Doing that unattended,
+    with nobody shown the closing page that says so, is the shape the owner was
+    objecting to.
+
+    SO THE REMOVAL IS TIED TO THE DISCLOSURE: the page that announces it only
+    renders on an interactive uninstall, and now so does the removal.  The two
+    cannot drift apart, which is what PRE_RELEASE_FIXES 74 was filed about in
+    the first place - a disclosure that did not match what was left behind.
+
+    THE COST, STATED: a scripted unattended uninstall still leaves the three
+    groups, so 74 is fixed on the interactive path only.  That is the safe
+    direction - it leaves MORE behind rather than silently changing who can
+    sign in - and it matches sd.iss's existing rule that a silent uninstall
+    never deletes the database. }
+  if UninstallSilent then
+    Exit;
+
   Net := ExpandConstant('{sys}\net.exe');
   Exec(Net, 'localgroup sdssh /delete',     '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdapi /delete',     '', SW_HIDE, ewWaitUntilTerminated, Code);
