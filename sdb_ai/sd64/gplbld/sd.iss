@@ -461,8 +461,22 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; THEY BEHAVE*** - it passed the broken version - and no cycle or suite run ever
 ; sees this page.  cycle.ps1 -SkipInstall builds the installer without touching
 ; the tree; running the .exe to the tasks page and cancelling writes nothing.
+; 02 Sep 26 - "Check: ApiConfAbsent", PRE_RELEASE_FIXES 89 Defect A, owner's
+; ruling of 2 Sep 2026.  THE BOX COULD NOT OPEN A SOCKET ON A TREE THAT ALREADY
+; HAD sd.conf, because the [Files] pair that writes it is onlyifdoesntexist on
+; both arms - so on the uninstall-then-reinstall path it was offered, ticked,
+; and inert.  Hidden now, the way sshserver hides on a machine that already has
+; a server.  The subtask goes with it: a child cannot outlive its parent.
+;
+; ***AND THE FIREWALL CALL IS GATED IN THE SAME EDIT, WHICH IS THE HALF THAT
+; MATTERS.***  ApplyApiFirewall follows ApiNetworkWanted, and a hidden task
+; reads as NOT selected - so hiding this box alone would have CLOSED port 4243
+; on every reinstall, turning "visible but inert" into "invisible but active".
+; That is the trap ShouldSkipPage's own comment records, arriving by a second
+; route.  The box and its firewall action now stand or fall together.
 Name: "apiremote"; Description: "Provide the SD Core API (port 4243)"; \
-    GroupDescription: "3)  SD Core API - Availability and Access:"; Flags: unchecked checkablealone
+    GroupDescription: "3)  SD Core API - Availability and Access:"; Flags: unchecked checkablealone; \
+    Check: ApiConfAbsent
 Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
     Flags: unchecked dontinheritcheck
 
@@ -1558,6 +1572,79 @@ begin
   Result := WizardIsTaskSelected('apiremote');
 end;
 
+(* 02 Sep 26 - CAN THE API BOX ACT AT ALL?  PRE_RELEASE_FIXES 89, Defect A.
+   Owner's ruling, 2 Sep 2026: hide it when it cannot, which is the shape
+   sshserver already uses to hide on a machine that has a server.
+
+   ***THE HONEST TEST IS sd.conf's EXISTENCE, NOT THE PATH THAT LED HERE.***
+   The [Files] pair that writes sd.conf is onlyifdoesntexist on BOTH arms, so
+   the box can move the listener only when there is no sd.conf to preserve.
+   Asking that directly is narrower than asking "is this an upgrade", and it
+   stays true however the tree came to be here.
+
+   THE PATH IT WAS FILED FOR: uninstall then reinstall with the database KEPT.
+   The uninstall key is gone, so SdWasInstalled and TrueUpgrade are both false
+   and the tasks page IS shown - while the data tree is present, so sd.conf is
+   preserved and ticking "Provide the SD Core API" opened no socket. *)
+function ApiConfAbsent: Boolean;
+begin
+  Result := not FileExists(ExpandConstant('{#DataDir}\sd.conf'));
+end;
+
+(* WILL THERE BE AN API LISTENER WHEN THIS INSTALL FINISHES?
+
+   ***THIS EXISTS BECAUSE HIDING THE BOX WOULD OTHERWISE HAVE MADE THE CLOSING
+   REPORT LIE, AND IN THE DANGEROUS DIRECTION.***  Three places read ApiWanted
+   as "is there an API" - two "no ssh server" paragraphs and the account
+   summary - and a hidden task reads as NOT selected.  On a preserved tree
+   whose sd.conf runs the API, the account summary would have stated
+   "Nothing can reach this account from another machine", which is a false
+   claim of isolation.  Fixing Defect A without this would have replaced an
+   inert tickbox with a wrong security sentence: a worse bargain.
+
+   IT READS THE FILE RATHER THAN GUESSING FROM THE PATH.  stage.py ships two
+   variants and says which is which in as many words - "full (APIPORT=4243) and
+   stand-alone (APIPORT unset)" - so an ACTIVE APIPORT line is the honest test,
+   and a commented or valueless one is not a listener.  Where there is no
+   sd.conf to read, the box is the only answer there is, and it is offered. *)
+function ApiConfHasListener: Boolean;
+var
+  Lines: TArrayOfString;
+  I, Eq: Integer;
+  L: String;
+begin
+  Result := False;
+  if not LoadStringsFromFile(ExpandConstant('{#DataDir}\sd.conf'), Lines) then
+    Exit;
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    L := Trim(Lines[I]);
+    if L <> '' then
+    begin
+      if (Copy(L, 1, 1) <> '#') and (Copy(L, 1, 1) <> ';') then
+      begin
+        if Pos('APIPORT', Uppercase(L)) = 1 then
+        begin
+          Eq := Pos('=', L);
+          if Eq > 0 then
+          begin
+            Result := Trim(Copy(L, Eq + 1, Length(L))) <> '';
+            Exit;
+          end;
+        end;
+      end;
+    end;
+  end;
+end;
+
+function ApiListenerAfterwards: Boolean;
+begin
+  if ApiConfAbsent then
+    Result := ApiWanted
+  else
+    Result := ApiConfHasListener;
+end;
+
 { 30 Aug 26 - MAY OTHER COMPUTERS REACH IT?  PRE_RELEASE_FIXES 75.
 
   SEPARATE FROM ApiWanted ON PURPOSE, and the two answer different questions:
@@ -2386,7 +2473,11 @@ begin
               'configuration was changed and no ssh port was opened. scp and sftp are ' +
               'unaffected on this computer.' + #13#10#13#10;
 
-    if ApiWanted then
+    { 02 Sep 26 - ApiListenerAfterwards, NOT ApiWanted.  PRE_RELEASE 89 Defect
+      A hid the box on a tree that already has sd.conf, and a hidden task reads
+      as not selected - so this would have promised "no API" over a preserved
+      configuration that runs one. }
+    if ApiListenerAfterwards then
       Result := Result +
                 'Accounts you gave API access can still sign in over the SD Core API. ssh is ' +
                 'the interactive way in; to add it, install OpenSSH Server and run this ' +
@@ -2428,7 +2519,10 @@ begin
               'SD Core itself is installed and works; administrators use it by typing "sd" at ' +
               'an elevated prompt. You asked for the ssh server, so the accounts you create ' +
               'are set to sign in over ssh - but until the server is there they cannot.';
-    if ApiWanted then
+    { 02 Sep 26 - ApiListenerAfterwards, for the reason given at the branch
+      above: on a preserved tree the box is hidden and its answer is not the
+      one to report. }
+    if ApiListenerAfterwards then
       Result := Result + ' Accounts you also gave API access can use the API meanwhile.';
     Result := Result + #13#10#13#10 +
               'Put the server right from an elevated PowerShell prompt:' + #13#10#13#10 +
@@ -3447,7 +3541,19 @@ begin
       skipped page is the previous install's answer.  Running it would either
       re-open 4243 to the network unasked or shut a port the site had opened.
       remote.api on|local|off is the way to change it. }
-    if not TrueUpgrade then
+    { 02 Sep 26 - "and ApiConfAbsent", PRE_RELEASE_FIXES 89 Defect A.  THE BOX
+      IS NOW HIDDEN WHEN IT CANNOT ACT, AND THIS IS THE OTHER HALF OF THAT.
+      A hidden task reads as NOT selected, so ApiNetworkWanted goes false and
+      this call would have CLOSED port 4243 on every uninstall-then-reinstall -
+      "visible but inert" becoming "invisible but active", which is the trap
+      ShouldSkipPage's comment records, arriving by a second route.
+
+      SO THE BOX AND THE FIREWALL STAND OR FALL TOGETHER, which also ends the
+      half-acting shape 89 was filed for: the reader used to get a firewall
+      change and no service change from one tick.  Where the box is not
+      offered, the site's own rule is left exactly as it was and remote.api
+      on|local|off is the way to change it. }
+    if (not TrueUpgrade) and ApiConfAbsent then
       ApiFw := ApplyApiFirewall;
 
     { STRICTLY BEFORE ApplyAllowGroups.  That step points sshd at the sdssh
@@ -3559,7 +3665,14 @@ begin
              this branch cares about was never really "is this stand-alone" - it
              was "can anything reach this account from another machine", and that
              is now answered directly: no ssh server and no API listener. }
-           if (not SshServerPresentAfterwards) and (not ApiWanted) then
+           { 02 Sep 26 - ApiListenerAfterwards, AND THIS IS THE SITE THAT MADE
+             THE PREDICATE NECESSARY.  PRE_RELEASE 89 Defect A hides the API box
+             on a tree that already has sd.conf; a hidden task reads as not
+             selected, so this branch would have told the reader "Nothing can
+             reach this account from another machine" on a machine still running
+             the API.  A false claim of isolation is worse than the inert
+             tickbox the ruling set out to remove. }
+           if (not SshServerPresentAfterwards) and (not ApiListenerAfterwards) then
              AccountMsg := AccountMsg +
                          '    1. SD Core opens so you can give that account a password. A ' +
                          'PASSWORD IS REQUIRED even here: SD Core asks for one every time you ' +
