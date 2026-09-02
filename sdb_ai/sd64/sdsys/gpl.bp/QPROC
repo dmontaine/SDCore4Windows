@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 02 Sep 26 Windows port - a directory-file record whose FILE is present under
+*            a name this encoding cannot produce now reports "invalid name"
+*            (10164) rather than "not found".  PRE_RELEASE_FIXES.md 128.
 * 22 Aug 26 Windows port - is.windows is gone.  system(91) is a constant 1
 *            here, so "if is.windows and is.dir" tested a platform that cannot
 *            be anything else.  PROJECT_STATUS.md section 7 step 12.
@@ -197,6 +200,7 @@ $define MAX.STRINGS     20          ;* For SEARCH command
    sampling = @false             ;* Process every n'th record...
    sample.interval = 1           ;* ...for this value of n
    not.found.list = ''           ;* Record not found
+   invalid.name.list = ''        ;* Record's FILE is there under an unusable name
 
    absent.null = @false          ;* ABSENT.NULL keyword
    locking = @false              ;* LOCKING keyword
@@ -2217,6 +2221,17 @@ done:
          printline =  "'" : remove(not.found.list, not.found.delim) : "' not found"
          if qdisp(QD$EMIT, printline, 'X') then goto qdisp.error
       while not.found.delim
+      repeat
+   end
+
+*  PRE_RELEASE_FIXES.md 128 - see record.not.found.  These are reported
+*  separately rather than folded into the list above, because they are a
+*  different answer: the file IS there and its name is the problem.
+   if (list.command or count.command or reformat.command) and len(invalid.name.list) then
+      loop
+         printline = sysmsg(10164, remove(invalid.name.list, invalid.name.delim))
+         if qdisp(QD$EMIT, printline, 'X') then goto qdisp.error
+      while invalid.name.delim
       repeat
    end
 
@@ -6399,8 +6414,33 @@ record.not.found:
       goto exit.qproc
    end
 
-   locate id in not.found.list<1> setting i else
-      not.found.list<-1> = id
+*  02 Sep 26 Windows port - PRE_RELEASE_FIXES.md 128.  TELL "THE RECORD IS NOT
+*  THERE" APART FROM "THE FILE IS THERE UNDER A NAME THIS ENCODING CANNOT
+*  PRODUCE".  A directory file stores ids as filenames with the restricted
+*  characters escaped, and '%' is itself restricted - it encodes to "%P".  So a
+*  file dropped in from outside carrying a bare '%' has a name SD would never
+*  create: dir_select() now reports it literally rather than mangling it (128),
+*  but reading that id back re-encodes the '%' and finds nothing.
+*
+*  "not found" is the misleading half, because the user can SEE the file.  The
+*  test is exact rather than a guess about '%': ask the file system whether a
+*  file of exactly this id is sitting in the directory.  It runs only on the
+*  failure path, so it costs nothing on a normal read.
+   inv.name = @false
+   if is.dir then
+      if ospath(fileinfo(data.f, FL$PATH) : @ds : id, OS$EXISTS) then
+         inv.name = @true
+      end
+   end
+
+   if inv.name then
+      locate id in invalid.name.list<1> setting i else
+         invalid.name.list<-1> = id
+      end
+   end else
+      locate id in not.found.list<1> setting i else
+         not.found.list<-1> = id
+      end
    end
 
    return
