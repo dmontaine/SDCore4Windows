@@ -927,6 +927,18 @@ $neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   # refuses - so the failure never looks like a missing list
                   # entry, it looks like the tree needing a cycle.
                   'test-stemcoverage-units.ps1',
+                  # 02 Sep 26 - test-dirscoverage-units.ps1, PRE_RELEASE 132's
+                  # guard: does sd.iss's [Dirs] block protect every sdsys
+                  # directory that stage.py ships EMPTY and PRESERVES?  Listed
+                  # in the commit that creates it, under the rule the entry
+                  # above states and that has now been broken four times.
+                  #
+                  # IT GUARDS THE SAME CLASS THIS LIST IS: two files describing
+                  # one fact, kept in step by hand.  120 fixed three names,
+                  # 132 found three more still missing after it shipped, and
+                  # the second set was found by accident rather than by
+                  # anything going red.
+                  'test-dirscoverage-units.ps1',
                   # 31 Aug 26 - the three that measured PRE_RELEASE 12, 24 and
                   # 87.  LISTED IN THE COMMIT THAT ADDS THEM, which is the rule
                   # the entry above was added for after breaking it.

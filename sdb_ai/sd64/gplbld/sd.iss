@@ -664,6 +664,36 @@ Name: "{#DataDir}\sdsys\bp"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\bp.out"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\batch.jobs"; Flags: uninsneveruninstall
 
+; 02 Sep 26 - PRE_RELEASE_FIXES 132.  THE OTHER THREE, FOUND BY MEASURING THE
+; FIX ABOVE RATHER THAN BY ANOTHER SITE LOSING THEM.
+;
+; The witness run for 120 swept every SDSYS_PRESERVE directory instead of only
+; the three it had just fixed, and found cat, prt and $hold gone by the same
+; mechanism on the same install.  ONLY cat SAID SO: secure-sysdirs.ps1 hardens
+; it, so its absence reached the closing box as "An SD Core system directory
+; was NOT locked (code 2)"; nothing hardens prt or $hold, so those two vanished
+; in silence.  That is the bp.out argument above, and it now has evidence
+; instead of foresight.
+;
+; ***WHAT MAKES THIS WORSE THAN THREE MISSING DIRECTORIES IS THAT THE INSTALLER
+; PROMISES THEM BY NAME.***  The upgrade notice at the MsgBox below tells the
+; reader "YOUR DATA IS UNTOUCHED: ... anything you catalogued, the print queue,
+; held output ..." - cat, prt and $hold, three of its six named promises - and
+; that sentence is generated from stage.py's SDSYS_PRESERVE while the
+; protection was enumerated here by hand.  The promise tracked a ten-entry list
+; and the machine tracked a three-entry one.
+;
+; ***dumps IS NOT HERE, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.***  It
+; is in the same class and does NOT disappear, because secure-dumps.ps1 creates
+; it when absent and its [Run] entry carries no Check: - so it is repaired on
+; every install by a second mechanism.  test-dirscoverage-units.ps1 knows that,
+; declares it as the one exemption, and FAILS if the reason stops being true.
+; Two mechanisms doing one job is what let this drift twice; the guard is what
+; stops a third time.
+Name: "{#DataDir}\sdsys\cat"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\prt"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\$hold"; Flags: uninsneveruninstall
+
 [Icons]
 Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 
