@@ -765,6 +765,20 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-audit.ps1"" -Path ""{#DataDir}\sdsys\audit"""; \
     Flags: runhidden; StatusMsg: "Making the audit trail append-only..."
 
+; 02 Sep 26 - PRE_RELEASE_FIXES.md 28.  AFTER the tree ACL for the same reason
+; as secure-audit.ps1 above: inheritance would otherwise put sdusers Modify back
+; on the directory, which is the whole defect - a process dump carries the
+; variable state of the session that wrote it, and sdsys is readable by every
+; SD user.  stage.py's SD_CONF points DUMPDIR here; without that, pdump.c:98
+; falls back to sysdir and this directory is never used.
+;
+; No exit code check, on secure-audit.ps1's precedent: if this step does not
+; run, dumps land in a directory that is inherited-Modify rather than
+; write-only, which is the pre-28 behaviour and not a broken install.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-dumps.ps1"" -Path ""{#DataDir}\sdsys\dumps"""; \
+    Flags: runhidden; StatusMsg: "Securing the process-dump directory..."
+
 ; THE CREDENTIAL STORE IS NOT LOCKED HERE.  It is locked from the Code section,
 ; by SecureCredStore, called at ssPostInstall.  MOVED OUT OF THIS SECTION
 ; 17 Aug 2026 because a Run entry discards the exit code, and this is the one
