@@ -1166,6 +1166,12 @@ def main():
                    # reason as the rest: sd.iss runs it from {app}, so a script
                    # left out of this list is a [Run] entry pointing at nothing.
                    'secure-dumps.ps1',
+                   # 02 Sep 26 - PRE_RELEASE_FIXES.md 135.  sd.iss runs it from
+                   # {app} at ssPostInstall, so leaving it out of this list is a
+                   # call pointing at nothing - and this one fails toward an
+                   # account that is NOT confined, so it must ship or the step
+                   # reports its own absence in the closing box.
+                   'restore-sshonly.ps1',
                    # 23 Aug 26 - section 7 step 15.  gcat decides WHICH
                    # catalogued program runs; this locks what the interpreter
                    # running it IS.  Both ship or neither is worth much.

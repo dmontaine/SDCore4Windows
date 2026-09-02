@@ -3287,6 +3287,73 @@ end;
   credential ACL leaves an escalation open, and it did, silently, for a whole
   session.  A Run entry discards the exit code (this file records the same
   mistake being made about the OpenSSH entry), so checking it means Exec. }
+{ PUT EVERY NON-ADMINISTRATOR SD ACCOUNT BACK INTO sdsshonly, and return what
+  to tell the user if it did not happen.  PRE_RELEASE_FIXES 135.
+
+  WHY IT IS NEEDED AT ALL.  The uninstaller deletes sdsshonly outright, and a
+  Windows local group takes its membership with it.  This install recreated the
+  group and deny-logon.ps1 has just reapplied SeDenyInteractiveLogonRight and
+  SeDenyRemoteInteractiveLogonRight to it - correctly, and to a group with
+  NOBODY IN IT.  Without this step every account that was confined to ssh
+  silently gets the console and Remote Desktop back, and the box below tells
+  the reader their accounts are untouched while it is true of the data and
+  false of the access.
+
+  ***IT IS IN [Code] AND NOT [Run] FOR SecureCredStore's REASON***, written out
+  where that one is: a Run entry discards the exit code, and this is a step
+  whose silent failure is a privilege escalation rather than a degraded
+  install.  Any non-zero is reported in the closing box.
+
+  ***AFTER AdoptAccount, DELIBERATELY.***  Adopt is the install's own writer
+  into the register, so running after it means the register this reads is the
+  finished one.  The adopted user is an administrator - the installer required
+  elevation to get here - so the script skips them by the same rule CREATEA
+  uses, and the ordering costs nothing either way.
+
+  IT READS THE REGISTER RATHER THAN ANY LOCAL GROUP, on the owner's ruling of
+  2 Sep 2026, because the same repair has to work when SD is MOVED to a new
+  computer and the only thing that arrives is the data tree.  The script's own
+  header carries that reasoning. }
+function RestoreSshOnly: String;
+var
+  Code: Integer;
+  Ps, Script, Data: String;
+begin
+  Result := '';
+  Code := 0;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\restore-sshonly.ps1');
+  Data := ExpandConstant('{#DataDir}');
+
+  if not FileExists(Script) then
+  begin
+    Result := 'The ssh-only confinement could NOT be restored: restore-sshonly.ps1 ' +
+              'is not installed. Accounts that were confined to ssh can sign in at ' +
+              'the console and over Remote Desktop until an administrator puts them ' +
+              'back into the "sdsshonly" group.' + #13#10#13#10;
+    Exit;
+  end;
+
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '" -DataDir "' + Data + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+
+  if Code = 0 then
+    Exit;
+
+  { Exit 2 is "could not measure and did nothing" and exit 1 is "a repair
+    failed"; both leave accounts unconfined, so both say the same thing to the
+    reader and the code distinguishes them for whoever reads the log. }
+  Result := 'The ssh-only confinement was NOT restored (code ' + IntToStr(Code) + '). ' +
+            'Accounts SD Core created are meant to reach this computer only over ssh, ' +
+            'and until this is put right they can also sign in at the console and over ' +
+            'Remote Desktop. Put it right from an ELEVATED PowerShell prompt:' +
+            #13#10#13#10 +
+            '    powershell -File "' + Script + '" -DataDir "' + Data + '"' +
+            #13#10#13#10;
+end;
+
 function SecureCredStore: String;
 var
   Code: Integer;
@@ -3497,6 +3564,7 @@ var
   SysdirMsg: String;
   AcctAclMsg: String;
   DictMsg: String;
+  SshOnlyMsg: String;
   MarkerMsg: String;
 begin
   if CurStep = ssPostInstall then
@@ -3654,6 +3722,11 @@ begin
 
     { Same rule - an unattended install must still end with a usable account. }
     AdoptCode := AdoptAccount;
+
+    { AFTER adopt, so the register this reads is the finished one.  See the
+      function: this is the step that undoes an uninstall having deleted
+      sdsshonly and taken every membership with it. }
+    SshOnlyMsg := RestoreSshOnly;
 
     { 30 Aug 26 - THE MARKER STEP IS GONE.  PRE_RELEASE_FIXES 75.  MarkerMsg is
       kept as an empty string rather than being unpicked from the closing
@@ -3868,6 +3941,11 @@ begin
              install, and both report a protection that is absent rather than a
              setting that is present. }
            DenyMsg +
+           { And with DenyMsg, because they are the two halves of one control:
+             DenyMsg reports that sdsshonly carries no deny rights, this reports
+             that it has the rights and nobody in it.  Either way an account
+             meant to be confined to ssh is not.  PRE_RELEASE_FIXES 135. }
+           SshOnlyMsg +
            { And beside DenyMsg for the third time: empty unless the ssh and API
              groups could not be set up, in which case ssh is refused to
              everyone but administrators and the person needs to know now. }
