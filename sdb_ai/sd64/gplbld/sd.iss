@@ -1770,15 +1770,19 @@ begin
        'Windows ships. The same applies if somebody has already changed how this ' +
        'computer''s Windows ssh server is configured.' + #13#10#13#10 +
 
-       'EVERY SSH SESSION GOES STRAIGHT INTO SD Core, AND THIS IS NOT AN OPTION' + #13#10#13#10 +
+       'IF YOU INSTALL THE ssh SERVER, EVERY SSH SESSION GOES STRAIGHT INTO SD Core, ' +
+       'AND THAT PART IS NOT AN OPTION' + #13#10#13#10 +
        'SD Core limits ssh to SD Core users and administrators, and puts every ssh session ' +
-       'straight into SD Core instead of a command prompt. That is the whole point of ' +
-       'the ssh-only model: an account SD Core creates cannot get a shell on this ' +
-       'computer.' + #13#10#13#10 +
-       'THE COST, SAID PLAINLY: scp and sftp STOP WORKING FOR EVERYONE on this ' +
-       'computer, because the command is forced and there is no subsystem left to ' +
-       'run. Remote-control tools that copy files are unaffected, and so are the ' +
-       'console and Remote Desktop.' + #13#10#13#10 +
+       'straight into SD Core instead of a command prompt. That is the point of ' +
+       'confining ssh to SD Core: an account SD Core creates cannot get a shell ' +
+       'on this computer.' + #13#10#13#10 +
+       'THE COST, SAID PLAINLY, AND ONLY IF YOU INSTALL THE SERVER: scp and sftp ' +
+       'STOP WORKING FOR EVERYONE on this computer, because the command is forced ' +
+       'and there is no subsystem left to run. Remote-control tools that copy files ' +
+       'are unaffected, and so are the console and Remote Desktop.' + #13#10#13#10 +
+       'DECLINE THE ssh SERVER ON THE NEXT PAGE AND NONE OF THAT HAPPENS. SD Core ' +
+       'then touches no ssh configuration at all, opens no port, and leaves scp and ' +
+       'sftp exactly as they are. The ssh server is off by default.' + #13#10#13#10 +
        'SD Core''s settings go in a marked block of their own, and any existing ' +
        'sshd_config is kept beside it as sshd_config.before-sd. ' +
        'Uninstalling SD Core removes its block and restarts the ssh server, which ' +
@@ -3634,7 +3638,10 @@ begin
              Removed: the "SD runs as a service and restarts itself" paragraph;
              the explanation of what LOGTO SDSYS does and why Windows asks for
              consent; the remote-control-tool passage; and the ADMINISTRATOR
-             keyword.  The first page carries the service and the ssh-only model;
+             keyword.  The first page carries the service and what confining ssh
+             to SD Core costs - PRE_RELEASE 129 retired the old four-word name
+             for that, since the API is an independent way in and ssh was never
+             the only one;
              the rest is reference material that belongs with the verb, not in a
              box somebody reads once.  The bare COMMANDS stayed, because they are
              the thing a reader comes back for.

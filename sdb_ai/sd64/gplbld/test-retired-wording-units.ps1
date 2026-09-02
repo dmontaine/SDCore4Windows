@@ -88,6 +88,15 @@ $RETIRED = @(
     @{ Ref = '130e'
        Retired     = 'used only at this computer from a session run as administrator'
        Replacement = 'cannot be used AT ALL' }
+    # 129 - "the ssh-only model" is 124's retired premise in compressed form.
+    # 124 registered the long phrase; this said the same thing in four words and
+    # sat in the very page 124 had corrected, which is how it survived.
+    @{ Ref = '129'
+       Retired     = 'ssh-only model'
+       Replacement = 'confining ssh to SD Core' }
+    @{ Ref = '129b'
+       Retired     = 'THE COST, SAID PLAINLY: scp and sftp'
+       Replacement = 'ONLY IF YOU INSTALL THE SERVER' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }
