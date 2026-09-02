@@ -134,21 +134,110 @@ foreach ($f in (Get-ChildItem -LiteralPath $gplbld -File -Filter '*.ps1')) {
     $scriptFiles += @{ Path = $f.FullName; Name = $f.Name; Strip = 'ps1' }
 }
 
+# 02 Sep 26 - PRE_RELEASE 131 (a).  PASCAL { } COMMENTS, AND WHY "HAS A BRACE"
+# IS NOT THE TEST.  Inno's own CONSTANTS are braced too - {app}, {tmp}, {sys},
+# {#AppName}, a GUID - so a naive strip would delete shipped text and turn this
+# lint into a silent liar, which is the failure it exists to prevent.
+#
+# MEASURED ON THIS FILE RATHER THAN ASSUMED: inside [Code], every brace span
+# that CONTAINS WHITESPACE is prose and every constant has none.  So whitespace
+# is the test, and it errs toward NOT stripping - a space-less comment stays in
+# the corpus and can at worst raise a loud false positive, never hide shipped
+# wording.  {# is a preprocessor directive and is never a comment.
+#
+# The scope is [Code] only.  sd.iss:876 discusses "{" and "}" inside a ";"
+# comment ABOVE [Code], and that line is already stripped by the ";" rule - so
+# confining this to [Code] sidesteps it instead of parsing around it.
+function Remove-PascalComment([string]$line, [ref]$inComment) {
+    $out = ''
+    $i   = 0
+    while ($i -lt $line.Length) {
+        if ($inComment.Value) {
+            $j = $line.IndexOf('}', $i)
+            if ($j -lt 0) { return $out }
+            $inComment.Value = $false
+            $i = $j + 1
+            continue
+        }
+        $b = $line.IndexOf('{', $i)
+        if ($b -lt 0) { $out += $line.Substring($i); break }
+        $isDirective = (($b + 1) -lt $line.Length -and $line[$b + 1] -eq '#')
+        $close = $line.IndexOf('}', $b)
+        if ($close -ge 0) {
+            $inner = $line.Substring($b + 1, $close - $b - 1)
+            if ((-not $isDirective) -and $inner -match '\s') {
+                $out += $line.Substring($i, $b - $i)          # prose: drop it
+            } else {
+                $out += $line.Substring($i, $close - $i + 1)  # constant: keep it
+            }
+            $i = $close + 1
+        } else {
+            if ($isDirective) { $out += $line.Substring($i); break }
+            $out += $line.Substring($i, $b - $i)
+            $inComment.Value = $true                          # block comment opens
+            break
+        }
+    }
+    return $out
+}
+
 $scriptLineCount = 0
+$flatCount       = 0
 foreach ($sf in $scriptFiles) {
-    $n = 0
+    $n            = 0
+    $inCode       = $false
+    $inComment    = $false
+    $issLines     = New-Object System.Collections.ArrayList
     foreach ($rawLine in (Get-Content -LiteralPath $sf.Path)) {
         $n++
         $t = $rawLine
         if ($sf.Strip -eq 'ps1') {
             $i = $t.IndexOf('#'); if ($i -ge 0) { $t = $t.Substring(0, $i) }
         } elseif ($sf.Strip -eq 'iss') {
+            if     ($t -match '^\s*\[Code\]')      { $inCode = $true }
+            elseif ($t -match '^\s*\[[A-Za-z]+\]') { $inCode = $false }
             if ($t -match '^\s*;') { $t = '' }
             else { $i = $t.IndexOf('//'); if ($i -ge 0) { $t = $t.Substring(0, $i) } }
+            if ($inCode) { $t = Remove-PascalComment $t ([ref]$inComment) }
+            [void]$issLines.Add(@{ Line = $n; Text = $t })
         }
         if ($t.Trim().Length -gt 0) {
             [void]$corpus.Add(@{ File = $sf.Name; Line = $n; Text = $t })
             $scriptLineCount++
+        }
+    }
+
+    # 02 Sep 26 - PRE_RELEASE 131 (b), AND THIS IS THE HALF THAT MATTERS.
+    # sd.iss builds its dialogue as
+    #     'the options page offers to install ' +
+    #     'one. It is downloaded from Windows Update ...'
+    # so a phrase straddling the break IS ON SCREEN and is on NO SINGLE LINE.
+    # A line-by-line scan reports it absent - and "retired phrase absent" then
+    # becomes a lie about wording that is shipping, with nothing in the output
+    # to tell that apart from a genuine absence.
+    #
+    # Adjacent concatenated literals are joined into one extra corpus entry,
+    # keyed to the run's FIRST line so the per-line report still locates a hit.
+    # A run of one line adds nothing the per-line pass has not already got, so
+    # it is skipped and the corpus does not double.  A #13#10 between fragments
+    # becomes a newline rather than nothing, so a phrase cannot be invented
+    # across a paragraph break that the reader sees as two.
+    if ($sf.Strip -eq 'iss') {
+        $runText = ''; $runStart = 0; $runLines = 0
+        foreach ($e in $issLines) {
+            if ($runLines -eq 0) { $runStart = $e.Line }
+            foreach ($m in [regex]::Matches($e.Text, "'((?:[^']|'')*)'")) {
+                $runText += $m.Groups[1].Value.Replace("''", "'")
+            }
+            if ($e.Text -match '#13') { $runText += "`n" }
+            $runLines++
+            if ($e.Text.TrimEnd() -notmatch '\+\s*$') {
+                if ($runLines -ge 2 -and $runText.Trim().Length -gt 0) {
+                    [void]$corpus.Add(@{ File = $sf.Name; Line = $runStart; Text = $runText })
+                    $flatCount++
+                }
+                $runText = ''; $runLines = 0
+            }
         }
     }
 }
@@ -182,6 +271,11 @@ Write-Host '=== 0. the null case is refused: the corpus is real ==='
 Check ("at least 100 message files were read (got $($msgFiles.Count))") ($msgFiles.Count -ge 100) $null
 Check ("at least one script file was read (got $($scriptFiles.Count))") ($scriptFiles.Count -ge 1) $null
 Check ("script lines survived the comment-strip (got $scriptLineCount)") ($scriptLineCount -ge 1) $null
+# A flattening that silently flattened NOTHING looks identical to one that
+# worked - PRE_RELEASE 131 says so in as many words - so it is asserted, not
+# assumed.
+Check ("the .iss concatenation flattening produced entries (got $flatCount)") ($flatCount -ge 1) `
+      'nothing was flattened, so a phrase split across a + break would still read as absent'
 
 Write-Host ''
 Write-Host '=== 1. THE MACHINERY CANARY: the scan finds what is there and only what is there ==='
@@ -189,6 +283,19 @@ $present = Find-Any 'the'
 $absent  = Find-Any 'zqxjkvbwp_absent_canary_9137'
 Check ("a token known present ('the') is found ($($present.Count) hit(s))") ($present.Count -gt 0) $null
 Check ("a nonsense token is NOT found ($($absent.Count) hit(s))") ($absent.Count -eq 0) ($absent -join ', ')
+
+# 02 Sep 26 - PRE_RELEASE 131's THREE CONTROLS, one per way this can go wrong.
+# The first two FAILED before the fix and pass after; the third guards the fix
+# itself, because over-stripping would be worse than the bug it repairs.
+$straddle = Find-Any 'offers to install one'
+Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") ($straddle.Count -gt 0) `
+      'sd.iss renders this across 1771-1772 and no single line carries it - the flattening is not working'
+$inBrace = Find-Any 'Lower case for the reason given at code 0'
+Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
+      ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))
+$const = Find-Any '{app}'
+Check ("an Inno constant is NOT mistaken for a comment ($($const.Count) hit(s))") ($const.Count -gt 0) `
+      'the brace strip is eating shipped text, which is a worse fault than the one it fixes'
 
 Write-Host ''
 Write-Host '=== 2. every retired phrase is GONE, and its replacement is present ==='
