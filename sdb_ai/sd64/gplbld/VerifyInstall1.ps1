@@ -516,7 +516,32 @@ $steps = @(
     # Measured on the 13:33:28 install before being added - 169 of 169 cases,
     # 0 failures - so it is not being wired in untested, which is the rule
     # verify-txn and verify-lineendings above both record.
-    @{ Name = 'verify-basicfuncs.ps1';   P = @{} }
+    @{ Name = 'verify-basicfuncs.ps1';   P = @{} },
+    # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
+    # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
+    # the three ask the same kind of question - does the engine itself answer
+    # correctly - where every step above asks about accounts, ACLs or doors.
+    #
+    # VerifyInstall1 AND NOT VerifyInstall2, WHICH IS WHERE THE RULING PUT IT.
+    # Its own header: "Unelevated on purpose: an ordinary session lands in DON,
+    # don's own account."  VerifyInstall2 is the elevated runner, so this step
+    # would measure something other than what it was written to measure.
+    # Flagged to the owner rather than transposed silently.
+    #
+    # WHY IT IS WORTH A SUITE STEP AT ALL: no verifier in either runner drives
+    # an AK index write.  verify-vocverbs is the only script that touches
+    # CREATE.INDEX, and its fixture indexes an empty DATA part with a verb that
+    # defines an index without building one - so get_ak_node is called zero
+    # times there.  100's seven callers had nothing exercising them.
+    #
+    # RUN-SPECIFIC TAG, for 54's reason: a fixed name passes once and collides
+    # with its own leftovers afterwards.  It cleans up and asserts it did - "no
+    # fixture directory is left behind", "no stray sd.exe session" - but an
+    # interrupted run is exactly when that does not happen.
+    #
+    # LAST, AND CHEAP TO LOSE: it makes and removes its own fixture in don and
+    # touches nothing else, so a failure here costs no other step.
+    @{ Name = 'probe-akwrite.ps1';       P = @{ Tag = "akp$Run" } }
 )
 
 # 28 Aug 26 - THE SUSPENDED DOOR PAIR, AS ONE STEP.  PRE_RELEASE 38, on the

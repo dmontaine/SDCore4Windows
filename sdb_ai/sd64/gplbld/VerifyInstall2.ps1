@@ -131,6 +131,16 @@ param(
     # non-administrator account, created and removed inside the step.  Lower
     # case only, same derivation as the rest: it becomes a Windows account name.
     [string]$GatePrefix  = '',   # verify-sdsysgate.ps1 - one account
+    # 02 Sep 26 - verify-vocverbs.ps1, PRE_RELEASE_FIXES 112, owner's ruling.
+    # It was in NEITHER runner, so the checks it carries for entries 5, 13, 14
+    # and 15 had never fired since the day it was written - the same shape as
+    # verify-profiledir below, and as 82 and 107.
+    #
+    # NO ACCOUNT: unlike every other prefix here it names FILES in SDSYS, not
+    # Windows accounts, so it carries no lower-case-only constraint of its own.
+    # It is still derived from -Run, because a fixed prefix passes once and
+    # fails every run after (54).
+    [string]$VocPrefix   = '',   # verify-vocverbs.ps1  - files, no account
     # 30 Aug 26 - verify-profiledir.ps1, PRE_RELEASE_FIXES 54.  It was in
     # NEITHER runner, so 36's last leg had never fired since the day it was
     # written.  VerifyInstall2 is the right runner and VerifyInstall1 is not,
@@ -222,6 +232,12 @@ if ($Run) {
     if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
     if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
     if (-not $GatePrefix)  { $GatePrefix  = "sdgate$Run" }
+    # 02 Sep 26 - PRE_RELEASE_FIXES 112.  Derived from -Run like the rest: a
+    # FIXED prefix passes once and fails every later run, which is 54's lesson
+    # and the reason to go through the runner rather than call the verifier by
+    # hand.  verify-vocverbs makes files, not accounts, so this is shorter than
+    # the account prefixes and needs no Windows-name constraint.
+    if (-not $VocPrefix)   { $VocPrefix   = "sdvv$Run" }
     # THE PREFIX MUST COME FROM THE -Run TOKEN, as sdacctb48/sdtiertb48 already
     # do and as 54 says in as many words.  verify-profiledir.ps1 refuses a spent
     # stem by design, so a FIXED prefix would pass once and fail on every later
@@ -614,6 +630,31 @@ $steps = @(
     # because it needs the SCRAM login to work before its answer means anything;
     # a failure here with scramlogin green is the identity change, not the login.
     @{ Name = 'verify-apiidentity.ps1';   P = @{ Prefix = $ApiIdPrefix } },
+    # 02 Sep 26 - PRE_RELEASE_FIXES 112, owner's ruling: "add verifiers to
+    # VerifyInstall2".  It was in NEITHER runner, so its checks for entries 5,
+    # 13, 14 and 15 have never run since the day it was written.
+    #
+    # HERE RATHER THAN LAST, because verify-tierapi below is last for a stated
+    # reason - it is the only step needing a binary from outside this
+    # repository - and taking that place would cost that reason.
+    #
+    # LATE RATHER THAN EARLY, because it is the one step that creates and
+    # deletes FILES IN SDSYS.  Nothing after it counts SDSYS state, so its churn
+    # cannot perturb another step's arithmetic.  Checked rather than assumed:
+    # verify-tiers' COUNT VOC rows are taken after LOGTO <tier account>, so they
+    # count the ACCOUNT's VOC and not SDSYS's, and this could in fact have gone
+    # anywhere - the placement is belt to that braces.
+    #
+    # IT CLEANS UP AFTER ITSELF AND PROVES IT: its section 9 deletes both
+    # fixtures and then asserts sdsys\messages survived the run, so a cleanup
+    # that took too much would show as a red row rather than as a puzzle later.
+    #
+    # WHAT IT DOES NOT COVER, SO NOBODY READS MORE INTO A GREEN THAN IS THERE:
+    # the AK write path.  Its fixture indexes a file whose DATA part is empty
+    # and uses CREATE.INDEX, which defines an index without building one, so
+    # get_ak_node is called zero times.  probe-akwrite.ps1 in VerifyInstall1 is
+    # what covers that.
+    @{ Name = 'verify-vocverbs.ps1';      P = @{ Prefix = $VocPrefix } },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.  LAST because it is the only step that needs a
     # binary from OUTSIDE this repository - sd-connect.exe from the sdclilib32
