@@ -206,9 +206,22 @@ function Show-SD([string]$title, [string[]]$commands) {
 
 # ------------------------------------------------------------- preconditions
 
-if ($Prefix -cnotmatch '^[a-z][a-z0-9]{1,6}$') {
+# 02 Sep 26 - THE LENGTH CAP WAS 7 AND IT REFUSED THE RUNNER'S OWN PREFIX.
+# PRE_RELEASE 112 wired this in with $VocPrefix = "sdvv$Run" (VerifyInstall2
+# :240), so -Run b101 composes "sdvvb101" - EIGHT characters - and this test
+# exited 2 before measuring anything.  It went unseen because the cap is only
+# breached once the run token reaches three digits: sdvvb99 is 7 and passes,
+# sdvvb100 is 8 and does not, so the step was wired in during the b99 era and
+# broke on the next run rather than the one that wired it.
+#
+# THE CAP PROTECTED NOTHING.  SD's own limit is MAX_ID_LEN 255 (gplsrc/
+# sddefs.h:281) and the longest name derived here is $Prefix + 'nosuch', so a
+# 15-character prefix reaches 21.  The refusal's stated reason is entirely
+# about CASE - that is real and is kept - and the length half was an arbitrary
+# bound on the hand-typed 'zzprf' default this script was written with.
+if ($Prefix -cnotmatch '^[a-z][a-z0-9]{1,14}$') {
     Write-Output "verify-vocverbs: -Prefix is '$Prefix'."
-    Write-Output '  Lower case letters and digits only, starting with a letter, 2 to 7 characters.'
+    Write-Output '  Lower case letters and digits only, starting with a letter, 2 to 15 characters.'
     Write-Output '  CREATE.FILE upper-cases the name for the PATH and leaves the VOC id as typed,'
     Write-Output '  and entries 15 and 26 are ABOUT that difference - a mixed-case prefix would'
     Write-Output '  make the two sides of the comparison disagree for a reason that is not the'
