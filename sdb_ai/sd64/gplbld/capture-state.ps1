@@ -39,7 +39,17 @@ param(
 
     # Where the file goes.  Y:\ is the xfer share in the standard rig; override
     # it when running somewhere that has no share mounted.
-    [string] $OutDir = 'Y:\'
+    [string] $OutDir = 'Y:\',
+
+    # 02 Sep 26 - PRE_RELEASE_FIXES 134.  Walk both SD trees and list every
+    # directory and file, so a before-capture and an after-capture can be
+    # DIFFED rather than compared by eye.
+    #
+    # OFF BY DEFAULT, DELIBERATELY.  It adds thousands of lines - the mirrored
+    # directories alone are 3028 files - and every existing use of this script
+    # wants the summary, not the inventory.  Pass it for an uninstall-then-
+    # reinstall comparison and leave it off otherwise.
+    [switch] $Manifest
 )
 
 $ErrorActionPreference = 'Continue'
@@ -205,6 +215,73 @@ $body = & {
             Write-Output ('  PRESENT  {0}  ({1} entries)' -f $p, $n)
         } else {
             Write-Output ('  absent   ' + $p)
+        }
+    }
+
+    # 02 Sep 26 - PRE_RELEASE_FIXES 134.  Owner's invariant: "all the system
+    # files and directories that existed when sd was first installed need to
+    # exist after it is reinstalled."  Nothing tested it - the section above
+    # counts entries in four trees and never walks them, so it can say a tree
+    # shrank but never WHICH thing left.
+    #
+    # ***THE WHOLE VALUE IS IN THE DIFF, SO THE OUTPUT IS SORTED AND RELATIVE.***
+    # Absolute paths and directory order would make two captures differ for
+    # reasons nobody cares about.
+    #
+    # ***AND A DIRECTORY THIS PROCESS MAY NOT READ IS NAMED, NEVER OMITTED.***
+    # That is the difference between this and the three ad-hoc probes that were
+    # written and corrected on 2 Sep 2026, each of which reported a permission
+    # denial as an absence.  Here the cost would be worse than a wrong line: a
+    # subtree that was readable BEFORE and denied AFTER would appear in the diff
+    # as hundreds of deleted files and read as catastrophic data loss.  So the
+    # walk's errors are collected and printed, and any capture carrying them is
+    # marked NOT COMPARABLE at the top of the section.
+    if ($Manifest) {
+        Section 'SD tree manifest (PRE_RELEASE 134)'
+        Write-Output '  Diff a before-capture against an after-capture.  Every line that'
+        Write-Output '  disappears is a file or directory the reinstall did not put back.'
+
+        foreach ($treeRoot in 'C:\Program Files\SD', 'C:\ProgramData\SD') {
+            Write-Output ''
+            Write-Output ('  --- ' + $treeRoot)
+            if (-not (Test-Path -LiteralPath $treeRoot)) {
+                Write-Output '      absent (the path is not there at all)'
+                continue
+            }
+
+            $walkErrs = $null
+            $items = @(Get-ChildItem -LiteralPath $treeRoot -Recurse -Force `
+                                     -ErrorAction SilentlyContinue -ErrorVariable walkErrs)
+
+            if ($walkErrs -and $walkErrs.Count -gt 0) {
+                Write-Output ('      NOT COMPARABLE: ' + $walkErrs.Count +
+                              ' path(s) could not be read by this process.')
+                Write-Output '      A denial is not an absence.  Re-run ELEVATED before diffing:'
+                foreach ($er in ($walkErrs | Select-Object -First 20)) {
+                    Write-Output ('        unreadable: ' + $er.TargetObject)
+                }
+                if ($walkErrs.Count -gt 20) {
+                    Write-Output ('        ... and ' + ($walkErrs.Count - 20) + ' more')
+                }
+            }
+
+            if ($items.Count -eq 0) {
+                Write-Output '      REFUSED: the path exists and the walk returned NOTHING.'
+                Write-Output '      That is a broken measurement, not an empty tree.'
+                continue
+            }
+
+            $dirs  = @($items | Where-Object { $_.PSIsContainer }).Count
+            Write-Output ('      ' + $items.Count + ' entries (' + $dirs + ' directories, ' +
+                          ($items.Count - $dirs) + ' files)')
+
+            $items |
+                ForEach-Object {
+                    $rel = $_.FullName.Substring($treeRoot.Length)
+                    if ($_.PSIsContainer) { 'D ' + $rel } else { 'F ' + $rel }
+                } |
+                Sort-Object |
+                ForEach-Object { Write-Output ('      ' + $_) }
         }
     }
 
