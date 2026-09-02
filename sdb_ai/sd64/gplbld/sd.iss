@@ -614,6 +614,42 @@ Name: "{#DataDir}\user_accounts"; Flags: uninsneveruninstall
 Name: "{#DataDir}\group_accounts"; Flags: uninsneveruninstall
 Name: "{#DataDir}\shm"; Flags: uninsneveruninstall
 
+; 02 Sep 26 - PRE_RELEASE_FIXES 120.  THE THREE SDSYS DIRECTORIES THAT SHIP
+; EMPTY, AND WHY BEING EMPTY IS THE WHOLE DEFECT.
+;
+; stage.py creates sdsys\bp, sdsys\bp.out and sdsys\batch.jobs EMPTY and puts
+; all three on the PRESERVED list - "the directory still has to exist", because
+; voc_template\bp is an F-pointer at it and secure-sysdirs.ps1 hardens it.
+;
+; ***uninsneveruninstall ON THE [Files] TREE PROTECTS FILES, NOT AN EMPTY
+; DIRECTORY.***  On a normal site nobody has written a BASIC program or
+; scheduled a batch job, so these three hold nothing at uninstall time and the
+; uninstaller takes the directories - while sdsys\accounts, which has content,
+; survives.  That asymmetry is exactly what was measured on guest Test 1: the
+; store gone and batch.jobs.dic still present and correctly locked.
+;
+; ***AND THE REINSTALL COULD NOT PUT THEM BACK***, which is what made it a
+; blocker rather than a blemish: the data tree is present so DataTreeAbsent is
+; false, the whole-tree [Files] entry does not fire, and upgrade.iss replaces
+; only SHIPPED files - these are preserved either way.  So the site stayed
+; unhardened for ever and was told so on every later install, while the remedy
+; the closing box printed named the very paths that did not exist and exited 2
+; as well.
+;
+; A [Dirs] entry fixes both halves at once and is why this is three lines
+; rather than new code: it carries NO Check:, so it runs on every install and
+; HEALS a tree that already lost them, and uninsneveruninstall stops the
+; uninstaller taking them again.
+;
+; bp.out IS HERE THOUGH 120 DID NOT NAME IT, AND THAT IS DELIBERATE.  It is the
+; same class - created empty, preserved, same disappearance - but NOTHING
+; HARDENS IT, so its loss is reported by nobody.  A silent sibling of a defect
+; that at least announced itself is the more dangerous of the two, not the
+; less, and leaving it would be fixing the instance instead of the class.
+Name: "{#DataDir}\sdsys\bp"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\bp.out"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\batch.jobs"; Flags: uninsneveruninstall
+
 [Icons]
 Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 
@@ -1423,8 +1459,16 @@ end;
    WizardIsTaskSelected keeps answering - so hiding the page without gating the
    ACTIONS would turn "visible but inert" into INVISIBLE BUT ACTIVE: firewall
    rules moving from state nobody saw, and install-ssh.ps1 able to install a
-   server silently.  The gates are at the [Run] entry, the [Registry] entry and
-   the two ApplyXxxFirewall call sites, each carrying "not TrueUpgrade". *)
+   server silently.  The gates are at the [Run] entry, the [Registry] entry,
+   the two ApplyXxxFirewall call sites and ApplyAllowGroups, each carrying
+   "not TrueUpgrade".
+
+   02 Sep 26 - ApplyAllowGroups JOINED THAT LIST LATE, WHICH IS PRE_RELEASE 118.
+   This sentence used to read "the two ApplyXxxFirewall call sites" and was
+   accurate about the gates that existed while being wrong about the ones that
+   were needed - an upgrade rewrote sshd_config and bounced sshd having just
+   told the reader it changed nothing.  A list like this is a claim; when a
+   gate is added the claim has to move with it. *)
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := (PageID = wpSelectTasks) and TrueUpgrade;
@@ -3413,7 +3457,27 @@ begin
       function's own comment. }
     RouteMsg := SyncRouteGroups;
 
-    SshLimit := ApplyAllowGroups;
+    { 02 Sep 26 - "not TrueUpgrade", PRE_RELEASE_FIXES 118.  THE CLOSING BOX
+      SAID ssh WAS LEFT ALONE AND THIS LINE HAD JUST REWRITTEN sshd_config.
+      Measured on guest Windows 11 - Test 1: the box promises "YOUR ssh AND API
+      SETTINGS WERE LEFT EXACTLY AS THEY WERE ... has changed nothing about who
+      may reach this machine", and sshd_config's mtime moved at 15:18:45 with
+      sshd.pid at 15:18:46 - so the file was rewritten and the service bounced
+      inside the upgrade, dropping every live ssh session one dialog after the
+      reader accepted a promise that it would not.
+
+      THE FIREWALL HALF OF THE CLAIM WAS ALREADY TRUE: 88 gated
+      ApplyApiFirewall directly above and ApplySshFirewall with it.  This step
+      was simply not among them, which is the whole of the defect.
+
+      SyncRouteGroups ABOVE IS DELIBERATELY LEFT UNGATED, and that is not an
+      oversight to tidy later: sync-route-groups.ps1 seeds only the group IT
+      created, so on a tree that already has sdssh it declines to seed and
+      changes nobody's access.  Gating it would instead risk leaving the groups
+      missing on a tree that lost them.  The ordering note above still holds -
+      the seeding step must precede the AllowGroups write whenever both run. }
+    if not TrueUpgrade then
+      SshLimit := ApplyAllowGroups;
 
     { AN UPGRADE'S DICTIONARIES, and a no-op on a first install.  See the
       function: it is here rather than earlier because every ACL step above

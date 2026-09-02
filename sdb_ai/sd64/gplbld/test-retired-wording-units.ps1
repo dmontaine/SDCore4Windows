@@ -181,12 +181,50 @@ function Remove-PascalComment([string]$line, [ref]$inComment) {
     return $out
 }
 
+# 02 Sep 26 - THE SECOND PASCAL COMMENT FORM, AND LEAVING IT OUT WOULD HAVE BEEN
+# FIXING THE INSTANCE INSTEAD OF THE CLASS.  PRE_RELEASE 131 named "{ }" because
+# that is what was tripped over, but Inno Pascal has two, and sd.iss uses
+# "(* *)" for nearly every function header - 28 blocks of prose that were all
+# still in the corpus after the brace fix.  A retirement documented in one of
+# those would raise the same false positive the brace strip exists to prevent.
+#
+# THIS ONE NEEDS NO HEURISTIC, WHICH IS WHY IT IS SHORTER.  "(*" and "*)" are
+# unambiguous - no Inno constant looks like them - so unlike the brace case
+# there is nothing to tell apart and no whitespace test to get wrong.  It runs
+# as its own pass BEFORE the brace pass, so each is a state machine with one
+# delimiter to think about rather than one machine with two.
+function Remove-ParenStarComment([string]$line, [ref]$inComment) {
+    $out = ''
+    $i   = 0
+    while ($i -lt $line.Length) {
+        if ($inComment.Value) {
+            $j = $line.IndexOf('*)', $i)
+            if ($j -lt 0) { return $out }
+            $inComment.Value = $false
+            $i = $j + 2
+            continue
+        }
+        $b = $line.IndexOf('(*', $i)
+        if ($b -lt 0) { $out += $line.Substring($i); break }
+        $close = $line.IndexOf('*)', $b + 2)
+        $out += $line.Substring($i, $b - $i)
+        if ($close -ge 0) {
+            $i = $close + 2
+        } else {
+            $inComment.Value = $true
+            break
+        }
+    }
+    return $out
+}
+
 $scriptLineCount = 0
 $flatCount       = 0
 foreach ($sf in $scriptFiles) {
     $n            = 0
     $inCode       = $false
     $inComment    = $false
+    $inParen      = $false
     $issLines     = New-Object System.Collections.ArrayList
     foreach ($rawLine in (Get-Content -LiteralPath $sf.Path)) {
         $n++
@@ -198,7 +236,10 @@ foreach ($sf in $scriptFiles) {
             elseif ($t -match '^\s*\[[A-Za-z]+\]') { $inCode = $false }
             if ($t -match '^\s*;') { $t = '' }
             else { $i = $t.IndexOf('//'); if ($i -ge 0) { $t = $t.Substring(0, $i) } }
-            if ($inCode) { $t = Remove-PascalComment $t ([ref]$inComment) }
+            if ($inCode) {
+                $t = Remove-ParenStarComment $t ([ref]$inParen)
+                $t = Remove-PascalComment    $t ([ref]$inComment)
+            }
             [void]$issLines.Add(@{ Line = $n; Text = $t })
         }
         if ($t.Trim().Length -gt 0) {
@@ -293,6 +334,9 @@ Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") (
 $inBrace = Find-Any 'Lower case for the reason given at code 0'
 Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
       ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))
+$inParenC = Find-Any 'THE OTHER BRANCH, AND THE TWO ARE EXHAUSTIVE'
+Check ("text inside a Pascal (* *) comment is stripped ($($inParenC.Count) hit(s))") ($inParenC.Count -eq 0) `
+      ("sd.iss uses (* *) for nearly every function header: " + ($inParenC -join ', '))
 $const = Find-Any '{app}'
 Check ("an Inno constant is NOT mistaken for a comment ($($const.Count) hit(s))") ($const.Count -gt 0) `
       'the brace strip is eating shipped text, which is a worse fault than the one it fixes'
