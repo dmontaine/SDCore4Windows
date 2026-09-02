@@ -62,6 +62,9 @@ $RETIRED = @(
     @{ Ref = '121'
        Retired     = 'refuse to install here again'
        Replacement = 'running the SD INSTALLER on this machine' }
+    @{ Ref = '124'
+       Retired     = 'sign in over ssh and nothing else'
+       Replacement = 'sign in over ssh, or over the' }
 )
 
 # --------------------------------------------------------------------------

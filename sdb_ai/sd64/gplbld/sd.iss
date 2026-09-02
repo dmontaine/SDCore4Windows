@@ -1337,10 +1337,9 @@ begin
         25 Aug 2026 - before ISCC ran, which is what that guard is for. }
       'SD Core has not been installed, because of this computer''s ssh server.' + #13#10#13#10 +
       String(PreflightReason) + #13#10 +
-      'Why this matters: accounts SD Core creates sign in over ssh and nothing else, ' +
-      'and SD Core configures the ssh server so that those accounts land in SD Core and ' +
-      'cannot get a command prompt. It can only promise that on a server it ' +
-      'installed and configured itself.' + #13#10#13#10 +
+      'Why this matters: SD Core configures the ssh server so that accounts signing in ' +
+      'over ssh land in SD Core and cannot get a command prompt - and it can only ' +
+      'promise that on a server it installed and configured itself.' + #13#10#13#10 +
       'What you can do: remove the other ssh server, or return this computer''s ' +
       'ssh configuration to the way Windows shipped it, and run this installer ' +
       'again.' + #13#10#13#10 +
@@ -1744,16 +1743,19 @@ begin
     not offered", and both of those became false on the same day.  A page whose
     whole purpose is to be believed cannot carry either. }
     M := M +
-       'OPENSSH SERVER - YOUR CHOICE, AND SD Core NEEDS IT TO BE USEFUL' + #13#10#13#10 +
-       'Accounts SD Core creates sign in over ssh and nothing else. That is true even ' +
-       'with no network: on a machine used by one person, you reach SD Core by ' +
-       'connecting with ssh to "localhost". So without an ssh server, nobody can ' +
-       'sign in to an SD Core account at all - you would use SD Core yourself, as an ' +
-       'administrator, by typing "sd".' + #13#10#13#10 +
+       'OPENSSH SERVER - YOUR CHOICE' + #13#10#13#10 +
+       'SD Core accounts sign in two ways: over ssh, or over the SD Core API. Both ' +
+       'are offered on the next page, and neither is required to install SD Core - ' +
+       'administrators use SD Core by typing "sd" at an elevated prompt, including ' +
+       'creating and managing accounts, with or without either one.' + #13#10#13#10 +
+       'So an account you create needs ssh OR the API before it can sign in. You can ' +
+       'set accounts up first and turn a transport on later: a grant made ahead of ' +
+       'time takes effect the moment the transport is on. With neither, only ' +
+       'administrators can use this machine.' + #13#10#13#10 +
        'IF THIS MACHINE HAS NO SSH SERVER, the options page offers to install ' +
        'one. It is downloaded from Windows Update and CAN TAKE SEVERAL MINUTES ' +
        'with nothing on screen. Do not stop it part way, and IT USUALLY NEEDS A ' +
-       'RESTART - until you restart, no SD Core account except your own can sign in.' + #13#10#13#10 +
+       'RESTART - until you restart, nobody can sign in over ssh yet.' + #13#10#13#10 +
        'WHO MAY REACH IT IS A SECOND, SEPARATE CHOICE on the same page, and it ' +
        'is offered whether SD Core installs the server or finds one already here. ' +
        'A server SD Core installs is reachable only from this machine unless you ask ' +
@@ -2310,14 +2312,27 @@ begin
     because the ssh boxes read machine state rather than a marker. }
   if not SshServerPresentAfterwards then
   begin
-    Result := 'NO ssh SERVER WAS INSTALLED, because you did not ask for one. No ssh ' +
+    { 1 Sep 26 - PRE_RELEASE_FIXES 124.  This branch is SshWasAbsent AND NOT
+      SshServerWanted (SshServerPresentAfterwards = (not SshWasAbsent) or
+      SshServerWanted), so "you did not ask" is always right here - the
+      ticked-but-download-failed case is the sshd.exe-missing branch below.  What
+      WAS wrong is "ssh and nothing else, nobody can sign in": false when the API
+      is provided, so the "who can sign in" line is conditioned on ApiWanted. }
+    Result := 'NO ssh server was installed, because you did not ask for one. No ssh ' +
               'configuration was changed and no ssh port was opened. scp and sftp are ' +
-              'unaffected on this computer.' + #13#10#13#10 +
-              'SD Core accounts sign in over ssh and nothing else, so nobody can sign in to an ' +
-              'SD Core account on this machine - including at this keyboard, where an account is ' +
-              'reached by "ssh localhost". Use SD Core by typing "sd" as an administrator.' + #13#10#13#10 +
-              'To let people reach this SD Core later, install OpenSSH Server and run this ' +
-              'installer again, ticking the ssh boxes.' + #13#10#13#10;
+              'unaffected on this computer.' + #13#10#13#10;
+
+    if ApiWanted then
+      Result := Result +
+                'Accounts you gave API access can still sign in over the SD Core API. ssh is ' +
+                'the interactive way in; to add it, install OpenSSH Server and run this ' +
+                'installer again, ticking the ssh boxes.' + #13#10#13#10
+    else
+      Result := Result +
+                'With no ssh server and no API, the accounts you create have no way to sign in ' +
+                'yet. Administrators still use SD Core by typing "sd" at an elevated prompt, ' +
+                'including creating and managing accounts. To let accounts sign in, install ' +
+                'OpenSSH Server or provide the API, and run this installer again.' + #13#10#13#10;
     Exit;
   end;
 
@@ -2343,13 +2358,16 @@ begin
 
   if not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe')) then
   begin
-    Result := 'OPENSSH SERVER COULD NOT BE INSTALLED, and SD Core needs it. Windows downloads it ' +
-              'on demand, so this is usually a policy that blocks optional features, a metered ' +
-              'connection, or no connection at all.' + #13#10#13#10 +
-              'SD Core itself is installed and works for you. But accounts created with ' +
-              'CREATE.ACCOUNT sign in over ssh and nothing else, so until there is an ssh ' +
-              'server NOBODY BUT YOU CAN USE THIS SD Core. Put it right from an elevated ' +
-              'PowerShell prompt:' + #13#10#13#10 +
+    Result := 'The OpenSSH server could NOT be installed. Windows downloads it on demand, so ' +
+              'this is usually a policy that blocks optional features, a metered connection, ' +
+              'or no connection at all.' + #13#10#13#10 +
+              'SD Core itself is installed and works; administrators use it by typing "sd" at ' +
+              'an elevated prompt. You asked for the ssh server, so the accounts you create ' +
+              'are set to sign in over ssh - but until the server is there they cannot.';
+    if ApiWanted then
+      Result := Result + ' Accounts you also gave API access can use the API meanwhile.';
+    Result := Result + #13#10#13#10 +
+              'Put the server right from an elevated PowerShell prompt:' + #13#10#13#10 +
               '    powershell -File "' + ExpandConstant('{app}') + '\install-ssh.ps1"' + #13#10#13#10;
     Exit;
   end;

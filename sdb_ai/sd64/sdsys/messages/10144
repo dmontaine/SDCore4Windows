@@ -1,1 +1,1 @@
-Accounts SD creates sign in over ssh and nothing else - including at this\nkeyboard, where they arrive by "ssh localhost". Removing the server leaves\nthem no way in at all.\n\nRemove the OpenSSH server (y/<n>)?
+Accounts SD creates sign in over ssh, or over the API. Removing the ssh server\ntakes away the ssh way in - and for an account that has only ssh, including at\nthis keyboard where it arrives by "ssh localhost", that is its only way in.\n\nRemove the OpenSSH server (y/<n>)?
