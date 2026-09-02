@@ -694,6 +694,37 @@ Name: "{#DataDir}\sdsys\cat"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\prt"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\$hold"; Flags: uninsneveruninstall
 
+; 02 Sep 26 - AND THE LAST FOUR, ON THE OWNER'S RULING THE SAME DAY: "as long
+; as the directories are not needed and reinstalled when the install after
+; removal happens".
+;
+; These four are in SDSYS_EMPTY and SDSYS_PRESERVE like the six above, and they
+; survive a reinstall today - but only because the install happens to write
+; records into them: $cred gets a credential from the adopt step, os.users gets
+; the installing user, and WRITE_INSTALL_DICTS fills the two dictionaries.
+; Measured on the 2 Sep 16:13 install: 1, 1, 5 and 3 entries.
+;
+; ***THAT IS NOT WHAT THE RULING ASKS FOR, WHICH IS WHY THEY ARE HERE RATHER
+; THAN EXEMPT.***  Having content means the uninstaller does not TAKE the
+; directory; it does not mean anything REINSTALLS it.  A site whose $cred or
+; os.users happened to be empty at uninstall time would lose it exactly as cat,
+; prt and $hold were lost, and no later install would put it back - the whole
+; shape of 120.  A [Dirs] entry is the only one of the two mechanisms that
+; heals, and it costs one line.
+;
+; NOTHING NEEDS THEM ABSENT.  A [Dirs] entry only ever creates, and both
+; secure-cred.ps1 and secure-osusers.ps1 exit 2 when their path is missing - so
+; guaranteeing existence can only move those from a failure to a success.
+;
+; AND THE UNINSTALL'S "remove the database" IS UNAFFECTED, checked rather than
+; assumed: that path is DelTree(DataPath, True, True, True) in [Code], which
+; deletes the tree outright and never consults the uninstall log, so
+; uninsneveruninstall cannot keep anything the user asked to destroy.
+Name: "{#DataDir}\sdsys\$cred"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\os.users"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\os.users.dic"; Flags: uninsneveruninstall
+Name: "{#DataDir}\sdsys\batch.jobs.dic"; Flags: uninsneveruninstall
+
 [Icons]
 Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 

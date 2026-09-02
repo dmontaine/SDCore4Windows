@@ -70,45 +70,31 @@ $iss   = Join-Path $root 'sd.iss'
 # is "open sd.iss when you add to SDSYS_EMPTY"; an exemption declared in sd.iss
 # would let the next author skip this file and still go green.
 #
-# EVERY EXEMPTION CARRIES A KIND, AND THE KINDS ARE NOT EQUALLY SAFE.
+# THERE IS EXACTLY ONE KIND OF EXEMPTION, AND IT IS THE ONE THAT HEALS.
 #
 #   recreated  - something else creates the directory when it is absent, so it
 #                is repaired on every install exactly as a [Dirs] entry would
 #                repair it.  THE REASON IS MACHINE-CHECKED below: if the named
 #                script stops creating it, this test fails.
 #
-#   content    - the install itself writes records into the directory, so it is
-#                never empty at uninstall time and the uninstaller leaves it.
-#                THIS IS WEAKER AND IS REPORTED ON EVERY RUN.  It is a property
-#                of what the install happens to write, not a guarantee, and an
-#                empty one would be taken like any other.  A [Dirs] entry would
-#                cost one line each and make the question go away; that is the
-#                owner's call and is recorded in PRE_RELEASE 132.
+# ***A SECOND KIND WAS WRITTEN AND THEN DELETED THE SAME DAY, AND THE REASON IS
+# WORTH KEEPING BECAUSE IT IS THE WHOLE DISTINCTION.***  $cred, os.users,
+# os.users.dic and batch.jobs.dic were briefly exempted as "content": the
+# install writes records into each, so none is empty at uninstall time and the
+# uninstaller leaves it.  Owner's ruling, 2 Sep 2026 - "as long as the
+# directories are not needed and reinstalled when the install after removal
+# happens" - and having content does not meet it.  HAVING CONTENT MEANS THE
+# UNINSTALLER DOES NOT TAKE THE DIRECTORY.  IT DOES NOT MEAN ANYTHING PUTS IT
+# BACK.  A site whose $cred happened to be empty would lose it exactly as cat,
+# prt and $hold were lost, and no later install would restore it - which is the
+# whole shape of 120.  All four now hold [Dirs] entries instead, so the
+# distinction survives here as a comment rather than as a category that would
+# quietly accept the weaker guarantee again.
 $exempt = @(
     @{ name = 'dumps'
        kind = 'recreated'
        by   = 'secure-dumps.ps1'
        why  = 'creates it when absent; its [Run] entry carries no Check:' }
-
-    @{ name = '$cred'
-       kind = 'content'
-       by   = ''
-       why  = 'the adopt step writes a credential record; measured 1 entry on a fresh install' }
-
-    @{ name = 'os.users'
-       kind = 'content'
-       by   = ''
-       why  = 'the adopt step lists the installing user; measured 1 entry on a fresh install' }
-
-    @{ name = 'os.users.dic'
-       kind = 'content'
-       by   = ''
-       why  = 'WRITE_INSTALL_DICTS fills it; measured 5 entries on a fresh install' }
-
-    @{ name = 'batch.jobs.dic'
-       kind = 'content'
-       by   = ''
-       why  = 'WRITE_INSTALL_DICTS fills it; measured 3 entries on a fresh install' }
 )
 
 # ---------------------------------------------------------------------------
@@ -248,15 +234,17 @@ if ($badReason.Count -gt 0) {
     exit 1
 }
 
-$contentOnly = @($exempt | Where-Object { $_.kind -eq 'content' } | ForEach-Object { $_.name })
-if ($contentOnly.Count -gt 0) {
+# A KIND THIS FILE DOES NOT DEFINE IS A HOLE, NOT A TYPO.  "recreated" is the
+# only kind whose reason is checked above; anything else would be waved through
+# unverified, which is how the weaker guarantee got in once already.
+$badKind = @($exempt | Where-Object { $_.kind -ne 'recreated' } | ForEach-Object { $_.name })
+if ($badKind.Count -gt 0) {
     Write-Output ''
-    Write-Output ('NOTE - protected only by having content, NOT by a [Dirs] entry: ' +
-                  ($contentOnly -join ', '))
-    Write-Output 'The install writes records into each, so none is empty at uninstall time and'
-    Write-Output 'the uninstaller leaves it.  That is a property of what the install happens to'
-    Write-Output 'write rather than a guarantee: an empty one would be taken like any other.'
-    Write-Output 'A [Dirs] entry costs one line each.  See PRE_RELEASE_FIXES 132.'
+    Write-Output ('FAILED: exemption with an unknown kind: ' + ($badKind -join ', '))
+    Write-Output 'The only exemption this guard can verify is kind = recreated, naming the'
+    Write-Output 'script that creates the directory when it is absent.  Anything else is an'
+    Write-Output 'unchecked claim - see the deleted "content" kind in the header for why.'
+    exit 1
 }
 
 # --- A STALE EXEMPTION IS REPORTED, NOT FAILED -----------------------------
