@@ -373,6 +373,15 @@ SDSYS_PRESERVE = [
     ('batch.jobs.dic', 'its dictionary; goes with the file it describes'),
     ('prt',            'the print queue'),
     ('$hold',          "the spooler hold file - the user's saved output"),
+    # 02 Sep 26 - PRE_RELEASE_FIXES.md 28.  PRESERVED, and stage.py's own guard
+    # is what caught the omission: adding 'dumps' to SDSYS_EMPTY alone put it on
+    # the upgrade REPLACE list while shipping it empty, so an upgrade would have
+    # deleted the directory and copied nothing back.  That is 120's shape
+    # exactly, found before it shipped rather than on a guest afterwards.
+    #
+    # It belongs here for the same reason as prt and $hold: SD ships nothing
+    # into it and everything in it is the site's.
+    ('dumps',          'process dumps; SD ships none and the site keeps them'),
     # 25 Aug 26 - see the note at their SDSYS_EMPTY entries.  SD ships nothing
     # into either, so anything in them belongs to the site.  bp.out being on
     # the replace list while staging empty is what stage.py refused on
