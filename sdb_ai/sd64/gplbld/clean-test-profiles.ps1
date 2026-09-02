@@ -186,24 +186,44 @@ $ErrorActionPreference = 'Stop'
 #   -Run b88 and named the family.  No litter had accrued yet (sdtc1a's run was
 #   28 Aug and C:\Users showed 0 sdtc* on 31 Aug), so counting could not have
 #   found it - only the source-to-source comparison does.
-# 02 Sep 26 - "sdvv" ADDED.  SIXTH FAMILY, FIFTH OCCASION, AND THE SECOND THE
-#   CHECKER CAUGHT IN A RUNNER: test-stemcoverage-units.ps1 stopped -Run b101 at
-#   step 2 and named it, exactly as it did sdtc at b88.  PRE_RELEASE 112 wired
-#   verify-vocverbs.ps1 into VerifyInstall2 the same day and did not add the
-#   stem, so the gap was created and detected within one session.
-#   ***AND THIS ONE IS REGISTERED FOR ITS NAME SHAPE, NOT BECAUSE IT LITTERS
-#   C:\Users - SAY SO RATHER THAN LET THE LIST IMPLY OTHERWISE.***  Every other
-#   stem here names Windows accounts or profile directories.  This one does not:
-#   VerifyInstall2.ps1:143 calls it "files, no account", and verify-vocverbs
-#   creates SD files INSIDE THE SDSYS ACCOUNT DIRECTORY which it deletes in its
-#   own section 9.  So the sweep will never match an sdvv* name in practice, and
-#   a green here is coverage of the SHAPE, not evidence that anything was swept.
-#   It is listed because over-covering costs one alternation branch and
-#   under-covering is invisible - the failure mode every note above records.
+# 02 Sep 26 - "sdvv" IS THE FIRST FAMILY THAT IS NOT A PROFILE FAMILY, AND IT
+#   GOES IN $notProfiles BELOW RATHER THAN HERE.  test-stemcoverage-units.ps1
+#   stopped -Run b101 at step 2 and named it, exactly as it did sdtc at b88;
+#   PRE_RELEASE 112 had wired verify-vocverbs.ps1 into VerifyInstall2 the same
+#   day without registering the family.  ***THE REFLEX FIX - ADD THE STEM - WAS
+#   MADE FIRST AND THEN WITHDRAWN, AND THE REASON IS WORTH THE LINES.***
+#   verify-vocverbs creates SD files INSIDE THE SDSYS ACCOUNT DIRECTORY
+#   (VerifyInstall2.ps1:143, "files, no account") and deletes them in its own
+#   section 9, so no sdvv* name can ever appear under C:\Users.
+#
+#   ***A STEM HERE IS A CLAIM THAT THIS SWEEP WILL MEET THE NAME.  DO NOT ADD
+#   ONE THE SWEEP CANNOT REACH.***  Two concrete costs, not a tidiness
+#   argument: it put two invented names into the -SelfTest must-match list,
+#   whose header promises every entry is a name really produced AS A PROFILE;
+#   and it widened a regex that the 26 Aug note above warns is one step from
+#   being reused for a user or group sweep, in a direction nobody has audited.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
-           'sdtc', 'sdvv')
+           'sdtc')
+
+# THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
+# compose that creates no Windows account and no profile, so this script has
+# nothing to find and a stem would be a false claim of coverage.
+# test-stemcoverage-units.ps1 reads this list and stops demanding a stem for
+# them - but it PRINTS them every run, so an exemption can never be silent.
+#
+# ***IT LIVES IN THIS FILE, NOT BESIDE THE COMPOSITION IN THE RUNNER, AND THAT
+# IS THE WHOLE DESIGN.***  The discipline that has failed five times over is
+# "open clean-test-profiles.ps1 when you invent a family" - sddr, sdgate, sdtu,
+# sdprof, sdsw and sdtc were every one of them a session that never opened this
+# file.  Declaring the exemption in the runner would have let the next author
+# skip it again and still go green.  Keeping it here preserves the visit and
+# only changes what they write once they arrive.
+#
+# A NAME MUST NOT APPEAR IN BOTH LISTS.  The checker refuses that outright:
+# "swept" and "nothing to sweep" cannot both be true of one family.
+$notProfiles = @('sdvv')
 $bare  = @('sdsshprobe', 'sdnotyet')
 $rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
       ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
@@ -239,13 +259,6 @@ if ($SelfTest) {
         # sdtc1, 28 PASS / 0 FAIL), and sdtcb88a is what VerifyInstall2 now
         # composes.  The trailing "a" is verify-tierchange.ps1:281, not a typo.
         'sdtc1a', 'sdtcb88a',
-        # 02 Sep 26 - verify-vocverbs' family (PRE_RELEASE 112).  BOTH SIDES OF
-        # THE CAP THAT REFUSED IT are here on purpose: sdvvb99 is the 7-char
-        # shape that passed verify-vocverbs' own -Prefix test, sdvvb101 the
-        # 8-char one that did not until the cap was widened the same day.  The
-        # sweep is indifferent to that length - these are shape fixtures, and
-        # the note beside $stems says why this family cannot litter C:\Users.
-        'sdvvb99', 'sdvvb101',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -275,11 +288,17 @@ if ($SelfTest) {
         # so it is the shape that would be swept if the required digit were ever
         # relaxed.  All three fail on that digit.
         'sdtcl', 'sdtcl.ps1', 'sdtcp',
-        # 02 Sep 26 - the near-misses "sdvv" opens up.  "sdvverbs" is the sharp
-        # one and is not invented: the family is named for verify-VOCVERBS, so a
-        # later name of exactly that shape is the plausible mistake.  Both fail
-        # on the required digit, which is the only thing keeping them out.
-        'sdvverbs', 'sdvvoc',
+        # 02 Sep 26 - THE $notProfiles CONTROL, AND IT IS THE SHARPEST PAIR IN
+        # THIS LIST.  sdvvb99 and sdvvb101 are REAL names verify-vocverbs is
+        # driven with, and they must NOT match: the family is declared in
+        # $notProfiles, so this sweep is meant to be blind to it.  Put "sdvv"
+        # back in $stems and these two turn green and take the list red, which
+        # is exactly what should happen - the two lists enforce each other here
+        # rather than in a comment.  "sdvverbs" and "sdvvoc" are the word-shaped
+        # near-misses; both fail on the required digit, and the family is named
+        # for verify-VOCVERBS, so a later name of that shape is the plausible
+        # mistake rather than an invented one.
+        'sdvvb99', 'sdvvb101', 'sdvverbs', 'sdvvoc',
         # the SD system account and the owner's
         'sdsys', 'don'
     )
