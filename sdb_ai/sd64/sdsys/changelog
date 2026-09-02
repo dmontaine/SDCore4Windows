@@ -5,6 +5,16 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  create.account / modify.account NOW WARN WHEN AN ACCOUNT HAS NO WAY
+           TO SIGN IN YET.
+
+           If you set an account up to sign in over ssh but no ssh server is
+           installed, or over the API but no API listener is running, the
+           command now says so and names how to turn that transport on. It is a
+           heads-up, not a refusal: the access is already granted and takes
+           effect the moment you install the ssh server or turn on the API, with
+           nothing more to do to the account.
+
 01 Sep 26  THE INSTALLER NO LONGER INSTALLS THE OpenSSH SERVER BY DEFAULT.
 
            Installing the OpenSSH server is now an unticked choice in the

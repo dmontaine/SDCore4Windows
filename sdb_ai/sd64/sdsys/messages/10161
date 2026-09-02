@@ -1,0 +1,1 @@
+%1 is set up to sign in over ssh, but this machine has no ssh server yet. The account cannot sign in until one is installed (ssh.server install) - the grant is already in place and takes effect then.

@@ -7,11 +7,10 @@
 #
 # Exit 0 applied, 1 failed, 2 refused or the rule is not there yet.
 #
-# WHY THIS EXISTS.  The OpenSSH server stopped being optional on 16 Aug 2026 -
-# SD accounts sign in over ssh and nothing else, and the API is carried over ssh
-# too, so an install without it is an install nobody but the installing user can
-# use.  But installing the capability also creates OpenSSH-Server-In-TCP and
-# ENABLES it.  Measured on this machine, 16 Aug 2026:
+# WHY THIS EXISTS.  The OpenSSH server is an opt-in install (default off since
+# 1 Sep 2026 - see install-ssh.ps1); SD accounts sign in over ssh, the API being
+# the other, independent way in.  Installing the capability also creates
+# OpenSSH-Server-In-TCP and ENABLES it.  Measured on this machine, 16 Aug 2026:
 #
 #     Name  OpenSSH-Server-In-TCP   Enabled True   Direction Inbound
 #     Profile Private               Action Allow   RemoteAddress Any

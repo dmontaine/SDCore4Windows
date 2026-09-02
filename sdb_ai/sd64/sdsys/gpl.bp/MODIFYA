@@ -1538,6 +1538,17 @@ say.access:
       case 1
          crt sysmsg(10079, acc.user) ;* no remote access at all
    end case
+
+*  PRE_RELEASE_FIXES 125: warn (non-prohibitively) when the access just set has
+*  no active transport on this machine - the same heads-up create.account gives,
+*  from the shared shape.  The grant persists and activates when the transport
+*  comes on, so this is not a refusal.  Native checks only, no PowerShell probe.
+   if want.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) then
+      crt sysmsg(10161, acc.user)  ;* set up for ssh, but no ssh server yet
+   end
+   if want.api and (config('APIPORT') + 0) <= 0 then
+      crt sysmsg(10162, acc.user)  ;* set up for the API, but no listener yet
+   end
    return
 
 program.end:

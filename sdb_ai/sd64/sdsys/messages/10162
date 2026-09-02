@@ -1,0 +1,1 @@
+%1 is set up to use the API, but this machine provides no API listener yet. The account cannot connect until it is turned on (remote.api on) - the grant is already in place and takes effect then.

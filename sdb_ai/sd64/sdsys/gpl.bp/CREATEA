@@ -1822,6 +1822,20 @@ set.access:
       case 1
          crt sysmsg(10079,acc.uname) ;* no remote access at all
    end case
+
+*  PRE_RELEASE_FIXES 125: warn (non-prohibitively) when the access just granted
+*  has no active transport on this machine.  The grant is a group membership
+*  that persists and takes effect when the transport comes on, so this is a
+*  heads-up for an account provisioned ahead of its transport, NOT a refusal -
+*  the owner ruled that provisioning first is a legitimate workflow.  Native
+*  checks only (sshd.exe on disk; sd.conf's APIPORT for the listener), so
+*  create.account gains no PowerShell probe on its hot path.
+   if access.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) then
+      crt sysmsg(10161, acc.uname)  ;* set up for ssh, but no ssh server yet
+   end
+   if access.api and (config('APIPORT') + 0) <= 0 then
+      crt sysmsg(10162, acc.uname)  ;* set up for the API, but no listener yet
+   end
 return
 
 * rev 0.9.0

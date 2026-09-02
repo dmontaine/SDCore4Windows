@@ -31,10 +31,10 @@
 *    With no keyword it reports whether one is present and changes nothing.
 *
 * ***WHY THIS MATTERS MORE THAN IT LOOKS.***  Accounts SD creates sign in over
-* ssh and nothing else - deny-logon.ps1:29 denies them the console and Remote
-* Desktop - so removing the server takes away the only way in for every SD
-* account, including at this keyboard, where they arrive by "ssh localhost".
-* That is why REMOVE asks before it acts.
+* ssh or over the API - deny-logon.ps1:29 denies them the console and Remote
+* Desktop - so removing the server takes away the ssh way in, and for an account
+* that has only ssh (including at this keyboard, where it arrives by "ssh
+* localhost") that is its only way in.  That is why REMOVE asks before it acts.
 *
 * ***THE REMOVAL IS STAGED BEHIND A REBOOT AND THE VERB SAYS SO.***  Measured on
 * the development host 30 Aug 2026: after Remove-WindowsCapability reported

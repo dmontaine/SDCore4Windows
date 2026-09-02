@@ -1,5 +1,6 @@
-# deny-logon.ps1 - confine a local group to ssh by denying it the console and
-# Remote Desktop.  Run once by the installer; see PROJECT_STATUS.md 5.6.2.
+# deny-logon.ps1 - deny a local group the console and Remote Desktop, leaving
+# network sign-in (which ssh uses; the API authenticates separately via SCRAM).
+# Run once by the installer; see PROJECT_STATUS.md 5.6.2.
 #
 #   powershell -File deny-logon.ps1 <groupname>
 #
