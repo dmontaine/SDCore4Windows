@@ -122,9 +122,15 @@ ChangesEnvironment=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Messages]
+; 1 Sep 26 - reworded from Inno's stock SelectTasksLabel2 at the owner's request.
+; [name] renders as AppName, "SD Core".  Must sit after [Languages], which is
+; what it overrides.
+SelectTasksLabel2=Select additional tasks for Setup to perform while installing [name], then click Next.
+
 [Tasks]
 Name: "addtopath"; Description: "Add SD Core to the system PATH so ""sd"" runs from any directory"; \
-    GroupDescription: "System integration:"
+    GroupDescription: "1)  System integration:"
 
 ; ===========================================================================
 ; ssh IS TWO SEPARATE CHOICES AGAIN, AND THE SECOND DEPENDS ON THE FIRST.
@@ -218,7 +224,7 @@ Name: "addtopath"; Description: "Add SD Core to the system PATH so ""sd"" runs f
 ; "accounts sign in over ssh and nothing else" premise is wrong and is filed
 ; separately.  PRE_RELEASE_FIXES 124.
 Name: "sshserver"; Description: "Install the OpenSSH server so SD Core accounts can sign in over ssh (they can also be reached through the API instead) - it downloads from Windows Update and can take several minutes, up to about an hour on a slow machine"; \
-    GroupDescription: "ssh:"; Flags: checkablealone unchecked; \
+    GroupDescription: "2)  SSH Server - Availability and Access:"; Flags: checkablealone unchecked; \
     Check: SshServerAbsent
 
 Name: "sshserver\sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
@@ -228,7 +234,7 @@ Name: "sshserver\sshremote"; Description: "Let other computers on your network c
 ; PRESENT AND CURRENTLY LOOPBACK-ONLY - default unticked, so doing nothing keeps
 ; it loopback-only.
 Name: "sshremoteshut"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    GroupDescription: "ssh:"; Flags: unchecked; \
+    GroupDescription: "2)  SSH Server - Availability and Access:"; Flags: unchecked; \
     Check: (not SshServerAbsent) and (not SshCurrentlyOpen)
 
 ; PRESENT AND CURRENTLY OPEN - default TICKED, so doing nothing leaves the
@@ -237,7 +243,7 @@ Name: "sshremoteshut"; Description: "Let other computers on your network connect
 ; but the user might want it limited to loopback so still want to deny remote
 ; access."
 Name: "sshremoteopen"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    GroupDescription: "ssh:"; \
+    GroupDescription: "2)  SSH Server - Availability and Access:"; \
     Check: (not SshServerAbsent) and SshCurrentlyOpen
 
 ; ===========================================================================
@@ -456,7 +462,7 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; sees this page.  cycle.ps1 -SkipInstall builds the installer without touching
 ; the tree; running the .exe to the tasks page and cancelling writes nothing.
 Name: "apiremote"; Description: "Provide the SD Core API (port 4243)"; \
-    GroupDescription: "SD Core API:"; Flags: unchecked checkablealone
+    GroupDescription: "3)  SD Core API - Availability and Access:"; Flags: unchecked checkablealone
 Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
     Flags: unchecked dontinheritcheck
 
@@ -1852,6 +1858,13 @@ begin
       'Setup changes Windows itself, not only its own folders. All of it is listed below. ' +
       'Nothing has happened yet - Cancel stops without changing anything.',
       DisclosureText);
+
+  { 1 Sep 26 - MORE AIR BETWEEN THE TASKS.  Owner, looking at the wizard: the
+    rows ran together, worst where the wrapped ssh label met its child box.  A
+    taller minimum row height separates them; taken from the control's own value
+    and nudged with ScaleY so it is right at any DPI, and set ONCE here rather
+    than in CurPageChanged so revisiting the page does not keep adding to it. }
+  WizardForm.TasksList.MinItemHeight := WizardForm.TasksList.MinItemHeight + ScaleY(6);
 end;
 
 { ---------------------------------------------------------------------------
