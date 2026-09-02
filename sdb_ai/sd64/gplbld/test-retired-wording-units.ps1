@@ -79,6 +79,15 @@ $RETIRED = @(
     @{ Ref = '130d'
        Retired     = 'not need one at this machine'
        Replacement = 'will not let a session go on without it' }
+    # 130e - the TENTH copy, in the /SILENT refusal, which nobody had looked at
+    # because that dialog only fires on a silent install.  Found on the third
+    # sweep, after two "that is all of them" claims.  THE PATTERN IS THE POINT:
+    # each earlier sweep searched for the WORDING of the copies already found;
+    # only searching for the CLAIM - "don't need", "need not", "without a
+    # password" - turned up the outlier.
+    @{ Ref = '130e'
+       Retired     = 'used only at this computer from a session run as administrator'
+       Replacement = 'cannot be used AT ALL' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }

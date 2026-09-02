@@ -1259,8 +1259,10 @@ begin
       'SD Core cannot be installed silently.' + #13#10#13#10 +
       'Installing ends by asking for a password, and a silent install has ' +
       'nobody to ask. It would finish with NO password set for any account, ' +
-      'which means ssh and the SD Core API could not be used at all, and SD Core could ' +
-      'be used only at this computer from a session run as administrator.' + #13#10#13#10 +
+      'and an account without a password cannot be used AT ALL - not at this ' +
+      'computer, not over ssh, and not through the SD Core API. SD Core asks ' +
+      'for one every time you open the account and will not let a session go ' +
+      'on without it.' + #13#10#13#10 +
       'Run the installer normally instead. You can do that at this computer''s ' +
       'keyboard, or through Remote Desktop or similar remote-control software - ' +
       'both work, because a person is there to answer.',
@@ -3501,12 +3503,19 @@ begin
                          'the first time you open the account.' + #13#10#13#10 +
       { 23 Aug 26 - WHAT SKIPPING ACTUALLY COSTS, owner's instruction the same
         day.  The paragraph above named ssh and the API and stopped there, which
-        reads as "some features are unavailable".  It is stronger than that: with
-        no password the account is reachable ONLY from this machine, and only
-        from an elevated session, because PROJECT_STATUS.md 5.6.2 gives local
-        terminal access to administrators and LOGIN's 21 Aug rule admits the
-        console only when elevated - $cred is locked to SYSTEM and
-        Administrators, so an ordinary session cannot read it.
+        reads as "some features are unavailable".  It is stronger than that.
+
+        02 Sep 26 - AND IT IS STRONGER AGAIN THAN THIS NOTE SAID.
+        PRE_RELEASE_FIXES 130.  This paragraph used to finish "with no password
+        the account is reachable ONLY from this machine, and only from an
+        elevated session", and that was measured false on a guest: LOGIN asks
+        for a credential on EVERY login and ends the session without one, so a
+        passwordless account is reachable from nowhere at all - the elevated
+        console included.  The reasoning it gave (5.6.2 gives local terminal
+        access to administrators; $cred is locked to SYSTEM and Administrators)
+        was sound about WHO could read the credential and said nothing about
+        whether LOGIN would let the session proceed, which is the part that
+        decides it.
 
         REMOTE DESKTOP IS NAMED because it is the case people get wrong: it
         feels like connecting from another computer and is not.  5.6.2 puts it
