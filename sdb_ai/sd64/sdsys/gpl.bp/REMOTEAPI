@@ -104,6 +104,8 @@ $include err.h
    report     = ''
    both       = ''
    r.i        = 0
+   rpt        = ''
+   rpt.cp     = 0
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -216,12 +218,19 @@ report.state:
    both   = ps_script_out(ps, @true)
    rc     = field(both, @fm, 1)
    report = field(both, @fm, 2, 9999)
-*  FIELD BY FIELD.  !ps_script_out returns one line per FIELD, and crt of a
-*  dynamic array prints the field marks themselves - which put the whole report
-*  on one line studded with boxes the first time one reached a terminal.
+*  FIELD BY FIELD, WITH THE SCRIPT'S "name:" PREFIX STRIPPED.  PRE_RELEASE_FIXES
+*  115: api-listener.ps1 tags each line with its filename; a leading "token: "
+*  (colon-space, no space before it) is removed so the read-only report does not
+*  lead with the script's name.  A genuine "x : y" line is left alone.  (crt of a
+*  dynamic array would print the field marks themselves, hence field by field.)
    if report # '' then
       for r.i = 1 to dcount(report, @fm)
-         crt report<r.i>
+         rpt    = report<r.i>
+         rpt.cp = index(rpt, ': ', 1)
+         if rpt.cp and index(rpt[1, rpt.cp], ' ', 1) = 0 then
+            rpt = rpt[rpt.cp + 2, len(rpt)]
+         end
+         crt rpt
       next r.i
    end
    if rc # 0 then

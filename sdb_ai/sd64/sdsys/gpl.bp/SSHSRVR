@@ -92,6 +92,8 @@ $include err.h
    report = ''
    both   = ''
    r.i    = 0
+   rpt    = ''
+   rpt.cp = 0
 
    parser = "!PARSER"
    call @parser(PARSER$RESET, 0, @sentence, 0)
@@ -192,9 +194,19 @@ run.report:
 *  FIELD BY FIELD.  !ps_script_out returns one line per FIELD, and crt of a
 *  dynamic array prints the field marks themselves.
 print.report:
+*  STRIP THE HELPER SCRIPT'S OWN "name:" PREFIX.  PRE_RELEASE_FIXES 115: the
+*  -Show scripts tag every line with their filename (remove-ssh:), which on a
+*  read-only report leads with a word like "remove" that has nothing to do with
+*  the question asked.  Strip a LEADING "token: " only - a colon-space with no
+*  space before it - so a genuine "state : Installed" line is left untouched.
    if report # '' then
       for r.i = 1 to dcount(report, @fm)
-         crt report<r.i>
+         rpt    = report<r.i>
+         rpt.cp = index(rpt, ': ', 1)
+         if rpt.cp and index(rpt[1, rpt.cp], ' ', 1) = 0 then
+            rpt = rpt[rpt.cp + 2, len(rpt)]
+         end
+         crt rpt
       next r.i
    end
    return

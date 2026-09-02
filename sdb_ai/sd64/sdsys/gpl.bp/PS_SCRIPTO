@@ -157,16 +157,21 @@ deffun elevate(action, arg) calling '!elevate'
 *  "os.execute probe capturing probe.out".  An inline concatenation followed by
 *  CAPTURING would probably parse, but this is not the file to find out in.
    cmd = 'Get-Content -LiteralPath ' : q : ps.path : q : ' -Raw | Invoke-Expression'
-   if want.out then
-      os.execute cmd capturing out
-   end else
-      os.execute cmd
-   end
+*  ALWAYS CAPTURE, EVEN WHEN want.out IS FALSE.  PRE_RELEASE_FIXES 115: a bare
+*  "os.execute cmd" sends the child's stdout to SD's terminal, so an acting verb
+*  (ssh.server install/remove, remote.*) that also prints its own sysmsg said it
+*  twice.  Capturing routes the child's output into a variable instead of the
+*  terminal - the same silence the elevated-helper branch has - and the text is
+*  dropped below unless the caller asked for it.  This is what the paragraph
+*  above always meant by "keeps BOTH branches behaving the same way".
+   os.execute cmd capturing out
    rc = os.error()
 
    if want.out then
       gosub tidy.out
       delete sys.f, out.id
+   end else
+      out = ''
    end
    delete sys.f, id
    close sys.f
