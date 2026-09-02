@@ -6,17 +6,24 @@
 #      2  installed, but a RESTART is needed before the service exists
 #      1  failed
 #
-# NO LONGER THE INSTALLER'S OPT-IN CHECKBOX.  Owner's decision, 16 Aug 2026: SD
-# accounts sign in over ssh and nothing else, and the API is carried over ssh
-# too, so sd.iss now runs this whenever the machine has no ssh server - a local
-# user reaches SD by ssh'ing to localhost.  What is optional is who may reach
-# the server from elsewhere, which is ssh-firewall.ps1.
+# IT IS THE INSTALLER'S OPT-IN TASK, AND DEFAULT OFF SINCE 1 Sep 2026.  The
+# history reversed twice, so it is worth stating plainly: an opt-in checkbox
+# originally; UNCONDITIONAL 16 Aug 2026 on the premise - SINCE SHOWN WRONG - that
+# SD accounts sign in over ssh and nothing else, the API "carried over ssh too";
+# an opt-in choice again 30 Aug 2026 (sd.iss [Tasks], the three-state ssh
+# ruling); and default UNCHECKED 1 Sep 2026, because the Feature-on-Demand
+# download can take up to an hour and forcing it on every install is a
+# deal-breaker.  THE PREMISE WAS WRONG: the API is a separate port-4243 listener,
+# not carried over ssh (sd.iss:349), and an account granted API access signs in
+# over it via SCRAM without any ssh server - so ssh is the INTERACTIVE login
+# path, not the only one.  sd.iss gates this with Check: SshServerWanted, so it
+# runs ONLY when the box is ticked.  Who may reach the server is separately
+# optional, which is ssh-firewall.ps1 and allow-ssh-groups.ps1.
 #
-# Nothing in this script changed with that decision, and nothing needed to: it
-# was already idempotent and already reported "was already installed"
-# separately from "installed it".  The caller changed, not the work.  It is also
-# still the by-hand recovery when the download is blocked, which is now a state
-# the machine can reach on its own rather than one the user chose.
+# Nothing in this script's WORK changed across any of that: it was already
+# idempotent and already reported "was already installed" separately from
+# "installed it".  It is also still the by-hand recovery when the download is
+# blocked.
 #
 # WHY THIS IS A FILE AND NOT AN INLINE [Run] PARAMETER.  It used to be inline,
 # and it carried a brace bug for its whole life: Inno escapes a literal "{" as

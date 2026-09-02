@@ -199,8 +199,26 @@ Name: "addtopath"; Description: "Add SD Core to the system PATH so ""sd"" runs f
 ; the parent task"; install-ssh.ps1 carries `Check: SshServerWanted`, which is a
 ; Check and not a Tasks parameter, so the exemption does not apply here and
 ; checkablealone is doing real work rather than being belt-and-braces.
-Name: "sshserver"; Description: "Install the OpenSSH server (SD Core accounts sign in over ssh and nothing else)"; \
-    GroupDescription: "ssh:"; Flags: checkablealone; \
+; 1 Sep 26 - OPT-IN, NOT OPT-OUT, AND THE COST IS ON THE LABEL.  Owner's ruling,
+; 1 Sep 2026: do not tick this by default.  Installing the server is a
+; Feature-on-Demand download from Windows Update that is a few minutes on a fast
+; machine and up to about an hour on a slow one, and forcing that on every
+; install - for a server the administrator may not need, since an administrator
+; reaches SD Core by elevation rather than over ssh - is a deal-breaker for an
+; open-source tool.  So it defaults OFF (Flags: unchecked) and the cost lives in
+; the Description, at the choice, rather than on a page of its own: the owner's
+; word, "I don't like having the explanation separate from the choice."
+;
+; LEAVING IT OFF DOES NOT MAKE ACCOUNTS UNUSABLE, and the label must not imply it
+; does.  Owner's correction, 1 Sep 2026: an account can also be reached through
+; the API - a separate port-4243 listener (its own choice below), NOT carried
+; over ssh (sd.iss:349, "the ssh tunnel is no longer part of the design") - so
+; creating accounts is independent of whether an ssh server exists.  What ssh
+; provides is interactive sign-in over "ssh localhost" or remotely.  The older
+; "accounts sign in over ssh and nothing else" premise is wrong and is filed
+; separately.  PRE_RELEASE_FIXES 124.
+Name: "sshserver"; Description: "Install the OpenSSH server so SD Core accounts can sign in over ssh (they can also be reached through the API instead) - it downloads from Windows Update and can take several minutes, up to about an hour on a slow machine"; \
+    GroupDescription: "ssh:"; Flags: checkablealone unchecked; \
     Check: SshServerAbsent
 
 Name: "sshserver\sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
@@ -820,17 +838,18 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-reclaim.ps1"" -Path ""{#DataDir}\profile-reclaim"""; \
     Flags: runhidden; StatusMsg: "Securing the profile reclaim store..."
 
-; NOT OPTIONAL SINCE 16 Aug 2026 - see the note in [Tasks].  The Check is the
-; whole of the condition now: install one if this machine has none, and never
-; touch one it already has.
+; OPT-IN AND DEFAULT OFF SINCE 1 Sep 2026 - see the note in [Tasks].  The Check
+; is SshServerWanted (the ticked box, which only appears when this machine has
+; none), so a server is installed only when the user asks for one and one that
+; already exists is never touched.
 ;
-; A FAILURE HERE STILL MUST NOT FAIL THE SD INSTALL.  This is a Features on
-; Demand download, and policy, a WSUS with no FoD source, a metered connection
-; or an offline machine can each block it.  That rule (5.9) has survived the
-; change - but its CONSEQUENCE has not, and this is the important part: the
-; machine can now land in the state the user used to choose, an SD with no ssh
-; server, in which NO ACCOUNT BUT THE INSTALLING USER'S CAN SIGN IN ANYWHERE.
-; It is not fatal and it is not silent either; SshReport says so at the end.
+; A FAILURE HERE - OR THE BOX SIMPLY LEFT UNTICKED, WHICH IS NOW THE DEFAULT -
+; MUST NOT FAIL THE SD INSTALL.  Installing is a Features on Demand download, and
+; policy, a WSUS with no FoD source, a metered connection or an offline machine
+; can each block it (5.9); and by default the user has not asked for it at all.
+; Either way the machine lands in an SD with no ssh server, in which NO ACCOUNT
+; BUT THE INSTALLING USER'S CAN SIGN IN ANYWHERE.  That is now the DEFAULT rather
+; than an edge case, and it is not silent: SshReport says so at the end.
 ;
 ; MOVED OUT OF THIS FILE ON PURPOSE - see install-ssh.ps1.  It used to be an
 ; inline -Command, and it carried a brace bug for its entire life: Inno escapes

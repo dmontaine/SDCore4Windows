@@ -5,6 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+01 Sep 26  THE INSTALLER NO LONGER INSTALLS THE OpenSSH SERVER BY DEFAULT.
+
+           Installing the OpenSSH server is now an unticked choice in the
+           installer rather than something done automatically.  Ticking it
+           still installs it; leaving it unticked skips a download Windows
+           fetches from Windows Update, which is a few minutes on a fast
+           machine and up to about an hour on a slow one.
+
+           This does not stop you creating or using SD Core accounts.  An
+           account signs in over ssh once a server is installed, or through the
+           SD Core API if you provide that instead; and an administrator uses
+           SD Core by typing "sd" at an elevated prompt either way.  If you skip
+           the server now, install it later by running the installer again and
+           ticking the box.
+
 01 Sep 26  delete.file NO LONGER REPORTS A FAILED INDEX DELETE ON A FILE THAT
            NEVER HAD AN INDEX.
 
