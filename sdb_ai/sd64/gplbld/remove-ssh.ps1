@@ -86,7 +86,19 @@ Say ("state      : " + $cap.State)
 # it.  "ssh.server" with no keyword runs -Show, and the first thing it printed
 # to the owner on 30 Aug 2026 was a line labelled "before" that was the whole
 # output.  A label that promises a second half has to deliver one.
-Report $(if ($Show) { 'state' } else { 'before' })
+#
+# 02 Sep 26 - AND THE LABEL THAT REPLACED IT COLLIDED.  PRE_RELEASE_FIXES.md
+# 127.  "state" is already used eleven lines above for the CAPABILITY state
+# ("state      : Installed"), so witnessing 115 on 2 Sep 2026 produced a
+# four-line report naming "state" twice, meaning two different things:
+#
+#     state      : Installed                                  <- the capability
+#     state   sshd.exe=True service=Running ...               <- the machine
+#
+# A reader cannot tell which one is authoritative.  "machine" says whose state
+# it is, is exactly the 7 characters the {0,-7} field holds, and leaves
+# "before"/"after" on the acting paths untouched.
+Report $(if ($Show) { 'machine' } else { 'before' })
 
 if ($Show) { exit 0 }
 

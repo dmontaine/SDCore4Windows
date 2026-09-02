@@ -101,7 +101,20 @@ for ($i = 0; $i -lt $lines.Count; $i++) {
     if ($t -ceq $COMMENTED) { $commentedIdx += $i }
 }
 
-Say ("before : active=" + $activeIdx.Count + " commented=" + $commentedIdx.Count)
+# 02 Sep 26 - "before" IS A LIE ON THE -Show PATH, because nothing comes after
+# it.  PRE_RELEASE_FIXES.md 127: "remote.api" with no keyword runs -Show, and
+# the owner's screen read "action : Show" followed by "before : active=1
+# commented=0" with no "after" line anywhere - a label that promises a second
+# half has to deliver one.  remove-ssh.ps1:85-89 found and fixed exactly this
+# on 30 Aug 2026 and the fix never reached this script, which is the whole of
+# 127.
+#
+# THE SHOW LABEL IS "lines", NOT "state", AND THAT IS NOT ARBITRARY.  This
+# script already prints its own "state  : ON - ..." further down, so reusing
+# "state" here would move the collision rather than remove it - which is the
+# second half of 127, committed in remove-ssh.ps1 by the 30 Aug fix.  "lines"
+# says what the two numbers actually count: whole lines in sd.conf.
+Say ($(if ($Show) { 'lines  : active=' } else { 'before : active=' }) + $activeIdx.Count + " commented=" + $commentedIdx.Count)
 
 # ***THE NULL CASE IS REFUSED OUT LOUD.***  A file carrying neither form is one
 # this script does not understand, and editing it would be guesswork.  Reporting

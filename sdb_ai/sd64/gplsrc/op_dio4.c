@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 02 Sep 26 Windows port - dir_select tests the escape character before
+ *                      consuming it (PRE_RELEASE_FIXES.md 128, UPSTREAM 35)
  * rev 0.9-3 mab in dir_select if we end up with an empty name, don't add to list
  * rev 0.9.0 Jan 25 mab fix period or tilde character mapping (%t / %d) 
  *                      to match either case
@@ -1139,9 +1141,42 @@ Private bool dir_select(FILE_VAR* fvar, int16_t list_no) {
 
           while ((c = *(p++)) != '\0') {
             if (c == '%') {
-              r = strchr(df_substitute_chars, *(p++));
-              if (r != NULL) {
+              /* 02 Sep 26 Windows port - PRE_RELEASE_FIXES.md 128, UPSTREAM 35.
+                 TEST THE CHARACTER BEFORE CONSUMING IT.  This read
+                 strchr(df_substitute_chars, *(p++)) and then tested the
+                 result, which had two faults.
+
+                 An unknown escape wrote nothing but had ALREADY stepped over
+                 the letter, so "draft%1" decoded to "draft" - two different
+                 files collapsing onto one id, and an id readnext hands back
+                 that will not open.
+
+                 Worse, a TRAILING '%' consumed the string's own terminator,
+                 and strchr(s, '\0') returns a pointer to that table's NUL
+                 rather than NULL - so the "r != NULL" guard PASSED, p was
+                 left pointing past the end of name, and this loop went on
+                 consuming adjacent stack memory while q wrote it back into
+                 name.  name is char[MAX_PATHNAME_LEN + 1] on the stack, so
+                 that overflows it rather than merely over-reading.
+
+                 An unknown escape is now kept LITERAL, which makes the decode
+                 total: every input maps to some output and none runs off the
+                 end.  q never overtakes p (each turn consumes at least as
+                 much as it writes), so the in-place decode is still safe.
+
+                 KNOWN AND DELIBERATE: a literal '%' does not round-trip
+                 through map_t1_id(), which encodes '%' as "%P" - so the id
+                 reported for a file named "draft%1" will not re-open it.  SD
+                 never creates such a name; only a file dropped into the
+                 directory from outside can carry one.  Reporting it visibly
+                 beats both the old silent collision and dropping the entry,
+                 which would hide the file from SELECT entirely. */
+              if ((*p != '\0') &&
+                  ((r = strchr(df_substitute_chars, *p)) != NULL)) {
                 *(q++) = df_restricted_chars[r - df_substitute_chars];
+                p++;
+              } else {
+                *(q++) = c;
               }
             } else {
               *(q++) = c;
