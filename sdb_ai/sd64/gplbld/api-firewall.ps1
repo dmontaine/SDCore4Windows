@@ -5,10 +5,24 @@
 #   powershell -File api-firewall.ps1 -Restrict          this machine only
 #   powershell -File api-firewall.ps1 -Remove            take the rule away
 #   powershell -File api-firewall.ps1 -Show              report, change nothing
+#   powershell -File api-firewall.ps1 -ScopeFile <path>  write one word and stop
 #   powershell -File api-firewall.ps1 -Open -Port 4243   a port other than the default
 #
 # Exit 0 applied, 1 failed, 2 refused.  ELEVATED - creating a firewall rule is
-# a machine-wide change.
+# a machine-wide change.  -Show and -ScopeFile are the two read-only modes and
+# neither takes the elevation gate.
+#
+# -ScopeFile EXISTS FOR THE INSTALLER, and ssh-firewall.ps1's -ScopeFile is the
+# precedent being copied.  PRE_RELEASE_FIXES 147: after an uninstall that kept
+# the database and a reinstall, the API listens and its rule is gone, and the
+# closing box has to say so - which it may only do if it MEASURED it.  A message
+# that asserted "nobody can reach the API" from the install path alone would be
+# a claim about a machine nobody looked at.
+#
+# THREE ANSWERS, NOT TWO, and that is the difference from the ssh one.  There it
+# is always a question about a rule Windows created, so "open" or "restricted"
+# covers it.  Here the rule is ours and may be ABSENT, which is the whole state
+# 147 is about - so a missing rule answers "none" rather than being an error.
 #
 # WHY THIS IS NOT ssh-firewall.ps1 WITH A DIFFERENT PORT, which was the first
 # thing tried.  That script TOGGLES a rule somebody else created: installing
@@ -45,7 +59,8 @@ param(
     [switch]$Open,
     [switch]$Restrict,
     [switch]$Remove,
-    [switch]$Show
+    [switch]$Show,
+    [string]$ScopeFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,6 +70,20 @@ $displayName = 'SD API (SDClient)'
 
 function Get-ApiRule {
     return (Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue)
+}
+
+# ONE PLACE DECIDES OPEN OR SHUT, which is ssh-firewall.ps1's rule and its
+# comment says why: two copies of this test invite the failure where one is
+# updated and the other is not.  -ScopeFile and the read-back verdict at the
+# bottom both come here.
+#
+# A LIST, NOT A SCALAR - RemoteAddress can hold several entries, so this asks
+# whether ANY of them is the unrestricted one rather than comparing a joined
+# string.  A missing rule is not open.
+function Test-RuleOpen($rule) {
+    if ($null -eq $rule) { return $false }
+    $addrs = ($rule | Get-NetFirewallAddressFilter).RemoteAddress
+    return ($addrs -contains 'Any')
 }
 
 function Write-State($rule) {
@@ -76,6 +105,22 @@ if ($Port -lt 1 -or $Port -gt 65535) {
 }
 
 try {
+    # ANSWERED FIRST, AND BEFORE THE ELEVATION GATE BELOW, because it changes
+    # nothing and because a caller that gets no answer at all is worse than one
+    # that gets "none": the installer's alternative to a measurement is a guess.
+    # The file is written before anything is printed, so a caller reading the
+    # file rather than the output cannot be told a rule exists by a line that
+    # was produced on the way to failing.
+    if ($ScopeFile -ne '') {
+        $rule = Get-ApiRule
+        if ($null -eq $rule)        { $verdict = 'none' }
+        elseif (Test-RuleOpen $rule) { $verdict = 'open' }
+        else                         { $verdict = 'restricted' }
+        [System.IO.File]::WriteAllText($ScopeFile, $verdict, [System.Text.Encoding]::ASCII)
+        Write-Output ("api-firewall: current scope is " + $verdict)
+        exit 0
+    }
+
     if ($Show) {
         Write-State (Get-ApiRule)
         exit 0
@@ -168,7 +213,7 @@ try {
     # the state on the machine rather than the state it intended to set.
     $applied = Get-ApiRule
     $addrs   = @($applied | Get-NetFirewallAddressFilter).RemoteAddress
-    $isOpen  = ($addrs -contains 'Any')
+    $isOpen  = Test-RuleOpen $applied
 
     if ($isOpen -ne [bool]$Open) {
         Write-Output ('api-firewall: FAILED - the rule was NOT changed.  Asked for ' +

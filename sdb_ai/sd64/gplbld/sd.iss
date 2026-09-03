@@ -2582,6 +2582,82 @@ begin
               '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
 end;
 
+(* ***WHO MAY REACH THE API PORT - MEASURED, NOT INFERRED.***
+   PRE_RELEASE_FIXES 147.  Answers 'open', 'restricted', 'none', or '' when it
+   could not be read.
+
+   ***THE EMPTY STRING IS AN ANSWER AND THE CALLER TREATS IT AS ONE.***  Every
+   failure lands there - the script is not installed, will not start, exits
+   non-zero, wrote no file, or wrote a word this does not know - and the box
+   that reads this then says NOTHING about the firewall at all.  A sentence
+   asserting "no other computer can reach the API" on the strength of a
+   measurement that did not happen is the null case the instrument rules forbid,
+   and saying nothing is the honest version of not knowing.
+
+   IT READS THE INSTALLED SCRIPT RATHER THAN EXTRACTING A TEMPORARY COPY, which
+   is where it differs from GetSshRuleIsOpen: that one runs in InitializeSetup,
+   before the file copy, and this runs at ssPostInstall - so the shipped script
+   is already there and is the same copy remote.api will use afterwards.
+
+   READ-ONLY, AND THE SCRIPT SAYS SO: -ScopeFile is one of api-firewall.ps1's
+   two modes that take no elevation gate, because they change nothing. *)
+function GetApiRuleScope: String;
+var
+  Ps, ScriptPath, ScopePath, Scope: String;
+  Raw: AnsiString;
+  Code: Integer;
+begin
+  Result := '';
+
+  ScriptPath := ExpandConstant('{app}\api-firewall.ps1');
+  if not FileExists(ScriptPath) then
+  begin
+    Log('SD: api-firewall.ps1 is not installed; the API firewall scope is unknown.');
+    Exit;
+  end;
+
+  Ps        := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  ScopePath := ExpandConstant('{tmp}\api-firewall-scope.txt');
+
+  if not Exec(Ps,
+              '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+              ScriptPath + '" -ScopeFile "' + ScopePath + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Log('SD: api-firewall.ps1 -ScopeFile could not be started; the API firewall scope is unknown.');
+    Exit;
+  end;
+
+  if Code <> 0 then
+  begin
+    Log('SD: api-firewall.ps1 -ScopeFile exited ' + IntToStr(Code) +
+        '; the API firewall scope is unknown.');
+    Exit;
+  end;
+
+  if not FileExists(ScopePath) then
+  begin
+    Log('SD: api-firewall.ps1 -ScopeFile wrote no file; the API firewall scope is unknown.');
+    Exit;
+  end;
+
+  Raw := '';
+  LoadStringFromFile(ScopePath, Raw);
+  Scope := Trim(String(Raw));
+
+  { THE THREE WORDS THE SCRIPT WRITES, AND NOTHING ELSE IS PASSED ON.  Anything
+    unrecognised stays '' rather than reaching the box as though it were one of
+    them - a fourth word added there must be handled here before it can mean
+    anything. }
+  if (Scope = 'open') or (Scope = 'restricted') or (Scope = 'none') then
+    Result := Scope
+  else
+    Log('SD: api-firewall.ps1 -ScopeFile wrote "' + Scope + '", which is not one of ' +
+        'open, restricted or none; the API firewall scope is unknown.');
+
+  Log('SD: API firewall scope read as "' + Scope + '".');
+end;
+
 { What happened to the ssh server, judged from the state of the machine rather
   than from an exit code.
 
@@ -3678,6 +3754,14 @@ var
   DictMsg: String;
   SshOnlyMsg: String;
   MarkerMsg: String;
+  { 03 Sep 26 - PRE_RELEASE_FIXES 135 and 147.  The two things a kept database
+    does NOT carry: the membership of the Windows groups that decide who may
+    reach SD, and the firewall rule in front of the API.  They are separate
+    variables because they are gated on different questions and either can be
+    the only one that fires. }
+  AccessMsg: String;
+  ApiRuleMsg: String;
+  ApiScope: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -3802,6 +3886,22 @@ begin
       on|local|off is the way to change it. }
     if (not TrueUpgrade) and ApiConfAbsent then
       ApiFw := ApplyApiFirewall;
+
+    { 03 Sep 26 - AND THEN ASK WHO MAY ACTUALLY REACH IT.  PRE_RELEASE_FIXES 147.
+
+      ***STRICTLY AFTER THE LINE ABOVE.***  That call is the only thing in this
+      installer that creates the rule, so a sample taken before it would report
+      the state this install was about to change - 146's mistake from the other
+      end, and the reason ApiConfAbsent must be sampled EARLY while this must be
+      sampled LATE.  The difference is which side of the write each one is
+      asking about.
+
+      ONLY WHEN THERE IS SOMEBODY TO TELL.  Its one reader is the kept-database
+      box further down, which appears only when the tree was already here; on a
+      first install nothing reads it and the query would be a PowerShell launch
+      for nobody. }
+    if not DataTreeAbsent then
+      ApiScope := GetApiRuleScope;
 
     { STRICTLY BEFORE ApplyAllowGroups.  That step points sshd at the sdssh
       group; this one creates it and seeds it from sdusers, which is the set
@@ -4190,6 +4290,87 @@ begin
       MsgBox(SshLimit, mbInformation, MB_OK);
 
     if not DataTreeAbsent then
+    begin
+      { 03 Sep 26 - WHAT A KEPT DATABASE DOES NOT CARRY.  PRE_RELEASE_FIXES 135.
+        It goes in THIS box, one paragraph under the promise, because that is
+        135's whole finding: the box says "YOUR DATA IS UNTOUCHED" and a reader
+        fairly takes it as a promise about ACCESS.  The correction belongs where
+        the promise is, not in a release note nobody is holding.
+
+        ***GATED ON "SD Core WAS NOT INSTALLED WHEN SETUP STARTED", NOT ON
+        "IS THIS AN UPGRADE".***  An in-place upgrade leaves every group and its
+        membership alone, so nothing was lost and there is nothing to say.  What
+        loses them is the uninstaller, which deletes the three route groups
+        outright - and a Windows local group takes its membership with it.  The
+        tree then outlives the install, and this is the branch that meets it:
+        TrueUpgrade is "the data tree is here AND SD was installed", so inside
+        this branch "not TrueUpgrade" is exactly "the product was gone and the
+        data stayed".
+
+        EVERY CLAIM IS ABOUT WHAT THE INSTALLER DOES, not about what this
+        machine's groups happen to hold, and that is deliberate: an invariant
+        cannot go stale between being measured and being read.
+        sync-route-groups.ps1 never seeds sdapi and says so in its own header;
+        restore-sshonly.ps1 repopulates sdsshonly from the register;  sdssh is
+        seeded from sdusers whenever this install had to create it. }
+      AccessMsg := '';
+      if not TrueUpgrade then
+      begin
+        AccessMsg :=
+          'BUT ACCESS IS NOT DATA, AND IT DID NOT ALL COME BACK. SD Core was not ' +
+          'installed on this computer when Setup started, so the Windows groups that ' +
+          'decide who may reach it are as this install leaves them, not as your last ' +
+          'one did.' + #13#10#13#10;
+
+        { ONLY IF THE STEP DID NOT REPORT A PROBLEM.  RestoreSshOnly's failure is
+          already in the summary box the reader has just closed, and claiming the
+          confinement was restored here would contradict it in the dangerous
+          direction - a message asserting a control that is not there, which is
+          the fault 133 was filed for. }
+        if SshOnlyMsg = '' then
+          AccessMsg := AccessMsg +
+            '    The ssh-only confinement IS restored, from the account register.' + #13#10;
+
+        AccessMsg := AccessMsg +
+          '    ssh comes back for every member of the "sdusers" group, so an account ' +
+          'whose ssh you had withdrawn can reach this machine again.' + #13#10 +
+          '    API access does NOT come back, and no install ever grants it: an account ' +
+          'that could use the API before cannot now.' + #13#10#13#10 +
+          'Set either of them per account, in SD Core as an administrator:' + #13#10#13#10 +
+          '    modify.account <name> ssh | api | both | none' + #13#10#13#10 +
+          'The keyword sets that account''s access to exactly what it names, so "api" on ' +
+          'its own takes ssh away.' + #13#10#13#10;
+      end;
+
+      { 03 Sep 26 - THE OTHER HALF OF THE SAME SILENCE.  PRE_RELEASE_FIXES 147:
+        after an uninstall that kept the database, the API listens and its rule
+        is gone, the tasks page cannot offer the box because sd.conf is
+        preserved, and nothing anywhere says so.  A site loses network API
+        access and is told only that its data is safe.
+
+        ***IT IS NOT FIXED BY UNGATING THE FIREWALL CALL ABOVE, AND MUST NOT
+        BE.***  That is the change 89 rejected: on a preserved tree it would let
+        a hidden box NARROW a scope the site chose.  Saying it out loud leaves
+        the choice where it belongs and takes nothing away.
+
+        THREE CONDITIONS, EACH DOING WORK.  sd.conf preserved, so "Setup did not
+        ask" is true and the case where the firewall step ran and FAILED has its
+        own message already.  A listener, so there is something to be
+        unreachable.  And a MEASURED absence of the rule - never an assumed one,
+        and never "restricted", which is a state somebody chose deliberately
+        with remote.api local. }
+      ApiRuleMsg := '';
+      if (not ApiConfAbsent) and ApiListenerAfterwards and (ApiScope = 'none') then
+        ApiRuleMsg := #13#10#13#10 +
+          'AND NOTHING CAN REACH THE API FROM ANOTHER COMPUTER. Your sd.conf was kept, ' +
+          'so SD Core still provides the API, and Setup did not ask who may reach it - ' +
+          'that is your setting and it will not overrule you. The firewall rule is not ' +
+          'part of the database either, and this computer has none: the API is listening ' +
+          'and nothing may connect to it from anywhere else. To let other computers in ' +
+          'again, in SD Core as an administrator:' + #13#10#13#10 +
+          '    remote.api on' + #13#10#13#10 +
+          'or "remote.api local" for the same rule scoped to this computer only.';
+
       { 30 Aug 26 - REWRITTEN, BECAUSE IT SAID THE OPPOSITE OF WHAT HAD JUST
         HAPPENED.  PRE_RELEASE_FIXES 77.
 
@@ -4235,6 +4416,9 @@ begin
              'YOUR DATA IS UNTOUCHED: your accounts and their passwords, the account ' +
              'register, anything you catalogued, the print queue, held output, and any ' +
              'programs you wrote in SDSYS''s own BP.' + #13#10#13#10 +
+             { PRE_RELEASE_FIXES 135.  Directly under the promise it qualifies,
+               and empty on an in-place upgrade - see the builder above. }
+             AccessMsg +
              'SD Core''S OWN SYSTEM FILES WERE REPLACED - the BASIC source and its compiled ' +
              'objects, the VOC templates, the messages and the dictionaries. That is ' +
              'what upgrading in place means, and it is why you are seeing this rather ' +
@@ -4252,8 +4436,12 @@ begin
              'YOUR CONFIGURATION WAS NOT CHANGED. sd.conf is left exactly as it is, so ' +
              'settings you edited survive - and re-running this installer will not ' +
              'change them back. To turn the SD Core API on or off afterwards, use the ' +
-             '"remote.api" command inside SD Core.',
+             { PRE_RELEASE_FIXES 147.  Last, because it is the exception to the
+               sentence immediately above it: the configuration was kept and the
+               rule in front of it was not.  Empty unless that was measured. }
+             '"remote.api" command inside SD Core.' + ApiRuleMsg,
              mbInformation, MB_OK);
+    end;
 
     { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
       user's password is collected by leaving them in SD, not by an installer

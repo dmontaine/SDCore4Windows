@@ -5,6 +5,54 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+03 Sep 26  REINSTALLING OVER A DATABASE YOU KEPT NOW TELLS YOU WHAT DID NOT
+           COME BACK WITH IT.
+
+           The box that says "YOUR DATA IS UNTOUCHED" was true, and it was
+           fair to read it as more than it said. Your data is kept. Who may
+           REACH it is not part of your data: uninstalling deletes the Windows
+           groups that decide that, and a Windows group takes its membership
+           with it.
+
+           So when SD Core was not installed on this computer at the moment
+           Setup started, that same box now also says, in the same breath:
+
+             - the ssh-only confinement IS put back, from the account
+               register;
+             - ssh comes back for everyone in the "sdusers" group, so an
+               account whose ssh you had withdrawn can reach this machine
+               again;
+             - API access does NOT come back, and no install ever grants it.
+
+           And it names the command that sets any of them, per account:
+
+               modify.account <name> ssh | api | both | none
+
+           THE KEYWORD SETS THAT ACCOUNT'S ACCESS TO EXACTLY WHAT IT NAMES.
+           "api" on its own takes ssh away; "both" is ssh and the API.
+
+           An ordinary upgrade, over an SD Core that is still installed, loses
+           no membership and says none of this.
+
+03 Sep 26  AND THE INSTALLER NOW CHECKS WHETHER ANYTHING CAN ACTUALLY REACH
+           THE API, RATHER THAN ONLY WHETHER IT IS RUNNING.
+
+           Uninstalling removes SD Core's own firewall rule for the API port,
+           on purpose: leaving a rule behind for a service that is gone would
+           be worse. Your sd.conf is kept, so a later reinstall still provides
+           the API - and Setup does not ask who may reach it, because that
+           setting is yours and it will not overrule you.
+
+           The result was an API that listened and admitted nobody, with
+           nothing said about it anywhere. The installer now looks for the
+           rule, and when there is none it says so and names the way back:
+
+               remote.api on
+
+           or "remote.api local" for the same rule scoped to this computer
+           only. If the rule is there, or SD Core cannot find out, it says
+           nothing rather than guessing.
+
 02 Sep 26  THE INSTALLER NOW EXPLAINS BOTH REASONS "sd" DOES NOT RUN YET.
            IT USED TO NAME ONLY ONE OF THEM.
 
