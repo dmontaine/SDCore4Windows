@@ -492,6 +492,25 @@ $steps = @(
     # records.
     @{ Name = 'verify-txn.ps1';          P = @{} },
 
+    # 03 Sep 26 - PRE_RELEASE 93 and 65's guard: the account register and
+    # os.users must contain only records for accounts that exist.
+    #
+    # IT IS IN THIS RUNNER BECAUSE THE PROPERTY IS ABOUT WHAT AN ORDINARY USER
+    # SEES.  Both files grant sdusers ReadAndExecute, and a stale record matters
+    # precisely because LIST ACCOUNTS shows it to everybody; checking it from an
+    # elevated window would measure a file nobody reads that way.  No prefix, no
+    # account, no UAC prompt, and it changes nothing.
+    #
+    # ***AND IT WOULD HAVE CAUGHT WHAT A 41-STEP GREEN SUITE DID NOT.*** On
+    # 1 Sep 2026 the b100 suite passed 753 checks with the register 93% invalid,
+    # because no step asserted it was internally consistent.  Entry 93 asks for
+    # exactly this check in exactly those words.
+    #
+    # Measured before being added - 7 of 7 PASS on the live tree, and 4 of 7
+    # with two FAILs on a deliberately dirty one, so it has been watched both
+    # ways rather than only passing.
+    @{ Name = 'verify-register.ps1';     P = @{} },
+
     # 31 Aug 26 - DOES THE LANGUAGE ITSELF ANSWER CORRECTLY?  PRE_RELEASE 106,
     # on the owner's ruling of 31 Aug 2026.  §5.24.  The §5.23 sweeps asked
     # whether a status was discarded; this asks the question underneath them,

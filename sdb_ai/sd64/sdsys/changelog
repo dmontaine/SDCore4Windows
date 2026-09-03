@@ -5,6 +5,34 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+03 Sep 26  "list accounts" AND "list os.users" NO LONGER SHOW ACCOUNTS THAT
+           HAVE BEEN DELETED.
+
+           A Windows account can be removed without SD being told - "net user
+           /delete", a change in Active Directory, a decommissioning script.
+           SD kept its own record of that account regardless, so "list
+           accounts" and "list os.users" listed accounts that no longer
+           existed, and "create.account" refused to make the name again,
+           saying "Account already exists" about an account that did not.
+
+           SD now checks its register against Windows every time the SD
+           service starts, which is every time the computer starts, and
+           removes the records for accounts that have gone. The account's
+           directory goes with the record, because deleting an account means
+           deleting its data.
+
+           IF YOU WANT TO KEEP AN ACCOUNT'S DATA, SUSPEND IT INSTEAD OF
+           DELETING IT: "modify.account <name> suspended" withdraws the
+           access and keeps everything else.
+
+           Nothing is removed on a guess. An account of the "GROUP" or
+           "OTHER" kind has no Windows login at all, and neither has SDSYS,
+           so those are left alone; so is any account whose directory is not
+           where SD put it, and any account at all if Windows cannot answer
+           the question - for example while a domain controller is
+           unreachable. Whatever was left alone, and why, is written to
+           "reconcile-accounts.log" beside the database.
+
 03 Sep 26  "remote.api" AND THE INSTALLATION CHECK NOW TELL YOU WHO MAY REACH
            THE API, NOT ONLY THAT IT IS LISTENING.
 

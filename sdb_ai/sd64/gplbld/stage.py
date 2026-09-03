@@ -1206,6 +1206,15 @@ def main():
                    # these - do NOT add either to that script's $neverShipped
                    # list.
                    'secure-reclaim.ps1', 'reclaim-profiles.ps1',
+                   # 03 Sep 26 - PRE_RELEASE_FIXES #93 and #65, and it is the
+                   # same argument as the pair above.  sdsvc.exe runs it at
+                   # every service start, so it MUST ship or the account
+                   # register is never reconciled against Windows and LIST
+                   # ACCOUNTS goes on answering wrongly.  It needs no store of
+                   # its own - it reads the register, which is already there.
+                   # It SHIPS, so assert-current watches it like the rest of
+                   # these - do NOT add it to that script's $neverShipped list.
+                   'reconcile-accounts.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

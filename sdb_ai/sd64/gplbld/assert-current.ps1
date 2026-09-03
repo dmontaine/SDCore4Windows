@@ -219,6 +219,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # dot-sources strip-comments.ps1; nothing installs it and
                   # nothing compiles it into sd.exe.
                   'test-apigate-units.ps1',
+                  # 03 Sep 26 - PRE_RELEASE 93 and 65's consistency verifier and
+                  # the units test over the sweep's decision table.  Listed in
+                  # the commit that creates them, under the rule the note below
+                  # states.  THE SWEEP ITSELF IS NOT HERE AND MUST NOT BE:
+                  # reconcile-accounts.ps1 SHIPS - sdsvc.exe runs it at every
+                  # service start - so it is watched like the rest of the tree.
+                  # These two are its instruments and reach no install.
+                  'verify-register.ps1', 'test-reconcile-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',

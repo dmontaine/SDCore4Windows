@@ -13,6 +13,11 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 03 Sep 26 Windows port - run gplbld/reconcile-accounts.ps1 as well, so the
+ *           account register and os.users lose the records whose Windows
+ *           account was removed from outside SD.  PRE_RELEASE_FIXES.md 93 and
+ *           65.  run_sweep() and sweep_script_path() take the script name and
+ *           a label now; nothing else about either changed.
  * 28 Aug 26 Windows port - run gplbld/reclaim-profiles.ps1 before "sd -start",
  *           so the profiles DELETE_USER could not remove are reclaimed on the
  *           boot that finally unmounts their hives.  PRE_RELEASE_FIXES.md 36.
@@ -54,7 +59,24 @@
  * is stage 2.  This runs sdwind under whatever identity the service is
  * configured with and changes nothing about who owns the files.
  *
- * THE ONE THING IT DOES BESIDES THE LIFECYCLE, AND WHY IT IS HERE.
+ * THE TWO THINGS IT DOES BESIDES THE LIFECYCLE, AND WHY THEY ARE HERE.
+ *
+ * BOTH ARE THE SAME SHAPE: a state Windows can reach WITHOUT SD BEING TOLD,
+ * which SD therefore cannot prevent and must instead detect and repair, at the
+ * one moment that reliably happens - service start, which is every boot, as
+ * LocalSystem, which is the token both repairs need.
+ *
+ * 03 Sep 26 Windows port, PRE_RELEASE_FIXES.md 93 and 65 - THE REGISTER.  A
+ * Windows account can be removed from outside SD (net user /delete, an AD
+ * removal, a decommission script) and nothing in SD is consulted, so
+ * @SDSYS/ACCOUNTS and @SDSYS/OS.USERS keep records for accounts that are gone.
+ * LIST ACCOUNTS and LIST OS.USERS then answer wrongly, which PROJECT_STATUS.md
+ * 5.23 makes a blocking defect, and CREATE.ACCOUNT refuses to recreate the name
+ * with "Account already exists" - true of the record and false of the world.
+ * Measured immediately after a GREEN 41-step suite run: 14 of 15 records named
+ * an account that no longer existed.  reconcile-accounts.ps1 removes the record
+ * and the account directory together, on the owner's ruling that deletion takes
+ * the data and SUSPENDED is the keep-it path.
  *
  * 28 Aug 26 Windows port, PRE_RELEASE_FIXES.md 36.  Deleting a Windows account
  * cannot delete its profile while Windows still has that profile's registry
@@ -114,6 +136,15 @@
    case is an empty store and an exit within a second.                       */
 #define SWEEP_WAIT_MS 120000
 #define SWEEP_SCRIPT "reclaim-profiles.ps1"
+
+/* 03 Sep 26 Windows port - THE SECOND SWEEP.  PRE_RELEASE_FIXES.md 93 and 65:
+   the account register and the shell-access list keep records for Windows
+   accounts that have been removed from outside SD, so LIST ACCOUNTS and LIST
+   OS.USERS answer wrongly and CREATEA refuses to recreate the name.  Same
+   shape and same reason as the profile reclaim above - an external condition
+   SD cannot prevent, swept at service start - so it hangs off the same
+   moment, with the same "nothing here is fatal" contract.                 */
+#define RECONCILE_SCRIPT "reconcile-accounts.ps1"
 
 static SERVICE_STATUS_HANDLE svc_status_handle = NULL;
 static SERVICE_STATUS svc_status;
@@ -227,7 +258,10 @@ static BOOL sd_exe_path(char *buf, DWORD len) {
 }
 
 /* ======================================================================
-   And where the reclaim sweep is.
+   And where a shipped sweep script is.
+
+   03 Sep 26 Windows port - IT TAKES THE NAME NOW, because there are two of
+   them.  PRE_RELEASE_FIXES.md 93 and 65.  Nothing else about it changed.
 
    28 Aug 26 Windows port.  The shipped .ps1 files live in the install root and
    this program lives two directories below it - sd.iss puts the binaries in
@@ -241,7 +275,7 @@ static BOOL sd_exe_path(char *buf, DWORD len) {
    which is the safe direction - the alternative is running an arbitrary
    .ps1 found somewhere else, as LocalSystem.                              */
 
-static BOOL sweep_script_path(char *buf, DWORD len) {
+static BOOL sweep_script_path(char *buf, DWORD len, const char *script) {
   DWORD n;
   char *slash;
   int i;
@@ -258,9 +292,10 @@ static BOOL sweep_script_path(char *buf, DWORD len) {
     *slash = '\0';
   }
 
-  if (strlen(buf) + strlen("\\" SWEEP_SCRIPT) + 1 > len)
+  if (strlen(buf) + 1 + strlen(script) + 1 > len)
     return FALSE;
-  strcat(buf, "\\" SWEEP_SCRIPT);
+  strcat(buf, "\\");
+  strcat(buf, script);
 
   return TRUE;
 }
@@ -440,7 +475,7 @@ static void report(DWORD state, DWORD win32_exit, DWORD wait_hint) {
    removed.  This records only that it ran and what it exited with, which is
    the part that belongs to the service.                                   */
 
-static void run_sweep(void) {
+static void run_sweep(const char *script_name, const char *what) {
   char script[MAX_PATH];
   char cmd[MAX_PATH * 2 + 160];
   char shell[MAX_PATH];
@@ -451,15 +486,15 @@ static void run_sweep(void) {
   DWORD waited = 0;
   DWORD w;
 
-  if (!sweep_script_path(script, sizeof(script))) {
-    svc_log("profile reclaim skipped: could not work out where " SWEEP_SCRIPT
-            " is from our own path");
+  if (!sweep_script_path(script, sizeof(script), script_name)) {
+    svc_log("%s skipped: could not work out where %s is from our own path",
+            what, script_name);
     return;
   }
 
   if (GetFileAttributesA(script) == INVALID_FILE_ATTRIBUTES) {
     /* An install predating this, or a partial one.  Said plainly and once. */
-    svc_log("profile reclaim skipped: no %s", script);
+    svc_log("%s skipped: no %s", what, script);
     return;
   }
 
@@ -468,7 +503,7 @@ static void run_sweep(void) {
     strcpy(shell, "C:\\Windows");
   if (strlen(shell) + strlen("\\System32\\WindowsPowerShell\\v1.0\\powershell.exe") + 1 >
       sizeof(shell)) {
-    svc_log("profile reclaim skipped: cannot build the PowerShell path");
+    svc_log("%s skipped: cannot build the PowerShell path", what);
     return;
   }
   strcat(shell, "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
@@ -480,20 +515,20 @@ static void run_sweep(void) {
   if (snprintf(cmd, sizeof(cmd),
                "\"%s\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"%s\"",
                shell, script) >= (int)sizeof(cmd)) {
-    svc_log("profile reclaim skipped: command line too long");
+    svc_log("%s skipped: command line too long", what);
     return;
   }
 
   /* Rule 1 of the instrument section in CLAUDE.md: the command actually run,
      resolved, not the one intended.                                        */
-  svc_log("profile reclaim: %s", cmd);
+  svc_log("%s: %s", what, cmd);
 
   ZeroMemory(&si, sizeof(si));
   si.cb = sizeof(si);
   ZeroMemory(&pi, sizeof(pi));
 
   if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-    svc_log("profile reclaim: could not start it - CreateProcess error %lu",
+    svc_log("%s: could not start it - CreateProcess error %lu", what,
             (unsigned long)GetLastError());
     return;
   }
@@ -507,9 +542,10 @@ static void run_sweep(void) {
     if (waited >= SWEEP_WAIT_MS) {
       /* Left running on purpose - see SWEEP_WAIT_MS.  It writes its own log,
          so nothing is lost by not waiting; SD is what must not wait.       */
-      svc_log("profile reclaim: still running after %d seconds - going on "
-              "without it (see reclaim-profiles.log for what it did)",
-              SWEEP_WAIT_MS / 1000);
+      svc_log("%s: still running after %d seconds - going on without it "
+              "(it writes its own log in ProgramData\\SD, which says what "
+              "it did)",
+              what, SWEEP_WAIT_MS / 1000);
       CloseHandle(pi.hProcess);
       CloseHandle(pi.hThread);
       return;
@@ -524,8 +560,10 @@ static void run_sweep(void) {
 
   /* 0 nothing pending, 1 something still pending, 2 could not be attempted.
      None of the three is a reason not to start SD, and 1 is a state rather
-     than a fault - a hive still up at this boot comes down at the next.    */
-  svc_log("profile reclaim: exited with %lu", (unsigned long)rc);
+     than a fault - a hive still up at this boot comes down at the next, and
+     a register record the reconcile REFUSED is one a person has to look at
+     rather than one the service can do anything about.                    */
+  svc_log("%s: exited with %lu", what, (unsigned long)rc);
 }
 
 static void WINAPI svc_ctrl(DWORD ctrl) {
@@ -576,7 +614,22 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
      what makes the NEXT CREATE.ACCOUNT refuse, so clearing it before the
      database is reachable means nobody meets the refusal for a directory that
      was about to go anyway.  It cannot fail SD - see run_sweep().          */
-  run_sweep();
+  run_sweep(SWEEP_SCRIPT, "profile reclaim");
+
+  /* 03 Sep 26 Windows port - AND THE REGISTER, PRE_RELEASE_FIXES.md 93 and 65.
+     BEFORE SD FOR A THIRD REASON, ON TOP OF THE TWO ABOVE: the register is a
+     directory file, so this removes records by removing FILES, and doing that
+     under a running SD would pull them out from under an open cursor.
+
+     AFTER THE PROFILE RECLAIM, NOT BEFORE IT, AND THE ORDER IS LOAD-BEARING.
+     A deleted account can leave a profile directory that only the reclaim can
+     take, and the reclaim's own refusal table rejects any record whose SID
+     still resolves to a live local account.  Running the register reconcile
+     first would change nothing about that - it removes SD's records, not
+     Windows accounts - but the reclaim is the older and more dangerous of the
+     two, and giving it the boot's first attempt keeps its behaviour exactly
+     as it was measured.                                                    */
+  run_sweep(RECONCILE_SCRIPT, "register reconcile");
 
   /* A NON-ZERO EXIT IS NOT ALWAYS A FAILURE.  "sd -start" exits 1 when SD is
      already running, which at boot means somebody started it by hand first -
