@@ -4540,9 +4540,16 @@ end;
   the safe answer was the negative one.
 
   EVERY FACT BELOW IS MEASURED, not read out of the help, which is a compressed
-  .chm and cannot be searched from the build tree.  gplbld/probe-taskdialog.iss
-  compiled and ran each one on 2 Sep 2026, and is kept so this is re-checkable
-  when Inno changes - three of them are invisible to a compiler:
+  .chm and cannot be searched from the build tree.  probe-taskdialog.iss, in
+  gplbld, compiled and ran each one on 2 Sep 2026, and is kept so this stays
+  re-checkable when Inno changes - three of them are invisible to a compiler.
+
+  ITS NAME IS WRITTEN WITHOUT A PATH SEPARATOR ON PURPOSE.  assert-current
+  decides whether a gplbld script ships by looking for a quote or a slash before
+  its name in this file (assert-current.ps1:1007), which is how wiring one into
+  the install silently puts it back under the staleness guard.  Written
+  "gplbld/probe-taskdialog.iss" it read as a Source line, and the 19:40:27 cycle
+  duly reported the probe as shipping when it does not:
 
     MB_YESNO or MB_DEFBUTTON2   COMPILES, then fails at RUN time with "Internal
                                 error: TaskDialogMsgBox: Invalid Buttons".  The
@@ -4587,10 +4594,77 @@ begin
   Result := TaskDialogMsgBox(Instruction, Text, mbConfirmation, MB_YESNO, Labels, 0) = IDNO;
 end;
 
+{ THE ANSWER IS RECORDED AND CONFIRMED, BOTH WAYS.  PRE_RELEASE_FIXES 139's
+  second half, on the owner's ruling of 2 Sep 2026.
+
+  WHAT IT FIXES, AND THE ASYMMETRY IS THE DEFECT.  The accounts question below
+  confirms afterwards both ways and leaves sd-remove-accounts.log behind.  This
+  one did neither: its only MsgBox fired when DelTree FAILED, so permanently
+  destroying every account, every password and the configuration was the
+  QUIETEST path through the whole wizard.  The more destructive of the two
+  questions had the less feedback.
+
+  IT ALWAYS WRITES, INCLUDING ON "KEEP".  A log written only when something was
+  destroyed cannot tell "kept" from "never asked", and that is the distinction
+  somebody reads it for.  On 2 Sep 2026 the data tree was gone, the owner
+  believed he had kept it, and nothing on disk could say which had been chosen -
+  so the entry could not record whether the click was wrong or the code was.
+
+  AND IT IS STAMPED, because on that same day a copy of the ACCOUNTS log from an
+  EARLIER uninstall was nearly taken for that run's.  A log that cannot say WHEN
+  answers about the wrong run, confidently.
+
+  Append: False - one line, this uninstall's.  The install that follows a
+  removal writes nothing here, so the newest file is always the last answer
+  given, and the stamp says whether that was a minute ago or last month. }
+procedure RecordDatabaseChoice(const DataPath: String; const Deleted, Failed: Boolean);
+var
+  LogPath, Outcome, Note: String;
+begin
+  if not Deleted then
+    Outcome := 'KEPT'
+  else if Failed then
+    Outcome := 'DELETE requested, but some files could NOT be removed'
+  else
+    Outcome := 'DELETED';
+
+  LogPath := ExpandConstant('{%TEMP|C:\Windows\Temp}\sd-remove-database.log');
+
+  if SaveStringToFile(LogPath,
+                      GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':') +
+                      '  database ' + Outcome + '  ' + DataPath + #13#10, False) then
+    Note := #13#10#13#10 + 'This answer is recorded in:' + #13#10 + LogPath
+  else
+    { SAYING SO IS THE POINT.  A recording step that fails silently leaves
+      exactly the state this was built to end. }
+    Note := #13#10#13#10 + 'This answer could NOT be recorded: ' + LogPath +
+            ' was not writable.';
+
+  if not Deleted then
+    MsgBox('Your SD Core database was KEPT.' + #13#10#13#10 +
+           DataPath + #13#10#13#10 +
+           'Every account, every password and your configuration are still ' +
+           'there. Installing SD Core again will find them.' + Note,
+           mbInformation, MB_OK)
+  else if Failed then
+    MsgBox('Your SD Core database was to be DELETED, and some of it could ' +
+           'not be removed.' + #13#10#13#10 + DataPath + #13#10#13#10 +
+           'What is left may be in use by a running SD Core process. Treat ' +
+           'the database as GONE rather than as intact.' + Note,
+           mbError, MB_OK)
+  else
+    MsgBox('Your SD Core database was DELETED.' + #13#10#13#10 +
+           DataPath + #13#10#13#10 +
+           'Every SD Core account, every password and your configuration file ' +
+           'have been permanently removed. This cannot be undone.' + Note,
+           mbInformation, MB_OK);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath, Ps, LogPath, KeepUser: String;
   Code: Integer;
+  DelFailed: Boolean;
 begin
   if CurUninstallStep = usUninstall then
   begin
@@ -4647,10 +4721,18 @@ begin
             'Choose Keep to keep them, which is the normal choice - reinstalling ' +
             'SD Core later will find them again.') then
   begin
-    if not DelTree(DataPath, True, True, True) then
-      MsgBox('Some files under ' + DataPath + ' could not be removed. ' +
-             'They may be in use by a running SD Core process.', mbError, MB_OK);
-  end;
+    { The old error box is gone rather than kept beside the new one: it said
+      less, and two dialogs about one outcome is how a reader learns to click
+      through them.  RecordDatabaseChoice states the partial failure, names the
+      path, and says to treat the database as gone. }
+    DelFailed := not DelTree(DataPath, True, True, True);
+    RecordDatabaseChoice(DataPath, True, DelFailed);
+  end
+  else
+    { THE BRANCH THAT DID NOT EXIST, and its absence is most of 139: a "keep"
+      left no dialog and no file, so it was indistinguishable afterwards from
+      never having been asked. }
+    RecordDatabaseChoice(DataPath, False, False);
 
   { ------------------------------------------------------------------------
     THE SECOND QUESTION - the Windows accounts.  PRE_RELEASE_FIXES 39, owner's
