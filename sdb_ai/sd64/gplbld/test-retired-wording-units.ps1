@@ -88,6 +88,22 @@ $RETIRED = @(
     @{ Ref = '130e'
        Retired     = 'used only at this computer from a session run as administrator'
        Replacement = 'cannot be used AT ALL' }
+    # 139 - the uninstaller's two destructive questions no longer answer to
+    # Yes/No: their choices are labelled Keep and Delete (sd.iss KeepOrDelete).
+    # REGISTERED BECAUSE THE OLD SENTENCE IS STILL CORRECT-SOUNDING PROSE - it
+    # reads fine, names a real button, and would be re-typed by anybody editing
+    # this text from memory.  Both call sites carried it, which is the shape
+    # that gets one of two copies fixed.
+    #
+    # The instruction to the reader is the whole of the guard: a dialog whose
+    # buttons say Keep and Delete, above a sentence that says "choose No",
+    # is worse than either wording alone.
+    @{ Ref = '139'
+       Retired     = 'Choose No to keep them'
+       Replacement = 'Choose Keep to keep them' }
+    @{ Ref = '139b'
+       Retired     = 'the account you expect, choose No'
+       Replacement = 'the account you expect, choose Keep' }
     # 129 - "the ssh-only model" is 124's retired premise in compressed form.
     # 124 registered the long phrase; this said the same thing in four words and
     # sat in the very page 124 had corrected, which is how it survived.

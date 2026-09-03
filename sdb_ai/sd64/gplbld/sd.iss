@@ -90,6 +90,27 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 
+; 02 Sep 26 - WINDOWS 10 AND 11, NOTHING EARLIER.  Owner's ruling, 2 Sep 2026:
+; "I don't believe in supporting versions no longer supported by the vendor",
+; and then, on 10: "just because 10 is still in extended support".
+;
+; ***SO THE FLOOR IS A SUPPORT DATE, NOT A TECHNICAL LIMIT, AND IT WILL MOVE.***
+; Nothing here needs anything Windows 10 lacks; 10 is admitted because Microsoft
+; still supports it and drops out when that ends.  Whoever raises this to 11 is
+; applying the rule rather than changing it - do not go looking for the feature
+; that stopped working, because there is not one.
+;
+; 10.0 ADMITS BOTH 10 AND 11, which is not obvious: Windows 11 reports itself as
+; NT 10.0 and is told apart by build number, not version.  So one directive
+; covers both and excludes 8.1 and earlier.
+;
+; IT WAS ABSENT UNTIL NOW, which meant Inno's own default applied - Windows 7
+; SP1 - so the installer had been promising four unsupported versions it was
+; never tested on.  Found 2 Sep 2026 while checking whether TaskDialogMsgBox
+; could fall back to a plain MsgBox on an older Windows; it cannot arise here,
+; and the check turned up this instead.
+MinVersion=10.0
+
 ; Creating C:\Program Files\SD and writing the ACLs on C:\ProgramData\SD both
 ; need an elevated token, and so does installing OpenSSH Server.  Inno asks for
 ; it through UAC, which is why the installer can do things a normal SD session
@@ -4510,6 +4531,57 @@ begin
   Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+{ THE TWO DESTRUCTIVE QUESTIONS ASK WITH LABELLED CHOICES, NOT Yes/No.
+  Owner's ruling, 2 Sep 2026, on PRE_RELEASE_FIXES 139: "if possible label the
+  buttons Keep and Delete, no ambiguity."  He had just answered both prompts on
+  guest Test 10 and got both backwards - reporting the database kept and the
+  accounts gone, when the data tree was gone and the accounts were untouched.
+  Both questions had the same shape, one after the other, and in each of them
+  the safe answer was the negative one.
+
+  EVERY FACT BELOW IS MEASURED, not read out of the help, which is a compressed
+  .chm and cannot be searched from the build tree.  gplbld/sigprobe.iss compiled
+  and ran each one on 2 Sep 2026:
+
+    MB_YESNO or MB_DEFBUTTON2   COMPILES, then fails at RUN time with "Internal
+                                error: TaskDialogMsgBox: Invalid Buttons".  The
+                                MB_DEFBUTTON flags are not accepted here, so the
+                                default button cannot be set through them.
+    bare MB_YESNO               accepted.  Renders as stacked COMMAND LINKS
+                                carrying the labels, not as push buttons.
+    Labels[0] / Labels[1]       IDYES / IDNO.
+    focus                       follows Labels[0].
+    Escape, and the X           THERE IS NO X, AND ESCAPE DOES NOTHING.  The
+                                dialog cannot be dismissed without choosing,
+                                which is why no third outcome is handled below.
+
+  ***SO THE ORDER IS FORCED RATHER THAN PREFERRED.***  Focus follows Labels[0],
+  so the safe answer has to be first - which makes Keep IDYES and Delete IDNO,
+  the INVERSE of what both call sites tested before this change.
+
+  THE INVERSION LIVES HERE, ONCE.  Two copies of a reversed test is how the
+  next person ships a Keep link that deletes, and this function exists to make
+  that impossible rather than merely unlikely.
+
+  NO FALLBACK IS HANDLED, and that is a consequence of MinVersion rather than
+  an omission.  The owner's ruling of 2 Sep 2026 admits Windows 10 and 11 and
+  nothing earlier, and task dialogs are universal on both, so the plain-MsgBox
+  path - where these labels would be lost and the buttons would read Yes/No
+  again - cannot arise.  See MinVersion in [Setup]: raise that floor and this
+  stays true; lower it and this comment is the thing that stops being so.
+
+  IT RETURNS "DELETE", NOT "YES".  A caller reading "if KeepOrDelete then" is
+  reading "if the user chose Delete", which is the question actually asked. }
+function KeepOrDelete(const Instruction, Text: String): Boolean;
+var
+  Labels: TArrayOfString;
+begin
+  SetArrayLength(Labels, 2);
+  Labels[0] := 'Keep';
+  Labels[1] := 'Delete';
+  Result := TaskDialogMsgBox(Instruction, Text, mbConfirmation, MB_YESNO, Labels, 0) = IDNO;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath, Ps, LogPath, KeepUser: String;
@@ -4558,16 +4630,17 @@ begin
   if UninstallSilent then
     Exit;
 
-  { Defaults to No - MB_DEFBUTTON2 - and names exactly what it destroys and
-    where.  "Do you want to remove your settings?" is how people lose data. }
-  if MsgBox('Remove the SD Core database as well?' + #13#10#13#10 +
+  { Names exactly what it destroys and where.  "Do you want to remove your
+    settings?" is how people lose data.  The choices are labelled - see
+    KeepOrDelete, which carries why, and which returns "the user chose
+    Delete" rather than "yes". }
+  if KeepOrDelete('Remove the SD Core database?',
             DataPath + #13#10#13#10 +
-            'This permanently deletes EVERY SD Core account, every password and all ' +
+            'Deleting permanently removes EVERY SD Core account, every password and all ' +
             'data stored in them, including the SDSYS account and your ' +
             'configuration file.' + #13#10#13#10 +
-            'Choose No to keep them, which is the normal choice - reinstalling ' +
-            'SD Core later will find them again.',
-            mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+            'Choose Keep to keep them, which is the normal choice - reinstalling ' +
+            'SD Core later will find them again.') then
   begin
     if not DelTree(DataPath, True, True, True) then
       MsgBox('Some files under ' + DataPath + ' could not be removed. ' +
@@ -4597,16 +4670,15 @@ begin
   if KeepUser = '' then
     Exit;
 
-  if MsgBox('Remove the Windows accounts SD Core created as well?' + #13#10#13#10 +
+  if not KeepOrDelete('Remove the Windows accounts SD Core created?',
             'These are the accounts CREATE.ACCOUNT made, with their sdu_ and ' +
             'sdg_ groups and their profiles. They are Windows accounts: they ' +
             'keep their passwords and stay able to sign in after SD Core is gone, ' +
             'and the ssh confinement that limited them to SD Core has just been ' +
             'removed with the rest of SD Core''s configuration.' + #13#10#13#10 +
             'The account ' + KeepUser + ' WILL BE KEPT, so you can still sign ' +
-            'in to Windows. If that is not the account you expect, choose No.' + #13#10#13#10 +
-            'Choose No to keep them all, which is the safe choice.',
-            mbConfirmation, MB_YESNO or MB_DEFBUTTON2) <> IDYES then
+            'in to Windows. If that is not the account you expect, choose Keep.' + #13#10#13#10 +
+            'Choose Keep to keep them all, which is the safe choice.') then
     Exit;
 
   { THROUGH cmd SO THE OUTPUT IS KEPT.  The sweep prints what it removed and
