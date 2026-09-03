@@ -189,6 +189,24 @@ function StopCycleTranscript {
 $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Sd64    = Split-Path -Parent $Gplbld
 $Iss     = Join-Path $Gplbld 'sd.iss'
+
+# 03 Sep 26 - PRE_RELEASE 137.  $TranscriptDegraded above guesses from "has this
+# window run a cycle"; this MEASURES the log, by counting the Compressing lines
+# it actually received against the payload files stage.py actually wrote.  It
+# lives in its own file with its own units test because the verdict logic is
+# where the mistakes are, and a unit test can drive it against real logs on
+# disk - which is the only way to test it here at all, since PowerShell 5.1
+# only transcribes native output when there is a real console to scrape.
+. (Join-Path $Gplbld 'transcript-whole.ps1')
+
+# Reads the transcript this run is still writing.  Start-Transcript flushes as
+# it goes (see the note at the top), so the file is readable while open - probed
+# 3 Sep 2026.  WARNS, never fails: the build was decided by ISCC's exit code
+# long before this, and what is at stake is only whether the log can be read.
+function ReportTranscriptWholeness {
+    $res = Get-TranscriptWholeness -TranscriptPath $script:CycleLog -StagePath $Stage
+    $null = Write-TranscriptWholeness -Result $res
+}
 # ISCC: THE DEFAULT PATH FIRST, THEN THE REGISTRY.  23 Aug 2026 - this was a
 # bare hardcoded path until setup-devbox.ps1's first real run reported Inno
 # installed and ISCC not present at it.  The default is still tried first, so
@@ -508,6 +526,11 @@ Write-Host ("   {0}, {1:N0} bytes, {2}" -f $setup.Name, $setup.Length, $setup.La
 
 if ($SkipInstall) {
     Write-Host ""
+    # PRE_RELEASE 137.  -SkipInstall exists to find out whether a change
+    # COMPILES, so this path is the one where somebody reads the log for an
+    # error message - and the front is exactly where a compile error lands.
+    ReportTranscriptWholeness
+    Write-Host ""
     Write-Host "-SkipInstall: stopping here.  The installed tree is untouched and STALE." -ForegroundColor Yellow
     StopCycleTranscript
     exit 0
@@ -695,6 +718,14 @@ if ($script:TranscriptDegraded) {
     Write-Host '  PowerShell output and did record.  Use a fresh elevated window next time.' -ForegroundColor Yellow
     Write-Host ""
 }
+
+# PRE_RELEASE 137, AND IT IS DELIBERATELY BESIDE THE FLAG ABOVE RATHER THAN
+# INSTEAD OF IT.  The flag says what this window did; this says what the LOG
+# got, and on 2 Sep 2026 they disagreed in both directions on the same day - a
+# flagged window produced a complete log and a fresh one lost 1,789 lines.
+# Printed here because the end of the log is what anybody actually reads.
+ReportTranscriptWholeness
+Write-Host ""
 
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -eq 0) {

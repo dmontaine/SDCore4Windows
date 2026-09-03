@@ -207,6 +207,12 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # really is named in stage.py or sd.iss, so this was the only
                   # omission, not the tip of a rotted list.
                   'test-retired-wording-units.ps1',
+                  # 03 Sep 26 - PRE_RELEASE 137's completeness instrument and
+                  # its units.  Listed in the commit that creates them, under
+                  # the rule the note below states.  transcript-whole.ps1 is
+                  # dot-sourced by cycle.ps1 and by its own units test; neither
+                  # is installed, and nothing compiles either into sd.exe.
+                  'transcript-whole.ps1', 'test-transcriptwhole-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
