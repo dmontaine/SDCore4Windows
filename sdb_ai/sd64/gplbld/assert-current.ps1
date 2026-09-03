@@ -184,7 +184,15 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @('assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
+$neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
+                  # that creates it, under the rule the note below states.  It
+                  # is an Inno script rather than a verifier, and it is kept
+                  # because three of the six things it measured about
+                  # TaskDialogMsgBox are invisible to a compiler - two calls
+                  # compiled clean and failed at run time.  sd.iss's
+                  # KeepOrDelete comment cites it by name.
+                  'probe-taskdialog.iss',
+                  'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
                   'verify-credacl.ps1', 'verify-nocase.ps1',

@@ -4540,8 +4540,9 @@ end;
   the safe answer was the negative one.
 
   EVERY FACT BELOW IS MEASURED, not read out of the help, which is a compressed
-  .chm and cannot be searched from the build tree.  gplbld/sigprobe.iss compiled
-  and ran each one on 2 Sep 2026:
+  .chm and cannot be searched from the build tree.  gplbld/probe-taskdialog.iss
+  compiled and ran each one on 2 Sep 2026, and is kept so this is re-checkable
+  when Inno changes - three of them are invisible to a compiler:
 
     MB_YESNO or MB_DEFBUTTON2   COMPILES, then fails at RUN time with "Internal
                                 error: TaskDialogMsgBox: Invalid Buttons".  The
@@ -4554,6 +4555,10 @@ end;
     Escape, and the X           THERE IS NO X, AND ESCAPE DOES NOTHING.  The
                                 dialog cannot be dismissed without choosing,
                                 which is why no third outcome is handled below.
+    in an UNINSTALLER           WORKS, same mapping as in Setup.  Inno's
+                                uninstaller is a separate executable, so this
+                                did not follow from the Setup measurement; the
+                                probe was made uninstallable and run.
 
   ***SO THE ORDER IS FORCED RATHER THAN PREFERRED.***  Focus follows Labels[0],
   so the safe answer has to be first - which makes Keep IDYES and Delete IDNO,
