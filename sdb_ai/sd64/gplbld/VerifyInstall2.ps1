@@ -813,15 +813,29 @@ foreach ($s in $steps) {
     $lines += ('{0,-28} {1,-22} exit {2}  {3}' -f $s.Name, $shown, $code, $stepLog)
 }
 
-Write-Output ''
+# 03 Sep 26 - THE HEADING GOES INTO THE FILE, NOT ONLY THE CONSOLE.
+# PRE_RELEASE_FIXES 149.  Until now the PARTIAL banner was Write-Output only
+# while the file received $lines alone, so the one artifact that outlives the
+# run could not say whether it was a full run - and a reader grepping it for
+# PARTIAL found nothing on a partial run exactly as on a whole one, the
+# dangerous direction.  VerifyInstall1 escaped this only because it has a
+# transcript; this runner has none of its own (see the note near the top).
+# Build the heading once, print it AND write it at the head of the file.
+#
+# @() ON BOTH SIDES OF THE '+' DELIBERATELY.  A bare "$heading + $lines" folds
+# the string and the array's first element into one when $lines happens to be a
+# scalar, which is the array-literal trap this file has paid for elsewhere;
+# wrapping both operands makes the result heading-then-rows whatever $lines is.
 if ($partial) {
-    Write-Output ('===== post-cycle summary - PARTIAL, {0} of {1} step(s) =====' -f
-                  @($steps).Count, $fullCount)
+    $heading = ('===== post-cycle summary - PARTIAL, {0} of {1} step(s) =====' -f
+                @($steps).Count, $fullCount)
 } else {
-    Write-Output '===== post-cycle summary ====='
+    $heading = '===== post-cycle summary ====='
 }
+Write-Output ''
+Write-Output $heading
 $lines | ForEach-Object { Write-Output $_ }
-$lines | Set-Content -LiteralPath $summary -Encoding utf8
+(@($heading) + @($lines)) | Set-Content -LiteralPath $summary -Encoding utf8
 Write-Output ''
 Write-Output ("summary written to: " + $summary)
 if ($Quiet) {
