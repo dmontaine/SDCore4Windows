@@ -25,6 +25,18 @@ Entries are newest first, by date, until there is a version to attach them to.
            every time it runs. Remove [locked] and run it again to take the new
            version.
 
+           VERBS ARE THE ONE EXCEPTION: A LOCKED VERB IS UPDATED ANYWAY, AND
+           YOU ARE TOLD. A verb is what SD runs, so holding an old one back
+           would leave your account calling a program, or an internal routine,
+           that the release has changed - and for the verbs dispatched by
+           number that goes wrong silently rather than loudly. The lock is
+           honoured on every other kind of record.
+
+           IF YOU NEED A VERB TO BEHAVE DIFFERENTLY, ADD YOUR OWN. Give it a
+           name SD does not ship and model it on the system one. update.account
+           only ever visits records SD ships, so a verb of your own is never
+           touched and needs no [locked] marker.
+
 02 Sep 26  ACCOUNTS SD CREATES NOW KEEP THE DESCRIPTIONS IN THEIR VOC RECORDS.
 
            "listf" in the SDSYS account shows a description beside every file -

@@ -1300,6 +1300,13 @@ update.voc:
    locked.count = 0
    locked.ids = ''
 
+* 02 Sep 26 Windows port - AND THE TALLY FOR THE LOCKS THAT WERE OVERRULED.
+*   Kept apart from locked.count on purpose: they are opposite outcomes, and
+*   one number covering both would tell a site that something was protected
+*   when it was replaced.
+   overridden.count = 0
+   overridden.ids = ''
+
    openpath @sdsys:@ds:"newvoc" to sdsys.file else
       display sysmsg(2210) ;* Cannot open SDSYS NEWVOC
       goto abort.login
@@ -1418,11 +1425,37 @@ update.voc:
 *   RELEASE BEFORE CONTINUE: the READU above took an update lock, and the
 *   declined-type-change arm thirty lines down is the precedent for both the
 *   release and the CONTINUE.
+* 02 Sep 26 Windows port - A VERB DOES NOT HONOUR THE LOCK.  Owner's ruling,
+*   2 Sep 2026: "every verb (119) because users should not be modifying them --
+*   if there was a way to lock them from editing I would.  If a user wants a
+*   similar behavior they create a custom verb modeled on the system one."
+*
+*   WHY VERBS AND NOT THE REST.  A verb is what SD RUNS.  A locked one goes on
+*   naming the program or the internal number this release replaced, and the
+*   internal ones fail in the worst possible way: field 3 of a V|IN record is a
+*   NUMBER, so a reassignment dispatches the verb to a DIFFERENT function
+*   silently.  Measured 2 Sep 2026 on the shipped newvoc - 119 verbs of 395
+*   records, 37 of them V|IN and 82 naming a catalogued program.  A keyword, a
+*   file pointer or a sentence carries no such coupling.
+*
+*   THE ESCAPE HATCH IS REAL AND COSTS THE SITE NOTHING, which is what makes
+*   the refusal fair: this loop walks NEWVOC's records, so a verb SD does NOT
+*   ship is never visited at all.  A site that needs different behaviour adds
+*   its own verb under its own name and it is safe without any marker.
+*
+*   IT IS REPORTED RATHER THAN SILENT, and that is the whole of why this is
+*   more than one IF.  A site that typed [locked] and was overruled believes it
+*   is protected; saying nothing would be worse than not offering the lock.
             if index(upcase(old.rec<1>), '[LOCKED]', 1) then
-               locked.count += 1
-               locked.ids<-1> = id
-               release update.voc.f, id
-               continue
+               if new.type = 'V' then
+                  overridden.count += 1
+                  overridden.ids<-1> = id
+               end else
+                  locked.count += 1
+                  locked.ids<-1> = id
+                  release update.voc.f, id
+                  continue
+               end
             end
 
             old.type = upcase(old.rec[1,1])
@@ -1503,6 +1536,15 @@ accept.without.query:
 *  of prose, not a list to be parsed.
    if locked.count then
       display sysmsg(10165, locked.count, convert(@fm, ' ', locked.ids))
+   end
+
+*  02 Sep 26 Windows port - AND THE OVERRULED ONES, SEPARATELY.  Reported even
+*  though nothing was withheld, because the site asked for something it did not
+*  get: the difference between "your lock held" and "your lock was overruled"
+*  is the whole of what it needs to know, and it is told where to put the
+*  behaviour instead.
+   if overridden.count then
+      display sysmsg(10166, overridden.count, convert(@fm, ' ', overridden.ids))
    end
 
    close sdsys.file
