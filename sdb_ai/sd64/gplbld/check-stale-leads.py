@@ -509,3 +509,168 @@ if problems:
     sys.exit(1)
 
 print("  every row agrees with its entry, and every entry has a row.")
+
+# ===========================================================================
+# PHASE 4 - THE PRE_RELEASE_FIXES INDEX, WHICH NOTHING HAS EVER READ
+# ===========================================================================
+#
+# PRE_RELEASE_FIXES 144, 2 Sep 2026.  Phases 1 to 3 compare PROJECT_STATUS.md
+# against itself.  The 143 entry rows in PRE_RELEASE_FIXES.md were guarded by
+# nothing, so an entry HEADLINE could age indefinitely against a table that
+# already knew better - and on 2 Sep four had.  Two of them cost a ruling being
+# put back to the owner that he had already given; he answered by pointing at
+# the record.
+#
+# ***THE VOCABULARY IS ITS OWN, AND THAT IS THE PART THAT WAS NOT FREE.***  The
+# obvious move was to point phase 1's patterns at the second file.  Measured
+# before writing: they do not fire.  96's headline read "NOT STARTED - THE
+# OWNER'S CALL" and OPEN_PAT has no "NOT STARTED", while its own body said "THE
+# CHOICE, DELEGATED BY THE OWNER ... IS (b)" and CLOSE_PAT has no "delegated".
+# The two files describe the same states in different words, so phase 4 carries
+# its own pair.  Reusing phase 1's would have shipped a scan that found nothing
+# and looked clean - the null case this whole file exists to refuse.
+#
+# 4a IS WITHIN-ROW and needs no other source: an open row that LEADS with an
+#    outstanding claim and settles it later in the same row.  That is 96.
+# 4b IS CROSS-FILE: an open row still asking for a ruling when PROJECT_STATUS
+#    records one for that id.  That is 102.
+#
+# ***NEITHER DECIDES.***  Phase 2 stays the only phase that sets a non-zero
+# exit, which is 144's own scope, and the reason is entry 65: it reads as
+# CLOSED in HISTORY ("65 IS CLOSED", 30 Aug, named in that session's closure
+# list) and is correctly OPEN - closed on the product half, re-opened when the
+# harness half regressed.  A guard that trusted a later document over the row
+# would have turned a right row into a wrong one.  Only the TABLE outranks a
+# row; HISTORY is deliberately not read here at all.
+
+# ***PHASE 4 IS THE RULING AXIS ONLY, AND THE FIRST DRAFT WAS NOT.***  It began
+# with the whole status vocabulary - NOT STARTED, UNCOMPILED, UNWITNESSED - and
+# measured 4 hits on the real file of which ONE was true.  120 says "UNWITNESSED,
+# SO IT STAYS OPEN" and later "WITNESSED 2 Sep 2026 ON GUEST" about its FINDING;
+# 132 says "NOT YET WITNESSED" and later "RULED".  Neither is a contradiction -
+# a ruling and an unwitnessed build coexist happily, and so do an unwitnessed
+# fix and a witnessed finding.  A ranking check that is wrong three times in four
+# gets ignored, which is the failure this tree keeps filing.
+#
+# So the pair below asks ONE question: does a row say a RULING is outstanding
+# while the same row records one?  That is 96 and nothing else.
+ENTRY_OPEN_PAT = re.compile(
+    r"(STILL NEEDS? THE RULING|STILL NEED THE RULING|NEEDS? A RULING"
+    r"|NEEDS THE RULING|THE OWNER'S CALL|AWAITING A RULING"
+    r"|NOTHING IS WRITTEN UNTIL HE RULES)",
+    re.I)
+
+ENTRY_CLOSE_PAT = re.compile(
+    r"(\bRULED\b|OWNER'S RULING|THE CHOICE[^.|]{0,90}\bIS\b"
+    r"|DELEGATED BY THE OWNER|OWNER CHOSE|HIS RULING)",
+    re.I)
+
+# QUOTED TEXT IS STRIPPED, and it is the same reason test-retired-wording-units
+# strips comments: THIS TREE'S HABIT IS TO QUOTE THE OFFENDING WORDING WHEN
+# DOCUMENTING THE FIX.  Entry 144's own row quotes both halves of 96's
+# contradiction to explain it, and entry 96's corrected row quotes them again -
+# so without this, the two rows that RECORD the fault would be flagged as
+# committing it, for ever.  Measured: with quotes kept, the real file flags 144
+# and 96; with them stripped it flags neither, and the fixture below - which
+# reproduces 96's wording UNQUOTED, as it was actually written - still flags.
+QUOTED_RE = re.compile(r'"[^"]*"')
+
+
+def unquoted(s):
+    return QUOTED_RE.sub(" ", s)
+
+
+def safe(s):
+    """Console-safe.  The real file carries emoji and en dashes, and printing
+    them to a cp1252 console raised UnicodeEncodeError mid-report - a crash in
+    the middle of a phase that had already found things."""
+    return s.encode("ascii", "replace").decode("ascii")
+
+print("")
+print("=" * 70)
+print("PHASE 4: the PRE_RELEASE_FIXES index")
+
+IDX = os.path.join(os.path.dirname(os.path.abspath(DOC)), "PRE_RELEASE_FIXES.md")
+explicit_doc = len(sys.argv) > 1
+
+if not os.path.exists(IDX):
+    # A LOUD SKIP ONLY WHEN THE CALLER AIMED US SOMEWHERE ELSE.  The control
+    # tests write a lone PROJECT_STATUS copy into a scratch directory, and
+    # failing those would say nothing about this file.  On the REAL run there is
+    # no such excuse, so a missing index refuses rather than scoring clean.
+    if explicit_doc:
+        print("  index not found beside %s" % DOC)
+        print("  PHASE 4 SKIPPED - this is the explicit-path case, not the repo.")
+    else:
+        print("REFUSING - PRE_RELEASE_FIXES.md is not beside PROJECT_STATUS.md.")
+        print("  Expected: %s" % IDX)
+        print("  Phase 4 scoring clean because it read nothing is the null case")
+        print("  this file exists to refuse.")
+        sys.exit(2)
+else:
+    with io.open(IDX, encoding="utf-8", newline="") as fh:
+        idx_lines = fh.read().split("\n")
+
+    ROW_RE = re.compile(r"^\|\s*(~~)?\s*(\d+)\s*(~~)?\s*\|")
+    open_rows = []
+    done_rows = 0
+    for i, ln in enumerate(idx_lines):
+        m = ROW_RE.match(ln)
+        if not m:
+            continue
+        if m.group(1) or m.group(3):
+            done_rows += 1
+        else:
+            open_rows.append((i, int(m.group(2)), ln))
+
+    print("  %s" % IDX)
+    print("  %d open row(s), %d struck" % (len(open_rows), done_rows))
+
+    # THE NULL CASE, AND THE CANARY.  A parser that matched nothing would print
+    # "0 flagged" and read exactly like a clean file.
+    if not open_rows and not done_rows:
+        print("REFUSING - no index rows parsed at all; the table shape has moved.")
+        sys.exit(2)
+
+    flagged4 = 0
+    for ln_i, eid, row in open_rows:
+        bare = unquoted(row)
+        opens = [m for m in ENTRY_OPEN_PAT.finditer(bare)]
+        if not opens:
+            continue
+        closes = [m for m in ENTRY_CLOSE_PAT.finditer(bare)]
+        if not closes:
+            continue
+        if opens[0].start() > closes[0].start():
+            continue                      # leads with the closure: correct
+        flagged4 += 1
+        print("")
+        print("  [4a] entry %d (line %d) says a RULING IS OUTSTANDING and records"
+              " one later in the same row" % (eid, ln_i + 1))
+        print("       asks  : %s" % safe(bare[opens[0].start():opens[0].end()]))
+        print("       records: %s" % safe(bare[closes[0].start():closes[0].end()]))
+
+    print("")
+    print("=" * 70)
+    print("%d row(s) ASK FOR A RULING THE SAME ROW ALREADY RECORDS." % flagged4)
+    print("This ranks for reading; it does not decide.  Phase 2 remains the only")
+    print("phase that sets a non-zero exit - see the header, and entry 65.")
+    if flagged4 == 0:
+        print("")
+        print("ZERO IS SUSPICIOUS, NOT CLEAN.  The open-row count above is the")
+        print("control: if it is 0 the table shape moved and nothing was read.")
+        print("gplbld/test-staleleads-units.py drives this against a fixture")
+        print("reproducing 96's wording, so a dead scan cannot score clean here.")
+
+    # ***THE CROSS-FILE HALF OF 144 IS NOT BUILT, AND THAT IS A MEASUREMENT
+    # RATHER THAN AN OMISSION.***  102's shape - a row asking for a ruling that
+    # PROJECT_STATUS records elsewhere - was written and then withdrawn.  It
+    # found 5 rows, of which 2 were real (102, 96) and 3 were not: an id matched
+    # inside any comma-separated bold run, so "**16, 80, 93, 114, ...**" in a
+    # handoff table lit up 80 and 89, and 144 matched a 28 Aug line about
+    # "ALL FOUR RULINGS".  Tightening the id to \*\*N\*\* removes all three -
+    # AND ALSO REMOVES 96, whose only true hit is written "**96, 102**".  There
+    # is no id form that keeps the true pair and drops the false three, because
+    # the outstanding table and the drift table are the same shape.  A ranking
+    # check that is wrong three times in five is worse than none, so it is left
+    # to entry 144 with this measurement rather than shipped noisy.

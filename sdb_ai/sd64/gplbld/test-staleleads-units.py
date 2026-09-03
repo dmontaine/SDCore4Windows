@@ -134,11 +134,36 @@ def main():
     # nothing was flagged, so the bait leaking back moves it to "1 entr(ies)"
     # and this fails.  Verified by reverting the clamp in check-stale-leads.py
     # and watching this case go red on its own.
+    # 02 Sep 26 - ANCHORED ON THE BASELINE, NOT ON ZERO.  This asserted the
+    # literal "0 entr(ies)", which was only ever true while the real document
+    # happened to rank no phase-1 leads.  It ranks one now - section 2's
+    # documentation entry leads "H.2 IS STILL OPEN" and the word "struck"
+    # appears 138 lines below it, about the OpenQM documents rather than about
+    # H.2 - so this case went red for a CONTENT reason while the code was fine,
+    # and the whole test with it.  Phase 1 RANKS and does not decide, so pinning
+    # a units test to an absolute count couples it to prose.
+    #
+    # The delta is the stronger claim anyway: the bait must not be attributed to
+    # an earlier entry, whatever the file already ranks.  And the document was
+    # deliberately NOT rewritten to make the old anchor true - silencing a
+    # ranking heuristic by editing a true heading is gaming the instrument.
+    def phase1_count(out):
+        m = re.search(r"(\d+) entr\(ies\) LEAD WITH AN OPEN CLAIM", out)
+        return int(m.group(1)) if m else None
+
+    rc_b, out_b = run(write(tmp, base, "phase1_baseline.md"))
+    base_leads = phase1_count(out_b)
     t = base.replace("## 8. Open questions",
                      "## 8. Open questions\n\nCLOSED DONE VERIFIED - bait.\n", 1)
     assert t != base, "could not find section 8's heading"
-    case("closure text after section 8 must not leak back", t, tmp, 0,
-         "0 entr(ies) LEAD WITH AN OPEN CLAIM")
+    rc_t, out_t = run(write(tmp, t, "sec8_bait.md"))
+    got = phase1_count(out_t)
+    ok = (rc_t == 0) and (base_leads is not None) and (got == base_leads)
+    results.append((ok, "closure after section 8 must not leak back",
+                    rc_t, 0, "phase 1 count unchanged"))
+    print("  [%s] %-46s rc=%d (want 0)  %s -> %s"
+          % ("PASS" if ok else "FAIL", "closure after section 8 must not leak back",
+             rc_t, base_leads, got))
 
     # Section 7's heading renamed must REFUSE rather than scan everything.
     t = base.replace("## 7. Next steps", "## 7. Things to do", 1)
@@ -205,6 +230,74 @@ def main():
     t = t.replace(ANCHOR, "> ***UNSEEN: nobody has looked at this page.***", 1)
     case("phase 3: denial with no observation must not fire", t, tmp, 0,
          "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
+
+    # =====================================================================
+    # PHASE 4 - the PRE_RELEASE_FIXES index.  PRE_RELEASE_FIXES 144.
+    #
+    # EACH CASE GETS ITS OWN DIRECTORY, because phase 4 finds the index by
+    # looking BESIDE the document it was handed.  Writing one fixture into the
+    # shared tmp would hand it to every later case as well.
+    # =====================================================================
+    print("")
+    print("=== [4] the PRE_RELEASE_FIXES index ===")
+
+    HEAD = "| | SEV | what | where |\n|---|---|---|---|\n"
+
+    def phase4(name, index_text, want_sub, want_rc=0):
+        d = tempfile.mkdtemp(prefix="staleleads4-")
+        try:
+            write(d, base, "PROJECT_STATUS.md")
+            write(d, index_text, "PRE_RELEASE_FIXES.md")
+            rc, out = run(os.path.join(d, "PROJECT_STATUS.md"))
+            ok = (rc == want_rc) and (want_sub in out)
+            results.append((ok, name, rc, want_rc, want_sub))
+            print("  [%s] %-46s rc=%d (want %d)"
+                  % ("PASS" if ok else "FAIL", name, rc, want_rc))
+            if not ok:
+                print("       looked for: %r" % want_sub)
+                for ln in out.splitlines():
+                    if "PHASE 4" in ln or "[4a]" in ln or "ASK FOR A RULING" in ln:
+                        print("       saw: " + ln.strip())
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    # THE RED CASE, and it reproduces 96's wording AS IT WAS ACTUALLY WRITTEN -
+    # unquoted in the headline, unquoted in the body.  If this ever stops
+    # flagging, phase 4 has gone blind and its zero on the real file means
+    # nothing.
+    phase4("4a: a row asking for a ruling it also records",
+           HEAD + "| 96 | **M** | ***NOT STARTED - THE OWNER'S CALL.*** "
+                  "The measurement follows. THE CHOICE, DELEGATED BY THE OWNER "
+                  "ON 2 Sep 2026, IS (b): guarded log_message. | x |\n",
+           "1 row(s) ASK FOR A RULING THE SAME ROW ALREADY RECORDS")
+
+    # THE QUOTE CONTROL.  The same row with both phrases quoted is a row that
+    # DOCUMENTS the fault rather than commits it - which is what entries 96 and
+    # 144 now are - and must not flag.
+    phase4("4a: the same wording QUOTED must not flag",
+           HEAD + '| 96 | **M** | Corrected. It used to read "NOT STARTED - THE '
+                  'OWNER\'S CALL." while its body said "THE CHOICE, DELEGATED BY '
+                  'THE OWNER ON 2 Sep 2026, IS (b)". | x |\n',
+           "0 row(s) ASK FOR A RULING THE SAME ROW ALREADY RECORDS")
+
+    # LEADS WITH THE CLOSURE - the legitimate "this was ruled, here is what is
+    # left" shape, which must never flag.
+    phase4("4a: a row that leads with the ruling must not flag",
+           HEAD + "| 140 | **B** | ***RULED 2 Sep 2026.*** Gate it on the tree. "
+                  "The rest still needs a ruling on wording. | x |\n",
+           "0 row(s) ASK FOR A RULING THE SAME ROW ALREADY RECORDS")
+
+    # A STRUCK ROW IS NOT SCANNED.  Done entries keep their original wording and
+    # would flag for ever.
+    phase4("4a: a struck row is not scanned",
+           HEAD + "| ~~96~~ | **M** | ***NOT STARTED - THE OWNER'S CALL.*** "
+                  "THE CHOICE, DELEGATED BY THE OWNER, IS (b). | x |\n",
+           "0 open row(s), 1 struck")
+
+    # THE NULL CASE.  An index whose rows do not parse must REFUSE, not report a
+    # clean zero - the fault this whole file exists to prevent.
+    phase4("4: an unparseable index must refuse",
+           "no table here at all, just prose\n", "REFUSING", want_rc=2)
 
     shutil.rmtree(tmp, ignore_errors=True)
 
