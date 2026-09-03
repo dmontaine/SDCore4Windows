@@ -5,6 +5,38 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+02 Sep 26  YOU CAN NOW PROTECT A VOC RECORD YOU HAVE CHANGED. PUT [locked] IN
+           FIELD 1 AND update.account WILL LEAVE IT ALONE.
+
+           An upgrade refreshes each account's VOC from the shipped one, which
+           is how you get commands added by a new release. Until now that also
+           meant a VOC record you had customised was replaced, with nothing
+           said and no way to prevent it.
+
+           Add [locked] anywhere in field 1 of the record, AFTER the type code,
+           and update.account will never replace it. The first character of
+           field 1 is the type code itself - two for a P - so [locked] must not
+           come first: write "V [locked]" and not "[locked]V". Upper or lower
+           case both work.
+
+           THE RECORD THEN KEEPS THE VERSION YOU HAVE, INCLUDING ANY FAULT WE
+           HAVE SINCE CORRECTED IN IT. That is the point of the lock and it is
+           your decision, so update.account tells you which records it skipped
+           every time it runs. Remove [locked] and run it again to take the new
+           version.
+
+02 Sep 26  ACCOUNTS SD CREATES NOW KEEP THE DESCRIPTIONS IN THEIR VOC RECORDS.
+
+           "listf" in the SDSYS account shows a description beside every file -
+           "File - Account register", "File - BASIC program source". In an
+           account created with create.account it showed a bare "F" instead,
+           because the descriptions were being stripped as the records were
+           copied in. Keyword records lost a second description the same way.
+
+           They are kept now. An account created from this release on will read
+           the way SDSYS always has. Existing accounts pick the descriptions up
+           the next time update.account runs in them.
+
 02 Sep 26  SD NO LONGER OFFERS TO SET "NO PASSWORD FOR NOW". A PASSWORD IS
            REQUIRED, AND THE MESSAGES NOW SAY SO.
 

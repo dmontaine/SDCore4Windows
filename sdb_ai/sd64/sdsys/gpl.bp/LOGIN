@@ -1291,6 +1291,15 @@ batch.permitted:
 update.voc:
    yn = ''
 
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 70.  The tally for the lock below.
+*   IT IS REPORTED WHETHER OR NOT ANYTHING ELSE HAPPENED: a site owns the
+*   consequence of locking a record, which it can only do if it is told which
+*   records this upgrade therefore did not touch.  A silent skip turns "I
+*   protected my customisation" into "I never received the fix" with nothing
+*   to connect the two.
+   locked.count = 0
+   locked.ids = ''
+
    openpath @sdsys:@ds:"newvoc" to sdsys.file else
       display sysmsg(2210) ;* Cannot open SDSYS NEWVOC
       goto abort.login
@@ -1388,6 +1397,34 @@ update.voc:
 *   See UPSTREAM_FIXES.md.
          old.rec = ''
          readu old.rec from update.voc.f, id then
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 70, THE LOCK, AND IT IS TESTED
+*   HERE BECAUSE HERE IS THE ONLY PLACE THAT HAS THE ACCOUNT'S OWN RECORD.
+*   Owner's design: a site marks a VOC record it has customised by putting
+*   [locked] in field 1, after the type code, and an upgrade leaves it alone.
+*
+*   IT IS TESTED ON old.rec, NOT rec.  rec is what NEWVOC ships and can never
+*   carry the marker; old.rec is what this account holds and is the only thing
+*   that knows whether a person changed it.
+*
+*   AFTER THE TYPE CODE, NOT ANYWHERE - the first character, or two for a P,
+*   IS the type, so "[locked]V" would be read as type "[".  INDEX finds it at
+*   any later position, which is what makes "anywhere else in field 1" true.
+*
+*   UPCASE BOTH SIDES, as every other field-1 test in this file and in CPROC
+*   does.  A lock that fails open because somebody typed [LOCKED] would be
+*   worse than no lock, since the record it was meant to protect is silently
+*   replaced and the site is told nothing.
+*
+*   RELEASE BEFORE CONTINUE: the READU above took an update lock, and the
+*   declined-type-change arm thirty lines down is the precedent for both the
+*   release and the CONTINUE.
+            if index(upcase(old.rec<1>), '[LOCKED]', 1) then
+               locked.count += 1
+               locked.ids<-1> = id
+               release update.voc.f, id
+               continue
+            end
+
             old.type = upcase(old.rec[1,1])
             if old.type = 'P' then old.type = upcase(old.rec[1,2])
 
@@ -1427,11 +1464,28 @@ update.voc:
          end
 
 accept.without.query:
-         rec<1> = new.type   ;* Remove comment text
-         if new.type = 'K' and rec<3> # '' then   ;* Keyword with other use
-            s = upcase(rec<3>)
-            rec<3> = if s[1,1] = 'P' then s<1>[1,2] else s[1,1]
-         end
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 136, AND THIS WAS THE THIRD SITE.
+*   Two lines used to stand here:
+*
+*     rec<1> = new.type   ;* Remove comment text
+*     if new.type = 'K' and rec<3> # '' then ... same for rec<3> ...
+*
+*   The comment said what it did.  Field 1 of a VOC record is the DESCRIPTION
+*   whose first character is the type code, and field 3 of a K record is a
+*   second one for its verb half - "Keyword to display counts" and "Verb to
+*   count records" in NEWVOC/count.  Both were reduced to a single letter.
+*
+*   ***FIXING ONLY CREATEA WOULD HAVE LOOKED RIGHT AND UNDONE ITSELF.***  The
+*   other two sites are in CREATEA and build an account's VOC once, at
+*   creation.  THIS one runs on every UPDATE.ACCOUNT, so an account created
+*   correctly would have lost its descriptions again the first time anybody
+*   refreshed it - and the refresh is exactly what the closing box tells an
+*   administrator to run after an upgrade.
+*
+*   SDSYS is the control: its VOC is built by the bootstrap from VOC_TEMPLATE,
+*   has never been through any of the three, keeps field 1 whole, and SD runs
+*   on it every day.  CPROC:1194 and :1282 read [1,1] and [1,2] and tolerate
+*   everything after, which is why new.type is still derived that way above.
 
          if compare(old.rec, rec) then
             write rec to update.voc.f, id
@@ -1441,7 +1495,15 @@ accept.without.query:
          end
       end
    repeat
-   display 
+   display
+
+*  02 Sep 26 Windows port - PRE_RELEASE_FIXES 70.  Name them, do not just count
+*  them: "3 records were locked" leaves the reader no way to find out which fix
+*  they have not received.  Field marks become spaces because this is one line
+*  of prose, not a list to be parsed.
+   if locked.count then
+      display sysmsg(10165, locked.count, convert(@fm, ' ', locked.ids))
+   end
 
    close sdsys.file
 

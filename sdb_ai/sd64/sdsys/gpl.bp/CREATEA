@@ -1292,13 +1292,36 @@ make.account:
 
       if copy.it then
          read rec from newvoc.f, id then
-            rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
-
-            if upcase(rec<1>) = 'K' and rec<3> # '' then  ;* Keyword with other use
-               s = rec<3>
-               rec<3> = if upcase(s[1,1]) = 'P' then s<1>[1,2] else s[1,1]
-            end
-
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 136.  THE RECORD IS COPIED WHOLE.
+*   Two lines used to stand here, and both threw information away:
+*
+*     rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
+*     if upcase(rec<1>) = 'K' and rec<3> # '' then  ... same for rec<3> ...
+*
+*   Field 1 of a VOC record is the DESCRIPTION whose first character is the
+*   type code - "File - Account register", "Keyword to test for equality" -
+*   and the loop above says so in its own comment.  Reducing it to that first
+*   character left every created account with a bare "F" where SDSYS shows a
+*   sentence, which is what the owner saw in a listf on 2 Sep 2026.  Field 3
+*   of a K record is the same shape ("Verb to count records") and was stripped
+*   by the same block; four newvoc records carry one.
+*
+*   ***SDSYS IS THE PROOF THAT NOTHING NEEDED THE BARE FORM.***  Its VOC is
+*   built by the bootstrap straight from voc_template, keeps field 1 whole,
+*   and SD has run on it every day: CPROC:1194 and :1282 test
+*   upcase(voc.rec[1,1]) and upcase(voc.rec[1,2]), reading one or two
+*   characters and tolerating everything after.  The descriptive form IS the
+*   working form, so the strip removed information for no gain.
+*
+*   THE ONLY CODE THAT DEPENDED ON THE BARE FORM WAS THE 'K' TEST INSIDE THE
+*   BLOCK ITSELF, which compared the WHOLE of field 1 to 'K' and worked only
+*   because the line above had just truncated it.  It went with the strip it
+*   guarded; an exhaustive grep of gpl.bp found no other equality test against
+*   a VOC field 1.
+*
+*   AND IT IS WHAT MAKES 70's LOCK FLAG POSSIBLE: a marker written after the
+*   type code in field 1 is exactly what these lines deleted, so the lock
+*   would have been destroyed by the refresh it exists to prevent.
             write rec to voc.f, id
 
          end
@@ -1351,13 +1374,14 @@ make.account:
          for add.i = 2 to add.count       ;* field 1 is the description
             add.id = add.rec<add.i>
             read rec from voctmpl.f, add.id then
-               rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
-
-               if upcase(rec<1>) = 'K' and rec<3> # '' then
-                  s = rec<3>
-                  rec<3> = if upcase(s[1,1]) = 'P' then s<1>[1,2] else s[1,1]
-               end
-
+*              02 Sep 26 Windows port - PRE_RELEASE_FIXES 136, the second of
+*              the two sites.  The same two lines stood here and are gone for
+*              the reason written out at the newvoc loop above.  BOTH HAD TO
+*              GO TOGETHER: this one supplies an ADMINISTRATOR's extra verbs
+*              from voc_template, so leaving it would have left exactly one
+*              tier with stripped descriptions - the hardest kind of
+*              inconsistency to notice, because it looks right in every
+*              account somebody thinks to check.
                write rec to voc.f, add.id
             end
          next add.i
