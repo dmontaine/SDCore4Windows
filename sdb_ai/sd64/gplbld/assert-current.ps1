@@ -881,6 +881,27 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # from the install.  Same rule, same commit.  PRE_RELEASE 74,
                   # 76, 78, 88 all run through the rig it sets up.
                   'vm-shares.ps1',
+                  #  2 Sep 26 - vm-type.ps1, the other half of the same rig.
+                  # HOST-SIDE, and it is the typing route the record allows into
+                  # a guest: guestcontrol is forbidden (guest credentials) and
+                  # keyboardputstring drops characters, so keyboardputscancode
+                  # is what is left and every guest session had been assembling
+                  # its own codes by hand.  It runs on the host, drives a VM,
+                  # installs nowhere and reads nothing from the install.  Same
+                  # rule, same commit as vm-shares.ps1 above.
+                  'vm-type.ps1',
+                  #  2 Sep 26 - diff-capture.ps1, PRE_RELEASE 134's other half.
+                  # capture-state -Manifest emits both trees as sorted D/F lines
+                  # SO THAT two captures can be diffed, and nothing diffed them;
+                  # 3,754 lines read by eye is not a measurement, and 120 and 132
+                  # are both about a directory that went missing QUIETLY.  Runs
+                  # on the host over the files the xfer share brought back,
+                  # installs nowhere.  Same rule, same commit.
+                  'diff-capture.ps1',
+                  #  2 Sep 26 - and its units test, by the same rule that puts
+                  # every other test-*-units.ps1 here: it drives diff-capture
+                  # against built fixtures and ships nowhere.
+                  'test-diffcapture-units.ps1',
                   # 28 Aug 26 - test-acctmsgs-units.ps1, added with the policy
                   # -aware rewrite of entry 22's refusal arm.  Same rule, same
                   # commit.  It reads the password policy and changes nothing.
