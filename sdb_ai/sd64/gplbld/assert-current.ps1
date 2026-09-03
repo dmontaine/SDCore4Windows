@@ -890,6 +890,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # installs nowhere and reads nothing from the install.  Same
                   # rule, same commit as vm-shares.ps1 above.
                   'vm-type.ps1',
+                  #  3 Sep 26 - vm-clone.ps1, the third piece of the same rig.
+                  # It clones a guest with keephwuuids AND keepallmacs - both
+                  # required for the licence, the second because Windows hashes
+                  # the MAC into its hardware id and a changed one demands
+                  # reactivation - and then READS BOTH VALUES BACK off the new
+                  # VM, because clonevm can exit 0 having quietly given a new
+                  # MAC.  Host-side, installs nowhere.  Same rule, same commit.
+                  'vm-clone.ps1',
                   #  2 Sep 26 - diff-capture.ps1, PRE_RELEASE 134's other half.
                   # capture-state -Manifest emits both trees as sorted D/F lines
                   # SO THAT two captures can be diffed, and nothing diffed them;
