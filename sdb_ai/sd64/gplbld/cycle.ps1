@@ -125,19 +125,39 @@ Write-Host "transcript: $script:CycleLog"
 # read WHY afterwards, so blocking the owner's cycle over it would cost more
 # than it saves.  Said TWICE, because a warning six minutes before the end
 # scrolls away: here, and again beside the final verdict.
+#
+# 2 Sep 26 - THE FLAG BELOW DOES NOT PREDICT THE LOSS.  It was wrong in BOTH
+# directions on the same day, measured on two logs an hour apart:
+#
+#   cycle-20260902-170323.log  flag SET, warning printed  3,670 Compressing
+#                              lines, first is ProgramFiles\adopt-account.ps1
+#                              - COMPLETE
+#   cycle-20260902-174446.log  fresh window, no warning   1,881 Compressing
+#                              lines, first is sdsys\messages\6059 - ISCC's
+#                              banner and ~1,789 lines LOST from the FRONT
+#
+# So a fresh window is not safe and a reused one is not doomed; PowerShell 5.1
+# drops native output under a fast producer whatever this flag says.  The
+# warning is kept because it is free and sometimes right, but it is NOT the
+# evidence that a log is whole - PRE_RELEASE 137, which carries what it cost:
+# 866 message paths in the log against 1,974 staged files read as "message
+# 10165 never went into the installer", and it took the INSTALLER SIZE (4,959,678
+# against the previous build's 4,957,848 - it GREW) to prove otherwise.
 if ($global:SdCycleHasRunInThisWindow) {
     $script:TranscriptDegraded = $true
     Write-Host ''
     Write-Host 'WARNING: THIS WINDOW HAS ALREADY RUN A CYCLE.' -ForegroundColor Yellow
     Write-Host '  PowerShell 5.1 stops transcribing NATIVE-command output after repeated' -ForegroundColor Yellow
     Write-Host '  Start/Stop-Transcript in one session, so the compile output, the ISCC' -ForegroundColor Yellow
-    Write-Host '  output and the installer output will be MISSING from the log above.' -ForegroundColor Yellow
+    Write-Host '  output and the installer output may be MISSING from the log above.' -ForegroundColor Yellow
     Write-Host '  The run is still sound - every check below is PowerShell output - but if' -ForegroundColor Yellow
     Write-Host '  it fails you will not be able to read why.' -ForegroundColor Yellow
     Write-Host '  CLOSE THIS WINDOW and run the cycle from a fresh elevated one.' -ForegroundColor Yellow
     Write-Host ''
 } else {
     $script:TranscriptDegraded = $false
+    # NOT A CLEAN BILL OF HEALTH.  A fresh window lost 1,789 lines on
+    # 2 Sep 2026; see the measurement above and PRE_RELEASE 137.
 }
 $global:SdCycleHasRunInThisWindow = $true
 
@@ -465,12 +485,25 @@ Write-Host "   staged tree is whole"
 Step 4 "Building the installer"
 
 if (-not (Test-Path -LiteralPath $Out)) { New-Item -ItemType Directory -Path $Out | Out-Null }
+# STAMPED BEFORE ISCC RUNS, so the freshness test below compares against a time
+# this run owns rather than against "recently".
+$isccStart = Get-Date
 & $Iscc "/DStage=$Stage" "/O$Out" $Iss
 if ($LASTEXITCODE -ne 0) { Fail "ISCC exited $LASTEXITCODE" }
 
 $setup = Get-ChildItem -LiteralPath $Out -Filter 'sd-setup-*.exe' |
          Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $setup) { Fail "ISCC reported success but no sd-setup-*.exe is in $Out" }
+# 2 Sep 26 - REFUSE THE NULL CASE.  The line above takes the NEWEST installer in
+# $Out, which on an ISCC that exited 0 without writing anything is the PREVIOUS
+# cycle's binary - and every step after this one, plus the copy to the guest,
+# would then be measuring a build nobody made.  Nothing here noticed; the size
+# and stamp were printed and read as this run's.
+if ($setup.LastWriteTime -lt $isccStart) {
+    Fail ("ISCC exited 0 but the newest installer in $Out predates this run: " +
+          "$($setup.Name) written $($setup.LastWriteTime), ISCC started $isccStart.  " +
+          "Nothing was built - this is an earlier cycle's binary.")
+}
 Write-Host ("   {0}, {1:N0} bytes, {2}" -f $setup.Name, $setup.Length, $setup.LastWriteTime)
 
 if ($SkipInstall) {
