@@ -128,6 +128,19 @@ $body = & {
     if (Test-Path -LiteralPath $cfg) {
         $lines = @(Get-Content -LiteralPath $cfg | Where-Object { $_ -match 'AllowGroups|ForceCommand|BEGIN SD|END SD' })
         Write-Output ('present: ' + $cfg)
+
+        # 02 Sep 26 - PRE_RELEASE 133 AND 118 ARE BOTH DECIDED BY THE mtime, AND
+        # NEITHER COULD BE READ OUT OF THE LINES ABOVE.  118 says an over-the-top
+        # install must NOT touch this file; 133 says the closing box claimed ssh
+        # was left alone on a path where the installer had just rewritten it and
+        # bounced sshd.  Both entries were measured by hand - "mtime 15:30:04 ->
+        # 15:44:32, sshd process created 15:44:34" - and the hand measurement is
+        # what this line replaces.  The SIZE goes with it because a rewrite that
+        # lands in the same second still changes the length of an AllowGroups
+        # line, and the two together are harder to coincide than either alone.
+        $ci = Get-Item -LiteralPath $cfg
+        Write-Output ('  mtime: ' + $ci.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') + '   size: ' + $ci.Length)
+
         if ($lines.Count -eq 0) {
             Write-Output '  NO AllowGroups / ForceCommand / SD block lines - the SD block is GONE'
         } else {
@@ -135,6 +148,37 @@ $body = & {
         }
     } else {
         Write-Output ('NOT PRESENT: ' + $cfg)
+    }
+
+    # THE OTHER HALF OF 133's SIGNATURE: sshd RESTARTED.  A rewritten config
+    # alone does not prove ApplyAllowGroups ran to completion - it restarts the
+    # service, and a process created seconds after the mtime is what says so.
+    # An ABSENT process is a third answer and is printed as one, because "no
+    # sshd" and "sshd that did not restart" are different facts and the closing
+    # box's wording is wrong in different ways against each.
+    # ***StartTime IS NULL UNELEVATED, IT DOES NOT THROW, AND THE FIRST VERSION
+    # OF THIS SECTION DIED ON IT.*** sshd runs as SYSTEM; an unelevated
+    # Get-Process still returns the object and still fills in Id, but StartTime
+    # comes back $null, so .ToString() threw "you cannot call a method on a
+    # null-valued expression" - and because the try wrapped the whole loop, the
+    # section printed one generic line and NO process at all.  Two rules broken
+    # at once: a reading that was merely unavailable was reported as a failure
+    # to enumerate, and one bad process would have hidden every good one.  The
+    # try is per-process now and the missing time says which of the two it is.
+    Section 'sshd process (PRE_RELEASE 133)'
+    $sshd = @(Get-Process -Name sshd -ErrorAction SilentlyContinue)
+    Write-Output ('  processes named sshd: ' + $sshd.Count)
+    if ($sshd.Count -eq 0) {
+        Write-Output '  none running (the enumeration itself succeeded)'
+    }
+    foreach ($p in $sshd) {
+        $started = '(START TIME NOT READABLE - this process is not elevated)'
+        try {
+            if ($null -ne $p.StartTime) { $started = $p.StartTime.ToString('yyyy-MM-dd HH:mm:ss') }
+        } catch {
+            $started = '(START TIME REFUSED: ' + $_.Exception.Message + ')'
+        }
+        Write-Output ('  pid {0}  started {1}' -f $p.Id, $started)
     }
 
     # 30 Aug 26 - PRE_RELEASE 67 AND 75 ARE MEASURED HERE RATHER THAN READ OUT OF
@@ -215,6 +259,77 @@ $body = & {
             Write-Output ('  PRESENT  {0}  ({1} entries)' -f $p, $n)
         } else {
             Write-Output ('  absent   ' + $p)
+        }
+    }
+
+    # 02 Sep 26 - PRE_RELEASE 120 AND 132, WHICH ARE BOTH "A PRESERVED DIRECTORY
+    # WENT MISSING ACROSS AN UNINSTALL-THEN-REINSTALL".  The four counted paths
+    # above cannot say it: sdsys is PRESENT either way and its entry count moves
+    # for a dozen innocent reasons.  The entries name their directories one at a
+    # time, so this reports them one at a time.
+    #
+    # ***THE LIST IS READ FROM stage.py, NOT RETYPED HERE.*** 132's whole finding
+    # was a hand-kept list drifting from stage.py's - the PROMISE tracked ten
+    # entries while the PROTECTION tracked three - and a third hand-kept copy in
+    # the INSTRUMENT would be the same defect in the place it is least visible.
+    # There is a built-in fallback for a run that cannot reach stage.py, and it
+    # SAYS WHICH ONE IT USED; a fallback that is silently taken is a fourth copy.
+    #
+    # ***AND "0 entries" IS NOT "empty".*** The 2 Sep witness read entries=0 for
+    # $cred and dumps and recorded them as "empty and survived"; both are simply
+    # read-denied to a process without the rights, and that reading was withdrawn.
+    # So each line distinguishes absent, present-and-counted, and present-but-
+    # unreadable, and never collapses the last two.
+    Section 'SDSYS_PRESERVE directories (PRE_RELEASE 120, 132)'
+    $fallback = @('$cred', 'accounts', 'cat', 'os.users', 'os.users.dic',
+                  'batch.jobs', 'batch.jobs.dic', 'prt', '$hold', 'dumps',
+                  'bp', 'bp.out')
+    $names   = $null
+    $source  = ''
+    $fromPy  = $false
+    $stage   = Join-Path $PSScriptRoot 'stage.py'
+    if (Test-Path -LiteralPath $stage) {
+        $txt = Get-Content -LiteralPath $stage -Raw
+        if ($txt -match '(?s)SDSYS_PRESERVE\s*=\s*\[(.*?)\n\]') {
+            $parsed = @([regex]::Matches($Matches[1], "\(\s*'([^']+)'") |
+                        ForEach-Object { $_.Groups[1].Value })
+            if ($parsed.Count -gt 0) {
+                $names  = $parsed
+                $source = $stage
+                $fromPy = $true
+            }
+        }
+    }
+    if ($null -eq $names) {
+        $names  = $fallback
+        $source = 'BUILT-IN FALLBACK - stage.py was not readable beside this script'
+    }
+    Write-Output ('  list source: ' + $source)
+    Write-Output ('  names      : ' + $names.Count)
+    if ($fromPy) {
+        # The fallback is allowed to be shorter than stage.py; it is NOT allowed
+        # to be shorter silently, because a stale fallback is what gets used on
+        # the one run that could not reach the share.
+        $only = @($names | Where-Object { $fallback -notcontains $_ })
+        if ($only.Count -gt 0) {
+            Write-Output ('  NOTE: the built-in fallback is STALE - stage.py also has: ' + ($only -join ', '))
+        }
+    }
+    if ($names.Count -eq 0) {
+        Write-Output '  REFUSED: no directory names to check.  This section measured NOTHING.'
+    }
+    foreach ($d in $names) {
+        $p = Join-Path 'C:\ProgramData\SD\sdsys' $d
+        if (-not (Test-Path -LiteralPath $p)) {
+            Write-Output ('  ABSENT      ' + $p)
+            continue
+        }
+        $err = $null
+        $n = @(Get-ChildItem -LiteralPath $p -Force -ErrorAction SilentlyContinue -ErrorVariable err).Count
+        if ($err) {
+            Write-Output ('  UNREADABLE  {0}  ({1})' -f $p, $err[0].Exception.GetType().Name)
+        } else {
+            Write-Output ('  present     {0}  ({1} entries, read OK)' -f $p, $n)
         }
     }
 
@@ -304,8 +419,15 @@ $body = & {
     # THE UNINSTALLER NAMES THIS PATH BACK TO THE USER, so the after-capture
     # carries the sweep's own report rather than a summary of it.  %TEMP% is the
     # elevated user's, which is where sd.iss:3589 puts it.
+    # 02 Sep 26 - sd-remove-database.log JOINS IT, PRE_RELEASE 139.  That entry
+    # exists because the database question confirmed nothing and wrote nothing,
+    # so after a run in which both questions were answered the machine could not
+    # say which button had been pressed - and the session that ran it could not
+    # tell whether the click was wrong or the code was.  This is the file that
+    # closes that gap, so it is read back the same way as the accounts sweep.
     Section 'sweep log, if the uninstaller has run'
-    foreach ($lp in (Join-Path $env:TEMP 'sd-remove-accounts.log'), 'C:\Windows\Temp\sd-remove-accounts.log') {
+    foreach ($lp in (Join-Path $env:TEMP 'sd-remove-accounts.log'), 'C:\Windows\Temp\sd-remove-accounts.log',
+                    (Join-Path $env:TEMP 'sd-remove-database.log'), 'C:\Windows\Temp\sd-remove-database.log') {
         if (Test-Path -LiteralPath $lp) {
             Write-Output ('--- ' + $lp + ' ---')
             Get-Content -LiteralPath $lp | ForEach-Object { Write-Output ('  ' + $_) }
