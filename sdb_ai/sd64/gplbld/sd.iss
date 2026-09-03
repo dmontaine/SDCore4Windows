@@ -1938,7 +1938,16 @@ begin
        'Creates the group "sdusers" and adds you to it. That membership is what ' +
        'grants access to the database. Windows only applies a new group when you ' +
        'sign in, so YOU MUST SIGN OUT AND BACK IN, or restart, before SD Core will ' +
-       'run. Until then it reports that it cannot open its files.' + #13#10#13#10;
+       'run. Until you do, a window that already has the PATH answers that SD Core ' +
+       'cannot open its files, and one opened before the install answers that "sd" ' +
+       'is not recognized.' + #13#10#13#10;
+  { 02 Sep 26 - THE SECOND SYMPTOM, PRE_RELEASE_FIXES 141.  This page said only
+    "cannot open its files", which is the group token; the PATH failure looks
+    nothing like it and is the one the owner actually hit.  Kept shorter than
+    the closing box's version because this page is read before the install,
+    where the cure - sign out - is the same either way.  The closing box is
+    where a reader is standing in front of the symptom, so it names which cure
+    goes with which. }
 
   { THE sdsshonly PARAGRAPH IS MODE-SPECIFIC BECAUSE THE GROUP'S JOB IS.  It
     confines the Windows accounts CREATE.ACCOUNT USER makes to ssh, and a
@@ -3973,8 +3982,24 @@ begin
            'You have been added to the "sdusers" group, which is what grants ' +
            'access to the SD Core database.' + #13#10#13#10 +
            'Windows only applies group membership when you sign in, so you must ' +
-           'SIGN OUT AND BACK IN (or restart) before SD Core will run. Until then it ' +
-           'will report that it cannot open its files.' + #13#10#13#10 +
+           'SIGN OUT AND BACK IN (or restart) before SD Core will run.' + #13#10#13#10 +
+           { 02 Sep 26 - BOTH SYMPTOMS, BECAUSE THERE ARE TWO REASONS "sd" DOES
+             NOT RUN YET AND THIS BOX CARRIED ONLY ONE.  PRE_RELEASE_FIXES 141,
+             hit twice in one evening by the owner.  The group token is the one
+             it described; the other is PATH, which addtopath writes to the
+             MACHINE environment and an already-open window never sees.  The
+             same instruction happens to cure both, which is why it went
+             unnoticed - and that coincidence is the trap, not the mitigation:
+             a reader who opens a new window fixes PATH and still meets the
+             token error, and a reader who signs out but keeps an old window
+             open fixes the token and still meets "not recognized".  Each was
+             being told about the other one's problem. }
+           'Until you do, "sd" fails in one of two ways. A command window that ' +
+           'was already open while this installer ran does not have the new ' +
+           'PATH, and answers that "sd" is not recognized - opening a new ' +
+           'window cures that one on its own. A window opened since has the ' +
+           'PATH but still carries your old group membership, and answers that ' +
+           'it cannot open its files - only signing out cures that one.' + #13#10#13#10 +
            { TRIMMED 16 Aug 2026, owner: "it is even longer".  Fair - the first
              page was added to move things EARLIER and then three paragraphs were
              added here as well, so the box grew rather than shrank.

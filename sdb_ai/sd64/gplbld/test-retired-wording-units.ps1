@@ -136,6 +136,18 @@ $RETIRED = @(
     @{ Ref = '124'
        Retired     = 'sign in over ssh and nothing else'
        Replacement = 'sign in over ssh, or over the' }
+    # 141 - "Until then it ..." introduced the ONE symptom the box knew about,
+    # the sdusers token, on a machine where the reader is at least as likely to
+    # meet the other one, PATH.  Registered on the connective rather than on
+    # "cannot open its files", which is still true and still shipped: the two
+    # copies worded the tail differently ("reports that" and "will report
+    # that"), so the connective is the only fragment both carried, and it is
+    # absent from both replacements.  That is the point of registering it -
+    # sd.iss carries this claim TWICE, on the options page and in the closing
+    # box, which is 121's shape exactly.
+    @{ Ref = '141'
+       Retired     = 'Until then it'
+       Replacement = 'is not recognized' }
 )
 
 # --------------------------------------------------------------------------

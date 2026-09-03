@@ -336,6 +336,42 @@ if (Test-Path -LiteralPath $SdExe) {
     Info 'Nothing else below will mean much.  Try installing again.'
 }
 
+# 02 Sep 26 - CAN YOU TYPE "sd"?  PRE_RELEASE_FIXES 141.  This script had
+# nothing to say about PATH at all, so the reader whose shell answers "sd is
+# not recognized" ran it and was told about a group membership instead - a
+# different message with a different cause, and the same cure, which is what
+# kept it hidden.
+#
+# IT IS THE SAME TWO-QUESTION SHAPE AS sdusers BELOW, and deliberately so: the
+# MACHINE environment is where the installer wrote it, this PROCESS's PATH is
+# what lags, and only the two together say which case a reader is in.  Reading
+# the registry rather than [Environment]::GetEnvironmentVariable(...,'Machine')
+# is not worth it - that call reads the same value and needs no path literal.
+#
+# NOT A [PROBLEM] WHEN IT IS ABSENT ENTIRELY.  "Add SD Core to the system PATH"
+# is an OPTIONAL task on the wizard (sd.iss "addtopath"), so a reader who
+# cleared it has an install that is working as they asked for.
+$binDir = Join-Path $AppDir 'usr\bin'
+$machinePath = ''
+try { $machinePath = [string][Environment]::GetEnvironmentVariable('Path', 'Machine') } catch { }
+$onMachine = @($machinePath -split ';' | ForEach-Object { $_.TrimEnd('\') }) -contains $binDir.TrimEnd('\')
+$onProcess = @($env:Path -split ';' | ForEach-Object { $_.TrimEnd('\') }) -contains $binDir.TrimEnd('\')
+
+if ($onMachine -and $onProcess) {
+    Ok 'You can run SD Core by typing "sd" - it is on this window''s PATH.'
+} elseif ($onMachine) {
+    NotYet 'SD Core is on the system PATH, but this window does not have it yet.'
+    Info 'This is normal and it is not a fault.  A command window keeps the PATH'
+    Info 'it started with, so one opened before the install never sees the new'
+    Info 'entry and answers "sd is not recognized".  OPEN A NEW WINDOW - that is'
+    Info 'enough for this one on its own, unlike the group membership below.'
+} else {
+    Info 'SD Core is not on the system PATH, so "sd" will not be found by name.'
+    Info 'Adding it is an optional choice in the installer.  Either run it by its'
+    Info ('full path - ' + $SdExe + ' - or install again and leave')
+    Info 'the PATH option ticked.'
+}
+
 # --- 2. the service --------------------------------------------------------
 Section '  The SD service'
 

@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 02 Sep 26 Windows port - COMMENT ONLY.  The block at the newvoc copy cited
+*   SDSYS as proof that the descriptive field 1 is the working form; measuring
+*   it showed SDSYS runs on a mostly-bare VOC, so the citation proved the
+*   opposite of what it was offered for.  The conclusion is re-hung on
+*   CPROC:1194 and :1282, which is where it always rested.
+*   PRE_RELEASE_FIXES.md 142.
 * 31 Aug 26 Windows port - THE FIVE GROUP ADDS TAKE os_group'S OWN ANSWER
 *   instead of reading OS.ERROR() after it.  Upstream's version really runs an
 *   os.execute, so OS.ERROR() is a sound witness there; the port replaced it
@@ -1306,12 +1312,33 @@ make.account:
 *   of a K record is the same shape ("Verb to count records") and was stripped
 *   by the same block; four newvoc records carry one.
 *
-*   ***SDSYS IS THE PROOF THAT NOTHING NEEDED THE BARE FORM.***  Its VOC is
-*   built by the bootstrap straight from voc_template, keeps field 1 whole,
-*   and SD has run on it every day: CPROC:1194 and :1282 test
-*   upcase(voc.rec[1,1]) and upcase(voc.rec[1,2]), reading one or two
-*   characters and tolerating everything after.  The descriptive form IS the
-*   working form, so the strip removed information for no gain.
+*   ***THE READS ARE THE PROOF THAT NOTHING NEEDED THE BARE FORM.***
+*   CPROC:1194 and :1282 test upcase(voc.rec[1,1]) and upcase(voc.rec[1,2]) -
+*   one or two characters, tolerating everything after - so the descriptive
+*   form is a working form, and the strip removed information for no gain.
+*
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 142.  THE PARAGRAPH ABOVE USED TO
+*   CITE SDSYS INSTEAD, AND HALF OF WHAT IT SAID IS FALSE.  It read "its VOC is
+*   built by the bootstrap straight from voc_template, KEEPS FIELD 1 WHOLE, and
+*   SD has run on it every day".  Measured on the staged tree of 2 Sep 2026:
+*
+*     - the first clause holds.  sdsys/voc carries voc_template's descriptions
+*       ("File - Account register", "File - Spooler hold files", "File -
+*       Session IPC area") and NONE of newvoc's, so it is a straight copy.
+*     - the second does not.  voc_template is BARE for 391 of the 392 records
+*       it shares with newvoc, six of them type F - $ACC, $MAP, SD.VOCLIB,
+*       dict.dict, syscom and voc.
+*
+*   So SDSYS runs on a mostly-bare VOC.  That proves the BARE form works and
+*   says nothing about the descriptive one, which is the opposite of what the
+*   sentence was offered to settle.  The conclusion survives on the reads
+*   above; the evidence it cited did not happen.
+*
+*   THE MIRROR OF THIS IS THE ONE RECORD 142 FIXES.  newvoc is the ONLY record
+*   of the 392 where voc_template carries the text and newvoc does not, which
+*   is why a created account showed a bare "F" for it while SDSYS showed the
+*   sentence.  newvoc/newvoc now carries "File - VOC given to a new account",
+*   the wording voc_template already had.
 *
 *   THE ONLY CODE THAT DEPENDED ON THE BARE FORM WAS THE 'K' TEST INSIDE THE
 *   BLOCK ITSELF, which compared the WHOLE of field 1 to 'K' and worked only

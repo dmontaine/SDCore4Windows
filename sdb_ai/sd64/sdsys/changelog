@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+02 Sep 26  THE INSTALLER NOW EXPLAINS BOTH REASONS "sd" DOES NOT RUN YET.
+           IT USED TO NAME ONLY ONE OF THEM.
+
+           There are two, they look nothing alike, and signing out happens to
+           cure both - which is why nobody noticed that the explanation on
+           screen matched only one of them.
+
+           A command window that was already open while the installer ran does
+           not have the new PATH, and answers that "sd" is not recognized.
+           Opening a new window is enough for that one on its own.
+
+           A window opened since has the PATH but still carries the group
+           membership you signed in with, and answers that SD Core cannot open
+           its files. Only signing out and back in cures that one.
+
+           "Check the SD installation" in the Start Menu now reports the PATH
+           as well, and says which of the two you are looking at.
+
+02 Sep 26  listf IN AN ACCOUNT SD CREATED NOW DESCRIBES newvoc, INSTEAD OF
+           SHOWING A BARE "F" FOR IT.
+
+           Every other file in the listing carried its description. This one
+           record was missing the text in the copy new accounts are built
+           from, so it was the only one that came out bare.
+
 02 Sep 26  THE VERB IS NOW update.accounts, NOT update.account. IT ALWAYS
            UPDATED MORE THAN ONE.
 
