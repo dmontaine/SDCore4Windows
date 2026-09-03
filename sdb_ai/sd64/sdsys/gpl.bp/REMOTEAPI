@@ -21,6 +21,9 @@
 * 30 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 78, owner's request:
 *           "we need three new administrator commands REMOTE.API ON|OFF,
 *           REMOTE.SSH ON|OFF and SSH.SERVER INSTALL|REMOVE".
+* 03 Sep 26 report.state now reads the FIREWALL as well as the listener, so
+*           "remote.api" with no keyword says who may reach the API and not
+*           only whether a socket is open.  PRE_RELEASE_FIXES 148.
 * END-HISTORY
 *
 *
@@ -213,16 +216,41 @@ $include err.h
 *  Field 1 is the status ps_script would have returned; fields 2 onwards are
 *  what the script printed.
 report.state:
+*  THE LISTENER: whether SD opens a socket at all.
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-listener.ps1') : char(39) : ' -Show'
    ps := @fm : 'exit $LASTEXITCODE'
    both   = ps_script_out(ps, @true)
    rc     = field(both, @fm, 1)
    report = field(both, @fm, 2, 9999)
-*  FIELD BY FIELD, WITH THE SCRIPT'S "name:" PREFIX STRIPPED.  PRE_RELEASE_FIXES
-*  115: api-listener.ps1 tags each line with its filename; a leading "token: "
-*  (colon-space, no space before it) is removed so the read-only report does not
-*  lead with the script's name.  A genuine "x : y" line is left alone.  (crt of a
-*  dynamic array would print the field marks themselves, hence field by field.)
+   gosub print.report
+   if rc # 0 then
+      crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API listener setting
+   end
+
+*  03 Sep 26 - AND WHO MAY REACH IT, PRE_RELEASE_FIXES 148.  The listener above
+*  says whether a socket is open; this says who may reach it.  With no keyword
+*  the verb reported only the first, so on a machine that kept its database
+*  through a reinstall (147) it answered "listening" while nothing could
+*  connect.  api-firewall.ps1 -Show now ends on a plain sentence, the same shape
+*  REMOTESSH prints from ssh-firewall.ps1, and this reads it the same way.
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-firewall.ps1') : char(39) : ' -Show'
+   ps := @fm : 'exit $LASTEXITCODE'
+   both   = ps_script_out(ps, @true)
+   rc     = field(both, @fm, 1)
+   report = field(both, @fm, 2, 9999)
+   gosub print.report
+   if rc # 0 then
+      crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API firewall setting
+   end
+   return
+
+*  THE STRIP-AND-PRINT LOOP, SHARED BY THE TWO READS ABOVE.  Field by field,
+*  with the script's "name:" prefix stripped - PRE_RELEASE_FIXES 115: each line
+*  is tagged with its filename, and a leading "token: " (colon-space, no space
+*  before it) is removed so the report does not lead with the script's name.  A
+*  genuine "x : y" line is left alone.  (crt of a dynamic array would print the
+*  field marks themselves, hence field by field.)
+print.report:
    if report # '' then
       for r.i = 1 to dcount(report, @fm)
          rpt    = report<r.i>
@@ -232,9 +260,6 @@ report.state:
          end
          crt rpt
       next r.i
-   end
-   if rc # 0 then
-      crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API listener setting
    end
    return
 

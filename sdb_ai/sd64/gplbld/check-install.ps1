@@ -515,6 +515,57 @@ if ($confState -eq 'unreadable') {
     }
     if ($listening) {
         Ok ('The network API is listening on port ' + $apiPort + '.')
+
+        # 03 Sep 26 - PRE_RELEASE_FIXES 148.  LISTENING IS NOT REACHABLE, AND
+        # SAYING ONLY "listening" IS THE DEFECT.  The firewall rule can be
+        # ABSENT - a machine that kept its database through an uninstall and
+        # reinstall (147) answers nobody off-box - or scoped to this computer,
+        # and reporting the socket while ignoring the rule told a site whose
+        # network access had silently gone that all was well.
+        #
+        # api-firewall.ps1 -ScopeFile IS READ-ONLY and takes no elevation gate,
+        # so it does not break this script's no-elevation rule (see the header).
+        # It is run in a CHILD powershell so its own 'exit' and Stop preference
+        # cannot reach this process - the installer calls it the same way.  A
+        # word it does not recognise, a missing script, or a failed read all
+        # leave the reachability UNSTATED rather than guessed.
+        $scope = $null
+        $fw = Join-Path $AppDir 'api-firewall.ps1'
+        if (Test-Path -LiteralPath $fw) {
+            $scopeFile = Join-Path $env:TEMP ('sd-apiscope-' + $PID + '.txt')
+            try {
+                & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+                    -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+                    -File $fw -ScopeFile $scopeFile | Out-Null
+                if (Test-Path -LiteralPath $scopeFile) {
+                    $scope = (Get-Content -LiteralPath $scopeFile -Raw).Trim()
+                    Remove-Item -LiteralPath $scopeFile -ErrorAction SilentlyContinue
+                }
+            } catch { }
+        }
+        switch ($scope) {
+            'open' {
+                Info 'Other computers on your network may reach it.'
+            }
+            'restricted' {
+                Info 'It is reachable from this computer only; "remote.api on" opens it to the network.'
+            }
+            'none' {
+                # THE 147 STATE, NAMED WHERE THE READER IS.  Info, NOT [not yet]:
+                # the summary turns every [not yet] into "sign out and back in",
+                # which does nothing for a firewall rule and is the exact
+                # misdirection this file's own comments warn against.  And NOT a
+                # [PROBLEM]: a local-only API is a legitimate choice ("remote.api
+                # local"), so exit 1 would be wrong.  It is a true sub-statement
+                # of the [ok] listening line above - the API works, and this is
+                # who can reach it - which is what Info is for.
+                Info 'No firewall rule admits other computers, so only this one can reach the API.'
+                Info 'To open it to the network, in SD Core as an administrator run "remote.api on".'
+            }
+            default {
+                Info 'Who may reach it could not be read from the firewall.'
+            }
+        }
     } elseif ($null -ne $svc -and $svc.Status -ne 'Running') {
         NotYet ('Nothing is listening on port ' + $apiPort + ' because the service is not running.')
     } else {

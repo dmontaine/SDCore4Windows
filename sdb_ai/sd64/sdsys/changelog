@@ -5,6 +5,20 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+03 Sep 26  "remote.api" AND THE INSTALLATION CHECK NOW TELL YOU WHO MAY REACH
+           THE API, NOT ONLY THAT IT IS LISTENING.
+
+           A listening API is not a reachable one: the firewall rule can be
+           absent, or scoped to this computer. Until now both of these reported
+           only the socket, so a machine that could no longer be reached over
+           the network still looked fine.
+
+           "remote.api" with no keyword now prints who may reach it as well as
+           whether SD opens the port - the same two-part answer "remote.ssh"
+           already gives. And "Check the SD installation" adds a line under the
+           listening API: whether other computers may reach it, and, when no
+           firewall rule admits them, that "remote.api on" opens it.
+
 03 Sep 26  REINSTALLING OVER A DATABASE YOU KEPT NOW TELLS YOU WHAT DID NOT
            COME BACK WITH IT.
 

@@ -122,7 +122,24 @@ try {
     }
 
     if ($Show) {
-        Write-State (Get-ApiRule)
+        $rule = Get-ApiRule
+        Write-State $rule
+        # 03 Sep 26 - AND SAY WHAT IT MEANS, matching ssh-firewall.ps1 -Show.
+        # PRE_RELEASE_FIXES 148: "remote.api" with no keyword runs this, and
+        # until now an administrator asking who may reach the API got a rule
+        # dump and no plain answer.  THREE STATES, because our rule can be
+        # ABSENT where ssh's - created by the OpenSSH capability - cannot: a
+        # machine that kept its database through a reinstall (147) has a
+        # listener and no rule, and "state is OFF at the firewall" is the whole
+        # point of saying this.  Test-RuleOpen is the SAME test -ScopeFile and
+        # the write-back verdict use, so the three cannot disagree.
+        if ($null -eq $rule) {
+            Write-Output 'api-firewall: state is OFF at the firewall - no rule, so only this computer may reach the API'
+        } elseif (Test-RuleOpen $rule) {
+            Write-Output 'api-firewall: state is ON - other computers on your network may reach the API'
+        } else {
+            Write-Output 'api-firewall: state is LOCAL - only this computer may reach the API'
+        }
         exit 0
     }
 
