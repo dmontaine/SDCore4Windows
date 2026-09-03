@@ -332,6 +332,107 @@ if ($issBad.Count -gt 0) {
 }
 
 # ---------------------------------------------------------------------------
+# 03 Sep 26 - STEP 0, THE C.  Owner's instruction, 3 Sep 2026: "seems like there
+# should be one script that can do all three, compile c if necessary, compile
+# basic if necessary and run the installer if necessary."
+#
+# TWO OF THE THREE WERE ALREADY HERE and only the C was missing: step 2's
+# "stage.py --bootstrap" IS the BASIC compile - gpl.bp.out from SECOND.COMPILE,
+# gcat, pcode.out, which is the pages of "0 error(s)" further down this log -
+# and steps 4 to 7 build and run the installer.  THE INSTALL STAYS
+# UNCONDITIONAL, which was the owner's other ruling the same day: a test cycle
+# begins with a FRESH install (CLAUDE.md), and cycling deliberately to clear
+# per-account state a suite dirtied is a real use that a "skip if current"
+# would take away.
+#
+# ***"IF NECESSARY" IS NOT WHAT make MEANS BY IT, AND THAT IS THE WHOLE REASON
+# THIS IS MORE THAN A CALL TO make.***  make relinks only what changed, while
+# assert-current compares source against the OLDEST binary in bin\ - so editing
+# one C file and running "make sd" leaves the tree STALE and the guard refusing,
+# with a fresh installer already built.  That cost two of the three cycles on
+# 3 Sep 2026 and it is written up under PROJECT_STATUS "110 AND 111".  So when
+# this fires it DELETES the binaries and relinks all of them, which is the only
+# thing that satisfies the guard.
+#
+# IT ASKS THE QUESTION WITH THE GUARD'S OWN CODE.  gplbld/stale-binaries.ps1 is
+# assert-current's check A2, lifted into a file both use, so a cycle that
+# thought the C was current while assert-current thought otherwise is not
+# expressible.  gplbld/test-stalebin-units.ps1 drives it.
+#
+# BUILDING ELEVATED IS SAFE, MEASURED RATHER THAN ASSUMED (3 Sep 2026): this
+# script requires an elevated window, so the build runs elevated too, and the
+# question is whether it strands object files an ordinary build could not then
+# overwrite.  HKLM\SYSTEM\CurrentControlSet\Control\Lsa\nodefaultadminowner is
+# unset, whose default is 1 - "object creator" - so an elevated process creates
+# files owned by the user, exactly as an unelevated one does.  bin\sd.exe and
+# gplobj\ are owned by the invoking user today and stay that way.
+Step 0 "Building the C, if source has moved past bin\"
+
+. (Join-Path $Gplbld 'stale-binaries.ps1')
+$binState = Get-BinaryStaleness $Sd64
+
+if (-not $binState.ok) {
+    # bin\ is empty on a fresh clone, and that is not a fault - it is the one
+    # case where the build is simply required.  stage.py would refuse at step 2
+    # with "run make sd first"; doing it here means the clone just works.
+    Write-Host ("   $($binState.reason)")
+    Write-Host "   building all of it"
+    $mustBuild = $true
+} elseif ($binState.stale) {
+    Write-Host ("   {0} source file(s) newer than bin\{1} ({2}):" -f
+                $binState.uncompiled.Count, $binState.oldest.Name,
+                $binState.oldest.LastWriteTime.ToString('dd MMM HH:mm:ss'))
+    $binState.uncompiled | Select-Object -First 10 | ForEach-Object {
+        Write-Host ("       {0}  {1}" -f $_.LastWriteTime.ToString('dd MMM HH:mm:ss'),
+                    $_.FullName.Substring($Sd64.Length + 1))
+    }
+    $mustBuild = $true
+} else {
+    # Rule 1 of the instrument section: say what was measured, not just the
+    # conclusion.  A silent skip here is indistinguishable from a step that
+    # did not run.
+    Write-Host ("   bin\ built {0}, no source newer - nothing to compile" -f
+                $binState.oldest.LastWriteTime.ToString('dd MMM HH:mm:ss'))
+    $mustBuild = $false
+}
+
+if ($mustBuild) {
+    # DELETE FIRST, SO EVERY BINARY GETS A FRESH MTIME.  See the header: a
+    # partial relink leaves the oldest binary older than the edit and the guard
+    # still refusing.  Only the .exe and .dll files the guard actually compares
+    # are removed - a kept sd.exe.installed-backup-<date> is not one of them,
+    # and neither is libsdclilib.dll.a, which is rebuilt with the DLL anyway.
+    foreach ($b in $binState.binaries) {
+        Remove-Item -LiteralPath $b.FullName -Force -ErrorAction SilentlyContinue
+    }
+    $gone = @($binState.binaries | Where-Object { -not (Test-Path -LiteralPath $_.FullName) })
+    Write-Host ("   removed {0} of {1} binary/ies for a full relink" -f
+                $gone.Count, $binState.binaries.Count)
+
+    # THROUGH THE MSYS2 LOGIN SHELL, AND WITH THE cd, which is not optional: a
+    # login shell starts in /home/<user>, where "make sd" reports "No rule to
+    # make target 'sd'" and reads like a broken Makefile rather than a wrong
+    # directory.  Paid for on 3 Sep 2026.
+    $mk = "cd '$(ToMsys $Sd64)' && make sd"
+    Write-Host "   $Bash -lc ""$mk"""
+    & $Bash -lc $mk
+    if ($LASTEXITCODE -ne 0) { Fail "make sd exited $LASTEXITCODE - nothing else has run." }
+
+    # AND ASK THE GUARD AGAIN RATHER THAN TRUSTING THE EXIT CODE.  "make sd"
+    # exits 0 having relinked only what it thought needed relinking, which is
+    # exactly the case this step exists for.  A cycle that carried on here would
+    # build an installer nobody can measure afterwards.
+    $binState = Get-BinaryStaleness $Sd64
+    if (-not $binState.ok)   { Fail ("after make sd: " + $binState.reason) }
+    if ($binState.stale) {
+        Fail ("make sd exited 0 but {0} source file(s) are STILL newer than bin\{1} - assert-current would refuse after the install, so this stops now." -f
+              $binState.uncompiled.Count, $binState.oldest.Name)
+    }
+    Write-Host ("   built: bin\ now {0}, no source newer" -f
+                $binState.oldest.LastWriteTime.ToString('dd MMM HH:mm:ss'))
+}
+
+# ---------------------------------------------------------------------------
 Step 1 "Stopping SD"
 
 # THE STEP THE HAND-RUN CYCLE MISSED.  Stop-Service returns before the SCM has

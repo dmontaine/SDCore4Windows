@@ -84,63 +84,24 @@ if ($hi -ne $hb) {
 # gplsrc\sdclilib or gplsrc\sdsvc counts too - those build sdclilib.dll and
 # sdsvc.exe, which ship in the same install.  A source change that rebuilds none
 # of them is still a false stale, and that is the right way round.
-$binaries = @(Get-ChildItem (Join-Path $sd64 'bin') -File |
-              Where-Object { $_.Extension -in '.exe', '.dll' })
-if ($binaries.Count -eq 0) {
-    Bad 'bin\ holds no binaries - run "make sd"'
+#
+# 03 Sep 26 - THE RULE MOVED TO gplbld/stale-binaries.ps1 AND NOTHING ABOUT IT
+# CHANGED.  cycle.ps1's step 0 asks the same question to decide whether to run
+# "make sd" before it stages anything, and a second hand-maintained copy of the
+# exclusions below would be the defect three of this tree's free guards already
+# exist to catch.  The wording this check prints is still its own.
+. (Join-Path $PSScriptRoot 'stale-binaries.ps1')
+$binState = Get-BinaryStaleness $sd64
+if (-not $binState.ok) {
+    Bad $binState.reason
     $stale = $true
 } else {
-    $oldestBuilt = ($binaries | Sort-Object LastWriteTime | Select-Object -First 1)
-    # 18 Aug 26 - THE SAME TWO EXCLUSIONS CHECK B USES BELOW, and A2 was written
-    # without them.  That produced a FALSE STALE THAT NO REINSTALL CLEARS:
-    # "make check-local" builds gplsrc\sdclilib\localtest\local-connect-test.exe,
-    # which is then newer than everything in bin\, and the next run of
-    # check-local recreates it.  The post-cycle sequence this repository
-    # documents is cycle, then check-local, then the verify scripts - so every
-    # verify script after the first refused to run.  Check B's comment below
-    # foresaw exactly this; A2 simply did not inherit it.  Nothing under
-    # localtest\ or __pycache__ is a source of sd.exe, so this does not loosen
-    # the guard.
-    # 19 Aug 26 - sdclilib\tests\ excluded here too, and Check B's comment gives
-    # the reasoning.  Nothing in that directory is compiled INTO sd.exe or the
-    # client DLL - the tests link against the DLL, they are not part of it - so
-    # "run make sd" is the wrong instruction for an edit there and the sequence
-    # it interrupts is the one that would have run the test.
-    # 19 Aug 26 - AND BUILD PRODUCTS ARE NOT SOURCE.  A2 asks one question -
-    # "is any SOURCE newer than the binaries" - and a .exe, .dll, .a or .o is
-    # by definition an answer to it, not part of it.  "make check" in
-    # gplsrc\sdclilib builds smoke-test.exe and internal-state-test.exe INTO
-    # THAT DIRECTORY rather than into localtest\, so running the client's own
-    # tests made this report "run make sd" for ever afterwards - the same false
-    # stale localtest\ was added for, arriving by a different route.  Filtering
-    # on the extension rather than on a list of names means the next build
-    # product to appear there is covered before anybody trips over it.
-    $buildProducts = '\.(exe|dll|a|o|obj|lib|exp)$'
-
-    # 20 Aug 26 - AND DOCUMENTATION IS NOT SOURCE EITHER, for the same reason
-    # and by the same test: nothing compiles a .md into sd.exe or the client
-    # DLL, and gplsrc is not installed at all - it is C source, and stage.py
-    # ships sdsys.  So an edit to gplsrc\sdclilib\VENDORING.md answered "run
-    # make sd, then run a cycle", and BOTH would have been pointless: the
-    # rebuild has nothing to read and the install has nothing to receive.
-    #
-    # FOUND BY DOING IT.  Editing VENDORING.md to record the client packaging
-    # work turned this check red, on a tree that had just cycled and passed the
-    # whole suite - so the next session would have spent an install on a
-    # markdown file, or learned to distrust the guard, which is worse.
-    #
-    # THE RULE IS THE ONE THE EXCLUSIONS ABOVE ALREADY FOLLOW: a file that
-    # cannot reach the binaries or the install cannot make either of them
-    # stale.  Extension rather than a list of names, so the next document is
-    # covered before anybody trips over it.
-    $documentation = '\.(md|txt)$'
-    $uncompiled  = @(Get-ChildItem (Join-Path $sd64 'gplsrc') -Recurse -File |
-                     Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
-                                    $_.FullName -notmatch '\\localtest\\' -and
-                                    $_.FullName -notmatch '\\sdclilib\\tests\\' -and
-                                    $_.Name -notmatch $buildProducts -and
-                                    $_.Name -notmatch $documentation -and
-                                    $_.LastWriteTime -gt $oldestBuilt.LastWriteTime })
+    $oldestBuilt = $binState.oldest
+    # WHAT COUNTS AS SOURCE, AND THE FALSE STALE EACH EXCLUSION WAS PAID FOR,
+    # ARE IN stale-binaries.ps1 - localtest\, __pycache__, sdclilib\tests\,
+    # build products by extension, and documentation.  They are unchanged; they
+    # moved so that cycle.ps1 asks this question with the same answer.
+    $uncompiled = @($binState.uncompiled)
     if ($uncompiled.Count -gt 0) {
         Bad ("{0} source file(s) are newer than bin\{1} ({2}) - run 'make sd':" -f
              $uncompiled.Count, $oldestBuilt.Name,
@@ -227,6 +188,12 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # service start - so it is watched like the rest of the tree.
                   # These two are its instruments and reach no install.
                   'verify-register.ps1', 'test-reconcile-units.ps1',
+                  # 03 Sep 26 - THIS SCRIPT'S OWN CHECK A2, lifted into a file
+                  # so cycle.ps1's step 0 asks the question with the same code,
+                  # and its units test.  Listed in the commit that creates them.
+                  # Neither is installed and nothing compiles either into
+                  # sd.exe; this one is dot-sourced from a few lines above.
+                  'stale-binaries.ps1', 'test-stalebin-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
