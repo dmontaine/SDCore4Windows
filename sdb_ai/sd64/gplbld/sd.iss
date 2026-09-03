@@ -3348,10 +3348,8 @@ begin
   Result := 'The ssh-only confinement was NOT restored (code ' + IntToStr(Code) + '). ' +
             'Accounts SD Core created are meant to reach this computer only over ssh, ' +
             'and until this is put right they can also sign in at the console and over ' +
-            'Remote Desktop. Put it right from an ELEVATED PowerShell prompt:' +
-            #13#10#13#10 +
-            '    powershell -File "' + Script + '" -DataDir "' + Data + '"' +
-            #13#10#13#10;
+            'Remote Desktop. Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+            '    powershell -File "' + Script + '" -DataDir "' + Data + '"' + #13#10#13#10;
 end;
 
 function SecureCredStore: String;
