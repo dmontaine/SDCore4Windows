@@ -192,6 +192,21 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # compiled clean and failed at run time.  sd.iss's
                   # KeepOrDelete comment cites it by name.
                   'probe-taskdialog.iss',
+                  # 02 Sep 26 - PRE_RELEASE 143's shared stripper and its units.
+                  # Listed in the commit that creates them, under the rule the
+                  # note below states.  strip-comments.ps1 is dot-sourced by
+                  # this script and by test-retired-wording-units.ps1; neither
+                  # is installed, and nothing compiles either into sd.exe.
+                  'strip-comments.ps1', 'test-stripcomments-units.ps1',
+                  # 02 Sep 26 - AND test-retired-wording-units.ps1, WHICH HAS
+                  # BEEN MISSING SINCE IT WAS WRITTEN THIS MORNING for
+                  # PRE_RELEASE 121.  Found by editing it for 143: the tree went
+                  # STALE for a lint that ships nowhere, and the fix on offer was
+                  # a whole cycle.  Swept the directory rather than adding the
+                  # one name - every other gplbld script absent from this list
+                  # really is named in stage.py or sd.iss, so this was the only
+                  # omission, not the tip of a rotted list.
+                  'test-retired-wording-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
@@ -1001,10 +1016,27 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # verifier that calls this script then refuses.
                   'check-datatree-litter.ps1')
 
+# 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
+# quote-or-slash rule below failing in the one place it was documented.
+#
+# The rule reads a SEPARATOR as evidence of a ship line, and sd.iss:4577 quotes
+# "gplbld/probe-taskdialog.iss" - the rejected spelling - inside the paragraph
+# explaining that spelling it that way is what makes the probe read as shipping.
+# One match, in a comment, and the 21:28:26 cycle duly reported the probe as
+# watched again when C:\Program Files\SD does not contain it.  The fix at :4569
+# (name it with no separator) works; its own explanation cancelled it.
+#
+# SO THE FIX IS THE STRIPPER, NOT THE SENTENCE.  Rewording line 4577 would work
+# once and lose the explanation, and the next comment that quotes a path would
+# do it again - the class this tree has now paid for twice, 131 and 143.
+# strip-comments.ps1 is the shared copy; test-retired-wording-units.ps1 grew it
+# and now reads it from there too.
+. (Join-Path $PSScriptRoot 'strip-comments.ps1')
+
 $shipEvidence = ''
-foreach ($f in @('stage.py', 'sd.iss')) {
-    $p = Join-Path $PSScriptRoot $f
-    if (Test-Path $p) { $shipEvidence += (Get-Content -LiteralPath $p -Raw) }
+foreach ($f in @(@{ N = 'stage.py'; K = 'hash' }, @{ N = 'sd.iss'; K = 'iss' })) {
+    $p = Join-Path $PSScriptRoot $f.N
+    if (Test-Path $p) { $shipEvidence += (Get-StrippedText -Path $p -Kind $f.K) + "`n" }
 }
 # QUOTED OR PATH-PREFIXED, not merely mentioned.  The first version of this
 # matched the bare name and immediately reinstated assert-current.ps1, because
@@ -1013,6 +1045,32 @@ foreach ($f in @('stage.py', 'sd.iss')) {
 # ...\deny-logon.ps1" in sd.iss's Source line - so the quote or the separator is
 # the thing that distinguishes a reference from a remark.
 $shipsAs = { param($n) $shipEvidence -match ("[""'\\/]" + [regex]::Escape($n)) }
+
+# ***THE CONTROL, AND STRIPPING IS WHAT MAKES IT NECESSARY.***  The two callers
+# of the stripper err in OPPOSITE directions: for the wording lint an
+# over-strip hides a retired phrase, which its header calls the safe way to
+# fail; here an over-strip hides a real Source line, the file stays excluded,
+# and the tree reports CURRENT when it is stale - the expensive direction this
+# script's own header names.  So a name known to ship is asserted to survive the
+# strip, and a failure is fatal rather than a note: it means the evidence this
+# whole section reasons from has been eaten.
+#
+# BOTH CANARIES ARE REAL SHIP LINES, one per file and per syntax - adopt-account
+# is an sd.iss [Files] Source entry, deny-logon is a stage.py tuple member - so
+# a strip that breaks either syntax is caught by the one that uses it.
+$shipCanaries = @('adopt-account.ps1', 'deny-logon.ps1')
+$canaryMissing = @($shipCanaries | Where-Object { -not (& $shipsAs $_) })
+if ($shipEvidence.Trim().Length -eq 0 -or $canaryMissing.Count -gt 0) {
+    Write-Host ''
+    Write-Host 'assert-current: CANNOT ANSWER - the ship evidence is not readable.' -ForegroundColor Red
+    Write-Host ("  stripped evidence: {0} chars from stage.py and sd.iss" -f $shipEvidence.Trim().Length)
+    if ($canaryMissing.Count -gt 0) {
+        Write-Host ("  these ship and were NOT found after comment-stripping: {0}" -f ($canaryMissing -join ', '))
+        Write-Host '  strip-comments.ps1 is eating shipped text, so every exclusion below is'
+        Write-Host '  untrustworthy and a stale tree could report CURRENT.'
+    }
+    exit 2
+}
 
 $excluded   = @($neverShipped | Where-Object { -not (& $shipsAs $_) })
 $reinstated = @($neverShipped | Where-Object {      (& $shipsAs $_) })

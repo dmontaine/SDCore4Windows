@@ -173,117 +173,24 @@ $issPath = "$gplbld/sd.iss"
 if (Test-Path -LiteralPath $issPath) { $scriptFiles += @{ Path = $issPath; Name = 'sd.iss'; Strip = 'iss' } }
 foreach ($f in (Get-ChildItem -LiteralPath $gplbld -File -Filter '*.ps1')) {
     if ($f.Name -like 'test-*' -or $f.Name -like 'verify-*') { continue }
-    $scriptFiles += @{ Path = $f.FullName; Name = $f.Name; Strip = 'ps1' }
+    $scriptFiles += @{ Path = $f.FullName; Name = $f.Name; Strip = 'hash' }
 }
 
-# 02 Sep 26 - PRE_RELEASE 131 (a).  PASCAL { } COMMENTS, AND WHY "HAS A BRACE"
-# IS NOT THE TEST.  Inno's own CONSTANTS are braced too - {app}, {tmp}, {sys},
-# {#AppName}, a GUID - so a naive strip would delete shipped text and turn this
-# lint into a silent liar, which is the failure it exists to prevent.
-#
-# MEASURED ON THIS FILE RATHER THAN ASSUMED: inside [Code], every brace span
-# that CONTAINS WHITESPACE is prose and every constant has none.  So whitespace
-# is the test, and it errs toward NOT stripping - a space-less comment stays in
-# the corpus and can at worst raise a loud false positive, never hide shipped
-# wording.  {# is a preprocessor directive and is never a comment.
-#
-# The scope is [Code] only.  sd.iss:876 discusses "{" and "}" inside a ";"
-# comment ABOVE [Code], and that line is already stripped by the ";" rule - so
-# confining this to [Code] sidesteps it instead of parsing around it.
-function Remove-PascalComment([string]$line, [ref]$inComment) {
-    $out = ''
-    $i   = 0
-    while ($i -lt $line.Length) {
-        if ($inComment.Value) {
-            $j = $line.IndexOf('}', $i)
-            if ($j -lt 0) { return $out }
-            $inComment.Value = $false
-            $i = $j + 1
-            continue
-        }
-        $b = $line.IndexOf('{', $i)
-        if ($b -lt 0) { $out += $line.Substring($i); break }
-        $isDirective = (($b + 1) -lt $line.Length -and $line[$b + 1] -eq '#')
-        $close = $line.IndexOf('}', $b)
-        if ($close -ge 0) {
-            $inner = $line.Substring($b + 1, $close - $b - 1)
-            if ((-not $isDirective) -and $inner -match '\s') {
-                $out += $line.Substring($i, $b - $i)          # prose: drop it
-            } else {
-                $out += $line.Substring($i, $close - $i + 1)  # constant: keep it
-            }
-            $i = $close + 1
-        } else {
-            if ($isDirective) { $out += $line.Substring($i); break }
-            $out += $line.Substring($i, $b - $i)
-            $inComment.Value = $true                          # block comment opens
-            break
-        }
-    }
-    return $out
-}
-
-# 02 Sep 26 - THE SECOND PASCAL COMMENT FORM, AND LEAVING IT OUT WOULD HAVE BEEN
-# FIXING THE INSTANCE INSTEAD OF THE CLASS.  PRE_RELEASE 131 named "{ }" because
-# that is what was tripped over, but Inno Pascal has two, and sd.iss uses
-# "(* *)" for nearly every function header - 28 blocks of prose that were all
-# still in the corpus after the brace fix.  A retirement documented in one of
-# those would raise the same false positive the brace strip exists to prevent.
-#
-# THIS ONE NEEDS NO HEURISTIC, WHICH IS WHY IT IS SHORTER.  "(*" and "*)" are
-# unambiguous - no Inno constant looks like them - so unlike the brace case
-# there is nothing to tell apart and no whitespace test to get wrong.  It runs
-# as its own pass BEFORE the brace pass, so each is a state machine with one
-# delimiter to think about rather than one machine with two.
-function Remove-ParenStarComment([string]$line, [ref]$inComment) {
-    $out = ''
-    $i   = 0
-    while ($i -lt $line.Length) {
-        if ($inComment.Value) {
-            $j = $line.IndexOf('*)', $i)
-            if ($j -lt 0) { return $out }
-            $inComment.Value = $false
-            $i = $j + 2
-            continue
-        }
-        $b = $line.IndexOf('(*', $i)
-        if ($b -lt 0) { $out += $line.Substring($i); break }
-        $close = $line.IndexOf('*)', $b + 2)
-        $out += $line.Substring($i, $b - $i)
-        if ($close -ge 0) {
-            $i = $close + 2
-        } else {
-            $inComment.Value = $true
-            break
-        }
-    }
-    return $out
-}
+# 02 Sep 26 - THE STRIPPERS MOVED TO strip-comments.ps1, PRE_RELEASE_FIXES 143.
+# They were written here for 131 and then assert-current.ps1 turned out to need
+# the identical thing for the identical reason - a comment quoting the very
+# spelling its paragraph warns about.  ONE COPY, TWO CALLERS, the suite-only.ps1
+# precedent.  The reading below is unchanged; only where the functions live is.
+. (Join-Path $PSScriptRoot 'strip-comments.ps1')
 
 $scriptLineCount = 0
 $flatCount       = 0
 foreach ($sf in $scriptFiles) {
-    $n            = 0
-    $inCode       = $false
-    $inComment    = $false
-    $inParen      = $false
-    $issLines     = New-Object System.Collections.ArrayList
-    foreach ($rawLine in (Get-Content -LiteralPath $sf.Path)) {
-        $n++
-        $t = $rawLine
-        if ($sf.Strip -eq 'ps1') {
-            $i = $t.IndexOf('#'); if ($i -ge 0) { $t = $t.Substring(0, $i) }
-        } elseif ($sf.Strip -eq 'iss') {
-            if     ($t -match '^\s*\[Code\]')      { $inCode = $true }
-            elseif ($t -match '^\s*\[[A-Za-z]+\]') { $inCode = $false }
-            if ($t -match '^\s*;') { $t = '' }
-            else { $i = $t.IndexOf('//'); if ($i -ge 0) { $t = $t.Substring(0, $i) } }
-            if ($inCode) {
-                $t = Remove-ParenStarComment $t ([ref]$inParen)
-                $t = Remove-PascalComment    $t ([ref]$inComment)
-            }
-            [void]$issLines.Add(@{ Line = $n; Text = $t })
-        }
+    $issLines = New-Object System.Collections.ArrayList
+    foreach ($e in @(Get-StrippedLines -Path $sf.Path -Kind $sf.Strip)) {
+        $n = $e.Line
+        $t = $e.Text
+        if ($sf.Strip -eq 'iss') { [void]$issLines.Add(@{ Line = $n; Text = $t }) }
         if ($t.Trim().Length -gt 0) {
             [void]$corpus.Add(@{ File = $sf.Name; Line = $n; Text = $t })
             $scriptLineCount++
