@@ -1145,6 +1145,15 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 02 Sep 26 - PRE_RELEASE_FIXES 133.  DID ApplyAllowGroups ACTUALLY WRITE?
+    The closing box used to answer that from SshWasAbsent - "did this machine
+    already have a server" - while the ACTION is gated on "not TrueUpgrade".
+    The two conditions are independent, and an install where ssh was already
+    present with TrueUpgrade false satisfies both, which is exactly the
+    post-uninstall reinstall.  So the box told the reader ssh had been left
+    alone on a path where sshd_config had just been rewritten and sshd
+    restarted.  This records what happened instead of inferring it. }
+  AllowGroupsWrote: Boolean;
   { 31 Aug 26 - PRE_RELEASE_FIXES 88.  Was SD ALREADY INSTALLED when we
     arrived - not merely "is there a data tree"?
 
@@ -2241,6 +2250,10 @@ var
   Ps: String;
 begin
   Result := '';
+  { PRE_RELEASE_FIXES 133.  Cleared on EVERY entry, not once at start-up: the
+    only honest default is "it has not written", and a flag that survived a
+    path which exits early below would report a write that did not happen. }
+  AllowGroupsWrote := False;
 
   { 25 Aug 26 - A STAND-ALONE INSTALL DOES NOT TOUCH sshd_config AT ALL, and
     that is the promise the mode page makes in as many words: "no ssh server is
@@ -2306,8 +2319,18 @@ begin
       and since EVERY SD account is in sdusers a reader who believed it would
       both over-read who can reach the machine and add the wrong group when
       granting access. }
+    { PRE_RELEASE_FIXES 133 - THIS IS THE ONE BRANCH THAT WROTE.  Code 0 is the
+      only outcome where allow-ssh-groups.ps1 edited sshd_config and restarted
+      sshd; code 2 explicitly changed nothing, and the else branch failed and
+      left the file as it was.  So the flag is set HERE and nowhere else.
+      THE begin/end IS LOAD-BEARING: this arm was a single statement and the
+      else-chain below binds to it, so a second statement without the block is
+      a compile error - caught by check-iss.ps1 rather than by a cycle. }
+  begin
+    AllowGroupsWrote := True;
     Result := 'ssh is now limited to members of "sdssh" and the administrators group. ' +
-              'Any existing sshd_config was kept as sshd_config.before-sd.'
+              'Any existing sshd_config was kept as sshd_config.before-sd.';
+  end
   else if Code = 2 then
     { The common case on a machine that has just been told to restart: sshd
       writes its config on first start, so there is nothing to edit yet. }
@@ -2593,12 +2616,31 @@ begin
     version, and claiming SD kept its hands off the rule would now be a lie. }
   if not SshWasAbsent then
   begin
-    Result := 'This machine already had an OpenSSH server. SD Core did not install, restart or ' +
-              'reconfigure one, and it did not change its configuration. Who may reach it ' +
-              'was set from the ssh box on the tasks page, which started out matching this ' +
-              'computer''s existing firewall rule - so if you left it alone, nothing about ' +
-              'that changed either. SD Core accounts sign in over ssh, so check that yours will ' +
-              'accept them.' + #13#10#13#10;
+    { 02 Sep 26 - PRE_RELEASE_FIXES 133.  THE WORDING NOW COMES FROM WHAT
+      ApplyAllowGroups DID, NOT FROM WHO INSTALLED THE SERVER.  This branch is
+      selected by "not SshWasAbsent" and used to assert flatly that SD "did not
+      change its configuration" - but the write is gated on "not TrueUpgrade",
+      an independent condition, and an install where ssh was already present
+      with TrueUpgrade false satisfies both.  That is the post-uninstall
+      reinstall exactly, and on it the reader was told ssh had been left alone
+      while sshd_config had just been rewritten and sshd restarted.
+      118's own lesson, in its own words: "A list like this is a claim; when a
+      gate is added the claim has to move with it." Here the claim was a
+      premise in a message and it never moved. }
+    if AllowGroupsWrote then
+      Result := 'This machine already had an OpenSSH server. SD Core did not install or ' +
+                'restart the server itself - but it DID set who may sign in over ssh, by ' +
+                'writing an AllowGroups line into sshd_config and restarting the ssh ' +
+                'service to apply it. Your previous file was kept as ' +
+                'sshd_config.before-sd. Any ssh sessions open at that moment were dropped. ' +
+                'SD Core accounts sign in over ssh, so check that yours will accept them.' + #13#10#13#10
+    else
+      Result := 'This machine already had an OpenSSH server. SD Core did not install, restart or ' +
+                'reconfigure one, and it did not change its configuration. Who may reach it ' +
+                'was set from the ssh box on the tasks page, which started out matching this ' +
+                'computer''s existing firewall rule - so if you left it alone, nothing about ' +
+                'that changed either. SD Core accounts sign in over ssh, so check that yours will ' +
+                'accept them.' + #13#10#13#10;
     Exit;
   end;
 
@@ -3662,7 +3704,12 @@ begin
     if not TrueUpgrade then
     begin
       SshFw := ApplySshFirewall;
-      SshMsg := SshReport;
+      { 02 Sep 26 - SshReport IS NO LONGER CALLED HERE, PRE_RELEASE_FIXES 133.
+        It ran BEFORE ApplyAllowGroups and therefore could not know whether the
+        write had happened - which is how it came to answer from SshWasAbsent
+        instead.  It is called below, immediately after that step, and SshMsg
+        has exactly one other reader (the closing box), so moving it changes
+        nothing else. }
     end
     else
     begin
@@ -3741,7 +3788,14 @@ begin
       missing on a tree that lost them.  The ordering note above still holds -
       the seeding step must precede the AllowGroups write whenever both run. }
     if not TrueUpgrade then
+    begin
       SshLimit := ApplyAllowGroups;
+      { PRE_RELEASE_FIXES 133 - AND STRICTLY AFTER IT.  SshReport's
+        "already had a server" branch now reports whether AllowGroups actually
+        wrote, so calling it before this line would read a flag that is still
+        False and reproduce the very claim this fixes. }
+      SshMsg := SshReport;
+    end;
 
     { AN UPGRADE'S DICTIONARIES, and a no-op on a first install.  See the
       function: it is here rather than earlier because every ACL step above
@@ -4557,6 +4611,49 @@ begin
   Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+{ PRE_RELEASE_FIXES 140, owner's ruling 2 Sep 2026.  REMOVE sdusers WHEN NO DATA
+  TREE SURVIVES THIS UNINSTALL - not when a particular button was pressed.
+
+  WHAT WENT WRONG, MEASURED END TO END ON GUEST Windows 11 - Test 10.  Delete
+  the database, keep the accounts, reinstall: every former SD account came back
+  in sdusers AND in sdssh, not in sdsshonly, and not in the SD register at all.
+  So it could reach the machine over ssh, and the console and Remote Desktop
+  denials no longer applied to it - sdsshonly carries those rights ON THE GROUP,
+  and an empty group denies nobody.  The reinstall does not merely fail to
+  restore the confinement, it POSITIVELY GRANTS ssh back: sync-route-groups.ps1
+  seeds sdssh from sdusers, correctly for its own case, and the account never
+  left sdusers.
+
+  THE OLD COMMENT NAMED THE CONDITION IT DID NOT TEST.  sdusers was kept
+  unconditionally, justified as "a data tree the user chose to keep is ACL'd to
+  it, so deleting the group would orphan the permissions on their own database"
+  - a reason that is conditional on the tree surviving, applied by code that was
+  not.  With the database deleted there is no tree to orphan, and the group's
+  only remaining effect is to hand the next install a seed list of accounts that
+  no longer have SD accounts.
+
+  ***AND GATING ON THE ANSWER ALONE IS NOT ENOUGH, WHICH IS WHY THIS TAKES A
+  PARAMETER RATHER THAN READING THE BUTTON.***  Three Exits stand between
+  RemoveSdGroups and the question - "the tree is already gone", UninstallSilent,
+  and then KeepOrDelete - so a machine whose tree was deleted by hand, or by an
+  uninstall that failed half way, never reaches the question and would keep the
+  group with no button ever pressed.  "Is there a tree afterwards" covers all
+  three, and gets the silent case right for free: a silent uninstall keeps the
+  database, so it keeps the group.
+
+  IT NARROWS RATHER THAN CLOSES, AND THE OWNER WAS TOLD SO BEFORE HE CHOSE.  The
+  Windows accounts themselves stay - enabled, with their passwords, in their
+  sdu_ groups.  What goes is the seed list that hands them ssh back on the next
+  install.  They lose the route in, not their existence. }
+procedure RemoveSdUsersGroup;
+var
+  Net: String;
+  Code: Integer;
+begin
+  Net := ExpandConstant('{sys}\net.exe');
+  Exec(Net, 'localgroup sdusers /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 { THE TWO DESTRUCTIVE QUESTIONS ASK WITH LABELLED CHOICES, NOT Yes/No.
   Owner's ruling, 2 Sep 2026, on PRE_RELEASE_FIXES 139: "if possible label the
   buttons Keep and Delete, no ambiguity."  He had just answered both prompts on
@@ -4708,9 +4805,12 @@ begin
     everything below this point can Exit early. }
   RemoveSdGroups;
 
-  { The sdusers group is deliberately NOT removed.  CREATE.ACCOUNT adds every
-    SD user to it, and a data tree the user chose to keep is ACL'd to it, so
-    deleting the group would orphan the permissions on their own database. }
+  { sdusers is NOT removed here, and that is now a decision about WHEN rather
+    than whether.  CREATE.ACCOUNT adds every SD user to it, and a data tree the
+    user chose to keep is ACL'd to it, so deleting the group would orphan the
+    permissions on their own database.  That reason holds only while a tree
+    survives, so the removal is made below at the two points where none does -
+    see RemoveSdUsersGroup, PRE_RELEASE_FIXES 140. }
 
   { AND THE ssh FIREWALL RULE IS DELIBERATELY NOT PUT BACK, which is worth
     stating because RemoveAllowGroups two procedures up sets the opposite
@@ -4727,7 +4827,15 @@ begin
 
   DataPath := ExpandConstant('{#DataDir}');
   if not DirExists(DataPath) then
+  begin
+    { PRE_RELEASE_FIXES 140 - THE PATH THAT NEVER REACHES THE QUESTION.  The
+      tree is already gone, deleted by hand or by an uninstall that failed half
+      way, so nothing below runs and no button is ever pressed.  There is no
+      database left for sdusers to hold permissions on, and leaving it seeds the
+      next install's sdssh with accounts that no longer exist in SD. }
+    RemoveSdUsersGroup;
     Exit;
+  end;
 
   { A SILENT UNINSTALL MUST NEVER DELETE THE DATABASE.  An unattended removal
     that takes the user's accounts with it is the worst possible default, and
@@ -4753,6 +4861,15 @@ begin
       path, and says to treat the database as gone. }
     DelFailed := not DelTree(DataPath, True, True, True);
     RecordDatabaseChoice(DataPath, True, DelFailed);
+    { PRE_RELEASE_FIXES 140.  The reader chose Delete, so no tree survives for
+      sdusers to hold permissions on.
+
+      ON THE PARTIAL-FAILURE PATH TOO, DELIBERATELY.  DelFailed means some of
+      the tree resisted, and RecordDatabaseChoice tells the reader to treat the
+      database as gone - so keeping the group would preserve a seed list for a
+      database they have been told is not coming back, which is the worse of the
+      two errors.  The group is recreated by the next install either way. }
+    RemoveSdUsersGroup;
   end
   else
     { THE BRANCH THAT DID NOT EXIST, and its absence is most of 139: a "keep"
