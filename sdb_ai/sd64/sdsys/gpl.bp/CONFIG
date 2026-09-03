@@ -169,7 +169,7 @@ report.params:
 *   the administrative superset that becomes SDSYS's VOC; newvoc is what
 *   CREATEA copies into every account.  The licence is 44 KB, so in newvoc it
 *   would land in every account's VOC and be copied again by every
-*   UPDATE.ACCOUNT.  gplbld/mkvocdoc.py generates both records FROM the files
+*   UPDATE.ACCOUNTS.  gplbld/mkvocdoc.py generates both records FROM the files
 *   that still ship in the data tree, so the two cannot drift; --check asserts
 *   it.
 *

@@ -1492,7 +1492,7 @@ more.args:
 *   them gate themselves: $CREATEA (line 109 of this file), $DELACC, $MODIFYA,
 *   $GRANTA and $UNLOCK each open with kernel(K$ADMINISTRATOR, -1) and stop with
 *   sysmsg(2001).  TWO OF THE NINE DO NOT, and are on the list anyway because
-*   they are part of the administrative set the ruling names: UPDATE.ACCOUNT is
+*   they are part of the administrative set the ruling names: UPDATE.ACCOUNTS is
 *   CPROC internal verb 15 and tests nothing, and ENCRYPT.FIELD points at
 *   $CRYPTO, which does not exist in this tree at all - it is as broken in
 *   SDSYS's own VOC as it will be here.

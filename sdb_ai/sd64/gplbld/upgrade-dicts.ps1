@@ -26,7 +26,7 @@
 # dictionary item an administrator added survives.  Copying the shipped
 # dictionary over theirs would destroy it silently, which is the same argument
 # that keeps cat and accounts on stage.py's SDSYS_PRESERVE.  It is
-# UPDATE.ACCOUNT's shape, which the owner already ruled correct for VOC.
+# UPDATE.ACCOUNTS's shape, which the owner already ruled correct for VOC.
 #
 # THE INPUT HAS TO BE INSIDE THE DATA TREE WHILE IT RUNS.  WRITE_INSTALL_DICTS
 # reads @sdsys:"/gplbld/FILES_DICTS", a hard-coded path, so this places the file

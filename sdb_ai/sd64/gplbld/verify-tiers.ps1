@@ -119,7 +119,7 @@
 # fault in either list moves one of them.  The targeted LIST VOC checks below
 # then say WHICH records moved, which a count cannot.
 #
-# THE LAST CHECK IS THE ONE THE TIER RECORD EXISTS FOR.  UPDATE.ACCOUNT re-runs
+# THE LAST CHECK IS THE ONE THE TIER RECORD EXISTS FOR.  UPDATE.ACCOUNTS re-runs
 # LOGIN's update.voc, which before 17 Aug 2026 re-copied the whole of NEWVOC and
 # handed a standard account its compiler and editors back.  It is ungated, and
 # the same routine is reached from an ordinary login by the $RELEASE prompt, so
@@ -130,7 +130,7 @@
 # test either, because the logto check sits after CPROC's elevated bypass and
 # this script refuses to run unelevated.  Section 6 covers the record, the
 # write-once guard on ACC$PRIOR.TIER that PRE_RELEASE 21 left unmeasured, and
-# the VOC across UPDATE.ACCOUNT.  It says out loud that the doors are untested
+# the VOC across UPDATE.ACCOUNTS.  It says out loud that the doors are untested
 # rather than scoring them.  The reasoning is at the section.
 #
 # DRIVING SD FROM POWERSHELL has two traps, both from verify-createaccount.ps1
@@ -262,7 +262,7 @@ $Withheld = @(
 # SHIPPED record is compared against rather than trusted.
 $AdminVerbs = @(
     # A1 - account and grant administration
-    'create.account','delete.account','modify.account','update.account','clean.account',
+    'create.account','delete.account','modify.account','update.accounts','clean.account',
     'grant','revoke','list.grants','unlock','modify.password',
     # A2 - the machine's network services
     'remote.api','remote.ssh','ssh.server',
@@ -547,15 +547,15 @@ foreach ($t in $Tiers) {
 
 # ---------------------------------------------------------------------------
 Write-Output ''
-Write-Output '=== 5. UPDATE.ACCOUNT must not give the standard account its verbs back ==='
+Write-Output '=== 5. UPDATE.ACCOUNTS must not give the standard account its verbs back ==='
 
 # The whole reason ACC$TIER exists.  Before 17 Aug 2026 this restored all of
 # them - the count has moved since and the sentence is about the behaviour.
 $std  = $Tiers[0]
-$text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNT', 'COUNT VOC',
+$text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNTS', 'COUNT VOC',
                     ("LIST VOC " + (($Withheld | ForEach-Object { "'" + $_ + "'" }) -join ' ')))
-Note 'standard COUNT VOC after UPDATE.ACCOUNT' $std.Count (Get-VocCount $text)
-Note 'standard withheld still MISSING after UPDATE.ACCOUNT' $Withheld.Count ((Get-Missing $text $Withheld) | Measure-Object).Count
+Note 'standard COUNT VOC after UPDATE.ACCOUNTS' $std.Count (Get-VocCount $text)
+Note 'standard withheld still MISSING after UPDATE.ACCOUNTS' $Withheld.Count ((Get-Missing $text $Withheld) | Measure-Object).Count
 
 # ---------------------------------------------------------------------------
 Write-Output ''
@@ -583,7 +583,7 @@ Write-Output '=== 6. SUSPENDED: the record, the write-once guard, and the VOC ==
 #                   that guard is the whole write-once mechanism now that the
 #                   unreachable inner test is deleted, and nothing measured it
 #   the VOC         "SUSPENDED denies access and changes nothing else"
-#                   (MODIFYA:98).  UPDATE.ACCOUNT on a suspended account must
+#                   (MODIFYA:98).  UPDATE.ACCOUNTS on a suspended account must
 #                   resolve SUSPENDED to ACC$PRIOR.TIER (LOGIN:283, :1212) or
 #                   a release update strips a suspended account's verbs - the
 #                   exact failure section 5 exists for, on the tier that has
@@ -650,13 +650,13 @@ Note ($susp.Name + ' ACC$PRIOR.TIER survived the second suspend') 'PROGRAMMER' `
 $text = Invoke-SD @(('LOGTO ' + $suspName), 'COUNT VOC')
 Note 'elevated LOGTO enters a suspended account (CPROC:3765)' $susp.Count (Get-VocCount $text)
 
-# AND UPDATE.ACCOUNT MUST NOT STRIP IT.  Section 5 asks this of a standard
+# AND UPDATE.ACCOUNTS MUST NOT STRIP IT.  Section 5 asks this of a standard
 # account; a suspended one is the harder case, because SUSPENDED is not a VOC
 # tier and update.voc has to resolve it to field 6 to know what to copy.
-$text = Invoke-SD @(('LOGTO ' + $suspName), 'UPDATE.ACCOUNT', 'COUNT VOC',
+$text = Invoke-SD @(('LOGTO ' + $suspName), 'UPDATE.ACCOUNTS', 'COUNT VOC',
                     ("LIST VOC " + (($Withheld + $AdminVerbs |
                         ForEach-Object { "'" + $_ + "'" }) -join ' ')))
-Note 'suspended COUNT VOC after UPDATE.ACCOUNT' $susp.Count (Get-VocCount $text)
+Note 'suspended COUNT VOC after UPDATE.ACCOUNTS' $susp.Count (Get-VocCount $text)
 # 28 Aug 26 - THE COUNTS IN THESE TWO LABELS ARE INTERPOLATED, NOT TYPED.  They
 # read "the 42 withheld" and "the 21 administration verbs" when they were
 # written, and the 00:53:34 run printed "the 21 administration verbs are still

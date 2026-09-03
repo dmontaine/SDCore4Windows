@@ -1642,7 +1642,7 @@ $endif
                      int.status,                 ;* 12  STATUS
                      int.set.date,               ;* 13  SET.DATE
                      int.help,                   ;* 14  HELP
-                     int.update.account,         ;* 15  UPDATE.ACCOUNT
+                     int.update.accounts,         ;* 15  UPDATE.ACCOUNTS
                      int.who,                    ;* 16  WHO
                      int.logto,                  ;* 17  LOGTO
                      int.if,                     ;* 18  IF
@@ -3278,9 +3278,9 @@ int.logout:
    return
 
 *****************************************************************************
-* INT.UPDATE.ACCOUNT    -  UPDATE.ACCOUNT (Internal verb 30)
+* INT.UPDATE.ACCOUNTS    -  UPDATE.ACCOUNTS (Internal verb 30)
 
-int.update.account:
+int.update.accounts:
    display sysmsg(5200) ;* Copying records from NEWVOC to VOC...
    i = '$LOGIN'
    call @i(j,2)

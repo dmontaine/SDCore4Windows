@@ -290,7 +290,7 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
    if mode = 2 or mode = 3 then     ;* Just doing a VOC upgrade or install
       if mode = 2 then              ;* VOC update
-* 17 Aug 26 Windows port - this is UPDATE.ACCOUNT (CPROC internal verb 15), which
+* 17 Aug 26 Windows port - this is UPDATE.ACCOUNTS (CPROC internal verb 15), which
 *   is ungated, so the account's own tier decides what it may copy back in.
 *   PROJECT_STATUS.md section 8.
          tier.acc.name = @who
@@ -917,7 +917,7 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   "/dev/cons0".  An ssh session is a pty and answers the same way.
 *
 *   A PHANTOM IS EXEMPT because there is nobody to ask, and mode is tested
-*   because mode 2 is UPDATE.ACCOUNT copying a VOC rather than a login.  AN API
+*   because mode 2 is UPDATE.ACCOUNTS copying a VOC rather than a login.  AN API
 *   SESSION CANNOT REACH THIS AT ALL: linuxio.c:112 gives it $APISRVR as its
 *   command processor instead of $CPROC, and $CPROC is the only caller of this
 *   routine at mode 0.
@@ -985,7 +985,7 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   it comes from the user table and CPROC handles it in a separate branch.  An
 *   INTERNAL session is exempt because that is the install path, which sd.c
 *   gates on its own.  Mode 0 for the same reason as the block above: mode 2 is
-*   UPDATE.ACCOUNT copying a VOC, not a login.
+*   UPDATE.ACCOUNTS copying a VOC, not a login.
 *   24 Aug 26 - batch.command IS NOW SET BY THE BLOCK ABOVE, under the same
 *   guard, because the password exemption added that day needs it too.  The
 *   assignment moved; nothing else here changed.
@@ -1318,7 +1318,7 @@ update.voc:
 *   re-copied the whole of NEWVOC and handed them straight back - the compiler,
 *   the cataloguer, both editors, COPY and DELETE.CATALOG.
 *
-*   AND IT IS REACHED WITHOUT ANY PRIVILEGE.  Two ways: UPDATE.ACCOUNT, which is
+*   AND IT IS REACHED WITHOUT ANY PRIVILEGE.  Two ways: UPDATE.ACCOUNTS, which is
 *   CPROC internal verb 15 and tests nothing, and - worse, because it needs no
 *   verb at all - the $RELEASE test below, which asks any user "Update VOC to new
 *   release?" whenever the account's release level differs from SD.REV.STAMP.
@@ -1347,7 +1347,7 @@ update.voc:
 
 *     The list records are never themselves VOC entries, whichever tier this is.
 *     Before this they were copied in like any other record, so any account that
-*     ran UPDATE.ACCOUNT acquired a TIER.OMIT.STANDARD entry in its VOC.  Inert -
+*     ran UPDATE.ACCOUNTS acquired a TIER.OMIT.STANDARD entry in its VOC.  Inert -
 *     their descriptions start with T, which is not a VOC type letter - but it
 *     had no business being there.
 * 18 Aug 26 Windows port - CASE INSENSITIVE, PROJECT_STATUS.md 5.12 (b).  id
@@ -1510,7 +1510,7 @@ accept.without.query:
 *
 *   ***FIXING ONLY CREATEA WOULD HAVE LOOKED RIGHT AND UNDONE ITSELF.***  The
 *   other two sites are in CREATEA and build an account's VOC once, at
-*   creation.  THIS one runs on every UPDATE.ACCOUNT, so an account created
+*   creation.  THIS one runs on every UPDATE.ACCOUNTS, so an account created
 *   correctly would have lost its descriptions again the first time anybody
 *   refreshed it - and the refresh is exactly what the closing box tells an
 *   administrator to run after an upgrade.
@@ -1577,7 +1577,7 @@ get.acc.tier:
 *        the tier it displaced.  The same substitution as the walk above, and
 *        it is here as well as there because these are two independent call
 *        sites and neither can see the other's.  A suspended account cannot
-*        reach LOGIN at all, but UPDATE.ACCOUNT can be run in an account that
+*        reach LOGIN at all, but UPDATE.ACCOUNTS can be run in an account that
 *        was suspended and un-suspended since, and the walk above reaches every
 *        account whatever its state.
          if upcase(update.voc.tier) = 'SUSPENDED' then

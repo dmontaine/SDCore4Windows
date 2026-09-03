@@ -23,7 +23,7 @@
 # what CREATEA copies into every account it makes.  A record placed here and
 # NOT named in TIER.ADD.ADMINISTRATOR reaches SDSYS only.  The licence is
 # 44 KB - in newvoc it would be copied into every account's VOC, and again by
-# every UPDATE.ACCOUNT, for text nobody reads twice.
+# every UPDATE.ACCOUNTS, for text nobody reads twice.
 #
 import os
 import sys

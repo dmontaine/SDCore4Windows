@@ -1621,11 +1621,11 @@ begin
     'runs from any directory are all left exactly as they are now.' + NewLine + NewLine +
     'NEW COMMANDS DO NOT APPEAR IN AN EXISTING ACCOUNT ON THEIR OWN.' + NewLine +
     'An upgrade replaces the shipped vocabulary but does not rebuild the one' + NewLine +
-    'each account is using. Sign in and run this ONCE IN EACH ACCOUNT that' + NewLine +
-    'needs the new commands, SDSYS included:' + NewLine + NewLine +
-    Space + 'update.account' + NewLine + NewLine +
-    'It takes no argument and refreshes the account you are in, keeping to' + NewLine +
-    'that account''s tier.' + NewLine + NewLine +
+    'each account is using. In SDSYS, as an administrator, run this ONCE and' + NewLine +
+    'answer Y when it offers to update every registered account:' + NewLine + NewLine +
+    Space + 'update.accounts' + NewLine + NewLine +
+    'It takes no argument, and it keeps to each account''s own tier - an' + NewLine +
+    'account is never given a command its tier does not allow.' + NewLine + NewLine +
     'To change the settings above, in SDSYS as an administrator:' + NewLine + NewLine +
     Space + 'remote.ssh on | off' + NewLine +
     Space + 'remote.api on | local | off' + NewLine +
@@ -2655,7 +2655,7 @@ end;
   IT MERGES RATHER THAN REPLACING, which is why it is that program and not a
   file copy: WRITE_INSTALL_DICTS writes one record at a time and clears
   nothing, so a dictionary item an administrator added survives.  That is
-  UPDATE.ACCOUNT's shape, which is already the ruling for VOC.
+  UPDATE.ACCOUNTS's shape, which is already the ruling for VOC.
 
   ORDERING.  After the four ACL steps above, deliberately: each of them grants
   BUILTIN\Administrators full control on the path it locks, so an elevated
@@ -3668,9 +3668,10 @@ begin
                 'FIRST, GIVE EACH ACCOUNT THE NEW COMMANDS. An upgrade replaces the ' +
                 'shipped vocabulary but does not rebuild the one each account is using, so ' +
                 'a command added by this release cannot be typed until you refresh it. ' +
-                'Sign in and run this once in each account that needs them, SDSYS ' +
-                'included - it takes no argument and keeps to that account''s tier:' + #13#10#13#10 +
-                '    update.account' + #13#10#13#10 +
+                'In SDSYS, as an administrator, run this once and answer Y when it ' +
+                'offers to update every registered account - it takes no argument and ' +
+                'keeps to each account''s own tier:' + #13#10#13#10 +
+                '    update.accounts' + #13#10#13#10 +
                 'THEN, to change the settings above, in SDSYS as an administrator:' + #13#10#13#10 +
                 '    remote.ssh on | off           who may reach ssh' + #13#10 +
                 '    remote.api on | local | off   whether the API is provided, and to whom' + #13#10 +

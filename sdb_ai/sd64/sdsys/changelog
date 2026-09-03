@@ -5,8 +5,21 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+02 Sep 26  THE VERB IS NOW update.accounts, NOT update.account. IT ALWAYS
+           UPDATED MORE THAN ONE.
+
+           Run in SDSYS as an administrator it refreshes SDSYS and then offers
+           to refresh every registered account, which is what it was doing
+           under the old name. The plural says so.
+
+           YOU NO LONGER NEED TO VISIT EACH ACCOUNT. The closing page used to
+           say "sign in and run this once in each account". That was never
+           necessary, and it could not be done at all in a STANDARD or
+           PROGRAMMER account, because the verb belongs to administrators. One
+           run in SDSYS, answering Y, does all of them.
+
 02 Sep 26  YOU CAN NOW PROTECT A VOC RECORD YOU HAVE CHANGED. PUT [locked] IN
-           FIELD 1 AND update.account WILL LEAVE IT ALONE.
+           FIELD 1 AND update.accounts WILL LEAVE IT ALONE.
 
            An upgrade refreshes each account's VOC from the shipped one, which
            is how you get commands added by a new release. Until now that also
@@ -14,14 +27,14 @@ Entries are newest first, by date, until there is a version to attach them to.
            said and no way to prevent it.
 
            Add [locked] anywhere in field 1 of the record, AFTER the type code,
-           and update.account will never replace it. The first character of
+           and update.accounts will never replace it. The first character of
            field 1 is the type code itself - two for a P - so [locked] must not
            come first: write "V [locked]" and not "[locked]V". Upper or lower
            case both work.
 
            THE RECORD THEN KEEPS THE VERSION YOU HAVE, INCLUDING ANY FAULT WE
            HAVE SINCE CORRECTED IN IT. That is the point of the lock and it is
-           your decision, so update.account tells you which records it skipped
+           your decision, so update.accounts tells you which records it skipped
            every time it runs. Remove [locked] and run it again to take the new
            version.
 
@@ -33,7 +46,7 @@ Entries are newest first, by date, until there is a version to attach them to.
            honoured on every other kind of record.
 
            IF YOU NEED A VERB TO BEHAVE DIFFERENTLY, ADD YOUR OWN. Give it a
-           name SD does not ship and model it on the system one. update.account
+           name SD does not ship and model it on the system one. update.accounts
            only ever visits records SD ships, so a verb of your own is never
            touched and needs no [locked] marker.
 
@@ -47,7 +60,7 @@ Entries are newest first, by date, until there is a version to attach them to.
 
            They are kept now. An account created from this release on will read
            the way SDSYS always has. Existing accounts pick the descriptions up
-           the next time update.account runs in them.
+           the next time update.accounts runs in them.
 
 02 Sep 26  SD NO LONGER OFFERS TO SET "NO PASSWORD FOR NOW". A PASSWORD IS
            REQUIRED, AND THE MESSAGES NOW SAY SO.
@@ -1570,7 +1583,7 @@ Entries are newest first, by date, until there is a version to attach them to.
            finishing quietly, and upgrade-dicts.log in C:\ProgramData\SD says
            what happened.
 
-           ONE THING YOU STILL DO YOURSELF.  Run  update.account  in each
+           ONE THING YOU STILL DO YOURSELF.  Run  update.accounts  in each
            account after upgrading, to bring that account's VOC up to date
            with the new release.  That is what the verb is for, and this
            changelog has been saying so for years.
@@ -2844,7 +2857,7 @@ Entries are newest first, by date, until there is a version to attach them to.
              programs and paragraphs keep working.
            * EXISTING ACCOUNTS KEEP THE OLD SPELLING until their VOC is
              updated - answer Y to "Update VOC to new release?" or run
-             UPDATE.ACCOUNT.  Both spellings work either way.
+             UPDATE.ACCOUNTS.  Both spellings work either way.
            * DELETE.FILE still refuses to delete your VOC, whichever case you
              type.
 
@@ -2890,7 +2903,7 @@ Entries are newest first, by date, until there is a version to attach them to.
                  Device    : windows
            * EXISTING ACCOUNTS KEEP THEIR OLD SETTING until their VOC is
              updated, which happens when you answer Y to "Update VOC to new
-             release?" or run UPDATE.ACCOUNT.  Until then, TERM WINDOWS sets
+             release?" or run UPDATE.ACCOUNTS.  Until then, TERM WINDOWS sets
              it for the session.
            * You can still choose your own - TERM WYSE60, say.  All 62
              definitions are still shipped.
@@ -2987,7 +3000,7 @@ Entries are newest first, by date, until there is a version to attach them to.
            * EXISTING ACCOUNTS ARE NOT TOUCHED.  An account created before this
              keeps the upper-case names in its VOC and goes on working.  There
              is nothing to migrate.  An account you create now, or one you
-             refresh with UPDATE.ACCOUNT, gets the new spelling.
+             refresh with UPDATE.ACCOUNTS, gets the new spelling.
            * The account tiers are unaffected: a standard account is still
              refused the same 18 capabilities, and an administrator still gets
              the same 10 administration verbs.
@@ -3212,7 +3225,7 @@ Entries are newest first, by date, until there is a version to attach them to.
              default for one account.
            * EXISTING ACCOUNTS KEEP LINUX until their VOC is updated, which
              happens when you answer Y to "Update VOC to new release?" or run
-             UPDATE.ACCOUNT.  The release number changed in this same version,
+             UPDATE.ACCOUNTS.  The release number changed in this same version,
              so you will be asked anyway on your next sign-in.
 
 18 Aug 26  The release is W1.0-0.  The login header now reads "version W1.0-0".
@@ -3371,7 +3384,7 @@ Entries are newest first, by date, until there is a version to attach them to.
 17 Aug 26  An SD administrator's account now holds the administration verbs,
            and the tier an account was given is remembered.
            * CREATE.ACCOUNT USER <name> ADMINISTRATOR now puts CREATE.ACCOUNT,
-             DELETE.ACCOUNT, MODIFY.ACCOUNT, UPDATE.ACCOUNT, GRANT, REVOKE,
+             DELETE.ACCOUNT, MODIFY.ACCOUNT, UPDATE.ACCOUNTS, GRANT, REVOKE,
              LIST.GRANTS, UNLOCK and ENCRYPT.FIELD into the account's own VOC.
              Until now they were in SDSYS alone, so an administrator had to
              LOGTO SDSYS before they could administer anything.
@@ -3382,7 +3395,7 @@ Entries are newest first, by date, until there is a version to attach them to.
              dictionaries or start background programs, which is work for a
              programmer.
            * WHICH TIER AN ACCOUNT WAS CREATED AS IS NOW RECORDED, in field 5
-             of its record in the ACCOUNTS file.  Say UPDATE.ACCOUNT, or
+             of its record in the ACCOUNTS file.  Say UPDATE.ACCOUNTS, or
              answer Yes when a new release offers to update your VOC, and a
              standard account no longer gets the withheld verbs back.  That
              was a way round the whole thing and needed no privilege.

@@ -180,7 +180,7 @@ upper. What it changes is what SD prints back: `CT VOC LIST` answers
 | `TERM` | Set or display terminal window size |
 | `TIME` | Display date and time |
 | `UNLOCK` | Unlock a record or file |
-| `UPDATE.ACCOUNT` | Update VOC items from NEWVOC |
+| `UPDATE.ACCOUNTS` | Update VOC items from NEWVOC |
 | `WHO` | Display user number and account name |
 | `WHERE` | Display pathname of current account |
 

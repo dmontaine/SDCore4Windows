@@ -88,6 +88,20 @@ $RETIRED = @(
     @{ Ref = '130e'
        Retired     = 'used only at this computer from a session run as administrator'
        Replacement = 'cannot be used AT ALL' }
+    # 70 - the verb is update.accountS, and the closing box no longer tells the
+    # reader to visit every account by hand.  One run in SDSYS, answering Y,
+    # updates all of them - measured 2 Sep 2026 on guest Test 10, where one
+    # update in SDSYS refreshed don, sdsys AND a PROGRAMMER that does not even
+    # own the verb.
+    #
+    # ***THE BARE OLD NAME CANNOT BE REGISTERED AND THAT IS NOT AN OVERSIGHT.***
+    # Matching is substring, so "update.account" is inside "update.accounts" -
+    # registering it would make this lint fail against its own replacement, for
+    # ever.  The retired INSTRUCTION is the distinguishing phrase, and it is the
+    # part that was actually wrong.
+    @{ Ref = '70'
+       Retired     = 'Sign in and run this once in each account'
+       Replacement = 'answer Y when it offers to update every registered account' }
     # 139 - the uninstaller's two destructive questions no longer answer to
     # Yes/No: their choices are labelled Keep and Delete (sd.iss KeepOrDelete).
     # REGISTERED BECAUSE THE OLD SENTENCE IS STILL CORRECT-SOUNDING PROSE - it

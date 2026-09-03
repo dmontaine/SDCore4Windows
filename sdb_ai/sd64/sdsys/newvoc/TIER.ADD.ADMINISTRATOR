@@ -2,7 +2,7 @@ This record is not a VOC entry - it lists what an ADMINISTRATOR account gets on 
 create.account
 delete.account
 modify.account
-update.account
+update.accounts
 clean.account
 grant
 revoke

@@ -323,7 +323,7 @@
       *   the first time the release stamp moved and the user answered Y to
       *   "Update VOC to new release?" (LOGIN, the $RELEASE test).  That prompt
       *   needs no privilege, and the verb reaching the same routine deliberately,
-      *   UPDATE.ACCOUNT, is CPROC internal verb 15 and is ungated.  LOGIN now
+      *   UPDATE.ACCOUNTS, is CPROC internal verb 15 and is ungated.  LOGIN now
       *   reads this field and applies the omit list CREATEA applied.
       *
       *   FIELD 5 BECAUSE FIELD 4 IS POISONED, per the note above.  This is the
