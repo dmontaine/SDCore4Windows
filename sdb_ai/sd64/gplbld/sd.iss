@@ -1184,6 +1184,27 @@ var
     not.  Left False in that case and never read; the [Tasks] Checks that use
     it all carry "not SshServerAbsent" first. }
   SshRuleWasOpen: Boolean;
+  { 03 Sep 26 - PRE_RELEASE_FIXES 146.  Was there an sd.conf when we ARRIVED?
+
+    ***THIS IS SdWasInstalled's REASON, WORD FOR WORD, AND ApiConfAbsent WAS
+    NOT BUILT THAT WAY - SO THE INSTALLER ANSWERED ITS OWN QUESTION.***  The
+    function used to call FileExists live, and it is asked twice with [Files]
+    writing sd.conf in between: TRUE at the tasks page, so the box is offered,
+    then FALSE at ssPostInstall, where the firewall call is gated on it.  Both
+    arms of that gate were then unsatisfiable together - an upgrade fails
+    "not TrueUpgrade", a fresh install fails this - so ApplyApiFirewall never
+    ran on ANY path and "let other computers reach it" did nothing at all.
+
+    MEASURED 3 Sep 2026 on guest Windows 11 - SSH no SD - Test B, both API
+    boxes ticked: APIPORT=4243 active, a listener on 0.0.0.0:4243, and no
+    firewall rule - api-firewall.ps1 -Show printing "rule: not present".
+
+    THE QUESTION IS ABOUT THE MACHINE AS WE FOUND IT, so it is asked once, in
+    InitializeSetup, exactly as the four above are.  All three readers want
+    that same answer: the tasks page (was the box offerable), the firewall gate
+    (was the box offered, so is the tick meaningful), and ApiListenerAfterwards
+    (is there a preserved sd.conf to read, or is the box the only answer). }
+  ApiConfWasAbsent: Boolean;
   { 29 Aug 26 - PRE_RELEASE_FIXES 39.  Where the account sweep was stashed at
     usUninstall, or empty if it could not be.  It has to be COPIED out of the
     application directory before that directory is deleted: the sweep is
@@ -1382,6 +1403,21 @@ begin
     SshRuleWasOpen := GetSshRuleIsOpen
   else
     SshRuleWasOpen := False;
+
+  (* 03 Sep 26 - AND WHETHER THIS MACHINE ALREADY HAD AN sd.conf.
+     PRE_RELEASE_FIXES 146.
+
+     IT MUST BE SAMPLED HERE AND NOWHERE LATER, AND THE REASON IS THE SAME ONE
+     SdWasInstalled's comment gives: THE INSTALLER WRITES THE THING BEING
+     TESTED FOR.  The [Files] pair at the sd.conf entries is onlyifdoesntexist
+     on both arms, so after that step the file ALWAYS exists and a live test
+     answers False on every machine from ssPostInstall onwards - which silently
+     took the whole API firewall step with it.
+
+     ANY MOVE OF THIS LINE BELOW [Files] REINTRODUCES 146 SILENTLY, which is
+     why test-apigate-units.ps1 asserts that ApiConfAbsent reads this variable
+     and never the file system. *)
+  ApiConfWasAbsent := not FileExists(ExpandConstant('{#DataDir}\sd.conf'));
 
   (* SD DOES NOT SUPPORT UNATTENDED INSTALLATION.  Owner's ruling, 23 Aug 2026,
      in his own words: "unattended deployment is not supported in sd - install
@@ -1677,9 +1713,15 @@ end;
    The uninstall key is gone, so SdWasInstalled and TrueUpgrade are both false
    and the tasks page IS shown - while the data tree is present, so sd.conf is
    preserved and ticking "Provide the SD Core API" opened no socket. *)
+{ 03 Sep 26 - PRE_RELEASE_FIXES 146.  READS THE SAMPLE, NEVER THE FILE.
+
+  This used to be a live FileExists, and because the installer writes sd.conf
+  itself the same call answered TRUE at the tasks page and FALSE at
+  ssPostInstall - offering the box and then disabling the action it gates.
+  ApiConfWasAbsent is taken once in InitializeSetup; see its declaration. }
 function ApiConfAbsent: Boolean;
 begin
-  Result := not FileExists(ExpandConstant('{#DataDir}\sd.conf'));
+  Result := ApiConfWasAbsent;
 end;
 
 (* WILL THERE BE AN API LISTENER WHEN THIS INSTALL FINISHES?

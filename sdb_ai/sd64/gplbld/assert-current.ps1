@@ -213,6 +213,12 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # dot-sourced by cycle.ps1 and by its own units test; neither
                   # is installed, and nothing compiles either into sd.exe.
                   'transcript-whole.ps1', 'test-transcriptwhole-units.ps1',
+                  # 03 Sep 26 - PRE_RELEASE 146's guard over the API firewall
+                  # gate in sd.iss.  Listed in the commit that creates it, under
+                  # the rule the note below states.  It reads sd.iss and
+                  # dot-sources strip-comments.ps1; nothing installs it and
+                  # nothing compiles it into sd.exe.
+                  'test-apigate-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
