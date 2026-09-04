@@ -5,6 +5,27 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  THE PASSWORD PAGE AT THE END OF AN INSTALL READS BETTER.
+
+           It asks for two passwords - your own account and SDSYS - and it
+           used to repeat the same five-line paragraph about what pressing
+           Enter does, once before each. That paragraph is now said once, at
+           the top, where you read it before you are asked anything.
+
+           The page also had three different left margins and three different
+           line widths, because two programs were writing to it and neither
+           knew what the other was doing. One of the explanatory lines was
+           long enough to run off the right-hand edge of an 80-column window
+           and break a word in half. Everything the installer writes is now
+           wrapped to one width, and each step's heading lines up with the
+           output underneath it.
+
+           Nothing about what is asked, or what your answers do, has changed.
+
+           If you run  modify.password  yourself, you still get the full
+           explanation. It is suppressed only when SD is started with -QUIET,
+           which is how the installer starts it.
+
 04 Sep 26  A TRANSACTION THAT FAILS PART WAY NOW PUTS BACK WHAT IT HAD
            ALREADY WRITTEN.
 

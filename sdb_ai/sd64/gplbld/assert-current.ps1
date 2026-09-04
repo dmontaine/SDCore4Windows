@@ -224,6 +224,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # NOTE install-editors.ps1 itself is NOT here and must not be
                   # - it SHIPS to {app}, so it stays under the guard.
                   'test-editorver-units.ps1',
+                  # 04 Sep 26 - PRE_RELEASE 155's units test over Write-Wrapped,
+                  # the text wrapper finish-install.ps1 gained the same day.
+                  # Listed in the commit that creates it.  It lifts the function
+                  # out of that script by AST and drives it in process; nothing
+                  # installs it, and it needs no SD, no elevation and no token.
+                  # NOTE finish-install.ps1 itself is NOT here and must not be
+                  # - it SHIPS to {app}, so it stays under the guard.
+                  'test-wraptext-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',

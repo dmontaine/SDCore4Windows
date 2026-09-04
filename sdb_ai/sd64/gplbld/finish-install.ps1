@@ -130,6 +130,62 @@ $SysDir = Join-Path (Join-Path $env:ProgramData 'SD') 'sdsys'
 # a second place for the next defect to be fixed in only one, which is the
 # argument gpl.bp/EDIT makes for not being two programs.
 # ===========================================================================
+
+# 4 Sep 26 - PRE_RELEASE_FIXES 155.  ONE WRAP WIDTH FOR EVERYTHING THIS SCRIPT
+# SAYS, because it had three.  The banner below is hand-wrapped at about 72; the
+# $Purpose strings were handed to Write-Host as ONE LINE EACH and wrapped at
+# whatever the console happened to be, which on the owner's screen broke "its"
+# across two lines mid-word.
+#
+# 74 IS CHOSEN AGAINST THE SMALL SCREEN, NOT THE BIG ONE.  Entry 150 is the
+# neighbouring lesson - a dialog sized to the machine that built it and clipped
+# on 1024x768 - and a console here is 80 columns until somebody widens it.
+function Write-Wrapped {
+    param(
+        [string] $Text,
+        [string] $Indent = '',
+        [int]    $Width  = 74,
+        [System.ConsoleColor] $Color
+    )
+    # ***IT KEEPS THE GAPS, AND THE FIRST VERSION DID NOT.***  This file writes
+    # two spaces after a full stop, and "Change it with  modify.password sdsys
+    # from inside SD." sets its command off with two on each side.  A wrapper
+    # built on -split '\s+' collapses every one of those to a single space -
+    # a formatting regression introduced by the fix for a formatting complaint.
+    # So each word carries the whitespace that FOLLOWED it, that gap is used
+    # when the next word lands on the same line, and it is discarded at a line
+    # break, which is where a gap should disappear anyway.
+    $limit   = $Width - $Indent.Length
+    $line    = ''
+    $pending = ''
+    $out     = @()
+    foreach ($m in [regex]::Matches($Text, '\S+[ \t]*')) {
+        $word = $m.Value.TrimEnd(" `t")
+        $gap  = $m.Value.Substring($word.Length)
+        if ($line -eq '') {
+            $line = $word
+        } elseif (($line.Length + $pending.Length + $word.Length) -le $limit) {
+            $line = $line + $pending + $word
+        } else {
+            $out += $line
+            $line = $word
+        }
+        $pending = $gap
+    }
+    if ($line -ne '') { $out += $line }
+    # ***A CALLER THAT PASSED NOTHING MUST NOT SILENTLY PRINT NOTHING.***  An
+    # empty $Purpose would leave the step with no explanation and look
+    # deliberate; say so instead.
+    if ($out.Count -eq 0) { $out = @('(no text supplied)') }
+    foreach ($l in $out) {
+        if ($PSBoundParameters.ContainsKey('Color')) {
+            Write-Host ($Indent + $l) -ForegroundColor $Color
+        } else {
+            Write-Host ($Indent + $l)
+        }
+    }
+}
+
 function Invoke-PasswordStep {
     param(
         [string] $Account,   # the SD account to set a password for
@@ -138,8 +194,17 @@ function Invoke-PasswordStep {
         [string] $IfDeclined # what is true if they press Enter and set none
     )
 
-    Write-Host ("  Password $Which - $Account") -ForegroundColor White
-    Write-Host ("  $Purpose")
+    # 4 Sep 26 - PRE_RELEASE_FIXES 155.  COLUMN 0, AND WRAPPED.
+    #
+    # THE PAGE HAD TWO LEFT MARGINS AND NEITHER WAS WRONG ON ITS OWN: this
+    # script indents what it says by two, and sd.exe's own output - "Account
+    # DON has no password set", "New password:" - starts at column 0 and cannot
+    # be indented from here.  Inside a step the two are interleaved, so the
+    # step's own header now sits at column 0 with the output it introduces.
+    # The banner keeps its indent: that is this script narrating, and the
+    # distinction is now a rule rather than an accident.
+    Write-Host ("Password $Which - $Account") -ForegroundColor White
+    Write-Wrapped -Text $Purpose
     Write-Host ''
 
     # THE ACCOUNT IS PASSED AS ITS OWN ARGUMENT, not glued into a string.
@@ -194,8 +259,10 @@ function Invoke-PasswordStep {
     $credDir = Join-Path $SysDir '$cred'
     if ((Test-Path -LiteralPath $credDir) -and
         (-not (Test-Path -LiteralPath (Join-Path $credDir $Account)))) {
-        Write-Host ("  No password was set for $Account.") -ForegroundColor Yellow
-        Write-Host ("  $IfDeclined") -ForegroundColor Yellow
+        # 4 Sep 26 - PRE_RELEASE_FIXES 155: column 0 and wrapped, like the
+        # header above it.  $IfDeclined is a long single line too.
+        Write-Host ("No password was set for $Account.") -ForegroundColor Yellow
+        Write-Wrapped -Text $IfDeclined -Color Yellow
         Write-Host ''
         return $false
     }
@@ -225,6 +292,22 @@ if ($WithPassword) {
     Write-Host '       You may give them the same one; SD does not mind either way.'
     Write-Host ''
     Write-Host '    2. This window then checks that the installation is sound.'
+    Write-Host ''
+    # 4 Sep 26 - PRE_RELEASE_FIXES 155.  SAID HERE, ONCE, FOR BOTH ACCOUNTS.
+    #
+    # SET_ACC_PASSWORD used to print this itself, which meant twice, because the
+    # installer runs it once per account in a separate sd.exe.  It now stays
+    # quiet under -QUIET - which this script already passes - so this is the
+    # only copy on the page.  It is ABOVE both prompts on purpose: it is the
+    # thing you need before you are asked, not after.
+    #
+    # KEEP THE PHRASE "A password is required".  test-retired-wording-units.ps1
+    # registers it as the REPLACEMENT for entry 130's retired claim, so it has
+    # to keep appearing somewhere the lint can find it.
+    Write-Wrapped -Indent '  ' -Text ('A password is required.  Pressing Enter on an empty line does not ' +
+        'give you an account without one - it leaves that account unusable until a password ' +
+        'is set: not here at the keyboard, not over ssh, and not through the SD API.  SD asks ' +
+        'again the first time you open the account.  This is true of both accounts below.')
     Write-Host ''
     Write-Host '  Starting SD now.  It closes by itself once each password is set,'
     Write-Host '  and the check follows automatically.' -ForegroundColor Cyan
@@ -310,9 +393,12 @@ if ($WithPassword) {
         # be an unrequested second change riding in on this one.
         $sdsysCred = Join-Path (Join-Path $SysDir '$cred') 'SDSYS'
         if (Test-Path -LiteralPath $sdsysCred) {
-            Write-Host '  Password 2 of 2 - SDSYS' -ForegroundColor White
-            Write-Host '  SDSYS already has a password from a previous install, so it has been'
-            Write-Host '  left alone.  Change it with  modify.password sdsys  from inside SD.'
+            # 4 Sep 26 - PRE_RELEASE_FIXES 155: this branch is a step header
+            # like the one Invoke-PasswordStep writes, so it takes the same
+            # margin.  It was the only other place printing "Password N of 2".
+            Write-Host 'Password 2 of 2 - SDSYS' -ForegroundColor White
+            Write-Wrapped -Text ('SDSYS already has a password from a previous install, so it has ' +
+                'been left alone.  Change it with  modify.password sdsys  from inside SD.')
             Write-Host ''
         } else {
             $null = Invoke-PasswordStep -Account 'SDSYS' -Which '2 of 2' `
