@@ -5,6 +5,31 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+03 Sep 26  SD NO LONGER TELLS YOU THAT YOU ARE NOT AN ADMINISTRATOR WHEN WHAT
+           IT MEANS IS THAT IT COULD NOT FIND OUT.
+
+           SD asks Windows three questions about privilege: is this account an
+           administrator, is this session running elevated, and is this user
+           allowed to reach the operating system. Each of those checks could
+           fail to complete - most often because your account is a domain
+           account and the domain controller cannot be reached - and when one
+           did, SD treated "I could not find out" as "no".
+
+           The refusal itself was correct and has not changed. SD still
+           refuses when it cannot establish that you have the right, which is
+           the safe direction. What was wrong was the explanation: an
+           administrator in an elevated window could be told to "start the
+           shell with Run as administrator", which they had already done, and
+           the audit trail recorded "reason=not an administrator" as though
+           that had been established.
+
+           SD now says which of the two happened. Where it cannot tell, it
+           says so and names the reason, and it writes a line to the error log
+           reading "PRIVILEGE CHECK UNDETERMINED". If you are locked out of
+           something you believe you have the right to, that line is the one
+           to look for: it means the check did not complete, not that your
+           rights were found wanting.
+
 03 Sep 26  "list accounts" AND "list os.users" NO LONGER SHOW ACCOUNTS THAT
            HAVE BEEN DELETED.
 

@@ -900,4 +900,42 @@ void log_permissions_error(FILE_VAR* fvar) {
   log_message(msg);
 }
 
+/* ======================================================================
+   priv_log_undetermined()  -  Record a privilege check that could not answer
+
+   03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  A lockout has to be
+   distinguishable from a denial in the record, and until now neither left a
+   trace: kernel.c simply did not set USR_ADMIN, with no message and no log.
+
+   IT IS HERE RATHER THAN IN linuxlb.c BESIDE THE PREDICATES, AND THE LINKER
+   DECIDED THAT.  linuxlb.o is linked into sdfix, sdtic, sdconv and sdidx, none
+   of which carry this file, so a log call from there fails to link all four -
+   "linuxlb.o: undefined reference to `log_message'", which is what the first
+   build of this entry did.
+
+   IT IS log_message() AND NOT log_printf(), WHICH IS NOT A STYLE CHOICE.
+   log_printf() calls tio_display_string() whenever my_uptr != NULL (below), so
+   every line here would ALSO print on the user's terminal mid-session - new
+   console output on a privilege path, which is the thing PRE_RELEASE 84 caught
+   verifiers matching against.
+
+   AND sysseg IS TESTED BECAUSE log_message() DEREFERENCES IT UNGUARDED
+   ("if (sysseg->errlog)" above).  sysseg is init(NULL) until bind_sysseg().
+   Every caller reaches this with the segment bound; sd.c's check_admin() does
+   NOT, which is exactly why that one site prints to stderr itself rather than
+   calling this - a guard that silently did nothing there would have omitted
+   the case the entry was filed for.                                        */
+
+void priv_log_undetermined(char* what, PRIV_WHY why) {
+  char msg[MAX_LOG_MSG_LEN];
+
+  if (sysseg == NULL)
+    return;
+
+  snprintf(msg, sizeof(msg),
+           "PRIVILEGE CHECK UNDETERMINED %s: %s - refused, but this is not a "
+           "denial", what, priv_why_text(why));
+  log_message(msg);
+}
+
 /* END-CODE */

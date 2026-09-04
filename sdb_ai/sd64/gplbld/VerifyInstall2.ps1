@@ -759,6 +759,19 @@ function Close-LeakedTranscripts([string]$stepName) {
 
 $lines  = @()
 $failed = 0
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 152.  COUNTED SEPARATELY, NOT COUNTED
+# DIFFERENTLY.  $failed keeps its meaning exactly - every step that did not
+# exit 0, refusals included - so the exit logic at the foot of this file is
+# untouched and a step that COULD NOT RUN still never reads as a pass.  This is
+# the extra count beside it, so the closing line can say which kind of red a
+# red suite is.  b106 showed six API verifiers "exit 1" in a block and it read
+# as "the API is broken"; not one of them had measured anything.
+#
+# A STEP THAT EXITED 2 BUT LEFT [FAIL] MARKERS IS COUNTED AS FAILED, NOT
+# REFUSED.  Entry 151's Refuse() downgrades itself to exit 1 when a decisive
+# check has already failed, so this should not arise in the six - but the rule
+# here does not depend on that, and it errs towards reporting a failure.
+$refused = 0
 $i      = 0
 foreach ($s in $steps) {
     $i++
@@ -773,8 +786,10 @@ foreach ($s in $steps) {
         & $path @splat
         $code = $LASTEXITCODE
         Close-LeakedTranscripts $s.Name
-        $lines += ('{0,-28} {1,-22} exit {2}' -f $s.Name, $shown, $code)
+        $lines += ('{0,-28} {1,-22} exit {2}{3}' -f $s.Name, $shown, $code,
+                   $(if ($code -eq 2) { '  COULD NOT RUN' } else { '' }))
         if ($code -ne 0) { $failed++ }
+        if ($code -eq 2) { $refused++ }   # 03 Sep 26 - PRE_RELEASE 152
         continue
     }
 
@@ -814,6 +829,18 @@ foreach ($s in $steps) {
 
     if ($code -eq 0 -and $fails.Count -eq 0) {
         Write-Host ' OK' -ForegroundColor Green
+    } elseif ($code -eq 2 -and $fails.Count -eq 0) {
+        # 03 Sep 26 - PRE_RELEASE_FIXES.md 152.  STILL COUNTED IN $failed, and
+        # still not a pass - it is coloured and worded differently because it
+        # sends the reader somewhere else: to the environment, not the product.
+        $failed++
+        $refused++
+        Write-Host ' COULD NOT RUN  exit 2' -ForegroundColor Yellow
+        Get-Content -LiteralPath $stepLog -Tail 4 -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host ('         ' + $_) -ForegroundColor DarkYellow }
+        Write-Host ('         full output: ' + $stepLog) -ForegroundColor Yellow
+        $lines += ('{0,-28} {1,-22} exit {2}  COULD NOT RUN  {3}' -f $s.Name, $shown, $code, $stepLog)
+        continue
     } else {
         $failed++
         Write-Host (' FAILED  exit {0}, {1} failing check(s)' -f $code, $fails.Count) -ForegroundColor Red
@@ -868,6 +895,14 @@ if ($failed -gt 0) {
                       $steps.Count, $fullCount, $failed)
     } else {
         Write-Output ("VerifyInstall2: {0} of {1} step(s) did not exit 0." -f $failed, $steps.Count)
+    }
+    # 03 Sep 26 - PRE_RELEASE_FIXES.md 152.  SAY WHICH KIND OF RED, ON ITS OWN
+    # LINE SO THE SENTENCE ABOVE KEEPS THE WORDING READERS AND GREPS EXPECT.
+    if ($refused -gt 0) {
+        Write-Output ("  of those, {0} FAILED a check and {1} COULD NOT RUN (exit 2)." -f
+                      ($failed - $refused), $refused)
+        Write-Output '  A step that could not run measured nothing: it is not a product finding.'
+        Write-Output '  Read those first - a stale tree or a missing tool refuses every one of them.'
     }
     exit 1
 }

@@ -51,7 +51,7 @@ void set_new_tty_modes(void);
 void op_capture(void);
 
 Private void sh(bool capture);
-Private bool os_permitted(void);
+Private bool os_permitted(PRIV_WHY* why);
 Private void sh_execute(char *command);
 Private int clparse(char *p, char *argv[], int maxargs);
 
@@ -147,7 +147,7 @@ void op_shcap() {
  * one line and the gate below is decoration.
  */
 
-Private bool os_permitted(void) {
+Private bool os_permitted(PRIV_WHY* why) {
   char path[MAX_PATHNAME_LEN + 1];
   char buff[128];
   int fu;
@@ -155,34 +155,63 @@ Private bool os_permitted(void) {
   char* p;
   char* q;
 
+  /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  Set once, overwritten
+     by whichever exit could not finish.  See linuxlb.h.                    */
+
+  if (why != NULL)
+    *why = PRIV_ANSWERED;
+
   if (process.program.flags & HDR_INTERNAL)
     return TRUE;
 
   if (my_uptr->flags & USR_ADMIN)
     return TRUE;
 
-  if (process.username[0] == '\0')
+  if (process.username[0] == '\0') {
+    if (why != NULL)
+      *why = PRIV_NO_USERNAME;
     return FALSE;
+  }
 
   if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cos.users%c%s", sysseg->sysdir,
-               DS, DS, process.username) >= (MAX_PATHNAME_LEN + 1))
+               DS, DS, process.username) >= (MAX_PATHNAME_LEN + 1)) {
+    if (why != NULL)
+      *why = PRIV_PATH_TOO_LONG;
     return FALSE;
+  }
+
+  /* 03 Sep 26 Windows port - ENOENT IS THE DESIGNED NO AND STAYS A PLAIN
+     FALSE, which PRE_RELEASE 96 called out specifically.  This file's own
+     banner says "MISSING FILE OR MISSING RECORD MEANS NO... the safe
+     direction", so an absent record is an ANSWER, not a failure to reach one.
+     Marking it undetermined would write a log line on every ordinary refusal
+     and drown the ones that matter - the same discrimination entry 101 made
+     for ENOENT in txn.c.  Any OTHER errno is the check failing to complete. */
 
   fu = open(path, O_RDONLY);
-  if (fu < 0)
+  if (fu < 0) {
+    if ((why != NULL) && (errno != ENOENT))
+      *why = PRIV_OPEN_FAILED;
     return FALSE;
+  }
   n = read(fu, buff, sizeof(buff) - 1);
   close(fu);
-  if (n <= 0)
+  if (n <= 0) {
+    if (why != NULL)
+      *why = PRIV_READ_FAILED;
     return FALSE;
+  }
   buff[n] = '\0';
 
   /* OS.USERS is a DIRECTORY file, so a record is a file and a field mark is a
      newline.  Field 1 is SH; field 2 is the one this reads.                */
 
   p = strchr(buff, '\n');
-  if (p == NULL)
+  if (p == NULL) {
+    if (why != NULL)
+      *why = PRIV_MALFORMED;
     return FALSE;
+  }
   p++;
 
   for (q = p; (*q != '\0') && (*q != '\n') && (*q != '\r'); q++) {
@@ -204,10 +233,19 @@ Private void sh(bool capture) {
   DESCRIPTOR *descr;
   STRING_CHUNK *str;
   int bytes;
+  PRIV_WHY why; /* 03 Sep 26 - PRE_RELEASE_FIXES.md 96 */
 
   /* Before the stack is touched, so a refusal leaves it as it was found. */
-  if (!os_permitted())
+  /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  10054 names the user
+     and says they are not permitted; when the check could not COMPLETE that
+     sentence is a guess.  The refusal is unchanged - it must stay, and it must
+     stay fail-closed - but the log now separates "os.users says no" from
+     "os.users could not be read".                                          */
+  if (!os_permitted(&why)) {
+    if (why != PRIV_ANSWERED)
+      priv_log_undetermined("OS.EXECUTE", why);
     k_error(sysmsg(10054), process.username);
+  }
 
   descr = e_stack - 1;
   k_get_string(descr);

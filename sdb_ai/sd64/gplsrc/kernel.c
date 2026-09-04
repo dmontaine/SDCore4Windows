@@ -59,7 +59,9 @@ Private void init_program(void);
 
 /* 13 Aug 26 Windows port - declared here as op_kernel.c does, rather than in a
    header, because linuxlb.c has none of its own.                            */
-bool IsElevated(void);
+/* 03 Sep 26 Windows port - THAT REASON WAS NOT TRUE: linuxlb.h has existed all
+   along, and sd.h includes it.  The declaration moved there with the signature
+   change for PRE_RELEASE_FIXES.md 96.                                       */
 
 jmp_buf k_exit;
 
@@ -97,6 +99,7 @@ bool init_kernel() {
   u_int32_t m;
   int16_t msg_no = 1000; /* User limit reached */
   char* p;
+  PRIV_WHY why; /* 03 Sep 26 - PRE_RELEASE_FIXES.md 96 */
 
   memset(option_flags, '\0', NumOptions);
 
@@ -237,8 +240,18 @@ bool init_kernel() {
        root that follows the account would follow it there.
        PROJECT_STATUS.md items 4 and 5.                                     */
 
-    if (IsElevated() && (connection_type != CN_SOCKET))
+    /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  THIS WAS THE QUIET
+       ONE: USR_ADMIN was simply not set, with no message and no log, and
+       os_permitted() (op_sh.c) reads USR_ADMIN, so the loss propagated to
+       OS.EXECUTE as a refusal nobody could account for.  The grant is
+       unchanged - an undetermined answer still does not set the flag - but it
+       is no longer silent.  sysseg is bound well before here (it is
+       dereferenced at :170), so the log call is safe.                      */
+
+    if (IsElevated(&why) && (connection_type != CN_SOCKET))
       my_uptr->flags |= USR_ADMIN;
+    else if (why != PRIV_ANSWERED)
+      priv_log_undetermined("USR_ADMIN at session start", why);
 
     /* Phantom processes have the user name entered by the parent when the
       user table entry is reserved.  For other users, initialise this now. */

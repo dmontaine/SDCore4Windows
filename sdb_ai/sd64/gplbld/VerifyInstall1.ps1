@@ -858,6 +858,18 @@ if ($partial) {
 
 $lines  = @()
 $failed = 0
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 152.  COUNTED SEPARATELY, NOT COUNTED
+# DIFFERENTLY.  $failed keeps its meaning exactly - every step that did not
+# exit 0, refusals included - so the exit logic at the foot of this file is
+# untouched and a step that COULD NOT RUN still never reads as a pass.  This is
+# the extra count beside it, so the closing line can say which kind of red a
+# red suite is: "the API is broken" and "six steps refused on a stale tree"
+# looked identical on b106 and were a whole reading apart.
+#
+# THE RUNNER'S OWN EXIT CODE IS DELIBERATELY NOT CHANGED.  A half that only
+# refused is arguably a 2, but cycle.ps1 and anything else reading this expect
+# 1 for "not clean", and entry 152 says not to move it without asking.
+$refused = 0
 
 # 29 Aug 26 - THE STEP LOOP IS IN A try SO THE TEST ACCOUNT IS ALWAYS REMOVED.
 # PRE_RELEASE 59.
@@ -939,7 +951,12 @@ foreach ($s in $steps) {
     }
 
     if ($code -ne 0) { $failed++ }
-    $lines += ('{0,-28} exit {1}' -f $s.Name, $code)
+    # 03 Sep 26 - PRE_RELEASE 152.  2 is the convention's "could not be run"
+    # (entry 151 made the six API verifiers honour it).  The row is annotated
+    # so the summary FILE carries the distinction too, not just the console.
+    if ($code -eq 2) { $refused++ }
+    $lines += ('{0,-28} exit {1}{2}' -f $s.Name, $code,
+               $(if ($code -eq 2) { '  COULD NOT RUN' } else { '' }))
 
     if ($code -ne 0 -and -not $ContinueOnFailure) {
         Write-Output ''
@@ -1000,7 +1017,18 @@ Write-Output ''
 Write-Output ('summary written to: ' + $summary)
 
 if ($failed -gt 0) {
-    Write-Output ("VerifyInstall1: {0} step(s) did not exit 0." -f $failed)
+    # 03 Sep 26 - PRE_RELEASE 152.  SAY WHICH KIND OF RED.  A step that refused
+    # measured nothing, so it is neither a pass nor a product finding, and a
+    # summary that calls both "did not exit 0" sends the reader to the wrong
+    # place - which is what b106 cost.
+    if ($refused -gt 0) {
+        Write-Output ("VerifyInstall1: {0} step(s) did not exit 0 - {1} FAILED a check, {2} COULD NOT RUN." -f
+                      $failed, ($failed - $refused), $refused)
+        Write-Output '  A step that could not run measured nothing: it is not a product finding.'
+        Write-Output '  Read those steps first - a stale tree or a missing tool refuses every one.'
+    } else {
+        Write-Output ("VerifyInstall1: {0} step(s) did not exit 0." -f $failed)
+    }
     if ($ThenElevated) {
         Write-Output '  NOT handing over to VerifyInstall2.ps1 - fix these first, or'
         Write-Output '  re-run with -ContinueOnFailure to hand over anyway.'

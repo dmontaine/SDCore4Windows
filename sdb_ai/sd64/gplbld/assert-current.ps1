@@ -193,6 +193,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # creates it.  It restarts the SD service and reads the sweep's
                   # log; nothing installs it.
                   'verify-registersweep.ps1',
+                  # 03 Sep 26 - PRE_RELEASE 96's structural guard over the
+                  # privilege tri-state.  Listed in the commit that creates it,
+                  # under the rule the note below states.  It READS gplsrc
+                  # (linuxlb.h/.c, op_sh.c, k_error.c) and asserts that every
+                  # failure exit sets *why - the one thing -Wall cannot catch,
+                  # because a return that forgets it compiles clean.  Nothing
+                  # installs it and nothing compiles it into sd.exe.
+                  'test-privwhy-units.ps1',
                   # 03 Sep 26 - THIS SCRIPT'S OWN CHECK A2, lifted into a file
                   # so cycle.ps1's step 0 asks the question with the same code,
                   # and its units test.  Listed in the commit that creates them.

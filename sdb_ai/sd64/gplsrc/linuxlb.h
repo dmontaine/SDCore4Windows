@@ -43,8 +43,52 @@
 
 #define chsize64 chsize
 
+/* The privilege predicates, and why they answer in two parts.
+ *
+ * 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  THEY ANSWERED "NO" AND
+ * "I COULD NOT TELL" WITH THE SAME FALSE, AND EVERY CALLER READ IT AS "NO".
+ * IsAdmin(), IsElevated() and os_permitted() (op_sh.c) each have several FALSE
+ * exits of which only one is the answer to the question asked; the rest are
+ * the check failing to complete.
+ *
+ * THE REFUSAL IS RIGHT EITHER WAY, AND THAT IS NOT WHAT WAS FILED.  Failing
+ * closed is the correct direction, no false grant was possible, and none is
+ * introduced here.  What was filed is that the refusal then STATED A REASON
+ * NOBODY ESTABLISHED: sd.c told an already-elevated administrator to elevate,
+ * and CPROC:2699 wrote "reason=not an administrator" into the trail an
+ * investigation reads, when the tier register may say otherwise.
+ *
+ * THE RETURN STAYS bool ON PURPOSE.  An enum return with three values would
+ * leave "if (IsElevated())" compiling and answering TRUE for the undetermined
+ * case - a false GRANT, and the one direction this must never take.  The bool
+ * is still fail-closed; the out-parameter carries what the bool cannot.  A
+ * NULL why is allowed and means "not going to look".
+ *
+ * THE REACHABLE TRIGGER IS NOT malloc().  On Cygwin getpwuid() and
+ * getgrouplist() resolve through Windows name lookup, so a domain account with
+ * the controller unreachable reaches all three of IsAdmin()'s failure exits at
+ * once - the administrator is locked out and told they are not one.
+ */
+
+typedef enum {
+  PRIV_ANSWERED = 0,   /* the check completed - the returned bool IS the answer */
+  PRIV_NO_PASSWD,      /* getpwuid() could not name the account */
+  PRIV_NO_GROUP_COUNT, /* the group list would not size */
+  PRIV_NO_MEMORY,      /* malloc() failed */
+  PRIV_NO_GROUP_LIST,  /* it sized, and then would not fetch */
+  PRIV_NO_USERNAME,    /* the session has no user name to look up */
+  PRIV_PATH_TOO_LONG,  /* the os.users pathname did not fit */
+  PRIV_OPEN_FAILED,    /* os.users record would not open, and NOT because absent */
+  PRIV_READ_FAILED,    /* os.users record would not read */
+  PRIV_MALFORMED       /* os.users record has no second field */
+} PRIV_WHY;
+
 /* Functions in linuxlb.c */
 
+bool IsAdmin(PRIV_WHY* why);
+bool IsElevated(PRIV_WHY* why);
+char* priv_why_text(PRIV_WHY why);
+void priv_log_undetermined(char* what, PRIV_WHY why);
 int64 filelength64(int fd);
 #define filelength(f) (int)filelength64(f)
 bool GetUserName(char* name, u_int32_t* bytes);

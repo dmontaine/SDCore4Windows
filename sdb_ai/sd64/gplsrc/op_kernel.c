@@ -53,7 +53,10 @@
 
 Public bool case_sensitive;
 
-bool IsAdmin(void);
+/* 03 Sep 26 Windows port - IsAdmin()'s ad-hoc declaration is gone; it and
+   IsElevated() are in linuxlb.h now, which sd.h already includes.  They took a
+   signature change for PRE_RELEASE_FIXES.md 96 and three private copies of a
+   prototype are three places for one to be missed.                         */
 bool recover_users(void);
 void set_date(int32_t);
 
@@ -453,10 +456,25 @@ void op_kernel() {
        API session for exactly the same reason; this copies its guard rather
        than inventing a second discriminator that could drift away from it. */
 
-    case K_OS_ADMINISTRATOR:
+    /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  THIS ONE FEEDS A
+       SENTENCE THAT IS WRITTEN DOWN AS FACT.  K$OS.ADMINISTRATOR reaches
+       CPROC:2697, which prints 10002 and then writes CPROC:2699
+       "LOGTO REFUSED account=SDSYS reason=not an administrator" into the audit
+       trail an investigation reads - a reason nobody established, when the
+       tier register may say otherwise.  The answer returned is unchanged and
+       still fails closed; what is new is that the log now says which of the
+       two happened.                                                        */
+
+    case K_OS_ADMINISTRATOR: {
+      PRIV_WHY why;
+      bool is_admin = IsAdmin(&why);
+
+      if (why != PRIV_ANSWERED)
+        priv_log_undetermined("K$OS.ADMINISTRATOR", why);
+
       result.data.value =
-          (IsAdmin() && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
-      break;
+          (is_admin && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
+    } break;
 
     case K_FILESTATS:
       GetInt(descr);

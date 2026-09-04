@@ -85,16 +85,27 @@ int64 filelength64(fd) int fd;
    looking it up by name would fail on a German or French machine.  sd.iss had
    to learn the same thing for icacls, where it writes *S-1-5-32-544.        */
 
-bool IsAdmin(void) {
+bool IsAdmin(PRIV_WHY* why) {
   struct passwd* pw;
   gid_t* list;
   int count;
   int i;
   bool status = FALSE;
 
+  /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  Set once here and
+     overwritten by whichever exit could not finish, so the DEFAULT is "this
+     answer was established" and a new failure path added below without a line
+     here is the only way to get it wrong.  sd.h has the reasoning.         */
+
+  if (why != NULL)
+    *why = PRIV_ANSWERED;
+
   pw = getpwuid(getuid());
-  if (pw == NULL)
+  if (pw == NULL) {
+    if (why != NULL)
+      *why = PRIV_NO_PASSWD;
     return FALSE; /* No account to ask about - fail closed */
+  }
 
   /* getgrouplist() wants the size in/out.  Ask twice: once to be told how many
      there are, once to fetch them.  It returns -1 on the sizing call, which is
@@ -102,12 +113,18 @@ bool IsAdmin(void) {
 
   count = 0;
   getgrouplist(pw->pw_name, pw->pw_gid, NULL, &count);
-  if (count <= 0)
+  if (count <= 0) {
+    if (why != NULL)
+      *why = PRIV_NO_GROUP_COUNT;
     return FALSE;
+  }
 
   list = (gid_t*)malloc(count * sizeof(gid_t));
-  if (list == NULL)
+  if (list == NULL) {
+    if (why != NULL)
+      *why = PRIV_NO_MEMORY;
     return FALSE;
+  }
 
   if (getgrouplist(pw->pw_name, pw->pw_gid, list, &count) >= 0) {
     for (i = 0; i < count; i++) {
@@ -116,6 +133,14 @@ bool IsAdmin(void) {
         break;
       }
     }
+  } else {
+    /* 03 Sep 26 Windows port - THE SIZING CALL SUCCEEDED AND THE FETCH DID
+       NOT, so the loop never ran and the initialised FALSE below would have
+       left as an answer.  PRE_RELEASE 96 named this as one of the two paths
+       its own list was short by; it is unreachable only if getgrouplist()
+       cannot fail twice differently, which is not promised.                */
+    if (why != NULL)
+      *why = PRIV_NO_GROUP_LIST;
   }
 
   free(list);
@@ -147,22 +172,31 @@ bool IsAdmin(void) {
    windows.h into a file built against the MSYS2 POSIX runtime, which is the
    toolchain split PROJECT_STATUS.md section 5.4 exists to keep clean.        */
 
-bool IsElevated(void) {
+bool IsElevated(PRIV_WHY* why) {
   gid_t* list;
   int count;
   int i;
   bool status = FALSE;
 
+  if (why != NULL)
+    *why = PRIV_ANSWERED;
+
   /* getgroups() sizes the same way getgrouplist() does, but by returning the
      count rather than writing it back through the argument.                 */
 
   count = getgroups(0, NULL);
-  if (count <= 0)
+  if (count <= 0) {
+    if (why != NULL)
+      *why = PRIV_NO_GROUP_COUNT;
     return FALSE; /* No groups in the token - fail closed */
+  }
 
   list = (gid_t*)malloc(count * sizeof(gid_t));
-  if (list == NULL)
+  if (list == NULL) {
+    if (why != NULL)
+      *why = PRIV_NO_MEMORY;
     return FALSE;
+  }
 
   if (getgroups(count, list) >= 0) {
     for (i = 0; i < count; i++) {
@@ -171,12 +205,59 @@ bool IsElevated(void) {
         break;
       }
     }
+  } else {
+    /* 03 Sep 26 Windows port - the second of the two paths PRE_RELEASE 96's
+       list was short by.  Same shape as IsAdmin() above: sized, then would
+       not fetch, so the loop never ran.                                    */
+    if (why != NULL)
+      *why = PRIV_NO_GROUP_LIST;
   }
 
   free(list);
 
   return status;
 }
+
+/* ======================================================================
+   priv_why_text()  -  Why could a privilege predicate not answer?
+
+   03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  One mapping, so the four
+   callers cannot describe the same failure two different ways.             */
+
+char* priv_why_text(PRIV_WHY why) {
+  switch (why) {
+    case PRIV_ANSWERED:
+      return "the check completed";
+    case PRIV_NO_PASSWD:
+      return "the account could not be looked up (getpwuid failed)";
+    case PRIV_NO_GROUP_COUNT:
+      return "the group list could not be sized";
+    case PRIV_NO_MEMORY:
+      return "out of memory";
+    case PRIV_NO_GROUP_LIST:
+      return "the group list sized and then could not be fetched";
+    case PRIV_NO_USERNAME:
+      return "the session has no user name";
+    case PRIV_PATH_TOO_LONG:
+      return "the os.users pathname did not fit";
+    case PRIV_OPEN_FAILED:
+      return "the os.users record could not be opened";
+    case PRIV_READ_FAILED:
+      return "the os.users record could not be read";
+    case PRIV_MALFORMED:
+      return "the os.users record has no second field";
+  }
+
+  return "unrecorded";
+}
+
+/* priv_log_undetermined() IS NOT HERE, AND THE LINKER IS THE REASON.
+   03 Sep 26 - it lives in k_error.c beside log_message().  This file is linked
+   into sdfix, sdtic, sdconv and sdidx, none of which carry the kernel's error
+   log, so a log call here fails to LINK those four:
+     "linuxlb.o: undefined reference to `log_message'"
+   Measured, not guessed - it is what the first build of PRE_RELEASE 96 did.
+   priv_why_text() above stays because it calls nothing.                    */
 
 /* ======================================================================
    itoa()  -  Convert integer to string                                   */

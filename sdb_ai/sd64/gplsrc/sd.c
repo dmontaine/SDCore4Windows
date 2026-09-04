@@ -792,7 +792,7 @@ void dump(u_char *addr, int32_t bytes) {
    check_admin()  -  Check user has admin rights                          */
 
 void check_admin() {
-  bool IsElevated(void);
+  PRIV_WHY why;
 
   /* 13 Aug 26 Windows port - was (geteuid() != 0) && !in_group("admin").
      Neither half means anything here: there is no uid zero on Windows, and
@@ -835,9 +835,30 @@ void check_admin() {
      two.  PROJECT_STATUS.md's opening section has the finding and the fix
      options, and nothing is fixed yet.                                     */
 
-  if (!IsElevated()) {
-    fprintf(stderr, "This command needs an elevated session - "
-                    "start the shell with \"Run as administrator\"\n");
+  /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96, AND THIS SITE IS THE ONE
+     THE ENTRY WAS FILED FOR.  The old message told an already-elevated
+     administrator to elevate, because a check that could not COMPLETE returned
+     the same FALSE as a check that answered no.  On Cygwin that is reachable
+     without any memory failure: getgroups() resolves through Windows, so a
+     domain account with the controller unreachable lands here.
+
+     IT PRINTS RATHER THAN LOGGING, AND THAT IS FORCED.  check_admin() runs
+     from comlin() at sd.c:175 and bind_sysseg() is at :180, so sysseg is still
+     init(NULL) - log_message() dereferences it unguarded (k_error.c:582) and
+     would crash at start-up.  priv_log_undetermined() tests sysseg for exactly
+     this reason and would silently do nothing here, which is why this site
+     does not call it.  stderr is all there is, and it already printed.     */
+
+  if (!IsElevated(&why)) {
+    if (why != PRIV_ANSWERED) {
+      fprintf(stderr, "Cannot tell whether this session is elevated: %s.\n"
+                      "Refusing rather than guessing - this is NOT a statement "
+                      "that you lack administrator rights.\n",
+              priv_why_text(why));
+    } else {
+      fprintf(stderr, "This command needs an elevated session - "
+                      "start the shell with \"Run as administrator\"\n");
+    }
     exit(1);
   }
 }
