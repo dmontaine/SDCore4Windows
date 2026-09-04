@@ -4412,7 +4412,20 @@ begin
         EVERY CLAIM BELOW COMES FROM stage.py's OWN LISTS - SDSYS_PRESERVE for
         what is kept, SDSYS_SHIP minus it for what is replaced.  Check it there
         rather than against this comment if either list moves. }
-      MsgBox('An existing SD Core database was found at ' + ExpandConstant('{#DataDir}\sdsys') + '.' + #13#10#13#10 +
+      { PRE_RELEASE_FIXES 150, 3 Sep 26 - WIDENED, NOT TRIMMED.  With 135's
+        AccessMsg and 147's ApiRuleMsg both present this box reached ~818px as a
+        plain MsgBox (measured off sdxfer\p147-witness-keptbox.png), and a MsgBox
+        has no settable width and does not scroll, so the tail fell off a 768
+        screen.  A first pass trimmed the wording to fit; the owner's answer was
+        instead to render it through ShowSummaryBox - the same custom form the
+        healthy-install box already uses (see its header comment).  It sets a
+        width, spaces paragraphs 7px apart instead of by blank lines, and falls
+        back to a scrolling memo when even that will not fit, so a clip cannot
+        recur on any screen.  The wording is the full 135/147 text, restored:
+        the fit constraint that forced a trim is gone, and MsgBox's fixed narrow
+        column - the reason the box could not be wider - is gone with it. }
+      ShowSummaryBox('SD Core database kept',
+             'An existing SD Core database was found at ' + ExpandConstant('{#DataDir}\sdsys') + '.' + #13#10#13#10 +
              'YOUR DATA IS UNTOUCHED: your accounts and their passwords, the account ' +
              'register, anything you catalogued, the print queue, held output, and any ' +
              'programs you wrote in SDSYS''s own BP.' + #13#10#13#10 +
@@ -4439,8 +4452,7 @@ begin
              { PRE_RELEASE_FIXES 147.  Last, because it is the exception to the
                sentence immediately above it: the configuration was kept and the
                rule in front of it was not.  Empty unless that was measured. }
-             '"remote.api" command inside SD Core.' + ApiRuleMsg,
-             mbInformation, MB_OK);
+             '"remote.api" command inside SD Core.' + ApiRuleMsg);
     end;
 
     { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
