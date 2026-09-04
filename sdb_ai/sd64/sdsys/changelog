@@ -5,6 +5,32 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+03 Sep 26  THE FULL-SCREEN EDITORS NOW COME WITH SD. INSTALLING NO LONGER
+           DOWNLOADS THEM.
+
+           The two editors the EDIT and MICRO verbs use - Microsoft Edit and
+           micro - used to be fetched from the internet while SD installed.
+           They are now part of the installer, and they are put beside SD's
+           own programs in
+
+               C:\Program Files\SD\usr\bin
+
+           Three things change for you. The install is quicker, and it no
+           longer stops near the end waiting for a download. It works on a
+           machine that is offline, behind a proxy, or where the tool that
+           did the downloading is blocked or absent - which was the case on
+           Windows Server, and on those machines you previously got no MICRO
+           at all. And the versions are fixed: micro 2.0.15 and Microsoft
+           Edit 1.2.1, which are the versions the editor documentation was
+           written from, so the keys it lists are the keys you have.
+
+           EDIT AND MICRO NOW RUN SD'S OWN COPY. They look beside SD first,
+           whether or not you ticked "Add SD to PATH" when you installed, and
+           fall back to searching your PATH as before. If you already keep
+           your own micro or Microsoft Edit somewhere, it is untouched - but
+           these two verbs will use SD's, so that a question about a release
+           has one answer.
+
 03 Sep 26  COMPILING A PROGRAM WITH AN UNFINISHED "BEGIN TRANSACTION" NO
            LONGER HANGS. IT NOW TELLS YOU WHICH LINE IS WRONG.
 
