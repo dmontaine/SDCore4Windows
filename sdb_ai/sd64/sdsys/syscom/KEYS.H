@@ -72,6 +72,11 @@
       $define FL$NO.RESIZE   1018  ;* Resizing inhibited?
       $define FL$UPDATE      1019  ;* File update counter
       $define FL$ENCRYPTED   1020  ;* File uses encryption
+*     PRE_RELEASE_FIXES 16.  Which sessions hold this file open, as printable
+*     text - "12 (don)", or several separated by commas.  Empty when nothing
+*     else has it, which is a real answer and not a failure: it means the
+*     obstacle is this session's own cached reference, not another user.
+      $define FL$HOLDERS     1021  ;* Sessions holding this file open
       
       * PRINTER.SETTING() function keys
       * This function is obsolete - Use GETPU() and SETPU()

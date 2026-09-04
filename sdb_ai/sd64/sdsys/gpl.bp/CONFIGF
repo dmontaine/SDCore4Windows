@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
+*           now names the file and the session holding it (10168/10169).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -278,7 +280,14 @@ convert.file:
    * Set exclusive access to file
 
    if not(fileinfo(old.fu, FL$EXCLUSIVE)) then
-      stop sysmsg(2602) ;* Cannot gain exclusive access to file
+*     PRE_RELEASE_FIXES 16 - name the file and whoever holds it.
+      excl.holders = fileinfo(old.fu, FL$HOLDERS)
+      excl.name    = fileinfo(old.fu, FL$VOCNAME)
+      if excl.holders = '' then
+         stop sysmsg(10169, excl.name)
+      end else
+         stop sysmsg(10168, excl.name, excl.holders)
+      end
    end
 
    * Get pathname of file to convert

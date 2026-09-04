@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
+*           now names the file and the session holding it (10168/10169).
 * 28 Aug 26 Windows port - match an index name typed in lower case, as
 *            LIST.INDEX already does.  PRE_RELEASE_FIXES.md 15,
 *            UPSTREAM_FIXES.md 22.
@@ -170,7 +172,14 @@ not.all.keyword:
 
 
    if not(fileinfo(fu, FL$EXCLUSIVE)) then    ;* Set exclusive access to file
-      stop sysmsg(2602) ;* Cannot gain exclusive access to file
+*     PRE_RELEASE_FIXES 16 - name the file and whoever holds it.
+      excl.holders = fileinfo(fu, FL$HOLDERS)
+      excl.name    = fileinfo(fu, FL$VOCNAME)
+      if excl.holders = '' then
+         stop sysmsg(10169, excl.name)
+      end else
+         stop sysmsg(10168, excl.name, excl.holders)
+      end
    end
    close fu                                   ;* Close it again
    i = ospath("", os$flush.cache)             ;* Wipe out the DH cache

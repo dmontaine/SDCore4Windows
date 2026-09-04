@@ -36,6 +36,7 @@ reformat
 sreformat
 delete.common
 cname
+logout
 pstat
 pdebug
 pdump

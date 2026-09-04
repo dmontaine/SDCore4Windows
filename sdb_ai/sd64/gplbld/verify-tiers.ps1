@@ -58,6 +58,33 @@
 # awk 'END{print NR}', which counts a final line whether or not it ends in a
 # newline; this file does end in one.
 #
+# 04 Sep 26 - PROGRAMMER 396 -> 397, AND ONLY PROGRAMMER MOVED.
+# PRE_RELEASE_FIXES.md 16, owner's ruling.  "logout" moved OUT of
+# TIER.ADD.ADMINISTRATOR and INTO newvoc plus TIER.OMIT.STANDARD - the shape
+# "micro" already has, and the shape a verb takes when PROGRAMMER may run it
+# and STANDARD may not.  RE-DERIVED, NOT ADJUSTED BY ONE:
+#
+#   newvoc gains a name, so the base goes 392 -> 393
+#   TIER.ADD.ADMINISTRATOR      24 verbs -> 23
+#   TIER.OMIT.STANDARD          41 verbs -> 42
+#
+#   ADMINISTRATOR  393 + 23 + 4 = 420   unchanged
+#   PROGRAMMER     393      + 4 = 397   +1
+#   STANDARD       393 - 42 + 4 = 355   unchanged
+#
+# ***THE TWO THAT DO NOT MOVE ARE THE CHECK ON THE ARITHMETIC***, and in
+# opposite ways.  ADMINISTRATOR is unchanged because the verb left one side of
+# "393 + 23" and joined the other; STANDARD is unchanged because it joined both
+# sides of "393 - 42" at once, being withheld.  A run where either moved would
+# mean the record landed in the wrong list - which is exactly what the 26 Aug
+# entry below describes micro doing correctly.
+#
+# ***THE CONSTANTS BELOW ARE THE AUTHORITY, NOT THIS COMMENT BLOCK.***  The
+# figures in the older entries here are archaeology and several are superseded:
+# a session on 4 Sep 2026 quoted "ADMINISTRATOR 419, STANDARD 354" out of the
+# 30 Aug block while the coded values had read 420 and 355 since PRE_RELEASE 7.
+# Read $Tiers, not the history.
+#
 # 30 Aug 26 - ADMINISTRATOR WAS 419, AND ONLY ADMINISTRATOR MOVED.
 # PRE_RELEASE_FIXES 78 adds three administrator verbs - remote.api, remote.ssh
 # and ssh.server - so the owner can change after an install what only the
@@ -196,7 +223,7 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 #   the others moving would mean the name reached newvoc instead.
 $Tiers = @(
     [pscustomobject]@{ Name = $Prefix + '1'; Keyword = '';              Tier = 'STANDARD';      Count = 355 }
-    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 396 }
+    [pscustomobject]@{ Name = $Prefix + '2'; Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Count = 397 }
     [pscustomobject]@{ Name = $Prefix + '3'; Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Count = 420 }
 )
 
@@ -234,7 +261,16 @@ $Withheld = @(
     #   already right.  This list is a set of NAMES, a second copy of the
     #   shipped record, and nothing outside this file compares it.
     'copy','copyp','delete','rename','reformat','sreformat','delete.common','cname',
-    # P4 - process introspection
+    # P4 - process introspection and control
+    # 04 Sep 26 - logout JOINED THIS LIST AND LEFT $AdminVerbs, PRE_RELEASE 16.
+    #   A programmer whose ssh drops could not clear their own dead session,
+    #   because logout was ADMINISTRATOR-only - and CPROC:3256 has always
+    #   carried a per-username guard that refuses a non-administrator any
+    #   session but their own (2007).  That branch was DEAD CODE: the tier
+    #   assignment meant a programmer never had the verb to reach it.  Owner's
+    #   ruling, 4 Sep 2026.  The guard now does the work it was written for and
+    #   no new permission logic was added.
+    'logout',
     'pstat','pdebug','pdump','dump'
 )
 
@@ -269,8 +305,9 @@ $AdminVerbs = @(
     # A2b - the machine's command search path.  Windows state like A2, but not
     # a network service, so it does not belong in that line.  PRE_RELEASE 89.
     'append.sd.path',
-    # A3 - system-wide state
-    'config','listu','list.readu','list.locks','clear.locks','lock','logout','set.date',
+    # A3 - system-wide state.  logout LEFT on 4 Sep 26 for $Withheld and
+    # newvoc - PRE_RELEASE 16, and the reasoning is at that list.
+    'config','listu','list.readu','list.locks','clear.locks','lock','set.date',
     # A4 - shell escapes
     'sh','!'
 )

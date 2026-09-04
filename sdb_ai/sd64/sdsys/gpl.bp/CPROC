@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  int.logout now tells the
+*            three outcomes apart: logout() answers 2 when the target's
+*            process was already gone and its slot has been REAPED, which is
+*            not a logout and must not be reported as one.  New message 10167.
 * 31 Aug 26 Windows port - AN ADMINISTRATOR'S ACCESS SURVIVES A LOGTO, AND
 *            "ADMINISTRATOR" NOW MEANS BOTH HALVES AT EVERY GATE.
 *            PRE_RELEASE_FIXES.md 91, PROJECT_STATUS.md 5.22.  logto.authorised
@@ -3263,10 +3267,21 @@ int.logout:
                 end
             end
 
-            if not(logout(i, @false)) then
-               display sysmsg(2100) ;* Invalid user number
-               return
-            end
+*           PRE_RELEASE_FIXES 16.  THREE OUTCOMES, NOT TWO.  logout() answers
+*           2 when the target's process was already gone and its slot has been
+*           REAPED rather than signalled - a different thing from a logout, and
+*           it has to say so: reporting "Force logout initiated" for a session
+*           that was not there is the instrument rule broken on screen.  Before
+*           this, that case set USR$LOGOUT on a slot nobody would ever clear
+*           and LISTU read "(logout pending)" for ever.
+            lo.rc = logout(i, @false)
+            begin case
+               case lo.rc = 0
+                  display sysmsg(2100) ;* Invalid user number
+                  return
+               case lo.rc = 2
+                  display sysmsg(10167, i) ;* was not running - slot reclaimed
+            end case
       
             call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
          until token.type = PARSER$END

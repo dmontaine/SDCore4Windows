@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
+*           now names the FILE and the SESSION holding it (10168/10169) instead
+*           of 2602, which named neither.  build.index is the verb the entry
+*           was filed about.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -388,7 +392,17 @@ build.index:
    * Set exclusive access to file
 
    if not(fileinfo(data.f, FL$EXCLUSIVE)) then
-      display sysmsg(2602)  ;* Cannot gain exclusive access to file
+*     PRE_RELEASE_FIXES 16.  NAME THE FILE AND WHOEVER IS HOLDING IT.  2602
+*     said only "Cannot gain exclusive access to file" - not which file, and
+*     not who - and the commonest cause is a session that DIED still holding
+*     it open.  This is the verb the entry was actually filed about.
+      excl.holders = fileinfo(data.f, FL$HOLDERS)
+      excl.name    = fileinfo(data.f, FL$VOCNAME)
+      if excl.holders = '' then
+         display sysmsg(10169, excl.name)
+      end else
+         display sysmsg(10168, excl.name, excl.holders)
+      end
       err = ER$EXCLUSIVE
       return
    end

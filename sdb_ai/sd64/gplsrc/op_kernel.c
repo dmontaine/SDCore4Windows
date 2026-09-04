@@ -942,10 +942,25 @@ void op_logout() {
      |================================|=============================|
      |            BEFORE              |           AFTER             |
      |================================|=============================|
- top |  Immediate flag                |  1 = ok, 0 = error          |
+ top |  Immediate flag                |  1 = ok, 2 = reaped,        |
+     |                                |  0 = error                  |
      |--------------------------------|-----------------------------|
      |  User number                   |                             |
      |================================|=============================|
+
+ 04 Sep 26 Windows port - PRE_RELEASE_FIXES.md 16.  ***2 IS NEW AND IT IS A
+ DIFFERENT OUTCOME, NOT A WARMER 1.***  Raising EVT_TERMINATE at a process
+ that no longer exists sets USR_LOGOUT and nothing ever clears it, so LISTU
+ reads "(logout pending)" for ever and the file the dead session held stays
+ locked.  When the process is gone the slot is REAPED instead, and the caller
+ has to be able to tell the two apart because they need different words on
+ screen: "asked it to go" against "it was already gone and has been cleared".
+ Reporting a reap as a logout would be this file's own instrument rule broken.
+
+ ***2 IS TRUTHY, WHICH IS WHY IT IS SAFE.***  Every existing caller writes
+ "if not(logout(...))" or takes the value as a flag, and 2 reads as true
+ there exactly as 1 does.  A new number was chosen over a second return
+ argument for that reason.
  */
 
   DESCRIPTOR *descr;
@@ -969,6 +984,14 @@ void op_logout() {
   if (user == 0) {
     k_exit_cause = (immediate) ? K_LOGOUT : K_TERMINATE;
     status = 1;
+  } else if (reap_lost_user((int16_t)user)) {
+    /* THE PROCESS WAS ALREADY GONE.  PRE_RELEASE_FIXES.md 16.  Its slot, and
+       every file, record, group and task lock it still held, have been
+       released.  Tried BEFORE raise_event() deliberately: raising an event at
+       a process that cannot receive it is what sets USR_LOGOUT and leaves
+       "(logout pending)" standing for ever, so asking the question in the
+       other order would still leave the flag behind on the way past. */
+    status = 2;
   } else {
     log_printf(sysmsg(1027), user); /* Force logout initiated for user %d */
     status = raise_event((immediate) ? EVT_LOGOUT : EVT_TERMINATE, user);

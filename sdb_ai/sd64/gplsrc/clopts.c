@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 04 Sep 26 Windows port - reap_lost_user(), so LOGOUT n can reclaim a slot
+ *                      whose process is gone instead of marking it
+ *                      "(logout pending)" for ever.  PRE_RELEASE_FIXES.md 16
  * 31 Aug 26 Windows port - remove_user() gave away the dead session's file,
  *                      record and group locks but never its TASK locks: the
  *                      loop tested process.user_no where the three loops
@@ -212,6 +215,78 @@ Private void kill_process(USER_ENTRY* uptr) {
     remove_user(uptr);
     printf("Removed user %d (pid %d).\n", (int)user_no, pid);
   }
+}
+
+/* ======================================================================
+   reap_lost_user()  -  Reclaim ONE user table slot whose process is gone
+
+   04 Sep 26 Windows port - PRE_RELEASE_FIXES.md 16.
+
+   ***WHY THIS EXISTS.***  A session that dies without logging out leaves its
+   user table slot behind, still holding the file it had open.  LOGOUT n then
+   raise_event()s EVT_TERMINATE at a process that is not there to receive it,
+   so USR_LOGOUT is set and nothing ever clears it: LISTU shows
+   "(logout pending)" for ever and the file stays locked.  Measured 26 Aug
+   2026 - user 58, pid 363, still listed ten minutes later.
+
+   ***IT IS cleanup()'s PER-USER HALF AND DELIBERATELY SHARES ITS CODE.***
+   process_exists() is the same liveness test and remove_user() the same
+   release, so a slot reaped here and a slot reaped by "sd -cleanup" are
+   reclaimed identically.  Writing a second release path was the alternative
+   and it is exactly how PRE_RELEASE 24 happened - one of two copies fixed.
+
+   ***IT DOES NOT ATTACH OR UNBIND SHARED MEMORY, WHICH IS THE ONE REAL
+   DIFFERENCE FROM cleanup().***  cleanup() runs as a standalone process that
+   has to attach first and let go afterwards; this runs inside a live session
+   which already holds the segment, and unbinding it here would pull the floor
+   out from under the caller.
+
+   ***THE LOCK ORDER IS cleanup()'s, AND THAT IS NOT COSMETIC.***  Four
+   semaphores are taken, and taking them in a different order from the other
+   routine that takes all four is how two live sessions deadlock.  Same order,
+   released in reverse.
+
+   ***IT REFUSES TO REAP THE CALLER.***  A session removing its own slot while
+   running would release its own locks underneath itself.  process_exists()
+   would answer TRUE for a live caller and stop it anyway, so this is the
+   belt to that braces - and it costs one comparison.                       */
+
+bool reap_lost_user(int16_t user) {
+  USER_ENTRY* uptr;
+  int16_t u;
+  int pid;
+  char username[MAX_USERNAME_LEN + 1];
+  bool reaped = FALSE;
+
+  if (user == process.user_no)
+    return FALSE; /* Never ourselves - see above */
+
+  StartExclusive(FILE_TABLE_LOCK, 59);
+  StartExclusive(REC_LOCK_SEM, 59);
+  StartExclusive(GROUP_LOCK_SEM, 59);
+  StartExclusive(SHORT_CODE, 59);
+
+  for (u = 1; u <= sysseg->max_users; u++) {
+    uptr = UPtr(u);
+    if ((uptr->uid != 0) && (uptr->uid == user)) {
+      pid = uptr->pid;
+      if (!process_exists(pid)) {
+        strcpy(username, (char*)(uptr->username));
+        remove_user(uptr);
+        log_printf("LOGOUT reaped user %d (pid %d, %s) - process was gone.\n",
+                   (int)user, pid, username);
+        reaped = TRUE;
+      }
+      break; /* uid is unique; alive or dead, this was the entry */
+    }
+  }
+
+  EndExclusive(SHORT_CODE);
+  EndExclusive(GROUP_LOCK_SEM);
+  EndExclusive(REC_LOCK_SEM);
+  EndExclusive(FILE_TABLE_LOCK);
+
+  return reaped;
 }
 
 /* ======================================================================

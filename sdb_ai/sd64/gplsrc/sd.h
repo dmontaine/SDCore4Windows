@@ -191,6 +191,12 @@ void k_call(char * name, int num_args, u_char * code_ptr, int16_t stack_adj);
 void k_return(void);
 void k_run_program(void);
 bool raise_event(int16_t event, int16_t user);
+/* 04 Sep 26 Windows port - PRE_RELEASE_FIXES.md 16.  Declared beside
+   raise_event() because op_logout() chooses between the two: an event for a
+   session that is still there, a reap for one that is not.  Defined in
+   clopts.c, beside cleanup(), whose process_exists() and remove_user() it
+   shares so that both routes reclaim a slot identically.                   */
+bool reap_lost_user(int16_t user);
 void process_events(void);
 void show_stack(void);
 void sigchld_handler(int signum);

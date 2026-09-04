@@ -5,6 +5,39 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  "CANNOT GAIN EXCLUSIVE ACCESS TO FILE" NOW TELLS YOU WHICH FILE
+           AND WHO IS HOLDING IT - AND YOU CAN CLEAR A DEAD SESSION YOURSELF.
+
+           If your connection drops, SD does not always find out. The session
+           you lost is still listed, and it is still holding open whatever
+           files it had open. The next time you try something that needs a
+           file to itself - build.index, delete.index, set.trigger,
+           configure.file, cname - it was refused with
+
+               Cannot gain exclusive access to file
+
+           which named neither the file nor the session in the way. There was
+           nothing there to act on.
+
+           It now names both, and says what to do about it. If the session
+           holding the file is one that has died, clearing it releases the
+           file:
+
+               logout <user number>
+
+           THAT COMMAND NOW WORKS ON A SESSION THAT HAS ALREADY GONE. It used
+           to signal the process and wait for a reply that could never come,
+           so the entry sat marked "(logout pending)" for ever and the file
+           stayed locked. It now reclaims the slot and releases every file,
+           record and task lock the dead session still held. If the process is
+           still running it is asked to log out, exactly as before - so check
+           with the person first.
+
+           AND "logout" IS NO LONGER ADMINISTRATOR-ONLY. Programmers have it
+           too, limited to their own sessions: you can clear a session of your
+           own that has died without needing an administrator. Standard
+           accounts do not have the command.
+
 04 Sep 26  INSTALLING NOW ASKS FOR TWO PASSWORDS, AND SAYS WHY.
 
            If you are an administrator you have TWO SD accounts, and until now

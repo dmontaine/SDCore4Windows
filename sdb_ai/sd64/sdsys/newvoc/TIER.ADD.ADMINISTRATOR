@@ -19,7 +19,6 @@ list.readu
 list.locks
 clear.locks
 lock
-logout
 set.date
 sh
 !

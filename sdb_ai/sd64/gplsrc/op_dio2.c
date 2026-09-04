@@ -398,6 +398,69 @@ void op_fileinfo() {
         /* Recognised but returns default zero */
         break;
 
+      case FL_HOLDERS: /* 1021  Which sessions hold this file open? */
+        /* 04 Sep 26 Windows port - PRE_RELEASE_FIXES.md 16.
+
+           ***WHY THIS EXISTS.***  "Cannot gain exclusive access to file"
+           (message 2602) named neither the file nor whoever was holding it,
+           so a user whose BUILD.INDEX was refused had nothing to act on - and
+           the commonest cause is a session that DIED, whose slot still holds
+           the file open.  LISTU would show it and LISTU is administrator-only.
+           The owner's ruling, 4 Sep 2026: display both session and file.
+
+           ***IT NEEDS NO NEW BOOKKEEPING***, which is why it is cheap: the
+           per-user file map is already maintained on every open and close -
+           dh_open.c:501 and :519 increment it, dh_close.c:54 decrements it -
+           and remove_user() already walks it to give a dead session's files
+           back.  This asks the same table the same question.
+
+           ***THE CALLER IS EXCLUDED.***  Reporting "you" as a holder would be
+           true and useless: every caller of this has the file open, that being
+           how they hold an fvar at all.  What the user needs is who ELSE.
+
+           EMPTY IS A REAL ANSWER, not a failure.  It means nothing else holds
+           the file, so the obstacle is this session's own cached reference -
+           a different problem with a different remedy, and the message the
+           BASIC prints says so rather than naming nobody.
+
+           static, BECAUSE set_string IS REACHED AFTER THIS BLOCK ENDS.  p has
+           to point at storage that outlives the scope, and SD runs one of
+           these per process, so there is nothing to race with.              */
+        {
+          static char holders[256];
+          USER_ENTRY* huptr;
+          int16_t hu;
+          int16_t hcount = 0;
+          char one[64];
+
+          holders[0] = '\0';
+
+          StartExclusive(SHORT_CODE, 37);
+          for (hu = 1; hu <= sysseg->max_users; hu++) {
+            huptr = UPtr(hu);
+            if ((huptr->uid == 0) || (huptr->uid == process.user_no))
+              continue; /* free slot, or ourselves - see above */
+            if (*UFMPtr(huptr, fvar->file_id) == 0)
+              continue; /* does not hold this file open */
+
+            snprintf(one, sizeof(one), "%s%d (%s)", (hcount ? ", " : ""),
+                     (int)(huptr->uid), (char*)(huptr->username));
+            /* Truncate rather than overflow: a machine with more holders than
+               fit in one line still gets a usable answer, and the count of
+               them is not what the user is being asked to act on. */
+            if (strlen(holders) + strlen(one) >= sizeof(holders) - 4) {
+              strcat(holders, ", ...");
+              break;
+            }
+            strcat(holders, one);
+            hcount++;
+          }
+          EndExclusive(SHORT_CODE);
+
+          p = holders;
+        }
+        goto set_string;
+
       case FL_EXCLUSIVE: /* 10000  Set exclusive access mode */
         if (internal) {
           /* To gain exclusive access to a file it must be open only to this

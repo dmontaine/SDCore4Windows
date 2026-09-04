@@ -14,7 +14,7 @@
 
       - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
         over SCRAM and attach to their own account
-      - what each tier can DO once in, as a VOC count: 355 / 396 / 420.  A
+      - what each tier can DO once in, as a VOC count: 355 / 397 / 420.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
       - a wrong password is refused, so the successes mean something
@@ -169,7 +169,18 @@ $Tiers = @(
     #   Aug - so test-tiercounts-units.ps1 was run before the suite this time
     #   and is step 1 of VerifyInstall1 precisely to catch it in a second.
     [pscustomobject]@{ Name = ($Prefix + '1'); Keyword = '';              Tier = 'STANDARD';      Voc = 355 }
-    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 396 }
+    # 04 Sep 26 - 396 -> 397, PRE_RELEASE 16, AND THIS FILE WAS LEFT BEHIND FOR
+    #   THE THIRD TIME - caught by test-tiercounts-units in 0.4 s, exactly as
+    #   the comment above predicted it would be.  "logout" moved out of
+    #   TIER.ADD.ADMINISTRATOR into newvoc plus TIER.OMIT.STANDARD, the shape
+    #   "micro" already has, so a PROGRAMMER may clear their own dead session.
+    #   RE-DERIVED FROM THE DIRECTORY RATHER THAN COPIED FROM verify-tiers.ps1:
+    #   newvoc now holds 396 names, less "%t" and the two list records = 393;
+    #   TIER.OMIT.STANDARD is 43 lines, 1 + 42.  So PROGRAMMER 393 + 4 = 397,
+    #   while ADMINISTRATOR 393 + 23 + 4 = 420 and STANDARD 393 - 42 + 4 = 355
+    #   do NOT move - the verb left one side of ADMINISTRATOR's sum and joined
+    #   the other, and joined both sides of STANDARD's at once.
+    [pscustomobject]@{ Name = ($Prefix + '2'); Keyword = 'PROGRAMMER';    Tier = 'PROGRAMMER';    Voc = 397 }
     # 28 Aug 26 - 417 -> 416, AND THIS FILE WAS THE ONE LEFT BEHIND.
     #   PRE_RELEASE 25 deleted encrypt.field from voc_template and from
     #   TIER.ADD.ADMINISTRATOR - a V record pointing at $CRYPTO, which is
