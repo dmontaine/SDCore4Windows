@@ -54,6 +54,34 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 04 Sep 26 - RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, on adding
+# verify-editors.ps1 (PRE_RELEASE 66).  The 31 Aug figures below it read 44 /
+# 17 / 22 and were stale in every column, which is what re-deriving is for:
+#
+#     47 verify-*.ps1 in the directory
+#     19 named in this file           (18 before verify-editors)
+#     24 named in VerifyInstall2.ps1
+#     -- 43 accounted for, FOUR not named in either table, AND ALL FOUR ARE
+#        CORRECTLY OUT - checked one at a time rather than counted:
+#
+#   verify-doors.ps1, verify-doors-admin.ps1  CHILDREN of verify-doors-suite.ps1
+#   verify-acctmsgs.ps1                       a child of those and of
+#                                             verify-tierchange.ps1
+#   verify-upgrade.ps1                        CANNOT be a step: a two-phase
+#                                             hand-run (-Snapshot, install over
+#                                             the top, -Compare) that brackets
+#                                             an installer run
+#
+# ***verify-vocverbs.ps1 WAS IN THAT LIST AND IS NOW A STEP OF ITS OWN IN
+# VerifyInstall2*** - which is why the count of correctly-out files went five to
+# four while the directory grew.  Adjusting the old numbers by one would have
+# hidden that and left the arithmetic wrong in the other direction.
+#
+# AND NO FILE IS IN BOTH TABLES, checked the same way.  A verifier named twice
+# would run twice, spend two prefixes from one token, and the second run would
+# fail on residue the first left - which reads as a product defect.
+#
+# (The superseded 31 Aug block follows, kept because its rule is the one above.)
 # 31 Aug 26 - RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, on adding
 # verify-basicfuncs.ps1 (PRE_RELEASE 106).  THE NUMBERS ABOVE WERE STALE AGAIN
 # AND THE ARITHMETIC NO LONGER CLOSES, which is the point of re-deriving:
@@ -437,6 +465,24 @@ $steps = @(
     # It is second so that the prompt comes early rather than after five
     # silent minutes.
     @{ Name = 'verify-osusers.ps1';     P = @{} },
+    # 04 Sep 26 - PRE_RELEASE 66's standing guard: are the full-screen editors
+    # BUNDLED, and does gpl.bp/EDIT's find.editor resolve the bundled copy
+    # rather than whatever winget left on PATH?  No account, no prefix, no run
+    # token; it reads the install, stage.py's BUNDLED_EDITORS and EDIT's own
+    # path literal, and runs install-editors.ps1 -CheckOnly.
+    #
+    # ***IT IS HERE BECAUSE THE REGRESSION IS SILENT.***  If the bundling broke,
+    # find.editor's PATH fallback would find the winget copy and every verb
+    # would go on working - against an editor of unknown version, which is the
+    # entire defect 66 was filed for.  Nothing would go red.  Same shape as the
+    # stem-coverage step above, and the same argument for making it a step.
+    #
+    # AFTER verify-credacl AND ITS TWO NEIGHBOURS, NOT BESIDE THE test-* STEPS:
+    # those two read source files only, which is why they may precede the step
+    # that decides what an ORDINARY token can do.  This one reads the installed
+    # tree, so it goes after.  And after verify-osusers so it does not delay
+    # that step's UAC prompt, which is early on purpose.
+    @{ Name = 'verify-editors.ps1';     P = @{} },
     @{ Name = 'verify-nocase.ps1';      P = @{} },
     @{ Name = 'verify-setpw.ps1';       P = @{} },
     @{ Name = 'verify-allowgroups.ps1'; P = @{} },

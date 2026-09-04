@@ -207,6 +207,15 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # Neither is installed and nothing compiles either into
                   # sd.exe; this one is dot-sourced from a few lines above.
                   'stale-binaries.ps1', 'test-stalebin-units.ps1',
+                  # 04 Sep 26 - PRE_RELEASE 66's standing guard over the bundled
+                  # full-screen editors.  Listed in the commit that creates it,
+                  # under the rule the note below states.  It reads the install,
+                  # stage.py's BUNDLED_EDITORS and gpl.bp/EDIT's own literal, and
+                  # runs install-editors.ps1 -CheckOnly; nothing installs it and
+                  # nothing compiles it into sd.exe.  It is a step in
+                  # VerifyInstall1 - the UNELEVATED half, because every check in
+                  # it is a read.
+                  'verify-editors.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
