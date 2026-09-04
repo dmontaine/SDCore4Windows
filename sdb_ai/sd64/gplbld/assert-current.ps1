@@ -188,6 +188,11 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # service start - so it is watched like the rest of the tree.
                   # These two are its instruments and reach no install.
                   'verify-register.ps1', 'test-reconcile-units.ps1',
+                  # 03 Sep 26 - PRE_RELEASE 93/65's end-of-suite check, on the
+                  # owner's instruction after b107.  Listed in the commit that
+                  # creates it.  It restarts the SD service and reads the sweep's
+                  # log; nothing installs it.
+                  'verify-registersweep.ps1',
                   # 03 Sep 26 - THIS SCRIPT'S OWN CHECK A2, lifted into a file
                   # so cycle.ps1's step 0 asks the question with the same code,
                   # and its units test.  Listed in the commit that creates them.

@@ -660,7 +660,28 @@ $steps = @(
     # binary from OUTSIDE this repository - sd-connect.exe from the sdclilib32
     # tree (its -SdConnect default).  If that tree is absent this step is the
     # one that fails, and nothing before it is lost.
-    @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } }
+    @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } },
+
+    # 03 Sep 26 - LAST, AND IT HAS TO BE LAST.  PRE_RELEASE 93 and 65, owner's
+    # instruction after the b107 witness.  It measures the residue THIS run
+    # leaves, restarts the SD service so reconcile-accounts.ps1 sweeps it, and
+    # checks the right records went and the valid ones stayed.
+    #
+    # ***IT IS NOT verify-register RUN AGAIN, AND IT CANNOT BE.***
+    # verify-tierapi above leaves its register records behind ON PURPOSE, so a
+    # plain verify-register placed here would find them and go red on EVERY
+    # run - and a permanently red guard is what teaches people to ignore
+    # guards.  The owner ruled sweep-then-verify; the file's header has the
+    # reasoning and the five things it proves that neither half proves alone.
+    #
+    # verify-register in VerifyInstall1 stays where it is: running FIRST, it
+    # catches what a PREVIOUS run left uncleaned, which is the b100 state (14
+    # dead records in 15).  This one catches residue seconds old.  They are
+    # different questions and both are worth asking.
+    #
+    # NO PREFIX AND NO ACCOUNT: it creates nothing.  It DOES restart SD, which
+    # this runner already does more than once.
+    @{ Name = 'verify-registersweep.ps1'; P = @{} }
 )
 
 # 30 Aug 26 - -Only.  Shared filter, see suite-only.ps1.  It runs AFTER the
