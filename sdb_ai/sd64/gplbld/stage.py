@@ -56,6 +56,7 @@
 #
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -86,6 +87,21 @@ PROGRAM_FILES_BIN = [
     'sdclilib.dll',             # native UCRT64, needs no MSYS2 runtime
     'libsdclilib.dll.a',        # import library, for building clients
     'sdsvc.exe',                # native UCRT64, the service that starts SD
+]
+
+# Third-party editor binaries the installer bundles.  PRE_RELEASE_FIXES 66.
+# NOT tracked in the repo (CLAUDE.md forbids tracked binaries) - they live in
+# the sibling SD-Untracked/editors tree, which the owner backs up with the
+# Projects tree and which the eventual SourceForge release zip will carry.
+# stage_editors() copies them into usr/bin beside sd.exe, the fixed path that
+# gpl.bp/EDIT's find.editor and install-editors.ps1 both resolve.  The SHA-256
+# pins the exact binary, so a build machine holding a different one fails loudly
+# rather than shipping an editor the documentation does not describe.  Versions:
+# micro 2.0.15 and Microsoft Edit 1.2.1 - what the editor pages were written
+# against.
+BUNDLED_EDITORS = [
+    ('micro.exe', '77a8b925c885702b5605b4aebb8e77c7b15e5b03beeb14b7aa7e12b2b8d4ef3f'),
+    ('edit.exe',  '5f54a0fa8cbf5423aef8be8502173a59183cf3adbc913212b1066ef8fff3d9c0'),
 ]
 
 # Scanned for imports.  The client DLL and the service are deliberately not in
@@ -920,6 +936,50 @@ def write_upgrade_iss(stage, sdsys, bootstrapped):
     return path, replace, preserve
 
 
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sd_untracked():
+    """The sibling SD-Untracked tree (outside git), which holds the bundled
+    binaries and the dev tooling.  Derived from this file so it follows the repo
+    on any machine that keeps the two side by side under Projects."""
+    gplbld = os.path.dirname(os.path.abspath(__file__))
+    projects = os.path.abspath(
+        os.path.join(gplbld, os.pardir, os.pardir, os.pardir, os.pardir))
+    return os.path.join(projects, 'SD-Untracked')
+
+
+def stage_editors(pfbin, staged, stage):
+    """Copy the bundled editors into usr/bin beside sd.exe.  PRE_RELEASE_FIXES
+    66.  The binaries are not in git; they live in SD-Untracked/editors.  The
+    SHA-256 pins the exact binary, so a build machine holding a different one
+    fails here rather than shipping an editor the documentation does not
+    describe."""
+    src_dir = os.path.join(sd_untracked(), 'editors')
+    for exe, want in BUNDLED_EDITORS:
+        src = os.path.join(src_dir, exe)
+        if not os.path.isfile(src):
+            die('bundled editor not found: %s\n'
+                '  Restore the SD-Untracked tree (backed up with Projects, '
+                'outside git), or install the editor and copy it there.  '
+                'PRE_RELEASE_FIXES 66.' % src)
+        got = sha256_of(src)
+        if got != want:
+            die('bundled editor %s SHA-256 mismatch\n  have %s\n  want %s\n'
+                '  The copy in SD-Untracked is not the version this build pins; '
+                'update BUNDLED_EDITORS or restore the pinned binary.'
+                % (exe, got, want))
+        dst = os.path.join(pfbin, exe)
+        shutil.copy2(src, dst)
+        staged.add(stage, dst)
+        print('  editor: %s staged from SD-Untracked (sha ok)' % exe)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description='Assemble the staging tree for a Windows install.')
@@ -1020,6 +1080,9 @@ def main():
         dst = os.path.join(pfbin, os.path.basename(dlls[name]))
         shutil.copy2(dlls[name], dst)
         staged.add(stage, dst)
+
+    # Third-party editors bundled beside sd.exe.  PRE_RELEASE_FIXES 66.
+    stage_editors(pfbin, staged, stage)
 
     fstab = os.path.join(pf, 'etc', 'fstab')
     os.makedirs(os.path.dirname(fstab))

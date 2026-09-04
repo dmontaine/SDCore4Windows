@@ -77,6 +77,15 @@ $Editors = @(
 # way at run time, so printing what THIS found is what makes a later "editor
 # not found" from the verb diagnosable rather than mysterious.
 function Find-Editor($exe) {
+    # THE BUNDLED COPY FIRST.  PRE_RELEASE_FIXES 66: the installer ships the
+    # editor at {app}\usr\bin, beside sd.exe, and this script runs from {app}
+    # ({app}\install-editors.ps1), so $PSScriptRoot locates it without touching
+    # PATH.  Preferring it makes the version SD shipped the one that runs, and
+    # it matches gpl.bp/EDIT's find.editor, which resolves the same fixed path.
+    if ($PSScriptRoot) {
+        $bundled = Join-Path $PSScriptRoot ('usr\bin\' + $exe)
+        if (Test-Path -LiteralPath $bundled) { return $bundled }
+    }
     $c = Get-Command -Name $exe -CommandType Application -ErrorAction SilentlyContinue
     if ($c) { return $c[0].Source }
     foreach ($p in @(

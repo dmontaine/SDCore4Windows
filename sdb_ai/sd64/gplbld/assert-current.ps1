@@ -537,12 +537,6 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # stale because it exists and then refuse to run on the
                   # strength of its own newness.
                   'verify-cmdaudit.ps1',
-                  # 23 Aug 26 - setup-devbox.ps1 builds a DEVELOPMENT machine
-                  # from nothing.  It never ships and never reaches an install
-                  # - it runs BEFORE there is a clone, let alone a tree - and
-                  # is listed in the commit that creates it, which is the rule
-                  # verify-scram.c was added without and paid for above.
-                  'setup-devbox.ps1',
                   # 19 Aug 26 - "make check" in gplsrc\sdclilib builds these
                   # two INTO THAT DIRECTORY rather than into localtest\, so
                   # they are the same false stale the localtest\ exclusion was

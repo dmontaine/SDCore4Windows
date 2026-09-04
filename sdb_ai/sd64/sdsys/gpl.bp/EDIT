@@ -15,6 +15,9 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 03 Sep 26 Windows port - PRE_RELEASE_FIXES 66.  find.editor now tries the
+*           bundled editor beside sd.exe (fixed at C:\Program Files\SD\usr\bin)
+*           before the PATH lookup, so the verb runs the version SD ships.
 * 27 Aug 26 Windows port - MICRO_CONFIG_HOME IS PER USER AND WRITABLE, and the
 *           "-backup off" that was here earlier the same day is gone entirely.
 *           micro writes to its configuration home when it saves; pointing it at
@@ -677,9 +680,23 @@ return
 * ---------------------------------------------------------------------------
 find.editor:
    editor.path = ''
-   probe = '$c = Get-Command -Name ' : editor.exe
+*  THE BUNDLED COPY FIRST, THEN PATH.  PRE_RELEASE_FIXES 66.  The installer
+*  ships the editor beside sd.exe, whose location is fixed at
+*  C:\Program Files\SD\usr\bin - the user chooses only whether that directory
+*  is added to PATH, not where it is.  Trying it first means the verb runs the
+*  version SD shipped - the one the documentation was written against - and
+*  does not depend on the optional PATH task.  The Get-Command fallback still
+*  answers for a machine that has the editor from winget instead.  It stays ONE
+*  lookup returning the resolved path, as the note above requires.
+*  Forward slashes: PowerShell accepts them, they are SD's own path convention
+*  (see the note at the foot of this program), and they keep a backslash out of
+*  a BASIC string literal.
+   bundled = 'C:/Program Files/SD/usr/bin/' : editor.exe
+   probe  = "$b = '" : bundled : "'; "
+   probe := 'if (Test-Path -LiteralPath $b) { $b } else { '
+   probe := '$c = Get-Command -Name ' : editor.exe
    probe := ' -CommandType Application -ErrorAction SilentlyContinue; '
-   probe := 'if ($c) { $c[0].Source }'
+   probe := 'if ($c) { $c[0].Source } }'
 
    os.execute probe capturing probe.out
 
