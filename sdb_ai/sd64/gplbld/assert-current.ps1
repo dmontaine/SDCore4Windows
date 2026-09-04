@@ -216,6 +216,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # VerifyInstall1 - the UNELEVATED half, because every check in
                   # it is a read.
                   'verify-editors.ps1',
+                  # 04 Sep 26 - PRE_RELEASE 153's units test over the version
+                  # probe install-editors.ps1 gained the same day.  Listed in
+                  # the commit that creates it.  It lifts Get-EditorVersion out
+                  # of that script by AST and drives it against .cmd fixtures in
+                  # %TEMP%, one of which hangs on purpose; nothing installs it.
+                  # NOTE install-editors.ps1 itself is NOT here and must not be
+                  # - it SHIPS to {app}, so it stays under the guard.
+                  'test-editorver-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',

@@ -233,6 +233,23 @@ function Test-AllBundled($text, $bin) {
     }
     return $true
 }
+# PRE_RELEASE_FIXES 153.  Every "already present" line must NAME a version.  It
+# used to trail off after "version " for micro, a Go binary with no Win32
+# version resource, so the one place the machine records which micro is
+# installed answered nothing - which is the whole of what 66 was for.
+#
+# APPLIED TO THE LIVE -CheckOnly OUTPUT ONLY, NOT THE HISTORICAL LOG.  A cycle
+# wipes the log with the data tree, but an upgrade that keeps the database does
+# not, so a tree upgraded from a pre-153 install would carry blank lines that
+# say nothing about the script running today.  The live run cannot.
+function Test-VersionNamed($text) {
+    $seen = [regex]::Matches($text, '(?m)already present - .+?\s\sversion\s*(.*)$')
+    if ($seen.Count -eq 0) { return $false }   # nothing found is not a pass
+    foreach ($s in $seen) {
+        if ($s.Groups[1].Value.Trim() -eq '') { return $false }
+    }
+    return $true
+}
 
 if (Test-Path -LiteralPath $Log) {
     $text = (Get-Content -LiteralPath $Log) -join "`n"
@@ -258,6 +275,12 @@ install-editors: every editor is present
 Row (-not (Test-NoDownload $badLog))          'control: predicate A goes RED on a log that downloaded'
 Row (-not (Test-AllBundled $badLog $UsrBin))  'control: predicate B goes RED on a log naming system32'
 Row (-not (Test-AllBundled 'nothing here' $UsrBin)) 'control: predicate B refuses a log with no editor line'
+# PRE_RELEASE_FIXES 153's predicate, controlled the same way.  The blank-version
+# line below is the EXACT text the log carried before 153 was fixed.
+$blankVer = 'install-editors: micro: already present - C:\Program Files\SD\usr\bin\micro.exe  version '
+Row (-not (Test-VersionNamed $blankVer)) 'control: the version check goes RED on the pre-153 blank line'
+Row (Test-VersionNamed ($blankVer + '2.0.15')) 'control: and GREEN when a version is named'
+Row (-not (Test-VersionNamed 'nothing here')) 'control: it refuses text with no editor line'
 
 # ---------------------------------------------------------------------------
 # 3b. A LIVE -CheckOnly RUN.  This exercises install-editors' OWN Find-Editor,
@@ -280,6 +303,7 @@ if (-not (Test-Path -LiteralPath $ie)) {
     Row ($t2.Trim() -ne '') 'the -CheckOnly run produced output (null case refused)'
     Row ($code -eq 0) ("the -CheckOnly run exited 0 (got " + $code + ")")
     Row (Test-AllBundled $t2 $UsrBin) 'its Find-Editor returns the bundled path for every editor'
+    Row (Test-VersionNamed $t2) 'and it NAMES a version for every editor (PRE_RELEASE 153)'
 }
 
 # ---------------------------------------------------------------------------

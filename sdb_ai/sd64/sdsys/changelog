@@ -5,6 +5,22 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  SD NOW RECORDS WHICH VERSION OF EACH EDITOR IT FOUND.
+
+           SD writes a line for each full-screen editor when it installs, to
+
+               C:\ProgramData\SD\install-editors.log
+
+           That line names the editor's version, and for micro it used to stop
+           short and say nothing - micro does not carry a version number the
+           way most Windows programs do, so there was nothing to read. If you
+           ever needed to answer "which micro is this?", the one place that
+           should have known did not.
+
+           It now asks micro itself, and records "version 2.0.15". If an
+           editor cannot be identified at all, the line gives its size and
+           checksum instead, so the field is never simply blank.
+
 03 Sep 26  THE FULL-SCREEN EDITORS NOW COME WITH SD. INSTALLING NO LONGER
            DOWNLOADS THEM.
 

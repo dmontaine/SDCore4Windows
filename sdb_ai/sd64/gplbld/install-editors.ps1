@@ -67,9 +67,14 @@ function Say($m) {
 # THE TABLE IS THE WHOLE DIFFERENCE BETWEEN THE TWO.  gpl.bp/EDIT carries the
 # same pair of names for the same two verbs; if one is changed the other has
 # to be, and there is nothing else to keep in step.
+#
+# VersionArg IS PER EDITOR AND IS EMPTY WHERE WE DO NOT KNOW THE FLAG.
+# PRE_RELEASE_FIXES 153.  It is only ever used when the Win32 version resource
+# is empty, and an editor with no entry here is simply not asked - guessing
+# "--version" at a full-screen editor is how this step would hang an install.
 $Editors = @(
-    [pscustomobject]@{ Verb = 'edit';  Name = 'Microsoft Edit'; Exe = 'edit.exe';  Id = 'Microsoft.Edit' },
-    [pscustomobject]@{ Verb = 'micro'; Name = 'micro';          Exe = 'micro.exe'; Id = 'zyedidia.micro' }
+    [pscustomobject]@{ Verb = 'edit';  Name = 'Microsoft Edit'; Exe = 'edit.exe';  Id = 'Microsoft.Edit';  VersionArg = '' },
+    [pscustomobject]@{ Verb = 'micro'; Name = 'micro';          Exe = 'micro.exe'; Id = 'zyedidia.micro'; VersionArg = '-version' }
 )
 
 # --- what counts as present ------------------------------------------------
@@ -97,6 +102,87 @@ function Find-Editor($exe) {
     return ''
 }
 
+# --- which version is this, and never a blank -----------------------------
+# PRE_RELEASE_FIXES 153.  This line used to read
+#     $v = (Get-Item -LiteralPath $found).VersionInfo.ProductVersion
+# and micro is a GO BINARY WITH NO WIN32 VERSION RESOURCE, so the log recorded
+#     micro: already present - ...\micro.exe  version
+# and stopped.  The one place the machine records which micro is installed
+# answered nothing - which is the whole of what entry 66 was for, the owner's
+# "so that we knew which version was installed".  Microsoft Edit answers 1.2.1
+# from the same call, which is why it was never noticed.
+#
+# A BLANK FIELD READS AS "no version" RATHER THAN "not asked", and that is the
+# null case the instrument rules refuse.  So this returns SOMETHING for every
+# file that exists: the resource, else the executable's own answer, else the
+# size and SHA-256 - which is not a consolation prize, it is the exact value
+# stage.py's BUNDLED_EDITORS pins, so a reader can match the log against the
+# build.
+#
+# ***ASKING THE EXECUTABLE IS THE RISKY PART AND IT IS FENCED FOUR WAYS.***
+# The installer runs this script HIDDEN, so a full-screen editor that opened
+# here would hang the install with nothing on screen to say why:
+#   1. only editors with a KNOWN flag are asked (VersionArg above);
+#   2. it is only reached when the version resource is empty, so Edit never
+#      gets here at all;
+#   3. hidden window, stdout and stderr to files, stdin from an EMPTY file, so
+#      a TUI cannot take the console and gets EOF at once if it tries to read;
+#   4. a five-second timeout and a Kill, and the whole thing inside try/catch -
+#      a version string is not worth failing an install over.
+function Get-EditorVersion($path, $versionArg) {
+    try {
+        $v = (Get-Item -LiteralPath $path).VersionInfo.ProductVersion
+        if ($null -ne $v) { $v = $v.Trim() }
+        if ($v) { return $v }
+    } catch { }
+
+    if ($versionArg) {
+        $out = Join-Path $env:TEMP ('sd-editorver-' + [guid]::NewGuid().ToString('N') + '.txt')
+        $err = $out + '.err'
+        $nul = $out + '.in'
+        try {
+            Set-Content -LiteralPath $nul -Value '' -NoNewline -Encoding ascii
+            $p = Start-Process -FilePath $path -ArgumentList $versionArg `
+                               -WindowStyle Hidden -PassThru `
+                               -RedirectStandardOutput $out `
+                               -RedirectStandardError $err `
+                               -RedirectStandardInput $nul
+            if (-not $p.WaitForExit(5000)) {
+                try { $p.Kill() } catch { }
+                Say ('    version probe timed out after 5s: ' + $path + ' ' + $versionArg)
+            } else {
+                $text = ''
+                if (Test-Path -LiteralPath $out) { $text = (Get-Content -LiteralPath $out -Raw) }
+                if ($text) {
+                    # micro prints "Version: 2.0.15" then a commit hash and a
+                    # build date.  Take the labelled line where there is one,
+                    # and the first non-empty line otherwise.
+                    $m = [regex]::Match($text, '(?im)^\s*version\s*:\s*(.+?)\s*$')
+                    if ($m.Success) { return $m.Groups[1].Value }
+                    foreach ($line in ($text -split "`r?`n")) {
+                        if ($line.Trim()) { return $line.Trim() }
+                    }
+                }
+            }
+        } catch {
+            Say ('    version probe failed: ' + $_.Exception.Message)
+        } finally {
+            foreach ($f in @($out, $err, $nul)) {
+                try { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } } catch { }
+            }
+        }
+    }
+
+    # LAST RESORT, AND STILL NOT A BLANK.  The SHA-256 is what the build pins.
+    try {
+        $it = Get-Item -LiteralPath $path
+        $h  = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower()
+        return ('unknown - {0:n0} bytes, sha256 {1}' -f $it.Length, $h)
+    } catch {
+        return 'unknown - and the file could not be read to identify it'
+    }
+}
+
 function Refresh-Path {
     # A fresh PATH: the machine PATH this process started with does not carry
     # a link directory winget has just created.
@@ -113,7 +199,7 @@ try {
     foreach ($ed in $Editors) {
         $found = Find-Editor $ed.Exe
         if ($found -ne '') {
-            $v = (Get-Item -LiteralPath $found).VersionInfo.ProductVersion
+            $v = Get-EditorVersion $found $ed.VersionArg
             Say ($ed.Verb + ': already present - ' + $found + '  version ' + $v)
             continue
         }
@@ -162,7 +248,11 @@ try {
         Refresh-Path
         $found = Find-Editor $ed.Exe
         if ($found -ne '') {
-            Say ($ed.Verb + ': installed - ' + $found)
+            # PRE_RELEASE_FIXES 153 - the same question, and the same reason to
+            # answer it: "which version did winget just put here" is exactly
+            # what a later support call needs, and it was not recorded at all.
+            Say ($ed.Verb + ': installed - ' + $found +
+                 '  version ' + (Get-EditorVersion $found $ed.VersionArg))
         } else {
             Say ($ed.Verb + ': winget ran and no ' + $ed.Exe + ' is reachable afterwards')
             $missing += $ed.Verb
