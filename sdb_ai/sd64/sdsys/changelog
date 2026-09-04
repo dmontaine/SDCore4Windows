@@ -5,6 +5,41 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  RECORDS WRITTEN OR DELETED INSIDE A TRANSACTION, IN A DIRECTORY
+           FILE, WITH CERTAIN CHARACTERS IN THE RECORD ID.
+
+           This affects directory files only, and only record ids containing
+           one of these characters:
+
+               *  ,  =  >  <  %  /  +  :  ;  ?  \  "
+
+           or an id starting with a dot or a tilde. In a directory file each
+           record is a separate file on disk, and because those characters
+           are awkward or illegal in a filename, SD stores them encoded - the
+           id "=" is held in a file called "%E", and SD converts back and
+           forth for you so you never see it.
+
+           That conversion was not being done for a write or a delete made
+           inside a transaction.
+
+           A WRITE inside a transaction stored the record under the raw id
+           instead of the encoded one. The write reported success, but a
+           later read of the same id looked in the encoded place, found
+           nothing, and reported the record as missing.
+
+           A DELETE inside a transaction tried to remove the raw name, which
+           was not there. SD treats "already gone" as success, so the delete
+           reported success and the record was still there afterwards.
+
+           Both are fixed. Neither needed anything to go wrong to happen -
+           the transactions committed normally - and neither produced an
+           error, a status or a log entry, so a site that hit this would have
+           seen only a record that would not read back, or one that would not
+           stay deleted.
+
+           The same statements OUTSIDE a transaction were always correct, and
+           records already on disk are unaffected.
+
 04 Sep 26  "CANNOT GAIN EXCLUSIVE ACCESS TO FILE" NOW TELLS YOU WHICH FILE
            AND WHO IS HOLDING IT - AND YOU CAN CLEAR A DEAD SESSION YOURSELF.
 

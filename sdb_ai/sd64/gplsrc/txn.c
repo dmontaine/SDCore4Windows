@@ -17,6 +17,16 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ *  4 Sep 26 Windows port - the directory-file arms of op_txncmt() now map the
+ *           record id before touching the disk.  dir_write() and the delete
+ *           path both take a MAPPED id, op_dio3.c passes map_t1_id()'s output
+ *           outside a transaction, and both were handed txn->id - which is the
+ *           RAW id, because op_dio3.c caches the id the statement used.  A
+ *           WRITE inside a transaction therefore created a file the matching
+ *           READ could never find, and a DELETE removed a path that had never
+ *           existed, tolerated the ENOENT and reported success.  Neither
+ *           needed an induced fault: an ordinary successful commit was enough.
+ *           PRE_RELEASE_FIXES 154, UPSTREAM_FIXES 36.
  *  1 Sep 26 Windows port - a commit that fails half way no longer holds its
  *           record locks for the life of the process.  k_error() longjmps to
  *           K_ABORT rather than returning, so the five "goto exit_op_txncmt"
@@ -155,6 +165,10 @@ void op_txncmt() {
   char path[MAX_PATHNAME_LEN + 1];
   STRING_CHUNK* str;
   struct stat statbuf; /* 1 Sep 26 - the S_IFREG guard below, PRE_RELEASE 101 */
+  /* 4 Sep 26 Windows port - THE CACHED ID IS THE RAW ONE AND THE DISK WANTS
+     THE MAPPED ONE.  PRE_RELEASE_FIXES 154, UPSTREAM_FIXES 36.  Sized as
+     op_dio3.c sizes it: every mapped character can become two.            */
+  char mapped_id[2 * MAX_ID_LEN + 1];
 
   if (sysseg->flags & SSF_SUSPEND)
     suspend_updates();
@@ -183,7 +197,44 @@ void op_txncmt() {
             break;
 
           case DIRECTORY_FILE:
-            if (!dir_write(fvar, txn->id, txn->str)) {
+            /* 4 Sep 26 Windows port - MAP THE ID, WHICH THIS ARM NEVER DID.
+               PRE_RELEASE_FIXES 154, UPSTREAM_FIXES 36.
+
+               dir_write()'s second parameter is a MAPPED id - it is spelled
+               mapped_id in the prototype and is used verbatim as the filename.
+               op_dio3.c:832 passes map_t1_id()'s output; this arm passed
+               txn->id, and txn->id is the RAW id: op_dio3.c:829 calls
+               txn_write(fvar, id, id_len, str), not mapped_id, so nothing
+               between the WRITE statement and here had ever mapped it.
+
+               WHAT THAT COST, MEASURED 4 Sep 2026 ON A COMMIT THAT SUCCEEDED:
+               WRITE ... ON F, ',' inside a transaction created the file ',',
+               where the identical statement outside one creates '%C'.  A
+               later READ of ',' maps as it always has, looks for '%C', and
+               returns NOREC.  THE RECORD IS WRITTEN WHERE NOTHING CAN READ IT
+               AGAIN, with no error on any path - map_dir_ids defaults TRUE and
+               df_restricted_chars is *,=><%/+:;?\" , so ordinary ids reach it.
+
+               THE CACHE IS RIGHT TO HOLD THE RAW ID AND IS NOT CHANGED.
+               txn_read(), txn_write(), txn_delete() and clear_parent() all
+               match the cache against the id the BASIC statement used, which
+               is the raw one; mapping it at cache time would break all four.
+               The mapping belongs here, at the point of contact with the disk,
+               which is exactly where the non-transactional twin does it.
+
+               THE FAILURE RETURN CANNOT FIRE FROM HERE and is handled anyway:
+               both entry points (op_dio3.c:821 for WRITE, :374 for DELETE)
+               call map_t1_id() and refuse ER_IID before they ever reach the
+               cache, so an id that maps has already been proved to map.  A
+               silent skip would be the null case the instrument rules refuse,
+               so it raises 1422 like every other failure in this arm.      */
+            if (!map_t1_id(txn->id, txn->id_len, mapped_id)) {
+              process.status = -ER_IID;
+              k_error(sysmsg(1422));
+              goto exit_op_txncmt;
+            }
+
+            if (!dir_write(fvar, mapped_id, txn->str)) {
               k_error(sysmsg(1422));
               goto exit_op_txncmt;
             }
@@ -209,6 +260,30 @@ void op_txncmt() {
             break;
 
           case DIRECTORY_FILE:
+            /* 4 Sep 26 Windows port - MAP THE ID HERE TOO, AND BEFORE THE
+               COUNTERS.  PRE_RELEASE_FIXES 154, UPSTREAM_FIXES 36.  Same
+               defect as the TXN_WRITE arm above and the same one line of
+               cause; see that comment for why the cache is right to hold the
+               raw id.  THIS ARM IS THE WORSE OF THE TWO, because it is
+               SILENT: the path built from the raw id names a file that never
+               existed, remove() fails ENOENT, and ENOENT is deliberately
+               tolerated twenty lines below (the record is gone, which is what
+               was asked for) - so a transactional DELETE of a mapped id
+               reported success, removed nothing, and left the record readable.
+               Measured 4 Sep 2026: DELETE F, ';' inside a transaction left
+               '%Y' on disk and a later READ still returned its contents.
+
+               BEFORE THE COUNTERS ON PURPOSE.  They were incremented first,
+               so an id that could not be mapped would have counted a delete
+               that never happened.  It cannot happen today - op_dio3.c:374
+               validates before caching - but a statistic raised by a path
+               that then refuses is the null case in miniature.            */
+            if (!map_t1_id(txn->id, txn->id_len, mapped_id)) {
+              process.status = -ER_IID;
+              k_error(sysmsg(1423));
+              goto exit_op_txncmt;
+            }
+
             /* Increment statistics and transaction counters */
 
             StartExclusive(FILE_TABLE_LOCK, 50);
@@ -218,7 +293,7 @@ void op_txncmt() {
             EndExclusive(FILE_TABLE_LOCK);
             /* converted sprintf() -gwb 22Feb20 */
             if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%s", fptr->pathname,
-                         DS, txn->id) >= (MAX_PATHNAME_LEN + 1)) {
+                         DS, mapped_id) >= (MAX_PATHNAME_LEN + 1)) {
                /* TODO should log more detail here */
                k_error("Overflowed path/filename length in op_txncmt()!");
             } else {

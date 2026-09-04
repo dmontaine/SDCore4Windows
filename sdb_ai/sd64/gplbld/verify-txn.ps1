@@ -20,6 +20,20 @@
 # reported it - not an error, not a status, not a log line.  A silent
 # data-loss regression is exactly the kind that returns unnoticed.
 #
+# 4 Sep 26 - SECTION 4 ADDED: PRE_RELEASE_FIXES 154, UPSTREAM_FIXES 36.  A
+# DIRECTORY file, where the record id becomes the FILENAME and has to be mapped
+# (map_dir_ids, df_restricted_chars "*,=><%/+:;?\" -> ACEGLPSVXYZBQ, so '=' is
+# the file %E).  op_txncmt() handed dir_write() and the delete path txn->id,
+# which is the RAW id - op_dio3.c caches the id the statement used, not
+# map_t1_id()'s output - so a WRITE inside a transaction created a file the
+# matching READ could never find, and a DELETE removed a path that had never
+# existed, tolerated the ENOENT and reported success.
+#
+# IT NEEDED NO INDUCED FAULT, WHICH IS WHY IT BELONGS IN THE STANDING SUITE
+# rather than in a probe: both commits succeeded.  Two instruments have to
+# agree here - what SD can READ back, and what is actually on disk - because
+# either alone can be satisfied by the wrong thing.
+#
 # RUN IT UNELEVATED.  The probe is compiled and run in the caller's OWN SD
 # account, and an elevated session lands in SDSYS instead (LOGIN's SDSYS case),
 # where the probe is not.  An elevated run would measure the wrong account or
@@ -34,6 +48,15 @@ $ErrorActionPreference = 'Stop'
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $probe   = 'ZZTXN'          # the BASIC probe
 $dataF   = 'ZZTXNF'         # its scratch file
+$dirF    = 'ZZTXND'         # 4 Sep 26 - section 4's scratch DIRECTORY file
+
+# 4 Sep 26 - THE THREE IDS SECTION 4 USES, AND THE FILENAME EACH MUST HAVE.
+# Every one is a legal Windows filename in BOTH forms, deliberately: '>' and
+# '*' are not, so a wrong-name write of those would fail loudly and would prove
+# nothing about the silent case this section is for.
+$idCtl = '='; $mapCtl = '%E'   # control:  written OUTSIDE a transaction
+$idWrt = ','; $mapWrt = '%C'   # written INSIDE a transaction
+$idDel = ';'; $mapDel = '%Y'   # deleted INSIDE a transaction
 
 $results = New-Object System.Collections.ArrayList
 $script:fatal = $false
@@ -168,6 +191,35 @@ $src = @(
     "      read v from f, 'R2' then crt '$probe.NEST.OUTER=' : v else crt '$probe.NEST.OUTER=none'"
     "      read v from f, 'R3' then crt '$probe.NEST.INNER=' : v else crt '$probe.NEST.INNER=none'"
     "      release"
+    "*     4. PRE_RELEASE 154 - a DIRECTORY file, where the id IS the filename"
+    "      execute 'create.file $dirF DIRECTORY' capturing junk"
+    "      open '$dirF' to d else"
+    "         crt '$probe.DIR.NOFILE'"
+    "         crt '$probe.END'"
+    "         stop"
+    "      end"
+    "*     the control, and the fixture the transactional delete removes -"
+    "*     both written OUTSIDE a transaction, which is the path that maps."
+    "      write 'ctl' to d, '$idCtl'"
+    "      write 'doomed' to d, '$idDel'"
+    "      release"
+    "*     the same write, INSIDE a transaction that commits normally"
+    "      begin transaction"
+    "         recordlocku d, '$idWrt'"
+    "         write 'txn' to d, '$idWrt'"
+    "         commit"
+    "      end transaction"
+    "*     and a delete, INSIDE a transaction that commits normally"
+    "      begin transaction"
+    "         recordlocku d, '$idDel'"
+    "         delete d, '$idDel'"
+    "         commit"
+    "      end transaction"
+    "      release"
+    "      read v from d, '$idCtl' then crt '$probe.DIR.CTL=' : v else crt '$probe.DIR.CTL=none'"
+    "      read v from d, '$idWrt' then crt '$probe.DIR.WRITE=' : v else crt '$probe.DIR.WRITE=none'"
+    "      read v from d, '$idDel' then crt '$probe.DIR.DEL=' : v else crt '$probe.DIR.DEL=none'"
+    "      close d"
     "      close f"
     "      crt '$probe.END'"
     "      stop"
@@ -182,7 +234,10 @@ $srcPath = Join-Path $bp $probe
                                [System.Text.Encoding]::GetEncoding('iso-8859-1'))
 
 function Remove-Probe {
-    $null = Invoke-SdPiped @("DELETE.FILE $dataF")
+    # 4 Sep 26 - BOTH scratch files, and through SD so the VOC records go with
+    # them: PRE_RELEASE 60 was a verifier that left one dead VOC record behind
+    # on every run and said nothing about it.
+    $null = Invoke-SdPiped @("DELETE.FILE $dataF", "DELETE.FILE $dirF")
     foreach ($f in @($srcPath, (Join-Path $acctDir ('bp.out\' + $probe)))) {
         if (Test-Path -LiteralPath $f) {
             try { Remove-Item -LiteralPath $f -Force } catch {
@@ -207,6 +262,15 @@ if (-not $out.Contains("$probe.START")) {
 }
 if (-not $out.Contains("$probe.END")) {
     Write-Output 'verify-txn: the probe STARTED and did not finish - it aborted part way.'
+    Write-Output $out
+    Remove-Probe
+    exit 2
+}
+# 4 Sep 26 - section 4 could not build its fixture.  That is a refusal, not a
+# finding: with no directory file the four rows below it would be measuring an
+# absence that says nothing about op_txncmt().
+if ($out.Contains("$probe.DIR.NOFILE")) {
+    Write-Output "verify-txn: could not create the scratch DIRECTORY file $dirF - section 4 measured nothing."
     Write-Output $out
     Remove-Probe
     exit 2
@@ -250,6 +314,40 @@ Note 'nested: the pair is balanced'        '0'     (Marker 'NEST.DELTA')  $true
 Note "nested: THE OUTER WRITE LANDED"      'outer' (Marker 'NEST.OUTER')  $true
 Note 'nested: the inner write landed'      'inner' (Marker 'NEST.INNER')  $true
 
+# ------------------------------- 4 Sep 26: PRE_RELEASE 154, UPSTREAM 36 -----
+#
+# INSTRUMENT ONE - what SD can read back.  The ids go in through map_t1_id() on
+# the way out as they did on the way in, so a record written under the raw name
+# is simply not there any more.
+Note 'dir: control, written outside a txn'  'ctl'    (Marker 'DIR.CTL')   $true
+Note 'dir: THE TRANSACTIONAL WRITE IS READABLE' 'txn' (Marker 'DIR.WRITE') $true
+Note 'dir: THE TRANSACTIONAL DELETE REMOVED IT' 'none' (Marker 'DIR.DEL')  $true
+
+# INSTRUMENT TWO - what is actually on disk, read without going through SD at
+# all.  This is the half that names the fault rather than merely detecting it:
+# before the fix the listing held ',' where it should hold '%C', and still held
+# '%Y' after a delete that had reported success.
+$dirPath = Join-Path $acctDir $dirF
+$names = @()
+if (Test-Path -LiteralPath $dirPath) {
+    $names = @(Get-ChildItem -LiteralPath $dirPath -Force | ForEach-Object { $_.Name })
+}
+Write-Output ''
+Write-Output "verify-txn: $dirPath"
+foreach ($n in $names) { Write-Output "  | $n" }
+
+# ***ZERO IS SUSPICIOUS, NOT CLEAN.***  An empty listing means the writes went
+# somewhere this verifier is not looking, and every row below it would then be
+# comparing absence against absence and scoring however the comparison fell.
+Note 'dir: the listing is not empty'        $true  ($names.Count -gt 0)      $true
+# THE MAPPING CONTROL.  If map_dir_ids were off, the raw and mapped names would
+# be the same string and the three rows under it would pass for the wrong
+# reason.  This row is what stops that, so it is decisive.
+Note "dir: control, mapping is live ($mapCtl on disk)" $true ($names -ccontains $mapCtl) $true
+Note "dir: the txn write used the MAPPED name ($mapWrt)" $true ($names -ccontains $mapWrt) $true
+Note "dir: and not the raw one ($idWrt)"     $false ($names -ccontains $idWrt) $true
+Note "dir: the txn delete removed $mapDel"   $false ($names -ccontains $mapDel) $true
+
 Remove-Probe
 
 # ---------------------------------------------------------------------- report
@@ -258,6 +356,18 @@ $results | Format-Table -AutoSize | Out-String | Write-Output
 if ($fatal) {
     Write-Output 'verify-txn: FAILED.'
     Write-Output ''
+    # 4 Sep 26 - name the OTHER defect this verifier now covers, so a red row
+    # in section 4 does not get read as entry 11 returning.
+    if (((Marker 'DIR.WRITE') -eq 'none') -or ((Marker 'DIR.DEL') -eq 'doomed')) {
+        Write-Output '  A DIRECTORY-FILE ID WAS NOT MAPPED AT COMMIT.  This is PRE_RELEASE_FIXES 154 /'
+        Write-Output '  UPSTREAM_FIXES 36 returning: op_txncmt() is passing txn->id - the RAW id the'
+        Write-Output '  BASIC statement used - where dir_write() and the delete path both want'
+        Write-Output '  map_t1_id() output.  A transactional WRITE then lands on a filename the'
+        Write-Output '  matching READ can never find, and a transactional DELETE removes a path that'
+        Write-Output '  never existed, tolerates the ENOENT and reports success.  Neither needs an'
+        Write-Output '  induced fault.  See gplsrc/txn.c, the two DIRECTORY_FILE arms of op_txncmt().'
+        Write-Output ''
+    }
     if ((Marker 'NEST.OUTER') -eq 'base') {
         Write-Output '  THE OUTER TRANSACTION LOST ITS WRITE.  This is PRE_RELEASE_FIXES 11 /'
         Write-Output '  UPSTREAM_FIXES 17 returning: op_txncmt() is not leaving the transaction'
