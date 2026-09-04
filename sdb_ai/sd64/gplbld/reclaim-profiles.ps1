@@ -3,6 +3,12 @@
 #   powershell -File reclaim-profiles.ps1            sweep (elevated)
 #   powershell -File reclaim-profiles.ps1 -List      report, change nothing
 #
+# BOTH MODES WANT AN ELEVATED PROMPT.  The sweep needs one to remove a profile
+# directory and a ProfileList entry; -List needs one to READ THE STORE, which is
+# granted to SYSTEM and Administrators only (secure-reclaim.ps1).  -List is not
+# refused when unelevated - it says it could not read the store rather than
+# reporting an empty one - but it cannot tell you what is pending.
+#
 # Exit 0 ran and nothing is pending, 1 ran and something is still pending,
 # 2 could not be attempted (not elevated).  ALL THREE ARE ORDINARY: 1 is a
 # state, not a fault - a hive that is still up at this boot comes down at the
@@ -116,10 +122,29 @@ if ($Path -eq '') { $Path = Join-Path $dataDir 'profile-reclaim' }
 Log ('reclaim-profiles: store {0}' -f $Path)
 Log ('reclaim-profiles: mode  {0}' -f $(if ($List) { 'LIST (nothing will be changed)' } else { 'SWEEP' }))
 
-# ELEVATION IS GATED ON THE SWEEP, NOT ON THE SCRIPT.  -List reads a registry
-# value, tests some paths and reads some owners, none of which needs a
-# privileged token - and refusing to REPORT without elevation would only teach
-# people to run the destructive mode to find out what is pending.
+# ELEVATION IS GATED ON THE SWEEP, NOT ON THE SCRIPT, and that is about what
+# this script may CHANGE.  Refusing to report without elevation would only
+# teach people to run the destructive mode to find out what is pending, so
+# -List is not refused here.
+#
+# ***BUT -List STILL NEEDS AN ELEVATED TOKEN TO SAY ANYTHING USEFUL, AND THIS
+# COMMENT USED TO CLAIM OTHERWISE.***  Corrected 4 Sep 2026 on the owner's
+# ruling.  It said "-List reads a registry value, tests some paths and reads
+# some owners, none of which needs a privileged token" - true of those three
+# things and false of the one that matters, because the STORE is granted to
+# SYSTEM and Administrators only (secure-reclaim.ps1), so an unelevated -List
+# cannot enumerate it at all.
+#
+# THE OPTION NOT TAKEN, AND WHY.  Granting Users READ to the store would have
+# made the old sentence true and kept write to Administrators.  It would also
+# expose the names of deleted accounts to every user on the machine, which is
+# real disclosure bought to satisfy a comment.  secure-osusers.ps1 locks its
+# list for the same kind of reason and says so; this follows it.  So the
+# sentence changed and the ACL did not.
+#
+# THE READ ITSELF IS HONEST ABOUT FAILING - see the Get-ChildItem below, which
+# is -ErrorAction Stop precisely so an unreadable store cannot be reported as
+# an empty one (PRE_RELEASE 49).  What was left stale was only this paragraph.
 if (-not $List) {
     $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
     if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {

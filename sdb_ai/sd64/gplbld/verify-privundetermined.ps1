@@ -356,6 +356,68 @@ function Invoke-SDSys([string[]]$commands) {
     return (Invoke-SDIn 'SDSYS' $commands)
 }
 
+# ONE REMOVAL FOR BOTH THROWAWAY ACCOUNTS, because there are two now and the
+# second is a member of BUILTIN\Administrators.  Two copies of this would be
+# two places for the administrator one to be removed less thoroughly.
+#
+# OUT OF THE GROUPS FIRST, BEFORE DELETE.ACCOUNT rather than relying on it.
+# Removing the Windows user takes its memberships with it, so this is redundant
+# on the happy path - but DELETE.ACCOUNT is exactly the step that sometimes does
+# not finish, and an account left behind holding an API grant is the one piece
+# of litter here that is a permission rather than a name.
+function Remove-ThrowawayAccount([string]$name) {
+    foreach ($g in @('sdapi', 'sdssh')) {
+        try {
+            if (Get-LocalGroupMember -Group $g -Member $name -ErrorAction SilentlyContinue) {
+                Remove-LocalGroupMember -Group $g -Member $name -ErrorAction Stop
+                Write-Host "   took $name out of $g"
+            }
+        } catch { }
+    }
+
+    # ***THE SECOND 'Y' IS DELIBERATE AND THE "Y is not in your VOC" IT PRODUCES
+    # IS EVIDENCE, NOT NOISE.  DO NOT "FIX" IT.***  DELETE.ACCOUNT asks one
+    # confirmation on the path taken here, so the first Y answers it and the
+    # second arrives at the ":" prompt and is refused as a verb - which is
+    # exactly what b114's transcript shows, twice.
+    #
+    # IT IS INSURANCE AGAINST THE ONE FAILURE THIS SCRIPT MUST NOT HAVE.  An
+    # unanswered SD prompt HANGS the piped session, and PROJECT_STATUS section 6
+    # records what that costs: a stray sd.exe that took an elevation to clear.
+    # Trading a cosmetic refusal line for that risk is the wrong way round, and
+    # the refusal line is also the POSITIVE EVIDENCE that only one prompt
+    # appeared - if DELETE.ACCOUNT ever grows a second question, this line stops
+    # appearing and the second Y is silently doing real work.
+    # verify-apiadmin.ps1 passes the same pair for the same reason.
+    try {
+        $out = Invoke-SDSys @("DELETE.ACCOUNT $name", 'Y', 'Y')
+        Write-Host $out
+    } catch { Write-Host "   DELETE.ACCOUNT $name threw: $_" }
+
+    $stillReg = Test-Path -LiteralPath (Join-Path $sysdir ('accounts\' + $name.ToUpper()))
+    $stillWin = [bool](Get-LocalUser -Name $name -ErrorAction SilentlyContinue)
+    # NAMED LOUDLY IF IT IS AN ADMINISTRATOR THAT SURVIVED.  A leftover
+    # PROGRAMMER account is litter; a leftover member of BUILTIN\Administrators
+    # with a generated password is not, and must not scroll past in the same
+    # colour as the rest of the restore.
+    if ($stillReg -or $stillWin) {
+        $admin = $false
+        try {
+            $admin = [bool](Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Name -like ("*\" + $name) })
+        } catch { }
+        $colour = $(if ($admin) { 'Red' } else { 'Yellow' })
+        Write-Host "   $name NOT fully removed - register:$stillReg windows:$stillWin" -ForegroundColor $colour
+        if ($admin) {
+            Write-Host "   *** $name IS STILL IN BUILTIN\Administrators.  Remove it by hand NOW. ***" -ForegroundColor Red
+        }
+        Write-Host "   Remove by hand before reusing this prefix." -ForegroundColor $colour
+        return $false
+    }
+    Write-Host "   $name removed"
+    return $true
+}
+
 function Stop-SD {
     if (Get-Service -Name $SvcName -ErrorAction SilentlyContinue) {
         & "$env:SystemRoot\System32\sc.exe" stop $SvcName | Out-Null
@@ -453,6 +515,17 @@ if (Test-Path -LiteralPath $fixture) {
     Refuse "$fixture already exists.  It is litter from an interrupted run - remove it, or use a fresh -Prefix."
 }
 
+# AND THE COMPOSITION STEP'S RECORD, WHICH WOULD POISON A PREMISE RATHER THAN
+# A MEASUREMENT.  Step 8 asserts that CREATE.ACCOUNT WROTE that record; if a
+# stale one is already there, grant.os.access leaves it exactly as it is and
+# says so (10103), and the assertion would pass on somebody else's file.
+# DELACC:394 removes it with the Windows user, so its presence means an earlier
+# run died between the two.
+$adminFixture = Join-Path $osUsers ($Prefix + 'a')
+if (Test-Path -LiteralPath $adminFixture) {
+    Refuse "$adminFixture already exists.  Step 8 would read it as CREATE.ACCOUNT's own work - remove it, or use a fresh -Prefix."
+}
+
 $bash = 'C:\msys64\usr\bin\bash.exe'
 if (-not (Test-Path -LiteralPath $bash)) { Refuse "MSYS2 bash not found at $bash" }
 
@@ -479,6 +552,7 @@ Write-Host ("  legs    : {0} - {1}" -f $legs.Count, (($legs | ForEach-Object { $
 
 $restoreNeeded = $false
 $madeAccount   = $false
+$madeAdmin     = $false
 $madeFixture   = $false
 $deniedAce     = $false
 $pw            = ''
@@ -781,7 +855,236 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    Step 8 'What this run did NOT reach'
+    Step 8 'THE COMPOSITION: an ADMINISTRATOR-tier account, no fixture at all'
+
+    # ***THIS IS NOT A LEG AND IT IS DELIBERATELY NOT IN THE LEG TABLE.***  Every
+    # leg above varies the RECORD for one account.  This varies the ACCOUNT and
+    # writes no record at all - the whole point is that this script touches
+    # nothing and the product supplies the state by itself.
+    #
+    # WHAT IT COMPOSES, AND EVERY LINK IS SEPARATELY GREEN ALREADY:
+    #
+    #   CREATEA:1731-1732  an ADMINISTRATOR-tier account gets os.sh=yes AND
+    #                      os.exec=yes in os.users, unconditionally.  Owner,
+    #                      27 Aug 2026: "administrators have full access, there
+    #                      should be no way to turn it off."
+    #   CREATEA:1718-1721  the same account joins sdapi and sdssh with NO
+    #                      keyword, and MODIFY.ACCOUNT refuses to remove either
+    #                      (10083).  Owner, 21 Aug 2026: "all administrators
+    #                      have access to both ssh and api".
+    #   verify-tierapi     an ADMINISTRATOR-tier account logs in over SCRAM and
+    #                      attaches to its own account.  Green suite step.
+    #   kernel.c:253       a CN_SOCKET session never gets USR_ADMIN, so
+    #                      os_permitted() falls through to that record.
+    #   the 'granted' leg  an API session whose record says yes RUNS os.execute.
+    #   verify-apiadmin    when it runs over the API it reports itself SYSTEM.
+    #
+    # ***SO THE COMPOSITION HAS NEVER BEEN RUN END TO END, WHILE EVERY ONE OF ITS
+    # LINKS HAS.***  That is the gap this step closes, and it is the reason it
+    # writes no fixture: a finding here is the product's own configuration, not
+    # one this script arranged.
+    #
+    # ***THE OUTCOME IS SCORED, AND IT BECAME SCORABLE ON 4 Sep 2026 WHEN THE
+    # OWNER RULED ON IT.***  Shown the b113 measurement, he said "157 Accept it",
+    # so a remote administrator reaching the operating system is now STATED
+    # POLICY rather than an open question - and a policy is something a verifier
+    # may assert.
+    #
+    # WHILE IT WAS UNSCORED THIS STEP ONLY REPORTED.  It now guards, and the
+    # direction it guards is the one nobody would think to watch: the obvious
+    # "fix" here is to withhold os.execute from a CN_SOCKET session the way
+    # kernel.c:253 withholds USR_ADMIN, and that fix would make the SHIPPED
+    # DOCUMENTATION FALSE.  80 has to say this happens; this row is what notices
+    # if it stops.
+    #
+    # ENTRY 64 IS SATISFIED RATHER THAN SIDESTEPPED: it forbids flipping an
+    # Expected to match what was OBSERVED, and the row below is a differently
+    # named claim about what was RULED - the same treatment verify-apiadmin.ps1
+    # gave its own OS.EXECUTE row on 29 Aug, for the same reason.
+
+    $adminAcct = $Prefix + 'a'
+    if (Get-LocalUser -Name $adminAcct -ErrorAction SilentlyContinue) {
+        Skip 'composition: an ADMINISTRATOR-tier account' "$adminAcct already exists as a Windows account"
+    } else {
+
+        # NO ACCESS KEYWORD, AND ITS ABSENCE IS HALF THE MEASUREMENT.  CREATEA
+        # sets access.given for this tier so no keyword is needed, and 10083
+        # refuses one that tries to take ssh or the API away.  If this script
+        # passed API here it would be arranging the very thing it claims the
+        # product arranges by itself.
+        $winPw2 = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+        $out = Invoke-SDSys @("CREATE.ACCOUNT USER $adminAcct ADMINISTRATOR", $winPw2, $winPw2)
+        Write-Host $out
+        $madeAdmin = Test-Path -LiteralPath (Join-Path $sysdir ('accounts\' + $adminAcct.ToUpper()))
+        Note 'composition: the ADMINISTRATOR account was created' $true $madeAdmin
+
+        if ($madeAdmin) {
+            # --- the premise, READ OFF DISK rather than taken from the source.
+            $adminRec  = Join-Path $osUsers $adminAcct
+            $recExists = Test-Path -LiteralPath $adminRec
+            Note 'composition: CREATE.ACCOUNT wrote it an os.users record' $true $recExists
+            $field2 = ''
+            if ($recExists) {
+                $txt = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($adminRec))
+                Write-Host ("   os.users\{0}: {1}" -f $adminAcct, ($txt -replace "`r?`n", ' | '))
+                $nl = $txt.IndexOf("`n")
+                if ($nl -ge 0) {
+                    $field2 = ($txt.Substring($nl + 1) -split "[`r`n]")[0].Trim()
+                }
+            }
+            Note 'composition: its OS.EXECUTE field says yes' 'yes' $field2.ToLower()
+
+            # --- and sdapi membership NOBODY GRANTED.  Step 6 had to ask for the
+            # PROGRAMMER account; this one is expected to be in it already.
+            $adminInApi = [bool](Get-LocalGroupMember -Group 'sdapi' -ErrorAction SilentlyContinue |
+                                 Where-Object { $_.Name -like ("*\" + $adminAcct) })
+            Note 'composition: it is in sdapi with NO keyword given' $true $adminInApi
+
+            $bytes2 = New-Object byte[] 18
+            ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes2)
+            $pw2 = ([Convert]::ToBase64String($bytes2) -replace '[^A-Za-z0-9]', '') + 'aA1'
+            $out = Invoke-SDSys @(("MODIFY.PASSWORD " + $adminAcct.ToUpper()), $pw2, $pw2)
+            Note 'composition: credential set' $true ($out -match 'Password set for account')
+
+            $bpDir2 = Join-Path $env:ProgramData ('SD\user_accounts\' + $adminAcct + '\bp')
+            if (Test-Path -LiteralPath $bpDir2) {
+                Copy-Item -LiteralPath (Join-Path $Gplbld 'apiosexecprobe.sb') `
+                          -Destination (Join-Path $bpDir2 'APIOSEXECPROBE') -Force
+                $out = Invoke-SDIn $adminAcct.ToUpper() @('BASIC BP APIOSEXECPROBE')
+                $ok2 = (([regex]::Matches($out, '\b0 error\(s\)')).Count -eq 1) -and
+                       (-not ($out -match '[1-9][0-9]* error'))
+                Note 'composition: probe compiled in the administrator account' $true $ok2
+
+                if ($ok2) {
+                    $adminCmd = "cd '$msys' && make check-api-admin APIHOST=127.0.0.1 APIPORT=$Port " +
+                                "APIUSER=$adminAcct APIPASS='$pw2' APIACCT=" + $adminAcct.ToUpper() +
+                                " APICMD='RUN BP APIOSEXECPROBE'"
+                    Write-Host ("   $bash -lc " + $adminCmd) -ForegroundColor DarkGray
+                    $prevEap = $ErrorActionPreference
+                    $ErrorActionPreference = 'Continue'
+                    try { $aOut = (& $bash -lc $adminCmd 2>&1 | Out-String) }
+                    finally { $ErrorActionPreference = $prevEap }
+                    $aOut = Convert-ProbeText $aOut
+                    Write-Host $aOut
+
+                    # PROBE.CONNECT COMES FROM THE C CLIENT (api_admin_probe.c:64),
+                    # not from the BASIC, so it is available whatever APICMD ran.
+                    $aConnect = Get-Marker $aOut 'CONNECT'
+                    $aWho     = Get-Marker $aOut 'WHOAMI'
+                    $aRefused = ($aOut -match ([regex]::Escape($adminAcct) + ' is not permitted to use OS\.EXECUTE'))
+                    $aTried   = ($aOut -match 'PROBE\.OSEXEC\.TRIED') -or $aRefused -or ($aWho -ne '')
+
+                    # SCORED, because verify-tierapi already says this is true and
+                    # a False here would contradict a green suite step rather than
+                    # settle a policy question.
+                    Note 'composition: the API ADMITTED an ADMINISTRATOR-tier account' 'YES' $aConnect
+                    Note 'composition: the probe reached the attempt' $true $aTried
+
+                    # ***A ROW WAS DELETED HERE AND THE REASON IS WORTH KEEPING.***
+                    # PRE_RELEASE 158.  It read
+                    #
+                    #   Note 'composition: it landed in its OWN account, not SDSYS' `
+                    #        $adminAcct.ToUpper() (Get-Marker $aOut 'ACCOUNT')
+                    #
+                    # and it SCORED FAIL on b113 against an account that had landed
+                    # exactly where it should.  PROBE.ACCOUNT is printed by
+                    # apiadminprobe.sb:31 (crt 'PROBE.ACCOUNT=' : @who) and this step
+                    # runs APIOSEXECPROBE, which never emits it - so the marker was
+                    # always empty and the row COULD NEVER PASS.  Same class as the
+                    # rows verify-apiadmin.ps1 and test-wraptext-units.ps1 each had to
+                    # delete: a check that cannot pass is as useless as one that
+                    # cannot fail, and this one manufactured a red on a green run.
+                    #
+                    # NOT REPLACED BY ADDING THE MARKER TO THE PROBE.  apiosexecprobe
+                    # is shared with verify-apiadmin, a green step, and the marker
+                    # would be discarded by the abort on the refusal path anyway - so
+                    # it would still be absent in the case where it mattered.  THE
+                    # CLAIM IS ALSO ALREADY SOMEBODY ELSE'S: verify-tierapi asserts
+                    # that one tier cannot enter another's account, and attaching to
+                    # APIACCT is entailed by PROBE.CONNECT=YES above.
+
+                    # ***NOW SCORED, AND THE OWNER'S RULING OF 4 Sep 2026 IS WHAT
+                    # MADE IT SCORABLE.  HE WAS SHOWN THE b113 MEASUREMENT AND SAID
+                    # "157 Accept it".***
+                    #
+                    # IT IS NOT A FLIPPED EXPECTED VALUE, WHICH ENTRY 64 FORBIDS BY
+                    # NAME.  64 forbids changing an Expected to match what was
+                    # OBSERVED; this is a claim about what was RULED, and it is a
+                    # differently-named row rather than the old one turned round -
+                    # the same treatment, for the same reason, that
+                    # verify-apiadmin.ps1's OS.EXECUTE row was given on 29 Aug when
+                    # the owner ruled on os.users.  While it was unscored this step
+                    # only reported; now it GUARDS.
+                    #
+                    # ***WHAT A FAILURE HERE MEANS IS THE WHOLE VALUE OF THE CHANGE:
+                    # SOMEBODY CLOSED THIS WITHOUT A RULING.***  An administrator
+                    # reaching the operating system over the API is accepted
+                    # behaviour and 80 documents it, so a future change that
+                    # withholds os.execute from a CN_SOCKET session - the obvious
+                    # fix, and the one deliberately NOT taken - would silently make
+                    # the shipped documentation false.  This row is what notices.
+                    Note 'composition: the RULED behaviour - a remote administrator reaches the OS' `
+                         $true ($aWho -ne '')
+
+                    Write-Host ''
+                    if ($aWho -ne '') {
+                        Write-Host 'COMPOSITION RESULT: OS.EXECUTE ran in a remote API session - AS RULED.' -ForegroundColor Cyan
+                        Write-Host ('  on an ADMINISTRATOR-tier account this script gave NO keyword and NO record.') -ForegroundColor Cyan
+                        Write-Host ('  It reported its identity as: ' + $aWho) -ForegroundColor Cyan
+                        Write-Host '  Three rulings compose to produce this: an administrator always has the API' -ForegroundColor Cyan
+                        Write-Host '  (21 Aug), always has os.execute (27 Aug), and os.users is the authority' -ForegroundColor Cyan
+                        Write-Host '  below USR_ADMIN (op_sh.c).  The port is reachable off-machine over ssh -L.' -ForegroundColor Cyan
+                        Write-Host '  ACCEPTED BY THE OWNER, 4 Sep 2026.  PRE_RELEASE_FIXES 157; the API page' -ForegroundColor Cyan
+                        Write-Host '  must say so in plain words, which is 80.' -ForegroundColor Cyan
+                    } elseif ($aRefused) {
+                        Write-Host 'COMPOSITION RESULT: OS.EXECUTE was REFUSED by name - THE RULED BEHAVIOUR HAS CHANGED.' -ForegroundColor Red
+                        Write-Host '  This was ACCEPTED on 4 Sep 2026 and the shipped documentation says it happens.' -ForegroundColor Red
+                        Write-Host '  Read the refusal above, then correct PRE_RELEASE_FIXES 157 AND the API page' -ForegroundColor Red
+                        Write-Host '  under 80 - a silent close leaves the documentation false.' -ForegroundColor Red
+                    } else {
+                        Write-Host 'COMPOSITION RESULT: undetermined - the probe never reached the attempt.' -ForegroundColor Yellow
+                    }
+                }
+            } else {
+                Skip 'composition: probe compiled in the administrator account' "no bp directory at $bpDir2"
+            }
+        }
+
+        # ***REMOVED HERE AND NOT ONLY IN THE finally.***  This account is in
+        # BUILTIN\Administrators (CREATEA:858) - a real local administrator with
+        # a password - so the window it exists for is kept to this step rather
+        # than to the rest of the run.  The finally is the backstop, not the plan.
+        # ***THIS BLOCK SCORED FAIL ON b113 ON A RUN WHERE THE ACCOUNT WAS
+        # CORRECTLY REMOVED, AND IT REUSED $madeAdmin FOR TWO OPPOSITE MEANINGS.***
+        # PRE_RELEASE 158.  It read
+        #
+        #   $madeAdmin = -not [bool](Get-LocalUser ...)
+        #   Note '...removed again' $false $madeAdmin
+        #
+        # so $madeAdmin - which every other site reads as "there is an account to
+        # clean up" - was assigned a value meaning "it is GONE", and then compared
+        # against $false.  Removal therefore scored FAIL, and the finally block
+        # would have re-run the removal on an account that no longer existed.
+        # A separate, positively-named variable, and the expectation the right way
+        # round.
+        if ($madeAdmin) {
+            # $null = BECAUSE THE RETURN VALUE LEAKED INTO THE TRANSCRIPT.
+            # Measured on b114: a bare "True" printed on its own line after
+            # "sdpwb114a removed", with nothing to say what it was a claim about.
+            # An unlabelled boolean in a transcript is the opposite of what
+            # CLAUDE.md's instrument section asks for, and it is this project's
+            # own "a function's return value joins its output" trap - the
+            # function reports through Write-Host and its bool is for callers
+            # that ask, which none of the three do.
+            $null = Remove-ThrowawayAccount $adminAcct
+            $adminGone = -not [bool](Get-LocalUser -Name $adminAcct -ErrorAction SilentlyContinue)
+            Note 'composition: the ADMINISTRATOR account was removed again' $true $adminGone
+            $madeAdmin = -not $adminGone
+        }
+    }
+
+    # -----------------------------------------------------------------------
+    Step 9 'What this run did NOT reach'
 
     # PRINTED EVERY RUN, PASS OR FAIL.  A green summary above is a claim about
     # three of the nine undetermined paths and about the silence of the answered
@@ -828,36 +1131,13 @@ finally {
         if (Stop-SD) { $null = Start-SD }
     }
 
-    if ($madeAccount) {
-        # OUT OF sdapi FIRST, BEFORE DELETE.ACCOUNT rather than relying on it.
-        # Removing the Windows user takes its memberships with it, so this is
-        # redundant on the happy path - but DELETE.ACCOUNT is exactly the step
-        # that sometimes does not finish, and an account left holding an API
-        # grant is the one piece of litter here that is a permission rather
-        # than a name.
-        foreach ($g in @('sdapi', 'sdssh')) {
-            try {
-                if (Get-LocalGroupMember -Group $g -Member $Prefix -ErrorAction SilentlyContinue) {
-                    Remove-LocalGroupMember -Group $g -Member $Prefix -ErrorAction Stop
-                    Write-Host "   took $Prefix out of $g"
-                }
-            } catch { }
-        }
-
-        try {
-            $out = Invoke-SDSys @("DELETE.ACCOUNT $Prefix", 'Y', 'Y')
-            Write-Host $out
-        } catch { Write-Host "   DELETE.ACCOUNT threw: $_" }
-
-        $stillReg = Test-Path -LiteralPath (Join-Path $sysdir ('accounts\' + $Prefix.ToUpper()))
-        $stillWin = [bool](Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue)
-        if ($stillReg -or $stillWin) {
-            Write-Host "   NOT fully removed - register:$stillReg windows:$stillWin" -ForegroundColor Yellow
-            Write-Host "   Remove by hand before reusing -Prefix $Prefix." -ForegroundColor Yellow
-        } else {
-            Write-Host '   throwaway account removed'
-        }
-    }
+    # ***THE ADMINISTRATOR ONE FIRST, AND THAT ORDERING IS THE WHOLE POINT OF
+    # DOING IT HERE AT ALL.***  Step 8 already removed it on the happy path;
+    # this is the backstop for a run that died inside that step, and it goes
+    # first because it is the only account here that is a member of
+    # BUILTIN\Administrators (CREATEA:858).
+    if ($madeAdmin) { $null = Remove-ThrowawayAccount ($Prefix + 'a') }
+    if ($madeAccount) { $null = Remove-ThrowawayAccount $Prefix }
 }
 
 Write-Host ''
