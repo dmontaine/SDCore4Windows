@@ -5,6 +5,25 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  INSTALLING NOW ASKS FOR TWO PASSWORDS, AND SAYS WHY.
+
+           If you are an administrator you have TWO SD accounts, and until now
+           the installer set a password for only one of them.
+
+               your own account   where SD puts you when you open it normally
+               SDSYS              where SD puts you when you run it as
+                                  administrator
+
+           They are separate accounts and each needs its own password. Because
+           only one was set, the first time you ran SD as administrator it
+           asked for a password again - and the one you had just given during
+           the install looked as though it had been ignored. It had not; you
+           were being asked for the other account.
+
+           The installer now asks for both, one after the other, and tells you
+           which account each one is for. You may use the same password for
+           both. Nothing about how you sign in has changed.
+
 04 Sep 26  SD NOW RECORDS WHICH VERSION OF EACH EDITOR IT FOUND.
 
            SD writes a line for each full-screen editor when it installs, to
