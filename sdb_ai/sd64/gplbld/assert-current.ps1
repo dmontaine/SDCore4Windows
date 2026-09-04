@@ -201,6 +201,17 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # because a return that forgets it compiles clean.  Nothing
                   # installs it and nothing compiles it into sd.exe.
                   'test-privwhy-units.ps1',
+                  # 04 Sep 26 - PRE_RELEASE 96's WITNESS and its own free
+                  # guard, listed in the commit that creates them.  The
+                  # verifier has the self-blocking shape twice over: it calls
+                  # THIS script at its step 0 and refuses on a non-zero exit,
+                  # so an unlisted copy would refuse the tree on account of its
+                  # own newness on its very first run - which is what
+                  # verify-notyet.ps1 paid for.  Neither is installed; it makes
+                  # a throwaway account, one record in sdsys\os.users, and
+                  # removes both.
+                  'verify-privundetermined.ps1',
+                  'test-privundetermined-units.ps1',
                   # 03 Sep 26 - THIS SCRIPT'S OWN CHECK A2, lifted into a file
                   # so cycle.ps1's step 0 asks the question with the same code,
                   # and its units test.  Listed in the commit that creates them.

@@ -196,6 +196,15 @@ $ErrorActionPreference = 'Stop'
 #   (VerifyInstall2.ps1:143, "files, no account") and deletes them in its own
 #   section 9, so no sdvv* name can ever appear under C:\Users.
 #
+# 04 Sep 26 - "sdpw" ADDED IN THE COMMIT THAT INVENTS THE FAMILY, which is what
+#   every note above asked for and the first time it has happened without the
+#   checker having to say so.  verify-privundetermined.ps1 (PRE_RELEASE 96)
+#   composes sdpw<Run> and VerifyInstall2.ps1 derives it.  IT GOES IN $stems AND
+#   NOT IN $notProfiles: it is a real Windows account made by CREATE.ACCOUNT and
+#   removed by DELETE.ACCOUNT, the same shape as sdapia directly above it, so
+#   the sweep genuinely can meet the name - which is the test the paragraph
+#   below sets.
+#
 #   ***A STEM HERE IS A CLAIM THAT THIS SWEEP WILL MEET THE NAME.  DO NOT ADD
 #   ONE THE SWEEP CANNOT REACH.***  Two concrete costs, not a tidiness
 #   argument: it put two invented names into the -SelfTest must-match list,
@@ -205,7 +214,7 @@ $ErrorActionPreference = 'Stop'
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
-           'sdtc')
+           'sdtc', 'sdpw')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has

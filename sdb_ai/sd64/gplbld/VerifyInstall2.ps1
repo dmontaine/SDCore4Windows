@@ -165,6 +165,14 @@ param(
     # account.  Lower case only, like the prefixes above, because CREATEA
     # downcases the name and the directory takes it verbatim.
     [string]$TcPrefix    = '',   # verify-tierchange.ps1 - one account
+    # 04 Sep 26 - verify-privundetermined.ps1, PRE_RELEASE_FIXES 96's witness.
+    # One throwaway PROGRAMMER account reached over the API, because a socket
+    # session is the only one on this machine that does NOT get USR_ADMIN and so
+    # is the only one whose OS.EXECUTE decision reaches the os.users record at
+    # all (kernel.c:253).  Lower case only, same derivation as the rest: it
+    # becomes a Windows account name AND the name of the record the run writes
+    # into sdsys\os.users, which op_sh.c looks up verbatim.
+    [string]$PrivPrefix  = '',   # verify-privundetermined.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -247,6 +255,12 @@ if ($Run) {
     # it creates a throwaway account, so a FIXED prefix would pass once and
     # collide on every later run on the same machine.
     if (-not $TcPrefix)    { $TcPrefix    = "sdtc$Run" }
+    # 04 Sep 26 - PRE_RELEASE 96's verifier.  Derived from -Run for 54's reason,
+    # and with one of its own: the run WRITES a record named after this prefix
+    # into sdsys\os.users, and refuses to start if one is already there.  A
+    # fixed prefix would therefore not merely collide on the account, it would
+    # refuse on litter from its own last run.
+    if (-not $PrivPrefix)  { $PrivPrefix  = "sdpw$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -607,6 +621,30 @@ $steps = @(
     # is talking to the server the earlier steps measured, and all of them
     # write API connection records to the error log peerlog has finished with.
     @{ Name = 'verify-apiadmin.ps1';      P = @{ Prefix = $ApiPrefix } },
+    # 04 Sep 26 - PRE_RELEASE_FIXES 96's witness, and the thing it measures has
+    # never been executed by anything: the tri-state was BUILT on 3 Sep, the
+    # suite went green on b108 with ZERO undetermined lines in errlog, and a
+    # zero is what a green run looks like whether the logging works or has never
+    # been reached.  This makes it non-zero on purpose, three times, and then
+    # requires it back to zero on a check that COMPLETED.
+    #
+    # IMMEDIATELY AFTER verify-apiadmin AND FOR ITS REASONS, NOT BY HABIT.  It
+    # is an API step, so it belongs with them: it edits APIPORT in the installed
+    # sd.conf and restarts SD, and it writes connection records to the error log
+    # that verify-peerlog has finished with.  Running it before peerlog would
+    # break peerlog's arithmetic, which is the ordering constraint that put the
+    # API block here in the first place.
+    #
+    # AND IT SHARES verify-apiadmin's FIXTURE SHAPE DELIBERATELY - same probe
+    # (apiosexecprobe.sb), same throwaway PROGRAMMER tier, same make target -
+    # so the two read as one pair: apiadmin asks whether OS.EXECUTE is CONTAINED
+    # for a remote session, this one asks whether the refusal can SAY WHY.
+    #
+    # IT WRITES ONE RECORD INTO sdsys\os.users AND REMOVES IT.  That is the one
+    # piece of shared state it touches, it is named after its own -Prefix, and
+    # it refuses to start if a record of that name is already there rather than
+    # overwriting somebody's decision on the list that grants shells.
+    @{ Name = 'verify-privundetermined.ps1'; P = @{ Prefix = $PrivPrefix } },
     # 22 Aug 26 - !valid_os_name on the API login path, and the audit trail.
     # SECOND of the API steps and deliberately before the three that rewrite
     # sd.conf: it is the only one that does NOT touch the file, so it measures
