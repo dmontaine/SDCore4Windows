@@ -5,6 +5,25 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+03 Sep 26  COMPILING A PROGRAM WITH AN UNFINISHED "BEGIN TRANSACTION" NO
+           LONGER HANGS. IT NOW TELLS YOU WHICH LINE IS WRONG.
+
+           "BEGIN TRANSACTION" opens a block that only "END TRANSACTION"
+           closes. If you reached the end of the program without closing it -
+           a typo, or a missing line - the compiler did not report the
+           mistake. It simply never finished, and there was nothing on screen
+           to say why.
+
+           It now reports "Unterminated transaction construct", in about half
+           a second, the same way every other unfinished block already did.
+
+           IF YOU HAVE HIT THIS BEFORE, IT MAY HAVE COST YOU MORE THAN THE
+           WAIT. A compile that never finishes has to be stopped from
+           outside, and doing that could leave the session still counted as
+           logged in - which in turn could stop the SD service from shutting
+           down cleanly, for a reason that looked unconnected to the program
+           you were compiling. That cannot happen from this cause any more.
+
 03 Sep 26  SD NO LONGER TELLS YOU THAT YOU ARE NOT AN ADMINISTRATOR WHEN WHAT
            IT MEANS IS THAT IT COULD NOT FIND OUT.
 
