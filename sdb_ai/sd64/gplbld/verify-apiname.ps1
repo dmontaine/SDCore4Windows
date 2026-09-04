@@ -52,6 +52,16 @@
 .EXAMPLE
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-apiname.ps1 -Prefix sdapin1
 #>
+
+# Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
+# could not be run.
+#
+# 03 Sep 26 - THAT SENTENCE IS NEW HERE, AND THE THIRD CODE HAD NEVER BEEN
+# USED.  PRE_RELEASE_FIXES.md 151.  Twelve other verifiers state this
+# convention in their own headers; the six API ones stated nothing and left
+# every precondition refusal through Fail() at exit 1 - which in a suite
+# summary is indistinguishable from a check that ran and failed.  See Refuse().
+
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
     [int]    $Port = 4243,
@@ -92,6 +102,29 @@ function Fail($msg) {
     Write-Host "STOPPED: $msg" -ForegroundColor Red
     try { Stop-Transcript | Out-Null } catch { }
     exit 1
+}
+
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 151.  A PRECONDITION REFUSAL IS NOT A FAILED
+# CHECK, and until now both left through Fail() at exit 1.  Run b106 showed six
+# API verifiers "exit 1" in a block, which reads as "the API is broken" - and
+# NOT ONE OF THEM HAD MEASURED ANYTHING.  All six had refused on
+# assert-current because a source file was written while the run was in flight.
+#
+# IT DOWNGRADES TO 1 IF A DECISIVE CHECK HAS ALREADY FAILED, and that is the
+# half that is easy to get wrong.  Several stop-sites below sit immediately
+# after a Note() that has already recorded a [FAIL] - there the fixture step IS
+# a decisive check - and exiting 2 there would file a real failure under "could
+# not run", which is the more dangerous direction of the two.  So the helper
+# asks the run's own state rather than trusting the call site to be a
+# precondition.
+function Refuse($msg) {
+    if ($script:failed) {
+        Fail ($msg + '  (a decisive check had already FAILED, so this is exit 1, not 2)')
+    }
+    Write-Host ''
+    Write-Host "COULD NOT RUN: $msg" -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 2
 }
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
@@ -157,12 +190,12 @@ function First-Verdict($r) {
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'Run this from an ELEVATED PowerShell - it creates and deletes an account.'
+    Refuse 'Run this from an ELEVATED PowerShell - it creates and deletes an account.'
 }
 
 Step 0 'Checking the installed tree matches source'
 & (Join-Path $Gplbld 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) { Fail 'assert-current says the install is not current. Cycle first.' }
+if ($LASTEXITCODE -ne 0) { Refuse 'assert-current says the install is not current. Cycle first.' }
 
 $restoreNeeded = $false
 try {
@@ -170,11 +203,11 @@ try {
     Step 1 'Making an account the API can reach'
 
     if (-not (Get-Process -Name sdwind -ErrorAction SilentlyContinue)) {
-        Fail 'sdwind is not running - start SD before running this.'
+        Refuse 'sdwind is not running - start SD before running this.'
     }
     $listening = [bool](netstat -an | Select-String (':' + $Port) | Select-String 'LISTENING')
     Note 'API port is listening' $true $listening
-    if (-not $listening) { Fail "Nothing is listening on $Port." }
+    if (-not $listening) { Refuse "Nothing is listening on $Port." }
 
     # Two passwords, and they are not the same thing - verify-apiport.ps1 has
     # the reasoning. The Windows one may hold punctuation; the SD one stays
@@ -189,18 +222,18 @@ try {
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made
-    if (-not $made) { Write-Host $out; Fail 'CREATE.ACCOUNT did not register the account.' }
+    if (-not $made) { Write-Host $out; Refuse 'CREATE.ACCOUNT did not register the account.' }
     $restoreNeeded = $true
 
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')
     Note 'password set' $true $set
-    if (-not $set) { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
+    if (-not $set) { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
 
     $out = Invoke-SD @("MODIFY.ACCOUNT $Prefix API")
     $inApi = [bool](Get-LocalGroupMember -Group 'sdapi' -Member $Prefix -ErrorAction SilentlyContinue)
     Note 'granted API access (in sdapi)' $true $inApi
-    if (-not $inApi) { Write-Host $out; Fail 'MODIFY.ACCOUNT ... API did not put the account in sdapi.' }
+    if (-not $inApi) { Write-Host $out; Refuse 'MODIFY.ACCOUNT ... API did not put the account in sdapi.' }
 
     # -----------------------------------------------------------------------
     Step 2 'Building the probe'
@@ -208,7 +241,7 @@ try {
     # sdclilib\tests\ and localtest\ are both excluded from assert-current, so
     # building here cannot make the install report stale - section 6.
     $bash = 'C:\msys64\usr\bin\bash.exe'
-    if (-not (Test-Path -LiteralPath $bash)) { Fail "MSYS2 bash not found at $bash." }
+    if (-not (Test-Path -LiteralPath $bash)) { Refuse "MSYS2 bash not found at $bash." }
     $sd64posix = '/' + ($Sd64 -replace '\\', '/' -replace '^([A-Za-z]):', '$1')
     $cmd = "cd '$sd64posix/gplsrc/sdclilib' && PATH=/c/msys64/ucrt64/bin:`$PATH " +
            "make CC=/c/msys64/ucrt64/bin/gcc.exe localtest/remote-connect-test.exe 2>/dev/null || " +
@@ -217,7 +250,7 @@ try {
     & $bash -lc $cmd | Out-Null
     $built = Test-Path -LiteralPath $probe
     Note 'probe built' $true $built
-    if (-not $built) { Fail 'Could not build remote-connect-test.exe.' }
+    if (-not $built) { Refuse 'Could not build remote-connect-test.exe.' }
 
     # -----------------------------------------------------------------------
     Step 3 'THE CONTROL: the bare name, admitted'
@@ -229,7 +262,7 @@ try {
     Note 'bare name admitted' $true $bareOk
     if (-not $bareOk) {
         Write-Host $bare.Text
-        Fail 'The control failed: the account cannot log in at all, so no refusal below means anything.'
+        Refuse 'The control failed: the account cannot log in at all, so no refusal below means anything.'
     }
     $bareVerdict = First-Verdict $bare
 

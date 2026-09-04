@@ -61,6 +61,15 @@
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-apiadmin.ps1 -Prefix sdapia1
 #>
 
+# Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
+# could not be run.
+#
+# 03 Sep 26 - THAT SENTENCE IS NEW HERE, AND THE THIRD CODE HAD NEVER BEEN
+# USED.  PRE_RELEASE_FIXES.md 151.  Twelve other verifiers state this
+# convention in their own headers; the six API ones stated nothing and left
+# every precondition refusal through Fail() at exit 1 - which in a suite
+# summary is indistinguishable from a check that ran and failed.  See Refuse().
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
@@ -116,6 +125,29 @@ function Fail($msg) {
     Write-Host "STOPPED: $msg" -ForegroundColor Red
     try { Stop-Transcript | Out-Null } catch { }
     exit 1
+}
+
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 151.  A PRECONDITION REFUSAL IS NOT A FAILED
+# CHECK, and until now both left through Fail() at exit 1.  Run b106 showed six
+# API verifiers "exit 1" in a block, which reads as "the API is broken" - and
+# NOT ONE OF THEM HAD MEASURED ANYTHING.  All six had refused on
+# assert-current because a source file was written while the run was in flight.
+#
+# IT DOWNGRADES TO 1 IF A DECISIVE CHECK HAS ALREADY FAILED, and that is the
+# half that is easy to get wrong.  Several stop-sites below sit immediately
+# after a Note() that has already recorded a [FAIL] - there the fixture step IS
+# a decisive check - and exiting 2 there would file a real failure under "could
+# not run", which is the more dangerous direction of the two.  So the helper
+# asks the run's own state rather than trusting the call site to be a
+# precondition.
+function Refuse($msg) {
+    if ($script:failed) {
+        Fail ($msg + '  (a decisive check had already FAILED, so this is exit 1, not 2)')
+    }
+    Write-Host ''
+    Write-Host "COULD NOT RUN: $msg" -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 2
 }
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
@@ -201,25 +233,25 @@ function Get-Marker([string]$text, [string]$name) {
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'Run this from an ELEVATED PowerShell - it creates an account, edits the installed sd.conf and restarts SD.'
+    Refuse 'Run this from an ELEVATED PowerShell - it creates an account, edits the installed sd.conf and restarts SD.'
 }
 
 Step 0 'Checking the installed tree matches source'
 & (Join-Path $Gplbld 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - run gplbld/cycle.ps1 first.' }
+if ($LASTEXITCODE -ne 0) { Refuse 'assert-current refuses - run gplbld/cycle.ps1 first.' }
 
 if ($Prefix -notmatch '^[a-z][a-z0-9_]*$') {
-    Fail "-Prefix is '$Prefix'.  Lower case letters, digits and underscore only, starting with a letter."
+    Refuse "-Prefix is '$Prefix'.  Lower case letters, digits and underscore only, starting with a letter."
 }
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
-    Fail "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
+    Refuse "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
 }
 if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper()))) {
-    Fail ($Prefix.ToUpper() + ' is still in the ACCOUNTS register from an earlier run.  Use a fresh -Prefix.')
+    Refuse ($Prefix.ToUpper() + ' is still in the ACCOUNTS register from an earlier run.  Use a fresh -Prefix.')
 }
 
 $bash = 'C:\msys64\usr\bin\bash.exe'
-if (-not (Test-Path -LiteralPath $bash)) { Fail "MSYS2 bash not found at $bash" }
+if (-not (Test-Path -LiteralPath $bash)) { Refuse "MSYS2 bash not found at $bash" }
 
 $restoreNeeded = $false
 $madeAccount   = $false
@@ -248,7 +280,7 @@ try {
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made
-    if (-not $made) { Write-Host $out; Fail 'CREATE.ACCOUNT did not register the account.' }
+    if (-not $made) { Write-Host $out; Refuse 'CREATE.ACCOUNT did not register the account.' }
     $madeAccount = $true
 
     # -----------------------------------------------------------------------
@@ -261,7 +293,7 @@ try {
     $out = Invoke-SDSys @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')
     Note 'credential set' $true $set
-    if (-not $set) { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
+    if (-not $set) { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
 
     # -----------------------------------------------------------------------
     Step 3 'The premise: what the ACL on $cred actually says'
@@ -284,7 +316,7 @@ try {
     $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $Prefix)
     $bpDir   = Join-Path $acctDir 'bp'
     if (-not (Test-Path -LiteralPath $bpDir)) {
-        Fail "No bp directory at $bpDir - CREATE.ACCOUNT's layout has changed."
+        Refuse "No bp directory at $bpDir - CREATE.ACCOUNT's layout has changed."
     }
     # 21 Aug 26 - TWO PROBES NOW, AND THE SPLIT IS NOT COSMETIC.  The os.execute
     # leg ABORTS when it is refused, and an abort DISCARDS the output an API
@@ -330,7 +362,7 @@ try {
     Write-Host ("    compile: {0} of {1} probe(s) said '0 error(s)'; an error count was {2}" -f
                 $okCount, $probes.Count, $(if ($errSeen) { 'SEEN' } else { 'absent' }))
     Note 'probe compiled' $true $compiled
-    if (-not $compiled) { Fail 'A probe did not compile - the output above says why.' }
+    if (-not $compiled) { Refuse 'A probe did not compile - the output above says why.' }
 
     # -----------------------------------------------------------------------
     Step 5 'CONTROL: the same probe from a LOCAL ELEVATED session'
@@ -365,8 +397,8 @@ try {
 
     # read_config() runs only when the shared segment is CREATED, so it has to
     # be a restart rather than a reload.
-    if (-not (Stop-SD))  { Fail 'SD would not stop - close any open session and try again.' }
-    if (-not (Start-SD)) { Fail 'SD would not start again.  Read the SD error log.' }
+    if (-not (Stop-SD))  { Refuse 'SD would not stop - close any open session and try again.' }
+    if (-not (Start-SD)) { Refuse 'SD would not start again.  Read the SD error log.' }
     Start-Sleep -Seconds 2
 
     # 21 Aug 26 - THE ADDRESS IS NO LONGER PART OF THIS CHECK.  Same stale
@@ -383,7 +415,7 @@ try {
                 Where-Object { $_ -match (':' + $Port + '\s') })
     Note 'a listener on the port' $true ($listen.Count -gt 0)
     foreach ($l in $listen) { Write-Host ('   ' + $l.ToString().Trim()) }
-    if ($listen.Count -eq 0) { Fail "Nothing is listening on port $Port." }
+    if ($listen.Count -eq 0) { Refuse "Nothing is listening on port $Port." }
 
     # -----------------------------------------------------------------------
     # C:\a\b -> /c/a/b
@@ -448,7 +480,7 @@ try {
     $inApi = [bool](Get-LocalGroupMember -Group 'sdapi' -ErrorAction SilentlyContinue |
                     Where-Object { $_.Name -like ("*\" + $Prefix) })
     Note 'MODIFY.ACCOUNT ... API put it in sdapi' $true $inApi
-    if (-not $inApi) { Write-Host $out; Fail 'the account was not granted the API - nothing below can be measured.' }
+    if (-not $inApi) { Write-Host $out; Refuse 'the account was not granted the API - nothing below can be measured.' }
 
     # NO SD RESTART, AND THAT IS AN ASSERTION RATHER THAN A SAVING.  APISRVR
     # asks the SAM per login through is_grp_member, so a grant is live for the
@@ -477,7 +509,7 @@ try {
     Write-Host "   api:   connect=$apiConnect account=$apiAcct open=$apiOpen write=$apiWrite (exit $apiRc)"
 
     Note 'API session connected' 'YES' $apiConnect
-    if ($apiConnect -ne 'YES') { Fail 'The API session did not connect - nothing below was measured.' }
+    if ($apiConnect -ne 'YES') { Refuse 'The API session did not connect - nothing below was measured.' }
 
     # We are where we think we are.  Without this, a probe that ran in some
     # other account would be read as a result about this one.

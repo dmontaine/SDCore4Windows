@@ -43,6 +43,15 @@
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-apiport.ps1 -Prefix sdapi1
 #>
 
+# Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
+# could not be run.
+#
+# 03 Sep 26 - THAT SENTENCE IS NEW HERE, AND THE THIRD CODE HAD NEVER BEEN
+# USED.  PRE_RELEASE_FIXES.md 151.  Twelve other verifiers state this
+# convention in their own headers; the six API ones stated nothing and left
+# every precondition refusal through Fail() at exit 1 - which in a suite
+# summary is indistinguishable from a check that ran and failed.  See Refuse().
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
@@ -84,6 +93,29 @@ function Fail($msg) {
     Write-Host "STOPPED: $msg" -ForegroundColor Red
     try { Stop-Transcript | Out-Null } catch { }
     exit 1
+}
+
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 151.  A PRECONDITION REFUSAL IS NOT A FAILED
+# CHECK, and until now both left through Fail() at exit 1.  Run b106 showed six
+# API verifiers "exit 1" in a block, which reads as "the API is broken" - and
+# NOT ONE OF THEM HAD MEASURED ANYTHING.  All six had refused on
+# assert-current because a source file was written while the run was in flight.
+#
+# IT DOWNGRADES TO 1 IF A DECISIVE CHECK HAS ALREADY FAILED, and that is the
+# half that is easy to get wrong.  Several stop-sites below sit immediately
+# after a Note() that has already recorded a [FAIL] - there the fixture step IS
+# a decisive check - and exiting 2 there would file a real failure under "could
+# not run", which is the more dangerous direction of the two.  So the helper
+# asks the run's own state rather than trusting the call site to be a
+# precondition.
+function Refuse($msg) {
+    if ($script:failed) {
+        Fail ($msg + '  (a decisive check had already FAILED, so this is exit 1, not 2)')
+    }
+    Write-Host ''
+    Write-Host "COULD NOT RUN: $msg" -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 2
 }
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
@@ -129,7 +161,7 @@ function Start-SD {
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'Run this from an ELEVATED PowerShell - it creates an account, edits the installed sd.conf and restarts SD.'
+    Refuse 'Run this from an ELEVATED PowerShell - it creates an account, edits the installed sd.conf and restarts SD.'
 }
 
 # THE CYCLE RULE, and it is a gate rather than a reminder.  CLAUDE.md: anything
@@ -137,10 +169,10 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
 # no longer exists.
 Step 0 'Checking the installed tree matches source'
 & (Join-Path $Gplbld 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - run gplbld/cycle.ps1 first.' }
+if ($LASTEXITCODE -ne 0) { Refuse 'assert-current refuses - run gplbld/cycle.ps1 first.' }
 
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
-    Fail "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
+    Refuse "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
 }
 
 # AND CHECK THE REGISTER, NOT JUST WINDOWS - the same trap verify-tiers.ps1
@@ -149,7 +181,7 @@ if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
 # CREATE.ACCOUNT then refuses the name several steps further on, for a reason
 # that has nothing to do with the API.
 if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper()))) {
-    Fail ($Prefix.ToUpper() + " is still in the ACCOUNTS register from an earlier run." +
+    Refuse ($Prefix.ToUpper() + " is still in the ACCOUNTS register from an earlier run." +
           "  Remove it with DELETE.ACCOUNT, or use a fresh -Prefix.")
 }
 
@@ -198,7 +230,7 @@ try {
     Note 'accounts record created' $true $made
     if (-not $made) {
         Write-Host $out
-        Fail 'CREATE.ACCOUNT did not register the account.'
+        Refuse 'CREATE.ACCOUNT did not register the account.'
     }
     $restoreNeeded = $true
 
@@ -218,7 +250,7 @@ try {
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')
     Note 'password set' $true $set
-    if (-not $set) { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
+    if (-not $set) { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
 
     # -----------------------------------------------------------------------
     Step 2a 'Granting it API access'
@@ -237,7 +269,7 @@ try {
     $out = Invoke-SD @("MODIFY.ACCOUNT $Prefix API")
     $inApi = [bool](Get-LocalGroupMember -Group 'sdapi' -Member $Prefix -ErrorAction SilentlyContinue)
     Note 'granted API access (in sdapi)' $true $inApi
-    if (-not $inApi) { Write-Host $out; Fail 'MODIFY.ACCOUNT ... API did not put the account in sdapi.' }
+    if (-not $inApi) { Write-Host $out; Refuse 'MODIFY.ACCOUNT ... API did not put the account in sdapi.' }
 
     # -----------------------------------------------------------------------
     Step 3 "Enabling APIPORT=$Port in the installed sd.conf"
@@ -253,8 +285,8 @@ try {
     # IT HAS TO BE A RESTART, not a reload.  read_config() runs only when the
     # shared segment is CREATED (sysseg.c:150-157); an attaching session takes
     # pcfg from the segment instead, so a running system never sees the change.
-    if (-not (Stop-SD))  { Fail 'SD would not stop - close any open session and try again.' }
-    if (-not (Start-SD)) { Fail 'SD would not start again.  Read the SD error log.' }
+    if (-not (Stop-SD))  { Refuse 'SD would not stop - close any open session and try again.' }
+    if (-not (Start-SD)) { Refuse 'SD would not start again.  Read the SD error log.' }
 
     Start-Sleep -Seconds 2
 
@@ -295,7 +327,7 @@ try {
     # up the MSYS2 cc instead of the UCRT64 compiler the DLL is built with, and
     # the test will not run.  Same trap as check-local.
     $bash = 'C:\msys64\usr\bin\bash.exe'
-    if (-not (Test-Path -LiteralPath $bash)) { Fail "MSYS2 bash not found at $bash" }
+    if (-not (Test-Path -LiteralPath $bash)) { Refuse "MSYS2 bash not found at $bash" }
 
     # C:\a\b -> /c/a/b
     $msys = '/' + $Sd64.Substring(0, 1).ToLower() + ($Sd64.Substring(2) -replace '\\', '/')

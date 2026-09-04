@@ -51,6 +51,15 @@
 #
 # NOT YET RUN BY ANYBODY.  Written 23 Aug 2026 at the end of a long session and
 # handed over UNRUN, deliberately: PROJECT_STATUS's START HERE says so.
+#
+# Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
+# could not be run.
+#
+# 03 Sep 26 - THAT SENTENCE IS NEW HERE, AND THIS SCRIPT WAS HALFWAY TO IT
+# ALREADY.  PRE_RELEASE_FIXES.md 151.  The VOID path at the foot of the file
+# has exited 2 with "a control did not hold, nothing was measured" since it was
+# written - but the PRECONDITIONS above all left through Fail() at exit 1, so a
+# refusal on assert-current was reported as a failed check.  See Refuse().
 
 [CmdletBinding()]
 param(
@@ -89,6 +98,35 @@ function Note($check, $expected, $got, $decisive = $true) {
     Write-Host "  $tag $check`: expected $expected, got $got"
 }
 function Fail($msg) { Write-Host ''; Write-Host "verify-apiidentity: $msg" -ForegroundColor Red; exit 1 }
+
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 151.  A PRECONDITION REFUSAL IS NOT A FAILED
+# CHECK, and until now both left through Fail() at exit 1.  Run b106 showed six
+# API verifiers "exit 1" in a block, which reads as "the API is broken" - and
+# NOT ONE OF THEM HAD MEASURED ANYTHING.  All six had refused on
+# assert-current because a source file was written while the run was in flight.
+# This is the same verdict the VOID path at the foot of the file already gives.
+#
+# IT DOWNGRADES TO 1 IF A DECISIVE CHECK HAS ALREADY FAILED, and that is the
+# half that is easy to get wrong: exiting 2 after a [FAIL] would file a real
+# product finding under "could not run", which is the more dangerous direction.
+# The decisive rows are the ones the foot of the file counts, so the test is
+# the same one - asked of the run's own state rather than of the call site.
+#
+# THE IN-STEP ASSERTIONS BELOW ARE DELIBERATELY LEFT ON Fail(), and that is a
+# decision rather than an oversight.  Several of them - CREATE.FILE reporting
+# success on a file that is not on disk, a record carrying a CR, a fixture
+# granting the user nothing - are as readable as product findings as they are
+# as fixture faults, and the SCRAM-login one says so in its own text (message
+# 5277 "IS THE FINDING, not a broken test").  Where the two readings compete,
+# the noisier code is the safer one.
+function Refuse($msg) {
+    if (@($script:checks | Where-Object { $_.Result -eq 'FAIL' -and $_.Decisive -eq 'yes' }).Count -gt 0) {
+        Fail ($msg + '  (a decisive check had already FAILED, so this is exit 1, not 2)')
+    }
+    Write-Host ''
+    Write-Host "verify-apiidentity: COULD NOT RUN - $msg" -ForegroundColor Yellow
+    exit 2
+}
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
 function Invoke-Icacls {
@@ -116,11 +154,11 @@ function Assert-Icacls([string[]]$arguments, [string]$what) {
     $text = ($r.Output | Out-String)
     if ($r.Code -ne 0) {
         Write-Host $text
-        Fail "$what exited $($r.Code)."
+        Refuse "$what exited $($r.Code)."
     }
     if ($text -match 'Access is denied|Failed processing [1-9]') {
         Write-Host $text
-        Fail ("$what reported a failure while exiting 0.  " +
+        Refuse ("$what reported a failure while exiting 0.  " +
               'Some object did not get the ACL, so the fixture cannot be trusted.')
     }
 }
@@ -411,19 +449,19 @@ Write-Host 'verify-apiidentity - does an API session run as the user? (7 step 14
 Write-Host ''
 
 & (Join-Path $Gplbld 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - the install does not match source.' }
+if ($LASTEXITCODE -ne 0) { Refuse 'assert-current refuses - the install does not match source.' }
 
 $pr = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'this needs an ELEVATED window: it creates an account and sets ACLs.'
+    Refuse 'this needs an ELEVATED window: it creates an account and sets ACLs.'
 }
 
-if (-not $Prefix) { Fail 'pass -Prefix, e.g. -Prefix sdapiidb18.  It names the throwaway account.' }
+if (-not $Prefix) { Refuse 'pass -Prefix, e.g. -Prefix sdapiidb18.  It names the throwaway account.' }
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
-    Fail "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
+    Refuse "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
 }
 if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper()))) {
-    Fail ($Prefix.ToUpper() + ' is still in the ACCOUNTS register from an earlier run.')
+    Refuse ($Prefix.ToUpper() + ' is still in the ACCOUNTS register from an earlier run.')
 }
 
 $base    = Join-Path $env:ProgramData ('SD\zzapiid-' + $stamp)
@@ -439,19 +477,19 @@ try {
     $apiPw = 'Qq!' + [Guid]::NewGuid().ToString('N').Substring(0, 12) + 'bB8'
     $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER API", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
-    if (-not (Test-Path -LiteralPath $accRec)) { Write-Host $out; Fail 'CREATE.ACCOUNT did not register the account.' }
+    if (-not (Test-Path -LiteralPath $accRec)) { Write-Host $out; Refuse 'CREATE.ACCOUNT did not register the account.' }
     $made = $true
     Write-Host "   account $Prefix created"
 
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $apiPw, $apiPw)
-    if ($out -notmatch 'Password set') { Write-Host $out; Fail 'MODIFY.PASSWORD did not report success.' }
+    if ($out -notmatch 'Password set') { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
     Write-Host '   API password set'
 
     # THE CONTROL ON THE CONTROL.  If CREATE.ACCOUNT ever started making
     # administrators, the deny fixture would not deny and this whole run would
     # read as "impersonation does nothing".
     $admins = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
-    if ($admins -match "\\$Prefix$") { Fail "$Prefix is an Administrator - the deny fixture would not deny it." }
+    if ($admins -match "\\$Prefix$") { Refuse "$Prefix is an Administrator - the deny fixture would not deny it." }
     Write-Host "   $Prefix is not an Administrator, so the deny fixture really denies"
 
     # ---------------------------------------------------------------- 2
@@ -522,7 +560,7 @@ try {
         Write-Host ("   $($f.Name): $($f.Dest)")
     }
     if (@(Get-ChildItem -LiteralPath $base -Directory).Count -ne $fixtures.Count) {
-        Fail "expected $($fixtures.Count) fixture directories under $base - the fixture table was empty or did not apply."
+        Refuse "expected $($fixtures.Count) fixture directories under $base - the fixture table was empty or did not apply."
     }
 
     # ---------------------------------------------------------------- 3
@@ -536,9 +574,9 @@ try {
     # Composing it by hand would bake in both a separator and a case guess,
     # and section 7 step 8 moved that case once already.
     $accPath = ((Get-Content -LiteralPath $accRec -TotalCount 1) -replace '/', '\').Trim()
-    if (-not $accPath) { Fail "ACCOUNTS record $accRec has no field 1 - cannot locate the account directory." }
+    if (-not $accPath) { Refuse "ACCOUNTS record $accRec has no field 1 - cannot locate the account directory." }
     if (-not (Test-Path -LiteralPath $accPath -PathType Container)) {
-        Fail "ACCOUNTS field 1 names '$accPath', which is not a directory on disk."
+        Refuse "ACCOUNTS field 1 names '$accPath', which is not a directory on disk."
     }
     Write-Host "   account directory, from the register: $accPath"
 
@@ -847,7 +885,7 @@ try {
         $first = Invoke-ScramFirst $conn $Prefix
         if ($first.Response.ServerError -ne 0 -or -not $first.Parsed) {
             Write-Host ('   server said: ' + $first.Response.Text)
-            Fail 'the SCRAM client-first was refused - no session to measure.'
+            Refuse 'the SCRAM client-first was refused - no session to measure.'
         }
         $final = Invoke-ScramFinal $conn $first $apiPw
         if ($final.Response.ServerError -ne 0) {
@@ -871,7 +909,7 @@ try {
         $acctReply = Receive-SdPacket $conn
         if ($acctReply.ServerError -ne 0) {
             Write-Host ('   server said: ' + $acctReply.Text)
-            Fail ("SrvrAccount attach to $acctName failed - server error " +
+            Refuse ("SrvrAccount attach to $acctName failed - server error " +
                   "$($acctReply.ServerError), status $($acctReply.Status).  " +
                   'Without the attach the session has no account VOC and no ' +
                   'open below could succeed - so nothing here is a result.')

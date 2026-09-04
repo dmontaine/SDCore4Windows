@@ -44,6 +44,15 @@
     gplbld\verify-tierapi.ps1 -Prefix sdtapi1
 #>
 
+# Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
+# could not be run.
+#
+# 03 Sep 26 - THAT SENTENCE IS NEW HERE, AND THE THIRD CODE HAD NEVER BEEN
+# USED.  PRE_RELEASE_FIXES.md 151.  Twelve other verifiers state this
+# convention in their own headers; the six API ones stated nothing and left
+# every precondition refusal through Fail() at exit 1 - which in a suite
+# summary is indistinguishable from a check that ran and failed.  See Refuse().
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
@@ -81,6 +90,27 @@ function Fail($msg) {
     try { Stop-Transcript | Out-Null } catch { }
     exit 1
 }
+# 03 Sep 26 - PRE_RELEASE_FIXES.md 151.  A PRECONDITION REFUSAL IS NOT A FAILED
+# CHECK, and until now both left through Fail() at exit 1.  Run b106 showed six
+# API verifiers "exit 1" in a block, which reads as "the API is broken" - and
+# NOT ONE OF THEM HAD MEASURED ANYTHING.  All six had refused on
+# assert-current because a source file was written while the run was in flight.
+#
+# IT DOWNGRADES TO 1 IF A DECISIVE CHECK HAS ALREADY FAILED, and that is the
+# half that is easy to get wrong.  Several stop-sites below sit immediately
+# after a Note() that has already recorded a [FAIL] - there the fixture step IS
+# a decisive check - and exiting 2 there would file a real failure under "could
+# not run", which is the more dangerous direction of the two.  So the helper
+# asks the run's own state rather than trusting the call site to be a
+# precondition.
+function Refuse($msg) {
+    if ($script:failed) {
+        Fail ($msg + '  (a decisive check had already FAILED, so this is exit 1, not 2)')
+    }
+    Write-Host ''; Write-Host "COULD NOT RUN: $msg" -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 2
+}
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
 function Invoke-SD([string[]]$commands) {
@@ -110,7 +140,7 @@ function Start-SD { & sc.exe start $SvcName | Out-Null; Start-Sleep -Seconds 4 }
 function Test-Connect([string]$user, [string]$pw, [string]$account) {
     $o = & $SdConnect '127.0.0.1' "$Port" $user $pw $account 2>&1
     $rc = $LASTEXITCODE
-    if ($rc -eq 2) { Write-Host ($o -join "`n"); Fail 'sd-connect rejected its arguments - this is a bug in this script, not a refusal.' }
+    if ($rc -eq 2) { Write-Host ($o -join "`n"); Refuse 'sd-connect rejected its arguments - this is a bug in this script, not a refusal.' }
     Write-Host ('     sd-connect: ' + (($o | Select-String -Pattern '  ok |  FAILED') -join '; '))
     return ($rc -eq 0)
 }
@@ -119,15 +149,15 @@ function Test-Connect([string]$user, [string]$pw, [string]$account) {
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
         [Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'Run this from an ELEVATED PowerShell - CREATE.ACCOUNT and MODIFY.PASSWORD for another account are both gated on administrator.'
+    Refuse 'Run this from an ELEVATED PowerShell - CREATE.ACCOUNT and MODIFY.PASSWORD for another account are both gated on administrator.'
 }
 
 Step 0 'Checking the installed tree matches source'
 & (Join-Path $Gplbld 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) { Fail 'assert-current refuses - run gplbld/cycle.ps1 first.' }
+if ($LASTEXITCODE -ne 0) { Refuse 'assert-current refuses - run gplbld/cycle.ps1 first.' }
 
 if (-not (Test-Path -LiteralPath $SdConnect)) {
-    Fail ("sd-connect.exe not found at $SdConnect.  Build it: make sd-connect.exe in the sdclilib32 project. " +
+    Refuse ("sd-connect.exe not found at $SdConnect.  Build it: make sd-connect.exe in the sdclilib32 project. " +
           "It is the 32-bit client, which is the whole reason this test uses it.")
 }
 
@@ -204,9 +234,9 @@ $Tiers = @(
     [pscustomobject]@{ Name = ($Prefix + '3'); Keyword = 'ADMINISTRATOR'; Tier = 'ADMINISTRATOR'; Voc = 420 }
 )
 foreach ($t in $Tiers) {
-    if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Fail ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }
+    if (Get-LocalUser -Name $t.Name -ErrorAction SilentlyContinue) { Refuse ($t.Name + ' already exists as a Windows account.  Use a fresh -Prefix.') }
     if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $t.Name.ToUpper()))) {
-        Fail ($t.Name.ToUpper() + ' is still in the ACCOUNTS register.  Use a fresh -Prefix, or DELETE.ACCOUNT it.')
+        Refuse ($t.Name.ToUpper() + ' is still in the ACCOUNTS register.  Use a fresh -Prefix, or DELETE.ACCOUNT it.')
     }
 }
 
@@ -234,7 +264,7 @@ try {
         # was given, so the name is in the output whether it worked or refused.
         $made = Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $t.Name.ToUpper()))
         Note ($t.Tier + ' account created') $true $made
-        if (-not $made) { Fail ('CREATE.ACCOUNT did not register ' + $t.Name) }
+        if (-not $made) { Refuse ('CREATE.ACCOUNT did not register ' + $t.Name) }
         $restoreNeeded = $true
     }
 
@@ -282,7 +312,7 @@ try {
         $listen = @(netstat -an | Select-String 'LISTENING' | Where-Object { $_ -match (':' + $Port + '\s') })
     }
     Note 'a listener on the port' $true ($listen.Count -gt 0)
-    if ($listen.Count -eq 0) { Fail 'Nothing is listening - the rest of this script has nothing to talk to.' }
+    if ($listen.Count -eq 0) { Refuse 'Nothing is listening - the rest of this script has nothing to talk to.' }
     # 22 Aug 26 - THIS CHECK WAS INVERTED AGAINST ITS OWN NAME, and it is
     # POSTURE B LEFT BEHIND.  It read:
     #
