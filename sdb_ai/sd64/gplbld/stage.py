@@ -1256,6 +1256,18 @@ def main():
                    # SHIPS, so assert-current watches it like the rest of
                    # these - do NOT add it to that script's $neverShipped list.
                    'upgrade-dicts.ps1',
+                   # 04 Sep 26 - the VOC step for an UPGRADE, and the same
+                   # argument as the dictionary one above.  PRE_RELEASE_FIXES
+                   # 70: an upgrade replaces newvoc and voc_template and
+                   # rebuilds no account's live VOC, so a verb this release
+                   # adds cannot be typed in any account that already existed.
+                   # This runs "sd -internal UPDATE.ACCOUNTS ALL", which is
+                   # LOGIN's own all-accounts walk with the question answered -
+                   # deliberately the SAME walk a person reaches by answering Y,
+                   # not a second copy of it.  It SHIPS, so assert-current
+                   # watches it like the rest of these - do NOT add it to that
+                   # script's $neverShipped list.
+                   'upgrade-voc.ps1',
                    # 28 Aug 26 - PRE_RELEASE_FIXES #36, and this pair is the
                    # half of that ruling that says something comes back for a
                    # profile SD could not remove.  secure-reclaim.ps1 creates

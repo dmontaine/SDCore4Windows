@@ -142,7 +142,28 @@ $fixture = @(
     '  U := ''kept-four'';',
     '  { an unterminated brace opens here and names "gplbld/secret-five.ps1"',
     '    and closes on this line }  V := ''kept-five'';',
-    'end;'
+    # 04 Sep 26 - PRE_RELEASE_FIXES 70.  A COMMENT LINE THAT STARTS WITH A
+    # BRACKETED WORD IS NOT A SECTION HEADER.  The [Code] test matched a PREFIX,
+    # so a wrapped sentence beginning "[locked] on everything but a verb" left
+    # code mode and turned Pascal stripping OFF for the whole rest of the file.
+    # The symptom surfaced 1,300 lines away, in another script's canary.
+    #
+    # ***THE BRACKETED WORD HAS TO START THE LINE, WHICH THE FIRST VERSION OF
+    # THIS FIXTURE GOT WRONG AND THE MUTANT CONTROL CAUGHT.***  Written first as
+    # "  { [locked] ... }" - one line, brace first - which cannot match
+    # "^\s*\[" at all, so both rows below passed against the UNFIXED stripper
+    # and measured nothing.  The real case is a WRAPPED comment whose
+    # CONTINUATION line begins with the word, which is how sd.iss came to have
+    # one.  secret-ten proves the damage does not stop at that comment: with the
+    # prefix test, stripping stays off for every later line too.
+    '  { a wrapped prose comment; the line after this one begins with a word in',
+    '  [locked] brackets and is prose, naming "gplbld/secret-eight.ps1" }',
+    '  W := ''kept-eight'';',
+    '  { later prose, naming "gplbld/secret-ten.ps1" }',
+    '  X := ''kept-ten'';',
+    'end;',
+    '[Registry]',
+    'Root: HKLM; ValueData: "{ still-code-would-strip secret-nine }"'
 )
 Set-Content -LiteralPath $fx -Value $fixture -Encoding ASCII
 try {
@@ -168,6 +189,20 @@ try {
     Check 'the {#AppName} directive is KEPT'          ($text -match [regex]::Escape('{#AppName}')) $null
     Check 'code after a closed (* *) block is kept'   ($text -match 'kept-four') $null
     Check 'code after a closed { } comment is kept'   ($text -match 'kept-five') $null
+
+    # PRE_RELEASE_FIXES 70's pair.  Both halves, because either alone can be
+    # satisfied by a stripper that is simply wrong in the other direction.
+    Check 'a "[locked] ..." continuation line does NOT end [Code]' `
+          ($text -notmatch 'secret-eight') `
+          'the section test is matching a prefix, so prose beginning with a bracketed word switches Pascal stripping off'
+    Check 'code after that line is still kept'        ($text -match 'kept-eight') $null
+    Check 'and a LATER { } comment is still stripped' `
+          ($text -notmatch 'secret-ten') `
+          'stripping stayed off after the fake header - the damage is not local to that comment'
+    Check 'code after the later comment is kept'      ($text -match 'kept-ten') $null
+    Check 'a REAL [Registry] line DOES end [Code], so braces there are left alone' `
+          ($text -match 'secret-nine') `
+          'the anchored test is too tight and a genuine section header no longer registers'
 } finally {
     Remove-Item -LiteralPath $fx -Force -ErrorAction SilentlyContinue
 }

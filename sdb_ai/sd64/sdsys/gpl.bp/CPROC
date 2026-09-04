@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 04 Sep 26 Windows port - PRE_RELEASE_FIXES 70.  UPDATE.ACCOUNTS takes an
+*            optional ALL keyword, which runs the all-accounts VOC walk
+*            WITHOUT asking (LOGIN mode 4) so that the installer can run it on
+*            an upgrade.  Any other trailing token is refused by name rather
+*            than ignored.  New message 10173.  The heading's "Internal verb
+*            30" was wrong - the dispatch table says 15 - and is corrected.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  int.logout now tells the
 *            three outcomes apart: logout() answers 2 when the target's
 *            process was already gone and its slot has been REAPED, which is
@@ -3293,14 +3299,47 @@ int.logout:
    return
 
 *****************************************************************************
-* INT.UPDATE.ACCOUNTS    -  UPDATE.ACCOUNTS (Internal verb 30)
+* INT.UPDATE.ACCOUNTS    -  UPDATE.ACCOUNTS (Internal verb 15)
+*
+* 04 Sep 26 Windows port - THE NUMBER IN THE HEADING WAS 30 AND THE DISPATCH
+*   TABLE ABOVE SAYS 15.  Upstream sdb64 has it too - see UPSTREAM_FIXES.md.
+*   It is a copy of INT.STOP's heading, where 30 IS the right number, so the
+*   two read as though they agree.  Corrected here because a reader tracing
+*   "which routine is this verb" from a VOC record's field 3 - and field 3 of a
+*   V|IN record is exactly that number - is sent to the wrong one by it.
 
 int.update.accounts:
+* 04 Sep 26 Windows port - "UPDATE.ACCOUNTS ALL" IS THE UNATTENDED FORM AND IT
+*   IS AN EXPLICIT KEYWORD RATHER THAN AN INFERENCE.  PRE_RELEASE_FIXES 70.
+*   gplbld/upgrade-voc.ps1 runs it on an upgrade so that a release which adds a
+*   VOC record reaches every EXISTING account, which nothing did before.
+*
+*   ***WHY A KEYWORD AND NOT "the session is internal, so do not ask".***  That
+*   test exists (kernel(K$INTERNAL,-1), used twice in LOGIN) and would have
+*   needed no new spelling - but it decides a destructive rewrite of every
+*   account's VOC from a property of HOW SD was started, which nobody typing
+*   the verb can see.  The owner's standing preference is the explicit form.
+*
+*   ***AND A TRAILING TOKEN IS REFUSED BY NAME, NOT GUESSED AT.***  Same rule as
+*   SET_ACC_PASSWORD's parser: a second word here is far likelier to be a
+*   mistake than a keyword, and quietly ignoring it would run the INTERACTIVE
+*   form while the caller believed it had asked for the other one.
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   upd.mode = 2
+   begin case
+      case keyword = KW$ALL
+         upd.mode = 4
+      case token # ''
+         display sysmsg(10173, token) ;* UPDATE.ACCOUNTS does not take xx
+         @system.return.code = -ER$ARGS
+         return
+   end case
+
    display sysmsg(5200) ;* Copying records from NEWVOC to VOC...
    i = '$LOGIN'
-   call @i(j,2)
+   call @i(j,upd.mode)
    i = ''
-   display 
+   display
    return
 
 *****************************************************************************

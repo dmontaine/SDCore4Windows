@@ -18,6 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 04 Sep 26 Windows port - MODE 4: THE ALL-ACCOUNTS VOC WALK WITH THE QUESTION
+*           ANSWERED BY THE CALLER, so the installer can run it on an upgrade.
+*           PRE_RELEASE_FIXES 70.  Same walk as mode 2's Y answer, deliberately
+*           - the ruling is "call the existing all-accounts path, not a new
+*           one".  It prints its decision, counts the accounts it wrote, and
+*           refuses out loud when it is not SDSYS or not an administrator,
+*           because upgrade-voc.ps1 is judged on those lines and an empty walk
+*           would otherwise be indistinguishable from a complete one.
 * 02 Sep 26 Windows port - the "press Enter for no password" offer is retired
 *           from 10089/10095/10101; the behaviour is unchanged and only the
 *           wording moved.  PRE_RELEASE_FIXES.md 130.
@@ -288,11 +296,18 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
       end
    end
 
-   if mode = 2 or mode = 3 then     ;* Just doing a VOC upgrade or install
-      if mode = 2 then              ;* VOC update
+   if mode = 2 or mode = 3 or mode = 4 then  ;* Just doing a VOC upgrade or install
+      if mode = 2 or mode = 4 then           ;* VOC update
 * 17 Aug 26 Windows port - this is UPDATE.ACCOUNTS (CPROC internal verb 15), which
 *   is ungated, so the account's own tier decides what it may copy back in.
 *   PROJECT_STATUS.md section 8.
+* 04 Sep 26 Windows port - MODE 4 IS THE SAME WORK WITH THE QUESTION ANSWERED BY
+*   THE CALLER.  PRE_RELEASE_FIXES 70.  It is what "UPDATE.ACCOUNTS ALL" asks
+*   for, and the installer runs that on an upgrade through
+*   gplbld/upgrade-voc.ps1.  IT DELIBERATELY REACHES THE SAME WALK BELOW rather
+*   than getting one of its own: 70's ruling is "the installer calls the
+*   existing all-accounts path, not a new one", and two copies of "refresh
+*   every account" would drift apart at the first tier change.
          tier.acc.name = @who
          gosub get.acc.tier
          update.voc.f = voc
@@ -301,19 +316,39 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
       end
 
       if @who = 'SDSYS' and kernel(K$ADMINISTRATOR,-1) then
-         loop
-            display sysmsg(5003) :  ;* Update VOC in all registered accounts (y/<n>)?
-            input yn
-            yn = upcase(yn)
+* 04 Sep 26 Windows port - MODE 4 DOES NOT ASK, AND IT SAYS SO RATHER THAN GOING
+*   QUIET.  PRE_RELEASE_FIXES 70.  The installer runs this from ssPostInstall,
+*   where there is nobody at a keyboard: stdin is not a terminal, "input" gets
+*   nothing, and the line below would then take the default the prompt
+*   advertises - N - leaving the step reporting a clean upgrade over a tree it
+*   never touched.  So the answer is the CALLER's, and it is printed, because a
+*   decision nothing announced is one nobody can disagree with afterwards.
+         if mode = 4 then
+            yn = 'Y'
+            display sysmsg(10170) ;* Every registered account will have its VOC updated
+         end else
+            loop
+               display sysmsg(5003) :  ;* Update VOC in all registered accounts (y/<n>)?
+               input yn
+               yn = upcase(yn)
 * 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
 *   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.  N is
 *   the conservative answer and matters more here than most: this rewrites the
 *   VOC of every registered account, so an accidental Enter must not start it.
-            if yn = '' then yn = 'N'
-         until yn = 'Y' or yn = 'N'
-         repeat
+               if yn = '' then yn = 'N'
+            until yn = 'Y' or yn = 'N'
+            repeat
+         end
 
          if yn = 'Y' then
+* 04 Sep 26 Windows port - COUNTED, AND THE COUNT IS PRINTED.  PRE_RELEASE_FIXES
+*   70.  upgrade-voc.ps1 is judged on this line and cannot be judged without it:
+*   a walk that opened the register and visited NOTHING prints the same nothing
+*   as a walk that refreshed every account, so the caller would score an empty
+*   run as a success - the null case the instrument rules forbid.  Incremented
+*   where an account's VOC was actually WRITTEN, not where a register record
+*   was read.
+            acc.updated = 0
             voc.paths = @path
             openpath @sdsys:@ds:'accounts' to acc.f then
                select acc.f to 12
@@ -344,16 +379,28 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
+                           acc.updated += 1
                         end
                      end
                   end
                repeat
                close acc.f
+               display sysmsg(10171, acc.updated) ;* xx account(s) had their VOC updated
             end else
                display sysmsg(2200) ;* Cannot open accounts register
             end
          end
-      end 
+      end else
+* 04 Sep 26 Windows port - THE NULL CASE, REFUSED OUT LOUD.  PRE_RELEASE_FIXES
+*   70.  Mode 4 is only ever asked for by something that wants every registered
+*   account refreshed, so arriving here means this session is not in SDSYS or is
+*   not an administrator and the walk did NOT run.  Modes 2 and 3 reach this
+*   arm on every ordinary account and must stay silent - that is the normal
+*   case for them and says nothing is wrong.
+         if mode = 4 then
+            display sysmsg(10172) ;* Cannot update every account from here
+         end
+      end
 
       ok = @true
       return

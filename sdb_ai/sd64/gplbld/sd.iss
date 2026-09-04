@@ -1664,13 +1664,14 @@ begin
     'SETUP HAS NOT ASKED ABOUT ssh OR THE API, AND WILL NOT CHANGE THEM.' + NewLine +
     'Who may reach this machine, whether the API is provided, and whether "sd"' + NewLine +
     'runs from any directory are all left exactly as they are now.' + NewLine + NewLine +
-    'NEW COMMANDS DO NOT APPEAR IN AN EXISTING ACCOUNT ON THEIR OWN.' + NewLine +
-    'An upgrade replaces the shipped vocabulary but does not rebuild the one' + NewLine +
-    'each account is using. In SDSYS, as an administrator, run this ONCE and' + NewLine +
-    'answer Y when it offers to update every registered account:' + NewLine + NewLine +
-    Space + 'update.accounts' + NewLine + NewLine +
-    'It takes no argument, and it keeps to each account''s own tier - an' + NewLine +
-    'account is never given a command its tier does not allow.' + NewLine + NewLine +
+    'EVERY ACCOUNT GETS THIS RELEASE''S COMMANDS. Setup refreshes the' + NewLine +
+    'vocabulary of every registered account, SDSYS included, so a command' + NewLine +
+    'added by this release can be typed straight away. There is nothing to' + NewLine +
+    'run afterwards.' + NewLine + NewLine +
+    'It keeps to each account''s own tier - an account is never given a' + NewLine +
+    'command its tier does not allow - and it leaves any VOC record you have' + NewLine +
+    'marked [locked] alone, apart from verbs, which are always brought' + NewLine +
+    'forward. It says which records it left, and which verbs it replaced.' + NewLine + NewLine +
     'To change the settings above, in SDSYS as an administrator:' + NewLine + NewLine +
     Space + 'remote.ssh on | off' + NewLine +
     Space + 'remote.api on | local | off' + NewLine +
@@ -2890,6 +2891,108 @@ begin
   end;
 end;
 
+{ BRING AN UPGRADED INSTALL'S ACCOUNT VOCABULARIES UP TO THE RELEASE.
+  PRE_RELEASE_FIXES 70.
+
+  THE HOLE IT CLOSES.  An upgrade REPLACES newvoc and voc_template and REBUILDS
+  NOTHING.  Every account's live VOC - SDSYS's own included - is built FROM
+  those templates by the bootstrap and by CREATEA, and is named in neither
+  stage.py list, so nothing an upgrade does can reach it.  A release that adds
+  a verb therefore shipped the verb and left no account able to type it, and
+  the only cure was a sentence in the closing box asking the administrator to
+  run update.accounts by hand.
+
+  IT CALLS THE EXISTING ALL-ACCOUNTS PATH, WHICH IS THE ENTRY'S RULING.
+  LOGIN's UPDATE.VOC walk already reads sdsys\accounts and rewrites every
+  registered account's VOC from NEWVOC at that account's own tier, honouring a
+  site's own lock marker on everything but a verb.  "UPDATE.ACCOUNTS ALL" is
+  that same walk with its question already answered (LOGIN mode 4).  A second
+  implementation would drift from the first at the next tier change.
+
+  DO NOT LET ANY LINE OF ANY COMMENT IN THIS FILE START WITH A BRACKETED WORD.
+  ISCC reads it as a section tag and answers "Invalid section tag", aborting the
+  compile - and it does that INSIDE a brace comment, because the section scan
+  runs before Pascal comments are considered at all.  The lock marker is spelled
+  with brackets, so a sentence about it is the natural way to write one; both
+  paragraphs here were rewritten to keep the brackets away from a line start.
+
+  MEASURED TWICE ON 4 Sep 2026, AND THE SECOND TIME IS THE INSTRUCTIVE ONE.
+  The first wrapping put the marker at the start of line 2908 and cost a cycle
+  at step 4, after the service had been stopped and the tree staged.  The fix
+  reworded the sentence - and rewrapped it so the marker began line 2908 again.
+  ***THE ERROR MESSAGE IS IDENTICAL, LINE NUMBER INCLUDED, SO IT READ AS "THE
+  EDIT DID NOT APPLY" RATHER THAN AS A SECOND INSTANCE.***  Check the line
+  itself, not the line number.  cycle.ps1's pre-flight lint now refuses this
+  before it stops the service; C:\Users\dmont\sdout\check-iss.ps1 compiles this
+  file alone in about a minute and is the thing to run before handing a cycle
+  over with a [Code] change in it.
+
+  A FIRST INSTALL HAS NOTHING TO DO HERE and this returns at once: it lays down
+  the whole staged tree, whose VOC the build's own bootstrap already wrote.
+
+  ORDERING.  After RefreshDictionaries, which is where the ACL reasoning above
+  applies unchanged, and before AdoptAccount for the reason that function's
+  header gives: each of the three starts a server and stops one only if it
+  started it, so none depends on another.  An account adopt creates AFTER this
+  runs needs no refresh - CREATEA builds its VOC from the NEW newvoc.
+
+  Returns '' when it worked or had nothing to do, and a paragraph for the
+  closing box when it did not. }
+function RefreshAccountVocs: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  if DataTreeWasAbsent then Exit;
+
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\upgrade-voc.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'The vocabulary update step could not be started, so each account ' +
+              'still has the vocabulary it had before. SD Core works; a command ' +
+              'added by this release cannot be typed yet. In SDSYS, as an ' +
+              'administrator, run this once and answer Y:' + #13#10#13#10 +
+              '    update.accounts' + #13#10#13#10;
+    Exit;
+  end;
+
+  { JUDGED ON THE SCRIPT'S OWN EXIT CODES, which its header lists.  Anything
+    that is not one of the named failures is still a failure - a case that fell
+    through silently is how a step of this shape hides.  EVERY branch names the
+    hand cure, because the reader's account is unusable for new commands until
+    somebody runs it. }
+  case Code of
+    0: ;
+    3: Result := 'SD Core would not start during the upgrade, so each account still ' +
+                 'has the vocabulary it had before. Everything else installed. In ' +
+                 'SDSYS, as an administrator, run this once and answer Y:' + #13#10#13#10 +
+                 '    update.accounts' + #13#10#13#10;
+    { DO NOT LET A #13 START A LINE, even in the middle of an expression: ISPP
+      reads a leading "#" as a preprocessor directive and answers "Unknown
+      preprocessor directive", naming a line that looks like ordinary Pascal.
+      RefreshDictionaries' comment has the whole trap. }
+    4: Result := 'This computer''s database is older than the update.accounts ' +
+                 'command, so the vocabularies could not be refreshed automatically ' +
+                 'and no rerun of this installer will change that. In SDSYS, as an ' +
+                 'administrator:' + #13#10#13#10 +
+                 '    update.accounts' + #13#10#13#10 +
+                 'Answer Y when it offers to update every registered account. It is ' +
+                 'needed once.' + #13#10#13#10;
+  else
+    Result := 'The account vocabularies could not be brought up to date for this ' +
+              'release, so each account still has the one it had before. SD Core ' +
+              'works; a command added by this release cannot be typed yet. ' +
+              'upgrade-voc.log in the SD Core data folder says what happened. In ' +
+              'SDSYS, as an administrator, run this once and answer Y:' + #13#10#13#10 +
+              '    update.accounts' + #13#10#13#10;
+  end;
+end;
+
 (* 30 Aug 26 - THE '$standalone' MARKER AND WriteStandaloneMarker ARE GONE.
    PRE_RELEASE_FIXES 75.  The marker existed for one reader - CREATEA, which
    used it to refuse CREATE.ACCOUNT USER - and that refusal is removed with it,
@@ -3752,6 +3855,14 @@ var
   SysdirMsg: String;
   AcctAclMsg: String;
   DictMsg: String;
+  { 04 Sep 26 - PRE_RELEASE_FIXES 70.  Its own variable rather than folded into
+    DictMsg, because the two steps fail independently and the cure is different:
+    a dictionary that did not update leaves a field unrecognised, a vocabulary
+    that did not leaves a whole command untypeable. }
+  VocMsg: String;
+  { Its positive half.  Exactly one of the two is ever non-empty on an upgrade,
+    neither on a first install - see where they are assigned. }
+  VocDoneMsg: String;
   SshOnlyMsg: String;
   MarkerMsg: String;
   { 03 Sep 26 - PRE_RELEASE_FIXES 135 and 147.  The two things a kept database
@@ -3847,14 +3958,14 @@ begin
       UpgMsg := 'YOUR ssh AND API SETTINGS WERE LEFT EXACTLY AS THEY WERE.' + #13#10#13#10 +
                 'This is an upgrade, so SD Core did not ask about them again and has changed ' +
                 'nothing about who may reach this machine.' + #13#10#13#10 +
-                'FIRST, GIVE EACH ACCOUNT THE NEW COMMANDS. An upgrade replaces the ' +
-                'shipped vocabulary but does not rebuild the one each account is using, so ' +
-                'a command added by this release cannot be typed until you refresh it. ' +
-                'In SDSYS, as an administrator, run this once and answer Y when it ' +
-                'offers to update every registered account - it takes no argument and ' +
-                'keeps to each account''s own tier:' + #13#10#13#10 +
-                '    update.accounts' + #13#10#13#10 +
-                'THEN, to change the settings above, in SDSYS as an administrator:' + #13#10#13#10 +
+                { 04 Sep 26 - THE VOCABULARY PARAGRAPH IS NOT WRITTEN HERE AND
+                  MUST NOT BE.  PRE_RELEASE_FIXES 70.  This runs BEFORE
+                  RefreshAccountVocs, so any claim made here would be a claim
+                  about a step that has not happened yet - which is 133's
+                  defect exactly, and it would sit in the same box as VocMsg
+                  contradicting it.  VocDoneMsg carries it, set after the step
+                  and only when the step returned nothing to report. }
+                'TO CHANGE THE SETTINGS ABOVE, in SDSYS as an administrator:' + #13#10#13#10 +
                 '    remote.ssh on | off           who may reach ssh' + #13#10 +
                 '    remote.api on | local | off   whether the API is provided, and to whom' + #13#10 +
                 '    ssh.server install | remove   add or take away the OpenSSH server' + #13#10 +
@@ -3944,6 +4055,30 @@ begin
       leaves Administrators full control, so nothing it writes is blocked, and
       running after them means it cannot re-open anything they narrowed. }
     DictMsg := RefreshDictionaries;
+
+    { AN UPGRADE'S ACCOUNT VOCABULARIES, and a no-op on a first install.
+      PRE_RELEASE_FIXES 70.  Beside the dictionary step and for the same
+      reason: both bring forward a part of the data tree that an upgrade
+      preserves and therefore cannot replace. }
+    VocMsg := RefreshAccountVocs;
+
+    { AND THE POSITIVE HALF, WRITTEN ONLY WHERE THE STEP ACTUALLY RAN AND
+      REPORTED NOTHING.  Exactly one of VocDoneMsg and VocMsg is ever non-empty,
+      and on a first install neither is - the same shape as the ssh pair above,
+      and for the same reason: a box that tells the reader their accounts were
+      refreshed, on a machine where the step failed, is worse than a box that
+      says nothing.  Gated on DataTreeUpgrade rather than TrueUpgrade because
+      that is what RefreshAccountVocs itself is gated on: an install over a tree
+      an uninstall left behind refreshes it too, and SdWasInstalled is false
+      there. }
+    if DataTreeUpgrade and (VocMsg = '') then
+      VocDoneMsg := 'EVERY ACCOUNT ALREADY HAS THIS RELEASE''S COMMANDS. Setup ' +
+                    'refreshed the vocabulary of every registered account, SDSYS ' +
+                    'included, so a command added by this release can be typed ' +
+                    'straight away and there is nothing to run first. It kept to ' +
+                    'each account''s own tier, and it left any VOC record you have ' +
+                    'marked [locked] alone apart from verbs, which are always ' +
+                    'brought forward.' + #13#10#13#10;
 
     { Same rule - an unattended install must still end with a usable account. }
     AdoptCode := AdoptAccount;
@@ -4162,6 +4297,11 @@ begin
              Beside the others because it reports something that did NOT
              happen, and the reader needs it before the settings. }
            DictMsg +
+           { And its pair, for the same reason.  PRE_RELEASE_FIXES 70: empty
+             unless an upgrade could not refresh the account vocabularies, in
+             which case a command this release added cannot be typed anywhere
+             and the reader has to run update.accounts by hand. }
+           VocMsg +
            { Beside CredMsg and for the same reason: both are empty on a healthy
              install, and both report a protection that is absent rather than a
              setting that is present. }
@@ -4234,6 +4374,12 @@ begin
              that are empty on an upgrade.  PRE_RELEASE_FIXES 88: exactly one
              of the two sets is ever non-empty. }
            UpgMsg +
+           { 04 Sep 26 - PRE_RELEASE_FIXES 70, and it is UpgMsg's neighbour for
+             the same reason the ssh trio are: it says what this upgrade did to
+             the thing the reader would otherwise have been told to do by hand.
+             Empty on a first install, and empty on an upgrade where the step
+             failed - VocMsg above is what speaks then. }
+           VocDoneMsg +
            { 25 Aug 26 - EMPTY ON EVERY INSTALL THAT WENT RIGHT, and it sits
              beside the ssh pair for the same reason they do: if the marker did
              not get written, the account advice below is describing rules this

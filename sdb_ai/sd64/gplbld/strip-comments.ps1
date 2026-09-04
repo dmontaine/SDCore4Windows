@@ -153,8 +153,23 @@ function Get-StrippedLines {
         if ($Kind -eq 'hash') {
             $i = $t.IndexOf('#'); if ($i -ge 0) { $t = $t.Substring(0, $i) }
         } else {
-            if     ($t -match '^\s*\[Code\]')      { $inCode = $true }
-            elseif ($t -match '^\s*\[[A-Za-z]+\]') { $inCode = $false }
+            # 04 Sep 26 - A SECTION HEADER IS THE WHOLE LINE, AND LEAVING THAT
+            # UNANCHORED COST A DIAGNOSIS.  PRE_RELEASE_FIXES 70.  These two
+            # tests used to match a PREFIX, so any line beginning with a
+            # bracketed word left [Code] - and this tree writes about VOC
+            # records "marked [locked]", which is exactly that shape.  One
+            # comment line wrapped so that "[locked] on everything but a verb"
+            # started it, Pascal stripping switched off for the remaining 2,400
+            # lines, and test-retired-wording-units' own canary went red naming
+            # a comment 1,300 lines further on - a true report of a fault whose
+            # cause was nowhere near it.
+            #
+            # ANCHORED AT BOTH ENDS, WHICH IS MEASURED RATHER THAN ASSUMED:
+            # every one of sd.iss's eleven real section lines is a bare [Word]
+            # with nothing after it, and the ONLY line in the file that matched
+            # the old pattern with trailing text was the prose above.
+            if     ($t -match '^\s*\[Code\]\s*$')      { $inCode = $true }
+            elseif ($t -match '^\s*\[[A-Za-z]+\]\s*$') { $inCode = $false }
             if ($t -match '^\s*;') { $t = '' }
             else { $i = $t.IndexOf('//'); if ($i -ge 0) { $t = $t.Substring(0, $i) } }
             if ($inCode) {

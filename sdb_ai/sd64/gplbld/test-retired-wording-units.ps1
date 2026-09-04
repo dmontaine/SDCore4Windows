@@ -101,7 +101,34 @@ $RETIRED = @(
     # part that was actually wrong.
     @{ Ref = '70'
        Retired     = 'Sign in and run this once in each account'
-       Replacement = 'answer Y when it offers to update every registered account' }
+       Replacement = 'refreshed the vocabulary of every registered account' }
+    # 70b - AND THE REPLACEMENT ITSELF IS NOW RETIRED, ONE STEP LATER.  The
+    # first fix made the instruction correct; the second made the instruction
+    # unnecessary, because the installer now runs the walk itself
+    # (upgrade-voc.ps1, "UPDATE.ACCOUNTS ALL").  A box that still tells the
+    # reader to do it by hand is not merely redundant - it says the accounts
+    # were NOT refreshed, which contradicts what the same box says four
+    # paragraphs up.
+    #
+    # ***THE RETIRED STRING IS THE FALSE PREMISE, NOT THE INSTRUCTION.***  This
+    # row was first written as "run this once and answer Y" and THIS LINT
+    # REFUSED IT, naming the six lines: RefreshAccountVocs' three failure
+    # branches each tell the reader to do exactly that, and on those paths it
+    # is correct - the step did not run, so somebody must. A phrase still
+    # needed somewhere is not retired. What IS retired is the claim underneath
+    # it, which the upgrade has made false.  Registering update.accounts itself
+    # would have been the same mistake one step worse: it is a live verb named
+    # on every one of those paths.
+    @{ Ref = '70b'
+       Retired     = 'does not rebuild the one each account is using'
+       Replacement = 'there is nothing to run first' }
+    # 70c - the premise the instruction rested on, retired with it.  It is the
+    # sentence a reader would re-type from memory when editing this text, and
+    # it is now FALSE: new commands DO appear in an existing account on their
+    # own, because the upgrade puts them there.
+    @{ Ref = '70c'
+       Retired     = 'NEW COMMANDS DO NOT APPEAR IN AN EXISTING ACCOUNT'
+       Replacement = 'EVERY ACCOUNT ALREADY HAS THIS RELEASE' }
     # 139 - the uninstaller's two destructive questions no longer answer to
     # Yes/No: their choices are labelled Keep and Delete (sd.iss KeepOrDelete).
     # REGISTERED BECAUSE THE OLD SENTENCE IS STILL CORRECT-SOUNDING PROSE - it

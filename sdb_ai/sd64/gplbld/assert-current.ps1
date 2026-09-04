@@ -232,6 +232,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # NOTE finish-install.ps1 itself is NOT here and must not be
                   # - it SHIPS to {app}, so it stays under the guard.
                   'test-wraptext-units.ps1',
+                  # 04 Sep 26 - PRE_RELEASE 70's units test over Get-VocVerdict,
+                  # the decision inside upgrade-voc.ps1.  Listed in the commit
+                  # that creates it.  It lifts the function out by AST and
+                  # drives it on recorded SD output; no SD, no elevation, no
+                  # token.  NOTE upgrade-voc.ps1 itself is NOT here and must not
+                  # be - it SHIPS to {app}, exactly like upgrade-dicts.ps1, so
+                  # it stays under the guard.
+                  'test-upgradevoc-units.ps1',
                   'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',

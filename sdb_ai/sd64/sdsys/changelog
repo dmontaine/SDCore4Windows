@@ -5,6 +5,48 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  UPGRADING NOW GIVES EVERY ACCOUNT THE NEW RELEASE'S COMMANDS.
+           YOU NO LONGER HAVE TO RUN ANYTHING AFTERWARDS.
+
+           An upgrade replaces the vocabulary SD ships, but each account runs
+           from its own copy, made when the account was created. So until now
+           a command added by a release existed on the machine and could not
+           be typed in any account that already existed - SDSYS included -
+           and the only cure was to remember to run  update.accounts  by hand
+           and answer Y. The closing box asked you to. Nothing checked that
+           you had, and nothing told you what you were missing if you did not.
+
+           Setup now does it for you, as the last part of an upgrade. It
+           walks every registered account and refreshes its vocabulary from
+           the one this release ships.
+
+           WHAT IT WILL NOT DO TO YOU:
+
+             * It keeps to each account's own tier. An account is never given
+               a command its tier does not allow.
+
+             * It leaves any VOC record you have marked [locked] alone, and
+               names the ones it left, so you know which corrections in this
+               release you have chosen not to receive.
+
+             * Verbs are the exception and always have been: a verb is what
+               SD runs, so a held-back one would go on calling a program this
+               release has changed. Those are brought forward and named.
+
+           If the step cannot run - SD will not start, or your database is
+           older than the  update.accounts  command itself - the closing box
+           says so and tells you the one command to run. It does not claim to
+           have done something it has not.
+
+           A first install is unaffected: its accounts are built from this
+           release to begin with.
+
+           You can still run  update.accounts  yourself at any time. It now
+           also accepts  update.accounts all , which does every registered
+           account without asking first; with no word after it, it updates
+           the account you are in and offers to do the rest, exactly as
+           before.
+
 04 Sep 26  THE PASSWORD PAGE AT THE END OF AN INSTALL READS BETTER.
 
            It asks for two passwords - your own account and SDSYS - and it

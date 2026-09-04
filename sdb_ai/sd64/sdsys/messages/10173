@@ -1,0 +1,1 @@
+UPDATE.ACCOUNTS does not take '%1', so nothing has been changed.\n\nThe only word it accepts is ALL, which updates every registered account without asking first. With no word at all it updates this account, and offers to do the rest.

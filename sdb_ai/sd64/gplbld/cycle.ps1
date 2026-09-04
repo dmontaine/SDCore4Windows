@@ -331,6 +331,39 @@ if ($issBad.Count -gt 0) {
           "directive.  Move the constant to the END of the previous line, as every other #13#10 in that file is.")
 }
 
+# 04 Sep 26 - AND THE SAME TRAP WITH A BRACKET, WHICH COST A CYCLE THE SAME WAY.
+# PRE_RELEASE_FIXES 70.  ISCC reads a line whose first non-blank character is
+# "[" as a SECTION TAG, and it does so INSIDE a brace comment - the section scan
+# runs before Pascal comments are considered at all.  So a wrapped sentence
+# about a VOC record "marked [locked]" aborts the compile with "Invalid section
+# tag", at step 4, after the service has been stopped and the tree staged.
+#
+# ***IT HAPPENED TWICE IN ONE HOUR, AND THE SECOND TIME IS WHY THIS EXISTS.***
+# The fix for the first reworded the sentence and REWRAPPED it so the marker
+# began the same line number again.  The error message is identical, line
+# number included, so it reads as "my edit did not apply" rather than as a
+# second instance - and the second cycle died exactly where the first did.
+#
+# THE WHITELIST IS THE ELEVEN REAL SECTIONS, and it is deliberately a list
+# rather than a shape test: "a bare [Word] on its own line" would also accept a
+# misspelled section, which ISCC rejects with this very message.  A new section
+# added to sd.iss belongs here, and the failure is loud.
+$issSections = @('Setup', 'Languages', 'Messages', 'Tasks', 'Files', 'Dirs',
+                 'Icons', 'Run', 'UninstallRun', 'Code', 'Registry',
+                 'InstallDelete', 'UninstallDelete', 'Components', 'Types',
+                 'CustomMessages', 'INI', 'LangOptions', 'UninstallRegistry')
+$issTags = @(Get-Content -LiteralPath $Iss |
+             Select-String -Pattern '^\s*\[([A-Za-z]*)\]?' |
+             Where-Object { $issSections -notcontains $_.Matches[0].Groups[1].Value })
+if ($issTags.Count -gt 0) {
+    foreach ($b in $issTags) {
+        Write-Host ("   sd.iss:{0}: {1}" -f $b.LineNumber, $b.Line.Trim()) -ForegroundColor Red
+    }
+    Fail ("sd.iss has {0} line(s) starting with '[' that ISCC will read as a section tag " -f $issTags.Count +
+          "and refuse.  Rewrap the sentence so the bracket is not the first thing on the line - " +
+          "check the LINE, not the line number, because a rewrap can reproduce both.")
+}
+
 # ---------------------------------------------------------------------------
 # 03 Sep 26 - STEP 0, THE C.  Owner's instruction, 3 Sep 2026: "seems like there
 # should be one script that can do all three, compile c if necessary, compile
