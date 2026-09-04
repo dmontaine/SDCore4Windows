@@ -5,6 +5,39 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  A TRANSACTION THAT FAILS PART WAY NOW PUTS BACK WHAT IT HAD
+           ALREADY WRITTEN.
+
+           A transaction is meant to be all or nothing. Until now, if a
+           COMMIT got part way through and then could not apply one of its
+           actions - a record locked by something else, a read-only file, a
+           disk problem - it stopped there and left everything it had already
+           applied on disk. The records before the failure were written; the
+           ones after it were not. There was no way to undo it and nothing
+           told you which was which.
+
+           SD now records what each record held immediately before the commit
+           overwrote it, and puts them back if the commit fails. A record
+           that existed is restored to its previous contents. A record the
+           transaction was creating is removed again, since it never existed.
+
+           WHAT IS WRITTEN TO THE ERROR LOG. Whether or not everything could
+           be put back, SD writes a line to sdsys/errlog saying so:
+
+               Transaction commit failed part way: 3 record(s) restored,
+               1 removed, 0 could not be undone
+
+           If a particular record could not be put back - because whatever
+           stopped the commit is also stopping the repair - it is named
+           individually, with its file, so you know exactly what to look at.
+           SD undoes everything else it can rather than stopping at the first
+           problem.
+
+           One thing worth knowing: the record the commit actually failed on
+           is also restored, and so may appear in that count. A write that
+           fails half way can leave a record in a state nothing can describe,
+           so SD puts it back rather than assuming it was untouched.
+
 04 Sep 26  RECORDS WRITTEN OR DELETED INSIDE A TRANSACTION, IN A DIRECTORY
            FILE, WITH CERTAIN CHARACTERS IN THE RECORD ID.
 

@@ -17,6 +17,21 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ *  4 Sep 26 Windows port - a commit that fails half way now PUTS BACK the
+ *           records it had already applied.  Owner's ruling, disambiguated
+ *           3 Sep 26: restore each already-applied record to what it held
+ *           before - NOT delete it, which taken literally would destroy the
+ *           prior version of an UPDATED record and defeat all-or-nothing
+ *           instead of delivering it.  The before image is taken at commit
+ *           time, immediately before each action is applied, because only
+ *           then is it certainly the one about to be overwritten; TXN_CACHE
+ *           has never held one.  It is replayed in reverse from txn_abort(),
+ *           the far side of the longjmp, before the locks are released.
+ *           An entry is the prior record, or a marker that there was none (so
+ *           the undo deletes), or a marker that the image could not be read -
+ *           which is logged by file and id rather than passed over.  The undo
+ *           never raises: the disk is already misbehaving by then.
+ *           PRE_RELEASE_FIXES 102, UPSTREAM_FIXES 32.
  *  4 Sep 26 Windows port - the directory-file arms of op_txncmt() now map the
  *           record id before touching the disk.  dir_write() and the delete
  *           path both take a MAPPED id, op_dio3.c passes map_t1_id()'s output
@@ -114,10 +129,55 @@ struct TXN_STACK {
 
 Private TXN_STACK* txn_stack = NULL;
 
+/* ======================================================================
+   4 Sep 26 Windows port - THE BEFORE IMAGES.  PRE_RELEASE_FIXES 102.
+
+   Owner's ruling, as disambiguated 3 Sep 2026: a commit that fails part way
+   must RESTORE EACH ALREADY-APPLIED RECORD TO WHAT IT HELD BEFORE.  ***THE
+   LITERAL READING OF THE ORIGINAL WORDS - "they are deleted" - WAS PUT BACK TO
+   HIM AND CLOSED, because deleting a record the transaction had UPDATED would
+   destroy the version that survives today.  That defeats all-or-nothing
+   instead of delivering it.  Do not re-open it.***
+
+   WHY THE IMAGE IS TAKEN AT COMMIT TIME AND NOT AT WRITE-CACHE TIME.  TXN_CACHE
+   holds only the NEW data (see its declaration above - mode, fvar, str, id).
+   Between the WRITE statement and the COMMIT, any number of things can change
+   the record; only immediately before the action is applied is the image
+   certainly the one about to be overwritten.
+
+   THE LIST IS A STACK, SO WALKING IT HEAD TO TAIL IS ALREADY REVERSE ORDER.
+   That matters when one transaction touches the same record twice through
+   different cache entries: the LAST image captured is the oldest state still
+   reachable, and it must be the one written back last.
+
+   THREE KINDS OF ENTRY, AND THE THIRD IS NOT A LUXURY.  A record that existed
+   is restored; one that did not is deleted; and one whose image COULD NOT BE
+   READ is neither - it is logged by file and id, because a commit that cannot
+   promise all-or-nothing for a particular record must say which record, not
+   fail silently or pretend it succeeded.                                    */
+
+typedef struct TXN_UNDO TXN_UNDO;
+struct TXN_UNDO {
+  TXN_UNDO* next;
+  int16_t mode;
+#define UNDO_RESTORE 1    /* it existed - write these bytes back */
+#define UNDO_DELETE 2     /* it did not exist - remove it again */
+#define UNDO_UNREADABLE 3 /* the image could not be taken - say so, do nothing */
+  FILE_VAR* fvar;
+  STRING_CHUNK* str; /* the record as it was; NULL is a valid empty record */
+  int16_t id_len;
+  char id[1]; /* the RAW id, exactly as TXN_CACHE holds it */
+};
+
+Private TXN_UNDO* undo_head = NULL;
+
 Private TXN_CACHE* alloc_txn(int16_t id_len);
 Private void rollback(void);
 Private void end_txn_level(void);
 Private void clear_parent(int16_t fno, char* id, int16_t id_len);
+Private void capture_undo(FILE_VAR* fvar, char* id, int16_t id_len);
+Private void replay_undo(void);
+Private void free_undo(void);
 
 /* ======================================================================
    op_txnbgn()  -  Begin transaction                                      */
@@ -182,6 +242,23 @@ void op_txncmt() {
 
   for (txn = txn_head; txn != NULL; txn = next_txn) {
     fvar = txn->fvar;
+
+    /* 4 Sep 26 Windows port - TAKE THE BEFORE IMAGE, IMMEDIATELY BEFORE THE
+       ACTION IS APPLIED.  PRE_RELEASE_FIXES 102.
+
+       ONE CALL SITE FOR BOTH MODES, ON PURPOSE, AND IT IS THE SAME REASONING
+       THAT PUT THE LOCK FIX IN txn_abort() RATHER THAN AT FIVE k_error()
+       SITES: a capture per arm would be four places to add a fifth to, and
+       this file has already been shown adding arms one day and forgetting the
+       bookkeeping the next.  TXN_CLOSE changes no record and capture_undo()
+       ignores it.
+
+       IT IS INVISIBLE TO EVERYTHING BELOW IT - process.status, os_error and
+       dh_err are all put back before it returns, because the arms under here
+       report their failures through exactly those. */
+
+    if ((txn->mode == TXN_WRITE) || (txn->mode == TXN_DELETE))
+      capture_undo(fvar, txn->id, txn->id_len);
 
     switch (txn->mode) {
       case TXN_WRITE:
@@ -388,6 +465,16 @@ void op_txncmt() {
 
   commit_txn_id = 0;
 
+  /* 4 Sep 26 Windows port - AND THE BEFORE IMAGES GO WITH IT.
+     PRE_RELEASE_FIXES 102.  The commit succeeded, so there is nothing to put
+     back; this only releases the captured records.  It is deliberately beside
+     the commit_txn_id clear so that the two halves of "no commit is in flight"
+     are dropped together - leaving the list behind would arm a later,
+     unrelated K_TERMINATE or K_LOGOUT to undo a transaction that committed,
+     which is the same shape of bug the commit_txn_id clear exists to stop. */
+
+  free_undo();
+
   /* 29 Aug 26 Windows port - AND NOW LEAVE THE TRANSACTION LEVEL, WHICH THIS
      FUNCTION NEVER DID.  PRE_RELEASE_FIXES 11, UPSTREAM_FIXES 17.  Without it
      txn_depth only ever climbed (so SYSTEM(1008) was useless) and, far worse, a
@@ -495,6 +582,20 @@ void txn_abort() {
      depend on that ruling and should not have waited for it - the partial
      state is already on disk and visible; the locks only stopped anybody
      reaching it, including whoever came to repair it.                        */
+
+  /* 4 Sep 26 Windows port - PUT BACK WHAT THE FAILED COMMIT ALREADY APPLIED,
+     BEFORE THE LOCKS GO.  PRE_RELEASE_FIXES 102.
+
+     BEFORE, NOT AFTER, AND THE ORDER IS THE POINT: the records this is about
+     to rewrite are the ones the transaction still holds locks on, and they are
+     ours to write only until unlock_txn() below gives them up.  Undoing after
+     the release would be writing to records another session may already have
+     taken.
+
+     It does nothing when the list is empty, which is every abort that did not
+     come from a half-applied commit - K_TERMINATE and K_LOGOUT included. */
+
+  replay_undo();
 
   if (commit_txn_id != 0) {
     unlock_txn(commit_txn_id);
@@ -873,6 +974,290 @@ Private void end_txn_level() {
     process.txn_id = 0;
 
   txn_depth--;
+}
+
+/* ======================================================================
+   capture_undo()  -  Take the before image of one record, at commit time
+
+   4 Sep 26 Windows port - PRE_RELEASE_FIXES 102.  Called from op_txncmt()'s
+   loop IMMEDIATELY BEFORE each action is applied, which is the only moment the
+   image is certainly the one about to be overwritten.
+
+   ***IT MUST BE INVISIBLE TO THE CALLER, AND THAT IS NOT A DETAIL.***  It reads
+   a record, so it sets process.status, process.os_error and dh_err on its way
+   past - and the caller is about to apply an action whose failure is reported
+   through exactly those.  A capture that succeeded would otherwise leave
+   ER_RNF sitting in process.status and the commit's own error would be
+   described by this function's last read.  All three are saved and restored.
+
+   NOT FINDING THE RECORD IS THE NORMAL CASE FOR A NEW ONE and is not a
+   failure: it becomes UNDO_DELETE, so the undo removes what the commit was
+   about to create.  Only a read that failed for some OTHER reason is
+   UNDO_UNREADABLE.  A caller that could not tell those apart would either
+   resurrect a record that never existed or leave one it should have removed.
+
+   AN ALLOCATION FAILURE IS LOGGED AND THE COMMIT CONTINUES.  Refusing the
+   commit here would turn a memory shortage into a failed transaction on a path
+   that works today; the record says which record cannot be undone instead.  */
+
+Private void capture_undo(FILE_VAR* fvar, char* id, int16_t id_len) {
+  TXN_UNDO* u;
+  STRING_CHUNK* str = NULL;
+  int16_t mode;
+  int16_t status;
+  char actual_id[MAX_ID_LEN + 1];
+  char mapped_id[2 * MAX_ID_LEN + 1];
+  char msg[MAX_PATHNAME_LEN + MAX_ID_LEN + 80];
+  int bytes;
+
+  int16_t saved_status = process.status;
+  int32_t saved_os_error = process.os_error;
+  int16_t saved_dh_err = dh_err;
+
+  switch (fvar->type) {
+    case DYNAMIC_FILE:
+      /* An EMPTY record returns NULL with dh_err 0, which is a record that
+         exists and holds nothing - not an absent one.  Test dh_err, never the
+         pointer. */
+      str = dh_read(fvar->access.dh.dh_file, id, id_len, actual_id);
+      if (dh_err == 0)
+        mode = UNDO_RESTORE;
+      else if (dh_err == DHE_RECORD_NOT_FOUND)
+        mode = UNDO_DELETE;
+      else
+        mode = UNDO_UNREADABLE;
+      break;
+
+    case DIRECTORY_FILE:
+      /* The id is mapped here for the same reason PRE_RELEASE 154 maps it in
+         the commit loop: the cache holds the raw id and the disk is called by
+         the mapped one. */
+      if (!map_t1_id(id, id_len, mapped_id))
+        mode = UNDO_UNREADABLE;
+      else if (dir_read(fvar, mapped_id, &str, &status))
+        mode = UNDO_RESTORE;
+      else if (process.status == ER_RNF)
+        mode = UNDO_DELETE;
+      else
+        mode = UNDO_UNREADABLE;
+      break;
+
+    default:
+      goto exit_capture_undo; /* nothing on disk to put back */
+  }
+
+  bytes = sizeof(TXN_UNDO) + id_len;
+  u = (TXN_UNDO*)k_alloc(82, bytes);
+  if (u == NULL) {
+    snprintf(msg, sizeof(msg),
+             "Transaction commit: no memory to record the prior content of "
+             "record '%.*s' in %s - it cannot be undone if the commit fails",
+             (int)id_len, id, (char*)(FPtr(fvar->file_id)->pathname));
+    log_message(msg);
+    if ((str != NULL) && (--(str->ref_ct) == 0))
+      s_free(str);
+    goto exit_capture_undo;
+  }
+
+  memset(u, 0, bytes);
+  u->mode = mode;
+  u->fvar = fvar;
+  u->id_len = id_len;
+  memcpy(u->id, id, id_len);
+
+  if (mode == UNDO_RESTORE) {
+    u->str = str; /* dh_read/dir_read hand it over at ref_ct 1 */
+  } else if ((str != NULL) && (--(str->ref_ct) == 0)) {
+    s_free(str);
+  }
+
+  /* PUSHED, NOT APPENDED.  Walking head to tail is then already reverse order,
+     which is what an undo has to be. */
+  u->next = undo_head;
+  undo_head = u;
+
+exit_capture_undo:
+  process.status = saved_status;
+  process.os_error = saved_os_error;
+  dh_err = saved_dh_err;
+}
+
+/* ======================================================================
+   replay_undo()  -  Put back what a failed commit had already applied
+
+   4 Sep 26 Windows port - PRE_RELEASE_FIXES 102.  Called from txn_abort(),
+   which is THE FAR SIDE OF THE LONGJMP - the same placement the lock half
+   uses, and for the same reason: k_error() does not return, so the five
+   "goto exit_op_txncmt" in the commit loop are dead code and nothing after
+   them in that function can run.
+
+   ***IT MUST NOT RAISE.***  The disk is already misbehaving - that is why the
+   commit failed - and a k_error() here would longjmp out of the abort handler
+   itself.  So every failure is logged and the walk continues: the entry's own
+   rule is "log every failed restore by file and id, finish undoing the rest,
+   and leave the transaction reported as failed".
+
+   ONE ACKNOWLEDGED EDGE, WRITTEN DOWN RATHER THAN WISHED AWAY: dir_write(),
+   dh_write() and t1_buffer_alloc() can themselves k_error() - on a path
+   overflow, on an alternate-key update, or on memory exhaustion.  The overflow
+   cannot fire here (the same path was built from the same pathname and id
+   moments earlier, when the commit applied it) but the other two genuinely
+   can.  Reimplementing either writer to avoid it would mean a second copy of a
+   write path, which is the trade this file has already refused once for the
+   mark mapping.
+
+   ***THE RECORD THE COMMIT FAILED ON IS RESTORED TOO, AND THAT IS DELIBERATE
+   RATHER THAN AN OVERSIGHT.***  capture_undo() runs before EVERY action,
+   including the one that then fails, because a write that fails PART WAY has
+   left the record in a state nobody can describe - and "the action failed" is
+   not the same claim as "the record is untouched".  Restoring it is the only
+   answer that is right in both cases.
+
+   IT ALSO MEANS THE LOG CAN NAME THAT RECORD AS "COULD NOT BE UNDONE" WHEN IT
+   WAS NEVER DAMAGED, and the witness of 4 Sep 2026 did exactly that: the
+   delete failed because the file was held open, so the restore was refused for
+   the same reason, and the summary read "2 restored, 2 removed, 1 could not be
+   undone" over a record that was provably intact.  ***THAT IS THE SAFE
+   DIRECTION AND IT IS NOT WORTH SUPPRESSING.***  Reporting a record whose
+   state we could not guarantee costs a line in the errlog; staying quiet about
+   one we could not put back costs the operator the only notice they get.
+
+   IT ALSO RUNS FOR K_TERMINATE AND K_LOGOUT, which reach txn_abort() too, and
+   does nothing at all when the list is empty - which is every abort that did
+   not come from a half-applied commit.                                      */
+
+Private void replay_undo(void) {
+  TXN_UNDO* u;
+  TXN_UNDO* next;
+  FILE_VAR* fvar;
+  FILE_ENTRY* fptr;
+  char mapped_id[2 * MAX_ID_LEN + 1];
+  char path[MAX_PATHNAME_LEN + 1];
+  char msg[MAX_PATHNAME_LEN + MAX_ID_LEN + 120];
+  int restored = 0;
+  int removed = 0;
+  int failed = 0;
+  bool ok;
+
+  if (undo_head == NULL)
+    return;
+
+  for (u = undo_head; u != NULL; u = next) {
+    next = u->next;
+    fvar = u->fvar;
+    fptr = FPtr(fvar->file_id);
+    ok = TRUE;
+
+    switch (u->mode) {
+      case UNDO_RESTORE:
+        switch (fvar->type) {
+          case DYNAMIC_FILE:
+            ok = dh_write(fvar->access.dh.dh_file, u->id, u->id_len, u->str);
+            break;
+
+          case DIRECTORY_FILE:
+            if (!map_t1_id(u->id, u->id_len, mapped_id))
+              ok = FALSE;
+            else
+              ok = dir_write(fvar, mapped_id, u->str);
+            break;
+
+          default:
+            ok = FALSE;
+            break;
+        }
+        if (ok)
+          restored++;
+        break;
+
+      case UNDO_DELETE:
+        switch (fvar->type) {
+          case DYNAMIC_FILE:
+            /* Already absent is the outcome asked for, not a failure - the
+               same tolerance the commit's own delete arm applies. */
+            if (!dh_delete(fvar->access.dh.dh_file, u->id, u->id_len) &&
+                (dh_err != DHE_RECORD_NOT_FOUND))
+              ok = FALSE;
+            break;
+
+          case DIRECTORY_FILE:
+            if (!map_t1_id(u->id, u->id_len, mapped_id)) {
+              ok = FALSE;
+            } else if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%s",
+                                fptr->pathname, DS,
+                                mapped_id) >= (MAX_PATHNAME_LEN + 1)) {
+              ok = FALSE;
+            } else if ((remove(path) < 0) && (errno != ENOENT)) {
+              ok = FALSE;
+            }
+            break;
+
+          default:
+            ok = FALSE;
+            break;
+        }
+        if (ok)
+          removed++;
+        break;
+
+      case UNDO_UNREADABLE:
+        ok = FALSE;
+        break;
+    }
+
+    if (!ok) {
+      failed++;
+      snprintf(msg, sizeof(msg),
+               "Transaction commit failed and record '%.*s' in %s could not be "
+               "put back as it was (%s)",
+               (int)u->id_len, u->id, (char*)(fptr->pathname),
+               (u->mode == UNDO_UNREADABLE) ? "its prior content could not be read"
+                                            : "the undo itself failed");
+      log_message(msg);
+    }
+
+    if ((u->str != NULL) && (--(u->str->ref_ct) == 0))
+      s_free(u->str);
+    k_free(u);
+  }
+
+  undo_head = NULL;
+
+  /* ***SAY WHAT WAS DONE EVEN WHEN IT ALL WORKED.***  A transaction that
+     failed and was fully undone is still a transaction that failed, and the
+     operator has no other way to learn that the disk was touched and put back.
+     A verdict with no record of what it did is the thing the house rules
+     refuse.  (A user-visible message would need a sysmsg number and the
+     owner's word; the errlog is what this entry's design asked for.) */
+
+  snprintf(msg, sizeof(msg),
+           "Transaction commit failed part way: %d record(s) restored, "
+           "%d removed, %d could not be undone",
+           restored, removed, failed);
+  log_message(msg);
+}
+
+/* ======================================================================
+   free_undo()  -  Discard the before images after a commit that succeeded
+
+   4 Sep 26 Windows port - PRE_RELEASE_FIXES 102.  Nothing is undone here; the
+   images are simply no longer needed.  Called where commit_txn_id is cleared,
+   so that the two pieces of "this commit is no longer in flight" state are
+   dropped together and neither can be left behind for a later, unrelated
+   abort to act on.                                                          */
+
+Private void free_undo(void) {
+  TXN_UNDO* u;
+  TXN_UNDO* next;
+
+  for (u = undo_head; u != NULL; u = next) {
+    next = u->next;
+    if ((u->str != NULL) && (--(u->str->ref_ct) == 0))
+      s_free(u->str);
+    k_free(u);
+  }
+
+  undo_head = NULL;
 }
 
 /* ======================================================================

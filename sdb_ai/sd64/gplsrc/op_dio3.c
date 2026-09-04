@@ -17,6 +17,15 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ *  4 Sep 26 Windows port - dir_read() added, the read half the directory code
+ *           never had: dir_write() has always been callable but the only
+ *           reader was read_record(), which takes its arguments off the VM's
+ *           e-stack, so nothing outside an executing READ opcode could ask
+ *           what a directory record held.  PRE_RELEASE_FIXES 102's undo needs
+ *           exactly that.  The CRLF/LF to field-mark conversion is lifted into
+ *           t1_unmap_chunk() and SHARED by both readers rather than copied,
+ *           because a capture that reverses the mapping differently from an
+ *           ordinary READ would restore the wrong bytes silently.
  * 31 Aug 26 Windows port - a WRITE refused for want of a lock reported
  *           "Error 3023 (o/s 0) writing record (Possible full disk?)".  The
  *           disk is not involved and nothing was written; message 10151 says
@@ -48,6 +57,7 @@
  *  op_write           WRITE
  *  op_writev          WRITEV
  *
+ *  dir_read           Read record from directory file
  *  dir_write          Write record to directory file
  *
  * Private functions
@@ -55,6 +65,7 @@
  *  t1_write           Write data to directory file
  *  t1_flush           Flush directory file working buffer
  *  t1_buffer_free     Free working buffer for directory file handling
+ *  t1_unmap_chunk     CRLF/LF to field marks, shared by both readers
  *  read_record        Read/Matread common path
  *
  * END-DESCRIPTION
@@ -96,6 +107,12 @@ Private void t1_buffer_alloc(int32_t size);
 Private bool t1_write(char *p, int16_t bytes);
 Private bool t1_flush(void);
 Private void t1_buffer_free(void);
+/* 4 Sep 26 Windows port - PRE_RELEASE_FIXES 102; shared by read_record() and
+   dir_read() so the two cannot reverse the mark mapping differently. */
+Private int32_t t1_unmap_chunk(char *buff,
+                               int32_t bytes,
+                               bool last_chunk,
+                               bool *cr_pending);
 Private void read_record(bool matread);
 Private bool valid_id(char *id, int16_t id_len);
 
@@ -1199,78 +1216,13 @@ Private void read_record(bool matread) {
 
         remaining_bytes -= bytes;
 
+        /* 4 Sep 26 Windows port - THE CONVERSION MOVED TO t1_unmap_chunk() SO
+           THAT dir_read() USES THE SAME COPY.  PRE_RELEASE_FIXES 102.  Body
+           unchanged; see that function for why sharing it is the whole point. */
         if (fvar->access.dir.mark_mapping) /* Non-image mode read */
         {
-          if (remaining_bytes == 0) {
-            /* This chunk contains the final byte of the file. This is
-               probably a newline which we do not want to convert into
-               a field mark. If so, decrement the byte count.
-
-               24 Aug 26 Windows port - and if that newline was a CRLF, drop
-               BOTH bytes, or the last field keeps a trailing CR.  If the pair
-               straddled the chunk boundary the CR is in cr_pending instead,
-               and clearing it is how the same case is handled there.      */
-
-            if ((bytes > 0) && (t1_buffer[bytes - 1] == '\n')) {
-              bytes--;
-              if ((bytes > 0) && (t1_buffer[bytes - 1] == '\r'))
-                bytes--;
-              else if (bytes == 0)
-                cr_pending = FALSE;
-            }
-          }
-
-          /* 24 Aug 26 Windows port - CRLF folds to ONE field mark; a LONE CR
-             is left alone because it is data.  PROJECT_STATUS 7 step 16 (a).
-
-             This compacts rather than substituting in place, because CRLF is
-             two bytes in and one out.  dst never overtakes src, so it is safe
-             in the same buffer. */
-          if (bytes || cr_pending) {
-            char *src = t1_buffer;
-            char *dst = t1_buffer;
-            int32_t left = bytes; /* own counter - the function's n is 16-bit */
-
-            if (cr_pending) {
-              /* A CR ended the PREVIOUS chunk.  Only now can we see whether
-                 an LF followed it.  MAX_T1_BUFFER_SIZE is 31744, so a record
-                 larger than that really does arrive in pieces. */
-              cr_pending = FALSE;
-              if (left && (*src == '\n')) {
-                *dst++ = FIELD_MARK;
-                src++;
-                left--;
-              } else {
-                *dst++ = '\r'; /* lone CR - data */
-              }
-            }
-
-            while (left) {
-              char c = *src++;
-              left--;
-
-              if (c == '\r') {
-                if (left) {
-                  if (*src == '\n') {
-                    src++;
-                    left--;
-                    *dst++ = FIELD_MARK;
-                  } else {
-                    *dst++ = '\r'; /* lone CR - data */
-                  }
-                } else {
-                  /* Last byte of the chunk: defer the decision. */
-                  cr_pending = TRUE;
-                }
-              } else if (c == '\n') {
-                *dst++ = FIELD_MARK;
-              } else {
-                *dst++ = c;
-              }
-            }
-
-            bytes = (int32_t)(dst - t1_buffer);
-          }
+          bytes = t1_unmap_chunk(t1_buffer, bytes, (remaining_bytes == 0),
+                                 &cr_pending);
         }
         if (bytes)
           ts_copy(t1_buffer, bytes);
@@ -1382,6 +1334,260 @@ bool map_t1_id(char *id, int16_t id_len, char *mapped_id) {
 
   *q = '\0';
   return TRUE;
+}
+
+/* ======================================================================
+   t1_unmap_chunk()  -  Convert one chunk of a directory file's bytes into
+                        SD's internal format: CRLF and LF become field marks
+
+   4 Sep 26 Windows port - LIFTED OUT OF read_record() UNCHANGED SO THAT
+   dir_read() USES THE SAME COPY.  PRE_RELEASE_FIXES 102.
+
+   ***SHARING IT IS THE WHOLE POINT, NOT A TIDY-UP.***  102's undo captures a
+   record before a commit overwrites it and writes it back if the commit fails.
+   A capture that reverses the mark mapping even slightly differently from the
+   way an ordinary READ does it would restore a record that is NOT the one it
+   captured, and would do it silently, on the failure path, where nobody is
+   looking.  One copy cannot drift from itself; two copies of this loop would
+   be exactly the kind of thing that agrees for a year and then does not.
+
+   THE CALLER OWNS *cr_pending AND MUST DO TWO THINGS WITH IT.  Initialise it
+   FALSE before the first chunk, and after the LAST chunk, if it is still set,
+   emit a '\r' of its own - a CR that ended the record with no LF after it is
+   DATA, and deferring it is the only way to tell that from a CRLF split across
+   a chunk boundary.  MAX_T1_BUFFER_SIZE is 31744, so a record larger than that
+   really does arrive in pieces and this really does happen.
+
+   Returns the new byte count.  Compacts in place, which is safe because CRLF
+   is two bytes in and one out, so dst never overtakes src.                  */
+
+Private int32_t t1_unmap_chunk(char *buff,
+                               int32_t bytes,
+                               bool last_chunk,
+                               bool *cr_pending) {
+  if (last_chunk) {
+    /* This chunk contains the final byte of the file. This is
+       probably a newline which we do not want to convert into
+       a field mark. If so, decrement the byte count.
+
+       24 Aug 26 Windows port - and if that newline was a CRLF, drop
+       BOTH bytes, or the last field keeps a trailing CR.  If the pair
+       straddled the chunk boundary the CR is in *cr_pending instead,
+       and clearing it is how the same case is handled there.      */
+
+    if ((bytes > 0) && (buff[bytes - 1] == '\n')) {
+      bytes--;
+      if ((bytes > 0) && (buff[bytes - 1] == '\r'))
+        bytes--;
+      else if (bytes == 0)
+        *cr_pending = FALSE;
+    }
+  }
+
+  /* 24 Aug 26 Windows port - CRLF folds to ONE field mark; a LONE CR
+     is left alone because it is data.  PROJECT_STATUS 7 step 16 (a). */
+  if (bytes || *cr_pending) {
+    char *src = buff;
+    char *dst = buff;
+    int32_t left = bytes;
+
+    if (*cr_pending) {
+      /* A CR ended the PREVIOUS chunk.  Only now can we see whether
+         an LF followed it. */
+      *cr_pending = FALSE;
+      if (left && (*src == '\n')) {
+        *dst++ = FIELD_MARK;
+        src++;
+        left--;
+      } else {
+        *dst++ = '\r'; /* lone CR - data */
+      }
+    }
+
+    while (left) {
+      char c = *src++;
+      left--;
+
+      if (c == '\r') {
+        if (left) {
+          if (*src == '\n') {
+            src++;
+            left--;
+            *dst++ = FIELD_MARK;
+          } else {
+            *dst++ = '\r'; /* lone CR - data */
+          }
+        } else {
+          /* Last byte of the chunk: defer the decision. */
+          *cr_pending = TRUE;
+        }
+      } else if (c == '\n') {
+        *dst++ = FIELD_MARK;
+      } else {
+        *dst++ = c;
+      }
+    }
+
+    bytes = (int32_t)(dst - buff);
+  }
+
+  return bytes;
+}
+
+/* ======================================================================
+   dir_read()  -  Read a record from a directory file, as a callable
+
+   4 Sep 26 Windows port - NEW.  PRE_RELEASE_FIXES 102.
+
+   ***THE DIRECTORY HALF OF SD HAD A WRITE API AND NO READ API***, which is why
+   102 is not a short job.  dir_write() has been callable from op_txncmt() since
+   the beginning; the only reader was read_record(), a Private function that
+   takes its file variable, its id and its target off the VM's e-stack and can
+   only be reached by executing a READ opcode.  A commit cannot execute an
+   opcode, so 102's undo could not ask what a directory record held before it
+   overwrote it.  This is that missing half, and it is deliberately shaped like
+   dir_write(): a FILE_VAR, a MAPPED id, and the record as a STRING_CHUNK.
+
+   THE ID MUST ALREADY BE MAPPED, exactly as dir_write() requires, and for the
+   same reason PRE_RELEASE 154 exists: the raw id is what the BASIC statement
+   used and the mapped id is what the disk is called.
+
+   *str IS SET TO THE RECORD ON SUCCESS and is NULL for an empty one, which is
+   a real state and not a failure - an empty directory record is a zero-length
+   file.  The chunk is returned with ref_ct 1 and belongs to the caller.
+
+   ON FAILURE *str IS NULL AND *status SAYS WHY, using the same values and the
+   same SIGNS read_record() uses, because that is where they came from:
+   ER_RNF for no such record, ER_IID for an illegal name or a device name,
+   ER_MAX_STRING for one too large to hold, and NEGATIVE -ER_IOE for a read
+   error, whose sign is what tells a caller to take the ON ERROR path.
+
+   ***ER_RNF IS NOT AN ERROR TO 102 AND THAT IS THE POINT OF SEPARATING IT.***
+   A commit that is about to create a record needs to know the record was not
+   there, so that the undo DELETES rather than restoring something.  A caller
+   that cannot tell "absent" from "unreadable" would either resurrect a record
+   that never existed or leave one it should have removed.
+
+   IT IS NOT RE-ENTRANT, and neither is read_record(): ts_init() parks the
+   target-string chain in file-scope state, and t1_buffer is a single shared
+   buffer.  Both callers are places where no other string is being built.   */
+
+bool dir_read(FILE_VAR *fvar,
+              char *mapped_id,
+              STRING_CHUNK **str,
+              int16_t *status) {
+  char pathname[MAX_PATHNAME_LEN + 1];
+  int16_t path_len;
+  char record_path[MAX_PATHNAME_LEN + 1];
+  OSFILE fu = INVALID_FILE_HANDLE;
+  struct stat statbuf;
+  int64_t remaining_bytes64;
+  int32_t remaining_bytes;
+  int32_t bytes;
+  bool cr_pending = FALSE;
+  bool ts_started = FALSE;
+  bool ok = FALSE;
+
+  *str = NULL;
+  *status = 0;
+
+  /* Increment statistics counter */
+
+  StartExclusive(FILE_TABLE_LOCK, 49);
+  sysseg->global_stats.reads++;
+  EndExclusive(FILE_TABLE_LOCK);
+
+  strcpy(pathname, (char *)(FPtr(fvar->file_id)->pathname));
+  path_len = strlen(pathname);
+  if (pathname[path_len - 1] == DS)
+    pathname[path_len - 1] = '\0'; /* 0214 */
+
+  if (snprintf(record_path, MAX_PATHNAME_LEN + 1, "%s%c%s", pathname, DS,
+               mapped_id) >= (MAX_PATHNAME_LEN + 1)) {
+    *status = (int16_t)(process.status = ER_IID);
+    goto exit_dir_read;
+  }
+
+  fu = dio_open(record_path, DIO_READ);
+  if (!ValidFileHandle(fu)) {
+    *status = (int16_t)(process.status = ER_RNF);
+    goto exit_dir_read;
+  }
+
+  /* 0408 Check that this really is a file, not CON, COMn, LPTn */
+
+  if (fstat(fu, &statbuf) || !(statbuf.st_mode & S_IFREG)) {
+    *status = (int16_t)(process.status = ER_IID);
+    goto exit_dir_read;
+  }
+
+  remaining_bytes64 = filelength64(fu);
+  if (remaining_bytes64 > MAX_STRING_SIZE) {
+    *status = (int16_t)(process.status = ER_MAX_STRING);
+    goto exit_dir_read;
+  }
+  remaining_bytes = (int32_t)remaining_bytes64;
+
+  ts_init(str, remaining_bytes);
+  ts_started = TRUE;
+  t1_buffer_alloc(remaining_bytes);
+
+  while (remaining_bytes > 0) {
+    bytes = min(remaining_bytes, t1_buffer_size);
+
+    if (Read(fu, t1_buffer, bytes) < 0) {
+      *status = (int16_t)(-(process.status = ER_IOE));
+      process.os_error = OSError;
+      goto exit_dir_read;
+    }
+
+    remaining_bytes -= bytes;
+
+    if (fvar->access.dir.mark_mapping) /* Non-image mode read */
+    {
+      bytes = t1_unmap_chunk(t1_buffer, bytes, (remaining_bytes == 0),
+                             &cr_pending);
+    }
+
+    if (bytes)
+      ts_copy(t1_buffer, bytes);
+  }
+
+  /* A CR that ended the record with no LF after it is DATA, and would
+     otherwise be swallowed by having been deferred. */
+
+  if (cr_pending) {
+    char cr = '\r';
+    ts_copy(&cr, 1);
+    cr_pending = FALSE;
+  }
+
+  (void)ts_terminate();
+  ts_started = FALSE;
+  ok = TRUE;
+
+exit_dir_read:
+  if (ValidFileHandle(fu))
+    CloseFile(fu);
+  if (t1_buffer != NULL)
+    t1_buffer_free();
+
+  /* ***TERMINATE BEFORE FREEING, OR THE FREE WALKS AN UNFINISHED CHAIN.***
+     ts_terminate() is what fills in ref_ct and string_len on the first chunk;
+     bail out of the read loop before it and the chunks exist but say nothing
+     about themselves.  read_record() never had to care because it leaves its
+     partial string on a descriptor for k_release() to deal with. */
+
+  if (!ok) {
+    if (ts_started)
+      (void)ts_terminate();
+    if (*str != NULL) {
+      s_free(*str);
+      *str = NULL;
+    }
+  }
+
+  return ok;
 }
 
 /* ======================================================================

@@ -331,6 +331,10 @@ bool net_path_permitted(char * path, bool for_write);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);
+/* 4 Sep 26 Windows port - the read half, which the directory code never had.
+   PRE_RELEASE_FIXES 102.  Takes a MAPPED id, like dir_write().  */
+bool dir_read(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK ** str,
+              int16_t * status);
 bool map_t1_id(char * id, int16_t id_len, char * mapped_id);
 bool call_trigger(DESCRIPTOR * fvar_descr, int16_t mode, DESCRIPTOR * id_descr,
                   DESCRIPTOR * data_descr, bool on_error, bool updatable);
