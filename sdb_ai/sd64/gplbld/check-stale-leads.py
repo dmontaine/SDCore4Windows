@@ -66,6 +66,10 @@ OPEN_PAT = re.compile(
     r"|is the owner's (call|decision)|untested|unmeasured|unverified)\b",
     re.I)
 
+# The one way a table row may have no entry in this file: it says where the
+# entry went.  Phase 2 requires this phrase before it will accept the absence.
+ARCHIVED_PAT = re.compile(r"entry archived in HISTORY\.md", re.I)
+
 # Wording that asserts it IS done.
 CLOSE_PAT = re.compile(
     r"\b(CLOSED|DONE|BUILT AND VERIFIED|IS CHOSEN AND BUILT|chosen and built"
@@ -437,6 +441,7 @@ if not rows:
     sys.exit(2)
 
 problems = []
+archived = []
 seen_ids = set()
 for ln_i, mark, eid in rows:
     seen_ids.add(eid)
@@ -465,6 +470,20 @@ for ln_i, mark, eid in rows:
                 "row %d: %s is ticked DONE but the ROW ITSELF still reads as "
                 "open - %r" % (ln_i + 1, eid, m.group(0)))
     if eid not in entry_at:
+        # AN ENTRY MAY LEGITIMATELY MOVE TO HISTORY.md - BUT THE ROW HAS TO SAY
+        # SO, IN ITS OWN TEXT.  05 Sep 26.  START HERE's superseded handoff
+        # stack was archived (10,911 lines), and H.1 to H.5's entries went with
+        # it, so seven ticked rows suddenly pointed at nothing.  That IS drift
+        # and this check was right to fire.
+        #
+        # THE FIX IS NOT TO ACCEPT A MISSING ENTRY, IT IS TO MAKE THE ROW
+        # DECLARE IT.  A row that names the archive still tells a reader where
+        # the reasoning went; a row that has merely lost its entry tells them
+        # nothing, and those two must not look the same to this checker.  So
+        # the phrase is REQUIRED and is matched on the row itself.
+        if ARCHIVED_PAT.search(lines[ln_i]):
+            archived.append(eid)
+            continue
         problems.append("row %d: ID %s has NO ENTRY in the file" % (ln_i + 1, eid))
         continue
     a, b = entry_at[eid]
@@ -499,6 +518,19 @@ for eid in sorted(entry_at):
     if eid not in seen_ids:
         problems.append("entry %s (line %d) has NO ROW in the task table"
                         % (eid, entry_at[eid][0] + 1))
+
+# SAY WHAT WAS ACCEPTED, NOT ONLY WHAT WAS REFUSED.  An exemption nobody can
+# see is an exemption nobody audits, and this one is granted by a phrase in a
+# document anyone can type.
+if archived:
+    print("  %d row(s) declare their entry archived in HISTORY.md: %s"
+          % (len(archived), ", ".join(sorted(archived))))
+    # AND REFUSE THE NULL CASE.  If EVERY row is exempt there is no table left
+    # to check, and phase 2 would print a clean run having compared nothing.
+    if len(archived) == len(rows):
+        print("  REFUSING - every row claims its entry is archived, so this")
+        print("  phase compared nothing.  The table has lost its entries.")
+        sys.exit(2)
 
 if problems:
     print("")

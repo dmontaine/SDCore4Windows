@@ -116,6 +116,36 @@ def main():
     case("table deleted - must refuse, not pass", t, tmp, 2,
          "no task table rows parsed")
 
+    # =====================================================================
+    # THE ARCHIVED-ENTRY EXEMPTION, BOTH DIRECTIONS.  05 Sep 26.
+    #
+    # A row may have no entry in this file IF the row says the entry moved to
+    # HISTORY.md.  That exemption is granted by a phrase anyone can type, so it
+    # needs a control in each direction: without the phrase the absence must
+    # still be drift, and if EVERY row claims it the phase has compared nothing
+    # and must refuse rather than print a clean run.
+    #
+    # THE ACCEPT DIRECTION IS ALREADY COVERED BY CASE [0] - the real file
+    # carries seven archived rows (H.1 to H.5) and must pass.  Asserting it
+    # again here would only re-measure the control.
+    ARCH = "**Entry archived in HISTORY.md**"
+    assert ARCH in base, "no row declares an archived entry - has the phrase changed?"
+    t = base.replace(ARCH, "**Entry once lived here**", 1)
+    assert t != base, "could not strip one row's archive declaration"
+    case("archived row without the declaration is still drift", t, tmp, 1,
+         "has NO ENTRY in the file")
+
+    # EVERY row exempt = nothing compared.  Both entry shapes are stripped so
+    # no row can find one, and the phrase is appended to every row line; the
+    # ROW pattern anchors at the start of the line, so trailing text is inert.
+    t = re.sub(r"^(> )?### [0-9]+[a-z]?\. .*\n", "", base, flags=re.M)
+    t = re.sub(r"^[0-9]+\. \*\*.*\n", "", t, flags=re.M)
+    t = re.sub(r"^(\| . \| \*\*[0-9H]\.[0-9a-z]+\*\* \|.*)$",
+               r"\1 entry archived in HISTORY.md", t, flags=re.M)
+    assert t != base, "could not build the all-archived fixture"
+    case("every row archived - must refuse, not pass", t, tmp, 2,
+         "every row claims its entry is archived")
+
     # REGRESSION, 26 Aug 2026: the LAST step in section 7 has no next entry
     # inside it, so its range ran to the next START HERE item and swallowed
     # section 8's preamble - which contains "Closed and superseded material is
@@ -184,49 +214,98 @@ def main():
     # running would have put a withdrawn claim back in the handoff document,
     # which is the exact fault the checker exists to find.
     #
-    # SO THE ANCHOR MOVED AND THE FIXTURE DID NOT CHANGE SHAPE.  It still needs
-    # a line INSIDE item 5 that sits AFTER an OBSERVE_PAT line, so substituting
-    # a denial into it makes the pair phase 3 must catch.  Item 5 still records
-    # "The owner cycled choosing stand-alone" above it, which is what case [e]
-    # strips to prove the null-case guard.
-    ANCHOR = "> ***WHAT THE PAGES SHOWED IS WRITTEN DOWN, WHICH IS THE STEP THAT WAS MISSED"
-    assert ANCHOR in base, "item 5's corrected wording is not where expected"
+    # 05 Sep 26 - AND IT MOVED A SECOND TIME, SO THE FIXTURE IS NOW INJECTED
+    # RATHER THAN BORROWED.  START HERE's superseded handoff stack was archived
+    # to HISTORY.md, item 5 with it, and this file went red naming a sentence
+    # that no longer existed - the code working perfectly.  ***TWICE IS A
+    # DESIGN FAULT, NOT BAD LUCK***: a units test that anchors on prose in a
+    # document whose whole purpose is to be rewritten will keep going red for
+    # content reasons, which is exactly the false verdict the checker exists to
+    # catch, committed by its own control.
+    #
+    # SO IT BUILDS THE ENTRY IT NEEDS.  Two synthetic START HERE items and two
+    # table rows go into a copy used by THIS PHASE ONLY - phases 0, 1, 2 and 4
+    # still run against the untouched document, so the positive control is
+    # unaffected.  Item 8 carries the observation and the anchor; item 9 exists
+    # only to BOUND item 8, so the checker's entry range stops there instead of
+    # running on into the handoff prose below and picking up its wording.
+    ANCHOR = "> ***THE PAGES WERE WRITTEN UP AFTERWARDS.***"
+    FIXTURE = (
+        "> ### 8. SYNTHETIC FIXTURE - PHASE 3'S CONTROL LIVES HERE\n"
+        ">\n"
+        "> The owner cycled choosing stand-alone, on the rig.\n"
+        ">\n"
+        + ANCHOR + "\n"
+        ">\n"
+        "> ### 9. SYNTHETIC FIXTURE - BOUNDARY ONLY, SO ITEM 8 ENDS HERE\n"
+        ">\n"
+        "> Nothing is recorded in this item.\n"
+        ">\n")
+    FIXTURE_ROWS = (
+        "| " + TICK + " | **H.8** | synthetic fixture injected by "
+        "test-staleleads-units.py | 5 Sep 2026 |\n"
+        "| " + TICK + " | **H.9** | synthetic boundary injected by "
+        "test-staleleads-units.py | 5 Sep 2026 |\n")
+
+    HEADING = "## NEXT SESSION: START HERE, IT IS SHORT\n"
+    base3 = base.replace(HEADING, HEADING + "\n" + FIXTURE, 1)
+    assert base3 != base, "could not find the START HERE heading to inject into"
+    tmp3 = base3.replace("\n**Legend**", "\n" + FIXTURE_ROWS + "\n**Legend**", 1)
+    assert tmp3 != base3, "could not find the task table legend to inject rows above"
+    base3 = tmp3
+    assert ANCHOR in base3, "the injected anchor is not in the fixture"
+
+    # THE FIXTURE'S OWN CONTROL.  If the injected copy does not pass CLEAN,
+    # every case below is measuring the injection rather than the defect - the
+    # null case this project's rules forbid.
+    rc_f, out_f = run(write(tmp, base3, "phase3_fixture_control.md"))
+    ok_f = (rc_f == 0) and ("0 entr(ies) RECORD AN OBSERVATION" in out_f)
+    results.append((ok_f, "phase 3: the injected fixture itself must PASS",
+                    rc_f, 0, "0 entr(ies) RECORD AN OBSERVATION"))
+    print("  [%s] %-46s rc=%d (want 0)"
+          % ("PASS" if ok_f else "FAIL",
+             "phase 3: the injected fixture itself must PASS", rc_f))
+    if not ok_f:
+        for ln in out_f.splitlines():
+            if "DRIFT" in ln or "REFUS" in ln or "disagree" in ln:
+                print("       saw: " + ln.strip())
 
     # [a] THE REAL ONE, restored verbatim.  This is the sentence item 5
     # carried on 26 Aug 2026, sixty-nine lines below its own record of the
     # owner cycling and CHOOSING stand-alone.  If this does not flag, the
     # phase is decoration.
-    t = base.replace(ANCHOR, "> ***UNSEEN: nobody has looked at this page.***", 1)
-    assert t != base, "could not restore the UNSEEN claim"
+    t = base3.replace(ANCHOR, "> ***UNSEEN: nobody has looked at this page.***", 1)
+    assert t != base3, "could not restore the UNSEEN claim"
     case("phase 3: the restored UNSEEN claim must be CAUGHT", t, tmp, 0,
          "1 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
 
     # [b] The banner alone, with no sentence after it - the case DENY_BANNER
     # exists for, since "nobody has looked" would not be there to match.
-    t = base.replace(ANCHOR, "> ***UNSEEN:*** and nothing else on the line.", 1)
+    t = base3.replace(ANCHOR, "> ***UNSEEN:*** and nothing else on the line.", 1)
     case("phase 3: the bare UNSEEN: banner must be CAUGHT", t, tmp, 0,
          "1 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
 
     # [c] QUOTING a denial is not making one.  This is how the corrected entry
     # actually reads, and an earlier cut of the phase reported it as the very
     # claim it was withdrawing.
-    t = base.replace(ANCHOR,
-                     '> It used to read *"UNSEEN: nobody has looked at this\n'
-                     '> page"*, and that was wrong.', 1)
+    t = base3.replace(ANCHOR,
+                      '> It used to read *"UNSEEN: nobody has looked at this\n'
+                      '> page"*, and that was wrong.', 1)
     case("phase 3: a QUOTED denial must not fire", t, tmp, 0,
          "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
 
     # [d] Past-tense prose is narration, not a live denial.  Both false hits
     # left on the repaired file were this shape.
-    t = base.replace(ANCHOR,
-                     "> The defect sat unseen for eight days, and is now fixed.", 1)
+    t = base3.replace(ANCHOR,
+                      "> The defect sat unseen for eight days, and is now fixed.", 1)
     case("phase 3: past-tense 'sat unseen' must not fire", t, tmp, 0,
          "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
 
     # [e] THE NULL-CASE GUARD ITSELF.  Strip every observation phrase and the
     # phase can no longer pair anything - it must SAY it measured nothing
     # rather than reporting a clean zero.
-    t = base.replace("The owner cycled choosing stand-alone", "It happened", 1)
+    t = base3.replace("The owner cycled choosing stand-alone", "It happened", 1)
+    assert t != base3, "could not strip the fixture's observation line"
     t = t.replace(ANCHOR, "> ***UNSEEN: nobody has looked at this page.***", 1)
     case("phase 3: denial with no observation must not fire", t, tmp, 0,
          "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
