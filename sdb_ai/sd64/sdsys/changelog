@@ -5,6 +5,30 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+05 Sep 26  FIXED: SD'S ADMINISTRATIVE COMMANDS FAILED ON A FRESH WINDOWS
+           MACHINE WITH "running scripts is disabled on this system".
+
+           On a newly installed Windows PC, typing
+
+             logto sdsys
+
+           could fail with a PowerShell error saying that running scripts
+           is disabled on this system. The same error could appear from
+           append.sd.path, remote.api, remote.ssh and the editor.
+
+           WHY IT HAPPENED. Several SD commands do their Windows-side work
+           by running a small PowerShell script that ships with SD. Windows
+           desktop editions refuse to run any script by default, and SD was
+           not telling PowerShell that these are its own installed scripts.
+           It now does. Windows Server editions allow scripts by default,
+           which is why this did not affect every machine.
+
+           NOTHING FOR YOU TO CHANGE. In particular you do NOT need to
+           alter your machine's execution policy - if you changed it to
+           work around this, you can put it back. SD only lifts the
+           restriction for the scripts it installed itself, and never for
+           an interactive shell you open with "sh".
+
 05 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh OR THROUGH THE
            API. ADMINISTRATION HAPPENS AT THE CONSOLE.
 

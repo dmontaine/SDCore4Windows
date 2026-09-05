@@ -17,6 +17,12 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 05 Sep 26 Windows port - SH1 carries -ExecutionPolicy Bypass.  Without it
+ *           every shipped .ps1 SD runs is refused on a stock Windows client,
+ *           whose default policy is Restricted.  PRE_RELEASE_FIXES 173.
+ *           SH1's clparse bound is 8 rather than 9 in the same change: this
+ *           branch appends two argv entries, so 9 could write one past the
+ *           end of a ten-pointer array.  PRE_RELEASE_FIXES 174.
  * 19 Aug 26 Windows port - OS.EXECUTE is gated.  It was open to every user
  *           from a program while SH was refused at the prompt.
  *           PROJECT_STATUS.md section 4 / section 7 step 7.
@@ -333,7 +339,7 @@ Private void sh_execute(char *command) {
      whatever it is given and writes into it.                                */
 
   char dflt_sh[MAX_PATHNAME_LEN + 64];
-  char dflt_sh1[MAX_PATHNAME_LEN + 64];
+  char dflt_sh1[MAX_PATHNAME_LEN + 96]; /* 05 Sep 26 - see the SH1 note below */
   char psh[MAX_PATHNAME_LEN + 1];
   const char *sysroot;
   char *pp;
@@ -355,7 +361,35 @@ Private void sh_execute(char *command) {
   }
 
   snprintf(dflt_sh, sizeof(dflt_sh), "%s -NoProfile -NoLogo", psh);
-  snprintf(dflt_sh1, sizeof(dflt_sh1), "%s -NoProfile -NonInteractive -Command",
+
+  /* 05 Sep 26 Windows port - -ExecutionPolicy Bypass ON SH1 ONLY.
+     PRE_RELEASE_FIXES 173, owner's ruling the day it was found.
+
+     WITHOUT IT EVERY SHIPPED .ps1 SD RUNS IS REFUSED ON A STOCK WINDOWS
+     CLIENT.  The client default policy is Restricted; SH1 is what os.execute
+     uses, and GPL.BP/ELEVATE builds "& '<app>/sd-elevate.ps1' ..." for it, so
+     "logto sdsys" died with "running scripts is disabled on this system" on a
+     machine that was not this one.  APNDPATH, EDIT, REMOTEAPI and REMOTESSH
+     all reach shipped scripts the same way.
+
+     THE SAME SWITCH FOR THE SAME REASON IS ALREADY IN sdsvc.c AND AT MORE
+     THAN THIRTY SITES IN gplbld/sd.iss.  Only this path was missed, and no
+     verify run could see it: this development machine's LocalMachine policy is
+     RemoteSigned rather than the shipped default, and the whole suite runs
+     there.
+
+     SH - the interactive branch above - deliberately does NOT get it.  It
+     opens a prompt for a person and runs no shipped script, so bypassing
+     policy for it would widen a default SD does not need.
+
+     The buffer grew with the string.  psh can be MAX_PATHNAME_LEN and the
+     suffix is now 60 characters, which left three bytes of headroom at +64;
+     snprintf truncates safely, but a truncated SH1 loses "-Command" and would
+     be a silent and very confusing failure.  config.h's own history records
+     this class of overrun costing a session already.                       */
+
+  snprintf(dflt_sh1, sizeof(dflt_sh1),
+           "%s -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command",
            psh);
 
   saved_trap_break_char = trap_break_char;
@@ -458,7 +492,15 @@ Private void sh_execute(char *command) {
       clparse((pcfg.sh[0] != '\0') ? pcfg.sh : dflt_sh, argv, 10);
     } else /* Single command */
     {
-      i = clparse((pcfg.sh1[0] != '\0') ? pcfg.sh1 : dflt_sh1, argv, 9);
+      /* 05 Sep 26 Windows port - 8, NOT 9.  PRE_RELEASE_FIXES 174.
+         clparse returns AT MOST maxargs, and this branch then writes argv[i]
+         and argv[i+1].  argv holds 10 pointers, so a maxargs of 9 could write
+         argv[10] - one past the end - for any configured SH1 of nine or more
+         space-separated tokens.  Two slots are reserved here, so the bound is
+         8.  Not reachable from the default, which is six tokens since 173
+         above; reachable from a config file, which is why it is a defect and
+         not a tidy-up.  The interactive branch keeps 10: it appends nothing. */
+      i = clparse((pcfg.sh1[0] != '\0') ? pcfg.sh1 : dflt_sh1, argv, 8);
       argv[i] = command;
       argv[i + 1] = NULL;
     }
