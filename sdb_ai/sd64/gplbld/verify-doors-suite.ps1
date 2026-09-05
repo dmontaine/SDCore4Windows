@@ -61,7 +61,13 @@ param(
     # rework of how a suite elevates should not be the only way to run it the
     # week it lands, so the old mechanism stays reachable and stays tested -
     # test-doorsargv-units.ps1 drives BOTH.
-    [switch] $NoHelper
+    [switch] $NoHelper,
+
+    # 04 Sep 26 - PRE_RELEASE 165.  A pipe VerifyInstall1 is already serving.
+    # When it is set this step starts nothing, asks for nothing, and - the part
+    # that matters - STOPS nothing: every step runs in the runner's process, so
+    # a stop from here would take the consent away from the rest of the run.
+    [string] $HelperPipe = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -131,41 +137,49 @@ function Add-Leg($name, $expected, $got) {
 # class PRE_RELEASE 46 was.  Nothing here modifies it - it is called exactly as
 # SD calls it, and editing it would make the tree stale and cost a cycle.
 #
-# ***THE 300-SECOND PER-REQUEST TIMEOUT IS WHY ONLY THE DOOR LEGS GO THIS WAY.***
-# sd-elevate.ps1 hard-codes it, each door leg finishes well inside it, and
-# VerifyInstall1's own elevation of VerifyInstall2 does NOT - that half runs 19
-# verifiers. So the suite run goes from FOUR prompts to TWO, not to one, and
-# taking it to one means changing a shipped file.  Owner's call, not assumed.
+# ***THE 300-SECOND CLAIM THAT USED TO BE HERE WAS FALSE, AND IT IS WORTH THE
+# SPACE BECAUSE IT PARKED THE WHOLE FIX FOR A WEEK.***  This block read:
+#
+#   "THE 300-SECOND PER-REQUEST TIMEOUT IS WHY ONLY THE DOOR LEGS GO THIS WAY.
+#    sd-elevate.ps1 hard-codes it, each door leg finishes well inside it, and
+#    VerifyInstall1's own elevation of VerifyInstall2 does NOT - that half runs
+#    19 verifiers.  So the suite run goes from FOUR prompts to TWO, not to one,
+#    and taking it to one means changing a shipped file.  Owner's call."
+#
+# sd-elevate.ps1:162 passes 300000 to Send-Request, and Send-Request passes its
+# timeout to $c.Connect() AND NOWHERE ELSE - the reply read is a StreamReader
+# with no ReadTimeout, which is unbounded.  MEASURED 4 Sep 2026: a server
+# replying 6 s after a 1.5 s connect timeout was read intact at 6025 ms, against
+# a control on a pipe with no server that refused at 1497 ms.  The control is
+# what makes the first leg mean anything.
+#
+# So there was never a timeout to fit inside, nothing shipped needed editing,
+# and the suite is at ONE prompt as of PRE_RELEASE 165.  The lesson is the one
+# this project keeps paying for: A LIMIT NOBODY MEASURED IS NOT A LIMIT.
+#
+# THE MACHINERY IS NOW IN elevate-once.ps1 - see its header for what the two
+# copies had drifted into.  $script:helperPipe stays, because Invoke-ElevatedPhase
+# branches on it and its call sites are unchanged.
+. (Join-Path $PSScriptRoot 'elevate-once.ps1')
 $script:helperPipe = ''
 
 function Start-ElevationHelper {
-    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-    if (-not (Test-Path -LiteralPath $elev)) {
-        Write-Output ('  no sd-elevate.ps1 beside this script - falling back to a prompt per leg')
-        return $false
-    }
-    $pipe = 'sddoors-' + [guid]::NewGuid().ToString('N')
-    Write-Output ''
-    Write-Output '  *** ONE UAC PROMPT IS COMING, AND IT IS THE ONLY ONE THIS STEP ASKS FOR.'
-    Write-Output ('      {0} -Start -PipeName {1} -OwnerPid {2}' -f $elev, $pipe, $PID)
-    & $elev -Start -PipeName $pipe -OwnerPid $PID | Out-Null
-    $rc = $LASTEXITCODE
-    if ($rc -ne 0) {
-        Write-Output ("  the helper did not start (exit {0}) - falling back to a prompt per leg." -f $rc)
-        Write-Output '  5 means consent was refused or unavailable; anything else is a failure to launch.'
-        return $false
-    }
-    $script:helperPipe = $pipe
-    Write-Output ('  helper is serving on pipe {0}; the three elevated legs need no further consent.' -f $pipe)
-    return $true
+    # RETURNS A BOOL AND MUST NOT PRINT, which is what the block at the top of
+    # this file says and what the old version here did anyway: five Write-Output
+    # calls and a "return $true" hand the caller a five-element ARRAY, and
+    # "-not <array>" is $false for both outcomes - so the failure path and the
+    # success path were indistinguishable to the caller.  The module prints
+    # (Write-Host, off the output stream) and the verdict comes from its state.
+    $st = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step' -NoHelper:$NoHelper
+    $script:helperPipe = $st.Pipe
+    return ([bool]$st.Active)
 }
 
 function Stop-ElevationHelper {
-    if ([string]::IsNullOrEmpty($script:helperPipe)) { return }
-    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-    & $elev -Stop -PipeName $script:helperPipe | Out-Null
-    Write-Output ('  elevation helper stopped (pipe {0}).' -f $script:helperPipe)
-    $script:helperPipe = ''
+    # A NO-OP ON AN ADOPTED PIPE.  The module decides; this file no longer holds
+    # a second opinion about who owns the helper.
+    Stop-SdElevationHelper
+    $script:helperPipe = (Get-SdElevationState).Pipe
 }
 
 # ***THE LAUNCHER IS SELF-CONTAINED HERE, BECAUSE THE HELPER PASSES NO
@@ -376,8 +390,9 @@ Write-Output ("  logs      {0}" -f $logDir)
 # yet at this point, so this says what is INTENDED and the start itself reports
 # what happened.
 Write-Output ('  three elevated phases, two ordinary ones, and ' +
-              $(if ($NoHelper) { 'THREE UAC prompts (-NoHelper)' }
-                else           { 'ONE UAC prompt if the helper starts, three if it cannot' }))
+              $(if ($NoHelper)             { 'THREE UAC prompts (-NoHelper)' }
+                elseif ($HelperPipe -ne '') { 'NO UAC prompt - it adopts the runner''s helper (PRE_RELEASE 165)' }
+                else                        { 'ONE UAC prompt if the helper starts, three if it cannot' }))
 Write-Output '  TWO accounts are created and TWO profile directories are left behind'
 Write-Output ''
 
@@ -434,11 +449,9 @@ New-Item -ItemType Directory -Path $work | Out-Null
 # this falls back to a prompt per leg rather than failing the run: the point of
 # the helper is fewer prompts, and a run that cannot have fewer should still be
 # able to happen.
-if (-not $NoHelper) {
-    if (-not (Start-ElevationHelper)) { $script:helperPipe = '' }
-} else {
-    Write-Output '  -NoHelper: a UAC prompt per elevated leg, the route -Run b53 went green on.'
-}
+# -NoHelper and -HelperPipe are both handled inside Start-ElevationHelper now,
+# so there is one branch here instead of the caller re-deciding.
+if (-not (Start-ElevationHelper)) { $script:helperPipe = '' }
 
 try {
     Invoke-ElevatedPhase 'Create' $pw

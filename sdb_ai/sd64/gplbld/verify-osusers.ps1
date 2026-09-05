@@ -86,10 +86,31 @@ param(
     [string] $MarkerDir = '',
     # Where the Unlist phase parks @LOGNAME's pre-existing record and the Revoke
     # phase reads it back from.  Empty when @LOGNAME started unlisted.
-    [string] $SaveFile = ''
+    [string] $SaveFile = '',
+
+    # 04 Sep 26 - PRE_RELEASE 165.  A pipe VerifyInstall1 is already serving, so
+    # the elevated phases below cost no consent of their own.
+    #
+    # ***DELIBERATELY NOT PASSED DOWN TO THIS SCRIPT'S OWN ELEVATED HALVES.***
+    # Those re-enter with -Phase and are ALREADY elevated; a child that adopted
+    # the pipe would be an elevated process holding a registration the runner
+    # thinks it owns, and its exit would be indistinguishable from the runner's.
+    [string] $HelperPipe = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ***ADOPT ONLY - THIS SCRIPT NEVER STARTS A HELPER.***  Run standalone it
+# behaves exactly as it always has, a prompt per elevated phase, because
+# Invoke-ElevatedScript falls back to Start-Process -Verb RunAs when no pipe is
+# active.  Starting one here instead would be a better standalone experience and
+# a CHANGE, and this file is not the place to make it: the elevated -Phase child
+# re-enters this same script, and a consent raised at load time would fire in a
+# process that is already elevated and has nothing to ask for.
+. (Join-Path $PSScriptRoot 'elevate-once.ps1')
+if ($HelperPipe -ne '') {
+    $null = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step'
+}
 
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $osUsers = Join-Path $env:ProgramData 'SD\sdsys\os.users'
@@ -555,22 +576,49 @@ $script:elevResults = @{}
 
 function Invoke-ElevatedPhase([string]$phase, [string]$resultPath) {
     $script:elevExit = -1
-    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
-           '-File',       ('"' + $PSCommandPath + '"'),
-           '-Phase',      $phase,
-           '-LogName',    $logNameValue,
-           '-ResultFile', ('"' + $resultPath + '"'),
-           '-MarkerDir',  ('"' + $markerDir + '"'))
-    # Only the Unlist/Revoke phases need it, and only when a record was parked.
-    if ($script:saveFile -ne '') { $a += @('-SaveFile', ('"' + $script:saveFile + '"')) }
-    try {
-        $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $a -Verb RunAs -Wait -PassThru
-        $script:elevExit = $p.ExitCode
+
+    # 04 Sep 26 - PRE_RELEASE 165.  THROUGH THE RUNNER'S HELPER WHEN THERE IS
+    # ONE.  This step raised a UAC prompt of its own for each elevated phase;
+    # with -HelperPipe it raises none.  The helper is handed a script PATH and
+    # passes no arguments, so the re-invocation of this file goes into a
+    # launcher with its arguments baked in - the same shape verify-doors-suite
+    # and the runner's test-account calls use.
+    #
+    # SINGLE-QUOTED, WHICH PROCESSES NO ESCAPES, so the backslashes in these
+    # paths are literal.  An apostrophe would not be, and is refused.
+    $vals = @($PSCommandPath, $phase, $logNameValue, $resultPath, $markerDir, $script:saveFile)
+    if (@($vals | Where-Object { $_ -match "'" }).Count -gt 0) {
+        Write-Output "verify-osusers: a path contains an apostrophe; the launcher cannot be built safely."
+        return
     }
-    catch {
-        # A declined or unavailable UAC prompt.  Over ssh there is no interactive
-        # desktop to draw one on at all - sd-elevate.ps1 says why.
-        Write-Output "verify-osusers: elevation for $phase did not happen: $($_.Exception.Message)"
+
+    $work = Join-Path $env:TEMP ('vou-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $null = New-Item -ItemType Directory -Path $work
+    try {
+        $call = "& '$PSCommandPath' -Phase '$phase' -LogName '$logNameValue'" +
+                " -ResultFile '$resultPath' -MarkerDir '$markerDir'"
+        # Only the Unlist/Revoke phases need it, and only when a record was parked.
+        if ($script:saveFile -ne '') { $call += " -SaveFile '$($script:saveFile)'" }
+
+        $launcher = Join-Path $work 'phase.ps1'
+        [System.IO.File]::WriteAllText($launcher,
+            (@($call, 'exit $LASTEXITCODE') -join "`r`n") + "`r`n",
+            [System.Text.Encoding]::ASCII)
+
+        # RULE 1: the real call, echoed before it runs.  A phase that measured
+        # nothing is diagnosed from this line - the clobbered-$args fault this
+        # project records presented exactly as a command with nothing after it.
+        Write-Output ("  elevated phase argv: " + $call)
+
+        $r = Invoke-ElevatedScript -Launcher $launcher -Why ('verify-osusers phase ' + $phase)
+        if ($r.Ok) { $script:elevExit = $r.ExitCode }
+        else {
+            # A declined or unavailable UAC prompt.  Over ssh there is no
+            # interactive desktop to draw one on at all - sd-elevate.ps1 says why.
+            Write-Output "verify-osusers: elevation for $phase did not happen: $($r.Reason)"
+        }
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

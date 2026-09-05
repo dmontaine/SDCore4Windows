@@ -208,7 +208,17 @@ param(
     # 22 Aug 26 - Skip the "are you sure" prompt.  For anything that is not a
     # person at a keyboard: a scripted run, or the installer, which cannot
     # answer a Read-Host and would hang for ever waiting to.
-    [switch] $Yes
+    [switch] $Yes,
+
+    # 04 Sep 26 - PRE_RELEASE 165.  KEEP THE OLD ROUTE: a UAC prompt per
+    # elevated step, which is what every run before b119 did.
+    #
+    # ***IT EXISTS FOR THE REASON verify-doors-suite.ps1's -NoHelper DOES***, and
+    # that reason is written into PRE_RELEASE 48: "a rework of how a suite
+    # elevates should not be the only way to run it the week it lands".  The
+    # elevate-once path is new; this is the one the suite has gone green on
+    # since b53, and it is one switch away if the new one misbehaves.
+    [switch] $NoHelper
 )
 
 $ErrorActionPreference = 'Stop'
@@ -325,7 +335,8 @@ if (-not $Yes) {
     Write-Output '      including a NON-ADMINISTRATOR test account the ordinary-user checks'
     Write-Output '      run as, made once at the start and removed at the end'
     Write-Output '    * RESTART THE SD SERVICE more than once, so log anyone else out first'
-    Write-Output '    * ask for elevation about six times - it is not unattended'
+    Write-Output '    * ask for elevation ONCE, at the start, and then not again'
+    Write-Output '      (-NoHelper puts back the old prompt-per-step route)'
     Write-Output ('    * write what it finds under ' + (Join-Path $env:LOCALAPPDATA 'SD-verify'))
     Write-Output ''
     Write-Output '  It puts back what it changes.  Nothing here alters your own data.'
@@ -679,8 +690,12 @@ $steps = @(
 # and calling a Mandatory -Prefix with nothing would PROMPT - which inside a
 # runner is a hang, not an error.  That trap cost a run on 28 Aug 2026.
 #
-# IT ADDS THREE UAC PROMPTS to this runner's five, and PRE_RELEASE 73's verifier
-# below adds a fourth - one, not one per leg, because it shares SD's own helper.
+# ***IT USED TO ADD THREE UAC PROMPTS to this runner's five, with PRE_RELEASE
+# 73's verifier below adding a fourth.  SINCE PRE_RELEASE 165 IT ADDS NONE***:
+# both are given -HelperPipe and ADOPT the helper this runner started, so
+# neither starts one and - the part that matters - neither STOPS one.  See
+# $helperAware below, and elevate-once.ps1's header for why an adopting step
+# stopping the helper would take the consent away from the rest of the run.
 if ($Run) {
     # 28 Aug 26 - BUILT AND COUNTED, not appended with a bare +.  A hashtable
     # on the right of + is folded into the array as one element only if it is
@@ -745,12 +760,14 @@ if ($Run) {
 # would cost five.  CLAUDE.md's rule is to remove the need for a prompt rather
 # than to skip the step, and this is the removal it asks for.
 #
-# IT COSTS TWO PROMPTS, ONE AT EACH END, AND THAT IS NOT THE FLOOR.
-# verify-doors-suite.ps1 serves its three elevated legs from ONE consent
-# through sd-elevate.ps1's resident helper.  Reusing that here would take this
-# to one - but it is ~150 lines of machinery in that file, and this whole
+# ***IT COST TWO PROMPTS, ONE AT EACH END. IT NOW COSTS NONE.***  PRE_RELEASE
+# 165, 04 Sep 2026.  This paragraph used to end "reusing that here would take
+# this to one - but it is ~150 lines of machinery in that file, and this whole
 # mechanism has never run, so a second unproven thing is not layered on the
-# first.  Filed as the follow-up in PRE_RELEASE 59.
+# first.  Filed as the follow-up in PRE_RELEASE 59."  The mechanism has since
+# run on b54 and every suite run after it, so the caution was paid off; the
+# machinery is now in elevate-once.ps1, shared rather than copied, and both the
+# create and the remove above go through the consent given once at the top.
 #
 # CONDITIONAL ON -Run, for the door step's reason exactly: the name becomes a
 # Windows account and is SINGLE-USE, because an ssh sign-in leaves a profile
@@ -766,6 +783,121 @@ if ($Run) {
 # directory out of the listing (verify-lcnames.ps1:133); nothing here counts
 # accounts.
 . (Join-Path $PSScriptRoot 'sdtestuser.ps1')
+
+# ---------------------------------------------------------------------------
+# 04 Sep 26 - ONE CONSENT FOR THE WHOLE RUN.  PRE_RELEASE 165, on the owner's
+# ruling "do the elevate fix before 1.0".
+#
+# WHAT THIS REPLACES.  Every elevated thing below used to raise its own UAC
+# prompt: the test account's creation and its removal, verify-osusers,
+# verify-batchjob's two, verify-doors-suite's helper, verify-sdsyswrite's
+# helper, and the handover to VerifyInstall2 - the "ask for elevation about six
+# times" the banner above warns about.  ***b115 WAS LOST TO A SINGLE STRAY
+# KEYSTROKE LANDING ON ONE OF THEM***, twenty minutes gone, the step correctly
+# reporting "The operation was canceled by the user".
+#
+# ***AND IT IS THE DIRECTION CLAUDE.md ASKS FOR, NOT THE ONE IT FORBIDS.***
+# "Pursue it by removing the need for a prompt, not by skipping the step."
+# Nothing here is skipped and nothing measures less: the same children run, with
+# the same tokens, and every one of them still prints what it did.  -Silent is
+# the forbidden shape; this is sd-elevate.ps1's, which SD itself uses.
+#
+# STARTED HERE, WHICH IS AFTER THE GATES AND BEFORE THE FIRST ELEVATION.  The
+# "are you sure" question, the elevated-shell refusal and the SD-running check
+# have all been answered by this line, so nobody is asked for consent for a run
+# that was never going to happen.
+#
+# ONLY WHEN THE RUN CONTAINS AN ELEVATED STEP AT ALL.  Every one of them is
+# conditional on -Run: the five that need the test account, the door pair and
+# the write step.  Without it this half elevates nowhere, and asking anyway
+# would be a prompt bought for nothing.
+. (Join-Path $PSScriptRoot 'elevate-once.ps1')
+$helperPipe = ''
+if ($Run) {
+    $st = Start-SdElevationHelper -Purpose 'this whole run' -NoHelper:$NoHelper
+    $helperPipe = $st.Pipe
+    if ($st.Active) {
+        Write-Output ''
+        Write-Output '===== elevation: ONE consent covers this half ====='
+        Write-Output ('  pipe: ' + $st.Pipe)
+        Write-Output '  You should not be asked again until the run finishes.'
+    } else {
+        Write-Output ''
+        Write-Output '===== elevation: A PROMPT PER STEP ====='
+        Write-Output ('  ' + $st.Reason)
+        Write-Output '  The run still happens; it just asks more often.  Do not walk away from it.'
+    }
+} else {
+    Write-Output 'VerifyInstall1: no -Run, so nothing in this half elevates and no helper is started.'
+}
+
+# Run sdtestuser-admin.ps1 elevated, through the helper when one is serving.
+#
+# ***A SELF-CONTAINED LAUNCHER, BECAUSE THE HELPER PASSES NO ARGUMENTS.***  It
+# is sent a script PATH and runs it with Get-Content | Invoke-Expression
+# (sd-elevate-helper.ps1:241), so everything this child needs is baked into the
+# file.  That is the same shape verify-doors-suite.ps1 uses and its measurement
+# carries over verbatim: a %TEMP% file carries SYSTEM, Administrators and the
+# user and NOBODY ELSE, while Win32_Process.CommandLine hands a same-user
+# process an argument verbatim - so moving the password off the command line and
+# into a file that is deleted in the finally is a step UP, not a compromise.
+#
+# ***THIS FUNCTION MUST NOT Write-Output.***  It returns a hashtable, and a
+# PowerShell function's return value is its whole output stream - the trap that
+# has now cost this project three separate bugs, one of them in elevate-once.ps1
+# yesterday.  Narration goes to Write-Host, which Start-Transcript records.
+function Invoke-SdTestUserAdmin {
+    param(
+        # PASSED, NOT INHERITED.  $admin is assigned inside the "if ($Run)" block
+        # below, and an if does not make a scope in PowerShell - so reading it
+        # from here would work and would depend on that.  A parameter says what
+        # this needs.
+        [string] $AdminScript = '',
+        [string] $Action   = '',
+        [string] $Name     = '',
+        [string] $Password = '',
+        [string] $LogFile  = '',
+        [switch] $Sweep
+    )
+    if ([string]::IsNullOrEmpty($AdminScript)) {
+        Write-Host '  REFUSING: no sdtestuser-admin.ps1 path was given. Nothing was run.'
+        return @{ Ok = $false; ExitCode = 2; Route = 'refused'; Reason = 'no admin script path' }
+    }
+    # REFUSE THE QUOTING HAZARD RATHER THAN GENERATING A BROKEN SCRIPT.  Every
+    # value is embedded in a single-quoted PowerShell string, which processes no
+    # escapes - so a backslash in a path is safe and an apostrophe is not.
+    foreach ($v in @($AdminScript, $Action, $Name, $Password, $LogFile)) {
+        if ($v -match "'") {
+            Write-Host '  REFUSING: a value contains an apostrophe and would break the launcher quoting.'
+            return @{ Ok = $false; ExitCode = 2; Route = 'refused'; Reason = 'apostrophe in a value' }
+        }
+    }
+
+    $work = Join-Path $env:TEMP ('sdtu-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $null = New-Item -ItemType Directory -Path $work
+    try {
+        $launcher = Join-Path $work 'run.ps1'
+        $call = "& '$AdminScript' -Action '$Action' -Name '$Name'"
+        if ($Password -ne '') { $call += " -Password '$Password'" }
+        if ($LogFile  -ne '') { $call += " -LogFile '$LogFile'" }
+        if ($Sweep)           { $call += ' -Sweep' }
+        # exit with the child's own code, or the whole point of the launcher is
+        # lost: the helper returns what the SCRIPT exited with.
+        $src = @($call, 'exit $LASTEXITCODE') -join "`r`n"
+        [System.IO.File]::WriteAllText($launcher, $src + "`r`n", [System.Text.Encoding]::ASCII)
+
+        # RULE 1: print the real call, with the password masked.  A create that
+        # did nothing is diagnosed from this line.
+        $shown = $call
+        if ($Password -ne '') { $shown = $shown.Replace("'$Password'", '<password>') }
+        Write-Host ('      ' + $shown)
+
+        return (Invoke-ElevatedScript -Launcher $launcher -Why ('sdtestuser-admin ' + $Action))
+    } finally {
+        # IT CARRIES THE SECRET, so this removal is not tidiness.
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 
 $testUser = ''
 $testPw   = ''
@@ -829,7 +961,13 @@ if ($Run) {
         Write-Output '  no stray test accounts from earlier runs.'
     }
 
-    Write-Output '  EXPECT A UAC PROMPT NOW - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
+    # CREATE.ACCOUNT is gated on K$ADMINISTRATOR, so this needs elevation
+    # either way; what changed on 04 Sep 26 is WHERE the consent comes from.
+    if ($helperPipe -ne '') {
+        Write-Output '  No prompt: the consent given at the top of this run covers it.'
+    } else {
+        Write-Output '  EXPECT A UAC PROMPT NOW - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
+    }
 
     # GENERATED HERE AND KEPT HERE.  New-SdTestPassword measures that the value
     # survives the askpass batch BEFORE anything is created, so a bad draw costs
@@ -843,22 +981,29 @@ if ($Run) {
     # the elevated window closes with its scrollback.  Without it the create
     # would be a verdict with no evidence.
     $tuLog = Join-Path $logDir ('testuser-create-' + $stamp + '.log')
-    try {
-        $tuChild = Start-Process -FilePath 'powershell.exe' `
-            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $admin,
-                            '-Action', 'Create', '-Name', $testUser,
-                            '-Password', $testPw, '-LogFile', $tuLog, '-Sweep') `
-            -Verb RunAs -Wait -PassThru -ErrorAction Stop
-    } catch {
-        Write-Output ('VerifyInstall1: the test account could not be created - ' + $_.Exception.Message)
-        Write-Output '  Either the UAC prompt was declined, or this shell has no desktop to show one on.'
-        exit 2
-    }
+    $tuRes = Invoke-SdTestUserAdmin -AdminScript $admin -Action 'Create' -Name $testUser `
+                                    -Password $testPw -LogFile $tuLog -Sweep
+
+    # ***THE LOG IS PRINTED BEFORE THE VERDICT IS READ, AND ON BOTH PATHS.***
+    # -LogFile exists because -RedirectStandardOutput cannot be used with -Verb
+    # and the elevated window closes with its scrollback; through the helper the
+    # child is hidden and there is no window at all.  Either way this file is the
+    # only evidence, so it is printed whether the create worked or not.
     if (Test-Path -LiteralPath $tuLog) {
         Get-Content -LiteralPath $tuLog | ForEach-Object { Write-Output ('  ' + $_) }
     }
-    if ($tuChild.ExitCode -ne 0) {
-        Write-Output ("VerifyInstall1: sdtestuser-admin Create exited {0} - stopping." -f $tuChild.ExitCode)
+
+    # DID NOT RUN and RAN AND FAILED ARE DIFFERENT ANSWERS, and they used to
+    # arrive on the same path: the catch below reported a declined prompt, and
+    # a non-zero exit reported a failed create.  Invoke-ElevatedScript keeps
+    # them apart - Ok is "did a child run", ExitCode is "what did it say".
+    if (-not $tuRes.Ok) {
+        Write-Output ('VerifyInstall1: the test account could not be created - ' + $tuRes.Reason)
+        Write-Output '  Nothing was created and nothing was measured.'
+        exit 2
+    }
+    if ($tuRes.ExitCode -ne 0) {
+        Write-Output ("VerifyInstall1: sdtestuser-admin Create exited {0} - stopping." -f $tuRes.ExitCode)
         Write-Output '  The five steps that need it would each fail with their own wording for'
         Write-Output '  one cause, which is worse than one refusal here.'
         exit 2
@@ -907,6 +1052,15 @@ if ($Run) {
 $needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1',
                    'verify-logtoaccess.ps1')
 
+# 04 Sep 26 - THE STEPS THAT TAKE -HelperPipe.  PRE_RELEASE 165.  These four are
+# the only things in this half that raise a UAC prompt of their own; each now
+# adopts the runner's helper instead.  test-elevonce-units.ps1 checks this list
+# against the scripts' actual parameter blocks, in BOTH directions, so a script
+# that gains the parameter without joining this list - or joins it without
+# having the parameter - fails in a second instead of costing a run its prompts.
+$helperAware = @('verify-osusers.ps1', 'verify-batchjob.ps1',
+                 'verify-doors-suite.ps1', 'verify-sdsyswrite.ps1')
+
 # AN ArrayList RATHER THAN "$kept += $s", and the door step above says why in
 # its own words: a hashtable on the right of + is folded into an array as one
 # element only if it is wrapped first, and getting that wrong is silent.  The
@@ -922,6 +1076,25 @@ foreach ($s in $steps) {
         }
         $s.P['TestUser']     = $testUser
         $s.P['TestPassword'] = $testPw
+    }
+    # 04 Sep 26 - TELL THE HELPER-AWARE STEPS WHICH PIPE IS ALREADY SERVING.
+    # PRE_RELEASE 165.
+    #
+    # ***AN EXPLICIT LIST, NOT A try/catch ON THE SPLAT.***  Passing -HelperPipe
+    # to a step that has no such parameter is a binding error that reads like a
+    # broken runner, and swallowing it would hide a step somebody forgot to
+    # wire.  The list is checked against the four scripts by
+    # test-elevonce-units.ps1, so adding a fifth without adding it here fails in
+    # a second rather than costing a run its prompts.
+    #
+    # ***AND THE STEP MUST NOT STOP WHAT IT DID NOT START.***  Every step runs
+    # IN-PROCESS ("& $path @splat" below), so they all share this runner's $PID,
+    # and the helper's owner set is keyed by pid - so one step sending
+    # "-Stop -OwnerPid $PID" would empty the set and kill the consent for the
+    # rest of the run.  elevate-once.ps1's Stop is a no-op on an adopted pipe
+    # and that is where the rule is enforced, not here.
+    if (($helperAware -contains $s.Name) -and ($helperPipe -ne '')) {
+        $s.P['HelperPipe'] = $helperPipe
     }
     $null = $kept.Add($s)
 }
@@ -1064,20 +1237,23 @@ foreach ($s in $steps) {
     if ($testUser -ne '') {
         Write-Output ''
         Write-Output ('===== removing the test account ' + $testUser + ' =====')
-        Write-Output '  EXPECT A UAC PROMPT - DELETE.ACCOUNT is gated on K$ADMINISTRATOR.'
+        if ($helperPipe -ne '') {
+            Write-Output '  No prompt: the consent given at the top of this run still covers it.'
+        } else {
+            Write-Output '  EXPECT A UAC PROMPT - DELETE.ACCOUNT is gated on K$ADMINISTRATOR.'
+        }
         $rmLog = Join-Path $logDir ('testuser-remove-' + $stamp + '.log')
         $rmCode = -1
-        try {
-            $rmChild = Start-Process -FilePath 'powershell.exe' `
-                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-                                (Join-Path $PSScriptRoot 'sdtestuser-admin.ps1'),
-                                '-Action', 'Remove', '-Name', $testUser,
-                                '-LogFile', $rmLog) `
-                -Verb RunAs -Wait -PassThru -ErrorAction Stop
-            $rmCode = $rmChild.ExitCode
-        } catch {
-            Write-Output ('  the removal did not start - ' + $_.Exception.Message)
-        }
+        # ***THE HELPER IS STILL SERVING HERE, AND THAT IS DELIBERATE.***  This
+        # is the step-loop's finally; the helper is stopped further down, after
+        # the handover.  A removal that had to ask for consent of its own is
+        # exactly the prompt somebody walks away from - and the account it
+        # leaves behind is live, enabled, and holding a password that existed
+        # only in this process.
+        $rmRes = Invoke-SdTestUserAdmin -AdminScript (Join-Path $PSScriptRoot 'sdtestuser-admin.ps1') `
+                                        -Action 'Remove' -Name $testUser -LogFile $rmLog
+        if ($rmRes.Ok) { $rmCode = $rmRes.ExitCode }
+        else { Write-Output ('  the removal did not start - ' + $rmRes.Reason) }
         if (Test-Path -LiteralPath $rmLog) {
             Get-Content -LiteralPath $rmLog | ForEach-Object { Write-Output ('  ' + $_) }
         }
@@ -1126,8 +1302,8 @@ if ($failed -gt 0) {
     if ($ThenElevated) {
         Write-Output '  NOT handing over to VerifyInstall2.ps1 - fix these first, or'
         Write-Output '  re-run with -ContinueOnFailure to hand over anyway.'
-        if (-not $ContinueOnFailure) { exit 1 }
-    } else { exit 1 }
+        if (-not $ContinueOnFailure) { Stop-SdElevationHelper; exit 1 }
+    } else { Stop-SdElevationHelper; exit 1 }
 } elseif ($partial) {
     # 30 Aug 26 - NEVER "every step exited 0" ON A PARTIAL RUN.  That sentence is
     # a claim about the whole half, and on a -Only run it would be false in the
@@ -1140,7 +1316,18 @@ if ($failed -gt 0) {
     Write-Output 'VerifyInstall1: every step exited 0.'
 }
 
-if (-not $ThenElevated) { exit ([int]($failed -gt 0)) }
+# 04 Sep 26 - THE HELPER GOES BEFORE THIS HALF DOES.  PRE_RELEASE 165.
+#
+# ***AN ELEVATED PROCESS OUTLIVING THE RUN THAT ASKED FOR IT IS THE ONE THING
+# sd-elevate-helper.ps1's HEADER SAYS TO AVOID ABOVE ALL***, so every exit from
+# here on stops it explicitly rather than relying on the backstop.
+#
+# THE BACKSTOP IS REAL AND IS NOT AN EXCUSE TO SKIP THIS.  The helper wakes
+# every 2000 ms while idle, prunes owners whose process has gone
+# (sd-elevate-helper.ps1:114) and exits when the set empties - so even a Ctrl-C,
+# which VerifyInstall1.ps1:1080 records as running no finally at all, leaves it
+# alive for about two seconds and no longer.
+if (-not $ThenElevated) { Stop-SdElevationHelper; exit ([int]($failed -gt 0)) }
 
 # ---------------------------------------------------------------------------
 # THE HANDOVER.  One UAC prompt, then the elevated runner in its own process
@@ -1162,6 +1349,7 @@ if (-not $ThenElevated) { exit ([int]($failed -gt 0)) }
 $elevated = Join-Path $PSScriptRoot 'VerifyInstall2.ps1'
 if (-not (Test-Path -LiteralPath $elevated)) {
     Write-Output ("VerifyInstall1: -ThenElevated, but {0} is not there." -f $elevated)
+    Stop-SdElevationHelper
     exit 2
 }
 
@@ -1170,7 +1358,13 @@ Write-Output ''
 Write-Output '===== handing over to VerifyInstall2.ps1 ====='
 Write-Output ("  -Run {0}" -f $Run)
 Write-Output ('  output: ' + $elevLog)
-Write-Output '  EXPECT A UAC PROMPT NOW - approving it is what elevates the child.'
+if ($helperPipe -ne '') {
+    Write-Output '  No prompt: the elevated helper starts it, in a VISIBLE window.'
+    Write-Output '  The helper is already elevated, so its child inherits the token and'
+    Write-Output '  Windows asks for nothing - PRE_RELEASE 165.'
+} else {
+    Write-Output '  EXPECT A UAC PROMPT NOW - approving it is what elevates the child.'
+}
 
 # 22 Aug 26 - Tee-Object, NOT "*> file".  Owner, watching the elevated window
 # through a whole run: "it is not printing the steps", "it is also supposed to
@@ -1223,25 +1417,54 @@ Write-Output '  EXPECT A UAC PROMPT NOW - approving it is what elevates the chil
 # unchanged rather than newly broken.
 $inner = ("& '{0}' -Run '{1}' -Quiet *>&1 | Tee-Object -FilePath '{2}'" `
             -f $elevated, $Run, $elevLog) + '; exit $LASTEXITCODE'
+
+# 04 Sep 26 - THE SAME COMMAND, IN A FILE.  PRE_RELEASE 165.
+#
+# ***THE COMMAND ITSELF IS UNCHANGED, AND THAT IS DELIBERATE.***  Every clause
+# of $inner above was paid for: Tee-Object rather than "*>" because Write-Host
+# goes to the INFORMATION stream and the window sat blank for ten minutes
+# looking hung; the concatenated '; exit $LASTEXITCODE' because neither "*>" nor
+# a bare pipeline carries the child's code, and nine "exit 2" paths were being
+# delivered as "A STEP FAILED".  None of that is re-derived here - the string is
+# built exactly as before and only the way it is DELIVERED has changed.
+#
+# WHY A FILE.  The helper is handed a script PATH and runs it; it passes no
+# arguments and takes no -Command.  Running from a file also removes the
+# quoting layer that -Command adds, which is a reduction in surface rather than
+# an increase.
+$hoWork = Join-Path $env:TEMP ('sdvi1-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+$null = New-Item -ItemType Directory -Path $hoWork
+$child = $null
 try {
-    $child = Start-Process -FilePath 'powershell.exe' `
-                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $inner) `
-                -Verb RunAs -Wait -PassThru -ErrorAction Stop
-} catch {
-    # THE CANCELLED-PROMPT PATH.  Declining UAC throws here rather than
-    # returning a code, and the raw exception says only "The operation was
-    # canceled by the user" - which is also what a DESKTOP-LESS shell gets when
-    # no prompt can be shown at all (VerifyInstall2.ps1's header, 19 Aug).
-    # The two are indistinguishable from the message, so name both.
+    $hoLauncher = Join-Path $hoWork 'handover.ps1'
+    [System.IO.File]::WriteAllText($hoLauncher, $inner + "`r`n", [System.Text.Encoding]::ASCII)
+
+    # -Visible: through the helper this runs in an ordinary window, because the
+    # helper is already elevated and its child inherits the token with no
+    # consent.  -Interactive: VerifyInstall2 ran without -NonInteractive before
+    # this change, and a Read-Host under -NonInteractive THROWS rather than
+    # waiting - see elevate-once.ps1's parameter.
+    $child = Invoke-ElevatedScript -Launcher $hoLauncher -Visible -Interactive `
+                                   -Why ('VerifyInstall2 -Run ' + $Run)
+} finally {
+    Remove-Item -LiteralPath $hoWork -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# THE CANCELLED-PROMPT PATH, which is now a returned reason rather than a
+# thrown one.  Declining UAC and a DESKTOP-LESS shell produce the same message
+# - "The operation was canceled by the user" - so both are named.
+if (-not $child.Ok) {
     Write-Output ''
-    Write-Output ('VerifyInstall1: the elevated half did not start - ' + $_.Exception.Message)
-    Write-Output '  Either the UAC prompt was declined, or this shell has no desktop to show'
-    Write-Output '  one on.  The unelevated results above still stand.  To run the other half:'
+    Write-Output ('VerifyInstall1: the elevated half did not start - ' + $child.Reason)
+    Write-Output '  The unelevated results above still stand.  To run the other half:'
     Write-Output ("      {0} -Run {1}" -f $elevated, $Run)
+    Stop-SdElevationHelper
     exit 1
 }
 
 Write-Output ('post-cycle-elevated exited ' + $child.ExitCode)
+Write-Output ('  elevated route: ' + $child.Route)
+Stop-SdElevationHelper
 if (Test-Path -LiteralPath $elevLog) {
     Write-Output ''
     Get-Content -LiteralPath $elevLog | Select-String -Pattern '^\[|FAILED|did not exit 0|all \d+ steps exited' |

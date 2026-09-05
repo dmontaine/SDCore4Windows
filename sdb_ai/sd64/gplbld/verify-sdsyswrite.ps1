@@ -94,7 +94,18 @@ param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
 
     # Fall back to a UAC prompt per elevated leg instead of a resident helper.
-    [switch] $NoHelper
+    [switch] $NoHelper,
+
+    # 04 Sep 26 - PRE_RELEASE 165.  A pipe VerifyInstall1 is already serving.
+    #
+    # ***WITHOUT THIS, THIS STEP KILLED THE RUN'S CONSENT.***  It starts its
+    # helper on SD's own pipe name, "sd-elev-<username>" - the same one the
+    # runner now uses - so -Start found the runner's helper and returned 0, and
+    # then Stop-ElevationHelper sent "-Stop -OwnerPid $PID".  Steps run
+    # IN-PROCESS, so that pid IS the runner's; the helper's owner set emptied
+    # and it exited, and every elevated thing after this step asked for consent
+    # again.  Adopting means using it and NOT stopping it.
+    [string] $HelperPipe = ''
 )
 
 $ErrorActionPreference = 'Continue'
@@ -173,6 +184,7 @@ Write-Host ('  sd.exe        : ' + $sdExe)
 Write-Host ('  account       : ' + $acct)
 Write-Host ('  this process  : pid ' + $PID + ', UNELEVATED (checked above)')
 Write-Host ('  helper        : ' + $(if ($NoHelper) { 'DISABLED (-NoHelper): expect one UAC prompt per elevated leg' }
+                                     elseif ($HelperPipe -ne '') { 'ADOPTED from the runner: ' + $HelperPipe + ' - no consent here, and this step will not stop it' }
                                      else { 'sd-elevate.ps1, one consent for the run' }))
 
 # ---------------------------------------------------------------------------
@@ -203,35 +215,29 @@ function Said($what, $text) {
 
 # ---------------------------------------------------------------------------
 # The elevation helper, on SD'S OWN PIPE NAME so SD shares it.
+# 04 Sep 26 - PRE_RELEASE 165.  THE MACHINERY MOVED TO elevate-once.ps1 AND IS
+# NO LONGER A SECOND COPY.  What was here started a helper on SD's own pipe and
+# stopped it with -Stop -OwnerPid $PID; verify-doors-suite.ps1 had its own
+# version that used a RANDOM pipe and a BARE -Stop.  Two copies of
+# security-sensitive lifetime logic that had already drifted apart in both of
+# the places that decide whether it works - see the module's header.
+#
+# $script:helperPipe IS KEPT, because Invoke-SDElevated and Invoke-PSElevated
+# below branch on it and their call sites are unchanged.  It is now a mirror of
+# the module's state rather than the state itself.
+. (Join-Path $PSScriptRoot 'elevate-once.ps1')
 $script:helperPipe = ''
 
 function Start-ElevationHelper {
-    if ($NoHelper) { return }
-    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-    if (-not (Test-Path -LiteralPath $elev)) {
-        Write-Host '  no sd-elevate.ps1 beside this script - falling back to a prompt per leg'
-        return
-    }
-    # gpl.bp/ELEVATE:121 - 'sd-elev-' : @logname.  Same name, so SD's own
-    # elevate('START') inside LOGTO SDSYS finds this one and asks for nothing.
-    $pipe = 'sd-elev-' + $env:USERNAME
-    Write-Host ('      ' + $elev + ' -Start -PipeName ' + $pipe + ' -OwnerPid ' + $PID)
-    Write-Host '  APPROVE THE UAC PROMPT.  It is the consent LOGTO SDSYS asks for, once.' -ForegroundColor Yellow
-    & $elev -Start -PipeName $pipe -OwnerPid $PID | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ("  the helper did not start (exit {0}) - falling back to a prompt per leg." -f $LASTEXITCODE)
-        return
-    }
-    $script:helperPipe = $pipe
-    Write-Host ('  helper is serving on pipe ' + $pipe + '; SD will share it.')
+    $st = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step' -NoHelper:$NoHelper
+    $script:helperPipe = $st.Pipe
 }
 
 function Stop-ElevationHelper {
-    if ([string]::IsNullOrEmpty($script:helperPipe)) { return }
-    $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-    & $elev -Stop -PipeName $script:helperPipe -OwnerPid $PID | Out-Null
-    Write-Host ('  elevation helper stopped (pipe ' + $script:helperPipe + ').')
-    $script:helperPipe = ''
+    # ***A NO-OP ON AN ADOPTED PIPE, AND THAT IS THE WHOLE FIX.***  The module
+    # decides, not this file: it stops only what this process started.
+    Stop-SdElevationHelper
+    $script:helperPipe = (Get-SdElevationState).Pipe
 }
 
 # Run an SD script ELEVATED.  Start-Process -Verb RunAs when there is no helper;

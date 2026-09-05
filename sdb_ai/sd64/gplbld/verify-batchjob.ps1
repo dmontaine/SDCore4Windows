@@ -48,10 +48,24 @@ param(
     [ValidateSet('', 'setup', 'cleanup')]
     [string] $Phase = '',
     [string] $Account = '',
-    [string] $ResultFile = ''
+    [string] $ResultFile = '',
+
+    # 04 Sep 26 - PRE_RELEASE 165.  A pipe VerifyInstall1 is already serving, so
+    # the two elevated phases below cost no consent of their own.  Not passed
+    # down to this script's own elevated halves: they are already elevated and
+    # have nothing to ask for.
+    [string] $HelperPipe = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ADOPT ONLY - this script never starts a helper.  Run standalone it behaves
+# exactly as it always has, two UAC prompts, because Invoke-ElevatedScript falls
+# back to Start-Process -Verb RunAs when no pipe is active.
+. (Join-Path $PSScriptRoot 'elevate-once.ps1')
+if ($HelperPipe -ne '') {
+    $null = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step'
+}
 
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $sdsys   = Join-Path $env:ProgramData  'SD\sdsys'
@@ -385,19 +399,46 @@ Note 'an ordinary token cannot WRITE batch.jobs' $false $wrote $true
 $resultFile = Join-Path ([System.IO.Path]::GetTempPath()) 'verify-batchjob-elev.txt'
 if (Test-Path -LiteralPath $resultFile) { Remove-Item -LiteralPath $resultFile -Force }
 
-Write-Output '  A UAC PROMPT IS COMING - it writes the probe record into batch.jobs.'
-$a = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
-       '-File', ('"' + $PSCommandPath + '"'),
-       '-Phase', 'setup', '-Account', $account,
-       '-ResultFile', ('"' + $resultFile + '"'))
-$elevOk = $false
-try {
-    $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $a -Verb RunAs -Wait -PassThru
-    $elevOk = ($p.ExitCode -eq 0)
+# 04 Sep 26 - PRE_RELEASE 165.  ONE FUNCTION FOR BOTH PHASES, AND IT REPLACES
+# A POSITIONAL EDIT.  The two calls used to share one $a array with the second
+# reaching into it - "$a[6] = 'cleanup'   # element 6 is the -Phase VALUE" - so
+# inserting an argument anywhere before it would silently have set the wrong
+# element and run the setup phase twice.  A parameter cannot do that.
+#
+# THROUGH THE RUNNER'S HELPER WHEN THERE IS ONE: the helper takes a script path
+# and passes no arguments, so the re-entry goes into a launcher.
+function Invoke-BatchJobPhase([string]$Phase) {
+    $vals = @($PSCommandPath, $Phase, $account, $resultFile)
+    if (@($vals | Where-Object { $_ -match "'" }).Count -gt 0) {
+        Write-Output 'verify-batchjob: a value contains an apostrophe; cannot build the launcher.'
+        return $false
+    }
+    $work = Join-Path $env:TEMP ('vbj-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $null = New-Item -ItemType Directory -Path $work
+    try {
+        $call = "& '$PSCommandPath' -Phase '$Phase' -Account '$account' -ResultFile '$resultFile'"
+        $launcher = Join-Path $work 'phase.ps1'
+        [System.IO.File]::WriteAllText($launcher,
+            (@($call, 'exit $LASTEXITCODE') -join "`r`n") + "`r`n",
+            [System.Text.Encoding]::ASCII)
+        Write-Output ('  elevated phase argv: ' + $call)
+        $r = Invoke-ElevatedScript -Launcher $launcher -Why ('verify-batchjob ' + $Phase)
+        if (-not $r.Ok) {
+            Write-Output ("verify-batchjob: elevation did not happen: " + $r.Reason)
+            return $false
+        }
+        return ($r.ExitCode -eq 0)
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
-catch {
-    Write-Output "verify-batchjob: elevation did not happen: $($_.Exception.Message)"
+
+if ($HelperPipe -ne '') {
+    Write-Output '  No prompt: the probe record is written through the runner''s elevated helper.'
+} else {
+    Write-Output '  A UAC PROMPT IS COMING - it writes the probe record into batch.jobs.'
 }
+$elevOk = Invoke-BatchJobPhase 'setup'
 if (-not $elevOk) {
     Write-Output 'verify-batchjob: could not write the list entry, so nothing below is measurable.'
     if (Test-Path -LiteralPath $resultFile) { Write-Output (Get-Content -Raw $resultFile) }
@@ -420,17 +461,13 @@ $wrongType = Invoke-SdCommand @($fpName)
 Note 'listed but not PA/S: refused on TYPE' $true (SawType $wrongType) $true
 
 # ------------------------------------- 7. remove it, and check elevation too
-Write-Output '  A SECOND UAC PROMPT IS COMING - it removes the record and tests the elevated path.'
+if ($HelperPipe -ne '') {
+    Write-Output '  No prompt: the removal goes through the same helper, and still tests the elevated path.'
+} else {
+    Write-Output '  A SECOND UAC PROMPT IS COMING - it removes the record and tests the elevated path.'
+}
 if (Test-Path -LiteralPath $resultFile) { Remove-Item -LiteralPath $resultFile -Force }
-$a[6] = 'cleanup'   # element 6 is the -Phase VALUE; 7 is -Account
-$cleanOk = $false
-try {
-    $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $a -Verb RunAs -Wait -PassThru
-    $cleanOk = ($p.ExitCode -eq 0)
-}
-catch {
-    Write-Output "verify-batchjob: the cleanup elevation did not happen: $($_.Exception.Message)"
-}
+$cleanOk = Invoke-BatchJobPhase 'cleanup'
 
 if ($cleanOk -and (Test-Path -LiteralPath $resultFile)) {
     $elevOut = (Get-Content -Raw -LiteralPath $resultFile)

@@ -243,6 +243,21 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # NOTE install-editors.ps1 itself is NOT here and must not be
                   # - it SHIPS to {app}, so it stays under the guard.
                   'test-editorver-units.ps1',
+                  # 04 Sep 26 - PRE_RELEASE 165's shared elevation module and its
+                  # units test.  Listed in the commit that creates them, under
+                  # the rule the note below states.  elevate-once.ps1 is
+                  # dot-sourced by VerifyInstall1 and by the four verifiers that
+                  # elevate; nothing installs it and nothing compiles it into
+                  # sd.exe.
+                  #
+                  # ***NOTE sd-elevate.ps1 AND sd-elevate-helper.ps1 ARE NOT HERE
+                  # AND MUST NOT BE.***  Those two SHIP - SD's own ELEVATE verb
+                  # drives them - so they stay under the guard, and 165
+                  # deliberately did not touch either: the "300-second timeout"
+                  # that was supposed to force an edit to them turned out to
+                  # bound Connect() and not the reply, so no shipped file moved
+                  # and no cycle is owed for this entry.
+                  'elevate-once.ps1', 'test-elevonce-units.ps1',
                   # 04 Sep 26 - PRE_RELEASE 155's units test over Write-Wrapped,
                   # the text wrapper finish-install.ps1 gained the same day.
                   # Listed in the commit that creates it.  It lifts the function
