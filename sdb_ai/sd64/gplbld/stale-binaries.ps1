@@ -114,6 +114,14 @@ function Test-IsSdSource([string]$fullName, [string]$name) {
     if ($fullName -match '\\__pycache__\\')     { return $false }
     if ($fullName -match '\\localtest\\')       { return $false }
     if ($fullName -match '\\sdclilib\\tests\\') { return $false }
+    # 04 Sep 26 - sdclilib\tools\ joins tests\ for the identical reason, and it
+    # arrived with PRE_RELEASE_FIXES 161.  tools\sd_connect.c builds
+    # sd-connect.exe, which LINKS AGAINST qmclilib.dll rather than being
+    # compiled into it, and which ships nowhere - stage.py's CLIENT_DIRS names
+    # the two DLLs explicitly.  So an edit there can no more reach an install
+    # than an edit under tests\ can, and answering it with "run a cycle" would
+    # be the toll that entry describes rather than a guard.
+    if ($fullName -match '\\sdclilib\\tools\\') { return $false }
     if ($name -match $buildProducts)            { return $false }
     if ($name -match $documentation)            { return $false }
     if ($name -match $generated)                { return $false }

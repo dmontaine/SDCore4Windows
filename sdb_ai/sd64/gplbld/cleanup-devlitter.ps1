@@ -38,8 +38,12 @@
 #                               a PERMISSION rather than a register entry, so
 #                               "nothing to clean" is a claim worth being
 #                               explicit about.  DELETE.ACCOUNT clears one.
-#   - ..\winsdclilib, ..\sdclilib32   the real client repositories, one level up
-#                               from this tree.  Never in scope.
+#   - ..\winsdclilib, ..\sdclilib32   GONE as of 4 Sep 2026, PRE_RELEASE_FIXES
+#                               161 - the client repositories were deleted once
+#                               "make sd" built all four DLLs.  They were never
+#                               in scope here and there is nothing to add: the
+#                               line is kept so that nobody re-adds a sweep for
+#                               trees that no longer exist.
 #   - sdadmins, sdapi, sdssh, sdsshonly, sdusers, sdu_don, sdu_test1
 #                               REAL groups.  See the safety note below.
 

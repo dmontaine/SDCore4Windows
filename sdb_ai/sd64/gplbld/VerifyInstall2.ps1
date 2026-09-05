@@ -694,10 +694,18 @@ $steps = @(
     # what covers that.
     @{ Name = 'verify-vocverbs.ps1';      P = @{ Prefix = $VocPrefix } },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
-    # not be reachable refused.  LAST because it is the only step that needs a
-    # binary from OUTSIDE this repository - sd-connect.exe from the sdclilib32
-    # tree (its -SdConnect default).  If that tree is absent this step is the
-    # one that fails, and nothing before it is lost.
+    # not be reachable refused.
+    #
+    # 04 Sep 26 - THE REASON IT WAS PUT LAST IS GONE, AND THE ORDER STAYS.
+    # PRE_RELEASE_FIXES 161.  This used to be "the only step that needs a binary
+    # from OUTSIDE this repository - sd-connect.exe from the sdclilib32 tree",
+    # placed last so that its absence cost nothing before it.  "make sd" now
+    # builds sd-connect.exe into bin\client32, so nothing here reaches outside
+    # the tree.  ***AND "THE ONLY STEP" WAS WRONG WHEN IT WAS WRITTEN***:
+    # verify-doors.ps1 carried the same default, and it SKIPS its API door
+    # rather than refusing - so on b116, with the tree deleted, this step
+    # exited 2 while doors passed with a door untested.  Last is still a fine
+    # place for it; it is no longer a mitigation for anything.
     @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } },
 
     # 03 Sep 26 - LAST, AND IT HAS TO BE LAST.  PRE_RELEASE 93 and 65, owner's

@@ -142,9 +142,28 @@ QMDEF2 = qmclient.def
 HDRS = sdclilib.h sdclient.h err.h revstamp.h
 QMSRCS = sdclilib.c qmcompat.c
 
+# ===========================================================================
+# THE 32-BIT DIAGNOSTIC CLIENT, AND IT IS BUILT BY "all" ON PURPOSE
+#
+# 04 Sep 26 - PRE_RELEASE_FIXES 161.  ../sdclilib32 built sd-connect.exe ON
+# DEMAND, and TWO verifiers in the standing suite pointed at it there.  When
+# that tree was deleted the suite said so in two different voices:
+#
+#   verify-tierapi  exit 2, COULD NOT RUN      - loud, and correct
+#   verify-doors    SKIPPED its API door in BOTH phases and STILL EXITED 0
+#
+# The second is the one that matters.  A binary the suite needs, built by hand,
+# in a tree outside this one, is the same defect 161 exists to remove - so it
+# is built here, every time, by the same command that builds the DLL it loads.
+#
+# IT LINKS AGAINST qmclilib.dll AND MUST SIT BESIDE IT.  Windows searches an
+# executable's own directory first, and nothing is on PATH any more, so the
+# top-level Makefile copies this into bin\client32 where that DLL lands.
+SDCONNECT = sd-connect.exe
+
 .PHONY: all clean check
 
-all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2)
+all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT)
 
 $(DLL): sdclilib.c $(HDRS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c \
@@ -175,6 +194,15 @@ $(QMDLL2): $(QMSRCS) $(HDRS) qmclilib.h $(QMDEF2)
 	PATH="$(CC32PATH)" $(CC32) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS32) \
 	  -shared -o $@ $(QMSRCS) $(QMDEF2) \
 	  $(LDLIBS) -Wl,--out-implib,$(QMIMPLIB2)
+
+# 32-BIT, like the DLL it drives, and that is the whole point of it: it proves
+# a claim about the library mvDeveloper actually loads rather than about the
+# protocol in the abstract.  Built from this tree since 4 Sep 2026 - see the
+# note at SDCONNECT above for what its absence cost.
+$(SDCONNECT): tools/sd_connect.c qmclilib.h $(QMDLL)
+	$(call check_cc32)
+	PATH="$(CC32PATH)" $(CC32) -std=c11 -Wall -Wextra -Wpedantic \
+	  -o $@ tools/sd_connect.c -I. -L. -lqmclilib -lws2_32
 
 check: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2)
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o smoke-test.exe \
@@ -390,7 +418,7 @@ check-peer-probe:
 
 clean:
 	$(RM) $(DLL) $(IMPLIB) $(DLL2) $(IMPLIB2) \
-	  $(QMDLL) $(QMIMPLIB) $(QMDLL2) $(QMIMPLIB2) $(QMDEF2) \
+	  $(QMDLL) $(QMIMPLIB) $(QMDLL2) $(QMIMPLIB2) $(QMDEF2) $(SDCONNECT) \
 	  smoke-test.exe smoke-test-sdclient.exe internal-state-test.exe \
 	  qm-alias-test.exe qm-alias-test-qmclient.exe
 	$(RM) -r localtest

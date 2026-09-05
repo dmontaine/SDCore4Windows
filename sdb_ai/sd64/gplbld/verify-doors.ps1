@@ -48,7 +48,13 @@ param(
     [Parameter(Mandatory = $true)] [string] $Password,
     [Parameter(Mandatory = $true)] [ValidateSet('Control', 'Refused')] [string] $Phase,
     [int]    $Port      = 4243,
-    [string] $SdConnect = 'C:\Users\dmont\Projects\sdclilib32\sd-connect.exe'
+    # 04 Sep 26 - PRE_RELEASE_FIXES 161, and this one mattered MORE than
+    # verify-tierapi's identical default.  That step refuses out loud when the
+    # binary is missing; THIS one Skips door 3 and still exits 0, so on b116 the
+    # API door went untested in both phases inside a green step.  "make sd" now
+    # builds sd-connect.exe beside the 32-bit DLL, derived from $PSScriptRoot
+    # rather than pointing at a deleted repository.
+    [string] $SdConnect = (Join-Path $PSScriptRoot '..\bin\client32\sd-connect.exe')
 )
 
 $ErrorActionPreference = 'Stop'

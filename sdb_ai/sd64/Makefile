@@ -197,6 +197,12 @@ sdclilib:
 	@mkdir -p $(GPLBIN)client64 $(GPLBIN)client32
 	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)client64/
 	@cp $(CLILIBDIR)/qmclilib.dll $(CLILIBDIR)/qmclient.dll $(GPLBIN)client32/
+# 04 Sep 26 - AND THE DIAGNOSTIC CLIENT, BESIDE THE DLL IT LOADS.  It is NOT
+# shipped: stage.py's CLIENT_DIRS names the two DLLs explicitly, so an extra
+# file here reaches no install.  verify-tierapi.ps1 and verify-doors.ps1 drive
+# it, and it lives beside qmclilib.dll because Windows searches an executable's
+# own directory first and nothing is on PATH any more.
+	@cp $(CLILIBDIR)/sd-connect.exe $(GPLBIN)client32/
 # Print what was produced rather than only that it succeeded - CLAUDE.md's
 # instrument rule.  "file" names the architecture, which is the one property a
 # 32-bit DLL under the right name can silently get wrong, and the failure it

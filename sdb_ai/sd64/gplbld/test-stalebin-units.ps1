@@ -162,6 +162,8 @@ Note (-not (Test-IsSdSource 'C:\r\gplsrc\__pycache__\x.pyc' 'x.pyc')) `
      '__pycache__ is excluded'
 Note (-not (Test-IsSdSource 'C:\r\gplsrc\sdclilib\tests\t.c' 't.c')) `
      'sdclilib\tests\ is excluded - those link AGAINST the DLL, they are not in it'
+Note (-not (Test-IsSdSource 'C:\r\gplsrc\sdclilib\tools\sd_connect.c' 'sd_connect.c')) `
+     'sdclilib\tools\ is excluded - sd-connect.exe links against the DLL and ships nowhere'
 Note (-not (Test-IsSdSource 'C:\r\gplsrc\sdclilib\smoke-test.exe' 'smoke-test.exe')) `
      'a build product is excluded even outside localtest - "make check" builds INTO sdclilib\'
 Note (-not (Test-IsSdSource 'C:\r\gplsrc\x.o' 'x.o'))     'an object file is excluded'

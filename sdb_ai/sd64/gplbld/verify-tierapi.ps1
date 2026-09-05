@@ -5,10 +5,14 @@
 
 .DESCRIPTION
     THE POINT IS THE CLIENT IT USES.  This drives sd-connect.exe, which links
-    against the 32-bit qmclilib.dll in ..\sdclilib32 - the same file
+    against the 32-bit qmclilib.dll in sd64\bin\client32 - the same file
     mvDeveloper loads.  So "mvDeveloper can connect as a standard user" stops
     being an inference about the protocol and becomes a reading of the actual
     library, without needing anyone at a GUI.
+
+    BOTH ARE BUILT BY "make sd" SINCE 4 Sep 2026 (PRE_RELEASE_FIXES 161).  They
+    used to be hand-built in ..\sdclilib32, and when that repository was deleted
+    this step exited 2 on b116.
 
     WHAT IT ESTABLISHES, and the last two are the ones that matter:
 
@@ -57,7 +61,16 @@
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
     [int]    $Port = 4243,
-    [string] $SdConnect = 'C:\Users\dmont\Projects\sdclilib32\sd-connect.exe',
+    # 04 Sep 26 - PRE_RELEASE_FIXES 161.  This used to name
+    # C:\Users\dmont\Projects\sdclilib32\sd-connect.exe, a binary hand-built in
+    # a repository outside this tree.  That repository is deleted, and on b116
+    # this step exited 2 COULD NOT RUN because of it.  "make sd" now builds
+    # sd-connect.exe beside the 32-bit DLL it loads, so the suite no longer
+    # depends on anyone having remembered to build it somewhere else.
+    #
+    # DERIVED FROM $PSScriptRoot RATHER THAN HARDCODED, so a clone anywhere
+    # works; gplbld sits directly under sd64, and bin\client32 beside it.
+    [string] $SdConnect = (Join-Path $PSScriptRoot '..\bin\client32\sd-connect.exe'),
     [switch] $Keep
 )
 
@@ -157,7 +170,7 @@ Step 0 'Checking the installed tree matches source'
 if ($LASTEXITCODE -ne 0) { Refuse 'assert-current refuses - run gplbld/cycle.ps1 first.' }
 
 if (-not (Test-Path -LiteralPath $SdConnect)) {
-    Refuse ("sd-connect.exe not found at $SdConnect.  Build it: make sd-connect.exe in the sdclilib32 project. " +
+    Refuse ("sd-connect.exe not found at $SdConnect.  Build it: run 'make sd' (or 'make sdclilib') from sdb_ai\sd64. " +
           "It is the 32-bit client, which is the whole reason this test uses it.")
 }
 
