@@ -71,3 +71,14 @@ stage/
 # as stage/ above is.  Scoped to docs/sample because that is the only place
 # documentation lives so far, and where it finally lives has not been ruled on.
 docs/sample/*.html
+
+# 05 Sep 26 - the Claude Code settings, split by what is shared and what is not.
+# .claude/settings.json and .claude/hooks/ ARE tracked: they carry the
+# PreToolUse guard that refuses a file edit made by a program, which is a
+# project rule and belongs with the project.  These two are not.
+#
+# settings.local.json is per-machine permission grants, and the .pyc is an
+# object file - CLAUDE.md's no-binaries rule covers it exactly as it covers
+# bin/ and stage/.
+.claude/settings.local.json
+.claude/hooks/__pycache__/
