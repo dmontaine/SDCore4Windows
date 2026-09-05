@@ -234,23 +234,45 @@ try {
     # as that address rather than 127.0.0.1 - which is the only thing LOGIN's
     # peer test reads.  Same host, same account, same password: the ONLY
     # variable between legs A and B is the route.
+    # ***AN ADDRESS IS NOT A ROUTE, AND b121 PAID FOR THAT DISTINCTION.***  The
+    # first version took the first non-loopback IPv4 it found.  That was
+    # 10.0.0.13 on an Ethernet adapter whose status was Disconnected - the
+    # address is still configured on a down interface - so ssh answered 255 and
+    # the leg measured nothing.  Require the adapter to be Up AND port 22 to
+    # actually accept a connection; an address that fails either is not a route
+    # to this machine.
     $lanIp = ''
+    $candidates = @()
     try {
-        $lanIp = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
-                   Where-Object { $_.IPAddress -notlike '127.*' -and
-                                  $_.IPAddress -notlike '169.254.*' } |
-                   Select-Object -ExpandProperty IPAddress -First 1)
+        $candidates = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+                        Where-Object { $_.IPAddress -notlike '127.*' -and
+                                       $_.IPAddress -notlike '169.254.*' })
     } catch { }
-    if ($lanIp -is [array]) { $lanIp = $lanIp[0] }
+    foreach ($c in $candidates) {
+        $status = ''
+        try { $status = (Get-NetAdapter -InterfaceIndex $c.InterfaceIndex -ErrorAction Stop).Status } catch { }
+        $reach = $false
+        if ($status -eq 'Up') {
+            try {
+                $reach = (Test-NetConnection -ComputerName $c.IPAddress -Port 22 `
+                              -WarningAction SilentlyContinue -ErrorAction Stop).TcpTestSucceeded
+            } catch { }
+        }
+        Write-Output ("  candidate {0,-16} adapter={1,-14} port22={2}" -f
+                      $c.IPAddress, $(if ($status) { $status } else { '?' }), $reach)
+        if ($reach -and -not $lanIp) { $lanIp = $c.IPAddress }
+    }
     Write-Output ("  non-loopback address for the REMOTE leg: {0}" -f
                   $(if ($lanIp) { $lanIp } else { '<none>' }))
 
-    # REFUSE THE NULL CASE.  With no routable address there is no remote leg,
-    # and leg A alone would show an administrator being ADMITTED with nothing
-    # demonstrating that a remote one is refused - a green that means nothing.
+    # REFUSE THE NULL CASE.  With no reachable routable address there is no
+    # remote leg, and leg A alone would show an administrator being ADMITTED
+    # with nothing demonstrating that a remote one is refused - a green that
+    # means nothing.
     if (-not $lanIp) {
-        Write-Output 'verify-sshadmin: this machine has no non-loopback IPv4 address.'
+        Write-Output 'verify-sshadmin: no non-loopback IPv4 address on this machine accepts a connection on port 22.'
         Write-Output '  The REMOTE leg cannot be driven, so the gate cannot be measured at all.'
+        Write-Output '  This is NOT a product failure - it is a network the test cannot use.'
         exit 2
     }
     Write-Output ''
@@ -288,7 +310,36 @@ try {
     Write-Output ("  ssh exit {0}, {1} characters of output" -f $rr.ExitCode, $textR.Length)
     Write-Output '  --- the session said: ---'
     Write-Output $textR
+    if ($rr.Err -ne '') {
+        # PRINTED, BECAUSE b121 THREW IT AWAY.  The first version printed leg
+        # A's stderr and not this one, so "ssh exit 255" arrived with no reason
+        # attached and the cause had to be found afterwards by hand.
+        Write-Output '  --- ssh stderr ---'
+        Write-Output $rr.Err
+    }
     Write-Output ''
+
+    # ***A SESSION THAT NEVER STARTED MUST NOT SCORE, AND ON b121 THIS ONE DID.***
+    # verify-sdsysgate.ps1's header says exactly this and it was read the same
+    # day.  ssh answered 255 with two characters of output - it never connected
+    # - and the two rows below PASSED on that: "the administrator did NOT reach
+    # a session" is true of a connection that never happened, and "the two
+    # routes were treated DIFFERENTLY" is true when one leg produced nothing.
+    # Both were right for the wrong reason.  Only the two anchored on positive
+    # evidence - the refusal message and the audit line - failed, which is the
+    # whole argument for anchoring on the success wording.
+    #
+    # SD PRINTS ITS BANNER ON THE REFUSAL PATH TOO - measured on b120, where the
+    # refused leg showed the full banner and then 10174 - so the banner is the
+    # signal that SD ran at all, and its absence means the leg measured nothing.
+    if ($textR -notmatch '(?i)SD Core for Windows') {
+        Write-Output 'verify-sshadmin: the REMOTE leg never reached SD - no banner in its output.'
+        Write-Output ("  ssh exit {0}. The connection failed; nothing was measured about the gate." -f $rr.ExitCode)
+        Write-Output '  NOT scored as a refusal: an ssh that never connected looks identical to'
+        Write-Output '  a session SD turned away, and calling that a pass is the defect this'
+        Write-Output '  check exists to refuse.'
+        exit 2
+    }
 
     Write-Output '=== 4. LEG B - the CONTROL, a PROGRAMMER, over the same route ====='
     $rb = $null
