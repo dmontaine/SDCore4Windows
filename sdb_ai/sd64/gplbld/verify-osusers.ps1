@@ -348,7 +348,22 @@ $fatal   = $false
 # Set by step 0a when @LOGNAME started listed and its record was parked.  Every
 # early exit runs through Stop-Here, which restores it; a '' here means there is
 # nothing to put back.  Declared now so a precondition Stop-Here sees a value.
-$script:saveFile = ''
+#
+# 05 Sep 26 - ***RENAMED FROM $script:saveFile, AND THE OLD NAME WAS THE SAME
+# VARIABLE AS THE -SaveFile PARAMETER AT :89.***  PRE_RELEASE 166, found by
+# test-elevonce-units.ps1's collision lint on its first run.  PowerShell variable
+# names are CASE-INSENSITIVE, so $script:saveFile and $SaveFile were one
+# variable - and this line, which runs at SCRIPT level, assigns '' to it.  The
+# elevated child is handed -SaveFile <path> and reads it at :219 and :291 to
+# restore @LOGNAME's parked os.users record.
+#
+# ***IT WAS BENIGN ONLY BY ORDERING***: the -Phase blocks exit before execution
+# reaches this line, so the child never wiped its own argument.  Move this line
+# up, or give the child any path that falls through, and the Revoke phase
+# restores NOTHING - the real os.users record stays deleted while the verifier
+# reports its own cleanup as done.  Data loss behind a green check, which is why
+# it was renamed rather than annotated.
+$script:parkedRec = ''
 
 function Note($step, $expected, $got, $decisive) {
     $pass = ($expected -eq $got)
@@ -374,7 +389,7 @@ function Stop-Here([int]$code, [string]$why) {
 # step 0a runs through (Stop-Here's `exit` triggers it - measured, PS 5.1).
 # Idempotent: a second call sees the save file gone and returns.
 function Restore-SavedRecord {
-    if (-not $script:saveFile -or -not (Test-Path -LiteralPath $script:saveFile)) { return }
+    if (-not $script:parkedRec -or -not (Test-Path -LiteralPath $script:parkedRec)) { return }
     Write-Output ''
     Write-Output "verify-osusers: restoring $logNameValue's parked OS.USERS record"
     $rf = Join-Path $logDir ('verify-osusers-restore-' + $stamp + '.txt')
@@ -382,14 +397,14 @@ function Restore-SavedRecord {
     Read-ElevResults $rf
     if ($script:elevResults['restored'] -eq 'yes') {
         Write-Output "  restored - $record is back as it was found"
-        $script:saveFile = ''
+        $script:parkedRec = ''
     } else {
         Write-Output ''
         Write-Output "verify-osusers: WARNING - could NOT restore $record automatically."
         Write-Output "  Its bytes are saved at:"
-        Write-Output "      $script:saveFile"
+        Write-Output "      $script:parkedRec"
         Write-Output "  Put them back from an ELEVATED prompt:"
-        Write-Output "      Copy-Item `"$script:saveFile`" `"$record`""
+        Write-Output "      Copy-Item `"$script:parkedRec`" `"$record`""
         Write-Output "  or regenerate it: elevated 'sd', then  modify.account $logNameValue administrator"
         $script:fatal = $true
     }
@@ -586,7 +601,7 @@ function Invoke-ElevatedPhase([string]$phase, [string]$resultPath) {
     #
     # SINGLE-QUOTED, WHICH PROCESSES NO ESCAPES, so the backslashes in these
     # paths are literal.  An apostrophe would not be, and is refused.
-    $vals = @($PSCommandPath, $phase, $logNameValue, $resultPath, $markerDir, $script:saveFile)
+    $vals = @($PSCommandPath, $phase, $logNameValue, $resultPath, $markerDir, $script:parkedRec)
     if (@($vals | Where-Object { $_ -match "'" }).Count -gt 0) {
         Write-Output "verify-osusers: a path contains an apostrophe; the launcher cannot be built safely."
         return
@@ -598,7 +613,7 @@ function Invoke-ElevatedPhase([string]$phase, [string]$resultPath) {
         $call = "& '$PSCommandPath' -Phase '$phase' -LogName '$logNameValue'" +
                 " -ResultFile '$resultPath' -MarkerDir '$markerDir'"
         # Only the Unlist/Revoke phases need it, and only when a record was parked.
-        if ($script:saveFile -ne '') { $call += " -SaveFile '$($script:saveFile)'" }
+        if ($script:parkedRec -ne '') { $call += " -SaveFile '$($script:parkedRec)'" }
 
         $launcher = Join-Path $work 'phase.ps1'
         [System.IO.File]::WriteAllText($launcher,
@@ -664,7 +679,7 @@ if ($startedListed) {
     Write-Output '  That is what CREATEA/adopt-account do for an ADMINISTRATOR account.'
     Write-Output '  Saving its bytes, removing it for the baseline, restoring it at step 5.'
 
-    $script:saveFile = Join-Path $logDir ('verify-osusers-saved-' + $stamp + '.rec')
+    $script:parkedRec = Join-Path $logDir ('verify-osusers-saved-' + $stamp + '.rec')
     $unlistFile      = Join-Path $logDir ('verify-osusers-unlist-' + $stamp + '.txt')
     Invoke-ElevatedPhase 'Unlist' $unlistFile
     $urc = $script:elevExit
@@ -675,18 +690,18 @@ if ($startedListed) {
         # Keep saveFile set IF the phase saved the bytes before it failed - the
         # finally then restores, which is safe whether or not the record went.
         # Only clear it when there is provably nothing to put back.
-        if (-not (Test-Path -LiteralPath $script:saveFile)) { $script:saveFile = '' }
+        if (-not (Test-Path -LiteralPath $script:parkedRec)) { $script:parkedRec = '' }
         Remove-Probe
         Stop-Here 2 ("could not park $logNameValue's automatic record for the baseline " +
                      "(exit $urc). The finally block will put it back if it moved.")
     }
     if ($ul['unlisted'] -eq 'already') {
         # Nothing was there after all - drop the save path so nothing restores.
-        if (Test-Path -LiteralPath $script:saveFile) { Remove-Item -LiteralPath $script:saveFile -Force }
-        $script:saveFile = ''
+        if (Test-Path -LiteralPath $script:parkedRec) { Remove-Item -LiteralPath $script:parkedRec -Force }
+        $script:parkedRec = ''
     }
 
-    if ($script:saveFile -ne '') {
+    if ($script:parkedRec -ne '') {
         $recheck = Invoke-Probe
         $recNow  = if ($recheck -match 'REC=(\S*)') { $Matches[1] } else { '(no line)' }
         Note 'baseline: the automatic record is now gone' '(none)' $recNow $true
@@ -908,23 +923,23 @@ finally {
             Write-Output "    del `"$record`""
             $script:fatal = $true
         }
-        elseif ($script:saveFile -ne '') {
+        elseif ($script:parkedRec -ne '') {
             # @LOGNAME started listed: the end state is the SAVED record back,
             # not an empty list.  The loop closes a different way - the shell
             # tracked the TEST record's SH field at step 4a (yes->no, refused),
             # and now the account's own record is readable again.
             if ($rev['restored'] -eq 'yes') {
                 Note 'the parked record was restored' 'yes' 'yes' $true
-                if (Test-Path -LiteralPath $script:saveFile) { Remove-Item -LiteralPath $script:saveFile -Force }
-                $script:saveFile = ''
+                if (Test-Path -LiteralPath $script:parkedRec) { Remove-Item -LiteralPath $script:parkedRec -Force }
+                $script:parkedRec = ''
                 $probeEnd = Invoke-Probe
                 $recEnd = if ($probeEnd -match 'REC=(\S*)') { $Matches[1] } else { '(no line)' }
                 Note 'SD reads the restored record back' 'yes' $recEnd $false
             } else {
                 Write-Output ''
                 Write-Output "verify-osusers: WARNING - could NOT restore $record."
-                Write-Output "  Bytes saved at:  $script:saveFile"
-                Write-Output "  Elevated:  Copy-Item `"$script:saveFile`" `"$record`""
+                Write-Output "  Bytes saved at:  $script:parkedRec"
+                Write-Output "  Elevated:  Copy-Item `"$script:parkedRec`" `"$record`""
                 $script:fatal = $true
             }
         }

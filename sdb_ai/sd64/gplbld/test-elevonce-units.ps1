@@ -300,6 +300,72 @@ exit $rc
          'every -HelperPipe taker is in $helperAware and vice versa' `
          ("takers: " + ($takers -join ',') + " / declared: " + ($declared -join ','))
 
+    # ------------------------------- $script:x colliding with a parameter $X
+    #
+    # ***THE DEFECT b119 ACTUALLY SHIPPED WITH, AND IT COST THREE CONSENTS
+    # INSTEAD OF ONE WHILE PASSING EVERY CHECK.***  PowerShell variable names
+    # are CASE-INSENSITIVE, so a parameter -HelperPipe and a variable written
+    # $script:helperPipe are THE SAME VARIABLE.  verify-doors-suite.ps1 and
+    # verify-sdsyswrite.ps1 each bound the runner's pipe and then assigned '' to
+    # what looked like a private script variable, wiping the parameter they had
+    # just been handed.  Both then started helpers of their own and stopped
+    # them, killing the run's consent.
+    #
+    # ***IT FAILED THE QUIET WAY, WHICH IS WHY A LINT AND NOT A COMMENT.***
+    # b119 was GREEN IN BOTH HALVES - 23 of 23 and 25 of 25 - and the only
+    # symptom was that the run went on asking for consent.  Nothing in a
+    # transcript says "your parameter was overwritten"; the two files that had
+    # no such variable adopted correctly, so the split looked inexplicable until
+    # the names were compared by hand.
+    #
+    # THE RULE IS GENERAL AND SWEEPS THE DIRECTORY, because this has nothing to
+    # do with elevation: ANY script that assigns to $script:<name> while taking
+    # a parameter of the same name (in any casing) is writing to its own
+    # parameter and almost certainly does not mean to.  Assigning to the
+    # parameter DIRECTLY ($Foo = 'x') is ordinary and is not flagged - it is the
+    # scope prefix that creates the false belief that they are separate.
+    Write-Output ''
+    Write-Output '--- no script assigns $script:<name> over its own parameter $<Name> ---'
+
+    function Get-ScopedParamCollisions([string]$Path) {
+        $tt = $null; $ee = $null
+        $a = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tt, [ref]$ee)
+        if ($null -eq $a.ParamBlock) { return @() }
+        $names = @($a.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+        if ($names.Count -eq 0) { return @() }
+        $hits = @()
+        foreach ($asn in @($a.FindAll({ param($n)
+                    $n -is [System.Management.Automation.Language.AssignmentStatementAst] }, $true))) {
+            $lv = $asn.Left
+            if ($lv -isnot [System.Management.Automation.Language.VariableExpressionAst]) { continue }
+            $vp = $lv.VariablePath
+            if (-not ($vp.IsScript -or $vp.IsGlobal)) { continue }
+            $bare = $vp.UserPath -replace '^(script|global|local|private):', ''
+            foreach ($p in $names) {
+                # -eq is case-insensitive, which is the whole point: that is
+                # exactly how PowerShell resolves the two to one variable.
+                if ($bare -eq $p) {
+                    $hits += ('line {0}: ${1} is the same variable as parameter ${2}' -f
+                              $lv.Extent.StartLineNumber, $vp.UserPath, $p)
+                }
+            }
+        }
+        return @($hits | Sort-Object -Unique)
+    }
+
+    $scanned  = 0
+    $collided = @()
+    foreach ($f in @(Get-ChildItem -LiteralPath $here -Filter '*.ps1' -File)) {
+        $scanned++
+        foreach ($h in @(Get-ScopedParamCollisions $f.FullName)) {
+            $collided += ($f.Name + ' -- ' + $h)
+        }
+    }
+    # REFUSE THE NULL CASE: a scan that parsed nothing would report clean.
+    Note ($scanned -gt 20) 'the sweep actually read the directory' ("scanned: " + $scanned)
+    Note ($collided.Count -eq 0) 'no gplbld script writes $script:<name> over its own parameter' `
+         ($collided -join ' | ')
+
     # ------------------------------------------- what could not be driven here
     Write-Output ''
     Write-Output '--- the two routes that would raise a real prompt: STATIC ---'

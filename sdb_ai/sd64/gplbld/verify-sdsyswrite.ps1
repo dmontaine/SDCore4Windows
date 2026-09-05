@@ -222,22 +222,32 @@ function Said($what, $text) {
 # security-sensitive lifetime logic that had already drifted apart in both of
 # the places that decide whether it works - see the module's header.
 #
-# $script:helperPipe IS KEPT, because Invoke-SDElevated and Invoke-PSElevated
-# below branch on it and their call sites are unchanged.  It is now a mirror of
-# the module's state rather than the state itself.
+# A script-scope pipe variable IS KEPT, because Invoke-SDElevated and
+# Invoke-PSElevated below branch on it and their call sites are unchanged.  It is
+# now a mirror of the module's state rather than the state itself.
+#
+# ***IT IS $script:elevPipe AND NOT $script:helperPipe, AND THE NAME IS
+# LOAD-BEARING. MEASURED ON b119.***  PowerShell variable names are
+# CASE-INSENSITIVE, so the parameter -HelperPipe and a variable spelt
+# $script:helperPipe are THE SAME VARIABLE: this file bound the runner's pipe and
+# then assigned '' to "its own" variable, wiping it.  It then started a second
+# helper on SD's own pipe name - after verify-doors-suite had already killed the
+# runner's the same way - and b119 asked for three consents instead of one, while
+# passing every check.  See verify-doors-suite.ps1's copy of this note for the
+# full account; test-elevonce-units.ps1 now refuses both spellings in one file.
 . (Join-Path $PSScriptRoot 'elevate-once.ps1')
-$script:helperPipe = ''
+$script:elevPipe = ''
 
 function Start-ElevationHelper {
     $st = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step' -NoHelper:$NoHelper
-    $script:helperPipe = $st.Pipe
+    $script:elevPipe = $st.Pipe
 }
 
 function Stop-ElevationHelper {
     # ***A NO-OP ON AN ADOPTED PIPE, AND THAT IS THE WHOLE FIX.***  The module
     # decides, not this file: it stops only what this process started.
     Stop-SdElevationHelper
-    $script:helperPipe = (Get-SdElevationState).Pipe
+    $script:elevPipe = (Get-SdElevationState).Pipe
 }
 
 # Run an SD script ELEVATED.  Start-Process -Verb RunAs when there is no helper;
@@ -295,14 +305,14 @@ function Invoke-SDElevated([string[]]$commands, [string]$why) {
         [System.IO.File]::WriteAllText($launcher, $ls + "`r`n", [System.Text.Encoding]::ASCII)
 
         Write-Host ('      elevated: ' + $why)
-        if ([string]::IsNullOrEmpty($script:helperPipe)) {
+        if ([string]::IsNullOrEmpty($script:elevPipe)) {
             $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru `
                     -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
                                     '-File', $launcher)
             $null = $p
         } else {
             $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-            & $elev -Run -PipeName $script:helperPipe -OwnerPid $PID -Script $launcher | Out-Null
+            & $elev -Run -PipeName $script:elevPipe -OwnerPid $PID -Script $launcher | Out-Null
         }
 
         if (Test-Path -LiteralPath $sdOut) {
@@ -337,14 +347,14 @@ function Invoke-PSElevated([string]$body, [string]$why) {
         [System.IO.File]::WriteAllText($launcher, $src + "`r`n", [System.Text.Encoding]::ASCII)
 
         Write-Host ('      elevated: ' + $why)
-        if ([string]::IsNullOrEmpty($script:helperPipe)) {
+        if ([string]::IsNullOrEmpty($script:elevPipe)) {
             $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru `
                     -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
                                     '-File', $launcher)
             $null = $p
         } else {
             $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-            & $elev -Run -PipeName $script:helperPipe -OwnerPid $PID -Script $launcher | Out-Null
+            & $elev -Run -PipeName $script:elevPipe -OwnerPid $PID -Script $launcher | Out-Null
         }
         if (Test-Path -LiteralPath $res) { return ((Get-Content -LiteralPath $res) -join "`n") }
         return ''

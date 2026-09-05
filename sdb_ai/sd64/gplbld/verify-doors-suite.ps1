@@ -158,10 +158,27 @@ function Add-Leg($name, $expected, $got) {
 # this project keeps paying for: A LIMIT NOBODY MEASURED IS NOT A LIMIT.
 #
 # THE MACHINERY IS NOW IN elevate-once.ps1 - see its header for what the two
-# copies had drifted into.  $script:helperPipe stays, because Invoke-ElevatedPhase
-# branches on it and its call sites are unchanged.
+# copies had drifted into.  A script-scope pipe variable stays, because
+# Invoke-ElevatedPhase branches on it and its call sites are unchanged.
+#
+# ***IT IS CALLED $script:elevPipe AND NOT $script:helperPipe, AND THAT NAME IS
+# LOAD-BEARING. MEASURED ON b119.***  POWERSHELL VARIABLE NAMES ARE
+# CASE-INSENSITIVE, so the parameter -HelperPipe and a variable spelt
+# $script:helperPipe ARE THE SAME VARIABLE.  This file bound -HelperPipe from
+# the runner and then, a few lines later, assigned '' to "its own" script
+# variable - WIPING THE PARAMETER IT HAD JUST BEEN GIVEN.  Start-ElevationHelper
+# then adopted nothing, started a helper of its own, and its Stop killed the
+# runner's, so b119 asked for THREE consents instead of one.
+#
+# ***AND IT FAILED THE QUIET WAY.***  Every step still passed - b119 was green in
+# both halves - and the only symptom was that the run went on asking. Nobody
+# reads that as a defect. verify-osusers.ps1 and verify-batchjob.ps1 have no such
+# variable and adopted correctly, which is exactly why the split looked
+# inexplicable until the names were compared.
+#
+# test-elevonce-units.ps1 now refuses any script that declares both spellings.
 . (Join-Path $PSScriptRoot 'elevate-once.ps1')
-$script:helperPipe = ''
+$script:elevPipe = ''
 
 function Start-ElevationHelper {
     # RETURNS A BOOL AND MUST NOT PRINT, which is what the block at the top of
@@ -171,7 +188,7 @@ function Start-ElevationHelper {
     # success path were indistinguishable to the caller.  The module prints
     # (Write-Host, off the output stream) and the verdict comes from its state.
     $st = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step' -NoHelper:$NoHelper
-    $script:helperPipe = $st.Pipe
+    $script:elevPipe = $st.Pipe
     return ([bool]$st.Active)
 }
 
@@ -179,7 +196,7 @@ function Stop-ElevationHelper {
     # A NO-OP ON AN ADOPTED PIPE.  The module decides; this file no longer holds
     # a second opinion about who owns the helper.
     Stop-SdElevationHelper
-    $script:helperPipe = (Get-SdElevationState).Pipe
+    $script:elevPipe = (Get-SdElevationState).Pipe
 }
 
 # ***THE LAUNCHER IS SELF-CONTAINED HERE, BECAUSE THE HELPER PASSES NO
@@ -240,7 +257,7 @@ function Invoke-PhaseViaHelper([string]$Phase, [string]$Password, [string]$Out) 
     Write-Output ('      launcher  : ' + $launcher)
 
     $elev = Join-Path $PSScriptRoot 'sd-elevate.ps1'
-    & $elev -Run -PipeName $script:helperPipe -Script $launcher | Out-Null
+    & $elev -Run -PipeName $script:elevPipe -Script $launcher | Out-Null
     $rc = $LASTEXITCODE
     if ($rc -eq 9) {
         Write-Output '  the helper is gone - it answers 9 when no elevated server is on the pipe.'
@@ -267,7 +284,7 @@ function Invoke-ElevatedPhase([string]$Phase, [string]$Password) {
 
     Write-Output ''
     Write-Output ("  --- {0} (ELEVATED) --------------------------------------------" -f $Phase.ToUpper())
-    if ([string]::IsNullOrEmpty($script:helperPipe)) {
+    if ([string]::IsNullOrEmpty($script:elevPipe)) {
         Write-Output '  *** A UAC PROMPT IS COMING.  It is this suite asking, not something else.'
     }
     Write-Output ("      {0} -Prefix {1} -Phase {2}" -f $admin, $Prefix, $Phase)
@@ -281,7 +298,7 @@ function Invoke-ElevatedPhase([string]$Phase, [string]$Password) {
     # run down the helper branch.  Caught by the unit test, which lifts this
     # function without the initialiser above it; the same shape as the
     # "an empty Get-Content is null, not ''" trap already in the record.
-    if (-not [string]::IsNullOrEmpty($script:helperPipe)) {
+    if (-not [string]::IsNullOrEmpty($script:elevPipe)) {
         Invoke-PhaseViaHelper $Phase $Password $out
         if (Test-Path -LiteralPath $out) {
             foreach ($line in (Get-Content -LiteralPath $out)) { Write-Output ('  | ' + $line) }
@@ -451,7 +468,7 @@ New-Item -ItemType Directory -Path $work | Out-Null
 # able to happen.
 # -NoHelper and -HelperPipe are both handled inside Start-ElevationHelper now,
 # so there is one branch here instead of the caller re-deciding.
-if (-not (Start-ElevationHelper)) { $script:helperPipe = '' }
+if (-not (Start-ElevationHelper)) { $script:elevPipe = '' }
 
 try {
     Invoke-ElevatedPhase 'Create' $pw
