@@ -70,13 +70,31 @@ param(
     #
     # DERIVED FROM $PSScriptRoot RATHER THAN HARDCODED, so a clone anywhere
     # works; gplbld sits directly under sd64, and bin\client32 beside it.
-    [string] $SdConnect = (Join-Path $PSScriptRoot '..\bin\client32\sd-connect.exe'),
+    #
+    # ***RESOLVED IN THE BODY, NOT HERE, AND THAT IS NOT STYLE.  MEASURED
+    # 4 Sep 2026.***  With [CmdletBinding()] present, $PSScriptRoot is EMPTY
+    # during parameter binding when the script runs as a CHILD PROCESS
+    # ("powershell.exe -File <script>") and populated when it runs IN-PROCESS
+    # ("& <script>").  The runners use "&", so a default written here would
+    # work in the suite and fail for anyone launching it the other way -
+    # including every Start-Process -ArgumentList '-File' child in this
+    # project.  The failure is a Join-Path binding error before the body runs,
+    # so the script prints nothing at all.
+    [string] $SdConnect = '',
     [switch] $Keep
 )
 
 $ErrorActionPreference = 'Stop'
 
 $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# See the note on -SdConnect: this cannot be a param() default, because
+# $PSScriptRoot is empty during binding under -File.  $Gplbld above is derived
+# from $MyInvocation, which is populated either way.
+if ($SdConnect -eq '') {
+    $SdConnect = Join-Path $Gplbld '..\bin\client32\sd-connect.exe'
+}
+
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $conf    = Join-Path $env:ProgramData 'SD\sd.conf'
 $backup  = $conf + '.before-tierapi'

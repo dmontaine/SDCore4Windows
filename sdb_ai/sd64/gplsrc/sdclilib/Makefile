@@ -161,9 +161,15 @@ QMSRCS = sdclilib.c qmcompat.c
 # top-level Makefile copies this into bin\client32 where that DLL lands.
 SDCONNECT = sd-connect.exe
 
+# 04 Sep 26 - PRE_RELEASE_FIXES 163, and the same reasoning as SDCONNECT above:
+# gplbld/verify-localconnect.ps1 makes this a standing suite step, so its
+# binary is built by "all" rather than by whoever remembers.  Its recipe and
+# the reason it lives in localtest/ are further down, at check-local.
+LOCALTEST = localtest/local-connect-test.exe
+
 .PHONY: all clean check
 
-all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT)
+all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT) $(LOCALTEST)
 
 $(DLL): sdclilib.c $(HDRS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c \
@@ -267,11 +273,58 @@ check: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2)
 SDBIN   ?= /c/Program Files/SD/usr/bin
 WINSYS  ?= /c/WINDOWS/System32
 
-check-local: $(DLL)
+# 04 Sep 26 - BUILT BY "all", RUN SEPARATELY.  PRE_RELEASE_FIXES 163.  This
+# test is now a standing suite step (gplbld/verify-localconnect.ps1), and a
+# step whose binary has to be hand-built is the defect 161 and 164 both landed
+# on - so the BUILD moved into "all" while the RUN stayed out of it, because
+# running needs an installed, running SD and an unelevated caller.
+#
+# IT STAYS IN localtest/ AND THAT IS LOAD-BEARING, not tidiness.  Windows
+# searches an executable's own directory first, and this directory holds a
+# freshly built sdclilib.dll with no sd.exe beside it - so a copy run from here
+# would load the BUILD library, which would then look for sd.exe next to itself
+# and not find one.  From localtest/, which holds neither, the loader falls
+# through to the PATH the recipe below sets, and picks up the INSTALLED DLL and
+# sd.exe as a pair.  That is the pair we mean to test.
+$(LOCALTEST): tests/local_connect_test.c sdclilib.h $(DLL)
 	mkdir -p localtest
-	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/local-connect-test.exe \
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o $@ \
 	  tests/local_connect_test.c -I. -L. -lsdclilib
-	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./local-connect-test.exe
+
+# 04 Sep 26 - AND IT TAKES THE ACCOUNT RATHER THAN NAMING ONE.  It used to
+# connect to the literal "DON", which is fine for a thing one person runs on
+# one machine and fatal for a suite step: a hardcoded name passes here and
+# fails everywhere else, which is PRE_RELEASE 54's fixed-prefix trap again.
+# NO DEFAULT, and the refusal is out loud: there is no account this could
+# usefully guess, and a run with no treatment would test only the control and
+# read as a pass.
+LOCALACCT ?=
+
+# ***DO NOT READ THE BINARY'S VERDICT THROUGH make.  MEASURED 4 Sep 2026.***
+# GNU make collapses EVERY recipe failure to its own exit 2, whatever the
+# recipe exited - this target exits 4 below and make still reports 2, printing
+# "Error 4" only in its message text.  So make's exit code carries exactly one
+# bit, "something failed", and a caller that maps it to the binary's codes is
+# reading a number the binary never sent.
+#
+# THAT IS NOT HYPOTHETICAL.  The first script written against this target did
+# exactly that: an empty LOCALACCT refused here, make exited 2, and 2 is the
+# BINARY's "SDSYS was ADMITTED - the grant check did not run".  It reported a
+# broken grant check, in those words, because an argument was missing.
+#
+# So gplbld/verify-localconnect.ps1 runs localtest\local-connect-test.exe
+# DIRECTLY and never through make, which is the only way the exit code arrives
+# unaliased.  The 4 here is still right - it is the binary's own "no account
+# given", one level up, so the two levels agree rather than collide - but it is
+# for a reader, not for a caller.
+check-local: $(LOCALTEST)
+	@if [ -z "$(LOCALACCT)" ]; then \
+	  echo "check-local needs LOCALACCT=<account> - an SD account the CALLER is"; \
+	  echo "granted, normally their own.  SDConnectLocal sends no password; the"; \
+	  echo "identity comes from the process owner, so run it UNELEVATED."; \
+	  echo "gplbld/verify-localconnect.ps1 derives it and passes it in."; \
+	  exit 4; fi
+	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./local-connect-test.exe "$(LOCALACCT)"
 
 # 17 Aug 26 - THE REMOTE TEST, PROJECT_STATUS.md 7 step 6.  Same rule as
 # check-local: it measures the INSTALLED tree, so it is not under "check".

@@ -58,6 +58,25 @@ from the process owner. Corrected 17 Aug 2026 — this file previously called it
 "Linux-specific and not part of this Windows DLL", which was wrong on both
 counts.
 
+***BUT IT WORKS ONLY FROM A DIRECTORY THAT ALSO HOLDS `sd.exe`, WHICH MEANS
+`usr\bin` AND NOWHERE ELSE.*** Added 4 Sep 2026, PRE_RELEASE_FIXES 163. The
+function finds the server by taking **its own module path** and appending
+`\sd.exe`, so the copy in `C:\Program Files\SD\usr\bin` — which sits beside the
+server — can start a session, and a copy taken from
+`C:\Program Files\SD\usr\clients\client64` to an application's directory or to
+`windows\system32` **cannot**. Everything else in the library works from a
+copied DLL; this one call does not.
+
+**That is not a limitation in practice.** A Windows application talks to SD
+over the API — `SDConnect` to `127.0.0.1` when the server is on the same
+machine — which is the supported route and the one the documentation describes.
+The 32-bit DLLs have never provided a local connection at all: `QMConnectLocal`
+is exported as a stub that always fails.
+
+`gplbld/verify-localconnect.ps1` is the standing test of this path, and of the
+grant check that decides it. It runs in `VerifyInstall1`, unelevated, because
+the identity being checked is the process owner's.
+
 `SDConnectUDS` is the Unix-domain-socket entry point and is genuinely not here.
 
 Use `SDConnect` for servers on another computer.

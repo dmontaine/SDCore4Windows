@@ -16,6 +16,21 @@ Windows DLL did not provide it and that it depended on Linux facilities.
 Neither was true: the transport is a named pipe, which has no Linux equivalent
 in this library at all.
 
+***IT REQUIRES `sd.exe` TO BE IN THE SAME DIRECTORY AS THE DLL, SO IT WORKS
+FROM `usr\bin` AND NOWHERE ELSE.*** Added 4 Sep 2026. The function locates the
+server by taking **its own module path** and appending `\sd.exe`. So:
+
+| the DLL you loaded | `SDConnectLocal` | everything else |
+|---|---|---|
+| `C:\Program Files\SD\usr\bin\sdclilib.dll` — beside the server | works | works |
+| a copy taken from `usr\clients\client64` and put beside your `.exe`, or in `windows\system32` | **fails** | works |
+| either 32-bit DLL (`qmclilib.dll`, `qmclient.dll`) | **never provided** — `QMConnectLocal` is a stub that always fails | works |
+
+**If you are writing an application, use the API and ignore this.** Call
+`SDConnect` with `127.0.0.1` when the server is on the same machine and its
+host name or address when it is not. That is the supported route, it works from
+a DLL copied anywhere, and it is the one the rest of this guide assumes.
+
 `SDConnectUDS` is not provided; it needs a Unix-domain socket.
 
 Use `SDConnect` for servers running on another computer.

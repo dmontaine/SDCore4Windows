@@ -52,12 +52,28 @@ param(
     # verify-tierapi's identical default.  That step refuses out loud when the
     # binary is missing; THIS one Skips door 3 and still exits 0, so on b116 the
     # API door went untested in both phases inside a green step.  "make sd" now
-    # builds sd-connect.exe beside the 32-bit DLL, derived from $PSScriptRoot
-    # rather than pointing at a deleted repository.
-    [string] $SdConnect = (Join-Path $PSScriptRoot '..\bin\client32\sd-connect.exe')
+    # builds sd-connect.exe beside the 32-bit DLL, derived from the script's
+    # own location rather than pointing at a deleted repository.
+    #
+    # ***RESOLVED IN THE BODY, NOT HERE.  MEASURED 4 Sep 2026.***  With
+    # [CmdletBinding()] present, $PSScriptRoot is EMPTY during parameter
+    # binding when the script runs as a CHILD PROCESS ("powershell.exe -File")
+    # and populated when it runs IN-PROCESS ("& <script>").  A default written
+    # here would work under the runner and fail for every Start-Process
+    # -ArgumentList '-File' launch, with a Join-Path binding error before the
+    # body runs - so the script would print nothing at all.
+    [string] $SdConnect = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+# See the note on -SdConnect: this cannot be a param() default, because
+# $PSScriptRoot is empty during binding under -File.  $MyInvocation is
+# populated either way.
+if ($SdConnect -eq '') {
+    $SdConnect = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) `
+                           '..\bin\client32\sd-connect.exe'
+}
 
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $accts  = Join-Path $env:ProgramData  'SD\sdsys\accounts'

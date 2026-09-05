@@ -212,6 +212,14 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # removes both.
                   'verify-privundetermined.ps1',
                   'test-privundetermined-units.ps1',
+                  # 04 Sep 26 - PRE_RELEASE_FIXES 163.  SDConnectLocal is the
+                  # only route into SD that sends NO PASSWORD - vb.local.login
+                  # reads the process owner - and until now its grant check was
+                  # exercised by "make check-local" and by nothing in either
+                  # half of the suite.  Listed IN THE COMMIT THAT CREATES IT.
+                  # It is not installed: it runs a test binary that "make sd"
+                  # builds into gplsrc\sdclilib\localtest, and changes nothing.
+                  'verify-localconnect.ps1',
                   # 03 Sep 26 - THIS SCRIPT'S OWN CHECK A2, lifted into a file
                   # so cycle.ps1's step 0 asks the question with the same code,
                   # and its units test.  Listed in the commit that creates them.

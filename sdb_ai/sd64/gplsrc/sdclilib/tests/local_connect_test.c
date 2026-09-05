@@ -44,39 +44,73 @@
  * one.  A connection that succeeds proves nothing on its own: a grant check
  * that was never reached would also let it through.  So:
  *
- *   DON    the caller is a member of sdu_don      -> MUST be admitted
- *   SDSYS  ACC$GROUP is "sdsys", not a Windows    -> MUST be refused
- *          group and never has been (section 6)
+ *   <account>  the caller is a member of its sdu_ group  -> MUST be admitted
+ *   SDSYS      ACC$GROUP is "sdsys", not a Windows        -> MUST be refused
+ *              group and never has been (section 6)
  *
  * Only the pair means anything.  Two earlier attempts at a control/treatment
  * test elsewhere in this project proved nothing for exactly this reason.
  *
- * Build and run it with "make check-local" in gplsrc/sdclilib.
+ * Build and run it by hand with "make check-local LOCALACCT=<account>" in
+ * gplsrc/sdclilib.  It is ALSO a standing suite step since 4 Sep 2026 -
+ * gplbld/verify-localconnect.ps1 drives it from VerifyInstall1, which is
+ * unelevated, and "make sd" builds it so it is always there to run
+ * (PRE_RELEASE_FIXES 163).
  *
  * Exit codes are distinct so a shell can tell the outcomes apart:
  *   0  both as expected
- *   1  DON was refused          - the grant check is too strict, or the
+ *   1  the account was refused  - the grant check is too strict, or the
  *                                 transport is broken.  Read SDError().
  *   2  SDSYS was admitted       - the grant check did not run.  The test that
  *                                 passed above it is therefore meaningless.
  *   3  the session opened but could not execute a command
+ *   4  no account given         - see main().  A run with no treatment would
+ *                                 test only the control and read as a pass.
  */
 
 #include <stdio.h>
 #include <string.h>
 #include "sdclilib.h"
 
-int main(void) {
+/* 04 Sep 26 - THE TREATMENT ACCOUNT IS AN ARGUMENT, AND IT USED TO BE THE
+   LITERAL "DON".  PRE_RELEASE_FIXES 163.  That was fine while this was run by
+   hand on one machine and fatal the moment it became a standing suite step: a
+   hardcoded name passes here and fails on every other machine, which is
+   PRE_RELEASE 54's fixed-prefix trap wearing different clothes.
+
+   THE CONTROL STAYS HARDCODED AS SDSYS, DELIBERATELY.  It is not a second
+   sample of the same thing - it is the account whose ACC$GROUP names a Windows
+   group that does not exist, so it is the one account whose refusal proves the
+   grant check ran.  Making it a parameter would let a caller supply two
+   accounts that are both admitted and still read as a pass.                  */
+
+int main(int argc, char** argv) {
   int err;
   char* value;
+  const char* acct;
+
+  /* REFUSE THE NULL CASE OUT LOUD - CLAUDE.md's instrument rule.  With no
+     account there is no treatment, and a run that tested only the control
+     would report "SDSYS was refused" and look like a pass.                   */
+
+  if (argc != 2) {
+    printf("usage: %s <account>\n\n", argv[0]);
+    printf("  <account> is an SD account the CALLER is granted - normally\n");
+    printf("  their own.  SDConnectLocal sends no password; the identity\n");
+    printf("  comes from the process owner, so run this UNELEVATED.\n");
+    printf("  SDSYS is the built-in control and is not a parameter.\n");
+    return 4;
+  }
+
+  acct = argv[1];
 
   /* --- treatment: an account the caller is granted --------------------- */
 
-  printf("connecting to DON ...\n");
+  printf("connecting to %s ...\n", acct);
 
-  if (!SDConnectLocal("DON")) {
+  if (!SDConnectLocal((char*)acct)) {
     printf("  REFUSED: %s\n", SDError());
-    printf("\nFAIL: DON was refused.  Either the named pipe never carried a\n");
+    printf("\nFAIL: %s was refused.  Either the named pipe never carried a\n", acct);
     printf("session - see whether cygwin_attach_handle_to_fd() honoured the\n");
     printf("descriptor numbers, PROJECT_STATUS.md section 7 step 11 - or the\n");
     printf("grant check refused a member of sdu_don.\n");
@@ -109,7 +143,7 @@ int main(void) {
     printf("  ADMITTED\n");
     printf("\nFAIL: SDSYS was admitted through the API.  ACCOUNTS/SDSYS names\n");
     printf("the group \"sdsys\", which does not exist on Windows, so the grant\n");
-    printf("check cannot have run.  That makes the DON result above worthless\n");
+    printf("check cannot have run.  That makes the %s result above worthless\n", acct);
     printf("as evidence - it would have succeeded either way.\n");
     SDDisconnectAll();
     return 2;
@@ -119,7 +153,7 @@ int main(void) {
 
   SDDisconnectAll();
 
-  printf("\nPASS: DON admitted, SDSYS refused.\n");
+  printf("\nPASS: %s admitted, SDSYS refused.\n", acct);
   printf("The grant check ran, and SDConnectLocal carried a session.\n");
   return 0;
 }

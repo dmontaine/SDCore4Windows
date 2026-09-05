@@ -54,6 +54,31 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 04 Sep 26 - RE-DERIVED AGAIN, on adding verify-localconnect.ps1
+# (PRE_RELEASE_FIXES 163).  THE BLOCK BELOW READ 47 / 19 / 24 AND WAS STALE IN
+# TWO COLUMNS, not one: this file gained verify-localconnect and VerifyInstall2
+# had already gained verify-privundetermined.  Adjusting by one would have left
+# the arithmetic wrong and hidden the second change, which is the whole reason
+# the rule says re-derive:
+#
+#     49 verify-*.ps1 in the directory
+#     20 named in this file           (19 before verify-localconnect)
+#     25 named in VerifyInstall2.ps1  (24 before verify-privundetermined)
+#     -- 45 accounted for, FOUR not named in either table, AND ALL FOUR ARE
+#        CORRECTLY OUT - the same four as the previous re-derivation, checked
+#        rather than assumed:
+#
+#   verify-doors.ps1, verify-doors-admin.ps1  CHILDREN of verify-doors-suite.ps1
+#   verify-acctmsgs.ps1                       a child of those and of
+#                                             verify-tierchange.ps1
+#   verify-upgrade.ps1                        CANNOT be a step: a two-phase
+#                                             hand-run (-Snapshot, install over
+#                                             the top, -Compare) that brackets
+#                                             an installer run
+#
+# AND NO FILE IS IN BOTH TABLES, checked the same way and none found.
+#
+# (The superseded 4 Sep block follows, kept because its reasoning stands.)
 # 04 Sep 26 - RE-DERIVED FROM THE DIRECTORY, NOT ADJUSTED BY ONE, on adding
 # verify-editors.ps1 (PRE_RELEASE 66).  The 31 Aug figures below it read 44 /
 # 17 / 22 and were stale in every column, which is what re-deriving is for:
@@ -537,6 +562,29 @@ $steps = @(
     # is not being wired in untested, which is the rule verify-lineendings above
     # records.
     @{ Name = 'verify-txn.ps1';          P = @{} },
+
+    # 04 Sep 26 - SDConnectLocal AND ITS GRANT CHECK.  PRE_RELEASE_FIXES 163.
+    #
+    # IT BELONGS IN THIS RUNNER AND NOWHERE ELSE, for the same reason
+    # verify-txn does and more sharply: SDConnectLocal sends NO PASSWORD at
+    # all.  vb.local.login (APISRVR request 25) takes the identity from the
+    # PROCESS OWNER, so the whole access decision is the grant check - and an
+    # elevated token is a different principal, which would measure something
+    # else and pass.  The script refuses an elevated shell rather than
+    # answering.
+    #
+    # WHY IT IS A STEP AT ALL: until today this path was exercised by "make
+    # check-local", by hand, on one machine, and by nothing in either half of
+    # the suite.  A passwordless authentication route with no standing test is
+    # not a gap this project leaves open on purpose.
+    #
+    # NO PREFIX, NO ACCOUNT, NO UAC PROMPT: it connects as the caller to the
+    # caller's own account, runs WHO, and disconnects.  The control is SDSYS,
+    # which MUST be refused - without it a success would only show that an
+    # account exists.  Measured before being wired in (CLAUDE.md): DON
+    # admitted with "WHO -> 1 DON", SDSYS refused with "User not allowed in
+    # requested account".
+    @{ Name = 'verify-localconnect.ps1'; P = @{} },
 
     # 03 Sep 26 - PRE_RELEASE 93 and 65's guard: the account register and
     # os.users must contain only records for accounts that exist.
