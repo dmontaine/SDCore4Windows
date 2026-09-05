@@ -425,8 +425,12 @@
 #define SDEXT_TestIt   1  /* Function Test */
 #define SD_SALT      100  /* sd_encrypt_sodium sd_salt function */
 #define SD_KEYFROMPW 101  /* sd_encrypt_sodium sd_KeyFromPW function */
-#define SD_EUID_SET     102  /* set current process's euid egid to that of user */
-#define SD_EUID_RESTORE 103  /* set current process's euid egid to what it was on entry to sd */
+/* 5 Sep 26 Windows port - SD_EUID_SET (102) and SD_EUID_RESTORE (103) were
+   defined here and implemented in sdext_eguid.c.  Removed with that file:
+   PRE_RELEASE_FIXES 168.  The numbers are deliberately left unreused, so an
+   old catalogued object calling one gets the unknown-key response rather than
+   a different function.  SYS$UNX_EUID (system(28)) is a DIFFERENT thing and
+   still exists - see syscom/KEYS.H. */
 
 /* 19 Aug 26 Windows port - SCRAM-SHA-256 primitives for the API login
    exchange.  These must stay in step with the $defines of the same names in

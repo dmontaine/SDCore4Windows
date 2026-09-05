@@ -194,9 +194,25 @@ sdclilib:
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
 	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)
 	@cp $(CLILIBDIR)/libsdclilib.dll.a $(CLILIBDIR)/libsdclient.dll.a $(GPLBIN)
+# 05 Sep 26 - THE 32-BIT PAIR GOES BESIDE sd.exe TOO.  Owner's ruling, 5 Sep
+# 2026: "we need both the 32 bit and 64 bit dlls sitting next to the sd.exe
+# file.  Some utilities that the admin may run are 32 bit apps."  This reverses
+# the "THE 32-BIT PAIR HAS NO usr\bin COPY" note in stage.py, which reasoned
+# from the SERVER never loading it - true, and not the question: usr\bin is on
+# PATH, so it is where a 32-bit utility finds its client.  The names do not
+# collide - qmclilib/qmclient against sdclilib/sdclient - so both live there.
+	@cp $(CLILIBDIR)/qmclilib.dll $(CLILIBDIR)/qmclient.dll $(GPLBIN)
 	@mkdir -p $(GPLBIN)client64 $(GPLBIN)client32
 	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)client64/
 	@cp $(CLILIBDIR)/qmclilib.dll $(CLILIBDIR)/qmclient.dll $(GPLBIN)client32/
+# 05 Sep 26 - AND THE IMPORT LIBRARIES GO WITH THE CLIENT COPIES, NOT INTO
+# usr\bin.  PRE_RELEASE_FIXES 171.  An implib is a LINKER INPUT and is never
+# loaded at runtime, so it has no business in the directory that goes on PATH;
+# the one audience that needs it is somebody BUILDING a client, and the ruling
+# above sends them to usr\clients.  They were in usr\bin and absent here, which
+# is exactly backwards, and it read as a broken install.
+	@cp $(CLILIBDIR)/libsdclilib.dll.a $(CLILIBDIR)/libsdclient.dll.a $(GPLBIN)client64/
+	@cp $(CLILIBDIR)/libqmclilib.dll.a $(CLILIBDIR)/libqmclient.dll.a $(GPLBIN)client32/
 # 04 Sep 26 - AND THE DIAGNOSTIC CLIENT, BESIDE THE DLL IT LOADS.  It is NOT
 # shipped: stage.py's CLIENT_DIRS names the two DLLs explicitly, so an extra
 # file here reaches no install.  verify-tierapi.ps1 and verify-doors.ps1 drive

@@ -301,11 +301,8 @@
 /* 19 Aug 26 Windows port - SCRAM primitives.  docs/SCRAM_AUTH.md */
 #define SD_SCRAM_ERR   -10303  /* sd_scram.c primitive failed or was given bad input */
 
-/* sdext_eguid_set error codes */
-#define SD_EUID_PWD_Err  -10400  /* Couldn't get pwd of user */
-#define SD_EUID_SET_Err  -10401  /* Couldn't set proess to uid / gid of user */
-#define SD_EUID_RST_Err  -10402  /* Couldn't return proess to uid / gid of caller */
-#define SD_EUID_NSET_Err -10403  /* SD_EUID_RESTORE called before SD_EUID_SET */
+/* 5 Sep 26 Windows port - the sdext_eguid_set error codes, -10400 to -10403,
+   were removed with sdext_eguid.c.  PRE_RELEASE_FIXES 168. */
 
 /* 13 Aug 26 Windows port - the embedded Python error codes, -12001 to
    -12036, were removed with the interpreter.  PROJECT_STATUS.md 5.15. */

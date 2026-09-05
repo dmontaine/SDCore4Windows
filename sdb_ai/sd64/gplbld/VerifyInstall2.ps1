@@ -136,6 +136,11 @@ param(
     # The step appends 'a' and 'p' to this, so it must leave room in a Windows
     # account name.  Lower case only, same derivation as the rest.
     [string]$SshAdminPrefix = '', # verify-sshadmin.ps1 - two accounts
+    # 05 Sep 26 - verify-apiremote.ps1, PRE_RELEASE 170, and it is the API half
+    # of the same ruling verify-sshadmin covers for ssh.  TWO throwaway
+    # accounts on the same 'a'/'p' pattern, one an ADMINISTRATOR.  Lower case
+    # only, same derivation as the rest.
+    [string]$ApiRemotePrefix = '', # verify-apiremote.ps1 - two accounts
     # 02 Sep 26 - verify-vocverbs.ps1, PRE_RELEASE_FIXES 112, owner's ruling.
     # It was in NEITHER runner, so the checks it carries for entries 5, 13, 14
     # and 15 had never fired since the day it was written - the same shape as
@@ -246,6 +251,7 @@ if ($Run) {
     if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
     if (-not $GatePrefix)  { $GatePrefix  = "sdgate$Run" }
     if (-not $SshAdminPrefix) { $SshAdminPrefix = "sdsadm$Run" }
+    if (-not $ApiRemotePrefix) { $ApiRemotePrefix = "sdapir$Run" }
     # 02 Sep 26 - PRE_RELEASE_FIXES 112.  Derived from -Run like the rest: a
     # FIXED prefix passes once and fails every later run, which is 54's lesson
     # and the reason to go through the runner rather than call the verifier by
@@ -562,6 +568,15 @@ $steps = @(
     # carries its own control for exactly the reason sdsysgate's header gives -
     # a refusal over ssh has a dozen causes that are not the gate.
     @{ Name = 'verify-sshadmin.ps1';      P = @{ Prefix  = $SshAdminPrefix } },
+    # 05 Sep 26 - the API half of the same ruling, PRE_RELEASE 170.  It is a
+    # SEPARATE step rather than a leg of the one above because the transports
+    # do not share a driver: that one drives ssh.exe, this one drives the API
+    # client through "make check-api-admin", and it also has to enable APIPORT
+    # and restart SD, which the ssh step has no reason to do.  It carries its
+    # own control - a PROGRAMMER over the same remote address - for the reason
+    # sdsysgate's header gives: a refused connection has a dozen causes that
+    # are not the gate.
+    @{ Name = 'verify-apiremote.ps1';     P = @{ Prefix  = $ApiRemotePrefix } },
     # 21 Aug 26 - the two route/rule verifiers, added when phase 4 rewrote the
     # first and wrote the second.  Both were run by hand until now, which is
     # exactly the shape this file exists to remove.

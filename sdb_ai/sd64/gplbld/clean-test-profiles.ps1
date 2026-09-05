@@ -214,7 +214,7 @@ $ErrorActionPreference = 'Stop'
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
-           'sdtc', 'sdpw', 'sdsadm')
+           'sdtc', 'sdpw', 'sdsadm', 'sdapir')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has
@@ -276,6 +276,12 @@ if ($SelfTest) {
         # list can fail to see.  Added in the commit that created the verifier,
         # which is the discipline the header above says has failed five times.
         'sdsadmb120a', 'sdsadmb120p', 'sdsadm1a',
+        # 05 Sep 26 - verify-apiremote's family (PRE_RELEASE 170).  Same two
+        # shapes and the same reason: the "a" account is a real WINDOWS
+        # ADMINISTRATOR while it exists, so missing it would leave an
+        # administrator profile behind unswept.  Added in the commit that
+        # created the verifier.
+        'sdapirb124a', 'sdapirb124p', 'sdapir1a',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -311,6 +317,15 @@ if ($SelfTest) {
         # would be swept if the required digit were ever relaxed - and sweeping
         # a real administrator account is the failure this stem must not cause.
         'sdsadmin', 'sdsadmins', 'sdsadmintool',
+        # 05 Sep 26 - the near-misses "sdapir" opens up.  "sdapiremote" is the
+        # sharp one: it is the verifier's own name in account shape, it starts
+        # with the stem AND continues with letters, so it is exactly what would
+        # be swept if the required digit were relaxed.  Note "sdapiary" above
+        # guards the SHORTER stem "sdapi", and neither stem matches the other's
+        # names - "sdapi" cannot match sdapirb124a, because [a-z]?[0-9]+ needs a
+        # digit after the "r", which is why the coverage guard called sdapir
+        # uncovered while sdapi was already listed.
+        'sdapiremote', 'sdapirest', 'sdapiroute',
         # 02 Sep 26 - THE $notProfiles CONTROL, AND IT IS THE SHARPEST PAIR IN
         # THIS LIST.  sdvvb99 and sdvvb101 are REAL names verify-vocverbs is
         # driven with, and they must NOT match: the family is declared in

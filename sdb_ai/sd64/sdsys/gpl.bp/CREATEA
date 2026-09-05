@@ -1284,6 +1284,9 @@ make.account:
 *   searches the VALUES of field 1; aliased.commands is set to '' and never
 *   populated at all.  A membership test that silently matched nothing would
 *   omit nothing, and this whole change would look like it had worked.
+* 5 Sep 26 Windows port - privileged_commands has since been DELETED from CPROC
+*   (PRE_RELEASE_FIXES 168), so do not go looking for it.  The reasoning above
+*   is why this line is a comparison and still holds; only the example is gone.
       if copy.it and omit.count > 1 then
          for omit.i = 2 to omit.count       ;* field 1 is the description
 *           18 Aug 26 Windows port - AND SO IS THIS ONE, and it is the one that

@@ -1,0 +1,117 @@
+* PEER_LOCAL
+* Did this session arrive from THIS machine?
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+*  5 Sep 26 Windows port - written.  PRE_RELEASE_FIXES 170.  Lifted verbatim
+*                      from LOGIN's peer.local.test, which was the only copy
+*                      and could not be reached by an API session at all.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !peer_local(is.local, peer.addr)
+*
+*    is.local   @true  the peer is this machine
+*               @false the peer is somewhere else, OR no peer address was found
+*    peer.addr  the address it decided on, '' when there was none
+*
+*    status()  0  a peer address was found and classified
+*              1  no peer address at all - a console session, or a transport
+*                 that reports none
+*
+*    ***THIS IS ONE RULE AND IT NOW HAS TWO CALLERS, WHICH IS WHY IT IS A FILE
+*    AND NOT A GOSUB.***  It was LOGIN's internal peer.local.test until 5 Sep
+*    2026.  APISRVR needs the same decision and CANNOT get it from there:
+*    APISRVR is the top-level program for an API connection, so CPROC never
+*    runs and CPROC's "call '$LOGIN'" never happens.  Copying the case
+*    statement into APISRVR would have made two copies of one security rule -
+*    SDADMIN's header names that shape and what it has already cost.
+*
+*    ***BOTH TRANSPORTS ARE READ, AND "else" WOULD BE THE BUG.***  ssh reports
+*    the peer in SSH_CLIENT; the API reports it in system(42), which is
+*    ip_addr, filled by getpeername() in linuxio.c when the connection is
+*    accepted.  A session is one or the other, so reading both costs nothing
+*    while ASSUMING which one applies is how this would rot the next time a
+*    transport is added.  ssh is read first because it is the transport this
+*    was written for.
+*
+*    ***AN EMPTY ADDRESS IS NOT LOCAL, AND THAT DIRECTION IS DELIBERATE.***
+*    The caller decides what to do about it, but this never answers @true on
+*    an absence.  For an API session there is ALWAYS a peer - it is a socket -
+*    so an empty address there means something is wrong rather than something
+*    is local, and refusing is the safe direction.  Same rule as APISRVR's
+*    "a missing sdapi group refuses everybody", and the opposite of NEWVOC's
+*    tier lists; do not carry that convention across.  A CONSOLE session has
+*    no peer either, which is why LOGIN's gate tests K$INTERACTIVE beside this
+*    rather than relying on the answer here.
+*
+*    ***WHAT "LOCAL" MEANS IS LOOPBACK, NOT "THE SAME COMPUTER".***  A
+*    connection to this machine's own LAN address is NOT local by this test,
+*    and that is the intended reading: it travelled over the network and
+*    anything else on the network could have sent it.  The b122 witness for
+*    PRE_RELEASE 167 rests on exactly that - it refused a self-connection to
+*    the host's own 10.0.0.3 while the console was admitted.
+*
+*    ***AND IT DOES NOT SEE THROUGH AN ssh TUNNEL, WHICH IS A REAL LIMIT AND
+*    IS WRITTEN DOWN RATHER THAN ASSUMED AWAY.***  "ssh -L" terminates on this
+*    host, so a tunnelled API connection is accepted FROM 127.0.0.1 and this
+*    answers @true for it.  Closing that is an sshd matter (AllowTcpForwarding,
+*    or a Match block), not something a peer address can do - see
+*    PRE_RELEASE_FIXES 170.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$flags trusted
+
+subroutine PEER_LOCAL(is.local, peer.addr)
+$catalog !peer_local
+
+$include keys.h
+
+   set.status 0
+
+   is.local = @false
+   peer.addr = ''
+
+*  ssh first: it is the transport this exists for.
+   peer.addr = trim(field(env('SSH_CLIENT'), ' ', 1))
+
+*  Then the API.  Not "else" - see the header.
+   if peer.addr = '' then peer.addr = trim(system(42))
+
+   if peer.addr = '' then
+      set.status 1
+      return
+   end
+
+   begin case
+      case peer.addr = '::1'
+         is.local = @true
+      case peer.addr = '::ffff:127.0.0.1'
+         is.local = @true
+      case field(peer.addr, '.', 1) = '127'
+         is.local = @true
+   end case
+
+   set.status 0
+   return
+
+* END-CODE

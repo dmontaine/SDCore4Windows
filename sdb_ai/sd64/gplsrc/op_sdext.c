@@ -61,7 +61,6 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 
 extern char* sd_salt();
 extern char* sd_KeyFromPW(char* mypassword, char* mysalt);
-extern void sdext_eguid_set(int key, char* Arg); 
 
 /* 13 Aug 26 Windows port - embedded Python removed, see PROJECT_STATUS.md 5.15 */
 
@@ -337,15 +336,16 @@ void op_sdext() {
       break;
     }
 
-    /* rev 0.9.0 set restore process euid and egid */
-    case SD_EUID_SET:
-    case SD_EUID_RESTORE:
-      sdext_eguid_set(key, SDMEArgArray[0]);
-      break;
-
     /* 13 Aug 26 Windows port - the SD_Py* keys were handled here.  Embedded
        Python is gone (PROJECT_STATUS.md 5.15), so they now fall through to
        the unknown-key response below, which is what they are. */
+
+    /* 5 Sep 26 Windows port - SD_EUID_SET and SD_EUID_RESTORE were handled
+       here, through sdext_eguid.c.  That was the Linux setuid model
+       (getpwnam/setegid/seteuid), its only callers were two CPROC blocks that
+       could never compile in, and it is gone: PRE_RELEASE_FIXES 168,
+       PROJECT_STATUS.md 5.5.  These keys now fall through to the unknown-key
+       response below, which is what they are. */
 
     default:
       /* unknown key */

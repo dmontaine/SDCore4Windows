@@ -211,7 +211,5 @@ err<-1> = "-10300"; text<-1> = "unknown key"
 err<-1> = "-10301"; text<-1> = "incorrect argument count for called function"
 err<-1> = "-10302"; text<-1> = "Result will create integer overflow (> 32 Bit int)"
 err<-1> = "-10303"; text<-1> = "sd_scram.c primitive failed or was given bad input"
-err<-1> = "-10400"; text<-1> = "Couldn't get pwd of user"
-err<-1> = "-10401"; text<-1> = "Couldn't set proess to uid / gid of user"
-err<-1> = "-10402"; text<-1> = "Couldn't return proess to uid / gid of caller"
-err<-1> = "-10403"; text<-1> = "SD_EUID_RESTORE called before SD_EUID_SET"
+* 5 Sep 26 Windows port - the sdext_eguid_set texts, -10400 to -10403, went
+*   with sdext_eguid.c.  Nothing can return them now.  PRE_RELEASE_FIXES 168.

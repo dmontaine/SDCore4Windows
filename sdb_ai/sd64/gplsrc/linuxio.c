@@ -190,8 +190,19 @@ bool start_connection(int unused) {
    treat a TCP peer as an authenticated OS user, and an unassigned value is
    what says so.
 
-   The listener binds 127.0.0.1 only and APIPORT defaults to off, so this
-   opens nothing by itself.                                                 */
+   5 Sep 26 - THIS SAID "the listener binds 127.0.0.1 only", AND IT HAS BEEN
+   FALSE SINCE 21 Aug 2026.  sdwind.c's open_api_listener() binds INADDR_ANY -
+   every interface - and its own history entry records the reversal.  APIPORT
+   still defaults to off, so the port opens nothing by itself, but a reader
+   who took the old sentence at face value would conclude that ip_addr can
+   only ever be 127.0.0.1 and that a peer-address test is therefore pointless.
+   It is not: a direct connection from another machine arrives here carrying
+   that machine's address, which is what APISRVR's administrator gate reads
+   through system(42).  PRE_RELEASE_FIXES 170.
+
+   WHAT IS STILL TRUE IS NARROWER: an "ssh -L" tunnel terminates on this host,
+   so a tunnelled connection is accepted from 127.0.0.1 and reads as local.
+   That is an sshd matter rather than something this can see.               */
       case PF_INET: {
           struct sockaddr_storage pa;
           socklen_t palen = sizeof(pa);

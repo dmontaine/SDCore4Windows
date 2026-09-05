@@ -103,6 +103,15 @@
 *                      is an administrator.  Until now a standard user with an
 *                      administrator's password reached SDSYS and the trail
 *                      named the wrong person.  PRE_RELEASE_FIXES 56
+* 5 Sep 26 Windows port - the two $ifndef IS_INSTALL blocks and
+*                      privileged_commands have gone, and !EUID_SET,
+*                      !EUID_RESTORE and define_install.h with them.  Item 3
+*                      above is therefore withdrawn on this platform.
+*                      IS_INSTALL was never un-defined in this tree - the
+*                      install script that did that is upstream's and has no
+*                      Windows counterpart - so both blocks compiled out
+*                      permanently and read as a live privilege-escalation
+*                      path that could not run.  PRE_RELEASE_FIXES 168
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -215,13 +224,6 @@ $include keyin.h
 $include menu.h
 $include keycode.h
 
-* rev 0.9.0  at install we cannot reduce running privialges to sdsys, none of the groups are effective
-*            casuing all sorts for access issues.  To get around this CPROC must be complied with
-*            IS_INSTALL defined.  This define statement will be found in GPL.BP file "define_install.h"
-*            The install script overwrites this file with IS_INSTALL commented out when completed
-*            
-$include define_install.h
-
 deffun errtext(err) calling '!errtext'
 
 * rev 0.9.0 *
@@ -250,12 +252,6 @@ deffun tier_allows(user,account) calling '!tier_allows'
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
 $define max.elements 500
-
-* rev 0.9.0 define commands requiring admin (root) privilege 
-   privileged_commands = ''
-   privileged_commands<-1> = "$CREATEA"  ;*"CREATE.ACCOUNT"
-   privileged_commands<-1> = "$DELACC"   ;*"DELETE.ACCOUNT"
-   privileged_commands<-1> = "$MODIFYA"  ;*"MODIFY.ACCOUNT"
 
    logto.reset = @false      ;* 0555
 
@@ -1604,32 +1600,20 @@ reparse:
             begin case
                case dispatch.mode = "CA"  ;* Catalogued command
                   s = voc.rec<3>
-* rev 0.9.0
-* this is the point that a command defined in voc as type "CA" is execute
-* we check to see if the command is in out list of commands requiring addition priviliges 
-* we skip this during install
-$ifndef IS_INSTALL
-                  priv_required = 0    
-                  locate s in privileged_commands<1> setting priv_required then
-                     priv_required = 1 
-*                    * must raise  privilige 
-                    call !EUID_RESTORE(rstat)  ;* restore root privilages
-                    if rstat > 0 then
-                       crt 'Warning: failed to restore root privilages, command may fail, error: ':status() 
-                    end
-                  end  
-$endif       
+* 5 Sep 26 Windows port - TWO $ifndef IS_INSTALL BLOCKS STOOD HERE AND NOTHING
+*   REPLACES THEM.  They raised the process euid to root around a catalogued
+*   command in privileged_commands ($CREATEA, $DELACC, $MODIFYA) and dropped it
+*   back to sdsys afterwards, through !EUID_RESTORE and !EUID_SET.  That is the
+*   Linux setuid model the port already ruled out where $LOGIN is called, in
+*   the 14 Aug 26 note there, and the guard they sat behind could never clear:
+*   nothing in this tree un-defines IS_INSTALL, so both blocks were compiled
+*   out permanently.
+*
+*   No privilege is raised here now, and none is wanted: every SD process opens
+*   the database under the invoking user's own token, and an administrator's
+*   rights come from K$ADMINISTRATOR, seeded in kernel.c before any BASIC runs.
+*   PROJECT_STATUS.md 5.5, 5.7; PRE_RELEASE_FIXES 168.
                   call @s
-                  
-$ifndef IS_INSTALL 
-                  if priv_required then
-                     call !EUID_SET('sdsys',rstat)  ;* drop back to sdsys
-                     if rstat > 0 then
-                        crt 'Warning: failed to resend root priviages, error: ':status()
-                     end
-                  end
-$endif
-                  
                   s = ''   ;* Allow unload of object code
 
                case dispatch.mode = "CS"  ;* Catalogued subroutine

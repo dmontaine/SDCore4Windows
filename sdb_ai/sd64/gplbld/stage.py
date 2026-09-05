@@ -85,18 +85,43 @@ PROGRAM_FILES_BIN = [
     'sdwind.exe',
     'sdtic.exe',
     'sdclilib.dll',             # native UCRT64, needs no MSYS2 runtime
-    'libsdclilib.dll.a',        # import library, for building clients
     # 04 Sep 26 - THE SECOND 64-BIT NAME, PRE_RELEASE_FIXES 161.  Same library,
-    # same build, different -o name and its own import library: sdclilib.dll is
-    # what anything already built against this library asks for, sdclient.dll
-    # is the name to use from now on.  An application asks for one BY NAME, so
-    # they are not alternatives to choose between at install time.
+    # same build, different -o name: sdclilib.dll is what anything already built
+    # against this library asks for, sdclient.dll is the name to use from now
+    # on.  An application asks for one BY NAME, so they are not alternatives to
+    # choose between at install time.
     #
     # HERE RATHER THAN IN A client64\ SUBDIRECTORY, and that is load-bearing -
     # see the note on CLIENT_DIRS below.  SDConnectLocal resolves sd.exe beside
     # the DLL, so only a copy in usr\bin can connect locally.
     'sdclient.dll',             # the same library under the current name
-    'libsdclient.dll.a',        # its import library; an implib names its DLL
+    # 05 Sep 26 - THE IMPORT LIBRARIES ARE NO LONGER HERE.  PRE_RELEASE_FIXES
+    # 171.  libsdclilib.dll.a and libsdclient.dll.a were in this list, with the
+    # comment "for building clients", and they are now in CLIENT_DIRS' client64
+    # instead.  An implib is a LINKER INPUT, never loaded at runtime, so it has
+    # no business in the directory that goes on PATH beside the executables -
+    # and the ruling quoted under CLIENT_DIRS sends a client BUILDER to
+    # usr\clients, where they were not.  Exactly backwards, and it cost the
+    # owner a look at usr\bin that read as a broken install: sorted by name,
+    # "libsd..." sits above the real DLLs and they fall below the fold.
+    #
+    # 05 Sep 26 - AND THE 32-BIT PAIR IS HERE NOW.  Owner's ruling, 5 Sep 2026:
+    # "we need both the 32 bit and 64 bit dlls sitting next to the sd.exe file.
+    # Some utilities that the admin may run are 32 bit apps."  ***THIS REVERSES
+    # THE "THE 32-BIT PAIR HAS NO usr\bin COPY" PARAGRAPH UNDER CLIENT_DIRS***,
+    # whose reasoning was that the server is 64-bit and never loads it.  That is
+    # true and it was the wrong question: usr\bin is on PATH, so it is where a
+    # 32-bit utility FINDS its client, and the server never loading it is beside
+    # the point.  The names cannot collide - qmclilib/qmclient against
+    # sdclilib/sdclient - so all four sit here.
+    #
+    # THEY ARE NOT IN DLL_SCAN, AND MUST NOT BE.  That list is what objdump
+    # walks for a dependency closure; pointing it at a 32-bit DLL would resolve
+    # 32-bit MSYS2 runtime DLLs and try to ship them beside the 64-bit ones.
+    # These two need no closure: they are built -static-libgcc against ws2_32
+    # and bcrypt, which are Windows' own.
+    'qmclilib.dll',             # 32-bit, for older utility programs
+    'qmclient.dll',             # the same library under the current name
     'sdsvc.exe',                # native UCRT64, the service that starts SD
 ]
 
@@ -122,10 +147,18 @@ PROGRAM_FILES_BIN = [
 # It is in PROGRAM_FILES_BIN above, with the rest of the server.  The copy
 # here is the USER's, and usr\bin stays a directory nobody has to rummage in.
 #
-# THE 32-BIT PAIR HAS NO usr\bin COPY because the server is 64-bit and never
-# loads it.  It exists for older 32-bit utility programs, which reach SD over
-# the API - and QMConnectLocal is a stub that always fails (qmcompat.c), so the
-# local route was never theirs to lose.
+# ***THE 32-BIT PAIR HAS A usr\bin COPY AS WELL, SINCE 5 Sep 2026, AND THIS
+# PARAGRAPH USED TO SAY THE OPPOSITE.***  Owner's ruling that day: "we need both
+# the 32 bit and 64 bit dlls sitting next to the sd.exe file.  Some utilities
+# that the admin may run are 32 bit apps."  What stood here was "the server is
+# 64-bit and never loads it" - TRUE, AND THE WRONG QUESTION.  usr\bin is on
+# PATH, so it is where a 32-bit utility finds its client; whether the server
+# loads it never came into it.  See PROGRAM_FILES_BIN, which now carries both.
+#
+# WHAT DID NOT CHANGE: those utilities still reach SD over the API, because
+# QMConnectLocal is a stub that always fails (qmcompat.c).  The local route was
+# never theirs to lose, and putting the DLL beside sd.exe does not give it to
+# them - so a 32-bit utility still needs APIPORT set and the listener running.
 #
 # THE USER COPIES THE DLL next to their application or into windows\system32,
 # which is the OpenQM habit the ruling deliberately matches.  NOTHING IS ON
@@ -133,12 +166,21 @@ PROGRAM_FILES_BIN = [
 # PATH and that task went with them, so an application finds its DLL because
 # someone put it there, and never by accident.
 #
-# THESE DIRECTORIES HOLD DLLs AND NOTHING ELSE.  Whether the import libraries
-# and headers should travel with them is open - the owner has not ruled - and
-# adding them is a line in this list rather than a change of shape.
+# 05 Sep 26 - AND THE IMPORT LIBRARIES NOW TRAVEL WITH THEM, PRE_RELEASE_FIXES
+# 171.  The paragraph here used to read "THESE DIRECTORIES HOLD DLLs AND NOTHING
+# ELSE.  Whether the import libraries and headers should travel with them is
+# open - the owner has not ruled - and adding them is a line in this list rather
+# than a change of shape."  It was a line in this list, and this is it.
+#
+# THE .a FILES WERE IN usr\bin AND ABSENT HERE, WHICH IS EXACTLY BACKWARDS.  An
+# implib is a linker input and is never loaded, so it does not belong beside the
+# executables; and the ruling above sends anyone building a client HERE, where
+# they were not.  Headers are still not shipped - that half stays open.
 CLIENT_DIRS = [
-    ('client64', ['sdclilib.dll', 'sdclient.dll']),
-    ('client32', ['qmclilib.dll', 'qmclient.dll']),
+    ('client64', ['sdclilib.dll', 'sdclient.dll',
+                  'libsdclilib.dll.a', 'libsdclient.dll.a']),
+    ('client32', ['qmclilib.dll', 'qmclient.dll',
+                  'libqmclilib.dll.a', 'libqmclient.dll.a']),
 ]
 
 # Where those two directories sit inside C:\Program Files\SD\.  Beside usr\bin

@@ -19,6 +19,14 @@
 *
 *
 * START-HISTORY:
+*  5 Sep 26 Windows port - AN ADMINISTRATOR IS REFUSED A REMOTE API SESSION,
+*           in vb.scram.final after the proof and beside the sdapi test.  This
+*           is the API half of the 5 Sep ruling; the ssh half is LOGIN's gate.
+*           It had to be built here because LOGIN does not run for this route -
+*           APISRVR is the top-level program for an API connection, so CPROC
+*           never runs - which left the peer test unreachable and nothing
+*           asking the question at all.  Local API sessions are unaffected:
+*           loopback is admitted, as it is for ssh.  PRE_RELEASE_FIXES 170
 *  1 Sep 26 Windows port - K$SET.USERNAME's answer is taken and compared to the
 *           name asked for, refusing on a mismatch (10160).  It was discarded,
 *           so the session identity that @logname, K$USERNAME and the audit
@@ -169,6 +177,16 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 * @sdsys/accounts from a network session - net_path_permitted's allow-list
 * does not include that file.
 deffun tier_allows(user,account) calling '!tier_allows'
+*  5 Sep 26 Windows port - AND THE ADMINISTRATOR TIER ITSELF, PRE_RELEASE_FIXES
+*   170.  vb.scram.final asks whether the name just proven is an SD
+*   administrator, to refuse it a REMOTE API session.  Declared up here with
+*   the other two for the reason the is_grp_member note above gives: its caller
+*   is earlier in the flow and later in the file.
+*
+*   !peer_local is a SUBROUTINE and needs no declaration - it answers "did this
+*   session arrive from this machine", and it is the same routine LOGIN's
+*   peer.local.test calls, so the two doors cannot drift apart.
+deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
 * If this is the first time through, initialise various things in
 * the SYSCOM common block.
@@ -1510,6 +1528,61 @@ vb.scram.final:
                   * refusal that reached the trail at all.
                   scram.refuse.reason = 'not in sdapi'
                   abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
+
+*  5 Sep 26 Windows port - AND AN ADMINISTRATOR MAY NOT DO IT FROM ANOTHER
+*   MACHINE.  PRE_RELEASE_FIXES 170, the API half of the 5 Sep ruling whose ssh
+*   half is LOGIN's gate, witnessed on b122.  Owner: "remote admin through api
+*   or ssh is just a security nightmare waiting to happen", refined the same
+*   day to "if I am at the console, everything works, only remote access is
+*   denied".  REMOTE is what is denied, not the API.
+*
+*   ***IT HAS TO BE HERE, BECAUSE LOGIN DOES NOT RUN FOR THIS ROUTE.***  This
+*   program is the top-level program for an API connection - the K$CPROC.LEVEL
+*   test at the head of the file is what says so - so CPROC never runs and
+*   CPROC's "call '$LOGIN'" never happens.  LOGIN's peer test was therefore
+*   unreachable for an API session, and nothing anywhere asked whether an
+*   administrator might open a remote API session at all.
+*
+*   ***AND IT IS NOT tier_allows's QUESTION.***  vb.account asks "may this
+*   person enter THAT account", which is about a target; this asks "may this
+*   person open a REMOTE session at all", which is about the caller.  A test
+*   at the LOGTO point could not have answered it, and that is why the gate is
+*   here rather than beside the one that already existed.
+*
+*   ***WHY THIS WAS WORTH BUILDING AND NOT JUST DOCUMENTING.***  kernel.c's
+*   CN_SOCKET term already denies an API session USR_ADMIN, so it cannot reach
+*   SDSYS - but OS.EXECUTE does not come from USR_ADMIN.  os_permitted()
+*   (op_sh.c) returns TRUE on USR_ADMIN *or* on the os.users record for the
+*   username, CREATE.ACCOUNT grants every administrator SH and OS.EXECUTE, and
+*   MODIFY.ACCOUNT refuses to take them away.  The forked session's token is
+*   LocalSystem.  So this closes remote operating-system command execution as
+*   SYSTEM, which is the thing the ruling was made about.
+*
+*   THE NAME IS scram.user, FOR THE REASON THE sdapi TEST ABOVE GIVES:
+*   K$SET.USERNAME has not run yet, so kernel(K$USERNAME,0) would still hold
+*   whatever the forked session started with.
+*
+*   AFTER THE PROOF, AND DISTINCT, FOR THE REASON THAT TEST ALSO GIVES.  A
+*   caller reaching this line has already produced a valid proof, so naming
+*   the rule tells it nothing it does not hold.
+*
+*   IT REUSES sysmsg(10174), THE ssh REFUSAL, AND THAT IS THE POINT.  One rule,
+*   one wording - 10174 already reads "ssh and the API still work for an
+*   administrator ON this machine", which is this gate seen from the other
+*   side.  A second phrasing would be a second thing to keep true, and
+*   gplbld/test-retired-wording-units.ps1 exists because that goes wrong.
+*
+*   NOT A CONSOLE CASE, SO NO K$INTERACTIVE TERM.  LOGIN's gate carries one
+*   because a console session must be admitted; every session reaching here
+*   arrived over a socket, so locality is the whole of the question.
+               call !peer_local(api.peer.local, api.peer.addr)
+               if sd_admin_tier(scram.user) and not(api.peer.local) then
+                  scram.refuse.reason = 'administrator on a remote API session from ' : api.peer.addr
+                  abort.message = sysmsg(10174)
+                  * An administrator may not sign in to this machine from another one
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
                end

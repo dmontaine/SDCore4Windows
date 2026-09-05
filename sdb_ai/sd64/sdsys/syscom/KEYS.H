@@ -352,8 +352,11 @@
       $define SDEXT_TestIt      1  ;* Function Test 
       $define SD_SALT         100  ; sd_encrypt_sodium sd_salt function 
       $define SD_KEYFROMPW    101  ;* sd_encrypt_sodium sd_KeyFromPW function  
-      $define SD_EUID_SET     102  ;* set current process's euid egid to that of user
-      $define SD_EUID_RESTORE 103  ;* set current process's euid egid to what it was on entry to sd
+      * 5 Sep 26 Windows port - SD_EUID_SET (102) and SD_EUID_RESTORE (103)
+      *   were defined here.  Removed with sdext_eguid.c and the two GPL.BP
+      *   wrappers: PRE_RELEASE_FIXES 168.  The numbers are left unreused so an
+      *   old catalogued object calling one gets the unknown-key response.
+      *   SYS$UNX_EUID (system(28)) below is a DIFFERENT thing and stays.
 
       * 19 Aug 26 Windows port - SCRAM-SHA-256 primitives for the API login
       *   exchange.  All of them take and return BASE64, because SDEXT carries

@@ -133,6 +133,10 @@
 *                      their own", knowingly, on the owner's model; and it
 *                      costs administrators ssh, which UAC decides rather
 *                      than a test here.  PRE_RELEASE_FIXES 56
+*  5 Sep 26 Windows port - peer.local.test's RULE moved out to !peer_local so
+*                      that APISRVR can make the same decision.  The gosub
+*                      stays and the gate above it is unchanged; only the
+*                      copy of the rule has gone.  PRE_RELEASE_FIXES 170
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -1436,26 +1440,14 @@ require.credential:
 * not just 127.0.0.1, so the test is on the leading octet.
 
 peer.local.test:
-   peer.local = @false
-   peer.addr = ''
-
-*  ssh first: it is the transport this exists for.
-   peer.addr = trim(field(env('SSH_CLIENT'), ' ', 1))
-
-*  Then the API.  Not "else" - a session is one or the other, and reading both
-*  costs nothing while assuming which one applies is how this would rot.
-   if peer.addr = '' then peer.addr = trim(system(42))
-
-   if peer.addr # '' then
-      begin case
-         case peer.addr = '::1'
-            peer.local = @true
-         case peer.addr = '::ffff:127.0.0.1'
-            peer.local = @true
-         case field(peer.addr, '.', 1) = '127'
-            peer.local = @true
-      end case
-   end
+*  5 Sep 26 Windows port - THE RULE ITSELF MOVED TO !peer_local.
+*    PRE_RELEASE_FIXES 170.  APISRVR has to make the same decision and could
+*    not reach this gosub: it is the top-level program for an API connection,
+*    so CPROC never runs and CPROC's "call '$LOGIN'" never happens.  Copying
+*    the case statement over would have left two copies of one security rule.
+*    The comment above this label, about the leading octet, describes what
+*    !peer_local now does; GPL.BP/PEER_LOCAL carries the full reasoning.
+   call !peer_local(peer.local, peer.addr)
 
    return
 

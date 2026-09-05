@@ -297,6 +297,13 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # this list makes the tree report STALE merely because it
                   # exists, and then every verifier that calls this one refuses.
                   'verify-sshadmin.ps1',
+                  # 05 Sep 26 - verify-apiremote.ps1, PRE_RELEASE 170's
+                  # verifier and the API half of the entry above's ruling.
+                  # Listed in the commit that creates it, for the reason the
+                  # entry above spells out - a gplbld script not on this list
+                  # makes the tree report STALE merely because it exists, and
+                  # then every verifier that calls this one refuses.
+                  'verify-apiremote.ps1',
                   # 31 Aug 26 - verify-logtoaccess.ps1, PRE_RELEASE 91's
                   # verifier.  Listed in the commit that creates it, for the
                   # reason the entry directly above spells out: a gplbld script

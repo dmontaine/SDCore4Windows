@@ -313,11 +313,9 @@
 #define SD_EXT_ARG_CNT -10301  /* incorrect argument count for called function */
 #define SD_INT_OVERFLW -10302  /* Result will create integer overflow  (> 32 Bit int)*/
 
-/* sdext_eguid_set error codes */
-#define SD_EUID_PWD_Err  -10400  /* Couldn't get pwd of user */
-#define SD_EUID_SET_Err  -10401  /* Couldn't set proess to uid / gid of user */
-#define SD_EUID_RST_Err  -10402  /* Couldn't return proess to uid / gid of caller */
-#define SD_EUID_NSET_Err -10403  /* SD_EUID_RESTORE called before SD_EUID_SET */
+/* 5 Sep 26 Windows port - the sdext_eguid_set error codes, -10400 to -10403,
+   were removed with sdext_eguid.c.  PRE_RELEASE_FIXES 168.  Kept in step with
+   gplsrc/err.h, which is the copy this one mirrors. */
 
 /* Embedded Python Error codes   */
 #define SD_PyEr_NotInit    -12001    /* interperter not initiialized */

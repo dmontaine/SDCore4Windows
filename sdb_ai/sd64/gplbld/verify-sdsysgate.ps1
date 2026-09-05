@@ -21,11 +21,30 @@
 #     CPROC:2637  identity gate       audit 'reason=not an administrator'
 #     CPROC:2651  elevation failed    audit 'reason=elevation refused or unavailable'
 #
-# and the session is reached over ssh, which has NO INTERACTIVE DESKTOP, so
-# UAC cannot render and elevate('START') would fail there ANYWAY.  A check that
-# anchored on 10002 would therefore pass with the identity gate DELETED - the
-# "pattern shared by the success and failure outputs" that CLAUDE.md calls a
-# false positive with a check's name on it.
+# and for THIS script's subject the elevation would fail anyway: the account it
+# drives is deliberately NOT an administrator, so sshd hands it an ordinary
+# token, Start-Process -Verb RunAs would need a CREDENTIAL prompt, and an ssh
+# session has no interactive desktop to render one on.  A check that anchored on
+# 10002 would therefore pass with the identity gate DELETED - the "pattern
+# shared by the success and failure outputs" that CLAUDE.md calls a false
+# positive with a check's name on it.
+#
+# 05 Sep 26 - ***THE SENTENCE ABOVE USED TO BE WRITTEN AS A GENERAL ONE - "the
+# session is reached over ssh, which has NO INTERACTIVE DESKTOP, so UAC cannot
+# render and elevate('START') would fail there ANYWAY" - AND IN THAT FORM IT IS
+# FALSE.***  PRE_RELEASE_FIXES 167 measured the opposite for an ADMINISTRATOR:
+# sshd runs as LocalSystem and builds the logon token itself, so a member of
+# Administrators arrives over ssh ALREADY elevated, with an unfiltered token and
+# nobody asked to consent.  sd-elevate.ps1 short-circuits "exit 0" in that case
+# and never reaches Start-Process.
+#
+# ***IT IS NARROWED RATHER THAN DELETED, BECAUSE THE ARGUMENT DEPENDS ON IT.***
+# If the elevation could SUCCEED for this subject, then with the identity gate
+# deleted the session would reach SDSYS and print no 10002 at all - so the
+# 10002 anchor would catch the deleted gate rather than miss it, and the whole
+# reason for reading the audit instead would go away.  It holds because the
+# subject is a non-administrator, which this script chooses on purpose; it would
+# NOT hold for an administrator, and nothing here should be copied to one.
 #
 # ***SO THE DECISIVE READING IS THE AUDIT REASON, AND ONLY THAT.***  The two
 # paths differ nowhere else.  'reason=not an administrator' means the identity
