@@ -25,7 +25,11 @@ WHAT IT CHECKS
   2. ../sdclilib32 HOLDS NO SOURCE.  Its Makefile SRCDIR must point INTO this
      tree - one hop.  It pointed at ../winsdclilib until 19 Aug 2026, which is
      the two-hop arrangement that let the 32-bit client lag.
-  3. Its built DLLs must be NEWER than the library source they were built from.
+  3. The built DLLs in BOTH siblings must be NEWER than the library source they
+     were built from - ../sdclilib32's 32-bit pair AND ../winsdclilib's own
+     shipped DLLs.  The mirror half was added 4 Sep 2026; before that a mirror
+     whose SOURCE was current and whose SHIPPED DLL had never been rebuilt
+     passed, which is the incident above wearing a clean shirt.
 
   Exit 0 in sync - 1 out of sync - 2 could not run.
 
@@ -74,7 +78,7 @@ def self_test():
     import tempfile
 
     def build(root, mirror_edit=None, srcdir=None, dll_old=False,
-              extra_mirror=None):
+              extra_mirror=None, mirror_dll_old=False, no_mirror_dll=False):
         t = os.path.join(root, "truth")
         m = os.path.join(root, "winsdclilib")
         l = os.path.join(root, "sdclilib32")
@@ -92,11 +96,20 @@ def self_test():
         rel = srcdir if srcdir else os.path.relpath(t, l).replace("\\", "/")
         io.open(os.path.join(l, "Makefile"), "w", newline="").write(
             "SRCDIR ?= %s\n" % rel)
+        old = min(os.path.getmtime(os.path.join(t, f)) for f in FILES) - 600
         dll = os.path.join(l, "qmclilib.dll")
         io.open(dll, "w", newline="").write("MZ\n")
         if dll_old:
-            old = min(os.path.getmtime(os.path.join(t, f)) for f in FILES) - 600
             os.utime(dll, (old, old))
+        # THE MIRROR SHIPS A DLL TOO, AND THE FIXTURE HAD NONE - so before
+        # 4 Sep 2026 the positive control passed partly because check 3 never
+        # looked at this tree.  A fixture that cannot exhibit the fault cannot
+        # witness the fix.
+        if not no_mirror_dll:
+            mdll = os.path.join(m, "sdclilib.dll")
+            io.open(mdll, "w", newline="").write("MZ\n")
+            if mirror_dll_old:
+                os.utime(mdll, (old, old))
         return t, m, l
 
     def run(t, m, l):
@@ -115,6 +128,11 @@ def self_test():
         ("a DLL older than the source", {"dll_old": True}, 1),
         ("mirror carrying source the truth lacks",
          {"extra_mirror": "rogue.c"}, 1),
+        # THE TWO CASES THE OLD CHECK COULD NOT FAIL.  Both pass against the
+        # pre-4 Sep 2026 script, which is the point of adding them: a stale
+        # SHIPPED client in the mirror, and a mirror that ships none at all.
+        ("a stale DLL in the MIRROR", {"mirror_dll_old": True}, 1),
+        ("a mirror shipping no DLL at all", {"no_mirror_dll": True}, 1),
     ]
     ok = 0
     print("=== self-test: does check-client-sync REJECT what it should? ===")
@@ -236,7 +254,7 @@ note("winsdclilib" not in srcdir,
      "SRCDIR does not go via the mirror (the two-hop fault)")
 
 print("")
-print("=== [3] the 32-bit build must be newer than the source ============")
+print("=== [3] every shipped build must be newer than the source =========")
 newest_src, newest_name = 0.0, ""
 for f in FILES:
     t = os.path.getmtime(os.path.join(TRUTH, f))
@@ -250,12 +268,36 @@ def stamp(t):
 
 
 print("  newest library source : %s  (%s)" % (stamp(newest_src), newest_name))
-dlls = [f for f in os.listdir(LIB32) if f.lower().endswith(".dll")]
-if not dlls:
-    note(False, "sdclilib32 holds a built DLL", "none found - never built here")
-for d in sorted(dlls):
-    t = os.path.getmtime(os.path.join(LIB32, d))
-    note(t >= newest_src, "%s is not older than the source" % d, stamp(t))
+
+# ***BOTH SIBLINGS SHIP DLLs AND ONLY ONE OF THEM WAS EVER CHECKED.***
+# Extended 4 Sep 2026, on the owner's instruction, after he asked whether the
+# DLLs in the two trees match this one and the honest answer was "sdclilib32's
+# are checked, winsdclilib's are not looked at at all".  This check tested
+# LIB32 only, while ../winsdclilib ships sdclilib.dll and sdclient.dll of its
+# own and nothing verified they were not stale.
+#
+# THAT IS THE EXACT SHAPE OF THE INCIDENT IN THIS FILE'S OWN HEADER: "the
+# 32-bit client SHIPPED SENDING PASSWORDS IN CLEAR, built from a winsdclilib
+# that had not moved since 15 Aug and had no SCRAM in it, with nothing in
+# either project able to report it".  Check 1 compares the mirror's SOURCE, so
+# a stale mirror source is caught - but a mirror whose source is current and
+# whose SHIPPED DLL was never rebuilt is the same defect wearing a clean shirt,
+# and until now it passed.
+#
+# .dll ONLY, WHICH EXCLUDES THE IMPORT LIBRARIES BY CONSTRUCTION:
+# libsdclilib.dll.a does not end in ".dll", so nothing has to name it.
+for tree, label in ((LIB32, "sdclilib32"), (MIRROR, "winsdclilib")):
+    dlls = [f for f in os.listdir(tree) if f.lower().endswith(".dll")]
+    # THE NULL CASE, PER TREE.  "No DLL was older than the source" is trivially
+    # true of a tree holding no DLL, and that tree ships nothing - which is a
+    # worse answer than a stale one, not a better one.
+    if not dlls:
+        note(False, "%s holds a built DLL" % label,
+             "none found - never built here")
+    for d in sorted(dlls):
+        t = os.path.getmtime(os.path.join(tree, d))
+        note(t >= newest_src, "%s/%s is not older than the source" % (label, d),
+             stamp(t))
 
 print("")
 print("=== summary =======================================================")
@@ -271,5 +313,6 @@ if bad:
     sys.exit(1)
 print("")
 print("check-client-sync: IN SYNC - the mirror matches the source byte for")
-print("  byte, sdclilib32 builds straight from this tree, and its DLLs are")
-print("  not older than the source they were built from.")
+print("  byte, sdclilib32 builds straight from this tree, and the shipped")
+print("  DLLs in BOTH siblings are not older than the source they were")
+print("  built from.")
