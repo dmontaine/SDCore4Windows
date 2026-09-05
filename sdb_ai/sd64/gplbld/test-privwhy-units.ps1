@@ -116,9 +116,15 @@ function Get-Body([string]$text, [string]$signature) {
 }
 
 $predicates = @(
-    @{ Name = 'IsAdmin';      Text = $libText; Sig = 'bool IsAdmin(PRIV_WHY* why)' },
-    @{ Name = 'IsElevated';   Text = $libText; Sig = 'bool IsElevated(PRIV_WHY* why)' },
-    @{ Name = 'os_permitted'; Text = $shText;  Sig = 'Private bool os_permitted(PRIV_WHY* why) {' }
+    @{ Name = 'IsAdmin';       Text = $libText; Sig = 'bool IsAdmin(PRIV_WHY* why)' },
+    @{ Name = 'IsElevated';    Text = $libText; Sig = 'bool IsElevated(PRIV_WHY* why)' },
+    # 05 Sep 26 - PRE_RELEASE_FIXES.md 167.  ADDED IN THE COMMIT THAT CREATED
+    # IT, which is the rule CLAUDE.md states for a new free guard and is the
+    # same shape as $neverShipped's one real gap.  It is a fourth predicate of
+    # exactly the guarded kind: two "return FALSE" exits that are the check
+    # failing to complete rather than the answer being no.
+    @{ Name = 'IsInteractive'; Text = $libText; Sig = 'bool IsInteractive(PRIV_WHY* why)' },
+    @{ Name = 'os_permitted';  Text = $shText;  Sig = 'Private bool os_permitted(PRIV_WHY* why) {' }
 )
 
 $checkedReturns = 0
@@ -147,7 +153,10 @@ foreach ($p in $predicates) {
 
 # REFUSE THE NULL CASE.  If the shapes above ever stop matching, every loop
 # runs zero times and every count is 0 - which would read as a clean pass.
-Check 'some return-FALSE sites were actually examined' $true ($checkedReturns -ge 8)
+# 05 Sep 26 - RAISED 8 -> 10 WITH IsInteractive's TWO EXITS.  The floor has to
+# move with the roster or it stops being a floor: at 8 the whole of the new
+# predicate could stop matching and the count would still clear it.
+Check 'some return-FALSE sites were actually examined' $true ($checkedReturns -ge 10)
 Write-Output ("       examined {0} 'return FALSE' site(s)" -f $checkedReturns)
 
 # --- 3. The ENOENT discrimination, which is deliberate and easy to "tidy" away.

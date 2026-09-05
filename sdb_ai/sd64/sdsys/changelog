@@ -5,6 +5,49 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+05 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh OR THROUGH THE
+           API. ADMINISTRATION HAPPENS AT THE CONSOLE.
+
+           If your SD account is an ADMINISTRATOR account, SD now refuses
+           the connection outright when the session has no screen - that
+           means ssh and the API. You will see:
+
+             An administrator may not sign in over ssh or the API.
+
+           WHERE ADMINISTRATION HAPPENS NOW:
+
+             * at the machine's own console, or
+             * through a remote desktop or remote-control product
+               (AnyDesk, RDP and similar) INSTALLED AS A SERVICE.
+
+           A per-user install of a remote-control tool is not enough. It
+           cannot show the Windows consent prompt, and the operator sees a
+           frozen screen instead.
+
+           NOTHING CHANGES FOR ORDINARY ACCOUNTS. Standard and programmer
+           accounts keep ssh exactly as before, and so does a Windows
+           administrator whose SD account is an ordinary one - it is the SD
+           account tier that decides, not Windows group membership.
+
+           WHY. Administration needs a screen Windows can draw its consent
+           prompt on; that prompt is what makes an elevation something a
+           person agreed to rather than something that merely happened. An
+           ssh session has no screen. Until now SD assumed that meant ssh
+           could not obtain administrator rights at all. That assumption
+           was wrong: OpenSSH runs as a system service and builds the sign-in
+           token itself, so a member of the Windows Administrators group
+           arrived over ssh holding FULL administrator rights, with nobody
+           asked to consent to anything.
+
+           IF YOU RELY ON ssh FOR ADMINISTRATION, this will stop working
+           when you upgrade, and that is deliberate. Use the console or a
+           service-installed remote desktop.
+
+           SCHEDULED TASKS ARE AFFECTED TOO. A task that runs unattended has
+           no screen either. If it signs in as an administrator account it
+           will now be refused; give it an ordinary account and list the
+           command it runs in the SD system file batch.jobs.
+
 04 Sep 26  THE CLIENT LIBRARIES NOW SHIP WITH SD, IN
            C:\Program Files\SD\usr\clients
 

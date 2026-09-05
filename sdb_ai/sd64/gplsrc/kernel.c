@@ -100,6 +100,10 @@ bool init_kernel() {
   int16_t msg_no = 1000; /* User limit reached */
   char* p;
   PRIV_WHY why; /* 03 Sep 26 - PRE_RELEASE_FIXES.md 96 */
+  PRIV_WHY why_desktop = PRIV_ANSWERED; /* 05 Sep 26 - PRE_RELEASE_FIXES.md 167.
+      Its own out-parameter, because && short-circuits and one variable would
+      name the wrong predicate in the log.  Initialised because the same
+      short-circuit means IsInteractive() may never run to set it. */
 
   memset(option_flags, '\0', NumOptions);
 
@@ -248,10 +252,66 @@ bool init_kernel() {
        is no longer silent.  sysseg is bound well before here (it is
        dereferenced at :170), so the log call is safe.                      */
 
-    if (IsElevated(&why) && (connection_type != CN_SOCKET))
+    /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  AND A DESKTOP, WHICH
+       IS THE TERM ssh WAS GETTING PAST.  Owner's ruling, 5 Sep 2026:
+       administration requires a session where UAC can RENDER, because that is
+       what makes an elevation consented to by a person rather than merely
+       granted.  PROJECT_STATUS.md 5.25.
+
+       WHAT WAS MEASURED, AND IT IS THE OPPOSITE OF WHAT THIS FILE BELIEVED.
+       q14 held that an administrator over ssh gets a FILTERED token and so
+       gets LESS, not more.  On 5 Sep 2026 an administrator ssh'd in and got
+       WHO = 3 SDSYS, LIST ACCOUNTS, and an elevated PowerShell from "sh":
+       S-1-16-12288 High, BUILTIN\Administrators ENABLED rather than deny-only,
+       NT AUTHORITY\NETWORK in the same token.  THE CAUSE IS OpenSSH, NOT SD -
+       sshd runs as LocalSystem and builds the logon token itself, so the
+       filtering LocalAccountTokenFilterPolicy governs never applies to it.
+       IsElevated() therefore answered TRUE, and the line below was the whole
+       of the gate.
+
+       CN_SOCKET WAS REACHING FOR THIS AND CAUGHT HALF OF IT.  The 21 Aug term
+       excludes a socket-connected session, which is the API; it cannot see
+       ssh, because sshd starts sd.exe as an ordinary process on a pty rather
+       than connecting to it.  So this is the same intent completed, not a
+       second discriminator that could drift away from it.
+
+       ***THE TEST GOES HERE AND NOT INSIDE IsElevated().***  sdwind.c shells
+       out to "sd -cleanup" from the daemon as LocalSystem - non-interactive -
+       and sd.c gates that verb on IsElevated().  Gating the predicate itself
+       would break check_lost_users()'s recovery, which is the exact path whose
+       failure once answered every new session "Forced logout" for twenty
+       minutes.  IsElevated() keeps its present meaning for sd.c and sdsem.c.
+
+       A PHANTOM INHERITS THE SEED AND THAT IS RULED, NOT OVERLOOKED.  Owner,
+       5 Sep 2026.  op_phantom() forks and execs, so a phantom carries its
+       parent's token and tests interactive when the parent did; the consent
+       happened once, at a real desktop, and the phantom is that session's own
+       work continued.  linuxlb.c's IsInteractive() carries the reasoning.
+
+       IT IS NOT THE WHOLE FIX EITHER.  This closes LOGIN's landing case, which
+       is the door the measurement came through.  LOGTO SDSYS is a SECOND door
+       and does not read this flag at all - it asks K$OS.ADMINISTRATOR, so the
+       same term is in op_kernel.c beside the same CN_SOCKET guard.  Without
+       both, an administrator lands in their own account over ssh and types
+       "logto sdsys" to get everything back, because CPROC re-grants this very
+       flag on entering SDSYS.                                              */
+
+    if (IsElevated(&why) && (connection_type != CN_SOCKET) &&
+        IsInteractive(&why_desktop)) {
       my_uptr->flags |= USR_ADMIN;
-    else if (why != PRIV_ANSWERED)
-      priv_log_undetermined("USR_ADMIN at session start", why);
+    } else {
+      /* WHICHEVER OF THE TWO COULD NOT ANSWER, and not just the first.  Two
+         out-parameters rather than one, because && short-circuits: reusing a
+         single "why" would leave IsElevated()'s PRIV_ANSWERED standing when it
+         was IsInteractive() that failed to complete, and the log would then
+         name the wrong predicate - the exact class of wrong-reason defect
+         PRE_RELEASE 96 was filed for.                                      */
+      if (why != PRIV_ANSWERED)
+        priv_log_undetermined("USR_ADMIN at session start", why);
+      else if (why_desktop != PRIV_ANSWERED)
+        priv_log_undetermined("USR_ADMIN at session start (desktop test)",
+                              why_desktop);
+    }
 
     /* Phantom processes have the user name entered by the parent when the
       user table entry is reserved.  For other users, initialise this now. */

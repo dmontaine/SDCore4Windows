@@ -229,7 +229,7 @@ try {
     Write-Output ''
 
     Write-Output '=== 3. the account tries both routes =============================='
-    Write-Output '  ssh in (never elevated, so LOGIN case 1 - the account s own), then LOGTO SDSYS.'
+    Write-Output '  ssh in as a NON-administrator (LOGIN case 1 - the account s own), then LOGTO SDSYS.'
 
     $r = $null
     try {
@@ -262,8 +262,20 @@ try {
         exit 2
     }
 
-    # ROUTE 1: LOGIN.  An ssh session is never elevated, so LOGIN:568's case
-    # cannot be taken and the account is where this must land.
+    # ROUTE 1: LOGIN.  The account is where a NON-ADMINISTRATOR must land.
+    #
+    # 05 Sep 26 - THE REASON GIVEN HERE WAS FALSE.  PRE_RELEASE 167.  It said
+    # "An ssh session is never elevated, so LOGIN:568's case cannot be taken".
+    # An ssh session IS elevated for a member of Administrators - sshd runs as
+    # LocalSystem and builds an unfiltered token - and that case WAS taken,
+    # measured 5 Sep 2026.  This step passed anyway because the account it uses
+    # is not an administrator, which is the only reason the wrong reason never
+    # showed.  The right reason is the tier: an ordinary account cannot match
+    # LOGIN's administrator case whatever its token says.
+    #
+    # AN ADMINISTRATOR CANNOT REACH THIS STEP AT ALL NOW - LOGIN refuses the
+    # ssh session outright (PROJECT_STATUS.md 5.25).  verify-sshadmin.ps1 is
+    # the step that measures THAT; this one stays the non-administrator leg.
     Note 'the session landed in the account (WHO names it)' $true `
          ($text -match ('(?i)\b' + [regex]::Escape($account) + '\b')) $true
 

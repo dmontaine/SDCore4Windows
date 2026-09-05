@@ -23,6 +23,8 @@
  *           op_login() fails closed now that login_user() is gone.
  * 29 Aug 26 Windows port - K_OS_ADMINISTRATOR added, with kernel.c's
  *           CN_SOCKET guard.  PRE_RELEASE_FIXES 56.
+ * 05 Sep 26 Windows port - K_INTERACTIVE added.  How the session ARRIVED,
+ *           where the two above ask who and what.  PRE_RELEASE_FIXES 167.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -474,6 +476,43 @@ void op_kernel() {
 
       result.data.value =
           (is_admin && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
+    } break;
+
+    /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  HOW DID THIS SESSION
+       ARRIVE?  keys.h has the three-way table this completes.
+
+       WHY IT EXISTS.  Owner's ruling, 5 Sep 2026: remote ssh and API access is
+       TOTALLY DENIED to administrators - administration happens at the console
+       or through a remote-control product or single-user remote desktop.  That
+       is a refusal of the SESSION, not a narrowing of its rights, so LOGIN
+       needs to ask the question before it chooses an account.  Nothing in the
+       BASIC layer could ask it before this key.
+
+       BOTH TERMS, BECAUSE THE RULING NAMES BOTH ROUTES.  IsInteractive() reads
+       S-1-5-4 from the token and answers for ssh, RDP, the console and an
+       unattended scheduled task.  It cannot answer for the API: an API session
+       is fork()ed by the LocalSystem service and AssumeUserIdentity() changes
+       only the EFFECTIVE uid, so the token walked here is the service's, not
+       the caller's - the identical trap K_OS_ADMINISTRATOR's CN_SOCKET guard
+       above exists for.  CN_SOCKET is the reliable discriminator there, and
+       using the SAME one keeps the two keys from drifting apart.
+
+       FAIL-CLOSED, AND THE UNDETERMINED CASE IS A REFUSAL.  IsInteractive()
+       returns FALSE when it could not read the token at all; that answers
+       "no desktop", which costs a local administrator a login they can retry
+       and costs a remote one nothing they were entitled to.  The log line says
+       which, so the refusal does not state a reason nobody established -
+       PRE_RELEASE 96's rule.                                                */
+
+    case K_INTERACTIVE: {
+      PRIV_WHY why;
+      bool has_desktop = IsInteractive(&why);
+
+      if (why != PRIV_ANSWERED)
+        priv_log_undetermined("K$INTERACTIVE", why);
+
+      result.data.value =
+          (has_desktop && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
     } break;
 
     case K_FILESTATS:

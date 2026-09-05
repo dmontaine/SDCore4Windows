@@ -2659,10 +2659,32 @@ int.logto:
 *   0 when the session is already elevated - the installer's account step, a
 *   bootstrap, "sd -internal" - and then nothing prompts and nothing changes.
 *
-*   AND IT IS WHAT KEEPS ADMINISTRATOR WORK OFF ssh (5.6.2).  UAC draws its
-*   dialog on the interactive desktop, an ssh session has none, so !elevate
-*   fails there and this refuses - enforced by Windows rather than by a test
-*   here that could drift out of step with the rule.
+* 05 Sep 26 Windows port - ***THE SENTENCE THAT STOOD HERE WAS FALSE.***
+*   PRE_RELEASE_FIXES 167.  It read:
+*
+*     "AND IT IS WHAT KEEPS ADMINISTRATOR WORK OFF ssh (5.6.2).  UAC draws its
+*      dialog on the interactive desktop, an ssh session has none, so !elevate
+*      fails there and this refuses - enforced by Windows rather than by a test
+*      here that could drift out of step with the rule."
+*
+*   ***!elevate DOES NOT FAIL OVER ssh - IT SUCCEEDS WITHOUT PROMPTING.***
+*   sd-elevate.ps1:126 short-circuits "exit 0" when the process token is
+*   already an administrator's, and over ssh it is: sshd runs as LocalSystem
+*   and builds an UNFILTERED token.  So this gate would have admitted an ssh
+*   session, silently, and the thing believed to be "enforced by Windows" was
+*   not being enforced at all.  Measured 5 Sep 2026.
+*
+*   ***AND THIS WAS THE SECOND DOOR, WHICH IS WHY THE SEED FIX IS NOT THE FIX.***
+*   Gating kernel.c's USR_ADMIN seed closes LOGIN's landing case and does
+*   nothing here - this gate never reads the seed.  Worse, :2858 below SETS the
+*   seed on entering SDSYS, so a session refused the landing recovered
+*   everything by typing "logto sdsys".
+*
+*   WHAT KEEPS ADMINISTRATOR WORK OFF ssh NOW IS A TEST IN SD, DELIBERATELY.
+*   LOGIN:560 refuses an administrator any session with no interactive desktop,
+*   ssh and the API alike, before an account is chosen.  Owner's ruling, 5 Sep
+*   2026, PROJECT_STATUS.md 5.25.  A test that can drift is better than a
+*   guarantee that was never there - and it is one a verifier can measure.
    if upcase(new.account) = "SDSYS" then
 
 * 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  A NON-ADMINISTRATOR IS NOT

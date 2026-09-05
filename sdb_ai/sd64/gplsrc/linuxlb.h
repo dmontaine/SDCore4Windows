@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 05 Sep 26 Windows port - IsInteractive() added.  PRE_RELEASE_FIXES.md 167.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -87,6 +88,7 @@ typedef enum {
 
 bool IsAdmin(PRIV_WHY* why);
 bool IsElevated(PRIV_WHY* why);
+bool IsInteractive(PRIV_WHY* why);
 char* priv_why_text(PRIV_WHY why);
 void priv_log_undetermined(char* what, PRIV_WHY why);
 int64 filelength64(int fd);

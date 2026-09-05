@@ -18,6 +18,13 @@
 * 
 * 
 * START-HISTORY:
+* 05 Sep 26 Windows port - AN ADMINISTRATOR IS REFUSED ANY SESSION WITH NO
+*           INTERACTIVE DESKTOP - ssh and the API, totally.  Owner's ruling,
+*           PRE_RELEASE_FIXES 167 and PROJECT_STATUS.md 5.25.  The connection
+*           is refused, not narrowed: three doors reach SDSYS and the seed is
+*           read by one of them, so refusing here is what closes all three.
+*           IT ALSO FALSIFIES :630's "an ssh session is never elevated" - sshd
+*           runs as LocalSystem and builds an UNFILTERED token; measured.
 * 04 Sep 26 Windows port - MODE 4: THE ALL-ACCOUNTS VOC WALK WITH THE QUESTION
 *           ANSWERED BY THE CALLER, so the installer can run it on an upgrade.
 *           PRE_RELEASE_FIXES 70.  Same walk as mode 2's Y answer, deliberately
@@ -501,6 +508,66 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
      end
   end
 
+* 05 Sep 26 Windows port - AN ADMINISTRATOR GETS NO ssh AND NO API SESSION AT
+*   ALL.  PRE_RELEASE_FIXES 167, owner's ruling of 5 Sep 2026: "remote ssh and
+*   api access is totally denied to administrators".  PROJECT_STATUS.md 5.25.
+*
+*   ***IT REFUSES THE SESSION, IT DOES NOT NARROW IT, AND THE DIFFERENCE IS THE
+*   RULING.***  An earlier reading of this had an administrator arriving over
+*   ssh land in their personal account with fewer rights.  That is not what was
+*   ruled and it does not hold anyway - see the next paragraph.
+*
+*   ***WHY THE SEED ALONE COULD NOT DO IT: THERE ARE THREE DOORS INTO SDSYS AND
+*   THE SEED IS READ BY ONE.***  kernel.c's USR_ADMIN seed decides the landing
+*   case at :675 below.  It decides NOTHING about LOGTO: CPROC:2707 gates
+*   "logto sdsys" on K$OS.ADMINISTRATOR and sd_admin_tier, and CPROC:4072 does
+*   the same for int.logto.  Neither reads the seed - and CPROC:2858 SETS it on
+*   entering SDSYS, so a session refused the landing gets everything back by
+*   typing one command.  elevate('START') cannot stop that either:
+*   sd-elevate.ps1:126 short-circuits "exit 0" when the token is already an
+*   administrator's, which over ssh it is, because sshd runs as LocalSystem and
+*   builds an UNFILTERED token (measured 5 Sep 2026 - PRE_RELEASE 167).
+*
+*   Refusing the connection here closes all three at once, before an account is
+*   chosen, which is why it is here and not at each gate.
+*
+*   ***THE TIER IS THE QUESTION, NOT THE WINDOWS GROUP.***  sd_admin_tier reads
+*   ACC$TIER from the register - the only thing in the system that says SD
+*   administrator (5.22) - and carries the SUSPENDED policy and the
+*   refuse-rather-than-guess rule with it.  A Windows administrator who holds
+*   an ordinary SD account is not doing administration and keeps ssh; that is
+*   the person 5.6.2 was written for.
+*
+*   ***K$INTERACTIVE IS THE ROUTE AND IS DELIBERATELY NOT THE ELEVATION.***
+*   An administrator at an UNELEVATED console must pass here: they land in
+*   their own account below and reach SDSYS with LOGTO, which is where UAC is
+*   asked.  Testing the seed instead would refuse them.  op_kernel.c's key
+*   folds CN_SOCKET in, so this one test answers for the API as well as ssh.
+*
+*   INTERNAL IS EXEMPT, for the sdusers gate's reason directly above: the
+*   bootstrap runs "sd -internal SECOND.COMPILE" on a machine that may have no
+*   register at all, and sd.c gates that path on its own.
+*
+*   A PHANTOM NEEDS NO EXEMPTION AND THAT IS MEASURED FROM THE CODE, NOT HOPED.
+*   op_phantom() forks and execs, so a phantom carries the token of the session
+*   that started it: one spawned from a console administrator's session is
+*   interactive and passes here, and one spawned from an ssh session cannot
+*   exist, because this line refused the ssh session first.  Owner's ruling,
+*   5 Sep 2026: inheritance stands.
+   if not(kernel(K$INTERNAL,-1)) then
+*     @logname, NOT lgn.id, MATCHING THE OTHER THREE GATES.  They all read
+*     sd_admin_tier(@logname) - :675 here, CPROC:2707 and CPROC:4072 - and one
+*     gate asking the same question of a different variable is how the four
+*     drift apart.  The two hold the same value at this point; the consistency
+*     is the reason, not a correction.
+      if sd_admin_tier(@logname) and not(kernel(K$INTERACTIVE, 0)) then
+         display sysmsg(10174) ;* An administrator may not sign in over ssh or the API
+         audit.account = 'SDSYS'
+         audit.reason = 'administrator on a session with no interactive desktop'
+         goto terminate.connection
+      end
+   end
+
    s = pterm(PT$INVERT, @true)
 
    * Determine account
@@ -627,11 +694,35 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   the seed would say "elevated" of somebody Windows does not call an
 *   administrator.  It costs one kernel call at login.
 *
-*   ADMINISTRATORS KEEP ssh NOW, WHICH THE MORNING'S MODEL HAD TAKEN.  An ssh
-*   session is never elevated - UAC has no desktop there - so it falls through
-*   to case 1 and lands in the administrator's personal account, like anybody
-*   else.  It is the account's rights that apply, not SDSYS's, which is the
-*   whole point of clause 3.
+* 05 Sep 26 Windows port - ***THE PARAGRAPH THAT STOOD HERE WAS FALSE, AND IT
+*   WAS FALSE IN THE DANGEROUS DIRECTION.***  PRE_RELEASE_FIXES 167.  It read:
+*
+*     "ADMINISTRATORS KEEP ssh NOW, WHICH THE MORNING'S MODEL HAD TAKEN.  An
+*      ssh session is never elevated - UAC has no desktop there - so it falls
+*      through to case 1 and lands in the administrator's personal account,
+*      like anybody else."
+*
+*   ***AN ssh SESSION IS ELEVATED, MEASURED 5 Sep 2026.***  sshd runs as
+*   LocalSystem and builds the logon token itself, so a member of
+*   Administrators gets a FULL, UNFILTERED one - the filtering that
+*   LocalAccountTokenFilterPolicy governs never applies to that path.  An
+*   administrator ssh'd in and this very case matched: WHO answered 3 SDSYS,
+*   LIST ACCOUNTS listed the register, and "sh" gave an elevated PowerShell
+*   carrying S-1-16-12288 High with BUILTIN\Administrators ENABLED rather than
+*   deny-only.  ***UAC HAVING NO DESKTOP DID NOT PREVENT THE ELEVATION; IT ONLY
+*   MEANT NOBODY WAS ASKED.***  That is the whole defect: unconsented
+*   privilege, not absent privilege.
+*
+*   IT CANNOT HAPPEN NOW, AND NOT BECAUSE OF THIS CASE.  The refusal at :560
+*   above terminates an administrator's connection before an account is chosen,
+*   so a session reaching here has an interactive desktop.  Owner's ruling,
+*   5 Sep 2026, PROJECT_STATUS.md 5.25: remote ssh and API access is totally
+*   denied to administrators.
+*
+*   WHAT IS STILL TRUE: an administrator at an UNELEVATED console falls through
+*   to case 1 and lands in their personal account, and it is the account's
+*   rights that apply, not SDSYS's.  That was always clause 3's point; only the
+*   claim about ssh was wrong.
 *
 *   THE REGISTER IS READ BEFORE UAC IS ASKED.  A broken install should not
 *   draw a consent dialog to then refuse the login anyway.

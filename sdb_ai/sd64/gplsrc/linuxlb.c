@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 14 Aug 26 Windows port - IsElevated() added beside IsAdmin()
+ * 05 Sep 26 Windows port - IsInteractive() added beside both.  How the session
+ *           arrived, where the other two ask who and what.  PRE_RELEASE 167.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -209,6 +211,99 @@ bool IsElevated(PRIV_WHY* why) {
     /* 03 Sep 26 Windows port - the second of the two paths PRE_RELEASE 96's
        list was short by.  Same shape as IsAdmin() above: sized, then would
        not fetch, so the loop never ran.                                    */
+    if (why != NULL)
+      *why = PRIV_NO_GROUP_LIST;
+  }
+
+  free(list);
+
+  return status;
+}
+
+/* ======================================================================
+   IsInteractive()  -  Does this session have a desktop UAC could render on?
+
+   05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167, the owner's ruling of
+   5 Sep 2026: administration requires a session where UAC can RENDER, because
+   that is what makes an elevation consented to by a person rather than merely
+   granted.  PROJECT_STATUS.md 5.25.
+
+   THE THIRD OF THE THREE, AND IT ASKS A DIFFERENT KIND OF QUESTION.  IsAdmin()
+   asks WHO the account is, IsElevated() asks WHAT this process may do, and
+   this asks HOW the session arrived.  All three are answered from the token;
+   only this one is about the route.
+
+   S-1-5-4 IS THE SIGNAL AND IT IS ALREADY IN THE LIST getgroups() RETURNS.
+   Windows puts a logon SID in every token saying how the session was
+   established, Cygwin maps a well-known SID to its RID, so INTERACTIVE arrives
+   as gid 4 beside the 544 IsElevated() is already looking for.  Measured
+   5 Sep 2026 from an MSYS2 shell: "id -Gn" printed INTERACTIVE CONSOLE LOGON
+   and "id -G" carried 4.  NO Win32 CALL AND NO NEW DEPENDENCY - which is what
+   keeps this out of the toolchain split PROJECT_STATUS.md 5.4 exists to
+   protect, exactly as the note on IsElevated() above explains.
+
+   WHAT IT ADMITS AND WHAT IT SHUTS.  A console logon carries 4; RDP and a
+   remote-control product INSTALLED AS A SERVICE carry 4 plus 14 REMOTE
+   INTERACTIVE, so both are admitted by testing 4 alone.  ssh carries 2 NETWORK
+   and no 4.  An unattended scheduled task carries 3 BATCH and no 4.  The API
+   is a socket session and was already excluded by CN_SOCKET.
+
+   ***ELEVATION KEEPS IT, AND HAD IT NOT, THIS WOULD LOCK OUT THE CONSOLE
+   ADMINISTRATOR*** - the one case that must keep working.  UAC hands back the
+   LINKED token from the same logon session, so the logon SIDs are the filtered
+   token's.  Measured rather than reasoned, from one ordinary session via
+   TokenLinkedToken: INTERACTIVE true in BOTH legs, with
+   BUILTIN\Administrators moving FALSE -> TRUE between them - the control that
+   stops the two legs being one token read twice.
+
+   A SIBLING OF IsElevated() RATHER THAN A SHARED WALK, DELIBERATELY, AND THE
+   NEXT READER WILL WANT TO MERGE THEM.  The two bodies differ only in the gid,
+   and folding them into one helper would move every "return FALSE" out of the
+   functions test-privwhy-units.ps1 guards - whose per-predicate check would
+   then pass on nothing, which is the null case PRE_RELEASE 96's whole guard
+   exists to refuse.  Merge them only by strengthening that guard first.
+
+   A PHANTOM INHERITS THIS AND THAT IS THE OWNER'S RULING, 5 Sep 2026.
+   op_phantom() forks and execs (op_kernel.c), so a phantom carries the token
+   of the session that started it, INTERACTIVE included - it has no desktop of
+   its own and still tests TRUE.  Deliberate: the consent happened once, at a
+   real desktop, and the phantom is that session's own work continued.  Do not
+   "correct" it to a per-process desktop test; an administrator would then be
+   unable to background anything at all.                                     */
+
+bool IsInteractive(PRIV_WHY* why) {
+  gid_t* list;
+  int count;
+  int i;
+  bool status = FALSE;
+
+  if (why != NULL)
+    *why = PRIV_ANSWERED;
+
+  count = getgroups(0, NULL);
+  if (count <= 0) {
+    if (why != NULL)
+      *why = PRIV_NO_GROUP_COUNT;
+    return FALSE; /* No groups in the token - fail closed */
+  }
+
+  list = (gid_t*)malloc(count * sizeof(gid_t));
+  if (list == NULL) {
+    if (why != NULL)
+      *why = PRIV_NO_MEMORY;
+    return FALSE;
+  }
+
+  if (getgroups(count, list) >= 0) {
+    for (i = 0; i < count; i++) {
+      if (list[i] == SD_INTERACTIVE_GID) {
+        status = TRUE;
+        break;
+      }
+    }
+  } else {
+    /* Sized, then would not fetch - the loop never ran, so the initialised
+       FALSE below is not an answer.  IsElevated()'s note has the reasoning. */
     if (why != NULL)
       *why = PRIV_NO_GROUP_LIST;
   }

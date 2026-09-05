@@ -149,6 +149,18 @@
 *   is the PERSON, asked of Windows each time, and a LOGTO does not move it.
 *   Nothing in SD can set or forge it.  keys.h carries the same note.
       $define K$OS.ADMINISTRATOR 63      ;* Is the signed-in person an OS administrator?
+* 05 Sep 26 Windows port - PRE_RELEASE_FIXES 167.  HOW DID THIS SESSION ARRIVE?
+*   The third of the trio and the one about the ROUTE: 26 is what this session
+*   may DO, 63 is WHO signed in, and this is HOW they got here.  True at the
+*   console and through a remote desktop installed as a SERVICE; false over
+*   ssh, over the API, and for an unattended scheduled task.
+*
+*   ***INDEPENDENT OF ELEVATION ON PURPOSE.***  An administrator at an
+*   UNELEVATED console must still be admitted - they log in to their own
+*   account and reach SDSYS with LOGTO, which is where UAC is asked.  Measured
+*   5 Sep 2026: it answers the same either side of a UAC prompt, because
+*   elevation reuses the logon session and its SIDs.
+      $define K$INTERACTIVE      64      ;* Does this session have a desktop?
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

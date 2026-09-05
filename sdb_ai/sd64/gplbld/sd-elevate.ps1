@@ -26,13 +26,27 @@
 # from entering SDSYS and nowhere else, and admins are highly trusted - this
 # raises the floor rather than trying to constrain the machine's owner.
 #
-# WHY -Start CANNOT WORK OVER ssh, AND WHY THAT IS THE POINT.  UAC renders its
-# consent dialog on the interactive desktop and an ssh session has none, so
-# Start-Process -Verb RunAs fails there.  That keeps administrator work off ssh
-# exactly as 5.6.2 requires, enforced by Windows rather than by a test in SD
-# that could drift.  A remote-control tool (AnyDesk, RDP) works, but only if it
-# is installed as a SERVICE - a per-user install cannot show the secure desktop
-# and the operator sees a frozen screen.
+# 05 Sep 26 - ***THE PARAGRAPH THAT STOOD HERE WAS FALSE.***  PRE_RELEASE 167.
+# It read: "WHY -Start CANNOT WORK OVER ssh, AND WHY THAT IS THE POINT.  UAC
+# renders its consent dialog on the interactive desktop and an ssh session has
+# none, so Start-Process -Verb RunAs fails there.  That keeps administrator work
+# off ssh exactly as 5.6.2 requires, enforced by Windows rather than by a test
+# in SD that could drift."
+#
+# ***-Start OVER ssh NEVER REACHES Start-Process AT ALL.***  Line 126 below
+# short-circuits "exit 0" when the token is already an administrator's, and
+# over ssh it is: sshd runs as LocalSystem and builds the logon token itself,
+# so a member of Administrators gets a FULL, UNFILTERED one.  Measured 5 Sep
+# 2026 - an administrator ssh'd in, reached SDSYS, and "sh" returned an
+# elevated PowerShell.  Nothing here failed; nothing here was asked.
+#
+# WHAT ENFORCES IT NOW IS LOGIN, IN SD, WHERE A VERIFIER CAN MEASURE IT.
+# LOGIN:560 refuses an administrator any session with no interactive desktop -
+# ssh and the API alike.  Owner's ruling, 5 Sep 2026, PROJECT_STATUS.md 5.25.
+#
+# STILL TRUE, AND STILL WORTH KNOWING: a remote-control tool (AnyDesk, RDP)
+# works, but only if it is installed as a SERVICE - a per-user install cannot
+# show the secure desktop and the operator sees a frozen screen.
 #
 # WHY -Run VERIFIES THE HELPER FIRST.  The reply to a request is an exit code,
 # and an exit code from something that is not elevated would tell SD an account

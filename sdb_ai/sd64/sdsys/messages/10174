@@ -1,0 +1,1 @@
+An administrator may not sign in over ssh or through the API.\n\nAdministration needs a screen Windows can show a consent prompt on, so it\nhappens at the console, or through a remote desktop or remote-control\nproduct installed as a service.\n\nIf you need this account for ordinary, non-administrative work, ask an\nadministrator to change its tier.

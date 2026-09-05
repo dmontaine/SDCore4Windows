@@ -213,6 +213,35 @@
    is not optional.                                                          */
 #define K_OS_ADMINISTRATOR   63
 
+/* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  DOES THIS SESSION HAVE A
+   DESKTOP UAC COULD RENDER ON?  The third question about a session, and it is
+   about the ROUTE where the two above are about the person and the process:
+
+     K_ADMINISTRATOR     the SESSION flag, USR_ADMIN - elevated, and settable
+                         $internal.  What this session may DO.
+     K_OS_ADMINISTRATOR  the PERSON, asked of Windows every time.  WHO signed
+                         in.  A LOGTO does not move it.
+     K_INTERACTIVE       the ROUTE.  How the session ARRIVED - console or a
+                         service-installed remote desktop, versus ssh, the API
+                         or an unattended scheduled task.
+
+   ***IT IS DELIBERATELY INDEPENDENT OF ELEVATION, AND THAT IS THE WHOLE REASON
+   IT IS A SEPARATE KEY.***  An administrator sitting at an UNELEVATED console
+   must still be admitted - they log in to their own account and reach SDSYS
+   with LOGTO, which asks UAC.  Folding the route into the seed would refuse
+   them, because the seed also requires IsElevated().  Measured 5 Sep 2026:
+   INTERACTIVE is TRUE in the filtered token and TRUE in the linked one, so it
+   answers the same either side of a UAC prompt.
+
+   IT CARRIES CN_SOCKET AS WELL AS THE SID, so one key answers for both of the
+   routes the owner's ruling names.  A socket session is the API and has no
+   desktop by construction; op_kernel.c has the reasoning.
+
+   Read-only, so NOT gated on HDR_INTERNAL, for K_OS_ADMINISTRATOR's reason:
+   it reports a fact about the session that grants nothing.  BCOMP refuses
+   KERNEL to anything not $internal in any case.                             */
+#define K_INTERACTIVE        64
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 05 Sep 26 Windows port - SD_INTERACTIVE_GID.  PRE_RELEASE_FIXES.md 167: the
+ *           administrator seed now also requires a session with a desktop, so
+ *           that ssh cannot reach SDSYS.  See the comment at the definition.
  * 26 Aug 26 Windows port - PLATFORM_NAME is "Windows".  See the comment at the
  *           definition; it changes SYSTEM(1010) and BCOMP's platform token.
  * 24 Aug 26 Windows port - Newline is CRLF and NewlineBytes is 2.  A directory
@@ -235,6 +238,37 @@
 
 #ifndef SD_ADMIN_GID
 #define SD_ADMIN_GID 544
+#endif
+
+/* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  S-1-5-4 INTERACTIVE, the
+ * logon SID Windows puts in the token of a session that has a desktop.
+ *
+ * THE RULE IT ENFORCES IS THE OWNER'S, 5 Sep 2026: administration requires a
+ * session where UAC can RENDER, because that is what makes an elevation
+ * consented to by a person rather than merely granted.  PROJECT_STATUS.md 5.25.
+ *
+ *   console                        4 INTERACTIVE            -> administration
+ *   RDP / AnyDesk as a SERVICE     4 INTERACTIVE + 14        -> administration
+ *   ssh                            2 NETWORK, no 4           -> no
+ *   scheduled task, unattended     3 BATCH, no 4             -> no
+ *   the API                        a socket session          -> no, already
+ *
+ * A WELL-KNOWN SID AGAIN, SO A NUMBER AGAIN, and for a second reason beyond
+ * SD_ADMIN_GID's localisation one: S-1-5-4 has no group a machine can rename
+ * or delete, which is what makes it a signal SD cannot be configured out of.
+ *
+ * MEASURED 5 Sep 2026 RATHER THAN ASSUMED, and the leg that mattered is that
+ * ELEVATION KEEPS IT.  UAC hands back the LINKED token from the same logon
+ * session, so its logon SIDs are the filtered token's: read from one ordinary
+ * session with TokenLinkedToken, INTERACTIVE was true in BOTH legs while
+ * BUILTIN\Administrators moved FALSE -> TRUE between them - which is the
+ * control that stops the two legs being one token read twice.  Had elevation
+ * dropped it, this test would have locked out the console administrator, who
+ * is the one case that must keep working.
+ */
+
+#ifndef SD_INTERACTIVE_GID
+#define SD_INTERACTIVE_GID 4
 #endif
 
 #define RelinquishTimeslice sched_yield()
