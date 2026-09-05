@@ -560,10 +560,59 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *     gate asking the same question of a different variable is how the four
 *     drift apart.  The two hold the same value at this point; the consistency
 *     is the reason, not a correction.
-      if sd_admin_tier(@logname) and not(kernel(K$INTERACTIVE, 0)) then
-         display sysmsg(10174) ;* An administrator may not sign in over ssh or the API
+* 05 Sep 26 Windows port - ***REMOTE IS WHAT IS DENIED, NOT ssh AND THE API.***
+*   Owner's refinement, 5 Sep 2026, after the first build refused LOCAL ssh too:
+*   "my lockout from remote API and SSH is fine.  However, local API and SSH
+*   should continue to work - if I am at the console, everything works, only
+*   remote access is denied."
+*
+*   ***THE FIRST BUILD GOT THIS WRONG AND verify-sshadmin PROVED IT.***  That
+*   step ssh'd to LOCALHOST and was refused, and it was scored as the gate
+*   working.  It was: the gate as specified.  The specification was narrower
+*   than the ruling, because an ssh session carries S-1-5-2 NETWORK and no
+*   S-1-5-4 INTERACTIVE whether the client is across the subnet or on the box -
+*   so the token cannot tell local from remote and K$INTERACTIVE alone denies
+*   both.
+*
+*   ***SO THE SECOND TERM IS THE PEER, AND SD ALREADY HAS IT BOTH WAYS.***
+*     ssh - ENV('SSH_CLIENT'), which sshd sets and a client CANNOT forge:
+*           measured on this machine, sshd_config has no AcceptEnv and leaves
+*           PermitUserEnvironment at its default of "no".  Field 1 is the
+*           client address.
+*     API - system(42), which is my_uptr->ip_addr, filled from accept()'s peer
+*           in linuxio.c.  op_sys.c case 42.
+*   Neither needed a C change; ENV is a BASIC intrinsic (OP.ENV) and 42 was
+*   already read by the network test above.
+*
+*   ***FAIL CLOSED WHEN THE ORIGIN CANNOT BE ESTABLISHED, WHICH IS THE WHOLE
+*   REASON THIS IS "PROVABLY LOCAL" AND NOT "NOT PROVABLY REMOTE".***  A
+*   session with no desktop, no SSH_CLIENT and no peer address is one whose
+*   origin nothing here can vouch for - an unattended scheduled task is exactly
+*   that shape - and the owner already ruled those fall to batch.jobs rather
+*   than carrying administrator rights.  Admitting the unknown case would
+*   reopen the hole under a different name.
+*
+*   THE CONSOLE NEVER REACHES THE PEER TEST.  K$INTERACTIVE answers first and
+*   is true there, elevated or not, so an administrator at the machine is
+*   admitted before anything is asked about addresses.
+*   A GOSUB RATHER THAN A CATALOGUED FUNCTION, FOR NOW, AND THE PRECEDENT IS IN
+*   THIS TREE.  CPROC:4062 records that !sd_admin_tier "was inline for one hour,
+*   when there was one caller" and became catalogued only when the owner's
+*   ruling made it three.  This has one caller: LOGIN refuses the CONNECTION, so
+*   CPROC's two SDSYS gates are unreachable for a session this turns away.  If a
+*   second caller ever appears, catalogue it then - one decision, one place.
+*
+*   ***AND IT IS COMPUTED BEFORE THE TEST, NOT INSIDE IT, BECAUSE "and" DOES NOT
+*   SHORT-CIRCUIT.***  CREATEA:382 records that in terms and the defect it cost
+*   went unnoticed from 10 June to 21 Aug 2026.  Every term of the condition
+*   below runs for every login anyway, so computing this first costs nothing and
+*   removes the temptation to write it as a function call that looks lazy.
+      gosub peer.local.test          ;* sets peer.local
+      if sd_admin_tier(@logname) and not(kernel(K$INTERACTIVE, 0)) ~
+         and not(peer.local) then
+         display sysmsg(10174) ;* An administrator may not sign in REMOTELY
          audit.account = 'SDSYS'
-         audit.reason = 'administrator on a session with no interactive desktop'
+         audit.reason = 'administrator on a remote session with no interactive desktop'
          goto terminate.connection
       end
    end
@@ -1347,6 +1396,68 @@ require.credential:
 * match".  The forced account from "sd -Axxx" is what initial.account already
 * holds by the time this runs, so consulting it cannot consult one account's
 * list while running in another - there is no second name to disagree with.
+
+* ======================================================================
+* PEER.LOCAL.TEST  -  did this session come from THIS machine?
+*
+* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167 and 169, the owner's
+* refinement of 5 Sep 2026: "local API and SSH should continue to work - if I am
+* at the console, everything works, only remote access is denied."  Sets
+* peer.local.  PROJECT_STATUS.md 5.25.
+*
+* ***IT PROVES LOCAL RATHER THAN DISPROVING REMOTE, AND THAT IS THE WHOLE
+* DESIGN.***  peer.local starts FALSE and only a recognised loopback address
+* sets it true.  A session whose origin nothing here can establish - no
+* SSH_CLIENT, no peer address, no desktop - stays false and is refused by the
+* caller.  An unattended scheduled task is exactly that shape, and the owner
+* ruled on 5 Sep that those fall to batch.jobs rather than carry administrator
+* rights.  Written the other way round - "refuse only what is provably remote" -
+* the unknown case would be ADMITTED, which reopens 167's hole under a new name.
+*
+* ***TWO SOURCES, BECAUSE THE TWO TRANSPORTS TELL SD DIFFERENT THINGS.***
+*   ssh   ENV('SSH_CLIENT'), set by sshd.  SD is started by sshd on a pty, not
+*         on a socket, so system(42) is EMPTY for an ssh session and this is
+*         the only source.  Field 1 of three, space separated: client address,
+*         client port, server port.
+*   API   system(42) - my_uptr->ip_addr, filled from accept()'s peer address in
+*         linuxio.c and read at op_sys.c case 42.
+*
+* ***SSH_CLIENT CANNOT BE FORGED BY THE CLIENT, AND THAT WAS CHECKED RATHER
+* THAN ASSUMED.***  Measured on this machine 5 Sep 2026: sshd_config carries no
+* AcceptEnv line and leaves PermitUserEnvironment at its default of "no", so a
+* client may not send environment variables and may not plant them in
+* authorized_keys.  sshd sets SSH_CLIENT itself, after authentication.  IF
+* EITHER OF THOSE SETTINGS EVER CHANGES, THIS TEST STOPS BEING A SECURITY
+* SIGNAL - allow-ssh-groups.ps1 is where that would happen.
+*
+* IPv6 AND IPv4 BOTH, AND THE MAPPED FORM TOO.  A loopback ssh may present as
+* 127.0.0.1, as ::1, or as ::ffff:127.0.0.1 depending on the client's address
+* family.  All three are this machine.  The whole 127.0.0.0/8 block is loopback,
+* not just 127.0.0.1, so the test is on the leading octet.
+
+peer.local.test:
+   peer.local = @false
+   peer.addr = ''
+
+*  ssh first: it is the transport this exists for.
+   peer.addr = trim(field(env('SSH_CLIENT'), ' ', 1))
+
+*  Then the API.  Not "else" - a session is one or the other, and reading both
+*  costs nothing while assuming which one applies is how this would rot.
+   if peer.addr = '' then peer.addr = trim(system(42))
+
+   if peer.addr # '' then
+      begin case
+         case peer.addr = '::1'
+            peer.local = @true
+         case peer.addr = '::ffff:127.0.0.1'
+            peer.local = @true
+         case field(peer.addr, '.', 1) = '127'
+            peer.local = @true
+      end case
+   end
+
+   return
 
 batch.permitted:
    batch.ok = @false

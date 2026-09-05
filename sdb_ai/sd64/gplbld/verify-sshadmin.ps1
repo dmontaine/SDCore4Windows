@@ -16,23 +16,37 @@
 # desktop installed as a service.  LOGIN refuses the session outright when
 # sd_admin_tier(@logname) is true and kernel(K$INTERACTIVE, 0) is false.
 #
-#   ADMINISTRATOR over ssh   REFUSED, message 10174, no session      <- the gate
-#   PROGRAMMER over ssh      ADMITTED, runs a command                <- the CONTROL
+#   ADMINISTRATOR via localhost   ADMITTED, runs a command    <- local is allowed
+#   ADMINISTRATOR via the LAN IP  REFUSED, message 10174      <- the gate
+#   PROGRAMMER    via localhost   ADMITTED, runs a command    <- the CONTROL
 #
-# ***THE CONTROL IS THE WHOLE REASON THIS IS TWO ACCOUNTS AND NOT ONE.***  A
-# refusal on the first leg has causes that have nothing to do with the gate -
-# sshd stopped, ForceCommand not starting SD, a password rejected, the host key
-# changed - and EVERY ONE of them would make leg A look like a pass.  The
-# second leg is what tells "the gate refused an administrator" from "ssh is
-# broken on this machine".  Without it a green here would mean nothing, which
-# is the trap CLAUDE.md's instrument rules name.
+# ***IT IS REMOTE THAT IS DENIED, NOT ssh.***  Owner's refinement, 5 Sep 2026:
+# "my lockout from remote API and SSH is fine.  However, local API and SSH
+# should continue to work - if I am at the console, everything works, only
+# remote access is denied."  THE FIRST VERSION OF THIS SCRIPT MEASURED THE
+# NARROWER RULE AND PASSED 10/0 ON IT: it ssh'd to localhost, was refused, and
+# scored that as the gate working.  It was the gate working as specified, and
+# the specification was narrower than the ruling.
 #
-# WHY IT NEEDS NO SECOND MACHINE.  q14 was parked for weeks as "it needs the VM
-# rig".  It does not: sshd runs on this host, and 167's own measurement was
-# taken by ssh'ing to it, so ssh to localhost exercises exactly the path that
-# was defective.  The token an ssh logon carries is built by sshd the same way
-# whether the client is across the network or on the box - S-1-5-2 NETWORK and
-# no S-1-5-4 INTERACTIVE - which is the thing under test.
+# ***THE PAIR IS THE INSTRUMENT.***  Legs A and B are the SAME ACCOUNT, the same
+# password and the same host, reached by two addresses - so the only variable
+# between "admitted" and "refused" is the route.  A single leg cannot show that:
+# a gate that admitted everything and a gate that refused everything would each
+# pass one of them.  The last check scores the DIFFERENCE for exactly that
+# reason.
+#
+# AND THE THIRD LEG IS STILL THE ORDINARY CONTROL - a non-administrator over the
+# same loopback route - because a refusal has causes that are nothing to do with
+# the gate: sshd stopped, ForceCommand not starting SD, a rejected password, a
+# changed host key.
+#
+# WHY IT NEEDS NO SECOND MACHINE, WHICH IS WHAT PARKED q14 FOR WEEKS.  ssh to
+# one of this machine's OWN LAN addresses leaves and returns over the interface,
+# and sshd then reports SSH_CLIENT as that address rather than 127.0.0.1 - which
+# is the only thing LOGIN's peer test reads.  A routable address is required and
+# its absence is refused out loud: without one there is no remote leg, and leg A
+# alone would show an administrator admitted with nothing showing a remote one
+# refused.
 #
 # ***IT CREATES A REAL LOCAL ADMINISTRATOR, BRIEFLY, AND THAT IS DELIBERATE.***
 # CREATE.ACCOUNT ... ADMINISTRATOR adds the Windows account to S-1-5-32-544
@@ -215,10 +229,38 @@ try {
     Write-Output ("  audit is {0} bytes before" -f $before.Length)
     Write-Output ''
 
-    Write-Output '=== 3. LEG A - the ADMINISTRATOR tries to ssh in =================='
+    # ***A NON-LOOPBACK ADDRESS FOR THIS SAME MACHINE.***  ssh to it and the
+    # packet leaves and returns over the interface, so sshd reports SSH_CLIENT
+    # as that address rather than 127.0.0.1 - which is the only thing LOGIN's
+    # peer test reads.  Same host, same account, same password: the ONLY
+    # variable between legs A and B is the route.
+    $lanIp = ''
+    try {
+        $lanIp = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+                   Where-Object { $_.IPAddress -notlike '127.*' -and
+                                  $_.IPAddress -notlike '169.254.*' } |
+                   Select-Object -ExpandProperty IPAddress -First 1)
+    } catch { }
+    if ($lanIp -is [array]) { $lanIp = $lanIp[0] }
+    Write-Output ("  non-loopback address for the REMOTE leg: {0}" -f
+                  $(if ($lanIp) { $lanIp } else { '<none>' }))
+
+    # REFUSE THE NULL CASE.  With no routable address there is no remote leg,
+    # and leg A alone would show an administrator being ADMITTED with nothing
+    # demonstrating that a remote one is refused - a green that means nothing.
+    if (-not $lanIp) {
+        Write-Output 'verify-sshadmin: this machine has no non-loopback IPv4 address.'
+        Write-Output '  The REMOTE leg cannot be driven, so the gate cannot be measured at all.'
+        exit 2
+    }
+    Write-Output ''
+
+    Write-Output '=== 3. LEG A - the ADMINISTRATOR over LOOPBACK - MUST BE ADMITTED =='
+    Write-Output '  Owner, 5 Sep 2026: "local API and SSH should continue to work".'
     $ra = $null
     try {
-        $ra = Invoke-SdAsTestUser -Name $adminAcct -Password $adminPw -Commands @('WHO')
+        $ra = Invoke-SdAsTestUser -Name $adminAcct -Password $adminPw `
+                  -Commands @('WHO') -SshHost 'localhost'
     } catch {
         Write-Output ("verify-sshadmin: could not drive ssh as {0} - {1}" -f $adminAcct, $_.Exception.Message)
         exit 2
@@ -231,6 +273,21 @@ try {
         Write-Output '  --- ssh stderr ---'
         Write-Output $ra.Err
     }
+    Write-Output ''
+
+    Write-Output ('=== 3b. LEG B - the SAME ACCOUNT via ' + $lanIp + ' - MUST BE REFUSED ==')
+    $rr = $null
+    try {
+        $rr = Invoke-SdAsTestUser -Name $adminAcct -Password $adminPw `
+                  -Commands @('WHO') -SshHost $lanIp
+    } catch {
+        Write-Output ("verify-sshadmin: could not drive ssh to {0} - {1}" -f $lanIp, $_.Exception.Message)
+        exit 2
+    }
+    $textR = ($rr.Out | Out-String)
+    Write-Output ("  ssh exit {0}, {1} characters of output" -f $rr.ExitCode, $textR.Length)
+    Write-Output '  --- the session said: ---'
+    Write-Output $textR
     Write-Output ''
 
     Write-Output '=== 4. LEG B - the CONTROL, a PROGRAMMER, over the same route ====='
@@ -259,18 +316,29 @@ try {
         exit 2
     }
 
-    # Leg A, on the SUCCESS WORDING of the refusal - a phrase that appears only
-    # when the gate fired.  10174 opens "An administrator may not sign in over
-    # ssh or the API"; nothing on the admitted path prints it.
-    $sawMsg = ($textA -match '(?i)may not sign in over ssh')
-    Note 'the refusal message (10174) was shown' $true $sawMsg $true
+    # ***LEG A - LOCAL - MUST BE ADMITTED.***  The owner's refinement of 5 Sep
+    # 2026.  A live session answers WHO with the account name and a user number;
+    # that is the SUCCESS wording, and the refusal path cannot print it.
+    $localRan = ($textA -match '(?i)\b' + [regex]::Escape($adminAcct) + '\b')
+    Note 'LOCAL: an administrator over loopback IS admitted' $true $localRan $true
 
-    # AND THE DISQUALIFIER.  A live session answers WHO with the account name
-    # and a user number.  If that appears, the gate did not fire, whatever else
-    # was printed.
-    $reachedSdsys = ($textA -match '(?i)\bSDSYS\b\s*$' -or
-                     $textA -match '(?i)\b' + [regex]::Escape($adminAcct) + '\b')
-    Note 'the administrator did NOT reach a session' $false $reachedSdsys $true
+    # And the disqualifier for the same leg: the refusal text must NOT appear.
+    $localRefused = ($textA -match '(?i)may not sign in')
+    Note 'LOCAL: no refusal message was shown' $false $localRefused $true
+
+    # ***LEG B - REMOTE - MUST BE REFUSED.***  Anchored on 10174's own wording,
+    # which appears only when the gate fired, and disqualified by a live session.
+    $remoteMsg = ($textR -match '(?i)may not sign in')
+    Note 'REMOTE: the refusal message (10174) was shown' $true $remoteMsg $true
+
+    $remoteRan = ($textR -match '(?i)\b' + [regex]::Escape($adminAcct) + '\b')
+    Note 'REMOTE: the administrator did NOT reach a session' $false $remoteRan $true
+
+    # ***AND THE PAIR IS THE POINT.***  Same account, same password, same host,
+    # two addresses.  If both legs went the same way the gate is not reading the
+    # route at all - it is admitting everything or refusing everything - and
+    # either of those can look like a pass on a single leg.
+    Note 'the two routes were treated DIFFERENTLY' $true ($localRan -ne $remoteRan) $true
 
     Write-Output ''
     Write-Output '=== 6. the audit trail, after - THE DECISIVE READING =============='
@@ -282,12 +350,19 @@ try {
         if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) }
     }
 
-    # Written on the refusal path and nowhere else.  LOGIN sets
-    # audit.reason = 'administrator on a session with no interactive desktop'
-    # and terminate.connection writes "LOGIN REFUSED account=... reason=...".
+    # Written on the refusal path and nowhere else.  LOGIN sets audit.reason =
+    # 'administrator on a remote session with no interactive desktop' and
+    # terminate.connection writes "LOGIN REFUSED account=... reason=...".
     $auditSaysRefused = ($tail -match '(?i)LOGIN REFUSED' -and
-                         $tail -match '(?i)no interactive desktop')
-    Note 'the audit records the refusal, with the reason' $true $auditSaysRefused $true
+                         $tail -match '(?i)remote session with no interactive desktop')
+    Note 'the audit records the REMOTE refusal, with the reason' $true $auditSaysRefused $true
+
+    # AND THE ADMISSION IS IN THE SAME FILE.  One trail should now carry three
+    # lines - the local administrator admitted, the remote one refused, and the
+    # control admitted - which is what tells "the gate reads the route" from
+    # "something refused something".
+    $auditSaysAdmitted = ($tail -match ('(?i)LOGIN account=' + [regex]::Escape($adminAcct)))
+    Note 'the audit records the LOCAL admission too' $true $auditSaysAdmitted $true
 
     # A trail that did not move at all means the session never reached LOGIN -
     # which is not the gate working, it is the measurement failing.

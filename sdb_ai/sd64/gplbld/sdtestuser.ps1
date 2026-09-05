@@ -163,7 +163,21 @@ function Invoke-SdAsTestUser {
         # is the "test that passes because it did nothing" the instrument rule
         # forbids.  The guard below is the refusal; it must be reachable.
         [string[]]$Commands = @(),
-        [string]$WorkDir = ''
+        [string]$WorkDir = '',
+
+        # 05 Sep 26 - PRE_RELEASE_FIXES 167/169.  WHERE TO ssh TO, and it
+        # defaults to localhost so every existing caller is untouched.
+        #
+        # IT EXISTS BECAUSE "LOCAL" AND "REMOTE" ARE NOW DIFFERENT ANSWERS.  The
+        # owner's refinement of 5 Sep 2026 admits an administrator over ssh from
+        # THIS machine and refuses the same account from another one, so a
+        # verifier has to be able to reach this host by a non-loopback address.
+        # It can: ssh to one of the machine's own LAN addresses leaves and
+        # returns over the interface, and sshd then reports SSH_CLIENT as that
+        # address rather than 127.0.0.1 - which is the only thing the gate reads.
+        # That makes the whole rule measurable on one machine, with the account,
+        # the credentials and the host held constant and ONLY the route varying.
+        [string]$SshHost = 'localhost'
     )
     Set-StrictMode -Version Latest
 
@@ -214,7 +228,7 @@ function Invoke-SdAsTestUser {
     $env:SSH_ASKPASS_REQUIRE = 'force'
     $env:DISPLAY = 'localhost:0'
     try {
-        $r = Invoke-SdTestNative $sshExe.Source ($sshCommon + @(($Name + '@localhost'), 'whoami')) `
+        $r = Invoke-SdTestNative $sshExe.Source ($sshCommon + @(($Name + '@' + $SshHost), 'whoami')) `
                  -StdIn $body -WorkDir $WorkDir
         # Strip the ANSI the terminal emits, the way every other verifier does.
         $r.Out = ($r.Out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')

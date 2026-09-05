@@ -1715,6 +1715,19 @@ more.args:
 *
 *   AND IT SETS access.given, so an administrator need not name a keyword and
 *   the check in the USER arm does not refuse them for staying silent.
+* 05 Sep 26 Windows port - ***THIS GRANT SURVIVES 167, AND THE NEXT READER WILL
+*   ASSUME IT DOES NOT.***  PRE_RELEASE_FIXES 169 (b).  167 denies an
+*   administrator ssh and the API FROM ANOTHER MACHINE; the owner's refinement
+*   of 5 Sep 2026 keeps both working from this one - "if I am at the console,
+*   everything works, only remote access is denied."  So the two grants below
+*   are still live, still used, and still correct, and the 27 Aug rule directly
+*   underneath - that none of the three can be taken away - keeps its reason.
+*
+*   WHAT DID CHANGE IS THE SENTENCE THIS VERB PRINTS ABOUT THEM.  It said "ssh
+*   and the API" with no qualification; :1883 now says "from this machine only"
+*   for this tier.  ***THE GATE IS LOGIN'S PEER TEST, NOT A GROUP MEMBERSHIP***,
+*   which is why nothing here needed narrowing - and why narrowing it would be
+*   the wrong fix, since it would take local ssh from an administrator too.
    if tier = 'ADMINISTRATOR' then
       access.given = @true
       access.ssh = @true
@@ -1880,7 +1893,25 @@ set.access:
 *  Says the whole resulting state, in the same four messages MODIFY.ACCOUNT
 *  uses, so an account's access reads identically whether it was just made or
 *  just changed.
+* 05 Sep 26 Windows port - ***AN ADMINISTRATOR'S ROUTES ARE LOCAL ONLY, AND
+*   SAYING "ssh and the API" WAS FALSE FROM THE MOMENT 167 LANDED.***
+*   PRE_RELEASE_FIXES 169 (a).  Found in verify-sshadmin's own PASSING
+*   transcript on b120: this verb printed "SD routes for SDSADMB120A: ssh and
+*   the API." and four seconds later LOGIN wrote "LOGIN REFUSED account=SDSYS
+*   reason=administrator...".  The same run said both.
+*
+*   ***THE GRANT IS NOT WRONG - THE SENTENCE WAS.***  :1718 forces access.ssh
+*   and access.api true for this tier and that is still right after the owner's
+*   refinement of 5 Sep: an administrator DOES use ssh and the API, from this
+*   machine.  What they cannot do is reach them from another one, which is
+*   LOGIN's peer test.  So the fix is a truthful message, not a narrower grant,
+*   and MODIFY.ACCOUNT's refusal to remove the two (10083) keeps its reason.
+*
+*   BEFORE THE THREE GENERAL CASES, so the tier answers first and the ordinary
+*   messages keep meaning exactly what they always did for the other tiers.
    begin case
+      case tier = 'ADMINISTRATOR'
+         crt sysmsg(10175,acc.uname) ;* ssh and the API, from this machine only
       case access.ssh and access.api
          crt sysmsg(10078,acc.uname) ;* may sign in over ssh and use the API
       case access.ssh

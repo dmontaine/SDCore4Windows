@@ -60,6 +60,37 @@
 # loses ssh - the caution in 5.6.2, and the reason this is an offer rather than
 # something a verb does silently.
 #
+# 05 Sep 26 - ***AND 167 IS NOT A REASON TO TAKE IT OUT. READ THIS BEFORE YOU
+# DO.***  PRE_RELEASE_FIXES 169 (c).  167 denies an administrator ssh FROM
+# ANOTHER MACHINE, and the obvious hardening looks like dropping Administrators
+# from this list so sshd refuses them before they authenticate.  ***THAT WOULD
+# BREAK THE RULING RATHER THAN ENFORCE IT.***  The owner's refinement of the
+# same day keeps LOCAL ssh working for an administrator - "if I am at the
+# console, everything works, only remote access is denied" - and AllowGroups
+# cannot tell one from the other: it matches on the GROUP, not the source, so
+# removing the entry takes loopback with it.
+#
+# ***SO THE LOCAL/REMOTE DECISION LIVES IN SD, IN LOGIN'S PEER TEST***, which
+# reads SSH_CLIENT and can see the difference.  The cost, stated plainly: a
+# remote administrator still AUTHENTICATES here and is refused a moment later
+# by SD, rather than being turned away by the transport.
+#
+# THE HARDENING THAT WOULD CLOSE THAT IS A "Match Address 127.0.0.1,::1" BLOCK
+# admitting Administrators only from loopback - sshd CAN discriminate that way,
+# where AllowGroups cannot.  It is NOT done here, and deliberately: a Match
+# block runs to the next Match or to end of file, this script already has to
+# reason about the "Match Group administrators" block Windows ships (see below),
+# and getting it wrong locks the author out of the machine.  ***IT IS A REAL
+# IMPROVEMENT AND IT IS THE OWNER'S TO ASK FOR***, not a tidy to slip in.
+#
+# ***AND SSH_CLIENT ONLY WORKS AS A SECURITY SIGNAL WHILE THIS FILE LEAVES THE
+# ENVIRONMENT ALONE.***  Measured 5 Sep 2026: sshd_config carries no AcceptEnv
+# line and leaves PermitUserEnvironment at its default of "no", so a client
+# cannot send or plant environment variables and sshd sets SSH_CLIENT itself
+# after authentication.  If either ever changes here, LOGIN's peer test stops
+# being trustworthy - it is the only thing standing between a remote
+# administrator and SDSYS.
+#
 # BY SID, RESOLVED TO A NAME.  sshd's AllowGroups takes name patterns and has
 # no SID syntax, but BUILTIN\Administrators is renamed on a localised Windows -
 # so the literal "Administrators" is exactly the bug that locks out the German
