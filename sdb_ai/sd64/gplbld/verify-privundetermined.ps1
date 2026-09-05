@@ -224,10 +224,27 @@ function Get-PrivUnreachable {
            Because = 'malloc() must fail' },
         @{ WhyId = 'PRIV_NO_GROUP_LIST'
            Because = 'the list must size and then fail to FETCH - same outage' },
+        # ***CORRECTED 4 Sep 2026 - PRE_RELEASE 159.  THIS ROW WAS IN THE WRONG
+        # BUCKET.***  It said "no login route produces one", which reads as
+        # structurally impossible.  It is not: kernel.c sets
+        # my_uptr->username[0] = '\0' when GetUserName() fails and :285 copies
+        # that into process.username - and GetUserName() is getpwuid(getuid())
+        # (linuxlb.c:294), the SAME call whose failure gives PRIV_NO_PASSWD.
+        # So this belongs with the name-service four, not with the arithmetic.
         @{ WhyId = 'PRIV_NO_USERNAME'
-           Because = 'the session must have no user name, and no login route produces one' },
+           Because = 'GetUserName() must fail, which is getpwuid() again (linuxlb.c:294) - the same outage' },
+        # ***THE CONCLUSION WAS RIGHT AND THE REASON WAS FALSE, WHICH IS WORSE
+        # THAN BEING WRONG OUTRIGHT - PRE_RELEASE 159.***  It said "sysdir is
+        # fixed".  sysdir is NOT fixed: it is the SDSYS= line in sd.conf
+        # (config.c:306-309), so a site sets it.  The real bound is arithmetic
+        # and it is the config READER that supplies it - fgets(rec, 200, ...)
+        # at config.c:158 caps the whole line, so the value after "SDSYS=" is
+        # at most 193 characters.  The path built at op_sh.c:176 is
+        # sysdir + "/os.users/" (10) + process.username (<= MAX_USERNAME_LEN,
+        # 32), so at most 193 + 10 + 32 = 235, against a limit of 256.
+        # ***IT CANNOT OVERFLOW BY 21 CHARACTERS, AND THAT MARGIN IS THE CLAIM.***
         @{ WhyId = 'PRIV_PATH_TOO_LONG'
-           Because = 'sysdir is fixed and the record name is bounded by MAX_USERNAME_LEN, so it cannot overflow' }
+           Because = 'arithmetic: sd.conf caps SDSYS= at 193 chars, +10 +32 = 235 against a 256 limit' }
     ) }
 }
 
@@ -1097,10 +1114,19 @@ try {
         Write-Host ("     {0,-20} leg '{1}'" -f $l.WhyId, $l.Name)
     }
     Write-Host ''
+    # ***"CANNOT BE FROM HERE" IS TWO DIFFERENT CLAIMS AND SAYING IT ONCE HID
+    # THAT - PRE_RELEASE 159.***  Five of these need a FAULT INDUCED that this
+    # machine cannot produce on demand; one is impossible by ARITHMETIC and
+    # would stay impossible on any machine.  Lumping them together is how
+    # PRIV_NO_USERNAME sat for a day in the second group while belonging in the
+    # first, its reason reading as a structural guarantee.
     Write-Host ("   {0} were NOT, and cannot be from here:" -f $unreachable.Count) -ForegroundColor Yellow
     foreach ($u in $unreachable) {
         Write-Host ("     {0,-20} {1}" -f $u.WhyId, $u.Because) -ForegroundColor Yellow
     }
+    Write-Host '     ---' -ForegroundColor Yellow
+    Write-Host '     Five of those need a fault INDUCED (a name-service outage, or malloc failing).' -ForegroundColor Yellow
+    Write-Host '     PRIV_PATH_TOO_LONG is the only one impossible by arithmetic rather than by rig.' -ForegroundColor Yellow
 }
 finally {
     Write-Host ''
