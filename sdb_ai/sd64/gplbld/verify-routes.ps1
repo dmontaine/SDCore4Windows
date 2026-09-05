@@ -323,7 +323,16 @@ try {
     # anyway, because allow-ssh-groups.ps1 names Administrators in its own
     # right, which is why sdapi is the half that was actually broken.
     Note 'admin has both routes'        'ssh+api' (Routes $admAcc)
-    Note 'admin: message 10078 shown (both)' $true (Shown $a.Out 10078)
+    # 05 Sep 26 - 10078 -> 10175.  PRE_RELEASE_FIXES 169 (a).  An administrator
+    # still HOLDS both routes - the row directly above still passes, and 169 (b)
+    # is why: the grant survives and cannot be taken away.  What changed is the
+    # sentence CREATE.ACCOUNT prints about them, because 167 denies an
+    # administrator both FROM ANOTHER MACHINE and 10078's bare "ssh and the API"
+    # had become false in the dangerous direction.  CREATEA:1883 reports the
+    # ADMINISTRATOR tier before the three general cases, so the ordinary "both"
+    # account still gets 10078 - and THAT row, further down this file, still
+    # passes.  b123 showed exactly that pair: this one red, the other green.
+    Note 'admin: message 10175 shown (this machine only)' $true (Shown $a.Out 10175)
 
     # -----------------------------------------------------------------------
     Step 3 "RDPACCOUNT is gone"
