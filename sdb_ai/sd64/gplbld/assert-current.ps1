@@ -288,6 +288,15 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # and then every verifier that calls this script refuses.
                   # Session 79 paid for that with three scripts at once.
                   'verify-sdsysgate.ps1',
+                  # 05 Sep 26 - verify-sshadmin.ps1, PRE_RELEASE 167's verifier
+                  # and the other half of sdsysgate's question: that one proves
+                  # a non-administrator is refused SDSYS and still gets a
+                  # session, this one proves an administrator gets no session at
+                  # all.  Listed in the commit that creates it, for the reason
+                  # the two entries above spell out - a gplbld script not on
+                  # this list makes the tree report STALE merely because it
+                  # exists, and then every verifier that calls this one refuses.
+                  'verify-sshadmin.ps1',
                   # 31 Aug 26 - verify-logtoaccess.ps1, PRE_RELEASE 91's
                   # verifier.  Listed in the commit that creates it, for the
                   # reason the entry directly above spells out: a gplbld script

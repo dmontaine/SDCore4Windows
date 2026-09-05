@@ -131,6 +131,11 @@ param(
     # non-administrator account, created and removed inside the step.  Lower
     # case only, same derivation as the rest: it becomes a Windows account name.
     [string]$GatePrefix  = '',   # verify-sdsysgate.ps1 - one account
+    # 05 Sep 26 - verify-sshadmin.ps1, PRE_RELEASE 167.  TWO throwaway accounts,
+    # one ADMINISTRATOR and one PROGRAMMER, created and removed inside the step.
+    # The step appends 'a' and 'p' to this, so it must leave room in a Windows
+    # account name.  Lower case only, same derivation as the rest.
+    [string]$SshAdminPrefix = '', # verify-sshadmin.ps1 - two accounts
     # 02 Sep 26 - verify-vocverbs.ps1, PRE_RELEASE_FIXES 112, owner's ruling.
     # It was in NEITHER runner, so the checks it carries for entries 5, 13, 14
     # and 15 had never fired since the day it was written - the same shape as
@@ -240,6 +245,7 @@ if ($Run) {
     if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
     if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
     if (-not $GatePrefix)  { $GatePrefix  = "sdgate$Run" }
+    if (-not $SshAdminPrefix) { $SshAdminPrefix = "sdsadm$Run" }
     # 02 Sep 26 - PRE_RELEASE_FIXES 112.  Derived from -Run like the rest: a
     # FIXED prefix passes once and fails every later run, which is 54's lesson
     # and the reason to go through the runner rather than call the verifier by
@@ -549,6 +555,13 @@ $steps = @(
     # It makes and removes its own account: VerifyInstall1's test account
     # belongs to the unelevated half and is gone before this runner starts.
     @{ Name = 'verify-sdsysgate.ps1';     P = @{ Prefix  = $GatePrefix } },
+    # 05 Sep 26 - PRE_RELEASE 167, the ssh half of the owner's 5 Sep ruling.
+    # NEXT TO verify-sdsysgate BECAUSE THEY ARE THE TWO HALVES OF ONE QUESTION:
+    # that one proves a non-administrator is refused SDSYS and still gets a
+    # session; this one proves an administrator gets no session at all.  It
+    # carries its own control for exactly the reason sdsysgate's header gives -
+    # a refusal over ssh has a dozen causes that are not the gate.
+    @{ Name = 'verify-sshadmin.ps1';      P = @{ Prefix  = $SshAdminPrefix } },
     # 21 Aug 26 - the two route/rule verifiers, added when phase 4 rewrote the
     # first and wrote the second.  Both were run by hand until now, which is
     # exactly the shape this file exists to remove.

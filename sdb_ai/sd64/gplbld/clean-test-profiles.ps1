@@ -214,7 +214,7 @@ $ErrorActionPreference = 'Stop'
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
-           'sdtc', 'sdpw')
+           'sdtc', 'sdpw', 'sdsadm')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has
@@ -268,6 +268,14 @@ if ($SelfTest) {
         # sdtc1, 28 PASS / 0 FAIL), and sdtcb88a is what VerifyInstall2 now
         # composes.  The trailing "a" is verify-tierchange.ps1:281, not a typo.
         'sdtc1a', 'sdtcb88a',
+        # 05 Sep 26 - verify-sshadmin's family (PRE_RELEASE 167).  ***IT MAKES
+        # TWO ACCOUNTS PER RUN, NOT ONE***, and both suffixes are here because
+        # the "a" one is a WINDOWS ADMINISTRATOR (CREATE.ACCOUNT ADMINISTRATOR
+        # adds it to S-1-5-32-544): missing that shape would leave a local
+        # administrator profile behind unswept, which is the worst litter this
+        # list can fail to see.  Added in the commit that created the verifier,
+        # which is the discipline the header above says has failed five times.
+        'sdsadmb120a', 'sdsadmb120p', 'sdsadm1a',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -297,6 +305,12 @@ if ($SelfTest) {
         # so it is the shape that would be swept if the required digit were ever
         # relaxed.  All three fail on that digit.
         'sdtcl', 'sdtcl.ps1', 'sdtcp',
+        # 05 Sep 26 - the near-misses "sdsadm" opens up.  "sdsadmin" is the
+        # sharp one: it is a plausible real account name, it starts with the
+        # stem AND continues with letters, so it is exactly the shape that
+        # would be swept if the required digit were ever relaxed - and sweeping
+        # a real administrator account is the failure this stem must not cause.
+        'sdsadmin', 'sdsadmins', 'sdsadmintool',
         # 02 Sep 26 - THE $notProfiles CONTROL, AND IT IS THE SHARPEST PAIR IN
         # THIS LIST.  sdvvb99 and sdvvb101 are REAL names verify-vocverbs is
         # driven with, and they must NOT match: the family is declared in
