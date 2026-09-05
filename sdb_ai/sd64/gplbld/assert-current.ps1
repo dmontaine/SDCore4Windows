@@ -840,22 +840,24 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # POSITIVE control: if the unmodified file does not pass,
                   # every injected failure below it proves nothing.
                   'test-staleleads-units.py',
-                  # 26 Aug 26 - check-client-sync.py, which compares the API
-                  # client across the three trees: gplsrc/sdclilib is the
-                  # source, ../winsdclilib is its mirror, ../sdclilib32 builds
-                  # from this tree and holds no source.  Listed IN THE COMMIT
-                  # THAT CREATES IT, under section 7 step 7's rule.  It reads
-                  # those trees and writes nothing.
+                  # 04 Sep 26 - check-client-sync.py WAS HERE AND IS RETIRED.
+                  # PRE_RELEASE_FIXES 161.  It compared the API client across
+                  # three trees, because gplsrc/sdclilib was the source,
+                  # ../winsdclilib its mirror, and ../sdclilib32 built from
+                  # this tree.  The owner deleted both siblings once "make sd"
+                  # built all four client DLLs, so there is no second copy left
+                  # to be out of sync with and the question it asked cannot be
+                  # asked any more.
                   #
-                  # IT EXISTS BECAUSE THE ABSENCE OF IT COST TWICE: the 32-bit
-                  # client that SHIPPED SENDING PASSWORDS IN CLEAR, built from
-                  # a mirror that had not moved since 15 Aug and had no SCRAM
-                  # in it; and the SV_EMSG_PAIR transposition that survived ten
-                  # days in three repositories at once.  Both were found by a
-                  # human running a grep on a hunch, neither by anything that
-                  # runs.  --self-test builds broken fixtures and requires a
-                  # rejection from each, so a clean run means something.
-                  'check-client-sync.py',
+                  # WHAT IT COST TO NOT HAVE IT IS KEPT, because the reason it
+                  # existed is the reason 161 was worth doing: the 32-bit
+                  # client SHIPPED SENDING PASSWORDS IN CLEAR, built from a
+                  # mirror that had not moved since 15 Aug and had no SCRAM in
+                  # it, and the SV_EMSG_PAIR transposition survived ten days in
+                  # three repositories at once.  Both were found by a human
+                  # running a grep on a hunch.  ***161 DID NOT RETIRE THE
+                  # CHECK, IT RETIRED THE DEFECT*** - one build now makes every
+                  # DLL from one source, so divergence has nowhere to happen.
                   # 26 Aug 26 - probe-sshremote.ps1, the HOST half of the ssh
                   # scoping test: it dials the GUEST's port 22 across the
                   # bridged segment.  probe-sshfirewall.ps1 is the guest half
