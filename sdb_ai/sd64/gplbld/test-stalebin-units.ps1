@@ -170,12 +170,28 @@ Note (-not (Test-IsSdSource 'C:\r\gplsrc\sdclilib\VENDORING.md' 'VENDORING.md'))
      'documentation is excluded - a rebuild has nothing to read and the install nothing to receive'
 Note (-not (Test-IsSdSource 'C:\r\gplsrc\notes.txt' 'notes.txt')) 'a .txt is excluded'
 
+# 04 Sep 26 - THE GENERATED .def, PRE_RELEASE_FIXES 161.  qmclient.def is
+# qmclilib.def with its LIBRARY line rewritten by the Makefile, so it cannot
+# change unless the file it comes from changes first.
+Note (-not (Test-IsSdSource 'C:\r\gplsrc\sdclilib\qmclient.def' 'qmclient.def')) `
+     'the generated qmclient.def is excluded - the Makefile rewrites it from qmclilib.def'
+
 # THE EXCLUSIONS MUST NOT BE SO BROAD THEY SWALLOW REAL SOURCE.  "too blind" is
 # the worse of the two failures - see the header.
 Note (Test-IsSdSource 'C:\r\gplsrc\localtester.c' 'localtester.c') `
      'localtest is matched as a DIRECTORY, so localtester.c is still source'
 Note (Test-IsSdSource 'C:\r\gplsrc\sdclilib\testsuite.c' 'testsuite.c') `
      'sdclilib\tests\ is matched as a directory, so testsuite.c is still source'
+
+# ***THE CONTROL FOR THE ROW ABOVE, AND IT IS THE ONE THAT MATTERS.***  If the
+# generated exclusion were written as an extension ('\.def$') this would go red:
+# qmclilib.def is the 99-name export list of both 32-bit DLLs, and editing it
+# changes what they export while no .c file moves.  Nothing else would catch
+# that, so a .def exclusion has to be by NAME.
+Note (Test-IsSdSource 'C:\r\gplsrc\sdclilib\qmclilib.def' 'qmclilib.def') `
+     'qmclilib.def IS source - it is the export list, and only it can change what the DLLs export'
+Note (Test-IsSdSource 'C:\r\gplsrc\sdclilib\otherqmclient.def' 'otherqmclient.def') `
+     'the generated name is anchored, so a different .def is still source'
 
 Write-Host ''
 Write-Host '--- Get-BinaryStaleness: the verdict'

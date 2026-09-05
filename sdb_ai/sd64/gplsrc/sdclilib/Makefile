@@ -37,24 +37,171 @@ ifneq ($(notdir $(CC)),$(CC))
 export PATH := $(dir $(CC)):$(PATH)
 endif
 
+# ===========================================================================
+# THE 32-BIT COMPILER.  PRE_RELEASE_FIXES 161.
+#
+# 04 Sep 26 - THIS DIRECTORY NOW BUILDS ALL FOUR CLIENT DLLs, and two of them
+# are i686.  Before today the 32-bit pair was hand-built in ../sdclilib32
+# against this tree's source, and the four DLLs nothing here built were
+# FIFTEEN DAYS STALE when it was measured - with the older copy winning on
+# PATH.  A build that cannot diverge beats a check that reports divergence.
+#
+# NAMED IN POSIX FORM, like UCRT_CC in the top-level Makefile, and that is not
+# cosmetic.  ../sdclilib32 defaults it to "C:/msys64/..." because build.cmd
+# reaches it from a Windows prompt; under MSYS2 make PATH is POSIX and joined
+# with colons, so prepending a drive-letter path splits at the colon into the
+# two nonexistent entries "C" and "/msys64/mingw32/bin".  PATH then LOOKS
+# modified, the directory is still not on it, and the compile fails with the
+# empty exit 1 described above from a makefile that appears to have guarded
+# against exactly that.
+CC32 ?= /c/msys64/mingw32/bin/gcc.exe
+
+# The 32-bit compile gets its own PATH with mingw32/bin FIRST.  PATH already
+# has ucrt64/bin on the front from the block above, and cc1.exe resolves its
+# DLLs through PATH in order - so without this the i686 cc1 would find the
+# x86_64 runtime DLLs first.  Same reasoning as the 64-bit block; only the
+# directory differs.
+ifneq ($(notdir $(CC32)),$(CC32))
+CC32PATH := $(patsubst %/,%,$(dir $(CC32))):$(PATH)
+else
+CC32PATH := $(PATH)
+endif
+
+# -static-libgcc, which the 64-bit build does not need and this one does.  The
+# i686 build pulls in the DWARF-2 unwinder and so links libgcc_s_dw2-1.dll,
+# which lives in C:\msys64\mingw32\bin and nowhere else on a machine without
+# MSYS2.  A DLL that loads on the build machine and fails on every other one is
+# the worst way to find that out, and the failure names the missing libgcc
+# rather than anything to do with this library.  Linked in statically, the only
+# remaining dependencies are kernel32, msvcrt and ws2_32, all of which are part
+# of Windows - so the DLL can simply be copied next to the application, which
+# is the whole route PRE_RELEASE 161 documents.
+LDFLAGS32 += -static-libgcc
+
+# ===========================================================================
+# THE ARCHITECTURE CHECK, AT RECIPE TIME RATHER THAN PARSE TIME
+#
+# ../sdclilib32 does this with $(error), which it can afford because 32-bit is
+# all it builds.  Here a parse-time error would stop the SERVER building on a
+# machine with no i686 toolchain, so the check moved into the recipe.
+#
+# IT PRINTS WHAT IT MEASURED, not just its conclusion - CLAUDE.md's instrument
+# rule.  The failure it exists to stop is silent: a bare "gcc" on this machine
+# is the UCRT64 x86_64 one, and it would cheerfully produce a 64-bit DLL named
+# qmclilib.dll, which loads in nothing and says only "%1 is not a valid Win32
+# application" when it fails.  AND IT REFUSES THE NULL CASE: a compiler that
+# cannot run at all answers the empty string, which must not read as a pass.
+# ===========================================================================
+define check_cc32
+	@arch=`PATH="$(CC32PATH)" "$(CC32)" -dumpmachine 2>/dev/null`; \
+	echo "  32-bit compiler $(CC32) -dumpmachine = $${arch:-<could not run>}"; \
+	case "$$arch" in \
+	  *i686*) ;; \
+	  '') echo "" >&2; \
+	      echo "Cannot run $(CC32).  Install the 32-bit toolchain with" >&2; \
+	      echo '  pacman -S mingw-w64-i686-gcc' >&2; \
+	      echo "in an MSYS2 shell, or set CC32 to a 32-bit compiler." >&2; \
+	      exit 2 ;; \
+	  *)  echo "" >&2; \
+	      echo "$(CC32) targets $$arch, not i686.  These two DLLs are the" >&2; \
+	      echo "32-bit pair; a 64-bit build under those names loads in" >&2; \
+	      echo "nothing.  Set CC32 to a 32-bit compiler." >&2; \
+	      exit 2 ;; \
+	esac
+endef
+
+# ===========================================================================
+# THE FOUR DLLs.  ONE SOURCE, FOUR NAMES, AND NONE OF THEM IS A COPY
+#
+# WHY A SECOND LINK AND NOT A COPY OF THE FILE.  An import library records the
+# DLL name its symbols come from, so a renamed copy hands out an implib that
+# still points at the first DLL.  On the 32-bit side it is worse: the .def
+# carries a LIBRARY statement, which is what sets that name, so the second DLL
+# needs a .def of its own or its implib points at the first no matter what -o
+# says.
+#
+# <x>clilib.dll is the name existing applications already ask for and does not
+# move; <x>client.dll is the name to use from now on.  They are not
+# alternatives to choose between - an application asks for one by name.
+# ===========================================================================
 DLL = sdclilib.dll
 IMPLIB = libsdclilib.dll.a
+DLL2 = sdclient.dll
+IMPLIB2 = libsdclient.dll.a
+
+QMDLL = qmclilib.dll
+QMIMPLIB = libqmclilib.dll.a
+QMDEF = qmclilib.def
+QMDLL2 = qmclient.dll
+QMIMPLIB2 = libqmclient.dll.a
+QMDEF2 = qmclient.def
+
+# The library's own headers, and the two files that are 32-bit-only: qmcompat.c
+# implements QMConnectLocal, which is the one QM entry point with no sdclilib
+# counterpart and so the only one that cannot be aliased in the .def.
+HDRS = sdclilib.h sdclient.h err.h revstamp.h
+QMSRCS = sdclilib.c qmcompat.c
 
 .PHONY: all clean check
 
-all: $(DLL)
+all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2)
 
-$(DLL): sdclilib.c sdclilib.h sdclient.h err.h revstamp.h
+$(DLL): sdclilib.c $(HDRS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c \
 	  $(LDLIBS) -Wl,--out-implib,$(IMPLIB)
 
-check: $(DLL)
+$(DLL2): sdclilib.c $(HDRS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c \
+	  $(LDLIBS) -Wl,--out-implib,$(IMPLIB2)
+
+# The .def supplies the export table.  Without it the QM names do not exist:
+# __declspec(dllexport) in sdclilib.c only ever produces SD ones.
+$(QMDLL): $(QMSRCS) $(HDRS) qmclilib.h $(QMDEF)
+	$(call check_cc32)
+	PATH="$(CC32PATH)" $(CC32) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS32) \
+	  -shared -o $@ $(QMSRCS) $(QMDEF) \
+	  $(LDLIBS) -Wl,--out-implib,$(QMIMPLIB)
+
+# GENERATED, NOT MAINTAINED, AND DELIBERATELY NOT TRACKED.  The export list is
+# 99 names and two hand-kept copies of it would diverge - most likely by one
+# name, in the direction that fails only at run time and only for whoever used
+# that call.  So the second .def is the first with its LIBRARY line rewritten,
+# and nothing else.
+$(QMDEF2): $(QMDEF)
+	sed 's/^LIBRARY .*/LIBRARY $(QMDLL2)/' $< > $@
+
+$(QMDLL2): $(QMSRCS) $(HDRS) qmclilib.h $(QMDEF2)
+	$(call check_cc32)
+	PATH="$(CC32PATH)" $(CC32) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS32) \
+	  -shared -o $@ $(QMSRCS) $(QMDEF2) \
+	  $(LDLIBS) -Wl,--out-implib,$(QMIMPLIB2)
+
+check: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2)
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o smoke-test.exe \
 	  tests/smoke_test.c -I. -L. -lsdclilib
 	./smoke-test.exe
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -Wno-unknown-pragmas \
 	  -o internal-state-test.exe tests/internal_state_test.c -lws2_32 -lbcrypt
 	./internal-state-test.exe
+# 04 Sep 26 - THE SAME TEST THROUGH THE SECOND 64-BIT NAME, and it is the only
+# thing here that would catch an implib pointing at the wrong DLL.  Carried
+# over from ../winsdclilib/build.cmd when this directory took over the build.
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o smoke-test-sdclient.exe \
+	  tests/smoke_test.c -I. -L. -lsdclient
+	./smoke-test-sdclient.exe
+# 04 Sep 26 - THE 32-BIT PAIR, and the alias test is the right one to repeat
+# rather than the smoke one.  It resolves QM export names, so it fails if the
+# .def lost the export list, AND it loads the DLL by name, so it fails if the
+# generated LIBRARY line left the implib pointing at qmclilib.dll.  Those are
+# the only two ways the second name can be wrong.  Carried over from
+# ../sdclilib32/Makefile with the build.
+	$(call check_cc32)
+	PATH="$(CC32PATH)" $(CC32) -std=c11 -Wall -Wextra -Wpedantic \
+	  -o qm-alias-test.exe tests/qm_alias_test.c -I. -L. -lqmclilib
+	./qm-alias-test.exe
+	PATH="$(CC32PATH)" $(CC32) -std=c11 -Wall -Wextra -Wpedantic \
+	  -o qm-alias-test-qmclient.exe tests/qm_alias_test.c -I. -L. -lqmclient
+	./qm-alias-test-qmclient.exe
 
 # 17 Aug 26 - SEPARATE FROM "check" ON PURPOSE.  Everything under "check" runs
 # without a server, so it can run on any machine at any time.  This one spawns
@@ -242,5 +389,8 @@ check-peer-probe:
 	cd localtest && ./peer-probe.exe
 
 clean:
-	$(RM) $(DLL) $(IMPLIB) smoke-test.exe internal-state-test.exe
+	$(RM) $(DLL) $(IMPLIB) $(DLL2) $(IMPLIB2) \
+	  $(QMDLL) $(QMIMPLIB) $(QMDLL2) $(QMIMPLIB2) $(QMDEF2) \
+	  smoke-test.exe smoke-test-sdclient.exe internal-state-test.exe \
+	  qm-alias-test.exe qm-alias-test-qmclient.exe
 	$(RM) -r localtest

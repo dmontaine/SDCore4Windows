@@ -32,6 +32,14 @@ sdb_ai/sd64/gplsrc/sdclilib/*.dll
 sdb_ai/sd64/gplsrc/sdclilib/*.dll.a
 sdb_ai/sd64/gplsrc/sdclilib/*.exe
 
+# 04 Sep 26 - qmclient.def is GENERATED from qmclilib.def, and is not tracked
+# for the reason the Makefile gives: the export list is 99 names, and a second
+# hand-kept copy of it would diverge by one name, in the direction that fails
+# only at run time and only for whoever used that call.  qmclilib.def IS
+# tracked - it is the source the other is made from.  Carried over from
+# ../sdclilib32 with the build (PRE_RELEASE_FIXES 161).
+sdb_ai/sd64/gplsrc/sdclilib/qmclient.def
+
 # 17 Aug 26 - localtest/ is where "make check-local" and "make
 # check-select-probe" build and RUN their binaries, deliberately (see the long
 # comment on check-local in that Makefile: the directory a test runs from

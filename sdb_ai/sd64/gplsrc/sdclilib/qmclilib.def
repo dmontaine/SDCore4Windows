@@ -1,0 +1,152 @@
+; Modifications Copyright (c) 2026 Donald Montaine
+;
+; This library is free software: you can redistribute it and/or modify it
+; under the terms of the GNU Lesser General Public License as published by
+; the Free Software Foundation, either version 3 of the License, or (at
+; your option) any later version.
+;
+; This library is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser
+; General Public License for more details.
+;
+; You should have received a copy of the GNU Lesser General Public License
+; along with this library.  If not, see <https://www.gnu.org/licenses/>.
+;
+; Linking exception (additional permission under GNU LGPL version 3
+; section 7): as a special exception, the copyright holders give you
+; permission to link this library with independent modules to produce an
+; executable, regardless of the license terms of these independent modules,
+; and to copy and distribute the resulting executable under terms of your
+; choice, provided that you also meet, for each linked independent module,
+; the terms and conditions of the license of that module.  An independent
+; module is a module which is not derived from or based on this library.
+
+; qmclilib.def - export list for the 32-bit QM-compatible build.
+;
+; The library implements SD-named entry points.  A QMClient application
+; imports QM-named ones, and Windows resolves imports by name: renaming the
+; file to qmclilib.dll is not enough, the export table has to carry the names
+; the application asks for or it fails to load with "entry point not found".
+;
+; Each QM name is an ALIAS onto the SD implementation - an extra export-table
+; entry pointing at the same code, not a wrapper.  That matters for QMCall and
+; QMCallx, which are variadic: a forwarding wrapper cannot pass on a "..."
+; argument list, whereas an alias never involves a call at all.
+;
+; Aliasing is sound because every QM/SD pair is ABI-identical under 32-bit
+; cdecl.  Where the declared types differ - QMDebug takes bool where SDDebug
+; takes int16_t, QMEnterPackage returns bool where SDEnterPackage returns
+; int16_t - both sides still occupy one 4-byte stack slot, and both returns
+; come back in AX with the significant value in AL.
+;
+; Derived from the 49 DLLEntry functions of the original QM
+; qmclilib.c and the 50 exports of the 64-bit sdclilib.dll.  48 of the 49
+; alias 1:1; QMConnectLocal is the exception and is implemented as a stub in
+; qmcompat.c - see the comment there.
+
+LIBRARY qmclilib.dll
+EXPORTS
+    SDCall
+    SDCallx
+    SDChange
+    SDClearSelect
+    SDClose
+    SDConnect
+    SDConnected
+    SDDcount
+    SDDebug
+    SDDel
+    SDDelete
+    SDDeleteu
+    SDDisconnect
+    SDDisconnectAll
+    SDEndCommand
+    SDEnterPackage
+    SDError
+    SDExecute
+    SDExitPackage
+    SDExtract
+    SDField
+    SDFree
+    SDGetArg
+    SDGetSession
+    SDIns
+    SDLocate
+    SDLogto
+    SDMarkMapping
+    SDMatch
+    SDMatchfield
+    SDOpen
+    SDRead
+    SDReadList
+    SDReadNext
+    SDReadl
+    SDReadu
+    SDRecordlock
+    SDRelease
+    SDReplace
+    SDRespond
+    SDSelect
+    SDSelectIndex
+    SDSelectLeft
+    SDSelectRight
+    SDSetLeft
+    SDSetRight
+    SDSetSession
+    SDStatus
+    SDWrite
+    SDWriteu
+
+    ; QM-compatibility aliases
+    QMCall                 = SDCall
+    QMChange               = SDChange
+    QMClearSelect          = SDClearSelect
+    QMClose                = SDClose
+    QMConnect              = SDConnect
+    QMConnected            = SDConnected
+    QMDcount               = SDDcount
+    QMDebug                = SDDebug
+    QMDel                  = SDDel
+    QMDelete               = SDDelete
+    QMDeleteu              = SDDeleteu
+    QMDisconnect           = SDDisconnect
+    QMDisconnectAll        = SDDisconnectAll
+    QMEndCommand           = SDEndCommand
+    QMEnterPackage         = SDEnterPackage
+    QMError                = SDError
+    QMExecute              = SDExecute
+    QMExitPackage          = SDExitPackage
+    QMExtract              = SDExtract
+    QMField                = SDField
+    QMFree                 = SDFree
+    QMGetSession           = SDGetSession
+    QMIns                  = SDIns
+    QMLocate               = SDLocate
+    QMLogto                = SDLogto
+    QMMarkMapping          = SDMarkMapping
+    QMMatch                = SDMatch
+    QMMatchfield           = SDMatchfield
+    QMOpen                 = SDOpen
+    QMRead                 = SDRead
+    QMReadList             = SDReadList
+    QMReadNext             = SDReadNext
+    QMReadl                = SDReadl
+    QMReadu                = SDReadu
+    QMRecordlock           = SDRecordlock
+    QMRelease              = SDRelease
+    QMReplace              = SDReplace
+    QMRespond              = SDRespond
+    QMSelect               = SDSelect
+    QMSelectIndex          = SDSelectIndex
+    QMSelectLeft           = SDSelectLeft
+    QMSelectRight          = SDSelectRight
+    QMSetLeft              = SDSetLeft
+    QMSetRight             = SDSetRight
+    QMSetSession           = SDSetSession
+    QMStatus               = SDStatus
+    QMWrite                = SDWrite
+    QMWriteu               = SDWriteu
+
+    ; Implemented in qmcompat.c, not an alias.
+    QMConnectLocal

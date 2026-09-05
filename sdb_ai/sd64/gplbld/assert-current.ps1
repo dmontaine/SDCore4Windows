@@ -1215,11 +1215,28 @@ foreach ($t in $trees) {
     # cycle before verify-apiport.ps1 would run again - and verify-apiport
     # calls this script first, so improving the test blocked the test.  A cycle
     # that reinstalls nothing is not a guard, it is a toll.
+    # 04 Sep 26 - IT NOW ASKS Test-IsSdSource RATHER THAN RE-STATING IT, AND
+    # THE RE-STATEMENT HAD ALREADY DRIFTED.  PRE_RELEASE_FIXES 161.
+    #
+    # The three path exclusions above were written here by hand AND in
+    # stale-binaries.ps1, which is "two files describe one fact and are kept in
+    # step by hand" - the shape three of this tree's free guards exist to
+    # catch, in the very file that was extracted to end it.  They agreed on the
+    # three paths and DISAGREED ON BUILD PRODUCTS: A2 has excluded .exe/.dll/
+    # .a/.o since 19 Aug 2026, this copy never did.  So "make check" in
+    # gplsrc\sdclilib left smoke-test.exe and internal-state-test.exe reported
+    # here as SOURCE NEWER THAN THE INSTALL, demanding a cycle for two files
+    # that cannot reach an install - gplsrc is not installed at all.  161 made
+    # it loud rather than made it true: that directory now produces four DLLs,
+    # four import libraries and five test executables instead of four files.
+    #
+    # THE .md/.txt NUANCE IS KEPT, and it is the reason this is not simply a
+    # call.  Test-IsSdSource excludes documentation outright; here a document
+    # is watched again the moment stage.py or sd.iss names it, because a false
+    # "current" costs an investigation while a false "stale" costs one install.
     $newer += Get-ChildItem $t -Recurse -File -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -notmatch '\\__pycache__\\' -and
-                             $_.FullName -notmatch '\\localtest\\' -and
-                             $_.FullName -notmatch '\\sdclilib\\tests\\' -and
-                             -not ($_.Extension -in '.md', '.txt' -and -not (& $shipsAs $_.Name)) -and
+              Where-Object { ( (Test-IsSdSource $_.FullName $_.Name) -or
+                               ($_.Extension -in '.md', '.txt' -and (& $shipsAs $_.Name)) ) -and
                              $excluded -notcontains $_.Name -and
                              $_.LastWriteTime -gt $installed }
 }

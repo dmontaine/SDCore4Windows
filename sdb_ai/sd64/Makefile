@@ -160,11 +160,53 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # and decides the target is already satisfied.
 .PHONY: sdclilib sdsvc terminfo check-local check-remote check-api-admin
 
+# 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
+# owner's ruling: "let's get rid of the client installers all together and just
+# have sd build all four, the 32 bit ones stored in sd64\bin\client32 directory
+# and the 64 bit ones stored in sd64\bin\client64".
+#
+# WHAT IT REPLACED, AND WHY THE OLD SHAPE COULD NOT HOLD.  One source produces
+# five DLLs.  Until today this target built ONE of them and the other four were
+# hand-built in two sibling trees; they were FIFTEEN DAYS STALE when it was
+# measured, and the older copy won on PATH.  A build that cannot diverge beats
+# a check that reports divergence.
+#
+# WHERE EACH PAIR LANDS, AND THE 64-BIT ONE LANDS TWICE ON PURPOSE.  Owner,
+# 4 Sep 2026, in two steps:
+#
+#   "the 64 bit dlls should be in the usr\bin directory and only the 32 bit
+#    dlls should be in client32 - they are never needed on the server as it is
+#    64 bit, they are only provided for older utility programs that are 32 bit."
+#
+#   "it might be convenient for users if the 64 bit dlls were in both usr\bin
+#    and a client64 directory ... a new directory usr\clients is created that
+#    has client64 and client32 underneath it - that way users are not trying to
+#    copy anything out of the usr\bin directory."
+#
+# So bin\ FLAT is the server's pair, which stage.py's PROGRAM_FILES_BIN copies
+# into usr\bin beside sd.exe.  That copy is load-bearing rather than tidy:
+# sdclilib.dll resolves sd.exe BESIDE ITSELF, so a copy anywhere else can do
+# everything except connect locally.  bin\client64 and bin\client32 are the
+# USER's copies and become usr\clients\ in the install - a directory nobody has
+# to go rummaging in usr\bin to find.
 sdclilib:
-	@echo Building native client DLL
+	@echo Building the four client DLLs
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC)
-	@cp $(CLILIBDIR)/sdclilib.dll $(GPLBIN)
-	@cp $(CLILIBDIR)/libsdclilib.dll.a $(GPLBIN)
+	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)
+	@cp $(CLILIBDIR)/libsdclilib.dll.a $(CLILIBDIR)/libsdclient.dll.a $(GPLBIN)
+	@mkdir -p $(GPLBIN)client64 $(GPLBIN)client32
+	@cp $(CLILIBDIR)/sdclilib.dll $(CLILIBDIR)/sdclient.dll $(GPLBIN)client64/
+	@cp $(CLILIBDIR)/qmclilib.dll $(CLILIBDIR)/qmclient.dll $(GPLBIN)client32/
+# Print what was produced rather than only that it succeeded - CLAUDE.md's
+# instrument rule.  "file" names the architecture, which is the one property a
+# 32-bit DLL under the right name can silently get wrong, and the failure it
+# produces names nothing: "%1 is not a valid Win32 application".
+	@echo "  bin (64-bit, the server's own, beside sd.exe):"
+	@file $(GPLBIN)sdclilib.dll $(GPLBIN)sdclient.dll | sed 's|^.*/|    |'
+	@echo "  bin/client64 (64-bit, the user's copy):"
+	@file $(GPLBIN)client64/*.dll | sed 's|^.*/|    |'
+	@echo "  bin/client32 (32-bit, for older utility programs):"
+	@file $(GPLBIN)client32/*.dll | sed 's|^.*/|    |'
 
 # 17 Aug 26 - REACHABLE FROM HERE, because reaching it the other way built the
 # wrong thing.  "cd gplsrc/sdclilib && make check-local" was what this file's

@@ -100,11 +100,23 @@ function Test-IsSdSource([string]$fullName, [string]$name) {
     $buildProducts = '\.(exe|dll|a|o|obj|lib|exp)$'
     $documentation = '\.(md|txt)$'
 
+    # 04 Sep 26 - GENERATED, AND BY NAME RATHER THAN BY EXTENSION.
+    # PRE_RELEASE_FIXES 161.  gplsrc\sdclilib\qmclient.def is qmclilib.def with
+    # its LIBRARY line rewritten by the Makefile, so watching it adds nothing:
+    # it cannot change without the file it is generated FROM changing first.
+    #
+    # ".def" IS A SOURCE EXTENSION HERE and must not be excluded outright.
+    # qmclilib.def is the 99-name export list of the two 32-bit DLLs - the one
+    # file whose edit changes what they export while no .c file moves - so a
+    # blunt '\.def$' would hide exactly the change nothing else would catch.
+    $generated = '^qmclient\.def$'
+
     if ($fullName -match '\\__pycache__\\')     { return $false }
     if ($fullName -match '\\localtest\\')       { return $false }
     if ($fullName -match '\\sdclilib\\tests\\') { return $false }
     if ($name -match $buildProducts)            { return $false }
     if ($name -match $documentation)            { return $false }
+    if ($name -match $generated)                { return $false }
     return $true
 }
 

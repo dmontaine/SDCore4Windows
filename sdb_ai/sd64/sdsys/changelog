@@ -5,6 +5,45 @@ what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
 Entries are newest first, by date, until there is a version to attach them to.
 
+04 Sep 26  THE CLIENT LIBRARIES NOW SHIP WITH SD, IN
+           C:\Program Files\SD\usr\clients
+
+           If you write a Windows program that talks to SD, it does so
+           through a client DLL. There used to be two separate installers
+           for those, downloaded and run on their own. There are not any
+           more: the DLLs are built with SD and are installed with it.
+
+             usr\clients\client64   sdclilib.dll   sdclient.dll
+             usr\clients\client32   qmclilib.dll   qmclient.dll
+
+           COPY THE ONE YOU NEED next to your application's .exe, or into
+           windows\system32. Nothing is added to your PATH, by design - a
+           program finds its DLL because you put it there, and never by
+           accident.
+
+           WHICH ONE:
+
+             * 64-bit, new work                    sdclient.dll
+             * 64-bit, already built against SD    sdclilib.dll
+             * 32-bit, already built for QMClient  qmclilib.dll
+             * 32-bit, new work                    qmclient.dll
+
+           The two names in each pair are the same library, built together
+           from the same source, so they cannot come to disagree with each
+           other or with the server. Your program asks for one by name.
+
+           Each DLL is a single file that needs nothing else installed: it
+           uses only Windows' own system libraries.
+
+           CONNECT OVER THE API, to 127.0.0.1 if SD is on the same machine.
+           The API port is off unless you turned it on when you installed
+           SD; the SD Core API section of Setup is where that is chosen.
+
+           SDConnectLocal is the exception and cannot be used from a copied
+           DLL. It starts SD by looking for sd.exe beside itself, so it
+           works only from usr\bin, where the server's own copy lives. The
+           32-bit DLLs have never provided it at all.
+
 04 Sep 26  UPGRADING NOW GIVES EVERY ACCOUNT THE NEW RELEASE'S COMMANDS.
            YOU NO LONGER HAVE TO RUN ANYTHING AFTERWARDS.
 

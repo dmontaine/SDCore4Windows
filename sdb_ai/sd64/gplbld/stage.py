@@ -86,8 +86,64 @@ PROGRAM_FILES_BIN = [
     'sdtic.exe',
     'sdclilib.dll',             # native UCRT64, needs no MSYS2 runtime
     'libsdclilib.dll.a',        # import library, for building clients
+    # 04 Sep 26 - THE SECOND 64-BIT NAME, PRE_RELEASE_FIXES 161.  Same library,
+    # same build, different -o name and its own import library: sdclilib.dll is
+    # what anything already built against this library asks for, sdclient.dll
+    # is the name to use from now on.  An application asks for one BY NAME, so
+    # they are not alternatives to choose between at install time.
+    #
+    # HERE RATHER THAN IN A client64\ SUBDIRECTORY, and that is load-bearing -
+    # see the note on CLIENT_DIRS below.  SDConnectLocal resolves sd.exe beside
+    # the DLL, so only a copy in usr\bin can connect locally.
+    'sdclient.dll',             # the same library under the current name
+    'libsdclient.dll.a',        # its import library; an implib names its DLL
     'sdsvc.exe',                # native UCRT64, the service that starts SD
 ]
+
+# ---------------------------------------------------------------------------
+# THE CLIENT DLLs A USER TAKES AWAY.  PRE_RELEASE_FIXES 161.
+#
+# The owner's ruling, 4 Sep 2026, arrived in two steps and the second is why
+# this is a directory of its own rather than two under usr\bin:
+#
+#   "the 64 bit dlls should be in the usr\bin directory and only the 32 bit
+#    dlls should be in client32 - they are never needed on the server as it is
+#    64 bit, they are only provided for older utility programs that are 32 bit."
+#
+#   "it might be convenient for users if the 64 bit dlls were in both usr\bin
+#    and a client64 directory ... a new directory usr\clients is created that
+#    has client64 and client32 underneath it - that way users are not trying to
+#    copy anything out of the usr\bin directory."
+#
+# ***SO THE 64-BIT PAIR IS INSTALLED TWICE, AND THE TWO COPIES ARE NOT THE SAME
+# THING.***  usr\bin's is the SERVER's: sdclilib.dll resolves sd.exe BESIDE
+# ITSELF - it takes its own module path and appends "\sd.exe" (sdclilib.c,
+# SDConnectLocal) - so only a copy sitting beside sd.exe can connect locally.
+# It is in PROGRAM_FILES_BIN above, with the rest of the server.  The copy
+# here is the USER's, and usr\bin stays a directory nobody has to rummage in.
+#
+# THE 32-BIT PAIR HAS NO usr\bin COPY because the server is 64-bit and never
+# loads it.  It exists for older 32-bit utility programs, which reach SD over
+# the API - and QMConnectLocal is a stub that always fails (qmcompat.c), so the
+# local route was never theirs to lose.
+#
+# THE USER COPIES THE DLL next to their application or into windows\system32,
+# which is the OpenQM habit the ruling deliberately matches.  NOTHING IS ON
+# PATH ANY MORE: the retired client installers put {app}\bin on the machine
+# PATH and that task went with them, so an application finds its DLL because
+# someone put it there, and never by accident.
+#
+# THESE DIRECTORIES HOLD DLLs AND NOTHING ELSE.  Whether the import libraries
+# and headers should travel with them is open - the owner has not ruled - and
+# adding them is a line in this list rather than a change of shape.
+CLIENT_DIRS = [
+    ('client64', ['sdclilib.dll', 'sdclient.dll']),
+    ('client32', ['qmclilib.dll', 'qmclient.dll']),
+]
+
+# Where those two directories sit inside C:\Program Files\SD\.  Beside usr\bin
+# rather than under it - see the ruling above.
+PF_CLIENTS_SUBDIR = os.path.join('usr', 'clients')
 
 # Third-party editor binaries the installer bundles.  PRE_RELEASE_FIXES 66.
 # NOT tracked in the repo (CLAUDE.md forbids tracked binaries) - they live in
@@ -1047,6 +1103,13 @@ def main():
 
     missing = [f for f in PROGRAM_FILES_BIN if not os.path.isfile(
         os.path.join('bin', f))]
+    # 04 Sep 26 - THE CLIENT DIRECTORIES ARE CHECKED THE SAME WAY, and they have
+    # to be named rather than globbed.  A directory that "make sd" built once
+    # and has not rebuilt since would otherwise stage whatever is in it, which
+    # is the fifteen-day-stale DLL that PRE_RELEASE_FIXES 161 exists to stop -
+    # arriving by a different road.
+    missing += [os.path.join(d, f) for d, files in CLIENT_DIRS for f in files
+                if not os.path.isfile(os.path.join('bin', d, f))]
     if missing:
         die('bin/ is missing %s - run "make sd" first'
             % ', '.join(sorted(missing)))
@@ -1073,6 +1136,19 @@ def main():
         dst = os.path.join(pfbin, f)
         shutil.copy2(os.path.join('bin', f), dst)
         staged.add(stage, dst)
+
+    # The client DLLs a user takes away, in usr\clients\client64 and
+    # usr\clients\client32.  BESIDE usr\bin rather than under it, so nobody has
+    # to copy anything out of the directory the server runs from - see the
+    # ruling at CLIENT_DIRS.  The 64-bit pair is ALSO in PROGRAM_FILES_BIN
+    # above, and that copy is the server's own.
+    for d, files in CLIENT_DIRS:
+        dstdir = os.path.join(pf, PF_CLIENTS_SUBDIR, d)
+        os.makedirs(dstdir)
+        for f in files:
+            dst = os.path.join(dstdir, f)
+            shutil.copy2(os.path.join('bin', d, f), dst)
+            staged.add(stage, dst)
 
     dlls, system = dll_closure(
         objdump, [os.path.join('bin', f) for f in DLL_SCAN], args.msys)
@@ -1511,6 +1587,13 @@ def main():
     print('  %d files, %.1f MB' % (len(staged.files), total / 1048576.0))
     print('  binaries in %s, so the POSIX root is the SD directory'
           % os.path.join('ProgramFiles', PF_BIN_SUBDIR))
+    # Say where the client DLLs went and how many, rather than leaving it to be
+    # inferred from the file count - PRE_RELEASE_FIXES 161, and CLAUDE.md's
+    # instrument rule.  A directory that staged nothing must not read the same
+    # as one that staged both.
+    for _d, _files in CLIENT_DIRS:
+        print('  %s: %s' % (os.path.join('ProgramFiles', PF_CLIENTS_SUBDIR, _d),
+                            ' '.join(_files)))
     print('  MSYS2 DLLs copied: %s'
           % ' '.join(sorted(os.path.basename(p) for p in dlls.values())))
     print('  supplied by Windows, not copied: %s' % ' '.join(sorted(system)))
