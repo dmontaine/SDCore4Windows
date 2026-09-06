@@ -293,8 +293,16 @@ if ($SelfTest) {
         'sdapi', 'sdssh', 'sdusers', 'sdadmins', 'sdsshonly', 'sdu_don',
         # a bare stem is not litter on its own
         'sdacct', 'sdrt', 'sdtapi',
-        # real things on this machine
-        'dmont', 'Public', 'sdout', 'sdclilib',
+        # real things on this machine.  THE DEVELOPER'S OWN HOME DIRECTORY IS
+        # READ, NOT TYPED - it was 'dmont', which stops guarding anything the
+        # moment this runs on a machine whose profile folder is named something
+        # else, and the owner is moving to one whose user is "don".  Measured
+        # 5 Sep 2026: $env:USERNAME here is already "don" while the profile
+        # folder is still "C:\Users\dmont", so the account name and the folder
+        # name are NOT interchangeable and only the folder name is what this
+        # sweep sees under C:\Users.
+        (Split-Path -Leaf $env:USERPROFILE),
+        'Public', 'sdout', 'sdclilib',
         # word-shaped near-misses
         'sdapiary', 'sdrtserver', 'sdaclmanager', 'sddriver', 'sddrive',
         # 30 Aug 26 - the near-misses the two new stems open up.  Both fail on

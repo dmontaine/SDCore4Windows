@@ -55,8 +55,32 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Home_       = 'C:\Users\dmont'
+# 5 Sep 26 - $env:USERPROFILE, NOT 'C:\Users\dmont'.  The owner is moving the
+# development environment to a second computer whose user is "don", and this
+# was one of five live paths with the profile folder's name typed into it.
+#
+# ***AND THE ACCOUNT NAME IS NOT THE FOLDER NAME, WHICH IS WHY NEITHER IS
+# TYPED HERE.***  Measured on this machine, 5 Sep 2026: $env:USERNAME is "don"
+# and $env:USERPROFILE is "C:\Users\dmont" - the account was renamed and the
+# profile directory kept its original name.  So "don" would have been just as
+# wrong as "dmont", and only the environment resolves both machines.
+#
+# WHAT THE TYPED PATH WOULD HAVE DONE ON THE NEW MACHINE, both quiet: the
+# home sweep at :165 enumerates with -ErrorAction SilentlyContinue, so a home
+# directory that does not exist yields nothing and the script reports having
+# swept a home it never looked at; then the closing assert at :397 fails on
+# "sdout is gone, and it is live build output" - a loud failure with the wrong
+# cause.
+$Home_       = $env:USERPROFILE
 $KeepInHome  = @('sdout')
+if (-not $Home_ -or -not (Test-Path -LiteralPath $Home_)) {
+    # REFUSE RATHER THAN SWEEP A HOME THIS SCRIPT CANNOT SEE.  Everything below
+    # deletes; a $Home_ that does not resolve must stop the run, not quietly
+    # narrow it.
+    Write-Output ("cleanup-devlitter: USERPROFILE does not resolve to a directory (" +
+                  $Home_ + ") - refusing to sweep")
+    exit 2
+}
 $Sweep       = Join-Path $PSScriptRoot 'clean-test-profiles.ps1'
 # 28 Aug 26 - THIS NAME IS SPENT AND IS DELIBERATELY NOT REPOINTED.
 #   sshRemoteTest-C1 was deleted by the 7.18 cleanup and no longer exists;
