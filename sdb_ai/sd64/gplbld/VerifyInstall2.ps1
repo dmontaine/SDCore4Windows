@@ -776,6 +776,57 @@ if ($partial) {
 }
 
 # ---------------------------------------------------------------------------
+# 06 Sep 26 - CLEAR THE EARLIER RUNS' TEST PROFILES BEFORE THIS ONE STARTS.
+# PRE_RELEASE_FIXES 178, owner's ruling 6 Sep 2026.
+#
+# WHY THE HARNESS SWEEPS ITS OWN LITTER RATHER THAN ROUTING REMOVAL THROUGH SD.
+# Five verifiers here delete their Windows account with Remove-LocalUser, which
+# bypasses DELETE_USER - so no reclaim record is written and PRE_RELEASE 36's
+# boot sweep never sees the profile.  The alternative was to make those
+# verifiers call SD's own delete, and it was rejected on four grounds:
+#
+#   * TEST CLEANUP MUST NOT DEPEND ON THE CODE UNDER TEST.  If deletion
+#     regresses, that route loses the test AND the ability to clean up after
+#     it, exactly when a clean machine matters most.
+#   * IT BUYS NO COVERAGE.  verify-delaccount.ps1 already exercises the real
+#     deletion path as its whole job.
+#   * IT WOULD NOT EVEN CLEAR THEM PROMPTLY.  The reclaim sweep runs at SERVICE
+#     START, so the directories would sit until the next boot; 26 of them did
+#     exactly that on 6 Sep 2026, waiting for a reboot.
+#   * IT WOULD PRE-EMPT AN OPEN QUESTION.  clean-test-profiles.ps1's own header
+#     records that verify-createaccount leaves what it makes DELIBERATELY,
+#     "because what DELETE.ACCOUNT should remove is still undecided".
+#
+# AT THE START AND NOT AT THE END, WHICH IS THE PART WORTH ARGUING.  A sweep
+# after the steps destroys precisely the accounts and profiles somebody would
+# want to inspect after a failure.  Sweeping first means every run BEGINS clean
+# - the same principle as "a test cycle begins with a fresh install" - while the
+# previous run's artefacts survive for as long as they might be wanted.
+#
+# NEVER ON A -Only RUN.  That is the debugging path, and someone narrowing a
+# failure with -Only is usually looking at what the last run left behind.
+#
+# IT REPORTS AND NEVER REFUSES.  Orphan profiles are litter, not a reason to
+# refuse a suite, so a non-zero exit here is printed and the run continues.
+if (-not $partial) {
+    $sweep = Join-Path $PSScriptRoot 'clean-test-profiles.ps1'
+    Write-Output ''
+    Write-Output '===== clearing test profiles left by earlier runs (PRE_RELEASE 178) ====='
+    Write-Output ('  ' + $sweep)
+    if (Test-Path -LiteralPath $sweep) {
+        & $sweep
+        $sweepExit = $LASTEXITCODE
+        if ($sweepExit -ne 0) {
+            Write-Output ('  clean-test-profiles exited ' + $sweepExit +
+                          ' - CONTINUING.  Whatever it could not take is litter,')
+            Write-Output '  and litter is not a reason to refuse a run.'
+        }
+    } else {
+        Write-Output '  NOT FOUND - nothing was cleaned, and this run starts on whatever is there.'
+    }
+}
+
+# ---------------------------------------------------------------------------
 # 22 Aug 26 - -Quiet: FULL OUTPUT TO A FILE PER STEP, PROGRESS AND FAILURES ON
 # THE SCREEN.  Seventeen verbose steps is several thousand lines, and the
 # console scrollback is not where any of it should be read from anyway.
