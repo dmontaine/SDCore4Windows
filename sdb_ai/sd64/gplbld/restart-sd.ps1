@@ -125,8 +125,23 @@ Report 'stopped'
 # ---------------------------------------------------------------------------
 & "$env:SystemRoot\System32\sc.exe" start $SvcName | Out-Null
 
+# 06 Sep 26 Windows port - WAIT FOR WHAT THE VERDICT ACTUALLY TESTS.
+# PRE_RELEASE_FIXES 176.  This loop used to exit as soon as a PROCESS appeared,
+# while the test below requires the SERVICE to be Running - and those are not
+# the same moment.  sdwind is up within a second; the SCM can still be
+# StartPending.  Measured 6 Sep 2026 on a restart that WORKED:
+#
+#   restart-sd: after   service=StartPending processes=sd(14632) sdwind(6996)
+#   restart-sd: SD did not come back up - check the service and the SD error log
+#
+# and the service was Running moments later.  A FALSE RED ON A GOOD RESTART,
+# which REMOTEAPI hands to an administrator who then goes looking for a fault
+# that is not there.  The verdict below is unchanged; only the wait is, so that
+# it waits for both halves of the answer instead of one of them.
 $deadline = (Get-Date).AddSeconds(45)
-while ((Get-SdProcs).Count -eq 0 -and (Get-Date) -lt $deadline) {
+while ((Get-Date) -lt $deadline) {
+    $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq 'Running' -and (Get-SdProcs).Count -gt 0) { break }
     Start-Sleep -Milliseconds 500
 }
 
