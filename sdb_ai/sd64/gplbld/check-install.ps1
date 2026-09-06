@@ -208,6 +208,28 @@ function Finish([bool] $Ran = $true) {
     # is caught and skipped rather than left to become a stack trace at the end
     # of an otherwise successful run.  -NoPause is the explicit way to ask for
     # the same thing.
+    # 06 Sep 26 - IS ANOTHER SCREEN COMING?  A successful check on a sign-in
+    # that does not yet carry sdusers ends with Show-SdGroupNotice above, on a
+    # cleared screen - so this pause is NOT the last thing the user sees and
+    # must not say it is.  The four conditions are each load-bearing:
+    #   problems -eq 0   clearing over a fault report would delete it, and
+    #                    signing out cannot cure a fault anyway
+    #   -not InToken     a membership already active needs no instruction, and
+    #                    a false one is how a true one stops being read
+    #   NoPause / redirected
+    #                    -Yes callers, the cycle and verify-notyet: clearing a
+    #                    redirected host writes escape codes into a log, so
+    #                    they keep exactly today's ending
+    #
+    # IT ASKS Get-SdUsersState ITSELF rather than reading $sdUsers, because the
+    # declined path calls Finish before line 327 computes it.  The call creates
+    # nothing and starts nothing, so asking twice beats an ordering dependency
+    # between two call sites that are 300 lines apart.
+    $state  = Get-SdUsersState
+    $notify = ($script:problems -eq 0) -and (-not $state.InToken) -and
+              (-not $NoPause) -and (-not [Console]::IsInputRedirected) -and
+              (-not [Console]::IsOutputRedirected)
+
     if ((-not $NoPause) -and (-not [Console]::IsInputRedirected)) {
     # THE GUARD IS IsInputRedirected, NOT A try/catch - MEASURED 22 Aug 2026.
     # The first version wrapped ReadKey in try/catch on the assumption it would
@@ -218,10 +240,16 @@ function Finish([bool] $Ran = $true) {
     # [Console]::IsInputRedirected is false only for a REAL console, which is
     # exactly when a keypress can arrive.  The try/catch stays as a backstop for
     # a host that refuses the call outright, but it is no longer the guard.
-        Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        if ($notify) {
+            Write-Host '  Press any key to continue.' -ForegroundColor Cyan
+        } else {
+            Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        }
         try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
         catch { }
     }
+
+    if ($notify) { Show-SdGroupNotice -State $state }
     Write-Host ''
 }
 
@@ -251,6 +279,75 @@ function Get-SdUsersState {
         } catch { }
     }
     return [pscustomobject]@{ InGroup = $inGroup; InToken = $inToken }
+}
+
+# ---------------------------------------------------------------------------
+function Show-SdGroupNotice {
+    <#  THE LAST THING ON SCREEN IS THE ONE INSTRUCTION THE USER MUST ACT ON.
+        Owner, 6 Sep 2026: "we need to do more than bury the instructions in
+        dialogs that many users will not read."  The wizard says it twice and
+        the documentation four times, and a person who has just typed two
+        passwords has read past all of them.  So a successful check ends on a
+        CLEARED screen with this and nothing else, and waits there.
+
+        IT IS CONDITIONAL ON THE TOKEN, NOT ON THE INSTALL, and Finish() decides
+        - see $notify there.  Get-SdUsersState already separates "you are in
+        sdusers" from "this sign-in knows it", and only the second is what makes
+        SD work.  Somebody reinstalling with an active membership must not be
+        told to sign out: a false instruction is how a true one stops being
+        read, which is the fault the [not yet] summary at the foot of this file
+        was already fixed for once.
+
+        AND IT NEVER CLEARS OVER A PROBLEM REPORT.  $notify requires
+        $script:problems to be 0, because clearing the screen would delete the
+        fault the user has to act on, and signing out cannot cure it anyway.  #>
+    param([Parameter(Mandatory = $true)] $State)
+
+    Clear-Host
+
+    # The subtitle is conditional because the CLAIM is.  "It is not active" is
+    # measured when InGroup is known; InGroup is $null when the group could not
+    # be read at all, and a banner asserting it anyway would be stating some-
+    # thing nothing measured.
+    $subtitle = if ($null -eq $State.InGroup) {
+        '    Your group membership may not be active in this sign-in yet.'
+    } else {
+        '    Your group membership is not active in this sign-in yet.'
+    }
+
+    Write-Host ''
+    Write-Host '  ============================================================' -ForegroundColor Yellow
+    Write-Host '    SIGN OUT OR RESTART NOW' -ForegroundColor Yellow
+    Write-Host $subtitle -ForegroundColor Yellow
+    Write-Host '  ============================================================' -ForegroundColor Yellow
+    Write-Host ''
+    if ($null -eq $State.InGroup) {
+        Write-Host '  This check could not read the "sdusers" group, so it cannot tell you'
+        Write-Host '  whether the membership is waiting for a new sign-in.  Signing out and'
+        Write-Host '  back in costs a minute and settles it either way.'
+    } else {
+        Write-Host '  The installer added you to the "sdusers" group, and that membership is'
+        Write-Host '  what grants access to the SD database.  Windows applies a new group'
+        Write-Host '  only when you sign in, so this sign-in does not carry it yet.'
+    }
+    Write-Host ''
+    Write-Host '  UNTIL YOU SIGN OUT AND BACK IN, OR RESTART:'
+    Write-Host '    * SD Core cannot open its database files, and'
+    Write-Host '    * a window opened before the install will say  sd  is not recognized.'
+    Write-Host ''
+    Write-Host '  Nothing else needs doing.  Afterwards, confirm it with'
+    Write-Host '    Start Menu  ->  SD  ->  Check the SD installation'
+    Write-Host ''
+
+    # The window closes when this returns, so it waits here rather than at the
+    # pause before it.  IsInputRedirected is the guard for the same measured
+    # reason as Finish()'s: ReadKey BLOCKS rather than throwing with no console.
+    if (-not [Console]::IsInputRedirected) {
+        Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
+        catch { }
+    }
+    Write-Host ''
 }
 
 # ---------------------------------------------------------------------------
@@ -294,7 +391,12 @@ if (-not $Brief) {
 # keystroke to say no.
 if (-not $Yes) {
     $answer = $null
-    try   { $answer = Read-Host '  Run the checks now? (y/n)' }
+    # 06 Sep 26 - THE DEFAULT IS IN THE PROMPT.  Owner: "the y/n prompt to run
+    # the post install test does not indicate the default".  Anything that is
+    # not y or yes is a no - including a bare Enter, which is what most people
+    # press - so the prompt now says which one it is taking.  The angle brackets
+    # are the owner's notation, 6 Sep 2026.
+    try   { $answer = Read-Host '  Run the checks now? (y/<n>)' }
     catch {
         Write-Host ''
         Write-Host '  Nothing is available to answer that question, so nothing was run.'

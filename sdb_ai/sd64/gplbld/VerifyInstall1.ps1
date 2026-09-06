@@ -348,7 +348,11 @@ if (-not $Yes) {
     # into at all.  Either way the caller gets a stack trace or a hang instead
     # of a result, so the absence of a person is caught and NAMED here.
     $answer = $null
-    try   { $answer = Read-Host '  Run the checks now? (y/n)' }
+    # 06 Sep 26 - THE DEFAULT IS IN THE PROMPT, matching check-install.ps1's.
+    # Owner's instruction that day was about the shipped one; this is the same
+    # prompt with the same rule, and two copies that disagree about their own
+    # default is the drift the wording lint exists for.
+    try   { $answer = Read-Host '  Run the checks now? (y/<n>)' }
     catch {
         Write-Output ''
         Write-Output 'VerifyInstall1: nothing is available to answer that question.'
