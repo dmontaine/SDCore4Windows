@@ -182,7 +182,12 @@ try {
     # ---------------------------------------------------------------------
     Write-Host ''
     $liveDir   = Join-Path $env:LOCALAPPDATA 'SD-verify'
-    $liveStage = 'C:\Users\dmont\stagetest'
+    # 5 Sep 26 - typed as C:\Users\dmont, this machine's account name rather
+    # than the second computer's; matches cycle.ps1's $Stage default, which
+    # was the same fix (CLAUDE.md, PROJECT_STATUS's USERPROFILE entry).  An
+    # unresolved USERPROFILE just fails the Test-Path below and SKIPs, which
+    # is this block's designed behaviour for "not on this machine".
+    $liveStage = Join-Path $env:USERPROFILE 'stagetest'
     $live = @(
         @{ Log = 'cycle-20260902-194027.log'; Want = 'banner';    Note = 'the COMPLETE log of 2 Sep 19:40' },
         @{ Log = 'cycle-20260902-174446.log'; Want = 'no-banner'; Note = 'the TRUNCATED log of 2 Sep 17:44' }

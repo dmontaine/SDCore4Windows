@@ -57,12 +57,21 @@
 
 [CmdletBinding()]
 param(
-    [string] $Stage = 'C:\Users\dmont\stagetest',
-    [string] $Out   = 'C:\Users\dmont\sdout',
+    [string] $Stage = (Join-Path $env:USERPROFILE 'stagetest'),
+    [string] $Out   = (Join-Path $env:USERPROFILE 'sdout'),
     [switch] $SkipInstall
 )
 
 $ErrorActionPreference = 'Stop'
+
+# 5 Sep 26 - $Stage AND $Out WERE TYPED AS C:\Users\dmont, WHICH IS THIS
+# MACHINE'S ACCOUNT NAME, NOT THE SECOND COMPUTER'S.  $env:USERNAME is already
+# "don" here while $env:USERPROFILE is still "C:\Users\dmont" - the account was
+# renamed and the profile folder kept its old name - so typing "don" into the
+# default above would be exactly as wrong as "dmont".  $env:USERPROFILE is the
+# only thing that resolves on both machines; it was measured to survive a
+# [CmdletBinding()] param default under both "& cycle.ps1" and
+# "powershell -File cycle.ps1", unlike $PSScriptRoot.
 
 # 17 Aug 26 - A TRANSCRIPT, for the same reason verify-tiers.ps1 has one: this
 # runs elevated, which usually means a window nobody is going to copy back, and

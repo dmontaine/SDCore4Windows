@@ -41,9 +41,15 @@ if ($state -ne 'poweroff') {
 }
 
 # host side
-$sdout  = 'C:/Users/dmont/sdout'
-$xfer   = 'C:/Users/dmont/sdxfer'
-$gplbld = 'C:/Users/dmont/Projects/sd4windows/sdb_ai/sd64/gplbld'
+# 5 Sep 26 - THESE WERE TYPED AS C:/Users/dmont, WHICH IS THIS MACHINE'S
+# ACCOUNT NAME, NOT THE SECOND COMPUTER'S.  $env:USERPROFILE is the one thing
+# that resolves on both machines (CLAUDE.md, PROJECT_STATUS's USERPROFILE
+# entry) - forward-slashed to match the style already here, since VBoxManage
+# and the existing "already has" comparisons below expect it.
+$homeFs = $env:USERPROFILE -replace '\\','/'
+$sdout  = "$homeFs/sdout"
+$xfer   = "$homeFs/sdxfer"
+$gplbld = "$homeFs/Projects/sd4windows/sdb_ai/sd64/gplbld"
 
 if (-not (Test-Path -LiteralPath $xfer)) {
     $null = New-Item -ItemType Directory -Path $xfer -Force
@@ -98,7 +104,7 @@ if ($missing.Count) { Write-Output ("FAIL: still missing " + ($missing -join ', 
 Write-Output ("added this run: " + $added)
 Write-Output ''
 Write-Output '=== the installer the guest will see ==='
-Get-ChildItem 'C:\Users\dmont\sdout' -Filter '*.exe' |
+Get-ChildItem $sdout -Filter '*.exe' |
     ForEach-Object { "  {0}  {1:n0} bytes  {2}" -f $_.Name, $_.Length, $_.LastWriteTime.ToString('dd MMM HH:mm:ss') }
 Write-Output ''
 Write-Output 'REACH THEM BY NAME IN THE GUEST, NOT BY DRIVE LETTER:'
