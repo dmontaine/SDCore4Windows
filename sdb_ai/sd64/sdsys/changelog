@@ -1,9 +1,31 @@
-Windows port - unreleased
+W1.0-0 - 06 Sep 2026
 -------------
 This section covers the conversion from Linux to Windows.  It is the record of
 what changed for someone using SD; PROJECT_STATUS.md and HISTORY.md in the
 repository root carry the reasoning, the state of the work and the traps.
-Entries are newest first, by date, until there is a version to attach them to.
+Entries are newest first, by date.  This is the first Windows release, so
+everything below it is what W1.0-0 contains rather than what changed since a
+previous one.
+
+06 Sep 26  THE POST-INSTALL WINDOW NOW ENDS BY TELLING YOU TO SIGN OUT.
+
+           After the install collects your passwords and offers the
+           installation check, the window clears and shows one
+           instruction: sign out and back in, or restart.
+
+           WHY IT MATTERS.  The installer adds you to a Windows group
+           called "sdusers", and that membership is what gives you
+           access to the SD database.  Windows only applies a new group
+           when you sign in, so until you do, SD cannot open its files.
+           This was already said in the installer's own pages and in the
+           documentation - it is now also the last thing on screen,
+           because it is the one thing you have to do.
+
+           IT DOES NOT SAY IT WHEN IT IS NOT TRUE.  If you are
+           reinstalling and your sign-in already carries the group,
+           the check ends as it always did.
+
+           The prompt offering the check now shows its default, (y/<n>).
 
 05 Sep 26  FIXED: SD'S ADMINISTRATIVE COMMANDS FAILED ON A FRESH WINDOWS
            MACHINE WITH "running scripts is disabled on this system".
