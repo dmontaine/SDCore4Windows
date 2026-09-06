@@ -243,14 +243,51 @@ try {
     $bash = 'C:\msys64\usr\bin\bash.exe'
     if (-not (Test-Path -LiteralPath $bash)) { Refuse "MSYS2 bash not found at $bash." }
     $sd64posix = '/' + ($Sd64 -replace '\\', '/' -replace '^([A-Za-z]):', '$1')
-    $cmd = "cd '$sd64posix/gplsrc/sdclilib' && PATH=/c/msys64/ucrt64/bin:`$PATH " +
+    # 06 Sep 26 Windows port - DELETE ANY EARLIER PROBE FIRST.
+    # PRE_RELEASE_FIXES 177.  The verdict below is Test-Path, which a LEFTOVER
+    # exe satisfies without a compiler having run at all - so a machine that
+    # built this once would pass this step for ever, including after the build
+    # had broken.  Deleting first is what makes "built" mean "built NOW", and
+    # it is the null case the instrument rules forbid: a check that passes
+    # because it did nothing must fail, not pass.
+    if (Test-Path -LiteralPath $probe) { Remove-Item -LiteralPath $probe -Force }
+
+    # 06 Sep 26 Windows port - export, NOT A COMMAND PREFIX.  PRE_RELEASE 177.
+    #
+    # This read "PATH=... make ... || ( gcc ... )", and "VAR=value command" sets
+    # the variable FOR THAT ONE COMMAND.  So make got the PATH and the fallback
+    # did not - and the Makefile has no rule for this target ("make: *** No rule
+    # to make target"), so THE FALLBACK IS THE BRANCH THAT ALWAYS RUNS.  The
+    # PATH line had therefore never applied to the compile it exists for.
+    #
+    # WHAT THAT COSTS, measured 6 Sep 2026: without ucrt64\bin on PATH, gcc.exe
+    # runs but the cc1.exe it spawns lives in lib/gcc/... and finds none of its
+    # support DLLs, so it dies with NO DIAGNOSTIC AT ALL - exit 1, zero bytes of
+    # output.  Both directions were driven: as written, silent failure and no
+    # exe; with export, exit 0 and a 139,519-byte exe from the same gcc line.
+    #
+    # IT COULD ONLY FAIL ON A FRESH MACHINE, which is why the suite has been
+    # green on this step for weeks: the development box carries ucrt64\bin in
+    # its global PATH, so the broken line was never the thing under test.  Same
+    # shape as 173 - a development-box condition hiding a defect from every run.
+    $cmd = "cd '$sd64posix/gplsrc/sdclilib' && export PATH=/c/msys64/ucrt64/bin:`$PATH && " +
            "make CC=/c/msys64/ucrt64/bin/gcc.exe localtest/remote-connect-test.exe 2>/dev/null || " +
            "( mkdir -p localtest && /c/msys64/ucrt64/bin/gcc.exe -std=c11 -Wall -Wextra -Wpedantic " +
            "-o localtest/remote-connect-test.exe tests/remote_connect_test.c -I. -L. -lsdclilib )"
-    & $bash -lc $cmd | Out-Null
+
+    # 06 Sep 26 Windows port - KEEP THE OUTPUT.  PRE_RELEASE 177.  This was
+    # "| Out-Null", so a failure arrived as "expected True, got False" and
+    # nothing else, and finding the cause took a hand reproduction outside the
+    # suite.  An instrument shows what it DID.
+    $buildOut = (& $bash -lc $cmd 2>&1 | Out-String)
     $built = Test-Path -LiteralPath $probe
     Note 'probe built' $true $built
-    if (-not $built) { Refuse 'Could not build remote-connect-test.exe.' }
+    if (-not $built) {
+        Write-Host ('  build command: ' + $cmd)
+        Write-Host ('  build output (' + $buildOut.Length + ' chars):')
+        Write-Host $buildOut
+        Refuse 'Could not build remote-connect-test.exe.'
+    }
 
     # -----------------------------------------------------------------------
     Step 3 'THE CONTROL: the bare name, admitted'
