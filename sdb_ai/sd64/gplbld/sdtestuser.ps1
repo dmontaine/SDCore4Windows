@@ -302,7 +302,30 @@ function Test-SdDirWritable {
     } catch {
         $ok = $false
     } finally {
-        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+        # 06 Sep 26 - THIS CLEANUP USED TO BREAK THE DOCSTRING ABOVE IT.
+        # PRE_RELEASE_FIXES 183.  It was
+        # `Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue`,
+        # and -ErrorAction SilentlyContinue DOES NOT SUPPRESS A TERMINATING
+        # ERROR.  In an SD account directory Remove-Item raises exactly that -
+        # UnauthorizedAccessException wrapping Win32Exception "Access is denied",
+        # measured 15 of 15 - because the cmdlet touches the PARENT while
+        # resolving the path and C:\ProgramData\SD\user_accounts refuses an
+        # ordinary token.  [IO.File]::Delete on the same path succeeded every
+        # time: it opens the file by full path and rides bypass-traverse.
+        #
+        # SO THE COST WAS NEVER THE UNCOLLECTED PROBE FILE, IT WAS THE
+        # DIAGNOSIS.  The exception escaped this function - which promises to
+        # throw nothing - skipped Assert-SdTestUserHomeWritable's catch, the one
+        # that prints the ACL it found, and reached VerifyInstall1 as a bare
+        # "Access is denied".  A run that had already spent a UAC prompt and
+        # created a single-use account stopped with no evidence for its own
+        # refusal.  The WRITE and the READ-BACK had both succeeded; only the
+        # tidy-up failed, so the probe's verdict was inverted by its finally.
+        #
+        # A CLEANUP IN A finally MUST NOT BE ABLE TO RAISE.  Same API as the
+        # write above, and the catch is deliberately empty: a probe file left
+        # behind is litter, while an exception here destroys the answer.
+        try { [IO.File]::Delete($probe) } catch { }
     }
     return $ok
 }

@@ -476,16 +476,67 @@ $targets         = @($all | Where-Object { -not $_.Special -and -not $_.Loaded -
 
 foreach ($p in $skipSpecial)    { Write-Output ("  skipped (special): " + $p.LocalPath) }
 foreach ($p in $skipLoadedLive) { Write-Output ("  skipped (hive loaded AND the account exists - may be signed in): " + $p.LocalPath) }
-foreach ($p in $skipLoadedStuck){ Write-Output ("  skipped (STUCK HIVE - loaded but the account is gone): " + $p.LocalPath) }
 foreach ($p in $skipLive)       { Write-Output ("  skipped (the account still exists - remove the account first): " + $p.LocalPath) }
 
+# ---------------------------------------------------------------------------
+# 06 Sep 26 - IT UNLOADS THE STUCK HIVES ITSELF NOW.  PRE_RELEASE_FIXES 185.
+#
+# WHAT THE OLD BEHAVIOUR COST, MEASURED ON THE ONLY TWO RUNS THIS SWEEP HAS
+# EVER HAD: b133 3 stuck / 0 removed, b134 23 stuck / 0 removed, and C:\Users at
+# 40 test directories.  It printed the cure below - "unload each one, elevated:
+# reg unload HKU\<SID>" - as an instruction to a PERSON, while running elevated
+# inside VerifyInstall2 with every SID it needed already resolved.
+#
+# AND THE SHAPE IS WHY IT COULD NEVER SUCCEED BY WAITING.  A verifier creates an
+# account, its profile hive loads, the verifier deletes the account, and Windows
+# only unloads a hive at logoff - so a hive that outlives its own account is
+# never released.  The run's own litter is therefore un-collectable before the
+# run ends, which is why b134's sweep skipped the three accounts b134 had just
+# made.  Sweeping at the START cannot reach what sweeping cannot unload.
+#
+# THE SAFETY ARGUMENT IS THE CLASSIFICATION ABOVE, NOT OPTIMISM: $skipLoadedStuck
+# is loaded AND its account does not exist, so nobody is signed in as it and
+# nobody can be.  The live-account case ($skipLoadedLive) is never touched here.
+# An unload that fails is reported and the profile stays skipped - exactly the
+# old behaviour for that row - so this can only turn a skip into a removal.
+$unloaded = @()
 if ($skipLoadedStuck.Count -gt 0) {
     Write-Output ''
-    Write-Output ("  {0} STUCK HIVE(S). Their accounts are gone, so nobody is signed in;" -f $skipLoadedStuck.Count)
-    Write-Output '  the registry hive was simply never unloaded, and a profile cannot be'
-    Write-Output '  removed while it is loaded. Clear them one of two ways:'
+    Write-Output ("  {0} STUCK HIVE(S) - loaded but the account is gone.  Unloading them:" -f $skipLoadedStuck.Count)
+    foreach ($p in $skipLoadedStuck) {
+        $sid = $p.SID
+        $out = & reg.exe unload ("HKU\" + $sid) 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Output ("    unloaded HKU\{0}   {1}" -f $sid, (Split-Path $p.LocalPath -Leaf))
+            $unloaded += $p
+        } else {
+            Write-Output ("    COULD NOT UNLOAD HKU\{0} ({1}) - reg said: {2}" -f $sid, (Split-Path $p.LocalPath -Leaf), ($out -join ' '))
+            Write-Output ("    skipped (STUCK HIVE - loaded but the account is gone): " + $p.LocalPath)
+        }
+    }
+    # The ones that unloaded are now removable, so they join the targets and are
+    # reported by the ordinary removal path below rather than counted here.  An
+    # instrument says what it DID: the removal lines are that statement, and a
+    # hive unloaded but a profile still refused would show as a failed removal
+    # rather than disappearing between the two lists.
+    if ($unloaded.Count -gt 0) {
+        $targets = @($targets + $unloaded)
+        Write-Output ("  {0} of {1} unloaded, and they are now removable." -f $unloaded.Count, $skipLoadedStuck.Count)
+    }
+    $skipLoadedStuck = @($skipLoadedStuck | Where-Object { $unloaded -notcontains $_ })
+}
+
+if ($skipLoadedStuck.Count -gt 0) {
+    # Only the ones the unload above could NOT clear reach this, and the advice
+    # is now the fallback rather than the whole answer.  An unload refused
+    # elevated usually means a process still holds a handle into the hive, which
+    # a reboot settles and a second attempt will not.
+    Write-Output ''
+    Write-Output ("  {0} STUCK HIVE(S) SURVIVED THE UNLOAD ABOVE. Their accounts are gone, so" -f $skipLoadedStuck.Count)
+    Write-Output '  nobody is signed in; something is still holding a handle into the hive, and'
+    Write-Output '  a profile cannot be removed while it is loaded. Clear them one of two ways:'
     Write-Output '    - reboot, which unloads every hive, then re-run this; or'
-    Write-Output '    - unload each one, elevated:  reg unload HKU\<SID>'
+    Write-Output '    - unload each one by hand, elevated:  reg unload HKU\<SID>'
     Write-Output '  The SIDs are:'
     foreach ($p in $skipLoadedStuck) { Write-Output ("    {0}   {1}" -f $p.SID, (Split-Path $p.LocalPath -Leaf)) }
 }

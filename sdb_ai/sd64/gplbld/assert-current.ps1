@@ -45,7 +45,42 @@ function Bad($m)  { Write-Output "STALE: $m" }
 
 if (-not (Test-Path $inst))     { Write-Output 'assert-current: nothing installed'; exit 2 }
 if (-not (Test-Path $built))    { Write-Output 'assert-current: no bin/sd.exe - run "make sd"'; exit 2 }
-if (-not (Test-Path $instTree)) { Write-Output 'assert-current: no installed data tree'; exit 2 }
+
+# ---------------------------------------------------------------------------
+# ABSENT AND FORBIDDEN ARE DIFFERENT ANSWERS, AND THIS LINE USED TO GIVE THE
+# WRONG ONE.  PRE_RELEASE_FIXES 182, 6 Sep 2026.  `Test-Path` on the data tree
+# THREW `UnauthorizedAccessException: Access is denied` - a fresh install had
+# recreated sdusers with a new SID and the caller's logon token predated it -
+# and the -not on a call that returned nothing took the false branch.  So a
+# 40-minute-old, perfectly good install was reported as
+# `no installed data tree`, exit 2.
+#
+# THE TWO STATES WANT OPPOSITE CURES: absent wants a cycle, forbidden wants a
+# new logon.  Naming the wrong one sends the reader an hour in the wrong
+# direction, and Handoff 45 had already recorded that this exit 2 is "CORRECT
+# rather than a fault" - true the day nothing was installed, and the sentence a
+# later session would read while holding a denial in its hand.
+# ***-ErrorAction Stop IS LOAD-BEARING, AND THE FIRST VERSION OF THIS FIX DID
+# NOT HAVE IT.*** Measured 6 Sep 2026 against a directory carrying a DENY ACE
+# for the running user: `Test-Path` reports "Access is denied" as a
+# NON-TERMINATING error - it writes to the error stream and RETURNS - so a bare
+# try/catch never fires and the classifier still answered `absent`.  The fix
+# was driven before it was believed, which is the only reason that was found;
+# `-ErrorAction Stop` promotes it, and then the catch is reached.
+$treeState = 'absent'
+try { if (Test-Path -LiteralPath $instTree -ErrorAction Stop) { $treeState = 'present' } }
+catch { $treeState = 'denied' }
+
+if ($treeState -eq 'denied') {
+    Write-Output ("assert-current: {0} exists but this session cannot read it - Access is denied." -f $instTree)
+    Write-Output '  THIS IS NOT A STALE TREE AND NOT A MISSING ONE.  The commonest cause is a'
+    Write-Output '  logon token older than the install: a cycle recreates the sdusers group with'
+    Write-Output '  a NEW SID, and Windows fixes group membership at sign-in, so a session that'
+    Write-Output '  started before the install carries none of the SIDs the new ACLs grant to.'
+    Write-Output '  SIGN OUT AND BACK IN, or restart, then run this again.  See PRE_RELEASE 182.'
+    exit 2
+}
+if ($treeState -eq 'absent') { Write-Output 'assert-current: no installed data tree'; exit 2 }
 
 $stale = $false
 
