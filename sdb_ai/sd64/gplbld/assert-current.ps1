@@ -153,6 +153,20 @@ $neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # compiled clean and failed at run time.  sd.iss's
                   # KeepOrDelete comment cites it by name.
                   'probe-taskdialog.iss',
+                  # 06 Sep 26 - PRE_RELEASE 176's witness.  Listed in the commit
+                  # that adds it, under the rule the note below states.  It is a
+                  # PROBE and not a verifier: it samples the SD service's state
+                  # and process list every 100 ms and reports whether a process
+                  # existed while the service was still StartPending.
+                  #
+                  # WHY IT HAD TO WATCH FROM OUTSIDE.  176's fix makes
+                  # restart-sd.ps1 wait for Running before it reports, so the
+                  # fixed script ALWAYS prints "after service=Running" - it
+                  # erases the evidence of the window it exists to survive.
+                  # Asking the subject to report on itself could not answer it;
+                  # this samples the state independently, and found the window
+                  # on three restarts of three, ~5 s each.
+                  'sample-sdstate.ps1',
                   # 02 Sep 26 - PRE_RELEASE 143's shared stripper and its units.
                   # Listed in the commit that creates them, under the rule the
                   # note below states.  strip-comments.ps1 is dot-sourced by
