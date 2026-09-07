@@ -180,7 +180,16 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
+$neverShipped = @(# 06 Sep 26 - PRE_RELEASE 185's probe.  Listed in the commit
+                  # that creates it, under the rule the note below states.  It
+                  # asks whether Win32_UserProfile.Loaded agrees with what
+                  # HKEY_USERS actually holds, and it exists because THAT
+                  # MEASUREMENT CANNOT BE TAKEN UNELEVATED: an ordinary token
+                  # enumerated 4 subkeys where an elevated one saw 86, so the
+                  # unelevated count looked like an answer and was not.  It
+                  # REFUSES when run unelevated rather than reporting the 4.
+                  'probe-stuckhives.ps1',
+                  # 02 Sep 26 - PRE_RELEASE 139's probe.  Listed in the commit
                   # that creates it, under the rule the note below states.  It
                   # is an Inno script rather than a verifier, and it is kept
                   # because three of the six things it measured about
