@@ -499,20 +499,42 @@ foreach ($p in $skipLive)       { Write-Output ("  skipped (the account still ex
 # nobody can be.  The live-account case ($skipLoadedLive) is never touched here.
 # An unload that fails is reported and the profile stays skipped - exactly the
 # old behaviour for that row - so this can only turn a skip into a removal.
+# ***AND ON THIS MACHINE THE UNLOAD IS MEASURED FUTILE, WHICH IS WHY THE OUTPUT
+# IS ONE SUMMARY LINE AND NOT FORTY.*** 6 Sep 2026, elevated: 40 of 40 answered
+# `ERROR: Access is denied`, and it was NOT privilege - this script refuses an
+# unelevated run at line 381, and probe-stuckhives.ps1 confirmed elevated that
+# HKEY_USERS really holds all 40 (86 subkeys) with `reg query` exiting 0 on
+# them.  ***NOR IS IT SD***: with the service STOPPED, the same unload was
+# refused again.  So something else holds those hives - the User Profile
+# Service over a logon that was killed rather than ended is the remaining
+# candidate, and a RESTART is the only cure anybody has.
+#
+# THE ATTEMPT STAYS, because a hive that nothing holds does unload and the call
+# costs milliseconds; what goes is the pretence that it usually works.
+#
+# NO `2>&1` ON reg.exe, DELIBERATELY.  Redirecting a native command's stderr in
+# PowerShell 5.1 wraps every line in an ErrorRecord and sets $? false even on
+# success - so the first version of this printed a NativeCommandError block per
+# profile into the owner's terminal, forty of them, for a condition the summary
+# line below states once.  The exit code is the verdict; stderr goes nowhere.
 $unloaded = @()
+$refused  = @()
 if ($skipLoadedStuck.Count -gt 0) {
     Write-Output ''
-    Write-Output ("  {0} STUCK HIVE(S) - loaded but the account is gone.  Unloading them:" -f $skipLoadedStuck.Count)
+    Write-Output ("  {0} stuck hive(s) - loaded but the account is gone.  Trying to unload:" -f $skipLoadedStuck.Count)
     foreach ($p in $skipLoadedStuck) {
         $sid = $p.SID
-        $out = & reg.exe unload ("HKU\" + $sid) 2>&1
+        & reg.exe unload ("HKU\" + $sid) 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             Write-Output ("    unloaded HKU\{0}   {1}" -f $sid, (Split-Path $p.LocalPath -Leaf))
             $unloaded += $p
         } else {
-            Write-Output ("    COULD NOT UNLOAD HKU\{0} ({1}) - reg said: {2}" -f $sid, (Split-Path $p.LocalPath -Leaf), ($out -join ' '))
-            Write-Output ("    skipped (STUCK HIVE - loaded but the account is gone): " + $p.LocalPath)
+            $refused += $p
         }
+    }
+    if ($refused.Count -gt 0) {
+        Write-Output ("    {0} refused (Access is denied) - a handle is held, and it is not privilege" -f $refused.Count)
+        Write-Output      '    and not the SD service: both were measured on 6 Sep 2026.  See PRE_RELEASE 185.'
     }
     # The ones that unloaded are now removable, so they join the targets and are
     # reported by the ordinary removal path below rather than counted here.  An
@@ -534,9 +556,12 @@ if ($skipLoadedStuck.Count -gt 0) {
     Write-Output ''
     Write-Output ("  {0} STUCK HIVE(S) SURVIVED THE UNLOAD ABOVE. Their accounts are gone, so" -f $skipLoadedStuck.Count)
     Write-Output '  nobody is signed in; something is still holding a handle into the hive, and'
-    Write-Output '  a profile cannot be removed while it is loaded. Clear them one of two ways:'
-    Write-Output '    - reboot, which unloads every hive, then re-run this; or'
-    Write-Output '    - unload each one by hand, elevated:  reg unload HKU\<SID>'
+    Write-Output '  a profile cannot be removed while it is loaded.'
+    Write-Output ''
+    Write-Output '  REBOOT, THEN RE-RUN THIS. That is the only cure anybody has, and the'
+    Write-Output '  alternative this used to offer is measured futile: "reg unload HKU\<SID>"'
+    Write-Output '  by hand is refused the same way, elevated, and refused again with the SD'
+    Write-Output '  service stopped (6 Sep 2026, 40 of 40). Do not spend time on it.'
     Write-Output '  The SIDs are:'
     foreach ($p in $skipLoadedStuck) { Write-Output ("    {0}   {1}" -f $p.SID, (Split-Path $p.LocalPath -Leaf)) }
 }
