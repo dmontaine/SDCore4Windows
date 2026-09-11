@@ -56,6 +56,11 @@
 # ADMINISTRATOR FOR PART OF THE RUN***, which is the point of the test, so the
 # downgrade is asserted before the delete and the litter section reads Windows
 # rather than trusting what DELETE.ACCOUNT said.
+#
+# 11 Sep 26 - IT NOW MAKES TWO ACCOUNTS, <Prefix>a and <Prefix>b.  Section 6
+# (RELEASE_1.1_FIXES.md 13) needs a STANDARD account to promote, and the first
+# one is created PROGRAMMER and is a Windows administrator by section 2.  Both
+# are deleted and both are read back from disk in the litter check.
 
 [CmdletBinding()]
 param([string]$Prefix = '')
@@ -66,11 +71,29 @@ $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $sdsys = Join-Path $env:ProgramData  'SD\sdsys'
 $accts = Join-Path $sdsys 'accounts'
 $osusr = Join-Path $sdsys 'os.users'
+# 11 Sep 26 - section 6 reads the shipped record it expects to be copied.
+$newvoc = Join-Path $sdsys 'newvoc'
 
 # The verb whose VOC record is made to differ.  Any of TIER.ADD.ADMINISTRATOR's
 # twenty would do; this one is named nowhere else in the run, so a stray match
 # cannot be mistaken for it.  It is never executed - only saved over.
 $adminVerb = 'list.locks'
+
+# 11 Sep 26 - SECTION 6's SUBJECT.  RELEASE_1.1_FIXES.md 13.
+#
+# It must satisfy two things at once, and both were measured on 11 Sep 26
+# rather than assumed: it is in newvoc/TIER.OMIT.STANDARD, so a STANDARD
+# account does NOT have it and the promotion to PROGRAMMER must ADD it; and
+# its field 1 in newvoc is a DESCRIPTION rather than a bare type letter, which
+# is the only shape RELEASE_1.1 1 could damage.  41 of that list's 42 ids
+# qualify; "basic" is one of them.
+#
+# ***THE EXPECTED TEXT IS NEVER TYPED HERE.***  It is read from the shipped
+# newvoc record at run time and compared with what the account ended up with,
+# because a constant typed into this file is a second place for the value to
+# live - the trap verify-tiers records as "a label carrying a constant drifts
+# from the value beside it".
+$upgradeVerb = 'basic'
 
 $results = New-Object System.Collections.ArrayList
 $fatal   = $false
@@ -269,7 +292,7 @@ if ($LASTEXITCODE -ne 0) {
 # directory that is not there at all, so a missing os.users would make section
 # 2's "an os.users record exists" FAIL as though the tier change were broken.
 # An instrument that cannot reach its subject must say so, not score it.
-foreach ($p in @($sdExe, $sdsys, $accts, $osusr)) {
+foreach ($p in @($sdExe, $sdsys, $accts, $osusr, $newvoc)) {
     if (-not (Test-Path -LiteralPath $p)) {
         Write-Output ("verify-tierchange: {0} does not exist - nothing could be measured." -f $p)
         exit 2
@@ -279,22 +302,28 @@ foreach ($p in @($sdExe, $sdsys, $accts, $osusr)) {
 Add-Type -AssemblyName System.Web
 
 $acct = $Prefix + 'a'
+# 11 Sep 26 - SECTION 6's ACCOUNT.  RELEASE_1.1_FIXES.md 13.
+$acct2 = $Prefix + 'b'
 
 Write-Output ("verify-tierchange: as {0}, ELEVATED" -f $id.Name)
 Write-Output ("  sd      {0}" -f $sdExe)
 Write-Output ("  account {0}" -f $acct)
+Write-Output ("  account {0}   (section 6, STANDARD -> PROGRAMMER)" -f $acct2)
 Write-Output ("  verb    {0}   (the VOC record made to differ)" -f $adminVerb)
+Write-Output ("  verb    {0}   (section 6's subject, read from newvoc)" -f $upgradeVerb)
 Write-Output ''
 
-$taken = @()
-if (Test-WinUser $acct)                                        { $taken += 'Windows account' }
-if (Test-Path -LiteralPath (Join-Path $accts $acct.ToUpper()))  { $taken += 'SD ACCOUNTS record' }
-if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $acct))) { $taken += 'profile directory' }
-if ($taken.Count -gt 0) {
-    Write-Output ("verify-tierchange: " + $acct + " already exists as: " + ($taken -join ', '))
-    Write-Output '  CREATE.ACCOUNT would refuse several steps in, for a reason that reads like'
-    Write-Output '  a fault in the tier change.  Use a fresh prefix.'
-    exit 2
+foreach ($a in @($acct, $acct2)) {
+    $taken = @()
+    if (Test-WinUser $a)                                       { $taken += 'Windows account' }
+    if (Test-Path -LiteralPath (Join-Path $accts $a.ToUpper())) { $taken += 'SD ACCOUNTS record' }
+    if (Test-Path -LiteralPath (Join-Path $env:SystemDrive ('Users\' + $a))) { $taken += 'profile directory' }
+    if ($taken.Count -gt 0) {
+        Write-Output ("verify-tierchange: " + $a + " already exists as: " + ($taken -join ', '))
+        Write-Output '  CREATE.ACCOUNT would refuse several steps in, for a reason that reads like'
+        Write-Output '  a fault in the tier change.  Use a fresh prefix.'
+        exit 2
+    }
 }
 
 # ------------------------------------------------------- 1. a PROGRAMMER account
@@ -479,10 +508,133 @@ Note 'D = P + kept: the kept record is the only difference' ($P + $delta.Kept) $
 Note ($adminVerb + ' survived the downgrade, still S-type') $true `
      (Test-Say $lastSD '^[ \t]*001[ \t]+S[ \t]*\r?$') $true
 
+# ------------------------------- 6. STANDARD -> PROGRAMMER keeps descriptions
+
+# 11 Sep 26 - RELEASE_1.1_FIXES.md 13.  THE ONE TRANSITION NOTHING ELSE DRIVES.
+#
+# ***WHY THIS SECTION EXISTS, AND IT IS NOT "MORE COVERAGE".***  RELEASE_1.1 1
+# was MODIFYA's tier.build.rec still applying the type-letter strip that
+# PRE_RELEASE 136 removed from CREATEA.  b131 was GREEN IN BOTH HALVES with
+# that defect four days old, and sections 1 to 5 above would have passed too -
+# not because they are loose, but because of WHICH RECORDS THEY TOUCH.
+#
+# The strip only damaged a field 1 that was LONGER than its type prefix.
+# Measured 11 Sep 26: all 22 TIER.ADD.ADMINISTRATOR records are bare type
+# letters in voc_template (list.locks is "V"), and none is K-type with a
+# field 3 - the other shape the strip reached.  So the PROGRAMMER<->ADMINISTRATOR
+# round trip above is a NO-OP for the defect in both directions.
+#
+# 41 of the 42 TIER.OMIT.STANDARD records DO carry a description, and they are
+# read from newvoc.  ***A STANDARD -> PROGRAMMER PROMOTION IS THEREFORE THE ONLY
+# TRANSITION THAT CAN SEE IT, AND NO VERIFIER PERFORMED ONE*** - swept 11 Sep 26:
+# every MODIFY.ACCOUNT in every verifier is the round trip above or
+# verify-tiers:713's restore, and b135 printed what THAT does:
+# "VOC: 0 records added, 0 removed, 0 left alone", because suspension does not
+# strip the VOC and the restore does not rebuild it.
+#
+# ***THE SHAPE OF THE DEFECT IS "V" WHERE A SENTENCE BELONGS*** - the same thing
+# the owner saw in a listf on 2 Sep 2026 that PRE_RELEASE 136 was filed for.
+
+Write-Output ''
+Write-Output '=== 6. STANDARD -> PROGRAMMER: the added records keep their text ==========='
+
+# ***WHAT THE ACCOUNT SHOULD END UP WITH, READ FROM THE SHIPPED RECORD.***  Not
+# typed: see $upgradeVerb's note.  Field 1 is the first line of the newvoc file.
+$srcRec = Join-Path $newvoc $upgradeVerb
+if (-not (Test-Path -LiteralPath $srcRec)) {
+    Write-Output ("  newvoc record '" + $upgradeVerb + "' is not there: " + $srcRec)
+    Write-Output '  Nothing below could be compared against anything.  That is "could not be run".'
+    Write-Verdict 'verify-tierchange'
+    exit 2
+}
+$wantF1 = (Get-Content -LiteralPath $srcRec -TotalCount 1) -replace '\r$', ''
+Write-Output ("  newvoc\" + $upgradeVerb + " field 1 = '" + $wantF1 + "'   (read, not typed)")
+
+# ***REFUSE THE NULL CASE, AND IT IS A REAL ONE HERE.***  If the shipped record's
+# field 1 were a bare type letter, the strip this section hunts would be a no-op
+# on it and every row below would PASS while measuring nothing - which is exactly
+# how sections 1 to 5 missed the defect.  A two-character prefix like "PA" is a
+# legitimate bare form, so the test is "longer than 2", not "longer than 1".
+if ($wantF1.Length -le 2) {
+    Write-Output ("  field 1 is '" + $wantF1 + "', a bare type code - so this section could not")
+    Write-Output '  tell a stripped record from a whole one.  Pick a $upgradeVerb whose newvoc'
+    Write-Output '  field 1 is a description; 41 of TIER.OMIT.STANDARD''s 42 ids are.'
+    Write-Verdict 'verify-tierchange'
+    exit 2
+}
+
+$pw2 = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+Show-SD 'create a STANDARD account' @(
+    ('CREATE.ACCOUNT USER ' + $acct2 + '  BOTH'), $pw2, $pw2) @($pw2)
+
+Note 'the STANDARD account was created' $true `
+     (Test-Path -LiteralPath (Join-Path $accts $acct2.ToUpper())) $true
+if (-not (Test-Path -LiteralPath (Join-Path $accts $acct2.ToUpper()))) {
+    Write-Output '  Nothing below would be measuring an upgrade.  That is "could not be run".'
+    Write-Verdict 'verify-tierchange'
+    exit 2
+}
+Note 'ACC$TIER is STANDARD' 'STANDARD' (Get-AccountTier $acct2) $true
+
+# THE CONTROL, AND IT RUNS BEFORE THE PROMOTION.  A STANDARD account must NOT
+# already hold the verb; if it did, the promotion would add nothing and the row
+# below would be reading a record this test never caused to be written.
+Show-SD 'the STANDARD account does not have it yet' @(
+    ('LOGTO ' + $acct2.ToUpper()), ('.L ' + $upgradeVerb)) @()
+Note ($upgradeVerb + ' is ABSENT before the promotion') $false `
+     (Test-Say $lastSD ('^[ \t]*001[ \t]+' + [regex]::Escape($wantF1))) $true
+
+Show-SD 'promote STANDARD -> PROGRAMMER' @(
+    ('MODIFY.ACCOUNT ' + $acct2.ToUpper() + ' PROGRAMMER BOTH')) @()
+$uOut = $lastSD
+
+Note 'promote says 10109 "Account X is now PROGRAMMER"' 'said' `
+     (Get-Said $uOut ('Account\s+' + [regex]::Escape($acct2.ToUpper()) + '\s+is now\s+PROGRAMMER')) $true
+Note 'ACC$TIER is PROGRAMMER' 'PROGRAMMER' (Get-AccountTier $acct2) $true
+
+# ***THE SECOND NULL-CASE GUARD.***  A promotion that wrote no records leaves the
+# VOC exactly as it was, and the row below would then be describing a record
+# that was never re-written - passing by measuring nothing.  This is not
+# hypothetical: it is precisely what verify-tiers:713's restore does.
+$uDelta = Get-VocDelta $uOut
+Note '10113 was printed with its three counts' $true $uDelta.Found $true
+Write-Output ("  10113: added " + $uDelta.Added + ", removed " + $uDelta.Removed +
+              ", left alone " + $uDelta.Kept)
+Note 'the promotion actually ADDED records' $true ($uDelta.Added -ge 1) $true
+
+# ***THE DECISIVE ROW.***  Field 1 of the account's copy must be the whole
+# sentence the shipped record carries.  RELEASE_1.1 1 left a bare type letter
+# here - "V" where "Verb to compile SDBasic program" belongs.
+Show-SD 'read the added record back' @(
+    ('LOGTO ' + $acct2.ToUpper()), ('.L ' + $upgradeVerb)) @()
+
+$gotF1 = ''
+foreach ($line in ($lastSD -split "`n")) {
+    if ($line -match '^[ \t]*001[ \t]+(.+?)[ \t]*\r?$') { $gotF1 = $Matches[1]; break }
+}
+Note ($upgradeVerb + ' field 1 after the promotion') $wantF1 $gotF1 $true
+
+# AND SAY WHAT A FAILURE MEANS, because the two strings differ by a lot and the
+# reason is one specific defect.
+if ($gotF1 -ne $wantF1) {
+    Write-Output ''
+    Write-Output '  *** The account''s copy does not match the shipped record.'
+    Write-Output ("      shipped: '" + $wantF1 + "'")
+    Write-Output ("      account: '" + $gotF1 + "'")
+    Write-Output '  If the account holds only the first character, this is RELEASE_1.1 1:'
+    Write-Output '  MODIFYA tier.build.rec applying the type-letter strip PRE_RELEASE 136'
+    Write-Output '  removed from CREATEA.  Nothing else in this file can see that.'
+}
+
 # -------------------------------------------------------------- clean up
 
 Write-Output ''
 Write-Output '=== clean up =============================================================='
+
+Show-SD 'delete the STANDARD account' @(('DELETE.ACCOUNT ' + $acct2), 'Y') @()
+Note 'clean up: the second Windows account is gone' $false (Test-WinUser $acct2) $true
+Note 'clean up: the second ACCOUNTS record is gone' $false `
+     (Test-Path -LiteralPath (Join-Path $accts $acct2.ToUpper())) $true
 
 Show-SD 'delete the account' @(('DELETE.ACCOUNT ' + $acct), 'Y') @()
 
@@ -494,15 +646,17 @@ Note 'clean up: the ACCOUNTS record is gone' $false `
 Note 'clean up: not left in the Windows administrators group' $false (Test-LocalAdmin $acct) $true
 
 $litter = @()
-$d = Join-Path $env:SystemDrive ('Users\' + $acct)
-if (Test-Path -LiteralPath $d) { $litter += $d }
-if (Test-OsUser $acct)         { $litter += ('os.users record ' + $acct) }
+foreach ($a in @($acct, $acct2)) {
+    $d = Join-Path $env:SystemDrive ('Users\' + $a)
+    if (Test-Path -LiteralPath $d) { $litter += $d }
+    if (Test-OsUser $a)            { $litter += ('os.users record ' + $a) }
+}
 if ($litter.Count -gt 0) {
     Write-Output '  *** LEFT BEHIND - read from disk, not from what the delete reported:'
     $litter | ForEach-Object { Write-Output ('      ' + $_) }
     Write-Output '  Nothing here signed in, so a profile directory would be PRE_RELEASE 35/36.'
 } else {
-    Write-Output ('  nothing left behind for ' + $acct)
+    Write-Output ('  nothing left behind for ' + $acct + ' or ' + $acct2)
 }
 
 Write-Output ''
