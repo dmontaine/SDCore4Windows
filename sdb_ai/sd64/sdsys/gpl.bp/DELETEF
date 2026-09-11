@@ -138,6 +138,21 @@ $define max.name.len 12
                display sysmsg(2050, file.name) :  ;* Use active select list (First item 'xx')?
                input yn
                yn = upcase(yn[1,1])
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  NOT DEFAULTED HERE, AND IT
+*   IS THE ONLY PROMPT IN THIS FILE LEFT HANGING AT END OF INPUT.  Message 2050
+*   has SIX consumers - CD:187, COPY:253, CT:142, DELETE:121, ED:217 and this -
+*   and all six were read on 11 Sep 26: every one requires Y to proceed, sends
+*   N to a stop that changes nothing, and RE-ASKS on anything else.  So they
+*   all hang identically, and N is the safe answer in all six.
+*
+*   ONE LINE IN EACH WOULD FIX IT.  It is not done because it would change what
+*   SIX user-facing verbs do when somebody presses Enter, which is a decision
+*   about the product rather than a defect in it - THE OWNER'S CALL.
+*
+*   SD Core for Linux left its copy alone too, but for a reason that DOES NOT
+*   HOLD IN THIS TREE: it recorded that "2050's other five consumers treat
+*   anything but N as yes".  They do not - all five loop until Y.  Recorded
+*   because the two ports should not diverge on a false premise.
             until yn = 'Y' or yn = 'N'
             repeat
             if yn = "N" then
@@ -181,6 +196,10 @@ delete.file:
                display sysmsg(6131, file.name) :  ;* Use file 'xx'?
                input yn
                yn = upcase(yn[1,1])
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  Same shape and same fix as
+*   the DATA prompt below; N is safe here because only Y branches to the
+*   delete, so an empty answer falls through to ER$STOPPED and nothing goes.
+               if yn = '' then yn = 'N'
             until yn = 'Y' or yn = 'N'
             repeat
             if yn = "Y" then goto delete.upcased.file
@@ -218,6 +237,14 @@ delete.upcased.file:
                display sysmsg(6133) :  ;* Delete all data components of multifile?
                input yn
                yn = upcase(yn)
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  DELIBERATELY NOT DEFAULTED,
+*   AND IT STILL HANGS AT END OF INPUT.  Every other prompt in this file now
+*   maps Enter to N.  This one cannot, because N IS NOT THE SAFE ANSWER HERE:
+*   the line below sends N to delete.dict, which still deletes the dictionary.
+*   Neither answer leaves the file alone, so there is no default to pick and
+*   guessing one would delete something quietly.  SD Core for Linux reached
+*   the same conclusion and left its copy alone too.  THE OWNER'S CALL - it
+*   wants a third answer (cancel), not a default.  RELEASE_1.1 6 carries it.
             until yn = 'Y'
                if yn = 'N' then goto delete.dict
             repeat
@@ -267,6 +294,20 @@ delete.upcased.file:
                      display sysmsg(6135, data.path) :  ;* OK to delete DATA portion 'xx'?
                      input yn
                      yn = upcase(yn[1,1])
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  ENTER TAKES THE DEFAULT,
+*   AND WITHOUT THIS THE LOOP NEVER ENDS.  Owner's rule, 30 Aug 2026: "scripts
+*   need to indicate which is the default using <y>/n or y/<n>" - DELACC:279
+*   is the same fix on the same shape.
+*
+*   PRE_RELEASE_FIXES 79 inventoried the prompts BY THEIR "Y/N" TEXT, and 6135
+*   has none, so this one and its DICT twin at :382 were not in the list.
+*
+*   THE CONSEQUENCE IS WORSE THAN A MISSING DEFAULT.  At end of input "input"
+*   yields '', which is neither Y nor N, so the until never fires and the
+*   question is re-asked for ever with nothing to stop it - SD Core for Linux
+*   measured 98.9 MB of it in 40 seconds down a pipe.  N is also the safe
+*   default here: it deletes nothing.
+                     if yn = '' then yn = 'N'
                   until yn = 'Y' or yn = 'N'
                   repeat
 * 20240121 mab using continue here will create endless loop "while more" is not tested. I know an ugly goto                 
@@ -368,6 +409,9 @@ delete.dict:
                   display sysmsg(6140, dict.path) : ;* OK to delete DICT portion 'xx'?
                   input yn
                   yn = upcase(yn[1,1])
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  The DICT twin of the DATA
+*   prompt above; the reasoning is there and is not repeated.
+                  if yn = '' then yn = 'N'
                until yn = 'Y' or yn = 'N'
                repeat
                if yn = "N" then goto write.voc

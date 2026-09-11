@@ -1383,13 +1383,37 @@ tier.layer:
    return
 
 * ======================================================================
-* tier.build.rec  -  read tier.id from the layer's source file and apply the
-* type-letter transformation CREATE.ACCOUNT applies on the way into a VOC.
+* tier.build.rec  -  read tier.id from the layer's source file, exactly as
+* CREATE.ACCOUNT writes it.
 *
-* THE TRANSFORMATION IS COPIED FROM CREATEA VERBATIM and must stay that way:
-* it is what makes a rebuilt record byte-comparable with one CREATE.ACCOUNT
-* wrote, which is the whole basis of the "delete only what we would have
-* written" rule in voc.delta.
+* THE RECORD IS COPIED WHOLE, and it must stay that way for the same reason it
+* used to be transformed: it is what makes a rebuilt record byte-comparable
+* with one CREATE.ACCOUNT wrote, which is the whole basis of the "delete only
+* what we would have written" rule in voc.delta.  THE RULE DID NOT CHANGE.
+* WHAT CHANGED IS WHAT CREATE.ACCOUNT WRITES.
+*
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 1.  Two lines used to stand
+*   here, the type-letter transformation copied from CREATEA:
+*
+*     tier.rec<1> = if upcase(tier.rec[1,1]) = 'P' then tier.rec<1>[1,2] else tier.rec[1,1]
+*     if upcase(tier.rec<1>) = 'K' and tier.rec<3> # '' then  ... same for rec<3> ...
+*
+*   PRE_RELEASE_FIXES 136 removed them from CREATEA on 2 Sep 26 - field 1 is
+*   the DESCRIPTION whose first character is the type code, and reducing it
+*   left every created account with a bare "F" where SDSYS shows a sentence -
+*   and this copy was missed.  The banner above then ASSERTED an agreement
+*   that no longer held, so anyone checking the comment was told the two were
+*   in step.
+*
+*   IT BROKE BOTH DIRECTIONS, AND ONLY ONE WAS OBVIOUS.  tier.del.one compares
+*   the rebuilt record with the account's: the rebuilt one was stripped and the
+*   account's is whole, so nothing ever matched and a downgrade deleted nothing
+*   while still reporting a tier change.  tier.add.one WRITES the rebuilt
+*   record, so an upgrade put the bare-letter records back - 136's own defect,
+*   reachable through a verb 136 never visited.
+*
+*   Found by SD Core for Linux while auditing this port; it reported the
+*   downgrade half.
 *
 * THE SOURCE FILE IS CHOSEN BY A FLAG RATHER THAN PASSED, because assigning one
 * file variable to another is not a thing this codebase does anywhere and this
@@ -1401,15 +1425,6 @@ tier.build.rec:
       read tier.rec from tvoctmpl.f, tier.id then tier.got = @true
    end else
       read tier.rec from tnewvoc.f, tier.id then tier.got = @true
-   end
-
-   if tier.got then
-      tier.rec<1> = if upcase(tier.rec[1,1]) = 'P' then tier.rec<1>[1,2] else tier.rec[1,1]
-
-      if upcase(tier.rec<1>) = 'K' and tier.rec<3> # '' then
-         tier.s = tier.rec<3>
-         tier.rec<3> = if upcase(tier.s[1,1]) = 'P' then tier.s<1>[1,2] else tier.s[1,1]
-      end
    end
 
    return

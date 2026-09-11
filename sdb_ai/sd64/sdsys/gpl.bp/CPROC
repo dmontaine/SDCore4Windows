@@ -1203,6 +1203,14 @@ stack.manipulation:
                   prompt ""
                   input s
 
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  ENTER TAKES THE DEFAULT,
+*   AND WITHOUT THIS THE LOOP NEVER ENDS.  Owner's rule, 30 Aug 2026: "scripts
+*   need to indicate which is the default using <y>/n or y/<n>".  At end of
+*   input "input" yields '', which is neither N above nor Y below, so the loop
+*   re-asks for ever.  N is the safe answer: it releases the record and leaves
+*   without deleting.  Same shape as CATALOG's three catalogue prompts.
+                  if s = '' then s = 'N'
+
                   if upcase(s[1,1]) = "N" then
                      release voc, at.command
                      goto exit.stack.command

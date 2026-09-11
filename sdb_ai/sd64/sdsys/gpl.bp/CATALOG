@@ -455,6 +455,18 @@ check.local:
                display sysmsg(3033) : ;* Program is also in local catalogue. Remove?
                input yn
                yn = upcase(yn)
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  ENTER TAKES THE DEFAULT,
+*   AND WITHOUT THIS THE LOOP NEVER ENDS.  Owner's rule, 30 Aug 2026: "scripts
+*   need to indicate which is the default using <y>/n or y/<n>"; DELACC:279 is
+*   the same fix.  At end of input "input" yields '', which is neither Y nor N,
+*   so the until never fires and the question repeats for ever.
+*
+*   N IS THE SAFE ANSWER AND IT IS ALSO THE HARMLESS ONE: only Y reaches the
+*   delete below, so an empty answer now leaves the catalogue entry exactly
+*   where it was.  The three catalogue prompts here and CPROC's 5040 all have
+*   this shape.  RELEASE_1.1 6 records the ONE that is deliberately left
+*   hanging - message 2050 - and why.
+               if yn = '' then yn = 'N'
             until yn = 'Y' or yn = 'N'
             repeat
 
@@ -478,6 +490,8 @@ check.private:
             display sysmsg(3034) : ;* Program is also in private catalogue. Remove?
             input yn
             yn = upcase(yn)
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  See 3033 above.
+            if yn = '' then yn = 'N'
          until yn = 'Y' or yn = 'N'
          repeat
    
@@ -500,6 +514,8 @@ check.global:
             display sysmsg(3035) : ;* Program is also in global catalogue. Remove?
             input yn
             yn = upcase(yn)
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  See 3033 above.
+            if yn = '' then yn = 'N'
          until yn = 'Y' or yn = 'N'
          repeat
    

@@ -17,6 +17,13 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 7.  op_getlocks() passed the
+ *           result of UserPtr() straight into ts_printf() without testing it
+ *           for NULL, so GETLOCKS and LIST.READU faulted on a lock whose
+ *           owner's session had gone.  Found by SD Core for Linux, which
+ *           measured the fault there; the two deadlock loops in this same
+ *           file were already guarded in June 2026 and these two sites were
+ *           missed.  Now goes through lock_owner_name().
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -55,6 +62,7 @@
 #include <time.h>
 
 Private bool unlock_id(int16_t file_id, char* raw_id, int16_t id_len);
+Private char* lock_owner_name(int16_t user_no);
 
 /* ======================================================================
    op_filelock()  -  Set file lock                                        */
@@ -211,6 +219,35 @@ void op_flunlock() {
 }
 
 /* ======================================================================
+   lock_owner_name()  -  Login name of a lock's owner, for the reports
+
+   11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 7.
+
+   UserPtr() yields NULL for a user number that is no longer mapped
+   (sysseg.h), and a lock can outlive its owner's session: the user table
+   slot is released while the lock entry still names that number.  The two
+   report loops below then formatted a NULL as %s.
+
+   A lock with no live owner is a normal state to REPORT, not an error, so
+   this answers with a placeholder rather than refusing.  "(gone)" is the
+   wording SD Core for Linux chose for the same fix; the two ports print the
+   same thing on purpose.
+
+   The callers hold FILE_TABLE_LOCK and REC_LOCK_SEM, which is why this
+   matters more than the missing line suggests - a fault here left both held
+   on Linux and stopped every session.                                     */
+
+Private char* lock_owner_name(int16_t user_no) {
+  USER_ENTRY* uptr;
+
+  /* The cast drops the volatile qualifier the shared user table carries.
+     It is what clopts.c:183 already does with the same field, and the two
+     call sites below did it implicitly by passing username to ts_printf. */
+  uptr = UserPtr(user_no);
+  return (uptr != NULL) ? (char*)(uptr->username) : "(gone)";
+}
+
+/* ======================================================================
    op_getlocks()  -  GETLOCKS() function                                  */
 
 void op_getlocks() {
@@ -289,7 +326,7 @@ void op_getlocks() {
         ts_copy_byte(FIELD_MARK);
         ts_printf("%d\xfd%s\xfd%d\xfd%s\xfd\xfd%s", (int)i, fptr->pathname,
                   (int)abs(lock_owner), (lock_owner < 0) ? "SX" : "FX",
-                  UserPtr(abs(lock_owner))->username);
+                  lock_owner_name(abs(lock_owner)));
       }
     }
   }
@@ -309,7 +346,7 @@ void op_getlocks() {
         ts_printf("%d\xfd%s\xfd%d\xfd%s\xfd%.*s\xfd%s", (int)(rlptr->file_id),
                   fptr->pathname, (int)lock_owner,
                   (rlptr->lock_type == L_UPDATE) ? "RU" : "RL", rlptr->id_len,
-                  rlptr->id, UserPtr(abs(lock_owner))->username);
+                  rlptr->id, lock_owner_name(abs(lock_owner)));
       }
     }
   }

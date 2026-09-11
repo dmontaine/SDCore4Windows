@@ -170,6 +170,17 @@
 * 20240219 mab dflt user and group parent directory for accounts
 *
 * mods to command line:
+*
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 4.  EVERYTHING FROM HERE TO THE
+*   "29 Aug 26" LINE IS HISTORY, NOT THE CURRENT GRAMMAR.  It is the 2024
+*   record of a change, so it states the form of that day and its paths are
+*   Linux ones - "/home/sd/user_accounts" is not where anything lives on this
+*   port.  The current grammar is in START-DESCRIPTION below, and what a user
+*   is shown is the syntax message at :747.  Read either of those; this block
+*   is kept because the REASONING under it - the three tiers, why the tier is
+*   written to ACC$TIER, why none of them is a wall - is still true and is
+*   cited from elsewhere.
+*
 *  Rem was
 *    CREATE.ACCOUNT acc.name pathname {NO.QUERY}
 *  Now 
@@ -251,7 +262,29 @@
 *
 * START-DESCRIPTION:
 *
-* CREATE.ACCOUNT account.name  path.name [NO.QUERY]
+* CREATE.ACCOUNT USER  <user name> SSH | API | BOTH | NONE
+*                        {ADMINISTRATOR | PROGRAMMER} {NO.QUERY}
+* CREATE.ACCOUNT GROUP <group name> {NO.QUERY}
+* CREATE.ACCOUNT OTHER <account name> <path name> {NO.QUERY}
+*
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 4.  THIS BLOCK USED TO READ
+*   "CREATE.ACCOUNT account.name  path.name [NO.QUERY]", the pre-0.9.0 form,
+*   which no arm of the case statement at :422 has accepted for two years.
+*
+*   IT IS WORTH MORE THAN A TIDY-UP BECAUSE IT WAS BELIEVED.  A SD Core for
+*   Linux session copied the equivalent line into a user-facing message and
+*   shipped a command that fails.  A stale comment at the top of a file is
+*   read as the summary of what is below it.
+*
+*   THE VERB'S OWN SYNTAX MESSAGE AT :747 IS THE AUTHORITY, and it is correct
+*   for USER and GROUP.  It does NOT name the OTHER form, which :728 accepts
+*   and :230 describes as kept for backwards compatibility.  That is left
+*   exactly as it is - this block documents what the verb takes, and :747
+*   stays the thing a user is shown.
+*
+*   THE "mods to command line" BLOCK AT :172 IS NOT A SECOND COPY OF THIS.
+*   It is the 2024 record of a change, it describes the form of that day, and
+*   its paths are Linux ones.  It is marked as history rather than corrected.
 *
 * END-DESCRIPTION
 *

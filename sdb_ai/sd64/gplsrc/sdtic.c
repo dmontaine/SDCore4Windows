@@ -536,6 +536,20 @@ void process_file() {
     while (more) {
       if ((p = get_token()) == NULL) {
         err("Unexpected end of source file\n");
+/* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 2.  COUNT THE ENTRY BEFORE
+ * LEAVING, OR A TRUNCATED LAST ENTRY REPORTS SUCCESS.  err() raises errors,
+ * but the only place that turns errors into failed_entries is at the bottom of
+ * the per-entry loop and this goto jumps straight past it - so the run ends
+ * with failed_entries == 0, the verdict above prints nothing and sdtic exits
+ * 0, having written a database with the last terminal missing from it.  That
+ * is precisely the failure the 19 Aug 26 note above says it fixed, surviving
+ * on the one path that leaves the loop early.
+ *
+ * THE LIKELIEST WAY TO REACH IT IS A HAND-EDITED terminfo.mods WHOSE FINAL
+ * LINE ENDS IN A COMMA.  Found by SD Core for Linux, which witnessed both
+ * sides there: the old tool 1 file / exit 0, the fixed tool 2 files / exit 1
+ * with the "did not compile" line.                                          */
+        failed_entries++;
         goto exit_process_file;
       }
 

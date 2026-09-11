@@ -1,3 +1,58 @@
+W1.1-0 - in progress
+-------------
+Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
+comes from SD Core for Linux, which found these faults in the Windows code
+while porting from it.
+
+11 Sep 26  FIXED: LIST.READU AND GETLOCKS COULD CRASH THE SESSION.
+
+           If a lock was still held for a session that had already gone,
+           listing locks looked up a user who was no longer there and
+           used the answer without checking it.  Such a lock now shows
+           its owner as "(gone)" and the listing finishes normally.
+
+           WHY IT MATTERS.  On Linux the same fault stopped every
+           session, because it happened while two internal locks were
+           held and they were never released.  Windows handles those
+           locks differently, so what would have happened here has not
+           been established - but the fault itself was the same.
+
+11 Sep 26  FIXED: MODIFY.ACCOUNT DID NOT CHANGE AN ACCOUNT'S VERBS.
+
+           Moving an account DOWN a tier - say programmer to standard -
+           reported the change but removed nothing, so the account kept
+           the verbs it was supposed to lose.  Moving it UP added the
+           verbs but stored them without their descriptions, so listf
+           showed a bare letter where a sentence belongs.
+
+           Both are fixed, and both had one cause: the rebuild still
+           trimmed each record the way CREATE.ACCOUNT used to before
+           that was corrected on 2 September.
+
+11 Sep 26  PROMPTS BEFORE A DELETION NOW SHOW THEIR DEFAULT.
+
+           Seven prompts now end (y/<n>) and take Enter as no: the DATA,
+           DICT and "use file" questions in DELETE.FILE, the three
+           catalogue questions in CATALOG, and .D's "delete VOC record".
+
+           WHY IT MATTERS.  Enter used to be neither yes nor no, so the
+           question was simply asked again.  When the answers came from
+           a file or a pipe rather than a keyboard, there was nothing
+           left to read and the question repeated without end.
+
+           TWO PROMPTS ARE DELIBERATELY UNCHANGED, because no is not a
+           safe answer to either: "delete all data components of
+           multifile", where no still deletes the dictionary, and "use
+           active select list", where no cancels the whole command.
+
+11 Sep 26  FIXED: SDTIC REPORTED SUCCESS ON A TRUNCATED SOURCE FILE.
+
+           If the last entry in a terminfo source ran out part way
+           through - the usual cause being a final line left ending in a
+           comma - sdtic stopped, wrote the database without it, and
+           exited 0.  It now counts that entry as failed, says so, and
+           exits 1.
+
 W1.0-0 - 06 Sep 2026
 -------------
 This section covers the conversion from Linux to Windows.  It is the record of
