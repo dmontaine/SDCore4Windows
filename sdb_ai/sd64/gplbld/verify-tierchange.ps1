@@ -428,7 +428,26 @@ Note '10113 was printed with its three counts' $true $delta.Found $true
 Write-Output ("  10113: added " + $delta.Added + ", removed " + $delta.Removed +
               ", left alone " + $delta.Kept)
 
-Note 'at least one record was LEFT ALONE' $true ($delta.Kept -ge 1) $true
+# 11 Sep 26 - EXACTLY ONE, NOT "AT LEAST ONE".  RELEASE_1.1_FIXES.md 12.
+#
+# ***THIS ROW READ "-ge 1" AND THAT IS WHY b131 WAS GREEN WITH RELEASE_1.1 1
+# SITTING IN THE PRODUCT.***  MODIFYA's tier.build.rec still stripped each
+# record the way CREATEA did before PRE_RELEASE 136, so EVERY record compared
+# unequal in tier.del.one, NOTHING was deleted by a downgrade, and all of them
+# were counted "left alone".  "At least one" is satisfied by "all of them", so
+# the row passed while describing a total failure of the thing it watches.
+#
+# Section 3 above plants exactly ONE mismatched record and refuses to continue
+# if it did not - so on a healthy tree the answer is 1, and 1 is the only
+# answer that means what this row claims.  The guard beside it already refused
+# the describes-ZERO case; this refuses the describes-EVERYTHING case, which is
+# the same hole at the other end.
+#
+# ***WHAT WOULD FALSIFY THIS.***  A healthy downgrade that legitimately keeps
+# more than one record - a voc_template record that differs from what a tier
+# build writes for some reason of its own.  If this goes red with Kept > 1 on a
+# tree nobody has edited, THIS NUMBER is the thing to question, not the product.
+Note 'exactly one record was LEFT ALONE - the one section 3 planted' 1 $delta.Kept $true
 
 Show-SD 'count the VOC after the downgrade' @(('LOGTO ' + $acct.ToUpper()), 'COUNT VOC',
                                               ('.L ' + $adminVerb)) @()
