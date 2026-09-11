@@ -1,7 +1,7 @@
 # verify-sshadmin.ps1 - prove that an SD ADMINISTRATOR gets no ssh session at
 # all, and that a non-administrator still does.
 #
-#   powershell -File verify-sshadmin.ps1 -Prefix sdsshadm<run>
+#   powershell -ExecutionPolicy Bypass -File verify-sshadmin.ps1 -Prefix sdsshadm<run>
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

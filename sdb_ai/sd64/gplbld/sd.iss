@@ -2227,7 +2227,7 @@ begin
             'They can sign in at the console and over Remote Desktop like any other ' +
             'Windows account. SD Core itself is installed and working. To apply it, from an ' +
             'ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" sdsshonly' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" sdsshonly' + #13#10#13#10;
 end;
 
 { Create sdssh and sdapi - the two groups that say which REMOTE route an
@@ -2272,7 +2272,7 @@ begin
             'sshd allows the group "sdssh", so until it has members, ssh will be ' +
             'refused to everyone except administrators. SD Core itself is installed and ' +
             'working. To repair it, from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '"' + #13#10#13#10;
 end;
 
 { Applies the AllowGroups block and returns what to tell the user, or '' if the
@@ -2380,13 +2380,13 @@ begin
     Result := 'ssh was NOT limited, and nothing was changed. The most likely reason is ' +
               'that OpenSSH has not started yet and has no configuration file - restart, ' +
               'then run this from an elevated prompt:' + #13#10#13#10 +
-              '    powershell -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed' + #13#10#13#10 +
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed' + #13#10#13#10 +
               'It also refuses if sshd_config already says who may connect, in which case ' +
               'that setting is somebody else''s and has been left alone.'
   else
     Result := 'Limiting ssh FAILED and sshd_config was left as it was. Run this from an ' +
               'elevated prompt to see why:' + #13#10#13#10 +
-              '    powershell -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed';
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\allow-ssh-groups.ps1') + '" -Installed';
 end;
 
 { Scope the OpenSSH firewall rule to match the checkbox, and return what to tell
@@ -2467,18 +2467,18 @@ begin
     else
       Result := 'ssh can be reached FROM THIS COMPUTER ONLY. Nothing on your network can ' +
                 'connect to it. To change that later, run this from an elevated prompt:' + #13#10#13#10 +
-                '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Open' + #13#10#13#10;
+                '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Open' + #13#10#13#10;
   end
   else if Code = 2 then
     { The likely case when a restart is outstanding: the capability has not
       finished registering its firewall rule, so there is nothing to scope. }
     Result := 'Who may reach ssh has NOT been set yet, because Windows has not finished ' +
               'registering the ssh firewall rule. Restart, then run this from an elevated prompt:' + #13#10#13#10 +
-              '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10
   else
     Result := 'Setting who may reach ssh FAILED, and Windows'' own default is in force - ' +
               'port 22 open to your local network. Run this from an elevated prompt to see why:' + #13#10#13#10 +
-              '    powershell -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10;
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\ssh-firewall.ps1" -Installed -Restrict' + #13#10#13#10;
 end;
 
 { WHO MAY REACH THE API PORT.  Owner's decision, 21 Aug 2026: the API is
@@ -2575,12 +2575,12 @@ begin
                 'connect later, sign in to SD Core as an administrator and run:' + #13#10#13#10 +
                 '    remote.api on' + #13#10#13#10 +
                 'or, from an elevated prompt:' + #13#10#13#10 +
-                '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
+                '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
   end
   else
     Result := 'Setting who may reach the SD Core API FAILED, so no rule was created and other ' +
               'computers cannot reach port 4243. Run this from an elevated prompt to see why:' + #13#10#13#10 +
-              '    powershell -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
 end;
 
 (* ***WHO MAY REACH THE API PORT - MEASURED, NOT INFERRED.***
@@ -2778,7 +2778,7 @@ begin
       Result := Result + ' Accounts you also gave API access can use the API meanwhile.';
     Result := Result + #13#10#13#10 +
               'Put the server right from an elevated PowerShell prompt:' + #13#10#13#10 +
-              '    powershell -File "' + ExpandConstant('{app}') + '\install-ssh.ps1"' + #13#10#13#10;
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\install-ssh.ps1"' + #13#10#13#10;
     Exit;
   end;
 
@@ -3224,8 +3224,8 @@ begin
   Result := 'The shell permission list was NOT locked (code ' + IntToStr(Code) + '). ' +
             'Until it is, any SD Core user can add themselves to it and obtain a command shell. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
 end;
 
 { LOCK THE ACCOUNT DIRECTORIES.  PROJECT_STATUS.md section 8, "the B work".
@@ -3289,8 +3289,8 @@ begin
   Result := 'The account directories were NOT locked (code ' + IntToStr(Code) + '). ' +
             'Until they are, any SD Core user can read and rewrite any other account''s ' +
             'files outside SD Core. Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
-            '    powershell -File "' + PerAccount + '" -Root "' + Root + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
+            '    powershell -ExecutionPolicy Bypass -File "' + PerAccount + '" -Root "' + Root + '"' + #13#10#13#10;
 end;
 
 { LOCK THE GLOBAL CATALOGUE.  PROJECT_STATUS.md 8, UPSTREAM_FIXES.md 7.
@@ -3353,8 +3353,8 @@ begin
   Result := 'The batch command list was NOT locked (code ' + IntToStr(Code) + '). ' +
             'Until it is, any SD Core user can add commands to their own record and run them ' +
             'from the command line.  Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
 end;
 
 function SecureGcat: String;
@@ -3393,7 +3393,7 @@ begin
   Result := 'The global catalogue was NOT locked (code ' + IntToStr(Code) + '). ' +
             'Until it is, any SD Core user can replace the programs SD Core runs for every session. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
 end;
 
 { LOCK THE PCODE LIBRARY, and return what to tell the user if it did not
@@ -3431,7 +3431,7 @@ begin
   Result := 'The pcode library was NOT locked (code ' + IntToStr(Code) + '). ' +
             'Until it is, any SD Core user can replace the interpreter every session runs. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
 end;
 
 { LOCK THE SEVEN SDSYS SYSTEM DIRECTORIES NOTHING WRITES, and return what to
@@ -3530,7 +3530,7 @@ begin
             'Until it is, any SD Core user can rewrite the account register, the system ' +
             'programs SDSYS runs, or the configuration SD Core reads at start-up. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
 end;
 
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
@@ -3642,7 +3642,7 @@ begin
             'Accounts SD Core created are meant to reach this computer only over ssh, ' +
             'and until this is put right they can also sign in at the console and over ' +
             'Remote Desktop. Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -DataDir "' + Data + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -DataDir "' + Data + '"' + #13#10#13#10;
 end;
 
 function SecureCredStore: String;
@@ -3671,7 +3671,7 @@ begin
   Result := 'The credential store was NOT locked (code ' + IntToStr(Code) + ').  Until it is, any SD Core ' +
             'user can overwrite another account''s stored password and then sign in as them. ' +
             'Put it right from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -File "' + Script + '" -Path "' + Store + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Store + '"' + #13#10#13#10;
 end;
 
 { ---------------------------------------------------------------------------
@@ -4246,7 +4246,7 @@ begin
                     'being a Windows administrator is not by itself an SD Core account, and ' +
                     'there is no exception for one. Put it right from an ELEVATED ' +
                     'PowerShell prompt:' + #13#10#13#10 +
-                    '    powershell -File "' + ExpandConstant('{app}') + '\adopt-account.ps1" -User ' +
+                    '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\adopt-account.ps1" -User ' +
                     ExpandConstant('{username}') + #13#10#13#10 +
                     'What went wrong is recorded in ' + ExpandConstant('{#DataDir}') +
                     '\adopt-account.log' + #13#10#13#10;

@@ -1,9 +1,9 @@
 # clean-test-profiles.ps1 - remove the Windows profiles left behind by the
 # verifiers that create accounts.  ELEVATED.
 #
-#   powershell -File clean-test-profiles.ps1 -SelfTest check the pattern only
-#   powershell -File clean-test-profiles.ps1 -List     show what would go
-#   powershell -File clean-test-profiles.ps1           remove them
+#   powershell -ExecutionPolicy Bypass -File clean-test-profiles.ps1 -SelfTest check the pattern only
+#   powershell -ExecutionPolicy Bypass -File clean-test-profiles.ps1 -List     show what would go
+#   powershell -ExecutionPolicy Bypass -File clean-test-profiles.ps1           remove them
 #
 # Exit 0 done (or nothing to do), 1 refused or failed.
 #

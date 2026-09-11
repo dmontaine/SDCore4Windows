@@ -2,7 +2,7 @@
 # synthetic transcripts of a FIXED build and a DEFECTIVE one, and require every
 # pattern to tell them apart.
 #
-#   powershell -File test-vocverbs-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-vocverbs-units.ps1
 #
 # Exit 0 every row passed, 1 a row failed.  It needs no install, no elevation
 # and no SD: it touches nothing but the verifier's own text.

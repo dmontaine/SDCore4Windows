@@ -2,7 +2,7 @@
 # ruled read-only on 24 Aug 2026 cannot be written by an ordinary SD user, AND
 # that $ipc still can.  PROJECT_STATUS.md 7 step 15.
 #
-#   powershell -File verify-sysdiracl.ps1        run the checks
+#   powershell -ExecutionPolicy Bypass -File verify-sysdiracl.ps1        run the checks
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.
@@ -236,7 +236,7 @@ if ($fatal) {
         Write-Output '  from an ELEVATED PowerShell prompt, one call per path:'
         Write-Output ''
         foreach ($p in $readOnly) {
-            Write-Output "      powershell -File `"$PSScriptRoot\secure-sysdirs.ps1`" -Path `"$p`""
+            Write-Output "      powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\secure-sysdirs.ps1`" -Path `"$p`""
         }
     }
     if ($tooHard) {

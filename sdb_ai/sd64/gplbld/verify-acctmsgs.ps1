@@ -3,7 +3,7 @@
 # (MODIFY.ACCOUNT ADD/DELETE writes an audit record), 37 (CREATE.ACCOUNT's two
 # access lines no longer contradict each other).
 #
-#   powershell -File verify-acctmsgs.ps1 -Prefix sdmsga
+#   powershell -ExecutionPolicy Bypass -File verify-acctmsgs.ps1 -Prefix sdmsga
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

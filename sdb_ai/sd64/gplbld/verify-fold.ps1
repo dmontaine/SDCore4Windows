@@ -1,9 +1,9 @@
 # verify-fold.ps1 - prove the name fold is "as typed, then lower, then upper",
 # and that nothing that worked before stopped working.  PROJECT_STATUS.md 5.12.
 #
-#   powershell -File verify-fold.ps1            create, check, clean up
-#   powershell -File verify-fold.ps1 -Keep      leave the two files behind
-#   powershell -File verify-fold.ps1 -Cleanup   remove ones left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-fold.ps1            create, check, clean up
+#   powershell -ExecutionPolicy Bypass -File verify-fold.ps1 -Keep      leave the two files behind
+#   powershell -ExecutionPolicy Bypass -File verify-fold.ps1 -Cleanup   remove ones left by -Keep
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

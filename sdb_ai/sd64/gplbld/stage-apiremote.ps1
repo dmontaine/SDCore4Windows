@@ -1,9 +1,9 @@
 # stage-apiremote.ps1 - put the API client kit in front of a VM, so the API can
 # be reached ACROSS A REAL NETWORK.  PROJECT_STATUS.md section 7 step 2, item 4.
 #
-#   powershell -File stage-apiremote.ps1                      stage, print the command
-#   powershell -File stage-apiremote.ps1 -Prefix sdapib8      also find the password
-#   powershell -File stage-apiremote.ps1 -Remove              undo
+#   powershell -ExecutionPolicy Bypass -File stage-apiremote.ps1                      stage, print the command
+#   powershell -ExecutionPolicy Bypass -File stage-apiremote.ps1 -Prefix sdapib8      also find the password
+#   powershell -ExecutionPolicy Bypass -File stage-apiremote.ps1 -Remove              undo
 #
 # Exit 0 staged, 1 something is wrong, 2 it could not be staged.
 #

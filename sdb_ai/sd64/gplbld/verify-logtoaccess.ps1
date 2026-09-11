@@ -1,7 +1,7 @@
 # verify-logtoaccess.ps1 - AN ADMINISTRATOR'S ACCESS SURVIVES A LOGTO.
 # PRE_RELEASE_FIXES.md 91, PROJECT_STATUS.md 5.22.
 #
-#   powershell -File verify-logtoaccess.ps1 -TestUser sdtub83 -TestPassword '<pw>'
+#   powershell -ExecutionPolicy Bypass -File verify-logtoaccess.ps1 -TestUser sdtub83 -TestPassword '<pw>'
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.  VerifyInstall1.ps1 supplies both arguments from the

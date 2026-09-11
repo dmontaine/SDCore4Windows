@@ -1,7 +1,7 @@
 # remove-sdaccounts.ps1 - take away the Windows accounts SD created.
 #
-#   powershell -File remove-sdaccounts.ps1                    report only
-#   powershell -File remove-sdaccounts.ps1 -Remove -Keep don  do it
+#   powershell -ExecutionPolicy Bypass -File remove-sdaccounts.ps1                    report only
+#   powershell -ExecutionPolicy Bypass -File remove-sdaccounts.ps1 -Remove -Keep don  do it
 #
 # Exit 0 it ran, 2 it refused.  REPORT IS THE DEFAULT: a script that deletes
 # Windows accounts should need -Remove typed at it.

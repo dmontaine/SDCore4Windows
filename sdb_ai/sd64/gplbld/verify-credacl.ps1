@@ -1,7 +1,7 @@
 # verify-credacl.ps1 - prove the credential store is closed to ordinary SD
 # users, PROJECT_STATUS.md 7 step 6.
 #
-#   powershell -File verify-credacl.ps1        run the checks
+#   powershell -ExecutionPolicy Bypass -File verify-credacl.ps1        run the checks
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.
@@ -187,7 +187,7 @@ if ($fatal) {
     Write-Output '  Any SD user can overwrite another account''s verifier and then'
     Write-Output '  authenticate as them. Put it right from an ELEVATED prompt:'
     Write-Output ''
-    Write-Output "      powershell -File `"$PSScriptRoot\secure-cred.ps1`" -Path `"$store`""
+    Write-Output "      powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\secure-cred.ps1`" -Path `"$store`""
     exit 1
 }
 

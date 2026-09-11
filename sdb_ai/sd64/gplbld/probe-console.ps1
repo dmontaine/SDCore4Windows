@@ -1,6 +1,6 @@
 # probe-console.ps1 - build and run probe-console.c IN A REAL CONSOLE.
 #
-#   powershell -File probe-console.ps1        UNELEVATED, in a REAL console
+#   powershell -ExecutionPolicy Bypass -File probe-console.ps1        UNELEVATED, in a REAL console
 #
 # Exit 0 the probe ran, 2 it could not be set up.  Like probe-keys.ps1 there is
 # nothing here to pass or fail: it is an instrument, and a person reads what it

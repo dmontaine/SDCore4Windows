@@ -3,7 +3,7 @@
 # NO run token, so it costs nothing and can run before the rule is handed to
 # either of its two callers.
 #
-#   powershell -File test-stalebin-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-stalebin-units.ps1
 #
 # Exit 0 every row passed, 1 a row failed, 2 the subject could not be read.
 #

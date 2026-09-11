@@ -1,7 +1,7 @@
 # verify-registersweep.ps1 - the register goes dirty, the service start cleans
 # it, and this watches the whole loop happen
 #
-#   powershell -File verify-registersweep.ps1     ELEVATED PowerShell
+#   powershell -ExecutionPolicy Bypass -File verify-registersweep.ps1     ELEVATED PowerShell
 #
 # Exit 0 the loop worked, 1 it did not, 2 the check could not be run.
 #

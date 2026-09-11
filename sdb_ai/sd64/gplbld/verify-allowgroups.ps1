@@ -1,7 +1,7 @@
 # verify-allowgroups.ps1 - exercise allow-ssh-groups.ps1's file editing against
 # the sshd_config Windows actually ships.  PROJECT_STATUS.md 5.6.2.
 #
-#   powershell -File verify-allowgroups.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-allowgroups.ps1
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

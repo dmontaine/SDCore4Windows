@@ -1,7 +1,7 @@
 # verify-register.ps1 - assert that @SDSYS/ACCOUNTS and @SDSYS/OS.USERS contain
 # only valid records
 #
-#   powershell -File verify-register.ps1     ORDINARY UNELEVATED PROMPT
+#   powershell -ExecutionPolicy Bypass -File verify-register.ps1     ORDINARY UNELEVATED PROMPT
 #
 # Exit 0 the register is consistent, 1 it is not, 2 the check could not be run.
 #

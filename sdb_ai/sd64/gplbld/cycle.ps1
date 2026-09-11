@@ -71,7 +71,7 @@ $ErrorActionPreference = 'Stop'
 # default above would be exactly as wrong as "dmont".  $env:USERPROFILE is the
 # only thing that resolves on both machines; it was measured to survive a
 # [CmdletBinding()] param default under both "& cycle.ps1" and
-# "powershell -File cycle.ps1", unlike $PSScriptRoot.
+# "powershell -ExecutionPolicy Bypass -File cycle.ps1", unlike $PSScriptRoot.
 
 # 17 Aug 26 - A TRANSCRIPT, for the same reason verify-tiers.ps1 has one: this
 # runs elevated, which usually means a window nobody is going to copy back, and
@@ -184,7 +184,7 @@ $global:SdCycleHasRunInThisWindow = $true
 # neither was ever stopped.
 #
 # WHY IT SURVIVED THIS LONG: a run launched as its own process
-# (powershell -File ...) closes the file when the process exits, so the log is
+# (powershell -ExecutionPolicy Bypass -File ...) closes the file when the process exits, so the log is
 # clean and carries its end marker.  The bleed only appears when the documented
 # usage is followed literally - typing the script path at an already-open
 # elevated prompt - which is the usage this script is written for.

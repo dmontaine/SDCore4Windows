@@ -1,9 +1,9 @@
 # verify-lcnames.ps1 - the first of section 5.12 (a)'s renames: the per-account
 # file names on disk are lower case.  PROJECT_STATUS.md 5.12, section 7 step 8.
 #
-#   powershell -File verify-lcnames.ps1            check, clean up after itself
-#   powershell -File verify-lcnames.ps1 -Keep      leave the two probe records
-#   powershell -File verify-lcnames.ps1 -Cleanup   remove ones left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-lcnames.ps1            check, clean up after itself
+#   powershell -ExecutionPolicy Bypass -File verify-lcnames.ps1 -Keep      leave the two probe records
+#   powershell -ExecutionPolicy Bypass -File verify-lcnames.ps1 -Cleanup   remove ones left by -Keep
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

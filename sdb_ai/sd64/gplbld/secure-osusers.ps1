@@ -1,7 +1,7 @@
 # secure-osusers.ps1 - lock a permission list so only an administrator can
 # change who is on it.
 #
-#   powershell -File secure-osusers.ps1 -Path "C:\ProgramData\SD\sdsys\os.users" ...
+#   powershell -ExecutionPolicy Bypass -File secure-osusers.ps1 -Path "C:\ProgramData\SD\sdsys\os.users" ...
 #
 # 22 Aug 26 - IT SERVES TWO LISTS NOW, and the name is the older of them.  It
 # takes -Path and has nothing in it specific to os.users, so PROJECT_STATUS.md

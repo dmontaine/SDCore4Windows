@@ -1,9 +1,9 @@
 # allow-ssh-groups.ps1 - the second layer of the ssh-only model: decide who may
 # ssh into this machine at all.  PROJECT_STATUS.md 5.6.2.
 #
-#   powershell -File allow-ssh-groups.ps1 -Installed write the block and restart sshd
-#   powershell -File allow-ssh-groups.ps1 -Check     print what it would write, touch nothing
-#   powershell -File allow-ssh-groups.ps1 -Remove    take SD's block back out
+#   powershell -ExecutionPolicy Bypass -File allow-ssh-groups.ps1 -Installed write the block and restart sshd
+#   powershell -ExecutionPolicy Bypass -File allow-ssh-groups.ps1 -Check     print what it would write, touch nothing
+#   powershell -ExecutionPolicy Bypass -File allow-ssh-groups.ps1 -Remove    take SD's block back out
 #
 # Exit 0 done (or nothing to do), 1 failed, 2 refused - see "WHEN IT REFUSES".
 #

@@ -2,7 +2,7 @@
 # table.  Needs NO install, NO elevation, NO register and NO account, so it
 # costs nothing to run and can run before the sweep is handed to sdsvc.exe.
 #
-#   powershell -File test-reconcile-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-reconcile-units.ps1
 #
 # Exit 0 every row passed, 1 a row failed, 2 the subject could not be read.
 #

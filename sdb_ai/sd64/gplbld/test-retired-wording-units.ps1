@@ -56,6 +56,29 @@ Write-Host "test-retired-wording-units: messages $msgDir"
 # Replacement = must appear somewhere (the positive control that proves the fix
 # is real and the scan reaches it).  Ref names the PRE_RELEASE_FIXES entry.
 $RETIRED = @(
+    # RELEASE_1.1 11 - "powershell -File" WITHOUT A POLICY SWITCH, IN A COMMAND
+    # SD PRINTS FOR SOMEBODY TO RUN.  The default execution policy on a Windows
+    # client SKU is Restricted, so every one of those refused with "running
+    # scripts is disabled on this system" - a message naming neither SD nor the
+    # thing the user was trying to fix.  ***WITNESSED BY THE OWNER ON HIS OWN
+    # MACHINE, 11 Sep 2026***, on cycle.ps1 in an elevated prompt.
+    #
+    # It is the sibling of PRE_RELEASE 173, which asked whether the scripts SD
+    # RUNS are refused and fixed those.  Nobody asked it of the scripts SD TELLS
+    # A USER TO RUN, and the answer was the same.
+    #
+    # ***REGISTERED BECAUSE IT HAD 175 COPIES*** across sd.iss, a message and 82
+    # gplbld scripts, which is precisely the shape this lint exists for: a fix
+    # that lands in one copy and misses another.
+    #
+    # ***THE TRAILING SPACE IS LOAD-BEARING.***  Every real invocation in this
+    # tree spells it "powershell.exe" and already carries the switch, so the
+    # pattern below cannot match one - and "powershell -File," in prose (a
+    # comma, no space) is left alone deliberately.  Comments are stripped before
+    # this runs, so a header line is invisible to it either way.
+    @{ Ref = 'R11'
+       Retired     = 'powershell -File '
+       Replacement = 'powershell -ExecutionPolicy Bypass -File ' }
     # 130 - the account this described could never exist: LOGIN demands a
     # credential on every login and ends the session without one, so there was
     # no way to REACH a passwordless account that "works only at this computer".

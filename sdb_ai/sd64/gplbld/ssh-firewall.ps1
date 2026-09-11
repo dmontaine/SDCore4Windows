@@ -1,9 +1,9 @@
 # ssh-firewall.ps1 - decide whether other computers may reach this machine's
 # ssh server.  PROJECT_STATUS.md 5.9.
 #
-#   powershell -File ssh-firewall.ps1 -Installed -Restrict   loopback only
-#   powershell -File ssh-firewall.ps1 -Installed -Open       any address
-#   powershell -File ssh-firewall.ps1 -Show                  report, change nothing
+#   powershell -ExecutionPolicy Bypass -File ssh-firewall.ps1 -Installed -Restrict   loopback only
+#   powershell -ExecutionPolicy Bypass -File ssh-firewall.ps1 -Installed -Open       any address
+#   powershell -ExecutionPolicy Bypass -File ssh-firewall.ps1 -Show                  report, change nothing
 #
 # Exit 0 applied, 1 failed, 2 refused or the rule is not there yet.
 #

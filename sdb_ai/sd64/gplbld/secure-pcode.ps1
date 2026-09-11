@@ -1,7 +1,7 @@
 # secure-pcode.ps1 - lock the pcode library so only an administrator can change
 # the interpreter every SD session runs.
 #
-#   powershell -File secure-pcode.ps1 -Path "C:\ProgramData\SD\sdsys\bin"
+#   powershell -ExecutionPolicy Bypass -File secure-pcode.ps1 -Path "C:\ProgramData\SD\sdsys\bin"
 #
 # PROJECT_STATUS.md 7 step 15.  Run by the installer, once, AFTER the icacls
 # that secures the data tree - it has to be after, or inheritance puts the

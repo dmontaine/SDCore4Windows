@@ -2,8 +2,8 @@
 # measures the three doors and creates nothing.  PRE_RELEASE 19's last row and
 # PRE_RELEASE 38.
 #
-#   powershell -File verify-doors.ps1 -Prefix sddr1 -Password '<pw>' -Phase Control
-#   powershell -File verify-doors.ps1 -Prefix sddr1 -Password '<pw>' -Phase Refused
+#   powershell -ExecutionPolicy Bypass -File verify-doors.ps1 -Prefix sddr1 -Password '<pw>' -Phase Control
+#   powershell -ExecutionPolicy Bypass -File verify-doors.ps1 -Prefix sddr1 -Password '<pw>' -Phase Refused
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.  verify-doors-admin.ps1 is the other half and prints these

@@ -1,7 +1,7 @@
 # reclaim-profiles.ps1 - remove the profiles SD had to leave behind
 #
-#   powershell -File reclaim-profiles.ps1            sweep (elevated)
-#   powershell -File reclaim-profiles.ps1 -List      report, change nothing
+#   powershell -ExecutionPolicy Bypass -File reclaim-profiles.ps1            sweep (elevated)
+#   powershell -ExecutionPolicy Bypass -File reclaim-profiles.ps1 -List      report, change nothing
 #
 # BOTH MODES WANT AN ELEVATED PROMPT.  The sweep needs one to remove a profile
 # directory and a ProfileList entry; -List needs one to READ THE STORE, which is

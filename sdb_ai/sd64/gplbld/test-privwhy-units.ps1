@@ -1,6 +1,6 @@
 # test-privwhy-units.ps1 - guard PRE_RELEASE_FIXES.md 96's tri-state
 #
-#   powershell -File test-privwhy-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-privwhy-units.ps1
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

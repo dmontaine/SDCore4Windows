@@ -1,9 +1,9 @@
 ﻿# verify-tiers.ps1 - prove the three VOC tiers, and that they survive a VOC
 # update.  PROJECT_STATUS.md section 8.
 #
-#   powershell -File verify-tiers.ps1            create, check, clean up
-#   powershell -File verify-tiers.ps1 -Keep      leave the three accounts behind
-#   powershell -File verify-tiers.ps1 -Cleanup   remove ones left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-tiers.ps1            create, check, clean up
+#   powershell -ExecutionPolicy Bypass -File verify-tiers.ps1 -Keep      leave the three accounts behind
+#   powershell -ExecutionPolicy Bypass -File verify-tiers.ps1 -Cleanup   remove ones left by -Keep
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

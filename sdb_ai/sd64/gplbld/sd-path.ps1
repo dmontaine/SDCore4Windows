@@ -1,8 +1,8 @@
 # sd-path.ps1 - put SD's program directory on the system PATH, or take it off.
 #
-#   powershell -File sd-path.ps1 -Show      report, change nothing
-#   powershell -File sd-path.ps1 -Add       add it if it is not there
-#   powershell -File sd-path.ps1 -Remove    take it off
+#   powershell -ExecutionPolicy Bypass -File sd-path.ps1 -Show      report, change nothing
+#   powershell -ExecutionPolicy Bypass -File sd-path.ps1 -Add       add it if it is not there
+#   powershell -ExecutionPolicy Bypass -File sd-path.ps1 -Remove    take it off
 #
 # Exit 0 applied (or -Show succeeded), 1 failed, 2 refused.  ELEVATED for -Add
 # and -Remove: the system PATH is a machine-wide setting under HKLM.  -Show
@@ -113,9 +113,9 @@ $modes = @($Show, $Add, $Remove) | Where-Object { $_ }
 if ($modes.Count -ne 1) {
     Write-Host 'sd-path: give exactly one of -Show, -Add or -Remove.'
     Write-Host ''
-    Write-Host '  powershell -File sd-path.ps1 -Show      report, change nothing'
-    Write-Host '  powershell -File sd-path.ps1 -Add       add it if it is not there'
-    Write-Host '  powershell -File sd-path.ps1 -Remove    take it off'
+    Write-Host '  powershell -ExecutionPolicy Bypass -File sd-path.ps1 -Show      report, change nothing'
+    Write-Host '  powershell -ExecutionPolicy Bypass -File sd-path.ps1 -Add       add it if it is not there'
+    Write-Host '  powershell -ExecutionPolicy Bypass -File sd-path.ps1 -Remove    take it off'
     exit 2
 }
 

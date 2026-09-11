@@ -2,9 +2,9 @@
 # administrator rights by every route, and that nothing else moved.
 # PROJECT_STATUS.md section 8, UPSTREAM_FIXES.md 7.
 #
-#   powershell -File verify-catgate.ps1            create, check, clean up
-#   powershell -File verify-catgate.ps1 -Keep      leave the account behind
-#   powershell -File verify-catgate.ps1 -Cleanup   remove one left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-catgate.ps1            create, check, clean up
+#   powershell -ExecutionPolicy Bypass -File verify-catgate.ps1 -Keep      leave the account behind
+#   powershell -ExecutionPolicy Bypass -File verify-catgate.ps1 -Cleanup   remove one left by -Keep
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

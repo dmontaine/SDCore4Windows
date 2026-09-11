@@ -2,7 +2,7 @@
 # nothing writes, leaving them readable by SD users and writable only by
 # administrators.
 #
-#   powershell -File secure-sysdirs.ps1 -Path "C:\ProgramData\SD\sdsys\accounts"
+#   powershell -ExecutionPolicy Bypass -File secure-sysdirs.ps1 -Path "C:\ProgramData\SD\sdsys\accounts"
 #
 # PROJECT_STATUS.md 7 step 15, on the OWNER'S RULING of 24 Aug 2026.  Run by
 # the installer, once per path, AFTER the icacls that secures the data tree -

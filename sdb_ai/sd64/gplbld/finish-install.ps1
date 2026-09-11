@@ -1,6 +1,6 @@
 # finish-install.ps1 - the two things that happen after the installer closes.
 #
-#   powershell -File finish-install.ps1 -AppDir "C:\Program Files\SD" -WithPassword
+#   powershell -ExecutionPolicy Bypass -File finish-install.ps1 -AppDir "C:\Program Files\SD" -WithPassword
 #
 # ONE WINDOW, TWO STEPS, IN ORDER.  Owner's instruction, 22 Aug 2026: "put them
 # both in one script, call sd for the password and then move on to the post

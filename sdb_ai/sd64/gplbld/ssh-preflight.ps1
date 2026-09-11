@@ -1,8 +1,8 @@
 # ssh-preflight.ps1 - may SD install on this machine at all?
 # PROJECT_STATUS.md 5.9 and 7 step 3.  Owner's ruling, 25 Aug 2026.
 #
-#   powershell -File ssh-preflight.ps1 -ReasonFile C:\path\reason.txt
-#   powershell -File ssh-preflight.ps1            report to stdout, change nothing
+#   powershell -ExecutionPolicy Bypass -File ssh-preflight.ps1 -ReasonFile C:\path\reason.txt
+#   powershell -ExecutionPolicy Bypass -File ssh-preflight.ps1            report to stdout, change nothing
 #
 # Exit 0  clear to install
 #      1  REFUSE - this machine has an ssh server SD does not own, or one it

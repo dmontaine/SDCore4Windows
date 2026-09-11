@@ -1,6 +1,6 @@
 # install-ssh.ps1 - install and start OpenSSH Server.  PROJECT_STATUS.md 5.9.
 #
-#   powershell -File install-ssh.ps1
+#   powershell -ExecutionPolicy Bypass -File install-ssh.ps1
 #
 # Exit 0  installed and running
 #      2  installed, but a RESTART is needed before the service exists

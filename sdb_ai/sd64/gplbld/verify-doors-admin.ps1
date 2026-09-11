@@ -2,9 +2,9 @@
 # PRE_RELEASE 19's last row and PRE_RELEASE 38.  It builds the fixture, moves it
 # between states, and takes it away again; it measures no door itself.
 #
-#   powershell -File verify-doors-admin.ps1 -Prefix sddr1 -Phase Create
-#   powershell -File verify-doors-admin.ps1 -Prefix sddr1 -Phase Suspend
-#   powershell -File verify-doors-admin.ps1 -Prefix sddr1 -Phase Remove
+#   powershell -ExecutionPolicy Bypass -File verify-doors-admin.ps1 -Prefix sddr1 -Phase Create
+#   powershell -ExecutionPolicy Bypass -File verify-doors-admin.ps1 -Prefix sddr1 -Phase Suspend
+#   powershell -ExecutionPolicy Bypass -File verify-doors-admin.ps1 -Prefix sddr1 -Phase Remove
 #
 # Exit 0 the phase did what it says, 1 it did not, 2 it could not be run.
 #

@@ -1,7 +1,7 @@
 # test-privundetermined-units.ps1 - guard verify-privundetermined.ps1's leg
 # table against the C it claims to describe.
 #
-#   powershell -File test-privundetermined-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-privundetermined-units.ps1
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

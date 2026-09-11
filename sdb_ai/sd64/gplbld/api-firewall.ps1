@@ -1,12 +1,12 @@
 # api-firewall.ps1 - decide whether other computers may reach this machine's
 # SD API port.  PROJECT_STATUS.md 5.9, and the posture B reversal in 8.
 #
-#   powershell -File api-firewall.ps1 -Open              any address
-#   powershell -File api-firewall.ps1 -Restrict          this machine only
-#   powershell -File api-firewall.ps1 -Remove            take the rule away
-#   powershell -File api-firewall.ps1 -Show              report, change nothing
-#   powershell -File api-firewall.ps1 -ScopeFile <path>  write one word and stop
-#   powershell -File api-firewall.ps1 -Open -Port 4243   a port other than the default
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Open              any address
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Restrict          this machine only
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Remove            take the rule away
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Show              report, change nothing
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -ScopeFile <path>  write one word and stop
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Open -Port 4243   a port other than the default
 #
 # Exit 0 applied, 1 failed, 2 refused.  ELEVATED - creating a firewall rule is
 # a machine-wide change.  -Show and -ScopeFile are the two read-only modes and

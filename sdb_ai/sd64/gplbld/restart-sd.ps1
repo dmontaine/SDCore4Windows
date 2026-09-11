@@ -1,8 +1,8 @@
 # restart-sd.ps1 - stop SD properly and start it again.
 # PRE_RELEASE_FIXES 78.
 #
-#   powershell -File restart-sd.ps1 -Show     report state, change nothing
-#   powershell -File restart-sd.ps1           stop, wait, start, verify
+#   powershell -ExecutionPolicy Bypass -File restart-sd.ps1 -Show     report state, change nothing
+#   powershell -ExecutionPolicy Bypass -File restart-sd.ps1           stop, wait, start, verify
 #
 # Exit 0 SD is running again and was verified, 1 it is not, 2 the question
 # could not be answered (no service installed, sd.exe missing).

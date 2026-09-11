@@ -1,7 +1,7 @@
 # verify-doors-suite.ps1 - drives the whole SUSPENDED door pair as ONE step, so
 # VerifyInstall1 can carry it.  PRE_RELEASE_FIXES.md 38.
 #
-#   powershell -File verify-doors-suite.ps1 -Prefix sddrb50
+#   powershell -ExecutionPolicy Bypass -File verify-doors-suite.ps1 -Prefix sddrb50
 #
 # Exit 0 every leg passed, 1 a leg failed, 2 it could not be run.
 #

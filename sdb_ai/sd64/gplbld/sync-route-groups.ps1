@@ -1,8 +1,8 @@
 # sync-route-groups.ps1 - create the two groups that decide which REMOTE route
 # an SD account may use, and seed sdssh so an existing install does not lose ssh.
 #
-#   powershell -File sync-route-groups.ps1            create and seed
-#   powershell -File sync-route-groups.ps1 -Check     print what it would do
+#   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1            create and seed
+#   powershell -ExecutionPolicy Bypass -File sync-route-groups.ps1 -Check     print what it would do
 #
 # Exit 0 success, 1 failure.  Prints what it did either way.
 #

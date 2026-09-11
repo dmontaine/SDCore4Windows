@@ -1,8 +1,8 @@
 # probe-s4u.ps1 - build and run probe-s4u.c AS THIS USER AND AS LocalSystem.
 #
-#   powershell -File probe-s4u.ps1              both runs, needs elevation
-#   powershell -File probe-s4u.ps1 -SelfOnly    the caller's run only
-#   powershell -File probe-s4u.ps1 -Account don a different target account
+#   powershell -ExecutionPolicy Bypass -File probe-s4u.ps1              both runs, needs elevation
+#   powershell -ExecutionPolicy Bypass -File probe-s4u.ps1 -SelfOnly    the caller's run only
+#   powershell -ExecutionPolicy Bypass -File probe-s4u.ps1 -Account don a different target account
 #
 # Exit 0 the probe ran, 2 it could not be set up.  Like probe-keys.ps1 and
 # probe-console.ps1 there is nothing here to pass or fail: it is an instrument,

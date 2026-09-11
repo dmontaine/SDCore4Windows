@@ -1,7 +1,7 @@
 # verify-pcodeacl.ps1 - prove the pcode library cannot be rewritten by an
 # ordinary SD user, PROJECT_STATUS.md 7 step 15.
 #
-#   powershell -File verify-pcodeacl.ps1        run the checks
+#   powershell -ExecutionPolicy Bypass -File verify-pcodeacl.ps1        run the checks
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.
@@ -162,7 +162,7 @@ if ($fatal) {
         Write-Output '  SDSYS''s and an administrator''s, from the next SD start. Put it right'
         Write-Output '  from an ELEVATED prompt:'
         Write-Output ''
-        Write-Output "      powershell -File `"$PSScriptRoot\secure-pcode.ps1`" -Path `"$binDir`""
+        Write-Output "      powershell -ExecutionPolicy Bypass -File `"$PSScriptRoot\secure-pcode.ps1`" -Path `"$binDir`""
     } else {
         Write-Output 'verify-pcodeacl: FAILED - and NOT because it is open.'
         Write-Output ''

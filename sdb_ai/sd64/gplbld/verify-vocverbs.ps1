@@ -3,8 +3,8 @@
 # not prompt on an @SDSYS part), 15 (DELETE.INDEX folds case), 26 (DELETE.FILE
 # does not prompt on a lower-case name).
 #
-#   powershell -File verify-vocverbs.ps1                 run the checks
-#   powershell -File verify-vocverbs.ps1 -Prefix zzprfb  use a different name set
+#   powershell -ExecutionPolicy Bypass -File verify-vocverbs.ps1                 run the checks
+#   powershell -ExecutionPolicy Bypass -File verify-vocverbs.ps1 -Prefix zzprfb  use a different name set
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

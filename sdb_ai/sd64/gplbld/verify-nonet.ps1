@@ -1,7 +1,7 @@
 # verify-nonet.ps1 - prove SDNet is gone and that nothing that shares its
 # neighbourhood went with it.  PROJECT_STATUS.md section 8.
 #
-#   powershell -File verify-nonet.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-nonet.ps1
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

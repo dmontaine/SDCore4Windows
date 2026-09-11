@@ -1,6 +1,6 @@
 # secure-audit.ps1 - create the audit trail and make it append-only
 #
-#   powershell -File secure-audit.ps1 -Path "C:\ProgramData\SD\sdsys\audit"
+#   powershell -ExecutionPolicy Bypass -File secure-audit.ps1 -Path "C:\ProgramData\SD\sdsys\audit"
 #
 # PROJECT_STATUS.md 7 step 4.  Run by the installer, once, after the icacls
 # that secures the data tree - it has to be after, or inheritance would put

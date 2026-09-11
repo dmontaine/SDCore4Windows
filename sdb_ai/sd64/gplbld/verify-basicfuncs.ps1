@@ -1,7 +1,7 @@
 # verify-basicfuncs.ps1 - do SD BASIC's intrinsic functions and operators
 #                         return the RIGHT ANSWERS?
 #
-#   powershell -File verify-basicfuncs.ps1 [-Account don] [-Keep]
+#   powershell -ExecutionPolicy Bypass -File verify-basicfuncs.ps1 [-Account don] [-Keep]
 #
 # Exit 0 every case passed, 1 a case failed, 2 the test could not run.
 # ***AN ORDINARY UNELEVATED PROMPT.***  Nothing here needs a privilege, and the

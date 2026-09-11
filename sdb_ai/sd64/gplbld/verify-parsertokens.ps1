@@ -2,7 +2,7 @@
 # IS still split at the punctuation the parser is supposed to split at.
 # PROJECT_STATUS.md 7 step 12.
 #
-#   powershell -File verify-parsertokens.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-parsertokens.ps1
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

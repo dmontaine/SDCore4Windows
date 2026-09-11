@@ -1,7 +1,7 @@
 # verify-osusers.ps1 - prove @SDSYS/OS.USERS PERMITS a shell, and not merely
 # that it refuses one.  PROJECT_STATUS.md 7 step 7.
 #
-#   powershell -File verify-osusers.ps1        run the whole test
+#   powershell -ExecutionPolicy Bypass -File verify-osusers.ps1        run the whole test
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

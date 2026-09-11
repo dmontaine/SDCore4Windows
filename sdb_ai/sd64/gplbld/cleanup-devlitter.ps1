@@ -1,10 +1,10 @@
 # cleanup-devlitter.ps1 - section 7 step 18, the last task of the development
 # phase.  ELEVATED.
 #
-#   powershell -File cleanup-devlitter.ps1 -SelfTest   check the name rules only
-#   powershell -File cleanup-devlitter.ps1 -List       show what would go
-#   powershell -File cleanup-devlitter.ps1             remove it
-#   powershell -File cleanup-devlitter.ps1 -IncludeVM  ...and the spent VM clone
+#   powershell -ExecutionPolicy Bypass -File cleanup-devlitter.ps1 -SelfTest   check the name rules only
+#   powershell -ExecutionPolicy Bypass -File cleanup-devlitter.ps1 -List       show what would go
+#   powershell -ExecutionPolicy Bypass -File cleanup-devlitter.ps1             remove it
+#   powershell -ExecutionPolicy Bypass -File cleanup-devlitter.ps1 -IncludeVM  ...and the spent VM clone
 #
 # Exit 0 done (or nothing to do), 1 refused or something failed, 2 self-test
 # failed or the run measured nothing.

@@ -1,9 +1,9 @@
 # verify-sshonly.ps1 - prove the ssh-only account model, PROJECT_STATUS.md 5.6.2.
 #
-#   powershell -File verify-sshonly.ps1             run the whole test, clean up
-#   powershell -File verify-sshonly.ps1 -Keep       leave the probe account behind
-#   powershell -File verify-sshonly.ps1 -RetestSsh  re-run only the key login
-#   powershell -File verify-sshonly.ps1 -Cleanup    remove a probe left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-sshonly.ps1             run the whole test, clean up
+#   powershell -ExecutionPolicy Bypass -File verify-sshonly.ps1 -Keep       leave the probe account behind
+#   powershell -ExecutionPolicy Bypass -File verify-sshonly.ps1 -RetestSsh  re-run only the key login
+#   powershell -ExecutionPolicy Bypass -File verify-sshonly.ps1 -Cleanup    remove a probe left by -Keep
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run (not elevated, no sshd, no ssh client).
@@ -724,9 +724,9 @@ try {
         Write-Output ""
         Write-Output "  A password login creates the user profile that key authentication needs,"
         Write-Output "  so if a password login has now succeeded, this should now pass:"
-        Write-Output ("    powershell -File verify-sshonly.ps1 -RetestSsh")
+        Write-Output ("    powershell -ExecutionPolicy Bypass -File verify-sshonly.ps1 -RetestSsh")
         Write-Output ""
-        Write-Output ("  Remove it with:  powershell -File verify-sshonly.ps1 -Cleanup")
+        Write-Output ("  Remove it with:  powershell -ExecutionPolicy Bypass -File verify-sshonly.ps1 -Cleanup")
     } else {
         Write-Output ""
         Remove-Probe

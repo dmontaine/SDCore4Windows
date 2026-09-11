@@ -1,8 +1,8 @@
 # secure-gcat.ps1 - lock the global catalogue so only an administrator can
 # change the programs SD runs for every session.
 #
-#   powershell -File secure-gcat.ps1 -Path "C:\ProgramData\SD\sdsys\gcat"
-#   powershell -File secure-gcat.ps1 -Path "C:\ProgramData\SD\sdsys\gpl.bp.out"
+#   powershell -ExecutionPolicy Bypass -File secure-gcat.ps1 -Path "C:\ProgramData\SD\sdsys\gcat"
+#   powershell -ExecutionPolicy Bypass -File secure-gcat.ps1 -Path "C:\ProgramData\SD\sdsys\gpl.bp.out"
 #
 # THE INSTALLER APPLIES IT TO BOTH, one call each (sd.iss, SecureGcat).
 # GPL.BP.OUT holds the compiled objects the global catalogue is loaded FROM, so

@@ -1,6 +1,6 @@
 # secure-reclaim.ps1 - create the profile-reclaim store and lock it to SYSTEM
 #
-#   powershell -File secure-reclaim.ps1 -Path "C:\ProgramData\SD\profile-reclaim"
+#   powershell -ExecutionPolicy Bypass -File secure-reclaim.ps1 -Path "C:\ProgramData\SD\profile-reclaim"
 #
 # PRE_RELEASE_FIXES.md 36.  Run by the installer, once, after the icacls that
 # secures the data tree - it has to be after, or inheritance would put the

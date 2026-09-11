@@ -1,8 +1,8 @@
 # restore-sshonly.ps1 - put every non-administrator SD account back into
 # sdsshonly, reading the account register rather than anything local.
 #
-#   powershell -File restore-sshonly.ps1 -DataDir "C:\ProgramData\SD"
-#   powershell -File restore-sshonly.ps1 -DataDir "C:\ProgramData\SD" -Check
+#   powershell -ExecutionPolicy Bypass -File restore-sshonly.ps1 -DataDir "C:\ProgramData\SD"
+#   powershell -ExecutionPolicy Bypass -File restore-sshonly.ps1 -DataDir "C:\ProgramData\SD" -Check
 #
 # Exit 0 nothing to do or all repaired, 1 a repair failed, 2 the step could not
 # measure and did nothing.  RUN ELEVATED - local group membership needs it.

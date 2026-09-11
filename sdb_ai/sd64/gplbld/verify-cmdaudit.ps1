@@ -1,7 +1,7 @@
 # verify-cmdaudit.ps1 - prove LOGIN sees a COMMAND LINE as a command line, and
 # an interactive session as an interactive one.  PROJECT_STATUS.md 7 step 9.
 #
-#   powershell -File verify-cmdaudit.ps1        run the checks
+#   powershell -ExecutionPolicy Bypass -File verify-cmdaudit.ps1        run the checks
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

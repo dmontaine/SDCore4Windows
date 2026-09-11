@@ -1,7 +1,7 @@
 # micro-home.ps1 - give the CALLING USER a micro configuration home they can
 # write to, and print where it is.  Run by gpl.bp/EDIT before it launches micro.
 #
-#   powershell -File micro-home.ps1
+#   powershell -ExecutionPolicy Bypass -File micro-home.ps1
 #
 # Prints exactly one machine-readable line on success:
 #

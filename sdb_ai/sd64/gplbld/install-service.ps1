@@ -1,7 +1,7 @@
 # install-service.ps1 - create, start and remove the SD Windows service
 #
-#   powershell -File install-service.ps1 -Install [-AppDir <dir>]
-#   powershell -File install-service.ps1 -Remove
+#   powershell -ExecutionPolicy Bypass -File install-service.ps1 -Install [-AppDir <dir>]
+#   powershell -ExecutionPolicy Bypass -File install-service.ps1 -Remove
 #
 # Exit 0 done, 1 failed, 2 could not be attempted (not elevated, no sdsvc.exe).
 #

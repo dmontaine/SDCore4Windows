@@ -1,6 +1,6 @@
 # secure-dumps.ps1 - make the process-dump directory write-only to SD users
 #
-#   powershell -File secure-dumps.ps1 -Path "C:\ProgramData\SD\sdsys\dumps"
+#   powershell -ExecutionPolicy Bypass -File secure-dumps.ps1 -Path "C:\ProgramData\SD\sdsys\dumps"
 #
 # PRE_RELEASE_FIXES.md 28.  Run by the installer, once, AFTER the icacls that
 # secures the data tree - it has to be after, or inheritance would put the

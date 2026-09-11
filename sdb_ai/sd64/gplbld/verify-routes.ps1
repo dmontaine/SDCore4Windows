@@ -453,7 +453,7 @@ try {
             Write-Host '   ssh is therefore open to any Windows account, and an ssh session' -ForegroundColor Yellow
             Write-Host '   gets a PowerShell prompt instead of SD.  sd.iss Check: SshServerAbsent.' -ForegroundColor Yellow
             Write-Host '   To apply it by hand, from an ELEVATED prompt:' -ForegroundColor Yellow
-            Write-Host ('       powershell -File "' +
+            Write-Host ('       powershell -ExecutionPolicy Bypass -File "' +
                         (Join-Path $env:ProgramFiles 'SD\allow-ssh-groups.ps1') + '" -Installed') -ForegroundColor Yellow
         }
     } else {

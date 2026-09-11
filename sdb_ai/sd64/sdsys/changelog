@@ -4,6 +4,24 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+11 Sep 26  FIXED: THE COMMANDS SD PRINTS FOR YOU TO RUN NOW WORK.
+
+           When something needs doing by hand - setting the firewall
+           rule, limiting ssh, running the installation check - SD and
+           the installer print the command to run.  Every one of them
+           began "powershell -File", and on a stock Windows machine that
+           is refused: "running scripts is disabled on this system".
+
+           WHY IT MATTERED MORE THAN IT SOUNDS.  Windows does not allow
+           scripts to run by default, and the refusal names neither SD
+           nor whatever you were trying to fix.  Worse, most of these
+           commands are printed when something has ALREADY gone wrong,
+           so the advice failed exactly when it was needed.
+
+           Every printed command now says "powershell -ExecutionPolicy
+           Bypass -File", which applies to that one command only and
+           changes no setting on your computer.
+
 11 Sep 26  FIXED: LIST.READU AND GETLOCKS COULD CRASH THE SESSION.
 
            If a lock was still held for a session that had already gone,

@@ -1,6 +1,6 @@
 # secure-log.ps1 - create a log only administrators can see or write
 #
-#   powershell -File secure-log.ps1 -Path "C:\ProgramData\SD\sd-elevate.log"
+#   powershell -ExecutionPolicy Bypass -File secure-log.ps1 -Path "C:\ProgramData\SD\sd-elevate.log"
 #
 # PROJECT_STATUS.md 7 step 4.  Run by the installer, once, AFTER the icacls that
 # secures the data tree - run before, and inheritance puts the directory's

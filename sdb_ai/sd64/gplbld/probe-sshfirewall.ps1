@@ -143,7 +143,7 @@ Head 'ssh-firewall.ps1 -Show, the shipped instrument'
 $fw = Join-Path $env:ProgramFiles 'SD\ssh-firewall.ps1'
 if (-not (Test-Path -LiteralPath $fw)) { Bad ('not installed at ' + $fw) }
 else {
-    Write-Host ('  running: powershell -File "' + $fw + '" -Show')
+    Write-Host ('  running: powershell -ExecutionPolicy Bypass -File "' + $fw + '" -Show')
     & powershell.exe -ExecutionPolicy Bypass -File $fw -Show 2>&1 | ForEach-Object { Write-Host ('    | ' + $_) }
     Write-Host ('  exit code : ' + $LASTEXITCODE)
 }
@@ -156,7 +156,7 @@ if ($Expect -eq 'Open') {
     Write-Host '  path is exercised by an -Expect Restricted run on its own guest.'
 }
 elseif (Test-Path -LiteralPath $fw) {
-    Write-Host ('  running: powershell -File "' + $fw + '" -Installed -Restrict')
+    Write-Host ('  running: powershell -ExecutionPolicy Bypass -File "' + $fw + '" -Installed -Restrict')
     & powershell.exe -ExecutionPolicy Bypass -File $fw -Installed -Restrict 2>&1 | ForEach-Object { Write-Host ('    | ' + $_) }
     $rc = $LASTEXITCODE
     Write-Host ('  exit code : ' + $rc + '  (0 applied, 1 failed, 2 refused)')

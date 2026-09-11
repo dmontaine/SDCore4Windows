@@ -1,6 +1,6 @@
 # verify-txn.ps1 - does COMMIT end the transaction it commits?
 #
-#   powershell -File verify-txn.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-txn.ps1
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

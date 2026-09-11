@@ -1,9 +1,9 @@
 # verify-upgrade.ps1 - measure a DATA-TREE UPGRADE: install over the top.
 # PROJECT_STATUS.md "START HERE" item 3.
 #
-#   powershell -File verify-upgrade.ps1 -Snapshot     BEFORE the upgrade
+#   powershell -ExecutionPolicy Bypass -File verify-upgrade.ps1 -Snapshot     BEFORE the upgrade
 #   ... run the installer over the existing install, WITHOUT uninstalling ...
-#   powershell -File verify-upgrade.ps1 -Compare      AFTER it
+#   powershell -ExecutionPolicy Bypass -File verify-upgrade.ps1 -Compare      AFTER it
 #
 # Exit 0 every check passed, 1 a check failed, 2 the test could not be run.
 #

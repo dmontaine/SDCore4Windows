@@ -1,10 +1,10 @@
 # verify-createaccount.ps1 - run CREATE.ACCOUNT USER against a throwaway name
 # and check both halves of what it makes, including the ssh-only branch.
 #
-#   powershell -File verify-createaccount.ps1            create, check, clean up
-#   powershell -File verify-createaccount.ps1 -Keep      leave the account behind
-#   powershell -File verify-createaccount.ps1 -Cleanup   remove one left by -Keep
-#   powershell -File verify-createaccount.ps1 -Keep -Password 'Sd-Test-1'
+#   powershell -ExecutionPolicy Bypass -File verify-createaccount.ps1            create, check, clean up
+#   powershell -ExecutionPolicy Bypass -File verify-createaccount.ps1 -Keep      leave the account behind
+#   powershell -ExecutionPolicy Bypass -File verify-createaccount.ps1 -Cleanup   remove one left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-createaccount.ps1 -Keep -Password 'Sd-Test-1'
 #                                                        a password you can type
 #
 # -Password is for the hand-driven case only.  The default is 24 random
@@ -520,7 +520,7 @@ try {
 
     if ($Keep) {
         Write-Output ("-Keep given.  " + $Account + " is a REAL Windows account, password " + $plain)
-        Write-Output ("  Remove it with:  powershell -File verify-createaccount.ps1 -Cleanup")
+        Write-Output ("  Remove it with:  powershell -ExecutionPolicy Bypass -File verify-createaccount.ps1 -Cleanup")
     } else {
         Remove-Made
     }

@@ -1,9 +1,9 @@
 # api-listener.ps1 - turn the SD API listener on or off in sd.conf.
 # PRE_RELEASE_FIXES 78.
 #
-#   powershell -File api-listener.ps1 -Show     report, change nothing
-#   powershell -File api-listener.ps1 -On       set APIPORT
-#   powershell -File api-listener.ps1 -Off      comment APIPORT out
+#   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -Show     report, change nothing
+#   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -On       set APIPORT
+#   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -Off      comment APIPORT out
 #
 # Exit 0 the file now says what was asked, 1 it could not be written, 2 the
 # question could not be answered - the file is missing, unreadable, or carries

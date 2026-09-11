@@ -2,7 +2,7 @@
 # network sign-in (which ssh uses; the API authenticates separately via SCRAM).
 # Run once by the installer; see PROJECT_STATUS.md 5.6.2.
 #
-#   powershell -File deny-logon.ps1 <groupname>
+#   powershell -ExecutionPolicy Bypass -File deny-logon.ps1 <groupname>
 #
 # Exit 0 success, 1 failure.  Prints what it did either way, because the
 # installer step it replaces failed silently and that is the mistake being

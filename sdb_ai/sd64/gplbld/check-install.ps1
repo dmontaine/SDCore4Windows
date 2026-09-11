@@ -1,7 +1,7 @@
 # check-install.ps1 - tell the person who just installed SD whether it worked.
 #
-#   powershell -File check-install.ps1            run the checks
-#   powershell -File check-install.ps1 -Brief     one line per check, no preamble
+#   powershell -ExecutionPolicy Bypass -File check-install.ps1            run the checks
+#   powershell -ExecutionPolicy Bypass -File check-install.ps1 -Brief     one line per check, no preamble
 #
 # Exit 0 nothing is wrong, 1 something is.  A check that cannot be answered YET
 # is not something being wrong - see THREE OUTCOMES below.
@@ -181,7 +181,7 @@ function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 function Rerun {
     Write-Host '    Start Menu  ->  SD  ->  Check the SD installation'
     Write-Host '  or:'
-    Write-Host ('    powershell -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
+    Write-Host ('    powershell -ExecutionPolicy Bypass -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
 }
 
 function Finish([bool] $Ran = $true) {

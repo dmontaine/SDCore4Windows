@@ -1,8 +1,8 @@
 # reconcile-accounts.ps1 - remove the register records whose Windows account
 # has gone, and the account directory with them
 #
-#   powershell -File reconcile-accounts.ps1            sweep (elevated)
-#   powershell -File reconcile-accounts.ps1 -List      report, change nothing
+#   powershell -ExecutionPolicy Bypass -File reconcile-accounts.ps1            sweep (elevated)
+#   powershell -ExecutionPolicy Bypass -File reconcile-accounts.ps1 -List      report, change nothing
 #
 # Exit 0 ran and the register is clean, 1 ran and something is still there
 # (refused, or it would not go), 2 could not be attempted.

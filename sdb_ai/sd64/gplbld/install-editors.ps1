@@ -1,7 +1,7 @@
 # install-editors.ps1 - make sure the full-screen editors the EDIT and MICRO
 # verbs run are on the machine.  Owner's rulings, 26 Aug 2026.
 #
-#   powershell -File install-editors.ps1 [-CheckOnly]
+#   powershell -ExecutionPolicy Bypass -File install-editors.ps1 [-CheckOnly]
 #
 # Exit 0  every editor is present (already was, or this installed it)
 #      2  at least one is missing and could not be installed

@@ -2,7 +2,7 @@
 # the account's list OR by elevation, and refused otherwise.
 # PROJECT_STATUS.md 7 step 9.
 #
-#   powershell -File verify-batchjob.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-batchjob.ps1
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

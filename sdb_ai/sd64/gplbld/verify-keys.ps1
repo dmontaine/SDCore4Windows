@@ -1,7 +1,7 @@
 # verify-keys.ps1 - the backspace key erases a character, whichever byte the
 # terminal sends for it.  PROJECT_STATUS.md 5.17.
 #
-#   powershell -File verify-keys.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-keys.ps1
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #

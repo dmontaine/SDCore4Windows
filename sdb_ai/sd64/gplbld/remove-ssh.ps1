@@ -1,8 +1,8 @@
 # remove-ssh.ps1 - take the Windows OpenSSH SERVER capability off this machine.
 # PRE_RELEASE_FIXES 78.
 #
-#   powershell -File remove-ssh.ps1 -Show     report, change nothing
-#   powershell -File remove-ssh.ps1           remove the capability
+#   powershell -ExecutionPolicy Bypass -File remove-ssh.ps1 -Show     report, change nothing
+#   powershell -ExecutionPolicy Bypass -File remove-ssh.ps1           remove the capability
 #
 # Exit 0 removed (see the restart note below), 1 the removal failed, 2 the
 # question could not be answered or there was nothing to remove.

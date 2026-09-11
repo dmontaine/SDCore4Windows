@@ -1,9 +1,9 @@
 # verify-notyet.ps1 - meet check-install.ps1's [not yet] path with a REAL stale
 # token.  PROJECT_STATUS.md "WHAT IS ACTUALLY LEFT", item 1.
 #
-#   powershell -File verify-notyet.ps1            run the test, clean up
-#   powershell -File verify-notyet.ps1 -Keep      leave the probe account behind
-#   powershell -File verify-notyet.ps1 -Cleanup   remove a probe left by -Keep
+#   powershell -ExecutionPolicy Bypass -File verify-notyet.ps1            run the test, clean up
+#   powershell -ExecutionPolicy Bypass -File verify-notyet.ps1 -Keep      leave the probe account behind
+#   powershell -ExecutionPolicy Bypass -File verify-notyet.ps1 -Cleanup   remove a probe left by -Keep
 #
 # Exit 0 every check passed, 1 a check failed, 2 the test could not be run.
 #

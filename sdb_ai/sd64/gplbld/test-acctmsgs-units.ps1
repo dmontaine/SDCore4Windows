@@ -1,7 +1,7 @@
 # test-acctmsgs-units.ps1 - drive verify-acctmsgs.ps1's password chooser with
 # policy values this machine does not have, and read the policy this one does.
 #
-#   powershell -File test-acctmsgs-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-acctmsgs-units.ps1
 #
 # Exit 0 every row passed, 1 a row failed.  Needs no SD and no account.  It
 # reads the password policy and CHANGES NOTHING.

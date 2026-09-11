@@ -1,7 +1,7 @@
 # probe-osadmin.ps1 - build and run probe-osadmin.c, and cross-check it against
 #                     Windows' own answer.
 #
-#   powershell -File probe-osadmin.ps1
+#   powershell -ExecutionPolicy Bypass -File probe-osadmin.ps1
 #
 # RUN IT TWICE - once from an ORDINARY, UNELEVATED PowerShell and once from an
 # ELEVATED one.  THE COMPARISON IS THE MEASUREMENT.  One run on its own says

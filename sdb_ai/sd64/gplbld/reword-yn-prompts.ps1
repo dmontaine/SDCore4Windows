@@ -19,8 +19,8 @@
 #      one message that never had a trailing space, unchanged in that respect).
 # Any failure leaves that file untouched and sets a non-zero exit.
 #
-#   powershell -File reword-yn-prompts.ps1 -WhatIf    show, change nothing
-#   powershell -File reword-yn-prompts.ps1            apply
+#   powershell -ExecutionPolicy Bypass -File reword-yn-prompts.ps1 -WhatIf    show, change nothing
+#   powershell -ExecutionPolicy Bypass -File reword-yn-prompts.ps1            apply
 #
 # Unelevated.  It writes only under sdsys/messages in the SOURCE tree.
 

@@ -2,7 +2,7 @@
 # section 6 does not cover and an elevated piped session CAN reach: the required
 # access keyword, what leaves with ADMINISTRATOR, and the "left alone" count.
 #
-#   powershell -File verify-tierchange.ps1 -Prefix sdtc1
+#   powershell -ExecutionPolicy Bypass -File verify-tierchange.ps1 -Prefix sdtc1
 #
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
 # could not be run.

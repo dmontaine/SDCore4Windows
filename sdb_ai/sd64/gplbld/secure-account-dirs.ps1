@@ -1,8 +1,8 @@
 # secure-account-dirs.ps1 - the ACL on each account's OWN directory
 #
-#   powershell -File secure-account-dirs.ps1 -Root "C:\ProgramData\SD\user_accounts"
-#   powershell -File secure-account-dirs.ps1 -Root "..." -Account sdacct1
-#   powershell -File secure-account-dirs.ps1 -Root "..." -WhatIf
+#   powershell -ExecutionPolicy Bypass -File secure-account-dirs.ps1 -Root "C:\ProgramData\SD\user_accounts"
+#   powershell -ExecutionPolicy Bypass -File secure-account-dirs.ps1 -Root "..." -Account sdacct1
+#   powershell -ExecutionPolicy Bypass -File secure-account-dirs.ps1 -Root "..." -WhatIf
 #
 # Exit 0 every directory stamped, 1 at least one failed, 2 it could not run.
 #

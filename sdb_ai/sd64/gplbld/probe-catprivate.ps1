@@ -1,7 +1,7 @@
 # probe-catprivate.ps1 - PROJECT_STATUS.md 7 step 15's owed measurement:
 # prove that CATALOG still writes sdsys\cat with the ACL lock in place.
 #
-#   powershell -File probe-catprivate.ps1
+#   powershell -ExecutionPolicy Bypass -File probe-catprivate.ps1
 #
 # WHY IT EXISTS, AND WHY IT IS ONE-SHOT.  Step 15 locks sdsys\cat to
 # sdusers:(RX), leaving Administrators:(F) and SYSTEM:(F).  The design says

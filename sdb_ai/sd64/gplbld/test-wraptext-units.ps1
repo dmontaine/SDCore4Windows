@@ -1,7 +1,7 @@
 # test-wraptext-units.ps1 - Write-Wrapped, the text wrapper finish-install.ps1
 # uses for everything it says on the page that ends an install.
 #
-#   powershell -File test-wraptext-units.ps1
+#   powershell -ExecutionPolicy Bypass -File test-wraptext-units.ps1
 #
 # Exit 0 every check passed, 1 a check failed, 2 the test could not be run.
 #

@@ -1,7 +1,7 @@
 # assert-current.ps1 - refuse to test a tree that source has moved past
 #
-#   powershell -File assert-current.ps1            check, print why
-#   powershell -File assert-current.ps1 -Quiet     check, print only on failure
+#   powershell -ExecutionPolicy Bypass -File assert-current.ps1            check, print why
+#   powershell -ExecutionPolicy Bypass -File assert-current.ps1 -Quiet     check, print only on failure
 #
 # Exit 0 the installed tree matches source, 1 it is stale, 2 the question
 # cannot be answered (nothing installed, no repository).

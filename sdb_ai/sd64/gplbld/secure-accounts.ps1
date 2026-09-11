@@ -1,6 +1,6 @@
 # secure-accounts.ps1 - the containers account directories are created in
 #
-#   powershell -File secure-accounts.ps1 -Path "C:\ProgramData\SD\user_accounts"
+#   powershell -ExecutionPolicy Bypass -File secure-accounts.ps1 -Path "C:\ProgramData\SD\user_accounts"
 #
 # PROJECT_STATUS.md 5.7.  Run by the installer AFTER the icacls that secures the
 # data tree, for both user_accounts and group_accounts.  This is HALF of the
