@@ -430,23 +430,33 @@ Write-Output ("  10113: added " + $delta.Added + ", removed " + $delta.Removed +
 
 # 11 Sep 26 - EXACTLY ONE, NOT "AT LEAST ONE".  RELEASE_1.1_FIXES.md 12.
 #
-# ***THIS ROW READ "-ge 1" AND THAT IS WHY b131 WAS GREEN WITH RELEASE_1.1 1
-# SITTING IN THE PRODUCT.***  MODIFYA's tier.build.rec still stripped each
-# record the way CREATEA did before PRE_RELEASE 136, so EVERY record compared
-# unequal in tier.del.one, NOTHING was deleted by a downgrade, and all of them
-# were counted "left alone".  "At least one" is satisfied by "all of them", so
-# the row passed while describing a total failure of the thing it watches.
+# Section 3 above plants exactly ONE mismatched record and exits 2 if it did
+# not - so on a healthy tree the answer is 1, and 1 is the only answer that
+# means what this row claims.  The guard beside it already refused the
+# describes-ZERO case; this refuses the describes-EVERYTHING case, which is the
+# same hole at the other end.
 #
-# Section 3 above plants exactly ONE mismatched record and refuses to continue
-# if it did not - so on a healthy tree the answer is 1, and 1 is the only
-# answer that means what this row claims.  The guard beside it already refused
-# the describes-ZERO case; this refuses the describes-EVERYTHING case, which is
-# the same hole at the other end.
+# ***IT DOES NOT CATCH RELEASE_1.1 1, AND THE FIRST VERSION OF THIS COMMENT
+# CLAIMED IT DID.  CORRECTED THE SAME DAY, BY READING THE RECORDS.***  The
+# reasoning was: entry 1 left every record "left alone", so "at least one"
+# passed while describing a total failure.  That is true of the defect and
+# FALSE OF THIS FILE, because of which layer this file exercises.
 #
-# ***WHAT WOULD FALSIFY THIS.***  A healthy downgrade that legitimately keeps
-# more than one record - a voc_template record that differs from what a tier
-# build writes for some reason of its own.  If this goes red with Kept > 1 on a
-# tree nobody has edited, THIS NUMBER is the thing to question, not the product.
+# tier.build.rec only truncated field 1 when field 1 was LONGER than its type
+# prefix - a description like "Verb to compile SDBasic program".  THE 22
+# RECORDS IN TIER.ADD.ADMINISTRATOR ARE ALL BARE TYPE LETTERS IN voc_template
+# (list.locks is "V"), so the strip was a NO-OP on this layer and the
+# PROGRAMMER<->ADMINISTRATOR round trip this file drives behaved correctly with
+# the defect in place.  Kept would have been 1 here either way.
+#
+# ***SO b131's GREEN WAS HONEST, AND THE GAP IS COVERAGE RATHER THAN A LOOSE
+# THRESHOLD.***  Entry 1 is reachable only on a transition that adds records
+# read from newvoc, where 41 of the 42 TIER.OMIT.STANDARD records DO carry a
+# description.  RELEASE_1.1 13 is that missing witness.
+#
+# ***WHAT WOULD FALSIFY THE ROW BELOW.***  A healthy downgrade that legitimately
+# keeps more than one record.  If it goes red with Kept > 1 on a tree nobody has
+# edited, THIS NUMBER is the thing to question, not the product.
 Note 'exactly one record was LEFT ALONE - the one section 3 planted' 1 $delta.Kept $true
 
 Show-SD 'count the VOC after the downgrade' @(('LOGTO ' + $acct.ToUpper()), 'COUNT VOC',
