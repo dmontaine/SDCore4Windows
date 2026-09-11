@@ -1,7 +1,14 @@
 <#
 .SYNOPSIS
-    Checks PRE_RELEASE_FIXES.md against itself and against every document that
-    cites it.  No install, no elevation, no run number - it reads files.
+    Checks PRE_RELEASE_FIXES.md and RELEASE_1.1_FIXES.md against themselves and
+    against every document that cites either.  No install, no elevation, no run
+    number - it reads files.
+
+    ***TWO SUBJECTS SINCE 11 Sep 2026.***  W1.0-0 shipped, PRE_RELEASE_FIXES.md
+    was frozen as its record, and RELEASE_1.1_FIXES.md took over with a fresh id
+    space starting at 1.  Checks 1 to 5 run over each file separately; check 6
+    checks each CITATION TOKEN against its own table, because id 7 now names two
+    different defects and the union would pass a citation of the wrong one.
 
 .DESCRIPTION
     ***WHY THIS EXISTS.***  Owner, 28 Aug 2026, after a session filed three new
@@ -38,9 +45,13 @@
          ONE THAT WOULD HAVE PREVENTED 28 AUGUST***: the next id was derived by
          scanning section headings, which stopped at 41, while the table went to
          48.  Nobody should have to derive it.
-      6  Every "PRE_RELEASE <n>" cited in PROJECT_STATUS.md, HISTORY.md and the
-         gplbld scripts names an id the table actually has.  A citation of an id
-         that does not exist is how a solved item comes back to life.
+      6  Every "PRE_RELEASE <n>" and every "RELEASE_1.1 <n>" cited in
+         PROJECT_STATUS.md, HISTORY.md and the gplbld scripts names an id THAT
+         FILE actually has.  A citation of an id that does not exist is how a
+         solved item comes back to life.  Each pattern is also driven against a
+         must-match and a must-not-match sample every run, because the old
+         "zero citations found" guard cannot be asked of a file that is new and
+         legitimately has none yet.
 
     WHAT IT CANNOT SEE.  Whether a status is TRUE.  It compares the documents
     with each other; it cannot tell you that entry 11 is still a live defect.
@@ -69,13 +80,40 @@ if ($Root -eq '') {
     $Root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $here))
 }
 
-$fixFile = Join-Path $Root 'PRE_RELEASE_FIXES.md'
-Write-Host "test-fixlist-units: root    $Root"
-Write-Host "test-fixlist-units: subject $fixFile"
+# ***TWO SUBJECTS SINCE 11 Sep 2026, AND THE TOKEN IS THE REASON THEY CANNOT
+# SHARE ONE TABLE.***  W1.0-0 shipped, PRE_RELEASE_FIXES.md was frozen as its
+# record, and RELEASE_1.1_FIXES.md took over with its own id space starting at
+# 1.  So id 7 now names two different defects depending on which file is meant,
+# and check 6 - "every citation names a row that exists" - is only answerable if
+# the citation says which.  Hence one token per file: `PRE_RELEASE 7` and
+# `RELEASE_1.1 7` are different claims and are checked against different tables.
+#
+# ***THE REGEXES DO NOT OVERLAP, AND THAT WAS CHECKED RATHER THAN ASSUMED.***
+# `PRE_RELEASE` requires the literal prefix, so it cannot fire on `RELEASE_1.1`;
+# `RELEASE_1\.1` requires `_1.1` after the word, so it cannot fire on a bare
+# `PRE_RELEASE 136`.  A token that matched both files would report every id of
+# one file as missing from the other - a check that fails loudly for no reason,
+# which is how a guard gets switched off.
+$subjects = @(
+    [pscustomobject]@{
+        Path  = Join-Path $Root 'PRE_RELEASE_FIXES.md'
+        Token = 'PRE_RELEASE'
+        Regex = 'PRE_RELEASE(?:_FIXES\.md)?\s+(\d{1,3})\b'
+    }
+    [pscustomobject]@{
+        Path  = Join-Path $Root 'RELEASE_1.1_FIXES.md'
+        Token = 'RELEASE_1.1'
+        Regex = 'RELEASE_1\.1(?:_FIXES\.md)?\s+(\d{1,3})\b'
+    }
+)
 
-if (-not (Test-Path -LiteralPath $fixFile)) {
-    Write-Host "  FAIL  $fixFile is not there - nothing was measured" -ForegroundColor Red
-    exit 2
+Write-Host "test-fixlist-units: root    $Root"
+foreach ($s in $subjects) {
+    Write-Host ("test-fixlist-units: subject " + $s.Path)
+    if (-not (Test-Path -LiteralPath $s.Path)) {
+        Write-Host ("  FAIL  " + $s.Path + " is not there - nothing was measured") -ForegroundColor Red
+        exit 2
+    }
 }
 
 $pass = 0; $fail = 0
@@ -91,6 +129,13 @@ function Note($ok, $label, $why) {
     else     { $script:fail++; Write-Host ("  FAIL  " + $label + "  <- " + $why) -ForegroundColor Red }
 }
 
+# Filled per subject and read by check 6 below: token -> the ids that file has.
+$allRows = @{}
+
+foreach ($subject in $subjects) {
+
+$fixFile = $subject.Path
+$tok     = $subject.Token
 $lines = Get-Content -LiteralPath $fixFile
 
 # --- the index table -------------------------------------------------------
@@ -116,7 +161,7 @@ foreach ($l in $lines) {
     if ($id -notmatch '^\d+$') { continue }
     $n = [int]$id
     if ($rows.ContainsKey($n)) {
-        Note $false ("table id $n appears twice") 'an id must be unique in the index'
+        Note $false ("$tok table id $n appears twice") 'an id must be unique in the index'
     } else {
         $rows[$n] = [pscustomobject]@{ Id = $n; Done = $done; What = $cells[3] }
         $null = $order.Add($n)
@@ -125,10 +170,11 @@ foreach ($l in $lines) {
 
 # REFUSE THE NULL CASE.  No table means every check below passes vacuously.
 if ($rows.Count -eq 0) {
-    Write-Host '  FAIL  no index table found - every check below would have passed by measuring nothing' -ForegroundColor Red
+    Write-Host ("  FAIL  $tok - no index table found in " + $fixFile +
+                ' - every check below would have passed by measuring nothing') -ForegroundColor Red
     exit 2
 }
-Write-Host ("test-fixlist-units: index table has " + $rows.Count + " row(s), ids " +
+Write-Host ("test-fixlist-units: $tok index table has " + $rows.Count + " row(s), ids " +
             (($order | Sort-Object) -join ',').Substring(0, [Math]::Min(60, (($order | Sort-Object) -join ',').Length)) + '...')
 
 # --- the detail sections ---------------------------------------------------
@@ -139,13 +185,13 @@ foreach ($l in $lines) {
         $n = [int]$Matches[1]
         $title = $Matches[2]
         if ($sections.ContainsKey($n)) {
-            Note $false ("section id $n appears twice") 'a detail section must be unique'
+            Note $false ("$tok section id $n appears twice") 'a detail section must be unique'
         } else {
             $sections[$n] = $title
         }
     }
 }
-Write-Host ("test-fixlist-units: " + $sections.Count + " detail section(s)")
+Write-Host ("test-fixlist-units: $tok " + $sections.Count + " detail section(s)")
 
 # --- significant words, for the title-agreement check ----------------------
 
@@ -160,10 +206,10 @@ function Words([string]$s) {
 
 foreach ($n in ($sections.Keys | Sort-Object)) {
     if (-not $rows.ContainsKey($n)) {
-        Note $false ("section $n has no row in the index table") 'the table is the index; add a row'
+        Note $false ("$tok section $n has no row in the index table") 'the table is the index; add a row'
         continue
     }
-    Note $true "section $n has a table row" ''
+    Note $true "$tok section $n has a table row" ''
 
     $sw = Words $sections[$n]
     $rw = Words $rows[$n].What
@@ -186,7 +232,7 @@ foreach ($n in ($sections.Keys | Sort-Object)) {
     # because its escape hatch is wider than the defect.  One threshold, no
     # second arm.
     Note ($ratio -ge 0.45) `
-         ("section $n and its row describe the same defect") `
+         ("$tok section $n and its row describe the same defect") `
          ("only $($shared.Count) significant word(s) shared, ratio $ratio - row says '" +
           ((($rows[$n].What -replace '\s+',' ').Trim()) -replace '^(.{0,60}).*','$1') +
           "', section says '" + (($sections[$n] -replace '\s+',' ').Trim() -replace '^(.{0,60}).*','$1') + "'")
@@ -199,9 +245,9 @@ foreach ($n in ($sections.Keys | Sort-Object)) {
     # counted below and reported, not failed.
     $secDone = ($sections[$n] -match '(?i)\bDONE\b')
     Note (-not ($secDone -and -not $rows[$n].Done)) `
-         ("section $n does not contradict row $n") `
+         ("$tok section $n does not contradict row $n") `
          ("the section heading says DONE but the row is still open - one of them is wrong")
-    if ($rows[$n].Done -and -not $secDone) { $script:silentDone += $n }
+    if ($rows[$n].Done -and -not $secDone) { $script:silentDone += "$tok $n" }
 }
 
 # --- 5  the declared next free id ------------------------------------------
@@ -211,15 +257,28 @@ foreach ($l in $lines) {
     if ($l -match '(?i)NEXT\s+FREE\s+ID[^0-9]*(\d+)') { $declared = [int]$Matches[1]; break }
 }
 $maxId = ($rows.Keys | Measure-Object -Maximum).Maximum
-Note ($null -ne $declared) 'the file declares NEXT FREE ID' 'no "NEXT FREE ID: n" line - the next session will derive it and get it wrong'
+Note ($null -ne $declared) "$tok declares NEXT FREE ID" 'no "NEXT FREE ID: n" line - the next session will derive it and get it wrong'
 if ($null -ne $declared) {
-    Note ($declared -eq $maxId + 1) "NEXT FREE ID is max+1" "declared $declared, table max is $maxId"
+    Note ($declared -eq $maxId + 1) "$tok NEXT FREE ID is max+1" "declared $declared, table max is $maxId"
 }
 
-# --- 6  citations elsewhere ------------------------------------------------
+# Carried out of the loop for check 6, which needs both id spaces at once.
+$allRows[$tok] = $rows
 
-$cited = @{}
-$scanned = 0
+$openIds = @($rows.Values | Where-Object { -not $_.Done } | ForEach-Object { $_.Id } | Sort-Object)
+Write-Host ("test-fixlist-units: $tok " + $openIds.Count + " entr(y/ies) OPEN: " + ($openIds -join ', '))
+
+}   # end foreach subject
+
+# --- 6  citations elsewhere ------------------------------------------------
+#
+# ***EACH TOKEN IS CHECKED AGAINST ITS OWN TABLE, AND THAT IS THE WHOLE CHANGE
+# OF 11 Sep 2026.***  With one file this was a straight line.  With two, the
+# failure this check exists to catch changes shape: a `RELEASE_1.1 8` in a
+# document is wrong not because no row 8 exists ANYWHERE - PRE_RELEASE_FIXES.md
+# has a row 8 and would absorb it silently - but because it does not exist in
+# THAT file.  Checking the union would pass every such citation.
+
 $targets = @()
 foreach ($rel in @('PROJECT_STATUS.md', 'HISTORY.md')) {
     $p = Join-Path $Root $rel
@@ -229,23 +288,49 @@ $gplbld = Join-Path $Root 'sdb_ai\sd64\gplbld'
 if (Test-Path -LiteralPath $gplbld) {
     $targets += @(Get-ChildItem -LiteralPath $gplbld -Filter '*.ps1' | ForEach-Object { $_.FullName })
 }
-foreach ($p in $targets) {
-    $scanned++
-    $txt = Get-Content -LiteralPath $p -Raw
-    foreach ($m in [regex]::Matches($txt, 'PRE_RELEASE(?:_FIXES\.md)?\s+(\d{1,3})\b')) {
-        $n = [int]$m.Groups[1].Value
-        if (-not $cited.ContainsKey($n)) { $cited[$n] = @() }
-        if ($cited[$n] -notcontains $p) { $cited[$n] += $p }
+Note ($targets.Count -gt 0) ("scanned " + $targets.Count + " file(s) for citations") 'nothing scanned - check 6 would pass by measuring nothing'
+
+# ***THE REGEX SELF-TEST, AND IT IS HERE BECAUSE THE OBVIOUS NULL-CASE GUARD NO
+# LONGER WORKS.***  The old check refused a run that found zero citations.  That
+# cannot be asked per token any more: RELEASE_1.1_FIXES.md is new and legitimately
+# has none yet, so a summed count would let a BROKEN RELEASE_1.1 regex hide behind
+# PRE_RELEASE's several hundred hits - exactly the "passes because it did nothing"
+# shape this tree keeps paying for.  So each pattern is driven against a sample it
+# must match and a sample it must NOT, every run, whether or not the tree cites it.
+foreach ($subject in $subjects) {
+    $tok = $subject.Token
+    $mine  = "$tok 42"
+    $other = @($subjects | Where-Object { $_.Token -ne $tok })[0].Token + ' 42'
+    Note ([regex]::IsMatch($mine, $subject.Regex)) `
+         ("$tok pattern matches its own citation form") `
+         ("the pattern did not match '$mine' - it would find nothing and score clean")
+    Note (-not [regex]::IsMatch($other, $subject.Regex)) `
+         ("$tok pattern does not match the other token's form") `
+         ("the pattern also matched '$other' - the two id spaces would be checked against the wrong tables")
+}
+
+$totalCited = 0
+foreach ($subject in $subjects) {
+    $tok   = $subject.Token
+    $rows  = $allRows[$tok]
+    $cited = @{}
+    foreach ($p in $targets) {
+        $txt = Get-Content -LiteralPath $p -Raw
+        foreach ($m in [regex]::Matches($txt, $subject.Regex)) {
+            $n = [int]$m.Groups[1].Value
+            if (-not $cited.ContainsKey($n)) { $cited[$n] = @() }
+            if ($cited[$n] -notcontains $p) { $cited[$n] += $p }
+        }
+    }
+    $totalCited += $cited.Count
+    Write-Host ("test-fixlist-units: $tok cited for " + $cited.Count + " distinct id(s)")
+    foreach ($n in ($cited.Keys | Sort-Object)) {
+        Note ($rows.ContainsKey($n)) `
+             ("$tok $n is cited and exists in that table") `
+             ("cited in " + (($cited[$n] | ForEach-Object { Split-Path $_ -Leaf }) -join ', ') + " but $tok has no row $n")
     }
 }
-Note ($scanned -gt 0) "scanned $scanned file(s) for citations" 'nothing scanned - check 6 would pass by measuring nothing'
-Note ($cited.Count -gt 0) ("found citations of " + $cited.Count + " distinct id(s)") 'no citations found at all - the regex or the tree is wrong'
-
-foreach ($n in ($cited.Keys | Sort-Object)) {
-    Note ($rows.ContainsKey($n)) `
-         ("PRE_RELEASE $n is cited and exists in the table") `
-         ("cited in " + (($cited[$n] | ForEach-Object { Split-Path $_ -Leaf }) -join ', ') + " but the table has no row $n")
-}
+Note ($totalCited -gt 0) ("found citations of $totalCited distinct id(s) across both tokens") 'no citations found at all - the regexes or the tree is wrong'
 
 # --- tally -----------------------------------------------------------------
 
@@ -260,8 +345,11 @@ if ($silentDone.Count -gt 0) {
                 " section(s) are done in the index but say nothing in their own heading: " +
                 (($silentDone | Sort-Object) -join ', ')) -ForegroundColor Yellow
 }
-$openIds = @($rows.Values | Where-Object { -not $_.Done } | ForEach-Object { $_.Id } | Sort-Object)
-Write-Host ("test-fixlist-units: " + $openIds.Count + " entr(y/ies) OPEN in the index: " + ($openIds -join ', '))
+foreach ($subject in $subjects) {
+    $tok = $subject.Token
+    $o = @($allRows[$tok].Values | Where-Object { -not $_.Done } | ForEach-Object { $_.Id } | Sort-Object)
+    Write-Host ("test-fixlist-units: $tok " + $o.Count + " entr(y/ies) OPEN in the index: " + ($o -join ', '))
+}
 Write-Host ("test-fixlist-units: $pass passed, $fail failed")
 if ($fail -gt 0) { exit 1 }
 exit 0

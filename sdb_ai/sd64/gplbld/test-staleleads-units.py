@@ -311,22 +311,39 @@ def main():
          "0 entr(ies) RECORD AN OBSERVATION AND LATER DENY ONE")
 
     # =====================================================================
-    # PHASE 4 - the PRE_RELEASE_FIXES index.  PRE_RELEASE_FIXES 144.
+    # PHASE 4 - the fix indexes.  PRE_RELEASE_FIXES 144.
     #
-    # EACH CASE GETS ITS OWN DIRECTORY, because phase 4 finds the index by
+    # EACH CASE GETS ITS OWN DIRECTORY, because phase 4 finds the indexes by
     # looking BESIDE the document it was handed.  Writing one fixture into the
     # shared tmp would hand it to every later case as well.
+    #
+    # ***BOTH INDEXES ARE WRITTEN SINCE 11 Sep 2026, AND THE COMPANION IS
+    # DELIBERATELY NOT THE SUBJECT.***  Phase 4 now refuses a run where either
+    # expected index is missing, so a fixture with one file takes the
+    # explicit-path SKIP and every case below scores rc=0 having measured
+    # nothing - which is exactly how this test failed the day the second file
+    # was added, and it failed LOUDLY, which is the guard working.
+    #
+    # ***THE COMPANION CARRIES TWO STRUCK ROWS, NOT ONE, AND THAT IS THE POINT
+    # OF THE NUMBER.***  The struck-row case below asserts the literal string
+    # "0 open row(s), 1 struck".  A companion printing the same line would
+    # satisfy that substring no matter what the subject printed - a check
+    # passing on the wrong file's output.  Two makes the subject's line unique.
     # =====================================================================
     print("")
-    print("=== [4] the PRE_RELEASE_FIXES index ===")
+    print("=== [4] the fix indexes ===")
 
     HEAD = "| | SEV | what | where |\n|---|---|---|---|\n"
+    COMPANION = HEAD + "| ~~1~~ | M | companion fixture, not the subject | - |\n" \
+                     + "| ~~2~~ | M | companion fixture, not the subject | - |\n"
 
-    def phase4(name, index_text, want_sub, want_rc=0):
+    def phase4(name, index_text, want_sub, want_rc=0, companion=None):
         d = tempfile.mkdtemp(prefix="staleleads4-")
         try:
             write(d, base, "PROJECT_STATUS.md")
             write(d, index_text, "PRE_RELEASE_FIXES.md")
+            write(d, COMPANION if companion is None else companion,
+                  "RELEASE_1.1_FIXES.md")
             rc, out = run(os.path.join(d, "PROJECT_STATUS.md"))
             ok = (rc == want_rc) and (want_sub in out)
             results.append((ok, name, rc, want_rc, want_sub))
@@ -377,6 +394,24 @@ def main():
     # clean zero - the fault this whole file exists to prevent.
     phase4("4: an unparseable index must refuse",
            "no table here at all, just prose\n", "REFUSING", want_rc=2)
+
+    # ***THE SAME NULL CASE ON THE SECOND FILE, AND IT NEEDS ITS OWN ROW.***  The
+    # case above breaks the FIRST index phase 4 reads, so it would still pass if
+    # the refusal were written once at the top of the loop instead of per file -
+    # and a broken RELEASE_1.1_FIXES.md would then score clean behind a healthy
+    # PRE_RELEASE_FIXES.md.  Here the subject is valid and the COMPANION is the
+    # broken one, so only a per-file refusal can satisfy it.
+    phase4("4: an unparseable SECOND index must refuse too",
+           HEAD + "| ~~1~~ | M | a perfectly good row | x |\n",
+           "REFUSING", want_rc=2,
+           companion="no table here at all, just prose\n")
+
+    # AND THE CONTROL FOR IT: the same shape with a VALID companion must not
+    # refuse.  Without this, the row above would pass on any refusal at all -
+    # including one caused by the fixture rather than by the broken file.
+    phase4("4: a valid second index does not refuse",
+           HEAD + "| ~~1~~ | M | a perfectly good row | x |\n",
+           "0 open row(s), 2 struck")
 
     shutil.rmtree(tmp, ignore_errors=True)
 

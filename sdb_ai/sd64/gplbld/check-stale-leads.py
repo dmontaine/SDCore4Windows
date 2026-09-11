@@ -620,67 +620,92 @@ def safe(s):
 
 print("")
 print("=" * 70)
-print("PHASE 4: the PRE_RELEASE_FIXES index")
+print("PHASE 4: the fix indexes")
 
-IDX = os.path.join(os.path.dirname(os.path.abspath(DOC)), "PRE_RELEASE_FIXES.md")
+# ***TWO INDEXES SINCE 11 Sep 2026, AND ONE OF THEM IS FROZEN.***  W1.0-0
+# shipped, PRE_RELEASE_FIXES.md became the record of that release and takes no
+# new entries, and RELEASE_1.1_FIXES.md took over with its own id space.  Both
+# are scanned: a frozen file's rows still carry rulings, and 4a is a WITHIN-ROW
+# check that does not care which file a row lives in.
+IDX_NAMES = ["PRE_RELEASE_FIXES.md", "RELEASE_1.1_FIXES.md"]
+IDX_DIR = os.path.dirname(os.path.abspath(DOC))
+INDEXES = [os.path.join(IDX_DIR, n) for n in IDX_NAMES]
+missing = [p for p in INDEXES if not os.path.exists(p)]
 explicit_doc = len(sys.argv) > 1
 
-if not os.path.exists(IDX):
+if missing:
     # A LOUD SKIP ONLY WHEN THE CALLER AIMED US SOMEWHERE ELSE.  The control
     # tests write a lone PROJECT_STATUS copy into a scratch directory, and
     # failing those would say nothing about this file.  On the REAL run there is
     # no such excuse, so a missing index refuses rather than scoring clean.
     if explicit_doc:
-        print("  index not found beside %s" % DOC)
+        print("  index not found beside %s: %s"
+              % (DOC, ", ".join(os.path.basename(p) for p in missing)))
         print("  PHASE 4 SKIPPED - this is the explicit-path case, not the repo.")
     else:
-        print("REFUSING - PRE_RELEASE_FIXES.md is not beside PROJECT_STATUS.md.")
-        print("  Expected: %s" % IDX)
+        print("REFUSING - not beside PROJECT_STATUS.md: %s"
+              % ", ".join(os.path.basename(p) for p in missing))
+        for p in missing:
+            print("  Expected: %s" % p)
         print("  Phase 4 scoring clean because it read nothing is the null case")
         print("  this file exists to refuse.")
         sys.exit(2)
 else:
-    with io.open(IDX, encoding="utf-8", newline="") as fh:
-        idx_lines = fh.read().split("\n")
-
     ROW_RE = re.compile(r"^\|\s*(~~)?\s*(\d+)\s*(~~)?\s*\|")
-    open_rows = []
-    done_rows = 0
-    for i, ln in enumerate(idx_lines):
-        m = ROW_RE.match(ln)
-        if not m:
-            continue
-        if m.group(1) or m.group(3):
-            done_rows += 1
-        else:
-            open_rows.append((i, int(m.group(2)), ln))
-
-    print("  %s" % IDX)
-    print("  %d open row(s), %d struck" % (len(open_rows), done_rows))
-
-    # THE NULL CASE, AND THE CANARY.  A parser that matched nothing would print
-    # "0 flagged" and read exactly like a clean file.
-    if not open_rows and not done_rows:
-        print("REFUSING - no index rows parsed at all; the table shape has moved.")
-        sys.exit(2)
-
     flagged4 = 0
-    for ln_i, eid, row in open_rows:
-        bare = unquoted(row)
-        opens = [m for m in ENTRY_OPEN_PAT.finditer(bare)]
-        if not opens:
-            continue
-        closes = [m for m in ENTRY_CLOSE_PAT.finditer(bare)]
-        if not closes:
-            continue
-        if opens[0].start() > closes[0].start():
-            continue                      # leads with the closure: correct
-        flagged4 += 1
-        print("")
-        print("  [4a] entry %d (line %d) says a RULING IS OUTSTANDING and records"
-              " one later in the same row" % (eid, ln_i + 1))
-        print("       asks  : %s" % safe(bare[opens[0].start():opens[0].end()]))
-        print("       records: %s" % safe(bare[closes[0].start():closes[0].end()]))
+    total_open = 0
+
+    for IDX in INDEXES:
+        with io.open(IDX, encoding="utf-8", newline="") as fh:
+            idx_lines = fh.read().split("\n")
+
+        open_rows = []
+        done_rows = 0
+        for i, ln in enumerate(idx_lines):
+            m = ROW_RE.match(ln)
+            if not m:
+                continue
+            if m.group(1) or m.group(3):
+                done_rows += 1
+            else:
+                open_rows.append((i, int(m.group(2)), ln))
+
+        print("  %s" % IDX)
+        print("  %d open row(s), %d struck" % (len(open_rows), done_rows))
+
+        # THE NULL CASE, AND THE CANARY.  A parser that matched nothing would
+        # print "0 flagged" and read exactly like a clean file.
+        #
+        # ***ASKED PER FILE, AND IT HAS TO BE.***  A frozen index has 0 OPEN rows
+        # legitimately - PRE_RELEASE_FIXES.md reached that state on 11 Sep 2026 -
+        # so "open" alone cannot be the canary.  What can is the TOTAL: a table
+        # with neither open nor struck rows was not parsed at all.  Summing
+        # across both files would let one unparsed table hide behind the other's
+        # rows, which is the null case in a new costume.
+        if not open_rows and not done_rows:
+            print("REFUSING - no index rows parsed at all in %s;"
+                  " the table shape has moved." % os.path.basename(IDX))
+            sys.exit(2)
+
+        total_open += len(open_rows)
+
+        for ln_i, eid, row in open_rows:
+            bare = unquoted(row)
+            opens = [m for m in ENTRY_OPEN_PAT.finditer(bare)]
+            if not opens:
+                continue
+            closes = [m for m in ENTRY_CLOSE_PAT.finditer(bare)]
+            if not closes:
+                continue
+            if opens[0].start() > closes[0].start():
+                continue                  # leads with the closure: correct
+            flagged4 += 1
+            print("")
+            print("  [4a] %s entry %d (line %d) says a RULING IS OUTSTANDING and"
+                  " records one later in the same row"
+                  % (os.path.basename(IDX), eid, ln_i + 1))
+            print("       asks  : %s" % safe(bare[opens[0].start():opens[0].end()]))
+            print("       records: %s" % safe(bare[closes[0].start():closes[0].end()]))
 
     print("")
     print("=" * 70)
@@ -689,8 +714,11 @@ else:
     print("phase that sets a non-zero exit - see the header, and entry 65.")
     if flagged4 == 0:
         print("")
-        print("ZERO IS SUSPICIOUS, NOT CLEAN.  The open-row count above is the")
-        print("control: if it is 0 the table shape moved and nothing was read.")
+        print("ZERO IS SUSPICIOUS, NOT CLEAN.  The COMBINED open-row count is the")
+        print("control, and it is %d.  If it is 0 no row was scanned at all - but"
+              % total_open)
+        print("note that a FROZEN index legitimately contributes 0 of its own, so")
+        print("read the per-file counts above rather than this total alone.")
         print("gplbld/test-staleleads-units.py drives this against a fixture")
         print("reproducing 96's wording, so a dead scan cannot score clean here.")
 
