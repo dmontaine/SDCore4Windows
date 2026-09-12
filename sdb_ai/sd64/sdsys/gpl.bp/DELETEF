@@ -270,7 +270,30 @@ delete.upcased.file:
                if skip.part then
                   del voc.rec<2,pos>
                   del voc.rec<4,pos>
-                  continue
+* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 15.  "continue" DOES NOT TEST
+*   "while more" HERE, AND THIS FILE ALREADY SAYS SO FORTY LINES BELOW.  The
+*   20240121 note at the DATA prompt reads "using continue here will create
+*   endless loop 'while more' is not tested.  I know an ugly goto", and the
+*   line under it is "if yn = 'N' then goto more_test".  The same "continue"
+*   was then used up here.
+*
+*   WHAT IT DID.  The body restarted without reaching more_test, so on a
+*   single-valued data.pathnames the next "remove" came off an exhausted array:
+*   data.path = '', which is not @SDSYS, so it fell through to the prompt and
+*   asked "OK to delete DATA portion '' (y/<n>)?" - a question about nothing.
+*
+*   ***AND IT ASKED IT UNDER NO.QUERY***, which is the part that matters.
+*   check.sdsys.file's NO.QUERY branch (28 Aug 26, PRE_RELEASE_FIXES 14) exists
+*   precisely so this path does not stop on a question nobody is there to
+*   answer, and sets skip.part to say so - and one line later the extra
+*   iteration asked one anyway.  Down a pipe that prompt EATS THE FOLLOWING
+*   COMMAND as its answer, which is the failure 14 was filed for.  Seen in
+*   verify-vocverbs entry 14 on b136: the test's second "N" reached the VOC as
+*   "N is not in your VOC".
+*
+*   It terminated only because 'N' leads to the goto below; it was never an
+*   endless loop, just a wrong one.
+                  goto more_test
                end
                data.path = @sdsys:data.path[7,9999]
             end

@@ -4,6 +4,23 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+11 Sep 26  FIXED: DELETE.FILE ... NO.QUERY STILL ASKED ONE QUESTION.
+
+           Deleting a file whose data part lives in the system account,
+           with NO.QUERY given, printed one more prompt after saying it
+           would not ask:  OK to delete DATA portion '' - with nothing
+           between the quotes, because there was no file left to name.
+
+           WHY IT MATTERED.  NO.QUERY exists so that scripts, build
+           steps and anything else driving SD without somebody at the
+           keyboard do not stop on a question.  When the answers come
+           from a file or a pipe, an unexpected prompt takes the NEXT
+           COMMAND as its answer - so the command is lost and the
+           prompt is answered by accident.
+
+           The file itself was always dealt with correctly.  What was
+           wrong was the extra question.
+
 11 Sep 26  FIXED: THE COMMANDS SD PRINTS FOR YOU TO RUN NOW WORK.
 
            When something needs doing by hand - setting the firewall
