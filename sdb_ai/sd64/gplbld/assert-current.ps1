@@ -202,6 +202,14 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # shipped file from the staleness guard - which is the one
                   # thing this list must never do.
                   'python-detect.ps1',
+                  # 12 Sep 26 - the last measurement before any of section
+                  # 5.27's helper is written.  An API session runs as
+                  # LocalSystem, so sdpy.exe would load python3.dll as
+                  # LocalSystem, and nothing had ever run as SYSTEM against
+                  # this install.  It registers a scheduled task, measures,
+                  # and removes it.  NOTHING SHIPS IT and nothing is meant to:
+                  # it answers a question once, the way probe-pylimited.c does.
+                  'probe-pysystem.ps1',
                   # 11 Sep 26 - RELEASE_1.1_FIXES.md 14's guard.  Listed in the
                   # commit that creates it, under the rule the note below
                   # states.  It drives VerifyInstall2's Close-LeakedTranscripts
