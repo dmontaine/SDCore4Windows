@@ -180,7 +180,18 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 12 Sep 26 - objective 2's first piece, PROJECT_STATUS.md
+$neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
+                  # PROJECT_STATUS.md section 8.  Built BOTH ways with the
+                  # UCRT64 compiler to find out whether the stable ABI really
+                  # forwards - it does, and the probe is kept because the
+                  # answer is a decision the helper rests on.  The .exe names
+                  # are here for the same reason probe-console.exe is: the
+                  # global *.exe rule keeps them out of git, this keeps them
+                  # out of the staleness walk.
+                  'probe-pylimited.c',
+                  'probe-pylimited-exact.exe',
+                  'probe-pylimited-limited.exe',
+                  # 12 Sep 26 - objective 2's first piece, PROJECT_STATUS.md
                   # section 8 constraint 1.  It answers "is there a Python SD
                   # could actually use" from the PEP 514 registry, and it is
                   # listed here because NOTHING SHIPS IT YET.
