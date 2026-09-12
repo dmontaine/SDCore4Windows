@@ -180,7 +180,18 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 11 Sep 26 - RELEASE_1.1_FIXES.md 14's guard.  Listed in the
+$neverShipped = @(# 12 Sep 26 - objective 2's first piece, PROJECT_STATUS.md
+                  # section 8 constraint 1.  It answers "is there a Python SD
+                  # could actually use" from the PEP 514 registry, and it is
+                  # listed here because NOTHING SHIPS IT YET.
+                  #
+                  # ***IT COMES OFF THIS LIST THE DAY THE INSTALLER CALLS IT.***
+                  # At that point it is named in stage.py or sd.iss like any
+                  # other shipped script, and leaving it here would exempt a
+                  # shipped file from the staleness guard - which is the one
+                  # thing this list must never do.
+                  'python-detect.ps1',
+                  # 11 Sep 26 - RELEASE_1.1_FIXES.md 14's guard.  Listed in the
                   # commit that creates it, under the rule the note below
                   # states.  It drives VerifyInstall2's Close-LeakedTranscripts
                   # and exists because that function drains EVERY open
