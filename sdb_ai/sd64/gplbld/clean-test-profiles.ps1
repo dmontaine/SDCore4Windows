@@ -524,7 +524,28 @@ if ($skipLoadedStuck.Count -gt 0) {
     Write-Output ("  {0} stuck hive(s) - loaded but the account is gone.  Trying to unload:" -f $skipLoadedStuck.Count)
     foreach ($p in $skipLoadedStuck) {
         $sid = $p.SID
-        & reg.exe unload ("HKU\" + $sid) 2>$null | Out-Null
+# 12 Sep 26 - RELEASE_1.1_FIXES.md 16.  ***THE try/catch IS WHAT STOPS THIS
+# KILLING THE WHOLE ELEVATED SUITE, AND THE PARAGRAPH ABOVE IS WHY IT WAS
+# MISSING.***  That note says redirecting a native command's stderr in
+# PowerShell 5.1 wraps every line in an ErrorRecord - and then this line does it
+# anyway with "2>$null", because 2>$null LOOKS like discarding rather than
+# redirecting.  It is a redirection.  The ErrorRecord is still raised, and
+# $ErrorActionPreference = 'Stop' at :46 makes it TERMINATING.
+#
+# WHAT IT COST, b139, 12 Sep 26: reg.exe answered "Access is denied" for the
+# first held hive, the NativeCommandError terminated this script, and because
+# PRE_RELEASE 178 runs this sweep BEFORE step 1, ***THE ELEVATED HALF DIED
+# WITHOUT RUNNING A SINGLE VERIFIER*** - 0 of 27, on a run reported as done.
+#
+# IT WAS LATENT UNTIL HIVES ACCUMULATED.  b136 took this branch not at all
+# ("removed 27, failed 0"), because nothing was stuck yet; b136, b137 and b138
+# then left 20 stuck hives between them and b139 met them.  Every run makes
+# more, so this was going to fire on whichever run came next.
+#
+# THE EXIT CODE IS STILL THE VERDICT.  $LASTEXITCODE is set by the process
+# whether or not the ErrorRecord was raised, so the catch swallows the noise
+# and changes no decision.
+        try { & reg.exe unload ("HKU\" + $sid) 2>$null | Out-Null } catch { }
         if ($LASTEXITCODE -eq 0) {
             Write-Output ("    unloaded HKU\{0}   {1}" -f $sid, (Split-Path $p.LocalPath -Leaf))
             $unloaded += $p
