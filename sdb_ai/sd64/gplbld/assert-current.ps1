@@ -180,7 +180,17 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 06 Sep 26 - PRE_RELEASE 185's probe.  Listed in the commit
+$neverShipped = @(# 11 Sep 26 - RELEASE_1.1_FIXES.md 14's guard.  Listed in the
+                  # commit that creates it, under the rule the note below
+                  # states.  It drives VerifyInstall2's Close-LeakedTranscripts
+                  # and exists because that function drains EVERY open
+                  # transcript - so the runner's own transcript, added the same
+                  # day, would have been closed by the first step that leaked
+                  # and every step after would have gone unrecorded, WITH THE
+                  # SUITE STILL GREEN.  Mutant control: the restore was removed,
+                  # the decisive row went red, and the file was put back to the
+                  # same SHA-256.
+                  'test-suitetranscript-units.ps1',# 06 Sep 26 - PRE_RELEASE 185's probe.  Listed in the commit
                   # that creates it, under the rule the note below states.  It
                   # asks whether Win32_UserProfile.Loaded agrees with what
                   # HKEY_USERS actually holds, and it exists because THAT

@@ -445,6 +445,38 @@ if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Director
 $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 $summary = Join-Path $logDir ('post-cycle-' + $stamp + '.txt')
 
+# 11 Sep 26 - AND IT NOW KEEPS ONE.  RELEASE_1.1_FIXES.md 14.
+#
+# ***WITHOUT -Quiet THIS RUNNER USED TO KEEP NO RECORD OF ANYTHING IT RAN.***
+# The per-step file below is written only on the -Quiet path; the other branch
+# runs each verifier straight to the console and moves on.  Measured 11 Sep 26:
+# the b136 run wrote 0 files named "20260911-*", against 108 from the -Quiet
+# runs of 6 Sep - a full 27-step green whose evidence was a console window.
+#
+# WHAT THAT COST, ONCE, BEFORE IT WAS FIXED: b136 closed RELEASE_1.1 1 on an
+# exit code, because the two rows that decide it had gone to a screen.  They
+# were recovered from the owner's scrollback, which is not a record.
+#
+# THE SHAPE IS cycle.ps1's, and its note says why: "a cycle that failed at step
+# 3 looks exactly like one that failed at step 7 once the window has gone".
+# VerifyInstall1 has had this since 22 Aug for the same reason.
+#
+# ***UNDER -Quiet THIS TRANSCRIPT IS DELIBERATELY THIN.***  A transcript records
+# what reaches the HOST, and -Quiet sends each step's streams to its own file
+# instead - so the per-step files stay the fuller record there, exactly as the
+# 22 Aug note below says of the verifiers' own transcripts.  This is for the
+# branch that had nothing.
+$transcript = Join-Path $logDir ('VerifyInstall2-' + $stamp + '.log')
+$stale = 0
+while ($true) {
+    try { Stop-Transcript -ErrorAction Stop | Out-Null; $stale++ } catch { break }
+}
+if ($stale -gt 0) {
+    Write-Output ("closed $stale transcript(s) this window had left open")
+}
+try { Start-Transcript -Path $transcript -Force | Out-Null } catch { }
+Write-Output ("transcript: " + $transcript)
+
 # Name => hashtable of parameters, splatted by NAME.  An empty hashtable means
 # "no arguments", which splats correctly too.
 $steps = @(
@@ -862,10 +894,17 @@ if (-not $partial) {
 # cannot be forgotten by the next verifier somebody writes, and it also covers
 # the case a try/finally does not - a step that dies outright.
 #
-# ***THIS RUNNER HAS NO TRANSCRIPT OF ITS OWN***, so every one closed here is a
-# leak and there is nothing to restore.  (VerifyInstall1 does have one, and its
-# copy of this restores it with -Append.)  Checked, not assumed: the only two
-# mentions of Start-Transcript in this file are in the comment above.
+# 11 Sep 26 - ***THAT IS NO LONGER TRUE AND THIS FUNCTION'S CORRECTNESS TURNED
+# ON IT.***  RELEASE_1.1_FIXES.md 14.  It used to read "THIS RUNNER HAS NO
+# TRANSCRIPT OF ITS OWN, so every one closed here is a leak and there is nothing
+# to restore" - and the loop below drains EVERY open transcript, so the moment
+# the runner gained one, the first step would have closed it and every step
+# after would have gone unrecorded.  ***THE FIX WOULD HAVE SILENTLY DESTROYED
+# THE THING IT WAS ADDED FOR***, and left a transcript holding step 1 alone.
+#
+# So the runner's own is restored with -Append, and the leak count drops one to
+# match: it is always among those closed.  This is VerifyInstall1:1218 verbatim,
+# which has done it this way since 22 Aug 26.
 #
 # AND IT REPORTS RATHER THAN TIDYING SILENTLY.  A leak is a defect in the step
 # that leaked, and a fix that hides it would leave nobody any way to find out
@@ -876,9 +915,16 @@ function Close-LeakedTranscripts([string]$stepName) {
     while ($true) {
         try { Stop-Transcript -ErrorAction Stop | Out-Null; $leaked++ } catch { break }
     }
-    if ($leaked -gt 0) {
+    # THE RUNNER'S OWN TRANSCRIPT IS AMONG THEM and has to come back, or every
+    # step after the first would go unrecorded.  -Append, so the file is one
+    # continuous record rather than being truncated per step.
+    try { Start-Transcript -Path $script:transcript -Append | Out-Null } catch { }
+    # -gt 1 AND $leaked - 1, BOTH BECAUSE OF THE LINE ABOVE.  One of the closed
+    # transcripts is always this runner's, so reporting $leaked would accuse
+    # every step of a leak it did not commit.
+    if ($leaked -gt 1) {
         Write-Host ("  NOTE: {0} left {1} transcript(s) open - PRE_RELEASE 40. Closed." -f
-                    $stepName, $leaked)
+                    $stepName, ($leaked - 1))
     }
 }
 
