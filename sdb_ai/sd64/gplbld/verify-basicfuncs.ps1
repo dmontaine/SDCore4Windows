@@ -48,6 +48,99 @@ $Probe  = 'ZZBASICFUNCS'          # namespaced so it cannot collide with a progr
 
 function Say([string]$m) { Write-Host $m }
 
+# ---------------------------------------------------------------------------
+# THE COVERAGE CHECK - RELEASE_1.1_FIXES.md 17, BUGS_FROM_LINUX_PORT.md bug 8.
+#
+# basicfuncs.sb used to close its exclusion list with "Everything else in
+# BCOMP's intrinsics table is exercised below".  That is PROSE: it could not be
+# wrong out loud, and an intrinsic added to BCOMP later joined the gap in
+# silence.  This function makes the same claim MECHANICAL.
+#
+# It takes text, not paths, so the units test can drive every verdict without
+# an install, an account or an SD.  Returns a hashtable; the caller prints the
+# rows.  Nothing here decides the exit code.
+function Get-CoverageVerdict([string]$bcompText, [string]$probeText) {
+
+    # BCOMP HAS TWO TABLES AND ONLY ONE IS IN SCOPE.  "intrinsics" is the
+    # ordinary set; "int.intrinsics" (BCOMP:619) is the 36 internal ones, which
+    # only an $internal program may call.  An UNANCHORED pattern matches both -
+    # measured, and it reported 212 instead of 176 the first time this was
+    # asked.  The anchor is what makes the number mean something.
+    $known = @()
+    foreach ($m in [regex]::Matches($bcompText, '(?m)^\s*intrinsics(?:<-1>)?\s*=\s*"([^"]+)"')) {
+        $known += $m.Groups[1].Value
+    }
+    $knownSet = @{}
+    foreach ($k in $known) { $knownSet[$k] = $true }
+
+    # COMMENT LINES ARE NOT CODE.  basicfuncs.sb quotes an old case label in a
+    # comment explaining a relabelling; counting that as coverage would credit
+    # a function nothing calls.
+    $codeLines = @()
+    $declared  = @()
+    $declaredUnknown = @()
+    foreach ($line in ($probeText -split "`r?`n")) {
+        if ($line -match '^\s*\*') {
+            $d = [regex]::Match($line, '^\s*\*\s*NOT\.TESTED:\s*(.+)$')
+            if ($d.Success) {
+                foreach ($tok in ($d.Groups[1].Value -split '\s+')) {
+                    if ($tok -eq '') { continue }
+                    if ($knownSet.ContainsKey($tok)) { $declared += $tok }
+                    else { $declaredUnknown += $tok }
+                }
+            }
+            continue
+        }
+        $codeLines += $line
+    }
+    $declaredSet = @{}
+    foreach ($d in $declared) { $declaredSet[$d] = $true }
+
+    # A case label is 'NAME' or 'NAME.variant'.  Longest match wins, so
+    # ARG.COUNT is not read as ARG.
+    $exercisedSet = @{}
+    $operatorLabels = @()
+    $strayLabels    = @()
+    foreach ($m in [regex]::Matches(($codeLines -join "`n"), "n\s*=\s*'([^']+)'")) {
+        $lab  = $m.Groups[1].Value
+        $best = ''
+        foreach ($k in $knownSet.psbase.Keys) {
+            if ($lab -eq $k -or $lab.StartsWith($k + '.')) {
+                if ($k.Length -gt $best.Length) { $best = $k }
+            }
+        }
+        if ($best -ne '') { $exercisedSet[$best] = $true }
+        elseif ($lab.StartsWith('OP.')) { $operatorLabels += $lab }
+        else { $strayLabels += $lab }
+    }
+
+    $both        = @()
+    $unaccounted = @()
+    foreach ($k in $known) {
+        $e = $exercisedSet.ContainsKey($k)
+        $d = $declaredSet.ContainsKey($k)
+        if ($e -and $d) { $both += $k }
+        if (-not $e -and -not $d) { $unaccounted += $k }
+    }
+
+    # ***.psbase.Count, NOT .Count, AND THAT IS NOT STYLE.***  These hashtables
+    # are keyed by BASIC function names and BCOMP has an intrinsic called COUNT.
+    # PowerShell resolves $h.Count to the VALUE OF THE KEY "COUNT" when one
+    # exists, so the tally came back as "True" - a member lookup silently
+    # shadowed by the data.  Measured: the fixture rows passed (no COUNT in
+    # them) and the live row against the real tree is what caught it.
+    return @{
+        Known           = $known.Count
+        Exercised       = $exercisedSet.psbase.Count
+        Declared        = $declaredSet.psbase.Count
+        Both            = @($both | Sort-Object)
+        Unaccounted     = @($unaccounted | Sort-Object)
+        DeclaredUnknown = @($declaredUnknown)
+        OperatorLabels  = $operatorLabels.Count
+        StrayLabels     = @($strayLabels | Sort-Object)
+    }
+}
+
 function Bail([int]$code, [string]$why) {
     Say ''
     if ($code -eq 0) { Say "verify-basicfuncs: PASSED - $why" }
@@ -87,6 +180,70 @@ Say "verify-basicfuncs: account   $Account"
 Say "verify-basicfuncs: bp        $bpDir"
 Say "verify-basicfuncs: sd.exe    $sdExe"
 Say "verify-basicfuncs: probe     $Probe"
+Say ''
+
+# 0. COVERAGE, before anything is compiled or run.  It costs nothing, it needs
+#    no install, and it is the one check that can say "this file no longer
+#    tests what its header claims".
+Say '--- coverage -------------------------------------------------------'
+$bcompPath = Join-Path $Gplbld '..\sdsys\gpl.bp\BCOMP'
+if (-not (Test-Path -LiteralPath $bcompPath)) {
+    Bail 2 "cannot read BCOMP at $bcompPath - the coverage claim cannot be checked."
+}
+Say "  BCOMP           : $((Resolve-Path $bcompPath).Path)"
+Say "  probe           : $srcFile"
+
+$cov = Get-CoverageVerdict (Get-Content -LiteralPath $bcompPath -Raw) (Get-Content -LiteralPath $srcFile -Raw)
+
+Say "  BCOMP intrinsics: $($cov.Known)"
+Say "  exercised       : $($cov.Exercised)"
+Say "  declared        : $($cov.Declared)"
+Say "  operator labels : $($cov.OperatorLabels)  (tested by syntax, not by name)"
+
+$covFails = @()
+
+# V1 IS THE NULL-CASE REFUSAL.  If the table did not parse, every count below
+# is 0 and every other row passes VACUOUSLY - a test that passes because it did
+# nothing must fail.
+if ($cov.Known -lt 100) {
+    $covFails += "V1 BCOMP's intrinsics table did not parse: $($cov.Known) name(s) found, expected well over 100.  Nothing below was measured."
+} else {
+    Say "  [PASS] V1 BCOMP's intrinsics table parsed: $($cov.Known) names"
+}
+
+if ($cov.Unaccounted.Count -gt 0) {
+    $covFails += "V2 named NOWHERE - neither exercised nor declared: $($cov.Unaccounted -join ', ')"
+} else {
+    Say '  [PASS] V2 every intrinsic is either exercised or declared'
+}
+
+if ($cov.Both.Count -gt 0) {
+    $covFails += "V3 claimed BOTH ways - declared untested AND exercised: $($cov.Both -join ', ')"
+} else {
+    Say '  [PASS] V3 no intrinsic is both declared and exercised'
+}
+
+if ($cov.DeclaredUnknown.Count -gt 0) {
+    $covFails += "V4 declared untested but UNKNOWN to BCOMP: $($cov.DeclaredUnknown -join ', ')"
+} else {
+    Say '  [PASS] V4 every declared name is one BCOMP knows'
+}
+
+# V5 catches a label that names a function this tree does not have.  One did:
+# 'ADDS.via.SUM', where BCOMP and OPCODES.H both have no ADDS at all.
+if ($cov.StrayLabels.Count -gt 0) {
+    $covFails += "V5 case label names no intrinsic and is not an OP. operator case: $($cov.StrayLabels -join ', ')"
+} else {
+    Say '  [PASS] V5 every case label names an intrinsic or an OP. operator case'
+}
+
+if ($covFails.Count -gt 0) {
+    Say ''
+    foreach ($f in $covFails) { Say "  [FAIL] $f" }
+    Bail 1 ("the coverage claim is wrong: $($covFails.Count) row(s) failed.  " +
+            'basicfuncs.sb no longer tests what its header says it tests.')
+}
+Say "  accounted for   : $($cov.Exercised + $cov.Declared) of $($cov.Known)"
 Say ''
 
 # 1. The install must match source, or the answers came from the wrong binary.

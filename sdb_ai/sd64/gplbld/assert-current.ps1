@@ -798,6 +798,14 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # BECAUSE of itself - which is the trap this list exists for
                   # and which it cost one run to rediscover.
                   'verify-basicfuncs.ps1', 'basicfuncs.sb',
+                  # 12 Sep 26 - RELEASE_1.1_FIXES.md 17's guard, listed in the
+                  # commit that creates it.  It drives Get-CoverageVerdict, the
+                  # decision that makes basicfuncs.sb's coverage claim
+                  # mechanical instead of prose.  Every row that matters is
+                  # unreachable on a healthy tree - a clean partition has
+                  # nothing unaccounted and nothing double-claimed - so the
+                  # verdict is driven directly here.
+                  'test-basicfuncscov-units.ps1',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.

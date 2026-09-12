@@ -20,26 +20,65 @@
 * run that compiled but executed nothing prints TOTAL|0 and the driver treats
 * that as a failure rather than "no failures found".
 *
-* WHAT IS DELIBERATELY NOT TESTED HERE, AND WHY - so the coverage claim is
-* honest rather than implied:
-*   blocking on the terminal   KEYIN KEYINC KEYINR KEYREADY INPUTBLK KEYCODE
-*   sockets                    OPEN.SOCKET READ.SOCKET WRITE.SOCKET SOCKET.INFO
-*                              ACCEPT.SOCKET.CONNECTION CREATE.SERVER.SOCKET
-*                              SERVER.ADDR SET.SOCKET.MODE
-*   need a file or select list FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
-*                              TRANS RTRANS XLATE ITYPE OBJECT OBJINFO SUBR CCALL
-*                              OUTERJOIN - it joins ACROSS FILES and its arity is
-*                              not satisfiable with literals; measured 31 Aug 26,
-*                              the literal form is a compile error, not a value.
-*   session or host state      DATE TIME TIMEDATE SYSTEM STATUS ENV OS.ERROR
-*                              SENTENCE ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
-*   terminal or printer state  TERMINFO SAVE.SCREEN GETPU PRINTER.SETTING BINDKEY
-*                              GET.PORT.PARAMS SET.PORT.PARAMS GETNLS
-*   change the process         CHGPHANT CHANGE CONFIG UMASK CATALOGUED DELETE DIR
-*                              GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT
-* Everything else in BCOMP's intrinsics table is exercised below.
+* WHAT IS DELIBERATELY NOT TESTED HERE, AND WHY.
+*
+* 12 Sep 26 - ***THIS LIST IS NOW READ BY A MACHINE, NOT ONLY BY A READER.***
+* It used to end "Everything else in BCOMP's intrinsics table is exercised
+* below", and that sentence was prose: it could not be wrong OUT LOUD, and an
+* intrinsic added to BCOMP later joined the gap in silence.  Found by SD Core
+* for Linux - BUGS_FROM_LINUX_PORT.md bug 8, RELEASE_1.1_FIXES.md 17.
+*
+* verify-basicfuncs.ps1 now reads BCOMP's own intrinsics table, reads every
+* declared name below, reads every case label, and FAILS THE RUN when a name is
+* neither exercised nor declared (V2), is claimed BOTH ways (V3), or is declared
+* here and unknown to BCOMP (V4).  Add an intrinsic to BCOMP and this file goes
+* red until somebody either tests it or says why not.
+*
+* EACH DECLARATION LINE IS THE MACHINE'S COPY; the words above it are the why.
+* Keep reasons on their own comment lines: a declaration is parsed as nothing
+* but names, so prose on one trips V4.  ***THAT IS NOT HYPOTHETICAL - IT HAPPENED
+* WHILE THIS BLOCK WAS BEING WRITTEN.***  A line wrap put the declaration keyword
+* at the start of a continuation line, thirteen English words were read as
+* intrinsic names, and V4 named every one of them.  The check earned itself
+* before it had ever been run in anger.
+*
+*   blocking on the terminal
+* NOT.TESTED: KEYIN KEYINC KEYINR KEYREADY INPUTBLK KEYCODE
+*   sockets
+* NOT.TESTED: OPEN.SOCKET READ.SOCKET WRITE.SOCKET SOCKET.INFO
+* NOT.TESTED: ACCEPT.SOCKET.CONNECTION CREATE.SERVER.SOCKET
+* NOT.TESTED: SERVER.ADDR SET.SOCKET.MODE
+*   need a file or select list.  OUTERJOIN joins across files and its arity is
+*   not satisfiable with literals; measured 31 Aug 26, the literal form is a
+*   compile error, not a value.
+* NOT.TESTED: FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
+* NOT.TESTED: TRANS RTRANS XLATE ITYPE OBJECT OBJINFO SUBR CCALL OUTERJOIN
+*   session or host state
+* NOT.TESTED: DATE TIME TIMEDATE SYSTEM STATUS ENV OS.ERROR
+* NOT.TESTED: SENTENCE ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
+*   terminal or printer state
+* NOT.TESTED: TERMINFO SAVE.SCREEN GETPU PRINTER.SETTING BINDKEY
+* NOT.TESTED: GET.PORT.PARAMS SET.PORT.PARAMS GETNLS
+*   change the process
+* NOT.TESTED: CHGPHANT CONFIG UMASK CATALOGUED DIR
+* NOT.TESTED: GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT
+*
+* TWO NAMES CAME OFF THAT LIST ON 12 Sep 26 AND NEITHER BELONGED ON IT:
+*   DELETE  was declared untested AND tested, by DELETE.fn below.  That is the
+*           double count bug 8 surfaced, and it is what V3 exists to catch.
+*   CHANGE  was filed under "change the process" beside CHGPHANT and CONFIG.
+*           gplsrc/op_chnge.c:35 is "op_change() - Change substrings": a pure
+*           substring replace that touches no session state.  It is tested
+*           below, with SWAP, which BCOMP:592 maps to the SAME opcode.
 
 program basicfuncs
+
+* A FRESH NAMED COMMON, never written to by anything.  It is here to pin what
+* such a variable actually IS - see the ASSIGNED.common case near the end.  It
+* was introduced believing a common would be UNASSIGNED; it is not, and the
+* case records the real answer.  Namespaced so it cannot collide with a real
+* common in the session.
+   common /zzbfunset/ unset.var
 
    cases = 0
    fails = 0
@@ -171,6 +210,31 @@ program basicfuncs
    n = 'CSVDQ.quoted' ; g = csvdq('"a,b",c') ; w = 'a,b':@fm:'c' ; gosub check
    n = 'MATCHFIELD' ; g = matchfield('abc123', '3A3N', 1) ; w = 'abc' ; gosub check
 
+* CHANGE and SWAP - added 12 Sep 26, RELEASE_1.1_FIXES.md 17.  CHANGE was on
+* the not-tested list under "change the process"; op_chnge.c:35 is
+* "op_change() - Change substrings", a pure substring replace.  SWAP is the
+* same opcode (BCOMP:592 maps both to OP.CHANGE), so the pair is tested rather
+* than assumed equivalent.
+*
+* ***ARGUMENTS 4 AND 5 ARE THE REVERSE OF WHAT THE NAMES SUGGEST, AND THAT IS
+* WHY THEY ARE PINNED HERE.***  Read off this tree, not off the documentation:
+* BCOMP:4064 says "3, 4 or 5 arguments.  Arg 4 defaults to -1, arg 5 to 1", and
+* op_chnge.c's stack comment puts "First occurrence to change" on TOP - so arg
+* 4 is HOW MANY to change and arg 5 is WHICH ONE TO START AT.  A reader who
+* assumes the usual start-then-count order writes the two the wrong way round
+* and gets a plausible answer to a different question.
+   n = 'CHANGE' ; g = change('a-b-a-b', 'a', 'Z') ; w = 'Z-b-Z-b' ; gosub check
+   n = 'CHANGE.miss' ; g = change('abc', 'z', 'Z') ; w = 'abc' ; gosub check
+   n = 'CHANGE.delete' ; g = change('a-b-c', '-', '') ; w = 'abc' ; gosub check
+* Arg 4 = change TWO of them, from the start.
+   n = 'CHANGE.count' ; g = change('a-a-a', 'a', 'Z', 2) ; w = 'Z-Z-a' ; gosub check
+* Arg 5 = start at the SECOND occurrence, and arg 4 limits it to one.
+   n = 'CHANGE.first' ; g = change('a-a-a', 'a', 'Z', 1, 2) ; w = 'a-Z-a' ; gosub check
+* op_chnge.c:97 clamps a start below 1 up to 1 rather than failing.
+   n = 'CHANGE.first.0' ; g = change('a-a', 'a', 'Z', 1, 0) ; w = 'Z-a' ; gosub check
+   n = 'SWAP' ; g = swap('a-b-a', 'a', 'Z') ; w = 'Z-b-Z' ; gosub check
+   n = 'SWAP.first' ; g = swap('a-a-a', 'a', 'Z', 1, 3) ; w = 'a-a-Z' ; gosub check
+
 * ------------------------------------------------------------ dynamic arrays
 
    r = 'a':@vm:'b':@vm:'c'
@@ -202,7 +266,11 @@ program basicfuncs
    n = 'LOCATE.miss'
    locate 'z' in rf<1> setting p then g = p else g = -1
    w = -1 ; gosub check
-   n = 'INMAT.reuse' ; g = reuse(1)      ; w = 1        ; gosub check
+* RELABELLED 12 Sep 26, RELEASE_1.1_FIXES.md 17.  This case read
+* n = 'INMAT.reuse' while the code has always called REUSE - so the coverage
+* record credited INMAT, which is on the NOT.TESTED list, and left REUSE
+* looking untested.  One label, two wrong entries, and V3 is what catches it.
+   n = 'REUSE' ; g = reuse(1)            ; w = 1        ; gosub check
    n = 'SUM' ; g = sum(1:@vm:2:@vm:3)    ; w = 6        ; gosub check
    n = 'SUMMATION' ; g = summation(1:@vm:2:@vm:3) ; w = 6 ; gosub check
 * VSLICE takes value N of every FIELD - a vertical slice down the fields, which
@@ -221,7 +289,10 @@ program basicfuncs
    n = 'LENS' ; g = lens('a':@vm:'bb')   ; w = 1:@vm:2   ; gosub check
    n = 'NUMS' ; g = nums('1':@vm:'x')    ; w = 1:@vm:0   ; gosub check
    n = 'CATS' ; g = cats('a':@vm:'b', 'X':@vm:'Y') ; w = 'aX':@vm:'bY' ; gosub check
-   n = 'ADDS.via.SUM' ; g = sum(v)       ; w = 6         ; gosub check
+* RELABELLED 12 Sep 26, RELEASE_1.1_FIXES.md 17.  This read 'ADDS.via.SUM'.
+* ***BCOMP HAS NO ADDS***, and neither does OPCODES.H - so the label claimed a
+* function this tree does not have.  What it exercises is SUM over a variable.
+   n = 'SUM.var' ; g = sum(v)            ; w = 6         ; gosub check
    n = 'COUNTS' ; g = counts('aa':@vm:'aaa', 'a') ; w = 2:@vm:3 ; gosub check
    n = 'EQS' ; g = eqs(1:@vm:2, 1:@vm:9) ; w = 1:@vm:0   ; gosub check
    n = 'NES' ; g = nes(1:@vm:2, 1:@vm:9) ; w = 0:@vm:1   ; gosub check
@@ -232,6 +303,13 @@ program basicfuncs
    n = 'ANDS' ; g = ands(1:@vm:0, 1:@vm:1) ; w = 1:@vm:0 ; gosub check
    n = 'ORS' ; g = ors(1:@vm:0, 0:@vm:0) ; w = 1:@vm:0   ; gosub check
    n = 'NOTS' ; g = nots(1:@vm:0)        ; w = 0:@vm:1   ; gosub check
+* NOT() the FUNCTION, added 12 Sep 26, RELEASE_1.1_FIXES.md 17.  It was named
+* nowhere - neither exercised nor declared - and the old prose header hid that
+* behind its own English: a scan for known names found the word NOT in the
+* heading "WHAT IS DELIBERATELY NOT TESTED HERE" and counted the intrinsic as
+* declared.  The OP.not case below is the operator, which is a different thing.
+   n = 'NOT' ; g = not(0)                ; w = 1         ; gosub check
+   n = 'NOT.true' ; g = not(1)           ; w = 0         ; gosub check
    n = 'MODS' ; g = mods(17:@vm:18, 5:@vm:5) ; w = 2:@vm:3 ; gosub check
    n = 'IFS' ; g = ifs(1:@vm:0, 'y':@vm:'y', 'n':@vm:'n') ; w = 'y':@vm:'n' ; gosub check
    n = 'STRS' ; g = strs('a':@vm:'b', 2) ; w = 'aa':@vm:'bb' ; gosub check
@@ -298,6 +376,34 @@ program basicfuncs
    n = 'OP.fmt.dyn' ; g = 'a':@fm:'b'<1,1> ; w = 'a':@fm:'b' ; gosub check
 
 * ------------------------------------------------------------------- summary
+
+* --------------------------------------------------------- variable state
+* ASSIGNED and UNASSIGNED - added 12 Sep 26, RELEASE_1.1_FIXES.md 17.  Neither
+* was exercised NOR declared before: they were named nowhere at all, which is
+* the silence bug 8 is about.  Both directions are driven, because a function
+* that always returned the same answer would pass a one-sided test.
+*
+* ***GETTING AN UNASSIGNED VARIABLE IS THE WHOLE DIFFICULTY, AND THE FIRST TWO
+* ATTEMPTS WERE WRONG IN OPPOSITE WAYS.***  A plain local raises BCOMP:1509's
+* "%1 is not assigned a value" at compile time.  A named COMMON does not - but
+* it is not unassigned either: op_array.c:140 creates the block with
+* initialise_zero, and a_alloc's own comment is "TRUE: initialise to zero,
+* FALSE leave as UNASSIGNED", so every element starts as INTEGER 0.  That was
+* measured here, as two FAIL lines, which is this file working as intended.
+*
+* What works is a variable the COMPILER sees assigned and the RUN never
+* reaches.  op_array.c:693 allocates locals with FALSE, so it really is
+* unassigned when the branch does not fire.  Assignment is a run-time fact.
+   zz = 0
+   if zz then lv.never = 'set'
+   n = 'ASSIGNED.no' ; g = assigned(lv.never) ; w = 0 ; gosub check
+   n = 'UNASSIGNED.yes' ; g = unassigned(lv.never) ; w = 1 ; gosub check
+   av = 'x'
+   n = 'ASSIGNED' ; g = assigned(av)     ; w = 1        ; gosub check
+   n = 'UNASSIGNED' ; g = unassigned(av) ; w = 0        ; gosub check
+* And the common, pinned with the answer it actually gives - a fresh named
+* common is ASSIGNED, and that is worth a case rather than a footnote.
+   n = 'ASSIGNED.common' ; g = assigned(unset.var) ; w = 1 ; gosub check
 
    crt 'TOTAL|' : cases : '|FAILS|' : fails
    crt 'PROBE.DONE'
