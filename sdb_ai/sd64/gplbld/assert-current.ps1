@@ -816,6 +816,13 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # holding a list, so a new defaulted prompt is covered the
                   # moment it is written.
                   'test-promptdefaults-units.ps1',
+                  # 12 Sep 26 - RELEASE_1.1_FIXES.md 6's witness, listed in the
+                  # commit that creates it.  It PRESSES ENTER at prompt 6131,
+                  # which no run in this project had ever done: every one of
+                  # the seven was answered with a real Y or N.  Unelevated, in
+                  # the caller's own account, and bounded - the defect it
+                  # witnesses is a loop that never ends.
+                  'verify-promptenter.ps1',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.
