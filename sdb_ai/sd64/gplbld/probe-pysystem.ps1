@@ -181,8 +181,14 @@ if ($Payload -ne '') {
             $names = @(Get-ChildItem -LiteralPath $cu -ErrorAction Stop | ForEach-Object { $_.PSChildName })
             $lines += ('    HKCU (contrast, not detection): ' + ($names -join ', '))
         } else {
-            $lines += '    HKCU (contrast, not detection): absent - SYSTEM does not see the interactive user''s 3.13'
+            $lines += '    HKCU (contrast, not detection): absent'
         }
+        # MEASURED 12 Sep 2026 AND IT WAS NOT WHAT THIS EXPECTED: running as
+        # SYSTEM, this row reported 3.13 - the per-user entry - so SYSTEM's HKCU
+        # is NOT empty of it.  The line above used to assert the opposite.  It
+        # changes nothing about detection, because python-detect.ps1 rejects
+        # HKCU outright whoever is asking, but "SYSTEM cannot see a per-user
+        # install" is the wrong reason to give for that rule.
     } catch {
         $lines += ('    HKCU (contrast, not detection): could not read - ' + $_.Exception.Message)
     }
@@ -243,11 +249,29 @@ if ($Payload -ne '') {
     # checked as well, so a line carrying both is not a pass either.
     $pyOut = ''
     try {
-        $code = 'import sys, os; print("PYOK " + sys.version.split()[0] + " prefix=" + sys.prefix + " os=" + os.__file__)'
+        # ***A SCRIPT FILE, NOT -c, AND THAT IS A MEASURED CORRECTION.***
+        # The first version passed the snippet as -ArgumentList @('-c', $code).
+        # PowerShell 5.1 joins that list into one command line and the comma in
+        # "import sys, os" ended the argument: python received the single word
+        # "import" and answered `SyntaxError: Expected one or more names after
+        # 'import'`.  Witnessed as SYSTEM, 12 Sep 2026, and the leg was reported
+        # FAIL against a perfectly working interpreter.
+        #
+        # The file route has no quoting surface at all.  It is also what the
+        # helper will do - sdpy.exe hands Python a program, not a command line.
+        $code = @'
+import sys, os
+print("PYOK " + sys.version.split()[0] + " prefix=" + sys.prefix + " os=" + os.__file__)
+'@
+        $tmpPy = [IO.Path]::Combine([IO.Path]::GetTempPath(),
+                                    ('sd-probe-' + [Guid]::NewGuid().ToString('N') + '.py'))
+        [IO.File]::WriteAllText($tmpPy, $code, (New-Object System.Text.UTF8Encoding($false)))
+        $lines += ('    python script : ' + $tmpPy)
         $tmpO = [IO.Path]::GetTempFileName()
         $tmpE = [IO.Path]::GetTempFileName()
-        $p = Start-Process -FilePath $pyExe -ArgumentList @('-c', $code) -NoNewWindow -Wait -PassThru `
+        $p = Start-Process -FilePath $pyExe -ArgumentList @($tmpPy) -NoNewWindow -Wait -PassThru `
                            -RedirectStandardOutput $tmpO -RedirectStandardError $tmpE
+        Remove-Item -LiteralPath $tmpPy -Force -ErrorAction SilentlyContinue
         $so = ''
         $se = ''
         if (Test-Path -LiteralPath $tmpO) { $so = (Get-Content -LiteralPath $tmpO -Raw -ErrorAction SilentlyContinue) }
