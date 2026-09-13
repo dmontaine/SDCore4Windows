@@ -1,4 +1,4 @@
-# probe-osex.ps1 - THE DISCRIMINATOR for probe-pyapi's -12040.
+# probe-osex.ps1 - THE DISCRIMINATOR for verify-pyapi's -12040.
 #
 # -12040 has three causes and the reason is never surfaced (sdpy_session_error
 # has no caller).  So ask the SAME QUESTION THE PYTHON GATE ASKS, by the same
@@ -11,7 +11,7 @@
 #                        working as designed, and the probe needs a permitted
 #                        session.
 #
-# Unelevated, on purpose: that is the session probe-pyapi used.
+# Unelevated, on purpose: that is the session verify-pyapi used.
 
 $ErrorActionPreference = 'Stop'
 
@@ -92,12 +92,12 @@ if (-not $ran) { Write-Output '  VERDICT: inconclusive - the program did not fin
 if ($worked -and -not $refused) {
     Write-Output '  VERDICT: THIS SESSION IS PERMITTED to reach the OS.'
     Write-Output '  So the Python gate had no permission reason to refuse, and'
-    Write-Output '  probe-pyapi''s -12040 points at the helper not STARTING.'
+    Write-Output '  verify-pyapi''s -12040 points at the helper not STARTING.'
     exit 0
 }
 if ($refused -and -not $worked) {
     Write-Output '  VERDICT: THIS SESSION IS NOT PERMITTED to reach the OS.'
-    Write-Output '  -12040 is then the gate working as designed, and probe-pyapi'
+    Write-Output '  -12040 is then the gate working as designed, and verify-pyapi'
     Write-Output '  needs a session that is permitted (elevated, or OS.USERS).'
     exit 0
 }

@@ -1289,7 +1289,7 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # in SDSYS, compile one program into it and remove all three
                   # parts afterwards.
                   #
-                  # probe-pyapi.ps1 IS THE ONLY THING IN THE TREE THAT DRIVES
+                  # verify-pyapi.ps1 IS THE ONLY THING IN THE TREE THAT DRIVES
                   # BASIC -> PY_* -> the pipe -> CPython.  test-sdpy-units
                   # drives sdpy.exe DIRECTLY and was green throughout the whole
                   # period the feature was dead, which is why this exists as a
@@ -1298,7 +1298,10 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # session may reach the OS at all, which is what separates a
                   # refused gate from a helper that would not start - the
                   # distinction RELEASE_1.1 21 says nothing else can make.
-                  'probe-pyapi.ps1', 'probe-osex.ps1')
+                  # 12 Sep 26 - verify-pyapi.ps1 is a STEP of VerifyInstall2 as
+                  # well as a standalone check, and it is here for the same
+                  # reason VerifyInstall2.ps1 itself is: it ships nowhere.
+                  'verify-pyapi.ps1', 'probe-osex.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

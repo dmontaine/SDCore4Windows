@@ -1,6 +1,6 @@
-# probe-pyapi.ps1 - does objective 2 work END TO END on an installed system?
+# verify-pyapi.ps1 - does objective 2 work END TO END on an installed system?
 #
-#   powershell -ExecutionPolicy Bypass -File probe-pyapi.ps1
+#   powershell -ExecutionPolicy Bypass -File verify-pyapi.ps1
 #
 # UNELEVATED is fine and is how it was run.  Exit 0 the whole path works,
 # 1 a step failed, 2 the fixture could not be built (never a FAIL).
@@ -35,7 +35,7 @@ if (-not $SkipAssertCurrent) {
     & (Join-Path $PSScriptRoot 'assert-current.ps1')
     if ($LASTEXITCODE -ne 0) {
         Write-Output ''
-        Write-Output 'probe-pyapi: refusing - see assert-current above'
+        Write-Output 'verify-pyapi: refusing - see assert-current above'
         exit 2
     }
 }
@@ -114,10 +114,21 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
 Write-Output ''
 Write-Output '=== fixture ==============================================================='
 
-foreach ($p in @($ctlDir, ($ctlDir + '.DIC'), ($ctlDir + '.OUT'))) {
-    if (Test-Path -LiteralPath $p) {
-        Write-Output ("  removing stale " + $p)
-        Remove-Item -LiteralPath $p -Recurse -Force
+# ***SWEEP THE WHOLE FAMILY, NOT THIS RUN'S NAME.***  The fixture name carries
+# a timestamp, so a "remove stale $ctlDir" written the obvious way can NEVER
+# fire - the only name it checks is the one this run is about to create, which
+# by construction does not exist yet.  It reads like belt-and-braces and is
+# dead code.  A run that dies between CREATE.FILE and cleanup therefore leaves
+# a directory in SDSYS that nothing removes and nothing reports:
+# check-datatree-litter.ps1 looks for U+F000-U+F0FF in names and would not see
+# it, and the profile sweep only knows about Windows accounts.
+$stale = @(Get-ChildItem -LiteralPath $sdsys -Directory -ErrorAction SilentlyContinue |
+           Where-Object { $_.Name -match '^PROBEPYBP[0-9]{6}(\.DIC|\.OUT)?$' })
+if ($stale.Count -gt 0) {
+    Write-Output ("  sweeping " + $stale.Count + " leftover fixture director(y/ies) from an earlier run:")
+    foreach ($d in $stale) {
+        Write-Output ("    " + $d.Name)
+        Remove-Item -LiteralPath $d.FullName -Recurse -Force
     }
 }
 
@@ -150,7 +161,7 @@ if (($out -notmatch 'Created DATA part as') -or -not (Test-Path -LiteralPath $ct
 # probe tests the CATALOGUED programs and not the include record's resolution
 # from a scratch directory.
 $src = @(
-    '* Created by probe-pyapi.ps1 - safe to delete'
+    '* Created by verify-pyapi.ps1 - safe to delete'
     "deffun PY_INITIALIZE() calling '!PY_INITIALIZE'"
     "deffun PY_IS_INITIALIZED() calling '!PY_IS_INITIALIZED'"
     "deffun PY_RUNSTRING(s) calling '!PY_RUNSTRING'"
@@ -248,7 +259,7 @@ Write-Output '=== the documented route: $include SDPYFUNC.H ====================
 
 $incName = 'PYINC' + $stamp.Substring(9)
 $incSrc  = @(
-    '* Created by probe-pyapi.ps1 - safe to delete'
+    '* Created by verify-pyapi.ps1 - safe to delete'
     '$include SDPYFUNC.H'
     '   st = PY_INITIALIZE()'
     "   crt 'PYINC-INIT=':st"
@@ -297,8 +308,8 @@ Write-Output ("  sd/sdwind processes now: " + $stray.Count)
 
 Write-Output ''
 if ($fails -gt 0) {
-    Write-Output "probe-pyapi: $rows row(s), $fails FAILED"
+    Write-Output "verify-pyapi: $rows row(s), $fails FAILED"
     exit 1
 }
-Write-Output "probe-pyapi: $rows of $rows passed - objective 2 works end to end"
+Write-Output "verify-pyapi: $rows of $rows passed - objective 2 works end to end"
 exit 0

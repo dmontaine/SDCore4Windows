@@ -787,7 +787,36 @@ $steps = @(
     #
     # NO PREFIX AND NO ACCOUNT: it creates nothing.  It DOES restart SD, which
     # this runner already does more than once.
-    @{ Name = 'verify-registersweep.ps1'; P = @{} }
+    @{ Name = 'verify-registersweep.ps1'; P = @{} },
+
+    # 12 Sep 26 - objective 2's end-to-end check, PROJECT_STATUS.md 5.27.  It
+    # drives BASIC -> !PY_* -> SDEXT/SDPYOBJ -> the pipe -> CPython and reads
+    # back a value only the interpreter can have produced.
+    #
+    # ***IT IS HERE BECAUSE NOTHING ELSE CROSSES sd.exe.***  test-sdpy-units
+    # drives sdpy.exe DIRECTLY over a pipe and was 53 of 53 green through the
+    # entire period the feature was dead on every install - the helper was
+    # never staged, and then the path handed to CreateProcessA was POSIX
+    # (RELEASE_1.1 19 and 20).  A green free tier said nothing about either.
+    #
+    # IT BELONGS IN THIS HALF RATHER THAN VerifyInstall1: LOGTO SDSYS from an
+    # unelevated session reaches elevate('START'), which gates on
+    # Start-Process -Verb RunAs (CPROC:2687), and nothing driven down a pipe
+    # can answer a UAC consent - it hangs at the LOGTO.
+    #
+    # NO PREFIX AND NO ACCOUNT.  It makes one DIRECTORY file inside SDSYS,
+    # named from the clock, and removes all three parts afterwards; it sweeps
+    # any leftover of its own family first.  It deliberately does NOT take a
+    # "sd<name>$Run" prefix, because that form declares a Windows ACCOUNT
+    # family - test-stemcoverage-units.ps1 reads those literals out of this
+    # file - and this step creates no account for the profile sweep to know
+    # about.
+    #
+    # WHAT IT DOES NOT COVER, SAID HERE SO THE GREEN IS NOT READ AS MORE THAN
+    # IT IS: an elevated session sets USR_ADMIN, so may_start_helper() returns
+    # on its "an administrator always may" branch and the OS.USERS field 2
+    # route is never exercised.  This measures the plumbing, not the gate.
+    @{ Name = 'verify-pyapi.ps1'; P = @{} }
 )
 
 # 30 Aug 26 - -Only.  Shared filter, see suite-only.ps1.  It runs AFTER the
