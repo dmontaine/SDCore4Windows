@@ -1301,7 +1301,17 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # 12 Sep 26 - verify-pyapi.ps1 is a STEP of VerifyInstall2 as
                   # well as a standalone check, and it is here for the same
                   # reason VerifyInstall2.ps1 itself is: it ships nowhere.
-                  'verify-pyapi.ps1', 'probe-osex.ps1')
+                  'verify-pyapi.ps1', 'probe-osex.ps1',
+                  # 13 Sep 26 - verify-pygate.ps1, RELEASE_1.1 23's witness and
+                  # step 29 of VerifyInstall2.  ***ADDED ONE COMMIT LATE, AND
+                  # THE GAP WAS MEASURED***: it was created and run on b141
+                  # without being listed here - harmless only because the file
+                  # predated the install - and the first edit to it afterwards
+                  # turned this guard STALE naming it, so the rerun that edit
+                  # was for would have refused itself.  The 17 Aug note above
+                  # describes exactly this.  A new gplbld script that ships
+                  # nowhere goes here in the commit that creates it.
+                  'verify-pygate.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

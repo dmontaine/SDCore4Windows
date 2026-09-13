@@ -107,6 +107,18 @@ $results = New-Object System.Collections.ArrayList
 $fatal   = $false
 
 function Note($step, $expected, $got, $decisive) {
+    # ***A COLLECTION IS NOT AN OBSERVATION.***  Measured on b141, 13 Sep 2026:
+    # Invoke-Leg both printed and RETURNED, so PowerShell folded its
+    # Write-Output lines into the return value - nothing was printed, and
+    # "$a -match 'x'" ran on an ARRAY, which returns the matching ELEMENTS.
+    # Every leg row then passed with an Observed of {SD Core for Windows...}
+    # or {}, and was right only because ($true -eq <non-empty array>) is true
+    # and ($true -eq @()) is false - checked afterwards, both directions.  A
+    # verdict that is correct by accident with its evidence unprinted is the
+    # instrument rule's exact subject, so this refuses the shape outright.
+    if (($null -ne $got) -and (($got -is [array]) -or ($got -is [System.Collections.ICollection]))) {
+        throw ("Note '{0}': Observed is a collection of {1} - a pattern was matched against an array, not a transcript.  Broken instrument, not a result." -f $step, @($got).Count)
+    }
     $pass = ($expected -eq $got)
     $null = $results.Add([pscustomobject]@{
         Check = $step; Expected = $expected; Observed = $got
@@ -261,17 +273,27 @@ function Get-ErrlogDelta([string]$before) {
 # ------------------------------------------------------------- one leg
 
 # Run the compiled probe as the test account, print EVERYTHING it said, and
-# hand back the text.  The null case is refused here, once: over ssh the same
-# silence has causes that are nothing to do with the gate - a refused
-# password, sshd down, ForceCommand not starting SD.
+# leave the text in $script:legText ($null if the leg could not run).  The
+# null case is refused here, once: over ssh the same silence has causes that
+# are nothing to do with the gate - a refused password, sshd down,
+# ForceCommand not starting SD.
+#
+# ***IT RETURNS NOTHING, AND THAT IS THE FIX FOR b141.***  This function used
+# to "return $text", and in PowerShell a function's Write-Output lines ARE its
+# return value - so every line below was captured into the caller's variable
+# instead of reaching the transcript, and the caller matched patterns against
+# an array.  The rows still came out right (see Note), but the raw output the
+# instrument rule demands was never printed.  A function that prints must not
+# also return; the text travels through script scope instead.
 function Invoke-Leg([string]$label) {
+    $script:legText = $null
     $r = $null
     try {
         $r = Invoke-SdAsTestUser -Name $script:account -Password $script:password `
                  -Commands @('RUN BP PYGATE')
     } catch {
         Write-Output ("verify-pygate: could not drive SD as {0} - {1}" -f $script:account, $_.Exception.Message)
-        return $null
+        return
     }
     $text = ($r.Out | Out-String)
     Write-Output ("  ssh exit {0}, {1} characters of output" -f $r.ExitCode, $text.Length)
@@ -287,14 +309,14 @@ function Invoke-Leg([string]$label) {
     Note ("{0}: the session produced output" -f $label) $true ($text.Trim().Length -gt 0) $true
     if ($text.Trim().Length -eq 0) {
         Write-Output ("verify-pygate: {0} said nothing - it never ran, so nothing was measured." -f $label)
-        return $null
+        return
     }
     # A PROGRAM THAT DID NOT REACH ITS LAST LINE IS SCORED AS A FAILURE, NOT
     # REFUSED: the ssh route has already been proved by the compile step, so a
     # missing PYGATE-DONE here is an observation about the product - a PY_*
     # that aborted the caller - and hiding it behind exit 2 would hide that.
     Note ("{0}: the probe ran to its last line (PYGATE-DONE)" -f $label) $true ($text -match 'PYGATE-DONE') $true
-    return $text
+    $script:legText = $text
 }
 
 # ------------------------------------------------------------- the account
@@ -448,7 +470,8 @@ try {
 
     Write-Output '=== 3. leg A - record ABSENT: refused, -12041 ======================'
     Note 'leg A: the os.users record is absent' $false (Test-Path -LiteralPath $record) $true
-    $a = Invoke-Leg 'leg A'
+    Invoke-Leg 'leg A'
+    $a = $script:legText
     if ($null -eq $a) { exit 2 }
 
     # ***THE MEASUREMENT.***  -12041 is SD_PyErr_NotPermitted: the gate ran,
@@ -487,7 +510,8 @@ try {
     $logBefore = Get-ErrlogText
     Write-Output ("  errlog is {0} bytes before" -f $logBefore.Length)
 
-    $b = Invoke-Leg 'leg B'
+    Invoke-Leg 'leg B'
+    $b = $script:legText
     if ($null -eq $b) { exit 2 }
 
     Note 'leg B: PY_INITIALIZE = -12042 (permission undetermined)'  $true ($b -match 'PYGATE-INIT=-12042')  $true
@@ -521,7 +545,8 @@ try {
     Write-Output ("  wrote {0}: yes<LF>yes<LF> ({1} bytes)" -f $record, $bytesC)
     Note 'leg C: the permitting record is in place (8 bytes)' 8 $bytesC $true
 
-    $c = Invoke-Leg 'leg C'
+    Invoke-Leg 'leg C'
+    $c = $script:legText
     if ($null -eq $c) { exit 2 }
 
     Note 'leg C: PY_INITIALIZE = 0'                                 $true ($c -match 'PYGATE-INIT=0')       $true
