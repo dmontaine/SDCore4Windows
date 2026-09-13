@@ -195,6 +195,35 @@ def main():
           % ("PASS" if ok else "FAIL", "closure after section 8 must not leak back",
              rc_t, base_leads, got))
 
+    # 13 Sep 26 - RELEASE_1.1 10.  A "### W1.1-0" subsection inside section 7
+    # carries its own numbered objective list, and "2. **..." matched the
+    # section-7 step pattern while still inside the section - so it registered
+    # as entry 7.2 and OVERWROTE the real step 2 in entry_at (a dict, last
+    # wins).  The task-table row 7.2 was then compared against the wrong entry
+    # and, when that objective led open, reported "7.2 is ticked DONE but its
+    # entry leads with an open claim" - a false DRIFT that set exit 1.
+    #
+    # THE FIX bounds the step list at section 7's first ### subsection.  This
+    # injects exactly that shape - a ### subsection with a "2." item that leads
+    # open, while the real table row 7.2 stays ticked - and requires that the
+    # false attribution does NOT appear.  Reverting the bound in
+    # check-stale-leads.py brings it straight back (rc 1), measured 13 Sep, so
+    # this is a control and not a vacuous absence.
+    FALSE_72 = "7.2 is ticked DONE but its entry leads with an open claim"
+    t = base.replace(
+        "## 8. Open questions",
+        "### ZZ W1.1-0 FIXTURE (test-staleleads-units.py) - a subsection with its own list\n\n"
+        "2. **Synthetic objective that is still open and unproven.** injected by the units test.\n\n"
+        "## 8. Open questions", 1)
+    assert t != base, "could not find section 8's heading for the item-10 fixture"
+    rc_i, out_i = run(write(tmp, t, "item10_subsection_collision.md"))
+    ok = (rc_i == 0) and (FALSE_72 not in out_i)
+    results.append((ok, "section 7 ### subsection is not a step (item 10)",
+                    rc_i, 0, "no 7.2 mis-attribution"))
+    print("  [%s] %-46s rc=%d (want 0)  false-flag present: %s"
+          % ("PASS" if ok else "FAIL", "section 7 ### subsection is not a step (item 10)",
+             rc_i, FALSE_72 in out_i))
+
     # Section 7's heading renamed must REFUSE rather than scan everything.
     t = base.replace("## 7. Next steps", "## 7. Things to do", 1)
     assert t != base, "could not rename section 7"

@@ -122,6 +122,26 @@ if sh_a is None or sh_b is None:
     sys.exit(2)
 print("START HERE spans lines %d..%d" % (sh_a + 1, sh_b + 1))
 
+# 13 Sep 26 - RELEASE_1.1 10.  SECTION 7'S NUMBERED STEPS END AT ITS FIRST
+# SUBSECTION HEADING.  A "### W1.1-0" block inside section 7 carries its own
+# "1." / "2." objective list, and those match ^\d+\. \*\* while still inside
+# (sec7_a, sec7_b) - so they registered as entries 7.1 and 7.2 and OVERWROTE
+# the real steps in entry_at, which is a dict where the last write wins.  The
+# task-table row 7.2 (the VirtualBox rig, ticked DONE) was then compared
+# against the "Embedded Python" objective, whose prose leads open, and reported
+# "row 99: 7.2 is ticked DONE but its entry leads with an open claim" - a false
+# DRIFT that set exit 1.  Reproduced 13 Sep 2026 before this bound existed.
+#
+# The real steps are a FLAT numbered list that ends at the first ### subsection;
+# everything below that heading is forward-looking scope prose, not a step, and
+# belongs to no entry.  The workaround was to reword the objective so it no
+# longer led open - which left the collision in place for the next open word.
+sec7_steps_b = sec7_b
+for i in range(sec7_a + 1, sec7_b):
+    if re.match(r"^#{3,}\s", lines[i]):
+        sec7_steps_b = i
+        break
+
 starts = []
 sec7_entry = set()
 sh_entry = set()
@@ -130,7 +150,7 @@ for i, ln in enumerate(lines):
         starts.append(i)                       # START HERE items, anywhere
         if sh_a < i < sh_b:
             sh_entry.add(i)
-    elif sec7_a < i < sec7_b and re.match(r"^\d+\. \*\*", ln):
+    elif sec7_a < i < sec7_steps_b and re.match(r"^\d+\. \*\*", ln):
         starts.append(i)                       # numbered steps, section 7 only
         sec7_entry.add(i)
 starts = sorted(set(starts))
