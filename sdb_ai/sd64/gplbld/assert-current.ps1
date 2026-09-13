@@ -1282,7 +1282,23 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # until now the only guard was a comment asking the next
                   # person to remember.  Restoring SDPYOBJ for objective 2 is
                   # the second time in a month that pair has been edited.
-                  'test-intrinsics-units.py')
+                  'test-intrinsics-units.py',
+                  # 12 Sep 26 - RELEASE_1.1 20's instruments, listed in the
+                  # commit that creates them.  Neither is installed and neither
+                  # is compiled into sd.exe; both make a scratch DIRECTORY file
+                  # in SDSYS, compile one program into it and remove all three
+                  # parts afterwards.
+                  #
+                  # probe-pyapi.ps1 IS THE ONLY THING IN THE TREE THAT DRIVES
+                  # BASIC -> PY_* -> the pipe -> CPython.  test-sdpy-units
+                  # drives sdpy.exe DIRECTLY and was green throughout the whole
+                  # period the feature was dead, which is why this exists as a
+                  # separate instrument rather than a row in that one.
+                  # probe-osex.ps1 is its discriminator: it asks whether the
+                  # session may reach the OS at all, which is what separates a
+                  # refused gate from a helper that would not start - the
+                  # distinction RELEASE_1.1 21 says nothing else can make.
+                  'probe-pyapi.ps1', 'probe-osex.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

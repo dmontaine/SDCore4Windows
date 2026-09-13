@@ -40,6 +40,10 @@
 
 #include <stdio.h>
 #include <string.h>
+/* cygwin_conv_path, for helper_path()'s POSIX -> native conversion.  This file
+ * is MSYS2 code by construction - it is compiled into sd.exe - so the header
+ * is present; sdpy.exe, which is native, includes nothing from here. */
+#include <sys/cygwin.h>
 
 /* One per session.  sd.exe is one process per session, so a file static IS
  * session scope here - the same reasoning that makes the helper per-session in
@@ -61,21 +65,49 @@ extern bool sd_os_permitted(PRIV_WHY* why);
  * splits binaries into C:\Program Files\SD\usr\bin while pcode stays with
  * SDSYS - so <sysdir>/bin holds no executable at all.  Both call sites failed
  * SILENTLY and both worked in development, where <sysdir>/bin does hold the
- * binaries.  The first version of this function made the same mistake. */
+ * binaries.  The first version of this function made the same mistake.
+ *
+ * ***AND THE THIRD MISTAKE IN THAT FAMILY WAS THE PATH FORM - 12 Sep 26,
+ * RELEASE_1.1 20, MEASURED ON AN INSTALL.***  exe_directory() answers a POSIX
+ * path, because it reads /proc/self/exe, which is the MSYS2 runtime's own
+ * interface; exepath.c's header says so and names GetModuleFileName() as "the
+ * native answer".  Its other three callers hand the result to execl() and
+ * system(), which are POSIX and translate it.  THIS caller does not: the path
+ * goes to sdpy_client.c's CreateProcessA, a NATIVE call that never sees the
+ * MSYS2 mount table.
+ *
+ * So every PY_* answered -12040 on a correct install with a healthy helper
+ * beside sd.exe.  MEASURED, with a control, by building the two legs with the
+ * same MSYS2 gcc sd.exe uses:
+ *
+ *   CreateProcessA("/c/Program Files/SD/usr/bin/sdpy.exe")  FAILED, error 3
+ *   CreateProcessA("C:\\Program Files\\SD\\usr\\bin\\sdpy.exe")  STARTED
+ *
+ * The conversion is done HERE, at the boundary, rather than in exe_directory()
+ * - that function has three POSIX callers which are correct as they are, and
+ * changing it would break them to fix this. */
 static const char* helper_path(void) {
   static char path[MAX_PATHNAME_LEN + 1] = "";
   char bindir[MAX_PATHNAME_LEN + 1];
+  char posix[MAX_PATHNAME_LEN + 1];
 
   if (path[0] == '\0') {
     int n;
     if (!exe_directory(bindir, sizeof(bindir)))
       return "";                      /* the caller reports "did not start" */
-    n = snprintf(path, sizeof(path), "%s%csdpy.exe", bindir, DS);
+    n = snprintf(posix, sizeof(posix), "%s%csdpy.exe", bindir, DS);
     /* ***A TRUNCATED PATH IS A SILENTLY WRONG PATH.***  It would name some
      * other file, or nothing, and the failure would arrive as "the helper did
      * not start" with a plausible-looking path in the message.  Refuse it
      * instead - the same class of quiet wrongness exepath.c was written for. */
-    if (n < 0 || (size_t)n >= sizeof(path)) {
+    if (n < 0 || (size_t)n >= sizeof(posix)) {
+      path[0] = '\0';
+      return "";
+    }
+    /* POSIX -> native, for the native CreateProcessA downstream.  A failure
+     * here is refused out loud the same way a truncation is, rather than
+     * passing the untranslated path on to fail less legibly later. */
+    if (cygwin_conv_path(CCP_POSIX_TO_WIN_A, posix, path, sizeof(path)) != 0) {
       path[0] = '\0';
       return "";
     }
