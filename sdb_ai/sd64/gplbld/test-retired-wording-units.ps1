@@ -56,6 +56,22 @@ Write-Host "test-retired-wording-units: messages $msgDir"
 # Replacement = must appear somewhere (the positive control that proves the fix
 # is real and the scan reaches it).  Ref names the PRE_RELEASE_FIXES entry.
 $RETIRED = @(
+    # RELEASE_1.1 3 - message 10114 asserted an outcome it did not measure.
+    # "Unable to change the tier of %1; nothing has changed" is printed on
+    # three paths in MODIFYA, and two of them HAVE changed something: the
+    # partial-VOC path (:1040, the standard layer was applied then the template
+    # open failed) and the register-write-failure path (:1068, voc.delta
+    # succeeded and only the write failed).  Linux reported it and kept our text
+    # for cross-port conformity; the owner ruled 13 Sep 2026 to apply Linux's
+    # own suggested wording here and file it upstream, so the two ports
+    # converge.  UPSTREAM_FIXES.md carries it.
+    #
+    # ***THE BARE PHRASE CANNOT BE REGISTERED - it is CORRECT in 10104 and in
+    # sd.iss:4770.***  Matching is substring, so the retired string carries the
+    # "the tier of %1; " prefix that is unique to 10114.
+    @{ Ref = 'R1.1-3'
+       Retired     = 'the tier of %1; nothing has changed'
+       Replacement = 'the tier of %1; its tier in the register is unchanged' }
     # RELEASE_1.1 11 - "powershell -File" WITHOUT A POLICY SWITCH, IN A COMMAND
     # SD PRINTS FOR SOMEBODY TO RUN.  The default execution policy on a Windows
     # client SKU is Restricted, so every one of those refused with "running

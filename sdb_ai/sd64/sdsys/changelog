@@ -4,6 +4,18 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+13 Sep 26  FIXED: A FAILED "MODIFY.ACCOUNT ... <tier>" COULD SAY "NOTHING
+           HAS CHANGED" WHEN PART OF THE VOC HAD.
+
+           Changing an account's tier applies the vocabulary in layers and
+           writes the register last.  If a later step failed, the message
+           read "Unable to change the tier of NAME; nothing has changed" -
+           but an earlier layer might already have been written, or the
+           vocabulary might have been rebuilt and only the register left
+           unwritten.  The message now reads "... its tier in the register
+           is unchanged", which is true whatever failed: the register is
+           the authority on the tier and it is only ever written at the end.
+
 12 Sep 26  PYTHON IS AVAILABLE FROM SD BASIC AGAIN.
 
            The PY_ functions are back - PY_INITIALIZE, PY_RUNSTRING,
