@@ -4,6 +4,41 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+12 Sep 26  PYTHON IS AVAILABLE FROM SD BASIC AGAIN.
+
+           The PY_ functions are back - PY_INITIALIZE, PY_RUNSTRING,
+           PY_RUNFILE, PY_GETATTR, the dictionary and list families and
+           the rest, twenty in all.  A BASIC program can run Python
+           code, set and read Python variables, and pass strings, lists
+           and dictionaries in both directions.
+
+           WHAT IS DIFFERENT FROM BEFORE.  Python no longer runs inside
+           sd.exe.  It runs in a separate program, sdpy.exe, installed
+           alongside SD, and your session talks to it down a pipe.  You
+           do not have to start it or stop it: the first PY_ call in a
+           session starts it, and it goes away when the session ends.
+
+           The reason for the change is that an interpreter inside the
+           database process could crash it, could see everything it
+           could see, and tied SD to one exact Python version.  A
+           separate program has none of those properties.
+
+           YOU NEED PYTHON INSTALLED, and it must be an all-users
+           install - one done "for me only" cannot be used.  Python
+           3.13 or later.  If there is no Python, SD installs and runs
+           exactly as before and every PY_ function returns -12040;
+           nothing else is affected.
+
+           WHO MAY USE IT.  The same people who may reach the operating
+           system - the OS.EX setting in OS.USERS, or an administrator.
+           Python can read and write files and start programs, so it is
+           governed as the shell is, and a session that may not use
+           OS.EXECUTE cannot get an interpreter either.
+
+           $include SDPYFUNC.H declares all twenty functions.  Each
+           returns a status - 0 for success, or an error code listed
+           in SYSCOM ERR.H.
+
 11 Sep 26  FIXED: DELETE.FILE ... NO.QUERY STILL ASKED ONE QUESTION.
 
            Deleting a file whose data part lives in the system account,

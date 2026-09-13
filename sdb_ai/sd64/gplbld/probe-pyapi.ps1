@@ -40,12 +40,28 @@ if (-not $SkipAssertCurrent) {
     }
 }
 
-# UNELEVATED IS CORRECT AND IS NOT AN OVERSIGHT.  probe-catprivate needs an
-# elevated shell because LOGTO SDSYS is administrator-only there; this probe
-# was written and first run unelevated, and the -12040 it found was diagnosed
-# by proving THIS session may reach the OS.  Running it elevated would set
-# USR_ADMIN and take the gate's "an administrator always may" branch, which
-# measures a different question.
+# ***THIS NEEDS AN ELEVATED SHELL, AND THE COMMENT HERE PREVIOUSLY SAID THE
+# OPPOSITE.  CORRECTED 12 Sep 2026, MEASURED.***
+#
+# It said "UNELEVATED IS CORRECT AND IS NOT AN OVERSIGHT", on the strength of
+# one unelevated run that worked.  THAT RUN WORKED BY ACCIDENT.  LOGTO SDSYS
+# from an unelevated session reaches elevate('START'), which gates on
+# Start-Process -Verb RunAs (CPROC:2687) - a UAC consent.  A session driven
+# down a pipe has nobody to consent, so it HANGS at the LOGTO and the transcript
+# ends with a prompt whose next command never appears.
+#
+# The one run that worked had a RESIDENT sd-elevate helper serving its pipe,
+# left behind by an elevated cycle minutes earlier; with no helper the same
+# command hung twice in a row.  Measured both ways: helper pipe present ->
+# worked, no sd-elev-* pipe -> hung.
+#
+# ***WHAT THAT COSTS IN COVERAGE, SAID OUT LOUD.***  An elevated session sets
+# USR_ADMIN, so may_start_helper() returns on its "an administrator always may"
+# branch and the OS.USERS field 2 route is NOT exercised here.  This probe
+# therefore measures the PLUMBING - BASIC to CPython and back - and not the
+# gate.  probe-osex.ps1 asks the gate question separately, and exercising the
+# OS.USERS branch properly needs a non-administrator account, which is what
+# VerifyInstall1's throwaway test user exists for.
 
 $dataDir = Join-Path $env:ProgramData 'SD'
 $sdsys   = Join-Path $dataDir 'sdsys'
@@ -110,6 +126,22 @@ Write-Output ("  SD: " + $cmd)
 $out = Invoke-SD @($cmd)
 if (($out -notmatch 'Created DATA part as') -or -not (Test-Path -LiteralPath $ctlDir)) {
     Write-Output '  --- SD said: ---'; Write-Output $out
+    # NAME THE REAL CAUSE RATHER THAN THE SYMPTOM.  "fixture file not created"
+    # sent a reader looking at CREATE.FILE when the session had never got past
+    # the LOGTO, and the two look identical in the exit code.
+    if ($out -match 'did not finish in') {
+        Write-Output ''
+        if ($out -match 'LOGTO SDSYS' -and $out -notmatch 'Created DATA part as') {
+            Write-Output '  IT HUNG AT "LOGTO SDSYS", AND THE USUAL CAUSE IS ELEVATION.'
+            Write-Output '  An unelevated session reaches elevate(''START''), which raises a'
+            Write-Output '  UAC consent (CPROC:2687).  Nothing driven down a pipe can answer'
+            Write-Output '  one, so it waits until the timeout.'
+            Write-Output ''
+            Write-Output '  RUN THIS FROM AN ELEVATED PowerShell.  See the header for what'
+            Write-Output '  that costs: USR_ADMIN takes the gate''s permissive branch, so this'
+            Write-Output '  measures the plumbing and not the OS.USERS route.'
+        }
+    }
     Write-Output '  fixture file not created'
     exit 2
 }
@@ -204,6 +236,43 @@ Row ($run -match 'PYPRB-ATTR=SDPY-42') `
     'PY_GETATTR read back SDPY-42 - CPython evaluated 6*7 and the bytes came home'
 
 Row ($run -match 'PYPRB-FIN=0')    'PY_FINALIZE returned 0'
+
+# --- the DOCUMENTED route in ---------------------------------------------
+# The program above declares its own deffuns, which tests the CATALOGUED
+# programs without depending on how an include resolves.  The changelog tells
+# a user to write "$include SDPYFUNC.H", so that claim is driven too: a
+# shipped include record that does not resolve is a documentation defect
+# nobody would find until a user tried it.
+Write-Output ''
+Write-Output '=== the documented route: $include SDPYFUNC.H ============================='
+
+$incName = 'PYINC' + $stamp.Substring(9)
+$incSrc  = @(
+    '* Created by probe-pyapi.ps1 - safe to delete'
+    '$include SDPYFUNC.H'
+    '   st = PY_INITIALIZE()'
+    "   crt 'PYINC-INIT=':st"
+    '   fs = PY_FINALIZE()'
+    "   crt 'PYINC-DONE'"
+) -join "`r`n"
+Set-Content -LiteralPath (Join-Path $ctlDir $incName) -Value $incSrc -Encoding Ascii
+
+$cmd = "BASIC $ctlFile $incName"
+Write-Output ("  SD: " + $cmd)
+$incOut = Invoke-SD @($cmd)
+Write-Output '  --- BASIC said: ---'
+Write-Output $incOut
+$incBuilt = Test-Path -LiteralPath (Join-Path ($ctlDir + '.OUT') $incName)
+Row $incBuilt '$include SDPYFUNC.H compiles - the documented include resolves' `
+    $(if ($incBuilt) { '' } else { 'no object produced' })
+
+if ($incBuilt) {
+    $incRun = Invoke-SD @("RUN $ctlFile $incName")
+    Write-Output '  --- SD said: ---'
+    Write-Output $incRun
+    Row ($incRun -match 'PYINC-INIT=0') `
+        'a program using the documented include runs and initialises'
+}
 
 # Disqualifiers: the helper-missing code and the not-initialised code must not
 # appear anywhere.  -12040 is SD_PyErr_NoHelper.
