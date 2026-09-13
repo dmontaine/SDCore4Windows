@@ -823,6 +823,21 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # the caller's own account, and bounded - the defect it
                   # witnesses is a loop that never ends.
                   'verify-promptenter.ps1',
+                  # 12 Sep 26 - objective 2's helper, section 5.27.  sdpy.exe
+                  # is a NATIVE UCRT64 binary linked -lpython3; sd.exe is MSYS2
+                  # and section 5.3 says the runtimes never meet, which is the
+                  # whole reason this is a process and not a library.
+                  #
+                  # ***THEY COME OFF THIS LIST THE DAY THE INSTALLER SHIPS THE
+                  # HELPER.***  At that point sdpy.c moves to gplsrc with a
+                  # Makefile target and is named in stage.py or sd.iss like
+                  # anything else, and leaving it here would exempt a shipped
+                  # file from the staleness guard - the one thing this list
+                  # must never do.  The .exe names are here for probe-console's
+                  # reason: the global *.exe rule keeps them out of git, this
+                  # keeps them out of the staleness walk.
+                  'sdpy.c', 'sdpy.exe', 'build-sdpy.ps1',
+                  'test-sdpy-units.ps1',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.
