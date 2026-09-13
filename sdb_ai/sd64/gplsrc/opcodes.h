@@ -628,8 +628,14 @@ _opc_(0xCFFD, OP_CFFD,     "OPCFFD",     op_illegal2,  OPCODE_BYTE,         0)
    object opcode (PROJECT_STATUS.md 5.15).  Retired in place rather than
    deleted: removing the line would renumber every opcode after it and
    invalidate all compiled pcode.  op_illegal is how this file retires an
-   opcode - see OP_09, OP_9E, OP_BB. */
-_opc_(0xCFFE, OP_CFFE,     "OPCFFE",     op_illegal,   OPCODE_BYTE,         0)
+   opcode - see OP_09, OP_9E, OP_BB.
+
+   12 Sep 26 Windows port - ***AND THAT IS WHY IT COMES BACK AT THE SAME
+   NUMBER.*** PROJECT_STATUS.md 5.27 restores the opcode over a helper process
+   rather than an embedded interpreter.  Retiring it in place rather than
+   deleting it is what makes this a one-line change instead of a re-release of
+   every compiled object in every account. */
+_opc_(0xCFFE, OP_SDPYOBJ,  "SDPYOBJ",    op_sdpyobj,   OPCODE_BYTE,        -3)
 _opc_(0xCFFF, OP_SDEXT,    "SDEXT",      op_sdext,     OPCODE_BYTE,        -2)
 
 /* Secondary opcodes with private dispatch systems

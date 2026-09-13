@@ -305,5 +305,47 @@
    were removed with sdext_eguid.c.  PRE_RELEASE_FIXES 168. */
 
 /* 13 Aug 26 Windows port - the embedded Python error codes, -12001 to
-   -12036, were removed with the interpreter.  PROJECT_STATUS.md 5.15. */
+   -12036, were removed with the interpreter.  PROJECT_STATUS.md 5.15.
+
+   12 Sep 26 Windows port - RESTORED, with the SAME NUMBERS AND THE SAME
+   MEANINGS, for the helper process of PROJECT_STATUS.md 5.27.  Python is no
+   longer inside sd.exe: these travel back over a pipe from sdpy.exe, and
+   sdpy.c carries its own copy of the subset it returns.  The numbers are kept
+   because every PY_* documents "status() - 0 on success, error code as defined
+   in ERR.H" - reusing them means the documented contract survives the change
+   of mechanism, and renumbering would have broken it for no gain. */
+#define SD_PyEr_NotInit    -12001  /* interpreter not initialised */
+#define SD_PyEr_Dict       -12002  /* PyDict_New() failed */
+#define SD_PyEr_Builtin    -12003  /* failed to link __builtins__ into the scope */
+#define SD_PyEr_Excpt      -12004  /* exception while running code */
+#define SD_PyEr_FinalEr    -12005  /* error reported by PY_FINALIZE */
+#define SD_PyEr_NOF        -12006  /* could not open script file */
+#define SD_PyEr_Key        -12007  /* failed to find key in dictionary */
+#define SD_PyEr_ObToStr    -12008  /* failed to convert python object to string */
+#define SD_PyErr_UniToStr  -12009  /* error encoding unicode string to Latin */
+
+#define SD_PyErr_MainMod   -12010  /* cannot import __main__ */
+#define SD_PyErr_GlobDict  -12011  /* could not get __main__ dictionary */
+#define SD_PyErr_DictExsts -12012  /* dictionary already exists */
+#define SD_PyErr_NamSpcErr -12013  /* failed to add to namespace */
+#define SD_PyErr_ObjNOF    -12014  /* requested object does not exist */
+#define SD_PyErr_DictSet   -12015  /* failed to set dictionary key / value */
+#define SD_PyErr_DictDel   -12016  /* failed to delete dictionary key / value */
+#define SD_PyErr_NotDict   -12017  /* object is not a dictionary */
+#define SD_PyErr_EnLatin   -12018  /* error encoding Latin string to unicode */
+#define SD_PyErr_NotStr    -12019  /* object is not a string */
+#define SD_PyErr_DelObj    -12020  /* failed to remove object from the namespace */
+
+#define SD_PyErr_NoItems   -12030  /* object contains no items */
+#define SD_PyErr_CreStr    -12031  /* failed to create a python string object */
+#define SD_PyErr_ConCat    -12032  /* failed to concatenate python strings */
+#define SD_PyErr_LstItem   -12033  /* failed to access a list item */
+#define SD_PyErr_NotList   -12034  /* object is not a list */
+
+/* 12 Sep 26 Windows port - NEW, and the only number this restoration adds.
+   The helper is a PROCESS now, so it can fail in a way an in-process
+   interpreter never could: not be there.  Every other code above describes
+   something Python said; this one describes not having reached Python at all,
+   and the two must not be confused by a caller deciding whether to retry. */
+#define SD_PyErr_NoHelper  -12040  /* the helper could not be started or has died */
 /* END-CODE */

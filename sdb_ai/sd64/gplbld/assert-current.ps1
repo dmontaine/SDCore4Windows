@@ -836,16 +836,17 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # must never do.  The .exe names are here for probe-console's
                   # reason: the global *.exe rule keeps them out of git, this
                   # keeps them out of the staleness walk.
-                  'sdpy.c', 'sdpy.exe', 'build-sdpy.ps1',
-                  'test-sdpy-units.ps1',
-                  # 12 Sep 26 - SD's side of the same pipe.  sdpy_client.c is
-                  # MSYS2 code and WILL be compiled into sd.exe; it is here
-                  # rather than in gplsrc only until the opcodes are wired,
-                  # because a .c in gplsrc makes bin\ stale and that cycle is
-                  # worth paying once, for the whole integration, rather than
-                  # twice.  ***THEY MOVE TO gplsrc IN THAT COMMIT.***
-                  'sdpy_client.c', 'sdpy_client.h', 'build-sdpyclient.ps1',
-                  'test-sdpyclient.c', 'test-sdpyclient.exe',
+                  # 12 Sep 26 - THE SOURCES MOVED OUT OF THIS LIST WHEN THE
+                  # OPCODES WERE WIRED, WHICH IS THE RULE ABOVE WORKING.
+                  # sdpy.c is gplsrc/sdpy/sdpy.c, sdpy_client.c and
+                  # sdpy_session.c are in gplsrc, and all three are watched by
+                  # the staleness walk like any other source - which is
+                  # correct, because sd.exe now contains two of them and ships
+                  # the third beside it.  What stays here is only the build and
+                  # test harness, which ships nowhere.
+                  'build-sdpy.ps1', 'test-sdpy-units.ps1', 'sdpy.exe',
+                  'build-sdpyclient.ps1', 'test-sdpyclient.c',
+                  'test-sdpyclient.exe',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.

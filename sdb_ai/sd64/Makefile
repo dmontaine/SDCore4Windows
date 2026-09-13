@@ -31,6 +31,10 @@ GPLSRC   := $(MAIN)gplsrc/
 GPLDOTSRC := $(MAIN)gpl.src
 GPLOBJ   := $(MAIN)gplobj/
 GPLBIN   := $(MAIN)bin/
+# 12 Sep 26 Windows port - the build scripts live here; the sdpy target calls
+# gplbld/build-sdpy.ps1 rather than carrying a second copy of its Python
+# detection.  PROJECT_STATUS.md 5.27.
+GPLBLD   := $(MAIN)gplbld/
 TERMINFO := $(MAIN)terminfo/
 VPATH    := $(GPLOBJ):$(GPLBIN):$(GPLSRC)
 
@@ -128,7 +132,7 @@ sd: BITSIZE := 64
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(ARCH)
-sd: $(SDOBJS) sdclilib sdsvc sdtic sdfix sdconv sdidx sdwind terminfo
+sd: $(SDOBJS) sdclilib sdsvc sdpy sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -158,7 +162,7 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc terminfo check-local check-remote check-api-admin
+.PHONY: sdclilib sdsvc sdpy terminfo check-local check-remote check-api-admin
 
 # 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
 # owner's ruling: "let's get rid of the client installers all together and just
@@ -281,6 +285,45 @@ sdsvc:
 	@echo Building native service wrapper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(SVCDIR)/sdsvc.c -ladvapi32 -o $(GPLBIN)sdsvc.exe
+
+# 12 Sep 26 Windows port - the Python helper, PROJECT_STATUS.md 5.27.
+#
+# ***NATIVE, LIKE sdsvc AND THE CLIENT DLLs, AND FOR THE SAME REASON.***  It
+# links python.org's python3.dll, which is an MSVC build; sd.exe is MSYS2; and
+# section 5.3 says the two runtimes never meet in one process.  They do not
+# meet here either - sd.exe talks to this over a PIPE (gplsrc/sdpy_client.c),
+# and nothing of Python is linked into the server.
+#
+# ***IT IS IN ITS OWN DIRECTORY FOR THE REASON sdsvc IS.***  TEMPSRCS is
+# $(wildcard $(GPLSRC)*.c), so a native source sitting in gplsrc/ would be
+# swept into OBJS and compiled with the POSIX flags.  gplsrc/sdpy/ keeps it out
+# of that wildcard; sdpy_client.c and sdpy_session.c stay in gplsrc BECAUSE
+# they are MSYS2 code and do belong in sd.exe.
+#
+# -lpython3 IS THE STABLE ABI, NOT -lpython314, and that is measured rather
+# than assumed: gplbld/probe-pylimited.c, 12 Sep 2026, built both ways - the
+# limited build bound python3.dll AND pulled in the concrete python314.DLL
+# behind it, compiled against a 3.13 floor and running 3.14.7.  One binary
+# therefore serves every Python at or above the floor.
+#
+# THE PYTHON IS FOUND IN THE PEP 514 HIVE, NOT ON PATH - section 8 constraint
+# 1: PATH answered this question wrongly in BOTH directions on the development
+# box.  PYDIR can be overridden; the default is read out of the registry.
+# ***THE PYTHON IS FOUND BY gplbld/build-sdpy.ps1, NOT BY PARSING THE REGISTRY
+# HERE.***  That script already reads the PEP 514 hive the way section 8
+# constraint 1 requires, it is the same code a person runs by hand, and one
+# implementation cannot disagree with itself.  The first version of this target
+# did its own "reg query" and got two different wrong answers before the third
+# was right - which is the argument for not having a second copy.
+#
+# -SkipIfNoPython: a machine with no Python still builds.  SD runs without the
+# helper and every PY_* answers -12040 until one is installed, so failing the
+# whole build here would be wrong.  A person running the script by hand gets
+# exit 2 instead, because they asked for a build and did not get one.
+sdpy:
+	@echo Building native Python helper
+	@powershell -ExecutionPolicy Bypass -File $(GPLBLD)build-sdpy.ps1 \
+	    -Out "$(shell cygpath -w $(GPLBIN))sdpy.exe" -SkipIfNoPython
 
 sdtic: sdtic.o inipath.o
 	@echo Linking $@

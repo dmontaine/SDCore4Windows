@@ -59,10 +59,12 @@ $env:PATH = (Split-Path -Parent $Cc) + ';' + $env:PATH
 
 if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Force }
 
-$args = @('-std=gnu17', '-O2', '-Wall', '-Wextra', $client, $driver, '-o', $out)
-Say ('command  : gcc ' + ($args -join ' '))
+# NOT $args - it is a PowerShell automatic variable.  See build-sdpy.ps1 and
+# CLAUDE.md's instrument section; the same name cost a session once already.
+$ccArgs = @('-std=gnu17', '-O2', '-Wall', '-Wextra', $client, $driver, '-o', $out)
+Say ('command  : gcc ' + ($ccArgs -join ' '))
 Write-Output ''
-$log = & $Cc @args 2>&1
+$log = & $Cc @ccArgs 2>&1
 $code = $LASTEXITCODE
 foreach ($l in $log) { Write-Output ('  ' + $l) }
 

@@ -53,6 +53,10 @@
 #include "sd.h"
 #include "keys.h"
 #include "sd_scram.h"
+/* 12 Sep 26 Windows port - SD's side of the Python helper pipe, 5.27.  This
+   header names no Python type and includes no Python header; the runtimes stay
+   apart (5.3) and only bytes cross. */
+#include "sdpy_client.h"
 
 /* Modified by Composer AI - 2026/06/10.
    k_error() longjmps and never returns; redeclare noreturn for analyzer. */
@@ -70,6 +74,16 @@ char* NullString(void);
 Private void sdme_err_rsp(int errnbr);
 Private void scram_reply(char* value);
 Private long scram_arg_long(const char* text);
+
+/* 12 Sep 26 Windows port - the Python adapters, PROJECT_STATUS.md 5.27. */
+Private int  py_ext_call(const char* verb, const char* arg,
+                         char** payload, size_t* plen);
+Private void py_ext_int(const char* verb, const char* arg);
+Private void py_ext_str(const char* verb, const char* arg);
+Private void py_ext_isinit(void);
+
+extern SDPY* sdpy_session(int* err_code);   /* sdpy_session.c */
+extern int   sdpy_session_running(void);
 
 /* ======================================================================
    op_sdext()   op code for BASIC function  SDME.EXT   
@@ -347,6 +361,47 @@ void op_sdext() {
        PROJECT_STATUS.md 5.5.  These keys now fall through to the unknown-key
        response below, which is what they are. */
 
+    /* 12 Sep 26 Windows port - THE PYTHON LIFECYCLE AND RUN KEYS ARE BACK,
+       over a helper process rather than an embedded interpreter.
+       PROJECT_STATUS.md 5.27.  The object keys are the OTHER opcode,
+       op_sdpyobj.c (0xCFFE); these six are the ones the PY_* wrappers send
+       through SDEXT, and the split is the one the BASIC surface already had.
+
+       ***THE GATE IS NOT HERE, AND THAT IS DELIBERATE.***  Section 8
+       constraint 4: a permission test inside this switch would run with
+       process.program already pointing at an $internal PY_* wrapper, and
+       os_permitted() returns TRUE on HDR_INTERNAL before it ever reads the
+       username - so it would pass for every user, always.  The test lives in
+       sdpy_session.c, at the moment the helper process is STARTED, which is
+       the only point where the real caller is still visible. */
+    case SD_PyInit:
+      py_ext_int("INIT", NULL);
+      break;
+
+    case SD_PyFinal:
+      py_ext_int("FIN", NULL);
+      break;
+
+    case SD_IsPyInit:
+      /* ***THIS ONE MUST NOT START A HELPER TO ANSWER.***  "Is Python
+         running?" asked of a session that has none is answered 0, not by
+         starting one to find out - and not by a gate refusal either, because
+         the honest answer to the question is still no. */
+      py_ext_isinit();
+      break;
+
+    case SD_PyRunStr:
+      py_ext_int("RUNSTR", SDMEArgArray[0]);
+      break;
+
+    case SD_PyRunFile:
+      py_ext_int("RUNFILE", SDMEArgArray[0]);
+      break;
+
+    case SD_PyGetAtt:
+      py_ext_str("GETATTR", SDMEArgArray[0]);
+      break;
+
     default:
       /* unknown key */
       sdme_err_rsp(SD_EXT_KEY_ERR);
@@ -415,6 +470,84 @@ Private long scram_arg_long(const char* text) {
     return -1;
 
   return value;
+}
+
+/* ======================================================================
+   12 Sep 26 Windows port - the three Python adapters.  PROJECT_STATUS.md 5.27.
+
+   Each is a thin wrapper round one request to sdpy.exe.  Nothing of Python
+   appears in this file: section 5.3 keeps the runtimes apart and the only
+   thing crossing is bytes on a pipe.
+   ====================================================================== */
+
+/* One exchange.  Returns the helper's status, or SD_PyErr_NoHelper when there
+   was no exchange at all - a refused gate, a helper that will not start, or a
+   pipe that broke.  Those are not Python errors and must not borrow a Python
+   error's number. */
+Private int py_ext_call(const char* verb, const char* arg,
+                        char** payload, size_t* plen) {
+  SDPY* s;
+  int err_code = 0;
+  int status = 0;
+
+  if (payload != NULL) *payload = NULL;
+  if (plen != NULL) *plen = 0;
+
+  s = sdpy_session(&err_code);
+  if (s == NULL)
+    return err_code != 0 ? err_code : SD_PyErr_NoHelper;
+
+  if (sdpy_call(s, verb, arg, arg ? strlen(arg) : 0, NULL, 0, NULL, 0,
+                &status, payload, plen) != 0)
+    return SD_PyErr_NoHelper;
+
+  return status;
+}
+
+/* Integer result: the status is the value, which is what PY_INITIALIZE,
+   PY_FINALIZE, PY_RUNSTRING and PY_RUNFILE all return. */
+Private void py_ext_int(const char* verb, const char* arg) {
+  char* payload = NULL;
+  size_t plen = 0;
+  int status = py_ext_call(verb, arg, &payload, &plen);
+
+  process.status = status;
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = (int32_t)status;
+}
+
+/* String result: PY_GETATTR's "on success returned string or empty string on
+   failure".  The traceback in the payload on an error path is for a human and
+   is NOT handed back as the value - that would make a failed call look like a
+   successful one that returned prose. */
+Private void py_ext_str(const char* verb, const char* arg) {
+  char* payload = NULL;
+  size_t plen = 0;
+  int status = py_ext_call(verb, arg, &payload, &plen);
+
+  process.status = status;
+  if (status != 0 || payload == NULL)
+    k_put_c_string("", e_stack);
+  else
+    k_put_string(payload, (int)plen, e_stack);
+  e_stack++;
+}
+
+/* PY_IS_INITIALIZED, which must answer without starting anything. */
+Private void py_ext_isinit(void) {
+  int running = 0;
+
+  if (sdpy_session_running()) {
+    char* payload = NULL;
+    size_t plen = 0;
+    if (py_ext_call("ISINIT", NULL, &payload, &plen) == 0 &&
+        payload != NULL && plen >= 1 && payload[0] == '1')
+      running = 1;
+  }
+
+  process.status = 0;
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = (int32_t)running;
 }
 
 /* generic error return with null response, setting process.status */

@@ -476,7 +476,12 @@
 #define SD_PyObjLen       2216  /* get object length (return SD_INT_OVERFLW  err overflow > 32bits)*/
 #define SD_PyObjType      2217  /* get object type*/
 
-//#define SD_PyListCrte     2220  /* create list object */
+/* 12 Sep 26 Windows port - UNCOMMENTED.  It was commented out with its number
+   already reserved, which is why the removed API could append to a list, clear
+   one and read one but could only CREATE one by running a script that said
+   "x = []".  PROJECT_STATUS.md 5.27 fills the gap at the number that was kept
+   for it rather than inventing a new one. */
+#define SD_PyListCrte     2220  /* create list object */
 #define SD_PyListGet      2221  /* get list items as fld mrk separated string */
 #define SD_PyListAppd     2222  /* append object to list     */
 #define SD_PyListClr      2223  /* clear list object   */

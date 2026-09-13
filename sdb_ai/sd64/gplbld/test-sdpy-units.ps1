@@ -36,7 +36,11 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$exe  = Join-Path $here 'sdpy.exe'
+# 12 Sep 26 - the Makefile builds it into bin\ now that the opcodes are wired
+# and sdpy.c lives in gplsrc/sdpy/.  A copy beside this script still works, for
+# the hand-built case before "make sd" has run.
+$exe = Join-Path $here '..\bin\sdpy.exe'
+if (-not (Test-Path -LiteralPath $exe)) { $exe = Join-Path $here 'sdpy.exe' }
 
 $pass = 0
 $fail = 0

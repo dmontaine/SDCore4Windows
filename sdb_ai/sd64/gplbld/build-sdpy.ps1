@@ -28,13 +28,24 @@
 
 [CmdletBinding()]
 param(
-    [string]$Cc = 'C:\msys64\ucrt64\bin\gcc.exe'
+    [string]$Cc = 'C:\msys64\ucrt64\bin\gcc.exe',
+    [string]$Out,
+    # 12 Sep 26 - the Makefile calls this, and a build must not FAIL because
+    # the machine has no Python: SD runs perfectly well without the helper and
+    # every PY_* answers -12040 until it is installed.  "make sd" passes this;
+    # a person running the script by hand does not and gets exit 2, because
+    # they asked for a build and did not get one.
+    [switch]$SkipIfNoPython
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$src  = Join-Path $here 'sdpy.c'
-$out  = Join-Path $here 'sdpy.exe'
+# 12 Sep 26 - sdpy.c moved to gplsrc/sdpy/ when the opcodes were wired.  Its
+# own directory, for the reason sdsvc has one: TEMPSRCS is a wildcard over
+# gplsrc/*.c and would otherwise compile this native source with POSIX flags.
+$src  = Join-Path $here '..\gplsrc\sdpy\sdpy.c'
+if (-not (Test-Path -LiteralPath $src)) { $src = Join-Path $here 'sdpy.c' }
+$out  = if ($Out) { $Out } else { Join-Path $here 'sdpy.exe' }
 
 function Say([string]$m) { Write-Output ("build-sdpy: " + $m) }
 
@@ -56,6 +67,11 @@ if (Test-Path -LiteralPath $root) {
 if ($pyDir -eq '') {
     Say 'no all-users Python under HKLM\SOFTWARE\Python\PythonCore.'
     Say '  python-detect.ps1 is the detector; a per-user install cannot be used.'
+    if ($SkipIfNoPython) {
+        Say '  -SkipIfNoPython given: the build carries on without the helper,'
+        Say '  and every PY_* answers -12040 until a Python is installed.'
+        exit 0
+    }
     exit 2
 }
 
@@ -79,7 +95,12 @@ Say ("output   : " + $out)
 # exits 1 having printed nothing at all.
 $env:PATH = (Split-Path -Parent $Cc) + ';' + $env:PATH
 
-$args = @(
+# ***NOT $args.***  CLAUDE.md's instrument section records what that cost:
+# $args is a PowerShell AUTOMATIC variable, and a probe that used it as a
+# parameter name had it clobbered, so Start-Process received no switches, the
+# gate never fired, and the verdict passed trivially.  Met again here - the
+# command line echoed correctly and the compiler was handed nothing.
+$ccArgs = @(
     $src,
     '-O2', '-Wall', '-Wextra',
     ('-I' + $inc),
@@ -87,13 +108,52 @@ $args = @(
     '-lpython3',
     '-o', $out
 )
-Say ('command  : ' + (Split-Path -Leaf $Cc) + ' ' + ($args -join ' '))
+Say ('command  : ' + (Split-Path -Leaf $Cc) + ' ' + ($ccArgs -join ' '))
 Write-Output ''
 
 if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Force }
 
-$log = & $Cc @args 2>&1
-$code = $LASTEXITCODE
+# ***REPORT WHY, NOT JUST THAT.***  "gcc printed nothing" is a verdict with no
+# evidence under it - the thing section 0 forbids - and it was exactly what
+# this script said while the real cause was invisible.  A launch failure
+# throws; a compile failure does not.  The two need telling apart.
+$log = $null
+$code = $null
+try {
+    # ***2>&1 IS SAFE ONLY WITH EAP RELAXED, AND NO TEMP FILE IS USED AT ALL.***
+    # Two traps met here in one line, both already in this project's record:
+    #
+    #   RELEASE_1.1_FIXES.md 16 - in PowerShell 5.1 redirecting a native
+    #   command's stderr wraps every line in an ErrorRecord, and under
+    #   $ErrorActionPreference = 'Stop' that is TERMINATING.  A compiler
+    #   WARNING would abort the build.
+    #
+    #   And routing stderr to [IO.Path]::GetTempFileName() instead fails under
+    #   make with "Access to the path is denied": the shell make runs does not
+    #   hand a native child a usable TMP, so .NET falls back to the Windows
+    #   directory.  That is the same root cause as the sdsvc target's failure
+    #   in the same shell, and it is not worth a temp file to meet it.
+    $savedEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $log = & $Cc @ccArgs 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $savedEap
+} catch {
+    $ErrorActionPreference = 'Stop'
+    Write-Output ''
+    Say ('COULD NOT LAUNCH THE COMPILER: ' + $_.Exception.Message)
+    Say ('  tried   : ' + $Cc)
+    Say ('  PATH[0] : ' + ($env:PATH -split ';')[0])
+    exit 2
+}
+if ($null -eq $code) {
+    Write-Output ''
+    Say 'the compiler produced no exit code at all, which means it never ran.'
+    Say ('  tried   : ' + $Cc)
+    Say '  what it did say:'
+    foreach ($l in @($log)) { Write-Output ('    | ' + $l) }
+    exit 2
+}
 foreach ($l in $log) { Write-Output ('  ' + $l) }
 
 # REFUSE THE NULL CASE.  A zero exit with no binary is not a build, and gcc can

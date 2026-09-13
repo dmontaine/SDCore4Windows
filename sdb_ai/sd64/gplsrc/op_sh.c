@@ -110,6 +110,33 @@ void op_shcap() {
 }
 
 /* ======================================================================
+   sd_os_permitted()  -  os_permitted() for callers outside this file.
+
+   12 Sep 26 Windows port - PROJECT_STATUS.md 5.27 and section 8 constraint 4.
+
+   ***THIS EXISTS SO THE PYTHON GATE ASKS THE SAME QUESTION AS THE SHELL GATE,
+   RATHER THAN A SECOND COPY OF IT.***  sdpy_session.c decides whether a
+   session may start a Python helper, and constraint 4's whole point is that
+   the answer must be the OS-access answer: Python's os.system never reaches
+   op_sh.c:156, so a session that may not use the shell must not get an
+   interpreter either.  Two implementations of one rule would drift, and the
+   drift would be silent and in the permissive direction.
+
+   os_permitted() itself stays Private and unchanged - including its PRIV_WHY
+   tri-state, which test-privwhy-units guards - and this is a wrapper, not a
+   copy.
+
+   ***THE CALLER MUST NOT BE INSIDE A $internal PROGRAM WHEN IT ASKS.***
+   os_permitted()'s first test short-circuits on HDR_INTERNAL, and all 20 PY_*
+   carry $internal, so asking from inside one passes for every user.  The only
+   correct moment is before any wrapper is in process.program - which is why
+   the helper is started from the opcode rather than from BASIC. */
+
+bool sd_os_permitted(PRIV_WHY* why) {
+  return os_permitted(why);
+}
+
+/* ======================================================================
    os_permitted()  -  May this session reach the operating system?         */
 
 /* 19 Aug 26 Windows port - PROJECT_STATUS.md section 4, and the C half of
