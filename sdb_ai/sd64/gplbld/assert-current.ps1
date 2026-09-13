@@ -806,6 +806,16 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # nothing unaccounted and nothing double-claimed - so the
                   # verdict is driven directly here.
                   'test-basicfuncscov-units.ps1',
+                  # 12 Sep 26 - RELEASE_1.1_FIXES.md 6's guard, listed in the
+                  # commit that creates it.  A prompt fix has two halves in two
+                  # files - the default in gpl.bp, the (y/<n>) marker in
+                  # messages - and either works alone while both are wrong
+                  # alone.  6131 had the default and not the marker for a day,
+                  # with the shipped changelog already telling users otherwise.
+                  # It DERIVES the prompt set by walking gpl.bp rather than
+                  # holding a list, so a new defaulted prompt is covered the
+                  # moment it is written.
+                  'test-promptdefaults-units.ps1',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.
