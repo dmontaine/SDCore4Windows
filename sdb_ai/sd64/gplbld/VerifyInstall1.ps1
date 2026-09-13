@@ -54,6 +54,31 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 12 Sep 26 - RE-DERIVED AGAIN, on adding verify-promptenter.ps1
+# (RELEASE_1.1_FIXES 6, owner's ruling).  THE BLOCK BELOW READ 49 / 20 / 25 AND
+# WAS STALE IN TWO COLUMNS AGAIN - the directory has grown by three and
+# VerifyInstall2 by two since 4 Sep, neither of them this file's doing.  That is
+# twice running that re-deriving found a change nobody was looking for, which is
+# the argument for the rule rather than an accident of it:
+#
+#     52 verify-*.ps1 in the directory
+#     21 named in this file           (20 before verify-promptenter)
+#     27 named in VerifyInstall2.ps1
+#     -- 48 accounted for, FOUR not named in either table, AND ALL FOUR ARE
+#        CORRECTLY OUT - the same four again, checked rather than assumed:
+#
+#   verify-doors.ps1, verify-doors-admin.ps1  CHILDREN of verify-doors-suite.ps1
+#   verify-acctmsgs.ps1                       a child of those and of
+#                                             verify-tierchange.ps1
+#   verify-upgrade.ps1                        CANNOT be a step: a two-phase
+#                                             hand-run (-Snapshot, install over
+#                                             the top, -Compare) that brackets
+#                                             an installer run
+#
+# AND NO FILE IS IN BOTH TABLES, checked by intersecting the two name lists:
+# empty.
+#
+# (The superseded 4 Sep block follows, kept because its reasoning stands.)
 # 04 Sep 26 - RE-DERIVED AGAIN, on adding verify-localconnect.ps1
 # (PRE_RELEASE_FIXES 163).  THE BLOCK BELOW READ 47 / 19 / 24 AND WAS STALE IN
 # TWO COLUMNS, not one: this file gained verify-localconnect and VerifyInstall2
@@ -645,6 +670,29 @@ $steps = @(
     # 0 failures - so it is not being wired in untested, which is the rule
     # verify-txn and verify-lineendings above both record.
     @{ Name = 'verify-basicfuncs.ps1';   P = @{} },
+    # 12 Sep 26 - RELEASE_1.1_FIXES.md 6, owner's ruling.  IT PRESSES ENTER at
+    # prompt 6131, which nothing in this project had ever done: all seven of
+    # entry 6's prompts had only ever been answered with a real Y or N, so the
+    # DEFAULTS THEMSELVES were unwitnessed while the fix was recorded as done.
+    #
+    # It sits HERE, beside verify-basicfuncs, for that script's own reason: both
+    # drive SD in the caller's own account, unelevated, with no run token and no
+    # Windows account created.  Nothing above it is disturbed by it.
+    #
+    # WHAT IT COSTS: two sd.exe sessions and a file created and deleted in don.
+    # Measured 8 of 8, exit 0, on the 19:47:59 install before being wired in -
+    # the rule verify-txn, verify-lineendings and verify-basicfuncs all record.
+    #
+    # ***ITS CONTROL IS THE STEP, NOT AN EXTRA.***  "The file survived Enter" is
+    # equally what a command that never ran produces, so the same prompt is
+    # answered Y and must delete.  A run where both answers leave the file is a
+    # FAIL rather than a pass.
+    #
+    # AND IT IS BOUNDED, because the defect it witnesses is a loop that never
+    # ends - 98.9 MB of the same question in 40 seconds when Linux measured it.
+    # Any sd.exe it leaves is killed BY PID DIFF, never by name: the service
+    # runs sd.exe too.
+    @{ Name = 'verify-promptenter.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer
