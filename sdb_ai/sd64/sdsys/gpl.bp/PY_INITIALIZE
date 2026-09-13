@@ -25,20 +25,36 @@ $catalog !py_initialize
 $include KEYS.H
 
 deffun PY_IS_INITIALIZED() calling '!PY_IS_INITIALIZED'
-deffun PY_RUNSTRING(py_script) calling '!PY_RUNSTRING'
+
+* 12 Sep 26 Windows port - THE NEWLINE RECONFIGURE IS GONE.  RELEASE_1.1 22.
+*
+* It ran a three-line script after a successful init:
+*
+*   import sys
+*   sys.stderr.reconfigure(newline='\r\n')
+*   sys.stdout.reconfigure(newline='\r\n')
+*
+* ***IT THREW EVERY TIME AND MADE A GOOD INIT REPORT -12004.***  Measured on
+* the 22:55:41 install: PY_INITIALIZE returned -12004 while PY_IS_INITIALIZED
+* answered 1 and every later call worked.
+*
+* reconfigure() is a TextIOWrapper method.  sdpy.c:231 replaces sys.stdout and
+* sys.stderr with an io.StringIO BEFORE ANY USER CODE CAN RUN, and that is a
+* requirement of the helper shape rather than a detail: stdout IS the protocol
+* channel, so a script that printed would corrupt the frame stream.  StringIO
+* has no reconfigure - measured, AttributeError - so the FIRST line threw and
+* the other two never ran.
+*
+* SO NOTHING IS LOST BY REMOVING IT.  The translation it asked for has not
+* happened since the interpreter moved out of sd.exe; it was already dead, and
+* only the status code was wrong.  Output now comes back as payload through
+* the protocol, so line endings are the caller's business at this end.
 
 * skip initialize if already so
 if py_is_initialized() then
   rtnstat = 0
 end else
   rtnstat = SDEXT('',@FALSE,SD_PyInit)
-  if rtnstat = 0 then ;* success, setup stderr and stdout to include carriage return
-    lf = char(10)
-    script  = "import sys":lf
-    script := "sys.stderr.reconfigure(newline='\r\n')":lf
-    script := "sys.stdout.reconfigure(newline='\r\n')":lf
-    rtnstat = PY_RUNSTRING(script)
-  end
 end
 return rtnstat
 
