@@ -78,6 +78,17 @@ $probe  = Join-Path $Sd64 'gplsrc\sdclilib\localtest\remote-connect-test.exe'
 $audit  = Join-Path $env:ProgramData 'SD\sdsys\audit'
 $ESC    = [char]27
 
+# 13 Sep 26 - RELEASE_1.1 24.  This verifier used to ASSUME a listener was
+# already up and Refuse if not, alone among the API verifiers.  The installed
+# sd.conf ships APIPORT commented, so run in isolation (-Only verify-apiname)
+# it always failed, and in the suite it passed only when a predecessor happened
+# to leave the port on - measured red on b143/b144, green on b140 by that
+# accident.  It now enables the listener itself, the same way verify-apiport
+# and six others do, and restores sd.conf in the finally.
+$conf    = Join-Path $env:ProgramData 'SD\sd.conf'
+$backup  = $conf + '.before-apiname'
+$SvcName = 'SD'
+
 # LOCALAPPDATA, not under ProgramData\SD: it is the same directory elevated or
 # not, so an unelevated session afterwards can read what this wrote.
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
@@ -128,6 +139,29 @@ function Refuse($msg) {
 }
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
+
+# 13 Sep 26 - RELEASE_1.1 24.  Copied from verify-apiport.ps1 verbatim: wait on
+# the PROCESSES, not the SCM, because sc.exe stop returns before sdwind is gone
+# (restart-sd.ps1's header has the measurement).
+function Stop-SD {
+    if (Get-Service -Name $SvcName -ErrorAction SilentlyContinue) {
+        & "$env:SystemRoot\System32\sc.exe" stop $SvcName | Out-Null
+    }
+    $deadline = (Get-Date).AddSeconds(45)
+    while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+    }
+    return -not [bool](Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue)
+}
+
+function Start-SD {
+    & "$env:SystemRoot\System32\sc.exe" start $SvcName | Out-Null
+    $deadline = (Get-Date).AddSeconds(45)
+    while (-not (Get-Process -Name sdwind -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+    }
+    return [bool](Get-Process -Name sdwind -ErrorAction SilentlyContinue)
+}
 
 function Invoke-SD([string[]]$commands) {
     # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
@@ -198,6 +232,7 @@ Step 0 'Checking the installed tree matches source'
 if ($LASTEXITCODE -ne 0) { Refuse 'assert-current says the install is not current. Cycle first.' }
 
 $restoreNeeded = $false
+$portAddedByUs = $false
 try {
     # -----------------------------------------------------------------------
     Step 1 'Making an account the API can reach'
@@ -205,9 +240,34 @@ try {
     if (-not (Get-Process -Name sdwind -ErrorAction SilentlyContinue)) {
         Refuse 'sdwind is not running - start SD before running this.'
     }
+
+    # 13 Sep 26 - RELEASE_1.1 24.  ENABLE THE LISTENER IF IT IS OFF, rather than
+    # refuse.  The baseline sd.conf ships APIPORT commented, so in isolation
+    # nothing has turned it on; verify-apiport.ps1:275-296 does exactly this and
+    # this mirrors it.  A listener that is ALREADY up is left alone (portAddedByUs
+    # stays false, so the finally does not disturb an sd.conf this run did not
+    # write).
     $listening = [bool](netstat -an | Select-String (':' + $Port) | Select-String 'LISTENING')
-    Note 'API port is listening' $true $listening
-    if (-not $listening) { Refuse "Nothing is listening on $Port." }
+    if (-not $listening) {
+        Write-Host "  no listener on $Port - enabling APIPORT and restarting SD"
+        Copy-Item -LiteralPath $conf -Destination $backup -Force
+        $lines = @(Get-Content -LiteralPath $conf) | Where-Object { $_ -notmatch '^\s*APIPORT\s*=' }
+        $lines += ('APIPORT=' + $Port)
+        Set-Content -LiteralPath $conf -Value $lines -Encoding Ascii
+        $portAddedByUs = $true
+        if (-not (Stop-SD))  { Refuse 'SD would not stop while enabling the listener.' }
+        if (-not (Start-SD)) { Refuse 'SD would not start again after enabling the listener - read the SD error log.' }
+        $listening = [bool](netstat -an | Select-String (':' + $Port) | Select-String 'LISTENING')
+    }
+    # ***A LISTENER THIS STEP COULD NOT RAISE IS A cannot-run, NOT A FAIL.***
+    # RELEASE_1.1 24's second half.  Scoring it through Note() would set
+    # $script:failed and make Refuse exit 1 - a socket precondition filed as a
+    # charset FAIL, indistinguishable in the summary.  So it is NOT a Note: if
+    # the listener is up (whether it always was, or this step raised it) the run
+    # proceeds to the checks that ARE this verifier's subject; if not, Refuse
+    # exits 2 because no decisive check has run yet.
+    if (-not $listening) { Refuse "Nothing is listening on $Port even after enabling APIPORT and restarting." }
+    Write-Host ("  listener on {0}: up{1}" -f $Port, $(if ($portAddedByUs) { ' (this run enabled it)' } else { ' (already)' }))
 
     # Two passwords, and they are not the same thing - verify-apiport.ps1 has
     # the reasoning. The Windows one may hold punctuation; the SD one stays
@@ -406,6 +466,22 @@ finally {
     } elseif ($restoreNeeded) {
         Write-Host ''
         Write-Host "-Keep: $Prefix still exists and is still in sdapi." -ForegroundColor Yellow
+    }
+
+    # 13 Sep 26 - RELEASE_1.1 24.  Put sd.conf back if THIS run enabled the
+    # listener, and only then - a run that found it already up must not touch
+    # the file.  In the finally so it runs on every exit path, as
+    # verify-apiport.ps1:404 does.  -Keep leaves it set, with the restore line.
+    if ($portAddedByUs -and (Test-Path -LiteralPath $backup)) {
+        if (-not $Keep) {
+            Copy-Item -LiteralPath $backup -Destination $conf -Force
+            Remove-Item -LiteralPath $backup -Force
+            Write-Host '   sd.conf restored'
+            if (Stop-SD) { $null = Start-SD }
+        } else {
+            Write-Host "-Keep: APIPORT=$Port is STILL SET.  Put it back with:" -ForegroundColor Yellow
+            Write-Host "  Copy-Item '$backup' '$conf' -Force, then restart SD"
+        }
     }
 }
 

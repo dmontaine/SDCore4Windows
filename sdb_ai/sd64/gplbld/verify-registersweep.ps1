@@ -243,10 +243,18 @@ if (Test-Path -LiteralPath $sweepLog) { $sweepLogBefore = (@(Get-Content -Litera
 
 Write-Host ''
 Write-Host '--- restarting the SD service (this is what runs the sweep)'
-try {
-    Restart-Service -Name 'SD' -Force -ErrorAction Stop
-} catch {
-    Stop-Now ('the SD service would not restart - ' + $_.Exception.Message)
+# 13 Sep 26 - RELEASE_1.1 25.  Was Restart-Service -Name 'SD' -Force, which
+# raised "Cannot stop SD service" in the b143 suite: it runs right after
+# verify-tierapi has cycled the service twice, and Restart-Service asks the SCM
+# to stop, which returns before sdwind is gone (restart-sd.ps1's header has the
+# measurement).  restart-sd.ps1 waits on the PROCESSES and falls back to
+# "sd -stop", which is the whole reason it exists; the b144 rerun in isolation
+# had already gone green, confirming the failure was that racing stop and not
+# the sweep.  This script's own $up loop below still re-verifies independently.
+$restartSd = Join-Path $Gplbld 'restart-sd.ps1'
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $restartSd | ForEach-Object { Write-Host ('   ' + $_) }
+if ($LASTEXITCODE -ne 0) {
+    Stop-Now ('the SD service would not restart - restart-sd.ps1 exited ' + $LASTEXITCODE)
 }
 
 $up = $false
