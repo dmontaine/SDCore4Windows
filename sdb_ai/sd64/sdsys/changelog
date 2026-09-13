@@ -33,7 +33,14 @@ while porting from it.
            system - the OS.EX setting in OS.USERS, or an administrator.
            Python can read and write files and start programs, so it is
            governed as the shell is, and a session that may not use
-           OS.EXECUTE cannot get an interpreter either.
+           OS.EXECUTE cannot get an interpreter either.  In that session
+           PY_INITIALIZE returns -12041, as does every PY_ function that
+           returns a status; the ones that return a value return an
+           empty string and set STATUS() to -12041.  If SD could not
+           tell - the OS.USERS record exists but could not be read, or
+           has no second field - the code is -12042 instead, and one
+           line in the errlog says which.  The decision is made once, at
+           the first PY_ call, and stands for the rest of the session.
 
            $include SDPYFUNC.H declares all twenty functions.  Each
            returns a status - 0 for success, or an error code listed

@@ -19,10 +19,20 @@
  * ...so a gate called from inside a PY_* passes for EVERY user, always.  The
  * entry's own word for that is decoration.
  *
- * ***SO THE GATE IS HERE, AT THE MOMENT THE PROCESS IS STARTED***, where
- * process.program is not yet an $internal wrapper and the real user is still
- * visible.  It is os_permitted()'s SECOND AND THIRD tests without its first:
- * an administrator always may, otherwise the os.users lookup decides.
+ * ***SO THE GATE IS HERE, AT THE MOMENT THE PROCESS IS STARTED***, and it
+ * asks os_permitted()'s SECOND AND THIRD tests without its first: an
+ * administrator always may, otherwise the os.users lookup decides.
+ *
+ * ***13 Sep 26 - THIS PARAGRAPH USED TO SAY "where process.program is not yet
+ * an $internal wrapper and the real user is still visible", AND THAT WAS
+ * FALSE.  RELEASE_1.1 23.***  The opcode that reaches sdpy_session() is
+ * executed BY !PY_INITIALIZE, whose header flags (0x22, HDR_INTERNAL set) are
+ * ORed into process.program.flags by k_call().  So sd_os_permitted(), which
+ * then called the whole of os_permitted(), took test 1 and answered TRUE for
+ * every user - the gate below was decoration for exactly the reason the
+ * paragraph above gives.  Skipping test 1 is now done in op_sh.c
+ * (os_user_permitted()), not by choosing a moment: there is no moment inside
+ * a PY_* call at which the wrapper is not in process.program.
  *
  * ***AND IT IS CHECKED ONCE PER SESSION, NOT ONCE PER CALL, BECAUSE THE
  * PROCESS IS THE PRIVILEGE.***  Once a helper exists, everything reachable
@@ -121,9 +131,9 @@ static const char* helper_path(void) {
 /* ***THE GATE.***  TRUE if this session may start a helper.
  *
  * os_permitted()'s own first test is the one that must NOT be reused: it
- * short-circuits on HDR_INTERNAL, which every PY_* carries.  Here the caller
- * is the opcode, before any PY_* wrapper is in process.program, so asking
- * os_permitted() at this point asks the real question about the real user. */
+ * short-circuits on HDR_INTERNAL, which every PY_* carries - and the caller
+ * IS inside a PY_* wrapper when this runs (see the banner).  sd_os_permitted()
+ * therefore asks os_user_permitted(), tests 2 and 3 only, since 13 Sep 26. */
 static int may_start_helper(PRIV_WHY* why) {
   if (why != NULL) *why = PRIV_ANSWERED;
   if (my_uptr == NULL)
@@ -190,6 +200,11 @@ SDPY* sdpy_session(int* err_code) {
                        "this session may not start Python: the permission could not be determined (%s)",
                        priv_why_text(why));
         helper_refused_code = SD_PyErr_PrivUnknown;
+        /* 13 Sep 26 - AND SAY SO IN THE LOG, as op_sh.c:277 does for
+           OS.EXECUTE.  PRE_RELEASE 96's rule: an undetermined answer refuses
+           but must not be silent, and helper_error above is read by nobody
+           (RELEASE_1.1 21).  Same helper, same wording, one log line. */
+        priv_log_undetermined("Python helper start", why);
       }
       if (err_code != NULL) *err_code = helper_refused_code;
       return NULL;

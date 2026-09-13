@@ -211,10 +211,16 @@ $ErrorActionPreference = 'Stop'
 #   whose header promises every entry is a name really produced AS A PROFILE;
 #   and it widened a regex that the 26 Aug note above warns is one step from
 #   being reused for a user or group sweep, in a direction nobody has audited.
+# 13 Sep 26 - "sdpyg" ADDED IN THE COMMIT THAT INVENTS THE FAMILY.
+#   verify-pygate.ps1 (RELEASE_1.1 23) composes sdpyg<Run> and VerifyInstall2
+#   derives it.  IN $stems, NOT $notProfiles: a real Windows account made by
+#   CREATE.ACCOUNT PROGRAMMER SSH and removed by DELETE.ACCOUNT, the same shape
+#   as sdpw directly above.  The fixture below is the name the first supported
+#   run (-Run b141) composes; it had not yet been produced when written.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
-           'sdtc', 'sdpw', 'sdsadm', 'sdapir')
+           'sdtc', 'sdpw', 'sdsadm', 'sdapir', 'sdpyg')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has
@@ -282,6 +288,10 @@ if ($SelfTest) {
         # administrator profile behind unswept.  Added in the commit that
         # created the verifier.
         'sdapirb124a', 'sdapirb124p', 'sdapir1a',
+        # 13 Sep 26 - verify-pygate's family (RELEASE_1.1 23).  One PROGRAMMER
+        # account per run, no suffix; this is what VerifyInstall2 -Run b141
+        # composes.  Added in the commit that created the verifier.
+        'sdpygb141',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -292,7 +302,7 @@ if ($SelfTest) {
         # REAL SD GROUPS - the old pattern matched the first two.
         'sdapi', 'sdssh', 'sdusers', 'sdadmins', 'sdsshonly', 'sdu_don',
         # a bare stem is not litter on its own
-        'sdacct', 'sdrt', 'sdtapi',
+        'sdacct', 'sdrt', 'sdtapi', 'sdpyg',
         # real things on this machine.  THE DEVELOPER'S OWN HOME DIRECTORY IS
         # READ, NOT TYPED - it was 'dmont', which stops guarding anything the
         # moment this runs on a machine whose profile folder is named something

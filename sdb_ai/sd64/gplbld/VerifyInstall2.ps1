@@ -183,6 +183,14 @@ param(
     # becomes a Windows account name AND the name of the record the run writes
     # into sdsys\os.users, which op_sh.c looks up verbatim.
     [string]$PrivPrefix  = '',   # verify-privundetermined.ps1 - one account
+    # 13 Sep 26 - verify-pygate.ps1, RELEASE_1.1 23 and 21's witness.  One
+    # throwaway PROGRAMMER account reached over ssh - the one session shape on
+    # this machine that is neither elevated (USR_ADMIN) nor a socket - so the
+    # Python gate's os.users branch is actually entered.  Lower case only, same
+    # derivation as $PrivPrefix and for the same two reasons: it becomes a
+    # Windows account name AND the os.users record name the run writes and
+    # op_sh.c looks up verbatim.
+    [string]$PyGatePrefix = '',  # verify-pygate.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -273,6 +281,11 @@ if ($Run) {
     # fixed prefix would therefore not merely collide on the account, it would
     # refuse on litter from its own last run.
     if (-not $PrivPrefix)  { $PrivPrefix  = "sdpw$Run" }
+    # 13 Sep 26 - verify-pygate.ps1's.  Same reasons as $PrivPrefix directly
+    # above: a fixed prefix would collide on the account AND refuse on its own
+    # os.users record from the previous run.  The stem is in
+    # clean-test-profiles.ps1, added in the same commit.
+    if (-not $PyGatePrefix) { $PyGatePrefix = "sdpyg$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -816,7 +829,27 @@ $steps = @(
     # IT IS: an elevated session sets USR_ADMIN, so may_start_helper() returns
     # on its "an administrator always may" branch and the OS.USERS field 2
     # route is never exercised.  This measures the plumbing, not the gate.
-    @{ Name = 'verify-pyapi.ps1'; P = @{} }
+    @{ Name = 'verify-pyapi.ps1'; P = @{} },
+
+    # 13 Sep 26 - THE GATE, which the step above says it does not cover.
+    # RELEASE_1.1 23, and the witness of 21's two new codes.  A throwaway
+    # PROGRAMMER account over ssh runs one compiled probe three times with only
+    # its os.users record varying: absent -> -12041, malformed -> -12042 and
+    # an errlog line, "yes","yes" -> 0 and SDPY-42 read back.
+    #
+    # ***IT EXISTS BECAUSE THE GATE WAS DECORATION AND EVERY GREEN AGREED WITH
+    # IT.***  As shipped on 12 Sep the wrapper called the whole of
+    # os_permitted(), whose first test answers TRUE on HDR_INTERNAL - and the
+    # opcode runs inside the $internal PY_* wrapper - so every user was
+    # admitted, and every elevated run passed on USR_ADMIN before reaching it.
+    # Found by tracing the call, confirmed by the flags word of the shipped
+    # object; this step is the run-time measurement, test-privwhy-units the
+    # free one.
+    #
+    # DIRECTLY AFTER verify-pyapi, deliberately: the two are the plumbing and
+    # the gate, and if the plumbing is dead this one's permitted leg fails
+    # for a reason the step above already named.
+    @{ Name = 'verify-pygate.ps1'; P = @{ Prefix = $PyGatePrefix } }
 )
 
 # 30 Aug 26 - -Only.  Shared filter, see suite-only.ps1.  It runs AFTER the

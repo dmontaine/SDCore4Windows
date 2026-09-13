@@ -124,7 +124,13 @@ $predicates = @(
     # exactly the guarded kind: two "return FALSE" exits that are the check
     # failing to complete rather than the answer being no.
     @{ Name = 'IsInteractive'; Text = $libText; Sig = 'bool IsInteractive(PRIV_WHY* why)' },
-    @{ Name = 'os_permitted';  Text = $shText;  Sig = 'Private bool os_permitted(PRIV_WHY* why) {' }
+    # 13 Sep 26 - RELEASE_1.1 23.  os_permitted() was split: it keeps the
+    # HDR_INTERNAL test and delegates, and tests 2 and 3 - every "return FALSE"
+    # this rule is about - moved to os_user_permitted().  The guard follows the
+    # body, in the same commit, or it would be examining a function with no
+    # failure exits and calling that clean.  Section 3 below covers the split
+    # itself.
+    @{ Name = 'os_user_permitted'; Text = $shText; Sig = 'Private bool os_user_permitted(PRIV_WHY* why) {' }
 )
 
 $checkedReturns = 0
@@ -162,13 +168,55 @@ Write-Output ("       examined {0} 'return FALSE' site(s)" -f $checkedReturns)
 # --- 3. The ENOENT discrimination, which is deliberate and easy to "tidy" away.
 Write-Output ''
 Write-Output '=== os.users: a missing record is the designed NO, not a failure ==='
-$osBody = Get-Body $shText 'Private bool os_permitted(PRIV_WHY* why) {'
+$osBody = Get-Body $shText 'Private bool os_user_permitted(PRIV_WHY* why) {'
 if ($null -ne $osBody) {
     Check 'the open() failure tests errno against ENOENT' $true `
           ($osBody -match 'errno\s*!=\s*ENOENT')
     Check 'it assigns PRIV_OPEN_FAILED for other errno values' $true `
           ($osBody -match 'PRIV_OPEN_FAILED')
 }
+
+# --- 3a. The split, and the one call that must never go back.  RELEASE_1.1 23.
+#
+# WHAT IT GUARDS.  The Python gate (sdpy_session.c) runs INSIDE the $internal
+# PY_* wrapper, so if sd_os_permitted() ever calls os_permitted() again it
+# takes the HDR_INTERNAL short-circuit and admits every user - which is
+# exactly how it shipped on 12 Sep 2026, with a comment beside it explaining
+# why it could not happen.  That compiles clean and warns about nothing, and
+# every elevated run passes anyway because USR_ADMIN short-circuits earlier.
+# The only run-time witness is verify-pygate in the elevated suite; this is the
+# free one.
+Write-Output ''
+Write-Output '=== the split: SH keeps test 1, the Python gate must not get it ==='
+$permBody = Get-Body $shText 'Private bool os_permitted(PRIV_WHY* why) {'
+Check 'os_permitted() body was found' $true ($null -ne $permBody)
+if ($null -ne $permBody) {
+    Check 'os_permitted() still tests HDR_INTERNAL first (SH from CPROC depends on it)' $true `
+          ($permBody -match 'HDR_INTERNAL')
+    Check 'os_permitted() delegates the rest to os_user_permitted()' $true `
+          ($permBody -match 'return\s+os_user_permitted\s*\(\s*why\s*\)')
+}
+Check 'os_user_permitted() does NOT test HDR_INTERNAL (the test that admits every PY_* caller)' $false `
+      (($null -ne $osBody) -and ($osBody -match 'HDR_INTERNAL'))
+Check 'os_user_permitted() keeps the USR_ADMIN test (an administrator always may)' $true `
+      (($null -ne $osBody) -and ($osBody -match 'USR_ADMIN'))
+
+$wrapBody = Get-Body $shText 'bool sd_os_permitted(PRIV_WHY* why) {'
+Check 'sd_os_permitted() body was found' $true ($null -ne $wrapBody)
+if ($null -ne $wrapBody) {
+    Check 'sd_os_permitted() calls os_user_permitted()' $true `
+          ($wrapBody -match '\bos_user_permitted\s*\(')
+    # THE REGRESSION.  \b keeps os_user_permitted( from satisfying this one.
+    Check 'sd_os_permitted() does NOT call os_permitted() - that is the 12 Sep defect' $false `
+          ($wrapBody -match '\bos_permitted\s*\(')
+}
+
+# AND THE GATE'S UNDETERMINED BRANCH LOGS, as OS.EXECUTE's does (op_sh.c).
+# helper_error is read by nobody (RELEASE_1.1 21), so without this line an
+# undetermined refusal of Python is silent - the class PRE_RELEASE 96 is for.
+$pyText = Get-Content -LiteralPath (Join-Path $sd64 'gplsrc\sdpy_session.c') -Raw
+Check 'sdpy_session.c logs the undetermined refusal through priv_log_undetermined' $true `
+      ($pyText -match 'priv_log_undetermined\s*\(\s*"Python helper start"')
 
 # --- 4. The logging helper is where the linker needs it, not beside the
 #        predicates.  linuxlb.o is linked into sdfix/sdtic/sdconv/sdidx, which

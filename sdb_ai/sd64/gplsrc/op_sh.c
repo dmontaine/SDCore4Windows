@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Sep 26 Windows port - os_permitted() split: tests 2 and 3 are now
+ *           os_user_permitted(), and sd_os_permitted() - the Python gate -
+ *           calls THAT, without the HDR_INTERNAL test.  The gate ran inside
+ *           the $internal PY_* wrapper and passed every user.  RELEASE_1.1 23.
  * 05 Sep 26 Windows port - SH1 carries -ExecutionPolicy Bypass.  Without it
  *           every shipped .ps1 SD runs is refused on a stock Windows client,
  *           whose default policy is Restricted.  PRE_RELEASE_FIXES 173.
@@ -58,6 +62,7 @@ void op_capture(void);
 
 Private void sh(bool capture);
 Private bool os_permitted(PRIV_WHY* why);
+Private bool os_user_permitted(PRIV_WHY* why);
 Private void sh_execute(char *command);
 Private int clparse(char *p, char *argv[], int maxargs);
 
@@ -122,18 +127,25 @@ void op_shcap() {
    interpreter either.  Two implementations of one rule would drift, and the
    drift would be silent and in the permissive direction.
 
-   os_permitted() itself stays Private and unchanged - including its PRIV_WHY
-   tri-state, which test-privwhy-units guards - and this is a wrapper, not a
-   copy.
+   os_permitted() itself stays Private - including its PRIV_WHY tri-state,
+   which test-privwhy-units guards - and this is a wrapper, not a copy.
 
-   ***THE CALLER MUST NOT BE INSIDE A $internal PROGRAM WHEN IT ASKS.***
-   os_permitted()'s first test short-circuits on HDR_INTERNAL, and all 20 PY_*
-   carry $internal, so asking from inside one passes for every user.  The only
-   correct moment is before any wrapper is in process.program - which is why
-   the helper is started from the opcode rather than from BASIC. */
+   ***13 Sep 26 - IT ASKS os_user_permitted(), NOT os_permitted(), AND THE
+   DIFFERENCE IS THE WHOLE GATE.  RELEASE_1.1 23.***  This used to return
+   os_permitted(why), with a comment saying the caller "must not be inside a
+   $internal program when it asks" and that starting the helper from the
+   opcode rather than from BASIC made that so.  IT DID NOT.  The opcode is
+   executed BY the $internal wrapper: k_call() ORs the callee's header flags
+   into process.program.flags (kernel.c:1006), !PY_INITIALIZE's flags word is
+   0x22 = HDR_INTERNAL | HDR_IS_FUNCTION, and os_permitted()'s first test
+   answered TRUE before reading the username - for every user.  The os.users
+   branch, the reason the gate exists, was unreachable.  Section 8 constraint
+   4 had specified "the second and third tests without the first" in as many
+   words; this is that, and test-privwhy-units now refuses a wrapper that goes
+   through test 1 again. */
 
 bool sd_os_permitted(PRIV_WHY* why) {
-  return os_permitted(why);
+  return os_user_permitted(why);
 }
 
 /* ======================================================================
@@ -178,16 +190,19 @@ bool sd_os_permitted(PRIV_WHY* why) {
  * THE ACL ON OS.USERS IS THE WHOLE OF THE PROTECTION.  gplbld/secure-osusers.ps1
  * makes it read-only to sdusers; without that a user grants themselves this in
  * one line and the gate below is decoration.
+ *
+ * 13 Sep 26 Windows port - SPLIT IN TWO, AND THE SPLIT IS THE FIX.
+ * RELEASE_1.1 23.  Test 1 stays here; tests 2 and 3 are os_user_permitted()
+ * below, so that sd_os_permitted() - the Python gate - can ask them WITHOUT
+ * test 1.  Section 8 constraint 4 specified the Python gate as "os_permitted()'s
+ * second and third tests without its first", and the wrapper as first written
+ * called all three: the SDEXT opcode that starts the helper executes INSIDE
+ * !PY_INITIALIZE, which is $internal (flags word 0x22 in the shipped object),
+ * so test 1 answered TRUE for every user and the os.users branch was never
+ * reached.  One body for tests 2 and 3, two entry points, no copy.
  */
 
 Private bool os_permitted(PRIV_WHY* why) {
-  char path[MAX_PATHNAME_LEN + 1];
-  char buff[128];
-  int fu;
-  int n;
-  char* p;
-  char* q;
-
   /* 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 96.  Set once, overwritten
      by whichever exit could not finish.  See linuxlb.h.                    */
 
@@ -196,6 +211,30 @@ Private bool os_permitted(PRIV_WHY* why) {
 
   if (process.program.flags & HDR_INTERNAL)
     return TRUE;
+
+  return os_user_permitted(why);
+}
+
+/* ======================================================================
+   os_user_permitted()  -  Tests 2 and 3 of os_permitted(), on their own.
+
+   The session's OWN standing, with no regard to what program is running:
+   an administrator always may, otherwise OS.USERS field 2 decides.  This is
+   the question the Python gate has to ask, because by the time it asks,
+   process.program is a $internal wrapper whatever the user's standing is.
+   sh() never calls this directly - it goes through os_permitted() so that SH
+   from CPROC keeps test 1.                                                */
+
+Private bool os_user_permitted(PRIV_WHY* why) {
+  char path[MAX_PATHNAME_LEN + 1];
+  char buff[128];
+  int fu;
+  int n;
+  char* p;
+  char* q;
+
+  if (why != NULL)
+    *why = PRIV_ANSWERED;
 
   if (my_uptr->flags & USR_ADMIN)
     return TRUE;

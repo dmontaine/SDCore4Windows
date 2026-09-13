@@ -256,8 +256,12 @@ if ($Phase -ne '') {
         # THE RECORD.  OS.USERS is a DIRECTORY file, so a record is a file and a
         # field mark is a newline - the same route verify-nocase.ps1 uses to
         # place a BP program without driving ED through a pipe.  Field 1 is SH
-        # and field 2 is OS.EX; OS.EX is stored, dictionaried and READ BY NOBODY
-        # (step 7), so "no" here documents intent and enforces nothing.
+        # and field 2 is OS.EX.  13 Sep 26: this used to say OS.EX was "READ BY
+        # NOBODY (step 7)", which stopped being true on 19 Aug 2026 when
+        # op_sh.c's os_permitted() started reading it for OS.EXECUTE, and again
+        # on 12 Sep when the Python gate did (RELEASE_1.1 23).  "no" here is
+        # therefore a real refusal of OS.EXECUTE for this session, and the
+        # GrantOsx phase below is its mirror image.
         if (Test-Path -LiteralPath $record) {
             Say 'RESULT: granted=already-there'
         } else {
