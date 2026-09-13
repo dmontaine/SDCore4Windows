@@ -1269,7 +1269,20 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # reads C:\ProgramData\SD and ships nowhere, so without this
                   # line its mere existence reports the tree STALE and every
                   # verifier that calls this script then refuses.
-                  'check-datatree-litter.ps1')
+                  'check-datatree-litter.ps1',
+                  # 12 Sep 26 - the guard over BCOMP's two POSITIONAL intrinsic
+                  # lists, listed in the commit that creates it.  It reads
+                  # sdsys\gpl.bp\BCOMP and writes nothing; nothing installs it
+                  # and nothing compiles it into sd.exe.
+                  #
+                  # WHY IT WAS WORTH A FILE.  int.intrinsics and the "on i goto"
+                  # below it are matched BY POSITION and kept in step by hand.
+                  # Adding a name to one and not the other misroutes every
+                  # intrinsic after it, and that fault COMPILES CLEANLY - so
+                  # until now the only guard was a comment asking the next
+                  # person to remember.  Restoring SDPYOBJ for objective 2 is
+                  # the second time in a month that pair has been edited.
+                  'test-intrinsics-units.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

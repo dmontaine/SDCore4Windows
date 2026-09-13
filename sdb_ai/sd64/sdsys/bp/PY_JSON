@@ -1,0 +1,174 @@
+program py_json
+* Test python json module functions from embedded python
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+$include SDPYFUNC.H
+$include keys.h
+
+
+******************************************************************************************************************
+crt 'json embedded python test'
+retry_fn:
+crt 'Fully qualified file name to parse <END> to quit: '
+Input fn
+begin case
+  case fn = ''
+    goto 999
+  case upcase(fn) = "END"
+    goto 999
+end case
+* does file exist (and can we get to it?)
+openseq fn to fnv else
+  crt 'Cannot open: ':fn:' , try again'
+  goto retry_fn
+end
+
+crt str('=',50)
+*
+crt 'attempt init'
+rtn_stat = PY_INITIALIZE()
+crt 'rtn_stat = ':rtn_stat
+crt 'status()   = ':status()
+crt str('=',50)
+if rtn_stat # 0 then 
+  crt 'python init failure, about'
+  stop
+end
+*
+* script to load json file
+*
+lf = char(10)
+script  = 'import json':lf
+   * Opening JSON file
+script  := 'f = open("':fn:'")':lf
+   * returns JSON object as a dictionary
+script  := 'jdata = json.load(f)':lf
+   * close the file
+script  := 'f.close()':lf
+*
+crt 'attempt to run script:'
+rtn_stat = PY_RUNSTRING(script)
+crt 'rtn_stat = ':rtn_stat
+crt 'status()   = ':status()
+if rtn_stat <> 0 then goto 999
+crt str('=',50)
+*
+gosub dsp_json('jdata',0)
+rtn_stat = PY_RUNSTRING('del jdata')
+if rtn_stat <> 0 then
+  crt 'python error on del of: jdata'
+  crt rtn_stat
+end
+*
+goto 999 ;* complete
+
+
+******************************************************************************************************************
+local subroutine dsp_json(obj_name,indent)
+*
+* recursive routine to parse json file
+*
+private i, keys, key_count, obj_size, elemt_name, aindent
+  obj_type = PY_OBJTYPE(obj_name)
+  newln = @False    ;* did last output include a line feed?
+  begin case
+    case obj_type = SD_Obj_List
+      aindent = indent + 2
+      obj_size = PY_OBJLEN(obj_name)
+      for i = 0 to obj_size -1
+        elemt_name = obj_name:'_':i 
+        script = elemt_name :' = ':obj_name:'[':i:']':lf
+        * crt '>>>>>':script
+        rtn_stat = PY_RUNSTRING(script)
+        if rtn_stat <> 0 then
+           crt 'python list error at element: ': i
+           crt rtn_stat
+           abort
+        end
+        gosub dsp_json(elemt_name,aindent)
+        * remove ref to element we just created
+        rtn_stat = PY_RUNSTRING('del ':elemt_name)
+        if rtn_stat <> 0 then
+          crt 'python error on del of : ': elemt_name
+          crt rtn_stat
+          abort
+        end
+      next i
+      
+    case obj_type = SD_Obj_Dict
+      keys = PY_DICTGETKEYS(obj_name)
+      key_count = dcount(keys,@fm)
+      for i = 1 to key_count
+        elemt_name = obj_name:'_':i 
+        script = elemt_name :' = ':obj_name:'["':keys<i>:'"]':lf
+        * crt '>>>>>':script
+        rtn_stat = PY_RUNSTRING(script)
+        if rtn_stat <> 0 then
+           crt 'python dict error at element: ':keys<i>
+           abort
+        end
+        *
+        * next element type on its on line?
+        tst_type = PY_OBJTYPE(elemt_name)
+        if tst_type = SD_Obj_List then
+          crt str(' ',indent) : keys<i> : ': '
+          newln = @true
+        end else
+          crt str(' ',indent) : keys<i> : ': ':
+          newln = @false
+        end
+        
+        newln = @false
+        gosub dsp_json(elemt_name,indent)
+        * remove ref to element we just created
+        rtn_stat = PY_RUNSTRING('del ':elemt_name)
+        if rtn_stat <> 0 then
+          crt 'python error on del of : ': elemt_name
+          crt rtn_stat
+          abort
+        end
+        
+      next i
+      
+    case obj_type = SD_Obj_Str
+      if newln then sp = ''  else sp = str(' ',indent)
+      crt  sp : PY_STRGET(obj_name)
+      newln = @true  
+      
+    case obj_type = SD_Obj_Long
+      if newln then sp = ''  else sp = str(' ',indent)
+      crt  sp : PY_GETATTR(obj_name)
+      newln = @true  
+      
+    case obj_type = SD_Obj_Float
+      if newln then sp = ''  else sp = str(' ',indent)
+      crt  sp : PY_GETATTR(obj_name)  
+      newln = @true
+      
+    case 1
+      if newln then sp = str(' ',indent) else sp = ''
+      crt sp :  'obj type unknow for: ': obj_name
+      newln = @true
+      
+    end case
+      
+    return    
+end
+
+
+999:  crt 'Complete'
+end

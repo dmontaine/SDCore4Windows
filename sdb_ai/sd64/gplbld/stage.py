@@ -125,6 +125,31 @@ PROGRAM_FILES_BIN = [
     'sdsvc.exe',                # native UCRT64, the service that starts SD
 ]
 
+# 12 Sep 26 - THE PYTHON HELPER, PROJECT_STATUS.md 5.27.  Staged if bin/ has
+# it and skipped with a line of output if not.
+#
+# ***IT IS A LIST OF ITS OWN BECAUSE THE ABSENT CASE IS LEGITIMATE, WHICH IS
+# THE WHOLE DIFFERENCE FROM PROGRAM_FILES_BIN.***  The Makefile builds it with
+# "build-sdpy.ps1 -SkipIfNoPython", whose own comment rules that "a build must
+# not FAIL because the machine has no Python: SD runs perfectly well without
+# the helper and every PY_* answers -12040 until it is installed".  Naming it
+# above would have made a no-Python build machine unable to stage at all,
+# which contradicts that ruling - so a missing helper is reported, not fatal.
+#
+# ***IT HAS TO BE IN usr\bin SPECIFICALLY, NOT MERELY SOMEWHERE UNDER
+# ProgramFiles.***  sdpy_session.c's helper_path() takes exe_directory() and
+# appends "sdpy.exe" - BESIDE sd.exe, deliberately, because <sysdir>\bin holds
+# no executable in the Windows layout.  usr\bin is where sd.exe is, so usr\bin
+# is the only place this binary works from.
+#
+# NOT IN DLL_SCAN, AND MUST NOT BE - the same rule as the 32-bit pair above,
+# for a different reason.  It links -lpython3, and that DLL belongs to the
+# user's own Python install: pointing objdump at this would resolve
+# python3.dll and try to ship a copy of somebody else's interpreter.
+PROGRAM_FILES_BIN_OPTIONAL = [
+    'sdpy.exe',                 # native UCRT64, the embedded-Python helper
+]
+
 # ---------------------------------------------------------------------------
 # THE CLIENT DLLs A USER TAKES AWAY.  PRE_RELEASE_FIXES 161.
 #
@@ -1178,6 +1203,23 @@ def main():
         dst = os.path.join(pfbin, f)
         shutil.copy2(os.path.join('bin', f), dst)
         staged.add(stage, dst)
+
+    # The optional binaries.  BOTH OUTCOMES PRINT: an installed system with no
+    # Python helper is a legitimate build and a silent one is indistinguishable
+    # from the staging bug this list was added to fix.
+    for f in PROGRAM_FILES_BIN_OPTIONAL:
+        src = os.path.join('bin', f)
+        if os.path.isfile(src):
+            dst = os.path.join(pfbin, f)
+            shutil.copy2(src, dst)
+            staged.add(stage, dst)
+            print('  optional: %s staged to ProgramFiles\\%s'
+                  % (f, PF_BIN_SUBDIR))
+        else:
+            print('  optional: %s is NOT in bin/ and is not staged' % f)
+            print('    SD installs and runs; every PY_* answers -12040.')
+            print('    "make sd" skips it when the machine has no all-users'
+                  ' Python (build-sdpy.ps1 -SkipIfNoPython).')
 
     # The client DLLs a user takes away, in usr\clients\client64 and
     # usr\clients\client32.  BESIDE usr\bin rather than under it, so nobody has

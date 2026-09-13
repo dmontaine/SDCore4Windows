@@ -1,0 +1,290 @@
+* py_term
+* very simple python interface via terminal 
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+$catalog py_term
+$include SDPYFUNC.H
+$INCLUDE KEYIN.H
+$INCLUDE KEYS.H
+*
+gosub help_scrn  
+*
+lf = char(10)
+*
+crt 'attempt init'
+rtn_stat = PY_INITIALIZE()
+if rtn_stat <> 0 then
+  crt 'Failed to Init Python, status = : ': status()
+  goto 999
+end else
+  crt 'success'
+  scrpt = 'print(sys.version)'
+  gosub exe_script
+end
+
+prompt ""
+indent = 0
+scrpt = ''
+instr_hist = ''   ;* history string
+
+loop:
+crt '>>>':space(indent):
+instr_col = indent + 3
+gosub instr_get
+rsp = trim(instr)
+begin case
+
+case upcase(rsp) = "QUIT" 
+  goto 999
+
+* execute script line?  
+case rsp = '!'
+  if len(scrpt) > 0 then
+    gosub exe_script
+    indent = 0
+    scrpt  = ''
+**    crt @(0):   ;* output from python is new line terminated, need to fix this
+  end  
+  
+* new block?     
+case rsp[1] = ':'
+  scrpt = scrpt : space(indent) : rsp : lf
+  indent += 2
+
+* display script  
+case rsp = '??'  
+  gosub dsp_script
+  
+* display help
+case rsp = '?' 
+  gosub help_scrn  
+  
+*  complete block?  
+case rsp = ''
+  scrpt = scrpt : space(indent) : rsp : lf
+  if indent > 0 then indent -= 2
+  
+case 1
+  scrpt = scrpt : space(indent) : rsp : lf
+  
+end case
+goto loop
+*
+******************************************************************************************************************
+*
+* instr_get - simple line edit routine
+* instr_col = starting col position
+******************************************************************************************************************
+instr_get:
+instr = ''                       ;* current input string
+nxtkey = @true                   ;* loop flag, get next key?
+ch_idx = 0                       ;* current character index postion 
+col    = 0                       ;* col position of cursor
+insz = 0                         ;* current length of instr
+hsz = dcount(instr_hist,@fm)     ;* current history size
+hidx = hsz                       ;* point to latest entry on entry
+ 
+loop
+
+
+
+  key = keycode()
+  skey = seq(key)
+
+
+  begin case
+
+    case skey = K$RETURN
+
+* if there was input, save to history list
+      if len(instr) > 0 then
+        instr_hist<-1> = instr
+      end
+  
+* reset character index and col pos, add new line
+      ch_idx = 0
+      col  = 0
+      crt ''
+  
+* and return (instr has our input string)
+      exit
+  
+  case skey = K$BACKSPACE
+    if col ge 0 then
+      if ch_idx > 0 then
+        instr = instr[1,ch_idx-1]:instr[ch_idx+1,132]
+        ch_idx -=1
+      end 
+      if ch_idx > 0 then
+        col = ch_idx -1
+      end else
+        col = 0
+      end
+    end
+   
+  case skey = K$UP
+* is there input history?
+    if hsz > 0 then
+      if hidx < 1 then
+        * top of history, return to blank text
+        instr = ''
+        hidx = hsz
+      end else
+        instr = instr_hist<hidx>
+        hidx -= 1
+      end
+      ch_idx = 1
+      col  = 0
+    end
+  
+  case skey = K$DOWN
+* is there input history?
+    if hsz > 0 then
+      if hidx ge hsz then
+        * bottom of history, return blank line
+        instr = ''
+        hidx = 1
+      end else
+        instr = instr_hist<hidx>
+        hidx += 1
+      end
+      ch_idx = 1
+      col    = 0
+    end
+  
+  case skey = K$RIGHT
+    ch_idx +=1
+    if ch_idx > insz then   ;* moved to end of text string, add next char to end
+      col = insz
+      ch_idx = insz
+    end else
+      col  = ch_idx - 1
+    end
+  
+  case skey = K$LEFT
+    if ch_idx = col and ch_idx > 0 then   ;* string entry, no edit keys have been pressed
+      col = ch_idx - 1
+    end else               ;* 
+      ch_idx -= 1
+      if ch_idx < 1 then ch_idx = 1
+      col  = ch_idx - 1
+    end
+  
+  case skey = K$INSERT
+    begin case  
+      case insz > 0 and ch_idx = 1
+        instr = ' ':instr
+      case ch_idx = insz     ;* at eol, do nothing
+        null
+      case 1
+        instr = instr[1,ch_idx-1]:' ':instr[ch_idx,132]
+    end case
+    
+    
+  case skey = K$DELETE
+    begin case
+      case insz = 1 and ch_idx = 1
+        instr = ''
+        ch_idx = 0
+        col =  0
+      case insz > 0 and ch_idx = 0
+        instr = instr[insz-1]
+        col = 0
+      case 1
+        instr = instr[1,ch_idx-1]:instr[ch_idx+1,132]
+        if ch_idx > insz then 
+          ch_idx = insz
+          col = ch_idx - 1
+          if col < 0 then col = 0
+        end
+    end case
+   
+  case skey lt 32
+    NULL  ;* 'invalid char'
+  
+  case skey gt 126
+    NULL  ;* 'invalid char'
+  
+  case 1
+
+    begin case
+      case insz = 0        ;* new line
+        instr = key
+      case ch_idx = insz and col = insz  ;* at end of line
+        instr = instr:key
+      case 1               ;* overwrite?
+        instr = instr[1,ch_idx-1]:key:instr[ch_idx+1,132]
+    end case
+    ch_idx +=1
+    col += 1
+    
+  
+  end case
+  
+  insz = len(instr)                ;* len of input string so far
+  
+  * test code
+* crt @(0,13):@(IT$CLEOL):'col = ':col:' ch_idx = ':ch_idx : ' insz = ':insz: ' hsz = ':dcount(instr_hist,@fm):
+* crt @(col,20):
+  * end test code
+
+  crt @(instr_col):@(IT$CLEOL):instr:@(col+instr_col):
+  
+while nxtkey repeat
+
+return
+**********************************************************************************
+* exe_script
+* execute script statements in scrpt
+**********************************************************************************
+exe_script:
+rtn_stat = PY_RUNSTRING(scrpt)
+if rtn_stat <> 0 then
+* error
+  crt 'script error'
+  crt 'rtn_stat = ':rtn_stat
+  crt 'status()   = ':status()
+end  
+return 
+
+**********************************************************************************
+* dsp_script
+* display statements in scrpt
+**********************************************************************************
+dsp_script:
+lncnt = dcount(scrpt,lf)
+for i = 1 to lncnt
+  ln = FIELD(scrpt, lf, i)
+  crt ln
+next i
+return 
+
+**********************************************************************************
+* help
+**********************************************************************************
+help_scrn:
+crt '--------------Embedded python terminal--------------------------'
+crt 'Valid line edit keys: Bcksp, Ins, Del, Cursor Rght, Cursor Lft'
+crt 'History: Up Arrow, Down Arrow' 
+crt '"??" to display script'
+crt '"!" to exe script, "quit" to stop'
+crt '"?" to display this help screen'
+crt '----------------------------------------------------------------'
+return
+*
+999: crt 'complete'
+end
