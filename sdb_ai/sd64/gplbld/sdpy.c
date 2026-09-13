@@ -85,6 +85,7 @@
 #define SD_PyErr_DelObj     -12020
 #define SD_PyErr_UniToStr    -12009  /* unicode -> Latin failed on the way out */
 #define SD_PyErr_EnLatin    -12018  /* Latin -> unicode failed on the way in  */
+#define SD_PyEr_NOF          -12006  /* could not open the script file */
 #define SD_PyEr_Key          -12007  /* key not in the dictionary */
 #define SD_PyEr_ObToStr      -12008  /* object would not convert to a string */
 #define SD_PyErr_DictExsts  -12012  /* a name is already in use */
@@ -97,6 +98,9 @@
 
 #define SDPY_PROTOCOL "SDPY1"
 #define MAX_PAYLOAD (64 * 1024 * 1024)
+
+/* Defined with the dict family below; used before it. */
+static int is_instance_of(PyObject* obj, const char* type_name);
 
 static PyObject* g_ns = NULL;      /* the one namespace, SD names and globals */
 static PyObject* g_cap = NULL;     /* io.StringIO capturing stdout and stderr */
@@ -297,6 +301,71 @@ static void verb_runstr(const char* src, size_t srclen) {
   respond_capture(0);          /* whatever the script printed */
 }
 
+/* RUNFILE - run a script FILE.
+ *
+ * ***THE HELPER OPENS THE FILE.  THAT IS THE WHOLE POINT.***  The removed code
+ * did fopen() in sd.exe and passed the FILE* into PyRun_File
+ * (sdext_py.c:207) - a C stdio handle crossing from the MSYS2 runtime into the
+ * native one, which section 5.3 says does not survive and section 5.27 names
+ * as a reason for the helper.  Here SD sends a PATH, which is just a string,
+ * and the file is opened on the side that reads it.
+ *
+ * Compiling with the real filename is what makes a traceback name the script
+ * and line rather than "<sdpy>", and it costs nothing in this shape. */
+static void verb_runfile(const char* path) {
+  FILE* f;
+  long size;
+  char* src;
+  size_t got;
+  PyObject* builtins;
+  PyObject* text;
+  PyObject* code;
+  PyObject* res;
+
+  if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
+  if (path == NULL || *path == '\0') { respond_str(SD_PyEr_NOF, "no script path given"); return; }
+
+  f = fopen(path, "rb");
+  if (f == NULL) {
+    /* Name the path that was tried: a "could not open" with no path in it is
+     * the verdict-without-evidence section 0 forbids. */
+    char msg[600];
+    (void)snprintf(msg, sizeof(msg), "could not open script file: %s", path);
+    respond_str(SD_PyEr_NOF, msg);
+    return;
+  }
+  if (fseek(f, 0, SEEK_END) != 0) { fclose(f); respond_str(SD_PyEr_NOF, "cannot size the script file"); return; }
+  size = ftell(f);
+  if (size < 0 || size > MAX_PAYLOAD) { fclose(f); respond_str(SD_PyEr_NOF, "script file is too large"); return; }
+  rewind(f);
+
+  src = (char*)calloc((size_t)size + 1, 1);
+  if (src == NULL) { fclose(f); respond_str(SD_PyEr_NOF, "out of memory reading the script"); return; }
+  got = fread(src, 1, (size_t)size, f);
+  fclose(f);
+  if (got != (size_t)size) { free(src); respond_str(SD_PyEr_NOF, "short read on the script file"); return; }
+
+  builtins = PyImport_ImportModule("builtins");
+  if (builtins == NULL) { free(src); respond_python_error(SD_PyEr_Excpt); return; }
+  text = sd_bytes_to_str(src, (size_t)size);
+  free(src);
+  if (text == NULL) { Py_DECREF(builtins); respond_python_error(SD_PyEr_Excpt); return; }
+
+  code = PyObject_CallMethod(builtins, "compile", "Oss", text, path, "exec");
+  Py_DECREF(text);
+  if (code == NULL) {
+    Py_DECREF(builtins);
+    respond_python_error(SD_PyEr_Excpt);
+    return;
+  }
+  res = PyObject_CallMethod(builtins, "exec", "OOO", code, g_ns, g_ns);
+  Py_DECREF(code);
+  Py_DECREF(builtins);
+  if (res == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
+  Py_DECREF(res);
+  respond_capture(0);
+}
+
 /* Look a named SD object up in the namespace.  Borrowed reference or NULL. */
 static PyObject* lookup(const char* name) {
   if (g_ns == NULL || name == NULL || *name == '\0')
@@ -319,12 +388,44 @@ static void verb_strset(const char* name, const char* value, size_t vlen) {
   respond(0, "", 0);
 }
 
-static void verb_strget(const char* name) {
+/* GETATTR - read ANY named object as its str().
+ *
+ * ***THE NAME LIES AND IT IS WORTH KNOWING BEFORE READING THE OLD CODE.***
+ * SD_PyGetAtt does no getattr at all: it is
+ * PyMapping_GetItemString(global_dict, Arg) - fetch a name out of the
+ * namespace and convert it to a string.  So it is the GENERAL reader, and
+ * STRGET below is the str-only one that refuses anything else.  Measured at
+ * 489b18e^, sdext_py.c case SD_PyGetAtt. */
+static void verb_getattr(const char* name) {
   PyObject* obj;
+  PyObject* s;
   PyObject* enc;
   if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
   obj = lookup(name);
   if (obj == NULL) { respond_str(SD_PyErr_ObjNOF, ""); return; }
+  s = PyObject_Str(obj);
+  if (s == NULL) { respond_python_error(SD_PyEr_ObToStr); return; }
+  enc = PyUnicode_AsEncodedString(s, "latin-1", "strict");
+  Py_DECREF(s);
+  if (enc == NULL) { PyErr_Clear(); respond_str(SD_PyErr_UniToStr, ""); return; }
+  respond(0, PyBytes_AsString(enc), (size_t)PyBytes_Size(enc));
+  Py_DECREF(enc);
+}
+
+static void verb_strget(const char* name) {
+  PyObject* obj;
+  PyObject* enc;
+  int is;
+  if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
+  obj = lookup(name);
+  if (obj == NULL) { respond_str(SD_PyErr_ObjNOF, ""); return; }
+  /* ***STRGET IS THE STRICT ONE.***  The old contract had SD_PyErr_NotStr for
+   * exactly this, and answering -12009 "could not encode" for an integer would
+   * blame the encoding for a type error.  GETATTR is the verb that str()s
+   * anything. */
+  is = is_instance_of(obj, "str");
+  if (is < 0) { respond_python_error(SD_PyEr_Excpt); return; }
+  if (is == 0) { respond_str(SD_PyErr_NotStr, ""); return; }
   /* Strict on the way out: a value SD cannot hold must be reported, not
    * silently mangled into one it can. */
   enc = PyUnicode_AsEncodedString(obj, "latin-1", "strict");
@@ -738,6 +839,10 @@ int main(void) {
       respond(0, "", 0);
     } else if (strcmp(verb, "RUNSTR") == 0) {
       verb_runstr(a1, (size_t)n1);
+    } else if (strcmp(verb, "RUNFILE") == 0) {
+      verb_runfile(a1);
+    } else if (strcmp(verb, "GETATTR") == 0) {
+      verb_getattr(a1);
     } else if (strcmp(verb, "STRSET") == 0) {
       verb_strset(a3, a1, (size_t)n1);        /* SDPYOBJ order: value, key, name */
     } else if (strcmp(verb, "STRGET") == 0) {

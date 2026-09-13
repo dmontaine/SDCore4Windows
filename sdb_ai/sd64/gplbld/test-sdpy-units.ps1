@@ -354,6 +354,65 @@ try {
     Row 'a script and SD share the same dict' ($r.Status -eq 0 -and $r.Text -eq 'yes') `
         "status $($r.Status) '$($r.Text)'"
 
+    # --- GETATTR: the general reader, whatever its name says ----------------
+    #
+    # SD_PyGetAtt was PyMapping_GetItemString(global_dict, Arg) - fetch a name
+    # and str() it.  It does no getattr at all.  So it reads an int where
+    # STRGET refuses one, and that difference is the pair of rows below.
+    Send-Frame 'RUNSTR' (Latin "anumber = 42") $null $null
+    $r = Read-Frame | Out-Null
+
+    Send-Frame 'GETATTR' (Latin 'anumber') $null $null
+    $r = Read-Frame
+    Row 'GETATTR reads a non-string as its str()' ($r.Status -eq 0 -and $r.Text -eq '42') `
+        "status $($r.Status) '$($r.Text)'"
+
+    Send-Frame 'STRGET' $null $null (Latin 'anumber')
+    $r = Read-Frame
+    Row 'STRGET refuses the same object with -12019' ($r.Status -eq -12019) `
+        "status $($r.Status) - it should blame the TYPE, not the encoding"
+
+    Send-Frame 'GETATTR' (Latin 'no_such_name') $null $null
+    $r = Read-Frame
+    Row 'GETATTR on an unknown name is -12014' ($r.Status -eq -12014) "status $($r.Status)"
+
+    # --- RUNFILE ------------------------------------------------------------
+    $tmpPy = Join-Path ([IO.Path]::GetTempPath()) ('sdpy-test-' + [Guid]::NewGuid().ToString('N') + '.py')
+    [IO.File]::WriteAllText($tmpPy,
+        "from_file = 'ran from a file'`nprint('file says hello')`n",
+        (New-Object Text.UTF8Encoding($false)))
+
+    Send-Frame 'RUNFILE' (Latin $tmpPy) $null $null
+    $r = Read-Frame
+    Row 'RUNFILE runs the script and returns what it printed' `
+        ($r.Status -eq 0 -and $r.Text -match 'file says hello') `
+        "status $($r.Status) '$($r.Text)'"
+
+    Send-Frame 'STRGET' $null $null (Latin 'from_file')
+    $r = Read-Frame
+    Row 'RUNFILE shares the same namespace' ($r.Status -eq 0 -and $r.Text -eq 'ran from a file') `
+        "status $($r.Status) '$($r.Text)'"
+
+    # ***THE TRACEBACK MUST NAME THE FILE, NOT "<sdpy>".***  That is the only
+    # reason RUNFILE is a separate verb rather than "read it and call RUNSTR".
+    $badPy = Join-Path ([IO.Path]::GetTempPath()) ('sdpy-bad-' + [Guid]::NewGuid().ToString('N') + '.py')
+    [IO.File]::WriteAllText($badPy, "x = 1`nraise RuntimeError('from the file')`n",
+        (New-Object Text.UTF8Encoding($false)))
+    Send-Frame 'RUNFILE' (Latin $badPy) $null $null
+    $r = Read-Frame
+    Row 'a failing script names the FILE and the line in its traceback' `
+        ($r.Status -eq -12004 -and $r.Text -match ([regex]::Escape((Split-Path -Leaf $badPy))) -and
+         $r.Text -match 'line 2' -and $r.Text -match 'from the file') `
+        "status $($r.Status) '$($r.Text)'"
+
+    Remove-Item -LiteralPath $tmpPy, $badPy -Force -ErrorAction SilentlyContinue
+
+    Send-Frame 'RUNFILE' (Latin 'C:\no\such\script.py') $null $null
+    $r = Read-Frame
+    Row 'a missing script is -12006 AND names the path tried' `
+        ($r.Status -eq -12006 -and $r.Text -match 'no\\such\\script\.py') `
+        "status $($r.Status) '$($r.Text)'"
+
     # --- shutdown -----------------------------------------------------------
     Send-Frame 'FIN' $null $null $null
     $r = Read-Frame
