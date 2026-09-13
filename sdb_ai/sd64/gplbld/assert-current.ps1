@@ -838,6 +838,14 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # keeps them out of the staleness walk.
                   'sdpy.c', 'sdpy.exe', 'build-sdpy.ps1',
                   'test-sdpy-units.ps1',
+                  # 12 Sep 26 - SD's side of the same pipe.  sdpy_client.c is
+                  # MSYS2 code and WILL be compiled into sd.exe; it is here
+                  # rather than in gplsrc only until the opcodes are wired,
+                  # because a .c in gplsrc makes bin\ stale and that cycle is
+                  # worth paying once, for the whole integration, rather than
+                  # twice.  ***THEY MOVE TO gplsrc IN THAT COMMIT.***
+                  'sdpy_client.c', 'sdpy_client.h', 'build-sdpyclient.ps1',
+                  'test-sdpyclient.c', 'test-sdpyclient.exe',
                   # 21 Aug 26 - housekeeping for the Windows side, which no
                   # cycle touches: the account-creating verifiers leave a
                   # profile behind each run and nothing had ever removed them.
