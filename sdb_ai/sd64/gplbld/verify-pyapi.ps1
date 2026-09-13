@@ -287,7 +287,14 @@ if ($incBuilt) {
 
 # Disqualifiers: the helper-missing code and the not-initialised code must not
 # appear anywhere.  -12040 is SD_PyErr_NoHelper.
-Row (-not ($run -match '-12040')) 'no -12040 (helper unreachable) anywhere in the transcript'
+Row (-not ($run -match '-12040')) 'no -12040 (helper would not start) anywhere in the transcript'
+# 12 Sep 26 - RELEASE_1.1 21 split the two permission refusals out of -12040.
+# On this step they are disqualifiers rather than expected answers: the suite
+# runs elevated, so may_start_helper() takes its USR_ADMIN branch and neither
+# can legitimately appear.  Seeing one here would mean the gate had started
+# refusing an administrator, which is a product change nobody asked for.
+Row (-not ($run -match '-12041')) 'no -12041 (session not permitted to use the OS) anywhere'
+Row (-not ($run -match '-12042')) 'no -12042 (OS permission undetermined) anywhere'
 Row (-not ($run -match '-12001')) 'no -12001 (interpreter not initialised) anywhere'
 
 # --- cleanup --------------------------------------------------------------

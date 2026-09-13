@@ -50,6 +50,9 @@
  * 5.27, and the reason SD's named Python objects cannot leak between users. */
 static SDPY* session_helper = NULL;
 static int   helper_refused = 0;      /* the gate said no; do not ask again */
+/* Which refusal it was, so every later call in this session gives the SAME
+ * answer as the first.  RELEASE_1.1 21. */
+static int   helper_refused_code = 0;
 static char  helper_error[512] = "";
 
 /* op_sh.c.  A WRAPPER round the shell gate, not a second copy of it: Python's
@@ -132,12 +135,18 @@ static int may_start_helper(PRIV_WHY* why) {
 
 /* Return the session's helper, starting it on first use.
  *
- * REFUSAL AND FAILURE ARE DIFFERENT AND THE CALLER IS TOLD WHICH.  A session
- * that is not permitted gets SD_EXT_KEY_ERR's sibling SD_PyErr_NoHelper with a
- * reason; a session that is permitted but whose helper would not start gets
- * the same code with a different reason.  Confusing the two would tell an
+ * REFUSAL AND FAILURE ARE DIFFERENT AND THE CALLER IS TOLD WHICH - IN THE
+ * CODE, since 12 Sep 26.  Not permitted is SD_PyErr_NotPermitted (-12041),
+ * undetermined is SD_PyErr_PrivUnknown (-12042), and a helper that would not
+ * start keeps SD_PyErr_NoHelper (-12040).  Confusing them would tell an
  * administrator that Python is broken when it is a permission, or tell an
- * ordinary user they lack a right when the binary is missing. */
+ * ordinary user they lack a right when the binary is missing.
+ *
+ * ***THIS COMMENT USED TO CLAIM THE CALLER WAS TOLD, AND IT WAS NOT.***  All
+ * three returned -12040 and the difference lived only in helper_error, whose
+ * accessor had no caller - RELEASE_1.1 21.  The sentence was true of the
+ * intent and false of the code, which is the kind of comment that stops the
+ * next reader looking. */
 SDPY* sdpy_session(int* err_code) {
   char err[512];
 
@@ -146,8 +155,15 @@ SDPY* sdpy_session(int* err_code) {
   if (session_helper != NULL)
     return session_helper;
 
+  /* ***THE REMEMBERED ANSWER MUST BE THE SAME ANSWER.***  This path returned a
+   * bare SD_PyErr_NoHelper while the first refusal returned the real reason,
+   * so the SECOND PY_* in a session contradicted the first - and since a
+   * session is refused for as long as it lives, that is every call after the
+   * first.  It was invisible while all three reasons were -12040.  Splitting
+   * the codes without this line would have created the more confusing defect
+   * it was meant to cure. */
   if (helper_refused) {
-    if (err_code != NULL) *err_code = SD_PyErr_NoHelper;
+    if (err_code != NULL) *err_code = helper_refused_code;
     return NULL;
   }
 
@@ -160,14 +176,22 @@ SDPY* sdpy_session(int* err_code) {
     PRIV_WHY why = PRIV_ANSWERED;
     if (!may_start_helper(&why)) {
       helper_refused = 1;
-      if (why == PRIV_ANSWERED)
+      /* ***THE CODE CARRIES THE DISTINCTION NOW, NOT JUST THE TEXT.***
+       * RELEASE_1.1 21: all three of these returned SD_PyErr_NoHelper and the
+       * sentence below was the only thing that told them apart - written into
+       * a buffer nothing read.  A caller gets the difference in the one
+       * integer the PY_* contract already carries. */
+      if (why == PRIV_ANSWERED) {
         (void)snprintf(helper_error, sizeof(helper_error),
                        "this session may not start Python: it is not permitted to use the operating system");
-      else
+        helper_refused_code = SD_PyErr_NotPermitted;
+      } else {
         (void)snprintf(helper_error, sizeof(helper_error),
                        "this session may not start Python: the permission could not be determined (%s)",
                        priv_why_text(why));
-      if (err_code != NULL) *err_code = SD_PyErr_NoHelper;
+        helper_refused_code = SD_PyErr_PrivUnknown;
+      }
+      if (err_code != NULL) *err_code = helper_refused_code;
       return NULL;
     }
   }
@@ -180,7 +204,8 @@ SDPY* sdpy_session(int* err_code) {
     (void)snprintf(helper_error, sizeof(helper_error),
                    "the Python helper did not start: %.200s (%.200s)",
                    err, helper_path());
-    if (err_code != NULL) *err_code = SD_PyErr_NoHelper;
+    helper_refused_code = SD_PyErr_NoHelper;
+    if (err_code != NULL) *err_code = helper_refused_code;
     return NULL;
   }
   return session_helper;
@@ -210,5 +235,6 @@ void sdpy_session_end(void) {
     session_helper = NULL;
   }
   helper_refused = 0;
+  helper_refused_code = 0;
   helper_error[0] = '\0';
 }

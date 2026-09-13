@@ -332,4 +332,22 @@ $define SD$PyErr.NotList   -12034  ;* object is not a list
 * something Python said; this one describes not having reached Python at all,
 * and the two must not be confused by a caller deciding whether to retry.
 $define SD$PyErr.NoHelper  -12040  ;* the helper could not be started or has died
+
+* 12 Sep 26 Windows port - RELEASE_1.1 21, on the owner's ruling.
+* -12040 MEANT THREE DIFFERENT THINGS AND A CALLER COULD NOT TELL THEM APART.
+* sdpy_session() refuses for three reasons - the session may not use the
+* operating system, the permission could not be determined, or the helper
+* itself would not start - and it wrote a sentence saying which into a buffer
+* whose accessor had NO CALLER.  Separating a permission from a broken binary
+* then cost a probe, a discriminator and a two-leg control, and the comment on
+* sdpy_session() had predicted exactly that: "Confusing the two would tell an
+* administrator that Python is broken when it is a permission, or tell an
+* ordinary user they lack a right when the binary is missing."
+
+* ***-12040 KEEPS ITS MEANING - "could not start" - SO NOTHING ALREADY
+* WRITTEN ABOUT IT BECOMES WRONG.***  That is the case a machine with no
+* Python hits, which is what the changelog documents.  The two new codes take
+* the meanings that were being smuggled inside it.
+$define SD$PyErr.NotPermitted -12041  ;* this session may not use the OS, so may not have Python
+$define SD$PyErr.PrivUnknown  -12042  ;* the OS permission could not be determined
 * END-CODE
