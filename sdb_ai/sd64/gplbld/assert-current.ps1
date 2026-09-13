@@ -1311,7 +1311,11 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # was for would have refused itself.  The 17 Aug note above
                   # describes exactly this.  A new gplbld script that ships
                   # nowhere goes here in the commit that creates it.
-                  'verify-pygate.ps1')
+                  'verify-pygate.ps1',
+                  # 13 Sep 26 - verify-createfilecase.ps1, RELEASE_1.1 5's
+                  # phase (a) witness: a new file's id is stored lower case.
+                  # Ships nowhere; listed with the commit that creates it.
+                  'verify-createfilecase.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

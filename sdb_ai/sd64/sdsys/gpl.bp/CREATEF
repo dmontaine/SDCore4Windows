@@ -119,6 +119,22 @@ $define default.split.load 80
 
    if file.name = '' then stop sysmsg(6100) ;* Illegal file name
 
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  A NEW FILE'S ID IS LOWER CASE.
+*   The VOC record this creates and the OS name derived from it are both an id
+*   in an SD system file (VOC), so a new one must not be able to exist in two
+*   casings.  The lookup fold already resolves a name typed in any case - as
+*   typed, then down, then up (PROJECT_STATUS.md 5.12) - so every caller that
+*   names the file in upper case keeps working; only the STORED case changes.
+*   downcase() is the established idiom here (CREATEA:521).  Owner's ruling,
+*   13 Sep 2026: lower case ids in SD system files, never in user data files.
+*   OPT.CREATE.FILE.CASE is the escape hatch - it preserves the name exactly as
+*   typed - and once it is honoured here, os.name below follows file.name in
+*   both cases, so the two upcase() branches it used to need are gone.
+   if not(option(OPT.CREATE.FILE.CASE)) then
+      file.name = downcase(file.name)
+      if component # '' then component = downcase(component)
+   end
+
    * Check for file type keyword. We default to DYNAMIC
 
    begin case
@@ -305,11 +321,7 @@ $define default.split.load 80
 
                * Transform invalid o/s names
 
-               if option(OPT.CREATE.FILE.CASE) then
-                  os.name = ospath(file.name, OS$MAPPED.NAME)
-               end else
-                  os.name = ospath(upcase(file.name), OS$MAPPED.NAME)
-               end
+               os.name = ospath(file.name, OS$MAPPED.NAME)  ;* file.name already canonical - RELEASE_1.1 5
                new.path = old.path : @ds : os.name
 
                subfiles = dir(old.path)
@@ -378,11 +390,7 @@ $define default.split.load 80
 
    * Form operating system file name from VOC record name
 
-   if option(OPT.CREATE.FILE.CASE) then
-      os.name = ospath(file.name, OS$MAPPED.NAME)
-   end else
-      os.name = ospath(upcase(file.name), OS$MAPPED.NAME)
-   end
+   os.name = ospath(file.name, OS$MAPPED.NAME)  ;* file.name already canonical - RELEASE_1.1 5
 
    * Check if operating system components already exist
 
@@ -404,11 +412,7 @@ $define default.split.load 80
             if dir.name.with.delimiter[1] # @ds then dir.name.with.delimiter := @ds
          end
 
-         if option(OPT.CREATE.FILE.CASE) then
-            os.name = ospath(component, OS$MAPPED.NAME)
-         end else
-            os.name = ospath(upcase(component), OS$MAPPED.NAME)
-         end
+         os.name = ospath(component, OS$MAPPED.NAME)  ;* component already canonical - RELEASE_1.1 5
       end
 
       data.path = dir.name.with.delimiter : os.name
