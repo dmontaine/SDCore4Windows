@@ -242,6 +242,118 @@ try {
     $r = Read-Frame
     Row 'the stream is in step after two failures' ($r.Text -eq 'PONG') "got '$($r.Text)'"
 
+    # --- the dict family ----------------------------------------------------
+    #
+    # THE SEPARATOR IS @fm (0xFE).  The removed PY_* headers all said "tab
+    # separated list" and the C beside them joined with U+00FE, the tab version
+    # commented out one line above.  These rows hold the code's answer, not the
+    # header's.
+    $FM = [char]0xFE
+
+    Send-Frame 'DICTCRTE' $null $null (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTCRTE creates a dict' ($r.Status -eq 0) "status $($r.Status) '$($r.Text)'"
+
+    Send-Frame 'DICTCRTE' $null $null (Latin 'd')
+    $r = Read-Frame
+    Row 'creating it twice is -12012, not a silent overwrite' ($r.Status -eq -12012) `
+        "status $($r.Status)"
+
+    # An empty dict is a normal state.  The removed code returned -12030 here.
+    Send-Frame 'DICTKEYS' $null $null (Latin 'd')
+    $r = Read-Frame
+    Row 'an EMPTY dict is status 0 and empty, not an error' `
+        ($r.Status -eq 0 -and $r.Got -eq 0) "status $($r.Status), $($r.Got) bytes"
+
+    Send-Frame 'DICTVSET' (Latin 'one') (Latin 'a') (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTVSET stores a value' ($r.Status -eq 0) "status $($r.Status) '$($r.Text)'"
+    Send-Frame 'DICTVSET' (Latin 'two') (Latin 'b') (Latin 'd')
+    $r = Read-Frame | Out-Null
+
+    Send-Frame 'DICTVGET' $null (Latin 'a') (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTVGET reads it back' ($r.Status -eq 0 -and $r.Text -eq 'one') `
+        "status $($r.Status) '$($r.Text)'"
+
+    Send-Frame 'DICTVGET' $null (Latin 'nokey') (Latin 'd')
+    $r = Read-Frame
+    Row 'a missing key is -12007' ($r.Status -eq -12007) "status $($r.Status)"
+
+    Send-Frame 'DICTKEYS' $null $null (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTKEYS joins with @fm, not tab' `
+        ($r.Status -eq 0 -and $r.Text -eq ('a' + $FM + 'b')) `
+        ("got: " + (($r.Bytes | ForEach-Object { '{0:X2}' -f $_ }) -join ' '))
+
+    Send-Frame 'DICTVALUES' $null $null (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTVALUES joins the values the same way' `
+        ($r.Status -eq 0 -and $r.Text -eq ('one' + $FM + 'two')) "got '$($r.Text)'"
+
+    Send-Frame 'DICTIDEL' $null (Latin 'a') (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTIDEL removes a key' ($r.Status -eq 0) "status $($r.Status)"
+    Send-Frame 'DICTIDEL' $null (Latin 'a') (Latin 'd')
+    $r = Read-Frame
+    Row 'deleting it again is -12007' ($r.Status -eq -12007) "status $($r.Status)"
+
+    Send-Frame 'DICTCLR' $null $null (Latin 'd')
+    $r = Read-Frame | Out-Null
+    Send-Frame 'OBJLEN' $null $null (Latin 'd')
+    $r = Read-Frame
+    Row 'DICTCLR empties it' ($r.Text -eq '0') "OBJLEN says '$($r.Text)'"
+
+    # The type guard: a str is not a dict.
+    Send-Frame 'STRSET' (Latin 'x') $null (Latin 'astring')
+    $r = Read-Frame | Out-Null
+    Send-Frame 'DICTKEYS' $null $null (Latin 'astring')
+    $r = Read-Frame
+    Row 'a non-dict asked for keys is -12017' ($r.Status -eq -12017) "status $($r.Status)"
+
+    # --- the list family ----------------------------------------------------
+    Send-Frame 'LISTCRTE' $null $null (Latin 'L')
+    $r = Read-Frame
+    Row 'LISTCRTE creates a list' ($r.Status -eq 0) "status $($r.Status) '$($r.Text)'"
+
+    Send-Frame 'STRSET' (Latin 'first') $null (Latin 'item1')
+    $r = Read-Frame | Out-Null
+    Send-Frame 'LISTAPPD' $null (Latin 'item1') (Latin 'L')
+    $r = Read-Frame
+    Row 'LISTAPPD appends a NAMED object' ($r.Status -eq 0) "status $($r.Status) '$($r.Text)'"
+
+    Send-Frame 'LISTAPPD' $null (Latin 'no_such') (Latin 'L')
+    $r = Read-Frame
+    Row 'appending an unknown name is -12014' ($r.Status -eq -12014) "status $($r.Status)"
+
+    Send-Frame 'STRSET' (Latin 'second') $null (Latin 'item2')
+    $r = Read-Frame | Out-Null
+    Send-Frame 'LISTAPPD' $null (Latin 'item2') (Latin 'L')
+    $r = Read-Frame | Out-Null
+    Send-Frame 'LISTGET' $null $null (Latin 'L')
+    $r = Read-Frame
+    Row 'LISTGET joins with @fm' ($r.Status -eq 0 -and $r.Text -eq ('first' + $FM + 'second')) `
+        "got '$($r.Text)'"
+
+    Send-Frame 'LISTCLR' $null $null (Latin 'L')
+    $r = Read-Frame | Out-Null
+    Send-Frame 'LISTGET' $null $null (Latin 'L')
+    $r = Read-Frame
+    Row 'LISTCLR empties it, and empty is not an error' ($r.Status -eq 0 -and $r.Got -eq 0) `
+        "status $($r.Status), $($r.Got) bytes"
+
+    Send-Frame 'LISTAPPD' $null (Latin 'item1') (Latin 'astring')
+    $r = Read-Frame
+    Row 'a non-list appended to is -12034' ($r.Status -eq -12034) "status $($r.Status)"
+
+    # A script and SD see the same collections.
+    Send-Frame 'RUNSTR' (Latin "d['fromscript'] = 'yes'") $null $null
+    $r = Read-Frame | Out-Null
+    Send-Frame 'DICTVGET' $null (Latin 'fromscript') (Latin 'd')
+    $r = Read-Frame
+    Row 'a script and SD share the same dict' ($r.Status -eq 0 -and $r.Text -eq 'yes') `
+        "status $($r.Status) '$($r.Text)'"
+
     # --- shutdown -----------------------------------------------------------
     Send-Frame 'FIN' $null $null $null
     $r = Read-Frame

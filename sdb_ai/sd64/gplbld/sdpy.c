@@ -85,6 +85,15 @@
 #define SD_PyErr_DelObj     -12020
 #define SD_PyErr_UniToStr    -12009  /* unicode -> Latin failed on the way out */
 #define SD_PyErr_EnLatin    -12018  /* Latin -> unicode failed on the way in  */
+#define SD_PyEr_Key          -12007  /* key not in the dictionary */
+#define SD_PyEr_ObToStr      -12008  /* object would not convert to a string */
+#define SD_PyErr_DictExsts  -12012  /* a name is already in use */
+#define SD_PyErr_DictSet    -12015
+#define SD_PyErr_DictDel    -12016
+#define SD_PyErr_NotDict    -12017
+#define SD_PyErr_CreStr     -12031
+#define SD_PyErr_LstItem    -12033
+#define SD_PyErr_NotList    -12034
 
 #define SDPY_PROTOCOL "SDPY1"
 #define MAX_PAYLOAD (64 * 1024 * 1024)
@@ -367,6 +376,265 @@ static void verb_objlen(const char* name) {
   respond_str(0, buf);
 }
 
+/* ======================================================================
+ * THE DICT AND LIST FAMILIES
+ *
+ * ***THE SEPARATOR IS @fm (0xFE), AND THE OLD DOCUMENTATION SAID OTHERWISE.***
+ * Every PY_DICTGETKEYS-style header at 489b18e^ reads "tab separated list",
+ * and the C beside it joined with PyUnicode_FromString("thorn") - U+00FE,
+ * which IS @fm - with the tab version commented out one line above.  The code
+ * was right and the header was stale, the same shape as the CREATE.ACCOUNT
+ * grammar SD Core for Linux filed as bug 4.  Measured at 489b18e^, not
+ * inherited.
+ *
+ * ***AND A LIMIT WORTH KNOWING RATHER THAN HIDING: a key or value that itself
+ * contains @fm makes an ambiguous list.***  The old code had the same hole and
+ * nothing said so.  It is inherent to a mark-joined string, it is not fixable
+ * inside this format, and DCOUNT on the result is what a caller would notice
+ * it with.
+ * ====================================================================== */
+
+#define SD_FM 0xFE
+
+/* A growing byte buffer, because the result is BYTES with a length and must
+ * not go anywhere near a C string: the items can contain NUL. */
+typedef struct { char* p; size_t len; size_t cap; int bad; } buf_t;
+
+static void buf_add(buf_t* b, const char* s, size_t n) {
+  if (b->bad) return;
+  if (b->len + n + 1 > b->cap) {
+    size_t want = (b->cap ? b->cap : 256);
+    char* np;
+    while (want < b->len + n + 1) want *= 2;
+    np = (char*)realloc(b->p, want);
+    if (np == NULL) { b->bad = 1; return; }
+    b->p = np;
+    b->cap = want;
+  }
+  memcpy(b->p + b->len, s, n);
+  b->len += n;
+}
+
+static int is_instance_of(PyObject* obj, const char* type_name) {
+  PyObject* builtins;
+  PyObject* ty;
+  int r;
+  builtins = PyImport_ImportModule("builtins");
+  if (builtins == NULL) return -1;
+  ty = PyObject_GetAttrString(builtins, type_name);
+  Py_DECREF(builtins);
+  if (ty == NULL) return -1;
+  r = PyObject_IsInstance(obj, ty);
+  Py_DECREF(ty);
+  return r;
+}
+
+/* Join a Python sequence into an @fm-marked SD string and respond with it. */
+static void respond_joined(PyObject* seq) {
+  Py_ssize_t n;
+  Py_ssize_t i;
+  buf_t b;
+  b.p = NULL; b.len = 0; b.cap = 0; b.bad = 0;
+
+  n = PySequence_Size(seq);
+  if (n < 0) { respond_python_error(SD_PyEr_Excpt); return; }
+
+  /* ***AN EMPTY COLLECTION IS NOT AN ERROR, AND THIS IS A DELIBERATE CHANGE.***
+   * The removed code returned SD_PyErr_NoItems (-12030) for an empty list or
+   * dict, so every caller had to special-case a state that is perfectly
+   * normal.  Here it is status 0 and an empty payload, which DCOUNT reads as
+   * 0 without any special casing.  Recorded because it diverges from what the
+   * PY_* headers documented. */
+  for (i = 0; i < n; i++) {
+    PyObject* item = PySequence_GetItem(seq, i);
+    PyObject* s;
+    PyObject* enc;
+    if (item == NULL) { free(b.p); respond_python_error(SD_PyErr_LstItem); return; }
+    s = PyObject_Str(item);
+    Py_DECREF(item);
+    if (s == NULL) { free(b.p); respond_python_error(SD_PyErr_CreStr); return; }
+    enc = PyUnicode_AsEncodedString(s, "latin-1", "replace");
+    Py_DECREF(s);
+    if (enc == NULL) { PyErr_Clear(); free(b.p); respond_str(SD_PyErr_UniToStr, ""); return; }
+    if (i != 0) { char fm = (char)SD_FM; buf_add(&b, &fm, 1); }
+    buf_add(&b, PyBytes_AsString(enc), (size_t)PyBytes_Size(enc));
+    Py_DECREF(enc);
+  }
+  if (b.bad) { free(b.p); respond_str(SD_PyErr_CreStr, ""); return; }
+  respond(0, b.len ? b.p : "", b.len);
+  free(b.p);
+}
+
+static void verb_dictcrte(const char* name) {
+  PyObject* d;
+  if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
+  if (name == NULL || *name == '\0') { respond_str(SD_PyErr_NamSpcErr, ""); return; }
+  if (lookup(name) != NULL) { respond_str(SD_PyErr_DictExsts, ""); return; }
+  d = PyDict_New();
+  if (d == NULL) { respond_python_error(SD_PyEr_Dict); return; }
+  if (PyDict_SetItemString(g_ns, name, d) != 0) {
+    Py_DECREF(d);
+    respond_python_error(SD_PyErr_NamSpcErr);
+    return;
+  }
+  Py_DECREF(d);
+  respond(0, "", 0);
+}
+
+/* LISTCRTE HAS NO PY_* EQUIVALENT AND THAT LOOKS LIKE A GAP RATHER THAN A
+ * DECISION: the removed API could append to a list, clear one and read one,
+ * but could only CREATE one by running a script that said "x = []".  Added
+ * for symmetry with the dictionary; nothing is obliged to use it. */
+static void verb_listcrte(const char* name) {
+  PyObject* l;
+  if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
+  if (name == NULL || *name == '\0') { respond_str(SD_PyErr_NamSpcErr, ""); return; }
+  if (lookup(name) != NULL) { respond_str(SD_PyErr_DictExsts, ""); return; }
+  l = PyList_New(0);
+  if (l == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
+  if (PyDict_SetItemString(g_ns, name, l) != 0) {
+    Py_DECREF(l);
+    respond_python_error(SD_PyErr_NamSpcErr);
+    return;
+  }
+  Py_DECREF(l);
+  respond(0, "", 0);
+}
+
+/* Resolve a named object and check its type.  Returns a borrowed reference, or
+ * NULL having already responded with the right error. */
+static PyObject* need(const char* name, const char* type_name, int wrong_type_err) {
+  PyObject* obj;
+  int is;
+  if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return NULL; }
+  obj = lookup(name);
+  if (obj == NULL) { respond_str(SD_PyErr_ObjNOF, ""); return NULL; }
+  if (type_name == NULL) return obj;
+  is = is_instance_of(obj, type_name);
+  if (is < 0) { respond_python_error(SD_PyEr_Excpt); return NULL; }
+  if (is == 0) { respond_str(wrong_type_err, ""); return NULL; }
+  return obj;
+}
+
+static void verb_dictclr(const char* name) {
+  PyObject* d = need(name, "dict", SD_PyErr_NotDict);
+  PyObject* r;
+  if (d == NULL) return;
+  r = PyObject_CallMethod(d, "clear", NULL);
+  if (r == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
+  Py_DECREF(r);
+  respond(0, "", 0);
+}
+
+static void verb_dictkeys(const char* name) {
+  PyObject* d = need(name, "dict", SD_PyErr_NotDict);
+  PyObject* keys;
+  if (d == NULL) return;
+  keys = PyDict_Keys(d);
+  if (keys == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
+  respond_joined(keys);
+  Py_DECREF(keys);
+}
+
+static void verb_dictvalues(const char* name) {
+  PyObject* d = need(name, "dict", SD_PyErr_NotDict);
+  PyObject* vals;
+  if (d == NULL) return;
+  vals = PyDict_Values(d);
+  if (vals == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
+  respond_joined(vals);
+  Py_DECREF(vals);
+}
+
+static void verb_dictvset(const char* name, const char* key, size_t keylen,
+                          const char* value, size_t vallen) {
+  PyObject* d = need(name, "dict", SD_PyErr_NotDict);
+  PyObject* k;
+  PyObject* v;
+  int rc;
+  if (d == NULL) return;
+  k = sd_bytes_to_str(key, keylen);
+  v = sd_bytes_to_str(value, vallen);
+  if (k == NULL || v == NULL) {
+    Py_XDECREF(k); Py_XDECREF(v);
+    respond_python_error(SD_PyErr_EnLatin);
+    return;
+  }
+  rc = PyDict_SetItem(d, k, v);
+  Py_DECREF(k); Py_DECREF(v);
+  if (rc != 0) { respond_python_error(SD_PyErr_DictSet); return; }
+  respond(0, "", 0);
+}
+
+static void verb_dictvget(const char* name, const char* key, size_t keylen) {
+  PyObject* d = need(name, "dict", SD_PyErr_NotDict);
+  PyObject* k;
+  PyObject* v;
+  PyObject* s;
+  PyObject* enc;
+  if (d == NULL) return;
+  k = sd_bytes_to_str(key, keylen);
+  if (k == NULL) { respond_python_error(SD_PyErr_EnLatin); return; }
+  v = PyObject_GetItem(d, k);
+  Py_DECREF(k);
+  if (v == NULL) { PyErr_Clear(); respond_str(SD_PyEr_Key, ""); return; }
+  s = PyObject_Str(v);
+  Py_DECREF(v);
+  if (s == NULL) { respond_python_error(SD_PyEr_ObToStr); return; }
+  enc = PyUnicode_AsEncodedString(s, "latin-1", "strict");
+  Py_DECREF(s);
+  if (enc == NULL) { PyErr_Clear(); respond_str(SD_PyErr_UniToStr, ""); return; }
+  respond(0, PyBytes_AsString(enc), (size_t)PyBytes_Size(enc));
+  Py_DECREF(enc);
+}
+
+static void verb_dictidel(const char* name, const char* key, size_t keylen) {
+  PyObject* d = need(name, "dict", SD_PyErr_NotDict);
+  PyObject* k;
+  int rc;
+  if (d == NULL) return;
+  k = sd_bytes_to_str(key, keylen);
+  if (k == NULL) { respond_python_error(SD_PyErr_EnLatin); return; }
+  if (PyObject_GetItem(d, k) == NULL) {
+    PyErr_Clear();
+    Py_DECREF(k);
+    respond_str(SD_PyEr_Key, "");          /* absent is -12007, not -12016 */
+    return;
+  }
+  rc = PyObject_DelItem(d, k);
+  Py_DECREF(k);
+  if (rc != 0) { respond_python_error(SD_PyErr_DictDel); return; }
+  respond(0, "", 0);
+}
+
+static void verb_listappd(const char* name, const char* objname) {
+  PyObject* l = need(name, "list", SD_PyErr_NotList);
+  PyObject* item;
+  if (l == NULL) return;
+  /* APPENDS A NAMED OBJECT, not a literal - that is the old signature,
+   * SDPYOBJ("", objname, listname, SD_PyListAppd). */
+  item = lookup(objname);
+  if (item == NULL) { respond_str(SD_PyErr_ObjNOF, ""); return; }
+  if (PyList_Append(l, item) != 0) { respond_python_error(SD_PyErr_LstItem); return; }
+  respond(0, "", 0);
+}
+
+static void verb_listclr(const char* name) {
+  PyObject* l = need(name, "list", SD_PyErr_NotList);
+  PyObject* r;
+  if (l == NULL) return;
+  r = PyObject_CallMethod(l, "clear", NULL);
+  if (r == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
+  Py_DECREF(r);
+  respond(0, "", 0);
+}
+
+static void verb_listget(const char* name) {
+  PyObject* l = need(name, "list", SD_PyErr_NotList);
+  if (l == NULL) return;
+  respond_joined(l);
+}
+
 static void verb_delobj(const char* name) {
   if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
   if (lookup(name) == NULL) { respond_str(SD_PyErr_ObjNOF, ""); return; }
@@ -480,6 +748,30 @@ int main(void) {
       verb_objlen(a3);
     } else if (strcmp(verb, "DELOBJ") == 0) {
       verb_delobj(a3);
+    /* The dict and list families.  Argument order is the old SDPYOBJ one:
+     * a1 = value, a2 = key or object name, a3 = the named collection. */
+    } else if (strcmp(verb, "DICTCRTE") == 0) {
+      verb_dictcrte(a3);
+    } else if (strcmp(verb, "DICTCLR") == 0) {
+      verb_dictclr(a3);
+    } else if (strcmp(verb, "DICTKEYS") == 0) {
+      verb_dictkeys(a3);
+    } else if (strcmp(verb, "DICTVALUES") == 0) {
+      verb_dictvalues(a3);
+    } else if (strcmp(verb, "DICTVSET") == 0) {
+      verb_dictvset(a3, a2, (size_t)n2, a1, (size_t)n1);
+    } else if (strcmp(verb, "DICTVGET") == 0) {
+      verb_dictvget(a3, a2, (size_t)n2);
+    } else if (strcmp(verb, "DICTIDEL") == 0) {
+      verb_dictidel(a3, a2, (size_t)n2);
+    } else if (strcmp(verb, "LISTCRTE") == 0) {
+      verb_listcrte(a3);
+    } else if (strcmp(verb, "LISTAPPD") == 0) {
+      verb_listappd(a3, a2);
+    } else if (strcmp(verb, "LISTCLR") == 0) {
+      verb_listclr(a3);
+    } else if (strcmp(verb, "LISTGET") == 0) {
+      verb_listget(a3);
     } else {
       respond_str(1, "unknown verb");
     }
