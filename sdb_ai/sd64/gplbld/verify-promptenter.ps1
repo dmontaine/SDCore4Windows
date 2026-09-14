@@ -81,6 +81,7 @@ $ProbeL = 'ZZPROMPTL'   # leg 3: created the ordinary way, so stored as zzprompt
 $FileD  = 'zzpromptd'   # leg 4: the real file
 $FileX  = 'zzpromptx'   # leg 4: a second VOC pointer to it, so its paths differ from its name
 $ProgP  = 'ZZPROMPTP'   # leg 5: a program catalogued LOCAL and private in turn
+$SentV  = 'zzpromptv'   # leg 6: a sentence saved with .S, for CPROC's .D prompt 5040
 
 $pass = 0
 $fail = 0
@@ -359,6 +360,42 @@ try {
             (($y33.Text -match 'Program is also in local catalogue') -and ($y33.Text -match "Record '$ProgP' not found")) `
             'the VOC V/CS record survived an explicit Y, or the prompt did not appear'
     }
+    Write-Host ''
+
+    # --- LEG 6: RELEASE_1.1 6, CPROC's .D prompt 5040 --------------------------
+    #
+    # The seventh prompt, and the only one of the seven b152 had not pressed
+    # Enter at: b136 answered it with a real Y inside verify-vocverbs entry 5.
+    # ".S <name> 1" saves the previous command as an S-type VOC record - the
+    # shape verify-vocverbs proved ("001  S" in the listing; a record that is
+    # neither S nor PA takes 5041 and never asks).  CPROC:1202 asks 5040; Enter
+    # now means N, which releases the record and leaves without deleting.
+    Write-Host "--- leg 6: CPROC .D prompt 5040 on the sentence $SentV ----------------"
+    $null = Invoke-SD @("DELETE VOC $SentV")                              # leftover of an earlier run
+    $mk6 = Invoke-SD @(".S $SentV 1", ".L $SentV")
+    Write-Host $mk6.Text
+    $sentOk = $mk6.Text -match '(?m)^[ \t]*001[ \t]+S[ \t]*\r?$'
+    Row "leg 6 precondition: .S wrote $SentV as an S-type record" $sentOk `
+        'no "001  S" line, so .D would take 5041 and never ask 5040'
+    if ($sentOk) {
+        $e6 = Invoke-SD @(".D $SentV", '', ".L $SentV")
+        Write-Host $e6.Text
+        Row 'leg 6: the run terminated (no runaway loop)' (-not $e6.Killed) "killed after ${TimeoutSeconds}s"
+        Row 'leg 6: the transcript is a sane size' ($e6.Text.Length -lt 200000) "$($e6.Text.Length) bytes"
+        Row 'leg 6: prompt 5040 was reached, showing (y/<n>)' `
+            ($e6.Text -match "Delete VOC record '$SentV' \(y/<n>\)\?") 'no 5040 prompt'
+        Row 'leg 6: ENTER kept the sentence (001  S still listed)' `
+            (($e6.Text -match '(?m)^[ \t]*001[ \t]+S[ \t]*\r?$') -and ($e6.Text -notmatch "'$SentV' not found in VOC")) `
+            'the sentence is gone after Enter - Enter was taken as YES'
+
+        # CONTROL: Y must delete, or "still listed" above measured nothing.
+        $y6 = Invoke-SD @(".D $SentV", 'Y', ".L $SentV")
+        Write-Host $y6.Text
+        Row 'CONTROL leg 6: the prompt was reached again' ($y6.Text -match "Delete VOC record '$SentV'") `
+            'the control did not reach 5040'
+        Row 'CONTROL leg 6: Y deleted the sentence' ($y6.Text -match "'$SentV' not found in VOC") `
+            '.L still lists the sentence after an explicit Y'
+    }
 }
 finally {
     $null = Invoke-SD @("DELETE.FILE $Probe", 'Y', 'Y', 'Y')
@@ -376,12 +413,12 @@ finally {
     $null = Invoke-SD @("DELETE VOC $FileX")
     $null = Invoke-SD @("DELETE.FILE $FileD", 'Y', 'Y', 'Y')
     $null = Invoke-SD @("DELETE VOC $FileD")
-    $null = Invoke-SD @("DELETE.CATALOG $ProgP", "DELETE VOC $ProgP")
+    $null = Invoke-SD @("DELETE.CATALOG $ProgP", "DELETE VOC $ProgP", "DELETE VOC $SentV")
     foreach ($f in @((Join-Path $bpDir $ProgP), (Join-Path (Join-Path (Join-Path $Root $Account) 'bp.out') $ProgP))) {
         if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
     }
-    $gone = Invoke-SD @("CT VOC $FileX", "CT VOC $FileD", "CT VOC $ProgP")
-    foreach ($n in @($FileX, $FileD, $ProgP)) {
+    $gone = Invoke-SD @("CT VOC $FileX", "CT VOC $FileD", "CT VOC $ProgP", "CT VOC $SentV")
+    foreach ($n in @($FileX, $FileD, $ProgP, $SentV)) {
         Row "cleanup: no VOC record '$n' is left" ($gone.Text -match "Record '$n' not found") "CT VOC $n still finds it"
     }
     $acctForClean = Join-Path $Root $Account
@@ -394,4 +431,4 @@ finally {
 Write-Host ''
 Write-Host "verify-promptenter: $pass passed, $fail failed"
 if ($fail -gt 0) { Bail 1 "$fail check(s) failed." }
-Bail 0 "Enter took the default at 6131, 6135, 6140, 3033 and 3034, each control proves its prompt was live, and a lower-case id was deleted by its upper-case name."
+Bail 0 "Enter took the default at 6131, 6135, 6140, 3033, 3034 and 5040, each control proves its prompt was live, and a lower-case id was deleted by its upper-case name."
