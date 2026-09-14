@@ -8,7 +8,9 @@
 # Four BASIC include records are generated from C headers rather than edited:
 #
 #   gplsrc/revstamp.h  ->  sdsys/gpl.bp/REVSTAMP.H      (was GPL.BP/REVSTAMP)
-#   gplsrc/err.h       ->  sdsys/syscom/ERR.H           (was GPL.BP/ERRGEN)
+#   gplsrc/err.h       ->  sdsys/syscom/err.h           (was GPL.BP/ERRGEN; the
+#                                                    record was ERR.H until
+#                                                    14 Sep 2026, RELEASE_1.1 5)
 #   gplsrc/err.h       ->  sdsys/gpl.bp/ERRTEXT.H       (was GPL.BP/ERRGEN)
 #   gplsrc/opcodes.h   ->  sdsys/gpl.bp/OPCODES.H       (was GPL.BP/OPGEN)
 #
@@ -360,7 +362,7 @@ def main():
     err_h = os.path.join(args.gplsrc, 'err.h')
     opcodes_h = os.path.join(args.gplsrc, 'opcodes.h')
     out_revstamp = os.path.join(args.sdsys, 'gpl.bp', 'REVSTAMP.H')
-    out_syscom = os.path.join(args.sdsys, 'syscom', 'ERR.H')
+    out_syscom = os.path.join(args.sdsys, 'syscom', 'err.h')
     out_errtext = os.path.join(args.sdsys, 'gpl.bp', 'ERRTEXT.H')
     out_opcodes = os.path.join(args.sdsys, 'gpl.bp', 'OPCODES.H')
 

@@ -1027,6 +1027,54 @@ end
     }
 
     # -----------------------------------------------------------------------
+    Write-Output ''
+    Write-Output '=== 10. RELEASE_1.1 5 STAGE 1, 14 Sep 2026 ================================='
+
+    # 10a. THE LAST FOUR UPPER-CASE VOC IDS NEWVOC SHIPPED - $ACC, $MAP, $RELEASE,
+    # SD.VOCLIB - are $acc, $map, $release, sd.voclib.  Section 3's instrument:
+    # CT folds the record id and prints the id it MATCHED, so typing the old name
+    # and being answered in the new one is the rename.  -cmatch is the assertion.
+    # (An account made BEFORE the rename is verify-tiers.ps1 section 5b's job: it
+    # plants the upper ids and runs UPDATE.ACCOUNTS, which needs an account.)
+    $ct10 = Invoke-SD @('CT VOC $ACC', 'CT VOC $MAP', 'CT VOC $RELEASE', 'CT VOC SD.VOCLIB')
+    foreach ($p in @(@{U='$ACC'; L='$acc'}, @{U='$MAP'; L='$map'},
+                     @{U='$RELEASE'; L='$release'}, @{U='SD.VOCLIB'; L='sd.voclib'})) {
+        Note ("typing {0} is answered as {1}" -f $p.U, $p.L) $true `
+             ($ct10 -cmatch ('(?m)^VOC ' + [regex]::Escape($p.L) + '\s*$'))
+    }
+    Write-Output '  --- CT VOC said: ---'
+    Write-Output $ct10
+
+    # 10b. CASE INVERSION - A CONTROL HERE, NOT THE WITNESS.  LOGIN turned it on
+    # at every login and linuxio.c at session start; the owner ruled both off.
+    # ***ON A PIPE THIS CANNOT TELL THE OLD CODE FROM THE NEW***: measured
+    # 14 Sep 2026 on the install that still had both, a piped PTERM DISPLAY read
+    # "Case inversion: Off" - the first piped input clears it.  The witness is
+    # verify-createfilecase.ps1's "sd -internal PTERM DISPLAY", which reads no
+    # input.  What this section can still hold is that PTERM itself reports and
+    # sets the flag: Off, then On after PTERM CASE INVERT (sysmsg 6833 / 6832),
+    # then NOINVERT so the session ends as it began.
+    $pt10 = Invoke-SD @('PTERM DISPLAY', 'PTERM CASE INVERT', 'PTERM DISPLAY', 'PTERM CASE NOINVERT')
+    $readings = @([regex]::Matches($pt10, 'Case inversion: (On|Off)') | ForEach-Object { $_.Groups[1].Value })
+    Write-Output ('  PTERM DISPLAY readings, in order: ' + ($readings -join ', '))
+    Note 'PTERM DISPLAY was read twice'                          2     $readings.Count
+    Note 'control: a piped session reads case inversion Off'     'Off' $(if ($readings.Count -ge 1) { $readings[0] } else { '(none)' })
+    Note 'control: PTERM CASE INVERT then reads On'              'On'  $(if ($readings.Count -ge 2) { $readings[1] } else { '(none)' })
+
+    # 10c. THE SYSCOM INCLUDE RECORDS ARE LOWER CASE ON DISK.  Exact-case listing,
+    # the section 2 instrument (Test-Path would match either).  Every shipped name
+    # in syscom, not a sample, so a file that missed the rename is named.
+    $syscomDir = Join-Path $sdsysDir 'syscom'
+    $sysc = @(Get-ChildItem -LiteralPath $syscomDir -File -Force | Select-Object -ExpandProperty Name)
+    Write-Output ('  syscom listing: ' + (($sysc | Sort-Object) -join '  '))
+    Note 'syscom listing is not empty' $true ($sysc.Count -gt 0)
+    foreach ($n in @('err.h', 'keys.h', 'parser.h', '$pcldata', 'sdclient.bas')) {
+        Note ('syscom ' + $n + ' present, exact case') 1 @($sysc | Where-Object { $_ -ceq $n }).Count
+    }
+    Note 'syscom holds no name with an upper-case letter' '' `
+         (($sysc | Where-Object { $_ -cmatch '[A-Z]' }) -join ' ')
+
+    # -----------------------------------------------------------------------
     if (-not $Keep) {
         Write-Output ''
         Write-Output '=== cleanup =============================================================='

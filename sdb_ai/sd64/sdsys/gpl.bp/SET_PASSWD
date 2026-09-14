@@ -18,6 +18,7 @@
 * 
 *
 * START-HISTORY:
+* 14 Sep 26 Windows port - comment only: LOGIN no longer sets PT$INVERT.
 * 28 Aug 26 Windows port - the same prompt now also writes SD's own credential
 *           through !CRED_SET, so an account is usable over the API as well as
 *           ssh the moment it is created.  New status 6.  Owner's ruling on
@@ -42,7 +43,8 @@
 *    asks, confirms, and hands the answer to Set-LocalUser.
 *
 *    Case inversion is turned off around the reads and restored afterwards.
-*    LOGIN sets PT$INVERT, which silently upcases everything typed - a
+*    PT$INVERT (set by LOGIN until 14 Sep 2026, and still by PTERM CASE
+*    INVERT) silently swaps the case of everything typed - a
 *    password entered as hunter2 arrives as HUNTER2, verifies by hand and
 *    fails at login with nothing visibly wrong.  See PROJECT_STATUS.md
 *    section 6; this is the same guard logto.step.up uses.

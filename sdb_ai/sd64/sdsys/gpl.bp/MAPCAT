@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  The default map file is $map, and
+*           naming it in any case skips the overwrite warning.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -85,7 +87,7 @@ $include err.h
 
          case keyword = KW$FILE
             call @parser(parser$get.token, token.type, file.name, keyword)
-            if token.type = parser$end then file.name = '$MAP'
+            if token.type = parser$end then file.name = '$map'
 
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
@@ -114,7 +116,7 @@ $include err.h
    if file.name # '' then
       open file.name to map.f else stop 'Cannot open ' : file.name
 
-      if file.name # '$MAP' then
+      if downcase(file.name) # '$map' then
          display sysmsg(3044, file.name) :  ;* File xx will be cleared and overwritten. Continue (y/<n>)?
          input yn
 * 30 Aug 26 Windows port - NO CODE CHANGE NEEDED HERE, ONLY THE WORDING.

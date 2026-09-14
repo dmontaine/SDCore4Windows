@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - SYSCOM's $PCLDATA record is $pcldata (RELEASE_1.1 5).
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -53,7 +54,7 @@ common /pcldata/ pcldata
 
    if not(pcldata) then
       open 'syscom' to syscom.f then
-         read pcldata from syscom.f, '$PCLDATA' else null
+         read pcldata from syscom.f, '$pcldata' else null   ;* 14 Sep 26 - RELEASE_1.1 5, record renamed lower
          close syscom.f
       end
    end

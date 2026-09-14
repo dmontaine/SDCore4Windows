@@ -191,6 +191,35 @@ try {
         Row $resolved ("COUNT resolves the file typed in $($cs.w) ('$($cs.n)') - 'record(s) counted'")
         if (-not $resolved) { Write-Output '    --- COUNT said: ---'; Write-Output $o }
     }
+
+    # 14 Sep 26 - RELEASE_1.1 5, STAGE 1: CASE INVERSION STARTS OFF.  LOGIN set
+    # pterm(PT$INVERT, @true) at every login and linuxio.c set it at session
+    # start; the owner ruled both off.  ***A PIPED SESSION CANNOT SEE THIS***:
+    # measured on the pre-change install, a piped "PTERM DISPLAY" already read
+    # "Case inversion: Off" - the pipe's first input clears it (_INPUT) - so
+    # verify-lcnames' pipe rows are only a control.  "sd -internal PTERM
+    # DISPLAY" reads no input at all, so it reports the state LOGIN left, and
+    # -internal needs elevation, which is why this lives here.
+    Write-Output ''
+    Write-Output '=== case inversion as LOGIN leaves it (sd -internal, no input read) ======'
+    $ptOut = Join-Path $env:TEMP ("sd-ptdisp-out-$PID.txt")
+    $ptErr = Join-Path $env:TEMP ("sd-ptdisp-err-$PID.txt")
+    Write-Output ("  command: `"$sdExe`" -internal PTERM DISPLAY")
+    $pp = Start-Process -FilePath $sdExe -ArgumentList @('-internal', 'PTERM', 'DISPLAY') -NoNewWindow -PassThru `
+                        -RedirectStandardOutput $ptOut -RedirectStandardError $ptErr
+    $null = $pp.Handle                      # upgrade-voc.ps1: or ExitCode reads $null
+    $ptDone = $pp.WaitForExit(60000)
+    $ptText = ''
+    foreach ($f in @($ptOut, $ptErr)) {
+        if (Test-Path $f) { $ptText += (Get-Content $f -Raw); Remove-Item $f -Force -ErrorAction SilentlyContinue }
+    }
+    if (-not $ptDone) { try { $pp.Kill() } catch { } }
+    Write-Output '  --- sd -internal PTERM DISPLAY said: ---'
+    Write-Output $ptText
+    $ptRead = @([regex]::Matches("$ptText", 'Case inversion: (On|Off)') | ForEach-Object { $_.Groups[1].Value })
+    Row $ptDone 'sd -internal PTERM DISPLAY finished within 60 s'
+    Row ($ptRead.Count -eq 1) 'PTERM DISPLAY printed exactly one case inversion line' ("got " + $ptRead.Count)
+    Row (($ptRead.Count -eq 1) -and ($ptRead[0] -eq 'Off')) 'a session LOGIN has set up reports case inversion Off' ($ptRead -join ',')
 }
 finally {
     Write-Output ''

@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  Case inversion is no longer turned
+*           on at login (owner's ruling); PTERM CASE INVERT still sets it.
+*           $RELEASE is read as $release, then $RELEASE.  update.voc renames
+*           an account's old upper-case copy of a NEWVOC id rather than
+*           writing a lower-case twin beside it.
 * 05 Sep 26 Windows port - AN ADMINISTRATOR IS REFUSED ANY SESSION WITH NO
 *           INTERACTIVE DESKTOP - ssh and the API, totally.  Owner's ruling,
 *           PRE_RELEASE_FIXES 167 and PROJECT_STATUS.md 5.25.  The connection
@@ -621,7 +626,16 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
       end
    end
 
-   s = pterm(PT$INVERT, @true)
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  CASE INVERSION IS NO LONGER TURNED ON
+*   AT LOGIN.  Owner's ruling, 14 Sep 2026.  This was "s = pterm(PT$INVERT,
+*   @true)": INPUT statements then swapped the case of every letter typed, so
+*   "yes" arrived as "YES" - including passwords (PROJECT_STATUS.md 6) - and the
+*   account prompt echoed "sue" for SUE.  With ids lower case and every lookup
+*   folding, nothing needs typed input upper.  Audited first: all 86 plain
+*   "input" sites in gpl.bp upcase or fold their answer before comparing it;
+*   keyin() and keycode() were never inverted.  The C default is off as well
+*   (linuxio.c), so a session is not inverted before LOGIN runs either.
+*   PTERM CASE INVERT still turns it on for a user who wants it.
 
    * Determine account
 * 20240330 mab we no longer support forced accounts from $LOGINS
@@ -991,7 +1005,16 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
    end
 
    if not(is.phantom) and not(fileinfo(voc, FL$READONLY)) then
-      read voc.rec from voc, "$RELEASE" then
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  THE RECORD IS $release NOW, AND AN
+*   ACCOUNT MADE BEFORE THAT STILL HOLDS $RELEASE.  The ELSE below ends the
+*   session (5028), so an exact read of the new id would lock every older
+*   account out at its next login.  Lower, then upper; update.voc renames the
+*   upper one when this account is next refreshed.
+      release.found = @true
+      read voc.rec from voc, "$release" else
+         read voc.rec from voc, "$RELEASE" else release.found = @false
+      end
+      if release.found then
          * ----- Field 2 - Release level
          s = matchfield(voc.rec<2>, "0X0A", 1)
          if s # SD.REV.STAMP then
@@ -1646,7 +1669,31 @@ update.voc:
 *   UPSTREAM TOO - ../sdb64 sd64/sdsys/GPL.BP/LOGIN has no initialisation either.
 *   See UPSTREAM_FIXES.md.
          old.rec = ''
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  A RENAMED ID TAKES OVER ITS OLD
+*   UPPER-CASE RECORD INSTEAD OF LANDING BESIDE IT.  NEWVOC's ids are lower
+*   case, and an account made before a rename holds the upper one ($RELEASE,
+*   $ACC, $MAP, SD.VOCLIB on 14 Sep 2026).  VOC is a DYNAMIC file, so the exact
+*   read missed it and the write below added a lower-case twin - two records,
+*   the upper one shadowing the new one whenever it is typed in upper case.
+*   So: exact first; failing that, the upper-case id is the old record.  It
+*   takes the same lock, type and [locked] tests as an exact match, and the
+*   write below then stores the new id and deletes old.id.  Only the upper
+*   variant is tried: it is the only other case SD ever shipped.
+         old.id = id
+         old.found = @false
          readu old.rec from update.voc.f, id then
+            old.found = @true
+         end else
+            if upcase(id) # id then
+               readu old.rec from update.voc.f, upcase(id) then
+                  old.found = @true
+                  old.id = upcase(id)
+               end else
+                  release update.voc.f, upcase(id)
+               end
+            end
+         end
+         if old.found then
 * 02 Sep 26 Windows port - PRE_RELEASE_FIXES 70, THE LOCK, AND IT IS TESTED
 *   HERE BECAUSE HERE IS THE ONLY PLACE THAT HAS THE ACCOUNT'S OWN RECORD.
 *   Owner's design: a site marks a VOC record it has customised by putting
@@ -1695,8 +1742,9 @@ update.voc:
                   overridden.ids<-1> = id
                end else
                   locked.count += 1
-                  locked.ids<-1> = id
+                  locked.ids<-1> = old.id
                   release update.voc.f, id
+                  if old.id # id then release update.voc.f, old.id
                   continue
                end
             end
@@ -1733,6 +1781,7 @@ update.voc:
                   repeat
                   if yn = 'N' then
                      release update.voc.f, id
+                     if old.id # id then release update.voc.f, old.id
                      continue
                   end
                end
@@ -1763,8 +1812,12 @@ accept.without.query:
 *   on it every day.  CPROC:1194 and :1282 read [1,1] and [1,2] and tolerate
 *   everything after, which is why new.type is still derived that way above.
 
-         if compare(old.rec, rec) then
+*        14 Sep 26 - RELEASE_1.1 5: a record found under its old upper-case id
+*        is written under the new id and the old one deleted, even when the
+*        contents already match - the rename IS the change.
+         if compare(old.rec, rec) or old.id # id then
             write rec to update.voc.f, id
+            if old.id # id then delete update.voc.f, old.id
             display '.' :
          end else
             release update.voc.f, id

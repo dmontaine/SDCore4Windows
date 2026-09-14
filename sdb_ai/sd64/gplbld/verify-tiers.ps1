@@ -615,6 +615,63 @@ Note 'standard withheld still MISSING after UPDATE.ACCOUNTS' $Withheld.Count ((G
 
 # ---------------------------------------------------------------------------
 Write-Output ''
+Write-Output '=== 5b. an account holding the OLD upper-case ids is renamed, not twinned =='
+
+# 14 Sep 26 - RELEASE_1.1 5.  $ACC, $MAP, $RELEASE and SD.VOCLIB became $acc,
+# $map, $release and sd.voclib in NEWVOC.  An account made before that holds the
+# upper ids, and VOC is a DYNAMIC file, so update.voc's exact read missed them
+# and wrote lower-case twins beside them; LOGIN's exact read of $RELEASE would
+# also have ended every such account's next session with 5028.
+#
+# THE OLD ACCOUNT IS MADE, NOT FOUND: each lower record is copied to its upper
+# id and the lower one deleted, in the programmer account, and the precondition
+# row proves that state before anything is measured.  THEN A NEW SESSION LOGTOs
+# IT - which is LOGIN's $RELEASE read - and runs UPDATE.ACCOUNTS.
+#
+# THE INSTRUMENT IS "LIST VOC WITH @ID = ...", WHICH IS CASE-SENSITIVE (measured
+# 14 Sep 2026: a stored ZzVidPtr listed for "ZzVidPtr" and not for "zzvidptr").
+# LIST with an explicit id and CT both fold, so they cannot tell the two apart.
+$renPairs = @(@{L='$acc'; U='$ACC'}, @{L='$map'; U='$MAP'},
+              @{L='$release'; U='$RELEASE'}, @{L='sd.voclib'; U='SD.VOCLIB'})
+$idQuery  = 'LIST VOC WITH ' + (($renPairs | ForEach-Object { '@ID = "' + $_.L + '" OR @ID = "' + $_.U + '"' }) -join ' OR ')
+function Get-StoredIds($text) {
+    $got = @()
+    foreach ($p in $renPairs) {
+        foreach ($id in @($p.L, $p.U)) {
+            if ($text -cmatch ('(?m)^' + [regex]::Escape($id) + '\s{2,}')) { $got += $id }
+        }
+    }
+    return ,$got
+}
+# THE PROGRAMMER ACCOUNT, NOT THE STANDARD ONE: COPY and DELETE are in
+# tier.policy/omit.standard, so the plant would be refused there.  The closing
+# count row restores section 6's premise (PROGRAMMER at its full count).
+$prog  = $Tiers[1]
+$plant = @(('LOGTO ' + $prog.Name.ToUpper()))
+foreach ($p in $renPairs) { $plant += ('COPY FROM VOC ' + $p.L + ',' + $p.U); $plant += ('DELETE VOC ' + $p.L) }
+$plant += $idQuery
+$text = Invoke-SD $plant
+Show-Raw 'plant the old upper-case ids' $text
+$before = Get-StoredIds $text
+Write-Output ('  stored before UPDATE.ACCOUNTS: ' + ($before -join ' '))
+Note '5b precondition: LIST reported a count' $true ($text -match '(?m)^\d+ record\(s\) listed')
+Note '5b precondition: the account holds exactly the four upper ids' 'U4' `
+     $(if ((@($before | Where-Object { $_ -cmatch '[A-Z]' }).Count -eq 4) -and ($before.Count -eq 4)) { 'U4' } else { ($before -join ' ') })
+
+$text = Invoke-SD @(('LOGTO ' + $prog.Name.ToUpper()), 'WHO', 'UPDATE.ACCOUNTS', $idQuery, 'COUNT VOC')
+Show-Raw 'LOGTO, UPDATE.ACCOUNTS' $text
+$after = Get-StoredIds $text
+Write-Output ('  stored after UPDATE.ACCOUNTS: ' + ($after -join ' '))
+Note '5b: LOGTO into the account did not stop on 5028 ($release VOC record not found)' $false `
+     ($text -match 'VOC record not found')
+Note '5b: the session reached WHO after the LOGTO' $true `
+     ($text -match ('(?m)^\d+ ' + [regex]::Escape($prog.Name.ToUpper()) + '\b'))
+Note '5b: after UPDATE.ACCOUNTS the account holds exactly the four lower ids' 'L4' `
+     $(if ((@($after | Where-Object { $_ -cnotmatch '[A-Z]' }).Count -eq 4) -and ($after.Count -eq 4)) { 'L4' } else { ($after -join ' ') })
+Note '5b: COUNT VOC is back to the programmer count (renamed, not added)' $prog.Count (Get-VocCount $text)
+
+# ---------------------------------------------------------------------------
+Write-Output ''
 Write-Output '=== 6. SUSPENDED: the record, the write-once guard, and the VOC ==========='
 
 # 28 Aug 26 - PRE_RELEASE 38 asked for SUSPENDED coverage and named this file

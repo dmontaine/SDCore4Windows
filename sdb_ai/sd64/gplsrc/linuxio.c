@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Sep 26 Windows port - case inversion starts off (RELEASE_1.1 5)
  * 20240219 mab move to only allow AF_UNIX socket types
  * 31 Dec 23 SD launch - prior history suppressed
  * 17 Aug 26 Windows port - login_user() removed; it read /etc/shadow, which
@@ -254,7 +255,7 @@ bool start_connection(int unused) {
     }
   }
 
-  case_inversion = TRUE;
+  case_inversion = FALSE; /* 14 Sep 26 - RELEASE_1.1 5, see the console branch */
   set_term(TRUE);
 
   /* Set up signal handler */
@@ -341,7 +342,10 @@ bool init_console() {
     }
   }
 
-  case_inversion = TRUE;
+  /* 14 Sep 26 Windows port - RELEASE_1.1 5: case inversion starts OFF, owner's
+     ruling.  It was TRUE here and in the socket branch above, and LOGIN turned
+     it on again; all three are gone.  PTERM CASE INVERT still sets it. */
+  case_inversion = FALSE;
   set_term(TRUE);
 
   fstat(0, &statbuf);
