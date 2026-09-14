@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Sep 26 Windows port - program names are canonical LOWER case: the
+ *           bootstrap processor is $bbproc and load_pcode() looks for lower-
+ *           case pcode names.  RELEASE_1.1_FIXES.md 5, stage 3a.
  * 22 Aug 26 Windows port - a command on the command line no longer needs an
  *           elevated session: the gate moved to LOGIN, which admits an
  *           elevated session as before OR a command named on the invoking
@@ -359,7 +362,7 @@ Private bool comlin(int argc, char *argv[]) {
         check_admin();
         is_bootstrap = TRUE;
         internal_mode = TRUE;
-        strcpy(command_processor, "$BBPROC");
+        strcpy(command_processor, "$bbproc");
 
     } else {
       switch (UpperCase(argv[arg][1])) {
@@ -873,10 +876,13 @@ Private bool load_pcode(char *pname, u_char **ptr) {
 
   pcode = ((u_char *)sysseg) + sysseg->pcode_offset;
 
-  /* Take a local copy of the pcode name and force it to uppercase */
+  /* Take a local copy of the pcode name and force it to lower case, the
+     canonical case of every program name since RELEASE_1.1 5 stage 3a.  The
+     names come from pcode.h, already lower, so this only guards a future
+     entry; the headers they must match are written by bbcmp.py.         */
 
   strcpy(u_pname, pname);
-  UpperCaseString(u_pname);
+  LowerCaseString(u_pname);
 
   /* Search for this item in the pcode library */
   for (i = 0; i < sysseg->pcode_len; i += (obj->object_size + 3) & ~3) {

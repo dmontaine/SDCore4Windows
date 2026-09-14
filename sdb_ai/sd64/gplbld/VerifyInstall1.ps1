@@ -54,6 +54,9 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 14 Sep 26 - AND ON ADDING verify-callcase.ps1 here (stage 3a): 60 verify-*.ps1,
+# 25 named here, 31 in VerifyInstall2, the same four in neither, none in both.
+#
 # 14 Sep 26 - AND ON ADDING verify-dictrename.ps1 to VerifyInstall2 (stage 2b):
 # 59 verify-*.ps1, 24 named here, 31 in VerifyInstall2, the same four in
 # neither, none in both - counted from the directory and both tables.
@@ -776,6 +779,16 @@ $steps = @(
     # code because COPY carries a compiled object across; each no-error row now
     # requires the "Compiling xtype" line.
     @{ Name = 'verify-dictfold.ps1'; P = @{} },
+    # 14 Sep 26 - RELEASE_1.1 5 stage 3a.  Program and catalogue names are lower
+    # case.  NTFS opens gcat under any case, so this reads NAMES - the gcat
+    # listing, bin\pcode's headers, the runtime's error text, CATALOG's and
+    # DELETE.CATALOG's messages, the stored local-catalogue VOC id - rather than
+    # whether calls work.  Same neighbourhood and reasons as verify-dictfold:
+    # own account, unelevated, no token, bounded per session.  Measured before
+    # being wired in: RED on the b158 install on 13 decisive rows, controls
+    # green, after its own stored-id matcher was fixed (it had counted 3029's
+    # message line as a VOC row).
+    @{ Name = 'verify-callcase.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer

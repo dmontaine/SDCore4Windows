@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Sep 26 Windows port - the debugger is $debug / $pdbg (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -765,7 +766,7 @@ void op_debug() {
 
     in_debugger = TRUE;
     /* 20240219 mab rebrand VBSRVR to APISRVR */
-    k_call((is_phantom || is_sdApiSrvr) ? "$PDBG" : "$DEBUG", 5, NULL, 0);
+    k_call((is_phantom || is_sdApiSrvr) ? "$pdbg" : "$debug", 5, NULL, 0);
   } else
     pc += 3;
 

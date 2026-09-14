@@ -798,16 +798,18 @@ def check_bootstrap_complete(sdsys):
         d = os.path.join(sdsys, sub)
         return len(os.listdir(d)) if os.path.isdir(d) else 0
 
-    cproc = os.path.join(sdsys, 'gcat', '$CPROC')
+    # 14 Sep 26 - lower case, RELEASE_1.1 5 stage 3a.  NTFS would match either
+    # spelling, so these checks cannot see the case; verify-callcase reads it.
+    cproc = os.path.join(sdsys, 'gcat', '$cproc')
     cproc_sz = os.path.getsize(cproc) if os.path.isfile(cproc) else -1
 
     faults = []
     if cproc_sz <= 0:
-        faults.append('gcat/$CPROC is %s - the bootstrap touches it empty and '
+        faults.append('gcat/$cproc is %s - the bootstrap touches it empty and '
                       'the LAST step overwrites it, so this is the decisive one'
                       % ('absent' if cproc_sz < 0 else '0 bytes'))
-    if not os.path.isfile(os.path.join(sdsys, 'gcat', '$LOGIN')):
-        faults.append('gcat/$LOGIN is absent - nothing could log in')
+    if not os.path.isfile(os.path.join(sdsys, 'gcat', '$login')):
+        faults.append('gcat/$login is absent - nothing could log in')
     if n('gcat') < 100:
         faults.append('gcat holds %d entries, expected ~132' % n('gcat'))
     if n('gpl.bp.out') < 150:

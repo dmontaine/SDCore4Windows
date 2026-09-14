@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - the call stack names $cproc, lower case
+*           (RELEASE_1.1 5 stage 3a)
 * 25 Aug 26 Windows port - dropped the FVAR.NET arm: it printed "(Networked)"
 *           for a file type nothing can produce since SDNet was removed.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -1549,7 +1551,7 @@ show.call.stack:
       ss = s<stack.index>
       message = ss<1,1>
       begin case
-         case message = '$CPROC'
+         case message = '$cproc'   ;* 14 Sep 26 stage 3a: program names are lower
             message = 'Command processor'
             gosub emit.msg
          case 1

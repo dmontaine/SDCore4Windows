@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Sep 26 Windows port - op_object() lowers the class catalogue name, as
+ *           op_call() does.  The property name in op_objref() stays upper:
+ *           it is an identifier, not a catalogue name.  RELEASE_1.1_FIXES.md 5,
+ *           stage 3a.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -176,7 +180,7 @@ void op_object() {
   if (k_get_c_string(descr, call_name, MAX_PROGRAM_NAME_LEN) <= 0) {
     k_illegal_call_name();
   }
-  UpperCaseString(call_name);
+  LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
 
   if (!valid_call_name(call_name))
     k_illegal_call_name();

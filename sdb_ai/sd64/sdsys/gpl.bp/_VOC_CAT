@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - an old upper-case local catalogue entry is found
+*           for a lower-case call name (RELEASE_1.1 5 stage 3a)
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -39,7 +41,15 @@ $include int$keys.h
    pathname = ""
    saved.status = status()
 
-   read rec from @voc,voc.id then
+*  14 Sep 26 - RELEASE_1.1 5 stage 3a.  voc.id arrives lower case - the kernel
+*  lowers every call name - but an entry catalogued before that is under the
+*  upper-case VOC id, so the upper-case spelling is tried second.
+   found = @true
+   read rec from @voc,voc.id else
+      read rec from @voc,upcase(voc.id) else found = @false
+   end
+
+   if found then
       if upcase(rec[1,1]) = "V" then
          if rec<2> = "CS" then pathname = trimb(rec<3>)
          if not(ospath(pathname, OS$EXISTS)) then

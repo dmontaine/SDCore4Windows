@@ -18,6 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 3a (owner: "CATALOG stores
+*           lower").  Call names are lower case, the runtime's canonical case.
+*           A local catalogue entry made before this, under the upper-case VOC
+*           id, is renamed rather than twinned, and found by the "also in the
+*           local catalogue" check.  A global or private entry is deleted
+*           before it is rewritten: on NTFS a file written over an existing
+*           one keeps the OLD name's case, so without it a re-catalogued
+*           program would keep its upper-case name on disk.
 * 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
 * rev 0.9.0 Jan 25 mab require admin priviliges for global catalog
 *                       and set owner : group to sdsys : sdusers on write
@@ -79,8 +87,8 @@ $define CAT_PCODE  3
    catalogue.all = @false        ;* Not using * tolen
    using.list = @false           ;* Not using a select list
    prefix.chars = "*!_$"
-   leading.chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-   following.chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.%$-_"
+   leading.chars = "abcdefghijklmnopqrstuvwxyz0123456789"         ;* 14 Sep 26 stage 3a: call names are lower
+   following.chars = "abcdefghijklmnopqrstuvwxyz0123456789.%$-_"
 
    * Check for alternative private catalogue location
 
@@ -156,7 +164,7 @@ $define CAT_PCODE  3
             using.list = @true
          end else
             file.name = "bp"
-            call.name = upcase(name(1))
+            call.name = downcase(name(1))
             program.name = name(1)
             if mode # CAT_PCODE and index(prefix.chars, call.name[1,1], 1) then
                program.name = program.name[2,999]
@@ -171,7 +179,7 @@ $define CAT_PCODE  3
             catalogue.all = @true
          end else
             program.name = name(2)
-            call.name = upcase(name(2))
+            call.name = downcase(name(2))
             if mode # CAT_PCODE and index(prefix.chars, call.name[1,1], 1) then
                program.name = program.name[2,999]
                if mode and mode # CAT_GLOBAL then stop sysmsg(3021) ;* Incompatible cataloguing modes specified
@@ -181,7 +189,7 @@ $define CAT_PCODE  3
 
       case no.names = 3
          file.name = name(1)
-         call.name = upcase(name(2))
+         call.name = downcase(name(2))
          program.name = name(3)
          if mode # CAT_PCODE and index(prefix.chars, call.name[1,1], 1) then
             if mode and mode # CAT_GLOBAL then stop sysmsg(3021) ;* Incompatible cataloguing modes specified
@@ -245,7 +253,7 @@ $define CAT_PCODE  3
       select object.file to 11
       readnext program.name from 11 then
          loop
-            call.name = upcase(program.name)
+            call.name = downcase(program.name)
             gosub catalogue.program
             readnext program.name from 11 else exit
          repeat
@@ -253,7 +261,7 @@ $define CAT_PCODE  3
    end else if using.list then
       readnext program.name then
          loop
-            call.name = upcase(program.name)
+            call.name = downcase(program.name)
             gosub catalogue.program
             readnext program.name else exit
          repeat
@@ -337,9 +345,26 @@ catalogue.program:
 
    begin case
       case mode = CAT_LOCAL
+*        14 Sep 26 - stage 3a.  An entry catalogued before call names went lower
+*        is under the upper-case VOC id.  It is found here and deleted once the
+*        lower-case one is written, so the entry is renamed, not twinned.
+         old.local.id = ''
+         if upcase(call.name) # call.name then
+            readu old.voc.rec from @voc, upcase(call.name) then
+               if upcase(old.voc.rec[1,1]) = 'V' and old.voc.rec<2> = 'CS' then
+                  old.local.id = upcase(call.name)
+               end else
+                  release @voc, upcase(call.name)
+               end
+            end else
+               release @voc, upcase(call.name)
+            end
+         end
+
          readu voc.rec from @voc, call.name then
             if upcase(voc.rec[1,1]) # 'V' or voc.rec<2> # 'CS' then
                release @voc, call.name
+               if old.local.id # '' then release @voc, old.local.id
                display sysmsg(3028, call.name) ;* VOC already contains a conflicting entry named xx
                return
             end
@@ -348,6 +373,7 @@ catalogue.program:
          program.path = fileinfo(object.file, fl$path) : @ds : program.name
          voc.rec = "V" : @fm : "CS" : @fm : program.path
          write voc.rec to @voc, call.name
+         if old.local.id # '' then delete @voc, old.local.id
 
          display sysmsg(3029, call.name) ;* xx added to local catalogue
          gosub check.private
@@ -356,6 +382,7 @@ catalogue.program:
       case mode = CAT_GLOBAL
          recordlocku gcat.f, call.name
          mark.mapping gcat.f, off
+         deleteu gcat.f, call.name   ;* 14 Sep 26 stage 3a: NTFS keeps an overwritten file's old case
          write object.code to gcat.f, call.name
 * 15 Aug 26 Windows port - THE chown IS GONE.  It set every catalogue entry to
 *   sdsys:sdusers, neither of which is a Windows account, so it failed on every
@@ -375,7 +402,7 @@ catalogue.program:
             stop sysmsg(7701, program.name) ;* %1 is not a valid recursive pcode name
          end
 
-         program.name = upcase(program.name[2,999])
+         program.name = downcase(program.name[2,999])   ;* 14 Sep 26 stage 3a: pcode names are lower (sd.c load_pcode)
 
          if not(bitand(flags, HDR.RECURSIVE)) then
             stop sysmsg(3048, program.name) ;* %1 is not a recursive pcode item
@@ -421,6 +448,7 @@ catalogue.program:
       case 1
          recordlocku cat.f, call.name
          mark.mapping cat.f, off
+         deleteu cat.f, call.name   ;* 14 Sep 26 stage 3a: NTFS keeps an overwritten file's old case
          write object.code to cat.f, call.name
       
          display sysmsg(3031, call.name) ;* xx added to private catalogue
@@ -446,10 +474,21 @@ validate.call.name:
 * ======================================================================
 
 check.local:
-   readu voc.rec from @voc, call.name then
+* 14 Sep 26 - stage 3a.  A local entry catalogued before call names went lower
+* is under the upper-case VOC id, so both spellings are checked.
+   local.ids = call.name
+   if upcase(call.name) # call.name then local.ids<2> = upcase(call.name)
+   for local.i = 1 to dcount(local.ids, @fm)
+      local.id = local.ids<local.i>
+      gosub check.local.id
+   next local.i
+   return
+
+check.local.id:
+   readu voc.rec from @voc, local.id then
       if upcase(voc.rec[1,1]) = 'V' and voc.rec<2> = 'CS' then
          if no.query then
-            delete @voc, call.name
+            delete @voc, local.id
          end else
             loop
                display sysmsg(3033) : ;* Program is also in local catalogue. Remove?
@@ -470,12 +509,12 @@ check.local:
             until yn = 'Y' or yn = 'N'
             repeat
 
-            if yn = 'Y' then delete @voc, call.name
+            if yn = 'Y' then delete @voc, local.id
          end
       end
    end
 
-   release @voc, call.name    ;* Ensure released for all paths
+   release @voc, local.id    ;* Ensure released for all paths
 
    return
 

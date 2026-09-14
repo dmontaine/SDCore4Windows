@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Sep 26  A trigger name is loaded lower case (RELEASE_1.1 5 stage 3a)
  * 17 Aug 26  Directory files are opened DHF_NOCASE unconditionally
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -260,12 +261,17 @@ DH_FILE* dh_open(char path[]) {
       dh_file->trigger_name = NULL;
     } else {
       strcpy(dh_file->trigger_name, header.trigger_name);
+      /* 14 Sep 26 - a file made before RELEASE_1.1 5 stage 3a holds its
+         trigger name in upper case, and nothing rewrites file headers.
+         Program names are canonical lower case now, so the copy is lowered
+         and that is what is loaded - never the header's own spelling.   */
+      LowerCaseString(dh_file->trigger_name);
     }
     /* -------------------- */
     if (dh_file->trigger_name != NULL) {
       /* Attempt to snap link to trigger function */
 
-      obj = (OBJECT_HEADER*)load_object(header.trigger_name, FALSE);
+      obj = (OBJECT_HEADER*)load_object(dh_file->trigger_name, FALSE);
       if (obj != NULL)
         obj->ext_hdr.prog.refs += 1;
       dh_file->trigger = (u_char*)obj;

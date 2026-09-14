@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Sep 26 Windows port - op_settrig stores the trigger name lower case
+ *           (RELEASE_1.1 5 stage 3a)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -379,6 +381,10 @@ void op_settrig() {
 
   descr = e_stack - 2;
   name_len = k_get_c_string(descr, call_name, MAX_TRIGGER_NAME_LEN);
+  /* 14 Sep 26 - stored lower case, the canonical case of program names
+     (RELEASE_1.1 5 stage 3a); valid_call_name() now refuses upper case.   */
+  if (name_len > 0)
+    LowerCaseString(call_name);
   if ((name_len < 0) || (name_len && !valid_call_name(call_name))) {
     process.status = ER_IID;
     goto exit_op_settrig;

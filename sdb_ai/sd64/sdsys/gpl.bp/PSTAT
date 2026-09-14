@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - compares program names lower case (RELEASE_1.1 5
+*           stage 3a)
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -188,11 +190,13 @@ report:
             case prog.name[1,1] = '_'       ;* Recursive
                continue
 
-            case prog.name= '$CPROC'
+*           14 Sep 26 - lower case: the names come from the loaded programs'
+*           headers, which carry the canonical lower case since stage 3a.
+            case prog.name= '$cproc'
                print space(5) : sysmsg(6807) ;* Command processor
                continue
 
-            case prog.name= '$VBSRVR'
+            case prog.name= '$vbsrvr'
                print space(5) : sysmsg(6808) ;* SDVbSrvr processor
                continue
          end case

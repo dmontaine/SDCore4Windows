@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 3a: catalogue names are lower
+*           case, and a local entry is found under its old upper-case VOC id too.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 18 Aug 26 Windows port - deleting from the global catalogue requires
 *           administrator rights.  It required nothing at all before.
@@ -73,7 +75,7 @@ $include int$keys.h
             global = @true
 
          case not(using.select.list)
-            name.list<-1> = upcase(token)
+            name.list<-1> = downcase(token)   ;* 14 Sep 26 stage 3a: call names are lower
 
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
@@ -122,7 +124,7 @@ $include int$keys.h
 
    @system.return.code = 0
    loop
-      cat.name = remove(name.list, delim)
+      cat.name = downcase(remove(name.list, delim))   ;* a select list's names too (stage 3a)
 
       if cat.name = '' then
          display sysmsg(3037) ;* Null catalogue entry name ignored
@@ -140,13 +142,22 @@ $include int$keys.h
                end
 
             case local
-               readu voc.rec from @voc, cat.name else null
+*              14 Sep 26 - stage 3a.  An entry catalogued before call names went
+*              lower is under the upper-case VOC id, so that is tried second.
+               local.id = cat.name
+               voc.rec = ''
+               readu voc.rec from @voc, local.id else
+                  release @voc, local.id
+                  local.id = upcase(cat.name)
+                  voc.rec = ''
+                  readu voc.rec from @voc, local.id else voc.rec = ''
+               end
                if upcase(voc.rec[1,1]) = "V" and voc.rec<2> = "CS" then
-                  delete @voc, cat.name
+                  delete @voc, local.id
                   unload.object
                   display sysmsg(3040, cat.name) ;* xx deleted from the local catalogue
                end else
-                  release @voc, cat.name
+                  release @voc, local.id
                   display sysmsg(3041, cat.name) ;* xx is not in the local catalogue
                   @system.return.code = -ER$NOT.CAT
                end

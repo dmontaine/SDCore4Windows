@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Sep 26 Windows port - the API server processor is $apisrvr (RELEASE_1.1 5
+ *           stage 3a)
  * 14 Sep 26 Windows port - case inversion starts off (RELEASE_1.1 5)
  * 20240219 mab move to only allow AF_UNIX socket types
  * 31 Dec 23 SD launch - prior history suppressed
@@ -116,7 +118,7 @@ bool start_connection(int unused) {
 
 /* 20240219 mab rebrand VBSRVR to APISRVR */ 
   if (is_sdApiSrvr)
-    strcpy(command_processor, "$APISRVR");
+    strcpy(command_processor, "$apisrvr");
     
 /* 20240219 mab rebrand VBSRVR to APISRVR */
   if (connection_type == CN_SOCKET) {

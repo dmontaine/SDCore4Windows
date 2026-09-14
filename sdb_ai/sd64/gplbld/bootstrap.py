@@ -18,11 +18,14 @@
 #
 # TWO STEPS LOOK WRONG AND ARE NOT, and both cost a previous session real time:
 #
-#   * The empty gcat/$CPROC placeholder is what lets "sd -start" run before
+#   * The empty gcat/$cproc placeholder is what lets "sd -start" run before
 #     anything is catalogued.  read_config() only does access(path, 0) on it,
 #     so an empty file satisfies the check and the last step overwrites it with
 #     the real object.  There is no ordering deadlock here, however much it
 #     looks like one.
+#     14 Sep 26 - LOWER CASE, RELEASE_1.1 5 stage 3a, and the case matters even
+#     on NTFS: a file written over an existing one keeps the OLD name's case,
+#     so an upper-case placeholder would leave the real object named $CPROC.
 #
 #   * "sd -start" comes before "sd -i", not after.
 #
@@ -232,7 +235,7 @@ def main():
         gcat = os.path.join(sysdir, 'gcat')
         if not os.path.isdir(gcat):
             os.makedirs(gcat)
-        open(os.path.join(gcat, '$CPROC'), 'ab').close()
+        open(os.path.join(gcat, '$cproc'), 'ab').close()
 
         # Clear anything a previous run left behind before starting.  A failed
         # bootstrap leaves the shared segment up, so the next attempt gets
@@ -286,7 +289,7 @@ def main():
             # "n error(s)" summary, so only the warning check applies.
             check_compile(out, 'THIRD.COMPILE', require_summary=False)
 
-            print('  writing the real gcat/$CPROC')
+            print('  writing the real gcat/$cproc')
             sd(sdexe, env, ['-internal', 'BASIC', 'gpl.bp', 'CPROC'])
         finally:
             print('  stopping SD')

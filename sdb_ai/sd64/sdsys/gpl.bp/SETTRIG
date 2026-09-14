@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - the trigger name is lower case (RELEASE_1.1 5
+*           stage 3a); the kernel stores and loads it lower too.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
 *           now names the file and the session holding it (10168/10169).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -86,7 +88,7 @@ $include err.h
    * Process second argument
 
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
-   trigger.name = upcase(token)
+   trigger.name = downcase(token)   ;* 14 Sep 26 RELEASE_1.1 5 stage 3a: call names are lower
 
    begin case
       case token.type = PARSER$END     ;* Report trigger state

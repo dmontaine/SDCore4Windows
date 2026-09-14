@@ -4,6 +4,19 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+14 Sep 26  PROGRAM AND CATALOGUE NAMES ARE LOWER CASE.
+
+           CATALOG now stores every name in lower case, and SD's own
+           programs are catalogued that way: MAP lists $cproc, !parser and
+           so on, and CATALOG and DELETE.CATALOG report the lower-case name.
+           The names in a compiled program (CALL, SUBROUTINE, FUNCTION,
+           PROGRAM and CLASS) are lower case too, and a call made in any
+           case, including from a program compiled by an earlier release,
+           still finds its subroutine.  A program you catalogued locally with
+           an earlier release is still found, and cataloguing it again renames
+           its VOC entry to lower case rather than adding a second one.
+           Names of COMMON blocks are unchanged.
+
 14 Sep 26  THE DICTIONARIES SD SUPPLIES NAME THEIR FIELDS IN LOWER CASE.
 
            The fields in the dictionaries of voc, of dictionaries themselves,

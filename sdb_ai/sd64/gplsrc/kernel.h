@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Sep 26 Windows port - command_processor defaults to $cproc (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * 00 Jun 24 bootstrap flag
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
@@ -65,7 +66,10 @@ Public char config_path[MAX_PATHNAME_LEN + 1] init("");
 Public char* single_command init(NULL); /* User typed "SD xxx" */
 Public char* forced_account init(NULL); /* User typed "SD -Axxx" */
 
-Public char command_processor[MAX_PROGRAM_NAME_LEN + 1] init("$CPROC");
+/* 14 Sep 26 - lower case, the canonical case of program names (RELEASE_1.1 5
+   stage 3a).  k_call() is given this name directly, so no canonicalization
+   reaches it.                                                              */
+Public char command_processor[MAX_PROGRAM_NAME_LEN + 1] init("$cproc");
 
 Public char private_catalogue[MAX_PATHNAME_LEN + 1] init("cat");
 

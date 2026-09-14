@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Sep 26 Windows port - op_procread looks for $proc, lower case
+ *           (RELEASE_1.1 5 stage 3a)
  * rev 1.0-1 mab add op_procread back in per user request
  * 06 Aug 24 mab remove op_procread
  * 02 Aug 24 mab correct format code in op_dtx
@@ -1227,7 +1229,7 @@ void op_procread() {
   for (pgm = process.program.prev; pgm != NULL; pgm = pgm->prev) {
     if (!strcmp(
             ((OBJECT_HEADER*)(pgm->saved_c_base))->ext_hdr.prog.program_name,
-            "$PROC")) {
+            "$proc")) { /* RELEASE_1.1 5 stage 3a: names are lower case */
       is_proc = TRUE;
       break;
     }

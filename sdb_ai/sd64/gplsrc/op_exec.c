@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Sep 26 Windows port - EXECUTE calls $cproc, lower case (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -207,7 +208,7 @@ void op_execute() {
     plant the actual CALL opcode as the called name is illegal for user
     mode programs.                                                      */
 
-  k_call("$CPROC", 0, NULL, 0);
+  k_call("$cproc", 0, NULL, 0);
   process.program.flags |= IS_EXECUTE;
   if (!(flags & 0x01))
     process.program.flags |= IGNORE_ABORTS;

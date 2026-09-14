@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 3a: PROGRAM, SUBROUTINE,
+*           FUNCTION, CLASS, CALL, ENTER, DEFFUN CALLING and $CATALOG names
+*           are LOWER case, the runtime's canonical case now.  COMMON and
+*           VARSET names are not - they are matched across programs by name,
+*           and objects compiled before this still carry upper case - and
+*           neither is a CLASS INHERITS name, which is also a variable.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a {field} name gains the
 *           downcase tier of the dictionary fold.
 * 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 114.  The BEGIN TRANSACTION
@@ -845,7 +851,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    * Object header information
 
-   program.name = upcase(record.name[1,HDR.PROGRAM.NAME.LEN])
+   program.name = downcase(record.name[1,HDR.PROGRAM.NAME.LEN])   ;* 14 Sep 26 RELEASE_1.1 5 stage 3a
    subr.arg.count = 0                ;* Subroutine arguments
    var.count = 0                     ;* Number of local variables
    symbol.table.offset = 0           ;* Symbol table position
@@ -2689,9 +2695,11 @@ proc.directive:
 
          begin case
             case look.ahead.token = TKN.END
-               if catalogue.name = 'LOCAL' or catalogue.name = 'GLOBAL' then
+*              14 Sep 26 - get.call.name answers lower case now (stage 3a),
+*              so the keyword test compares upper to upper.
+               if upcase(catalogue.name) = 'LOCAL' or upcase(catalogue.name) = 'GLOBAL' then
                   * Not really a catalogue name at all
-                  catalogue.mode = catalogue.name
+                  catalogue.mode = upcase(catalogue.name)
                   catalogue.name = '~'
                end
             case u.look.ahead.token.string = 'LOCAL'
@@ -2711,7 +2719,7 @@ proc.directive:
             if len(catalogue.name) > 1 and index("*!_$", catalogue.name[1,1], 1) then n = 2
             else n = 1
 
-            if len(catalogue.name) > MAX.CALL.NAME.LEN or convert("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.%$_-", "", catalogue.name[n,99]) # '' then
+            if len(catalogue.name) > MAX.CALL.NAME.LEN or convert("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.%$_-", "", catalogue.name[n,99]) # '' then
                err.msg = sysmsg(2836) ;* Illegal catalogue name
                gosub error
                goto exit.proc.directive
@@ -3117,7 +3125,17 @@ get.var.name:
 * GET.NAME       Used for PROGRAM and COMMON names
 * GET.CALL.NAME  Used for CALL and SUBROUTINE statements
 
+* 14 Sep 26 - RELEASE_1.1 5 stage 3a.  GET.CALL.NAME answers LOWER case, the
+* runtime's canonical case for program names.  GET.NAME is unchanged: COMMON
+* and VARSET names come through it and must match objects compiled before
+* this.  The upper-case body is GET.CALL.NAME.UPPER, which CLASS INHERITS
+* calls directly because its name is also a variable.
 get.call.name:
+   gosub get.call.name.upper
+   s = downcase(s)
+   return
+
+get.call.name.upper:
    s = ""
 
    if look.ahead.token.string = '!' or look.ahead.token.string = '*' then
@@ -6057,6 +6075,7 @@ st.class:
    * Get name of program
 
    gosub get.name
+   s = downcase(s)     ;* 14 Sep 26 stage 3a - a class name is a program name
    program.name = s[1,HDR.PROGRAM.NAME.LEN]
    if len(s) > HDR.PROGRAM.NAME.LEN then
       err.msg = sysmsg(2919) ;* Name has been truncated for cataloguing
@@ -6106,7 +6125,7 @@ st.class:
    if look.ahead.token = TKN.NAME and u.look.ahead.token.string = 'INHERITS' then
       gosub get.token
       loop
-         gosub get.call.name                 ;* Read name token
+         gosub get.call.name.upper           ;* Read name token - upper: also a variable (stage 3a)
          inherited.classes<-1> = s
 
          * Create a PRIVATE variable of the same name as the class
@@ -6709,7 +6728,7 @@ st.deffun:
                goto error
             end
 
-            function.call.name = u.token.string
+            function.call.name = downcase(token.string)   ;* 14 Sep 26 stage 3a
             st.work = bitor(st.work, 1)
 
          case u.look.ahead.token.string = "KEY"
@@ -10132,6 +10151,7 @@ st.program:
    * Get name of program
 
    gosub get.name
+   s = downcase(s)     ;* 14 Sep 26 stage 3a - program names are lower case
    program.name = s[1,HDR.PROGRAM.NAME.LEN]
    if len(s) > HDR.PROGRAM.NAME.LEN then
       err.msg = sysmsg(2919) ;* Name has been truncated for cataloguing
@@ -10139,7 +10159,7 @@ st.program:
    end
    name.set = @true
 
-   return   
+   return
 
 *****************************************************************************
 * ST.QUIT  -  QUIT statement (Restricted)

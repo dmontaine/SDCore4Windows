@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Sep 26 Windows port - call names are canonical LOWER case: the five
+ *           UpperCaseString() calls became LowerCaseString(), and
+ *           valid_call_name() accepts lower case only.  RELEASE_1.1_FIXES.md 5,
+ *           stage 3a.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -92,7 +96,7 @@ void op_call() {
         k_illegal_call_name();
       }
 
-      UpperCaseString(call_name);
+      LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
 
       if (!valid_call_name(call_name))
         k_illegal_call_name();
@@ -210,7 +214,7 @@ void op_callv() {
         k_illegal_call_name();
       }
 
-      UpperCaseString(call_name);
+      LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
 
       if (!valid_call_name(call_name))
         k_illegal_call_name();
@@ -275,7 +279,7 @@ void op_chkcat() {
 
   descr = e_stack - 1; /* Replace e-stack item, not final descr */
   if (k_get_c_string(descr, call_name, MAX_PROGRAM_NAME_LEN) > 0) {
-    UpperCaseString(call_name);
+    LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
     (void)map_t1_id(call_name, strlen(call_name), mapped_name);
 
     if (strchr("*$_!", call_name[0]) == NULL) { /* No prefix */
@@ -376,7 +380,7 @@ void op_enter() {
       k_error(sysmsg(1129));
   }
 
-  UpperCaseString(call_name);
+  LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
 
   if (!valid_call_name(call_name))
     k_illegal_call_name();
@@ -687,7 +691,7 @@ void op_loadobj() {
         k_illegal_call_name();
       }
 
-      UpperCaseString(call_name);
+      LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
 
       if (!valid_call_name(call_name))
         k_illegal_call_name();
@@ -871,7 +875,12 @@ Private void computed_jump(
 
 bool valid_call_name(char* p) {
   char c;
-  char valid_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.%$-_";
+  /* 14 Sep 26 Windows port - LOWER CASE ONLY, RELEASE_1.1 5 stage 3a.  Every
+     caller converts the name with LowerCaseString() immediately before this
+     test, so an upper-case letter here means a caller that missed the flip -
+     and NTFS would otherwise hide it by opening gcat case-blind.  Refusing it
+     makes such a site fail loudly as an illegal call name.                   */
+  char valid_chars[] = "abcdefghijklmnopqrstuvwxyz0123456789.%$-_";
   char leading_chars[] = "*$!_";
 
   /* !!CALLNAME!! */

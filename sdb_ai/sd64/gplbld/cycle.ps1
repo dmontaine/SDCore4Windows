@@ -620,24 +620,33 @@ $nTinfo  = $(
     if (Test-Path -LiteralPath $d) {
         (Get-ChildItem -LiteralPath $d -Recurse -File -ErrorAction SilentlyContinue).Count
     } else { -1 })
-$szCproc = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')) {
-               (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$CPROC')).Length } else { -1 }
-$szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')) {
-               (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$BCOMP')).Length } else { -1 }
+# 14 Sep 26 - $cproc and $bcomp, lower case (RELEASE_1.1 5 stage 3a).  Test-Path
+# matches either spelling on NTFS, so these read the size, not the case.
+$szCproc = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$cproc')) {
+               (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$cproc')).Length } else { -1 }
+$szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$bcomp')) {
+               (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$bcomp')).Length } else { -1 }
 
 # 18 Aug 26 - 129/190, NOT 132/193.  Removing SDNet took three programs with it
 # (commit c893308), so the old figures have read three high since the 17:21
 # cycle.  The thresholds below did not move and did not need to: they are set
 # far enough back to catch a bootstrap that failed, not to police a count.
 Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~100)" -f $nGcat, $nOut, $nTinfo)
-Write-Host ("   `$CPROC {0} bytes (want >0)   `$BCOMP {1} (want ~88,000 - 70,697 is the seed)" -f $szCproc, $szBcomp)
+Write-Host ("   `$cproc {0} bytes (want >0)   `$bcomp {1} (want ~88,000 - under 80,000 is bbcmp.py's seed, ~70,900)" -f $szCproc, $szBcomp)
 
 $faults = @()
 if ($szCproc -le 0)   { $faults += '$CPROC is the 0-byte placeholder - the bootstrap never reached the last step' }
 if ($nGcat   -lt 100) { $faults += "gcat holds $nGcat entries" }
 if ($nOut    -lt 150) { $faults += "gpl.bp.out holds $nOut objects" }
 if ($nTinfo  -lt 50)  { $faults += "terminfo holds $nTinfo entries - run 'make terminfo'; no terminal type would resolve" }
-if ($szBcomp -eq 70697) { $faults += '$BCOMP is bbcmp.py''s seed, not BCOMP''s own object' }
+# 14 Sep 26 - A THRESHOLD, NOT AN EXACT SIZE, AND THE EXACT SIZE HAD ALREADY GONE
+# BLIND.  This was "-eq 70697".  Measured this day by compiling HEAD's BCOMP with
+# HEAD's bbcmp.py in a scratch tree (3e237f6): the seed was 70,828 bytes, and
+# after stage 3a's BCOMP edits 70,881 - so every BCOMP edit since the constant
+# was written moved the seed off it, and a bootstrap that never replaced the
+# seed compiler would have passed this check.  BCOMP's own object is ~88,000
+# (88,179 on the b158 install); the gap is 17,000 bytes either way.
+if ($szBcomp -ge 0 -and $szBcomp -lt 80000) { $faults += "`$bcomp is $szBcomp bytes - bbcmp.py's seed, not BCOMP's own object" }
 if (-not (Test-Path -LiteralPath (Join-Path $Sdsys 'voc'))) { $faults += "voc is absent - 'sd -i' did not complete" }
 if ($faults) { Fail ("the staged tree is not whole:`n  - " + ($faults -join "`n  - ")) }
 Write-Host "   staged tree is whole"

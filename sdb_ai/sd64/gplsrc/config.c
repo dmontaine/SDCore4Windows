@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Sep 26 Windows port - the global catalogue check names gcat/$cproc
+ *           (RELEASE_1.1 5 stage 3a)
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab add CREATUSR - allow create.account to create os user
  * 16 Aug 26 Windows port - CREATUSR is gone.  The line is still accepted and
@@ -437,9 +439,12 @@ struct CONFIG* read_config(char* errmsg) {
     goto exit_read_config;
   }
   /* changed to snprintf() from sprintf() 22Feb20 -gwb */
-  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cgcat%c$CPROC", cfg->sysdir, 
+  /* 14 Sep 26 - $cproc, lower case (RELEASE_1.1 5 stage 3a). bootstrap.py's
+     placeholder carries the same name: on NTFS a file written over an
+     existing one keeps the OLD name's case, so the two must agree.       */
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cgcat%c$cproc", cfg->sysdir,
          DS, DS) >= (MAX_PATHNAME_LEN + 1)) {
-      sprintf(errmsg, "Overflowed path/filename length with: '%s%cgcat%c$CPROC'.",
+      sprintf(errmsg, "Overflowed path/filename length with: '%s%cgcat%c$cproc'.",
             cfg->sysdir, DS, DS);
       goto exit_read_config;
   }
