@@ -224,6 +224,48 @@ def main():
           % ("PASS" if ok else "FAIL", "section 7 ### subsection is not a step (item 10)",
              rc_i, FALSE_72 in out_i))
 
+    # 14 Sep 26 - A LEVEL-1 HEADING ENDS AN ENTRY.  check-stale-leads.py's
+    # BOUNDARY read #{2,}, two lines below a comment saying "the next heading of
+    # ANY kind" - so "> # ⇩⇩⇩ HANDOFF N ⇩⇩⇩", nineteen of them in this document
+    # and the largest structural marker in START HERE, was not a boundary.  The
+    # last item above a handoff banner therefore inherited the banner's prose.
+    #
+    # THIS IS A REAL DOCUMENT SHAPE, NOT A CONTRIVANCE: it is what the phase-3
+    # fixture accidentally built at 8035ac7, and it cost six red rows attributed
+    # to the wrong thing.  The fixture is injected, self-bounded at a "> ##" and
+    # ticked, so the ONLY thing that can flag it is the banner failing to bound.
+    #
+    # MUTANT CONTROL, 14 Sep 2026: with BOUNDARY put back to #{2,} this row
+    # goes red naming the H.8 row, and the file was restored to the same
+    # SHA-256 afterwards.
+    LVL1 = (
+        "> ### 8. SYNTHETIC LEVEL-1 BOUNDARY FIXTURE\n"
+        ">\n"
+        "> Item 8's own body, which carries no status word at all.\n"
+        ">\n"
+        "> # ⇩⇩⇩ SYNTHETIC BANNER - LEVEL 1, NOT PART OF ITEM 8 ⇩⇩⇩\n"
+        ">\n"
+        "> This prose is unmeasured, and it belongs to the banner rather than\n"
+        "> to item 8 above it.\n"
+        ">\n"
+        "> ## SYNTHETIC LEVEL-2 HEADING - ENDS THE FIXTURE\n"
+        ">\n")
+    LVL1_ROW = ("| " + TICK + " | **H.8** | synthetic level-1 boundary fixture "
+                "injected by test-staleleads-units.py | 14 Sep 2026 |\n")
+    HEADING = "## NEXT SESSION: START HERE, IT IS SHORT\n"
+    t = base.replace(HEADING, HEADING + "\n" + LVL1, 1)
+    assert t != base, "could not find the START HERE heading for the level-1 fixture"
+    t2 = t.replace("\n**Legend**", "\n" + LVL1_ROW + "\n**Legend**", 1)
+    assert t2 != t, "could not find the task table legend for the level-1 row"
+    FALSE_H8 = "H.8 is ticked DONE but its entry leads with an open claim"
+    rc_l, out_l = run(write(tmp, t2, "level1_heading_bounds.md"))
+    ok = (rc_l == 0) and (FALSE_H8 not in out_l)
+    results.append((ok, "a level-1 heading ends an entry",
+                    rc_l, 0, "no H.8 mis-attribution"))
+    print("  [%s] %-46s rc=%d (want 0)  false-flag present: %s"
+          % ("PASS" if ok else "FAIL", "a level-1 heading ends an entry",
+             rc_l, FALSE_H8 in out_l))
+
     # Section 7's heading renamed must REFUSE rather than scan everything.
     t = base.replace("## 7. Next steps", "## 7. Things to do", 1)
     assert t != base, "could not rename section 7"
@@ -252,12 +294,28 @@ def main():
     # content reasons, which is exactly the false verdict the checker exists to
     # catch, committed by its own control.
     #
-    # SO IT BUILDS THE ENTRY IT NEEDS.  Two synthetic START HERE items and two
-    # table rows go into a copy used by THIS PHASE ONLY - phases 0, 1, 2 and 4
+    # SO IT BUILDS THE ENTRY IT NEEDS.  One synthetic START HERE item and one
+    # table row go into a copy used by THIS PHASE ONLY - phases 0, 1, 2 and 4
     # still run against the untouched document, so the positive control is
-    # unaffected.  Item 8 carries the observation and the anchor; item 9 exists
-    # only to BOUND item 8, so the checker's entry range stops there instead of
-    # running on into the handoff prose below and picking up its wording.
+    # unaffected.  Item 8 carries the observation and the anchor.
+    #
+    # 14 Sep 26 - AND IT WENT RED A THIRD TIME, FOR THE SAME REASON IN A NEW
+    # PLACE, WHICH IS WHY THE FIXTURE NOW BOUNDS ITSELF.  The 5 Sep cut ended
+    # item 8 with a second synthetic item, 9, whose only job was to be a
+    # boundary - but ITEM 9 THEN NEEDED BOUNDING TOO, and nothing in the
+    # fixture did it.  Its range ran 37 lines down into HANDOFF 59, met
+    # "Unmeasured whether they write by id or replace the file", and phase 2
+    # reported the ticked H.9 row as leading open: six red rows at 8035ac7,
+    # with neither the checker's subject nor the injected text at fault.
+    # Bounding an entry with another entry is a regress; bounding it with a
+    # HEADING is not, because a heading needs no row and cannot run on.
+    #
+    # THE CHECKER WAS ALSO WRONG AND IS FIXED IN THE SAME COMMIT - its
+    # BOUNDARY missed level-1 headings, so "> # ⇩⇩⇩ HANDOFF N" did not end an
+    # entry.  That fix has its OWN case below; this phase must not depend on
+    # it, which is why the terminator here is a "> ##" heading that bounds
+    # under either version.  A control that shares a dependency with the fix it
+    # is controlling is not a control.
     ANCHOR = "> ***THE PAGES WERE WRITTEN UP AFTERWARDS.***"
     FIXTURE = (
         "> ### 8. SYNTHETIC FIXTURE - PHASE 3'S CONTROL LIVES HERE\n"
@@ -266,17 +324,12 @@ def main():
         ">\n"
         + ANCHOR + "\n"
         ">\n"
-        "> ### 9. SYNTHETIC FIXTURE - BOUNDARY ONLY, SO ITEM 8 ENDS HERE\n"
-        ">\n"
-        "> Nothing is recorded in this item.\n"
+        "> ## SYNTHETIC FIXTURE ENDS HERE - A HEADING, NOT AN ENTRY\n"
         ">\n")
     FIXTURE_ROWS = (
         "| " + TICK + " | **H.8** | synthetic fixture injected by "
-        "test-staleleads-units.py | 5 Sep 2026 |\n"
-        "| " + TICK + " | **H.9** | synthetic boundary injected by "
         "test-staleleads-units.py | 5 Sep 2026 |\n")
 
-    HEADING = "## NEXT SESSION: START HERE, IT IS SHORT\n"
     base3 = base.replace(HEADING, HEADING + "\n" + FIXTURE, 1)
     assert base3 != base, "could not find the START HERE heading to inject into"
     tmp3 = base3.replace("\n**Legend**", "\n" + FIXTURE_ROWS + "\n**Legend**", 1)
