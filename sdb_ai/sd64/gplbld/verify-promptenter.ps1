@@ -17,6 +17,18 @@
     WORDING was missing until 12 Sep 2026, so this witnesses the message and
     the default together.
 
+    ***AN UPPER-CASE VOC RECORD NO LONGER COMES FOR FREE - 13 Sep 2026.***
+    RELEASE_1.1 5 phase (a) makes CREATE.FILE store a new id in lower case,
+    so this script's plain "CREATE.FILE ZZPROMPTE" would now write
+    zzprompte, leg 1 would find it as typed, never reach 6131 and delete it.
+    The fixture is therefore made with OPTION CREATE.FILE.UPCASE set (option
+    24, OPT.CREATE.FILE.CASE - despite its name it KEEPS the case typed), and
+    a setup row proves the stored id is upper before any leg runs.
+
+    ***LEG 3 WITNESSES RELEASE_1.1 27***: a file created the ordinary way
+    (stored lower) and deleted by its name typed in UPPER case must go,
+    without 6130 and without a prompt - DELETEF's lower-case tier.
+
     ***THE CONTROL IS THE POINT, NOT THE ENTER CASE.***  "The file still
     exists" is also what you get from a command that never ran, a prompt that
     never fired, and a typo in the file name.  So the same prompt is driven
@@ -53,6 +65,7 @@ $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $Root   = Join-Path $env:ProgramData 'SD\user_accounts'
 $Probe  = 'ZZPROMPTE'
+$ProbeL = 'ZZPROMPTL'   # leg 3: created the ordinary way, so stored as zzpromptl
 
 $pass = 0
 $fail = 0
@@ -118,8 +131,9 @@ if (-not (Test-Path -LiteralPath $bpDir)) {
 
 Write-Host "verify-promptenter: account $Account"
 Write-Host "verify-promptenter: sd.exe  $sdExe"
-Write-Host "verify-promptenter: file    $Probe"
-Write-Host "verify-promptenter: prompt  6131, DELETEF:196"
+Write-Host "verify-promptenter: file    $Probe  (legs 1-2, made with OPTION CREATE.FILE.UPCASE)"
+Write-Host "verify-promptenter: file    $ProbeL  (leg 3, made the ordinary way)"
+Write-Host "verify-promptenter: prompt  6131, DELETEF"
 Write-Host ''
 Write-Host '--- assert-current -------------------------------------------------'
 & (Join-Path $Gplbld 'assert-current.ps1')
@@ -129,7 +143,8 @@ Write-Host ''
 try {
     # --- setup -------------------------------------------------------------
     $null = Invoke-SD @("DELETE.FILE $Probe", 'Y', 'Y', 'Y')   # any leftover
-    $mk = Invoke-SD @("CREATE.FILE $Probe")
+    $null = Invoke-SD @("DELETE.FILE $($ProbeL.ToLower())", 'Y', 'Y', 'Y')
+    $mk = Invoke-SD @('OPTION CREATE.FILE.UPCASE', "CREATE.FILE $Probe")
     if ($mk.Text -notmatch "Created DATA part as $Probe") {
         Bail 2 "could not create $Probe - the setup, not the measurement, failed.`n$($mk.Text)"
     }
@@ -137,7 +152,20 @@ try {
     if ($ls.Text -notmatch '1 record\(s\) listed') {
         Bail 2 "$Probe was not listed after creation - nothing to measure."
     }
-    Write-Host "  setup: $Probe created and listed"
+
+    # THE PREMISE OF LEGS 1 AND 2, MEASURED.  CT prints the id it MATCHED, not
+    # the one typed (CT:210), so asking for the lower name must echo the UPPER
+    # id.  The echoed command carries only the lower spelling, and the refusal
+    # (2108 "Record 'x' not found") carries the name as typed, so neither can
+    # produce "VOC ZZPROMPTE" - hence -cmatch, and the disqualifier as well.
+    $ct = Invoke-SD @("CT VOC $($Probe.ToLower())")
+    $isUpper = ($ct.Text -cmatch "VOC $Probe\b") -and ($ct.Text -notmatch 'not found')
+    Write-Host "  setup: CT VOC $($Probe.ToLower()) said:"
+    Write-Host $ct.Text
+    if (-not $isUpper) {
+        Bail 2 "$Probe's VOC record is not stored in upper case - legs 1 and 2 could not reach 6131, so nothing would be measured."
+    }
+    Write-Host "  setup: $Probe created, listed, and its VOC id is upper case"
     Write-Host ''
 
     # --- LEG 1: press ENTER -------------------------------------------------
@@ -187,15 +215,50 @@ try {
     Row 'CONTROL: an explicit Y DOES delete the file' `
         ($cGone.Text -notmatch '1 record\(s\) listed') `
         "LISTF still finds $Probe after Y - the prompt is not driving a deletion at all, so leg 1's survival means nothing"
+    Write-Host ''
+
+    # --- LEG 3: RELEASE_1.1 27, a lower-case id deleted by its UPPER name ------
+    #
+    # CREATE.FILE stores this one lower (phase (a)).  Typed in upper case,
+    # DELETEF must find it on its lower-case tier: no 6130, no 6131, deleted.
+    # No answer lines are supplied, so a prompt that did appear would take its
+    # default N and the file would survive - which the last row catches.
+    $lowerL = $ProbeL.ToLower()
+    Write-Host "--- leg 3: CREATE.FILE $ProbeL (stored lower), DELETE.FILE $ProbeL ----"
+    $mk3 = Invoke-SD @("CREATE.FILE $ProbeL")
+    $ct3 = Invoke-SD @("CT VOC $ProbeL")
+    Write-Host $ct3.Text
+    # Precondition, and the reason it is decisive: if the id were stored upper
+    # this leg would pass on an exact match and say nothing about the fold.
+    $isLower = ($ct3.Text -cmatch "VOC $lowerL\b") -and ($ct3.Text -notmatch 'not found')
+    Row "leg 3 precondition: $ProbeL was created and stored as $lowerL" $isLower `
+        "CT VOC $ProbeL did not echo 'VOC $lowerL' - phase (a) is not on this install or the create failed.`n$($mk3.Text)"
+    if ($isLower) {
+        $d3 = Invoke-SD @("DELETE.FILE $ProbeL")
+        Write-Host $d3.Text
+        Row 'leg 3: the run terminated' (-not $d3.Killed) "killed after ${TimeoutSeconds}s"
+        Row 'leg 3: no 6130 - the lower-case tier found the record' `
+            ($d3.Text -notmatch 'No VOC record found') 'DELETEF printed 6130, so it did not try lower case'
+        Row 'leg 3: no 6131 prompt' ($d3.Text -notmatch 'Use file') 'DELETEF asked - the lower tier is meant to be silent'
+        # SUCCESS WORDING, NOT THE ABSENCE OF AN ERROR: 6144 with the stored id.
+        Row "leg 3: SD reported VOC entry '$lowerL' deleted" `
+            ($d3.Text -cmatch "VOC entry '$lowerL' deleted") 'no 6144 success line naming the lower-case id'
+        $after3 = Invoke-SD @("CT VOC $lowerL")
+        Row "leg 3: the VOC record is gone" ($after3.Text -match 'not found') `
+            "CT VOC $lowerL still finds the record"
+    }
 }
 finally {
     $null = Invoke-SD @("DELETE.FILE $Probe", 'Y', 'Y', 'Y')
-    $left = Invoke-SD @("LISTF $Probe")
+    $null = Invoke-SD @("DELETE.FILE $($ProbeL.ToLower())", 'Y', 'Y', 'Y')
+    $left  = Invoke-SD @("LISTF $Probe")
+    $leftL = Invoke-SD @("CT VOC $($ProbeL.ToLower())")
     Write-Host ''
     Write-Host ("cleanup: $Probe left behind = " + ($left.Text -match '1 record\(s\) listed'))
+    Write-Host ("cleanup: $ProbeL left behind = " + ($leftL.Text -notmatch 'not found'))
 }
 
 Write-Host ''
 Write-Host "verify-promptenter: $pass passed, $fail failed"
 if ($fail -gt 0) { Bail 1 "$fail check(s) failed." }
-Bail 0 "Enter took the default at prompt 6131, and the control proves the prompt was live."
+Bail 0 "Enter took the default at prompt 6131, the control proves the prompt was live, and a lower-case id was deleted by its upper-case name."

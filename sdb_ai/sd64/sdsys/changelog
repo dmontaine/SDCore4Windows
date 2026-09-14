@@ -4,6 +4,22 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+13 Sep 26  NEW FILES ARE NAMED IN LOWER CASE, AND DELETE.FILE FINDS THEM
+           HOWEVER YOU TYPE THE NAME.
+
+           CREATE.FILE now stores a new file's VOC entry, and names its
+           directory, in lower case: "CREATE.FILE ORDERS" makes the file
+           orders.  Commands look a file name up as you typed it, then in
+           lower case, then in upper case, so ORDERS and orders both reach
+           it.  Files
+           that already exist are not renamed.  If you need the name kept
+           exactly as typed, use OPTION CREATE.FILE.UPCASE first - despite
+           its name, that option keeps the case you typed.
+
+           DELETE.FILE had one lookup that did not try lower case, so
+           "DELETE.FILE ORDERS" on a file created this way would have said
+           "No VOC record found".  It now finds it without asking.
+
 13 Sep 26  FIXED: A FAILED "MODIFY.ACCOUNT ... <tier>" COULD SAY "NOTHING
            HAS CHANGED" WHEN PART OF THE VOC HAD.
 

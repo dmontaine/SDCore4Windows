@@ -68,17 +68,32 @@ $sdsys   = Join-Path $dataDir 'sdsys'
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $sdpyExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sdpy.exe'
 
-$stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
-$ctlFile = 'PROBEPYBP' + $stamp.Substring(9)
-$ctlDir  = Join-Path $sdsys $ctlFile
-$ctlName = 'PYPRB' + $stamp.Substring(9)
+# ***THE PROBES GO INTO SDSYS's OWN bp, AND NO FILE IS CREATED - 13 Sep 2026,
+# owner: "they should not be stored in VOC".***  This script used to run
+# CREATE.FILE PROBEPYBP<hhmmss> DIRECTORY, and BASIC then made its .OUT; both
+# are VOC records in SDSYS, and the cleanup removed the DIRECTORIES with
+# Remove-Item and never the records.  b141, b143 and b146 left six dead file
+# pointers in SDSYS's VOC - PRE_RELEASE 60's defect in verify-catgate, copied.
+# A record in bp is a file in a directory file and has no VOC entry, so there is
+# nothing left to forget; verify-batchjob has planted into SDSYS's bp the same
+# way since 29 Aug 2026.  (It also sidesteps RELEASE_1.1 5 phase (a): CREATE.FILE
+# now stores a new id in lower case, which the old stale-fixture sweep's
+# upper-case pattern would never have matched.)
+$stamp    = Get-Date -Format 'yyyyMMdd-HHmmss'
+$ctlFile  = 'bp'
+$sysBp    = Join-Path $sdsys 'bp'
+$sysBpOut = Join-Path $sdsys 'bp.out'
+$ctlName  = 'PYPRB' + $stamp.Substring(9)
+$incName  = 'PYINC' + $stamp.Substring(9)
+$fixtures = @((Join-Path $sysBp $ctlName), (Join-Path $sysBpOut $ctlName),
+              (Join-Path $sysBp $incName), (Join-Path $sysBpOut $incName))
 
 Write-Output '=== inputs (rule 1: what it actually used) ================================'
 Write-Output ("  sd.exe       : " + $sdExe)
 Write-Output ("  sdpy.exe     : " + $sdpyExe)
 Write-Output ("  sdsys        : " + $sdsys)
-Write-Output ("  fixture file : " + $ctlFile + "  (" + $ctlDir + ")")
-Write-Output ("  fixture prog : " + $ctlName)
+Write-Output ("  fixture file : " + $ctlFile + "  (" + $sysBp + ", objects in " + $sysBpOut + ")")
+Write-Output ("  fixture progs: " + $ctlName + ", " + $incName)
 
 if (-not (Test-Path -LiteralPath $sdExe))   { Write-Output "  no sd.exe at $sdExe";   exit 2 }
 if (-not (Test-Path -LiteralPath $sdpyExe)) {
@@ -114,47 +129,39 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
 Write-Output ''
 Write-Output '=== fixture ==============================================================='
 
-# ***SWEEP THE WHOLE FAMILY, NOT THIS RUN'S NAME.***  The fixture name carries
-# a timestamp, so a "remove stale $ctlDir" written the obvious way can NEVER
-# fire - the only name it checks is the one this run is about to create, which
-# by construction does not exist yet.  It reads like belt-and-braces and is
-# dead code.  A run that dies between CREATE.FILE and cleanup therefore leaves
-# a directory in SDSYS that nothing removes and nothing reports:
-# check-datatree-litter.ps1 looks for U+F000-U+F0FF in names and would not see
-# it, and the profile sweep only knows about Windows accounts.
-$stale = @(Get-ChildItem -LiteralPath $sdsys -Directory -ErrorAction SilentlyContinue |
-           Where-Object { $_.Name -match '^PROBEPYBP[0-9]{6}(\.DIC|\.OUT)?$' })
+# ***SWEEP THE WHOLE FAMILY, NOT THIS RUN'S NAME.***  The program names carry a
+# timestamp, so a "remove stale" written against this run's names can NEVER
+# fire - they do not exist yet by construction.  A run that dies between the
+# plant and the cleanup leaves records in bp and bp.out that nothing else
+# removes or reports.
+$stale = @(foreach ($d in @($sysBp, $sysBpOut)) {
+               Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Name -match '^(PYPRB|PYINC)[0-9]{6}$' }
+           })
 if ($stale.Count -gt 0) {
-    Write-Output ("  sweeping " + $stale.Count + " leftover fixture director(y/ies) from an earlier run:")
-    foreach ($d in $stale) {
-        Write-Output ("    " + $d.Name)
-        Remove-Item -LiteralPath $d.FullName -Recurse -Force
+    Write-Output ("  sweeping " + $stale.Count + " leftover probe record(s) from an earlier run:")
+    foreach ($f in $stale) {
+        Write-Output ("    " + $f.FullName)
+        Remove-Item -LiteralPath $f.FullName -Force
     }
 }
 
-$cmd = "CREATE.FILE $ctlFile DIRECTORY"
-Write-Output ("  SD: " + $cmd)
-$out = Invoke-SD @($cmd)
-if (($out -notmatch 'Created DATA part as') -or -not (Test-Path -LiteralPath $ctlDir)) {
-    Write-Output '  --- SD said: ---'; Write-Output $out
-    # NAME THE REAL CAUSE RATHER THAN THE SYMPTOM.  "fixture file not created"
-    # sent a reader looking at CREATE.FILE when the session had never got past
-    # the LOGTO, and the two look identical in the exit code.
-    if ($out -match 'did not finish in') {
-        Write-Output ''
-        if ($out -match 'LOGTO SDSYS' -and $out -notmatch 'Created DATA part as') {
-            Write-Output '  IT HUNG AT "LOGTO SDSYS", AND THE USUAL CAUSE IS ELEVATION.'
-            Write-Output '  An unelevated session reaches elevate(''START''), which raises a'
-            Write-Output '  UAC consent (CPROC:2687).  Nothing driven down a pipe can answer'
-            Write-Output '  one, so it waits until the timeout.'
-            Write-Output ''
-            Write-Output '  RUN THIS FROM AN ELEVATED PowerShell.  See the header for what'
-            Write-Output '  that costs: USR_ADMIN takes the gate''s permissive branch, so this'
-            Write-Output '  measures the plumbing and not the OS.USERS route.'
-        }
-    }
-    Write-Output '  fixture file not created'
+if (-not (Test-Path -LiteralPath $sysBp -PathType Container)) {
+    Write-Output "  no SDSYS bp at $sysBp - the probe has nowhere to go"
     exit 2
+}
+
+# The null case for the VOC row at the end: a scan that could not read the VOC
+# would find no fixture name and "pass".  So it must first find a record every
+# SDSYS VOC has.  Dynamic-file buckets are read as bytes; grep -a over the same
+# files is how PRE_RELEASE 60's cleanup was checked.
+function Get-VocText {
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $sdsys 'voc') -File -ErrorAction SilentlyContinue)) {
+        $null = $sb.Append([System.Text.Encoding]::GetEncoding('iso-8859-1').GetString(
+                    [System.IO.File]::ReadAllBytes($f.FullName)))
+    }
+    return $sb.ToString()
 }
 
 # The deffuns are declared here rather than $include SDPYFUNC.H, so that the
@@ -183,17 +190,32 @@ $src = @(
     "   crt 'PYPRB-FIN=':fs"
     "   crt 'PYPRB-DONE'"
 ) -join "`r`n"
-Set-Content -LiteralPath (Join-Path $ctlDir $ctlName) -Value $src -Encoding Ascii
+Set-Content -LiteralPath (Join-Path $sysBp $ctlName) -Value $src -Encoding Ascii
 
 $cmd = "BASIC $ctlFile $ctlName"
 Write-Output ("  SD: " + $cmd)
 $out = Invoke-SD @($cmd)
 Write-Output '  --- BASIC said: ---'
 Write-Output $out
-if (-not (Test-Path -LiteralPath (Join-Path ($ctlDir + '.OUT') $ctlName))) {
+if (-not (Test-Path -LiteralPath (Join-Path $sysBpOut $ctlName))) {
+    # NAME THE REAL CAUSE RATHER THAN THE SYMPTOM.  "no object produced" sends a
+    # reader looking at the compiler when the session never got past the LOGTO,
+    # and the two look identical in the exit code.  This diagnosis sat on the
+    # CREATE.FILE step until 13 Sep 2026; BASIC is the first SD call now.
+    if ($out -match 'did not finish in' -and $out -notmatch 'error\(s\)') {
+        Write-Output ''
+        Write-Output '  IT HUNG BEFORE THE COMPILER ANSWERED, AND THE USUAL CAUSE IS ELEVATION.'
+        Write-Output '  An unelevated LOGTO SDSYS reaches elevate(''START''), which raises a'
+        Write-Output '  UAC consent (CPROC:2687).  Nothing driven down a pipe can answer'
+        Write-Output '  one, so it waits until the timeout.'
+        Write-Output ''
+        Write-Output '  RUN THIS FROM AN ELEVATED PowerShell.  See the header for what'
+        Write-Output '  that costs: USR_ADMIN takes the gate''s permissive branch, so this'
+        Write-Output '  measures the plumbing and not the OS.USERS route.'
+    }
     Write-Output '  no object produced - the probe cannot run'
-    foreach ($p in @($ctlDir, ($ctlDir + '.DIC'), ($ctlDir + '.OUT'))) {
-        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }
+    foreach ($p in $fixtures) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
     exit 2
 }
@@ -232,8 +254,8 @@ if (-not $ran) {
     Write-Output ''
     Write-Output "  REFUSING a verdict: $rows row(s), and the decisive one says the"
     Write-Output '  program did not run.  This is not a pass and not a product FAIL.'
-    foreach ($p in @($ctlDir, ($ctlDir + '.DIC'), ($ctlDir + '.OUT'))) {
-        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }
+    foreach ($p in $fixtures) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
     exit 2
 }
@@ -257,7 +279,6 @@ Row ($run -match 'PYPRB-FIN=0')    'PY_FINALIZE returned 0'
 Write-Output ''
 Write-Output '=== the documented route: $include SDPYFUNC.H ============================='
 
-$incName = 'PYINC' + $stamp.Substring(9)
 $incSrc  = @(
     '* Created by verify-pyapi.ps1 - safe to delete'
     '$include SDPYFUNC.H'
@@ -266,14 +287,14 @@ $incSrc  = @(
     '   fs = PY_FINALIZE()'
     "   crt 'PYINC-DONE'"
 ) -join "`r`n"
-Set-Content -LiteralPath (Join-Path $ctlDir $incName) -Value $incSrc -Encoding Ascii
+Set-Content -LiteralPath (Join-Path $sysBp $incName) -Value $incSrc -Encoding Ascii
 
 $cmd = "BASIC $ctlFile $incName"
 Write-Output ("  SD: " + $cmd)
 $incOut = Invoke-SD @($cmd)
 Write-Output '  --- BASIC said: ---'
 Write-Output $incOut
-$incBuilt = Test-Path -LiteralPath (Join-Path ($ctlDir + '.OUT') $incName)
+$incBuilt = Test-Path -LiteralPath (Join-Path $sysBpOut $incName)
 Row $incBuilt '$include SDPYFUNC.H compiles - the documented include resolves' `
     $(if ($incBuilt) { '' } else { 'no object produced' })
 
@@ -300,15 +321,29 @@ Row (-not ($run -match '-12001')) 'no -12001 (interpreter not initialised) anywh
 # --- cleanup --------------------------------------------------------------
 Write-Output ''
 Write-Output '=== cleanup ==============================================================='
-foreach ($p in @($ctlDir, ($ctlDir + '.DIC'), ($ctlDir + '.OUT'))) {
+foreach ($p in $fixtures) {
     if (Test-Path -LiteralPath $p) {
-        Remove-Item -LiteralPath $p -Recurse -Force
+        Remove-Item -LiteralPath $p -Force
         Write-Output ("  removed " + $p)
     }
 }
-$left = @($ctlDir, ($ctlDir + '.DIC'), ($ctlDir + '.OUT')) |
-        Where-Object { Test-Path -LiteralPath $_ }
-Row ($left.Count -eq 0) 'the fixture left nothing behind' ($left -join ', ')
+$left = @($fixtures | Where-Object { Test-Path -LiteralPath $_ })
+Row ($left.Count -eq 0) 'the fixture left nothing behind in bp or bp.out' ($left -join ', ')
+
+# ***THE OWNER'S RULE AS A ROW: THE RUN PUT NOTHING IN SDSYS's VOC.***  The
+# control comes first and must be FOUND - "listf" is in every SDSYS VOC - or a
+# scan that read nothing would pass.  Case-insensitive, because the fold means a
+# record could be stored in either case.
+$voc = Get-VocText
+$vocControl = $voc.IndexOf('listf', [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+Write-Output ("  VOC scan: " + $voc.Length + " bytes read, control 'listf' found: " + $vocControl)
+if (-not $vocControl) {
+    Row $false 'SDSYS VOC scan could read the VOC (control listf found)' 'the scan below would measure nothing'
+} else {
+    $named = @(@($ctlName, $incName) | Where-Object {
+                   $voc.IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 })
+    Row ($named.Count -eq 0) 'SDSYS VOC names neither probe program - nothing was stored in VOC' ($named -join ', ')
+}
 
 $stray = @(Get-Process -Name 'sdwind', 'sd' -ErrorAction SilentlyContinue)
 Write-Output ("  sd/sdwind processes now: " + $stray.Count)

@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 13 Sep 26 Windows port - the VOC lookup tries the name in lower case, silently,
+*            before the upper-case fallback and its 6131 prompt.  CREATE.FILE
+*            stores a new file's id in lower case since RELEASE_1.1 5 phase (a),
+*            so "DELETE.FILE ZZX" on a file created as ZZX found nothing and
+*            stopped (RELEASE_1.1_FIXES.md 27).
 *  1 Sep 26 Windows port - the 31 Aug fix below reported a failure on the
 *            ORDINARY path: FL$AKPATH comes back non-empty for a file that
 *            never had an index, so the delete failed because there was
@@ -188,26 +193,48 @@ delete.file:
 
     readu voc.rec from voc.f, file.name else
       release voc.f, file.name
-      display sysmsg(6130, file.name) ;* No VOC record found for xx
-      file.name = upcase(file.name)
-      readu voc.rec from voc.f, file.name then
-         if upcase(voc.rec[1,1]) = "F" then
-            loop
-               display sysmsg(6131, file.name) :  ;* Use file 'xx'?
-               input yn
-               yn = upcase(yn[1,1])
+
+* 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 27.  AS TYPED, THEN LOWER, THEN
+*   UPPER - the fold every other lookup already has (PROJECT_STATUS.md 5.12).
+*   This one was missed because it is a READU of the VOC record rather than an
+*   OPEN, so _VOC_REF's fold never reached it.  It did not matter while
+*   CREATE.FILE stored ids in upper case; since RELEASE_1.1 5 phase (a) stores
+*   them in lower case, "DELETE.FILE ZZX" for a file created as ZZX printed 6130
+*   and stopped.
+*
+*   THE LOWER TIER IS SILENT AND THE UPPER TIER STILL ASKS, DELIBERATELY.  Lower
+*   is where CREATE.FILE now puts a new id, so finding it there is the name the
+*   caller meant - exactly the case that was found silently, as an exact match,
+*   before phase (a), and callers that name a file in upper case (scripts
+*   included, which cannot answer 6131) keep that behaviour.  The upper tier is
+*   upstream's "did you mean" for an old upper-case record typed in lower case,
+*   and is unchanged.  A name already in lower case reads the same id twice and
+*   falls through, so nothing changes for it.
+      readu voc.rec from voc.f, downcase(file.name) then
+         file.name = downcase(file.name)
+      end else
+         release voc.f, downcase(file.name)
+         display sysmsg(6130, file.name) ;* No VOC record found for xx
+         file.name = upcase(file.name)
+         readu voc.rec from voc.f, file.name then
+            if upcase(voc.rec[1,1]) = "F" then
+               loop
+                  display sysmsg(6131, file.name) :  ;* Use file 'xx'?
+                  input yn
+                  yn = upcase(yn[1,1])
 * 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 6.  Same shape and same fix as
 *   the DATA prompt below; N is safe here because only Y branches to the
 *   delete, so an empty answer falls through to ER$STOPPED and nothing goes.
-               if yn = '' then yn = 'N'
-            until yn = 'Y' or yn = 'N'
-            repeat
-            if yn = "Y" then goto delete.upcased.file
+                  if yn = '' then yn = 'N'
+               until yn = 'Y' or yn = 'N'
+               repeat
+               if yn = "Y" then goto delete.upcased.file
+            end
          end
-      end
 
-      @system.return.code = -ER$STOPPED
-      return
+         @system.return.code = -ER$STOPPED
+         return
+      end
    end
 
    if upcase(voc.rec[1,1]) # "F" then
