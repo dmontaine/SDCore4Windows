@@ -240,9 +240,15 @@
       $define FL$EXCLUSIVE   10000    ;* Set exclusive file access
       $define FL$FLAGS       10001    ;* Fetch file flags
       * LS 16 bits are from file header...
-      $define FL$FLAGS.NORESIZE   0x00000008   ;* Case insensitive ids
+      $define FL$FLAGS.NORESIZE   0x00000008   ;* No splits/merges
       $define FL$FLAGS.NOCASE     0x00000010   ;* Case insensitive ids
       $define FL$FLAGS.TRUSTED    0x00000020   ;* Access requires trusted program
+* 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  Every hashed file is created
+*     NOCASE by the kernel (gplsrc/op_dio1.c), whatever flags it is given.
+*     KEEPCASE is a creation REQUEST, never a header bit (dh.h DHF_KEEPCASE,
+*     outside DHF_CREATE), honoured only in internal mode: it lets tooling
+*     build a case-sensitive fixture for the upgrade's twin refusal.
+      $define FL$FLAGS.KEEPCASE   0x00000004   ;* REQUEST: create case sensitive (internal mode only)
       * MS 16 bits are internal...
       $define FL$FLAGS.TRIGGER    0x00010000   ;* File has trigger
       $define FL$FLAGS.AK         0x00020000   ;* File has AK indices

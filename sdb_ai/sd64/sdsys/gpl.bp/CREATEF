@@ -25,6 +25,8 @@
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+* 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  Every file is NO.CASE; the
+*            CASE keyword is refused outside internal mode (sysmsg 10176).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -42,7 +44,10 @@
 *    MERGE.LOAD n
 *    VERSION n
 *    DIRECTORY path         path is existing directory to hold file
-*    NO.CASE                case insensitive ids
+*    NO.CASE                case insensitive ids (the default, and the only
+*                           kind of file since 14 Sep 26 - RELEASE_1.1 5 D2)
+*    CASE                   case sensitive ids - internal mode only, for the
+*                           upgrade witness; refused otherwise (10176)
 *    NO.RESIZE              disable file resizing
 *
 * END-DESCRIPTION
@@ -75,6 +80,7 @@ $define default.split.load 80
    create.data = @true
    file.type = FL$TYPE.DH
    no.case = @false
+   keep.case = @false
    dir.name = ""
    dir.name.with.delimiter = ""
    using.dict = @false
@@ -188,6 +194,19 @@ $define default.split.load 80
          * ---------- NO.CASE
          case keyword = KW$NO.CASE
             no.case = @true
+
+         * ---------- CASE
+         * 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  Owner's ruling: no two
+         *   record ids may differ only by case, in any file.  The kernel makes
+         *   every hashed file NOCASE whatever it is asked (op_dio1.c), so a
+         *   CASE keyword would be silently ineffective here - it is refused
+         *   instead, so nobody believes they have a case-sensitive file.  The
+         *   one exception is internal mode: the upgrade's twin refusal
+         *   (CONFIGURE.FILE) can only be witnessed on a case-sensitive file
+         *   holding twins, and sd -internal is the only way to build one.
+         case keyword = KW$CASE
+            if not(kernel(K$INTERNAL, -1)) then stop sysmsg(10176)
+            keep.case = @true
 
          * ---------- NO.QUERY
          case keyword = KW$NO.QUERY
@@ -424,12 +443,23 @@ $define default.split.load 80
       end
    end
 
+   * 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  The case request for both
+   *   parts.  NOCASE is what the kernel does anyway; asking for it here keeps
+   *   the verb honest about what it makes.  KEEPCASE is a request the kernel
+   *   honours only in internal mode (CASE above is refused everywhere else).
+   if no.case and keep.case then stop sysmsg(6113) ;* Inconsistent command options
+   case.flags = FL$FLAGS.NOCASE
+   if keep.case then case.flags = FL$FLAGS.KEEPCASE
 
    * Create dictionary part
 
    if create.dict then
       if not(using.dict) then
-         create.file dict.path dynamic
+         * 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  The dictionary carries
+         *   the same case request as the data part, so a CASE fixture is
+         *   case sensitive in both halves and the kernel's default (NOCASE)
+         *   reaches an ordinary dictionary by the same route as its data.
+         create.file dict.path dynamic flags case.flags
          display sysmsg(6123, dict.path) ;* Created DICT part as xx
       end
       voc.rec<3> = dict.path
@@ -457,8 +487,7 @@ $define default.split.load 80
          voc.rec<4,-1> = component
       end
 
-      file.flags = 0
-      if no.case then file.flags = bitor(file.flags, FL$FLAGS.NOCASE)
+      file.flags = case.flags
       if no.resize then file.flags = bitor(file.flags, FL$FLAGS.NORESIZE)
 
       begin case

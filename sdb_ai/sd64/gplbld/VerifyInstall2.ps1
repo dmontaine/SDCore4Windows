@@ -795,6 +795,13 @@ $steps = @(
     # SDSYS session and sd -internal.  NO PREFIX: it creates no account, and its
     # fixture ids are fixed and removed only when stored exactly.
     @{ Name = 'verify-dictrename.ps1';     P = @{} },
+    # 14 Sep 26 - RELEASE_1.1 5 D2.  No two record ids may differ only by
+    # case.  A fresh file folds (jack over JACK is one record); CASE is refused
+    # outside internal mode; and an OLD case-sensitive file holding a twin is
+    # refused by CONFIGURE.FILE, not silently merged.  ELEVATED, WITH THE FILE
+    # STEPS, because it builds a case-sensitive fixture with sd -internal and
+    # drives an SDSYS session.  NO PREFIX: fixed zztw* ids in SDSYS, removed.
+    @{ Name = 'verify-twins.ps1';          P = @{} },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.
     #

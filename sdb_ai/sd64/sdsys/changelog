@@ -4,6 +4,18 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+14 Sep 26  NO TWO RECORD IDS MAY DIFFER ONLY BY CASE.
+
+           Every file now treats record ids without regard to case, so a file
+           can hold "jack" or "JACK" but never both - writing one when the
+           other is present updates the same record.  This is how it has always
+           behaved for the system files (VOC, dictionaries); it now holds for
+           every file, including your own.  CREATE.FILE ... CASE is no longer
+           accepted.  When you upgrade, each of your files is converted; if one
+           already holds a pair of ids that differ only by case, that file is
+           left as it was and named, so you can rename or delete one of the two
+           and convert it yourself with CONFIGURE.FILE.
+
 14 Sep 26  PROGRAM AND CATALOGUE NAMES ARE LOWER CASE.
 
            CATALOG now stores every name in lower case, and SD's own

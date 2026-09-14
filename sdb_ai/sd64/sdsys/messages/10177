@@ -1,0 +1,4 @@
+'%1' and '%2' differ only by case in %3, so the file was left as it is.
+
+Record ids are case insensitive now, and a rebuild keeps only one of such
+a pair. Rename or delete one of them, then run CONFIGURE.FILE again.

@@ -1,0 +1,4 @@
+Record ids are case insensitive in every file, so CASE is not accepted.
+
+Two ids that differ only by case would be the same record; there is no
+kind of file in which they are two. Leave the keyword off.

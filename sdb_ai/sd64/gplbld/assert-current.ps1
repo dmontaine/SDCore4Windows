@@ -1333,7 +1333,11 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   'verify-dictrename.ps1',
                   # 14 Sep 26 - verify-callcase.ps1, stage 3a's witness.
                   # Ships nowhere; listed with the commit that creates it.
-                  'verify-callcase.ps1')
+                  'verify-callcase.ps1',
+                  # 14 Sep 26 - RELEASE_1.1 5 D2's witness and free guard.
+                  # Ship nowhere; listed with the commit that creates them.
+                  'verify-twins.ps1',
+                  'test-voctwins-units.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

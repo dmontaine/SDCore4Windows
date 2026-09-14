@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
+ * 14 Sep 26 Windows port - DHF_KEEPCASE, a creation REQUEST bit (never stored):
+ *           RELEASE_1.1 5 D2, every hashed file is created DHF_NOCASE
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -102,6 +104,19 @@ struct DH_FILE {
                                             DH_FILE, as CONFIGURE.FILE may
                                             change. Test only in FILE_ENTRY) */
 #define DHF_NOCASE 0x00000010  /* Case insensitive ids */
+/* 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  Owner's ruling: no two record
+   ids may differ only by case, in any file.  So the create opcode (op_dio1.c)
+   sets DHF_NOCASE on EVERY hashed file it makes, whatever the caller asked,
+   and a twin cannot exist by construction.  DHF_KEEPCASE is the one exception,
+   and it is a REQUEST bit, not a header bit: it is deliberately outside
+   DHF_CREATE, so dh_create_file masks it out and no file ever carries it.  The
+   opcode honours it only in internal mode (sd -internal, which check_admin()
+   gates), so that tooling can build a case-sensitive fixture to witness the
+   upgrade's twin refusal.  A user program or verb cannot reach it: KERNEL() is
+   an internal-only intrinsic and the verbs refuse CASE outside internal mode
+   (sysmsg 10176).  Same value as nothing else in the low byte: 0x01, 0x02 and
+   0x04 were free. */
+#define DHF_KEEPCASE 0x00000004 /* REQUEST ONLY: create case sensitive (internal mode) */
 #define DHF_TRUSTED 0x00000020 /* Access requires trusted program */
 /* 0x00000040 is RETIRED - do not recycle.  It was DHF_VFS, and it is a
    file-header bit, so a file from another MultiValue implementation could

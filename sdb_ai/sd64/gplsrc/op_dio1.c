@@ -21,6 +21,8 @@
  * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
  * 21 Aug 26 Windows port - containment gate on open_file(), covering both
  *           OPEN and OPENPATH, and FV_RDONLY for a read-only admission
+ * 14 Sep 26 Windows port - op_create_dh() sets DHF_NOCASE on every file it
+ *           creates (RELEASE_1.1 5 D2); DHF_KEEPCASE honoured in internal mode
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -232,6 +234,31 @@ void op_create_dh() {
   creation_flags = (u_int16_t)((descr->data.value < 0)
                                         ? 0
                                         : (descr->data.value & DHF_CREATE));
+
+  /* 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  THE ONE PLACE EVERY HASHED
+     FILE IS BORN, so this is where the owner's ruling lives: no two record
+     ids may differ only by case, in any file, and the way to make that true
+     by construction rather than by checking is DHF_NOCASE - the DH layer then
+     hashes and compares ids case blind (dh_hash.c, dh_read.c, dh_write.c,
+     dh_del.c, op_lock.c, txn.c all already honour it), so the second casing
+     IS the first record and a twin cannot exist.  The CREATE.FILE verb, the
+     BASIC create.file statement (CREATEA's new VOC), the bootstrap and
+     CONFIGURE.FILE's rebuild all arrive here, so none of them can forget.
+
+     The single exception is a tooling one.  Once this ships nothing can build
+     a case-sensitive file, and the upgrade's twin refusal (CONFIGF) could
+     never be witnessed.  DHF_KEEPCASE is a request bit that is not in
+     DHF_CREATE (so it never reaches a file header) and it is honoured only in
+     internal mode, which sd -internal grants behind check_admin().  The verbs
+     refuse CASE outside internal mode with sysmsg 10176; this test is the
+     guard underneath them.  A negative flags value means "defaults", which
+     is now NOCASE too. */
+  if ((descr->data.value >= 0) && (descr->data.value & DHF_KEEPCASE) &&
+      internal_mode) {
+    creation_flags &= (u_int16_t)(~DHF_NOCASE);
+  } else {
+    creation_flags |= DHF_NOCASE;
+  }
 
   /* Get DH file parameters */
 

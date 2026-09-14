@@ -23,6 +23,7 @@
  * rev 0.9.0 Jan 25 mab sdext_eguid_set error codes
  * rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
+ * 14 Sep 26 Windows port - ER_TWIN 3042, RELEASE_1.1 5 D2
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -148,6 +149,10 @@
 /* 25 Aug 26 Windows port - 3038-3040 RETIRED, do not recycle.  They were
    the VFS errors, never raised, and sdclilib/err.h still defines them. */
 #define ER_ENCRYPTED   3041    /* Access denied to encrypted file */
+/* 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  Raised by CONFIGURE.FILE when a
+   case-sensitive file it is asked to rebuild holds two ids that differ only
+   by case, so the rebuild (which would keep only one) is refused. */
+#define ER_TWIN        3042    /* Two record ids differ only by case */
 
 /* 4000 - 4999   SDClient errors */
 #define ER_SRVRMEM     4000    /* Insufficient memory for packet buffer */
