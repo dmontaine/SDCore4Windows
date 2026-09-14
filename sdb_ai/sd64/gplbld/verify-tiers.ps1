@@ -607,9 +607,30 @@ Write-Output '=== 5. UPDATE.ACCOUNTS must not give the standard account its verb
 
 # The whole reason ACC$TIER exists.  Before 17 Aug 2026 this restored all of
 # them - the count has moved since and the sentence is about the behaviour.
+#
+# 14 Sep 26 - ***THIS SECTION HAD BEEN MEASURING NOTHING.***  It ran plain
+# UPDATE.ACCOUNTS inside the standard account, and update.accounts is in
+# tier.policy/add.administrator - so the answer was "UPDATE.ACCOUNTS is not in
+# your VOC", the VOC was untouched, and both rows below passed because nothing
+# had run.  Found by 5b's first run (b155), whose PROGRAMMER account got the
+# same answer.  Show-Raw was never called here, which is why nobody saw it.
+#
+# THE ROUTE THAT STILL REACHES A STANDARD ACCOUNT is the administrator's
+# "UPDATE.ACCOUNTS ALL" from SDSYS (LOGIN mode 4, what an upgrade runs), which
+# walks the register and applies each account's own tier.  Invoke-SD starts in
+# SDSYS, elevated, so this is that session.  It refreshes every registered
+# account; on a fresh install they already match NEWVOC.  The rows anchor on
+# 10171's count line and on 5004 naming this account's VOC, and refuse 10172.
 $std  = $Tiers[0]
-$text = Invoke-SD @(('LOGTO ' + $std.Name.ToUpper()), 'UPDATE.ACCOUNTS', 'COUNT VOC',
+$text = Invoke-SD @('UPDATE.ACCOUNTS ALL', ('LOGTO ' + $std.Name.ToUpper()), 'COUNT VOC',
                     ("LIST VOC " + (($Withheld | ForEach-Object { "'" + $_ + "'" }) -join ' ')))
+Show-Raw 'UPDATE.ACCOUNTS ALL, then the standard account' $text
+Note 'UPDATE.ACCOUNTS ALL was not refused (10172, or not in VOC)' $false `
+     ($text -match 'Cannot update every registered account|UPDATE.ACCOUNTS is not in your VOC')
+Note 'UPDATE.ACCOUNTS ALL reported its account count (10171)' $true `
+     ($text -match '(?m)^\d+ account\(s\) had their VOC updated')
+Note "the walk updated the standard account's VOC (5004)" $true `
+     ($text -match ('(?im)^Updating .*[\\/]' + [regex]::Escape($std.Name) + '[\\/]voc\s*$'))
 Note 'standard COUNT VOC after UPDATE.ACCOUNTS' $std.Count (Get-VocCount $text)
 Note 'standard withheld still MISSING after UPDATE.ACCOUNTS' $Withheld.Count ((Get-Missing $text $Withheld) | Measure-Object).Count
 
@@ -624,13 +645,14 @@ Write-Output '=== 5b. an account holding the OLD upper-case ids is renamed, not 
 # also have ended every such account's next session with 5028.
 #
 # THE OLD ACCOUNT IS MADE, NOT FOUND: each lower record is copied to its upper
-# id and the lower one deleted, in the programmer account, and the precondition
+# id and the lower one deleted, in the administrator account, and the precondition
 # row proves that state before anything is measured.  THEN A NEW SESSION LOGTOs
 # IT - which is LOGIN's $RELEASE read - and runs UPDATE.ACCOUNTS.
 #
-# THE INSTRUMENT IS "LIST VOC WITH @ID = ...", WHICH IS CASE-SENSITIVE (measured
-# 14 Sep 2026: a stored ZzVidPtr listed for "ZzVidPtr" and not for "zzvidptr").
-# LIST with an explicit id and CT both fold, so they cannot tell the two apart.
+# THE INSTRUMENT IS THE @ID COLUMN OF "LIST VOC WITH @ID = ...", read with
+# -cmatch.  The selection itself FOLDS (b155: "$acc" and "$ACC" both selected
+# the one record $ACC, so it was listed twice), but the row prints the id the
+# record is STORED under, which is what is compared.  Listed twice is expected.
 $renPairs = @(@{L='$acc'; U='$ACC'}, @{L='$map'; U='$MAP'},
               @{L='$release'; U='$RELEASE'}, @{L='sd.voclib'; U='SD.VOCLIB'})
 $idQuery  = 'LIST VOC WITH ' + (($renPairs | ForEach-Object { '@ID = "' + $_.L + '" OR @ID = "' + $_.U + '"' }) -join ' OR ')
@@ -643,10 +665,11 @@ function Get-StoredIds($text) {
     }
     return ,$got
 }
-# THE PROGRAMMER ACCOUNT, NOT THE STANDARD ONE: COPY and DELETE are in
-# tier.policy/omit.standard, so the plant would be refused there.  The closing
-# count row restores section 6's premise (PROGRAMMER at its full count).
-$prog  = $Tiers[1]
+# THE ADMINISTRATOR ACCOUNT: COPY and DELETE are in tier.policy/omit.standard,
+# and update.accounts is in add.administrator - b155 ran this in PROGRAMMER and
+# got "UPDATE.ACCOUNTS is not in your VOC", so nothing ran.  Plain
+# UPDATE.ACCOUNTS outside SDSYS is LOGIN mode 2: this account only, no prompt.
+$prog  = $Tiers[2]
 $plant = @(('LOGTO ' + $prog.Name.ToUpper()))
 foreach ($p in $renPairs) { $plant += ('COPY FROM VOC ' + $p.L + ',' + $p.U); $plant += ('DELETE VOC ' + $p.L) }
 $plant += $idQuery
@@ -662,13 +685,15 @@ $text = Invoke-SD @(('LOGTO ' + $prog.Name.ToUpper()), 'WHO', 'UPDATE.ACCOUNTS',
 Show-Raw 'LOGTO, UPDATE.ACCOUNTS' $text
 $after = Get-StoredIds $text
 Write-Output ('  stored after UPDATE.ACCOUNTS: ' + ($after -join ' '))
+Note '5b: UPDATE.ACCOUNTS ran (5200 printed, not "is not in your VOC")' $true `
+     (($text -match 'Copying records from NEWVOC to VOC') -and ($text -notmatch 'UPDATE.ACCOUNTS is not in your VOC'))
 Note '5b: LOGTO into the account did not stop on 5028 ($release VOC record not found)' $false `
      ($text -match 'VOC record not found')
 Note '5b: the session reached WHO after the LOGTO' $true `
      ($text -match ('(?m)^\d+ ' + [regex]::Escape($prog.Name.ToUpper()) + '\b'))
 Note '5b: after UPDATE.ACCOUNTS the account holds exactly the four lower ids' 'L4' `
      $(if ((@($after | Where-Object { $_ -cnotmatch '[A-Z]' }).Count -eq 4) -and ($after.Count -eq 4)) { 'L4' } else { ($after -join ' ') })
-Note '5b: COUNT VOC is back to the programmer count (renamed, not added)' $prog.Count (Get-VocCount $text)
+Note '5b: COUNT VOC is back to the administrator count (renamed, not added)' $prog.Count (Get-VocCount $text)
 
 # ---------------------------------------------------------------------------
 Write-Output ''
