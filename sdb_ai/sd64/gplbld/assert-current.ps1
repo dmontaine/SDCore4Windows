@@ -1285,9 +1285,10 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   'test-intrinsics-units.py',
                   # 12 Sep 26 - RELEASE_1.1 20's instruments, listed in the
                   # commit that creates them.  Neither is installed and neither
-                  # is compiled into sd.exe; both make a scratch DIRECTORY file
-                  # in SDSYS, compile one program into it and remove all three
-                  # parts afterwards.
+                  # is compiled into sd.exe.  probe-osex makes a scratch
+                  # DIRECTORY file in SDSYS; verify-pyapi no longer does - since
+                  # 13 Sep 26 (RELEASE_1.1 26) it plants its programs in SDSYS's
+                  # own bp so that nothing is written to SDSYS's VOC.
                   #
                   # verify-pyapi.ps1 IS THE ONLY THING IN THE TREE THAT DRIVES
                   # BASIC -> PY_* -> the pipe -> CPython.  test-sdpy-units
@@ -1315,7 +1316,11 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # 13 Sep 26 - verify-createfilecase.ps1, RELEASE_1.1 5's
                   # phase (a) witness: a new file's id is stored lower case.
                   # Ships nowhere; listed with the commit that creates it.
-                  'verify-createfilecase.ps1')
+                  'verify-createfilecase.ps1',
+                  # 13 Sep 26 - verify-pagesuppress.ps1, RELEASE_1.1 28's
+                  # witness: "S" at QDISP's page prompt behaves as NO.PAGE.
+                  # Ships nowhere; listed with the commit that creates it.
+                  'verify-pagesuppress.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

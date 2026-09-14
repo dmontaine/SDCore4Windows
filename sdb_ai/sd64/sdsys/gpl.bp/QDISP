@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 13 Sep 26 Windows port - "Suppress pagination" at the page prompt now does
+*            what NO.PAGE does: the rest of the report runs on without clearing
+*            the screen or repeating the page heading at every page boundary
+*            (RELEASE_1.1_FIXES.md 28, UPSTREAM_FIXES.md 39).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -849,7 +853,16 @@ page.prompt:
             gosub display.page.image
 
          case action = 'S' and not(final.page)
+* 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 28.  SET BOTH FLAGS, AS
+*   QD$NPAG (disable.pagination) DOES FOR THE NO.PAGE KEYWORD.  qd.paginate
+*   only stops this prompt; qd.no.page is what emit.line tests before clearing
+*   the screen and emitting the heading at each new page, and before the footer.
+*   With only the first set, the report stopped asking but went on clearing the
+*   screen every page, so a terminal showed nothing but the last page.
+*   Measured on the 13 Sep 10:23:02 install, LIST ONLY VOC at TERM 80,12:
+*   NO.PAGE gave 1 clear-screen and 1 heading; answering S gave 48 and 47.
             qd.paginate = @false
+            qd.no.page = @true
             exit
 
          case action matches '1N' and qd.scrolling

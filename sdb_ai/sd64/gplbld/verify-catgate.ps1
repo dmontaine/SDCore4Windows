@@ -202,7 +202,17 @@ function Remove-Fixtures {
     # IT IS UNCONDITIONAL, unlike the line above.  The VOC record can outlive
     # the directory - that is the whole defect - so keying the cleanup on the
     # directory existing is what let these accumulate in the first place.
-    $null = Invoke-SD @("DELETE VOC $ctlFile.OUT")
+    #
+    # 13 Sep 26 - RELEASE_1.1 31.  BOTH SPELLINGS, BECAUSE THE ID'S CASE MOVED.
+    # BASIC makes the .OUT with CREATE.FILE, and since RELEASE_1.1 5 phase (a)
+    # CREATE.FILE stores a new id in LOWER case - so -Run b148 left
+    # "sdcatgb148bp.out" in SDSYS's VOC while this line deleted
+    # "SDCATGB148BP.OUT", which no longer existed.  DELETE matches a record id
+    # exactly (it is a record verb, and record ids are data), so there is no
+    # fold to rely on.  Naming both is safe: the absent one is simply not found,
+    # and the named-ids path has no prompt (see above).  The VOC check at the
+    # end of the run is what makes a third miss visible.
+    $null = Invoke-SD @("DELETE VOC $ctlFile.OUT", ("DELETE VOC " + ($ctlFile + '.OUT').ToLower()))
 
     foreach ($p in @($ctlDir, ($ctlDir + '.OUT'), ($ctlDir + '.DIC'), (Join-Path $gcat ('$' + $ctlName)))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
@@ -482,6 +492,24 @@ if (-not $Keep) {
     Write-Output ''
     Write-Output 'Cleaning up (use -Keep to leave the account for inspection)'
     Remove-Made
+
+    # 13 Sep 26 - RELEASE_1.1 31.  THE CLEANUP IS CHECKED, NOT TRUSTED.  This
+    # file's fixtures have left dead records in SDSYS's VOC twice - PRE_RELEASE
+    # 60 (Remove-Item instead of SD) and -Run b148 (the .OUT id's case) - and
+    # both times the run was green, because nothing looked.  A byte scan of the
+    # VOC buckets, as PRE_RELEASE 60's cleanup was verified.  The control
+    # "listf" must be found first, or a scan that read nothing would pass.
+    $vocText = ''
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $sdsys 'voc') -File -ErrorAction SilentlyContinue)) {
+        $vocText += [System.Text.Encoding]::GetEncoding('iso-8859-1').GetString([System.IO.File]::ReadAllBytes($f.FullName))
+    }
+    $vocReadable = $vocText.IndexOf('listf', [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+    Write-Output ("  SDSYS VOC scan: " + $vocText.Length + " bytes, control 'listf' found: " + $vocReadable)
+    Note 'cleanup: SDSYS VOC scan could read the VOC (control listf)' $true $vocReadable
+    if ($vocReadable) {
+        Note ("cleanup: SDSYS VOC names nothing called " + $ctlFile + " in any case") $false `
+             ($vocText.IndexOf($ctlFile, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)
+    }
 } else {
     Write-Output ''
     Write-Output ('Left behind for inspection: ' + $acctDir)

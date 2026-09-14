@@ -472,10 +472,30 @@ Write-Output '=== 0. The omit list this test asserts against ===================
 
 # Read the shipped list and compare it with $Withheld.  If they disagree the
 # test is out of date, and saying so is worth more than failing obscurely.
-$omitRec  = Join-Path $env:ProgramData 'SD\sdsys\newvoc\TIER.OMIT.STANDARD'
+#
+# 13 Sep 26 - RELEASE_1.1 29.  THE LISTS MOVED FROM newvoc TO THEIR OWN FILE,
+# sdsys\tier.policy, AS omit.standard AND add.administrator (RELEASE_1.1 5,
+# a47526f), AND THIS FILE WAS NOT UPDATED WITH THEM.  Both paths below still
+# named newvoc\TIER.*, so -Run b147 died here on Get-Content with a terminating
+# error, step 6 of 29, and the runner stopped with 23 steps unrun.  The record
+# format is unchanged - field 1 a note, then one verb id per line - so -Skip 1
+# still holds.  AND A MISSING RECORD IS NOW REFUSED BY NAME, exit 2, instead of
+# an exception: "the list is not where this test looks" is a cannot-run, and
+# the crash reported it as neither.
+$tierPol  = Join-Path $env:ProgramData 'SD\sdsys\tier.policy'
+$omitRec  = Join-Path $tierPol 'omit.standard'
+$addRec   = Join-Path $tierPol 'add.administrator'
+Write-Output ("  omit list : " + $omitRec)
+Write-Output ("  add list  : " + $addRec)
+foreach ($r in @($omitRec, $addRec)) {
+    if (-not (Test-Path -LiteralPath $r -PathType Leaf)) {
+        Write-Output ("  REFUSING: no tier list at " + $r + " - nothing to compare this test against")
+        exit 2
+    }
+}
 $shipped  = @(Get-Content -LiteralPath $omitRec | Select-Object -Skip 1)
 $diff     = (Compare-Object $shipped $Withheld -SyncWindow 100)
-Note 'shipped TIER.OMIT.STANDARD matches this test' 0 ($diff | Measure-Object).Count
+Note 'shipped tier.policy omit.standard matches this test' 0 ($diff | Measure-Object).Count
 if ($diff) { $diff | ForEach-Object { Write-Output ("    {0} {1}" -f $_.SideIndicator, $_.InputObject) } }
 Note 'omit list length' $Withheld.Count $shipped.Count
 
@@ -485,10 +505,9 @@ Note 'omit list length' $Withheld.Count $shipped.Count
 # list.  It went unnoticed while the add list never changed; MODIFY.PASSWORD
 # joining it on 17 Aug 2026 is exactly the edit that would have slipped
 # through, updating the record and not the test, or the other way about.
-$addRec    = Join-Path $env:ProgramData 'SD\sdsys\newvoc\TIER.ADD.ADMINISTRATOR'
 $shippedAd = @(Get-Content -LiteralPath $addRec | Select-Object -Skip 1)
 $diffAd    = (Compare-Object $shippedAd $AdminVerbs -SyncWindow 100)
-Note 'shipped TIER.ADD.ADMINISTRATOR matches this test' 0 ($diffAd | Measure-Object).Count
+Note 'shipped tier.policy add.administrator matches this test' 0 ($diffAd | Measure-Object).Count
 if ($diffAd) { $diffAd | ForEach-Object { Write-Output ("    {0} {1}" -f $_.SideIndicator, $_.InputObject) } }
 Note 'add list length' $AdminVerbs.Count $shippedAd.Count
 

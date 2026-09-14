@@ -30,7 +30,7 @@ $target = Join-Path $PSScriptRoot 'verify-vocverbs.ps1'
 $t = $null; $e = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $target).Path, [ref]$t, [ref]$e)
 if ($e.Count -ne 0) { throw "parse errors: $($e.Count)" }
-$want = @('Test-Say','Get-SayCount')
+$want = @('Test-Say','Get-SayCount','Get-CreatedName')
 $fns = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) |
        Where-Object { $want -contains $_.Name }
 if ($fns.Count -ne $want.Count) { throw "lifted $($fns.Count) of $($want.Count) functions" }
@@ -122,8 +122,26 @@ $bad26 = @("Created DATA part as C:\ProgramData\SD\sdsys\ZZPRFW",
 T 'e26 data prompt: fixed'           $false (Test-Say $fix26 'OK to delete DATA portion')
 T 'e26 data prompt: defect'          $true  (Test-Say $bad26 'OK to delete DATA portion')
 T 'e26 dict prompt: defect'          $true  (Test-Say $bad26 'OK to delete DICT portion')
-T 'e26 data deleted: fixed'          $true  (Test-Say $fix26 ("DATA portion '" + [regex]::Escape($wFile.ToUpper()) + "' deleted"))
-T 'e26 dict deleted: fixed'          $true  (Test-Say $fix26 ("DICT portion '" + [regex]::Escape($wFile.ToUpper() + '.DIC') + "' deleted"))
+# 13 Sep 26 - RELEASE_1.1 30.  The deletion rows now expect the name CREATE.FILE
+# reported (Get-CreatedName), so both eras are driven: $fix26 is the old
+# upper-case build, $fix26a is -Run b148's real output after RELEASE_1.1 5
+# phase (a), where the old $wFile.ToUpper() anchor failed a working build.
+$fix26a = @("Created DICT part as sdvvb148w.DIC", "Created DATA part as sdvvb148w",
+  "DATA portion 'sdvvb148w' deleted", "DICT portion 'sdvvb148w.DIC' deleted",
+  "VOC entry 'sdvvb148w' deleted") -join "`n"
+$d26  = Get-CreatedName $fix26 'DATA'
+$d26a = Get-CreatedName $fix26a 'DATA'; $k26a = Get-CreatedName $fix26a 'DICT'
+T 'e26 created name, old build (leaf of a full path)' 'ZZPRFW'        $d26
+T 'e26 created name, phase (a) build'                 'sdvvb148w'     $d26a
+T 'e26 created DICT name, phase (a) build'            'sdvvb148w.DIC' $k26a
+T 'e26 created name absent -> empty'                  ''              (Get-CreatedName "DATA portion 'x' deleted" 'DATA')
+T 'e26 data deleted: fixed, old build'                $true  (Test-Say $fix26  ("DATA portion '" + [regex]::Escape($d26) + "' deleted"))
+T 'e26 data deleted: fixed, phase (a) build'          $true  (Test-Say $fix26a ("DATA portion '" + [regex]::Escape($d26a) + "' deleted"))
+T 'e26 dict deleted: fixed, phase (a) build'          $true  (Test-Say $fix26a ("DICT portion '" + [regex]::Escape($k26a) + "' deleted"))
+T 'e26 data deleted: defect'                          $false (Test-Say $bad26  ("DATA portion '" + [regex]::Escape((Get-CreatedName $bad26 'DATA')) + "' deleted"))
+# The regression this fixes, kept as a row: the old typed-case anchor against
+# the phase (a) transcript.  It must NOT match, or the fix was never needed.
+T 'e26 old ToUpper anchor fails on phase (a) output'  $false (Test-Say $fix26a ("DATA portion '" + [regex]::Escape('sdvvb148w'.ToUpper()) + "' deleted"))
 T 'e26 voc deleted: fixed'           $true  (Test-Say $fix26 ("VOC entry '" + [regex]::Escape($wFile) + "' deleted"))
 T 'e26 voc deleted: defect'          $false (Test-Say $bad26 ("VOC entry '" + [regex]::Escape($wFile) + "' deleted"))
 

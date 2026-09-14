@@ -4,6 +4,17 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+13 Sep 26  FIXED: "SUPPRESS PAGINATION" AT A REPORT'S PAGE PROMPT NOW SHOWS
+           THE REST OF THE REPORT.
+
+           When a LIST, SORT or similar report fills the screen it asks
+           "Action (Abort/Quit/Next/Suppress pagination)".  Answering S
+           stopped the prompts, but every later page still cleared the
+           screen and repeated the heading, so only the last page could be
+           seen.  S now does what the NO.PAGE keyword does: the remaining
+           lines run on without clearing the screen or repeating the
+           heading.
+
 13 Sep 26  NEW FILES ARE NAMED IN LOWER CASE, AND DELETE.FILE FINDS THEM
            HOWEVER YOU TYPE THE NAME.
 

@@ -145,6 +145,25 @@ function Get-SayCount([string]$text, [string]$pattern) {
     return ([regex]::Matches($text, $pattern, [Text.RegularExpressions.RegexOptions]::Multiline)).Count
 }
 
+# 13 Sep 26 - RELEASE_1.1 30.  THE NAME CREATE.FILE SAID IT MADE, FROM ITS OWN
+# SUCCESS LINE, "Created DATA part as <path>" / "Created DICT part as <path>".
+# Returns the last path component exactly as printed, or '' if the line is
+# absent - and '' can match no "portion '...' deleted" pattern, so a missing
+# create cannot score a deletion.
+#
+# WHY NOT TYPE THE CASE.  Entry 26 anchored on $wFile.ToUpper(), because CREATEF
+# upper-cased the OS name.  RELEASE_1.1 5 phase (a) made it lower, and -Run b148
+# failed both rows on a build that printed "DATA portion 'sdvvb148w' deleted" -
+# the product right, the typed case wrong.  The case is the product's decision,
+# so the check reads it from the product rather than restating it.  Matching
+# stays case-sensitive, which is still the point of this file.
+function Get-CreatedName([string]$text, [string]$part) {
+    if ([string]::IsNullOrEmpty($text)) { return '' }
+    $m = [regex]::Match($text, ('Created ' + $part + ' part as (\S+)'))
+    if (-not $m.Success) { return '' }
+    return (($m.Groups[1].Value -split '[\\/]')[-1])
+}
+
 # ------------------------------------------------------------------ Invoke-SD
 #
 # COPIED FROM probe-catprivate.ps1:144 UNCHANGED, which is the shape
@@ -544,10 +563,15 @@ Note 'entry 26: the DATA prompt did NOT fire' $false `
 Note 'entry 26: the DICT prompt did NOT fire' $false `
      (Test-Say $e26 'OK to delete DICT portion') $true
 
+# The names CREATE.FILE reported, not the case this script expects - see
+# Get-CreatedName.  An absent create line gives '' and fails both rows.
+$w26Data = Get-CreatedName $e26 'DATA'
+$w26Dict = Get-CreatedName $e26 'DICT'
+Write-Output ("  entry 26: CREATE.FILE reported DATA '" + $w26Data + "', DICT '" + $w26Dict + "'")
 Note 'entry 26: the DATA portion was deleted' $true `
-     (Test-Say $e26 ("DATA portion '" + [regex]::Escape($wFile.ToUpper()) + "' deleted")) $true
+     (($w26Data -ne '') -and (Test-Say $e26 ("DATA portion '" + [regex]::Escape($w26Data) + "' deleted"))) $true
 Note 'entry 26: the DICT portion was deleted' $true `
-     (Test-Say $e26 ("DICT portion '" + [regex]::Escape($wFile.ToUpper() + '.DIC') + "' deleted")) $true
+     (($w26Dict -ne '') -and (Test-Say $e26 ("DICT portion '" + [regex]::Escape($w26Dict) + "' deleted"))) $true
 Note 'entry 26: the VOC entry was deleted' $true `
      (Test-Say $e26 ("VOC entry '" + [regex]::Escape($wFile) + "' deleted")) $true
 
