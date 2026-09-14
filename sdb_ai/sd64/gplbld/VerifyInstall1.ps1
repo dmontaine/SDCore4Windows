@@ -59,12 +59,13 @@
 #
 #     56 verify-*.ps1 in the directory
 #     22 named in this file           (21 before verify-pagesuppress)
-#     29 named in VerifyInstall2.ps1  (verify-pyapi and verify-pygate since 12 Sep)
-#     -- 51 accounted for, none in both, FIVE in neither: the four named below,
-#        which stay correctly out, AND verify-createfilecase.ps1 - RELEASE_1.1
-#        5 phase (a)'s witness, created 13 Sep, ELEVATED, run by hand and in no
-#        runner.  Recorded rather than wired: nobody has ruled that it joins
-#        VerifyInstall2.
+#     30 named in VerifyInstall2.ps1  (verify-pyapi and verify-pygate since
+#                                      12 Sep; verify-createfilecase 13 Sep)
+#     -- 52 accounted for, none in both, FOUR in neither - the four named below,
+#        which stay correctly out.  verify-createfilecase.ps1 was a fifth for
+#        part of one day (13 Sep 26): created, run by hand, in no runner, until
+#        the owner ruled it into VerifyInstall2 - RELEASE_1.1 32, whose matcher
+#        repairs came first.
 #
 # 12 Sep 26 - RE-DERIVED AGAIN, on adding verify-promptenter.ps1
 # (RELEASE_1.1_FIXES 6, owner's ruling).  THE BLOCK BELOW READ 49 / 20 / 25 AND

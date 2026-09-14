@@ -766,6 +766,27 @@ $steps = @(
     # get_ak_node is called zero times.  probe-akwrite.ps1 in VerifyInstall1 is
     # what covers that.
     @{ Name = 'verify-vocverbs.ps1';      P = @{ Prefix = $VocPrefix } },
+    # 13 Sep 26 - RELEASE_1.1 5 phase (a)'s witness, owner's instruction ("add
+    # verify-createfilecase to VerifyInstall2").  CREATE.FILE stores a new id in
+    # LOWER case, on disk and in the VOC, and the name still resolves typed in
+    # either case.  Before this it was run by hand once and was in no runner.
+    #
+    # HERE, BESIDE verify-vocverbs, FOR THAT STEP'S REASON: the two are the steps
+    # that create and delete files in SDSYS, and nothing after them counts SDSYS
+    # state.  ELEVATED BECAUSE IT MUST BE: it drives an SDSYS session, and an
+    # unelevated LOGTO SDSYS down a pipe hangs at UAC.  NO PREFIX: the fixture is
+    # named from the clock (ZzLcTest<HHmmss>), so a rerun cannot collide with
+    # its own leftovers, and it sweeps that family through SD before starting.
+    #
+    # ***ITS MATCHERS WERE REPAIRED BEFORE IT WAS WIRED IN - RELEASE_1.1 32.***
+    # The LISTF row matched the id anywhere, including the session's own echo
+    # and LISTF's miss wording, and the COUNT rows asserted only that no failure
+    # word appeared - so three of the owner's 6 of 6 could not have failed.  All
+    # three now anchor on success wording captured from a real session, and
+    # were driven against real hit and miss text, the old patterns included.
+    # It also now asserts its VOC record is gone after cleanup (26 and 31's
+    # lesson), a row that fails rather than repairs quietly.
+    @{ Name = 'verify-createfilecase.ps1'; P = @{} },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.
     #

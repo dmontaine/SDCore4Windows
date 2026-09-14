@@ -90,7 +90,13 @@ $stale = @(Get-ChildItem -LiteralPath $sdsys -Directory -ErrorAction SilentlyCon
            Where-Object { $_.Name -match '(?i)^zzlctest[0-9]{6}(\.DIC|\.OUT)?$' })
 foreach ($d in $stale) {
     Write-Output ("  sweeping leftover " + $d.Name)
-    Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    # THROUGH SD FIRST (13 Sep 26, RELEASE_1.1 32): a leftover directory from an
+    # interrupted run has a VOC record too, and Remove-Item alone would strand it
+    # - PRE_RELEASE 60's shape.  The .DIC and .OUT go with the DATA name.
+    if ($d.Name -notmatch '\.(DIC|OUT)$') { $null = Invoke-SD @("DELETE.FILE $($d.Name.ToLower())") }
+    if (Test-Path -LiteralPath $d.FullName) {
+        Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 $cmd = "CREATE.FILE $typed DIRECTORY"
@@ -105,6 +111,42 @@ $created = ($out -match 'Created DATA part as')
 if (-not $created -or ($out -match 'did not finish in')) {
     Write-Output '  CREATE.FILE did not report success - nothing below could be measured.'
     exit 2
+}
+
+# 13 Sep 26 - RELEASE_1.1 32.  THE THREE MATCHERS, AS FUNCTIONS SO THEY CAN BE
+# DRIVEN ON THEIR OWN.  Found while wiring this into VerifyInstall2: the first
+# version's LISTF row matched the id ANYWHERE in the session text - and the
+# session ECHOES ":LISTF <id>", and a miss prints "'<id>' not found" - so it
+# passed whether LISTF found the file or not.  Its COUNT rows asserted only the
+# ABSENCE of failure words, never the success line.  Both are the trap CLAUDE.md
+# names ("anchor on the SUCCESS wording, not on any string the failure also
+# carries").  The formats below were captured from a real session on the
+# 18:41:41 install, success and miss both, before these were written.
+#
+#   LISTF hit :  "zzlcprobe210617      Dir      F   zzlcprobe210617  ..."
+#                "1 record(s) listed"
+#   LISTF miss:  "0 record(s) listed" / "'zznosuchfile999' not found"
+#   COUNT hit :  "0 record(s) counted"   (an empty file is still found)
+#   COUNT miss:  "File not found"
+#   CT gone   :  "Record 'zzlcprobe210617' not found"
+
+# A LISTF table ROW for the id, case-sensitive, at the start of a line - the
+# echoed command starts with ":" and the miss wording starts with "'", so
+# neither can match - AND exactly one record listed.
+function Test-ListfRow([string]$text, [string]$id) {
+    return (($text -cmatch ('(?m)^' + [regex]::Escape($id) + '\s+Dir\s')) -and
+            ($text -match '(?m)^1 record\(s\) listed'))
+}
+# COUNT's own success line, and none of the ways it says it could not open.
+function Test-CountResolved([string]$text) {
+    return (($text -match '(?m)^\d+ record\(s\) counted') -and
+            ($text -notmatch 'File not found|not in your VOC|did not finish in'))
+}
+# The VOC record is gone: CT's not-found wording naming the id, from a session
+# that finished.
+function Test-VocGone([string]$text, [string]$id) {
+    return (($text -match ("Record '" + [regex]::Escape($id) + "' not found")) -and
+            ($text -notmatch 'did not finish in'))
 }
 
 $fails = 0; $rows = 0
@@ -134,8 +176,8 @@ try {
     $lf = Invoke-SD @("LISTF $lower")
     Write-Output '  --- LISTF said: ---'
     Write-Output $lf
-    # The lower id must appear; the upper id must NOT appear as a separate F row.
-    Row ($lf -cmatch ('\b' + [regex]::Escape($lower) + '\b')) "LISTF shows the VOC id in lower case ('$lower')"
+    # A table row for the lower id - not the echo, not the miss wording.
+    Row (Test-ListfRow $lf $lower) "LISTF lists a row for the VOC id in lower case ('$lower')"
 
     Write-Output ''
     Write-Output '=== resolution: the fold still finds it typed either way ==================='
@@ -145,9 +187,8 @@ try {
     # fold it UP-then-find, i.e. down to lower.
     foreach ($cs in @(@{ n = $upper; w = 'UPPER' }, @{ n = $lower; w = 'lower' })) {
         $o = Invoke-SD @("COUNT $($cs.n)")
-        $resolved = ($o -notmatch 'not in your VOC' -and $o -notmatch 'not found' -and
-                     $o -notmatch 'cannot|Unable to open')
-        Row $resolved ("COUNT resolves the file typed in $($cs.w) ('$($cs.n)')")
+        $resolved = Test-CountResolved $o
+        Row $resolved ("COUNT resolves the file typed in $($cs.w) ('$($cs.n)') - 'record(s) counted'")
         if (-not $resolved) { Write-Output '    --- COUNT said: ---'; Write-Output $o }
     }
 }
@@ -155,12 +196,29 @@ finally {
     Write-Output ''
     Write-Output '=== cleanup ==============================================================='
     $rm = Invoke-SD @("DELETE.FILE $lower")
+    Write-Output '  --- DELETE.FILE said: ---'
+    Write-Output $rm
     foreach ($p in @($lower, ($lower + '.DIC'), ($lower + '.OUT'), $upper)) {
         $full = Join-Path $sdsys $p
         if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue }
     }
     $left = @($lower, $upper) | Where-Object { Test-Path -LiteralPath (Join-Path $sdsys $_) }
     Write-Output ("  removed the fixture; leftover: " + $(if ($left.Count) { $left -join ', ' } else { '(none)' }))
+
+    # 13 Sep 26 - RELEASE_1.1 32.  THE VOC RECORD IS CHECKED, NOT ASSUMED.  This
+    # fixture is a file in SDSYS, so a cleanup that took the directory and not
+    # the record would leave a dead F-pointer - RELEASE_1.1 26 and 31, twice
+    # today, both from green steps.  CT, not a file test: a VOC record is not a
+    # file.  If DELETE.FILE left it, DELETE VOC takes it and the row still fails,
+    # so the leak is reported rather than quietly repaired.
+    $ct = Invoke-SD @("CT VOC $lower")
+    $gone = Test-VocGone $ct $lower
+    if (-not $gone) {
+        Write-Output '  --- CT VOC said: ---'; Write-Output $ct
+        $null = Invoke-SD @("DELETE VOC $lower")
+    }
+    Row $gone "the VOC record '$lower' is gone after cleanup"
+    Row ($left.Count -eq 0) 'no fixture directory is left in sdsys' ($left -join ', ')
 }
 
 Write-Output ''
