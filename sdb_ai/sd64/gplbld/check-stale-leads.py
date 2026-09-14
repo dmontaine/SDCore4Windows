@@ -167,7 +167,28 @@ starts.append(len(lines))
 # So the rule is now the obvious one: an entry ends at the next entry OR at the
 # next heading of any kind, whichever comes first.  A third block, or a
 # blockquoted heading nobody thought about, needs no new special case.
-BOUNDARY = re.compile(r"^>? *#{2,} ")
+#
+# 14 Sep 26 - AND THE CODE DID NOT IMPLEMENT THE RULE THE PARAGRAPH ABOVE
+# STATES.  "Any kind" was written as #{2,}, which excludes a LEVEL-1 heading -
+# and "> # ⇩⇩⇩ HANDOFF N ⇩⇩⇩" is the biggest structural marker inside START
+# HERE, nineteen of them in this file.  So an entry that ends where a handoff
+# begins did not end there: it ran on and inherited the handoff's wording,
+# which is the exact fault this paragraph was written for, committed by its own
+# fix.  It is literally "a blockquoted heading nobody thought about".
+#
+# FOUND BY test-staleleads-units.py's OWN FIXTURE, not by the document.  Its
+# phase-3 item 9 sat immediately above HANDOFF 59, ran 37 lines into it, met
+# "Unmeasured whether they write by id or replace the file" and was reported as
+# a ticked row leading open - six red rows for a fault in neither the fixture's
+# subject nor the prose.
+#
+# MEASURED BEFORE CHANGING IT: widening #{2,} to #{1,6} moves NO entry range in
+# the real file (0 of 19, both at this commit and at 8035ac7), so the fix
+# cannot be hiding a verdict change.  The cost of the widening is that a "# "
+# comment inside a fenced code block would now bound an entry early - measured
+# too, and there are none: all 20 single-hash lines in this document are
+# headings, and no line inside any fenced block starts with a hash at all.
+BOUNDARY = re.compile(r"^>? *#{1,6} ")
 bounds = [i for i, ln in enumerate(lines) if BOUNDARY.match(ln)]
 
 
