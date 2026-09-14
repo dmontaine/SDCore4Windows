@@ -705,6 +705,12 @@ $steps = @(
     # ends - 98.9 MB of the same question in 40 seconds when Linux measured it.
     # Any sd.exe it leaves is killed BY PID DIFF, never by name: the service
     # runs sd.exe too.
+    #
+    # 13 Sep 26 - NOW FIVE LEGS AND 38 ROWS: leg 3 witnesses RELEASE_1.1 27, and
+    # legs 4-5 press Enter at DELETEF 6135/6140 and CATALOG 3033/3034 (RELEASE_1.1
+    # 6).  Still unelevated, still no token and no Windows account; it creates
+    # and removes a file, a VOC pointer and a catalogued program in the caller's
+    # own account.  Measured 38 of 38 on the 18:41:41 install before this note.
     @{ Name = 'verify-promptenter.ps1'; P = @{} },
     # 13 Sep 26 - RELEASE_1.1_FIXES.md 28, owner's instruction ("add
     # verify-pagesuppress to VerifyInstall1").  "Suppress pagination" at a query

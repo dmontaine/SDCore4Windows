@@ -29,6 +29,18 @@
     (stored lower) and deleted by its name typed in UPPER case must go,
     without 6130 and without a prompt - DELETEF's lower-case tier.
 
+    ***LEGS 4 AND 5 PRESS ENTER AT FOUR MORE PROMPTS - 13 Sep 2026, RELEASE_1.1
+    6.***  That entry had 6135, 6140, 3033, 3034 and 3035 reached by no
+    verifier.  Leg 4 is DELETEF's 6135 and 6140: a second VOC pointer made with
+    COPY (zzpromptx -> zzpromptd) is a file whose stored paths differ from its
+    own name, which is the branch that asks - a plain DELETE.FILE asks nothing.
+    Leg 5 is CATALOG's 3033 and 3034: a program catalogued LOCAL then private
+    meets 3033, and LOCAL again meets 3034.  Every leg has its Y control, and
+    every behaviour was captured from a real session before these were written.
+    3035 is NOT here and cannot be: it needs a matching GLOBAL catalogue entry,
+    every gcat name carries a $ ! * prefix (152 of 152, measured) that a private
+    or local name cannot, and writing gcat is administrator-only.
+
     ***THE CONTROL IS THE POINT, NOT THE ENTER CASE.***  "The file still
     exists" is also what you get from a command that never ran, a prompt that
     never fired, and a typo in the file name.  So the same prompt is driven
@@ -66,6 +78,9 @@ $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $Root   = Join-Path $env:ProgramData 'SD\user_accounts'
 $Probe  = 'ZZPROMPTE'
 $ProbeL = 'ZZPROMPTL'   # leg 3: created the ordinary way, so stored as zzpromptl
+$FileD  = 'zzpromptd'   # leg 4: the real file
+$FileX  = 'zzpromptx'   # leg 4: a second VOC pointer to it, so its paths differ from its name
+$ProgP  = 'ZZPROMPTP'   # leg 5: a program catalogued LOCAL and private in turn
 
 $pass = 0
 $fail = 0
@@ -247,6 +262,103 @@ try {
         Row "leg 3: the VOC record is gone" ($after3.Text -match 'not found') `
             "CT VOC $lowerL still finds the record"
     }
+    Write-Host ''
+
+    # --- LEG 4: RELEASE_1.1 6, DELETEF 6135 and 6140 ----------------------------
+    #
+    # DELETEF asks 6135/6140 only when the stored DATA/DICT path differs from
+    # the name typed.  COPY FROM VOC makes exactly that: zzpromptx whose field 2
+    # is zzpromptd.  Enter at both must delete nothing; the control, Y at both,
+    # deletes both portions of zzpromptd (captured 13 Sep 2026: "DATA portion
+    # 'zzpromptd' deleted" / "DICT portion 'zzpromptd.DIC' deleted").
+    Write-Host "--- leg 4: DELETEF 6135 + 6140 via a second VOC pointer ($FileX -> $FileD) ---"
+    $acctDir = Join-Path $Root $Account
+    $dDir    = Join-Path $acctDir $FileD
+    $dDic    = Join-Path $acctDir ($FileD + '.DIC')
+    $null = Invoke-SD @("DELETE VOC $FileX")                             # leftovers of an earlier run
+    $null = Invoke-SD @("DELETE.FILE $FileD", 'Y', 'Y', 'Y')
+    $mk4 = Invoke-SD @("CREATE.FILE $FileD", "COPY FROM VOC $FileD,$FileX", "CT VOC $FileX")
+    Write-Host $mk4.Text
+    # PRECONDITION: the pointer exists and names the other file.  Without it
+    # DELETEF would ask nothing and every "nothing deleted" row would pass.
+    $ptrOk = ($mk4.Text -match '1 record\(s\) copied') -and ($mk4.Text -cmatch "(?m)^\s*2: $FileD\s*$")
+    Row "leg 4 precondition: $FileX is a VOC pointer to $FileD" $ptrOk `
+        'COPY did not make the pointer, so DELETEF would not ask - nothing below could be measured'
+    if ($ptrOk) {
+        $e4 = Invoke-SD @("DELETE.FILE $FileX", '', '')
+        Write-Host $e4.Text
+        Row 'leg 4: the run terminated (no runaway loop)' (-not $e4.Killed) "killed after ${TimeoutSeconds}s"
+        Row 'leg 4: the transcript is a sane size' ($e4.Text.Length -lt 200000) "$($e4.Text.Length) bytes"
+        Row 'leg 4: prompt 6135 was reached, showing (y/<n>)' `
+            ($e4.Text -match "OK to delete DATA portion '$FileD' \(y/<n>\)\?") 'no 6135 prompt for the DATA portion'
+        Row 'leg 4: prompt 6140 was reached, showing (y/<n>)' `
+            ($e4.Text -match "OK to delete DICT portion '$FileD\.DIC' \(y/<n>\)\?") 'no 6140 prompt for the DICT portion'
+        Row 'leg 4: ENTER at both deleted nothing' `
+            (($e4.Text -notmatch "portion '[^']*' deleted") -and ($e4.Text -notmatch "VOC entry '[^']*' deleted")) `
+            'a deletion was reported - Enter was taken as YES'
+        Row 'leg 4: both portions survive on disk' ((Test-Path -LiteralPath $dDir) -and (Test-Path -LiteralPath $dDic)) `
+            "$dDir or its .DIC is gone after Enter"
+
+        # CONTROL: Y at both must delete, or "survived" above measured nothing.
+        $y4 = Invoke-SD @("DELETE.FILE $FileX", 'Y', 'Y')
+        Write-Host $y4.Text
+        Row "CONTROL leg 4: Y deletes DATA portion '$FileD'" ($y4.Text -match "DATA portion '$FileD' deleted") `
+            'no 6136 - the prompt is not driving a deletion'
+        Row "CONTROL leg 4: Y deletes DICT portion '$FileD.DIC'" ($y4.Text -match "DICT portion '$FileD\.DIC' deleted") `
+            'no 6141'
+        Row 'CONTROL leg 4: both portions are gone from disk' `
+            (-not (Test-Path -LiteralPath $dDir) -and -not (Test-Path -LiteralPath $dDic)) 'a portion survived an explicit Y'
+    }
+    Write-Host ''
+
+    # --- LEG 5: RELEASE_1.1 6, CATALOG 3033 and 3034 ----------------------------
+    #
+    # LOCAL then private meets 3033 ("also in local catalogue"); LOCAL again
+    # meets 3034 ("also in private catalogue").  Enter keeps each entry; Y
+    # removes it.  Local is a VOC record (V / CS); private is a record in the
+    # account's cat directory.  Captured 13 Sep 2026 before writing this.
+    Write-Host "--- leg 5: CATALOG 3033 + 3034 on $ProgP ------------------------------"
+    $catRec = Join-Path (Join-Path $acctDir 'cat') $ProgP
+    $srcRec = Join-Path $bpDir $ProgP
+    [System.IO.File]::WriteAllText($srcRec,
+        ("* $ProgP - written by verify-promptenter.ps1.  Safe to delete.`n   crt '$ProgP-RAN'`nend`n"),
+        [System.Text.Encoding]::GetEncoding('iso-8859-1'))
+    $mk5 = Invoke-SD @("BASIC BP $ProgP", "CATALOG BP $ProgP LOCAL", "CT VOC $ProgP")
+    Write-Host $mk5.Text
+    $localOk = ($mk5.Text -match "$ProgP added to local catalogue") -and ($mk5.Text -cmatch '(?m)^\s*2: CS\s*$')
+    Row "leg 5 precondition: $ProgP compiled and is in the LOCAL catalogue (V / CS)" $localOk `
+        'the program is not locally catalogued, so 3033 could not be reached'
+    if ($localOk) {
+        # 3033: catalogue privately while the local entry exists; Enter.
+        $e33 = Invoke-SD @("CATALOG BP $ProgP", '', "CT VOC $ProgP")
+        Write-Host $e33.Text
+        Row 'leg 5: the 3033 run terminated' (-not $e33.Killed) "killed after ${TimeoutSeconds}s"
+        Row 'leg 5: prompt 3033 was reached, showing (y/<n>)' `
+            ($e33.Text -match 'Program is also in local catalogue\. Remove \(y/<n>\)\?') 'no 3033 prompt'
+        Row 'leg 5: ENTER at 3033 kept the LOCAL entry (V / CS still there)' `
+            ($e33.Text -cmatch '(?m)^\s*2: CS\s*$') 'the VOC V/CS record is gone after Enter'
+        Row "leg 5: and the private entry was written ($catRec)" (Test-Path -LiteralPath $catRec) `
+            'no private catalogue record, so 3034 below could not be reached'
+
+        # 3034: catalogue LOCAL while the private entry exists; Enter.
+        $e34 = Invoke-SD @("CATALOG BP $ProgP LOCAL", '')
+        Write-Host $e34.Text
+        Row 'leg 5: the 3034 run terminated' (-not $e34.Killed) "killed after ${TimeoutSeconds}s"
+        Row 'leg 5: prompt 3034 was reached, showing (y/<n>)' `
+            ($e34.Text -match 'Program is also in private catalogue\. Remove \(y/<n>\)\?') 'no 3034 prompt'
+        Row 'leg 5: ENTER at 3034 kept the private entry' (Test-Path -LiteralPath $catRec) `
+            'the private catalogue record is gone after Enter'
+
+        # CONTROLS: Y removes each.
+        $y34 = Invoke-SD @("CATALOG BP $ProgP LOCAL", 'Y')
+        Row 'CONTROL leg 5: Y at 3034 removes the private entry' `
+            (($y34.Text -match 'Program is also in private catalogue') -and -not (Test-Path -LiteralPath $catRec)) `
+            'the private record survived an explicit Y, or the prompt did not appear'
+        $y33 = Invoke-SD @("CATALOG BP $ProgP", 'Y', "CT VOC $ProgP")
+        Row 'CONTROL leg 5: Y at 3033 removes the LOCAL entry' `
+            (($y33.Text -match 'Program is also in local catalogue') -and ($y33.Text -match "Record '$ProgP' not found")) `
+            'the VOC V/CS record survived an explicit Y, or the prompt did not appear'
+    }
 }
 finally {
     $null = Invoke-SD @("DELETE.FILE $Probe", 'Y', 'Y', 'Y')
@@ -256,9 +368,30 @@ finally {
     Write-Host ''
     Write-Host ("cleanup: $Probe left behind = " + ($left.Text -match '1 record\(s\) listed'))
     Write-Host ("cleanup: $ProbeL left behind = " + ($leftL.Text -notmatch 'not found'))
+
+    # Legs 4 and 5.  DELETE VOC for the pointer and any dead record; DELETE.FILE
+    # for a file that survived; DELETE.CATALOG for the private entry, and DELETE
+    # VOC for a local one; then the source and object by file.  Checked, not
+    # assumed: a VOC record left by a green run is RELEASE_1.1 26 and 31.
+    $null = Invoke-SD @("DELETE VOC $FileX")
+    $null = Invoke-SD @("DELETE.FILE $FileD", 'Y', 'Y', 'Y')
+    $null = Invoke-SD @("DELETE VOC $FileD")
+    $null = Invoke-SD @("DELETE.CATALOG $ProgP", "DELETE VOC $ProgP")
+    foreach ($f in @((Join-Path $bpDir $ProgP), (Join-Path (Join-Path (Join-Path $Root $Account) 'bp.out') $ProgP))) {
+        if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
+    }
+    $gone = Invoke-SD @("CT VOC $FileX", "CT VOC $FileD", "CT VOC $ProgP")
+    foreach ($n in @($FileX, $FileD, $ProgP)) {
+        Row "cleanup: no VOC record '$n' is left" ($gone.Text -match "Record '$n' not found") "CT VOC $n still finds it"
+    }
+    $acctForClean = Join-Path $Root $Account
+    $leftFiles = @((Join-Path $acctForClean $FileD), (Join-Path $acctForClean ($FileD + '.DIC')),
+                   (Join-Path (Join-Path $acctForClean 'cat') $ProgP), (Join-Path $bpDir $ProgP)) |
+                 Where-Object { Test-Path -LiteralPath $_ }
+    Row 'cleanup: no leg 4/5 file, catalogue record or source is left' ($leftFiles.Count -eq 0) ($leftFiles -join ', ')
 }
 
 Write-Host ''
 Write-Host "verify-promptenter: $pass passed, $fail failed"
 if ($fail -gt 0) { Bail 1 "$fail check(s) failed." }
-Bail 0 "Enter took the default at prompt 6131, the control proves the prompt was live, and a lower-case id was deleted by its upper-case name."
+Bail 0 "Enter took the default at 6131, 6135, 6140, 3033 and 3034, each control proves its prompt was live, and a lower-case id was deleted by its upper-case name."
