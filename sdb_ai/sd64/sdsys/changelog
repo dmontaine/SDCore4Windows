@@ -4,6 +4,17 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+14 Sep 26  DICTIONARY FIELD NAMES ARE FOUND HOWEVER YOU TYPE THEM.
+
+           A field defined in a dictionary in lower case can now be named in
+           upper case, and the other way round: in LIST, SORT, SELECT and
+           the other query commands, in COMPILE.DICT (CD), in CREATE.INDEX,
+           in SHOW, and inside an I-type or A-type expression.  Each is
+           looked up as typed, then in lower case, then in upper case, the
+           same way VOC names already were.  Before, an I-type expression
+           could only name fields whose dictionary names were upper case,
+           and CD could not find an item named in a different case.
+
 14 Sep 26  FOUR MORE VOC ENTRIES AND THE SYSCOM INCLUDE FILES ARE NAMED IN
            LOWER CASE.
 

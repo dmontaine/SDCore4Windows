@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: every dictionary read folds
+*           (as given, lower, upper).
 * 02 Sep 26 Windows port - a directory-file record whose FILE is present under
 *            a name this encoding cannot produce now reports "invalid name"
 *            (10164) rather than "not found".  PRE_RELEASE_FIXES.md 128.
@@ -537,11 +539,21 @@ $define MAX.STRINGS     20          ;* For SEARCH command
 
    * Process defaults from VOC $QUERY.DEFAULTS record, if present
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a.  DICTIONARY IDS FOLD, AS VOC
+*   IDS ALREADY DO (PROJECT_STATUS.md 5.12).  Every dictionary read in this file
+*   now tries the id as given, then lower case, then upper case.  Additive: on
+*   today's shipped dictionaries the new tier never hits.  It exists so that the
+*   stage 2b rename of shipped dictionary ids to lower case (owner's ruling,
+*   14 Sep 2026, @ID included) leaves every query that names them in upper case
+*   working, and so a user dictionary keeps working whichever case it uses.
    if list.command and not(sum.command) then
       if dict.open then
          read dict.rec from dict.file, '$QUERY.DEFAULTS' then goto defaults.found
+         read dict.rec from dict.file, '$query.defaults' then goto defaults.found
       end
-      read dict.rec from @voc, '$QUERY.DEFAULTS' else null
+      read dict.rec from @voc, '$QUERY.DEFAULTS' else
+         read dict.rec from @voc, '$query.defaults' else null
+      end
 defaults.found:
       if upcase(dict.rec[1,1]) = 'X' then
          * Merge continuation lines
@@ -572,11 +584,17 @@ defaults.found:
             read dict.rec from dict.file, id then
                if dict.rec[1,2] = 'PH' then goto parse.default.phrase
             end
+            read dict.rec from dict.file, downcase(id) then   ;* RELEASE_1.1 5
+               if dict.rec[1,2] = 'PH' then goto parse.default.phrase
+            end
          end
 
          if show.command then
             id = "@SHOW"
             read dict.rec from dict.file, id then
+               if dict.rec[1,2] = 'PH' then goto parse.default.phrase
+            end
+            read dict.rec from dict.file, downcase(id) then   ;* RELEASE_1.1 5
                if dict.rec[1,2] = 'PH' then goto parse.default.phrase
             end
          end
@@ -738,6 +756,12 @@ parse.default.phrase:
                if (upcase(s[1,1]) = "D") and (s<dict.loc> = 0) then
                   dict.rec = s
                end
+            end else
+               read s from dict.file, "@id" then   ;* RELEASE_1.1 5
+                  if (upcase(s[1,1]) = "D") and (s<dict.loc> = 0) then
+                     dict.rec = s
+                  end
+               end
             end
          end
 
@@ -829,9 +853,14 @@ parse.default.phrase:
             read label.template from dict.file, '@LABEL' then
                goto template.found
             end
+            read label.template from dict.file, '@label' then   ;* RELEASE_1.1 5
+               goto template.found
+            end
          end
 
-         read label.template from @voc, '@LABEL' else null
+         read label.template from @voc, '@LABEL' else
+            read label.template from @voc, '@label' else null
+         end
 template.found:
       end
 
@@ -2650,6 +2679,9 @@ parse.command.options:
                   read label.template from dict.file, token then
                      goto label.template.found
                   end
+                  read label.template from dict.file, downcase(token) then   ;* RELEASE_1.1 5
+                     goto label.template.found
+                  end
                   read label.template from dict.file, upcase(token) then
                      goto label.template.found
                   end
@@ -3897,6 +3929,24 @@ get.token:
       if dict.rec[1,2] = "PH" then goto is.phrase
    end
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a.  THE DOWNCASE TIER THE
+*   DICTIONARY LOOKUP LACKED, placed where the upcase tier already was (after the
+*   VOC fold, so the precedence between a VOC keyword and a field is unchanged)
+*   and shaped exactly like it, token rewritten to the id that matched.
+   if dict.open then
+      read dict.rec from dict.file, downcase(token) then
+         from.voc = @false    ;* 0316
+         type = upcase(dict.rec[1,1])
+         if listindex('A,C,D,I,S', ',', type) then
+            keyword = -1
+            token = downcase(token)
+            return
+         end
+         if type = 'K' then return
+         if dict.rec[1,2] = "PH" then goto is.phrase
+      end
+   end
+
    if dict.open then
       read dict.rec from dict.file, upcase(token) then
          from.voc = @false    ;* 0316
@@ -3932,7 +3982,9 @@ get.token:
    if index(token, '%', 1) then
       link.name = field(token, '%', 1)
       read dict.rec from dict.file, link.name else
-         read dict.rec from dict.file, upcase(link.name) else null
+         read dict.rec from dict.file, downcase(link.name) else   ;* RELEASE_1.1 5
+            read dict.rec from dict.file, upcase(link.name) else null
+         end
       end
       type = upcase(dict.rec[1,1])
       if type = 'L' then
@@ -4922,6 +4974,18 @@ add.field.by.name:
    if dict.open then
       read dict.rec from dict.file, token then
          type = dict.rec[1,1]
+      end else
+*        14 Sep 26 - RELEASE_1.1 5 stage 2a: lower, then upper; token becomes the
+*        id that matched, as get.token does.
+         read dict.rec from dict.file, downcase(token) then
+            token = downcase(token)
+            type = dict.rec[1,1]
+         end else
+            read dict.rec from dict.file, upcase(token) then
+               token = upcase(token)
+               type = dict.rec[1,1]
+            end
+         end
       end
    end else
       dict.rec = ''

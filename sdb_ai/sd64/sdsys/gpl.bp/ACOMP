@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a {field} name folds.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -1051,9 +1052,20 @@ if.then.else.expr.abort:
                if look.ahead.token # TKN.RBR then goto err.rbr
                * Look up name in dictionary
 
+*              14 Sep 26 - RELEASE_1.1 5 stage 2a: as written, then lower, then
+*              upper; token.string becomes the id that matched, because it is
+*              written back and recorded as an embedded object name below.
                read field.rec from dict.file, token.string else
-                  err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
-                  goto error
+                  read field.rec from dict.file, downcase(token.string) then
+                     token.string = downcase(token.string)
+                  end else
+                     read field.rec from dict.file, upcase(token.string) then
+                        token.string = upcase(token.string)
+                     end else
+                        err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
+                        goto error
+                     end
+                  end
                end
 
                type = upcase(field.rec[1,1])

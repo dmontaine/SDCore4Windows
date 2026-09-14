@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the dictionary's @ID record
+*           is updated whether it is @ID or @id.
 * 14 Sep 26 Windows port - RELEASE_1.1 5.  Renaming a file: the old name folds,
 *           the new name is stored lower case and refused if it exists in any
 *           case other than the record being renamed, and the two default-path
@@ -264,10 +266,21 @@ rename.file:
    * old file name.
 
    open 'DICT', new.file.name to dict.f then
-      readu dict.rec from dict.f, '@ID' then
+*     14 Sep 26 - RELEASE_1.1 5 stage 2a: the record is @ID in a dictionary
+*     made before stage 2b and @id after it; either is updated under its own id.
+      id.rec.id = '@ID'
+      readu dict.rec from dict.f, id.rec.id else
+         release dict.f, id.rec.id
+         id.rec.id = '@id'
+         readu dict.rec from dict.f, id.rec.id else
+            release dict.f, id.rec.id
+            id.rec.id = ''
+         end
+      end
+      if id.rec.id # '' then
          if dict.rec<DICT.DISPLAY.NAME> = old.file.name then
             dict.rec<DICT.DISPLAY.NAME> = new.file.name
-            write dict.rec to dict.f, '@ID'
+            write dict.rec to dict.f, id.rec.id
          end
       end
       close dict.f

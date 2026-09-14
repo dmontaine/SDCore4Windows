@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: $INCLUDE is found as either
+*           $INCLUDE or $include.
 * 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -85,9 +87,18 @@ $include dictdict.h
       end
    end
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: an existing control record is
+*   found as $INCLUDE or $include; only when neither exists is one asked for.
+   incl.found = @false
    readu incl.rec from dict.file, "$INCLUDE" then
-      release dict.file, "$INCLUDE"
+      incl.found = @true
    end else
+      release dict.file, "$INCLUDE"
+      readu incl.rec from dict.file, "$include" then incl.found = @true
+   end
+   release dict.file, "$INCLUDE"
+   release dict.file, "$include"
+   if not(incl.found) then
       incl.rec = 'X'
 
       loop

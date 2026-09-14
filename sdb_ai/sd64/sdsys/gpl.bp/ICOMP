@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a field named in an I-type
+*           is looked up as written, then lower, then upper; it had read only
+*           the upper-cased token, twice.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -1209,16 +1212,26 @@ if.then.else.expr.abort:
          end else
             * Look up name in dictionary
 
-            read field.rec from dict.file, u.token.string else
-               read field.rec from dict.file, u.token.string then
-                  token.string = u.token.string
+*           14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a.  THIS READ THE
+*           UPPER-CASED TOKEN TWICE AND NEVER THE NAME AS WRITTEN, so an I-type
+*           could only name an upper-case field.  Now as written, then lower,
+*           then upper; token.string becomes the id that matched, because it is
+*           written back and recorded as an embedded object name below.  The
+*           VOC fallback after it is unchanged.
+            read field.rec from dict.file, token.string else
+               read field.rec from dict.file, downcase(token.string) then
+                  token.string = downcase(token.string)
                end else
-                  read field.rec from @voc, token.string else
-                     read field.rec from @voc, u.token.string then
-                        token.string = u.token.string
-                     end else
-                        err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
-                        goto error
+                  read field.rec from dict.file, u.token.string then
+                     token.string = u.token.string
+                  end else
+                     read field.rec from @voc, token.string else
+                        read field.rec from @voc, u.token.string then
+                           token.string = u.token.string
+                        end else
+                           err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
+                           goto error
+                        end
                      end
                   end
                end

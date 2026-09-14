@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the field named for a new
+*           index folds and the index takes the matched id; @ID or @id.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
 *           now names the FILE and the SESSION holding it (10168/10169) instead
 *           of 2602, which named neither.  build.index is the verb the entry
@@ -163,10 +165,27 @@ create.index:
          return
       end
 
+*     14 Sep 26 - RELEASE_1.1 5 stage 2a: as typed, then lower, then upper, and
+*     the index takes the id that matched - so the existing-index test is asked
+*     again under that id, or "CREATE.INDEX f type" beside an index on TYPE
+*     would get past the locate above.
       read dict.rec from dict.f, new.index.name else
-         display sysmsg(2608, new.index.name) ;* %1 is not defined in the dictionary
-         err = ER$RNF
-         return
+         read dict.rec from dict.f, downcase(new.index.name) then
+            new.index.name = downcase(new.index.name)
+         end else
+            read dict.rec from dict.f, upcase(new.index.name) then
+               new.index.name = upcase(new.index.name)
+            end else
+               display sysmsg(2608, new.index.name) ;* %1 is not defined in the dictionary
+               err = ER$RNF
+               return
+            end
+         end
+         locate new.index.name in ak.names<1> setting pos then
+            display sysmsg(2609, new.index.name)
+            err = DHE$AK.EXISTS
+            return
+         end
       end
 
       if num.aks = MAX$INDICES then
@@ -238,7 +257,11 @@ create.index:
 
       ak.flags = 0
 
-      read id.rec from dict.f, '@ID' then
+      id.found = @true   ;* 14 Sep 26 - RELEASE_1.1 5: @ID or @id
+      read id.rec from dict.f, '@ID' else
+         read id.rec from dict.f, '@id' else id.found = @false
+      end
+      if id.found then
          fmt.code = id.rec<DICT.FORMAT>
          gosub determine.justification
       end else

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a {field} name gains the
+*           downcase tier of the dictionary fold.
 * 03 Sep 26 Windows port - PRE_RELEASE_FIXES.md 114.  The BEGIN TRANSACTION
 *            body's inner loop had no end.source test, so an unterminated
 *            block spun for ever at EOF instead of reporting sysmsg 2878,
@@ -12051,11 +12053,17 @@ if.then.else.expr.abort:
          end
 
          gosub get.token
+*        14 Sep 26 - RELEASE_1.1 5 stage 2a: the downcase tier, before the
+*        existing upcase one.  The upcase tier keeps its REWRITE shape.
          read dict.rec from dict.f, token.string else
-            token.string = upcase(token.string)
-            read dict.rec from dict.f, token.string else
-               gosub err.field.name
-               goto exit.get.expr.item
+            read dict.rec from dict.f, downcase(token.string) then
+               token.string = downcase(token.string)
+            end else
+               token.string = upcase(token.string)
+               read dict.rec from dict.f, token.string else
+                  gosub err.field.name
+                  goto exit.get.expr.item
+               end
             end
          end
 

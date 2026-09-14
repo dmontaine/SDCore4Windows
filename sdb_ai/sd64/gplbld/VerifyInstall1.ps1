@@ -54,6 +54,10 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 14 Sep 26 - AND AGAIN ON ADDING verify-dictfold.ps1 (RELEASE_1.1 5 stage 2a):
+# 58 verify-*.ps1, 24 named here, 30 in VerifyInstall2, the same four in
+# neither, none in both - counted from the directory and both tables.
+#
 # 14 Sep 26 - RE-DERIVED ON ADDING verify-vocidcase.ps1 (RELEASE_1.1 5 and 34),
 # by listing the directory and counting both tables: 57 verify-*.ps1, 23 named
 # here, 30 in VerifyInstall2, the same four in neither (below), none in both.
@@ -755,6 +759,19 @@ $steps = @(
     # names one of the defects - and leg 10, which the old code also passes, is
     # the guard that the new clash test does not refuse a record's own rename.
     @{ Name = 'verify-vocidcase.ps1'; P = @{} },
+    # 14 Sep 26 - RELEASE_1.1 5 stage 2a.  Every dictionary read folds (as given,
+    # lower, upper), which must be installed and witnessed before stage 2b
+    # renames the shipped dictionary ids.  A file whose dictionary holds f1, f3
+    # and xtype (copied from DICT VOC) is queried as F1, compiled as XTYPE, and
+    # xtype's own expression names F1 and F3 - ICOMP read only the upper-cased
+    # token until today.  Same neighbourhood and reasons as verify-vocidcase:
+    # own account, unelevated, no token, bounded per session.
+    #
+    # Measured before being wired in: RED on the b155 install on exactly its six
+    # decisive rows, controls green.  A first draft passed two rows on the old
+    # code because COPY carries a compiled object across; each no-error row now
+    # requires the "Compiling xtype" line.
+    @{ Name = 'verify-dictfold.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer

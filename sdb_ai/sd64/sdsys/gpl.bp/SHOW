@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: field names, @SHOW and @ID
+*           are found in the dictionary in either case.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -234,7 +236,11 @@ show.subr:
    if prompt.string = '' then prompt.string = PROMPT.CHAR
 
    if num.items = 0 and dict.open then
-      read dict.rec from dict.fvar, "@SHOW" then
+      show.found = @true   ;* 14 Sep 26 - RELEASE_1.1 5 stage 2a: @SHOW or @show
+      read dict.rec from dict.fvar, "@SHOW" else
+         read dict.rec from dict.fvar, "@show" else show.found = @false
+      end
+      if show.found then
          if upcase(dict.rec[1,2]) = "PH" then
             option.string = convert(' ', @fm, trim(dict.rec<2>))
             from.args = @false
@@ -266,10 +272,12 @@ show.subr:
 
       if dict.open then
          read dict.rec from dict.fvar, '@ID' else
-            dict.rec = 'D'
-            dict.rec<DICT.LOC> = '0'
-            dict.rec<DICT.DISPLAY.NAME> = 'Id'
-            dict.rec<DICT.FORMAT> = '10L'
+            read dict.rec from dict.fvar, '@id' else   ;* RELEASE_1.1 5
+               dict.rec = 'D'
+               dict.rec<DICT.LOC> = '0'
+               dict.rec<DICT.DISPLAY.NAME> = 'Id'
+               dict.rec<DICT.FORMAT> = '10L'
+            end
          end
       end else
          dict.rec = 'D'
@@ -620,6 +628,20 @@ parse:
          read dict.rec from dict.fvar, option then
             type = upcase(dict.rec[1,1])
             found = @true
+         end else
+*           14 Sep 26 - RELEASE_1.1 5 stage 2a: lower, then upper; option
+*           becomes the id that matched, because CD is later run on it.
+            read dict.rec from dict.fvar, downcase(option) then
+               option = downcase(option)
+               type = upcase(dict.rec[1,1])
+               found = @true
+            end else
+               read dict.rec from dict.fvar, upcase(option) then
+                  option = upcase(option)
+                  type = upcase(dict.rec[1,1])
+                  found = @true
+               end
+            end
          end
       end         
 

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the $NEXT counter is found
+*           as $NEXT or $next and written back under the id it was found as.
 * 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -37,11 +39,23 @@ $recursive
 subroutine nextptr()
    seqno = '0'
    open 'DICT', '$hold' to dict.f then
-      readu rec from dict.f, '$NEXT' else null
+*     14 Sep 26 - RELEASE_1.1 5 stage 2a: the counter is found as $NEXT or $next
+*     and written back under the id it was found as.
+      next.id = '$NEXT'
+      rec = ''
+      readu rec from dict.f, next.id else
+         release dict.f, next.id
+         readu rec from dict.f, '$next' then
+            next.id = '$next'
+         end else
+            release dict.f, '$next'
+            readu rec from dict.f, next.id else null
+         end
+      end
       if not(rec<2> matches '1-4N') then rec = 'X':@fm:1
       seqno = fmt(rec<2>, "4'0'R")
       rec<2> = rem(seqno, 1000) + 1
-      write rec to dict.f, '$NEXT'
+      write rec to dict.f, next.id
    end
 
    return value seqno

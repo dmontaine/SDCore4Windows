@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: an index's field is found in
+*           the dictionary in either case.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -262,7 +264,15 @@ not.all.keyword:
       * Check against dictionary entry
 
       if dict.open then
-         read dict.rec from dict.f, index.name then
+*        14 Sep 26 - RELEASE_1.1 5 stage 2a: an index built on TYPE still finds
+*        its field once the dictionary id is type, and the other way round.
+         dict.found = @true
+         read dict.rec from dict.f, index.name else
+            read dict.rec from dict.f, downcase(index.name) else
+               read dict.rec from dict.f, upcase(index.name) else dict.found = @false
+            end
+         end
+         if dict.found then
             if type # upcase(dict.rec[1, 1]) or trimb(trimf(ak.data<comp.field>)) # trimb(trimf(dict.rec<comp.field>)) then
                crt sysmsg(2622)  ;* ** The above index differs from its dictionary definition
             end

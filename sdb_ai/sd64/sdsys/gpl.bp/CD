@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: an item named on the
+*           command line folds, and is written back under the id that matched.
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
 *            (RELEASE_1.1_FIXES.md 33, owner's ruling).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -256,11 +258,24 @@ compile.all:
 compile:
    * Read source record
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a name typed on the command
+*   line is found as typed, then lower, then upper, and itype.name becomes the
+*   id that matched - it is what the compiled record is written back under.
    readu itype.rec from dict.f, itype.name else
       release dict.f, itype.name
-      errors += 1
-      display sysmsg(2811, itype.name) ;* Source record 'xx' not found
-      return
+      readu itype.rec from dict.f, downcase(itype.name) then
+         itype.name = downcase(itype.name)
+      end else
+         release dict.f, downcase(itype.name)
+         readu itype.rec from dict.f, upcase(itype.name) then
+            itype.name = upcase(itype.name)
+         end else
+            release dict.f, upcase(itype.name)
+            errors += 1
+            display sysmsg(2811, itype.name) ;* Source record 'xx' not found
+            return
+         end
+      end
    end
 
    type = upcase(itype.rec[1,1])
