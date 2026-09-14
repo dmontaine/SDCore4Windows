@@ -84,6 +84,11 @@ $sdExe    = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $ctlFile   = $Account.ToUpper() + 'BP'
 $ctlDir    = Join-Path $sdsys $ctlFile
 $ctlName   = $Account.ToUpper() + 'G'
+# 13 Sep 26 - RELEASE_1.1 6, CATALOG prompt 3035.  An UNPREFIXED call name
+# catalogued with the GLOBAL keyword, so a private catalogue of the same name
+# meets "Program is also in global catalogue".  Per-run, for the reason above.
+$gpName    = $Account.ToUpper() + 'U'
+$sysCat    = Join-Path $sdsys 'cat'
 $userName  = 'SDGATE2'
 $localName = 'SDGATE3'
 
@@ -214,7 +219,10 @@ function Remove-Fixtures {
     # end of the run is what makes a third miss visible.
     $null = Invoke-SD @("DELETE VOC $ctlFile.OUT", ("DELETE VOC " + ($ctlFile + '.OUT').ToLower()))
 
-    foreach ($p in @($ctlDir, ($ctlDir + '.OUT'), ($ctlDir + '.DIC'), (Join-Path $gcat ('$' + $ctlName)))) {
+    # 13 Sep 26 - section 1b's unprefixed global and SDSYS-private entries.
+    $null = Invoke-SD @("DELETE.CATALOG $gpName", "DELETE.CATALOG $gpName GLOBAL")
+    foreach ($p in @($ctlDir, ($ctlDir + '.OUT'), ($ctlDir + '.DIC'), (Join-Path $gcat ('$' + $ctlName)),
+                     (Join-Path $gcat $gpName), (Join-Path $sysCat $gpName))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
@@ -311,6 +319,52 @@ Note "SDSYS: gcat gained `$$ctlName"               $true (Test-Path -LiteralPath
 if (-not (Test-Path -LiteralPath (Join-Path $gcat ('$' + $ctlName)))) {
     Write-Output '  --- SD said: ---'; Write-Output $out
 }
+
+# ---------------------------------------------------------------------------
+Write-Output ''
+Write-Output '=== 1b. Prompt 3035: ENTER keeps a global entry, Y removes it =============='
+
+# 13 Sep 26 - RELEASE_1.1 6.  3035 is the one CATALOG prompt no unelevated run
+# can reach: it needs a GLOBAL entry whose name matches a private one, every
+# gcat name carries a $ ! * prefix a private name cannot (152 of 152, measured),
+# and the GLOBAL keyword that writes an UNPREFIXED name is administrator-only
+# (KW$GLOBAL tests K$ADMINISTRATOR).  This session is elevated and in SDSYS, so
+# it can.  CATALOG:421 (private) runs check.global, which asks 3035.
+#
+# ENTER MUST KEEP THE GLOBAL ENTRY; Y MUST REMOVE IT - the control, without which
+# "still there" is equally what a prompt that never appeared produces.
+# NOTHING HERE WAS RUN BEFORE IT WAS WRITTEN: an agent shell cannot drive an
+# SDSYS session.  3033/3034's identical shape was captured unelevated first, and
+# every row here prints what SD said.
+$gpGcat = Join-Path $gcat $gpName
+$gpPriv = Join-Path $sysCat $gpName
+$out = Invoke-SD @("CATALOG $ctlFile $gpName $ctlName GLOBAL")
+Write-Output '  --- SD said: ---'; Write-Output $out
+$gpOk = ($out -match "$gpName added to global catalogue") -and (Test-Path -LiteralPath $gpGcat)
+Note "3035 fixture: $gpName (unprefixed) is in the global catalogue" $true $gpOk
+if ($gpOk) {
+    $e35 = Invoke-SD @("CATALOG $ctlFile $gpName $ctlName", '')
+    Write-Output '  --- SD said (Enter): ---'; Write-Output $e35
+    Note '3035: the private catalogue was written'                 $true ($e35 -match "$gpName added to private catalogue")
+    Note '3035: the prompt was reached, showing (y/<n>)'           $true ($e35 -match 'Program is also in global catalogue\. Remove \(y/<n>\)\?')
+    Note '3035: ENTER kept the global entry'                       $true (Test-Path -LiteralPath $gpGcat)
+    Note '3035: the session finished (no runaway loop)'            $false ($e35 -match 'did not finish in')
+
+    $y35 = Invoke-SD @("CATALOG $ctlFile $gpName $ctlName", 'Y')
+    Write-Output '  --- SD said (Y): ---'; Write-Output $y35
+    Note 'CONTROL 3035: the prompt was reached again'              $true ($y35 -match 'Program is also in global catalogue')
+    Note 'CONTROL 3035: Y removed the global entry'                $false (Test-Path -LiteralPath $gpGcat)
+}
+# The private entry this section made in SDSYS, and a global one a failed Y
+# left behind.  Remove-Fixtures repeats both, so an early exit does not strand
+# them.  DELCAT asks nothing (no "input" in it); an unprefixed name without the
+# keyword is deleted from the PRIVATE catalogue, and GLOBAL takes the global one.
+$null = Invoke-SD @("DELETE.CATALOG $gpName", "DELETE.CATALOG $gpName GLOBAL")
+foreach ($p in @($gpGcat, $gpPriv)) {
+    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
+}
+Note "3035 cleanup: no $gpName left in gcat or SDSYS's private catalogue" $false `
+     ((Test-Path -LiteralPath $gpGcat) -or (Test-Path -LiteralPath $gpPriv))
 
 # ---------------------------------------------------------------------------
 Write-Output ''
