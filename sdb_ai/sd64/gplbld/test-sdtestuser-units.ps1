@@ -87,18 +87,20 @@ NoteTrue 'create: NEVER grants ADMINISTRATOR - that would land the session in SD
          ($mk[0] -notmatch '\bADMINISTRATOR\b')
 
 # AND THE TIER IS CHECKED AGAINST THE SHIPPED RECORD, NOT AGAINST THIS COMMENT.
-# TIER.OMIT.STANDARD is what the product actually reads, so if a future change
-# gives standard accounts 'basic' back, this row says the tier can be lowered
-# again rather than leaving the reason to fade into a paragraph nobody re-reads.
-$omitRec = Join-Path (Split-Path $here -Parent) 'sdsys\newvoc\TIER.OMIT.STANDARD'
+# The omit list is what the product actually reads, so if a future change gives
+# standard accounts 'basic' back, this row says the tier can be lowered again
+# rather than leaving the reason to fade into a paragraph nobody re-reads.
+# 13 Sep 26 - RELEASE_1.1 5: the list moved from newvoc/TIER.OMIT.STANDARD to
+# tier.policy/omit.standard (it is control data, not a VOC record).
+$omitRec = Join-Path (Split-Path $here -Parent) 'sdsys\tier.policy\omit.standard'
 if (Test-Path -LiteralPath $omitRec) {
     $omit = ([IO.File]::ReadAllText($omitRec) -split '\r?\n') | ForEach-Object { $_.Trim() }
-    Write-Output ('  TIER.OMIT.STANDARD: ' + @($omit | Where-Object { $_ -ne '' }).Count + ' lines')
+    Write-Output ('  tier.policy/omit.standard: ' + @($omit | Where-Object { $_ -ne '' }).Count + ' lines')
     NoteTrue 'the record really withholds basic from standard (else the tier could drop)' `
              ($omit -contains 'basic')
     NoteTrue 'and run' ($omit -contains 'run')
 } else {
-    Note 'TIER.OMIT.STANDARD is where this expects it' $true $false
+    Note 'tier.policy/omit.standard is where this expects it' $true $false
 }
 
 # ---------------------------------------------------------------- delete

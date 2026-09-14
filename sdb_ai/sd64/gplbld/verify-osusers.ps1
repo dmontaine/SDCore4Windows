@@ -761,7 +761,7 @@ Write-Output $before.TrimEnd()
 Write-Output '-----------------'
 
 # "SH is not in your VOC" IS NOT A REFUSAL BY THE GATE.  A standard-tier account
-# has neither SH nor BASIC (NEWVOC/TIER.OMIT.STANDARD), so say so rather than
+# has neither SH nor BASIC (tier.policy/omit.standard), so say so rather than
 # scoring an absent verb as a working gate.
 # SD does NOT quote the name in message 5051 - measured 18 Aug 2026, where a
 # BOM came back as "<BOM> is not in your VOC" - so this matches it unquoted.

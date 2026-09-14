@@ -1553,6 +1553,13 @@ update.voc:
       goto abort.login
    end
 
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  The tier policy lists moved out of
+*   NEWVOC into sdsys/tier.policy (they are verb-id lists, not VOC records).
+*   Fail-safe if it will not open: no omit list, which is the full VOC - the
+*   direction the list has always failed.  See CREATEA for the full note.
+   tierpol.open = @false
+   openpath @sdsys:@ds:'tier.policy' to tierpol.f then tierpol.open = @true
+
 * 17 Aug 26 Windows port - THE TIER FILTER, PROJECT_STATUS.md section 8.  THIS
 *   ROUTINE WAS THE HOLE IN THE VOC TIERS.  CREATEA gives a standard account
 *   NEWVOC less the capabilities in TIER.OMIT.STANDARD; this routine then
@@ -1575,8 +1582,8 @@ update.voc:
 *   why that is the safe way round rather than reading blank as STANDARD.
    omit.rec = ''
    omit.tier = upcase(update.voc.tier)
-   if omit.tier # '' and omit.tier # 'PROGRAMMER' and omit.tier # 'ADMINISTRATOR' then
-      read omit.rec from sdsys.file, 'TIER.OMIT.STANDARD' else omit.rec = ''
+   if omit.tier # '' and omit.tier # 'PROGRAMMER' and omit.tier # 'ADMINISTRATOR' and tierpol.open then
+      read omit.rec from tierpol.f, 'omit.standard' else omit.rec = ''
    end
    omit.count = dcount(omit.rec, @fm)
 
@@ -1586,17 +1593,12 @@ update.voc:
 
       copy.it = @true
 
-*     The list records are never themselves VOC entries, whichever tier this is.
-*     Before this they were copied in like any other record, so any account that
-*     ran UPDATE.ACCOUNTS acquired a TIER.OMIT.STANDARD entry in its VOC.  Inert -
-*     their descriptions start with T, which is not a VOC type letter - but it
-*     had no business being there.
-* 18 Aug 26 Windows port - CASE INSENSITIVE, PROJECT_STATUS.md 5.12 (b).  id
-*     comes from READNEXT over a DIRECTORY file, so it is the name as it stands
-*     on disk.  A rename of the VOC ids would make these two comparisons miss
-*     and put both list records into every account's VOC.
-      if upcase(id) = 'TIER.OMIT.STANDARD' then copy.it = @false
-      if upcase(id) = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  The two copy.it = @false tests that
+*     stood here - skipping TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR so the
+*     list records were not copied into an account's VOC - are gone with the
+*     records.  The tier lists moved to sdsys/tier.policy, so NEWVOC holds only
+*     VOC entries now and there is nothing here to skip.  An upgrade replaces
+*     NEWVOC wholesale (stage.py), so no pre-move copy survives to be filtered.
 
 *     An explicit comparison rather than LOCATE, for the reason CREATEA gives at
 *     the matching loop: CPROC's two LOCATE precedents each search a structure
@@ -1789,6 +1791,7 @@ accept.without.query:
    end
 
    close sdsys.file
+   if tierpol.open then close tierpol.f
 
    return
 

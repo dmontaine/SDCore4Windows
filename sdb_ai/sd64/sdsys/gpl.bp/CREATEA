@@ -1259,6 +1259,17 @@ make.account:
       stop sysmsg(6018) ;* Cannot open SDSYS NEWVOC
    end
 
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  THE TIER POLICY LISTS LIVE IN THEIR
+*   OWN FILE NOW, sdsys/tier.policy, not in NEWVOC.  They are control data -
+*   verb-id lists - not VOC records, so keeping them in a VOC file dropped a
+*   malformed entry into LIST VOC and forced the copy loop below to skip them.
+*   Fail-safe if the file will not open: no policy, which is the full VOC for a
+*   STANDARD account and a programmer's VOC for an ADMINISTRATOR (who is told so
+*   the first time they type CREATE.ACCOUNT) - the same direction the lists have
+*   always failed.  Owner's ruling, 13 Sep 2026.
+   tierpol.open = @false
+   openpath @sdsys:@ds:'tier.policy' to tierpol.f then tierpol.open = @true
+
 * 17 Aug 26 Windows port - THE TIER OMIT LIST, PROJECT_STATUS.md section 8.
 *   A standard account gets NEWVOC less the records named in NEWVOC's own
 *   TIER.OMIT.STANDARD; PROGRAMMER and ADMINISTRATOR get all of it.
@@ -1291,8 +1302,8 @@ make.account:
 *     A copy.it flag round the write says the same thing in constructs this
 *     file already uses.
    omit.rec = ''
-   if tier = 'STANDARD' then
-      read omit.rec from newvoc.f, 'TIER.OMIT.STANDARD' else omit.rec = ''
+   if tier = 'STANDARD' and tierpol.open then
+      read omit.rec from tierpol.f, 'omit.standard' else omit.rec = ''
    end
    omit.count = dcount(omit.rec, @fm)
 
@@ -1302,13 +1313,12 @@ make.account:
 
       copy.it = @true
 
-*     The list records are never themselves VOC entries, whichever tier this is.
-* 18 Aug 26 Windows port - CASE INSENSITIVE, PROJECT_STATUS.md 5.12 (b).  id
-*     comes from READNEXT over a DIRECTORY file, so it is the name as it stands
-*     on disk.  A rename of the VOC ids would make these two comparisons miss
-*     and put both list records into every account's VOC.
-      if upcase(id) = 'TIER.OMIT.STANDARD' then copy.it = @false
-      if upcase(id) = 'TIER.ADD.ADMINISTRATOR' then copy.it = @false
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  The two copy.it = @false tests that
+*     stood here - for TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR - are gone
+*     with the records: the tier lists moved to sdsys/tier.policy, so NEWVOC no
+*     longer holds anything that is not a VOC entry and there is nothing here to
+*     skip.  An upgrade replaces NEWVOC wholesale (stage.py), so no pre-move
+*     NEWVOC survives to reintroduce them into an account.
 
 * 17 Aug 26 Windows port - an explicit comparison rather than LOCATE, and not
 *   from taste: CPROC has two LOCATE precedents and NEITHER can be copied
@@ -1442,7 +1452,8 @@ make.account:
 *   it came from does not.  SDSYS's own UNLOCK is still broken; fixing that is a
 *   data change to VOC_TEMPLATE and is not this.
    if tier = 'ADMINISTRATOR' then
-      read add.rec from newvoc.f, 'TIER.ADD.ADMINISTRATOR' else add.rec = ''
+      add.rec = ''
+      if tierpol.open then read add.rec from tierpol.f, 'add.administrator' else add.rec = ''
       add.count = dcount(add.rec, @fm)
 
       if add.count > 1 then
@@ -1471,6 +1482,7 @@ make.account:
    end
 
    close newvoc.f
+   if tierpol.open then close tierpol.f
 
    * Set up $COMMAND,STACK VOC entry
 

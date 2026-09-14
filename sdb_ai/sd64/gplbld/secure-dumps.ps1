@@ -14,7 +14,7 @@
 # that wrote it, so every SD user could read every other user's.
 #
 # WHY NOT SIMPLY ADMINISTRATOR-ONLY, WHICH IS WHAT THE ENTRY FIRST PROPOSED.
-# Measured before writing this: pdump is in newvoc/TIER.OMIT.STANDARD, so it is
+# Measured before writing this: pdump is in tier.policy/omit.standard, so it is
 # withheld from STANDARD accounts and available to PROGRAMMER ones - and
 # k_error.c:286 calls it unprompted whenever OptDumpOnError is set.  An
 # administrator-only directory would therefore fail to write a programmer's

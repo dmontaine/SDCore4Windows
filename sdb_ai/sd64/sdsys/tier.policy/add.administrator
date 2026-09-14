@@ -1,4 +1,4 @@
-This record is not a VOC entry - it lists what an ADMINISTRATOR account gets on top of NEWVOC, copied from VOC_TEMPLATE
+Verbs an ADMINISTRATOR account gets on top of NEWVOC, each copied from VOC_TEMPLATE.  Field 1 is this note; fields 2+ are verb ids, read from sdsys/tier.policy by CREATEA and MODIFYA.
 create.account
 delete.account
 modify.account

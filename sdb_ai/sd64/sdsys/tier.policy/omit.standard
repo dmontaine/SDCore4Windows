@@ -1,4 +1,4 @@
-This record is not a VOC entry - it lists verbs a standard account does not get
+Verbs a STANDARD account does not get.  Field 1 is this note; fields 2+ are verb ids, read from sdsys/tier.policy by CREATEA, LOGIN and MODIFYA.
 basic
 catalog
 catalogue

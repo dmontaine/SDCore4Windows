@@ -23,7 +23,8 @@
 # THE ARITHMETIC, which is verify-tiers.ps1's and is quoted rather than
 # invented here:
 #
-#   base           = names in newvoc, less "%t" and the two list records
+#   base           = names in newvoc, less "%t"  (the two tier list records
+#                    moved to tier.policy on 13 Sep 26 - RELEASE_1.1 5)
 #   ADMINISTRATOR  = base + (TIER.ADD.ADMINISTRATOR lines - 1) + 4
 #   PROGRAMMER     = base                                     + 4
 #   STANDARD       = base - (TIER.OMIT.STANDARD  lines - 1)    + 4
@@ -69,8 +70,11 @@ if (-not (Test-Path -LiteralPath $newvoc)) {
     exit 2
 }
 $names = @(Get-ChildItem -LiteralPath $newvoc -File)
-$addAdmin = Join-Path $newvoc 'TIER.ADD.ADMINISTRATOR'
-$omitStd  = Join-Path $newvoc 'TIER.OMIT.STANDARD'
+# 13 Sep 26 - RELEASE_1.1 5.  The two tier lists moved out of newvoc into their
+# own directory file, tier.policy; the base name count still comes from newvoc.
+$tierpol  = Join-Path $PSScriptRoot '..\sdsys\tier.policy'
+$addAdmin = Join-Path $tierpol 'add.administrator'
+$omitStd  = Join-Path $tierpol 'omit.standard'
 foreach ($f in @($addAdmin, $omitStd)) {
     if (-not (Test-Path -LiteralPath $f)) {
         Write-Output ("REFUSING - {0} is missing; the arithmetic cannot be done." -f $f)
@@ -84,22 +88,22 @@ $omitLines = @(Get-Content -LiteralPath $omitStd).Count
 # list record would make every sum below equal 4 and the file would then be
 # comparing two verifiers against nonsense.
 Note ($names.Count -gt 100) 'newvoc has a plausible number of names' ("{0} names" -f $names.Count)
-Note ($addLines  -gt 1) 'TIER.ADD.ADMINISTRATOR is not empty' ("{0} lines" -f $addLines)
-Note ($omitLines -gt 1) 'TIER.OMIT.STANDARD is not empty'     ("{0} lines" -f $omitLines)
+Note ($addLines  -gt 1) 'tier.policy add.administrator is not empty' ("{0} lines" -f $addLines)
+Note ($omitLines -gt 1) 'tier.policy omit.standard is not empty'     ("{0} lines" -f $omitLines)
 if ($names.Count -le 100 -or $addLines -le 1 -or $omitLines -le 1) {
     Write-Output ''
     Write-Output 'REFUSING - the directory did not answer, so nothing below would mean anything.'
     exit 2
 }
 
-$base     = $names.Count - 3
+$base     = $names.Count - 1   # less "%t"; the two tier lists no longer live in newvoc (RELEASE_1.1 5)
 $derived  = @{
     'STANDARD'      = $base - ($omitLines - 1) + 4
     'PROGRAMMER'    = $base                    + 4
     'ADMINISTRATOR' = $base + ($addLines  - 1) + 4
 }
 Write-Output ''
-Write-Output ("  newvoc {0} names, base {1}; TIER.ADD.ADMINISTRATOR {2}, TIER.OMIT.STANDARD {3}" -f
+Write-Output ("  newvoc {0} names, base {1}; tier.policy add.administrator {2}, omit.standard {3}" -f
               $names.Count, $base, $addLines, $omitLines)
 Write-Output ("  derived: STANDARD {0}, PROGRAMMER {1}, ADMINISTRATOR {2}" -f
               $derived['STANDARD'], $derived['PROGRAMMER'], $derived['ADMINISTRATOR'])
@@ -174,7 +178,7 @@ foreach ($f in $files) {
 # right for a verifier and useless before a cycle.  This compares it against
 # SOURCE, which is what makes it free.
 $tiersPath = Join-Path $PSScriptRoot 'verify-tiers.ps1'
-$addRecSrc = Join-Path $PSScriptRoot '..\sdsys\newvoc\TIER.ADD.ADMINISTRATOR'
+$addRecSrc = Join-Path $PSScriptRoot '..\sdsys\tier.policy\add.administrator'
 
 if ((Test-Path -LiteralPath $tiersPath) -and (Test-Path -LiteralPath $addRecSrc)) {
     $tok = $null; $errs = $null
@@ -194,7 +198,7 @@ if ((Test-Path -LiteralPath $tiersPath) -and (Test-Path -LiteralPath $addRecSrc)
         $shipped  = @(Get-Content -LiteralPath $addRecSrc | Select-Object -Skip 1)
         $diff     = @(Compare-Object $shipped $claimed -SyncWindow 100)
         Note ($claimed.Count -gt 0) 'verify-tiers.ps1: $AdminVerbs is not empty' "$($claimed.Count) name(s)"
-        Note ($diff.Count -eq 0) 'verify-tiers.ps1: $AdminVerbs matches source TIER.ADD.ADMINISTRATOR' `
+        Note ($diff.Count -eq 0) 'verify-tiers.ps1: $AdminVerbs matches source tier.policy/add.administrator' `
              $(if ($diff.Count -eq 0) { "$($claimed.Count) names agree" }
                else { ($diff | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; ' })
     }

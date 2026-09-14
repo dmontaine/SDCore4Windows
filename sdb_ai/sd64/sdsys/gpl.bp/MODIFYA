@@ -1278,19 +1278,32 @@ voc.delta:
       return
    end
 
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  The tier policy lists moved out of
+*   NEWVOC into sdsys/tier.policy (verb-id lists, not VOC records).  Both files
+*   are needed to compute a tier change, so a missing tier.policy is a broken
+*   install and refuses here exactly as a missing NEWVOC does - which makes
+*   10114 "its tier in the register is unchanged" the true answer.  tnewvoc.f
+*   still supplies the STANDARD verb records; tvoctmpl.f the ADMINISTRATOR ones.
+   openpath @sdsys:@ds:'tier.policy' to tierpol.f else
+      close tvoc.f
+      close tnewvoc.f
+      voc.ok = @false
+      return
+   end
+
    tmpl.open = @false
 
    if to.rank > from.rank then
       tier.dir = 'ADD'
 
       if from.rank < 2 then
-         read tier.layer.rec from tnewvoc.f, 'TIER.OMIT.STANDARD' else tier.layer.rec = ''
+         read tier.layer.rec from tierpol.f, 'omit.standard' else tier.layer.rec = ''
          tier.from.template = @false
          gosub tier.layer
       end
 
       if to.rank = 3 then
-         read tier.layer.rec from tnewvoc.f, 'TIER.ADD.ADMINISTRATOR' else tier.layer.rec = ''
+         read tier.layer.rec from tierpol.f, 'add.administrator' else tier.layer.rec = ''
          gosub tier.open.template
          if tmpl.open then
             tier.from.template = @true
@@ -1301,7 +1314,7 @@ voc.delta:
       tier.dir = 'DEL'
 
       if from.rank = 3 then
-         read tier.layer.rec from tnewvoc.f, 'TIER.ADD.ADMINISTRATOR' else tier.layer.rec = ''
+         read tier.layer.rec from tierpol.f, 'add.administrator' else tier.layer.rec = ''
          gosub tier.open.template
          if tmpl.open then
             tier.from.template = @true
@@ -1310,7 +1323,7 @@ voc.delta:
       end
 
       if to.rank < 2 then
-         read tier.layer.rec from tnewvoc.f, 'TIER.OMIT.STANDARD' else tier.layer.rec = ''
+         read tier.layer.rec from tierpol.f, 'omit.standard' else tier.layer.rec = ''
          tier.from.template = @false
          gosub tier.layer
       end
@@ -1323,6 +1336,7 @@ voc.delta:
 *  below is ordinary and costs nothing.
    if tmpl.open then gosub tier.close.template
    close tnewvoc.f
+   close tierpol.f
    close tvoc.f
    return
 

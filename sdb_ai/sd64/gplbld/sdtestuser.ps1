@@ -41,7 +41,7 @@
 #     :RUN BP SDNOCASE
 #     RUN is not in your VOC
 #
-# sdsys/newvoc/TIER.OMIT.STANDARD lists the 42 verbs a standard account does not
+# sdsys/tier.policy/omit.standard lists the 42 verbs a standard account does not
 # get, and 'basic' and 'run' are both on it - as are 'ed', 'edit', 'micro',
 # 'create.file', 'copy', 'delete' and 'rename'.  ***ALL FOUR VERIFIERS THIS
 # EXISTS FOR COMPILE AND RUN A BASIC PROBE***, so STANDARD cannot host any of

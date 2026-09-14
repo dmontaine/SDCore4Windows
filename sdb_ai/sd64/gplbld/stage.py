@@ -265,13 +265,19 @@ SDSYS_SHIP = [
     # 17 Aug 26 - AND THAT RULE STILL HOLDS AFTER THE VOC TIERS, which is why
     # CREATEA gives an ADMINISTRATOR account its nine administration verbs by
     # reading them OUT of voc_template rather than by moving them into newvoc.
-    # The tier lists in newvoc (TIER.OMIT.STANDARD, TIER.ADD.ADMINISTRATOR) fail
-    # safe only in that direction: a lost or empty omit list is read as "no
-    # policy" and gives the full VOC, which is harmless while newvoc holds
-    # nothing administrative and hands out CREATE.ACCOUNT the moment it does.
-    # PROJECT_STATUS.md section 8.
+    # 13 Sep 26 - THE TIER LISTS ARE NO LONGER IN NEWVOC.  RELEASE_1.1 5: they
+    # were TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR, verb-id lists rather
+    # than VOC records, and a VOC file must hold only VOC records or LIST VOC
+    # trips on them.  They moved to their own directory file, tier.policy, which
+    # is not a VOC and is opened by path.  They still fail safe in one direction:
+    # a lost or empty omit list is read as "no policy" and gives the full VOC,
+    # harmless while newvoc holds nothing administrative.  PROJECT_STATUS.md
+    # section 8.
     ('newvoc',        'the VOC a newly created account is given'),
     ('voc_template',  "the administrative superset; becomes SDSYS's own VOC"),
+    # 13 Sep 26 - RELEASE_1.1 5.  Not a VOC: two records (omit.standard,
+    # add.administrator) read by CREATEA, LOGIN and MODIFYA to layer the tiers.
+    ('tier.policy',   'the tier verb-id lists; read by the tier code, not a VOC'),
     ('messages',      'sysmsg() text'),
     ('sd.voclib',     'library routines'),
     ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
@@ -445,6 +451,8 @@ SDSYS_MIRROR = [
     ('syscom',       'include records'),
     ('newvoc',       'read by CREATEA; never written'),
     ('voc_template', 'read by CREATEA and UPDATE.ACCOUNTS; never written'),
+    # 13 Sep 26 - RELEASE_1.1 5.  The tier policy lists, moved out of newvoc.
+    ('tier.policy',  'read by CREATEA/LOGIN/MODIFYA; never written'),
     ('messages',     'sysmsg text'),
     ('sd.voclib',    'library routines'),
     # 25 Aug 26 - bp IS NO LONGER A MIRROR, and it stopped qualifying the

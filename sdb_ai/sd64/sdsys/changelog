@@ -16,6 +16,21 @@ while porting from it.
            is unchanged", which is true whatever failed: the register is
            the authority on the tier and it is only ever written at the end.
 
+13 Sep 26  THE TIER POLICY LISTS MOVED TO THEIR OWN FILE.
+
+           The two lists that decide which verbs each account tier gets -
+           the verbs a STANDARD account is denied, and the ones an
+           ADMINISTRATOR gains on top - used to live in SDSYS NEWVOC as the
+           records TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR.  They are
+           not vocabulary entries, so they did not belong in a VOC file,
+           where LIST VOC would show them as malformed records.
+
+           They now live in a dedicated file, SDSYS tier.policy, as the
+           records omit.standard and add.administrator.  IF YOU CUSTOMISE
+           what a tier starts with, edit them there.  Nothing else changes:
+           existing accounts are untouched, and each tier gets exactly the
+           verbs it did before.
+
 12 Sep 26  PYTHON IS AVAILABLE FROM SD BASIC AGAIN.
 
            The PY_ functions are back - PY_INITIALIZE, PY_RUNSTRING,
@@ -4072,8 +4087,10 @@ previous one.
            * If somebody needs one of them, copy the verb into their VOC from
              SDSYS - that is a normal COPY and takes a moment.  This is a
              starting posture, not a lock.
-           * The list lives in SDSYS NEWVOC as the record TIER.OMIT.STANDARD,
-             so you can change what a standard account starts with.
+           * The list lives in SDSYS tier.policy as the record omit.standard
+             (it was NEWVOC/TIER.OMIT.STANDARD until 13 Sep 26 - see that
+             date's entry), so you can change what a standard account starts
+             with.
            * EXISTING ACCOUNTS ARE NOT TOUCHED.  This applies to accounts made
              from now on.
 
