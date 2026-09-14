@@ -1,5 +1,5 @@
 I
-(IF GLOBAL THEN '* ' ELSE '  '):@ID
+(IF global THEN '* ' ELSE '  '):@ID
 
 G Name
 34L

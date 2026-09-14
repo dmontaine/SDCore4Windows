@@ -21,11 +21,24 @@
                             (after the failed CD; COPY had carried a compiled
                             object across, which LIST runs if no CD failed)
 
-    THE FIXTURE is copied out of SDSYS's own shipped dictionary, so nothing here
-    invents a dictionary record: DICT VOC's F1 and F3 become f1 and f3, and its
-    TYPE I-type - whose expression names F1 and F3 in upper case - becomes
-    xtype.  The data record is VOC's who verb (field 1 "Verb to show...", field
-    3 "16"), so xtype must evaluate to V.
+    THE FIXTURE: DICT VOC's f1 and f3 are copied as they are shipped, and xtype
+    is VOC's TYPE I-type as it shipped BEFORE stage 2b - its expression naming
+    F1 and F3 in UPPER case - written into the account's bp and copied from
+    there.  (14 Sep 26: stage 2b lowered the shipped expression's tokens, and
+    COPY does not fold - measured, "COPY FROM DICT VOC ... f1" answered "Record
+    'f1' not found" while F1 was stored - so copying TYPE would no longer test
+    the upper-case tokens, and copying F1 would find nothing.)  The data record
+    is VOC's who verb (field 1 "Verb to show...", field 3 "16"), so xtype must
+    evaluate to V.
+
+    ***AND STAGE 2b's OWN ROWS*** (legs 4 and 5, and two setup rows): the
+    shipped ids are stored lower case - LIST DICT VOC's rows read -cmatch, type
+    / f1 / @id / data.name present and their upper-case spellings absent - and
+    CREATE.FILE writes @id, saying so in 6129.  Every one of those was upper
+    case on the b157 install (measured the same day by scratch probe: sixteen
+    upper-case ids, "Added default '@ID' record to dictionary").  Leg 5, a query
+    naming TYPE and one naming type, is a regression control: 2a already made
+    both work.
 
     BOUNDED like verify-promptenter: every session is a job, killed after
     -TimeoutSeconds, any sd.exe left killed BY PID DIFF, never by name.
@@ -52,6 +65,9 @@ $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $AcctDir = Join-Path (Join-Path $env:ProgramData 'SD\user_accounts') $Account
 $File    = 'zzdf' + (Get-Date -Format 'HHmmss')
+$XRec    = $File + 'xt'      # the pre-2b TYPE I-type, as a record in bp
+# VOC's TYPE expression exactly as FILES_DICTS shipped it before stage 2b.
+$XExpr   = 'IF F1[1,1]=''P'' THEN F1[1,2] ELSE F1[1,1];IF @ = ''K'' AND F3 # '''' THEN @:@VM:(IF F3[1,1]=''P'' THEN F3[1,2] ELSE F3[1,1]) ELSE @'
 
 $pass = 0
 $fail = 0
@@ -104,6 +120,11 @@ function Remove-Fixtures {
         }
         Write-Host "    swept $($d.Name)"
     }
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $AcctDir 'bp') -File -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -match '(?i)^zzdf[0-9]{6}xt$' })) {
+        Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
+        Write-Host "    swept bp record $($f.Name)"
+    }
 }
 
 # --- refusals ---------------------------------------------------------------
@@ -127,11 +148,18 @@ try {
     # --- setup: a dictionary holding f1, f3 and xtype, a record r1 ----------
     Write-Host ''
     Write-Host '--- setup ------------------------------------------------------------'
+    # The record is written with LF field marks and no BOM, the form a directory
+    # file's record takes on disk (gplbld\FILES_DICTS is the same shape).
+    $xPath = Join-Path (Join-Path $AcctDir 'bp') $XRec
+    $xBody = (@('I', $XExpr, '', 'Type', '2L', 'S') -join "`n") + "`n"
+    [System.IO.File]::WriteAllText($xPath, $xBody, (New-Object System.Text.ASCIIEncoding))
+    Write-Host "  wrote $xPath"
+    Write-Host "  expression: $XExpr"
     $mk = Invoke-SD @(
         "CREATE.FILE $File",
-        "COPY FROM DICT VOC TO DICT $File F1,f1",
-        "COPY FROM DICT VOC TO DICT $File F3,f3",
-        "COPY FROM DICT VOC TO DICT $File TYPE,xtype",
+        "COPY FROM DICT VOC TO DICT $File f1,f1",
+        "COPY FROM DICT VOC TO DICT $File f3,f3",
+        "COPY FROM bp TO DICT $File $XRec,xtype",
         "COPY FROM VOC TO $File who,r1",
         "LIST DICT $File")
     Show 'setup' $mk
@@ -142,6 +170,10 @@ try {
         Row "setup: the dictionary holds '$id', lower case" ($mk.Text -cmatch ('(?m)^' + [regex]::Escape($id) + '\s{2,}[DI]\s')) "no LIST DICT row for $id"
     }
     if ($fail -gt 0) { Bail 2 'the fixture is not what the legs assume - nothing below would measure the fold.' }
+
+    # --- stage 2b: CREATE.FILE's default record is @id ------------------------
+    Row "2b: CREATE.FILE said it added '@id' (6129)" ($mk.Text -cmatch "(?m)^Added default '@id' record to dictionary") "no 6129 line naming '@id'"
+    Row "2b: the new dictionary stores '@id' and no '@ID'" (($mk.Text -cmatch '(?m)^@id\s{2,}D\s') -and ($mk.Text -cnotmatch '(?m)^@ID\s{2,}D\s')) 'LIST DICT shows the default record under @ID, or not at all'
 
     # --- leg 1: a query names f1 as F1 ---------------------------------------
     # The column heading is the dictionary item's display name padded to its
@@ -189,6 +221,31 @@ try {
     Show "LIST $File xtype" $ev
     Row 'leg 3: no compile error at query time' ($ev.Text -notmatch 'is not defined|Compilation error') 'the query recompiled and failed'
     Row "leg 3: r1's type evaluates to V (who is a verb)" ($ev.Text -match '(?m)^r1\s+V\s*$') 'no "r1  V" row'
+
+    # --- leg 4: stage 2b - the shipped ids are stored lower case --------------
+    # DICT VOC is SDSYS's voc.dic from any account.  A row is the id at the
+    # start of a line, two or more spaces, then the type column; the heading
+    # ("@ID.......") and the echoed command (":LIST ...") cannot match.
+    Write-Host ''
+    Write-Host '--- leg 4: LIST DICT VOC - the shipped ids as stored ----------------------'
+    $dv = Invoke-SD @('LIST DICT VOC')
+    Show 'LIST DICT VOC' $dv
+    $dvCount = [regex]::Match($dv.Text, '(?m)^(\d+) record\(s\) listed')
+    Write-Host ("  records listed: " + $(if ($dvCount.Success) { $dvCount.Groups[1].Value } else { '(no count line)' }))
+    Row 'CONTROL leg 4: LIST DICT VOC listed its records' ($dvCount.Success -and ([int]$dvCount.Groups[1].Value -gt 0)) 'no "n record(s) listed" line - dict.dic''s own phrase or ids may not resolve'
+    foreach ($pair in @(@('type', 'TYPE', 'I'), @('f1', 'F1', 'D'), @('@id', '@ID', 'D'), @('data.name', 'DATA.NAME', 'D'))) {
+        $lo = [regex]::Escape($pair[0]); $up = [regex]::Escape($pair[1]); $t = $pair[2]
+        Row ("leg 4: '" + $pair[0] + "' is stored, '" + $pair[1] + "' is not") `
+            (($dv.Text -cmatch ('(?m)^' + $lo + '\s{2,}' + $t + '\s')) -and ($dv.Text -cnotmatch ('(?m)^' + $up + '\s{2,}' + $t + '\s'))) 'the stored id is not lower case, or both spellings are stored'
+    }
+
+    # --- leg 5: a query names the renamed field in either case ----------------
+    Write-Host ''
+    Write-Host '--- leg 5: LIST VOC WITH TYPE / type - regression control ----------------'
+    $qv = Invoke-SD @('LIST VOC WITH TYPE = "V" AND @ID = "who"', 'LIST VOC WITH type = "V" AND @id = "who"')
+    Show 'LIST VOC WITH TYPE, WITH type' $qv
+    $one = [regex]::Matches($qv.Text, '(?m)^1 record\(s\) listed').Count
+    Row 'leg 5: both queries found who (1 record listed, twice)' (($one -eq 2) -and ($qv.Text -notmatch 'not defined|Compilation error')) "1-record lines: $one of 2"
 }
 finally {
     Write-Host ''

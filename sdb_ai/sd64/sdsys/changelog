@@ -4,6 +4,20 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+14 Sep 26  THE DICTIONARIES SD SUPPLIES NAME THEIR FIELDS IN LOWER CASE.
+
+           The fields in the dictionaries of voc, of dictionaries themselves,
+           of $map, accounts, os.users, batch.jobs and $hold are now named in
+           lower case - type, desc, f1, data.name, @id and so on - and
+           LIST DICT shows them that way.  Typing the old upper-case names
+           still works everywhere, as the entry below describes.  A new file
+           made by CREATE.FILE, and a new account's $hold, get an @id record
+           rather than @ID.  When SD is upgraded, a field held under its old
+           upper-case name is replaced by the new one rather than kept beside
+           it; fields you added yourself under other names are not touched.
+           Dictionaries in your own files, and $hold in accounts made before
+           this release, keep the names they already have.
+
 14 Sep 26  DICTIONARY FIELD NAMES ARE FOUND HOWEVER YOU TYPE THEM.
 
            A field defined in a dictionary in lower case can now be named in

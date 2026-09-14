@@ -787,6 +787,14 @@ $steps = @(
     # It also now asserts its VOC record is gone after cleanup (26 and 31's
     # lesson), a row that fails rather than repairs quietly.
     @{ Name = 'verify-createfilecase.ps1'; P = @{} },
+    # 14 Sep 26 - RELEASE_1.1 5 stage 2b's upgrade leg.  It plants the old
+    # upper-case TYPE and @ID in SDSYS's DICT VOC, runs the INSTALLED
+    # upgrade-dicts.ps1, and requires them replaced rather than twinned, with a
+    # non-shipped control id surviving.  HERE, WITH THE OTHER TWO STEPS THAT
+    # CHANGE SDSYS FILES, for their reason.  ELEVATED BECAUSE IT MUST BE: an
+    # SDSYS session and sd -internal.  NO PREFIX: it creates no account, and its
+    # fixture ids are fixed and removed only when stored exactly.
+    @{ Name = 'verify-dictrename.ps1';     P = @{} },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.
     #

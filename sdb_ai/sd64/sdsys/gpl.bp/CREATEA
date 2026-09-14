@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - a new account's $hold.dic gets @id, not @ID, as the
+*   shipped dictionaries do.  RELEASE_1.1_FIXES.md 5, stage 2b.
 * 02 Sep 26 Windows port - COMMENT ONLY, TWICE.  The block at the newvoc copy
 *   cited SDSYS as proof that the descriptive field 1 is the working form.  A
 *   first correction called that citation false, on a grep of the dynamic voc
@@ -1876,7 +1878,7 @@ create.dir.file:
          stop sysmsg(6024, fn) ;* Unable to open dictionary part of xx
       end
 * 20240121 mab use @VM not hard coded hex fd 
-      write raise('D':@VM:'0':@VM:@VM:fn:@VM:'10L':@VM:'S') to dict.f, '@ID'
+      write raise('D':@VM:'0':@VM:@VM:fn:@VM:'10L':@VM:'S') to dict.f, '@id'
       close dict.f
 
       voc.rec<3> = os.name:'.dic'

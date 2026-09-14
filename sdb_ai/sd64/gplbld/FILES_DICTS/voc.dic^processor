@@ -1,0 +1,16 @@
+I
+IF f1[1,1] = 'V' THEN f3 ELSE IF f1[1,1] = 'K' AND f3[1,1] = 'V' THEN f5 ELSE ''
+
+Processor
+24L
+S
+
+
+
+
+
+
+
+
+ 1460537184
+

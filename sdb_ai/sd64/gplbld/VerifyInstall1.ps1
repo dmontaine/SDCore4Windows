@@ -54,6 +54,10 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 14 Sep 26 - AND ON ADDING verify-dictrename.ps1 to VerifyInstall2 (stage 2b):
+# 59 verify-*.ps1, 24 named here, 31 in VerifyInstall2, the same four in
+# neither, none in both - counted from the directory and both tables.
+#
 # 14 Sep 26 - AND AGAIN ON ADDING verify-dictfold.ps1 (RELEASE_1.1 5 stage 2a):
 # 58 verify-*.ps1, 24 named here, 30 in VerifyInstall2, the same four in
 # neither, none in both - counted from the directory and both tables.

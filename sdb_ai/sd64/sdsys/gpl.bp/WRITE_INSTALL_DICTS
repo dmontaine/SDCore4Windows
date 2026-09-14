@@ -49,6 +49,10 @@ END
 
 OPEN_FILE_NAME = ''
 FILES.PROCESSED.LIST = ''
+* 14 Sep 26 - the ids already in the open dictionary; see where it is opened.
+OLD.IDS = ''
+U.OLD.IDS = ''
+N.OLD.IDS = 0
 * Modified by Composer AI - 2026/06/10.
 * Track dictionary file handle open state for safe CLOSE.
 * (no flag previously)
@@ -94,7 +98,21 @@ FOR I = 1 TO ID_CNT
        CONTINUE
     END
     DICT.FILE.OPEN = @TRUE
-  END   
+
+    * 14 Sep 26 Windows port - RELEASE_1.1_FIXES.md 5, stage 2b.  THE SHIPPED
+    * IDS ARE LOWER CASE NOW, AND AN UPGRADED DICTIONARY STILL HOLDS THE OLD
+    * UPPER-CASE ONES.  This program merges record by record, so writing
+    * 'type' into a dictionary that holds 'TYPE' would leave both - the twin
+    * update.voc was changed to avoid for VOC in stage 1.  So the ids already
+    * in the dictionary are listed once, when it is opened, and each shipped
+    * record below replaces any of them that differs from it only in case.
+    * An id that matches in no case (an administrator's own item) is untouched.
+    OLD.IDS = ''
+    SELECT DICT.FILE.VAR TO 4
+    READLIST OLD.IDS FROM 4 ELSE OLD.IDS = ''
+    U.OLD.IDS = UPCASE(OLD.IDS)
+    N.OLD.IDS = DCOUNT(OLD.IDS, @FM)
+  END
     
   CRT 'DICTIONARY: ':NEW_FILE_NAME:' ':FILE_REC_NAME 
     
@@ -105,6 +123,16 @@ FOR I = 1 TO ID_CNT
   END
     
   WRITE DICT.REC ON DICT.FILE.VAR, FILE_REC_NAME
+
+  * 14 Sep 26 - written first, then the old id deleted, as update.voc does:
+  * a failure between the two leaves a twin, never a missing item.
+  U.REC.NAME = UPCASE(FILE_REC_NAME)
+  FOR J = 1 TO N.OLD.IDS
+    IF U.OLD.IDS<J> = U.REC.NAME AND OLD.IDS<J> # FILE_REC_NAME THEN
+      DELETE DICT.FILE.VAR, OLD.IDS<J>
+      CRT 'REPLACED OLD ID: ':NEW_FILE_NAME:' ':OLD.IDS<J>:' BY ':FILE_REC_NAME
+    END
+  NEXT J
 
 NEXT I
 

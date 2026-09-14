@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - the default dictionary record is @id, not @ID, as
+*            the shipped dictionaries are.  RELEASE_1.1_FIXES.md 5, stage 2b.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -473,7 +475,7 @@ $define default.split.load 80
 
    write voc.rec to voc.f, file.name
 
-   * Write @ID record to dictionary
+   * Write @id record to dictionary
 
    if create.dict and not(using.dict) then
       open "DICT", file.name to dict.file else
@@ -481,13 +483,13 @@ $define default.split.load 80
          stop sysmsg(6128) ;* Unable to open newly created dictionary
       end
 
-      recordlocku dict.file, '@ID'
+      recordlocku dict.file, '@id'
       id.rec = "D" : @fm : "0" : @fm : "" : @fm : file.name : @fm
       id.rec := if file.type = FL$TYPE.DIR then "12L" else "10L"
       id.rec := @fm : "S" : @fm
-      write id.rec to dict.file, "@ID"
+      write id.rec to dict.file, "@id"
 
-      display sysmsg(6129) ;* Added default '@ID' record to dictionary
+      display sysmsg(6129) ;* Added default '@id' record to dictionary
 
       close dict.file
    end

@@ -1,5 +1,5 @@
 I
-IF GLOBAL THEN '*' ELSE ''
+IF global THEN '*' ELSE ''
 
 G
 1L

@@ -1,0 +1,16 @@
+I
+IF f1[1,1] = 'V' THEN f2 ELSE IF f1[1,1] = 'K' AND f3[1,1] = 'V' THEN f4 ELSE ''
+
+Dsp
+2L
+S
+
+
+
+
+
+
+
+
+ 320625257
+

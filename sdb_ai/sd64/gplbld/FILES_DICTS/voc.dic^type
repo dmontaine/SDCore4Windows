@@ -1,0 +1,16 @@
+I
+IF f1[1,1]='P' THEN f1[1,2] ELSE f1[1,1];IF @ = 'K' AND f3 # '' THEN @:@VM:(IF f3[1,1]='P' THEN f3[1,2] ELSE f3[1,1]) ELSE @
+
+Type
+2L
+M
+
+
+
+
+
+
+
+
+  -1344722006
+
