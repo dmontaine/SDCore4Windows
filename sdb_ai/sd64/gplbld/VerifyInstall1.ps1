@@ -54,6 +54,10 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 14 Sep 26 - RE-DERIVED ON ADDING verify-vocidcase.ps1 (RELEASE_1.1 5 and 34),
+# by listing the directory and counting both tables: 57 verify-*.ps1, 23 named
+# here, 30 in VerifyInstall2, the same four in neither (below), none in both.
+#
 # 13 Sep 26 - RE-DERIVED ON ADDING verify-pagesuppress.ps1 (RELEASE_1.1 28),
 # by listing the directory and both tables, not by adding one:
 #
@@ -734,6 +738,23 @@ $steps = @(
     # decisive rows (46, 46) against the unfixed QDISP.  Bounded by a job; any
     # sd.exe it leaves is killed BY PID DIFF, never by name.
     @{ Name = 'verify-pagesuppress.ps1'; P = @{} },
+    # 14 Sep 26 - RELEASE_1.1 5 (the remainder after phase (a)) and 34.  SET.FILE,
+    # .S and CNAME store a NEW VOC id lower case, find an EXISTING one in any
+    # case, and never write a second copy in another case; Enter at .S's 5045
+    # keeps the old sentence, with Y as the control.  The decisive read is the
+    # stored id, listed with LIST VOC and compared case-sensitively.
+    #
+    # HERE for the same reason as the two above: the caller's own account,
+    # unelevated, no token, no prefix, no Windows account.  It creates and
+    # removes files, Q-pointers and sentences named zzvid<letter><HHmmss>, and
+    # sweeps that family at both ends.  Bounded by a job per session; any
+    # sd.exe left is killed BY PID DIFF.
+    #
+    # Measured before being wired in: RED on the b153 install (the unfixed
+    # SETFILE, CPROC and CNAME), 8 passed / 23 failed, every failure a row that
+    # names one of the defects - and leg 10, which the old code also passes, is
+    # the guard that the new clash test does not refuse a record's own rename.
+    @{ Name = 'verify-vocidcase.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer

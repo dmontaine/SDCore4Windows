@@ -4,6 +4,35 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+14 Sep 26  SET.FILE, .S AND CNAME NAME NEW VOC ENTRIES IN LOWER CASE, AND
+           NO LONGER MAKE A SECOND COPY IN ANOTHER CASE.
+
+           A new pointer from SET.FILE, a sentence saved with .S, and the new
+           name given to a file by CNAME are now stored in lower case, as
+           CREATE.FILE's new files already are.  Each looks for an existing
+           entry as you typed the name, then in lower case, then in upper
+           case, and treats a match as the same entry: SET.FILE reports that
+           the pointer name is already in VOC, .S asks whether to overwrite
+           it, and CNAME refuses the new name.  Before, typing a name in a
+           different case from an existing entry quietly created a second
+           entry beside it.
+
+           CNAME also finds the file you are renaming however you type its
+           name, and now renames a lower-case file's dictionary directory
+           along with its data.  CNAME MYFILE TO myfile renames an old
+           upper-case entry to lower case.  Catalogued program names are
+           unchanged and stay in upper case.
+
+           SET.FILE finds the target account's file however you type its
+           name.
+
+14 Sep 26  ".S" NOW HAS A DEFAULT WHEN IT ASKS TO OVERWRITE.
+
+           "Overwrite VOC record 'x'?", asked when .S saves onto an existing
+           entry, now ends (y/<n>)?.  Pressing Enter answers N and keeps the
+           existing entry.  Before, an empty answer asked again, for ever if
+           the input had run out.
+
 13 Sep 26  TWO MORE QUESTIONS NOW HAVE A DEFAULT, AND DELETE.FILE CAN CANCEL.
 
            "Use active select list (First item 'x')?", which CD, COPY, CT,

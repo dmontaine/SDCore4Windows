@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  The pointer name is found in any
+*           case, and a new pointer is written lower case.  The target file
+*           name gains the downcase tier of the fold.
 * 19 Aug 26 Windows port - SDSYS accounts, and the named account's voc, are
 *           lower case on disk.  PROJECT_STATUS.md 5.12 (a).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -95,12 +98,19 @@ $include int$keys.h
          if filename = '' then stop sysmsg(2059) ;* Command aborted
       end
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  THE downcase TIER THIS FOLD LACKED.
+*     It tried as typed, then upcase only, so once CREATE.FILE stores new ids
+*     lower case, "SET.FILE acc ZZX" could not find the account's zzx.
       read voc.rec from rvoc.f, filename else
-         filename = upcase(filename)
-         read voc.rec from rvoc.f, filename else
-            display sysmsg(6872) ;* File name is not in target VOC
-            if not(prompting) then goto exit.set.file
-            continue
+         read voc.rec from rvoc.f, downcase(filename) then
+            filename = downcase(filename)
+         end else
+            filename = upcase(filename)
+            read voc.rec from rvoc.f, filename else
+               display sysmsg(6872) ;* File name is not in target VOC
+               if not(prompting) then goto exit.set.file
+               continue
+            end
          end
       end
 
@@ -131,7 +141,10 @@ $include int$keys.h
          read voc.rec from @voc, pointer else
             read voc.rec from @voc, downcase(pointer) then
                pointer = downcase(pointer)
-            end else exit
+            end else
+               pointer = downcase(pointer)   ;* RELEASE_1.1 5 - a new id is lower case
+               exit
+            end
          end
          if voc.rec[1,1] = 'Q' then exit
          display sysmsg(6875) ;* QFILE is already in the VOC but not as a Q-pointer
@@ -139,7 +152,25 @@ $include int$keys.h
          continue
       end
 
-      read voc.rec from @voc, pointer else exit
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  A NEW POINTER'S ID IS LOWER CASE,
+*     AND AN EXISTING ONE IS FOUND IN ANY CASE.  Owner's ruling, 13 Sep 2026:
+*     ids in SD system files are lower case.  @voc is a DYNAMIC file, so an
+*     exact-case test let "SET.FILE acc file MYPTR" write a second pointer
+*     beside an existing myptr instead of reaching 6876.  As typed, then down,
+*     then up: a hit keeps the id it matched and takes the existing-record path
+*     (owner, 14 Sep 2026: "treat it as the same id"); no hit writes downcase().
+      read voc.rec from @voc, pointer else
+         read voc.rec from @voc, downcase(pointer) then
+            pointer = downcase(pointer)
+         end else
+            read voc.rec from @voc, upcase(pointer) then
+               pointer = upcase(pointer)
+            end else
+               pointer = downcase(pointer)
+               exit
+            end
+         end
+      end
 
       display sysmsg(6876) ;* Pointer name is already in VOC
 

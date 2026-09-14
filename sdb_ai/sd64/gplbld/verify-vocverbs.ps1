@@ -348,9 +348,10 @@ if ($fatal) {
 Write-Output ''
 Write-Output '=== PRE_RELEASE 5: ".D name" finds a lower-case record typed in upper ====='
 
-# THE FIXTURE IS MADE WITH .S, which writes the name EXACTLY AS TYPED - so the
-# record is lower case and the ".D" below is upper case, which is the case under
-# test.  "001  S" in the listing is what proves .S wrote a record of the type .D
+# THE FIXTURE IS MADE WITH .S, typed in lower case - so the record is lower case
+# and the ".D" below is upper case, which is the case under test.  (.S wrote the
+# name exactly as typed until 14 Sep 2026; since RELEASE_1.1 5 it downcases a
+# new name, which changes nothing here because the name is typed lower.)  "001  S" in the listing is what proves .S wrote a record of the type .D
 # requires: a record that exists but is neither S nor PA takes a different
 # branch (5041) and would never reach the prompt this section anchors on.
 Show-SD 'entry 5' @(

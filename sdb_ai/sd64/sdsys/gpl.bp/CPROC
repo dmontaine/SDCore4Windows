@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5 and 34.  ".S name" finds an existing
+*            record in any case and saves a new one lower case; Enter at the
+*            5045 overwrite prompt means N.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 70.  UPDATE.ACCOUNTS takes an
 *            optional ALL keyword, which runs the all-accounts VOC walk
 *            WITHOUT asking (LOGIN mode 4) so that the installer can run it on
@@ -1334,11 +1337,41 @@ stack.manipulation:
             arg3 = n
          end
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  A NEW SENTENCE'S ID IS LOWER CASE,
+*   AND AN EXISTING ONE IS FOUND IN ANY CASE.  Owner's ruling, 13 Sep 2026:
+*   ids in SD system files are lower case.  VOC is a DYNAMIC file, so "DAILY"
+*   and "daily" are two records; .S wrote the name exactly as typed, and an
+*   exact-case existence test would then save a second copy beside an existing
+*   one rather than ask 5045.  So: as typed, then down, then up (the fold .D
+*   uses above) - a hit keeps the id it matched and asks 5045 about it (owner,
+*   14 Sep 2026: "treat it as the same id"); no hit saves under downcase().
+         readvu voc.rec from voc, arg1, 0 else
+            release voc, arg1
+            readvu voc.rec from voc, downcase(arg1), 0 then
+               arg1 = downcase(arg1)
+            end else
+               release voc, downcase(arg1)
+               readvu voc.rec from voc, upcase(arg1), 0 then
+                  arg1 = upcase(arg1)
+               end else
+                  release voc, upcase(arg1)
+                  arg1 = downcase(arg1)
+               end
+            end
+         end
+
          readvu voc.rec from voc, arg1, 0 then
             loop
                display sysmsg(5045, arg1) :  ;* Overwrite VOC record 'xx'?
                prompt ""
                input s
+
+* 14 Sep 26 Windows port - RELEASE_1.1 34.  ENTER TAKES THE DEFAULT, AND IT IS
+*   N.  At end of input "input" yields '', which is neither N nor Y, so this
+*   loop re-asked for ever - RELEASE_1.1 6's class, at a prompt 6 never listed.
+*   N is the arm that releases the record and saves nothing.
+               if s = '' then s = 'N'
+
                if upcase(s[1,1]) = "N" then
                   release voc, arg1
                   goto exit.stack.command

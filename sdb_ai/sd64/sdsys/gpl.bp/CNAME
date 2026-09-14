@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  Renaming a file: the old name folds,
+*           the new name is stored lower case and refused if it exists in any
+*           case other than the record being renamed, and the two default-path
+*           tests ignore case so the OS files follow the rename.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  Both exclusive-access
 *           refusals now name the file and the session holding it
 *           (10168/10169).  The data file and its DICT are separate files and
@@ -118,12 +122,25 @@ rename.file:
       stop sysmsg(2027) ;* Null file name not allowed
    end
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  THE OLD NAME FOLDS.  This read was
+*   exact, so once CREATE.FILE stores new ids lower case "CNAME ZZX TO ZZY"
+*   answered 2014 for a file that exists.  As typed, then down, then up.
    readu rec from voc.f, old.file.name else
-      @system.return.code = -status()
-      if status() = ER$RNF then
-         stop sysmsg(2014, old.file.name) ;* xx is not defined in your VOC
+      release voc.f, old.file.name
+      readu rec from voc.f, downcase(old.file.name) then
+         old.file.name = downcase(old.file.name)
       end else
+         release voc.f, downcase(old.file.name)
+         readu rec from voc.f, upcase(old.file.name) then
+            old.file.name = upcase(old.file.name)
+         end else
+            @system.return.code = -status()
+            if status() = ER$RNF then
+               stop sysmsg(2014, old.file.name) ;* xx is not defined in your VOC
+            end else
 
+            end
+         end
       end
    end
 
@@ -133,9 +150,31 @@ rename.file:
       stop sysmsg(6150, old.file.name) ;* VOC entry for 'xx' is not a file description
    end
 
-   readvu s from voc.f, new.file.name, 0 then
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  THE NEW NAME IS LOWER CASE, AND IS
+*   REFUSED IF IT EXISTS IN ANY CASE.  Owner's ruling, 13 Sep 2026: ids in SD
+*   system files are lower case; 14 Sep 2026: an existing id in another case is
+*   "the same id".  VOC is a DYNAMIC file, so the exact test alone let a rename
+*   land beside a differently cased twin.  The one hit that is NOT a clash is
+*   the record being renamed, which is what lets "CNAME MYFILE TO myfile" bring
+*   an old upper-case id into line.
+   new.typed = new.file.name
+   new.file.name = downcase(new.typed)
+
+*  AND A NEW NAME THAT FOLDS TO THE OLD ONE IS REFUSED, OR THE RECORD IS LOST.
+*  "CNAME myfile TO MYFILE" gives new.file.name = old.file.name, the write below
+*  lands on the old record, and the delete after it removes the only copy.
+   if new.file.name = old.file.name then
       stop sysmsg(6151, new.file.name) ;* xx is already defined in your VOC
    end
+
+   clash.ids = new.typed : @fm : new.file.name : @fm : upcase(new.typed)
+   for clash.i = 1 to 3
+      if clash.ids<clash.i> # old.file.name then
+         readvu s from voc.f, clash.ids<clash.i>, 0 then
+            stop sysmsg(6151, clash.ids<clash.i>) ;* xx is already defined in your VOC
+         end
+      end
+   next clash.i
 
    if type = 'Q' then
       display sysmsg(6152) ;* This is a Q-pointer. The operating system files will not be renamed.
@@ -179,10 +218,17 @@ rename.file:
       * Try to rename at operating system level if paths are default names
       * and the new name is an acceptable operating system name.
 
+* 14 Sep 26 Windows port - RELEASE_1.1 5.  BOTH "IS THIS THE DEFAULT PATH"
+*   TESTS COMPARE WITHOUT CASE.  The data test was exact and the dictionary
+*   test upcased only the path, so a lower-case file (whose dictionary is
+*   "zzx.DIC") never matched the second, and a file typed lower before
+*   CREATE.FILE stored ids lower (VOC id myfile, directory MYFILE) never matched
+*   the first.  Either way the OS files kept the old name.  NTFS is case
+*   insensitive, so upcase on both sides is the test it applies itself.
 		default.file.name = old.file.name
 		old.file.path = rec<2>
 
-      if old.file.path = default.file.name and ospath(new.file.name, OS$FILENAME) then
+      if upcase(old.file.path) = upcase(default.file.name) and ospath(new.file.name, OS$FILENAME) then
          if osrename(old.file.path, new.file.name) then
             display sysmsg(6153) ;* Renamed data file at operating system level
             rec<2> = new.file.name
@@ -195,7 +241,7 @@ rename.file:
 		old.file.path = rec<3>
 		s = new.file.name:'.DIC'
 
-      if upcase(old.file.path) = default.file.name and ospath(s, OS$FILENAME) then
+      if upcase(old.file.path) = upcase(default.file.name) and ospath(s, OS$FILENAME) then
          if osrename(old.file.path, s) then
             display sysmsg(6155) ;* Renamed dictionary at operating system level
             rec<3> = s

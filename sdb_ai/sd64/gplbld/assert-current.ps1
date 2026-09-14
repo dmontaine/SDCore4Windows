@@ -1320,7 +1320,11 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # 13 Sep 26 - verify-pagesuppress.ps1, RELEASE_1.1 28's
                   # witness: "S" at QDISP's page prompt behaves as NO.PAGE.
                   # Ships nowhere; listed with the commit that creates it.
-                  'verify-pagesuppress.ps1')
+                  'verify-pagesuppress.ps1',
+                  # 14 Sep 26 - verify-vocidcase.ps1, RELEASE_1.1 5 and 34's
+                  # witness: SET.FILE, .S and CNAME store new VOC ids lower.
+                  # Ships nowhere; listed with the commit that creates it.
+                  'verify-vocidcase.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.
