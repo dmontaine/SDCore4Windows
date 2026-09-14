@@ -194,12 +194,15 @@ try {
 
     # 14 Sep 26 - RELEASE_1.1 5, STAGE 1: CASE INVERSION STARTS OFF.  LOGIN set
     # pterm(PT$INVERT, @true) at every login and linuxio.c set it at session
-    # start; the owner ruled both off.  ***A PIPED SESSION CANNOT SEE THIS***:
-    # measured on the pre-change install, a piped "PTERM DISPLAY" already read
-    # "Case inversion: Off" - the pipe's first input clears it (_INPUT) - so
-    # verify-lcnames' pipe rows are only a control.  "sd -internal PTERM
-    # DISPLAY" reads no input at all, so it reports the state LOGIN left, and
-    # -internal needs elevation, which is why this lives here.
+    # start; the owner ruled both removed.  ***THIS IS A REGRESSION GUARD, NOT A
+    # WITNESS OF THE CHANGE, AND THAT IS MEASURED***: on the install that still
+    # had both lines, "Case inversion: Off" was read three ways - a piped PTERM
+    # DISPLAY, this sd -internal PTERM DISPLAY (the owner, elevated), and an
+    # interactive session where lower-case typing echoed lower case (the owner).
+    # On Windows the flag was already not in effect, cause untraced, so no
+    # instrument can tell the old code from the new.  What this still holds is
+    # that nothing turns it back on for a session LOGIN has set up.  -internal
+    # needs elevation, which is why it lives here.
     Write-Output ''
     Write-Output '=== case inversion as LOGIN leaves it (sd -internal, no input read) ======'
     $ptOut = Join-Path $env:TEMP ("sd-ptdisp-out-$PID.txt")

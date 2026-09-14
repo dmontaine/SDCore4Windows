@@ -4,17 +4,6 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
-14 Sep 26  WHAT YOU TYPE IS NO LONGER CASE-INVERTED.
-
-           SD used to swap the case of every letter typed at an INPUT
-           prompt, so "yes" arrived as "YES" (and a password typed in lower
-           case arrived in upper case).  That is now off when a session
-           starts.  Commands, file names and answers to questions all work
-           in either case.  PTERM CASE INVERT turns the old behaviour back
-           on for a session that wants it.  A BASIC program of your own that
-           compares an INPUT answer with an upper-case letter should upcase
-           the answer first.
-
 14 Sep 26  FOUR MORE VOC ENTRIES AND THE SYSCOM INCLUDE FILES ARE NAMED IN
            LOWER CASE.
 

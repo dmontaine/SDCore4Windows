@@ -1047,11 +1047,11 @@ end
 
     # 10b. CASE INVERSION - A CONTROL HERE, NOT THE WITNESS.  LOGIN turned it on
     # at every login and linuxio.c at session start; the owner ruled both off.
-    # ***ON A PIPE THIS CANNOT TELL THE OLD CODE FROM THE NEW***: measured
-    # 14 Sep 2026 on the install that still had both, a piped PTERM DISPLAY read
-    # "Case inversion: Off" - the first piped input clears it.  The witness is
-    # verify-createfilecase.ps1's "sd -internal PTERM DISPLAY", which reads no
-    # input.  What this section can still hold is that PTERM itself reports and
+    # ***NOTHING CAN TELL THE OLD CODE FROM THE NEW***: measured 14 Sep 2026 on
+    # the install that still had both, inversion read Off piped, under
+    # sd -internal, and interactively (the owner) - on Windows it was already not
+    # in effect, cause untraced.  verify-createfilecase.ps1 holds the -internal
+    # reading as a regression guard.  What this section can still hold is that PTERM itself reports and
     # sets the flag: Off, then On after PTERM CASE INVERT (sysmsg 6833 / 6832),
     # then NOINVERT so the session ends as it began.
     $pt10 = Invoke-SD @('PTERM DISPLAY', 'PTERM CASE INVERT', 'PTERM DISPLAY', 'PTERM CASE NOINVERT')
