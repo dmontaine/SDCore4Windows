@@ -54,6 +54,18 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 13 Sep 26 - RE-DERIVED ON ADDING verify-pagesuppress.ps1 (RELEASE_1.1 28),
+# by listing the directory and both tables, not by adding one:
+#
+#     56 verify-*.ps1 in the directory
+#     22 named in this file           (21 before verify-pagesuppress)
+#     29 named in VerifyInstall2.ps1  (verify-pyapi and verify-pygate since 12 Sep)
+#     -- 51 accounted for, none in both, FIVE in neither: the four named below,
+#        which stay correctly out, AND verify-createfilecase.ps1 - RELEASE_1.1
+#        5 phase (a)'s witness, created 13 Sep, ELEVATED, run by hand and in no
+#        runner.  Recorded rather than wired: nobody has ruled that it joins
+#        VerifyInstall2.
+#
 # 12 Sep 26 - RE-DERIVED AGAIN, on adding verify-promptenter.ps1
 # (RELEASE_1.1_FIXES 6, owner's ruling).  THE BLOCK BELOW READ 49 / 20 / 25 AND
 # WAS STALE IN TWO COLUMNS AGAIN - the directory has grown by three and
@@ -693,6 +705,28 @@ $steps = @(
     # Any sd.exe it leaves is killed BY PID DIFF, never by name: the service
     # runs sd.exe too.
     @{ Name = 'verify-promptenter.ps1'; P = @{} },
+    # 13 Sep 26 - RELEASE_1.1_FIXES.md 28, owner's instruction ("add
+    # verify-pagesuppress to VerifyInstall1").  "Suppress pagination" at a query
+    # report's page prompt must behave like NO.PAGE: after S, no further
+    # clear-screen and no further page heading.  Before the fix a terminal showed
+    # only the last page.
+    #
+    # It sits HERE, beside verify-promptenter, for the same reason that one sits
+    # beside verify-basicfuncs: it drives SD in the caller's own account,
+    # unelevated, with no run token, no prefix and no Windows account, and it
+    # creates nothing - two LIST ONLY VOC sessions at TERM 80,12.  Nothing above
+    # or below it is disturbed.  About 10 seconds.
+    #
+    # ***ITS CONTROL IS NO.PAGE, AND THE PROMPT BEING REACHED IS DECISIVE.*** A
+    # leg that never met a prompt would pass every "no further headings" row by
+    # default.  Counts are taken AFTER the prompt, because the sign-on banner and
+    # page 1 clear the screen in both legs.
+    #
+    # Measured before being wired in, the rule every step above records: 7 of 7
+    # on the 18:41:41 install (the owner's run), and red on exactly its two
+    # decisive rows (46, 46) against the unfixed QDISP.  Bounded by a job; any
+    # sd.exe it leaves is killed BY PID DIFF, never by name.
+    @{ Name = 'verify-pagesuppress.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer
