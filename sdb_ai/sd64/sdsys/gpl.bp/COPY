@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
+*            (RELEASE_1.1_FIXES.md 33, owner's ruling).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -254,6 +256,10 @@ retry.target.file.open:
                      prompt ""
 
                      input reply
+* 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 33, owner's ruling.  Enter means
+*   N, which stops without changing anything; without it the loop re-asked for
+*   ever at end of input.  The same line is in all six users of message 2050.
+                     if reply = '' then reply = 'N'
 
                      if upcase(reply[1,1]) = "N" then stop
 

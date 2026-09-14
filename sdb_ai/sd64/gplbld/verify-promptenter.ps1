@@ -41,6 +41,13 @@
     every gcat name carries a $ ! * prefix (152 of 152, measured) that a private
     or local name cannot, and writing gcat is administrator-only.
 
+    ***LEGS 6, 7 AND 8 - 13 Sep 2026.***  Leg 6 is CPROC's .D prompt 5040, the
+    last of RELEASE_1.1 6's seven.  Legs 7 and 8 are RELEASE_1.1 33, the owner's
+    ruling on the two prompts 6 left alone: message 2050 ("Use active select
+    list") now defaults to N in its six verbs, driven here through CT; and
+    DELETEF's 6133 on a multifile gains C to cancel, which Enter now means -
+    driven on a two-component multifile, with N (dictionary only) as the control.
+
     ***THE CONTROL IS THE POINT, NOT THE ENTER CASE.***  "The file still
     exists" is also what you get from a command that never ran, a prompt that
     never fired, and a typo in the file name.  So the same prompt is driven
@@ -82,6 +89,7 @@ $FileD  = 'zzpromptd'   # leg 4: the real file
 $FileX  = 'zzpromptx'   # leg 4: a second VOC pointer to it, so its paths differ from its name
 $ProgP  = 'ZZPROMPTP'   # leg 5: a program catalogued LOCAL and private in turn
 $SentV  = 'zzpromptv'   # leg 6: a sentence saved with .S, for CPROC's .D prompt 5040
+$MultiM = 'zzpromptm'   # leg 8: a two-component multifile, for DELETEF's 6133
 
 $pass = 0
 $fail = 0
@@ -396,6 +404,75 @@ try {
         Row 'CONTROL leg 6: Y deleted the sentence' ($y6.Text -match "'$SentV' not found in VOC") `
             '.L still lists the sentence after an explicit Y'
     }
+    Write-Host ''
+
+    # --- LEG 7: RELEASE_1.1 33, message 2050 (select list), owner's ruling -----
+    #
+    # "Use active select list (First item 'x') (y/<n>)?", asked by six verbs; CT is
+    # the harmless one to drive - it only displays.  Captured 13 Sep 2026 before
+    # the change: SSELECT VOC SAMPLE 1 then CT VOC asks 2050 naming the first id;
+    # N stops, Y prints "VOC <id>" and the record.  Enter must now mean N.
+    Write-Host '--- leg 7: message 2050 - an active select list, then CT VOC ------------'
+    $e7 = Invoke-SD @('SSELECT VOC SAMPLE 1', 'CT VOC', '', 'WHO')
+    Write-Host $e7.Text
+    $first7 = [regex]::Match($e7.Text, "First item '([^']+)'")
+    Row 'leg 7: the run terminated (no runaway loop)' (-not $e7.Killed) "killed after ${TimeoutSeconds}s"
+    Row 'leg 7: prompt 2050 was reached, showing (y/<n>)' `
+        ($e7.Text -match "Use active select list \(First item '[^']+'\) \(y/<n>\)\?") 'no 2050 prompt carrying (y/<n>)'
+    if ($first7.Success) {
+        $id7 = $first7.Groups[1].Value
+        Row "leg 7: ENTER displayed nothing (no 'VOC $id7' record)" `
+            ($e7.Text -notmatch ('(?m)^VOC ' + [regex]::Escape($id7) + '\s*$')) 'the record was displayed - Enter was taken as YES'
+        # The line after the Enter ran as a command, so the prompt ended rather
+        # than eating it: WHO answers with the account name.
+        Row 'leg 7: the session went on to the next command (WHO answered)' `
+            ($e7.Text -match "(?m)^\s*\d+\s+$([regex]::Escape($Account))\b") 'WHO did not answer - the prompt swallowed it'
+        $y7 = Invoke-SD @('SSELECT VOC SAMPLE 1', 'CT VOC', 'Y')
+        Row "CONTROL leg 7: Y displays the record 'VOC $id7'" `
+            ($y7.Text -match ('(?m)^VOC ' + [regex]::Escape($id7) + '\s*$')) 'Y did not display it - the prompt is not driving anything'
+    }
+    Write-Host ''
+
+    # --- LEG 8: RELEASE_1.1 33, DELETEF 6133 gains C to cancel, owner's ruling --
+    #
+    # A multifile with two data components reaches 6133.  Captured 13 Sep 2026
+    # before the change: CREATE.FILE ZZPROMPTM,C1 then ,C2 makes it (field 4
+    # "c1<vm>c2"); N at 6133 deletes the DICTIONARY only; Y goes on to ask 6135
+    # for each component.  Now: Enter means C, and C deletes nothing.
+    Write-Host "--- leg 8: DELETEF 6133 on the multifile $MultiM ---------------------"
+    $mDir = Join-Path $acctDir $MultiM
+    $mDic = Join-Path $acctDir ($MultiM + '.DIC')
+    $null = Invoke-SD @("DELETE VOC $MultiM")
+    foreach ($p in @($mDir, $mDic)) { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue } }
+    $mk8 = Invoke-SD @("CREATE.FILE $($MultiM.ToUpper()),C1", "CREATE.FILE $($MultiM.ToUpper()),C2", "CT VOC $MultiM")
+    Write-Host $mk8.Text
+    $multiOk = ($mk8.Text -match "Created DATA part as $MultiM/c2") -and (Test-Path -LiteralPath (Join-Path $mDir 'c1')) -and
+               (Test-Path -LiteralPath (Join-Path $mDir 'c2')) -and (Test-Path -LiteralPath $mDic)
+    Row "leg 8 precondition: $MultiM is a multifile with components c1 and c2 and a dictionary" $multiOk `
+        'the multifile was not built, so 6133 could not be reached'
+    if ($multiOk) {
+        foreach ($ans in @(@{ Label = 'ENTER'; Line = '' }, @{ Label = 'an explicit C'; Line = 'C' })) {
+            $r8 = Invoke-SD @("DELETE.FILE $MultiM", $ans.Line, 'WHO')
+            Write-Host $r8.Text
+            Row "leg 8 ($($ans.Label)): the run terminated" (-not $r8.Killed) "killed after ${TimeoutSeconds}s"
+            Row "leg 8 ($($ans.Label)): prompt 6133 was reached, showing (y/n/<c>)" `
+                ($r8.Text -match 'Delete all data components of multifile.*\(y/n/<c>\)\?') 'no 6133 prompt carrying (y/n/<c>)'
+            Row "leg 8 ($($ans.Label)): nothing was deleted" `
+                (($r8.Text -notmatch "portion '[^']*' deleted") -and ($r8.Text -notmatch "VOC entry '[^']*' deleted")) `
+                'a deletion was reported - cancel did not cancel'
+            Row "leg 8 ($($ans.Label)): both components and the dictionary survive on disk" `
+                ((Test-Path -LiteralPath (Join-Path $mDir 'c1')) -and (Test-Path -LiteralPath (Join-Path $mDir 'c2')) -and (Test-Path -LiteralPath $mDic)) `
+                'a part of the multifile is gone'
+            Row "leg 8 ($($ans.Label)): the session went on (WHO answered)" `
+                ($r8.Text -match "(?m)^\s*\d+\s+$([regex]::Escape($Account))\b") 'WHO did not answer - the prompt swallowed it'
+        }
+        # CONTROL: N keeps its old meaning - the dictionary goes, the data stays.
+        $n8 = Invoke-SD @("DELETE.FILE $MultiM", 'N')
+        Write-Host $n8.Text
+        Row "CONTROL leg 8: N deletes the dictionary only ('$MultiM.DIC' deleted)" `
+            (($n8.Text -match "DICT portion '$MultiM\.DIC' deleted") -and (-not (Test-Path -LiteralPath $mDic)) -and
+             (Test-Path -LiteralPath (Join-Path $mDir 'c1'))) 'N did not delete exactly the dictionary - the prompt is not driving the branch'
+    }
 }
 finally {
     $null = Invoke-SD @("DELETE.FILE $Probe", 'Y', 'Y', 'Y')
@@ -414,21 +491,30 @@ finally {
     $null = Invoke-SD @("DELETE.FILE $FileD", 'Y', 'Y', 'Y')
     $null = Invoke-SD @("DELETE VOC $FileD")
     $null = Invoke-SD @("DELETE.CATALOG $ProgP", "DELETE VOC $ProgP", "DELETE VOC $SentV")
+    # Leg 8's multifile: every answer given explicitly - Y at 6133, then Y at
+    # each component's 6135 (a component's path never equals the file name, so
+    # DELETEF always asks; captured) - then the VOC record and a file fallback.
+    $null = Invoke-SD @("DELETE.FILE $MultiM", 'Y', 'Y', 'Y')
+    $null = Invoke-SD @("DELETE VOC $MultiM")
+    foreach ($p in @((Join-Path (Join-Path $Root $Account) $MultiM), (Join-Path (Join-Path $Root $Account) ($MultiM + '.DIC')))) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue }
+    }
     foreach ($f in @((Join-Path $bpDir $ProgP), (Join-Path (Join-Path (Join-Path $Root $Account) 'bp.out') $ProgP))) {
         if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
     }
-    $gone = Invoke-SD @("CT VOC $FileX", "CT VOC $FileD", "CT VOC $ProgP", "CT VOC $SentV")
-    foreach ($n in @($FileX, $FileD, $ProgP, $SentV)) {
+    $gone = Invoke-SD @("CT VOC $FileX", "CT VOC $FileD", "CT VOC $ProgP", "CT VOC $SentV", "CT VOC $MultiM")
+    foreach ($n in @($FileX, $FileD, $ProgP, $SentV, $MultiM)) {
         Row "cleanup: no VOC record '$n' is left" ($gone.Text -match "Record '$n' not found") "CT VOC $n still finds it"
     }
     $acctForClean = Join-Path $Root $Account
     $leftFiles = @((Join-Path $acctForClean $FileD), (Join-Path $acctForClean ($FileD + '.DIC')),
-                   (Join-Path (Join-Path $acctForClean 'cat') $ProgP), (Join-Path $bpDir $ProgP)) |
+                   (Join-Path (Join-Path $acctForClean 'cat') $ProgP), (Join-Path $bpDir $ProgP),
+                   (Join-Path $acctForClean $MultiM), (Join-Path $acctForClean ($MultiM + '.DIC'))) |
                  Where-Object { Test-Path -LiteralPath $_ }
-    Row 'cleanup: no leg 4/5 file, catalogue record or source is left' ($leftFiles.Count -eq 0) ($leftFiles -join ', ')
+    Row 'cleanup: no leg 4/5/8 file, catalogue record or source is left' ($leftFiles.Count -eq 0) ($leftFiles -join ', ')
 }
 
 Write-Host ''
 Write-Host "verify-promptenter: $pass passed, $fail failed"
 if ($fail -gt 0) { Bail 1 "$fail check(s) failed." }
-Bail 0 "Enter took the default at 6131, 6135, 6140, 3033, 3034 and 5040, each control proves its prompt was live, and a lower-case id was deleted by its upper-case name."
+Bail 0 "Enter took the default at 6131, 6135, 6140, 3033, 3034, 5040, 2050 and 6133 (cancel), each control proves its prompt was live, and a lower-case id was deleted by its upper-case name."

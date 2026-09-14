@@ -4,6 +4,21 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+13 Sep 26  TWO MORE QUESTIONS NOW HAVE A DEFAULT, AND DELETE.FILE CAN CANCEL.
+
+           "Use active select list (First item 'x')?", which CD, COPY, CT,
+           DELETE, DELETE.FILE and ED ask when a select list is active, now
+           ends (y/<n>)?.  Pressing Enter answers N: the command stops and
+           nothing is changed.  Before, an empty answer asked the question
+           again, for ever if the input had run out.
+
+           DELETE.FILE on a multifile asks "Delete all data components of
+           multifile" and now offers three answers: Y deletes all the data
+           components, N deletes the dictionary only (as before), and C
+           cancels without deleting anything.  C is also what Enter does.
+           Before, neither answer left the file alone and an empty answer
+           asked again for ever.
+
 13 Sep 26  FIXED: "SUPPRESS PAGINATION" AT A REPORT'S PAGE PROMPT NOW SHOWS
            THE REST OF THE REPORT.
 

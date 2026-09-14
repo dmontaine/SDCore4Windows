@@ -52,7 +52,13 @@ function Row([string]$name, [bool]$ok, [string]$detail) {
 # THE DECISION, lifted by the test below and by nothing else yet.
 #
 # Given one program's text, return every prompt in it that defaults an empty
-# answer, as @{ Msg = '6131'; Var = 'yn'; Line = 202 }.
+# answer, as @{ Msg = '6131'; Var = 'yn'; Line = 202; Default = 'N' }.
+#
+# 13 Sep 26 - RELEASE_1.1 33.  ANY DEFAULT LETTER, NOT ONLY N.  DELETEF's 6133
+# now defaults to C (cancel) on the owner's ruling, and a walk that matched only
+# 'N' would have skipped exactly the prompt with the least obvious default - so
+# its marker would go unchecked while this file reported every prompt covered.
+# The marker required is the default's own letter in angle brackets.
 #
 # It walks BACKWARDS from the default to the sysmsg() that asked the question,
 # rather than forwards from the message.  Forwards fails: the fixes carry long
@@ -62,10 +68,23 @@ function Get-DefaultedPrompts([string]$programText) {
     $lines = $programText -split "`r?`n"
     $out = @()
     for ($i = 0; $i -lt $lines.Count; $i++) {
-        $m = [regex]::Match($lines[$i], "if\s+(\w[\w.]*)\s*=\s*''\s*then\s+\1\s*=\s*'N'")
+        $m = [regex]::Match($lines[$i], "if\s+(\w[\w.]*)\s*=\s*''\s*then\s+\1\s*=\s*'([A-Za-z])'")
         if (-not $m.Success) { continue }
         if ($lines[$i] -match '^\s*\*') { continue }      # a comment, not code
         $var = $m.Groups[1].Value
+        $dflt = $m.Groups[2].Value.ToUpper()
+        # ***AND IT MUST BE AN ANSWER.***  Matching any letter picked up
+        # QDISP:652, "if dsp.class = '' then dsp.class = 'D'" - an ordinary
+        # variable default, not a prompt - the first time it ran.  Every real
+        # prompt reads its answer with "input <var>" shortly before defaulting
+        # it (measured across all 22: yn, s, reply, response, n), so that is the
+        # test.  Same window as the display search below.
+        $isAnswer = $false
+        for ($k = $i - 1; $k -ge [Math]::Max(0, $i - 60); $k--) {
+            if ($lines[$k] -match '^\s*\*') { continue }
+            if ($lines[$k] -match ('^\s*input\s+' + [regex]::Escape($var) + '\b')) { $isAnswer = $true; break }
+        }
+        if (-not $isAnswer) { continue }
         # Back up to the question this answers.
         #
         # ***DO NOT STOP AT "loop".***  The first version did, and it lost
@@ -91,7 +110,7 @@ function Get-DefaultedPrompts([string]$programText) {
             if ($s.Success) { $msg = $s.Groups[1].Value }
             break
         }
-        $out += [pscustomobject]@{ Msg = $msg; Var = $var; Line = $i + 1 }
+        $out += [pscustomobject]@{ Msg = $msg; Var = $var; Line = $i + 1; Default = $dflt }
     }
     return , $out
 }
@@ -148,6 +167,33 @@ program p
 Row 'a prompt with no default is not reported as one' `
     ((Get-DefaultedPrompts $none).Count -eq 0) 'found a default that is not there'
 
+# 13 Sep 26 - RELEASE_1.1 33: a default that is not N is still a default.
+$cancel = @'
+program p
+   loop
+      display sysmsg(6133) :
+      input yn
+      yn = upcase(yn)
+      if yn = '' then yn = 'C'
+   until yn = 'Y'
+   repeat
+'@
+$r = Get-DefaultedPrompts $cancel
+Row 'a default to C is found, and its letter is recorded' `
+    ($r.Count -eq 1 -and $r[0].Msg -eq '6133' -and $r[0].Default -eq 'C') `
+    "got $($r.Count): msg=$($r[0].Msg) default=$($r[0].Default)"
+$notPrompt = @'
+show.line:
+   dsp.class = line[1,1]
+   if dsp.class = '' then dsp.class = 'D'
+'@
+Row 'a variable default that no input reads is not a prompt (QDISP:652, real text)' `
+    ((Get-DefaultedPrompts $notPrompt).Count -eq 0) 'an ordinary default was counted as a prompt'
+Row 'the marker a C default needs is <c>, and <n> does not satisfy it' `
+    (('Delete it (y/n/<c>)?' -match ('<' + $r[0].Default.ToLower() + '>')) -and
+     -not ('Delete it (y/<n>)?' -match ('<' + $r[0].Default.ToLower() + '>'))) `
+    'the marker check does not follow the default letter'
+
 # --- the live walk ----------------------------------------------------------
 
 Write-Host ''
@@ -157,13 +203,13 @@ if (-not (Test-Path -LiteralPath $bpDir)) {
     $found = @()
     foreach ($f in (Get-ChildItem -LiteralPath $bpDir -File)) {
         foreach ($p in (Get-DefaultedPrompts (Get-Content -LiteralPath $f.FullName -Raw))) {
-            $found += [pscustomobject]@{ Prog = $f.Name; Msg = $p.Msg; Var = $p.Var; Line = $p.Line }
+            $found += [pscustomobject]@{ Prog = $f.Name; Msg = $p.Msg; Var = $p.Var; Line = $p.Line; Default = $p.Default }
         }
     }
 
     Write-Host ("  derived from gpl.bp: " + $found.Count + " defaulted prompt(s)")
     foreach ($p in ($found | Sort-Object Msg)) {
-        Write-Host ("    {0,-6} {1}:{2}  (`${3})" -f $p.Msg, $p.Prog, $p.Line, $p.Var)
+        Write-Host ("    {0,-6} {1}:{2}  (`${3}, default {4})" -f $p.Msg, $p.Prog, $p.Line, $p.Var, $p.Default)
     }
 
     # REFUSE THE NULL CASE.  Entry 6 fixed seven; a walk that finds almost none
@@ -203,8 +249,10 @@ if (-not (Test-Path -LiteralPath $bpDir)) {
         # reported SETFILE's 2060 as a defect, and it is not one: it reads
         # "Overwrite (y/<n>/q)?" - a three-way prompt that marks its default
         # perfectly well.  What matters is that the default ARM is the one shown
-        # in angle brackets.
-        if ((Get-Content -LiteralPath $mf -Raw) -notmatch '<n>') { $noMarker += $p }
+        # in angle brackets.  13 Sep 26: and that arm is the DEFAULT'S OWN LETTER
+        # (RELEASE_1.1 33 - 6133 defaults to C), so <n> no longer stands in for all.
+        $want = '<' + $p.Default.ToLower() + '>'
+        if ((Get-Content -LiteralPath $mf -Raw) -notmatch [regex]::Escape($want)) { $noMarker += $p }
     }
     Row 'LIVE: every defaulted prompt has a message file' ($noFile.Count -eq 0) `
         ("missing: " + (($noFile | ForEach-Object { $_.Msg }) -join ', '))
@@ -218,7 +266,9 @@ if (-not (Test-Path -LiteralPath $bpDir)) {
     $deleteF = Join-Path $bpDir 'DELETEF'
     if (Test-Path -LiteralPath $deleteF) {
         $orig = Get-Content -LiteralPath $deleteF -Raw
-        $mut  = $orig -replace "if yn = '' then yn = 'N'", "if yn = '' then yn = 'Q'"
+        # 13 Sep 26 - the mutant breaks the EMPTY test, not the letter: any letter
+        # is now a default, so the old 'N' -> 'Q' mutant would still be found.
+        $mut  = $orig -replace "if yn = '' then yn = 'N'", "if yn = 'x' then yn = 'N'"
         $m    = Get-DefaultedPrompts $mut
         Row 'MUTANT: breaking the default makes the walk stop finding it' `
             ($mut -ne $orig -and $m.Count -lt (Get-DefaultedPrompts $orig).Count) `
