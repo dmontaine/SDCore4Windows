@@ -99,16 +99,18 @@ function Invoke-Bounded([string[]]$lines, [bool]$internal, [int]$TimeoutSec = 12
         if ($int) { $text | & $exe '-internal' 2>&1 } else { $text | & $exe 2>&1 }
     } -ArgumentList $sdExe, $body, $internal
     $killed = $false
+    $killedPids = @()
     if (-not (Wait-Job $job -Timeout $TimeoutSec)) {
         $killed = $true
         Stop-Job $job -ErrorAction SilentlyContinue
         foreach ($p in @(Get-Process -Name 'sd' -ErrorAction SilentlyContinue)) {
-            if ($before -notcontains $p.Id) { Write-Output ("  killing stray sd.exe PID " + $p.Id); try { $p.Kill() } catch { } }
+            # Recorded into the returned text, not Write-Output: see Get-Probe.
+            if ($before -notcontains $p.Id) { $killedPids += $p.Id; try { $p.Kill() } catch { } }
         }
     }
     $out = (@(Receive-Job $job -ErrorAction SilentlyContinue) | Out-String) -replace ([char]27 + '\[[0-9]*[A-Za-z]'), ''
     Remove-Job $job -Force -ErrorAction SilentlyContinue
-    if ($killed) { $out += "`n*** SD DID NOT FINISH IN $TimeoutSec s - a timed-out session can leave its slot and locks (PROJECT_STATUS.md section 6)" }
+    if ($killed) { $out += "`n*** SD DID NOT FINISH IN $TimeoutSec s - killed stray sd.exe PID(s): $($killedPids -join ', ') - a timed-out session can leave its slot and locks (PROJECT_STATUS.md section 6)" }
     return [string]$out
 }
 function Show([string]$label, [string]$text) {
@@ -149,9 +151,15 @@ $probeBasic = @'
    next i
 end
 '@
-function Get-Probe([string]$label) {
+# ***RETURNS ONE OBJECT AND PRINTS NOTHING.***  The first version called Show
+# in here, and a PowerShell function's Write-Output becomes part of its RETURN
+# VALUE: the caller got an array of text lines with the map at the end, every
+# $b['zznuclean/DATA'] was $null, and the run refused its precondition with the
+# probe's own output swallowed (14 Sep 2026, the first run).  The caller shows
+# .Text; .Lines is the count of FIX lines, so a probe that printed nothing is
+# refused by name rather than read as "no fixture".
+function Get-Probe {
     $t = Invoke-Bounded @("BASIC bp $probeName", "RUN bp $probeName") $false
-    Show $label $t
     $map = @{}
     foreach ($m in [regex]::Matches($t, '(?m)^FIX (\S+) (DATA|DICT) (?:NOCASE=(\d+) AK=(\d+) IDS=(.*?)|NOFILE)\s*$')) {
         $ids = @([regex]::Matches($m.Groups[5].Value, '\[([^\]]*)\]') | ForEach-Object { $_.Groups[1].Value })
@@ -164,7 +172,7 @@ function Get-Probe([string]$label) {
             Ids    = ($arr -join ',')
         }
     }
-    return $map
+    return [pscustomobject]@{ Text = $t; Map = $map; Lines = $map.Count }
 }
 function Get-TempLeftovers {
     return @(Get-ChildItem -LiteralPath $sdsys -Force -ErrorAction SilentlyContinue |
@@ -204,7 +212,11 @@ try {
     [IO.File]::WriteAllText($probeSrc, ($probeBasic -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
     Write-Output ("  wrote " + $probeSrc)
 
-    $b = Get-Probe 'probe BEFORE'
+    $bp = Get-Probe
+    Show 'probe BEFORE' $bp.Text
+    Write-Output ("  probe lines read: " + $bp.Lines + " of 8")
+    if ($bp.Lines -ne 8) { Write-Output '  verify-nocaseupgrade: the probe did not report all 8 fixture parts - see its output above; nothing measured'; exit 2 }
+    $b = $bp.Map
     $want = @{
         'zznuclean/DATA' = @{ NoCase = 0; Ak = 0; Ids = 'jack' }
         'zznutwin/DATA'  = @{ NoCase = 0; Ak = 0; Ids = 'JACK,jack' }
@@ -268,7 +280,11 @@ try {
     Row 'the log names zznutwin' ($logNew -match 'zznutwin') 'nocase-upgrade.log did not receive the report'
 
     # ---- after: every part's flags and stored ids ---------------------------
-    $a = Get-Probe 'probe AFTER'
+    $ap = Get-Probe
+    Show 'probe AFTER' $ap.Text
+    Write-Output ("  probe lines read: " + $ap.Lines + " of 8")
+    Row 'the AFTER probe reported all 8 fixture parts' ($ap.Lines -eq 8) "read $($ap.Lines)"
+    $a = $ap.Map
     foreach ($k in ($b.Keys | Sort-Object)) {
         $g0 = $b[$k]; $g1 = $a[$k]
         if ($null -eq $g1 -or $g1.NoFile) { Row ("$k still exists") $false 'the part is gone'; continue }
