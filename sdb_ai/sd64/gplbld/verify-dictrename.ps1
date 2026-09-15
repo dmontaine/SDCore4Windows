@@ -1,6 +1,7 @@
 # verify-dictrename.ps1 - an UPGRADED dictionary gives up its old upper-case ids
-# instead of keeping them beside the lower-case ones.  RELEASE_1.1_FIXES.md 5,
-# stage 2b, plan step 4.  ***ELEVATED POWERSHELL.***
+# instead of keeping them beside the lower-case ones - and, on a case-insensitive
+# dictionary, instead of DELETING them.  RELEASE_1.1_FIXES.md 5, stage 2b plan
+# step 4, and D2.  ***ELEVATED POWERSHELL.***
 #
 #   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\sd4windows\sdb_ai\sd64\gplbld\verify-dictrename.ps1
 #
@@ -10,37 +11,52 @@
 # WHAT IT MEASURES.  Stage 2b renamed the shipped dictionary ids to lower case
 # (gplbld\FILES_DICTS: TYPE -> type, @ID -> @id, ...).  WRITE_INSTALL_DICTS
 # MERGES record by record, and on an upgrade upgrade-dicts.ps1 runs it against a
-# dictionary that still holds the old upper-case ids - so without the stage 2b
-# change it writes 'type' BESIDE 'TYPE', the twin update.voc was changed to
-# avoid for VOC in stage 1.  It now deletes any existing id that differs from a
-# shipped one only in case, after writing the shipped one.
+# dictionary that may still hold the old upper-case ids, so for each shipped
+# record it deletes any existing id that differs from it only in case.
 #
-# ***NOTHING ELSE REACHES THAT BRANCH, SO THIS FORCES THE STATE.***  A first
-# install's dictionaries never hold an upper-case id, and a real upgrade needs
-# the installer run over the top (verify-upgrade.ps1, which cycle.ps1 cannot
-# do).  So it plants the old ids in SDSYS's DICT VOC - TYPE and @ID, copies of
-# type and @id - and runs the INSTALLED upgrade-dicts.ps1, the very script the
-# installer runs at an upgrade, then reads the stored ids back.
+# ***15 Sep 2026 - REBUILT FOR D2, OWNER'S RULING ("retire and replace").***
+# The first version planted TWINS - TYPE beside type - and D2 made every hashed
+# file case insensitive, so a twin cannot be written (b161: the plant did not
+# take and the step exited 2).  What CAN exist is a dictionary converted to
+# NOCASE while it still stored the old spellings: ONE record, stored 'TYPE'.
+# And on that state the 2b code DELETED the item: it wrote 'type', which on a
+# NOCASE file updates the record still stored as TYPE, then deleted 'TYPE' -
+# the only copy.  Measured 15 Sep 2026 on a scratch NOCASE file (write TYPE,
+# write type, delete TYPE: 0 records).  Owner: "fix it now".  WRITE_INSTALL_DICTS
+# now deletes first and writes after on a NOCASE dictionary.  This is its
+# witness: the plant is that exact state, and the item must come back RENAMED.
 #
-# ***THE CONTROL IS zzdrkeep***, planted with them: an id that folds to no
-# shipped record, standing for an administrator's own dictionary item.  A
-# replace that took too much deletes it; it must survive, and the record count
-# must fall by exactly the two planted twins.
+# THE PLANT, AND WHY IN THAT ORDER.  For TYPE and @ID: copy the shipped record
+# to a scratch id, DELETE the shipped id, copy the scratch id back under the
+# upper-case id, delete the scratch id.  No step deletes a record it has just
+# written.  A precondition row proves TYPE and @ID stored, type and @id not.
 #
-# STORED IDS ARE READ CASE-SENSITIVELY from LIST DICT VOC's rows (-cmatch at
-# the start of a line), because a query folds and NTFS folds: a case-blind
-# check passes whichever id is stored.  The heading line ("@ID.......") and the
-# echoed command (":LIST ...") cannot match a row pattern.
+# ***THE CONTROLS.***  (1) D2 itself: COPY f1 to F1 without OVERWRITING must be
+# refused as "already exists" - on a case-sensitive dictionary it would make a
+# twin.  (2) zzdrkeep, an id that folds to no shipped record, standing for an
+# administrator's own item: it must survive.  (3) the record count must be the
+# same after the upgrade as after the plant - renamed, not added, not lost.
+#
+# STORED IDS ARE READ CASE-SENSITIVELY from LIST DICT VOC's rows (-cmatch at the
+# start of a line).  A full LIST walks the file and prints each id as stored;
+# the heading line ("@id.......") and the echoed command cannot match a row.
+#
+# ***CLEANUP NEVER DELETES A SHIPPED NAME, IN ANY CASE.***  On a NOCASE file
+# "DELETE DICT VOC TYPE" deletes 'type'.  If type or @id is not stored lower at
+# the end - a plant that was never upgraded, or a pre-fix install that deleted
+# them - cleanup runs the installed upgrade-dicts.ps1 again (twice at most):
+# with the fix it renames; without it, the first run deletes and the second
+# writes the item back.  Only zzdrkeep and the zzdrtmp scratch ids are deleted
+# by name, and they fold to nothing shipped.
 #
 # IT MUST RUN ELEVATED: it drives an SDSYS session (LOGTO SDSYS from an
 # unelevated pipe hangs at UAC - verify-pyapi.ps1) and upgrade-dicts.ps1 runs
 # sd -internal.  It changes shipped state only by re-running the upgrade step,
 # which rewrites the same 78 records the install wrote and recompiles them.
 #
-# NEVER RUN RED.  assert-current refuses it on an install without stage 2b, so
-# the old WRITE_INSTALL_DICTS cannot be driven through it; the red half is the
-# source reading in RELEASE_1.1 5 (WRITE_INSTALL_DICTS:107 wrote, nothing
-# deleted).
+# NEVER RUN RED AS A SCRIPT.  assert-current refuses it on an install without
+# the fix; the red half is the scratch-file measurement above and the reading
+# of WRITE_INSTALL_DICTS:125-133 before it, in RELEASE_1.1 5.
 
 $ErrorActionPreference = 'Stop'
 
@@ -66,18 +82,19 @@ $shipped  = Join-Path $appDir 'gplbld\FILES_DICTS'
 $dataDir  = Join-Path $env:ProgramData 'SD'
 $upLog    = Join-Path $dataDir 'upgrade-dicts.log'
 
-# The planted twins: old id -> the shipped id it copies.  And the control.
+# The planted old spellings: old id -> the shipped id it replaces.  And the control.
 $plants = @(
-    [pscustomobject]@{ Old = 'TYPE'; New = 'type' },
-    [pscustomobject]@{ Old = '@ID';  New = '@id'  })
+    [pscustomobject]@{ Old = 'TYPE'; New = 'type'; Tmp = 'zzdrtmp1' },
+    [pscustomobject]@{ Old = '@ID';  New = '@id';  Tmp = 'zzdrtmp2' })
 $keep = 'zzdrkeep'
 
 Write-Output '=== inputs (rule 1: what it actually used) ================================'
 Write-Output ("  sd.exe            : " + $sdExe)
 Write-Output ("  upgrade-dicts.ps1 : " + $upScript)
 Write-Output ("  shipped records   : " + $shipped)
-Write-Output ("  planted twins     : " + (($plants | ForEach-Object { $_.Old + ' (copy of ' + $_.New + ')' }) -join ', '))
-Write-Output ("  control           : " + $keep + ' (copy of f1; folds to no shipped id)')
+Write-Output ("  planted           : " + (($plants | ForEach-Object { $_.Old + ' (stored alone, in place of ' + $_.New + ')' }) -join ', '))
+Write-Output ("  controls          : " + $keep + ' (copy of f1; folds to no shipped id); COPY f1,F1 refused')
+Write-Output ("  upgrade log       : " + $upLog)
 
 foreach ($p in @($sdExe, $upScript, $shipped)) {
     if (-not (Test-Path -LiteralPath $p)) { Write-Output "  missing: $p"; exit 2 }
@@ -105,6 +122,19 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
     return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
+# The installed upgrade step, exactly as the installer runs it.  NO 2>&1: in
+# Windows PowerShell 5.1 a native command's stderr redirected under
+# ErrorActionPreference Stop becomes a terminating error.  The script writes
+# everything it has to say to stdout (Say -> Write-Output).
+function Invoke-Upgrade {
+    Write-Output ("  powershell -ExecutionPolicy Bypass -File " + $upScript + " -AppDir " + $appDir)
+    $ErrorActionPreference = 'Continue'
+    $o = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $upScript -AppDir $appDir)
+    $c = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    return [pscustomobject]@{ Text = (($o | ForEach-Object { "$_" }) -join "`n"); Code = $c }
+}
+
 # A LIST DICT row for exactly this id: the id at the start of a line, two or
 # more spaces, then the D/I/PH type column.  Case-sensitive.
 function Test-DictRow([string]$text, [string]$id) {
@@ -114,11 +144,15 @@ function Get-Listed([string]$text) {
     $m = [regex]::Match($text, '(?m)^(\d+) record\(s\) listed')
     if ($m.Success) { return [int]$m.Groups[1].Value } else { return -1 }
 }
+function Test-ShippedLower([string]$text) {
+    foreach ($p in $plants) {
+        if (-not (Test-DictRow $text $p.New) -or (Test-DictRow $text $p.Old)) { return $false }
+    }
+    return $true
+}
 
 $logExisted = Test-Path -LiteralPath $upLog
 $exit = 2
-# Cleanup deletes only what this run planted.  Before the plant, an upper-case
-# id in DICT VOC is not ours to remove.
 $planted = $false
 try {
     # ---- before ------------------------------------------------------------
@@ -129,46 +163,55 @@ try {
     $beforeCount = Get-Listed $b
     Write-Output ("  records listed: " + $beforeCount)
     $setupOk = ($beforeCount -gt 0)
-    foreach ($p in $plants) {
-        if (-not (Test-DictRow $b $p.New)) { Write-Output ("  no stored '" + $p.New + "' row - not a stage 2b install"); $setupOk = $false }
-        if (Test-DictRow $b $p.Old)        { Write-Output ("  '" + $p.Old + "' is already stored - residue of an earlier run; it is planted again below") }
-    }
+    if (-not (Test-ShippedLower $b)) { Write-Output '  type and @id are not both stored lower (and alone) - not a 2b install, or residue of an earlier run'; $setupOk = $false }
+    if (Test-DictRow $b $keep) { Write-Output ("  '" + $keep + "' is already stored - residue of an earlier run"); $setupOk = $false }
     if (-not $setupOk) { Write-Output '  the dictionary is not what this test assumes - nothing measured'; exit 2 }
+
+    # ---- control: D2 refuses a twin ------------------------------------------
+    Write-Output ''
+    Write-Output '=== control: a twin cannot be written ====================================='
+    $tw = Invoke-SD @('COPY FROM DICT VOC TO DICT VOC f1,F1', 'LIST DICT VOC')
+    Write-Output $tw
+    Row 'CONTROL: COPY f1 to F1 is refused as already existing (D2 - no twin)' `
+        (($tw -match "Record 'F1' already exists") -and ($tw -match '(?m)^0 record\(s\) copied')) 'COPY did not refuse - the dictionary is not case insensitive'
+    Row 'CONTROL: and the dictionary still holds exactly the records it had' ((Get-Listed $tw) -eq $beforeCount) ("before " + $beforeCount + ", now " + (Get-Listed $tw))
 
     # ---- plant -------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== plant: the old upper-case ids, and the control ========================'
+    Write-Output '=== plant: the old upper-case spellings, one record each, and the control =='
     $cmds = @()
-    foreach ($p in $plants) { $cmds += ('COPY FROM DICT VOC TO DICT VOC ' + $p.New + ',' + $p.Old + ' OVERWRITING') }
-    $cmds += ('COPY FROM DICT VOC TO DICT VOC f1,' + $keep + ' OVERWRITING')
+    foreach ($p in $plants) {
+        $cmds += ('COPY FROM DICT VOC TO DICT VOC ' + $p.New + ',' + $p.Tmp)
+        $cmds += ('DELETE DICT VOC ' + $p.New)
+        $cmds += ('COPY FROM DICT VOC TO DICT VOC ' + $p.Tmp + ',' + $p.Old)
+        $cmds += ('DELETE DICT VOC ' + $p.Tmp)
+    }
+    $cmds += ('COPY FROM DICT VOC TO DICT VOC f1,' + $keep)
     $cmds += 'LIST DICT VOC'
     foreach ($c in $cmds) { Write-Output ("  SD: " + $c) }
     $planted = $true
     $pl = Invoke-SD $cmds
     Write-Output $pl
     $copied = [regex]::Matches($pl, '(?m)^1 record\(s\) copied').Count
+    $wantCopied = 2 * $plants.Count + 1
     $plantedCount = Get-Listed $pl
-    Write-Output ("  copy success lines: " + $copied + " of 3; records listed: " + $plantedCount)
-    $plantOk = ($copied -eq 3)
-    foreach ($id in @($plants.Old) + @($keep)) {
-        if (-not (Test-DictRow $pl $id)) { Write-Output "  '$id' is not stored after the plant"; $plantOk = $false }
+    Write-Output ("  copy success lines: " + $copied + " of " + $wantCopied + "; records listed: " + $plantedCount)
+    $plantOk = ($copied -eq $wantCopied) -and ($plantedCount -eq ($beforeCount + 1))
+    foreach ($p in $plants) {
+        if (-not (Test-DictRow $pl $p.Old)) { Write-Output ("  '" + $p.Old + "' is not stored after the plant"); $plantOk = $false }
+        if (Test-DictRow $pl $p.New)        { Write-Output ("  '" + $p.New + "' is still stored after the plant"); $plantOk = $false }
+        if (Test-DictRow $pl $p.Tmp)        { Write-Output ("  '" + $p.Tmp + "' was left behind"); $plantOk = $false }
     }
-    if (-not $plantOk) { Write-Output '  the plant did not take - nothing below would be measured'; exit 2 }
+    if (-not (Test-DictRow $pl $keep)) { Write-Output "  '$keep' is not stored after the plant"; $plantOk = $false }
+    Row ('precondition: ' + (($plants | ForEach-Object { $_.Old }) -join ' and ') + ' stored alone, count ' + ($beforeCount + 1)) $plantOk 'the plant did not take'
+    if (-not $plantOk) { Write-Output '  nothing below would be measured'; exit 2 }
 
     # ---- the upgrade step --------------------------------------------------
     Write-Output ''
     Write-Output '=== run: the installed upgrade-dicts.ps1 =================================='
-    Write-Output ("  powershell -ExecutionPolicy Bypass -File " + $upScript + " -AppDir " + $appDir)
-    # NO 2>&1: in Windows PowerShell 5.1 a native command's stderr redirected
-    # under ErrorActionPreference Stop becomes a terminating error.  The script
-    # writes everything it has to say to stdout (Say -> Write-Output).
-    $ErrorActionPreference = 'Continue'
-    $upOut = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $upScript -AppDir $appDir)
-    $upCode = $LASTEXITCODE
-    $ErrorActionPreference = 'Stop'
-    $upText = ($upOut | ForEach-Object { "$_" }) -join "`n"
-    Write-Output $upText
-    Write-Output ("  upgrade-dicts exit: " + $upCode)
+    $up = Invoke-Upgrade
+    Write-Output $up.Text
+    Write-Output ("  upgrade-dicts exit: " + $up.Code)
 
     # ---- after -------------------------------------------------------------
     Write-Output ''
@@ -178,21 +221,22 @@ try {
     $afterCount = Get-Listed $a
     Write-Output ("  DICT VOC records: before " + $beforeCount + ", planted " + $plantedCount + ", after " + $afterCount)
 
-    $done = [regex]::Match($upText, '(?m)DONE - (\d+) dictionary record\(s\) written and compiled')
-    Row 'upgrade-dicts exited 0' ($upCode -eq 0) "exit $upCode"
+    $done = [regex]::Match($up.Text, '(?m)DONE - (\d+) dictionary record\(s\) written and compiled')
+    Row 'upgrade-dicts exited 0' ($up.Code -eq 0) "exit $($up.Code)"
     Row "upgrade-dicts wrote and compiled all $shippedCount shipped records" `
         ($done.Success -and ([int]$done.Groups[1].Value -eq $shippedCount)) 'no DONE line with the shipped count'
     foreach ($p in $plants) {
         Row ("WRITE_INSTALL_DICTS reported replacing '" + $p.Old + "' by '" + $p.New + "'") `
-            ($upText -cmatch ('(?m)REPLACED OLD ID: voc\.dic ' + [regex]::Escape($p.Old) + ' BY ' + [regex]::Escape($p.New) + '\s*$')) 'no REPLACED OLD ID line'
-        Row ("'" + $p.Old + "' is no longer stored") (-not (Test-DictRow $a $p.Old)) 'the old upper-case id survived beside the new one'
-        Row ("'" + $p.New + "' is still stored") (Test-DictRow $a $p.New) 'the shipped id is gone'
+            ($up.Text -cmatch ('(?m)REPLACED OLD ID: voc\.dic ' + [regex]::Escape($p.Old) + ' BY ' + [regex]::Escape($p.New) + '\s*$')) 'no REPLACED OLD ID line'
+        # DECISIVE, AND THE ROW THE PRE-FIX CODE FAILS: the item must still exist.
+        Row ("'" + $p.New + "' is stored - the item was renamed, not deleted") (Test-DictRow $a $p.New) 'the shipped item is GONE - the write-then-delete order removed it'
+        Row ("'" + $p.Old + "' is no longer stored") (-not (Test-DictRow $a $p.Old)) 'the old upper-case spelling survived'
     }
-    Row "CONTROL: '$keep' (folds to no shipped id) survived" (Test-DictRow $a $keep) 'a record that is not a twin was deleted'
-    Row 'CONTROL: nothing but the twins was reported replaced' `
-        ([regex]::Matches($upText, '(?m)REPLACED OLD ID: ').Count -eq $plants.Count) 'a REPLACED line for something that was not planted'
-    Row 'CONTROL: the record count fell by exactly the planted twins' `
-        (($plantedCount -gt 0) -and ($afterCount -eq ($plantedCount - $plants.Count))) "planted $plantedCount, after $afterCount"
+    Row "CONTROL: '$keep' (folds to no shipped id) survived" (Test-DictRow $a $keep) 'a record that is not a renamed id was deleted'
+    Row 'CONTROL: nothing but the planted ids was reported replaced' `
+        ([regex]::Matches($up.Text, '(?m)REPLACED OLD ID: ').Count -eq $plants.Count) 'a REPLACED line for something that was not planted'
+    Row 'CONTROL: the record count is unchanged by the upgrade (renamed, not added, not lost)' `
+        (($plantedCount -gt 0) -and ($afterCount -eq $plantedCount)) "planted $plantedCount, after $afterCount"
     $listedWho = [regex]::Matches($a, '(?m)^1 record\(s\) listed').Count
     Row 'a query naming TYPE and @ID, and one naming type and @id, each found who' ($listedWho -eq 2) "1-record lines: $listedWho of 2 (the LIST DICT VOC count is not one of them)"
 
@@ -203,26 +247,37 @@ finally {
     Write-Output '=== cleanup ================================================================'
     if (-not $planted) {
         Write-Output '  nothing was planted - nothing to remove'
-        $c = ''
     } else {
+        # 1. The shipped items, restored by the upgrade step itself - never by a
+        #    DELETE of any spelling of a shipped name.
         $c = Invoke-SD @('LIST DICT VOC')
+        $tries = 0
+        while ((-not (Test-ShippedLower $c)) -and ($tries -lt 2)) {
+            $tries++
+            Write-Output ("  type/@id not both stored lower - running upgrade-dicts to restore (" + $tries + " of 2)")
+            $r = Invoke-Upgrade
+            Write-Output $r.Text
+            Write-Output ("  upgrade-dicts exit: " + $r.Code)
+            $c = Invoke-SD @('LIST DICT VOC')
+        }
+        # 2. Our own scratch ids, by their exact lower names only.
+        $del = @()
+        foreach ($id in @($keep) + @($plants.Tmp)) { if (Test-DictRow $c $id) { $del += ('DELETE DICT VOC ' + $id) } }
+        if ($del.Count -gt 0) {
+            foreach ($d in $del) { Write-Output ("  SD: " + $d) }
+            $c = Invoke-SD ($del + @('LIST DICT VOC'))
+            Write-Output $c
+        }
+        $left = @(@($keep) + @($plants.Tmp) | Where-Object { Test-DictRow $c $_ })
+        $shippedOk = Test-ShippedLower $c
+        Write-Output ("  still stored after cleanup: " + $(if ($left.Count -eq 0) { '(none)' } else { $left -join ', ' }))
+        Write-Output ("  type and @id stored lower after cleanup: " + $shippedOk)
+        if ($left.Count -gt 0) { Write-Output '  [FAIL] cleanup: planted records remain in SDSYS DICT VOC'; if ($exit -eq 0) { $exit = 1 } }
+        if (-not $shippedOk) {
+            Write-Output ('  [FAIL] cleanup: SDSYS DICT VOC does not hold type and @id - run ' + $upScript + ' elevated to restore them')
+            if ($exit -eq 0) { $exit = 1 }
+        }
     }
-    $del = @()
-    foreach ($id in @($plants.Old) + @($keep)) {
-        # Only an id that is STORED exactly is deleted, so a DELETE that folded
-        # could never reach the shipped lower-case record.
-        if (Test-DictRow $c $id) { $del += ('DELETE DICT VOC ' + $id) }
-    }
-    if ($del.Count -gt 0) {
-        foreach ($d in $del) { Write-Output ("  SD: " + $d) }
-        $dout = Invoke-SD ($del + @('LIST DICT VOC'))
-        Write-Output $dout
-        $c = $dout
-    } else { Write-Output '  nothing planted is still stored' }
-    $left = @(@($plants.Old) + @($keep) | Where-Object { Test-DictRow $c $_ })
-    $gone = ($left.Count -eq 0)
-    Write-Output ("  still stored after cleanup: " + $(if ($gone) { '(none)' } else { $left -join ', ' }))
-    if (-not $gone) { Write-Output '  [FAIL] cleanup: planted records remain in SDSYS DICT VOC'; if ($exit -eq 0) { $exit = 1 } }
     if (-not $logExisted -and (Test-Path -LiteralPath $upLog)) {
         Remove-Item -LiteralPath $upLog -Force -ErrorAction SilentlyContinue
         Write-Output ("  removed " + $upLog + " (this run created it; its content is printed above)")

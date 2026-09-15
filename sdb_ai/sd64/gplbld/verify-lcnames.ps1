@@ -46,6 +46,14 @@
 #
 # COPYP RIDES ALONG because it shipped in the same cycle.  See section 5.
 #
+# 15 Sep 2026 - RELEASE_1.1 5 D2 MADE VOC CASE INSENSITIVE, AND THREE OF THIS
+# FILE'S INSTRUMENTS DIED WITH IT (b161).  CT now echoes the spelling TYPED, an
+# exact-match read of VOC now finds any spelling, and sections 5/5a/5b's rename
+# toggles ("write UPPER, delete lower") DELETED THE ONLY RECORD - $savedlists,
+# $hold and $command.stack vanished from the account this runs in.  Stored ids
+# are now read from "LIST VOC WITH @ID LIKE", which prints them as stored; the
+# toggles are gone.  NEVER write one spelling and delete another on a hashed file.
+#
 # DRIVING SD FROM POWERSHELL: input must be PIPED, not redirected, and the pipe
 # prepends a BOM to the first line, so a blank sacrificial line absorbs it.
 # PROJECT_STATUS.md section 6.  Every call is bounded - section 8 records three
@@ -302,20 +310,40 @@ try {
     # install: CT folds the RECORD id as well as the file name (CT:202, one of
     # the 74 sites), so it finds the record whichever case is typed.
     #
-    # WHICH GIVES A BETTER INSTRUMENT THAN THE ONE INTENDED.  CT:215 prints the
-    # id it actually MATCHED, not the one typed, so the echo says which spelling
-    # is stored - and it says it however the query was cased.  Typing the OLD
-    # name and being answered in the new one is the rename, demonstrated and not
-    # inferred.  -cmatch: the whole assertion is the case of the echo.
-    $ctUc = Invoke-SD @('CT VOC $SAVEDLISTS', 'CT VOC $HOLD', 'CT VOC BP')
-    Note 'typing $SAVEDLISTS is answered as $savedlists' $true `
-         ($ctUc -cmatch '(?m)^VOC \$savedlists\s*$')
-    Note 'typing $HOLD is answered as $hold' $true `
-         ($ctUc -cmatch '(?m)^VOC \$hold\s*$')
-    # 19 Aug 26 - BP MOVED THIS CYCLE AND TOOK ITS CONTROL WITH IT, exactly as
-    # the note below said it would.  It is an assertion now, not a control.
-    Note 'typing BP is answered as bp' $true `
-         ($ctUc -cmatch '(?m)^VOC bp\s*$')
+    # WHICH GAVE A BETTER INSTRUMENT THAN THE ONE INTENDED, UNTIL D2.  CT:215
+    # printed the id it MATCHED, not the one typed, so the echo said which
+    # spelling was stored.
+    #
+    # 15 Sep 26 - NOT ANY MORE.  RELEASE_1.1 5 D2 made VOC case insensitive, so
+    # CT's read of the typed name hits the record directly and echoes the
+    # spelling TYPED: every "typing X is answered as x" row failed on b161, a
+    # correct install.  Each id is now two rows: typing the old name REACHES the
+    # record (CT prints it, no 2108), and the id is STORED lower, read from
+    # "LIST VOC WITH @ID LIKE" - which scans and prints the id as stored
+    # (measured 15 Sep 2026: LIKE "$HOLD" listed $hold, @ID = "$HOLD" listed
+    # $HOLD).  -cmatch on the row is the assertion.
+    function Test-Reached([string]$text, [string]$typed) {
+        return (($text -match ('(?m)^VOC ' + [regex]::Escape($typed) + '\s*$')) -and
+                ($text -notmatch ("Record '" + [regex]::Escape($typed) + "' not found")))
+    }
+    function Test-StoredAs([string]$text, [string]$stored, [string]$other) {
+        return (($text -cmatch ('(?m)^' + [regex]::Escape($stored) + '\s{2,}')) -and
+                ($text -cnotmatch ('(?m)^' + [regex]::Escape($other) + '\s{2,}')))
+    }
+    function Get-LikeQuery([string[]]$ids) {
+        return ('LIST VOC WITH ' + (($ids | ForEach-Object { '@ID LIKE "' + $_ + '"' }) -join ' OR '))
+    }
+    function Note-Pairs($text, $pairs, [string]$prefix) {
+        foreach ($p in $pairs) {
+            Note ("{0}typing {1} reaches the record" -f $prefix, $p.U) $true (Test-Reached $text $p.U)
+            Note ("{0}{1} is stored as {2}" -f $prefix, $p.U, $p.L) $true (Test-StoredAs $text $p.L $p.U)
+        }
+    }
+    # 19 Aug 26 - BP MOVED THIS CYCLE AND TOOK ITS CONTROL WITH IT.  It is an
+    # assertion now, not a control.
+    $ucPairs = @(@{U='$SAVEDLISTS'; L='$savedlists'}, @{U='$HOLD'; L='$hold'}, @{U='BP'; L='bp'})
+    $ctUc = Invoke-SD (@($ucPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($ucPairs | ForEach-Object { $_.L })))
+    Note-Pairs $ctUc $ucPairs ''
     # 19 Aug 26 - THE TEN F/Q FILE POINTERS MOVED, 5.12 (b).  Same instrument:
     # type the OLD upper-case id and read which spelling CT says it matched.
     # VOC is the one worth naming - DELETEF bans it, CNAME, CREATEF, SHOW and
@@ -327,27 +355,21 @@ try {
     # ACCOUNTS, MESSAGES, QFILE and OS.USERS are in voc_template ONLY, so in
     # DON's account they do not exist and never did - "Record not found" is the
     # right answer there, not evidence of anything.  Ask each one where it lives.
-    $ctFq = Invoke-SD @('CT VOC VOC', 'CT VOC NEWVOC', 'CT VOC SYSCOM',
-                        'CT VOC DICT.DICT', 'CT VOC MD', 'CT VOC SD.ACCOUNTS')
-    foreach ($p in @(@{U='VOC';         L='voc'},
-                     @{U='NEWVOC';      L='newvoc'},
-                     @{U='SYSCOM';      L='syscom'},
-                     @{U='DICT.DICT';   L='dict.dict'},
-                     @{U='MD';          L='md'},
-                     @{U='SD.ACCOUNTS'; L='sd.accounts'})) {
-        Note ("typing {0} is answered as {1}" -f $p.U, $p.L) $true `
-             ($ctFq -cmatch ('(?m)^VOC ' + [regex]::Escape($p.L) + '\s*$'))
-    }
+    $fqPairs = @(@{U='VOC';         L='voc'},
+                 @{U='NEWVOC';      L='newvoc'},
+                 @{U='SYSCOM';      L='syscom'},
+                 @{U='DICT.DICT';   L='dict.dict'},
+                 @{U='MD';          L='md'},
+                 @{U='SD.ACCOUNTS'; L='sd.accounts'})
+    $ctFq = Invoke-SD (@($fqPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($fqPairs | ForEach-Object { $_.L })))
+    Note-Pairs $ctFq $fqPairs ''
 
-    $ctSys = Invoke-SD @('LOGTO SDSYS', 'CT VOC ACCOUNTS', 'CT VOC MESSAGES',
-                         'CT VOC QFILE', 'CT VOC OS.USERS')
-    foreach ($p in @(@{U='ACCOUNTS'; L='accounts'},
-                     @{U='MESSAGES'; L='messages'},
-                     @{U='QFILE';    L='qfile'},
-                     @{U='OS.USERS'; L='os.users'})) {
-        Note ("SDSYS: typing {0} is answered as {1}" -f $p.U, $p.L) $true `
-             ($ctSys -cmatch ('(?m)^VOC ' + [regex]::Escape($p.L) + '\s*$'))
-    }
+    $sysPairs = @(@{U='ACCOUNTS'; L='accounts'},
+                  @{U='MESSAGES'; L='messages'},
+                  @{U='QFILE';    L='qfile'},
+                  @{U='OS.USERS'; L='os.users'})
+    $ctSys = Invoke-SD (@('LOGTO SDSYS') + @($sysPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($sysPairs | ForEach-Object { $_.L })))
+    Note-Pairs $ctSys $sysPairs 'SDSYS: '
     # AND THE OTHER HALF OF THAT SPLIT IS ITSELF AN ASSERTION: those four are
     # administrative and must NOT have arrived in an ordinary account's VOC.
     Note 'ACCOUNTS is absent from the account VOC, as it always was' $true `
@@ -363,9 +385,9 @@ try {
     Note 'control: SD.ACCOUNTS field 2 is still SDSYS' $true ($ctQ -cmatch '(?m)^\s*2:\s*SDSYS\s*$')
 
     # $COMMAND.STACK MOVED ON 19 AUG, so it is an assertion now, not the control.
-    $ctCs = Invoke-SD @('CT VOC $COMMAND.STACK')
-    Note 'typing $COMMAND.STACK is answered as $command.stack' $true `
-         ($ctCs -cmatch '(?m)^VOC \$command\.stack\s*$')
+    $csPairs = @(@{U='$COMMAND.STACK'; L='$command.stack'})
+    $ctCs = Invoke-SD @('CT VOC $COMMAND.STACK', (Get-LikeQuery @('$command.stack')))
+    Note-Pairs $ctCs $csPairs ''
 
     # THE CONTROL, AND IT IS NO LONGER A SHIPPED ID - it is a record this test
     # makes for itself.  $HOLD was the control until 18 Aug, BP until 19 Aug and
@@ -397,11 +419,14 @@ end
         $ctlRun = Invoke-SD @("BASIC bp $ctlProg", "RUN bp $ctlProg")
         Note 'control: the test wrote its own UPPER-case VOC record' $true ($ctlRun -match 'CTL=OK')
 
-    # Typed in LOWER case and answered in UPPER: the fold reaches it, and the
-    # stored id is untouched.  A sweep would have taken this with it.
-        $ctCtl = Invoke-SD @("CT VOC $($ctlName.ToLower())")
-        Note 'control: an UPPER-case id typed lower is answered UPPER' $true `
-             ($ctCtl -cmatch ('(?m)^VOC ' + [regex]::Escape($ctlName) + '\s*$'))
+    # Typed in LOWER case it is reached, and the stored id is untouched.  A
+    # sweep would have taken this with it.  15 Sep 26 - the stored id is read
+    # from LIKE's row, not CT's echo (see the note on the rows above).
+        $ctCtl = Invoke-SD @("CT VOC $($ctlName.ToLower())", (Get-LikeQuery @($ctlName.ToLower())))
+        Note 'control: an UPPER-case id the test wrote is reached typed lower' $true `
+             (Test-Reached $ctCtl $ctlName.ToLower())
+        Note 'control: and it is still stored UPPER - nothing lower-cased it' $true `
+             (Test-StoredAs $ctCtl $ctlName $ctlName.ToLower())
         $null = Invoke-SD @("DELETE VOC $ctlName")
         foreach ($d in @($ctlBp[0].FullName, (Join-Path $acctDir 'BP.OUT'))) {
             $q = Join-Path $d $ctlProg
@@ -484,284 +509,83 @@ end
 
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 5. AN ACCOUNT CREATED BEFORE THE RENAME STILL WORKS =================='
-    Write-Output '  The no-migration claim, and it is the one that could break every account'
-    Write-Output '  that already exists.  GPL.BP now opens the literal "$savedlists"; those'
-    Write-Output '  accounts hold $SAVEDLISTS, and nothing upgrades them.  What makes them'
-    Write-Output '  keep working is _VOC_REF folding UP.  This renames the id back to the'
-    Write-Output '  old spelling, drives SAVE.LIST/GET.LIST through it, and restores it.'
-    Write-Output '  A failure part-way leaves the account on $SAVEDLISTS - which is exactly'
-    Write-Output '  the state this section says works - so the failure mode is benign.'
-
-    $tog     = 'ZZSVTOGL'
-    $oldList = ('ZZO' + $Tag).ToUpper()
-    $oldRec  = Join-Path $acctDir ('$svlists\' + $oldList)
-    $bp5     = @(Get-ChildItem -LiteralPath $acctDir -Directory |
-                 Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
-    if ($bp5.Count -ne 1) {
-        Note 'section 5 could run (bp directory found)' $true $false
-    } else {
-        # A PROGRAM, because no verb renames a VOC record in place.  It TOGGLES,
-        # so one file both breaks the account and puts it back and there is one
-        # thing to delete afterwards.  Single-quoted here-string: every $ in it
-        # is SD source, not PowerShell.
-        $togSrc = @'
-* ZZSVTOGL - written by verify-lcnames.ps1.  Safe to delete.
-* Moves the saved-list VOC id between its two spellings, whichever way round it
-* currently is, and says which way it went.
-   open 'VOC' to voc.f else stop
-   read rec from voc.f, '$savedlists' then
-      write rec to voc.f, '$SAVEDLISTS'
-      delete voc.f, '$savedlists'
-      print 'MOVED=UP'
-   end else
-      read rec from voc.f, '$SAVEDLISTS' then
-         write rec to voc.f, '$savedlists'
-         delete voc.f, '$SAVEDLISTS'
-         print 'MOVED=DOWN'
-      end else
-         print 'MOVED=NONE'
-      end
-   end
-end
-'@
-        [IO.File]::WriteAllText((Join-Path $bp5[0].FullName $tog),
-                                ($togSrc -replace "`r`n", "`n"),
-                                (New-Object Text.UTF8Encoding $false))
-
-        if (Test-Path -LiteralPath $oldRec) { Remove-Item -LiteralPath $oldRec -Force }
-
-        $up = Invoke-SD @("BASIC bp $tog", "RUN bp $tog")
-        Note 'the id was renamed back to $SAVEDLISTS' $true ($up -match 'MOVED=UP')
-        if ($up -notmatch 'MOVED=UP') {
-            Write-Output '  --- SD said: ---'
-            Write-Output $up
-        } else {
-            # THE MEASUREMENT.  SAVELST's open is the literal "$savedlists", so
-            # only the upward fold can reach an id spelled $SAVEDLISTS.  The
-            # record arriving on disk is what says the right file was opened.
-            $old = Invoke-SD @('SELECT VOC', ('SAVE.LIST ' + $oldList),
-                               ('GET.LIST ' + $oldList))
-            Note 'SAVE.LIST reached the upper-case id' $true (Test-Path -LiteralPath $oldRec)
-            Note 'GET.LIST read it back'               $false ($old -match 'not found')
-            Note 'no open error was reported'          $false ($old -match 'opening \$savedlists')
-            Write-Output '  --- SAVE.LIST/GET.LIST said: ---'
-            Write-Output $old
-        }
-
-        # RESTORE, whether or not anything above passed.
-        $down = Invoke-SD @("RUN bp $tog")
-        Note 'the id was restored to $savedlists' $true ($down -match 'MOVED=DOWN')
-        Note 'and CT VOC $savedlists answers again' $false `
-             ((Invoke-SD @('CT VOC $savedlists')) -match 'not found')
-        if ($down -notmatch 'MOVED=DOWN') {
-            Write-Output '  --- SD said: ---'
-            Write-Output $down
-        }
-
-        Remove-Item -LiteralPath (Join-Path $bp5[0].FullName $tog) -Force -ErrorAction SilentlyContinue
-        if (Test-Path -LiteralPath $oldRec) { Remove-Item -LiteralPath $oldRec -Force }
-    }
+    Write-Output '=== 5. RETIRED 15 Sep 2026: AN ACCOUNT CREATED BEFORE THE RENAME ========='
+    Write-Output '  Sections 5, 5a and 5b renamed a shipped VOC id back to its old upper'
+    Write-Output '  spelling with "write UPPER, delete lower", measured through it, and'
+    Write-Output '  renamed it back.  RELEASE_1.1 5 D2 made VOC case insensitive, so the'
+    Write-Output '  delete removed the ONLY record: b161 left $savedlists, $hold and'
+    Write-Output '  $command.stack missing from the account this runs in (put back by'
+    Write-Output '  hand 15 Sep 2026).  A lower/upper pair cannot exist under D2, and'
+    Write-Output '  section 4 already reaches the one record typed either way.  What is'
+    Write-Output '  kept is behaviour on the SHIPPED ids: _NEXTPTR (5a), the stack (5b).'
+    # ***DO NOT BRING A TOGGLE BACK.***  Writing one spelling and deleting another
+    # on a case-insensitive file deletes the record - measured 15 Sep 2026 on a
+    # scratch file (write TYPE, write type, delete TYPE: 0 records).  This test
+    # runs in the owner's own account.  Owner's ruling: retire and replace.
 
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 5a. THE SAME CLAIM FOR $hold, WHICH MOVED THIS CYCLE ================='
-    Write-Output '  GPL.BP now opens the literal "$hold" in CLEANAC, SPVIEW, MICRO, _PRFILE'
-    Write-Output '  and _NEXTPTR.  An account created before this holds $HOLD.  Same method:'
-    Write-Output '  rename the id back, measure, restore.  A failure part-way leaves the'
-    Write-Output '  account on $HOLD, which is the state this section says works.'
-    Write-Output '  NOT the SETPTR check in section 4 - that one never touches the VOC.'
-    Write-Output '  to_file.c builds a RELATIVE path, so it reaches $hold whatever the VOC'
-    Write-Output '  says, and would pass with the record deleted altogether.'
+    Write-Output '=== 5a. _NEXTPTR REACHES DICT $hold THROUGH THE SHIPPED VOC RECORD ======'
+    Write-Output '  GPL.BP opens the literal "$hold" in CLEANAC, SPVIEW, MICRO, _PRFILE and'
+    Write-Output '  _NEXTPTR.  NOT the SETPTR check in section 4 - to_file.c builds a RELATIVE'
+    Write-Output '  path and reaches $hold whatever the VOC says.  AS NEXT goes through'
+    Write-Output '  _NEXTPTR, which opens DICT "$hold" - field 3 of the VOC record.'
+    Write-Output '  15 Sep 2026: the rename toggle this section had is retired (see 5).'
 
-    $htog    = 'ZZHDTOGL'
-    $hprobe  = 'ZZHDOPEN'
     $nextRec = ('ZZN' + $Tag).ToUpper()
-    $bph     = @(Get-ChildItem -LiteralPath $acctDir -Directory |
-                 Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
-    if ($bph.Count -ne 1) {
-        Note 'section 5a could run (bp directory found)' $true $false
+    $holdDir = @(Get-ChildItem -LiteralPath $acctDir -Directory |
+                 Where-Object { $_.Name -ieq '$hold' } | Select-Object -First 1)
+    if ($holdDir.Count -ne 1) {
+        Note 'section 5a could run ($hold directory found)' $true $false
     } else {
-        # Two programs, both single-quoted here-strings: every $ in them is SD
-        # source, not PowerShell.  The toggle is the same shape as section 5's.
-        $htogSrc = @'
-* ZZHDTOGL - written by verify-lcnames.ps1.  Safe to delete.
-* Moves the hold-file VOC id between its two spellings, whichever way round it
-* currently is, and says which way it went.
-   open 'VOC' to voc.f else stop
-   read rec from voc.f, '$hold' then
-      write rec to voc.f, '$HOLD'
-      delete voc.f, '$hold'
-      print 'MOVED=UP'
-   end else
-      read rec from voc.f, '$HOLD' then
-         write rec to voc.f, '$hold'
-         delete voc.f, '$HOLD'
-         print 'MOVED=DOWN'
-      end else
-         print 'MOVED=NONE'
-      end
-   end
-end
-'@
-        # THE DIRECT MEASUREMENT: the hard-coded literal all five of those
-        # programs use, on its own, with nothing else in the way.
-        $hprobeSrc = @'
-* ZZHDOPEN - written by verify-lcnames.ps1.  Safe to delete.
-* Opens the hard-coded literal GPL.BP uses, and says whether it arrived.
-   open '$hold' to f then
-      print 'OPENED=YES'
-   end else
-      print 'OPENED=NO'
-   end
-end
-'@
-        foreach ($pair in @(, @($htog, $htogSrc)) + @(, @($hprobe, $hprobeSrc))) {
-            [IO.File]::WriteAllText((Join-Path $bph[0].FullName $pair[0]),
-                                    ($pair[1] -replace "`r`n", "`n"),
-                                    (New-Object Text.UTF8Encoding $false))
-        }
+        # THE FAILURE IS SILENT, AND THAT IS WHY THE SUFFIX IS THE INSTRUMENT:
+        # _NEXTPTR presets seqno to '0' and only a successful open replaces it
+        # with a four-digit number, so a lookup that missed writes ZZN..._0 and a
+        # lookup that hit writes ZZN..._0001.
+        Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
+            Where-Object { $_.Name -like ($nextRec + '_*') } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
 
-        $hup = Invoke-SD @("BASIC bp $htog", "BASIC bp $hprobe", "RUN bp $htog")
-        Note 'the id was renamed back to $HOLD' $true ($hup -match 'MOVED=UP')
-        if ($hup -notmatch 'MOVED=UP') {
-            Write-Output '  --- SD said: ---'
-            Write-Output $hup
-        } else {
-            $opened = Invoke-SD @("RUN bp $hprobe")
-            Note 'open "$hold" reached the upper-case id' $true ($opened -match 'OPENED=YES')
-            Write-Output '  --- the probe said: ---'
-            Write-Output $opened
+        $nxt = Invoke-SD @(('SETPTR 1,132,60,0,0,3,AS NEXT ' + $nextRec + ',BRIEF'),
+                           'LIST VOC COPYP LPTR 1 NO.PAGE',
+                           'SP.CLOSE 1')
 
-            # AND A REAL VERB, not only a probe.  SETPTR ... AS NEXT makes
-            # to_file.c call _NEXTPTR, which opens DICT '$hold' - the dictionary,
-            # so it needs field 3 of the record as well as the record itself.
-            # THE FAILURE IS SILENT, AND THAT IS WHY THE SUFFIX IS THE
-            # INSTRUMENT: _NEXTPTR presets seqno to '0' and only a successful
-            # open replaces it with a four-digit number, so a lookup that missed
-            # writes ZZN..._0 and a lookup that hit writes ZZN..._0001.
-            $holdDir = @(Get-ChildItem -LiteralPath $acctDir -Directory |
-                         Where-Object { $_.Name -ieq '$hold' } | Select-Object -First 1)
-            if ($holdDir.Count -eq 1) {
-                Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
-                    Where-Object { $_.Name -like ($nextRec + '_*') } |
-                    Remove-Item -Force -ErrorAction SilentlyContinue
-            }
+        $suffixed = @(Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
+                      Where-Object { $_.Name -like ($nextRec + '_*') } |
+                      Select-Object -ExpandProperty Name)
+        Write-Output ('  hold file now holds: ' + ($suffixed -join '  '))
+        # FOUR DIGITS, NOT THE LITERAL _0001.  $NEXT persists in $hold.dic, so
+        # the second run on one install would legitimately get _0002 and an exact
+        # match would fail on a change that is working.  The discriminator is the
+        # WIDTH: fmt(...,"4'0'R") can only produce four digits, and the preset can
+        # only produce _0.
+        $rxOk = '^' + [regex]::Escape($nextRec) + '_[0-9]{4}$'
+        Note '_NEXTPTR reached DICT $hold' 1 `
+             @($suffixed | Where-Object { $_ -match $rxOk }).Count
+        Note 'and did not fall back to the unnumbered suffix' 0 `
+             @($suffixed | Where-Object { $_ -ceq ($nextRec + '_0') }).Count
+        Write-Output '  --- SETPTR/LIST/SP.CLOSE said: ---'
+        Write-Output $nxt
 
-            $nxt = Invoke-SD @(('SETPTR 1,132,60,0,0,3,AS NEXT ' + $nextRec + ',BRIEF'),
-                               'LIST VOC COPYP LPTR 1 NO.PAGE',
-                               'SP.CLOSE 1')
-
-            $suffixed = @()
-            if ($holdDir.Count -eq 1) {
-                $suffixed = @(Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
-                              Where-Object { $_.Name -like ($nextRec + '_*') } |
-                              Select-Object -ExpandProperty Name)
-            }
-            Write-Output ('  hold file now holds: ' + ($suffixed -join '  '))
-            # FOUR DIGITS, NOT THE LITERAL _0001.  $NEXT persists in $hold.dic,
-            # so the second run on one install would legitimately get _0002 and
-            # an exact match would fail on a change that is working.  The
-            # discriminator is the WIDTH: fmt(...,"4'0'R") can only produce four
-            # digits, and the preset can only produce _0.
-            $rxOk = '^' + [regex]::Escape($nextRec) + '_[0-9]{4}$'
-            Note '_NEXTPTR reached DICT $hold through the fold' 1 `
-                 @($suffixed | Where-Object { $_ -match $rxOk }).Count
-            Note 'and did not fall back to the unnumbered suffix' 0 `
-                 @($suffixed | Where-Object { $_ -ceq ($nextRec + '_0') }).Count
-            Write-Output '  --- SETPTR/LIST/SP.CLOSE said: ---'
-            Write-Output $nxt
-        }
-
-        # RESTORE, whether or not anything above passed.
-        $hdown = Invoke-SD @("RUN bp $htog")
-        Note 'the id was restored to $hold' $true ($hdown -match 'MOVED=DOWN')
-        Note 'and CT VOC $hold answers again' $false `
-             ((Invoke-SD @('CT VOC $hold')) -match 'not found')
-        if ($hdown -notmatch 'MOVED=DOWN') {
-            Write-Output '  --- SD said: ---'
-            Write-Output $hdown
-        }
-
-        foreach ($n in @($htog, $hprobe)) {
-            Remove-Item -LiteralPath (Join-Path $bph[0].FullName $n) -Force -ErrorAction SilentlyContinue
-        }
-        Get-ChildItem -LiteralPath $acctDir -Directory |
-            Where-Object { $_.Name -ieq '$hold' } |
-            ForEach-Object {
-                Get-ChildItem -LiteralPath $_.FullName -Force |
-                    Where-Object { $_.Name -like ($nextRec + '_*') } |
-                    Remove-Item -Force -ErrorAction SilentlyContinue
-            }
+        Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
+            Where-Object { $_.Name -like ($nextRec + '_*') } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
     # -----------------------------------------------------------------------
     Write-Output ''
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 5b. THE COMMAND STACK, WHOSE READERS HAVE NO FOLD ===================='
-    Write-Output '  $COMMAND.STACK became $command.stack on 19 Aug.  CPROC and LOGIN reach it'
-    Write-Output '  by RECORD read, and a record read matches the id exactly - _VOC_REF folds'
-    Write-Output '  a FILE name, not a record id - so both spellings are tried by hand there.'
-    Write-Output '  THE INSTRUMENT IS THE stacks FILE, not the VOC: CPROC writes it only when'
-    Write-Output '  it found the record AND the record is X type, so the file appearing is the'
-    Write-Output '  read having succeeded.'
+    Write-Output '=== 5b. THE COMMAND STACK IS SAVED THROUGH THE SHIPPED VOC RECORD ========'
+    Write-Output '  CPROC and LOGIN reach $command.stack by RECORD read.  THE INSTRUMENT IS'
+    Write-Output '  THE stacks FILE, not the VOC: CPROC writes it only when it found the'
+    Write-Output '  record AND the record is X type, so the file appearing is the read having'
+    Write-Output '  succeeded.  15 Sep 2026: the rename toggle this section had is retired (see 5).'
 
     $stkDir = Join-Path $acctDir 'stacks'
-    $csBp = @(Get-ChildItem -LiteralPath $acctDir -Directory |
-              Where-Object { $_.Name -ieq 'bp' } | Select-Object -First 1)
-    if ($csBp.Count -ne 1) {
-        Note 'section 5b could run (bp directory found)' $true $false
-    } else {
-        $csTog = ('ZZCSTOG' + $Tag).ToUpper()
-        $csTogSrc = @'
-* ZZCSTOG - flip the command-stack VOC id between the two spellings.
-   open 'voc' to vf then
-      read rec from vf, '$command.stack' then
-         write rec to vf, '$COMMAND.STACK'
-         delete vf, '$command.stack'
-         print 'MOVED=UP'
-      end else
-         read rec from vf, '$COMMAND.STACK' then
-            write rec to vf, '$command.stack'
-            delete vf, '$COMMAND.STACK'
-            print 'MOVED=DOWN'
-         end else
-            print 'MOVED=NONE'
-         end
-      end
-   end
-end
-'@
-        [IO.File]::WriteAllText((Join-Path $csBp[0].FullName $csTog),
-                                ($csTogSrc -replace "`r`n", "`n"),
-                                (New-Object Text.UTF8Encoding $false))
-        $null = Invoke-SD @("BASIC bp $csTog")
-
-        # (i) as shipped - the lower-case id
-        if (Test-Path -LiteralPath $stkDir) { Remove-Item -LiteralPath $stkDir -Recurse -Force }
-        $null = Invoke-SD @('COUNT VOC')
-        Note 'the stack is saved with the shipped lower-case id' $true (Test-Path -LiteralPath $stkDir)
-
-        # (ii) an account from before the rename
-        $up = Invoke-SD @("RUN bp $csTog")
-        Note 'the id was renamed back to $COMMAND.STACK' $true ($up -match 'MOVED=UP')
-        if (Test-Path -LiteralPath $stkDir) { Remove-Item -LiteralPath $stkDir -Recurse -Force }
-        $null = Invoke-SD @('COUNT VOC')
-        Note 'a pre-rename account still saves its stack' $true (Test-Path -LiteralPath $stkDir)
-
-        # (iii) put it back, and prove the toggle really moved it both times
-        $down = Invoke-SD @("RUN bp $csTog")
-        Note 'the id was restored to $command.stack' $true ($down -match 'MOVED=DOWN')
-        $csBack = Invoke-SD @('CT VOC $COMMAND.STACK')
-        Note 'and CT answers in the lower-case spelling again' $true `
-             ($csBack -cmatch '(?m)^VOC \$command\.stack\s*$')
-
-        foreach ($d in @($csBp[0].FullName, (Join-Path $acctDir 'BP.OUT'))) {
-            $q = Join-Path $d $csTog
-            if (Test-Path -LiteralPath $q) { Remove-Item -LiteralPath $q -Force }
-        }
-    }
+    if (Test-Path -LiteralPath $stkDir) { Remove-Item -LiteralPath $stkDir -Recurse -Force }
+    $null = Invoke-SD @('COUNT VOC')
+    Note 'the stack is saved with the shipped lower-case id' $true (Test-Path -LiteralPath $stkDir)
 
     Write-Output '=== 6. COPYP, which rides this cycle and is unrelated ===================='
     Write-Output '  VOC_TEMPLATE/COPYP field 1 held the description where the type code'
@@ -972,15 +796,14 @@ end
         $rd9 = ('ZZR' + $Tag).ToUpper()
         $up9 = ('ZZU' + $Tag).ToUpper()
 
-        # THE READER USES EXACT-MATCH READS, and that is the whole instrument.
-        # CT would fold and answer for any spelling; a read of a VOC record does
-        # not fold at all, so these three say which id is actually stored.
+        # THE READER USED EXACT-MATCH READS until 15 Sep 2026.  RELEASE_1.1 5 D2
+        # made a read of VOC case insensitive, so 'bp.OUT' and 'BP.OUT' both found
+        # bp.out (b161: MIXED=YES and UPPER=YES on a correct install).  The stored
+        # id is now read from "LIST VOC WITH @ID LIKE", which prints it as stored
+        # (measured the same day: LIKE "bp.OUT" listed bp.out).
         $rd9Src = @'
 program zzreadout
-   open 'VOC' to voc.f else stop
-   read r from voc.f, 'bp.out' then print 'LOWER=YES' else print 'LOWER=NO'
-   read r from voc.f, 'bp.OUT' then print 'MIXED=YES' else print 'MIXED=NO'
-   read r from voc.f, 'BP.OUT' then print 'UPPER=YES' else print 'UPPER=NO'
+   print 'RAN=OK'
 end
 '@
         [IO.File]::WriteAllText((Join-Path $bp9[0].FullName $rd9),
@@ -989,16 +812,17 @@ end
 
         # Compiling it IS the measurement: this is the compile that goes through
         # the create branch, typed in LOWER case against a VOC id that is now bp.
-        $mk9 = Invoke-SD @("BASIC bp $rd9", "RUN bp $rd9")
-        Write-Output '  --- BASIC bp / RUN bp said: ---'
+        $mk9 = Invoke-SD @("BASIC bp $rd9", "RUN bp $rd9", 'LIST VOC WITH @ID LIKE "bp.out"')
+        Write-Output '  --- BASIC bp / RUN bp / LIST VOC WITH @ID LIKE said: ---'
         Write-Output $mk9
 
+        Note 'the probe compiled and ran' $true ($mk9 -match 'RAN=OK')
         Note 'BASIC bp <x> created the object file as bp.out' $true `
-             ($mk9 -match 'LOWER=YES')
-        Note 'and NOT as the unreachable mixed-case bp.OUT'   $false `
-             ($mk9 -match 'MIXED=YES')
+             ($mk9 -cmatch '(?m)^bp\.out\s{2,}')
+        Note 'and NOT as the mixed-case bp.OUT'               $false `
+             ($mk9 -cmatch '(?m)^bp\.OUT\s{2,}')
         Note 'and not as BP.OUT either'                       $false `
-             ($mk9 -match 'UPPER=YES')
+             ($mk9 -cmatch '(?m)^BP\.OUT\s{2,}')
 
         # THE REGRESSION ITSELF, and it is a different assertion from the one
         # above: the failure was never in the compile that made the file, it was
@@ -1031,17 +855,14 @@ end
     Write-Output '=== 10. RELEASE_1.1 5 STAGE 1, 14 Sep 2026 ================================='
 
     # 10a. THE LAST FOUR UPPER-CASE VOC IDS NEWVOC SHIPPED - $ACC, $MAP, $RELEASE,
-    # SD.VOCLIB - are $acc, $map, $release, sd.voclib.  Section 3's instrument:
-    # CT folds the record id and prints the id it MATCHED, so typing the old name
-    # and being answered in the new one is the rename.  -cmatch is the assertion.
-    # (An account made BEFORE the rename is verify-tiers.ps1 section 5b's job: it
-    # plants the upper ids and runs UPDATE.ACCOUNTS, which needs an account.)
-    $ct10 = Invoke-SD @('CT VOC $ACC', 'CT VOC $MAP', 'CT VOC $RELEASE', 'CT VOC SD.VOCLIB')
-    foreach ($p in @(@{U='$ACC'; L='$acc'}, @{U='$MAP'; L='$map'},
-                     @{U='$RELEASE'; L='$release'}, @{U='SD.VOCLIB'; L='sd.voclib'})) {
-        Note ("typing {0} is answered as {1}" -f $p.U, $p.L) $true `
-             ($ct10 -cmatch ('(?m)^VOC ' + [regex]::Escape($p.L) + '\s*$'))
-    }
+    # SD.VOCLIB - are $acc, $map, $release, sd.voclib.  Section 3's instrument,
+    # as it is since 15 Sep 2026: typing the old name reaches the record, and
+    # LIKE's row shows it stored lower.  (An account made BEFORE the rename is
+    # verify-tiers.ps1 section 5b's job, which needs an account of its own.)
+    $p10 = @(@{U='$ACC'; L='$acc'}, @{U='$MAP'; L='$map'},
+             @{U='$RELEASE'; L='$release'}, @{U='SD.VOCLIB'; L='sd.voclib'})
+    $ct10 = Invoke-SD (@($p10 | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($p10 | ForEach-Object { $_.L })))
+    Note-Pairs $ct10 $p10 ''
     Write-Output '  --- CT VOC said: ---'
     Write-Output $ct10
 

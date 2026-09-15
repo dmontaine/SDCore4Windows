@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 15 Sep 26 Windows port - RELEASE_1.1 5 D2: the upper-case rename below runs
+*           only on a case-sensitive VOC.  On a NOCASE one it deleted the entry
+*           it had just written, so a second CATALOG ... LOCAL left none.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 3a (owner: "CATALOG stores
 *           lower").  Call names are lower case, the runtime's canonical case.
 *           A local catalogue entry made before this, under the upper-case VOC
@@ -348,8 +351,14 @@ catalogue.program:
 *        14 Sep 26 - stage 3a.  An entry catalogued before call names went lower
 *        is under the upper-case VOC id.  It is found here and deleted once the
 *        lower-case one is written, so the entry is renamed, not twinned.
+*        15 Sep 26 - ONLY ON A CASE-SENSITIVE VOC (RELEASE_1.1 5 D2).  On a
+*        case-insensitive one the upcase read below hits the lower-case entry
+*        ITSELF, so the write updated it and the delete removed it: measured
+*        15 Sep 2026, a second CATALOG bp zzcatp LOCAL printed 3029 and left no
+*        entry.  There the exact read of call.name already finds an old upper
+*        entry, and writing over it keeps the catalogue whole.
          old.local.id = ''
-         if upcase(call.name) # call.name then
+         if upcase(call.name) # call.name and not(fileinfo(@voc, FL$NOCASE)) then
             readu old.voc.rec from @voc, upcase(call.name) then
                if upcase(old.voc.rec[1,1]) = 'V' and old.voc.rec<2> = 'CS' then
                   old.local.id = upcase(call.name)

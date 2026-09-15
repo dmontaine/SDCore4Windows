@@ -208,11 +208,18 @@ try {
     # --- leg 2b: CD XTYPE - CD's own lookup of the item name -----------------
     Write-Host ''
     Write-Host '--- leg 2b: CD XTYPE - the item name typed in upper case ----------------'
-    $cd = Invoke-SD @("CD $File XTYPE")
-    Show "CD $File XTYPE" $cd
+    # 15 Sep 26 - RELEASE_1.1 5 D2: every hashed file is case insensitive, so
+    # CD's read of XTYPE hits xtype directly and CD echoes 'Compiling XTYPE'
+    # as typed (b161).  The spelling of that line is no longer the witness; the
+    # stored id is, read from LIST DICT's rows (-cmatch) after the compile wrote
+    # the object back.
+    $cd = Invoke-SD @("CD $File XTYPE", "LIST DICT $File")
+    Show "CD $File XTYPE, LIST DICT $File" $cd
     Row 'leg 2b: CD found the item typed in upper case (no "not found")' ($cd.Text -notmatch "Source record 'XTYPE' not found") 'CD did not fold the name'
-    Row "leg 2b: CD compiled it under its own id ('Compiling xtype', no error)" `
-        (($cd.Text -cmatch '(?m)^Compiling xtype\s*$') -and ($cd.Text -notmatch 'is not defined|Compilation error')) 'no clean Compiling line naming xtype'
+    Row "leg 2b: CD compiled it ('Compiling xtype' in any case, no error)" `
+        (($cd.Text -match '(?m)^Compiling xtype\s*$') -and ($cd.Text -notmatch 'is not defined|Compilation error')) 'no clean Compiling line naming xtype'
+    Row "leg 2b: the item is still stored as 'xtype' and not as 'XTYPE'" `
+        (($cd.Text -cmatch '(?m)^xtype\s{2,}I\s') -and ($cd.Text -cnotmatch '(?m)^XTYPE\s{2,}')) 'LIST DICT does not show exactly one row, xtype'
 
     # --- leg 3: the compiled I-type evaluates ---------------------------------
     Write-Host ''

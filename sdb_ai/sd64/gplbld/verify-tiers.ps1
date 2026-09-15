@@ -644,18 +644,32 @@ Write-Output '=== 5b. an account holding the OLD upper-case ids is renamed, not 
 # and wrote lower-case twins beside them; LOGIN's exact read of $RELEASE would
 # also have ended every such account's next session with 5028.
 #
-# THE OLD ACCOUNT IS MADE, NOT FOUND: each lower record is copied to its upper
-# id and the lower one deleted, in the administrator account, and the precondition
-# row proves that state before anything is measured.  THEN A NEW SESSION LOGTOs
-# IT - which is LOGIN's $RELEASE read - and runs UPDATE.ACCOUNTS.
+# 15 Sep 26 - THE PLANT IS REBUILT FOR RELEASE_1.1 5 D2 (owner: "retire and
+# replace").  It copied each lower record to its upper id, then deleted the
+# lower one.  Under D2 VOC is case insensitive: the COPY answered "Record '$ACC'
+# already exists" and the DELETE removed the only record (b161), so the account
+# held none of the four and 5b measured nothing.  A lower/upper PAIR cannot
+# exist under D2, but an account converted to NOCASE while still holding the old
+# spellings can: one record each, stored upper.  That is what is planted now -
+# DELETE FIRST, then COPY back under the upper id through a scratch id, so no
+# step deletes a record it has just written.  THEN A NEW SESSION LOGTOs IT -
+# LOGIN's $release read - and runs UPDATE.ACCOUNTS.
 #
-# THE INSTRUMENT IS THE @ID COLUMN OF "LIST VOC WITH @ID = ...", read with
-# -cmatch.  The selection itself FOLDS (b155: "$acc" and "$ACC" both selected
-# the one record $ACC, so it was listed twice), but the row prints the id the
-# record is STORED under, which is what is compared.  Listed twice is expected.
+# AND WHAT IS ASSERTED CHANGED WITH IT.  update.voc's exact read (LOGIN:1689)
+# now hits the upper record, so it updates it in place and deletes nothing: the
+# old spelling STAYS, which is cosmetic.  The rows require NO LOSS - each of the
+# four stored exactly once in some case, COUNT VOC unchanged.  The order that
+# WOULD lose it - write the new spelling, delete the old - was measured 15 Sep
+# 2026 on a scratch NOCASE file (write TYPE, write type, delete TYPE: 0
+# records); update.voc takes it only when the exact read misses, which D2 rules
+# out.  WRITE_INSTALL_DICTS took it unconditionally; see verify-dictrename.
+#
+# THE INSTRUMENT IS THE @ID COLUMN OF "LIST VOC WITH @ID LIKE ...", read with
+# -cmatch.  LIKE scans and prints the id as STORED; "@ID =" is a keyed read and
+# prints the spelling asked for (both measured 15 Sep 2026 on $hold).
 $renPairs = @(@{L='$acc'; U='$ACC'}, @{L='$map'; U='$MAP'},
               @{L='$release'; U='$RELEASE'}, @{L='sd.voclib'; U='SD.VOCLIB'})
-$idQuery  = 'LIST VOC WITH ' + (($renPairs | ForEach-Object { '@ID = "' + $_.L + '" OR @ID = "' + $_.U + '"' }) -join ' OR ')
+$idQuery  = 'LIST VOC WITH ' + (($renPairs | ForEach-Object { '@ID LIKE "' + $_.L + '"' }) -join ' OR ')
 function Get-StoredIds($text) {
     $got = @()
     foreach ($p in $renPairs) {
@@ -671,15 +685,25 @@ function Get-StoredIds($text) {
 # UPDATE.ACCOUNTS outside SDSYS is LOGIN mode 2: this account only, no prompt.
 $prog  = $Tiers[2]
 $plant = @(('LOGTO ' + $prog.Name.ToUpper()))
-foreach ($p in $renPairs) { $plant += ('COPY FROM VOC ' + $p.L + ',' + $p.U); $plant += ('DELETE VOC ' + $p.L) }
+$tmpN  = 0
+foreach ($p in $renPairs) {
+    $tmpN++
+    $tmp = 'zzt5btmp' + $tmpN
+    $plant += ('COPY FROM VOC ' + $p.L + ',' + $tmp)
+    $plant += ('DELETE VOC ' + $p.L)
+    $plant += ('COPY FROM VOC ' + $tmp + ',' + $p.U)
+    $plant += ('DELETE VOC ' + $tmp)
+}
 $plant += $idQuery
+$plant += 'COUNT VOC'
 $text = Invoke-SD $plant
-Show-Raw 'plant the old upper-case ids' $text
+Show-Raw 'plant the old upper-case ids (one record each, no twin)' $text
 $before = Get-StoredIds $text
 Write-Output ('  stored before UPDATE.ACCOUNTS: ' + ($before -join ' '))
 Note '5b precondition: LIST reported a count' $true ($text -match '(?m)^\d+ record\(s\) listed')
 Note '5b precondition: the account holds exactly the four upper ids' 'U4' `
      $(if ((@($before | Where-Object { $_ -cmatch '[A-Z]' }).Count -eq 4) -and ($before.Count -eq 4)) { 'U4' } else { ($before -join ' ') })
+Note '5b precondition: the plant lost nothing (COUNT VOC is the administrator count)' $prog.Count (Get-VocCount $text)
 
 $text = Invoke-SD @(('LOGTO ' + $prog.Name.ToUpper()), 'WHO', 'UPDATE.ACCOUNTS', $idQuery, 'COUNT VOC')
 Show-Raw 'LOGTO, UPDATE.ACCOUNTS' $text
@@ -691,9 +715,10 @@ Note '5b: LOGTO into the account did not stop on 5028 ($release VOC record not f
      ($text -match 'VOC record not found')
 Note '5b: the session reached WHO after the LOGTO' $true `
      ($text -match ('(?m)^\d+ ' + [regex]::Escape($prog.Name.ToUpper()) + '\b'))
-Note '5b: after UPDATE.ACCOUNTS the account holds exactly the four lower ids' 'L4' `
-     $(if ((@($after | Where-Object { $_ -cnotmatch '[A-Z]' }).Count -eq 4) -and ($after.Count -eq 4)) { 'L4' } else { ($after -join ' ') })
-Note '5b: COUNT VOC is back to the administrator count (renamed, not added)' $prog.Count (Get-VocCount $text)
+$oncePer = @($renPairs | Where-Object { $pr = $_; @($after | Where-Object { $_ -ieq $pr.L }).Count -eq 1 }).Count
+Note '5b: after UPDATE.ACCOUNTS each of the four is stored exactly once, in either case' 'ONE4' `
+     $(if (($oncePer -eq 4) -and ($after.Count -eq 4)) { 'ONE4' } else { ($after -join ' ') })
+Note '5b: COUNT VOC is still the administrator count (nothing added, nothing lost)' $prog.Count (Get-VocCount $text)
 
 # ---------------------------------------------------------------------------
 Write-Output ''

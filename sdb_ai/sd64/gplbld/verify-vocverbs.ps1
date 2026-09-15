@@ -367,12 +367,15 @@ $e5 = $lastSD
 Note 'entry 5 fixture: .S wrote an S-type record' $true `
      (Test-Say $e5 '^[ \t]*001[ \t]+S[ \t]*\r?$') $true
 
-# DECISIVE, AND SUCCESS-ONLY.  5040 names $vocSent in LOWER case after ".D" was
-# typed in UPPER: the only way at.command holds the lower-case name at that
-# point is the downcase read the fix added.  The old code failed both reads and
-# printed nothing here at all.
+# DECISIVE, AND SUCCESS-ONLY.  5040 is reached after ".D" was typed in UPPER for
+# a record stored lower.  The old code failed both reads and printed nothing here
+# at all.
+# 15 Sep 26 - THE PROMPT'S SPELLING IS NO LONGER ASSERTED.  RELEASE_1.1 5 D2
+# made VOC case insensitive, so CPROC's exact read of the typed name hits the
+# lower record first and 5040 echoes 'SDVVB161D' as typed (b161).  The id is
+# still stored lower - the "gone afterwards" row below reads it back lower.
 Note 'entry 5: .D UPPER reached the delete prompt for the lower-case record' $true `
-     (Test-Say $e5 ("Delete VOC record '" + [regex]::Escape($vocSent) + "'")) $true
+     (Test-Say $e5 ("Delete VOC record '(?i:" + [regex]::Escape($vocSent) + ")'")) $true
 
 # Disqualifier: the refusal wording for the name as typed.
 Note 'entry 5: .D UPPER did NOT report the name as not found' $false `
