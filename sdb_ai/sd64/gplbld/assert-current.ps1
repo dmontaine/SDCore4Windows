@@ -432,6 +432,12 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # machine.  ssh-preflight.ps1 ITSELF ships and is NOT on this
                   # list - stage.py:598 records why.
                   'probe-sshpreflight.ps1',
+                  # 15 Sep 26 - interop-account.ps1, the RELEASE_1.1 41 reverse-
+                  # interop helper (a throwaway remote API account + firewall on
+                  # this box).  Listed in the commit that created it, section 7
+                  # step 7's rule.  It creates an account and opens the firewall,
+                  # so it must never ship.
+                  'interop-account.ps1',
                   'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
