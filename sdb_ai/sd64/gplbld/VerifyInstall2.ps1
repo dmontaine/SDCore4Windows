@@ -802,6 +802,13 @@ $steps = @(
     # STEPS, because it builds a case-sensitive fixture with sd -internal and
     # drives an SDSYS session.  NO PREFIX: fixed zztw* ids in SDSYS, removed.
     @{ Name = 'verify-twins.ps1';          P = @{} },
+    # 14 Sep 26 - RELEASE_1.1 5 D2's UPGRADE walk (Handoff 62 item 3).  It builds
+    # case-sensitive files in SDSYS with sd -internal - a clean one, one holding
+    # a twin, an indexed one - plus a NOCASE control, runs the INSTALLED
+    # upgrade-nocase.ps1, and requires the clean one converted, the twin and
+    # indexed ones left whole and named, the control untouched.  ELEVATED, WITH
+    # THE FILE STEPS, for verify-twins' reason.  NO PREFIX: fixed zznu* ids.
+    @{ Name = 'verify-nocaseupgrade.ps1';  P = @{} },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.
     #

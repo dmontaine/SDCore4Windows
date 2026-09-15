@@ -54,6 +54,11 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 14 Sep 26 - AND ON ADDING verify-nocaseupgrade.ps1 to VerifyInstall2 (D2's
+# upgrade walk): 62 verify-*.ps1, 25 named here, 33 in VerifyInstall2, the same
+# four in neither, none in both - counted from the directory and both tables.
+# (verify-twins.ps1's addition, 61 and 32, was not noted here.)
+#
 # 14 Sep 26 - AND ON ADDING verify-callcase.ps1 here (stage 3a): 60 verify-*.ps1,
 # 25 named here, 31 in VerifyInstall2, the same four in neither, none in both.
 #
