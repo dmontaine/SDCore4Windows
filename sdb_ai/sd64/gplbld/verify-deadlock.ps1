@@ -272,8 +272,10 @@ try {
     } else {
         Write-Output ''
         Write-Output ("  NOT REACHED: the probe saw " + (($seen | Select-Object -Unique) -join ' then ') + ", never '(gone)'.")
-        Write-Output '  The killed owner stayed mapped until its lock went with it, so the fixed'
-        Write-Output '  line never ran.  This is not a pass and not a product failure.'
+        Write-Output '  The fixed line never ran.  This is not a pass.  If every probe said "named",'
+        Write-Output '  the killed owner stayed mapped AND its lock stayed held for the whole window'
+        Write-Output '  (RELEASE_1.1_FIXES 37, seen 15 Sep 2026); if the last said "none", the slot'
+        Write-Output '  and the lock were reclaimed together.  Neither reaches "(gone)".'
     }
     $exit = $(if ($fail -gt 0) { 1 } elseif ($gone) { 0 } else { 2 })
 }
