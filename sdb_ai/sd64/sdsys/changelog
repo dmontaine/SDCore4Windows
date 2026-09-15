@@ -11,10 +11,17 @@ while porting from it.
            other is present updates the same record.  This is how it has always
            behaved for the system files (VOC, dictionaries); it now holds for
            every file, including your own.  CREATE.FILE ... CASE is no longer
-           accepted.  When you upgrade, each of your files is converted; if one
-           already holds a pair of ids that differ only by case, that file is
-           left as it was and named, so you can rename or delete one of the two
-           and convert it yourself with CONFIGURE.FILE.
+           accepted.
+
+           When you upgrade, each of your files is converted.  Every file is
+           checked first: if one already holds two ids that differ only by
+           case, it is left exactly as it was rather than losing one of them,
+           and both ids are named in the file nocase-upgrade.log in your SD
+           Core data folder.  Rename or delete one id of each pair listed
+           there, then convert that file yourself with CONFIGURE.FILE NO.CASE.
+           A file with alternate key indexes is also left for you to convert
+           the same way, and named in that log.  Nothing is changed in a file
+           that would lose a record.
 
 14 Sep 26  PROGRAM AND CATALOGUE NAMES ARE LOWER CASE.
 
