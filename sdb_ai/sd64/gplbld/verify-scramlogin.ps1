@@ -5,15 +5,23 @@
 
 .DESCRIPTION
     ONE ELEVATED COMMAND for request types 47 and 48.  It is the only thing
-    that exercises vb.scram.first and vb.scram.final; until it passes they are
-    written and unproven.
+    that exercises vb.scram.first and vb.scram.final's refusals; until it
+    passes they are written and unproven.
 
-    THE CLIENT IS IN THIS FILE, and that is the point.  sdclilib.c does not
-    speak SCRAM until phase 4, so a test that went through the client library
-    would be testing nothing.  The exchange here is built from .NET primitives
-    - PBKDF2, HMAC-SHA256, SHA-256 - against the same RFC as the server, so
-    agreement between the two is agreement between two implementations rather
-    than one implementation agreeing with itself.
+    THE CLIENT IS NOT sdclilib, and that is the point.  A test that went
+    through the client library would be the library agreeing with itself.
+
+    15 Sep 26 - RELEASE_1.1 42.  THE CLIENT IS NOW gplbld/scram-probe.py, NOT
+    .NET CODE IN THIS FILE.  RELEASE_1.1 41 made every API connection TLS 1.3
+    with the login bound to it (RFC 9266 tls-exporter), and .NET's SslStream
+    cannot export that binding, so the TcpClient this file carried could no
+    longer reach the server at all.  The probe is SCRAM from Python's standard
+    library over libssl by ctypes, with no SD code in it - still a second
+    implementation against the same RFC.  Each refusal below is one probe run
+    in a mode that makes the message wrong in exactly one way, and every run's
+    command line and full output is printed.  The Linux port split its
+    verifiers the same way (mailbox 15 Sep 12:15): positives over TLS, the raw
+    plaintext socket kept only as a refusal control.
 
     IT CHANGES THE INSTALLED SYSTEM AND PUTS IT BACK, exactly as
     verify-apiport.ps1 does and for the same reasons: a throwaway account,
@@ -28,12 +36,12 @@
       - two exchanges for one account get different server nonces
       - a captured client-final replayed against a fresh exchange is refused
       - a client-final with no client-first before it is refused
+      - a client-final carrying the wrong channel binding is refused, and so
+        is an unbound 'n,,' header over TLS (41's downgrade)
+      - a connection that does not start TLS gets no ACK
       - every refusal carries the message the handler meant to send, not
         merely a non-zero status
-      - request 24 is REFUSED, and says why.  This check was "request 24 is
-        still accepted" until phase 5 retired the cleartext login; it was
-        inverted rather than deleted, so it is now the proof the old path is
-        gone rather than the proof it survived.
+      - request 24 is REFUSED, and says why.
 
 .PARAMETER Prefix
     Name for the throwaway Windows and SD account.  Use one nobody has used -
@@ -47,8 +55,12 @@
     poking at by hand.  The account still has to be removed with
     DELETE.ACCOUNT afterwards.
 
+.PARAMETER SelfTest
+    The client alone, no server: runs test-scramprobe-units.py, which checks
+    the probe's SCRAM against the RFC 7677 vector and its packets byte for byte.
+
 .EXAMPLE
-    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-scramlogin.ps1 -Prefix sdscram1
+    powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\sd4windows\sdb_ai\sd64\gplbld\verify-scramlogin.ps1 -Prefix sdscram1
 #>
 
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
@@ -75,13 +87,6 @@ $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $SvcName = 'SD'
 $conf    = Join-Path $env:ProgramData 'SD\sd.conf'
 $backup  = $conf + '.before-scramlogin'
-
-# Request types.  APISRVR's dispatch table is the authority; these three are
-# the only ones this script sends.
-$SrvrAccount = 3
-$SrvrLogin   = 24
-$ScramFirst  = 47
-$ScramFinal  = 48
 
 # SCRAM$ITERATIONS in gpl.bp/int$keys.h.  Asserted rather than read, so a
 # change to the cost has to be made deliberately in both places.
@@ -194,244 +199,113 @@ function Start-SD {
 }
 
 # ===========================================================================
-# The wire.  op_tio.c op_readpkt/op_writepkt and sdclilib.c write_packet are
-# the authority for all of this.
+# THE CLIENT: gplbld/scram-probe.py.  15 Sep 26 - RELEASE_1.1 42.
 #
-#   request   [4 byte length][2 byte type][payload]
-#   response  [4 byte length][2 byte server error][4 byte status][text]
+# The wire format, the SCRAM arithmetic and the TLS session are all in the
+# probe; its header documents each mode and the one verdict line each prints.
+# What stays here is running it so that the result can be disagreed with:
+# the exact command line, the password's LENGTH (never the password - it goes
+# in the environment, which does not reach the process list), every line the
+# probe printed, and its exit code.  CLAUDE.md's instrument rule.
 #
-# Length counts itself.  Every number is low byte first regardless of the
-# server platform, which is APISRVR's own START-DESCRIPTION.
+# EVERY MATCH BELOW IS CASE-SENSITIVE AND ANCHORED ON A WHOLE LINE the probe
+# prints only on that path.  The probe echoes its own arguments, so a loose
+# match on a name or a mode would find the echo - the verify-apiidentity
+# Step 3 trap.
 # ===========================================================================
 
-function New-SdConnection([int]$port) {
-    $c = New-Object System.Net.Sockets.TcpClient
-    $c.Connect('127.0.0.1', $port)
-    $c.NoDelay = $true
-    $s = $c.GetStream()
-    $s.ReadTimeout  = 30000
-    $s.WriteTimeout = 30000
+$Probe      = Join-Path $Gplbld 'scram-probe.py'
+$ProbeUnits = Join-Path $Gplbld 'test-scramprobe-units.py'
+$Python     = $null
 
-    # WAIT FOR THE ACK, as OpenSocket() does.  The listener accepts before the
-    # SD process behind it is running, so anything sent earlier is lost; 0x06
-    # is that process announcing itself.
-    $deadline = (Get-Date).AddSeconds(30)
-    do {
-        $b = $s.ReadByte()
-        if ($b -lt 0) { throw 'connection closed before the ACK arrived' }
-        if ((Get-Date) -gt $deadline) { throw 'no ACK within 30 seconds' }
-    } while ($b -ne 6)
-
-    return [pscustomobject]@{
-        Client = $c
-        Stream = $s
-        Sent   = (New-Object System.Collections.Generic.List[byte])
+# Resolves the python the probe runs under, then runs the probe's own unit
+# test with it: the RFC 7677 vector, libssl loading, and the request packets
+# byte for byte.  THE INSTRUMENT IS PROVED BEFORE IT IS BELIEVED - if these
+# come out wrong, nothing this script says about the server means anything.
+# Returns the unit test's exit code.
+function Test-ProbeInstrument {
+    foreach ($f in @($Probe, $ProbeUnits)) {
+        if (-not (Test-Path -LiteralPath $f)) { Refuse "$f is missing - it is the API client this verifier drives." }
     }
+    $cmd = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cmd) { Refuse 'python is not on PATH - scram-probe.py is the API client this verifier drives.' }
+    $script:Python = $cmd.Source
+    Write-Host "   python : $script:Python"
+    Write-Host "   probe  : $Probe"
+    $saved = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $u  = & $script:Python $ProbeUnits 2>&1
+        $uc = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $saved }
+    foreach ($l in @($u)) { Write-Host ('   | ' + ("$l".TrimEnd("`r"))) }
+    Write-Host "   test-scramprobe-units exit $uc"
+    return $uc
 }
 
-function Close-SdConnection($conn) {
-    if ($null -eq $conn) { return }
-    try { $conn.Stream.Close() } catch { }
-    try { $conn.Client.Close() } catch { }
-}
-
-function Send-SdPacket($conn, [int]$type, [byte[]]$payload) {
-    if ($null -eq $payload) { $payload = New-Object byte[] 0 }
-    $pkt = New-Object byte[] (6 + $payload.Length)
-    [BitConverter]::GetBytes([int32]($payload.Length + 6)).CopyTo($pkt, 0)
-    [BitConverter]::GetBytes([int16]$type).CopyTo($pkt, 4)
-    if ($payload.Length -gt 0) { $payload.CopyTo($pkt, 6) }
-    $conn.Stream.Write($pkt, 0, $pkt.Length)
-    $conn.Stream.Flush()
-    # EVERY BYTE IS KEPT.  The "password never on the wire" check reads this
-    # back, so it measures what was sent rather than what was meant.
-    $conn.Sent.AddRange($pkt)
-}
-
-function Read-SdExact($conn, [int]$n) {
-    $buf = New-Object byte[] $n
-    $got = 0
-    while ($got -lt $n) {
-        $r = $conn.Stream.Read($buf, $got, $n - $got)
-        if ($r -le 0) { throw 'connection closed part way through a packet' }
-        $got += $r
+# One probe run.  $probeArgs, NOT $args - that is PowerShell's automatic
+# variable, and a parameter of that name reaches the call empty (CLAUDE.md,
+# 23 Aug 2026).  An empty list is refused rather than run.
+function Invoke-ScramProbe([string]$label, [string]$password, [string[]]$probeArgs) {
+    if ($null -eq $probeArgs -or $probeArgs.Count -eq 0) {
+        Refuse "Invoke-ScramProbe '$label' was handed no arguments - it would measure nothing."
     }
-    return $buf
-}
-
-function Receive-SdPacket($conn) {
-    $len = [BitConverter]::ToInt32((Read-SdExact $conn 4), 0)
-    # 4 length + 2 server error + 4 status is the smallest legal reply.
-    if ($len -lt 10) { throw "reply declared $len bytes, which is shorter than a header" }
-    $body = Read-SdExact $conn ($len - 4)
-    return [pscustomobject]@{
-        ServerError = [BitConverter]::ToInt16($body, 0)
-        Status      = [BitConverter]::ToInt32($body, 2)
-        Text        = [Text.Encoding]::ASCII.GetString($body, 6, $body.Length - 6)
+    Write-Host ''
+    Write-Host "   -- scram-probe: $label"
+    Write-Host ('   command : ' + $script:Python + ' ' + $Probe + ' ' + ($probeArgs -join ' '))
+    Write-Host ('   password: in SD_SCRAM_PASSWORD, {0} characters' -f $password.Length)
+    $saved = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $env:SD_SCRAM_PASSWORD = $password
+    try {
+        $raw  = & $script:Python $Probe @probeArgs 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        Remove-Item -Path 'Env:SD_SCRAM_PASSWORD' -ErrorAction SilentlyContinue
+        $ErrorActionPreference = $saved
     }
+    $lines = @($raw | ForEach-Object { "$_".TrimEnd("`r") })
+    foreach ($l in $lines) { Write-Host ('   | ' + $l) }
+    Write-Host "   probe exit $code"
+    return [pscustomobject]@{ Label = $label; Code = $code; Lines = $lines }
 }
 
-# ===========================================================================
-# SCRAM-SHA-256, client side.  RFC 5802 and RFC 7677.
-# ===========================================================================
-
-function Get-Pbkdf2([string]$password, [byte[]]$salt, [int]$iter, [int]$len) {
-    $pw = [Text.Encoding]::UTF8.GetBytes($password)
-    $k = New-Object System.Security.Cryptography.Rfc2898DeriveBytes -ArgumentList @(
-             $pw, $salt, $iter, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
-    try { return $k.GetBytes($len) } finally { $k.Dispose() }
-}
-
-function Get-Hmac([byte[]]$key, [string]$msg) {
-    $h = New-Object System.Security.Cryptography.HMACSHA256 -ArgumentList (, $key)
-    try { return $h.ComputeHash([Text.Encoding]::UTF8.GetBytes($msg)) } finally { $h.Dispose() }
-}
-
-function Get-Sha256([byte[]]$data) {
-    $h = [System.Security.Cryptography.SHA256]::Create()
-    try { return $h.ComputeHash($data) } finally { $h.Dispose() }
-}
-
-function Get-Xor([byte[]]$a, [byte[]]$b) {
-    if ($a.Length -ne $b.Length) { throw 'XOR operands differ in length' }
-    $o = New-Object byte[] $a.Length
-    for ($i = 0; $i -lt $a.Length; $i++) { $o[$i] = $a[$i] -bxor $b[$i] }
-    return $o
-}
-
-function New-Nonce {
-    # 18 bytes for the same reason the server uses 18: a multiple of three, so
-    # base64 adds no '=' padding, and no character it emits is a comma.
-    $b = New-Object byte[] 18
-    ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($b)
-    return [Convert]::ToBase64String($b)
-}
-
-# Sends client-first and returns what came back, parsed if it was accepted.
-function Invoke-ScramFirst($conn, [string]$user, [string]$gs2 = 'n,,', [string]$nonce = '') {
-    if ($nonce -eq '') { $nonce = New-Nonce }
-    $bare = "n=$user,r=$nonce"
-    Send-SdPacket $conn $ScramFirst ([Text.Encoding]::UTF8.GetBytes($gs2 + $bare))
-    $rsp = Receive-SdPacket $conn
-
-    $out = [pscustomobject]@{
-        Bare = $bare; CNonce = $nonce; Response = $rsp
-        Combined = ''; Salt = $null; Iterations = 0; Parsed = $false
+# The first group of the first line matching $pattern, case-sensitively;
+# $null if no line matches.
+function Get-ProbeMatch($r, [string]$pattern) {
+    foreach ($l in $r.Lines) {
+        if ($l -cmatch $pattern) { return $Matches[1] }
     }
-    if ($rsp.ServerError -ne 0) { return $out }
-
-    $parts = $rsp.Text.Split(',')
-    if ($parts.Count -ne 3)      { return $out }
-    if ($parts[0].Substring(0, 2) -ne 'r=') { return $out }
-    if ($parts[1].Substring(0, 2) -ne 's=') { return $out }
-    if ($parts[2].Substring(0, 2) -ne 'i=') { return $out }
-
-    $out.Combined   = $parts[0].Substring(2)
-    $out.Salt       = [Convert]::FromBase64String($parts[1].Substring(2))
-    $out.Iterations = [int]$parts[2].Substring(2)
-    $out.Parsed     = $true
-    return $out
+    return $null
 }
 
-# THE WHOLE CLIENT-SIDE DERIVATION, WITH NO SOCKET IN IT.  Split out so
-# -SelfTest can drive it with the RFC 7677 vectors and compare against
-# published constants - which makes this the code the vectors prove, rather
-# than a second copy written to agree with it.
-function New-ScramProof([string]$bare, [string]$serverFirst, [byte[]]$salt,
-                        [int]$iter, [string]$password, [string]$nonce) {
-    $salted    = Get-Pbkdf2 $password $salt $iter 32
-    $clientKey = Get-Hmac $salted 'Client Key'
-    $storedKey = Get-Sha256 $clientKey
-    $serverKey = Get-Hmac $salted 'Server Key'
-
-    $cfinalBare = "c=biws,r=$nonce"
-    $authMsg    = $bare + ',' + $serverFirst + ',' + $cfinalBare
-
-    return [pscustomobject]@{
-        SaltedPassword  = [Convert]::ToBase64String($salted)
-        StoredKey       = [Convert]::ToBase64String($storedKey)
-        ServerKey       = [Convert]::ToBase64String($serverKey)
-        ClientProof     = [Convert]::ToBase64String((Get-Xor $clientKey (Get-Hmac $storedKey $authMsg)))
-        ServerSignature = [Convert]::ToBase64String((Get-Hmac $serverKey $authMsg))
-        FinalBare       = $cfinalBare
-        AuthMessage     = $authMsg
-    }
+# The wire line's verdict: 'absent from', 'FOUND IN' or 'NOT CHECKED'.
+function Get-ProbeWire($r) {
+    $w = Get-ProbeMatch $r '^  wire     : password (absent from|FOUND IN|NOT CHECKED)'
+    if ($null -eq $w) { return '<no wire line>' }
+    return $w
 }
 
-# Sends client-final.  The overrides exist so the negative checks can send a
-# message that is wrong in exactly one way.
-function Invoke-ScramFinal($conn, $first, [string]$password,
-                           [string]$nonceOverride = '', [string]$proofOverride = '',
-                           [string]$rawOverride = '') {
-    if ($rawOverride -ne '') {
-        Send-SdPacket $conn $ScramFinal ([Text.Encoding]::UTF8.GetBytes($rawOverride))
-        return [pscustomobject]@{ Response = (Receive-SdPacket $conn); Sent = $rawOverride; ExpectedV = '' }
-    }
-
-    if ($nonceOverride -ne '') { $n = $nonceOverride } else { $n = $first.Combined }
-    $s = New-ScramProof $first.Bare $first.Response.Text $first.Salt $first.Iterations $password $n
-
-    if ($proofOverride -ne '') { $p = $proofOverride } else { $p = $s.ClientProof }
-
-    $msg = $s.FinalBare + ',p=' + $p
-    Send-SdPacket $conn $ScramFinal ([Text.Encoding]::UTF8.GetBytes($msg))
-    return [pscustomobject]@{
-        Response  = (Receive-SdPacket $conn)
-        Sent      = $msg
-        ExpectedV = 'v=' + $s.ServerSignature
-    }
-}
-
-# The request 24 body: each field a 2 byte length then the text, padded to a
-# 2 byte multiple with a NUL.  SDConnect() in sdclilib.c builds exactly this.
-function New-SrvrLoginBody([string]$user, [string]$password) {
-    $ms = New-Object System.IO.MemoryStream
-    foreach ($s in @($user, $password)) {
-        $b = [Text.Encoding]::ASCII.GetBytes($s)
-        $ms.Write([BitConverter]::GetBytes([int16]$b.Length), 0, 2)
-        $ms.Write($b, 0, $b.Length)
-        if ($b.Length -band 1) { $ms.WriteByte(0) }
-    }
-    return $ms.ToArray()
-}
-
-# Is this byte sequence anywhere in what we sent?
-function Test-SentContains($conn, [string]$needle) {
-    $hay = $conn.Sent.ToArray()
-    $ndl = [Text.Encoding]::ASCII.GetBytes($needle)
-    if ($ndl.Length -eq 0 -or $hay.Length -lt $ndl.Length) { return $false }
-    for ($i = 0; $i -le $hay.Length - $ndl.Length; $i++) {
-        $hit = $true
-        for ($j = 0; $j -lt $ndl.Length; $j++) {
-            if ($hay[$i + $j] -ne $ndl[$j]) { $hit = $false; break }
-        }
-        if ($hit) { return $true }
-    }
-    return $false
+# A login the server must refuse at $request with sysmsg($msg).  Two rows, as
+# before 42: that it refused, and that the refusal is the one the handler
+# meant.  $pattern's group is the server's text; the default is the probe's
+# ordinary refusal line.
+function Assert-Refusal($r, [string]$what, [int]$request, [int]$msg, [string]$pattern = '') {
+    if ($pattern -eq '') { $pattern = '^SCRAM: login REFUSED at request ' + $request + ': (.*)$' }
+    $t = Get-ProbeMatch $r $pattern
+    Note "$what refused at request $request" $true (($r.Code -eq 1) -and ($null -ne $t))
+    if ($null -eq $t) { $t = "<the probe printed no refusal at request $request>" }
+    Note "  and it is $msg" (Get-SysMsg $msg) $t.Trim()
 }
 
 # ---------------------------------------------------------------------------
-# -SelfTest: the client half alone, against the published vectors.  NO
-# ELEVATION, NO SERVER, NO INSTALL - so it can be run at any time, including
-# while a cycle is owed, and it is the first thing to run when the exchange
-# fails and it is not obvious which side is wrong.
-#
-# IT PROVES THE INSTRUMENT, NOT THE SERVER.  If these five constants come out
-# right, a later disagreement with SD is SD's; if they come out wrong, nothing
-# this script says about the server means anything.
+# -SelfTest: the client alone, against the published vector and its own
+# packet layouts.  NO ELEVATION, NO SERVER, NO INSTALL - so it can be run at
+# any time, including while a cycle is owed, and it is the first thing to run
+# when the exchange fails and it is not obvious which side is wrong.
 if ($SelfTest) {
-    Step 0 'RFC 7677 section 3 vectors - client side only, no server involved'
-
-    $tSalt     = [Convert]::FromBase64String('W22ZaJ0SNY7soEsUEjb6gQ==')
-    $tCombined = 'rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0'
-    $tFirst    = 'r=' + $tCombined + ',s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096'
-    $t = New-ScramProof 'n=user,r=rOprNGfwEbeRWgbNEkqO' $tFirst $tSalt 4096 'pencil' $tCombined
-
-    Note 'SaltedPassword'  'xKSVEDI6tPlSysH6mUQZOeeOp01r6B3fcJbodRPcYV0=' $t.SaltedPassword
-    Note 'StoredKey'       'WG5d8oPm3OtcPnkdi4Uo7BkeZkBFzpcXkuLmtbsT4qY=' $t.StoredKey
-    Note 'ServerKey'       'wfPLwcE6nTWhTAmQ7tl2KeoiWGPlZqQxSrmfPwDl2dU=' $t.ServerKey
-    Note 'ClientProof'     'dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=' $t.ClientProof
-    Note 'ServerSignature' '6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4=' $t.ServerSignature
+    Step 0 'test-scramprobe-units.py - the client only, no server involved'
+    Note 'test-scramprobe-units exits 0' 0 (Test-ProbeInstrument)
 
     Write-Host ''
     Write-Host '=== Summary ============================================================='
@@ -453,16 +327,20 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
     Refuse 'Run this from an ELEVATED PowerShell - it creates an account, edits the installed sd.conf and restarts SD.'
 }
 
-if (-not [BitConverter]::IsLittleEndian) {
-    Refuse 'This script builds packets with BitConverter and assumes a little endian host.'
-}
-
 # THE CYCLE RULE, and it is a gate rather than a reminder.  CLAUDE.md: anything
 # that tests the install calls this first, or the result describes a tree that
 # no longer exists.
 Step 0 'Checking the installed tree matches source'
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -ne 0) { Refuse 'assert-current refuses - run gplbld/cycle.ps1 first.' }
+
+# BEFORE ANY ACCOUNT IS MADE: a probe that cannot run would otherwise be
+# discovered after the system had been changed, and every row below would be
+# a statement about python rather than about the server.
+Step '0b' 'Proving the client before using it'
+if ((Test-ProbeInstrument) -ne 0) {
+    Refuse 'test-scramprobe-units did not pass - the probe cannot be trusted, so nothing it reports about the server would mean anything.'
+}
 
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
     Refuse "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
@@ -562,156 +440,125 @@ try {
     if ($listen.Count -eq 0) { Refuse 'Nothing is listening - the rest of this script has nothing to talk to.' }
 
     $upper = $Prefix.ToUpper()
+    $at    = @('--user', $Prefix, '--port', "$Port")
 
     # -----------------------------------------------------------------------
-    Step 5 'The exchange, end to end'
+    Step 5 'The exchange, end to end, over TLS'
 
-    $c1 = $null
-    try {
-        $c1 = New-SdConnection $Port
-        $f1 = Invoke-ScramFirst $c1 $Prefix
+    $r5 = Invoke-ScramProbe 'a correct login, then the account' $pw ($at + @('--account', $upper))
 
-        Note '47 accepted'                 0     ([int]$f1.Response.ServerError)
-        if ($f1.Response.ServerError -ne 0) { Write-Host ('   server said: ' + $f1.Response.Text) }
-        Note 'server-first parses'         $true $f1.Parsed
-        if (-not $f1.Parsed) {
-            Write-Host ('   server-first was: ' + $f1.Response.Text)
-            Refuse 'Without a server-first there is nothing further to check.'
-        }
+    $cNonce = Get-ProbeMatch $r5 '^  client-first: p=tls-exporter,,n=[^,]*,r=([^,]+)$'
+    $sFirst = Get-ProbeMatch $r5 '^  server-first: (r=[^,]+,s=[^,]+,i=\d+)$'
+    Note '47 sent with the bound header, and accepted' $true (($null -ne $cNonce) -and ($null -ne $sFirst))
+    if ($null -eq $sFirst) { Refuse 'Without a server-first there is nothing further to check.' }
 
-        # THE CLIENT-SIDE CHECK THE DESIGN NAMES.  A combined nonce that does
-        # not start with the nonce we sent is a reply to somebody else's
-        # exchange, and this is the test that notices.
-        Note 'combined nonce extends ours' $true $f1.Combined.StartsWith($f1.CNonce)
-        Note 'server added nonce of its own' $true ($f1.Combined.Length -gt $f1.CNonce.Length)
-        Note 'iterations'                  $ExpectedIterations $f1.Iterations
+    $sParts = $sFirst -split ','
+    $sNonce = $sParts[0].Substring(2)
 
-        $r1 = Invoke-ScramFinal $c1 $f1 $pw
-        Note '48 accepted'                 0     ([int]$r1.Response.ServerError)
-        if ($r1.Response.ServerError -ne 0) { Write-Host ('   server said: ' + $r1.Response.Text) }
+    # THE CLIENT-SIDE CHECK THE DESIGN NAMES, made HERE from the two lines the
+    # probe printed rather than taken from the probe's own refusal to go on.
+    # A combined nonce that does not start with the nonce we sent is a reply
+    # to somebody else's exchange.
+    Note 'combined nonce extends ours'   $true ($null -ne $cNonce -and $sNonce.StartsWith($cNonce))
+    Note 'server added nonce of its own' $true ($null -ne $cNonce -and $sNonce.Length -gt $cNonce.Length)
+    Note 'iterations'                    $ExpectedIterations ([int]$sParts[2].Substring(2))
 
-        # MUTUAL AUTHENTICATION, AND IT IS THE HALF EASIEST TO LET SLIDE.  The
-        # signature is computed here from ServerKey and compared; a server that
-        # answered anything else would be an impostor, and this is where that
-        # is caught rather than in a comment.
-        Note 'server signature verifies'   $r1.ExpectedV $r1.Response.Text
+    # MUTUAL AUTHENTICATION, AND IT IS THE HALF EASIEST TO LET SLIDE.  The
+    # probe computes the signature from ServerKey and compares it; VERIFIED is
+    # printed only when they agree, and MISMATCH exits 3.
+    Note '48 accepted and the server signature verifies' $true (
+        ($r5.Code -eq 0) -and ($null -ne (Get-ProbeMatch $r5 '^(SCRAM: server signature VERIFIED)$')))
 
-        # NOT JUST "48 RETURNED 0".  logged.in has to have been set, and the
-        # only way to see that from outside is to issue a request the main loop
-        # refuses to an unauthenticated session.
-        Send-SdPacket $c1 $SrvrAccount ([Text.Encoding]::ASCII.GetBytes($upper))
-        $acc = Receive-SdPacket $c1
-        Note 'session is authenticated'    0     ([int]$acc.ServerError)
-        if ($acc.ServerError -ne 0) { Write-Host ('   server said: ' + $acc.Text) }
+    # NOT JUST "48 RETURNED 0".  logged.in has to have been set, and the
+    # only way to see that from outside is to issue a request the main loop
+    # refuses to an unauthenticated session - the probe's request 3.
+    Note 'session is authenticated (request 3 entered the account)' $true (
+        $null -ne (Get-ProbeMatch $r5 ('^(account ' + [regex]::Escape($upper) + ': entered)$')))
 
-        # THE CENTRAL CLAIM, MEASURED.  Everything this connection sent is in
-        # $c1.Sent; the password is not in it.  The control is in step 9.
-        Note 'password absent from the bytes sent' $false (Test-SentContains $c1 $pw)
-
-        $capturedFinal = $r1.Sent
-        $firstCombined = $f1.Combined
-    } finally { Close-SdConnection $c1 }
+    # THE CENTRAL CLAIM, MEASURED.  The probe searched every plaintext byte it
+    # handed to TLS.  The control is in step 9.
+    Note 'password absent from the bytes sent' 'absent from' (Get-ProbeWire $r5)
 
     # -----------------------------------------------------------------------
     Step 6 'Freshness: a second exchange for the same account'
 
-    $c2 = $null
-    try {
-        $c2 = New-SdConnection $Port
-        $f2 = Invoke-ScramFirst $c2 $Prefix
-        Note '47 accepted again'           0     ([int]$f2.Response.ServerError)
-        # If this ever fails, the server nonce is not random and every replay
-        # defence below is decoration.
-        Note 'server nonce differs from the first exchange' $true ($f2.Combined -ne $firstCombined)
-    } finally { Close-SdConnection $c2 }
+    $r6 = Invoke-ScramProbe 'a second login for the same account' $pw $at
+    $s6 = Get-ProbeMatch $r6 '^  server-first: r=([^,]+),s=[^,]+,i=\d+$'
+    Note '47 accepted again' $true ($null -ne $s6)
+    # If this ever fails, the server nonce is not random and every replay
+    # defence below is decoration.
+    Note 'server nonce differs from the first exchange' $true (($null -ne $s6) -and ($s6 -ne $sNonce))
 
     # -----------------------------------------------------------------------
     Step 7 'The refusals'
 
-    # Each of these needs its own connection: a refused exchange sets done and
-    # the server drops the link, which is itself part of the behaviour.
+    # Each is its own probe run on its own connection: a refused exchange sets
+    # done and the server drops the link, which is itself part of the
+    # behaviour.  Each message is wrong in EXACTLY ONE WAY.
 
     # Wrong password.  Everything else about the message is correct, so this
     # isolates the proof.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        $f = Invoke-ScramFirst $c $Prefix
-        $r = Invoke-ScramFinal $c $f ($pw + 'x')
-        Note 'wrong password refused'      $true ([int]$r.Response.ServerError -ne 0)
-        Note '  and it is 5017'            (Get-SysMsg 5017) $r.Response.Text.Trim()
-    } finally { Close-SdConnection $c }
+    $r = Invoke-ScramProbe 'wrong password' ($pw + 'x') $at
+    Assert-Refusal $r 'wrong password' 48 5017
 
-    # Replay.  A client-final captured from the exchange that SUCCEEDED, sent
-    # against a fresh client-first.  Its nonce belongs to an exchange that no
-    # longer exists, which is what makes the capture worthless.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        $null = Invoke-ScramFirst $c $Prefix
-        $r = Invoke-ScramFinal $c $null $pw '' '' $capturedFinal
-        Note 'replayed client-final refused' $true ([int]$r.Response.ServerError -ne 0)
-        # 5272, not 5017: the proof is never reached.  A stale nonce is a bad
-        # MESSAGE, and if this ever reads 5017 the server has run a signature
-        # check against an exchange that had already been closed.
-        Note '  and it is 5272'            (Get-SysMsg 5272) $r.Response.Text.Trim()
-    } finally { Close-SdConnection $c }
+    # Replay.  A client-final captured from an exchange that SUCCEEDED, sent
+    # against a fresh client-first on a new connection.  The probe rewrites
+    # c= to the new connection's binding, so the nonce - which belongs to an
+    # exchange that no longer exists - is the only stale part.
+    #
+    # 5272, not 5017: the proof is never reached.  A stale nonce is a bad
+    # MESSAGE, and if this ever reads 5017 the server has run a signature
+    # check against an exchange that had already been closed.
+    $r = Invoke-ScramProbe 'replay a captured client-final' $pw ($at + @('--replay'))
+    Assert-Refusal $r 'replayed client-final' 48 5272 '^REPLAY: the captured client-final was REFUSED at request 48: (.*)$'
 
     # A client-final answering a nonce nobody issued.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        $f = Invoke-ScramFirst $c $Prefix
-        $r = Invoke-ScramFinal $c $f $pw (New-Nonce)
-        Note 'tampered nonce refused'      $true ([int]$r.Response.ServerError -ne 0)
-        Note '  and it is 5272'            (Get-SysMsg 5272) $r.Response.Text.Trim()
-    } finally { Close-SdConnection $c }
+    $r = Invoke-ScramProbe 'tampered nonce' $pw ($at + @('--tamper-nonce'))
+    Assert-Refusal $r 'tampered nonce' 48 5272
+
+    # 15 Sep 26 - RELEASE_1.1 42.  THE BINDING, the check 41 added.  The
+    # correct nonce and a proof computed over what was sent, but c= carries
+    # this session's binding with one bit flipped: a login relayed by a man in
+    # the middle, who holds a different TLS session and so a different binding.
+    $r = Invoke-ScramProbe 'client-final with the wrong channel binding' $pw ($at + @('--bad-cbind'))
+    Assert-Refusal $r 'wrong channel binding' 48 5272
 
     # 48 with no 47 before it.  This is the one that would pass silently if the
     # handler compared against empty values instead of refusing.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        $r = Invoke-ScramFinal $c $null $pw '' '' 'c=biws,r=nonsense,p=AAAA'
-        Note 'client-final without client-first refused' $true ([int]$r.Response.ServerError -ne 0)
-        # 5273 and not 5272: the sequence is what is wrong, not the message.
-        Note '  and it is 5273'            (Get-SysMsg 5273) $r.Response.Text.Trim()
-    } finally { Close-SdConnection $c }
+    # 5273 and not 5272: the sequence is what is wrong, not the message.
+    $r = Invoke-ScramProbe 'client-final without client-first' $pw ($at + @('--final-only'))
+    Assert-Refusal $r 'client-final without client-first' 48 5273
 
     # An account that does not exist.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        $f = Invoke-ScramFirst $c ($Prefix + 'nosuch')
-        Note 'unknown account refused'     $true ([int]$f.Response.ServerError -ne 0)
-        # THE SAME WORDS AS A WRONG PASSWORD, which is the point - the reply
-        # must not distinguish an account that exists from one that does not.
-        # The round trip still does; docs/SCRAM_AUTH.md, "Still open".
-        Note '  and it is 5017, as a wrong password is' (Get-SysMsg 5017) $f.Response.Text.Trim()
-    } finally { Close-SdConnection $c }
+    # THE SAME WORDS AS A WRONG PASSWORD, which is the point - the reply
+    # must not distinguish an account that exists from one that does not.
+    # The round trip still does; docs/SCRAM_AUTH.md, "Still open".
+    $r = Invoke-ScramProbe 'unknown account' $pw @('--user', ($Prefix + 'nosuch'), '--port', "$Port")
+    Assert-Refusal $r 'unknown account' 47 5017
 
     # The downgrade signal.  'y,,' says "the server does not support channel
-    # binding"; accepting it would let a man in the middle strip a binding that
-    # a later SCRAM-SHA-256-PLUS would rely on.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        $f = Invoke-ScramFirst $c $Prefix 'y,,'
-        Note 'y,, downgrade refused'       $true ([int]$f.Response.ServerError -ne 0)
-        Note '  and it is 5272'            (Get-SysMsg 5272) $f.Response.Text.Trim()
-    } finally { Close-SdConnection $c }
+    # binding"; accepting it would let a man in the middle strip a binding.
+    $r = Invoke-ScramProbe "the 'y,,' downgrade header" $pw ($at + @('--gs2', 'y,,'))
+    Assert-Refusal $r "'y,,' downgrade" 47 5272
+
+    # 15 Sep 26 - RELEASE_1.1 42.  'n,,' OVER TLS: the header that was correct
+    # before 41 is now a downgrade, because the transport has a binding to
+    # offer.  apisrvr picks the header from the transport, not the client.
+    $r = Invoke-ScramProbe "the unbound 'n,,' header over TLS" $pw ($at + @('--no-binding'))
+    Assert-Refusal $r "unbound 'n,,' over TLS" 47 5272
 
     # A mandatory extension the server does not understand.  RFC 5802 requires
     # a failure, not a shrug.
-    $c = $null
-    try {
-        $c = New-SdConnection $Port
-        Send-SdPacket $c $ScramFirst ([Text.Encoding]::UTF8.GetBytes(
-            'n,,m=whatever,n=' + $Prefix + ',r=' + (New-Nonce)))
-        $r = Receive-SdPacket $c
-        Note 'm= mandatory extension refused' $true ([int]$r.ServerError -ne 0)
-        Note '  and it is 5272'            (Get-SysMsg 5272) $r.Text.Trim()
-    } finally { Close-SdConnection $c }
+    $r = Invoke-ScramProbe 'an m= mandatory extension' $pw ($at + @('--gs2', 'p=tls-exporter,,m=whatever,'))
+    Assert-Refusal $r 'm= mandatory extension' 47 5272
+
+    # 15 Sep 26 - RELEASE_1.1 42.  THE TRANSPORT REFUSAL, and the one row where
+    # the raw socket survives: a client that does not start TLS must never be
+    # spoken to in clear.  The relay waits out its handshake deadline
+    # (SD_TLS_HANDSHAKE_MS) and closes without the ACK.
+    $r = Invoke-ScramProbe 'a plaintext connection' $pw ($at + @('--no-tls'))
+    Note 'a plaintext connection gets no ACK' $true (
+        ($r.Code -eq 1) -and ($null -ne (Get-ProbeMatch $r '^(PLAINTEXT: no ACK) - connection closed')))
 
     # -----------------------------------------------------------------------
     Step '7b' 'The server-fault path: an unopenable $cred is 5274, not 5017'
@@ -737,14 +584,10 @@ try {
     }
 
     if ($movedCred) {
-        $c = $null
         try {
-            $c = New-SdConnection $Port
-            $f = Invoke-ScramFirst $c $Prefix
-            Note 'unopenable $cred refused'  $true ([int]$f.Response.ServerError -ne 0)
-            Note '  and it is 5274, not 5017' (Get-SysMsg 5274) $f.Response.Text.Trim()
+            $r = Invoke-ScramProbe 'a login while $cred cannot be opened' $pw $at
+            Assert-Refusal $r 'unopenable $cred' 47 5274
         } finally {
-            Close-SdConnection $c
             try {
                 Rename-Item -LiteralPath $credAside -NewName (Split-Path -Leaf $credDir) -ErrorAction Stop
                 $movedCred = $false
@@ -758,37 +601,28 @@ try {
     # -----------------------------------------------------------------------
     Step 8 'Phase 5: request 24 is retired, and refuses'
 
-    $c3 = $null
-    try {
-        $c3 = New-SdConnection $Port
-        # THE CREDENTIALS ARE CORRECT.  That is what makes this a test of the
-        # retirement rather than of the password: the old path is refused for
-        # a login that would have succeeded before phase 5.
-        Send-SdPacket $c3 $SrvrLogin (New-SrvrLoginBody $Prefix $pw)
-        $r = Receive-SdPacket $c3
-        Note 'request 24 refused'          $true ([int]$r.ServerError -ne 0)
+    # THE CREDENTIALS ARE CORRECT.  That is what makes this a test of the
+    # retirement rather than of the password: the old path is refused for a
+    # login that would have succeeded before phase 5.
+    #
+    # AND IT IS 5275, NOT 5017 OR 5270.  A retired request that answered
+    # "invalid username or password" would send everyone looking for a
+    # credential fault; "not logged in" would read as a client bug.
+    $r8 = Invoke-ScramProbe 'request 24, the retired cleartext login' $pw ($at + @('--legacy'))
+    Assert-Refusal $r8 'request 24' 24 5275 '^LEGACY: login REFUSED at request 24: (.*)$'
 
-        # AND IT IS 5275, NOT 5017 OR 5270.  A retired request that answered
-        # "invalid username or password" would send everyone looking for a
-        # credential fault; "not logged in" would read as a client bug.  This
-        # is the check that keeps the reply diagnostic, and it is also what
-        # distinguishes a handler that refuses from one that was never reached.
-        Note '  and it is 5275'            (Get-SysMsg 5275) $r.Text.Trim()
+    # -----------------------------------------------------------------------
+    Step 9 'The control for the wire check'
 
-        # -------------------------------------------------------------------
-        Step 9 'The control for the wire check'
-
-        # WITHOUT THIS, "the password is not in the bytes" MEANS NOTHING - a
-        # search that can never find anything passes just as well.  Request 24
-        # carries the password in clear, and the same function finds it.
-        #
-        # STILL VALID AFTER PHASE 5, and worth being clear why: Test-SentContains
-        # reads what THIS SCRIPT sent, not what the server accepted.  The packet
-        # above still puts the password on the wire; the server now throws it
-        # away instead of reading it.  So the control measures the detector, as
-        # it always did, and does not depend on request 24 working.
-        Note 'same search finds the password in a request 24 login' $true (Test-SentContains $c3 $pw)
-    } finally { Close-SdConnection $c3 }
+    # WITHOUT THIS, "the password is not in the bytes" MEANS NOTHING - a
+    # search that can never find anything passes just as well.  Request 24
+    # carries the password in clear, and the same search finds it.
+    #
+    # STILL VALID AFTER PHASE 5, and worth being clear why: the probe searches
+    # what IT sent, not what the server accepted.  The packet above still puts
+    # the password in the stream; the server throws it away instead of reading
+    # it.  So the control measures the detector, as it always did.
+    Note 'same search finds the password in a request 24 login' 'FOUND IN' (Get-ProbeWire $r8)
 
     # -----------------------------------------------------------------------
     Step '9b' 'The OTHER client: the !sdclient class module'
@@ -800,9 +634,11 @@ try {
     # Retiring 24 without changing it would have broken it silently - it has no
     # test of its own and no caller in this tree to notice.
     #
-    # EVERYTHING ABOVE SPEAKS SCRAM FROM .NET.  This step is the only one that
-    # exercises the BASIC implementation, and it runs against the same server,
-    # which is what stops the two agreeing with each other and both being wrong.
+    # EVERYTHING ABOVE SPEAKS SCRAM FROM THE PROBE.  This step is the only one
+    # that exercises the BASIC implementation - which since 41 opens the socket
+    # with SKT$TLS and binds its login too - and it runs against the same
+    # server, which is what stops the two agreeing with each other and both
+    # being wrong.
     #
     # THE PASSWORD GOES ON STDIN, NEVER ON THE COMMAND LINE - TESTSDCLI reads
     # it with echo off.  A command line reaches the process list.

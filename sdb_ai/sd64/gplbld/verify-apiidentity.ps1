@@ -41,11 +41,15 @@
 # the login half works and the containment half does not.  That is a product
 # finding, not a test fault, and it should be treated as one.
 #
-# THE SCRAM CLIENT BELOW IS COPIED VERBATIM FROM verify-scramlogin.ps1, extracted
-# with the PowerShell AST rather than retyped.  Duplicated rather than shared
-# because factoring it out would mean editing a verifier that passes, and the
-# copy cannot drift into being subtly wrong the way a retyped one can.  If the
-# protocol ever changes, both change.
+# THE API CLIENT IS gplbld/scram-probe.py - 15 Sep 26, RELEASE_1.1 42.  This
+# file carried a .NET TcpClient copied from verify-scramlogin.ps1, and after
+# RELEASE_1.1 41 made every API connection TLS with the login bound to it, that
+# client could not reach the server (.NET's SslStream cannot export the RFC
+# 9266 binding).  The probe logs in, enters the account (request 3), opens each
+# fixture (request 4) and writes the ownership record (request 16) - the same
+# requests as before, one request per answer, no command parsing in the way.
+# The helpers that run it are copied from verify-scramlogin.ps1, which says
+# why each exists; if one changes, both change.
 #
 # NOT SHIPPED - it must be on assert-current.ps1's $neverShipped list.
 #
@@ -73,13 +77,11 @@ $ErrorActionPreference = 'Stop'
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
-# Request types.  APISRVR's dispatch table is the authority.
-$SrvrOpen    = 4
-$SrvrQuit    = 1
-$SrvrAccount = 3
-$SrvrWrite   = 16   # APISRVR dispatch table line 336
-$ScramFirst  = 47
-$ScramFinal  = 48
+# The API client.  The request types it sends (3 account, 4 open, 16 write,
+# 47/48 SCRAM) are in scram-probe.py, whose header documents each.
+$Probe      = Join-Path $Gplbld 'scram-probe.py'
+$ProbeUnits = Join-Path $Gplbld 'test-scramprobe-units.py'
+$Python     = $null
 
 $script:checks = @()
 $script:void   = $false
@@ -217,230 +219,85 @@ function Get-WhoAccounts([string]$text) {
 }
 
 # ---------------------------------------------------------------------------
-# THE SCRAM CLIENT, COPIED VERBATIM FROM verify-scramlogin.ps1 - see the header.
-# Extracted with the PowerShell AST, not retyped.
+# THE API CLIENT: gplbld/scram-probe.py - see the header.  These three helpers
+# are copied from verify-scramlogin.ps1, whose comments give the reasons:
+# prove the probe with its own unit test before believing it, run it with the
+# exact command line and the password's LENGTH printed (the password itself
+# goes in the environment), print every line it returns, and match whole
+# lines case-sensitively on wording the probe prints only on that path.
 # ---------------------------------------------------------------------------
 
-function New-SdConnection([int]$port) {
-    $c = New-Object System.Net.Sockets.TcpClient
-    $c.Connect('127.0.0.1', $port)
-    $c.NoDelay = $true
-    $s = $c.GetStream()
-    $s.ReadTimeout  = 30000
-    $s.WriteTimeout = 30000
-
-    # WAIT FOR THE ACK, as OpenSocket() does.  The listener accepts before the
-    # SD process behind it is running, so anything sent earlier is lost; 0x06
-    # is that process announcing itself.
-    $deadline = (Get-Date).AddSeconds(30)
-    do {
-        $b = $s.ReadByte()
-        if ($b -lt 0) { throw 'connection closed before the ACK arrived' }
-        if ((Get-Date) -gt $deadline) { throw 'no ACK within 30 seconds' }
-    } while ($b -ne 6)
-
-    return [pscustomobject]@{
-        Client = $c
-        Stream = $s
-        Sent   = (New-Object System.Collections.Generic.List[byte])
+function Test-ProbeInstrument {
+    foreach ($f in @($Probe, $ProbeUnits)) {
+        if (-not (Test-Path -LiteralPath $f)) { Refuse "$f is missing - it is the API client this verifier drives." }
     }
+    $cmd = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cmd) { Refuse 'python is not on PATH - scram-probe.py is the API client this verifier drives.' }
+    $script:Python = $cmd.Source
+    Write-Host "   python : $script:Python"
+    Write-Host "   probe  : $Probe"
+    $saved = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $u  = & $script:Python $ProbeUnits 2>&1
+        $uc = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $saved }
+    foreach ($l in @($u)) { Write-Host ('   | ' + ("$l".TrimEnd("`r"))) }
+    Write-Host "   test-scramprobe-units exit $uc"
+    return $uc
 }
 
-function Close-SdConnection($conn) {
-    if ($null -eq $conn) { return }
-    try { $conn.Stream.Close() } catch { }
-    try { $conn.Client.Close() } catch { }
-}
-
-function Send-SdPacket($conn, [int]$type, [byte[]]$payload) {
-    if ($null -eq $payload) { $payload = New-Object byte[] 0 }
-    $pkt = New-Object byte[] (6 + $payload.Length)
-    [BitConverter]::GetBytes([int32]($payload.Length + 6)).CopyTo($pkt, 0)
-    [BitConverter]::GetBytes([int16]$type).CopyTo($pkt, 4)
-    if ($payload.Length -gt 0) { $payload.CopyTo($pkt, 6) }
-    $conn.Stream.Write($pkt, 0, $pkt.Length)
-    $conn.Stream.Flush()
-    # EVERY BYTE IS KEPT.  The "password never on the wire" check reads this
-    # back, so it measures what was sent rather than what was meant.
-    $conn.Sent.AddRange($pkt)
-}
-
-function Read-SdExact($conn, [int]$n) {
-    $buf = New-Object byte[] $n
-    $got = 0
-    while ($got -lt $n) {
-        $r = $conn.Stream.Read($buf, $got, $n - $got)
-        if ($r -le 0) { throw 'connection closed part way through a packet' }
-        $got += $r
+function Invoke-ScramProbe([string]$label, [string]$password, [string[]]$probeArgs) {
+    if ($null -eq $probeArgs -or $probeArgs.Count -eq 0) {
+        Refuse "Invoke-ScramProbe '$label' was handed no arguments - it would measure nothing."
     }
-    return $buf
-}
-
-function Receive-SdPacket($conn) {
-    $len = [BitConverter]::ToInt32((Read-SdExact $conn 4), 0)
-    # 4 length + 2 server error + 4 status is the smallest legal reply.
-    if ($len -lt 10) { throw "reply declared $len bytes, which is shorter than a header" }
-    $body = Read-SdExact $conn ($len - 4)
-    # Data is the payload as RAW BYTES.  vb.open answers with the file number
-    # as iconv(i,'ISL') - a two-byte little-endian short (APISRVR:668) - which
-    # is not text and does not survive an ASCII decode.
-    $data = New-Object byte[] ($body.Length - 6)
-    if ($data.Length -gt 0) { [Array]::Copy($body, 6, $data, 0, $data.Length) }
-    return [pscustomobject]@{
-        ServerError = [BitConverter]::ToInt16($body, 0)
-        Status      = [BitConverter]::ToInt32($body, 2)
-        Text        = [Text.Encoding]::ASCII.GetString($body, 6, $body.Length - 6)
-        Data        = $data
+    Write-Host ''
+    Write-Host "   -- scram-probe: $label"
+    Write-Host ('   command : ' + $script:Python + ' ' + $Probe + ' ' + ($probeArgs -join ' '))
+    Write-Host ('   password: in SD_SCRAM_PASSWORD, {0} characters' -f $password.Length)
+    $saved = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $env:SD_SCRAM_PASSWORD = $password
+    try {
+        $raw  = & $script:Python $Probe @probeArgs 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        Remove-Item -Path 'Env:SD_SCRAM_PASSWORD' -ErrorAction SilentlyContinue
+        $ErrorActionPreference = $saved
     }
+    $lines = @($raw | ForEach-Object { "$_".TrimEnd("`r") })
+    foreach ($l in $lines) { Write-Host ('   | ' + $l) }
+    Write-Host "   probe exit $code"
+    return [pscustomobject]@{ Label = $label; Code = $code; Lines = $lines }
 }
 
-function Get-Pbkdf2([string]$password, [byte[]]$salt, [int]$iter, [int]$len) {
-    $pw = [Text.Encoding]::UTF8.GetBytes($password)
-    $k = New-Object System.Security.Cryptography.Rfc2898DeriveBytes -ArgumentList @(
-             $pw, $salt, $iter, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
-    try { return $k.GetBytes($len) } finally { $k.Dispose() }
-}
-
-function Get-Hmac([byte[]]$key, [string]$msg) {
-    $h = New-Object System.Security.Cryptography.HMACSHA256 -ArgumentList (, $key)
-    try { return $h.ComputeHash([Text.Encoding]::UTF8.GetBytes($msg)) } finally { $h.Dispose() }
-}
-
-function Get-Sha256([byte[]]$data) {
-    $h = [System.Security.Cryptography.SHA256]::Create()
-    try { return $h.ComputeHash($data) } finally { $h.Dispose() }
-}
-
-function Get-Xor([byte[]]$a, [byte[]]$b) {
-    if ($a.Length -ne $b.Length) { throw 'XOR operands differ in length' }
-    $o = New-Object byte[] $a.Length
-    for ($i = 0; $i -lt $a.Length; $i++) { $o[$i] = $a[$i] -bxor $b[$i] }
-    return $o
-}
-
-function New-Nonce {
-    # 18 bytes for the same reason the server uses 18: a multiple of three, so
-    # base64 adds no '=' padding, and no character it emits is a comma.
-    $b = New-Object byte[] 18
-    ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($b)
-    return [Convert]::ToBase64String($b)
-}
-
-function Invoke-ScramFirst($conn, [string]$user, [string]$gs2 = 'n,,', [string]$nonce = '') {
-    if ($nonce -eq '') { $nonce = New-Nonce }
-    $bare = "n=$user,r=$nonce"
-    Send-SdPacket $conn $ScramFirst ([Text.Encoding]::UTF8.GetBytes($gs2 + $bare))
-    $rsp = Receive-SdPacket $conn
-
-    $out = [pscustomobject]@{
-        Bare = $bare; CNonce = $nonce; Response = $rsp
-        Combined = ''; Salt = $null; Iterations = 0; Parsed = $false
+function Get-ProbeMatch($r, [string]$pattern) {
+    foreach ($l in $r.Lines) {
+        if ($l -cmatch $pattern) { return $Matches[1] }
     }
-    if ($rsp.ServerError -ne 0) { return $out }
-
-    $parts = $rsp.Text.Split(',')
-    if ($parts.Count -ne 3)      { return $out }
-    if ($parts[0].Substring(0, 2) -ne 'r=') { return $out }
-    if ($parts[1].Substring(0, 2) -ne 's=') { return $out }
-    if ($parts[2].Substring(0, 2) -ne 'i=') { return $out }
-
-    $out.Combined   = $parts[0].Substring(2)
-    $out.Salt       = [Convert]::FromBase64String($parts[1].Substring(2))
-    $out.Iterations = [int]$parts[2].Substring(2)
-    $out.Parsed     = $true
-    return $out
+    return $null
 }
 
-function New-ScramProof([string]$bare, [string]$serverFirst, [byte[]]$salt,
-                        [int]$iter, [string]$password, [string]$nonce) {
-    $salted    = Get-Pbkdf2 $password $salt $iter 32
-    $clientKey = Get-Hmac $salted 'Client Key'
-    $storedKey = Get-Sha256 $clientKey
-    $serverKey = Get-Hmac $salted 'Server Key'
-
-    $cfinalBare = "c=biws,r=$nonce"
-    $authMsg    = $bare + ',' + $serverFirst + ',' + $cfinalBare
-
-    return [pscustomobject]@{
-        SaltedPassword  = [Convert]::ToBase64String($salted)
-        StoredKey       = [Convert]::ToBase64String($storedKey)
-        ServerKey       = [Convert]::ToBase64String($serverKey)
-        ClientProof     = [Convert]::ToBase64String((Get-Xor $clientKey (Get-Hmac $storedKey $authMsg)))
-        ServerSignature = [Convert]::ToBase64String((Get-Hmac $serverKey $authMsg))
-        FinalBare       = $cfinalBare
-        AuthMessage     = $authMsg
+# What the probe said about one vb.open (request 4).  SERVER.ERROR IS THE
+# FIELD, NOT STATUS: vb.open sets server.error when the open fails, and the
+# probe prints OPENED only for server_error 0 with a file number in the reply.
+# Getting this wrong would have called every refusal a success.
+#
+# NO LINE AT ALL IS NOT "REFUSED".  A probe that never reached the open - it
+# stopped at the login or the account - printed nothing for it, and reading
+# that as a refusal would score DENY a pass for having measured nothing.
+function Get-ProbeOpen($r, [string]$vocName) {
+    $n = [regex]::Escape($vocName)
+    $fno = Get-ProbeMatch $r ('^OPEN ' + $n + ': OPENED fileno (-?\d+)$')
+    if ($null -ne $fno) {
+        return [pscustomobject]@{ Seen = $true; Opened = $true; ServerError = '0'; Text = '' }
     }
-}
-
-function Invoke-ScramFinal($conn, $first, [string]$password,
-                           [string]$nonceOverride = '', [string]$proofOverride = '',
-                           [string]$rawOverride = '') {
-    if ($rawOverride -ne '') {
-        Send-SdPacket $conn $ScramFinal ([Text.Encoding]::UTF8.GetBytes($rawOverride))
-        return [pscustomobject]@{ Response = (Receive-SdPacket $conn); Sent = $rawOverride; ExpectedV = '' }
+    foreach ($l in $r.Lines) {
+        if ($l -cmatch ('^OPEN ' + $n + ': REFUSED server_error (-?\d+) status (-?\d+): (.*)$')) {
+            return [pscustomobject]@{ Seen = $true; Opened = $false; ServerError = $Matches[1]; Text = $Matches[3] }
+        }
     }
-
-    if ($nonceOverride -ne '') { $n = $nonceOverride } else { $n = $first.Combined }
-    $s = New-ScramProof $first.Bare $first.Response.Text $first.Salt $first.Iterations $password $n
-
-    if ($proofOverride -ne '') { $p = $proofOverride } else { $p = $s.ClientProof }
-
-    $msg = $s.FinalBare + ',p=' + $p
-    Send-SdPacket $conn $ScramFinal ([Text.Encoding]::UTF8.GetBytes($msg))
-    return [pscustomobject]@{
-        Response  = (Receive-SdPacket $conn)
-        Sent      = $msg
-        ExpectedV = 'v=' + $s.ServerSignature
-    }
-}
-
-# ---------------------------------------------------------------------------
-# Open a file by VOC name over the API and say plainly what came back.
-# Request 4 is vb.open; a non-zero server error means it did not open.
-# ---------------------------------------------------------------------------
-function Test-ApiOpen($conn, [string]$vocName) {
-    $payload = [Text.Encoding]::ASCII.GetBytes($vocName)
-    Send-SdPacket $conn $SrvrOpen $payload
-    $reply = Receive-SdPacket $conn
-    # SERVER.ERROR IS THE FIELD, NOT STATUS.  vb.open sets server.error to
-    # SV$ON.ERROR or SV$ELSE when the open fails; Status is SD's STATUS() and is
-    # not what says whether the file opened.  verify-scramlogin judges every one
-    # of its checks the same way.  Getting this wrong would have called every
-    # refusal a success.
-    # FileNo is what vb.write needs; vb.open returns it as a 2-byte LE short.
-    $fno = -1
-    if ($reply.ServerError -eq 0 -and $reply.Data.Length -ge 2) {
-        $fno = [BitConverter]::ToInt16($reply.Data, 0)
-    }
-    return [pscustomobject]@{
-        Opened      = ($reply.ServerError -eq 0)
-        ServerError = $reply.ServerError
-        Status      = $reply.Status
-        Text        = $reply.Text
-        FileNo      = $fno
-    }
-}
-
-# vb.write, request 16 (APISRVR:900).  Payload is
-#   fileno (2, LE) | id_len (2, LE) | id | data
-# which is what APISRVR's oconv(cmnd[1,2],'ISL') / cmnd[3,2] / cmnd[5,id.len]
-# read back off the wire.
-function Invoke-ApiWrite($conn, [int]$fileNo, [string]$id, [string]$data) {
-    $idBytes   = [Text.Encoding]::ASCII.GetBytes($id)
-    $dataBytes = [Text.Encoding]::ASCII.GetBytes($data)
-    $payload   = New-Object System.Collections.Generic.List[byte]
-    $payload.AddRange([BitConverter]::GetBytes([int16]$fileNo))
-    $payload.AddRange([BitConverter]::GetBytes([int16]$idBytes.Length))
-    $payload.AddRange($idBytes)
-    $payload.AddRange($dataBytes)
-    Send-SdPacket $conn $SrvrWrite $payload.ToArray()
-    $reply = Receive-SdPacket $conn
-    return [pscustomobject]@{
-        Written     = ($reply.ServerError -eq 0)
-        ServerError = $reply.ServerError
-        Status      = $reply.Status
-        Text        = $reply.Text
-    }
+    return [pscustomobject]@{ Seen = $false; Opened = $false; ServerError = '?'; Text = '' }
 }
 
 # ---------------------------------------------------------------------------
@@ -457,6 +314,15 @@ if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 }
 
 if (-not $Prefix) { Refuse 'pass -Prefix, e.g. -Prefix sdapiidb18.  It names the throwaway account.' }
+
+# 15 Sep 26 - RELEASE_1.1 42.  BEFORE ANY ACCOUNT IS MADE: a probe that cannot
+# run would otherwise be discovered after the system had been changed, and
+# Step 5's readings would be statements about python rather than the server.
+Write-Host ''
+Write-Host 'Proving the API client before using it'
+if ((Test-ProbeInstrument) -ne 0) {
+    Refuse 'test-scramprobe-units did not pass - the probe cannot be trusted, so no reading it gave would be a result.'
+}
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
     Refuse "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
 }
@@ -879,134 +745,140 @@ try {
 
     # ---------------------------------------------------------------- 5
     Step 5 'Opening the fixtures, then asking the session who it is'
-    $conn = $null
-    try {
-        $conn  = New-SdConnection $Port
-        $first = Invoke-ScramFirst $conn $Prefix
-        if ($first.Response.ServerError -ne 0 -or -not $first.Parsed) {
-            Write-Host ('   server said: ' + $first.Response.Text)
-            Refuse 'the SCRAM client-first was refused - no session to measure.'
-        }
-        $final = Invoke-ScramFinal $conn $first $apiPw
-        if ($final.Response.ServerError -ne 0) {
-            Write-Host ('   server said: ' + $final.Response.Text)
-            Fail ('SCRAM login failed, so nothing below can be measured.  IF THAT TEXT IS ' +
+
+    # 15 Sep 26 - RELEASE_1.1 42.  ONE PROBE RUN, ONE SESSION, THE SAME
+    # REQUESTS IN THE SAME ORDER as this step sent itself before 41: the SCRAM
+    # login, the account attach, a vb.open per fixture, then - only if the
+    # local control record exists - the ownership vb.write.  The session is
+    # over when the probe exits, so every reading is taken from its output
+    # and the ownership comparison reads the disk afterwards.
+    #
+    # SCRAM authenticates the user; ATTACHING to an account is a separate,
+    # required step.  sdclilib.c:1241 does exactly this after login:
+    #     message_pair(SrvrAccount, account, strlen(account))
+    # Without it the session has NO account VOC, and every vb.open of ZZID*
+    # came back ER_NVR (3007) - the b19 VOID.  --account is that attach.
+    $acctName     = $Prefix.ToUpper()
+    $ownDir       = Join-Path $accPath 'ZZIDOWN'
+    $localRec     = Join-Path $ownDir 'ZZLOCAL'
+    $apiRec       = Join-Path $ownDir 'ZZAPI'
+    $localPresent = Test-Path -LiteralPath $localRec
+
+    $probeArgs = @('--user', $Prefix, '--account', $acctName, '--port', "$Port")
+    foreach ($f in $fixtures) { $probeArgs += @('--open', $f.Name) }
+    if ($localPresent) { $probeArgs += @('--write', 'ZZIDOWN', 'ZZAPI', 'written by the API session') }
+    $r = Invoke-ScramProbe 'log in, attach, open the fixtures, write the ownership record' $apiPw $probeArgs
+
+    if ($null -ne (Get-ProbeMatch $r '^SCRAM: login REFUSED at request 47: (.*)$')) {
+        Refuse 'the SCRAM client-first was refused - no session to measure.'
+    }
+    if ($null -eq (Get-ProbeMatch $r '^(SCRAM: server signature VERIFIED)$')) {
+        if ($null -ne (Get-ProbeMatch $r '^SCRAM: login REFUSED at request 48: (.*)$')) {
+            Fail ('SCRAM login failed, so nothing below can be measured.  IF THE REFUSAL ABOVE IS ' +
                   'MESSAGE 5277 - "could not take your Windows identity" - then ' +
                   'K$ASSUME.USER refused and THAT IS THE FINDING, not a broken test.')
         }
-        Write-Host "   logged in over the API as $Prefix"
+        Refuse "the probe did not log in (exit $($r.Code)) - its output is above; no session was measured."
+    }
+    Write-Host "   logged in over the API as $Prefix"
 
-        # SCRAM authenticates the user; ATTACHING to an account is a separate,
-        # required step.  sdclilib.c:1241 does exactly this after login:
-        #     message_pair(SrvrAccount, account, strlen(account))
-        # verify-scramlogin never opens a file, so it does not attach; copying
-        # only its login left the session with NO account VOC, and every
-        # vb.open of ZZID* came back ER_NVR (3007) - the b19 VOID.  Without
-        # this attach the whole run measures nothing.
-        $acctName = $Prefix.ToUpper()
-        $acctPayload = [Text.Encoding]::ASCII.GetBytes($acctName)
-        Send-SdPacket $conn $SrvrAccount $acctPayload
-        $acctReply = Receive-SdPacket $conn
-        if ($acctReply.ServerError -ne 0) {
-            Write-Host ('   server said: ' + $acctReply.Text)
-            Refuse ("SrvrAccount attach to $acctName failed - server error " +
-                  "$($acctReply.ServerError), status $($acctReply.Status).  " +
-                  'Without the attach the session has no account VOC and no ' +
-                  'open below could succeed - so nothing here is a result.')
+    if ($null -eq (Get-ProbeMatch $r ('^(account ' + [regex]::Escape($acctName) + ': entered)$'))) {
+        Refuse ("SrvrAccount attach to $acctName failed - the probe's reason is above.  " +
+              'Without the attach the session has no account VOC and no ' +
+              'open below could succeed - so nothing here is a result.')
+    }
+    Write-Host "   attached to account $acctName"
+
+    $opened = @{}
+    foreach ($f in $fixtures) {
+        $o = Get-ProbeOpen $r $f.Name
+        if (-not $o.Seen) {
+            Refuse "the probe printed no OPEN line for $($f.Name) - the open was never reported, so there is no reading to score."
         }
-        Write-Host "   attached to account $acctName"
+        $opened[$f.Name] = $o
+        Write-Host ("   {0,-9} opened={1}  serverError={2}" -f $f.Name, $o.Opened, $o.ServerError)
+        if ($o.Text) { Write-Host ("     reply: " + $o.Text.Trim()) }
+    }
 
-        $opened = @{}
-        foreach ($f in $fixtures) {
-            $r = Test-ApiOpen $conn $f.Name
-            $opened[$f.Name] = $r
-            Write-Host ("   {0,-9} opened={1}  serverError={2}  status={3}" -f
-                        $f.Name, $r.Opened, $r.ServerError, $r.Status)
-            if ($r.Text -and -not $r.Opened) { Write-Host ("     reply: " + $r.Text.Trim()) }
-        }
-
-        # THE NULL-CASE GUARD.  Without the allow fixture opening, a refusal on
-        # deny says nothing at all.
-        if (-not $opened['ZZIDALLOW'].Opened) {
-            $script:void = $true
-            Write-Host ''
-            Write-Host '*** VOID: the ALLOW fixture did not open either. ***' -ForegroundColor Yellow
-            Write-Host '    The VOC pointer, the path or the fixture is wrong, so the refusal'
-            Write-Host '    on DENY proves nothing.  Nothing here is a result.'
-        } else {
-            # NOT DECISIVE, AND RUN b27 IS WHY.  All three of these opened on
-            # a run whose fixture ACLs were verified correct at %0 - which no
-            # single token can do, since ZZIDDENY grants the account nothing
-            # and ZZIDUSER grants nothing else.  So the DACL was not what
-            # gated them: a LocalSystem session holds SeBackupPrivilege, which
-            # bypasses DACLs outright.  These rows are kept because they are
-            # real readings and their pattern is diagnostic, but the identity
-            # question is settled by ownership below, not here.
-            Note 'ALLOW fixture opens over the API'      $true  $opened['ZZIDALLOW'].Opened $false
-            Note 'DENY fixture is REFUSED over the API'  $false $opened['ZZIDDENY'].Opened  $false
-            Note 'USER-ONLY fixture opens over the API'  $true  $opened['ZZIDUSER'].Opened  $false
-        }
-
-        # ------------------------------------------------------------- 5b
-        # THE OWNERSHIP PROBE - THE MEASUREMENT THIS VERIFIER IS ACTUALLY FOR.
-        #
-        # Every ACL fixture above asks "what may this session READ", and that
-        # question cannot be answered while the session may hold a privilege
-        # that bypasses the answer.  Ownership is not bypassable in the same
-        # way: SeBackupPrivilege lets a token open a file it has no ACE on, it
-        # does not change whose name goes on a file the token CREATES.  A
-        # directory-type file stores each record as a real file, so writing
-        # one and reading its owner asks the session, directly, who it is.
+    # THE NULL-CASE GUARD.  Without the allow fixture opening, a refusal on
+    # deny says nothing at all.
+    if (-not $opened['ZZIDALLOW'].Opened) {
+        $script:void = $true
         Write-Host ''
-        Write-Host '   -- ownership probe --'
-        $ownDir   = Join-Path $accPath 'ZZIDOWN'
-        $localRec = Join-Path $ownDir 'ZZLOCAL'
-        $apiRec   = Join-Path $ownDir 'ZZAPI'
+        Write-Host '*** VOID: the ALLOW fixture did not open either. ***' -ForegroundColor Yellow
+        Write-Host '    The VOC pointer, the path or the fixture is wrong, so the refusal'
+        Write-Host '    on DENY proves nothing.  Nothing here is a result.'
+    } else {
+        # NOT DECISIVE, AND RUN b27 IS WHY.  All three of these opened on
+        # a run whose fixture ACLs were verified correct at %0 - which no
+        # single token can do, since ZZIDDENY grants the account nothing
+        # and ZZIDUSER grants nothing else.  So the DACL was not what
+        # gated them: a LocalSystem session holds SeBackupPrivilege, which
+        # bypasses DACLs outright.  These rows are kept because they are
+        # real readings and their pattern is diagnostic, but the identity
+        # question is settled by ownership below, not here.
+        Note 'ALLOW fixture opens over the API'      $true  $opened['ZZIDALLOW'].Opened $false
+        Note 'DENY fixture is REFUSED over the API'  $false $opened['ZZIDDENY'].Opened  $false
+        Note 'USER-ONLY fixture opens over the API'  $true  $opened['ZZIDUSER'].Opened  $false
+    }
 
-        if (-not (Test-Path -LiteralPath $localRec)) {
+    # ------------------------------------------------------------- 5b
+    # THE OWNERSHIP PROBE - THE MEASUREMENT THIS VERIFIER IS ACTUALLY FOR.
+    #
+    # Every ACL fixture above asks "what may this session READ", and that
+    # question cannot be answered while the session may hold a privilege
+    # that bypasses the answer.  Ownership is not bypassable in the same
+    # way: SeBackupPrivilege lets a token open a file it has no ACE on, it
+    # does not change whose name goes on a file the token CREATES.  A
+    # directory-type file stores each record as a real file, so writing
+    # one and reading its owner asks the session, directly, who it is.
+    Write-Host ''
+    Write-Host '   -- ownership probe --'
+
+    if (-not $localPresent) {
+        $script:void = $true
+        Write-Host "*** VOID: the local control record '$localRec' is absent." -ForegroundColor Yellow
+        Write-Host '    The Step 3d COPY did not produce a file, so there is nothing to compare against.'
+        Write-Host '    (The probe was therefore not asked to write ZZAPI.)'
+    } else {
+        $own     = Get-ProbeOpen $r 'ZZIDOWN'
+        $written = Get-ProbeMatch $r '^WRITE ZZIDOWN ZZAPI: (WRITTEN)$'
+        if (-not $own.Opened) {
             $script:void = $true
-            Write-Host "*** VOID: the local control record '$localRec' is absent." -ForegroundColor Yellow
-            Write-Host '    The Step 3d COPY did not produce a file, so there is nothing to compare against.'
+            Write-Host "*** VOID: the API session could not open ZZIDOWN (serverError $($own.ServerError))." -ForegroundColor Yellow
+        } elseif ($null -eq $written) {
+            # REFUSED, NOT SENT, or no line at all - the probe's own WRITE line
+            # says which, and it is printed rather than paraphrased.
+            $script:void = $true
+            $wLine = Get-ProbeMatch $r '^(WRITE ZZIDOWN ZZAPI: .*)$'
+            if ($null -eq $wLine) { $wLine = '<the probe printed no WRITE line>' }
+            Write-Host "*** VOID: vb.write did not report WRITTEN." -ForegroundColor Yellow
+            Write-Host ('    probe said: ' + $wLine)
+        } elseif (-not (Test-Path -LiteralPath $apiRec)) {
+            # REFUSE THE NULL CASE.  vb.write reporting success without
+            # a file on disk would make every owner reading below a
+            # statement about a file that does not exist.
+            $script:void = $true
+            Write-Host "*** VOID: vb.write reported success but '$apiRec' is not on disk." -ForegroundColor Yellow
         } else {
-            $own = Test-ApiOpen $conn 'ZZIDOWN'
-            if (-not $own.Opened) {
-                $script:void = $true
-                Write-Host "*** VOID: the API session could not open ZZIDOWN (serverError $($own.ServerError))." -ForegroundColor Yellow
-            } else {
-                $w = Invoke-ApiWrite $conn $own.FileNo 'ZZAPI' 'written by the API session'
-                if (-not $w.Written) {
-                    $script:void = $true
-                    Write-Host "*** VOID: vb.write was refused (serverError $($w.ServerError), status $($w.Status))." -ForegroundColor Yellow
-                    if ($w.Text) { Write-Host ('    server said: ' + $w.Text.Trim()) }
-                } elseif (-not (Test-Path -LiteralPath $apiRec)) {
-                    # REFUSE THE NULL CASE.  vb.write reporting success without
-                    # a file on disk would make every owner reading below a
-                    # statement about a file that does not exist.
-                    $script:void = $true
-                    Write-Host "*** VOID: vb.write reported success but '$apiRec' is not on disk." -ForegroundColor Yellow
-                } else {
-                    $localOwner = (Get-Acl -LiteralPath $localRec).Owner
-                    $apiOwner   = (Get-Acl -LiteralPath $apiRec).Owner
-                    Write-Host "   ZZLOCAL (written by the local elevated session): $localOwner"
-                    Write-Host "   ZZAPI   (written by the API session)           : $apiOwner"
+            $localOwner = (Get-Acl -LiteralPath $localRec).Owner
+            $apiOwner   = (Get-Acl -LiteralPath $apiRec).Owner
+            Write-Host "   ZZLOCAL (written by the local elevated session): $localOwner"
+            Write-Host "   ZZAPI   (written by the API session)           : $apiOwner"
 
-                    # THE CONTROL.  If both records carry the same owner then
-                    # ownership is not tracking the writing session at all -
-                    # every SD-created file might simply be owned by whoever
-                    # owns the tree - and the API reading proves nothing.
-                    if ($localOwner -eq $apiOwner) {
-                        $script:void = $true
-                        Write-Host '*** VOID: both records have the SAME owner, so ownership does not' -ForegroundColor Yellow
-                        Write-Host '    track the writing session and the API reading is not evidence.'
-                    } else {
-                        Note 'the API session writes as the authenticated user' `
-                             $true ($apiOwner -match "\\$Prefix$")
-                    }
-                }
+            # THE CONTROL.  If both records carry the same owner then
+            # ownership is not tracking the writing session at all -
+            # every SD-created file might simply be owned by whoever
+            # owns the tree - and the API reading proves nothing.
+            if ($localOwner -eq $apiOwner) {
+                $script:void = $true
+                Write-Host '*** VOID: both records have the SAME owner, so ownership does not' -ForegroundColor Yellow
+                Write-Host '    track the writing session and the API reading is not evidence.'
+            } else {
+                Note 'the API session writes as the authenticated user' `
+                     $true ($apiOwner -match "\\$Prefix$")
             }
         }
-    } finally {
-        if ($conn) { try { Send-SdPacket $conn $SrvrQuit @() } catch { }; Close-SdConnection $conn }
     }
 }
 finally {
