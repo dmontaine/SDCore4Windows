@@ -42,6 +42,14 @@
 #     and anything other than exactly one refuses the kill;
 #   - this script writes its own transcript under %LOCALAPPDATA%\SD-verify.
 #
+# ***15 Sep 2026, SECOND RUN - THE HOLDER WORKED AND THE PROBE MISSED IT.***
+# HOLD=LOCKED, held through the 60 s poll, released only by the record; the
+# probe printed "locks=1 seen=0" and the run refused at the instrument check.
+# A NOCASE file's lock id is UPPER-CASED in the lock table (op_lock.c:630) and
+# since D2 every hashed file is NOCASE, so GETLOCKS answered ZZDLREC to a probe
+# comparing against 'zzdlrec'.  The compare now folds, and every lock the probe
+# sees is printed (OTHER-LOCK ...) whether it matches or not.
+#
 #   1. INSTRUMENT CHECK, before anything is killed: the probe must see the lock
 #      with a real owner name.  If it does not, the holder is released cleanly
 #      (the release record is written) and the run REFUSES - nothing is killed.
@@ -161,14 +169,20 @@ program zzdlprobe
 * zzdlprobe - written by verify-deadlock.ps1.  Safe to delete.
 * GETLOCKS field 1 is the limits; every later field is one lock:
 * file_id VM pathname VM userno VM type VM id VM username (LISTRDU:98).
+* The id is UPPER-CASED in the lock table on a NOCASE file (op_lock.c:630),
+* and since D2 every hashed file is one - the first run of this probe
+* compared case-sensitively and reported locks=1 seen=0.  Every lock is
+* printed, matched or not, so a miss shows what was there.
    locks = getlocks('', 0)
    n = dcount(locks, @fm)
    seen = 0
    for i = 2 to n
       s = locks<i>
-      if s<1,5> = 'zzdlrec' then
+      if upcase(s<1,5>) = 'ZZDLREC' then
          seen += 1
          crt 'LOCK user=' : s<1,3> : ' type=' : s<1,4> : ' name=[' : s<1,6> : ']'
+      end else
+         crt 'OTHER-LOCK file=' : s<1,1> : ' id=[' : s<1,5> : '] user=' : s<1,3> : ' type=' : s<1,4>
       end
    next i
    crt 'PROBE-DONE locks=' : (n - 1) : ' seen=' : seen
