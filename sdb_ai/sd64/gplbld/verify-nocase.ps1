@@ -40,12 +40,18 @@
 # to one file, so without the flag SD takes two record locks (op_lock.c) and
 # two transaction cache entries (txn.c) on what is one file.
 #
-# THE DYNAMIC FILE IS THE CONTROL AND IS THE POINT OF THE TEST.  FILEINFO
-# answering 1 for a directory file proves nothing on its own - a constant
-# would do the same.  VOC is a dynamic file and takes its flags from its own
-# header (dh_open.c:549), which this change did not touch, so it must still
-# answer 0.  One moved, one did not, and only then is the flag being read
-# rather than invented.
+# FILEINFO answering 1 for a directory file proves nothing on its own - a
+# constant would do the same.  Until 14 Sep 2026 the control was the DYNAMIC
+# file: VOC took its flags from its own header (dh_open.c) and only directory
+# files carried DHF_NOCASE, so VOC answered 0 - one moved, one did not.
+#
+# RELEASE_1.1 5 D2 CHANGED THAT: the kernel now sets DHF_NOCASE on EVERY hashed
+# file as it is created (gplsrc/op_dio1.c op_create_dh), owner's ruling that no
+# two record ids may differ only by case in any file.  So VOC answers 1 too,
+# and the old "one moved, one did not" control is gone.  FL$TYPE is the control
+# now: FILEINFO returns 4 (directory) for BP and 3 (dynamic) for VOC - two
+# distinct per-file answers - which is what proves the 1008 answers are read
+# from each file's header rather than invented.
 #
 # THE LOCK COLLISION IS THE CONSEQUENCE, NOT THE CHANGE, and is not tested
 # here.  Whether a READU on sue blocks a READU on SUE is downstream of this
@@ -61,6 +67,8 @@
 #       OPEN 'VOC' TO F.DH ELSE STOP 'cannot open VOC'
 #       CRT 'DIRFILE=':FILEINFO(F.DIR, 1008)
 #       CRT 'DHFILE=':FILEINFO(F.DH, 1008)
+#       CRT 'DIRTYPE=':FILEINFO(F.DIR, 3)
+#       CRT 'DHTYPE=':FILEINFO(F.DH, 3)
 #       CRT 'ISWIN=':SYSTEM(91)
 #
 # then send "BASIC BP SDNOCASE", "RUN BP SDNOCASE", "OFF" into an ssh session
@@ -74,8 +82,10 @@
 # SYSTEM() is the route to these.
 #
 # MEASURED BEFORE THE CHANGES, both by hand: DIRFILE=0 and DHFILE=0 on the
-# 17:36:21 install, ISWIN=0 on the 20:10:31 one.  Those are the readings this
-# script exists to see move - and DHFILE is the one that must NOT.
+# 17:36:21 install, ISWIN=0 on the 20:10:31 one.  DIRFILE moved to 1 with the
+# directory-file work; DHFILE moved to 1 with RELEASE_1.1 5 D2 (14 Sep 2026),
+# which made every hashed file NOCASE.  Both are 1 now; FL$TYPE (4 for BP, 3
+# for VOC) is the control that FILEINFO reads per-file values.
 
 [CmdletBinding()]
 param(
@@ -202,11 +212,13 @@ $probeObj = Join-Path $acctDir 'bp.out\SDNOCASE'
 
 $src = @(
     "* SDNOCASE - written by gplbld/verify-nocase.ps1.  Safe to delete."
-    "* 1008 is FL`$NOCASE (SYSCOM KEYS.H), literal to avoid an include path."
+    "* 1008 is FL`$NOCASE, 3 is FL`$TYPE (SYSCOM KEYS.H), literal to avoid an include path."
     "      OPEN 'BP' TO F.DIR ELSE STOP 'cannot open BP'"
     "      OPEN 'VOC' TO F.DH ELSE STOP 'cannot open VOC'"
     "      CRT 'DIRFILE=':FILEINFO(F.DIR, 1008)"
     "      CRT 'DHFILE=':FILEINFO(F.DH, 1008)"
+    "      CRT 'DIRTYPE=':FILEINFO(F.DIR, 3)"
+    "      CRT 'DHTYPE=':FILEINFO(F.DH, 3)"
     "      CRT 'ISWIN=':SYSTEM(91)"
 ) -join "`n"
 
@@ -287,16 +299,27 @@ if ($text -notmatch 'DIRFILE=') {
     exit 2
 }
 
-$dirVal = if ($text -match 'DIRFILE=(\d+)') { $Matches[1] } else { '(none)' }
-$dhVal  = if ($text -match 'DHFILE=(\d+)')  { $Matches[1] } else { '(none)' }
-$winVal = if ($text -match 'ISWIN=(\d+)')   { $Matches[1] } else { '(none)' }
+$dirVal  = if ($text -match 'DIRFILE=(\d+)') { $Matches[1] } else { '(none)' }
+$dhVal   = if ($text -match 'DHFILE=(\d+)')  { $Matches[1] } else { '(none)' }
+$dirType = if ($text -match 'DIRTYPE=(\d+)') { $Matches[1] } else { '(none)' }
+$dhType  = if ($text -match 'DHTYPE=(\d+)')  { $Matches[1] } else { '(none)' }
+$winVal  = if ($text -match 'ISWIN=(\d+)')   { $Matches[1] } else { '(none)' }
 
 Remove-Probe
 
 # ---------------------------------------------------------------------- report
 
-Note 'directory file (BP) reports FL$NOCASE' '1' $dirVal $true
-Note 'dynamic file (VOC) reports FL$NOCASE'  '0' $dhVal  $true
+# RELEASE_1.1 5 D2, 14 Sep 2026: every hashed file is created NOCASE now
+# (gplsrc/op_dio1.c), so the DYNAMIC file (VOC) reads 1 too - it was 0 until D2,
+# when only directory files carried the flag.  Both reading 1 means the old
+# control - "one moved, one did not" - no longer discriminates, so FL$TYPE is
+# the control instead: FILEINFO returns 4 (directory) for BP and 3 (dynamic)
+# for VOC, two different per-file answers, which is what proves the 1008 answers
+# are read from each file's header and not a constant.
+Note 'directory file (BP) reports FL$NOCASE' '1' $dirVal  $true
+Note 'dynamic file (VOC) reports FL$NOCASE'  '1' $dhVal   $true
+Note 'CONTROL: BP is a directory file (FL$TYPE 4)' '4' $dirType $true
+Note 'CONTROL: VOC is a dynamic file (FL$TYPE 3)'  '3' $dhType  $true
 
 # SYSTEM(91) IS WHAT UNBLOCKS QPROC, and it is decisive for the same reason the
 # rows above are: QPROC:499 is the only route by which the query processor
@@ -311,16 +334,20 @@ if ($fatal) {
     Write-Output 'verify-nocase: FAILED.'
     Write-Output ''
     if ($dirVal -eq '0' -and $dhVal -eq '0') {
-        Write-Output '  Both read 0, which is the reading from BEFORE the change - so the'
-        Write-Output '  installed sd.exe predates dh_open.c:529. assert-current passed, so'
+        Write-Output '  Both read 0, which is the reading from BEFORE any of this - so the'
+        Write-Output '  installed sd.exe predates the NOCASE work. assert-current passed, so'
         Write-Output '  check that the cycle actually rebuilt and reinstalled the binary.'
-    } elseif ($dhVal -ne '0') {
-        Write-Output '  The DYNAMIC file moved, which this change should not have touched.'
-        Write-Output '  Dynamic files take their flags from their own header (dh_open.c:549);'
-        Write-Output '  if that moved, something wider than step 8 has changed.'
+    } elseif ($dhVal -eq '0') {
+        Write-Output '  The DYNAMIC file (VOC) read 0 - case SENSITIVE. RELEASE_1.1 5 D2 makes'
+        Write-Output '  every hashed file NOCASE at creation (gplsrc/op_dio1.c op_create_dh).'
+        Write-Output '  A 0 here means the installed sd.exe predates D2 - check the cycle.'
+    } elseif ($dirType -ne '4' -or $dhType -ne '3') {
+        Write-Output '  The FL$TYPE control did not read 4 (directory) for BP and 3 (dynamic)'
+        Write-Output '  for VOC, so FILEINFO is not returning per-file values and the NOCASE'
+        Write-Output '  readings above cannot be trusted. Something wider has changed.'
     }
     exit 1
 }
 
-Write-Output 'verify-nocase: PASSED - directory files are case insensitive, dynamic files unchanged.'
+Write-Output 'verify-nocase: PASSED - every hashed file is case insensitive (D2); FL$TYPE control read two distinct per-file values.'
 exit 0
