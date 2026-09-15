@@ -29,6 +29,11 @@
 * pair, and the lookup fold serves it).
 *
 * START-HISTORY:
+* 14 Sep 26 Windows port - three defects its first measuring run and a reading
+*           found: select lists 13-15 are out of range (0-12), so the walk
+*           stopped on its first file; old.path was read in phase 1 before
+*           phase 2 set it; and SDSYS's live VOC was queued through its own
+*           'voc' F-record.  verify-nocaseupgrade.ps1 is the witness.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 D2, new program.
 * END-HISTORY
 
@@ -133,9 +138,15 @@ do.account:
 do.account.at:
    file.list = ''
    openpath this.acct:@ds:'voc' to acct.voc then
-      select acct.voc to 13
+* 14 Sep 26 - LIST 11, NOT 13.  Select lists run 0 to 12 (HIGH_SELECT,
+*   gplsrc/sd.h:43), and 11-12 only in an $internal program; 13, 14 and 15
+*   stopped the walk with 1118 "Select list number out of range" on its first
+*   file (verify-nocaseupgrade, its first measuring run).  The register walk
+*   holds 12 for its whole loop, so every inner list here is 11, used one after
+*   another: this one is exhausted before any file is converted.
+      select acct.voc to 11
       loop
-         readnext vid from 13 else exit
+         readnext vid from 11 else exit
          read vrec from acct.voc, vid then
             if upcase(vrec[1,1]) = 'F' then
                gosub add.file
@@ -199,6 +210,18 @@ convert.one:
       close old.fu
       return                       ;* directory files fold on NTFS already
    end
+* 14 Sep 26 - old.path IS SET HERE, BEFORE PHASE 1 USES IT.  It was first
+*   assigned in phase 2, so phase 1's probe path read an unassigned variable
+*   on the first file and the previous file's path on every later one.
+   old.path = fileinfo(old.fu, FL$PATH)
+* 14 Sep 26 - AND THE SESSION'S OWN LIVE VOC IS NEVER REBUILT, however it was
+*   queued.  do.account skips it by design, but SDSYS's VOC holds an F-record
+*   'voc' naming itself (voc_template/voc), so add.file queued it anyway.  The
+*   test is on the opened file's path, not on how the path was spelled.
+   if upcase(old.path) = upcase(fileinfo(@voc, FL$PATH)) then
+      close old.fu
+      return
+   end
    scanned += 1
 
    if bitand(fileinfo(old.fu, FL$FLAGS), FL$FLAGS.NOCASE) then
@@ -228,9 +251,9 @@ convert.one:
       err.count += 1
       return
    end
-   select old.fu to 14
+   select old.fu to 11             ;* 11, not 14 - see do.account.at
    loop
-      readnext sid from 14 else exit
+      readnext sid from 11 else exit
       read prev.spelling from scan.fu, sid then
          if prev.spelling # sid then
             dups<1, -1> = prev.spelling : ' / ' : sid
@@ -240,7 +263,7 @@ convert.one:
          write sid to scan.fu, sid   ;* store the first spelling under its folded key
       end
    repeat
-   clearselect 14
+   clearselect 11
    close scan.fu
    void ospath(scan.path, OS$DELETE)
 
@@ -281,7 +304,7 @@ convert.one:
       return
    end
 
-   old.path = fileinfo(old.fu, FL$PATH)
+   * old.path was set at the top of convert.one (14 Sep 26).
    new.path = field(old.path, @ds, 1, dcount(old.path, @ds) - 1) : @ds : '~SDNOCASE.' : @userno
 
    openpath new.path to new.fu then
@@ -304,9 +327,9 @@ convert.one:
    filelock new.fu
 
    copy.failed = @false
-   select old.fu to 15
+   select old.fu to 11             ;* 11, not 15 - see do.account.at
    loop
-      readnext cid from 15 else exit
+      readnext cid from 11 else exit
       read crec from old.fu, cid then
          write crec to new.fu, cid
       end else
@@ -314,7 +337,7 @@ convert.one:
          exit
       end
    repeat
-   clearselect 15
+   clearselect 11
 
    if copy.failed then
       close new.fu

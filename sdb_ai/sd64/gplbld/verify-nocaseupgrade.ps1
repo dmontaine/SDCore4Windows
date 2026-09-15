@@ -38,10 +38,14 @@
 #     that the install matches source; the converted count row would name any
 #     other file the walk converted.
 #
-# RED BEFORE THE FIX, EXPECTED AND NOT YET SEEN.  Read 14 Sep 2026: phase 1
-# builds its probe path from old.path (UPGRADE_NOCASE:218), which is first set
-# in phase 2 (:284), so the first case-sensitive file stops the walk before
-# COMPLETE.  Falsified if the first run reaches COMPLETE on today's install.
+# RED BEFORE THE FIX, MEASURED 14 Sep 2026 (the owner's second run; the first
+# refused its precondition on this script's own Get-Probe defect).  PREDICTED
+# by reading: phase 1's use of old.path before phase 2 set it.  WHAT HAPPENED
+# FIRST WAS A THIRD DEFECT: "Select list number out of range at line 136" -
+# the walk used lists 13-15 and SD allows 0-12.  Driver exit 1, no COMPLETE,
+# 11 FAIL / 20 PASS, and every "lost nothing" row PASSED: nothing converted,
+# nothing lost.  The old.path abort was masked, never reached.  All three were
+# fixed together; test-selectlists-units.py now guards the list-number class.
 #
 # BOUNDED: every SD session and the driver run as jobs with a timeout; any
 # sd.exe a timed-out session leaves is killed BY PID DIFF, never by name.
@@ -264,7 +268,13 @@ try {
     Write-Output ("  log text this run added: " + $logNew.Length + " chars (shown in the driver output above)")
 
     Row 'the driver finished within 600 s' $finished
-    Row 'no runtime abort in the walk (no "Unassigned variable")' ($drv -notmatch 'Unassigned variable') 'the walk stopped on an unassigned variable'
+    # ANY SD RUNTIME ERROR, NOT ONE WORDING.  This row first matched only
+    # "Unassigned variable" - the abort predicted by reading - and PASSED on the
+    # run that stopped on "0000025C: Select list number out of range at line 136
+    # of ...UPGRADE_NOCASE".  SD prints every runtime error as
+    # "<8 hex>: <text> at line <n> of <object>", so that shape is the anchor.
+    $rte = [regex]::Match($drv, '(?m)[0-9A-Fa-f]{8}: .+ at line \d+ of \S+')
+    Row 'no SD runtime error in the walk' (-not $rte.Success) $rte.Value
     Row 'the walk reached COMPLETE' ($drv -match '(?m)\|\s*COMPLETE\s*$') 'no COMPLETE line in the report'
     Row 'no file "could not be read or rebuilt" (10183)' ($drv -notmatch 'could not be read or rebuilt') 'the walk reported trouble'
     Row 'the driver exited 2 - done, with a duplicate left and named' ($drvExit -eq 2) "exit $drvExit"
