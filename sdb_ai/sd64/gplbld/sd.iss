@@ -2993,6 +2993,63 @@ begin
   end;
 end;
 
+{ CONVERT AN UPGRADED INSTALL'S FILES TO CASE-INSENSITIVE RECORD IDS.
+  RELEASE_1.1 5 D2.  A fresh install makes every file case insensitive as it
+  is created (the kernel forces it), so no two record ids can differ only by
+  case.  An upgrade keeps the user's existing data files, which were built case
+  sensitive, so this walks every account's files and converts each one - after
+  scanning it read-only for a case-only duplicate FIRST, so a conversion can
+  never lose a record.  A file that holds such a duplicate is left exactly as
+  it was and named in nocase-upgrade.log, for the administrator to resolve.
+
+  Exit codes, from upgrade-nocase.ps1's header: 0 clean, 2 done but some files
+  hold a duplicate and were left (a WARNING, not a failure), 1 a real failure,
+  3 SD would not start.  A first install has nothing to do and returns at once.
+
+  Ordering: after RefreshAccountVocs, so the account register it walks is the
+  one that step has already brought forward.  ISCC note, as elsewhere in this
+  file: no comment line here may start with a bracketed word or a hash. }
+function RefreshNocase: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  if DataTreeWasAbsent then Exit;
+
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\upgrade-nocase.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'The case-insensitivity conversion could not be started, so your ' +
+              'existing files were left as they were. SD Core works and finds a ' +
+              'record typed in any case. Run upgrade-nocase.ps1 from the SD Core ' +
+              'program folder, as an administrator.' + #13#10#13#10;
+    Exit;
+  end;
+
+  case Code of
+    0: ;
+    2: Result := 'One or more of your files hold two record ids that differ only ' +
+                 'by case, so those files were left unchanged - converting them ' +
+                 'would have kept only one. nocase-upgrade.log in the SD Core ' +
+                 'data folder names every one. Rename or delete one id of each ' +
+                 'pair, then run CONFIGURE.FILE NO.CASE on that file.' + #13#10#13#10;
+    3: Result := 'SD Core would not start during the upgrade, so your existing ' +
+                 'files were not converted to case-insensitive ids. Everything ' +
+                 'else installed. Run upgrade-nocase.ps1 from the SD Core program ' +
+                 'folder, as an administrator, once SD Core is running.' + #13#10#13#10;
+  else
+    Result := 'Some files could not be converted to case-insensitive record ids ' +
+              'for this release. SD Core works and finds a record typed in any ' +
+              'case. nocase-upgrade.log in the SD Core data folder says what ' +
+              'happened.' + #13#10#13#10;
+  end;
+end;
+
 (* 30 Aug 26 - THE '$standalone' MARKER AND WriteStandaloneMarker ARE GONE.
    PRE_RELEASE_FIXES 75.  The marker existed for one reader - CREATEA, which
    used it to refuse CREATE.ACCOUNT USER - and that refusal is removed with it,
@@ -3863,6 +3920,11 @@ var
   { Its positive half.  Exactly one of the two is ever non-empty on an upgrade,
     neither on a first install - see where they are assigned. }
   VocDoneMsg: String;
+  { 14 Sep 26 - RELEASE_1.1 5 D2.  Empty on a first install and on an upgrade
+    whose files all converted; non-empty when a file held a case-only duplicate
+    and was left, or the step could not run.  Its own variable for the same
+    reason as VocMsg: it fails independently and its cure is its own. }
+  NocaseMsg: String;
   SshOnlyMsg: String;
   MarkerMsg: String;
   { 03 Sep 26 - PRE_RELEASE_FIXES 135 and 147.  The two things a kept database
@@ -4071,6 +4133,11 @@ begin
       that is what RefreshAccountVocs itself is gated on: an install over a tree
       an uninstall left behind refreshes it too, and SdWasInstalled is false
       there. }
+    { AN UPGRADE'S FILES CONVERTED TO CASE-INSENSITIVE IDS, and a no-op on a
+      first install.  RELEASE_1.1 5 D2.  After the vocabulary step so the
+      register it walks is the finished one. }
+    NocaseMsg := RefreshNocase;
+
     if DataTreeUpgrade and (VocMsg = '') then
       VocDoneMsg := 'EVERY ACCOUNT ALREADY HAS THIS RELEASE''S COMMANDS. Setup ' +
                     'refreshed the vocabulary of every registered account, SDSYS ' +
@@ -4380,6 +4447,11 @@ begin
              Empty on a first install, and empty on an upgrade where the step
              failed - VocMsg above is what speaks then. }
            VocDoneMsg +
+           { RELEASE_1.1 5 D2.  Empty unless an upgrade left a file that holds a
+             case-only duplicate id, or could not convert one; beside the VOC
+             pair because it too brings a preserved part of the data tree up to
+             this release. }
+           NocaseMsg +
            { 25 Aug 26 - EMPTY ON EVERY INSTALL THAT WENT RIGHT, and it sits
              beside the ssh pair for the same reason they do: if the marker did
              not get written, the account advice below is describing rules this

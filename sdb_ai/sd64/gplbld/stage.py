@@ -1438,6 +1438,16 @@ def main():
                    # watches it like the rest of these - do NOT add it to that
                    # script's $neverShipped list.
                    'upgrade-voc.ps1',
+                   # 14 Sep 26 - RELEASE_1.1 5 D2's UPGRADE step.  A fresh
+                   # install makes every file NOCASE (gplsrc/op_dio1.c); an
+                   # upgrade keeps the user's case-sensitive data files, so
+                   # this runs "sd -internal RUN gpl.bp UPGRADE_NOCASE", which
+                   # scans every file for a case-only duplicate FIRST and
+                   # converts only the clean ones, naming any it leaves.  It
+                   # SHIPS, so assert-current watches it - do NOT add it to
+                   # that script's $neverShipped list.  test-upgradenocase-
+                   # units.ps1 does NOT ship and IS in $neverShipped.
+                   'upgrade-nocase.ps1',
                    # 28 Aug 26 - PRE_RELEASE_FIXES #36, and this pair is the
                    # half of that ruling that says something comes back for a
                    # profile SD could not remove.  secure-reclaim.ps1 creates
