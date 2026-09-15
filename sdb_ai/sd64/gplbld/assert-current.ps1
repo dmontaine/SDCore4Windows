@@ -1352,7 +1352,12 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # 15 Sep 26 - test-tlsconsts-units.py, the free guard over the
                   # API's TLS wire constants (RELEASE_1.1 41).  Ships nowhere;
                   # listed with the commit that creates it.
-                  'test-tlsconsts-units.py')
+                  'test-tlsconsts-units.py',
+                  # 15 Sep 26 - scram-probe.py, RELEASE_1.1 42's TLS+SCRAM probe
+                  # (the Windows port of Linux's), and its free guard.  A test
+                  # tool like verify-scram.c; ships nowhere, listed with its
+                  # commit.
+                  'scram-probe.py', 'test-scramprobe-units.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.
