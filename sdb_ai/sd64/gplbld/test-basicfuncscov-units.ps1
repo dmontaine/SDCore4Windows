@@ -38,7 +38,7 @@ $ErrorActionPreference = 'Stop'
 $here     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $verifier = Join-Path $here 'verify-basicfuncs.ps1'
 $probe    = Join-Path $here 'basicfuncs.sb'
-$bcomp    = Join-Path $here '..\sdsys\gpl.bp\BCOMP'
+$bcomp    = Join-Path $here '..\sdsys\gpl.bp\bcomp'
 
 $pass = 0
 $fail = 0

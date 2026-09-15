@@ -4,6 +4,27 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+15 Sep 26  PY_LISTCREATE CREATES A PYTHON LIST.
+
+           A BASIC program could append to a Python list and read one back,
+           but had no way to make one.  PY_LISTCREATE(listname) now does, and
+           returns 0 on success.  It is declared in SDPYFUNC.H with the other
+           PY_ functions, which now number twenty-one.
+
+15 Sep 26  COPY ... DELETING NO LONGER DELETES A RECORD COPIED ONTO ITSELF.
+
+           When the source and target are the same file and the two record ids
+           name the same record - identical, or differing only in case, since
+           every file now treats ids without regard to case - COPY with
+           OVERWRITING DELETING wrote the record and then deleted it.  It now
+           leaves the record in place and says it was copied onto itself.
+
+15 Sep 26  SD'S OWN BASIC SOURCE RECORDS ARE LOWER CASE.
+
+           The programs in GPL.BP are named in lower case, like the catalogue
+           entries built from them.  Nothing you type changes: GPL.BP and its
+           record names are found in any case.
+
 14 Sep 26  NO TWO RECORD IDS MAY DIFFER ONLY BY CASE.
 
            Every file now treats record ids without regard to case, so a file

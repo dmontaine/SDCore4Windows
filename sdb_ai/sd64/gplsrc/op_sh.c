@@ -433,7 +433,7 @@ Private void sh_execute(char *command) {
 
      WITHOUT IT EVERY SHIPPED .ps1 SD RUNS IS REFUSED ON A STOCK WINDOWS
      CLIENT.  The client default policy is Restricted; SH1 is what os.execute
-     uses, and GPL.BP/ELEVATE builds "& '<app>/sd-elevate.ps1' ..." for it, so
+     uses, and gpl.bp/elevate builds "& '<app>/sd-elevate.ps1' ..." for it, so
      "logto sdsys" died with "running scripts is disabled on this system" on a
      machine that was not this one.  APNDPATH, EDIT, REMOTEAPI and REMOTESSH
      all reach shipped scripts the same way.

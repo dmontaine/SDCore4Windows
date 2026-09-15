@@ -1,6 +1,6 @@
 #
 # test-edittokens-units.py - prove the mark grammar BEFORE a cycle spends time
-# on it.  It models gpl.bp/EDIT's marks.out and marks.back exactly.
+# on it.  It models gpl.bp/edit's marks.out and marks.back exactly.
 #
 # THE GRAMMAR.  Every token is "~" plus one character, and "~" is the only
 # escape character, so a scan only ever has to look at a tilde:

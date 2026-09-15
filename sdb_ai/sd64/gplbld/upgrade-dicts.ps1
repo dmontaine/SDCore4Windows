@@ -8,7 +8,7 @@
 # more efficient as a DYNAMIC file - so the dictionaries are created and loaded
 # during the install instead of being tracked as built files.  That is why
 # gplbld\FILES_DICTS is the tracked source (76 records, keyed
-# "<file>^<record>") and gpl.bp\WRITE_INSTALL_DICTS is what turns it into
+# "<file>^<record>") and gpl.bp\write_install_dicts is what turns it into
 # dictionaries.  It is the same reasoning that makes the pcode build Python
 # rather than a shipped binary.
 #
@@ -204,7 +204,7 @@ try {
     # Separate arguments and -internal, exactly as bootstrap.py runs it.
     # NO.PAGE matters: without it the program pages and waits for a keypress
     # that no installer will ever send.
-    Say 'upgrade-dicts: sd -internal RUN gpl.bp WRITE_INSTALL_DICTS NO.PAGE'
+    Say 'upgrade-dicts: sd -internal RUN gpl.bp write_install_dicts NO.PAGE'
     $w = Invoke-Sd @('-internal', 'RUN', 'gpl.bp', 'WRITE_INSTALL_DICTS', 'NO.PAGE')
     Say ("  exit {0}" -f $w.Code)
     Say '  --- output ---'

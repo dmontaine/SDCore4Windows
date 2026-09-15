@@ -175,6 +175,12 @@ $src = @(
     "deffun PY_GETATTR(o) calling '!PY_GETATTR'"
     "deffun PY_OBJTYPE(o) calling '!PY_OBJTYPE'"
     "deffun PY_FINALIZE() calling '!PY_FINALIZE'"
+    # 14 Sep 26 - PY_LISTCREATE, the 21st program (owner's ruling), and the two
+    # list programs that prove it: a list that was never made cannot be appended
+    # to or read back holding SDPY-42.
+    "deffun PY_LISTCREATE(l) calling '!PY_LISTCREATE'"
+    "deffun PY_LISTAPPD(l, o) calling '!PY_LISTAPPD'"
+    "deffun PY_LISTGETS(l) calling '!PY_LISTGETS'"
     ''
     '   st = PY_INITIALIZE()'
     "   crt 'PYPRB-INIT=':st"
@@ -186,6 +192,16 @@ $src = @(
     "   crt 'PYPRB-ATTR=':vv"
     "   ot = PY_OBJTYPE('zz_probe')"
     "   crt 'PYPRB-TYPE=':ot"
+    "   nl = PY_LISTGETS('zz_nolist')"
+    "   crt 'PYPRB-NOLIST=[':nl:']'"
+    "   lc = PY_LISTCREATE('zz_list')"
+    "   crt 'PYPRB-LCREATE=':lc"
+    "   la = PY_LISTAPPD('zz_list', 'zz_probe')"
+    "   crt 'PYPRB-LAPPD=':la"
+    "   lg = PY_LISTGETS('zz_list')"
+    "   crt 'PYPRB-LGET=[':lg:']'"
+    "   lt = PY_OBJTYPE('zz_list')"
+    "   crt 'PYPRB-LTYPE=':lt"
     '   fs = PY_FINALIZE()'
     "   crt 'PYPRB-FIN=':fs"
     "   crt 'PYPRB-DONE'"
@@ -269,6 +285,17 @@ Row ($run -match 'PYPRB-ATTR=SDPY-42') `
     'PY_GETATTR read back SDPY-42 - CPython evaluated 6*7 and the bytes came home'
 
 Row ($run -match 'PYPRB-FIN=0')    'PY_FINALIZE returned 0'
+
+# 14 Sep 26 - PY_LISTCREATE.  DECISIVE: the list read back holds SDPY-42, which
+# only a created list that took the append can.  CONTROL: a list never created
+# reads back without it, so the row cannot pass on a helper that answers
+# anything for any name.
+Row ($run -match 'PYPRB-LCREATE=0') 'PY_LISTCREATE returned 0'
+Row ($run -match 'PYPRB-LAPPD=0')   'PY_LISTAPPD appended to the created list (0)'
+Row ($run -match 'PYPRB-LGET=\[[^\]]*SDPY-42') 'PY_LISTGETS read the created list back holding SDPY-42'
+Row ($run -match 'PYPRB-LTYPE=list') 'PY_OBJTYPE says the created object is a list'
+Row (($run -match 'PYPRB-NOLIST=\[') -and ($run -notmatch 'PYPRB-NOLIST=\[[^\]]*SDPY-42')) `
+    'CONTROL: a list never created does not read back SDPY-42'
 
 # --- the DOCUMENTED route in ---------------------------------------------
 # The program above declares its own deffuns, which tests the CATALOGUED

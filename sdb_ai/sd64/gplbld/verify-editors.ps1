@@ -17,7 +17,7 @@
 # install-editors.ps1 while SD installed - unpinned, so a user installing next
 # year got whatever winget had that day and a key-binding table that may not
 # describe it.  They are now staged from the out-of-git SD-Untracked tree into
-# {app}\usr\bin beside sd.exe, SHA-256-pinned, and gpl.bp/EDIT's find.editor
+# {app}\usr\bin beside sd.exe, SHA-256-pinned, and gpl.bp/edit's find.editor
 # resolves that fixed path BEFORE falling back to a PATH lookup.
 #
 # ***IT FAILS THE QUIET WAY, WHICH IS WHY IT IS WORTH A STEP.***  If the
@@ -32,7 +32,7 @@
 # depends on and never the launch.  Resolving is not running.
 #
 # THE LISTS ARE READ, NOT RETYPED.  The SHA-256 pins come out of stage.py's
-# BUNDLED_EDITORS and the destination out of gpl.bp/EDIT's own literal.
+# BUNDLED_EDITORS and the destination out of gpl.bp/edit's own literal.
 # Copying either here would make this a second place to keep them in step,
 # which is the defect rather than the fix.
 #
@@ -68,7 +68,7 @@ $App    = Join-Path $env:ProgramFiles 'SD'
 $UsrBin = Join-Path $App 'usr\bin'
 $Log    = Join-Path $env:ProgramData 'SD\install-editors.log'
 $Stage  = Join-Path $PSScriptRoot 'stage.py'
-$Edit   = Join-Path $PSScriptRoot '..\sdsys\gpl.bp\EDIT'
+$Edit   = Join-Path $PSScriptRoot '..\sdsys\gpl.bp\edit'
 $psh    = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
 Write-Output ''
@@ -141,7 +141,7 @@ Row (-not (Test-Path -LiteralPath (Join-Path $UsrBin 'nosucheditor.exe'))) `
     'control: usr\bin does NOT hold nosucheditor.exe'
 
 # ---------------------------------------------------------------------------
-# 2. THE PROBE gpl.bp/EDIT BUILDS
+# 2. THE PROBE gpl.bp/edit BUILDS
 #
 # The verb's find.editor concatenates the string below and hands it to
 # OS.EXECUTE, which runs powershell.exe -NoProfile -NonInteractive -Command with
@@ -156,7 +156,7 @@ Write-Output '--- 2. find.editor resolves the bundled copy, not a PATH lookup --
 $editSrc = Get-Content -LiteralPath $Edit -Raw
 $mBun    = [regex]::Match($editSrc, "bundled\s*=\s*'([^']+)'\s*:\s*editor\.exe")
 if (-not $mBun.Success) {
-    Write-Output 'verify-editors: refusing - could not read find.editor''s bundled path out of gpl.bp/EDIT.'
+    Write-Output 'verify-editors: refusing - could not read find.editor''s bundled path out of gpl.bp/edit.'
     Write-Output '  Either the verb no longer prefers the bundled copy - which is the defect 66'
     Write-Output '  was filed for - or find.editor was rewritten and this check needs rewriting.'
     exit 2

@@ -64,7 +64,7 @@ function Say($m) {
     }
 }
 
-# THE TABLE IS THE WHOLE DIFFERENCE BETWEEN THE TWO.  gpl.bp/EDIT carries the
+# THE TABLE IS THE WHOLE DIFFERENCE BETWEEN THE TWO.  gpl.bp/edit carries the
 # same pair of names for the same two verbs; if one is changed the other has
 # to be, and there is nothing else to keep in step.
 #
@@ -78,7 +78,7 @@ $Editors = @(
 )
 
 # --- what counts as present ------------------------------------------------
-# The resolved path, not just a yes: gpl.bp/EDIT resolves the editor the same
+# The resolved path, not just a yes: gpl.bp/edit resolves the editor the same
 # way at run time, so printing what THIS found is what makes a later "editor
 # not found" from the verb diagnosable rather than mysterious.
 function Find-Editor($exe) {
@@ -86,7 +86,7 @@ function Find-Editor($exe) {
     # editor at {app}\usr\bin, beside sd.exe, and this script runs from {app}
     # ({app}\install-editors.ps1), so $PSScriptRoot locates it without touching
     # PATH.  Preferring it makes the version SD shipped the one that runs, and
-    # it matches gpl.bp/EDIT's find.editor, which resolves the same fixed path.
+    # it matches gpl.bp/edit's find.editor, which resolves the same fixed path.
     if ($PSScriptRoot) {
         $bundled = Join-Path $PSScriptRoot ('usr\bin\' + $exe)
         if (Test-Path -LiteralPath $bundled) { return $bundled }

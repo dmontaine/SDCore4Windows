@@ -127,3 +127,64 @@ function Select-SuiteSteps {
     $result.Partial = ($kept.Count -ne @($Steps).Count)
     return $result
 }
+
+function Add-RegisterSweep {
+    <#
+    .SYNOPSIS
+        On a PARTIAL run whose steps create accounts, append the register sweep.
+
+    .DESCRIPTION
+        14 Sep 26 Windows port.  Owner's ruling, 14 Sep 2026, on the class
+        Handoff 58 left unruled: "auto-add the sweep".  A VerifyInstall2 -Only
+        run of an account-creating step (verify-catgate is the one that keeps
+        doing it) leaves a dead ACCOUNTS record, because verify-registersweep is
+        the runner's LAST step and -Only never reaches it - and that record then
+        fails the NEXT VerifyInstall1 at verify-register, nineteen steps in.
+
+        A step "creates accounts" when its parameters carry a non-empty Prefix
+        or Account: that is how VerifyInstall2 hands a step the names it will
+        create.  Returns an object:
+
+          Steps    the steps to run, the sweep appended LAST when added
+          Added    $true when the sweep was appended
+          Reason   one line for the banner, '' when nothing was added
+
+        Nothing is added to a FULL run (the sweep is already its last step), to
+        a partial run that selected the sweep itself, or to one with no
+        account-creating step.  A runner with no sweep step refuses by Reason
+        rather than inventing one.
+    #>
+    param(
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $Selected,
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $AllSteps,
+        [Parameter(Mandatory = $true)] [bool] $Partial,
+        [string] $SweepName = 'verify-registersweep.ps1'
+    )
+
+    Set-StrictMode -Version Latest
+
+    $out = [pscustomobject]@{ Steps = @($Selected); Added = $false; Reason = '' }
+    if (-not $Partial) { return $out }
+    if (@($Selected | Where-Object { $_.Name -ieq $SweepName }).Count -gt 0) { return $out }
+
+    $creators = @($Selected | Where-Object {
+        $p = $_.P
+        ($null -ne $p) -and (
+            ($p.ContainsKey('Prefix')  -and -not [string]::IsNullOrEmpty([string]$p['Prefix'])) -or
+            ($p.ContainsKey('Account') -and -not [string]::IsNullOrEmpty([string]$p['Account'])))
+    })
+    if ($creators.Count -eq 0) { return $out }
+
+    $sweep = @($AllSteps | Where-Object { $_.Name -ieq $SweepName })
+    if ($sweep.Count -ne 1) {
+        $out.Reason = ("no {0} step in this runner, so the account records {1} leave(s) will stay" -f
+                       $SweepName, (($creators | ForEach-Object { $_.Name }) -join ', '))
+        return $out
+    }
+
+    $out.Steps  = @($Selected) + @($sweep[0])
+    $out.Added  = $true
+    $out.Reason = ("{0} added, because {1} create(s) accounts and -Only would otherwise leave their register records behind" -f
+                   $SweepName, (($creators | ForEach-Object { $_.Name }) -join ', '))
+    return $out
+}

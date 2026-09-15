@@ -17,7 +17,9 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
-* rev 0.9-2 Apr 25 mab 
+* rev 0.9-2 Apr 25 mab
+* 15 Sep 26 Windows port - PY_LISTCREATE, the 21st program (owner's ruling),
+*           declared here so the documented $include route reaches it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -45,6 +47,7 @@ deffun PY_DICTGETVALUES(dictname) calling '!PY_DICTGETVALUES'
 deffun PY_STRSET(strname,value) calling '!PY_STRSET'
 deffun PY_STRGET(strname) calling '!PY_STRGET'
 *
+deffun PY_LISTCREATE(listname) calling '!PY_LISTCREATE'
 deffun PY_LISTAPPD(listname,objname) calling '!PY_LISTAPPD'
 deffun PY_LISTGETS(listname) calling '!PY_LISTGETS'
 deffun PY_LISTCLR(listname) calling '!PY_LISTCLR'

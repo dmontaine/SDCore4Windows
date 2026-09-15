@@ -9,7 +9,7 @@
 # question could not be answered - the file is missing, unreadable, or carries
 # neither form of the line.
 #
-# WHY THIS EXISTS.  "remote.api on|local|off" (gpl.bp/REMOTEAPI) is the verb;
+# WHY THIS EXISTS.  "remote.api on|local|off" (gpl.bp/remoteapi) is the verb;
 # this is the half of it that edits a file.  The verb is a thin wrapper on
 # purpose: a script can be parse-checked, byte-checked and run on its own,
 # which BASIC embedded in a verb cannot, and this file's neighbours all follow

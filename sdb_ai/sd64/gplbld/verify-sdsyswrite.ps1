@@ -56,7 +56,7 @@
 # one consent to sd-elevate.ps1 -Start, then a resident helper serves every
 # elevated leg over a named pipe.
 #
-# THE PIPE NAME IS SD'S OWN AND THAT IS DELIBERATE.  gpl.bp/ELEVATE:121 builds
+# THE PIPE NAME IS SD'S OWN AND THAT IS DELIBERATE.  gpl.bp/elevate:121 builds
 # 'sd-elev-' : @logname, so starting the helper on that name means SD's own
 # elevate('START') inside LOGTO SDSYS finds one already serving and
 # short-circuits (sd-elevate.ps1:128).  ONE CONSENT FOR THE WHOLE RUN instead of
@@ -400,7 +400,7 @@ if (`$exists) {
 #
 # THE VERB IS MODIFY.PASSWORD AND THERE IS NO set.password.  Only
 # voc_template carries it, so it is SDSYS-only - which is what makes it the right
-# probe here.  gpl.bp/SET_ACC_PASSWORD:252 prints the success line.
+# probe here.  gpl.bp/set_acc_password:252 prints the success line.
 $pwOkRx = 'Password set for account'
 #
 # AND THE DISQUALIFIERS, because a run can fail THREE ways and two of them are

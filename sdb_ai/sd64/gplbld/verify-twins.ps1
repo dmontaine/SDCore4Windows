@@ -92,11 +92,12 @@ function HasRow([string]$text, [string]$id) {
     return ($text -cmatch ('(?m)^' + [regex]::Escape($id) + '(\s{2,}|\s*$)'))
 }
 
-$names = @('zztwn', 'zztwc', 'zztwk', 'zzx')
+$names = @('zztwn', 'zztwc', 'zztwk', 'zzx', 'zztwe')
 function Cleanup {
     $null = Invoke-SD @(
         'DELETE.FILE zztwn FORCE', 'DELETE.FILE zztwc FORCE',
-        'DELETE.FILE zztwk FORCE', 'DELETE.FILE zzx FORCE')
+        'DELETE.FILE zztwk FORCE', 'DELETE.FILE zzx FORCE',
+        'DELETE.FILE zztwe FORCE')
     $left = @()
     foreach ($n in $names) {
         if (Test-Path -LiteralPath (Join-Path $sdsys $n)) { $left += $n }
@@ -174,6 +175,22 @@ try {
     } else {
         Row 'D CONTROL: fixture built' $false 'could not build zztwk'
     }
+
+    # ---- E. COPY onto the same record with DELETING keeps it (RELEASE_1.1 36)
+    # On a NOCASE file jack and JACK are one record, so COPY ... jack,JACK
+    # OVERWRITING DELETING wrote the record and then deleted the only copy.
+    # CONTROL: a copy to a DIFFERENT id with DELETING must still move it, or
+    # the fix would be a DELETING that no longer deletes anything.
+    $e = Invoke-SD @(
+        'CREATE.FILE zztwe',
+        'COPY FROM VOC TO zztwe who,jack',
+        'COPY FROM zztwe jack,JACK OVERWRITING DELETING',
+        'COUNT zztwe')
+    Row 'E: COPY jack,JACK OVERWRITING DELETING keeps the one record' ((Listed $e) -eq 1) "COUNT said $(Listed $e)"
+    Row 'E: and says it was copied onto itself (10187)' ($e -match 'was copied onto itself, so it was not deleted') "$e"
+    $e2 = Invoke-SD @('COPY FROM zztwe jack,jill DELETING', 'COUNT zztwe', 'LIST zztwe @ID')
+    Row 'E CONTROL: COPY jack,jill DELETING still moves it (one record, stored jill)' `
+        (((Listed $e2) -eq 1) -and (HasRow $e2 'jill') -and -not (HasRow $e2 'jack')) "$e2"
 
     $exit = $(if ($fail -eq 0) { 0 } else { 1 })
 }

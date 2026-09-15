@@ -796,7 +796,7 @@ char socket_byte() {
      platform where SD accounts are not OS users (section 5.6).  Section 7
      step 6d said to delete them; they go here.
 
-   The API authenticates against $CRED in GPL.BP/APISRVR now and sets its
+   The API authenticates against $CRED in gpl.bp/apisrvr now and sets its
    session identity with kernel(K$SET.USERNAME, ...) - section 7 step 6a.
    op_login() is kept as a fail-closed stub because opcodes.h is positional.
 

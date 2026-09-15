@@ -962,7 +962,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 
 ; WHERE DELETE_USER RECORDS A PROFILE IT COULD NOT REMOVE.  28 Aug 26,
 ; PRE_RELEASE_FIXES.md 36.  A Windows profile cannot be deleted while its
-; registry hive is still mounted, so gpl.bp/DELETE_USER keeps both halves of
+; registry hive is still mounted, so gpl.bp/delete_user keeps both halves of
 ; the profile and writes a record here; sdsvc.exe runs reclaim-profiles.ps1 at
 ; every service start - which is every boot, as LocalSystem - and that is when
 ; the pair finally goes.
@@ -2813,7 +2813,7 @@ end;
   25 Aug 2026: this repository holds no binary bits, and a dictionary is more
   efficient as a DYNAMIC file - so the dictionaries are created and loaded
   during the install.  gplbld\FILES_DICTS is the tracked source, 76 records,
-  and gpl.bp\WRITE_INSTALL_DICTS is what turns it into dictionaries.
+  and gpl.bp\write_install_dicts is what turns it into dictionaries.
 
   A FIRST INSTALL HAS NOTHING TO DO HERE and this returns at once.  It copies
   the whole staged tree, whose dictionaries the BUILD's own bootstrap already

@@ -170,7 +170,7 @@ Write-Output ("  BEFORE the index: {0} bytes  [{1}]" -f $before.Bytes, $before.L
 
 Write-Output ''
 Write-Output '=== 3a. CREATE.INDEX defines the index - IT DOES NOT BUILD IT ==='
-# gpl.bp/CREATEI:33 says so outright: "The two commands are identical except
+# gpl.bp/createi:33 says so outright: "The two commands are identical except
 # that MAKE.INDEX automatically goes on to build the index."  So CREATE.INDEX
 # alone leaves the En(abled) column N and the AK subfile empty, and a SELECT
 # then falls back to a SEQUENTIAL SCAN and answers correctly having touched no

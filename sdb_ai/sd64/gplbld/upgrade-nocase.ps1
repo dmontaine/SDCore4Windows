@@ -3,7 +3,7 @@
 # install makes every file NOCASE by construction); the installer calls it from
 # sd.iss beside upgrade-dicts.ps1.
 #
-# It drives  sd -internal RUN gpl.bp UPGRADE_NOCASE , which walks every
+# It drives  sd -internal RUN gpl.bp upgrade_nocase , which walks every
 # account's files by path, and:
 #   - scans each file READ ONLY for a fold-pair (two record ids differing only
 #     by case) FIRST, and converts nothing until the file is proven clean;
@@ -110,7 +110,7 @@ try {
         $weStartedIt = $true
     }
 
-    Say 'upgrade-nocase: sd -internal RUN gpl.bp UPGRADE_NOCASE NO.PAGE'
+    Say 'upgrade-nocase: sd -internal RUN gpl.bp upgrade_nocase NO.PAGE'
     $w = Invoke-Sd @('-internal', 'RUN', 'gpl.bp', 'UPGRADE_NOCASE', 'NO.PAGE')
     Say ("  exit {0}" -f $w.Code)
     Say '  --- report ---'

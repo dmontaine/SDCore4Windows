@@ -125,7 +125,7 @@ if ($dead.Count -eq 0) {
 # records name is already gone - which is the definition of the thing being
 # cleaned up.  What has to go is the VOC RECORD itself.
 #
-# NO PROMPT ON THIS PATH, read from gpl.bp/DELETE rather than hoped for: with
+# NO PROMPT ON THIS PATH, read from gpl.bp/delete rather than hoped for: with
 # record names given explicitly it takes the "num.ids > 0" branch straight to
 # delete.record, and both of DELETE's "input reply" prompts are in the other
 # branches - an active select list (2050) and the ALL keyword (3220) - which

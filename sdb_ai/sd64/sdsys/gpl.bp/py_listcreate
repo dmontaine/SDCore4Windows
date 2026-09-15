@@ -1,0 +1,57 @@
+* PY_LISTCREATE
+* Create a Python list for sd use
+* Copyright (c)2026 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 14 Sep 26 Windows port - new, the 21st Python program (owner's ruling).
+*           SD_PyListCrte 2220 was reserved in KEYS.H and dispatched by
+*           op_sdpyobj.c to the helper's LISTCRTE, but nothing in BASIC
+*           called it, so a list could be appended to and read but never
+*           made.  Shaped exactly like PY_CREATEDICT.
+* END-HISTORY
+* START-DESCRIPTION:
+*
+* return_status = PY_LISTCREATE(listname)
+*
+* listname - name of python list to create
+* return_status 0 - success or error as defined in ERR.H
+*               status() - 0 on success, error code as defined in ERR.H
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+function py_listcreate(listname)
+$catalog !py_listcreate
+
+$include keys.h
+$include err.h
+
+* Reject an empty Python object name before the SDPYOBJ call, as the other
+* PY_* programs do.
+if listname = '' then
+   set.status 1
+   return 1
+end
+rtn_status = SDPYOBJ("","",listname,SD_PyListCrte)
+*
+return rtn_status
+
+end

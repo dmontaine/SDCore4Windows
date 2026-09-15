@@ -27,60 +27,60 @@ SDSYS = sys.argv[1] if len(sys.argv) > 1 else '/usr/local/sdsys'
 DEBUG_DIFF = False
 
 pcode_fs = ["_AK",
-"_BINDKEY"    ,
-"_BREAK"      ,
-"_CCONV"      ,
-"_CHAIN"      ,
-"_DATA"       ,
-"_DELLIST"    ,
-"_FMTS"       ,
-"_FOLD"       ,
-"_FORMCSV"    ,
-"_FORMLST"    ,
-"_GETLIST"    ,
-"_GETMSG"     ,
-"_HF"         ,
-"_ICONV"      ,
-"_ICONVS"     ,
-"_IN"         ,
-"_INDICES"    ,
-"_INPUT"      ,
-"_INPUTAT"    ,
-"_ITYPE"      ,
-"_KEYCODE"    ,
-"_KEYEDIT"    ,
-"_MAXIMUM"    ,
-"_MESSAGE"    ,
-"_MINIMUM"    ,
-"_MSGARGS"    ,
-"_NEXTPTR"    ,
-"_OCONV"      ,
-"_OCONVS"     ,
-"_OJOIN"      ,
-"_OVERLAY"    ,
-"_PCLSTART"   ,
-"_PREFIX"     ,
-"_PRFILE"     ,
-"_READLST"    ,
-"_READV"      ,
-"_REPADD"     ,
-"_REPCAT"     ,
-"_REPDIV"     ,
-"_REPMUL"     ,
-"_REPSUB"     ,
-"_REPSUBST"   ,
-"_SAVELST"    ,
-"_SSELCT"     ,
-"_SUBST"      ,
-"_SUBSTRN"    ,
-"_SUM"        ,
-"_SUMALL"     ,
-"_SYSTEM"     ,
-"_TCONV"      ,
-"_TRANS"      ,
-"_VOC_CAT"    ,
-"_VOC_REF"    ,
-"_WRITEV"     ]
+"_bindkey"    ,
+"_break"      ,
+"_cconv"      ,
+"_chain"      ,
+"_data"       ,
+"_dellist"    ,
+"_fmts"       ,
+"_fold"       ,
+"_formcsv"    ,
+"_formlst"    ,
+"_getlist"    ,
+"_getmsg"     ,
+"_hf"         ,
+"_iconv"      ,
+"_iconvs"     ,
+"_in"         ,
+"_indices"    ,
+"_input"      ,
+"_inputat"    ,
+"_itype"      ,
+"_keycode"    ,
+"_keyedit"    ,
+"_maximum"    ,
+"_message"    ,
+"_minimum"    ,
+"_msgargs"    ,
+"_nextptr"    ,
+"_oconv"      ,
+"_oconvs"     ,
+"_ojoin"      ,
+"_overlay"    ,
+"_pclstart"   ,
+"_prefix"     ,
+"_prfile"     ,
+"_readlst"    ,
+"_readv"      ,
+"_repadd"     ,
+"_repcat"     ,
+"_repdiv"     ,
+"_repmul"     ,
+"_repsub"     ,
+"_repsubst"   ,
+"_savelst"    ,
+"_sselct"     ,
+"_subst"      ,
+"_substrn"    ,
+"_sum"        ,
+"_sumall"     ,
+"_system"     ,
+"_tconv"      ,
+"_trans"      ,
+"_voc_cat"    ,
+"_voc_ref"    ,
+"_writev"     ]
 
 
 def main():
@@ -96,11 +96,11 @@ def main():
     logger.info('Started')
 
     # command line: bbcmp.py sdsys sfp binfp
-    # eg sudo python3 bbcmp.py /usr/local/sdsys GPL.BP/BBPROC GPL.BP.OUT/BBPROC
+    # eg sudo python3 bbcmp.py /usr/local/sdsys gpl.bp/bbproc gpl.bp.out/bbproc
     # note - need root privilege to 
     # sdsys - path to sdsys, most likely "/usr/local/sdsys"
     # sfp -   directory and file name of source, appended to sdsys to resolve full path
-    #         ie) GPL.BP/BCOMP for BCOMP source
+    #         ie) gpl.bp/bcomp for BCOMP source
     # binfn - directory and file name of pcode object file, appended to sdsys to resolve full path
     #         ie) GPL.BP.OUT/BCOMP.OUT
     # If $catlog directive found in source  bbcmp will also write the pcode object file to the global catalog file
@@ -127,7 +127,7 @@ def main():
     if DEBUG_DIFF:
         for src in pcode_fs:
             logger.info('**********************************************************************')
-        #diff --suppress-common-lines <(xxd /usr/local/sdsys/GPL.BP.OUT/_HF) <(xxd /usr/local/sdsys/PCODE.OUT/_HF)    
+        #diff --suppress-common-lines <(xxd /usr/local/sdsys/gpl.bp.out/_hf) <(xxd /usr/local/sdsys/PCODE.OUT/_HF)    
             result =   subprocess.run(
                 ['xxd', SDSYS + '/gpl.bp.out/'+src, 'bsrc1'])
     #             capture_output=True,

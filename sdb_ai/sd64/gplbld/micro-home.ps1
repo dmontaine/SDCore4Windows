@@ -1,5 +1,5 @@
 # micro-home.ps1 - give the CALLING USER a micro configuration home they can
-# write to, and print where it is.  Run by gpl.bp/EDIT before it launches micro.
+# write to, and print where it is.  Run by gpl.bp/edit before it launches micro.
 #
 #   powershell -ExecutionPolicy Bypass -File micro-home.ps1
 #
@@ -174,7 +174,7 @@ if ($home1 -eq '') {
 Say ("configuration home: " + $home1)
 
 # --- the syntax file, copied from the read-only master ----------------------
-# THIS IS WHAT DISPOSES OF THE OLD OBJECTION.  gpl.bp/EDIT and stage.py both
+# THIS IS WHAT DISPOSES OF THE OLD OBJECTION.  gpl.bp/edit and stage.py both
 # used to say a per-profile configuration was useless because accounts SD
 # creates cannot log in to Windows, "so a syntax file in a profile is one they
 # could never be given".  That is only true of a file nobody puts there.

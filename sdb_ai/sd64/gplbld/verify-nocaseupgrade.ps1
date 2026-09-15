@@ -7,7 +7,7 @@
 # Exit 0 every check passed, 1 a check failed, 2 the fixture could not be built
 # (never a FAIL).
 #
-# WHY IT FORCES THE STATE.  gpl.bp/UPGRADE_NOCASE, driven by upgrade-nocase.ps1
+# WHY IT FORCES THE STATE.  gpl.bp/upgrade_nocase, driven by upgrade-nocase.ps1
 # from sd.iss's RefreshNocase, converts an UPGRADED machine's case-sensitive
 # hashed files.  A fresh install makes every file NOCASE, and cycle.ps1 always
 # installs fresh, so nothing had ever run it.  This builds the pre-D2 state with

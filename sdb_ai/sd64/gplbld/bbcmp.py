@@ -1,11 +1,11 @@
 #
 # bbcmp.py - BootStrap Basic Compiler 
 # command line: bbcmp.py sdsys sfp binfp
-# eg sudo python3 bbcmp.py /usr/local/sdsys GPL.BP/BBPROC GPL.BP.OUT/BBPROC
+# eg sudo python3 bbcmp.py /usr/local/sdsys gpl.bp/bbproc gpl.bp.out/bbproc
 # note - need root privilege to 
 # sdsys - path to sdsys, most likely "/usr/local/sdsys"
 # sfp -   directory and file name of source, appended to sdsys to resolve full path
-#         ie) GPL.BP/BCOMP for BCOMP source
+#         ie) gpl.bp/bcomp for BCOMP source
 # binfn - directory and file name of pcode object file, appended to sdsys to resolve full path
 #         ie) GPL.BP.OUT/BCOMP.OUT
 # If $catlog directive found in source  bbcmp will also write the pcode object file to the global catalog file

@@ -180,7 +180,7 @@ program basicfuncs
 * the operand has to carry marks or nothing matches.  CROP removes TRAILING
 * empty elements, not internal ones; both pinned as measured 31 Aug 26.
 * SUBSTITUTE's FOURTH operand DOES NOT SPLIT THE SOURCE - three drafts assumed
-* it did.  gpl.bp/_SUBST is the implementation and it settles it: the source is
+* it did.  gpl.bp/_subst is the implementation and it settles it: the source is
 * split by SYSTEM MARKS ("s = remove(str, delim)"), and the delimiter splits the
 * OLD and NEW LISTS instead, through listindex() and field().  So a source with
 * no marks is one element whatever delimiter is passed.  All three shapes are

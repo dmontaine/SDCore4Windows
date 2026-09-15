@@ -19,7 +19,7 @@
  * START-HISTORY:
  * 24 Aug 26 Windows port - OPGEN, the BASIC generator that read this
  *           file, is deleted.  gplbld/gen_includes.py builds
- *           GPL.BP/OPCODES.H from it now, and the description below
+ *           gpl.bp/opcodes.h from it now, and the description below
  *           is corrected to say so.
  * rev 1.0-1  mab add PROCREAD back in
  * 31 Dec 23 SD launch - prior history suppressed 
@@ -40,7 +40,7 @@
  *
  *     cd sdb_ai/sd64 && python gplbld/gen_includes.py
  *
- * to rebuild the equivalent SDBasic include record, GPL.BP/OPCODES.H.
+ * to rebuild the equivalent SDBasic include record, gpl.bp/opcodes.h.
  * The BASIC generator that used to do this, GPL.BP/OPGEN, was deleted
  * on 24 Aug 26 - it read ./gplsrc from inside SD, a path no installed
  * system has.

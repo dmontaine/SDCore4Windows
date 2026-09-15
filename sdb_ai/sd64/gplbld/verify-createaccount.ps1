@@ -298,7 +298,7 @@ function SshPassword($pass) {
 # still lands on the first line whichever form is used.
 function Invoke-SD([string[]]$commands) {
     # 15 Aug 26 - "sd -ASDSYS" IS REFUSED NOW, and this is the whole change on
-    # this side.  Nobody logs in to an account but their own (GPL.BP/LOGIN,
+    # this side.  Nobody logs in to an account but their own (gpl.bp/login,
     # owner's rule 15 Aug 2026); an administrator arrives in their own account
     # and reaches SDSYS with LOGTO, which is where the elevated bypass lives.
     # The elevation this script already requires is what makes the LOGTO pass.

@@ -26,7 +26,7 @@
 # and Rename-Item (Access denied); the identical Remove-Item removed it
 # silently afterwards.
 #
-# So gpl.bp/DELETE_USER keeps BOTH halves when it cannot take the directory -
+# So gpl.bp/delete_user keeps BOTH halves when it cannot take the directory -
 # the folder and its ProfileList entry - and writes a record here naming the
 # SID, the account and the directory.  This runs at every SD service start,
 # which is every boot, as LocalSystem, by which time the previous boot's hives
@@ -333,7 +333,7 @@ if ($records.Count -eq 0) {
 Log ('reclaim-profiles: {0} record(s) to consider' -f $records.Count)
 
 function Read-Record($file) {
-    # key=value per line, written by gpl.bp/DELETE_USER.  Returns a hashtable;
+    # key=value per line, written by gpl.bp/delete_user.  Returns a hashtable;
     # missing keys come back absent and the caller refuses on them.
     $h = @{}
     $lines = @(Get-Content -LiteralPath $file.FullName -ErrorAction Stop)

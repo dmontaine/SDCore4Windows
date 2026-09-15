@@ -186,7 +186,7 @@ Say ''
 #    no install, and it is the one check that can say "this file no longer
 #    tests what its header claims".
 Say '--- coverage -------------------------------------------------------'
-$bcompPath = Join-Path $Gplbld '..\sdsys\gpl.bp\BCOMP'
+$bcompPath = Join-Path $Gplbld '..\sdsys\gpl.bp\bcomp'
 if (-not (Test-Path -LiteralPath $bcompPath)) {
     Bail 2 "cannot read BCOMP at $bcompPath - the coverage claim cannot be checked."
 }

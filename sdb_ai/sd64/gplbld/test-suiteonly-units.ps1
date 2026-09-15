@@ -160,6 +160,54 @@ $r = Select-SuiteSteps -Steps $fixture -Only 'verify-nope' -Runner 'VerifyInstal
 Check 'the refusal is attributed' 'True' ($r.Error -match '^VerifyInstall2:')
 
 Write-Host ''
+Write-Host '=== 9. Add-RegisterSweep - a partial run that creates accounts gets the sweep ==='
+# 14 Sep 26 - the owner's "auto-add the sweep" ruling.  Its fixture mirrors how
+# VerifyInstall2 marks a step that creates accounts: a non-empty Prefix or Account.
+if (-not (Get-Command Add-RegisterSweep -ErrorAction SilentlyContinue)) {
+    Check 'suite-only.ps1 defines Add-RegisterSweep' 'True' 'False'
+} else {
+    $vi2 = @(
+        @{ Name = 'verify-fold.ps1';          P = @{} },
+        @{ Name = 'verify-catgate.ps1';       P = @{ Account = 'sdcatgb999' } },
+        @{ Name = 'verify-tiers.ps1';         P = @{ Prefix = 'sdtiertb999' } },
+        @{ Name = 'verify-twins.ps1';         P = @{} },
+        @{ Name = 'verify-emptyprefix.ps1';   P = @{ Prefix = '' } },
+        @{ Name = 'verify-registersweep.ps1'; P = @{} }
+    )
+    function SweepNames($r) { return (($r.Steps | ForEach-Object { $_.Name }) -join ',') }
+
+    $sel = Select-SuiteSteps -Steps $vi2 -Only 'verify-catgate' -Runner 'T'
+    $r = Add-RegisterSweep -Selected $sel.Steps -AllSteps $vi2 -Partial $sel.Partial
+    Check 'an account-creating partial run gets the sweep added'  'True' $r.Added
+    Check 'the sweep is appended LAST'                            'verify-catgate.ps1,verify-registersweep.ps1' (SweepNames $r)
+    Check 'the reason names the step that creates accounts'       'True' ($r.Reason -match 'verify-catgate\.ps1')
+
+    $sel = Select-SuiteSteps -Steps $vi2 -Only 'verify-twins,verify-fold' -Runner 'T'
+    $r = Add-RegisterSweep -Selected $sel.Steps -AllSteps $vi2 -Partial $sel.Partial
+    Check 'CONTROL: a partial run with no account step gets nothing' 'False' $r.Added
+    Check 'and its steps are unchanged'                              'verify-fold.ps1,verify-twins.ps1' (SweepNames $r)
+
+    $sel = Select-SuiteSteps -Steps $vi2 -Only 'verify-emptyprefix' -Runner 'T'
+    $r = Add-RegisterSweep -Selected $sel.Steps -AllSteps $vi2 -Partial $sel.Partial
+    Check 'CONTROL: an EMPTY Prefix does not count as creating accounts' 'False' $r.Added
+
+    $r = Add-RegisterSweep -Selected $vi2 -AllSteps $vi2 -Partial $false
+    Check 'CONTROL: a full run is left alone (the sweep is already last)' 'False' $r.Added
+    Check 'and keeps all six steps'                                      6 $r.Steps.Count
+
+    $sel = Select-SuiteSteps -Steps $vi2 -Only 'verify-tiers,verify-registersweep' -Runner 'T'
+    $r = Add-RegisterSweep -Selected $sel.Steps -AllSteps $vi2 -Partial $sel.Partial
+    Check 'a run that already selected the sweep does not get it twice' 'False' $r.Added
+    Check 'and runs it once'                                           1 (@($r.Steps | Where-Object { $_.Name -eq 'verify-registersweep.ps1' }).Count)
+
+    $noSweep = @($vi2 | Where-Object { $_.Name -ne 'verify-registersweep.ps1' })
+    $sel = Select-SuiteSteps -Steps $noSweep -Only 'verify-catgate' -Runner 'T'
+    $r = Add-RegisterSweep -Selected $sel.Steps -AllSteps $noSweep -Partial $sel.Partial
+    Check 'a runner with no sweep step adds nothing'  'False' $r.Added
+    Check 'and says why'                              'True'  ($r.Reason -match 'no verify-registersweep\.ps1 step')
+}
+
+Write-Host ''
 if ($fail -gt 0) {
     Write-Host ("test-suiteonly-units: FAILED - {0} passed, {1} failed" -f $pass, $fail)
     exit 1

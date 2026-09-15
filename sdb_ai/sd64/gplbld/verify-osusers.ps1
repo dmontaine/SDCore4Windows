@@ -320,7 +320,7 @@ $logPath = Join-Path $logDir ('verify-osusers-' + (Get-Date -Format 'yyyyMMdd-HH
 try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
 Write-Output ('transcript: ' + $logPath)
 
-# A CURRENT INSTALL FIRST.  This measures a BASIC change (GPL.BP/CPROC) and an
+# A CURRENT INSTALL FIRST.  This measures a BASIC change (gpl.bp/cproc) and an
 # installer step (secure-osusers.ps1), so a stale install answers for the tree
 # that change replaced.  CLAUDE.md: compiling is not running.
 & (Join-Path $PSScriptRoot 'assert-current.ps1')

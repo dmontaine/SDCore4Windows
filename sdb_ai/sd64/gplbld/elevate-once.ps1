@@ -13,7 +13,7 @@
 #   * doors-suite used a RANDOM pipe name ('sddoors-' + guid), so SD's own
 #     elevate('START') inside LOGTO SDSYS could not find it and prompted again.
 #     sdsyswrite used SD's name and SD shared it.  SD'S NAME IS RIGHT and is
-#     what this file uses - gpl.bp/ELEVATE:121 builds 'sd-elev-' : @logname.
+#     what this file uses - gpl.bp/elevate:121 builds 'sd-elev-' : @logname.
 #   * doors-suite sent a BARE -Stop, which stops the helper outright.
 #     sdsyswrite sent -Stop -OwnerPid $PID, which deregisters one session.
 #     Neither is right for a step that ADOPTED somebody else's helper: both
@@ -81,7 +81,7 @@ $script:sdElev = @{
     Reason  = 'not started'
 }
 
-# gpl.bp/ELEVATE:121 builds the name as 'sd-elev-' : @logname.  Using the same
+# gpl.bp/elevate:121 builds the name as 'sd-elev-' : @logname.  Using the same
 # one is not tidiness: it is what lets SD's own elevate('START'), fired by a
 # LOGTO SDSYS inside a verifier, find this helper and ask for nothing.
 function Get-SdElevPipeName {

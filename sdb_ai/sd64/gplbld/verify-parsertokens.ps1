@@ -12,7 +12,7 @@
 # record ids that do not exist.  Elevation is not refused either - nothing here
 # depends on the token.
 #
-# WHAT IT GUARDS.  gpl.bp/PARSER splits a simple token at a comma, a right
+# WHAT IT GUARDS.  gpl.bp/parser splits a simple token at a comma, a right
 # bracket or a string quote.  Upstream splits at a BACKSLASH too, guarded by
 # "if not(is.windows)"; this port kept the body and dropped the guard, on a
 # build where a backslash is a path separator.  Every native path typed at TCL
@@ -151,7 +151,7 @@ if ($fatal) {
     Write-Output ''
     if (Saw 'C:') {
         Write-Output "  It answered Record 'C:' - the token was cut at the first backslash."
-        Write-Output '  gpl.bp/PARSER has the split back; PROJECT_STATUS.md 7 step 12 has why'
+        Write-Output '  gpl.bp/parser has the split back; PROJECT_STATUS.md 7 step 12 has why'
         Write-Output '  it must not, and sdb64 carries the same line correctly for Linux.'
     } elseif (-not (Saw 'a')) {
         Write-Output '  The COMMA rows failed, which is the opposite fault: the parser is not'

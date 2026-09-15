@@ -1,7 +1,7 @@
 #
 # mkbasicsyntax.py - build micro's SD BASIC syntax file FROM BCOMP.
 #
-#   python mkbasicsyntax.py <gpl.bp/BCOMP> <out.yaml>
+#   python mkbasicsyntax.py <gpl.bp/bcomp> <out.yaml>
 #
 # THE WORD LISTS ARE NOT TYPED OUT.  BCOMP is the compiler: its own tables say
 # what a statement is, what a reserved word is and what an intrinsic function
@@ -74,11 +74,11 @@ YAML = '''filetype: sdbasic
 # SD BASIC, for the EDIT and MICRO verbs of SD Core for Windows.
 #
 # GENERATED FROM THE COMPILER'S OWN TABLES by gplbld/mkbasicsyntax.py, which
-# reads sdsys/gpl.bp/BCOMP.  Do not hand-edit: regenerate it, or the
+# reads sdsys/gpl.bp/bcomp.  Do not hand-edit: regenerate it, or the
 # highlighting and the language drift apart.  Counts at generation time are in
 # the comment above each rule.
 #
-# DETECTION IS ON THE WORKING COPY'S NAME, not on the record's.  gpl.bp/EDIT
+# DETECTION IS ON THE WORKING COPY'S NAME, not on the record's.  gpl.bp/edit
 # writes a BP record to $hold as "<record>.editing.sdbasic" precisely so that
 # this can match; a record edited from any other file gets ".editing" and no
 # highlighting, which is the honest answer for a VOC or data record.

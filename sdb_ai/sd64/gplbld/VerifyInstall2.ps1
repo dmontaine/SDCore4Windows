@@ -903,12 +903,20 @@ $sel = Select-SuiteSteps -Steps $steps -Only ($Only -join ',') -Runner 'VerifyIn
 if ($sel.Error -ne '') { Write-Output $sel.Error; exit 2 }
 $partial   = $sel.Partial
 $fullCount = @($steps).Count
+$allSteps  = @($steps)
 $steps     = @($sel.Steps)
+# 14 Sep 26 - OWNER'S RULING: A PARTIAL RUN THAT CREATES ACCOUNTS ALSO SWEEPS.
+# verify-registersweep is the last step, so -Only never reached it and an
+# account-creating step's register record broke the NEXT VerifyInstall1 at
+# verify-register (Handoff 58; SDCATGB163 after b163).  suite-only.ps1 decides.
+$swp = Add-RegisterSweep -Selected $steps -AllSteps $allSteps -Partial $partial
+$steps = @($swp.Steps)
 if ($partial) {
     Write-Output ''
     Write-Output ('***** PARTIAL RUN - {0} of {1} step(s), because -Only was given *****' -f
                   @($steps).Count, $fullCount)
     Write-Output ('      ' + (($steps | ForEach-Object { $_.Name }) -join ', '))
+    if ($swp.Reason -ne '') { Write-Output ('      ' + $swp.Reason) }
     Write-Output '      This run says NOTHING about the steps it did not run.'
 }
 

@@ -54,6 +54,12 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 14 Sep 26 - AND verify-deadlock.ps1 (RELEASE_1.1 7) IS IN NEITHER TABLE, ON
+# PURPOSE: it kills an SD session and can leave the install forcing every new
+# session out, so it is a hand-run staged fault followed by a cycle, never a
+# step.  63 verify-*.ps1, 25 here, 33 in VerifyInstall2, FIVE in neither (the
+# four below and this one), none in both.
+#
 # 14 Sep 26 - AND ON ADDING verify-nocaseupgrade.ps1 to VerifyInstall2 (D2's
 # upgrade walk): 62 verify-*.ps1, 25 named here, 33 in VerifyInstall2, the same
 # four in neither, none in both - counted from the directory and both tables.
@@ -564,7 +570,7 @@ $steps = @(
     # silent minutes.
     @{ Name = 'verify-osusers.ps1';     P = @{} },
     # 04 Sep 26 - PRE_RELEASE 66's standing guard: are the full-screen editors
-    # BUNDLED, and does gpl.bp/EDIT's find.editor resolve the bundled copy
+    # BUNDLED, and does gpl.bp/edit's find.editor resolve the bundled copy
     # rather than whatever winget left on PATH?  No account, no prefix, no run
     # token; it reads the install, stage.py's BUNDLED_EDITORS and EDIT's own
     # path literal, and runs install-editors.ps1 -CheckOnly.
@@ -695,7 +701,7 @@ $steps = @(
     # THE STRUCTURAL HALF IS NOT HERE AND DOES NOT NEED TO BE.  Whether the
     # compiler and the runtime agree about opcode numbers is settled at build
     # time - gplsrc/opcodes.h is an X-macro table that kernel.c:75 turns into
-    # dispatch[] by #include, and gen_includes.py generates gpl.bp/OPCODES.H
+    # dispatch[] by #include, and gen_includes.py generates gpl.bp/opcodes.h
     # from the same file - so there is nothing for a runtime step to catch.
     # §5.24 records that measurement so it is not repeated by hand.
     #
@@ -864,7 +870,7 @@ if ($Run) {
     # runas /trustlevel yields a RESTRICTED token rather than the user's own.
     #
     # ONE MORE CONSENT, NOT ONE PER LEG.  It starts the helper on SD'S OWN pipe
-    # name - gpl.bp/ELEVATE:121 builds 'sd-elev-' : @logname - so SD's own
+    # name - gpl.bp/elevate:121 builds 'sd-elev-' : @logname - so SD's own
     # elevate('START') inside LOGTO SDSYS finds one already serving and asks for
     # nothing further.
     #

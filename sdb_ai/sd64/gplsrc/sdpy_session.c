@@ -12,7 +12,7 @@
  * obvious place does not work:
  *
  *   - all 20 PY_* carry $internal,
- *   - $internal sets HDR_INTERNAL (gpl.bp/BCOMP:2875),
+ *   - $internal sets HDR_INTERNAL (gpl.bp/bcomp:2875),
  *   - os_permitted() returns TRUE on HDR_INTERNAL BEFORE it reads the
  *     username (op_sh.c:170),
  *

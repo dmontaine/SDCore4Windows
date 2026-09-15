@@ -1,6 +1,6 @@
 # sd-elevate.ps1 - the unelevated half of an SD administrator session
 #
-# Called by SD (GPL.BP/ELEVATE) in three modes:
+# Called by SD (gpl.bp/elevate) in three modes:
 #
 #   -Start   launch the elevated helper.  THIS IS WHERE UAC PROMPTS.
 #   -Run     hand a script to the helper and return its exit code

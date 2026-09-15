@@ -36,7 +36,7 @@
  * that no longer exists (CLAUDE.md).
  *
  * RUN IT UNELEVATED, as an ordinary user.  SDConnectLocal sends no password:
- * vb.local.login in GPL.BP/APISRVR takes the identity from the process owner,
+ * vb.local.login in gpl.bp/apisrvr takes the identity from the process owner,
  * which is the whole point of the local transport and is what the grant check
  * below is testing against.
  *

@@ -128,7 +128,7 @@ $SysDir = Join-Path (Join-Path $env:ProgramData 'SD') 'sdsys'
 #
 # ONE FUNCTION, RUN TWICE, rather than two copies of the block: a second copy is
 # a second place for the next defect to be fixed in only one, which is the
-# argument gpl.bp/EDIT makes for not being two programs.
+# argument gpl.bp/edit makes for not being two programs.
 # ===========================================================================
 
 # 4 Sep 26 - PRE_RELEASE_FIXES 155.  ONE WRAP WIDTH FOR EVERYTHING THIS SCRIPT

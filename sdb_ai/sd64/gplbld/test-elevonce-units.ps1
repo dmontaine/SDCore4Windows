@@ -97,16 +97,16 @@ exit $rc
     $expected = 'sd-elev-' + $env:USERNAME
     Note ((Get-SdElevPipeName) -ceq $expected) 'Get-SdElevPipeName is sd-elev-<username>' ("got " + (Get-SdElevPipeName))
 
-    # ONE FACT IN TWO FILES, SO COMPARE THEM.  gpl.bp/ELEVATE builds the name SD
+    # ONE FACT IN TWO FILES, SO COMPARE THEM.  gpl.bp/elevate builds the name SD
     # uses; if the prefix there ever changes, this helper stops being the one SD
     # finds and every LOGTO SDSYS starts prompting again - which presents as
     # "the helper does not work any more" and is a one-character edit elsewhere.
-    $elevBp = Join-Path $here '..\sdsys\gpl.bp\ELEVATE'
+    $elevBp = Join-Path $here '..\sdsys\gpl.bp\elevate'
     if (Test-Path -LiteralPath $elevBp) {
         $bpLine = @(Get-Content -LiteralPath $elevBp | Where-Object { $_ -match "pipe\s*=\s*'sd-elev-'" })
-        Note ($bpLine.Count -eq 1) 'gpl.bp/ELEVATE builds the pipe name from the same prefix' ("matched " + $bpLine.Count + " line(s)")
+        Note ($bpLine.Count -eq 1) 'gpl.bp/elevate builds the pipe name from the same prefix' ("matched " + $bpLine.Count + " line(s)")
     } else {
-        Note $false 'gpl.bp/ELEVATE is readable for the prefix cross-check' ('not at ' + $elevBp)
+        Note $false 'gpl.bp/elevate is readable for the prefix cross-check' ('not at ' + $elevBp)
     }
 
     # ------------------------------------------------------- -NoHelper

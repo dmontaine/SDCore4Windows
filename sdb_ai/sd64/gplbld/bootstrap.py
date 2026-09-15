@@ -54,7 +54,7 @@ import tempfile
 # Run by bbcmp.py before there is a compiler.  Order matters: BBPROC is the
 # bootstrap paragraph processor, BCOMP the compiler it needs, PATHTKN the
 # pathname tokeniser both rely on.
-BBCMP_FIRST = ['BBPROC', 'BCOMP', 'PATHTKN']
+BBCMP_FIRST = ['bbproc', 'bcomp', 'pathtkn']
 
 # BUILTIN\Administrators by RID, never by name - the same choice, for the same
 # reason, as SD_ADMIN_GID in gplsrc/linuxlb.c.  Cygwin maps a built-in SID to
@@ -281,7 +281,7 @@ def main():
             # while SDSYS has no credential.
             print('  writing the install dictionaries')
             sd(sdexe, env,
-               ['-internal', 'RUN', 'gpl.bp', 'WRITE_INSTALL_DICTS', 'NO.PAGE'])
+               ['-internal', 'RUN', 'gpl.bp', 'write_install_dicts', 'NO.PAGE'])
 
             print('  compiling the system (THIRD.COMPILE)')
             out = sd(sdexe, env, ['-internal', 'THIRD.COMPILE'])
@@ -290,7 +290,7 @@ def main():
             check_compile(out, 'THIRD.COMPILE', require_summary=False)
 
             print('  writing the real gcat/$cproc')
-            sd(sdexe, env, ['-internal', 'BASIC', 'gpl.bp', 'CPROC'])
+            sd(sdexe, env, ['-internal', 'BASIC', 'gpl.bp', 'cproc'])
         finally:
             print('  stopping SD')
             sd(sdexe, env, ['-stop'], expect_fail=True)

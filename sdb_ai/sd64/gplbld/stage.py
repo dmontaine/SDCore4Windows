@@ -217,7 +217,7 @@ PF_CLIENTS_SUBDIR = os.path.join('usr', 'clients')
 # the sibling SD-Untracked/editors tree, which the owner backs up with the
 # Projects tree and which the eventual SourceForge release zip will carry.
 # stage_editors() copies them into usr/bin beside sd.exe, the fixed path that
-# gpl.bp/EDIT's find.editor and install-editors.ps1 both resolve.  The SHA-256
+# gpl.bp/edit's find.editor and install-editors.ps1 both resolve.  The SHA-256
 # pins the exact binary, so a build machine holding a different one fails loudly
 # rather than shipping an editor the documentation does not describe.  Versions:
 # micro 2.0.15 and Microsoft Edit 1.2.1 - what the editor pages were written
@@ -308,7 +308,7 @@ SDSYS_EMPTY = [
     # PCL and PCL.GRID (printer control), U0032 and U50BB (user exits), VFS.CLS
     # (a template VFS class module).  Owner's ruling, 25 Aug 2026: they are not
     # needed in this version, and VFS is not a supported feature, so shipping a
-    # template for one is worse than shipping nothing.  gpl.bp/PCL is the PCL
+    # template for one is worse than shipping nothing.  gpl.bp/pcl is the PCL
     # that is actually compiled and catalogued; sdsys/bp/PCL was a second,
     # divergent copy of it.
     #
@@ -1271,7 +1271,7 @@ def main():
     # than in the data tree on purpose - the helper is executed with full
     # privilege, and the data tree is writable by every member of sdusers, so
     # shipping it there would let one SD user rewrite what another user's
-    # elevated helper runs.  gpl.bp/ELEVATE reaches them with
+    # elevated helper runs.  gpl.bp/elevate reaches them with
     # kernel(K$WINPATH), because they are "/" to SD and "C:\Program Files\SD"
     # to PowerShell, which cannot open the first.
     for script in ('deny-logon.ps1', 'install-ssh.ps1', 'allow-ssh-groups.ps1',
@@ -1373,7 +1373,7 @@ def main():
                    'install-editors.ps1',
                    # 27 Aug 26 - micro-home.ps1, PRE_RELEASE_FIXES #29.  It
                    # gives the calling user a micro configuration home they can
-                   # WRITE to and prints where it is; gpl.bp/EDIT runs it before
+                   # WRITE to and prints where it is; gpl.bp/edit runs it before
                    # launching micro.  Without it every unelevated save printed
                    # "Permission denied" and wrote the file anyway.  It SHIPS,
                    # so assert-current watches it like the rest of these - do
@@ -1421,7 +1421,7 @@ def main():
                    # the build's own bootstrap already wrote; an upgrade keeps
                    # the user's data tree, dictionaries included, so a release
                    # that edits FILES_DICTS would never reach it.  This runs
-                   # gpl.bp/WRITE_INSTALL_DICTS, which MERGES record by record
+                   # gpl.bp/write_install_dicts, which MERGES record by record
                    # rather than replacing the file - see its header.  It
                    # SHIPS, so assert-current watches it like the rest of
                    # these - do NOT add it to that script's $neverShipped list.
@@ -1441,7 +1441,7 @@ def main():
                    # 14 Sep 26 - RELEASE_1.1 5 D2's UPGRADE step.  A fresh
                    # install makes every file NOCASE (gplsrc/op_dio1.c); an
                    # upgrade keeps the user's case-sensitive data files, so
-                   # this runs "sd -internal RUN gpl.bp UPGRADE_NOCASE", which
+                   # this runs "sd -internal RUN gpl.bp upgrade_nocase", which
                    # scans every file for a case-only duplicate FIRST and
                    # converts only the clean ones, naming any it leaves.  It
                    # SHIPS, so assert-current watches it - do NOT add it to
@@ -1497,7 +1497,7 @@ def main():
     # "<file>^<record>".  The dictionaries themselves are not tracked, because
     # this repository holds no binary bits and a dictionary is more efficient
     # as a DYNAMIC file - so they are created and loaded during the install
-    # (owner, 25 Aug 2026).  gpl.bp/WRITE_INSTALL_DICTS is what turns one into
+    # (owner, 25 Aug 2026).  gpl.bp/write_install_dicts is what turns one into
     # the other, and upgrade-dicts.ps1 runs it on an upgrade.
     #
     # IT MUST NOT GO INTO THE DATA TREE.  WRITE_INSTALL_DICTS reads it as

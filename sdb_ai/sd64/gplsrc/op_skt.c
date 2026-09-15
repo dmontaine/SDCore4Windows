@@ -900,7 +900,7 @@ void op_srvrskt() {
      The Port parameter is at e_stack - 3.
      The Server Address parameter is at e_stack - 4.
 
-     To see how the BASIC compiler works with this, open GPL.BP BCOMP
+     To see how the BASIC compiler works with this, open gpl.bp bcomp
      and search for the label "in.create.socket.server".
 
      Through the use of k_dismiss() and k_pop(n), the result is returned

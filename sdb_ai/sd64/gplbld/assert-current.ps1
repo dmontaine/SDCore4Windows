@@ -16,7 +16,7 @@
 #
 #   * sd.iss was edited after the installer was built, and the run in flight
 #     carried on being read afterwards.
-#   * GPL.BP/OS_GROUP was hand-recompiled into the installed tree and
+#   * gpl.bp/os_group was hand-recompiled into the installed tree and
 #     LIST.GRANTS then measured on it.
 #
 # A result from a stale tree is worse than no result: it looks like evidence.
@@ -327,7 +327,7 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # 04 Sep 26 - PRE_RELEASE 66's standing guard over the bundled
                   # full-screen editors.  Listed in the commit that creates it,
                   # under the rule the note below states.  It reads the install,
-                  # stage.py's BUNDLED_EDITORS and gpl.bp/EDIT's own literal, and
+                  # stage.py's BUNDLED_EDITORS and gpl.bp/edit's own literal, and
                   # runs install-editors.ps1 -CheckOnly; nothing installs it and
                   # nothing compiles it into sd.exe.  It is a step in
                   # VerifyInstall1 - the UNELEVATED half, because every check in
@@ -934,7 +934,7 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # replace list, after which every account is unreachable.
                   'test-upgradeiss-units.py',
                   # 26 Aug 26 - test-edittokens-units.py, the unit test for
-                  # gpl.bp/EDIT's mark tokens: @vm <-> "~~" and @sm <-> "~`".
+                  # gpl.bp/edit's mark tokens: @vm <-> "~~" and @sm <-> "~`".
                   # Listed IN THE COMMIT THAT CREATES IT, under section 7 step
                   # 7's rule.  It reads nothing and writes nothing.
                   #
@@ -1272,7 +1272,7 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   'check-datatree-litter.ps1',
                   # 12 Sep 26 - the guard over BCOMP's two POSITIONAL intrinsic
                   # lists, listed in the commit that creates it.  It reads
-                  # sdsys\gpl.bp\BCOMP and writes nothing; nothing installs it
+                  # sdsys\gpl.bp\bcomp and writes nothing; nothing installs it
                   # and nothing compiles it into sd.exe.
                   #
                   # WHY IT WAS WORTH A FILE.  int.intrinsics and the "on i goto"
@@ -1345,7 +1345,10 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   'verify-nocaseupgrade.ps1',
                   # 14 Sep 26 - test-selectlists-units.py, the free guard over
                   # select list numbers.  Ships nowhere; listed with its commit.
-                  'test-selectlists-units.py')
+                  'test-selectlists-units.py',
+                  # 14 Sep 26 - verify-deadlock.ps1, RELEASE_1.1 7's staged
+                  # fault.  Ships nowhere and is in neither runner, deliberately.
+                  'verify-deadlock.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

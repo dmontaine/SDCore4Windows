@@ -6,7 +6,7 @@
 # secures the data tree - it has to be after, or inheritance would put the
 # tree's sdusers:Modify straight back on this directory.
 #
-# WHAT THE STORE IS.  gpl.bp/DELETE_USER writes one file per SID here when it
+# WHAT THE STORE IS.  gpl.bp/delete_user writes one file per SID here when it
 # has to leave a profile behind: the SID, the account name and the DIRECTORY.
 # gplbld/reclaim-profiles.ps1 reads them when the SD service starts - as
 # LocalSystem, at boot, by which time the previous boot's hives are down - and

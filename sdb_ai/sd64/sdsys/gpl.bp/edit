@@ -1,0 +1,1002 @@
+* Copyright (c)2024 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 03 Sep 26 Windows port - PRE_RELEASE_FIXES 66.  find.editor now tries the
+*           bundled editor beside sd.exe (fixed at C:\Program Files\SD\usr\bin)
+*           before the PATH lookup, so the verb runs the version SD ships.
+* 27 Aug 26 Windows port - MICRO_CONFIG_HOME IS PER USER AND WRITABLE, and the
+*           "-backup off" that was here earlier the same day is gone entirely.
+*           micro writes to its configuration home when it saves; pointing it at
+*           C:\Program Files\SD\micro (Users:RX) made every unelevated save
+*           print "Permission denied.  Save with sudo not supported on Windows"
+*           - and write the file anyway.  PRE_RELEASE_FIXES item 29.
+*
+*           THE FIRST FIX WAS REASONED AND WRONG, WHICH IS THE PART WORTH
+*           KEEPING.  It blamed micro's auto-backup and passed "-backup off".
+*           Measured afterwards, four runs with one variable: a read-only home
+*           errors with no flags, with "-backup off", and with "-backup false
+*           -savehistory false"; a writable home is clean.  No option suppresses
+*           it, so nothing but a writable home was ever going to work.
+*
+*           THE HOME IS THE USER'S OWN - owner's ruling, 27 Aug 2026, and it is
+*           where micro looks anyway.  micro-home.ps1 resolves it, falls back to
+*           TEMP, and copies the syntax file in; see micro.home below and that
+*           script's header.  It must be PER USER: micro executes Lua plugins
+*           from its configuration home, so one shared writable directory would
+*           let any SD user run code in every other user's editor session.
+* 27 Aug 26 Windows port - ONE crt PER LINE at end.program.  Every message here
+*           is built with char(10) as a separator and a bare LF does not return
+*           to column 0, so one crt of the whole string staircased across a real
+*           console.  Fixed at the single print site rather than at the eight
+*           places that build the text.  PRE_RELEASE_FIXES item 1.
+* 27 Aug 26 Windows port - TEXT MARKS, AND A COMMA BETWEEN MARKS IN A RUN.
+*           Owner, 27 Aug 2026.  "~!" is a text mark, and consecutive marks are
+*           written with a comma between their tokens: text mark, text mark,
+*           value mark is "~!,~!,~~".  A literal comma standing in that exact
+*           position is written "~,", because "~~,~~" already means two value
+*           marks.
+*
+*           HIS FIRST PROPOSAL WAS "`~" AND HE WITHDREW IT HIMSELF, on the
+*           ground that it breaks the rule that every token starts with "~".
+*           That is not cosmetic: it would make the BACKTICK a second
+*           escape-introducing character needing its own escape, and "~`" and
+*           "`~" are anagrams, so a run of marks became unreadable.  See the
+*           grammar at the top.
+*
+*           THE DECODE STOPPED BEING change() CALLS AND BECAME A SCAN, because
+*           the run separator is a token that exists only by virtue of where it
+*           sits, and change() rewrites the whole string with no notion of
+*           where it is.  marks.out and marks.back.
+* 27 Aug 26 Windows port - THE CONVERSION IS LOSSLESS, NOT REFUSABLE.  Owner,
+*           27 Aug 2026, after micro refused gpl.bp/edit itself: "the whole
+*           purpose of these editors is primarily to edit source code without
+*           having to use ED... the conversion of field, value and subvalue
+*           marks needs to be handled seamlessly, just like CRLF or LF".
+*
+*           THE OLD GUARD REFUSED ANY RECORD WHOSE TEXT COULD BE MISTAKEN FOR
+*           A TOKEN, and this record - which carries the token strings as
+*           constants - was the ONLY source record in the whole shipped tree
+*           that it turned away.  "~" is now an escape character: a tilde is
+*           written "~-" WHERE, AND ONLY WHERE, the reader could take it for a
+*           token, so ordinary text keeps its tildes readable.  Proved lossless
+*           before the cycle by gplbld/test-edittokens-units.py.
+* 26 Aug 26 Windows port - MARKS ARE TYPEABLE: "~~" is a value mark and "~`" a
+*           subvalue mark, both ways round.  Owner's idea, and the subvalue
+*           token his correction of the same day - the first version converted
+*           value marks only and said a record with subvalues was not safe to
+*           edit here, which was true and was not a good enough answer.
+*
+*           THE GUARD IS A ROUND TRIP, NOT A SEARCH FOR THE TOKENS.  Converting
+*           back and comparing catches the case a token search misses: a
+*           literal "~" immediately before a mark, where the substitution
+*           merges with it and the tilde comes back on the other side.  A
+*           record that fails it is refused and ED is named.  See
+*           process.record.
+* 26 Aug 26 Windows port - TWO GATES, NOT ONE.  Owner's ruling: "these commands
+*           will only work if the user has OS.EXECUTE privileges.  If not, they
+*           should get a message that the command is not available."  The VOC
+*           tier decides who has the verb; OS.USERS field 2 decides whether it
+*           runs.  check.permitted, below, and it also refuses a session with
+*           no terminal - an API session or a piped script.
+* 26 Aug 26 Windows port - TWO VERBS, ONE PROGRAM.  Owner, 26 Aug 2026: a
+*           second full-screen editor, "one called with the verb micro and the
+*           other with the verb edit".  Both VOC entries are CA $EDIT; the
+*           editor is chosen from field 1 of the command line.  See THE VERB
+*           CHOOSES THE EDITOR below for why this is not two programs.
+* 26 Aug 26 Windows port - EDIT.  The full-screen editor comes back, on the
+*           owner's ruling of 26 Aug 2026, and this is gpl.bp/MICRO ported.
+*           The old MICRO source is deleted in the same commit: its VOC
+*           entries went on 17 Aug 2026 and it had been callerless since.
+*
+*           WHAT IS THE SAME AS MICRO, because the wiring was asked to stay:
+*           the record is copied to $hold, an external editor is run on the
+*           copy, the copy is read back, and the user is asked whether to
+*           save and - for a BP record - whether to compile and catalogue.
+*           A DICT record is always saved and re-compiled with CD.
+*
+*           WHAT IS DIFFERENT, and each of these was a defect rather than a
+*           preference:
+*
+*           1. THE EDITOR IS FOUND, NOT ASSUMED.  MICRO ran "!micro", which
+*              on a machine without micro produced a shell error and then
+*              read back an unchanged record, reporting "Record is unchanged"
+*              - a confident wrong answer with nothing naming the cause.  The
+*              editor is located once, up front, and a missing one refuses
+*              out loud with the command that installs it.
+*
+*           2. IT DOES NOT GO THROUGH THE SH VERB.  "!micro" is CPROC's shell
+*              escape, so it carried OS.USERS field 1 - the SH field, which is
+*              not the right one for a program that runs an editor.  This
+*              program is $internal, so os_permitted() admits it on
+*              HDR_INTERNAL (op_sh.c:157), and check.permitted below tests
+*              OS.USERS field 2 - the OS.EXECUTE field - itself.  See its
+*              header for why the test is here rather than left to C.
+*
+*           3. THE TEMPORARY RECORD IS ADDRESSED BY ITS REAL PATH.
+*              "$HOLD/name" is a relative path that only resolved because the
+*              process happened to be sitting in the account directory.
+*              fileinfo(FL$PATH) asks SD where the file actually is.
+*
+*           4. IT CLEANS UP ON EVERY EXIT.  MICRO deleted the temporary
+*              record only on the "<E>xit" path, so every other way out - an
+*              empty record, a write error, a refusal to save - left
+*              "<name>.editing" in $hold for ever.
+*
+*           5. NO ABSOLUTE SCREEN POSITIONS.  MICRO wrote at fixed rows up to
+*              @(0,27), which is off the bottom of a 25-line terminal, and
+*              its prompts overwrote each other on a short one.  Everything
+*              here is written sequentially.
+* END-HISTORY
+*
+PROGRAM EDIT
+
+$internal
+$catalog $EDIT
+
+$include syscom keys.h
+$include int$keys.h
+
+   q            = char(39)          ;* single quote, as ELEVATE builds its own
+   ds           = @ds
+
+*  ***THE MARK GRAMMAR.  EVERY TOKEN IS "~" PLUS ONE CHARACTER, AND "~" IS THE
+*  ONLY ESCAPE CHARACTER.***  See marks.out and marks.back.  One place each, so
+*  the two directions cannot disagree.
+*
+*      ~~   value mark          ~-   a literal "~"
+*      ~`   subvalue mark       ~,   a literal "," where one would be a separator
+*      ~!   text mark
+*
+*  THE TEXT MARK IS "~!" AND NOT "`~", which was the first proposal, and the
+*  owner spotted why on 27 Aug 2026: a token led by a backtick breaks the rule
+*  that every token starts with "~", and a broken rule is not cosmetic here.
+*  It would make the BACKTICK a second escape-introducing character, so a
+*  literal backtick before a tilde would need escaping too - a whole second
+*  mechanism - and "~`" and "`~" are anagrams, so a run of marks came out as
+*  "~``~" and could only be read by a strict left-to-right scanner.  With "~!"
+*  a backtick is an ordinary character again and needs nothing.
+*
+*  THE BACKTICK IS char(96) RATHER THAN TYPED, because a lone backtick inside
+*  a quoted string is the kind of character that survives one editor and not
+*  the next, and this record is edited by hand.
+   bq           = char(96)
+   vm.token     = '~~'
+   sm.token     = '~' : bq
+   tm.token     = '~!'
+   esc.token    = '~-'
+   comma.token  = '~,'
+
+*  The character after the "~" in each token, in one string, so the scanners
+*  can test membership with index() instead of five comparisons.
+   token.chars  = '~' : bq : '!-,'
+   mark.letters = '~' : bq : '!'
+   mark.chars   = @vm : @sm : @tm
+
+*  What a literal "~" has to be escaped in front of: anything that would make
+*  the pair look like a token, plus the three marks, whose tokens begin "~".
+   danger.chars = token.chars : mark.chars
+
+   compiled.dict = @false
+   files.opened  = @false
+   record.saved  = @false
+   temp.written  = @false
+   error.text    = ''
+   input.record  = ''
+   temp.record   = ''
+   response      = ''
+
+* ---------------------------------------------------------------------------
+* The command line:  edit {DICT} file record
+* ---------------------------------------------------------------------------
+   cmd = convert(' ', @fm, trim(@command, ' ', 'C'))
+
+* ---------------------------------------------------------------------------
+* THE VERB CHOOSES THE EDITOR, AND THERE IS ONE PROGRAM RATHER THAN TWO.
+*
+* Owner, 26 Aug 2026: two full-screen editors, "one called with the verb micro
+* and the other with the verb edit".  Both VOC entries are CA $EDIT and this
+* reads field 1 of the command line - the verb as it was typed - to decide
+* which executable to run.
+*
+* WHY NOT TWO PROGRAMS.  Everything either verb does is the same: the working
+* copy, the save query, the compile-and-catalogue loop, the cleanup.  A second
+* copy of that is a second place for the next defect to be fixed in only one -
+* which is the shape of MICRO's own three faults, and of the 32-bit client's
+* middle hop before it was removed.  If the two ever need to behave
+* differently, the table below is where it goes.
+*
+* THE EXECUTABLE IS NAMED, NOT PATHED.  System32 is always on PATH and a
+* machine-scope winget install puts its link directory there too, so
+* find.editor's lookup answers for either.
+* ---------------------------------------------------------------------------
+   begin case
+      case upcase(trim(cmd<1>, ' ', 'B')) = 'MICRO'
+         editor.exe  = 'micro.exe'
+         editor.name = 'micro'
+         editor.get  = 'winget install -e --id zyedidia.micro --scope machine'
+*        MICRO NEEDS A CONFIGURATION HOME IT CAN WRITE TO, AND IT IS RESOLVED
+*        PER USER AT RUN TIME - see micro.home below.  Only the flag that this
+*        verb wants one is set here; the path is not known until then.
+         needs.cfg = @true
+      case 1
+         editor.exe  = 'edit.exe'
+         editor.name = 'Microsoft Edit'
+         editor.get  = 'winget install -e --id Microsoft.Edit --scope machine'
+*        Microsoft Edit has nothing to configure and takes none of micro's
+*        switches - it is launched with the file alone.
+         needs.cfg = @false
+   end case
+   editor.cfg = ''
+
+   if upcase(trim(cmd<2>, ' ', 'B')) = 'DICT' then
+      in.file.name   = cmd<3>
+      in.record.name = cmd<4>
+      dict.text      = 'DICT'
+   end else
+      in.file.name   = cmd<2>
+      in.record.name = cmd<3>
+      dict.text      = ''
+   end
+
+*  The verb as typed, lower cased, so every message this program prints names
+*  the command the user actually used rather than one of the two.
+   verb.text = downcase(trim(cmd<1>, ' ', 'B'))
+   usage     = 'Usage: ' : verb.text : ' {dict} <file> <record>'
+
+   if trim(in.file.name) = '' then
+      error.text = 'No file name specified.  ' : usage
+      goto end.program
+   end
+
+   if trim(in.record.name) = '' then
+      error.text = 'No record name specified.  ' : usage
+      goto end.program
+   end
+
+   temp.file.name = '$hold'
+   if dict.text = 'DICT' then
+      temp.record.name = 'dict.' : in.record.name : '.editing'
+   end else
+      temp.record.name = in.record.name : '.editing'
+   end
+
+*  ***AND A BP RECORD GETS A ".sdbasic" ON THE END, WHICH IS WHAT MAKES THE
+*  HIGHLIGHTING WORK.***  micro chooses a syntax file by matching a regex
+*  against the FILE NAME, and the name it sees is this working copy's, not the
+*  record's - a record called MY.REPORT tells it nothing.  The suffix is the
+*  only thing that can carry the language across, and microcfg/syntax/
+*  sdbasic.yaml detects exactly it.
+*
+*  ".editing" IS KEPT IN FRONT OF IT so a working copy left behind by a
+*  session that died is still recognisable as one, whichever kind it is.
+*
+*  Same test as the compile offer below, and deliberately so: what is worth
+*  compiling as BASIC is what is worth highlighting as BASIC.
+   if dict.text # 'DICT' and upcase(in.file.name[-2, 2]) = 'BP' then
+      temp.record.name := '.sdbasic'
+   end
+
+* ---------------------------------------------------------------------------
+* Both gates BEFORE anything is written, so a session that may not do this is
+* told so rather than handed a working copy it cannot edit.
+* ---------------------------------------------------------------------------
+   gosub check.permitted
+   if not(permitted) then goto end.program
+
+   gosub find.editor
+   if editor.path = '' then goto end.program
+
+*  BEFORE THE WORKING COPY IS WRITTEN, like the two gates above: a session that
+*  cannot be given a writable configuration home is told so rather than handed
+*  an editor that will cry "Permission denied" over every save.
+   if needs.cfg then
+      gosub micro.home
+      if editor.cfg = '' then goto end.program
+   end
+
+   gosub open.files
+   if not(files.opened) then goto end.program
+
+   crt @(-1) :
+
+   loop
+      gosub process.record
+      if trim(temp.record, ' ', 'B') = '' then
+*        NAME THE FILE THE EDITOR WAS GIVEN, because this message is what a
+*        failed LAUNCH looks like as well as a genuinely empty record, and on
+*        26 Aug 2026 it was the second - the path was POSIX and Windows put
+*        the user's typing somewhere else entirely.  Told only "Record is
+*        empty" there is nothing to go on; told the path, a wrong one is
+*        obvious at a glance.
+         error.text  = 'Record is empty - not saved.' : char(10)
+         error.text := 'The editor was given:' : char(10)
+         error.text := '   ' : os.file : char(10)
+         error.text := 'If you typed something and it is not here, check that'
+         error.text := ' path exists.'
+         goto end.program
+      end
+
+      crt
+      if temp.record = input.record then
+         crt 'Record is unchanged'
+         record.saved = @true
+      end else
+         gosub save.record.query
+      end
+
+      if record.saved then
+         gosub compile.record.query
+         response = ''
+         crt
+         loop
+            crt '<E>xit or <R>e-edit : ' :
+            input response, 1 :
+            crt
+            response = upcase(response)
+         until index('ER', response, 1) > 0 repeat
+         if response = 'E' then goto end.program
+      end
+   repeat
+
+* ---------------------------------------------------------------------------
+end.program:
+   gosub remove.temp.record
+
+   if error.text = '' then
+      crt verb.text : ' ended normally'
+   end else
+*     ***ONE crt PER LINE, NOT ONE crt OF A STRING WITH char(10) IN IT.***
+*     Every message in this program is built with char(10) as the line
+*     separator, and a bare LF moves DOWN a line without returning to column
+*     0, so a single crt of the whole thing staircases across the screen -
+*     confirmed on a real console by the owner, 26 and 27 Aug 2026:
+*
+*         edit is not available to don.
+*                                     It runs an editor outside SD, so it...
+*
+*     A PIPE HIDES IT, which is why it survived so long: down a pipe the LF
+*     *is* the separator and the same message reads perfectly.  Fixing it here
+*     rather than at the eight places that build the text means the next
+*     message written cannot reintroduce it.
+      err.lines = dcount(error.text, char(10))
+      for err.i = 1 to err.lines
+         crt field(error.text, char(10), err.i)
+      next err.i
+   end
+   stop
+
+* ===========================================================================
+* SUBROUTINES: alphabetical
+* ===========================================================================
+
+* ---------------------------------------------------------------------------
+* compile.record.query  -  a DICT record is always re-compiled; a BP record is
+* offered the compile and the catalogue, exactly as MICRO offered them.
+* ---------------------------------------------------------------------------
+compile.record.query:
+   if compiled.dict then
+      execute 'CD ' : in.file.name : ' ' : in.record.name
+      return
+   end
+
+   if dict.text = 'DICT' then return
+   if upcase(in.file.name[-2, 2]) # 'BP' then return
+
+   prompt ''
+   response = ''
+   crt
+   loop
+      crt 'Compile ' : in.file.name : ' ' : in.record.name : '?  <Y>es, <N>o : ' :
+      input response, 1 :
+      crt
+      response = upcase(response)
+   until index('YN', response, 1) > 0 repeat
+   if response # 'Y' then return
+
+   execute 'BASIC ' : in.file.name : ' ' : in.record.name
+   crt
+
+   response = ''
+   crt
+   loop
+      crt 'Catalog?  <L>ocal, <P>rivate, <G>lobal, <N>o : ' :
+      input response, 1 :
+      crt
+      response = upcase(response)
+   until index('LPGN', response, 1) > 0 repeat
+
+   begin case
+      case response = 'L'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' LOCAL'
+      case response = 'P'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name
+      case response = 'G'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' GLOBAL'
+      case response = 'N'
+         crt in.file.name : ' ' : in.record.name : ' not catalogued'
+   end case
+return
+
+* ---------------------------------------------------------------------------
+* check.permitted  -  THE SECOND GATE.
+*
+* Owner, 26 Aug 2026: *"these commands will only work if the user has
+* OS.EXECUTE privileges.  If not, they should get a message that the command
+* is not available."*
+*
+* THE VOC TIER IS THE FIRST GATE AND IS NOT ENOUGH ON ITS OWN.  A programmer
+* account has the verb; running an editor is still reaching the operating
+* system, and who may do that is OS.USERS field 2 - the same list and the same
+* field that governs OS.EXECUTE from inside a program.
+*
+* WHY THE TEST IS HERE RATHER THAN LEFT TO os_permitted().  This program is
+* $internal, so op_sh.c:157 admits it on HDR_INTERNAL and never consults the
+* list.  Dropping $internal would make C do the test, but its refusal is
+* k_error(sysmsg(10054)) - an abort, mid-program, AFTER the working copy has
+* been written and with wording about "the operating system shell" that names
+* neither this verb nor what to ask for.  Testing here refuses before anything
+* is created and says what to do about it.
+*
+* IT MIRRORS os_permitted() DELIBERATELY, including which way it fails: a
+* missing file or a missing record means NO.  An elevated session passes on
+* its own, as it does for SH, so an empty list cannot lock the machine's own
+* administrator out.
+*
+* AND THE TERMINAL TEST IS FIRST, because it is the plainer answer.  An API
+* session and a piped script have nowhere to draw a full screen, and telling
+* one of those about os.users would be answering a question it did not ask.
+* ---------------------------------------------------------------------------
+check.permitted:
+   permitted = @false
+
+   if kernel(K$TTY, 0) = '' then
+      error.text  = verb.text : ' needs a terminal to draw on, and this session'
+      error.text := ' has none.' : char(10)
+      error.text := 'ed, the line editor, works anywhere.'
+      return
+   end
+
+   if kernel(K$ADMINISTRATOR, -1) then
+      permitted = @true
+      return
+   end
+
+   openpath @sdsys : ds : 'os.users' to os.users.f else
+      error.text  = verb.text : ' is not available: this system has no os.users'
+      error.text := ' list, so nobody but an administrator may reach the'
+      error.text := ' operating system.' : char(10)
+      error.text := 'ed, the line editor, needs none of this.'
+      return
+   end
+
+*  THE THREE-CASE FOLD, as CPROC and LOGIN's batch gate do it: as held, then
+*  lower, then upper.  The record is written by hand with ED and the login
+*  name arrives in whatever case Windows reports it.
+   os.rec = ''
+   read os.rec from os.users.f, @logname else
+      read os.rec from os.users.f, downcase(@logname) else
+         read os.rec from os.users.f, upcase(@logname) else os.rec = ''
+      end
+   end
+   close os.users.f
+
+   if downcase(trim(os.rec<2>, ' ', 'B')) = 'yes' then
+      permitted = @true
+      return
+   end
+
+   error.text  = verb.text : ' is not available to ' : @logname : '.' : char(10)
+   error.text := 'It runs an editor outside SD, so it needs OS.EXECUTE'
+   error.text := ' permission: field 2 of your record in the SD system file'
+   error.text := ' os.users, which only an administrator can change.' : char(10)
+   error.text := 'ed, the line editor, needs none of this.'
+return
+
+* ---------------------------------------------------------------------------
+* marks.out  -  temp.record (SD) -> work.record (what the editor is given).
+*
+* A FIELD mark is a line break, so a text editor handles fields on its own.
+* The other three are control characters an editor either draws as a stray
+* glyph or drops, so each becomes a two-character token; see the grammar at
+* the top of the program.
+*
+* ***CONSECUTIVE MARKS ARE SEPARATED BY A COMMA.***  Owner, 27 Aug 2026: a run
+* of marks written token against token cannot be read.  Text mark, text mark,
+* value mark is "~!,~!,~~" and not "~!~!~~".  A LITERAL COMMA STANDING IN THAT
+* EXACT POSITION - after a mark and before a mark - is therefore written "~,",
+* because "~~,~~" already means two value marks.  Nowhere else does a comma
+* need anything: they are far too common in real text to escape on sight.
+*
+* A LITERAL "~" IS WRITTEN "~-" ONLY WHERE THE NEXT CHARACTER WOULD MAKE THE
+* PAIR LOOK LIKE A TOKEN.  Escaping every tilde would be shorter and would
+* show "~-" wherever the author wrote "~", which is the complaint this whole
+* conversion exists to answer.  "a~b" is "a~b" in the editor.
+*
+* IT COSTS FOUR count() CALLS ON A RECORD THAT HAS NONE OF THIS, which is
+* almost every BASIC source record.  The scan is per character otherwise, but
+* it appends whole runs of ordinary text rather than one character at a time.
+* ---------------------------------------------------------------------------
+marks.out:
+   work.record = temp.record
+
+   n.special = count(work.record, '~')
+   n.special += count(work.record, @vm)
+   n.special += count(work.record, @sm)
+   n.special += count(work.record, @tm)
+   if n.special = 0 then return
+
+   m.s = work.record
+   m.w = ''
+   m.len = len(m.s)
+   m.run = 1                        ;* start of the plain run not yet appended
+   m.prev.mark = @false
+
+   for m.i = 1 to m.len
+      m.c  = m.s[m.i, 1]
+      m.nx = m.s[m.i + 1, 1]        ;* '' at the end of the record
+
+      m.tok = ''
+      m.is.mark = @false
+      begin case
+         case m.c = @vm
+            m.tok = vm.token
+            m.is.mark = @true
+         case m.c = @sm
+            m.tok = sm.token
+            m.is.mark = @true
+         case m.c = @tm
+            m.tok = tm.token
+            m.is.mark = @true
+         case m.c = ','
+*           Only the comma that would be read back as a run separator.
+            if m.prev.mark and m.nx # '' then
+               if index(mark.chars, m.nx, 1) > 0 then m.tok = comma.token
+            end
+         case m.c = '~'
+            if m.nx # '' then
+               if index(danger.chars, m.nx, 1) > 0 then m.tok = esc.token
+            end
+      end case
+
+      if m.tok # '' then
+         m.w := m.s[m.run, m.i - m.run]
+         if m.is.mark and m.prev.mark then m.w := ','
+         m.w := m.tok
+         m.run = m.i + 1
+      end
+      m.prev.mark = m.is.mark
+   next m.i
+
+   m.w := m.s[m.run, m.len - m.run + 1]
+   work.record = m.w
+return
+
+* ---------------------------------------------------------------------------
+* marks.back  -  work.record (what came back from the editor) -> temp.record.
+*
+* ***IT IS A LEFT-TO-RIGHT SCAN AND NOT A SEQUENCE OF change() CALLS.***  It
+* was three change() calls until 27 Aug 2026 and could not stay one: change()
+* rewrites the whole string for each token, so a token that only exists
+* because of where it sits - the run separator - cannot be expressed, and a
+* later pass can cut a token an earlier pass created.  A scan reads each
+* position once and decides there.
+*
+* EVERY TOKEN IS "~" PLUS ONE CHARACTER, so the scan only ever has to look at
+* a tilde; every other character is itself.  A record with no tilde in it
+* comes back unchanged for one count().
+* ---------------------------------------------------------------------------
+marks.back:
+   temp.record = work.record
+   if count(temp.record, '~') = 0 then return
+
+   m.s = temp.record
+   m.w = ''
+   m.len = len(m.s)
+   m.run = 1
+   m.prev.mark = @false
+   m.i = 1
+
+   loop
+   while m.i <= m.len
+      m.c  = m.s[m.i, 1]
+      m.nx = m.s[m.i + 1, 1]
+
+      m.hit = ''
+      m.drop = @false
+      m.is.mark = @false
+      m.step = 1
+
+      begin case
+         case m.c = '~' and m.nx # '' and index(token.chars, m.nx, 1) > 0
+            m.step = 2
+            begin case
+               case m.nx = '~'
+                  m.hit = @vm
+                  m.is.mark = @true
+               case m.nx = bq
+                  m.hit = @sm
+                  m.is.mark = @true
+               case m.nx = '!'
+                  m.hit = @tm
+                  m.is.mark = @true
+               case m.nx = '-'
+                  m.hit = '~'
+               case 1
+                  m.hit = ','
+            end case
+
+         case m.c = ',' and m.prev.mark and m.nx = '~'
+*           A comma between two mark tokens is the separator this program
+*           wrote, and it is not data.  The run continues across it.
+            m.after = m.s[m.i + 2, 1]
+            if m.after # '' then
+               if index(mark.letters, m.after, 1) > 0 then
+                  m.drop = @true
+                  m.is.mark = @true
+               end
+            end
+      end case
+
+      if m.hit # '' or m.drop then
+         m.w := m.s[m.run, m.i - m.run]
+         if not(m.drop) then m.w := m.hit
+         m.run = m.i + m.step
+         m.prev.mark = m.is.mark
+      end else
+         m.prev.mark = @false
+      end
+
+      m.i += m.step
+   repeat
+
+   m.w := m.s[m.run, m.len - m.run + 1]
+   temp.record = m.w
+return
+
+* ---------------------------------------------------------------------------
+* find.editor  -  ask Windows where the editor is, once.
+*
+* IT RETURNS THE RESOLVED PATH AND THE PATH IS WHAT IS RUN.  Asking
+* Get-Command and then running the bare name would be two lookups that could
+* disagree; and printing the path is what makes a wrong editor obvious rather
+* than mysterious.
+*
+* CommandType Application is deliberate: it cannot match a PowerShell alias or
+* function, only a real executable.
+* ---------------------------------------------------------------------------
+find.editor:
+   editor.path = ''
+*  THE BUNDLED COPY FIRST, THEN PATH.  PRE_RELEASE_FIXES 66.  The installer
+*  ships the editor beside sd.exe, whose location is fixed at
+*  C:\Program Files\SD\usr\bin - the user chooses only whether that directory
+*  is added to PATH, not where it is.  Trying it first means the verb runs the
+*  version SD shipped - the one the documentation was written against - and
+*  does not depend on the optional PATH task.  The Get-Command fallback still
+*  answers for a machine that has the editor from winget instead.  It stays ONE
+*  lookup returning the resolved path, as the note above requires.
+*  Forward slashes: PowerShell accepts them, they are SD's own path convention
+*  (see the note at the foot of this program), and they keep a backslash out of
+*  a BASIC string literal.
+   bundled = 'C:/Program Files/SD/usr/bin/' : editor.exe
+   probe  = "$b = '" : bundled : "'; "
+   probe := 'if (Test-Path -LiteralPath $b) { $b } else { '
+   probe := '$c = Get-Command -Name ' : editor.exe
+   probe := ' -CommandType Application -ErrorAction SilentlyContinue; '
+   probe := 'if ($c) { $c[0].Source } }'
+
+   os.execute probe capturing probe.out
+
+   editor.path = trim(convert(char(13) : char(10), '  ', probe.out))
+
+   if editor.path = '' then
+      error.text  = editor.name : ' (' : editor.exe : ') was not found on this'
+      error.text := ' machine, so ' : verb.text : ' has nothing to edit with.'
+      error.text := @fm
+      error.text := 'Install it from an elevated prompt:' : @fm
+      error.text := '   ' : editor.get : @fm
+      error.text := 'or use ed, the line editor, which needs nothing installed.'
+      error.text  = change(error.text, @fm, char(10))
+   end
+return
+
+* ---------------------------------------------------------------------------
+* micro.home  -  ask micro-home.ps1 for a configuration home THIS USER can
+* write, and refuse if there is not one.
+*
+* ***WHY MICRO NEEDS ONE AT ALL, AND WHY IT IS NOT A FLAG.***  micro writes to
+* its configuration home when it saves.  This program used to point
+* MICRO_CONFIG_HOME at C:\Program Files\SD\micro - BUILTIN\Users:(RX) - and
+* every save from an unelevated account printed, in red,
+*
+*     Permission denied.  Save with sudo not supported on Windows
+*
+* and then wrote the file anyway.  A false alarm rather than data loss, and the
+* wording says the opposite.  PRE_RELEASE_FIXES #29.
+*
+* MEASURED FOUR WAYS, 27 Aug 2026, one variable: same file in a writable
+* directory, unelevated, micro launched straight from PowerShell with only
+* MICRO_CONFIG_HOME differing.  A read-only home errors with no flags, with
+* "-backup off", and with "-backup false -savehistory false"; a writable home
+* is clean.  NO OPTION SUPPRESSES IT.  An earlier version of this program
+* passed "-backup off" on reasoning alone and fixed nothing - the whole of that
+* change is gone.
+*
+* THE PATH IS NOT BUILT HERE, AND THAT IS DELIBERATE.  Choosing it needs
+* %USERPROFILE% - which is NOT C:\Users\<login>, measured: the login "don" has
+* the profile "C:\Users\dmont" - a fallback when a profile cannot be written,
+* and a copy of the syntax file.  micro-home.ps1 does all of it and prints one
+* line; its header carries the reasoning, including why the home must be per
+* user rather than one shared directory (micro executes Lua plugins from it).
+*
+* IT ANCHORS ON THE SUCCESS WORDING.  "MICROHOME=" is printed by that script on
+* one path only - after it has proved the directory writable BY WRITING TO IT -
+* so it cannot be matched out of an echoed argument or an error message.  The
+* diagnostics all begin "micro-home:" and are deliberately a different string.
+* ---------------------------------------------------------------------------
+micro.home:
+   editor.cfg = ''
+
+   home.ps1 = kernel(K$WINPATH, '/micro-home.ps1')
+   if home.ps1 = '' then
+      error.text  = 'Could not locate micro-home.ps1, which prepares the'
+      error.text := ' editor''s configuration directory.' : char(10)
+      error.text := 'ed, the line editor, needs none of this.'
+      return
+   end
+
+   home.cmd = '& ' : q : home.ps1 : q
+   os.execute home.cmd capturing home.out
+
+*  ***THE CAPTURE IS @fm-SEPARATED AND EVERY LINE ENDS IN CR. THERE IS NO LF IN
+*  IT AT ALL.***  Measured 27 Aug 2026 with a probe that counted the characters
+*  rather than assuming: two lines of output came back
+*  FM=7 VM=0 CR=8 LF=0, the bytes reading "... 13 254 ..." between lines.
+*
+*  THE FIRST VERSION OF THIS SPLIT ON char(10) AND THEREFORE SAW ONE FIELD - so
+*  it never found MICROHOME=, and the verb refused with the script's own
+*  successful output quoted underneath it, which is how the mistake was caught.
+*  find.editor gets away with convert(char(13):char(10), '  ', ...) only because
+*  its answer is a single line.
+*
+*  Normalising all three to one separator rather than splitting on @fm keeps it
+*  right if a future capture ever does carry LF.  Empty fields cannot match.
+   home.sep  = char(10)
+   home.norm = convert(@fm : char(13), home.sep : home.sep, home.out)
+
+   home.lines = dcount(home.norm, home.sep)
+   for home.i = 1 to home.lines
+      home.line = trim(field(home.norm, home.sep, home.i), ' ', 'B')
+      if home.line[1, 10] = 'MICROHOME=' then
+         editor.cfg = home.line[11, len(home.line) - 10]
+      end
+   next home.i
+
+*  PRINT WHAT THE INSTRUMENT DID WHEN IT FAILED.  The script's own diagnostics
+*  name the candidates it tried and why each was refused, and they are the only
+*  thing that makes this diagnosable rather than mysterious.
+   if editor.cfg = '' then
+      error.text  = verb.text : ' could not be given a configuration directory'
+      error.text := ' it can write to, and micro reports every save as'
+      error.text := ' "Permission denied" without one.' : char(10)
+      error.text := 'micro-home.ps1 said:' : char(10)
+      error.text := trim(home.norm, home.sep, 'B')
+      error.text := char(10) : 'ed, the line editor, needs none of this.'
+   end
+return
+
+* ---------------------------------------------------------------------------
+* open.files  -  the record's file, and $hold for the working copy.
+* ---------------------------------------------------------------------------
+open.files:
+   open dict.text, in.file.name to input.file then
+      open temp.file.name to temp.file then
+         files.opened = @true
+      end else
+         error.text = 'File error: ' : temp.file.name : ' could not be opened.'
+      end
+   end else
+      error.text = 'File error: ' : trim(dict.text : ' ' : in.file.name)
+      error.text := ' could not be opened.'
+   end
+return
+
+* ---------------------------------------------------------------------------
+* process.record  -  write the working copy, run the editor on it, read it
+* back.  A record that does not exist yet is editable: the copy is simply
+* empty, which is how a new program is written.
+* ---------------------------------------------------------------------------
+process.record:
+   read input.record from input.file, in.record.name else input.record = ''
+   temp.record = input.record
+
+   if dict.text = 'DICT' then
+      temp.str = trim(field(temp.record, @fm, 1), ' ', 'B')[1, 1]
+      if index('CI', upcase(temp.str), 1) > 0 then
+         compiled.dict = @true
+         temp.record = field(temp.record, @fm, 1, 15)
+      end
+   end
+
+*  MARKS BECOME TYPEABLE TEXT ON THE WAY OUT AND COME BACK ON THE WAY IN.
+*  Owner's idea, 26 Aug 2026; the subvalue token the day after, and the text
+*  mark and the run separator on the 27th.  The grammar is at the top of the
+*  program and the two scanners are marks.out and marks.back.
+*
+*  ***THE CONVERSION IS LOSSLESS, NOT REFUSABLE.***  Owner's ruling, 27 Aug
+*  2026, after micro refused gpl.bp/edit itself: "the whole purpose of these
+*  editors is primarily to edit source code... the conversion needs to be
+*  handled seamlessly, just like CRLF or LF".  The version this replaces
+*  converted two of the three marks and then checked the round trip, refusing
+*  any record whose own text could be mistaken for a token - and EDIT, which
+*  carries the token strings as constants, was the ONE source record in the
+*  whole shipped tree that its own guard turned away.
+   gosub marks.out
+
+*  ***AND THE ROUND TRIP IS STILL TESTED RATHER THAN REASONED ABOUT.***  It is
+*  now expected never to fire: gplbld/test-edittokens-units.py runs these two
+*  algorithms against each other over EVERY string up to six characters drawn
+*  from ~ ` ! - , @vm @sm @tm and one ordinary letter, and over all 197 shipped
+*  gpl.bp records, and nothing is lost.  It stays because losing a user's data
+*  silently is the one outcome worth a few lines to prevent, and because a
+*  failure here would now be a defect in THIS program rather than a property of
+*  the record.
+*
+*  IT COSTS A THIRD SCAN, and that is the price of the check being real: this
+*  runs marks.back on the actual text the editor is about to be given rather
+*  than reasoning about what it would produce.
+   check.keep  = temp.record
+   check.in    = work.record
+   gosub marks.back
+   check.back  = temp.record
+   temp.record = check.keep
+   work.record = check.in
+
+   if check.back # temp.record then
+      error.text  = verb.text : ' cannot represent this record safely, which is'
+      error.text := ' a fault in SD rather than anything wrong with the record.'
+      error.text := char(10)
+      error.text := 'Nothing has been changed.  Please report it.' : char(10)
+      error.text := 'ed, the line editor, handles the record meanwhile.'
+      goto end.program
+   end
+
+   write work.record to temp.file, temp.record.name on error
+      error.text = 'Write error: the working copy could not be created in '
+      error.text := temp.file.name
+      goto end.program
+   end
+   temp.written = @true
+
+*  THE REAL PATH, NOT "$hold/name".  $hold is a directory file, so its record
+*  is a file on disk, and fileinfo() is what knows where.  MICRO passed a
+*  relative path and it resolved only because the process happened to be
+*  standing in the account directory.
+   hold.dir = fileinfo(temp.file, FL$PATH)
+   if hold.dir = '' then
+      error.text = 'Could not find the operating-system path of ' : temp.file.name
+      goto end.program
+   end
+
+*  ***AND THEN CONVERTED, BECAUSE fileinfo() ANSWERS IN POSIX.***  Measured
+*  26 Aug 2026 with ANALYSE.FILE on an installed system:
+*
+*      Path name : /cygdrive/c/ProgramData/SD/sdsys/$hold
+*
+*  sd.conf holds "C:\ProgramData\SD\sdsys", so it is tempting to conclude the
+*  runtime keeps Windows paths and skip this.  IT DOES NOT: the MSYS2 runtime
+*  converts on the way in and SD works in POSIX from then on.
+*
+*  A POSIX PATH HANDED TO A WINDOWS PROGRAM IS NOT AN ERROR, WHICH IS WHY THIS
+*  COST A TEST RUN.  "/cygdrive/c/..." reads to Windows as a path from the
+*  root of the CURRENT DRIVE, so the editor neither refuses nor opens the
+*  record - it opens a new buffer somewhere else entirely.  micro says
+*  "parent dirs don't exist"; Microsoft Edit says nothing at all and the
+*  record reads back empty, which arrives as "Record is empty - not saved".
+*  A stray "C:" directory in the account was the only physical trace.
+*
+*  kernel(K$WINPATH) is the conversion - cygwin_conv_path(), op_kernel.c:628 -
+*  and it is the same one ELEVATE makes for its helper, whose header says it
+*  plainly: the scripts are POSIX "/" to SD and "C:\Program Files\SD" to
+*  PowerShell, WHICH CANNOT OPEN THE FORMER.
+*
+*  IT ANSWERS AN EMPTY STRING RATHER THAN A GUESS when the runtime cannot
+*  convert, so an empty answer is refused here rather than passed on.  A wrong
+*  pathname would put the user's work in a file nobody goes looking for.
+   posix.file = hold.dir : ds : temp.record.name
+   os.file = kernel(K$WINPATH, posix.file)
+   if os.file = '' then
+      error.text  = 'Could not turn the working copy path into a Windows one:'
+      error.text := char(10) : '   ' : posix.file
+      goto end.program
+   end
+
+   crt @(-1) : 'Editing ' : trim(dict.text : ' ' : in.file.name) : ' ' :
+   crt in.record.name
+
+   cmd = ''
+   if editor.cfg # '' then
+      cmd := '$env:MICRO_CONFIG_HOME = ' : q : editor.cfg : q : '; '
+   end
+   cmd := '& ' : q : editor.path : q : ' ' : q : os.file : q
+   cmd := '; exit $LASTEXITCODE'
+   os.execute cmd
+   rc = os.error()
+
+   crt @(-1) :
+
+   read work.record from temp.file, temp.record.name else
+      error.text = 'The working copy has gone - nothing was read back.'
+      if rc # 0 then
+         error.text := '  The editor exited ' : rc : '.'
+      end
+      goto end.program
+   end
+
+*  Back the other way, so what is compared and what is written are both in
+*  SD's own representation.  This is also where anything the USER typed is
+*  interpreted, which is what makes the tokens a feature rather than only a
+*  transport.
+   gosub marks.back
+return
+
+* ---------------------------------------------------------------------------
+* remove.temp.record  -  on EVERY exit, not only the tidy one.
+* ---------------------------------------------------------------------------
+remove.temp.record:
+   if temp.written then
+      delete temp.file, temp.record.name on error
+         crt 'Warning: the working copy ' : temp.record.name : ' is still in '
+         crt temp.file.name
+      end
+      temp.written = @false
+   end
+return
+
+* ---------------------------------------------------------------------------
+* save.record.query  -  a DICT record is always saved, as in MICRO.
+* ---------------------------------------------------------------------------
+save.record.query:
+   if dict.text = 'DICT' then
+      response = 'Y'
+   end else
+      prompt ''
+      response = ''
+      crt
+      loop
+         crt trim(dict.text : ' ' : in.file.name) : ' ' : in.record.name :
+         crt ' has been changed'
+         crt 'Save?  <Y>es, <N>o : ' :
+         input response, 1 :
+         crt
+         response = upcase(response)
+      until index('YN', response, 1) > 0 repeat
+   end
+
+   if response # 'Y' then
+      error.text = 'Record not saved'
+      goto end.program
+   end
+
+   write temp.record to input.file, in.record.name on error
+      error.text = 'Write error: ' : trim(dict.text : ' ' : in.file.name)
+      error.text := ' ' : in.record.name : ' could not be updated.'
+      goto end.program
+   end
+   record.saved = @true
+return
+
+end

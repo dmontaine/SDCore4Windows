@@ -83,7 +83,7 @@ $SrvrLogin   = 24
 $ScramFirst  = 47
 $ScramFinal  = 48
 
-# SCRAM$ITERATIONS in gpl.bp/INT$KEYS.H.  Asserted rather than read, so a
+# SCRAM$ITERATIONS in gpl.bp/int$keys.h.  Asserted rather than read, so a
 # change to the cost has to be made deliberately in both places.
 $ExpectedIterations = 600000
 

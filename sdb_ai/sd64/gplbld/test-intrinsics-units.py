@@ -7,7 +7,7 @@
 # nothing.  Needs no build, no install, no elevation and no run token, so it is
 # in neither post-cycle runner.
 #
-# WHY THIS EXISTS.  GPL.BP/BCOMP registers each intrinsic in int.intrinsics and
+# WHY THIS EXISTS.  gpl.bp/bcomp registers each intrinsic in int.intrinsics and
 # dispatches it through an "on i goto" list MATCHED BY POSITION.  The two lists
 # are kept in step by hand.  Adding or removing a name from one and not the
 # other MISROUTES EVERY INTRINSIC AFTER IT - and that fault compiles cleanly and
