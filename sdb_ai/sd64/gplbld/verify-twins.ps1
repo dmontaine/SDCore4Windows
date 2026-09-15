@@ -84,7 +84,7 @@ function Invoke-SDInternal([string[]]$commands, [int]$TimeoutSec = 60) {
     return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 function Listed([string]$text) {
-    $m = [regex]::Match($text, '(?m)^(\d+) record\(s\) listed')
+    $m = [regex]::Match($text, '(?m)^(\d+) record\(s\) (listed|counted)')
     if ($m.Success) { return [int]$m.Groups[1].Value } else { return -1 }
 }
 # A LIST row for exactly this id, case sensitive: id at line start, 2+ spaces.
@@ -109,17 +109,25 @@ try {
     Write-Output '  --- cleaning any earlier fixture ---'
     $null = Cleanup
 
+    # Records are planted with COPY, not ED: ED driven down a pipe never wrote
+    # the record (measured b161) AND left the file open in a session that then
+    # DENIED CONFIGURE.FILE exclusive access.  COPY writes a record and its
+    # session ends cleanly, so the file is free for CONFIGURE.FILE.  The source
+    # is SDSYS's own VOC record 'who' - any existing record does; only its id in
+    # the target matters here, never its data.  COUNT, not LIST, reports the
+    # record tally ('n record(s) counted').
+
     # ---- A. a fresh file is NOCASE ----------------------------------------
-    # Two records are written through the editor: jack, then JACK.  On a
-    # NOCASE file the second is a rewrite of the first, so one record remains,
-    # stored under the first spelling (jack).
+    # jack then JACK: on a NOCASE file the second is a rewrite of the first, so
+    # one record remains, stored under the first spelling (jack).
     $a = Invoke-SD @(
         'CREATE.FILE zztwn',
-        'ED zztwn jack', 'I', 'ok-lower', '.', 'FI',
-        'ED zztwn JACK', 'I', 'ok-UPPER', '.', 'FI',
-        'LIST zztwn ID.SUP')
+        'COPY FROM VOC TO zztwn who,jack OVERWRITING',
+        'COPY FROM VOC TO zztwn who,JACK OVERWRITING',
+        'COUNT zztwn',
+        'LIST zztwn @ID')
     $naCount = Listed $a
-    Row 'A: a fresh file folds - writing jack then JACK leaves ONE record' ($naCount -eq 1) "LIST counted $naCount"
+    Row 'A: a fresh file folds - writing jack then JACK leaves ONE record' ($naCount -eq 1) "COUNT said $naCount"
     $storedLower = HasRow $a 'jack'
     $storedUpper = HasRow $a 'JACK'
     Row 'A: the surviving id is the first spelling, jack (not JACK)' ($storedLower -and -not $storedUpper) "jack=$storedLower JACK=$storedUpper"
@@ -132,33 +140,35 @@ try {
     Row 'B: and no file was created' $bNoFile
 
     # ---- C. an old CASE file with a twin: CONFIGURE.FILE refuses ----------
-    # Build the fixture with sd -internal, the only maker of a CASE file.
-    $mk = Invoke-SDInternal @('CREATE.FILE zztwc CASE')
+    # sd -internal is the only maker of a CASE file, and the whole fixture -
+    # create AND both COPY plants - is done in that ONE session, which then
+    # ends, so nothing holds zztwc when CONFIGURE.FILE (a separate session)
+    # asks for exclusive access.
+    $mk = Invoke-SDInternal @(
+        'CREATE.FILE zztwc CASE',
+        'COPY FROM VOC TO zztwc who,jack OVERWRITING',
+        'COPY FROM VOC TO zztwc who,JACK OVERWRITING',
+        'COUNT zztwc')
     $caseMade = (Test-Path -LiteralPath (Join-Path $sdsys 'zztwc'))
-    Row 'C-setup: sd -internal built a case-sensitive file' $caseMade "$mk"
-    if ($caseMade) {
-        # Plant both spellings; on a CASE file these are two records.
-        $plant = Invoke-SDInternal @(
-            'ED zztwc jack', 'I', 'keep-lower', '.', 'FI',
-            'ED zztwc JACK', 'I', 'keep-UPPER', '.', 'FI',
-            'LIST zztwc ID.SUP')
-        $planted = Listed $plant
-        Row 'C-setup: the CASE file holds both jack and JACK (2 records)' ($planted -eq 2) "counted $planted"
+    Row 'C-setup: sd -internal built a case-sensitive file' $caseMade
+    $planted = Listed $mk
+    Row 'C-setup: the CASE file holds both jack and JACK (2 records)' ($planted -eq 2) "COUNT said $planted"
 
-        $conf = Invoke-SD @('CONFIGURE.FILE zztwc NO.CASE')
-        $refused = ($conf -match '10177' -or $conf -match 'differ only by case')
-        Row 'C: CONFIGURE.FILE NO.CASE refuses the twinned file (10177)' $refused "$conf"
+    $conf = Invoke-SD @('CONFIGURE.FILE zztwc NO.CASE')
+    $refused = ($conf -match '10177' -or $conf -match 'differ only by case')
+    Row 'C: CONFIGURE.FILE NO.CASE refuses the twinned file (10177)' $refused "$conf"
 
-        $after = Invoke-SD @('LIST zztwc ID.SUP')
-        $stillTwo = (Listed $after) -eq 2
-        Row 'C: the file is LEFT AS IT WAS - both records survive, nothing lost' $stillTwo "counted $(Listed $after)"
-    }
+    $after = Invoke-SD @('COUNT zztwc')
+    $stillTwo = (Listed $after) -eq 2
+    Row 'C: the file is LEFT AS IT WAS - both records survive, nothing lost' $stillTwo "COUNT said $(Listed $after)"
 
     # ---- D. control: a single-spelling CASE file converts cleanly ---------
-    $mk2 = Invoke-SDInternal @('CREATE.FILE zztwk CASE')
+    $mk2 = Invoke-SDInternal @(
+        'CREATE.FILE zztwk CASE',
+        'COPY FROM VOC TO zztwk who,jack OVERWRITING',
+        'COUNT zztwk')
     if (Test-Path -LiteralPath (Join-Path $sdsys 'zztwk')) {
-        $null = Invoke-SDInternal @('ED zztwk jack', 'I', 'only-one', '.', 'FI')
-        $conf2 = Invoke-SD @('CONFIGURE.FILE zztwk NO.CASE', 'LIST zztwk ID.SUP')
+        $conf2 = Invoke-SD @('CONFIGURE.FILE zztwk NO.CASE', 'COUNT zztwk')
         $ok = ((Listed $conf2) -eq 1) -and ($conf2 -notmatch '10177')
         Row 'D CONTROL: a file with only jack converts to NOCASE and keeps it' $ok "$conf2"
     } else {
