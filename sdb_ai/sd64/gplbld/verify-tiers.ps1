@@ -644,7 +644,7 @@ Write-Output '=== 5b. an account holding the OLD upper-case ids is renamed, not 
 # and wrote lower-case twins beside them; LOGIN's exact read of $RELEASE would
 # also have ended every such account's next session with 5028.
 #
-# 15 Sep 26 - THE PLANT IS REBUILT FOR RELEASE_1.1 5 D2 (owner: "retire and
+# 14 Sep 26 - THE PLANT IS REBUILT FOR RELEASE_1.1 5 D2 (owner: "retire and
 # replace").  It copied each lower record to its upper id, then deleted the
 # lower one.  Under D2 VOC is case insensitive: the COPY answered "Record '$ACC'
 # already exists" and the DELETE removed the only record (b161), so the account
@@ -659,14 +659,14 @@ Write-Output '=== 5b. an account holding the OLD upper-case ids is renamed, not 
 # now hits the upper record, so it updates it in place and deletes nothing: the
 # old spelling STAYS, which is cosmetic.  The rows require NO LOSS - each of the
 # four stored exactly once in some case, COUNT VOC unchanged.  The order that
-# WOULD lose it - write the new spelling, delete the old - was measured 15 Sep
+# WOULD lose it - write the new spelling, delete the old - was measured 14 Sep
 # 2026 on a scratch NOCASE file (write TYPE, write type, delete TYPE: 0
 # records); update.voc takes it only when the exact read misses, which D2 rules
 # out.  WRITE_INSTALL_DICTS took it unconditionally; see verify-dictrename.
 #
 # THE INSTRUMENT IS THE @ID COLUMN OF "LIST VOC WITH @ID LIKE ...", read with
 # -cmatch.  LIKE scans and prints the id as STORED; "@ID =" is a keyed read and
-# prints the spelling asked for (both measured 15 Sep 2026 on $hold).
+# prints the spelling asked for (both measured 14 Sep 2026 on $hold).
 $renPairs = @(@{L='$acc'; U='$ACC'}, @{L='$map'; U='$MAP'},
               @{L='$release'; U='$RELEASE'}, @{L='sd.voclib'; U='SD.VOCLIB'})
 $idQuery  = 'LIST VOC WITH ' + (($renPairs | ForEach-Object { '@ID LIKE "' + $_.L + '"' }) -join ' OR ')

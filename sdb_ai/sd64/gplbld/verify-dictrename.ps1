@@ -14,14 +14,14 @@
 # dictionary that may still hold the old upper-case ids, so for each shipped
 # record it deletes any existing id that differs from it only in case.
 #
-# ***15 Sep 2026 - REBUILT FOR D2, OWNER'S RULING ("retire and replace").***
+# ***14 Sep 2026 - REBUILT FOR D2, OWNER'S RULING ("retire and replace").***
 # The first version planted TWINS - TYPE beside type - and D2 made every hashed
 # file case insensitive, so a twin cannot be written (b161: the plant did not
 # take and the step exited 2).  What CAN exist is a dictionary converted to
 # NOCASE while it still stored the old spellings: ONE record, stored 'TYPE'.
 # And on that state the 2b code DELETED the item: it wrote 'type', which on a
 # NOCASE file updates the record still stored as TYPE, then deleted 'TYPE' -
-# the only copy.  Measured 15 Sep 2026 on a scratch NOCASE file (write TYPE,
+# the only copy.  Measured 14 Sep 2026 on a scratch NOCASE file (write TYPE,
 # write type, delete TYPE: 0 records).  Owner: "fix it now".  WRITE_INSTALL_DICTS
 # now deletes first and writes after on a NOCASE dictionary.  This is its
 # witness: the plant is that exact state, and the item must come back RENAMED.

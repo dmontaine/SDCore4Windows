@@ -370,7 +370,7 @@ Note 'entry 5 fixture: .S wrote an S-type record' $true `
 # DECISIVE, AND SUCCESS-ONLY.  5040 is reached after ".D" was typed in UPPER for
 # a record stored lower.  The old code failed both reads and printed nothing here
 # at all.
-# 15 Sep 26 - THE PROMPT'S SPELLING IS NO LONGER ASSERTED.  RELEASE_1.1 5 D2
+# 14 Sep 26 - THE PROMPT'S SPELLING IS NO LONGER ASSERTED.  RELEASE_1.1 5 D2
 # made VOC case insensitive, so CPROC's exact read of the typed name hits the
 # lower record first and 5040 echoes 'SDVVB161D' as typed (b161).  The id is
 # still stored lower - the "gone afterwards" row below reads it back lower.

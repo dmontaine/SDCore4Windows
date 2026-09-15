@@ -25,12 +25,12 @@
                                                  entry, stored zzcl3a
       G. DELETE.CATALOG                       - 3042 / 3040 name the lower id
 
-    ***15 Sep 2026 - F's PLANT IS RETIRED*** (owner: "retire and replace").
+    ***14 Sep 2026 - F's PLANT IS RETIRED*** (owner: "retire and replace").
     It planted an old-style ZZCL3A by writing that id and deleting zzcl3a.
     RELEASE_1.1 5 D2 made VOC case insensitive, so the delete removed the one
     record (b161).  Stored ids are read with "LIST VOC WITH @ID LIKE", which
     prints the id as STORED; "@ID =" is a keyed read and prints the spelling
-    asked for (both measured 15 Sep 2026).
+    asked for (both measured 14 Sep 2026).
 
     ***RED ON THE b158 INSTALL, MEASURED BEFORE THE CYCLE*** by a scratch copy
     without the assert gate - see RELEASE_1.1 5 for the rows it failed.
@@ -65,7 +65,7 @@ $pcodeF  = Join-Path $sdsys 'bin\pcode'
 $AcctDir = Join-Path (Join-Path $env:ProgramData 'SD\user_accounts') $Account
 $BpDir   = Join-Path $AcctDir 'bp'
 $CatDir  = Join-Path $AcctDir 'cat'
-$Progs   = @('zzcc3ap', 'zzrn3a', 'zzlc3a')   # zzmv3a retired 15 Sep 26; still swept below
+$Progs   = @('zzcc3ap', 'zzrn3a', 'zzlc3a')   # zzmv3a retired 14 Sep 26; still swept below
 
 $pass = 0
 $fail = 0
@@ -232,7 +232,7 @@ try {
     # --- E, F. local catalogue: new entry, then one planted the old way ---------
     Write-Host ''
     Write-Host '--- E, F. CATALOG LOCAL, and an entry catalogued before stage 3a -------'
-    $lc = Invoke-SD @('CATALOG bp zzcl3a zzcc3ap LOCAL', 'LIST VOC WITH @ID LIKE "zzcl3a"')
+    $lc = Invoke-SD @('CATALOG bp zzcl3a zzcc3ap LOCAL', 'LIST VOC WITH @ID LIKE "zzcl..."')
     Show 'CATALOG LOCAL' $lc
     Row "E: CATALOG said 'zzcl3a added to local catalogue' (3029, lower case)" ($lc.Text -cmatch '(?m)^zzcl3a added to local catalogue') 'no 3029 line naming zzcl3a in lower case'
     # @() because PowerShell unrolls a one-element result to a bare string, and
@@ -240,7 +240,7 @@ try {
     $ids = @(Get-StoredVocIds $lc.Text 'zzcl3a')
     Row "E: the VOC stores 'zzcl3a' and no other spelling" ((@($ids).Count -eq 1) -and ($ids[0] -ceq 'zzcl3a')) ("stored: " + ($ids -join ' '))
 
-    # 15 Sep 26 - F's PLANT IS RETIRED (see the header).  zzmv3a wrote ZZCL3A
+    # 14 Sep 26 - F's PLANT IS RETIRED (see the header).  zzmv3a wrote ZZCL3A
     # and deleted zzcl3a; under D2 that delete removed the one record (b161:
     # "PLANTED3A V CS", then "'zzcl3a' not found" and "Unable to load 'zzcl3a'").
     # F now calls the entry E made, typed upper, and re-catalogues over it.
@@ -248,7 +248,7 @@ try {
     Show 'call the local entry typed ZZCL3A' $pl
     Row 'F: a call typed ZZCL3A finds the local entry' ($pl.Text -match '(?m)^LOCAL3A \[ok3a\]') 'no LOCAL3A [ok3a] line'
 
-    $rc = Invoke-SD @('CATALOG bp zzcl3a zzcc3ap LOCAL', 'LIST VOC WITH @ID LIKE "zzcl3a"')
+    $rc = Invoke-SD @('CATALOG bp zzcl3a zzcc3ap LOCAL', 'LIST VOC WITH @ID LIKE "zzcl..."')
     Show 'CATALOG LOCAL over the existing entry' $rc
     $ids = @(Get-StoredVocIds $rc.Text 'zzcl3a')
     Row "F: re-cataloguing left exactly one entry, stored 'zzcl3a'" ((@($ids).Count -eq 1) -and ($ids[0] -ceq 'zzcl3a')) ("stored: " + ($ids -join ' '))
@@ -256,7 +256,7 @@ try {
     # --- G. DELETE.CATALOG, both catalogues ---------------------------------
     Write-Host ''
     Write-Host '--- G. DELETE.CATALOG ---------------------------------------------------'
-    $dc = Invoke-SD @('DELETE.CATALOG ZZCC3AP', 'DELETE.CATALOG ZZCL3A LOCAL', 'LIST VOC WITH @ID LIKE "zzcl3a"')
+    $dc = Invoke-SD @('DELETE.CATALOG ZZCC3AP', 'DELETE.CATALOG ZZCL3A LOCAL', 'LIST VOC WITH @ID LIKE "zzcl..."')
     Show 'DELETE.CATALOG' $dc
     Row "G: 3042 names 'zzcc3ap' deleted from the private catalogue" ($dc.Text -cmatch '(?m)^zzcc3ap deleted from the private catalogue') 'no 3042 line naming zzcc3ap'
     Row "G: 3040 names 'zzcl3a' deleted from the local catalogue, typed ZZCL3A" ($dc.Text -cmatch '(?m)^zzcl3a deleted from the local catalogue') 'no 3040 line naming zzcl3a'

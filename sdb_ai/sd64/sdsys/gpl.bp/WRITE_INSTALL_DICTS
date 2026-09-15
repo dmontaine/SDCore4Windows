@@ -114,7 +114,7 @@ FOR I = 1 TO ID_CNT
     READLIST OLD.IDS FROM 4 ELSE OLD.IDS = ''
     U.OLD.IDS = UPCASE(OLD.IDS)
     N.OLD.IDS = DCOUNT(OLD.IDS, @FM)
-    * 15 Sep 26 - RELEASE_1.1 5 D2: whether this dictionary is case insensitive
+    * 14 Sep 26 - RELEASE_1.1 5 D2: whether this dictionary is case insensitive
     * decides the order of the replace below.
     NOCASE.DICT = FILEINFO(DICT.FILE.VAR, FL$NOCASE)
   END
@@ -129,10 +129,10 @@ FOR I = 1 TO ID_CNT
     
   * 14 Sep 26 - written first, then the old id deleted, as update.voc does:
   * a failure between the two leaves a twin, never a missing item.
-  * 15 Sep 26 - BUT NOT ON A CASE-INSENSITIVE DICTIONARY (RELEASE_1.1 5 D2),
+  * 14 Sep 26 - BUT NOT ON A CASE-INSENSITIVE DICTIONARY (RELEASE_1.1 5 D2),
   *   WHERE THAT ORDER DELETES THE ITEM.  There the old spelling IS the record:
   *   the WRITE updates it in place, still stored under the old id, and the
-  *   DELETE then removes the only copy.  Measured 15 Sep 2026 on a scratch
+  *   DELETE then removes the only copy.  Measured 14 Sep 2026 on a scratch
   *   NOCASE file: write TYPE, write type, delete TYPE - 0 records.  Reached
   *   when this runs after the upgrade's NOCASE conversion, which is what the
   *   installer tells an administrator to do when this step failed.  So on

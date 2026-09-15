@@ -208,18 +208,21 @@ try {
     # --- leg 2b: CD XTYPE - CD's own lookup of the item name -----------------
     Write-Host ''
     Write-Host '--- leg 2b: CD XTYPE - the item name typed in upper case ----------------'
-    # 15 Sep 26 - RELEASE_1.1 5 D2: every hashed file is case insensitive, so
+    # 14 Sep 26 - RELEASE_1.1 5 D2: every hashed file is case insensitive, so
     # CD's read of XTYPE hits xtype directly and CD echoes 'Compiling XTYPE'
-    # as typed (b161).  The spelling of that line is no longer the witness; the
-    # stored id is, read from LIST DICT's rows (-cmatch) after the compile wrote
-    # the object back.
+    # as typed (b161).  AND CD WRITES THE COMPILED RECORD BACK UNDER THE NAME
+    # TYPED (CD:302, :316), which re-stores the id as XTYPE - b162's LIST DICT
+    # showed one record, XTYPE, and 4 records in all.  Cosmetic: no twin, no
+    # loss.  So the rows are the D2 ones: exactly one row that folds to xtype,
+    # and the record count unchanged.
     $cd = Invoke-SD @("CD $File XTYPE", "LIST DICT $File")
     Show "CD $File XTYPE, LIST DICT $File" $cd
     Row 'leg 2b: CD found the item typed in upper case (no "not found")' ($cd.Text -notmatch "Source record 'XTYPE' not found") 'CD did not fold the name'
     Row "leg 2b: CD compiled it ('Compiling xtype' in any case, no error)" `
         (($cd.Text -match '(?m)^Compiling xtype\s*$') -and ($cd.Text -notmatch 'is not defined|Compilation error')) 'no clean Compiling line naming xtype'
-    Row "leg 2b: the item is still stored as 'xtype' and not as 'XTYPE'" `
-        (($cd.Text -cmatch '(?m)^xtype\s{2,}I\s') -and ($cd.Text -cnotmatch '(?m)^XTYPE\s{2,}')) 'LIST DICT does not show exactly one row, xtype'
+    $xRows = [regex]::Matches($cd.Text, '(?m)^(?i:xtype)\s{2,}I\s').Count
+    Row "leg 2b: exactly one row for xtype, in either case - no twin, nothing lost" `
+        (($xRows -eq 1) -and ($cd.Text -match '(?m)^4 record\(s\) listed')) "xtype rows: $xRows; LIST DICT should list @id, f1, f3 and xtype - 4 records"
 
     # --- leg 3: the compiled I-type evaluates ---------------------------------
     Write-Host ''

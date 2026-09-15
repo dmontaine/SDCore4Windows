@@ -214,7 +214,7 @@ try {
     Write-Host '--- leg 3: SET.FILE finds a lower-case target file typed in upper ---'
     $mk = Invoke-SD @("CREATE.FILE $F")
     if ($mk.Text -notmatch "Created DATA part as $F") { Show 'CREATE.FILE' $mk; Bail 2 "could not create $F - setup, not measurement, failed." }
-    # 15 Sep 26 - RELEASE_1.1 5 D2: VOC is case insensitive, so SET.FILE's read
+    # 14 Sep 26 - RELEASE_1.1 5 D2: VOC is case insensitive, so SET.FILE's read
     # of the typed name hits the file directly and field 3 keeps the spelling
     # typed ('3: ZZVIDF...' on b161).  That is cosmetic - the pointer resolves in
     # any case - so the row reads the name without its case, and COUNT through
@@ -246,7 +246,7 @@ try {
     $fam = Get-Family 'zzvids'
     Write-Host "  stored ids: $(Fmt $fam)"
     Row 'leg 5: the session terminated (no runaway loop)' (-not $r.Killed) "killed after $TimeoutSeconds s"
-    # 15 Sep 26 - D2: 5045 echoes the id as typed (b161); the one-record row
+    # 14 Sep 26 - D2: 5045 echoes the id as typed (b161); the one-record row
     # below is what proves it is the lower id, so this one is case-blind.
     Row "leg 5: 5045 was reached for the lower id, showing (y/<n>)" `
         ($r.Text -match "Overwrite VOC record '$S' \(y/<n>\)\?") "no 5045 naming '$S' with its default marker"
@@ -276,7 +276,7 @@ try {
     $dirsN = Get-Dirs 'zzvidn'; $dirsC = Get-Dirs 'zzvidc'
     Write-Host "  stored ids: new $(Fmt $famN); old $(Fmt $famC)"
     Write-Host "  on disk   : new $($dirsN -join ', '); old $($dirsC -join ', ')"
-    # 15 Sep 26 - D2: 6158 names the OLD id as typed (b161: 'ZZVIDC...'); the
+    # 14 Sep 26 - D2: 6158 names the OLD id as typed (b161: 'ZZVIDC...'); the
     # NEW id is still the stored lower one, and that half keeps its case.
     Row "leg 7: CNAME reported '$C' renamed to '$N'" ($r.Text -cmatch "'(?i:$C)' renamed to '$N'") 'no 6158 naming the new id lower'
     Row 'leg 7: the data directory was renamed (6153)' ($r.Text -match 'Renamed data file at operating system level') 'no 6153'
@@ -295,7 +295,7 @@ try {
     $r = Invoke-SD @("CNAME $T TO $($N.ToUpper())")
     Show "CNAME $T TO $($N.ToUpper())" $r
     $famN = Get-Family 'zzvidn'; $famT = Get-Family 'zzvidt'
-    # 15 Sep 26 - D2: 6151 names the id as typed (b161); case-blind.
+    # 14 Sep 26 - D2: 6151 names the id as typed (b161); case-blind.
     Row 'leg 8: refused with 6151 naming the existing id' ($r.Text -match "(?m)^$N is already defined in your VOC") 'no 6151 naming the id'
     Row "leg 8: '$T' is untouched" (Is-Exactly $famT $T) "got $(Fmt $famT)"
     Row "leg 8: '$N' is still the only one of its name" (Is-Exactly $famN $N) "got $(Fmt $famN)"
@@ -312,11 +312,11 @@ try {
     # --- leg 10: CNAME of an upper-case id to its own lower spelling ---------
     # OPTION CREATE.FILE.UPCASE keeps the case typed (verify-promptenter's
     # fixture route), so this is an old-style upper id with upper directories.
-    # 15 Sep 26 - RETIRED AS A RENAME, OWNER'S RULING (retire and replace).  It
+    # 14 Sep 26 - RETIRED AS A RENAME, OWNER'S RULING (retire and replace).  It
     # asserted the recase; on b161 CNAME refused it with 6151, because under D2
     # the new name's NOCASE read finds the old record itself - the leg 9 guard.
     # A recase could not be done by write-then-delete on a NOCASE VOC anyway:
-    # measured 15 Sep, writing 'type' then deleting 'TYPE' deletes the one
+    # measured 14 Sep, writing 'type' then deleting 'TYPE' deletes the one
     # record.  So the leg now asserts the refusal is SAFE - nothing is lost.
     Write-Host ''
     Write-Host '--- leg 10: CNAME an upper-case id to its own lower spelling is refused, nothing lost ---'

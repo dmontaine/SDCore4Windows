@@ -17,7 +17,7 @@
     WORDING was missing until 12 Sep 2026, so this witnesses the message and
     the default together.
 
-    ***15 Sep 2026 - LEGS 1 AND 2 ARE RETIRED, AND 6131 WITH THEM.***
+    ***14 Sep 2026 - LEGS 1 AND 2 ARE RETIRED, AND 6131 WITH THEM.***
     RELEASE_1.1 5 D2 made every hashed file case insensitive, so DELETEF's
     exact read finds the upper-case record by its lower name and never reaches
     6131.  Leg 1 now asserts that: deleted, no 6130, no prompt.  The paragraphs
@@ -183,7 +183,7 @@ try {
         Bail 2 "$Probe was not listed after creation - nothing to measure."
     }
 
-    # 15 Sep 26 - LEGS 1 AND 2 RETIRED, OWNER'S RULING ("retire and replace").
+    # 14 Sep 26 - LEGS 1 AND 2 RETIRED, OWNER'S RULING ("retire and replace").
     # They pressed Enter at 6131, which DELETEF asks only when its exact read of
     # the typed name MISSES and the upcase read hits.  RELEASE_1.1 5 D2 made VOC
     # case insensitive, so the exact read of 'zzprompte' hits ZZPROMPTE itself:
@@ -237,7 +237,7 @@ try {
     $mk3 = Invoke-SD @("CREATE.FILE $ProbeL")
     Write-Host $mk3.Text
     # Precondition, and the reason it is decisive: if the id were stored upper
-    # this leg would say nothing about the lower-case tier.  15 Sep 26 - read
+    # this leg would say nothing about the lower-case tier.  14 Sep 26 - read
     # from the DIRECTORY name, not CT's echo, which under D2 repeats the
     # spelling typed (see the leg 1 note).  CREATE.FILE names it as it stores the id.
     $isLower = ($mk3.Text -match "Created DATA part as $lowerL") -and
@@ -252,7 +252,7 @@ try {
             ($d3.Text -notmatch 'No VOC record found') 'DELETEF printed 6130, so it did not try lower case'
         Row 'leg 3: no 6131 prompt' ($d3.Text -notmatch 'Use file') 'DELETEF asked - the lower tier is meant to be silent'
         # SUCCESS WORDING, NOT THE ABSENCE OF AN ERROR: 6144 with the stored id.
-        # 15 Sep 26 - case-blind: under D2 6144 may name the id as typed.
+        # 14 Sep 26 - case-blind: under D2 6144 may name the id as typed.
         Row "leg 3: SD reported VOC entry '$lowerL' deleted (any case)" `
             ($d3.Text -match "VOC entry '$lowerL' deleted") 'no 6144 success line'
         $after3 = Invoke-SD @("CT VOC $lowerL")

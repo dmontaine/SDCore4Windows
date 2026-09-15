@@ -46,7 +46,7 @@
 #
 # COPYP RIDES ALONG because it shipped in the same cycle.  See section 5.
 #
-# 15 Sep 2026 - RELEASE_1.1 5 D2 MADE VOC CASE INSENSITIVE, AND THREE OF THIS
+# 14 Sep 2026 - RELEASE_1.1 5 D2 MADE VOC CASE INSENSITIVE, AND THREE OF THIS
 # FILE'S INSTRUMENTS DIED WITH IT (b161).  CT now echoes the spelling TYPED, an
 # exact-match read of VOC now finds any spelling, and sections 5/5a/5b's rename
 # toggles ("write UPPER, delete lower") DELETED THE ONLY RECORD - $savedlists,
@@ -314,13 +314,13 @@ try {
     # printed the id it MATCHED, not the one typed, so the echo said which
     # spelling was stored.
     #
-    # 15 Sep 26 - NOT ANY MORE.  RELEASE_1.1 5 D2 made VOC case insensitive, so
+    # 14 Sep 26 - NOT ANY MORE.  RELEASE_1.1 5 D2 made VOC case insensitive, so
     # CT's read of the typed name hits the record directly and echoes the
     # spelling TYPED: every "typing X is answered as x" row failed on b161, a
     # correct install.  Each id is now two rows: typing the old name REACHES the
     # record (CT prints it, no 2108), and the id is STORED lower, read from
     # "LIST VOC WITH @ID LIKE" - which scans and prints the id as stored
-    # (measured 15 Sep 2026: LIKE "$HOLD" listed $hold, @ID = "$HOLD" listed
+    # (measured 14 Sep 2026: LIKE "$HOLD" listed $hold, @ID = "$HOLD" listed
     # $HOLD).  -cmatch on the row is the assertion.
     function Test-Reached([string]$text, [string]$typed) {
         return (($text -match ('(?m)^VOC ' + [regex]::Escape($typed) + '\s*$')) -and
@@ -420,7 +420,7 @@ end
         Note 'control: the test wrote its own UPPER-case VOC record' $true ($ctlRun -match 'CTL=OK')
 
     # Typed in LOWER case it is reached, and the stored id is untouched.  A
-    # sweep would have taken this with it.  15 Sep 26 - the stored id is read
+    # sweep would have taken this with it.  14 Sep 26 - the stored id is read
     # from LIKE's row, not CT's echo (see the note on the rows above).
         $ctCtl = Invoke-SD @("CT VOC $($ctlName.ToLower())", (Get-LikeQuery @($ctlName.ToLower())))
         Note 'control: an UPPER-case id the test wrote is reached typed lower' $true `
@@ -509,17 +509,17 @@ end
 
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 5. RETIRED 15 Sep 2026: AN ACCOUNT CREATED BEFORE THE RENAME ========='
+    Write-Output '=== 5. RETIRED 14 Sep 2026: AN ACCOUNT CREATED BEFORE THE RENAME ========='
     Write-Output '  Sections 5, 5a and 5b renamed a shipped VOC id back to its old upper'
     Write-Output '  spelling with "write UPPER, delete lower", measured through it, and'
     Write-Output '  renamed it back.  RELEASE_1.1 5 D2 made VOC case insensitive, so the'
     Write-Output '  delete removed the ONLY record: b161 left $savedlists, $hold and'
     Write-Output '  $command.stack missing from the account this runs in (put back by'
-    Write-Output '  hand 15 Sep 2026).  A lower/upper pair cannot exist under D2, and'
+    Write-Output '  hand 14 Sep 2026).  A lower/upper pair cannot exist under D2, and'
     Write-Output '  section 4 already reaches the one record typed either way.  What is'
     Write-Output '  kept is behaviour on the SHIPPED ids: _NEXTPTR (5a), the stack (5b).'
     # ***DO NOT BRING A TOGGLE BACK.***  Writing one spelling and deleting another
-    # on a case-insensitive file deletes the record - measured 15 Sep 2026 on a
+    # on a case-insensitive file deletes the record - measured 14 Sep 2026 on a
     # scratch file (write TYPE, write type, delete TYPE: 0 records).  This test
     # runs in the owner's own account.  Owner's ruling: retire and replace.
 
@@ -530,7 +530,7 @@ end
     Write-Output '  _NEXTPTR.  NOT the SETPTR check in section 4 - to_file.c builds a RELATIVE'
     Write-Output '  path and reaches $hold whatever the VOC says.  AS NEXT goes through'
     Write-Output '  _NEXTPTR, which opens DICT "$hold" - field 3 of the VOC record.'
-    Write-Output '  15 Sep 2026: the rename toggle this section had is retired (see 5).'
+    Write-Output '  14 Sep 2026: the rename toggle this section had is retired (see 5).'
 
     $nextRec = ('ZZN' + $Tag).ToUpper()
     $holdDir = @(Get-ChildItem -LiteralPath $acctDir -Directory |
@@ -580,7 +580,7 @@ end
     Write-Output '  CPROC and LOGIN reach $command.stack by RECORD read.  THE INSTRUMENT IS'
     Write-Output '  THE stacks FILE, not the VOC: CPROC writes it only when it found the'
     Write-Output '  record AND the record is X type, so the file appearing is the read having'
-    Write-Output '  succeeded.  15 Sep 2026: the rename toggle this section had is retired (see 5).'
+    Write-Output '  succeeded.  14 Sep 2026: the rename toggle this section had is retired (see 5).'
 
     $stkDir = Join-Path $acctDir 'stacks'
     if (Test-Path -LiteralPath $stkDir) { Remove-Item -LiteralPath $stkDir -Recurse -Force }
@@ -796,7 +796,7 @@ end
         $rd9 = ('ZZR' + $Tag).ToUpper()
         $up9 = ('ZZU' + $Tag).ToUpper()
 
-        # THE READER USED EXACT-MATCH READS until 15 Sep 2026.  RELEASE_1.1 5 D2
+        # THE READER USED EXACT-MATCH READS until 14 Sep 2026.  RELEASE_1.1 5 D2
         # made a read of VOC case insensitive, so 'bp.OUT' and 'BP.OUT' both found
         # bp.out (b161: MIXED=YES and UPPER=YES on a correct install).  The stored
         # id is now read from "LIST VOC WITH @ID LIKE", which prints it as stored
@@ -856,7 +856,7 @@ end
 
     # 10a. THE LAST FOUR UPPER-CASE VOC IDS NEWVOC SHIPPED - $ACC, $MAP, $RELEASE,
     # SD.VOCLIB - are $acc, $map, $release, sd.voclib.  Section 3's instrument,
-    # as it is since 15 Sep 2026: typing the old name reaches the record, and
+    # as it is since 14 Sep 2026: typing the old name reaches the record, and
     # LIKE's row shows it stored lower.  (An account made BEFORE the rename is
     # verify-tiers.ps1 section 5b's job, which needs an account of its own.)
     $p10 = @(@{U='$ACC'; L='$acc'}, @{U='$MAP'; L='$map'},
