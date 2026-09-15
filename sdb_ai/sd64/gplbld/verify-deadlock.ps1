@@ -12,8 +12,9 @@
 # 3b's cycle".  PROJECT_STATUS.md section 4 records that killing sd sessions
 # with Stop-Process once left the install answering EVERY new session "Forced
 # logout", for twenty minutes, recoverable only elevated.  So this is a staged
-# fault, it is not a suite step, and a cycle is expected afterwards.  If SD is
-# unusable when it finishes, the recovery it prints is, elevated:
+# fault, it is not a suite step, and a cycle is expected afterwards IF IT
+# KILLED ANYTHING (its last line says).  If SD is unusable when it finishes,
+# the recovery it prints is, elevated:
 #   sd -cleanup           (C:\Program Files\SD\usr\bin\sd.exe -cleanup)
 #   then restart-sd.ps1   (C:\Program Files\SD\restart-sd.ps1), then a cycle.
 #
@@ -24,14 +25,28 @@
 # prints that field.  GETLOCKS shows OTHER users' locks only to an $internal
 # program (op_lock.c:981), so the probe is compiled and run under sd -internal.
 #
-#   1. a holder session takes READU on zzdlfile 'zzdlrec' and waits at INPUT;
-#   2. INSTRUMENT CHECK, before anything is killed: the probe must see that
-#      lock with a real owner name.  If it does not, the holder is ended
-#      cleanly (it answers its INPUT and logs off) and the run REFUSES - nothing
-#      is killed on an instrument that cannot see the lock;
-#   3. the holder's own sd.exe is killed BY THE PID THIS SCRIPT STARTED, never
-#      by name;
-#   4. the probe runs again at once, then every 20 s for up to 6 minutes (the
+# ***15 Sep 2026 - THE HOLDER WAS REBUILT AFTER ITS FIRST RUN.***  It was a
+# .NET Process fed by StandardInput.WriteLine, waiting at INPUT.  WriteLine
+# sends CRLF, SD took the stray line end as the INPUT answer, and the holder
+# released at once ("HOLD=LOCKED" then "HOLD=RELEASED"); the probe then
+# correctly saw no lock and the run refused, killing nothing.  And that
+# sd.exe wrote to the owner's CONSOLE - its banner arrived unindented and about
+# forty lines of this script's output vanished from the screen.  So now:
+#   - the holder reads NO stdin: it loops, sleeping, until a record
+#     'zzdlrelease' appears in zzdlfile;
+#   - it runs in a background job like every other session here, so it has no
+#     console to draw on;
+#   - "holding" is proved by the $internal probe seeing the live lock with a
+#     real owner name, polled for up to 60 s - not by any line the holder prints;
+#   - the holder's PID is the one sd.exe that appeared since the job started,
+#     and anything other than exactly one refuses the kill;
+#   - this script writes its own transcript under %LOCALAPPDATA%\SD-verify.
+#
+#   1. INSTRUMENT CHECK, before anything is killed: the probe must see the lock
+#      with a real owner name.  If it does not, the holder is released cleanly
+#      (the release record is written) and the run REFUSES - nothing is killed.
+#   2. the holder's sd.exe is killed BY THAT PID, never by name;
+#   3. the probe runs again at once, then every 20 s for up to 6 minutes (the
 #      daemon's lost-user scan is every 5), until it sees "(gone)" or no lock.
 #
 # ***THE NULL CASE IS LIKELY AND IS NOT A PASS.***  Whether a killed owner's
@@ -42,32 +57,40 @@
 # Only a probe line naming "(gone)" is the witness.
 #
 # BOUNDED: every probe is a job with a timeout, reported as a hang if it
-# outstays it; the holder is a Process this script owns.
+# outstays it; the holder job is stopped in cleanup whatever happened.
 
 $ErrorActionPreference = 'Stop'
+
+$logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
+if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
+$logPath = Join-Path $logDir ('verify-deadlock-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+try { Start-Transcript -Path $logPath -Force | Out-Null } catch { }
+Write-Output ("transcript: " + $logPath)
+
 & (Join-Path $PSScriptRoot 'assert-current.ps1')
-if ($LASTEXITCODE -ne 0) { Write-Output ''; Write-Output 'verify-deadlock: refusing - see assert-current above'; exit 2 }
+if ($LASTEXITCODE -ne 0) { Write-Output ''; Write-Output 'verify-deadlock: refusing - see assert-current above'; try { Stop-Transcript | Out-Null } catch { }; exit 2 }
 
 $wpr = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $wpr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'verify-deadlock: this needs an ELEVATED session - the probe runs under sd -internal.'
+    try { Stop-Transcript | Out-Null } catch { }
     exit 2
 }
 
-$appDir  = Join-Path $env:ProgramFiles 'SD'
-$sdExe   = Join-Path $appDir 'usr\bin\sd.exe'
-$restart = Join-Path $appDir 'restart-sd.ps1'
-$sdsys   = Join-Path $env:ProgramData 'SD\sdsys'
-$bp      = Join-Path $sdsys 'bp'
-$bpOut   = Join-Path $sdsys 'bp.out'
-$holdSrc = Join-Path $bp 'zzdlhold'
+$appDir   = Join-Path $env:ProgramFiles 'SD'
+$sdExe    = Join-Path $appDir 'usr\bin\sd.exe'
+$restart  = Join-Path $appDir 'restart-sd.ps1'
+$sdsys    = Join-Path $env:ProgramData 'SD\sdsys'
+$bp       = Join-Path $sdsys 'bp'
+$bpOut    = Join-Path $sdsys 'bp.out'
+$holdSrc  = Join-Path $bp 'zzdlhold'
 $probeSrc = Join-Path $bp 'zzdlprobe'
 
 Write-Output '===== verify-deadlock.ps1 ====='
 Write-Output ("  sd.exe   : " + $sdExe)
-Write-Output ("  fixture  : SDSYS file zzdlfile, record zzdlrec; programs " + $holdSrc + ", " + $probeSrc)
+Write-Output ("  fixture  : SDSYS file zzdlfile, lock on zzdlrec, release record zzdlrelease; programs " + $holdSrc + ", " + $probeSrc)
 Write-Output ("  RECOVERY if SD is unusable afterwards (elevated): " + $sdExe + " -cleanup ; then " + $restart + " ; then a cycle")
-foreach ($p in @($sdExe, $bp)) { if (-not (Test-Path -LiteralPath $p)) { Write-Output ("verify-deadlock: missing " + $p); exit 2 } }
+foreach ($p in @($sdExe, $bp)) { if (-not (Test-Path -LiteralPath $p)) { Write-Output ("verify-deadlock: missing " + $p); try { Stop-Transcript | Out-Null } catch { }; exit 2 } }
 
 $pass = 0
 $fail = 0
@@ -112,7 +135,9 @@ function Get-LockState {
     else { $state = 'none' }
     return [pscustomobject]@{ State = $state; Rows = $rows; Text = $t }
 }
+function Get-SdPids { return @(Get-Process -Name 'sd' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }) }
 
+# The holder: takes the lock, then waits for the release RECORD - no stdin.
 $holdBasic = @'
 * zzdlhold - written by verify-deadlock.ps1.  Safe to delete.
    open 'zzdlfile' to f else stop 'HOLD=NOFILE'
@@ -122,8 +147,10 @@ $holdBasic = @'
    end then
       crt 'HOLD=LOCKED'
    end
-   prompt ''
-   input x
+   for t = 1 to 900
+      read flag from f, 'zzdlrelease' then exit
+      sleep 1
+   next t
    release f, 'zzdlrec'
    crt 'HOLD=RELEASED'
 end
@@ -148,7 +175,8 @@ program zzdlprobe
 end
 '@
 
-$holder = $null
+$holdJob = $null
+$holdPid = 0
 $killed = $false
 $exit = 2
 try {
@@ -164,63 +192,57 @@ try {
     Show 'build: probe program (sd -internal)' $mk2
     $built = ($mk -match '1 record\(s\) copied') -and ([regex]::Matches($mk + $mk2, '(?m)^Compiled 1 program\(s\) with no errors').Count -eq 2)
     Row 'setup: the file, the record and both programs were built' $built
-    if (-not $built) { Write-Output '  nothing killed, nothing measured'; exit 2 }
+    # throw, not exit: an exit here would skip the health check's exit code.
+    if (-not $built) { throw 'the fixture did not build - nothing killed, nothing measured' }
 
     $b0 = Get-LockState
     Show 'probe with no holder' $b0.Text
     Row 'CONTROL: before any holder, the probe runs and sees no zzdlrec lock' ($b0.State -eq 'none') "state $($b0.State)"
-    if ($b0.State -ne 'none') { Write-Output '  nothing killed'; exit 2 }
+    if ($b0.State -ne 'none') { throw 'the probe did not give a clean "no lock" before the holder - nothing killed' }
 
-    # ---- 1. the holder ------------------------------------------------------
-    $psi = New-Object Diagnostics.ProcessStartInfo
-    $psi.FileName = $sdExe
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.CreateNoWindow = $true
-    $holder = [Diagnostics.Process]::Start($psi)
-    $holdOut = New-Object Text.StringBuilder
-    $holdErr = New-Object Text.StringBuilder
-    $oEvt = Register-ObjectEvent -InputObject $holder -EventName OutputDataReceived -MessageData $holdOut -Action { if ($null -ne $EventArgs.Data) { [void]$Event.MessageData.AppendLine($EventArgs.Data) } }
-    $eEvt = Register-ObjectEvent -InputObject $holder -EventName ErrorDataReceived -MessageData $holdErr -Action { if ($null -ne $EventArgs.Data) { [void]$Event.MessageData.AppendLine($EventArgs.Data) } }
-    $holder.BeginOutputReadLine()
-    $holder.BeginErrorReadLine()
-    Write-Output ("  holder sd.exe started, PID " + $holder.Id)
-    foreach ($l in @('', 'TERM 200,9999', 'RUN bp zzdlhold')) { $holder.StandardInput.WriteLine($l) }
-    $holder.StandardInput.Flush()
+    # ---- 1. the holder, in a job, and the instrument check ------------------
+    $pidsBefore = Get-SdPids
+    $holdBody = "`nTERM 200,9999`nRUN bp zzdlhold`nOFF`n"
+    $holdJob = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe 2>&1 } -ArgumentList $sdExe, $holdBody
+    Write-Output ("  holder job started (id " + $holdJob.Id + "); sd.exe PIDs before it: " + ($pidsBefore -join ', '))
+
+    $a0 = $null
     $deadline = (Get-Date).AddSeconds(60)
-    while ((Get-Date) -lt $deadline -and $holdOut.ToString() -notmatch 'HOLD=(LOCKED|BUSY|NOFILE)') { Start-Sleep -Milliseconds 500 }
-    Show 'holder so far' ($holdOut.ToString() + $holdErr.ToString())
-    $locked = ($holdOut.ToString() -match 'HOLD=LOCKED')
-    Row 'the holder took READU on zzdlrec and is waiting' $locked
-    if (-not $locked) { throw 'the holder never reported HOLD=LOCKED - ending it cleanly, nothing killed' }
-
-    # ---- 2. the instrument check, before any kill ---------------------------
-    $a0 = Get-LockState
-    Show 'probe with the holder alive' $a0.Text
-    $named = @($a0.Rows | Where-Object { $_.Name -ne '' -and $_.Name -ne '(gone)' })
-    Row 'INSTRUMENT: the probe sees the live lock with a real owner name' (($a0.State -eq 'named') -and ($named.Count -ge 1)) "state $($a0.State)"
-    if (-not (($a0.State -eq 'named') -and ($named.Count -ge 1))) { throw 'the probe cannot see the live lock - ending the holder cleanly, nothing killed' }
+    do {
+        Start-Sleep -Seconds 2
+        if ($holdJob.State -ne 'Running') { break }
+        $a0 = Get-LockState
+    } while ($a0.State -ne 'named' -and (Get-Date) -lt $deadline)
+    if ($null -ne $a0) { Show 'probe with the holder running' $a0.Text }
+    Row 'the holder job is still running (it has not released)' ($holdJob.State -eq 'Running') "job state $($holdJob.State)"
+    $named = @(); if ($null -ne $a0) { $named = @($a0.Rows | Where-Object { $_.Name -ne '' -and $_.Name -ne '(gone)' }) }
+    $seesIt = ($null -ne $a0) -and ($a0.State -eq 'named') -and ($named.Count -ge 1)
+    Row 'INSTRUMENT: the probe sees the live lock with a real owner name' $seesIt $(if ($null -eq $a0) { 'no probe ran' } else { "state $($a0.State)" })
+    if (-not $seesIt -or $holdJob.State -ne 'Running') { throw 'the probe cannot see a live lock - releasing the holder cleanly, nothing killed' }
     Write-Output ("  live lock: user " + $named[0].User + ", type " + $named[0].Type + ", name [" + $named[0].Name + "]")
 
-    # ---- 3. kill the holder's own sd.exe -------------------------------------
-    Write-Output ("  KILLING the holder, PID " + $holder.Id + " (the process this script started)")
-    $holder.Kill()
-    $null = $holder.WaitForExit(15000)
-    $killed = $true
-    Row 'the holder process is gone' $holder.HasExited
+    $newPids = @(Get-SdPids | Where-Object { $pidsBefore -notcontains $_ })
+    Write-Output ("  sd.exe PIDs that appeared since the holder started: " + $(if ($newPids.Count) { $newPids -join ', ' } else { '(none)' }))
+    Row 'exactly one new sd.exe - the holder - so the kill has one target' ($newPids.Count -eq 1) "found $($newPids.Count)"
+    if ($newPids.Count -ne 1) { throw 'cannot tell which sd.exe is the holder - releasing it cleanly, nothing killed' }
+    $holdPid = $newPids[0]
 
-    # ---- 4. probe until "(gone)" or no lock ---------------------------------
+    # ---- 2. kill the holder's sd.exe ----------------------------------------
+    Write-Output ("  KILLING the holder, PID " + $holdPid)
+    Stop-Process -Id $holdPid -Force
+    $killed = $true
+    Start-Sleep -Seconds 2
+    Row 'the holder process is gone' ($null -eq (Get-Process -Id $holdPid -ErrorAction SilentlyContinue))
+
+    # ---- 3. probe until "(gone)" or no lock ---------------------------------
     $seen = @()
     $end = (Get-Date).AddMinutes(6)
     $last = $null
     do {
         $s = Get-LockState
         $last = $s
-        $stamp = (Get-Date).ToString('HH:mm:ss')
         $desc = ($s.Rows | ForEach-Object { "user $($_.User) $($_.Type) [$($_.Name)]" }) -join '; '
-        Write-Output ("  " + $stamp + "  probe state: " + $s.State + $(if ($desc) { "  - " + $desc } else { '' }))
+        Write-Output ("  " + (Get-Date).ToString('HH:mm:ss') + "  probe state: " + $s.State + $(if ($desc) { "  - " + $desc } else { '' }))
         $seen += $s.State
         if ($s.State -in @('gone', 'none', 'hang', 'forced', 'noprobe')) { break }
         Start-Sleep -Seconds 20
@@ -243,17 +265,21 @@ try {
 }
 catch {
     Write-Output ("verify-deadlock: " + $_.Exception.Message)
-    if ($exit -eq 2 -and $fail -gt 0) { $exit = 1 }
+    if ($exit -eq 2 -and $fail -gt 0 -and $killed) { $exit = 1 }
 }
 finally {
     Write-Output '  --- cleanup ---'
-    if ($null -ne $holder -and -not $holder.HasExited) {
-        # END IT CLEANLY: answer its INPUT and log off, never kill on this path.
-        try { $holder.StandardInput.WriteLine('x'); $holder.StandardInput.WriteLine('OFF'); $holder.StandardInput.Flush() } catch { }
-        $null = $holder.WaitForExit(20000)
-        Write-Output ("  holder ended cleanly: " + $holder.HasExited)
+    if ($null -ne $holdJob) {
+        if (-not $killed -and $holdJob.State -eq 'Running') {
+            # RELEASE IT CLEANLY: write the record the holder waits for.
+            $rel = Invoke-Bounded @('COPY FROM VOC TO zzdlfile who,zzdlrelease') $false
+            $null = Wait-Job $holdJob -Timeout 30
+            Write-Output ("  holder released by record: job state " + $holdJob.State)
+        }
+        if ($holdJob.State -eq 'Running') { Stop-Job $holdJob -ErrorAction SilentlyContinue }
+        Show 'holder job output' ((@(Receive-Job $holdJob -ErrorAction SilentlyContinue) | Out-String) -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')
+        Remove-Job $holdJob -Force -ErrorAction SilentlyContinue
     }
-    Get-EventSubscriber -ErrorAction SilentlyContinue | Where-Object { $_.SourceObject -eq $holder } | Unregister-Event -ErrorAction SilentlyContinue
     $cl = Invoke-Bounded @('DELETE.FILE zzdlfile FORCE') $false
     foreach ($f in @($holdSrc, $probeSrc, (Join-Path $bpOut 'zzdlhold'), (Join-Path $bpOut 'zzdlprobe'))) {
         if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
@@ -268,12 +294,12 @@ finally {
         Write-Output ("    " + $sdExe + " -cleanup")
         Write-Output ("    powershell -ExecutionPolicy Bypass -File " + $restart)
         Write-Output '  and then a cycle.'
-        if ($exit -ne 1) { $exit = 1 }
+        $exit = 1
     }
     $leftFile = Test-Path -LiteralPath (Join-Path $sdsys 'zzdlfile')
     Row 'cleanup: zzdlfile and both programs removed' (-not $leftFile -and -not (Test-Path -LiteralPath $holdSrc) -and -not (Test-Path -LiteralPath $probeSrc)) $(if ($leftFile) { 'zzdlfile remains (a lock may still hold it)' } else { '' })
+    Write-Output ''
+    Write-Output ("verify-deadlock: $pass passed, $fail failed; exit $exit" + $(if ($killed) { ' - a session WAS killed; run a cycle before measuring anything else' } else { ' - nothing was killed' }))
+    try { Stop-Transcript | Out-Null } catch { }
 }
-
-Write-Output ''
-Write-Output ("verify-deadlock: $pass passed, $fail failed; exit $exit" + $(if ($killed) { ' - a session was killed; run a cycle before measuring anything else' } else { '' }))
 exit $exit

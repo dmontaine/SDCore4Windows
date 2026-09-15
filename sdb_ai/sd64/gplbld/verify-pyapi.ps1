@@ -200,8 +200,10 @@ $src = @(
     "   crt 'PYPRB-LAPPD=':la"
     "   lg = PY_LISTGETS('zz_list')"
     "   crt 'PYPRB-LGET=[':lg:']'"
-    "   lt = PY_OBJTYPE('zz_list')"
-    "   crt 'PYPRB-LTYPE=':lt"
+    # 15 Sep 26 - NOT "lt": LT is BASIC's less-than operator, so "lt = ..." is
+    # "Unrecognised statement" and the whole probe failed to compile (b164).
+    "   lty = PY_OBJTYPE('zz_list')"
+    "   crt 'PYPRB-LTYPE=':lty"
     '   fs = PY_FINALIZE()'
     "   crt 'PYPRB-FIN=':fs"
     "   crt 'PYPRB-DONE'"
