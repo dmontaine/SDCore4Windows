@@ -24,6 +24,13 @@ the files as the authority):
   sdsys/syscom/keys.h        the BASIC mirror: SKT$TLS, SKT$INFO.TLS.CBIND,
                              SD_TLS_CBIND, same three values
 
+And three more hand-kept copies of the GS2 header and binding label (added
+15 Sep 26, RELEASE_1.1 42, Linux parity - mailbox 15 Sep 14:20):
+  gplbld/scram-probe.py      GS2_BOUND, BINDING_LABEL
+  sdsys/gpl.bp/apisrvr       the 'p=tls-exporter,,' code literal
+  sdsys/gpl.bp/sdclient      the 'p=tls-exporter,,' code literal
+The BASIC pair name the header in a COMMENT too, which does not count.
+
 A CONTROL asserts the scan actually found each constant, so a renamed or
 deleted define fails loudly rather than passing because there was nothing to
 compare.
@@ -90,6 +97,32 @@ def basic_define(text, name):
     return m.group(1).strip() if m else None
 
 
+def py_assign(text, name):
+    """The value of a Python `NAME = value` (value up to a # comment)."""
+    m = re.search(r"^\s*" + re.escape(name) + r"\s*=\s*(.+?)\s*(#.*)?$", text, re.M)
+    return m.group(1).strip() if m else None
+
+
+def basic_code_literal(text, bare):
+    """`bare` if the quoted literal 'bare' appears on a NON-comment line of a
+    BASIC program, else None.  15 Sep 26 - the point of "comments do not count"
+    (Linux, mailbox 15 Sep 14:20): apisrvr and sdclient each name the header in
+    a comment as well as in code, and a guard that matched the comment would
+    pass on a program whose code had drifted.  A whole-line comment starts with
+    * or ! after optional whitespace; an inline comment starts ;* or ;!."""
+    needle = "'" + bare + "'"
+    for line in text.splitlines():
+        if line.strip()[:1] in ("*", "!"):
+            continue
+        for marker in (";*", ";!"):
+            i = line.find(marker)
+            if i != -1:
+                line = line[:i]
+        if needle in line:
+            return bare
+    return None
+
+
 def expect(where, got, want, label):
     global checks
     checks += 1
@@ -122,8 +155,30 @@ def main():
     expect("sdsys/syscom/keys.h", basic_define(syscom_h, "SD_TLS_CBIND"),
            "110", "SD_TLS_CBIND")
 
+    # 15 Sep 26 - RELEASE_1.1 42, Linux parity (mailbox 15 Sep 14:20).  The GS2
+    # header and its binding label are hand-copied into three more places the
+    # compiler never cross-checks: the probe, and the two BASIC programs that
+    # build and check the login.  Pinned to the SAME contract as the headers
+    # above (not read from one of them as authority), so a drift on any side is
+    # what fails.  The bare strings come from the C values already pinned.
+    probe = read("gplbld/scram-probe.py")
+    apisrvr = read("sdsys/gpl.bp/apisrvr")
+    sdclient = read("sdsys/gpl.bp/sdclient")
+
+    gs2_bare = C_CONSTS["SD_TLS_GS2_HEADER"].strip('"')        # p=tls-exporter,,
+    label_bare = C_CONSTS["SD_TLS_BINDING_LABEL"].strip('"')   # EXPORTER-Channel-Binding
+
+    expect("gplbld/scram-probe.py", py_assign(probe, "GS2_BOUND"),
+           '"%s"' % gs2_bare, "GS2_BOUND")
+    expect("gplbld/scram-probe.py", py_assign(probe, "BINDING_LABEL"),
+           'b"%s"' % label_bare, "BINDING_LABEL")
+    expect("sdsys/gpl.bp/apisrvr", basic_code_literal(apisrvr, gs2_bare),
+           gs2_bare, "GS2 header literal (code, not comment)")
+    expect("sdsys/gpl.bp/sdclient", basic_code_literal(sdclient, gs2_bare),
+           gs2_bare, "GS2 header literal (code, not comment)")
+
     print("\n%d checks, %d failed" % (checks, fails))
-    if checks < len(C_CONSTS) * 2 + len(KEY_CONSTS) + 3:
+    if checks < len(C_CONSTS) * 2 + len(KEY_CONSTS) + 3 + 4:
         print("  [FAIL] fewer checks ran than expected (null case)")
         sys.exit(2)
     sys.exit(1 if fails else 0)
