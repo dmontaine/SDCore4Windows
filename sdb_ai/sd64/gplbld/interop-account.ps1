@@ -25,12 +25,15 @@
     is asserted NOT to be a Windows Administrator - the same control
     verify-scramlogin.ps1 uses.
 
-    IT CHANGES THE INSTALLED SYSTEM.  It creates a Windows + SD account and adds
-    a firewall rule; -Remove deletes the account, its user profile and group,
-    clears its $cred record and removes the firewall rule.  The SD ACCOUNTS and
-    $CRED register rows are left by CREATE.ACCOUNT's convention (as
-    verify-scramlogin leaves its own) - -Remove clears $cred but a leftover
-    register row is removed with DELETE.ACCOUNT.
+    IT CHANGES THE INSTALLED SYSTEM.  It creates a Windows + SD account and
+    ensures the firewall is open; -Remove deletes the account (DELETE.ACCOUNT
+    takes the SD account, its directory, the ACCOUNTS record and the Windows
+    account together, and answers its Y/N confirmation), then clears the $cred
+    record so no credential outlives it.  -Remove LEAVES THE FIREWALL RULE: on a
+    box where remote API was chosen at install, SD-API-In-TCP is the installer's
+    own rule and -Create only re-asserted it, so closing it here would undo the
+    owner's install choice.  Closing it is left to the owner (remote.api off, or
+    api-firewall.ps1 -Remove).
 
     NOT SHIPPED.  On assert-current.ps1's $neverShipped list, like the verifiers
     and probes.
@@ -39,7 +42,8 @@
     Make the account and open the firewall, then prompt for the password.
 
 .PARAMETER Remove
-    Tear it all down: account, profile, group, $cred record, firewall rule.
+    Remove the account (DELETE.ACCOUNT + profile, group, $cred).  LEAVES the
+    firewall rule alone - see the description.
 
 .PARAMETER Name
     The throwaway account name.  Default zzinteropw (the Linux side used
@@ -107,13 +111,22 @@ $credRec = Join-Path $env:ProgramData ('SD\sdsys\$cred\' + $upper)
 
 # ===========================================================================
 if ($Remove) {
-    Step "Removing the interop account $Name and its firewall rule"
+    Step "Removing the interop account $Name"
 
     # DELETE.ACCOUNT takes the name and nothing else (verify-apiidentity's
-    # 24 Aug lesson: no trailing keyword).  Left silent if it was never there.
+    # 24 Aug lesson: no trailing keyword) AND ASKS ONE Y/N CONFIRMATION
+    # (delacc:271-286, default N on an empty answer).  The 'Y' MUST be piped
+    # after it: on a piped stdin an unanswered prompt makes sd block at the
+    # console forever - the 15 Sep 2026 freeze this helper caused.  DELETE.ACCOUNT
+    # removes the SD account, its directory, the ACCOUNTS record and the Windows
+    # account together.
     if (Test-Path -LiteralPath $accRec) {
-        $out = Invoke-SD @("DELETE.ACCOUNT $upper")
-        Say "  DELETE.ACCOUNT $upper run"
+        $out = Invoke-SD @("DELETE.ACCOUNT $upper", 'Y')
+        if ($out -match 'Account deletion abandoned') {
+            Write-Host $out
+            Die "DELETE.ACCOUNT was abandoned - the confirmation was not accepted." 1
+        }
+        Say "  DELETE.ACCOUNT $upper confirmed and run"
     } else {
         Say "  no ACCOUNTS record $upper - nothing to delete in SD"
     }
@@ -139,11 +152,19 @@ if ($Remove) {
         Say "  cleared `$cred record $upper"
     }
 
-    Step 'Removing the firewall rule'
-    & (Join-Path $Gplbld 'api-firewall.ps1') -Remove -Port $Port
+    # THE FIREWALL RULE IS LEFT ALONE, DELIBERATELY.  15 Sep 2026: on a machine
+    # where remote API was enabled at install, SD-API-In-TCP is the INSTALLER's
+    # rule, not this helper's - -Create only re-asserted it (api-firewall.ps1
+    # -Open is idempotent and cannot tell "I opened it" from "it was already
+    # open").  Removing it here would close a port the owner deliberately opened
+    # at install and left open for other accounts.  So -Remove takes the account
+    # and says what it did NOT touch.
     Say ''
-    Say "interop-account: removed.  The API listener stays up (APIPORT is unchanged);"
-    Say "only the firewall rule and this account are gone."
+    Say "interop-account: account $upper removed.  THE FIREWALL RULE IS LEFT AS-IS"
+    Say "(it may be your install's own SD-API-In-TCP).  If you opened the API only"
+    Say "for this run and want it closed again, decide that yourself:"
+    Say "  remote.api off      (from SD, elevated), or"
+    Say ("  powershell -ExecutionPolicy Bypass -File " + (Join-Path $Gplbld 'api-firewall.ps1') + " -Remove")
     exit 0
 }
 
@@ -248,6 +269,7 @@ Say "  user    : $Name"
 Say "  account : $upper"
 Say "  password: the one you just typed - hand it to the Linux side directly"
 Say ''
-Say "  Disposable: run this with -Remove when the interop run is done."
-Say "  The firewall is OPEN to any address until then."
+Say "  Disposable: run -Remove when the interop run is done.  It removes the"
+Say "  account but LEAVES the firewall rule - if you opened the API only for this"
+Say "  run, close it yourself (remote.api off, or api-firewall.ps1 -Remove)."
 exit 0
