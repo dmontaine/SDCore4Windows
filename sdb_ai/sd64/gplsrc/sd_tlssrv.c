@@ -123,7 +123,7 @@ static bool create_identity(const char* path, EVP_PKEY** pkey_out,
                             X509** cert_out, char* errmsg, size_t errlen) {
   EVP_PKEY* pkey = NULL;
   X509* cert = NULL;
-  X509_NAME* name;
+  X509_NAME* name = NULL;
   unsigned char serial[8];
   char tmp[4096];
   int fd = -1;
@@ -153,13 +153,27 @@ static bool create_identity(const char* path, EVP_PKEY** pkey_out,
     }
   }
 
-  name = X509_get_subject_name(cert);
+  /* BUILD the name rather than borrow the certificate's own.  OpenSSL 4 returns
+     X509_get_subject_name() as const X509_NAME* (OpenSSL 3 did not), so writing
+     entries into the borrowed pointer discards the const qualifier - a warning
+     the free check test-tls-relay.py caught on the Linux port when its build box
+     moved to libssl 4 (mailbox 15 Sep 2026; SDCore4Linux c773008).  It is latent
+     here only while the Windows build links OpenSSL 3.x, and make carries no
+     -Werror, so it never broke the binary - but building the name is correct on
+     both.  X509_set_subject_name and X509_set_issuer_name both COPY it, so it is
+     freed unconditionally at done:. */
+  name = X509_NAME_new();
+  if (name == NULL) {
+    sd_tls_error_text("cannot allocate the certificate name", errmsg, errlen);
+    goto done;
+  }
   if (X509_set_version(cert, 2) != 1 ||
       X509_gmtime_adj(X509_getm_notBefore(cert), -86400L) == NULL ||
       X509_time_adj_ex(X509_getm_notAfter(cert), 36500, 0, NULL) == NULL ||
       X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
                                  (const unsigned char*)"SD Core API", -1, -1,
                                  0) != 1 ||
+      X509_set_subject_name(cert, name) != 1 ||
       X509_set_issuer_name(cert, name) != 1 ||
       X509_set_pubkey(cert, pkey) != 1 ||
       X509_sign(cert, pkey, NULL) <= 0) {
@@ -202,6 +216,7 @@ static bool create_identity(const char* path, EVP_PKEY** pkey_out,
   ok = true;
 
 done:
+  X509_NAME_free(name);   /* copied into the cert; NULL-safe on early failures */
   if (ok) {
     *pkey_out = pkey;
     *cert_out = cert;
