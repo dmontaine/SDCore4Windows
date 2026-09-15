@@ -17,6 +17,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * 
 * START-HISTORY:
+* rev W1.1-0 15 Sep 26 Windows port - release string W1.1-0 (RELEASE_1.1);
+*            segment numerics left as W1.0-0 shipped them (see gplsrc/revstamp.h).
 * rev W1.0-0 18 Aug 26 Windows port - SD release string is W1.0-0
 * rev 1.0-2 see sdsys/changelog
 * rev 1.0-1 Add back PROCREAD PROCWRITE
@@ -41,7 +43,7 @@
 $define MAJOR.REV      1
 $define MINOR.REV      0
 $define BUILD          2
-$define SD.REV.STAMP   "W1.0-0"
+$define SD.REV.STAMP   "W1.1-0"
 
 $define SD.COPYRIGHT.YEAR "2007"
 

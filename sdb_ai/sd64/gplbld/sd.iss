@@ -27,9 +27,17 @@
   #define Stage "..\..\stage"
 #endif
 #ifndef AppVer
-  #define AppVer "W1.0-0"
+  #define AppVer "W1.1-0"
 #endif
 
+; 15 Sep 26 - AppVer W1.0-0 -> W1.1-0 (RELEASE_1.1), owner's instruction.  This
+; renames the installer to sd-setup-W1.1-0.exe (OutputBaseFilename), the caption
+; and the Apps & Features entry.  SD's own release string moved in lockstep -
+; gplsrc/revstamp.h, gplsrc/sdclilib/revstamp.h, sdsys/gpl.bp/revstamp.h and the
+; $release records in newvoc and voc_template - so SYSTEM(1012) and every banner
+; read W1.1-0 too; the segment numerics in gplsrc/revstamp.h were left as W1.0-0
+; shipped them.  AppId is unchanged, so W1.0-0 -> W1.1-0 is a recognised upgrade.
+;
 ; 1 Sep 26 - THE PRODUCT IS "SD Core", AND THE WIZARD SAID "SD".  Owner, on
 ; reading the caption during the guest run: "the title of the sd setup dialog
 ; should be SD Core W1.0-0 (the word Core is missing)".  sd.exe's own banner has
