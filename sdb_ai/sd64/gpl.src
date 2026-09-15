@@ -73,12 +73,15 @@ pdump
 reccache
 sd_encrypt_sodium
 sd_scram
+sd_tls
+sd_tlssrv
 sdlib
 sdpy_client
 sdpy_session
 sdsem
 win32sem
 win32audit
+win32tls
 win32s4u
 win32pipe
 win32vt

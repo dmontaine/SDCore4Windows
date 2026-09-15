@@ -306,6 +306,10 @@ void set_default_character_maps(void);
    gplbld/verify-scramclient.c test the same code against the RFC 7677
    vectors.  Everything in it comes from bcrypt.dll, part of Windows. */
 #include "scram_client.h"
+/* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41.  A network session is TLS 1.3,
+   and its SCRAM login is bound to the TLS session.  OpenSSL is confined to
+   sd_tls.c; this header names no OpenSSL type. */
+#include "sd_tls.h"
 
 DLLEntry char* SDError(void);
 
@@ -314,7 +318,6 @@ Private bool OpenSocket(char* host, int16_t port);
 Private bool CloseSocket(void);
 Private bool read_packet(void);
 Private bool write_packet(int type, char* data, int32_t bytes);
-Private bool send_all(SOCKET sock, const char* data, int32_t bytes);
 Private void abandon_connection(void);
 Private void net_error(char* prefix);
 Private void debug(unsigned char* p, int n);
@@ -409,6 +412,9 @@ Private struct {
   int16_t server_error;
   int32_t sd_status;
   SOCKET sock;
+  /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: set on every network
+     session, NULL on a local pipe session. */
+  SD_TLS_CLIENT* tls;
   /* A local session talks to an SD process on this machine over a pipe instead
      of a socket.  Exactly one of sock / the pipe pair is live at a time.
      17 Aug 26 - TWO SIMPLEX PIPES, NOT ONE DUPLEX NAMED PIPE.  See
@@ -1018,8 +1024,9 @@ Private bool scram_login(char* username, char* password) {
   char salt_b64[SCRAM_MAX_SALT_B64];
   unsigned char salt[SCRAM_MAX_SALT];
   size_t salt_len = 0;
-  char client_final_bare[SCRAM_MAX_NONCE + 16];
-  char client_final[SCRAM_MAX_NONCE + SCRAM_B64_LEN + 32];
+  /* 15 Sep 26 Windows port - S.19: +64 in both for the channel-binding c=. */
+  char client_final_bare[SCRAM_MAX_NONCE + 80];
+  char client_final[SCRAM_MAX_NONCE + SCRAM_B64_LEN + 96];
   char auth_message[SCRAM_MAX_AUTH_MSG];
   char expected[SCRAM_B64_LEN + 4];
   SCRAM_KEYS keys;
@@ -1043,11 +1050,13 @@ Private bool scram_login(char* username, char* password) {
     goto done;
   }
 
-  /* 'n,,' is the GS2 header: no channel binding, said honestly because there
-     is no TLS channel here to bind to.  'biws' below is its base64, echoed in
-     the final message so it cannot be stripped in flight. */
-  n = snprintf(client_first, sizeof(client_first), "n,,n=%s,r=%s",
-               username, cnonce);
+  /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: the connection is TLS (every
+     network session opens it in OpenSocket), so the login binds to it with the
+     GS2 header 'p=tls-exporter,,' (RFC 9266).  APISRVR refuses 'n,,' over TLS.
+     scram_login() is only ever the network path here - local sessions do not
+     call it - so there is no 'n,,' branch. */
+  n = snprintf(client_first, sizeof(client_first), "%sn=%s,r=%s",
+               SD_TLS_GS2_HEADER, username, cnonce);
   if (n < 0 || (size_t)n >= sizeof(client_first)) {
     strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
              "Invalid user name");
@@ -1131,13 +1140,26 @@ Private bool scram_login(char* username, char* password) {
     goto done;
   }
 
-  n = snprintf(client_final_bare, sizeof(client_final_bare), "c=biws,r=%s",
-               combined);
+  /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: c= carries THIS end's TLS
+     binding.  The proof is computed over it, so a proof relayed into another
+     TLS session - a man in the middle's - fails at the server. */
+  {
+    char* cbind = sd_tls_cbind_attr(
+        sd_tls_client_binding(session[session_idx].tls));
+    if (cbind == NULL) {
+      strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror),
+               "Could not derive the channel binding");
+      goto done;
+    }
+    n = snprintf(client_final_bare, sizeof(client_final_bare), "c=%s,r=%s",
+                 cbind, combined);
+    free(cbind);
+  }
   if (n < 0 || (size_t)n >= sizeof(client_final_bare))
     goto done;
 
   n = snprintf(auth_message, sizeof(auth_message), "%s,%s,%s",
-               client_first + 3,          /* client-first-bare: 'n,,' removed */
+               client_first + strlen(SD_TLS_GS2_HEADER), /* client-first-bare */
                server_first,
                client_final_bare);
   if (n < 0 || (size_t)n >= sizeof(auth_message)) {
@@ -4042,19 +4064,38 @@ Private bool OpenSocket(char* host, int16_t port) {
         net_error("setsockopt(TCP_NODELAY)");
         goto exit_opensocket;
     }
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: TLS 1.3 first.  The
+       server's relay takes the session before SD says anything, so the Ack
+       below now arrives inside TLS.  Its channel binding is what scram_login()
+       binds the login to.  A failure here leaves the socket for CloseSocket(). */
+    {
+        char tls_err[256];
+
+        session[session_idx].tls = sd_tls_client_start(
+            session[session_idx].sock, SD_TLS_HANDSHAKE_MS + 5000, tls_err,
+            sizeof(tls_err));
+        if (session[session_idx].tls == NULL) {
+            snprintf(session[session_idx].sderror,
+                     sizeof(session[session_idx].sderror),
+                     "Secure connection to server failed: %s", tls_err);
+            goto exit_opensocket;
+        }
+    }
     /* Wait for an Ack character to arrive before we assume the connection
       to be open and working. This is necessary because Linux loses anything
       we send before the SD process is up and running.                       */
     do {
-        n = recv(session[session_idx].sock, &ack_buff, 1, 0);
-        if (n == 0) { /* orderly close during handshake: WSAGetLastError stale */
+        n = sd_tls_client_read(session[session_idx].tls, &ack_buff, 1);
+        if (n == 0) { /* orderly close during handshake */
             snprintf(session[session_idx].sderror,
                      sizeof(session[session_idx].sderror),
                      "Connection closed by server");
             goto exit_opensocket;
         }
-        if (n == SOCKET_ERROR) {
-            net_error("recv()"); /* Socket only path */
+        if (n < 0) {
+            snprintf(session[session_idx].sderror,
+                     sizeof(session[session_idx].sderror),
+                     "TLS read failed");
             goto exit_opensocket;
         }
     } while (ack_buff != '\x06');
@@ -4083,6 +4124,12 @@ Private bool CloseSocket() {
         session[session_idx].hPipeRd = INVALID_HANDLE_VALUE;
     }
     session[session_idx].is_local = FALSE;
+
+    /* 15 Sep 26 Windows port - S.19: close_notify first, then the socket. */
+    if (session[session_idx].tls != NULL) {
+        sd_tls_client_end(session[session_idx].tls);
+        session[session_idx].tls = NULL;
+    }
 
     if (session[session_idx].sock != INVALID_SOCKET) {
         if (closesocket(session[session_idx].sock) == SOCKET_ERROR) {
@@ -4127,8 +4174,11 @@ static void net_error(char* prefix) {
 Private int transport_recv(char* p, int len) {
     DWORD n;
 
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: a network session is TLS.
+       sd_tls_client_read() returns >0/0/<0 like recv(), so the callers'
+       recv() conventions are unchanged. */
     if (!session[session_idx].is_local)
-        return recv(session[session_idx].sock, p, len, 0);
+        return sd_tls_client_read(session[session_idx].tls, p, len);
 
     if (!ReadFile(session[session_idx].hPipeRd, p, (DWORD)len, &n, NULL)) {
         DWORD err = GetLastError();
@@ -4168,8 +4218,15 @@ Private bool transport_send(const char* data, int32_t bytes) {
     int32_t sent = 0;
     DWORD n;
 
-    if (!session[session_idx].is_local)
-        return send_all(session[session_idx].sock, data, bytes);
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: a network session is TLS.
+       sd_tls_client_write() completes the whole buffer like send_all(). */
+    if (!session[session_idx].is_local) {
+        if (sd_tls_client_write(session[session_idx].tls, data, bytes))
+            return TRUE;
+        snprintf(session[session_idx].sderror,
+                 sizeof(session[session_idx].sderror), "TLS write failed");
+        return FALSE;
+    }
 
     while (sent < bytes) {
         if (!WriteFile(session[session_idx].hPipeWr, data + sent,
@@ -4318,30 +4375,10 @@ fail:
     return FALSE;
 }
 
-/* ======================================================================
-   send_all()  -  send() may transmit fewer bytes than requested on a blocking
-   socket for large payloads. Loop until everything is sent so a short send
-   does not leave a partial packet on the wire and desync the protocol.      */
-
-Private bool send_all(SOCKET sock, const char* data, int32_t bytes) {
-    int32_t sent = 0;
-    int n;
-    while (sent < bytes) {
-        n = send(sock, data + sent, bytes - sent, 0);
-        if (n == SOCKET_ERROR) {
-            net_error("send()");
-            return FALSE;
-        }
-        if (n <= 0) { /* no progress; WSAGetLastError would be stale */
-            snprintf(session[session_idx].sderror,
-                     sizeof(session[session_idx].sderror),
-                     "Send made no progress");
-            return FALSE;
-        }
-        sent += n;
-    }
-    return TRUE;
-}
+/* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: send_all() removed.  Every
+   network session is TLS, so transport_send() writes through
+   sd_tls_client_write(), which completes the buffer the same way; the local
+   pipe path uses WriteFile in transport_send(). */
 
 /* ======================================================================
    write_packet()  -  Send SD data packet  from  sdclient                 */
@@ -4434,6 +4471,7 @@ Private void initialise_client() {
 	  session[i].winsock_started = FALSE;
 	  session[i].sderror[0] = '\0';
 	  session[i].sock = INVALID_SOCKET;
+	  session[i].tls = NULL; /* 15 Sep 26 Windows port - S.19 */
 	  session[i].hPipeRd = INVALID_HANDLE_VALUE;
 	  session[i].hPipeWr = INVALID_HANDLE_VALUE;
 	  session[i].is_local = FALSE;

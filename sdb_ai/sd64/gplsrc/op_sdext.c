@@ -53,6 +53,7 @@
 #include "sd.h"
 #include "keys.h"
 #include "sd_scram.h"
+#include "sd_tls.h"
 /* 12 Sep 26 Windows port - SD's side of the Python helper pipe, 5.27.  This
    header names no Python type and includes no Python header; the runtimes stay
    apart (5.3) and only bytes cross. */
@@ -347,6 +348,33 @@ void op_sdext() {
       answer[1] = '\0';
       k_put_c_string(answer, e_stack);
       e_stack++;
+      break;
+    }
+
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41.  The c= value this
+       session's SCRAM login must carry.  "" when the session is not TLS,
+       which APISRVR reads as "nothing to bind to: the login must say n,," -
+       not an error, since a local pipe session legitimately has none.  Every
+       socket session is TLS (sd_tlssrv.c), so a network client cannot reach
+       the "" answer. */
+    case SD_TLS_CBIND: {
+      const unsigned char* binding = sd_tls_server_binding();
+      char* attr;
+      char empty[1] = {'\0'};
+
+      if (binding == NULL) {
+        k_put_c_string(empty, e_stack);
+        e_stack++;
+        break;
+      }
+      attr = sd_tls_cbind_attr(binding);
+      if (attr == NULL) {
+        sdme_err_rsp(SD_SCRAM_ERR);
+        break;
+      }
+      k_put_c_string(attr, e_stack);
+      e_stack++;
+      free(attr);
       break;
     }
 

@@ -59,7 +59,17 @@ COMP     := gcc
 # semaphore calls themselves are in kernel32, which mingw links by default.
 # 23 Aug 26 Windows port - -lsecur32 is for win32s4u.c: LsaRegisterLogonProcess,
 # LsaLogonUser and LsaDeregisterLogonProcess live there, not in advapi32.
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32
+# 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: -lssl -lcrypto for the API's
+#   TLS relay and its BASIC-socket client (gplsrc/sd_tls.c, sd_tlssrv.c),
+#   which are MSYS2 code and link the MSYS2 (msys-ssl-3/msys-crypto-3) OpenSSL.
+#   openssl-devel provides the headers under /usr/include (a default include
+#   path) and libssl.dll.a/libcrypto.dll.a under /usr/lib.  OPENSSL_LIBS is
+#   overridable only so a sandbox build can point elsewhere; plain "make"
+#   needs no override.  win32tls.c's DACL calls (GetNamedSecurityInfo, GetAce,
+#   LookupAccountSid, ConvertSidToStringSid, IsWellKnownSid) are all in the
+#   -ladvapi32 already above.
+OPENSSL_LIBS ?= -lssl -lcrypto
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 $(OPENSSL_LIBS)
 
 RM       := rm
 

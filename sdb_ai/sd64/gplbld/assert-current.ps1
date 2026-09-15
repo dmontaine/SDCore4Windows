@@ -1348,7 +1348,11 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   'test-selectlists-units.py',
                   # 14 Sep 26 - verify-deadlock.ps1, RELEASE_1.1 7's staged
                   # fault.  Ships nowhere and is in neither runner, deliberately.
-                  'verify-deadlock.ps1')
+                  'verify-deadlock.ps1',
+                  # 15 Sep 26 - test-tlsconsts-units.py, the free guard over the
+                  # API's TLS wire constants (RELEASE_1.1 41).  Ships nowhere;
+                  # listed with the commit that creates it.
+                  'test-tlsconsts-units.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

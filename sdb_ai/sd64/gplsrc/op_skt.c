@@ -93,6 +93,7 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 #include "sd.h"
 #include "keys.h"
 #include "sdnet.h"
+#include "sd_tls.h"
 
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -221,6 +222,7 @@ void op_accptskt() {
   sock->ref_ct = 1;
   sock->socket_handle = (int)skt;
   sock->flags = SKT_INCOMING;
+  sock->tls = NULL; /* 15 Sep 26 Windows port - S.19: k_alloc does not zero */
   sock->family = sockvar->family;
 
   switch (sock->family) {
@@ -335,6 +337,12 @@ void op_openskt() {
   descr = e_stack - 2;
   GetInt(descr);
   flags = descr->data.value;
+
+  /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: SKT$TLS is not a protocol
+     bit.  Taken out before the protocol tests below, which read flags == 0 as
+     "stream TCP". */
+  bool want_tls = (flags & SKT_TLS) != 0;
+  flags &= ~SKT_TLS;
 
   /* Get port */
 
@@ -460,6 +468,7 @@ void op_openskt() {
     sock->socket_handle = (unsigned int)skt;
     sock->family = res->ai_family;
     sock->flags = flags & SKT_USER_MASK;
+    sock->tls = NULL; /* 15 Sep 26 Windows port - S.19 */
     struct sockaddr_in const* sin;
     struct sockaddr_in6 const* sin6;
     switch (res->ai_family) {
@@ -481,6 +490,24 @@ void op_openskt() {
 
       default:
         strcpy(server_addr, "Unknown Address Family!");
+    }
+
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: SKT$TLS - a TLS 1.3
+       client handshake before the socket is handed to BASIC.  No certificate
+       check: the caller is !sdclient, whose SCRAM login is bound to this
+       session (sd_tls.c).  A failed handshake is a failed open, and the
+       socket is not returned. */
+    if ((process.status == 0) && want_tls) {
+      char tls_err[256];
+
+      sock->tls = sd_tls_client_start((int)skt, SD_TLS_HANDSHAKE_MS + 5000,
+                                      tls_err, sizeof(tls_err));
+      if (sock->tls == NULL) {
+        process.status = ER_CONNECT;
+        process.os_error = 0;
+        closesocket(skt);
+        k_free(sock);
+      }
     }
 
     if (process.status == 0) {
@@ -589,16 +616,25 @@ void op_readskt() {
   else
     blocking = ((sock->flags & SKT_BLOCKING) != 0);
 
-  /* Wait for data to arrive */
+  /* Wait for data to arrive.  15 Sep 26 Windows port - S.19: bytes OpenSSL
+     already holds decrypted are invisible to select(), so a TLS socket with
+     some pending does not wait for data it has. */
 
-  if (!socket_wait(skt, TRUE, (blocking) ? timeout : 0))
-    goto exit_op_readskt;
+  if ((sock->tls == NULL) ||
+      (sd_tls_client_pending((SD_TLS_CLIENT*)sock->tls) <= 0)) {
+    if (!socket_wait(skt, TRUE, (blocking) ? timeout : 0))
+      goto exit_op_readskt;
+  }
 
   /* Read the data */
 
   ts_init(&head, max_len);
 
-  rcvd_bytes = recv(skt, skt_buff, max_len, 0);
+  if (sock->tls != NULL)
+    rcvd_bytes = sd_tls_client_read((SD_TLS_CLIENT*)sock->tls, skt_buff,
+                                    max_len);
+  else
+    rcvd_bytes = recv(skt, skt_buff, max_len, 0);
   if (rcvd_bytes <= 0) /* Lost connection */
   {
     process.status = (rcvd_bytes == 0) ? ER_SKT_CLOSED : ER_FAILED;
@@ -781,6 +817,23 @@ void op_sktinfo() {
       getsockopt(sockvar->socket_handle, SOL_SOCKET, SO_KEEPALIVE, (char*)&n,
                  &socklen);
       result_descr.data.value = (n != 0);
+      break;
+
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: the SCRAM c= value for a
+       socket opened with SKT$TLS - base64("p=tls-exporter,," + this end's
+       binding) - and "" for any other socket.  !sdclient's login carries it. */
+    case SKT_INFO_TLS_CBIND:
+      if (sockvar->tls != NULL) {
+        char* attr = sd_tls_cbind_attr(
+            sd_tls_client_binding((SD_TLS_CLIENT*)sockvar->tls));
+        char none[1] = {'\0'};
+
+        k_put_c_string((attr != NULL) ? attr : none, &result_descr);
+        free(attr);
+      } else {
+        char none[1] = {'\0'};
+        k_put_c_string(none, &result_descr);
+      }
       break;
 
     case SKT_INFO_FAMILY:
@@ -1042,6 +1095,7 @@ void op_srvrskt() {
       sock->socket_handle = (int)skt;
       sock->family = res->ai_family;
       sock->flags = SKT_SERVER;
+      sock->tls = NULL; /* 15 Sep 26 Windows port - S.19: k_alloc does not zero */
 
       struct sockaddr_in const* sin;
       struct sockaddr_in6 const* sin6;
@@ -1183,7 +1237,13 @@ void op_writeskt() {
       if (!socket_wait(skt, FALSE, (blocking) ? timeout : 0))
         goto exit_op_writeskt;
 // rev 0.9-3 SIGPIPE Error in Sockets issue #89 / ScarletDME
-      bytes_sent = send(skt, p, bytes,  MSG_NOSIGNAL);
+      /* 15 Sep 26 Windows port - S.19: through TLS on an SKT$TLS socket, all
+         or none. */
+      if (sock->tls != NULL)
+        bytes_sent = sd_tls_client_write((SD_TLS_CLIENT*)sock->tls, p, bytes)
+                         ? bytes : -1;
+      else
+        bytes_sent = send(skt, p, bytes,  MSG_NOSIGNAL);
       if (bytes_sent < 0) /* Lost connection */
       {
         process.status = ER_FAILED;
@@ -1210,6 +1270,11 @@ exit_op_writeskt:
 /* ====================================================================== */
 
 void close_skt(SOCKVAR* sock) {
+  /* 15 Sep 26 Windows port - S.19: close_notify, then the socket. */
+  if (sock->tls != NULL) {
+    sd_tls_client_end((SD_TLS_CLIENT*)sock->tls);
+    sock->tls = NULL;
+  }
   closesocket((SOCKET)(sock->socket_handle));
 }
 

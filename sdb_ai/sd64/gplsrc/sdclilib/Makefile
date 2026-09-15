@@ -16,6 +16,18 @@ CPPFLAGS += -DBUILDING_SDCLILIB
 # the reason the primitives came from here rather than from a library that
 # would have had to travel with it.
 LDLIBS += -lws2_32 -lbcrypt
+# 15 Sep 26 - S.19/RELEASE_1.1 41: TLS 1.3 for every network session
+# (sd_tls.c).  OpenSSL is STATIC-LINKED so the DLL stays a single file that can
+# be copied beside an application - the property this whole library is built to
+# preserve (VENDORING.md), and the reason SCRAM used bcrypt over a library.
+# -Wl,-Bstatic scopes the static request to ssl/crypto; -Bdynamic restores the
+# default so msvcrt and the rest stay shared.  -lcrypt32 and -lws2_32 come
+# AFTER -lcrypto because the PE linker resolves left to right and static
+# libcrypto references them (a second -lws2_32; harmless).  The 64-bit static
+# libs are in /ucrt64/lib and the 32-bit in /mingw32/lib, each on its own
+# compiler's default library path.
+TLSSRC     = sd_tls.c
+OPENSSL_STATIC = -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32
 
 # 15 Aug 26 - THE COMPILER'S OWN DIRECTORY MUST BE ON PATH, even when CC is
 # already an absolute path.  gcc.exe finds its DLLs beside itself, but the
@@ -139,7 +151,7 @@ QMDEF2 = qmclient.def
 # The library's own headers, and the two files that are 32-bit-only: qmcompat.c
 # implements QMConnectLocal, which is the one QM entry point with no sdclilib
 # counterpart and so the only one that cannot be aliased in the .def.
-HDRS = sdclilib.h sdclient.h err.h revstamp.h
+HDRS = sdclilib.h sdclient.h err.h revstamp.h sd_tls.h
 QMSRCS = sdclilib.c qmcompat.c
 
 # ===========================================================================
@@ -171,21 +183,21 @@ LOCALTEST = localtest/local-connect-test.exe
 
 all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT) $(LOCALTEST)
 
-$(DLL): sdclilib.c $(HDRS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c \
-	  $(LDLIBS) -Wl,--out-implib,$(IMPLIB)
+$(DLL): sdclilib.c $(TLSSRC) $(HDRS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c $(TLSSRC) \
+	  $(LDLIBS) $(OPENSSL_STATIC) -Wl,--out-implib,$(IMPLIB)
 
-$(DLL2): sdclilib.c $(HDRS)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c \
-	  $(LDLIBS) -Wl,--out-implib,$(IMPLIB2)
+$(DLL2): sdclilib.c $(TLSSRC) $(HDRS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c $(TLSSRC) \
+	  $(LDLIBS) $(OPENSSL_STATIC) -Wl,--out-implib,$(IMPLIB2)
 
 # The .def supplies the export table.  Without it the QM names do not exist:
 # __declspec(dllexport) in sdclilib.c only ever produces SD ones.
-$(QMDLL): $(QMSRCS) $(HDRS) qmclilib.h $(QMDEF)
+$(QMDLL): $(QMSRCS) $(TLSSRC) $(HDRS) qmclilib.h $(QMDEF)
 	$(call check_cc32)
 	PATH="$(CC32PATH)" $(CC32) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS32) \
-	  -shared -o $@ $(QMSRCS) $(QMDEF) \
-	  $(LDLIBS) -Wl,--out-implib,$(QMIMPLIB)
+	  -shared -o $@ $(QMSRCS) $(TLSSRC) $(QMDEF) \
+	  $(LDLIBS) $(OPENSSL_STATIC) -Wl,--out-implib,$(QMIMPLIB)
 
 # GENERATED, NOT MAINTAINED, AND DELIBERATELY NOT TRACKED.  The export list is
 # 99 names and two hand-kept copies of it would diverge - most likely by one
@@ -195,11 +207,11 @@ $(QMDLL): $(QMSRCS) $(HDRS) qmclilib.h $(QMDEF)
 $(QMDEF2): $(QMDEF)
 	sed 's/^LIBRARY .*/LIBRARY $(QMDLL2)/' $< > $@
 
-$(QMDLL2): $(QMSRCS) $(HDRS) qmclilib.h $(QMDEF2)
+$(QMDLL2): $(QMSRCS) $(TLSSRC) $(HDRS) qmclilib.h $(QMDEF2)
 	$(call check_cc32)
 	PATH="$(CC32PATH)" $(CC32) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS32) \
-	  -shared -o $@ $(QMSRCS) $(QMDEF2) \
-	  $(LDLIBS) -Wl,--out-implib,$(QMIMPLIB2)
+	  -shared -o $@ $(QMSRCS) $(TLSSRC) $(QMDEF2) \
+	  $(LDLIBS) $(OPENSSL_STATIC) -Wl,--out-implib,$(QMIMPLIB2)
 
 # 32-BIT, like the DLL it drives, and that is the whole point of it: it proves
 # a claim about the library mvDeveloper actually loads rather than about the

@@ -1395,6 +1395,12 @@ def main():
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',
                    'secure-gcat.ps1',
+                   # 15 Sep 26 - RELEASE_1.1 41 (Linux S.19).  The API's TLS
+                   # relay keeps its server key in {#DataDir}\sd-tls; this
+                   # locks that directory to SYSTEM and Administrators.  Ships
+                   # for the same reason as the rest - sd.iss runs it from
+                   # {app}.
+                   'secure-tls.ps1',
                    # 02 Sep 26 - PRE_RELEASE_FIXES.md 28.  Ships for the same
                    # reason as the rest: sd.iss runs it from {app}, so a script
                    # left out of this list is a [Run] entry pointing at nothing.

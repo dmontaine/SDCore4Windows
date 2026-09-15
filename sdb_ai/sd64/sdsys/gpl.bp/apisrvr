@@ -1275,13 +1275,18 @@ vb.scram.first:
 
                scram.stage = 0        ;* a restart abandons any exchange in flight
 
-               * GS2 header.  'n,,' is "no channel binding", and it is honest -
-               * there is no TLS channel here to bind to.  'y,,' claims the
-               * server does not support binding, which is the downgrade signal,
-               * and 'p=' demands a binding that does not exist.  Both refused.
-               if cmnd[1,3] # 'n,,' then goto scram.bad.message
+* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: THE GS2 HEADER FOLLOWS THE
+*   TRANSPORT; THE CLIENT DOES NOT CHOOSE IT.  Every socket connection is TLS
+*   (gplsrc/sd_tlssrv.c) and must bind the login to it with 'p=tls-exporter,,'
+*   (RFC 9266).  A session with no TLS - a local pipe - has nothing to bind to
+*   and must say 'n,,'.  'y,,' (the downgrade signal) is refused everywhere.
+*   A client that offered 'n,,' over TLS would be a downgrade, so it is a
+*   malformed message here, not a weaker login.
+               scram.cbind = SDEXT('', @FALSE, SD_TLS_CBIND)
+               if scram.cbind = '' then scram.gs2 = 'n,,' else scram.gs2 = 'p=tls-exporter,,'
+               if cmnd[1,len(scram.gs2)] # scram.gs2 then goto scram.bad.message
 
-               scram.cfirst.bare = cmnd[4,99999999]
+               scram.cfirst.bare = cmnd[len(scram.gs2)+1,99999999]
 
                * Exactly two attributes.  RFC 5802 section 5 requires the server
                * to FAIL on an m= mandatory extension rather than ignore it, and
@@ -1423,11 +1428,15 @@ vb.scram.final:
 
                if count(cmnd, ',') # 2 then goto scram.bad.message
 
-               * 'biws' is base64("n,,") - the header the exchange began with,
-               * echoed back so it cannot be stripped in flight.  It is a literal
-               * because the only header accepted at 47 was a literal.
+* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: c= is base64 of the GS2 header
+*   plus, over TLS, this session's binding; 'biws' is base64('n,,').  Recomputed
+*   from this session's own binding rather than trusted from the client: a login
+*   relayed by a man in the middle carries the relay's binding, not this
+*   session's, and the proof - computed over this attribute - fails with it.
+               scram.cbind = SDEXT('', @FALSE, SD_TLS_CBIND)
+               if scram.cbind = '' then scram.cattr = 'c=biws' else scram.cattr = 'c=' : scram.cbind
                scram.attr = field(cmnd, ',', 1)
-               if scram.attr # 'c=biws' then goto scram.bad.message
+               if scram.attr # scram.cattr then goto scram.bad.message
 
                scram.attr = field(cmnd, ',', 2)
                if scram.attr[1,2] # 'r=' then goto scram.bad.message
@@ -1438,7 +1447,7 @@ vb.scram.final:
                * that no longer exists.
                if scram.attr[3,99999999] # scram.nonce then goto scram.bad.message
 
-               scram.cfinal.bare = 'c=biws,' : scram.attr
+               scram.cfinal.bare = scram.cattr : ',' : scram.attr
 
                scram.attr = field(cmnd, ',', 3)
                if scram.attr[1,2] # 'p=' then goto scram.bad.message

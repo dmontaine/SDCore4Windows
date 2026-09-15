@@ -451,6 +451,10 @@ struct SOCKVAR {
 #define SKT_USER_MASK 0x0001    /* Flags settable by user */
   /* 20240219 mab mods to handle AF_UNIX sockets */
   char ip_addr[MAX_SOCKET_ADDR_STR_LEN];             /* IP address,IPv4 or IPv6 or AF_UNIX sockets */
+  /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: an SD_TLS_CLIENT* when
+     OPEN.SOCKET was given SKT$TLS, else NULL.  Every k_alloc of a SOCKVAR
+     must set it - k_alloc does not zero. */
+  void* tls;
 };
 
 /* -------------------- OBJECT NAME MAP ------------------ */

@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 15 Sep 26 Windows port - every API connection goes through a TLS 1.3 relay
+ *           (sd_tlssrv.c), started after the peer is recorded; the Ack moved
+ *           after it, inside TLS.  Identity in <sd.conf's dir>\sd-tls.
+ *           RELEASE_1.1 41, adopted from Linux S.19.
  * 14 Sep 26 Windows port - the API server processor is $apisrvr (RELEASE_1.1 5
  *           stage 3a)
  * 14 Sep 26 Windows port - case inversion starts off (RELEASE_1.1 5)
@@ -38,6 +42,7 @@
 #include "sdtermlb.h"
 #include "telnet.h"
 #include "tio.h"
+#include "sd_tls.h"
 
 #include <netdb.h>
 #include <pwd.h>
@@ -102,6 +107,33 @@ void set_new_tty_modes(void);
 bool negotiate_telnet_parameter(void);
 
 /* ======================================================================
+   api_tls_dir()  -  Where the API's TLS relay keeps the server identity
+
+   15 Sep 26 Windows port - RELEASE_1.1 41.  Beside sd.conf: <its directory>\
+   sd-tls, normally C:\ProgramData\SD\sd-tls.  NOT under SDSYS, the same
+   reasoning as Linux's /etc/sd-tls in a Windows shape: the data tree grants
+   sdusers Modify with inheritance (sd.iss's icacls), so anything under it
+   that is not separately locked is readable and renameable by every SD user.
+   secure-tls.ps1 locks this one directory to SYSTEM and Administrators at
+   install time, and sd_tlssrv.c refuses it in any other state.  Derived from
+   config_path because this runs before bind_sysseg() - there is no
+   sysseg->sysdir yet.  config_path has been through fullpath() (sd.c), so it
+   reads C:/ProgramData/SD/sd.conf; both separators are accepted anyway.   */
+
+Private bool api_tls_dir(char *out, size_t len) {
+  char *fs = strrchr(config_path, '/');
+  char *bs = strrchr(config_path, '\\');
+  char *sep = (fs > bs) ? fs : bs;
+  int n;
+
+  if (sep == NULL || sep == config_path)
+    return FALSE;
+  n = snprintf(out, len, "%.*s/%s", (int)(sep - config_path), config_path,
+               SD_TLS_IDENTITY_DIR);
+  return (n > 0) && ((size_t)n < len);
+}
+
+/* ======================================================================
    start_connection()  -  Start Linux socket / pipe based connection      */
 
 bool start_connection(int unused) {
@@ -125,13 +157,10 @@ bool start_connection(int unused) {
     if (is_sdApiSrvr) {
      // flag = TRUE;
      // setsockopt(0, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
-      /* Fire an Ack character up the connection to start the conversation.
-         This is necessary because Linux loses anything we send before the
-         new process is up and running so Q_M_Client isn't going to talk until
-         we go first. The Ack comes from Q_M_Svc on NT style systems.          */
-
-      send(0, "\x06", 1, 0);
-    } 
+      /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: the Ack moved below the
+         peer capture and the TLS relay start, so it travels inside TLS.  The
+         client still waits for it before speaking.                          */
+    }
   /* 20240127 mab mods to handle IPv6 */
     n = sizeof(sa);
     getsockname(0, (struct sockaddr *)&sa, &n);
@@ -245,7 +274,35 @@ bool start_connection(int unused) {
 
       default:
           syslog (LOG_INFO,"Invalid Network Socket Type UNKNOW");
-          return FALSE; /* Error */ 
+          return FALSE; /* Error */
+    }
+
+    /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: EVERY API CONNECTION IS
+       TLS 1.3.  AFTER the peer is recorded above: once descriptor 0 is the
+       relay's socketpair, getsockname()/getpeername() would describe the
+       relay.  BEFORE the ACK, so the ACK and everything after it travel
+       inside TLS.  BEFORE bind_sysseg(), so the relay never maps SD's shared
+       memory.  See sd_tlssrv.c.                                            */
+    if (is_sdApiSrvr) {
+      char tls_dir[MAX_PATHNAME_LEN + 16];
+      char tls_err[512];
+
+      if (!api_tls_dir(tls_dir, sizeof(tls_dir))) {
+        syslog(LOG_ERR, "API connection refused: no usable data directory in %s",
+               config_path);
+        return FALSE;
+      }
+      if (!sd_tls_relay_start(tls_dir, SD_TLS_HANDSHAKE_MS, tls_err,
+                              sizeof(tls_err))) {
+        syslog(LOG_INFO, "API connection from %s refused: %s", ip_addr,
+               tls_err);
+        return FALSE;
+      }
+
+      /* Fire an Ack character up the connection to start the conversation.
+         Moved here from the top of this function by S.19: it now goes through
+         the relay, inside TLS.  The client waits for it before speaking.    */
+      send(0, "\x06", 1, 0);
     }
 
     /* Create output buffer */

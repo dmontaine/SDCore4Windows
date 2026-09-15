@@ -404,6 +404,12 @@
 #define SKT_INFO_FAMILY		 7    /* Socket address family */
 #define SKT_INFO_FAMILY_IPV4     1    /* Socket address family IPV4 */
 #define SKT_INFO_FAMILY_IPV6     2    /* Socket address family IPV6 */
+/* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41.  OPEN.SOCKET flag: TLS 1.3
+   client, no certificate check - for !sdclient, whose SCRAM login binds to
+   the session.  And the SOCKET.INFO key that returns that login's c= value
+   ("" without TLS).  Mirrored in sdsys/syscom/KEYS.H. */
+#define SKT_TLS            0x01000000
+#define SKT_INFO_TLS_CBIND       8    /* SCRAM c= for this TLS session */
 
 /* OBJINFO() keys */
 #define OI_ISOBJ      0  /* Is descriptor an object */
@@ -443,6 +449,11 @@
 #define SD_RANDBYTES    107  /* sd_scram random bytes, 1 arg: count */
 #define SD_XORBYTES     108  /* sd_scram xor, 2 args, equal lengths */
 #define SD_CTEQUAL      109  /* sd_scram constant-time compare, 2 args */
+/* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41.  The SCRAM c= value this API
+   session must carry: base64("p=tls-exporter,," + RFC 9266 binding), or ""
+   when the session is not TLS (a local pipe connection).  Same number as
+   Linux (S.19) so the two ports' catalogued objects agree.  No arguments. */
+#define SD_TLS_CBIND    110  /* sd_tlssrv channel binding, 0 args */
 
 /* embedded python  */
 /* py  object types */

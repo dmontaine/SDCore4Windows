@@ -998,6 +998,35 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-reclaim.ps1"" -Path ""{#DataDir}\profile-reclaim"""; \
     Flags: runhidden; StatusMsg: "Securing the profile reclaim store..."
 
+; WHERE THE API's TLS RELAY KEEPS ITS SERVER KEY.  RELEASE_1.1 41 (Linux
+; S.19), the Windows shape of Linux's /etc/sd-tls.  gplsrc/sd_tlssrv.c writes
+; api.pem here on the first API connection - an Ed25519 private key and its
+; self-signed certificate.
+;
+; SAME REASON AND SAME SHAPE AS secure-reclaim ABOVE.  The icacls that secures
+; the data tree grants sdusers:(OI)(CI)M to everything underneath.  Left to
+; inherit, the server's PRIVATE KEY would be readable by every SD user, and an
+; SD user could create this directory first and own the whole key store.
+; secure-tls.ps1 breaks inheritance and grants SYSTEM and Administrators only;
+; the relay (win32tls.c) refuses the directory - and api.pem - in any other
+; state, so a skipped step means no API connection rather than a readable key.
+;
+; ORDER: after the icacls, as above, or inheritance puts the Modify back.  It
+; is directly under {#DataDir}, not under sdsys, so it does not disturb the
+; installer's "a database is already here" test (that looks at {#DataDir}\sdsys).
+;
+; NOT A [Dirs] ENTRY, deliberately: the relay must never create it (its parent
+; is sdusers-writable), so the install is the one moment it can be made with
+; the right ACL and no window for an SD user to make it first.
+;
+; A FAILURE HERE IS NOT FATAL to the install - a machine that never turns on
+; the API port needs no key - but it does stop the API working until repaired,
+; so unlike secure-reclaim the exit code is worth surfacing in the log.  The
+; step is still non-blocking; the relay's own refusal is the real gate.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-tls.ps1"" -Path ""{#DataDir}\sd-tls"""; \
+    Flags: runhidden; StatusMsg: "Securing the API key directory..."
+
 ; OPT-IN AND DEFAULT OFF SINCE 1 Sep 2026 - see the note in [Tasks].  The Check
 ; is SshServerWanted (the ticked box, which only appears when this machine has
 ; none), so a server is installed only when the user asks for one and one that
