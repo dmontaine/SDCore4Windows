@@ -137,6 +137,12 @@ function Get-CasePrecondition($case, $before, $prefix) {
     if (-not $before.UninsPresent) {
         return 'the snapshot shows no unins000.exe, so no uninstall could have been run from it.'
     }
+    # EVERY CASE NOW JUDGES THE THREE ROUTE GROUPS, so every case needs them
+    # present beforehand - "they survived" and "they were removed" are both
+    # unobservable against a machine that had none.
+    if ($before.RouteGroups.Count -eq 0) {
+        return 'the route groups (sdapi, sdssh, sdsshonly) were already absent, so neither their removal nor their survival could be observed.'
+    }
 
     switch ($case) {
         'silentkeep' {
@@ -191,13 +197,32 @@ function Get-UninstallVerdict($case, $before, $after, $saw, $prefix) {
     # that was never started scores whatever the before state happened to be.
     Row $rows 'the uninstall ran (program directory gone)' $false $after.ProgramPresent
 
+    # THE THREE ROUTE GROUPS SPLIT ON SILENCE, AND THIS ROW HAD IT BACKWARDS
+    # ON ITS FIRST RUN - 16 Sep 2026, silentkeep 5 of 6, the one red being the
+    # instrument rather than the product.  RemoveSdGroups is CALLED above the
+    # UninstallSilent guard in CurUninstallStepChanged, so the call site reads
+    # as unconditional; the procedure carries ITS OWN guard (sd.iss:5158),
+    # which is the owner's ruling of 2 Sep 2026 and states the cost out loud:
+    # "a scripted unattended uninstall still leaves the three groups".  The
+    # reason is that removing sdsshonly hands every KEPT account the console
+    # and Remote Desktop back, and the removal is tied to the closing page
+    # that discloses it - a page that only renders interactively.
+    #
+    # SO THE ROW STAYS AND IS INVERTED, because it now pins that ruling: a
+    # change that starts removing them silently goes red here rather than
+    # silently changing who can sign in to the machine.
+    if ($case -eq 'silentkeep') {
+        Row $rows 'route groups SURVIVE a silent uninstall' $before.RouteGroups.Count $after.RouteGroups.Count
+    } else {
+        Row $rows 'route groups removed (interactive)' 0 $after.RouteGroups.Count
+    }
+
     switch ($case) {
         'silentkeep' {
             Row $rows 'data tree survives'          $true  $after.TreePresent
             Row $rows 'sd.conf survives'            $true  $after.ConfPresent
             Row $rows 'sdsys survives'              $true  $after.SdsysPresent
             Row $rows 'sdusers survives'            $true  $after.SdusersPresent
-            Row $rows 'route groups removed'        0      $after.RouteGroups.Count
         }
         'keepdb-delconf' {
             Row $rows 'data tree survives'          $true  $after.TreePresent

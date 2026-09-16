@@ -40,7 +40,7 @@ function New-State($h) {
         TreePresent = $true; TreeEntries = @('sdsys', 'sd.conf'); ConfPresent = $true
         SdsysPresent = $true; ProgramPresent = $false; UninsPresent = $true
         SdusersPresent = $true; SdusersMembers = @('Don', 'sdw50a')
-        RouteGroups = @(); LocalUsers = @('Don', 'sdw50a'); Taken = 'fixture'
+        RouteGroups = @('sdapi', 'sdssh', 'sdsshonly'); LocalUsers = @('Don', 'sdw50a'); Taken = 'fixture'
     }
     foreach ($k in $h.Keys) { $d[$k] = $h[$k] }
     return [pscustomobject]$d
@@ -133,7 +133,7 @@ foreach ($c in $cases) {
 Write-Host ''
 Write-Host '=== 3. silentkeep - /VERYSILENT must remove neither ==='
 $before = New-State @{ ProgramPresent = $true }
-$good   = New-State @{ RouteGroups = @() }
+$good   = New-State @{}
 Check 'a run that kept everything passes' (AllPass (Get-UninstallVerdict 'silentkeep' $before $good 'yes' '')) $null
 Check 'it fails if sd.conf went' `
       (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ ConfPresent = $false }) 'yes' '') 'sd.conf survives') $null
@@ -141,19 +141,30 @@ Check 'it fails if the tree went' `
       (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ TreePresent = $false }) 'yes' '') 'data tree survives') $null
 Check 'it fails if sdusers went' `
       (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ SdusersPresent = $false }) 'yes' '') 'sdusers survives') $null
-Check 'it fails if a route group survived' `
-      (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ RouteGroups = @('sdsshonly') }) 'yes' '') 'route groups removed') $null
+# ***THE ROW THIS TEST HAD BACKWARDS UNTIL IT WAS RUN FOR REAL.***  The three
+# route groups SURVIVE a silent uninstall by the owner's ruling of 2 Sep 2026:
+# RemoveSdGroups is called above the UninstallSilent guard but carries its own,
+# because removing sdsshonly gives kept accounts the console back and that
+# disclosure only renders interactively.  Both directions are pinned here.
+Check 'silentkeep fails if the route groups were removed silently' `
+      (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ RouteGroups = @() }) 'yes' '') 'route groups SURVIVE') $null
+Check 'silentkeep fails if only some of them survived' `
+      (Failed (Get-UninstallVerdict 'silentkeep' $before (New-State @{ RouteGroups = @('sdsshonly') }) 'yes' '') 'route groups SURVIVE') $null
+Check 'an INTERACTIVE case fails if the route groups survived' `
+      (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false }) 'yes' '') 'route groups removed') $null
+Check 'a snapshot with no route groups at all is refused' `
+      ((Get-CasePrecondition 'silentkeep' (New-State @{ RouteGroups = @() }) '') -like '*route groups*') $null
 
 Write-Host ''
 Write-Host '=== 4. the two 38 combinations are each others control ==='
-$kdc = New-State @{ ConfPresent = $false; TreeEntries = @('sdsys') }
+$kdc = New-State @{ ConfPresent = $false; TreeEntries = @('sdsys'); RouteGroups = @() }
 Check 'keepdb-delconf passes when only sd.conf went' (AllPass (Get-UninstallVerdict 'keepdb-delconf' $before $kdc 'yes' '')) $null
 Check 'keepdb-delconf fails if sdsys went too' `
       (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false; SdsysPresent = $false }) 'yes' '') 'sdsys survives') $null
 Check 'keepdb-delconf fails if sdusers went (the database was kept)' `
       (Failed (Get-UninstallVerdict 'keepdb-delconf' $before (New-State @{ ConfPresent = $false; SdusersPresent = $false }) 'yes' '') 'sdusers survives') $null
 
-$dkc = New-State @{ SdsysPresent = $false; TreeEntries = @('sd.conf'); SdusersPresent = $false }
+$dkc = New-State @{ SdsysPresent = $false; TreeEntries = @('sd.conf'); SdusersPresent = $false; RouteGroups = @() }
 Check 'deldb-keepconf passes when the folder holds sd.conf alone' (AllPass (Get-UninstallVerdict 'deldb-keepconf' $before $dkc 'yes' '')) $null
 # THE ROW THAT MATTERS: "sd.conf is still there" is true of a tree that was
 # never touched, so the folder's WHOLE contents are asserted, not just the file.
@@ -168,7 +179,8 @@ $oldUser = $env:USERNAME
 try {
     $env:USERNAME = 'Don'
     $swept = New-State @{ TreePresent = $false; TreeEntries = @(); ConfPresent = $false
-                          SdsysPresent = $false; SdusersPresent = $false; LocalUsers = @('Don') }
+                          SdsysPresent = $false; SdusersPresent = $false; LocalUsers = @('Don')
+                          RouteGroups = @() }
     Check 'a real sweep passes' (AllPass (Get-UninstallVerdict 'deldb-delacct' $before $swept 'yes' 'sdw50a')) $null
     # RELEASE_1.1 50 ITSELF: the sweep reported success having enumerated
     # nothing, so the account survived.
@@ -189,7 +201,7 @@ Write-Host '=== 6. treeabsent - the operators observation decides it, and is req
 $taBefore = New-State @{ TreePresent = $false; TreeEntries = @(); ConfPresent = $false
                          SdsysPresent = $false; ProgramPresent = $true }
 $taAfter  = New-State @{ TreePresent = $false; TreeEntries = @(); ConfPresent = $false
-                         SdsysPresent = $false; SdusersPresent = $false }
+                         SdsysPresent = $false; SdusersPresent = $false; RouteGroups = @() }
 Check 'it passes when the question was seen' (AllPass (Get-UninstallVerdict 'treeabsent' $taBefore $taAfter 'yes' '')) $null
 # ***THE WHOLE POINT.***  Before the fix this branch showed NO dialog, and the
 # state afterwards is identical either way - sdusers goes in both worlds.  So a
