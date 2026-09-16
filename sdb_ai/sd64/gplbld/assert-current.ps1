@@ -180,7 +180,26 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 16 Sep 26 - RELEASE_1.1 5's real-upgrade witness.
+$neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
+                  # LISTED IN THE COMMIT THAT CREATED IT, which is the rule the
+                  # entry below had to be written to establish.  It reads the
+                  # installed tree, the local groups and the local users, and
+                  # writes only into %LOCALAPPDATA%\SD-verify; it ships nowhere
+                  # and is named in neither stage.py nor sd.iss.  Listing it
+                  # matters more than usual here: every case it measures is an
+                  # UNINSTALL, so the tree it would offer a cycle to refresh is
+                  # the one the measurement has just deliberately taken apart.
+                  # ***AND ITS UNITS TEST, WHICH WAS LEFT OFF FOR EXACTLY AS
+                  # LONG AS IT TOOK TO RUN assert-current ONCE.***  The verifier
+                  # was listed here in the same edit that created it and the
+                  # test beside it was not, so the tree went STALE naming a
+                  # guard that ships nowhere - the identical shape recorded for
+                  # test-retired-wording-units.ps1 below, arrived at by an
+                  # author who had just read that note.  It cost nothing only
+                  # because assert-current is cheap and was run before the tree
+                  # was needed.
+                  'verify-uninstallchoices.ps1', 'test-uninstallchoices-units.ps1',
+                  # 16 Sep 26 - RELEASE_1.1 5's real-upgrade witness.
                   # ***LISTED LATE, AND THAT IS THE DEFECT RATHER THAN A
                   # FOOTNOTE.***  It was created 15 Sep and not listed, and the
                   # omission stayed invisible for a day because nothing EDITED

@@ -220,7 +220,14 @@ $ErrorActionPreference = 'Stop'
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
-           'sdtc', 'sdpw', 'sdsadm', 'sdapir', 'sdpyg')
+           'sdtc', 'sdpw', 'sdsadm', 'sdapir', 'sdpyg',
+           # 16 Sep 26 - verify-uninstallchoices.ps1 -Make, RELEASE_1.1 50.
+           # It is not composed by a runner, so test-stemcoverage-units would
+           # never have asked for this stem; the account is a REAL Windows
+           # account with a profile, and the case that removes it is the one
+           # being tested - so an abandoned run leaves exactly the litter this
+           # sweep exists for.
+           'sdunin')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has
