@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 15 Sep 26 Windows port - RELEASE_1.1 45.  int.logto's SDSYS gate keys on
+*            K$OS.ELEVATED (did this session START elevated), not
+*            K$OS.ADMINISTRATOR - so "logto sdsys" from an unelevated session is
+*            refused and elevation is the only door to SDSYS.  elevate('START')
+*            stays: it registers the resident helper, it is not the gate.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 and 34.  ".S name" finds an existing
 *            record in any case and saves a new one lower case; Enter at the
 *            5045 overwrite prompt means N.
@@ -2751,9 +2756,24 @@ int.logto:
 *   to then refuse the login anyway" - applies here with more force, because a
 *   refusal AFTER UAC has asked for a password teaches somebody to type one
 *   where it was never going to be accepted.
-      if not(kernel(K$OS.ADMINISTRATOR, 0) and sd_admin_tier(@logname)) then
+* 15 Sep 26 Windows port - RELEASE_1.1 45, the owner's "elevation is the only
+*   door to SDSYS" model.  THE GATE IS NOW K$OS.ELEVATED - did this session
+*   START elevated - NOT K$OS.ADMINISTRATOR, the person's admin membership.  An
+*   unelevated session, administrator or not, is refused HERE, before
+*   elevate('START'), so that call is no longer a SECOND DOOR: it used to be the
+*   UAC step-up that let an unelevated administrator reach SDSYS by typing "logto
+*   sdsys", and that route is now closed.  A session that STARTED elevated
+*   passes, and a process's elevation is immutable, so K$OS.ELEVATED still holds
+*   after a LOGTO down to a personal account - SDSYS -> personal -> SDSYS works,
+*   and elevate('START') below then only RE-REGISTERS the resident helper with no
+*   UAC (sd-elevate.ps1:119 short-circuits for an already-elevated token).
+*   Reverses the 5 Sep K_INTERACTIVE intent (an unelevated console admin reaching
+*   SDSYS via LOGTO+UAC) now that ssh/API admins are denied any session anyway,
+*   and neutralises the 16 Aug "LOGTO ends the elevated session" clear for
+*   re-entry.  keys.h's four-question table carries K$OS.ELEVATED (65).
+      if not(kernel(K$OS.ELEVATED, 0) and sd_admin_tier(@logname)) then
          display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-         void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=not an administrator')
+         void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=session did not start elevated')
          unwinding = 2
          return
       end
