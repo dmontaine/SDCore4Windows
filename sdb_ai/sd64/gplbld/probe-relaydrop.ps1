@@ -22,8 +22,9 @@
     task, the shape the other probes use.
 
     ITERATION 3 (16 Sep 26): the socket is used through NATIVE Winsock in the
-    child and relayed over an inherited anonymous pipe read as a Cygwin fd -
-    the Linux per-connection shape.  See the .c header.
+    child, and exchanged both ways over two Cygwin pipe()s whose far ends the
+    child inherits as duplicated handles - the Linux per-connection shape.
+    See the .c header.
 
     Build, from gplbld in MSYS2's bash:
       gcc -O2 -Wall -o probe-relaydrop.exe probe-relaydrop.c -lsecur32 -ladvapi32 -lws2_32 -luserenv
@@ -216,10 +217,12 @@ if ($owner -notlike "*\$Account") {
 # never attempted is refused rather than scored.
 $sread     = if ($c -match '(?m)socket read\s*:\s*(.+?)\s*$')  { $Matches[1].Trim() } else { '<not reported>' }
 $pwrite    = if ($c -match '(?m)pipe write\s*:\s*(.+?)\s*$')   { $Matches[1].Trim() } else { '<not reported>' }
+$cread     = if ($c -match '(?m)pipe read\s*:\s*(.+?)\s*$')    { $Matches[1].Trim() } else { '<not reported>' }
 $pread     = if ($p -match '(?m)pipe read \(cygwin\)\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
 $roundTrip = [bool]($p -match 'ROUND TRIP WORKED')
 $piped     = [bool]($p -match 'THE PIPE CARRIED')
 Say "  socket read (child, native): $sread"
+Say "  pipe read   (child, native): $cread"
 Say "  pipe write  (child)        : $pwrite"
 Say "  pipe read   (parent, cygwin): $pread"
 Say "  socket round trip          : $(if ($roundTrip) { 'WORKED' } else { 'did NOT' })"
@@ -232,10 +235,10 @@ if ($sread -like 'NOT ATTEMPTED*' -or $sread -eq '<not reported>') {
 Say ''
 if ($roundTrip -and $piped -and ($sread -like '*PING-from-parent*')) {
     Say "ANSWERED (FULL): the bare account '$Account' child read the inherited socket" -ForegroundColor Green
-    Say "  through native Winsock, answered on it, and relayed what it read over an"
-    Say "  inherited pipe that a Cygwin reader received.  The Linux per-connection"
-    Say "  shape - relay holds the connection, private channel to sd - has a working"
-    Say "  Windows handover.  (Integrity Medium; the Low drop is next.)"
+    Say "  through native Winsock, answered on it, and exchanged bytes BOTH WAYS with"
+    Say "  a Cygwin parent over inherited duplicates of Cygwin pipe() ends.  The Linux"
+    Say "  per-connection shape - relay holds the connection, private channel to sd -"
+    Say "  has a working Windows handover.  (Integrity Medium; the Low drop is next.)"
     Cleanup
     exit 0
 }
