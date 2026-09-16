@@ -132,14 +132,19 @@ try {
     # -----------------------------------------------------------------------
     Step 1 "Creating the two throwaway accounts $accA (to delete) and $accB (voc crippled)"
 
-    $winPwA = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $accA PROGRAMMER", $winPwA, $winPwA)
+    # NONE: CREATE.ACCOUNT refuses (10082) unless told how the account is
+    # reached, and the first run of this file, 15 Sep 20:42, omitted it - SD
+    # asked "Say who may reach this account" and was fed the password.  Neither
+    # account needs a route; the scan opens their voc from disk.  Password shape
+    # copied from verify-delaccount (GeneratePassword + 'aA1!' meets complexity).
+    $winPwA = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $accA PROGRAMMER NONE", $winPwA, $winPwA)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upA))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $accA." }
     $madeA = $true
     Write-Host "   $accA created"
 
-    $winPwB = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $accB PROGRAMMER", $winPwB, $winPwB)
+    $winPwB = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $accB PROGRAMMER NONE", $winPwB, $winPwB)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upB))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $accB." }
     $madeB = $true
     Write-Host "   $accB created"
@@ -211,18 +216,22 @@ finally {
     }
 
     Step 9 'Cleaning up the throwaway accounts'
+    # Says what it removed rather than "removed both": the 20:42 run created
+    # nothing and still printed that it had removed two accounts.
+    $removed = @()
     if ($madeA -and (Test-Path -LiteralPath (Join-Path $accts $upA))) {
-        $null = Invoke-SD @("DELETE.ACCOUNT $upA", 'Y')
+        $null = Invoke-SD @("DELETE.ACCOUNT $upA", 'Y'); $removed += "SD:$upA"
     }
-    if ($madeB) { $null = Invoke-SD @("DELETE.ACCOUNT $upB", 'Y') }
+    if ($madeB) { $null = Invoke-SD @("DELETE.ACCOUNT $upB", 'Y'); $removed += "SD:$upB" }
     foreach ($n in @($accA, $accB)) {
-        if (Get-LocalUser -Name $n -ErrorAction SilentlyContinue) { Remove-LocalUser -Name $n -ErrorAction SilentlyContinue }
+        if (Get-LocalUser -Name $n -ErrorAction SilentlyContinue) { Remove-LocalUser -Name $n -ErrorAction SilentlyContinue; $removed += "user:$n" }
         $prof = Join-Path $env:ProgramData ('SD\user_accounts\' + $n)
-        if (Test-Path -LiteralPath $prof) { Remove-Item -LiteralPath $prof -Recurse -Force -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $prof) { Remove-Item -LiteralPath $prof -Recurse -Force -ErrorAction SilentlyContinue; $removed += "dir:$n" }
         $grp = 'sdu_' + $n
-        if (Get-LocalGroup -Name $grp -ErrorAction SilentlyContinue) { Remove-LocalGroup -Name $grp -ErrorAction SilentlyContinue }
+        if (Get-LocalGroup -Name $grp -ErrorAction SilentlyContinue) { Remove-LocalGroup -Name $grp -ErrorAction SilentlyContinue; $removed += "group:$grp" }
     }
-    Write-Host '   removed both throwaway accounts (SD + Windows), profiles and groups'
+    if ($removed.Count) { Write-Host ('   removed: ' + ($removed -join ', ')) }
+    else                { Write-Host '   nothing to remove - no account had been created' }
 }
 
 # ---------------------------------------------------------------------------
