@@ -21,6 +21,13 @@
     accounts are never touched.  The parent runs as SYSTEM via a scheduled
     task, the shape the other probes use.
 
+    ITERATION 3 (16 Sep 26): the socket is used through NATIVE Winsock in the
+    child and relayed over an inherited anonymous pipe read as a Cygwin fd -
+    the Linux per-connection shape.  See the .c header.
+
+    Build, from gplbld in MSYS2's bash:
+      gcc -O2 -Wall -o probe-relaydrop.exe probe-relaydrop.c -lsecur32 -ladvapi32 -lws2_32 -luserenv
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File probe-relaydrop.ps1
 #>
@@ -203,31 +210,38 @@ if ($owner -notlike "*\$Account") {
 
 # The CRUX: did the handed-over socket round-trip?  parent.log ($p) reports the
 # parent's side, child.log ($c) the adopt and the bytes it read.
-$adopt     = if ($c -match '(?m)socket adopt\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
+# Iteration 3: the child uses the SOCKET through native Winsock and relays what
+# it read over an inherited pipe that the parent reads as a Cygwin fd.  Each leg
+# is anchored on wording printed only on its success path, and a leg the child
+# never attempted is refused rather than scored.
 $sread     = if ($c -match '(?m)socket read\s*:\s*(.+?)\s*$')  { $Matches[1].Trim() } else { '<not reported>' }
+$pwrite    = if ($c -match '(?m)pipe write\s*:\s*(.+?)\s*$')   { $Matches[1].Trim() } else { '<not reported>' }
+$pread     = if ($p -match '(?m)pipe read \(cygwin\)\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
 $roundTrip = [bool]($p -match 'ROUND TRIP WORKED')
-Say "  socket adopt      : $adopt"
-Say "  socket read       : $sread"
-Say "  round trip        : $(if ($roundTrip) { 'WORKED' } else { 'did NOT' })"
+$piped     = [bool]($p -match 'THE PIPE CARRIED')
+Say "  socket read (child, native): $sread"
+Say "  pipe write  (child)        : $pwrite"
+Say "  pipe read   (parent, cygwin): $pread"
+Say "  socket round trip          : $(if ($roundTrip) { 'WORKED' } else { 'did NOT' })"
+Say "  pipe channel               : $(if ($piped) { 'WORKED' } else { 'did NOT' })"
+
+if ($sread -like 'NOT ATTEMPTED*' -or $sread -eq '<not reported>') {
+    Refuse 'the child never attempted the socket leg - the handles did not reach its command line.'
+}
 
 Say ''
-if ($roundTrip -and ($sread -like '*PING-from-parent*')) {
-    Say "ANSWERED (FULL): the bare account '$Account' child ADOPTED the handed-over" -ForegroundColor Green
-    Say "  socket and round-tripped bytes with the parent. A daemon CAN spawn a"
-    Say "  bare-account relay AND hand it the accepted connection via an inherited"
-    Say "  handle + cygwin_attach_handle_to_fd - the per-connection-spawn"
-    Say "  architecture is viable. (Integrity Medium this iteration; Low drop and"
-    Say "  then the product build are next.)"
+if ($roundTrip -and $piped -and ($sread -like '*PING-from-parent*')) {
+    Say "ANSWERED (FULL): the bare account '$Account' child read the inherited socket" -ForegroundColor Green
+    Say "  through native Winsock, answered on it, and relayed what it read over an"
+    Say "  inherited pipe that a Cygwin reader received.  The Linux per-connection"
+    Say "  shape - relay holds the connection, private channel to sd - has a working"
+    Say "  Windows handover.  (Integrity Medium; the Low drop is next.)"
     Cleanup
     exit 0
 }
 
-# Foundation holds, socket did not: a real finding about the MECHANISM, not a
-# falsification of the split.
 Say "PARTIAL: the account switch HOLDS (child ran as $Account, 0 privileges, file" -ForegroundColor Yellow
-Say "  owned by it), but the handed-over socket did NOT round-trip (adopt: $adopt)."
-Say "  A bare relay is viable; THIS socket-passing mechanism is not the one. Next:"
-Say "  WSADuplicateSocket, or architecture B - the bare relay owns the listener and"
-Say "  accepts its own connections (no cross-token socket handover at all)."
+Say "  owned by it), but socket=$(if ($roundTrip) { 'ok' } else { 'FAILED' }), pipe=$(if ($piped) { 'ok' } else { 'FAILED' })."
+Say "  Read both logs above for which call refused."
 Cleanup
 exit 2
