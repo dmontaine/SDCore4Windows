@@ -130,17 +130,23 @@ DH_FILE* dh_open(char path[]) {
      grants the account's group Modify.  NOTE: access() asks with the REAL
      uid/gid and open() with the EFFECTIVE - they coincide in this port (sd is
      not setuid; the S4U session moves the effective uid) but are not
-     interchangeable in general.  Falling back on ANY failure keeps the old
-     behaviour: a file that cannot be opened at all fails the DIO_READ attempt
-     too and reaches the DHE_FILE_NOT_FOUND path below exactly as before. */
+     interchangeable in general.  FALL BACK ONLY ON A PERMISSION DENIAL
+     (EACCES/EROFS): that is the case access() used to catch and the one this
+     fixes, and it opens read-only exactly as before.  Any OTHER DIO_UPDATE
+     failure - a transient sharing violation, or fd exhaustion dio_open could
+     not retry away - is not a permission fact and must stay the precise
+     DHE_FILE_NOT_FOUND error, not become a silent read-only open that only
+     surfaces as a write error later (the asymmetry SD Core for Linux flagged
+     reviewing this, mailbox 16 Sep 00:10). */
   {
     int32_t saved_os_error = process.os_error;
     fu = dio_open(pathname, DIO_UPDATE);
-    if (!ValidFileHandle(fu)) {
+    if (!ValidFileHandle(fu) &&
+        ((process.os_error == EACCES) || (process.os_error == EROFS))) {
       read_only = TRUE;
       fu = dio_open(pathname, DIO_READ);
       if (ValidFileHandle(fu))
-        process.os_error = saved_os_error; /* the update failure was not the caller's error */
+        process.os_error = saved_os_error; /* the write denial is not the caller's error */
     }
   }
   if (!ValidFileHandle(fu)) {
@@ -199,16 +205,18 @@ DH_FILE* dh_open(char path[]) {
      k_error("Overflowed directory/filename path length in dh_open()!");
      goto exit_dh_open;
   }
-  /* Overflow subfile, same rule as the primary above (RELEASE_1.1 46).  If the
-     primary already forced read-only, open this one read-only too - which is
-     what the old access()-first form did, since read_only was already set. */
+  /* Overflow subfile, same rule as the primary above (RELEASE_1.1 46), and the
+     same permission-denial-only fallback.  If the primary already forced
+     read-only, open this one read-only too - which is what the old
+     access()-first form did, since read_only was already set. */
   {
     int32_t saved_os_error = process.os_error;
     if (read_only) {
       ofu = dio_open(pathname, DIO_READ);
     } else {
       ofu = dio_open(pathname, DIO_UPDATE);
-      if (!ValidFileHandle(ofu)) {
+      if (!ValidFileHandle(ofu) &&
+          ((process.os_error == EACCES) || (process.os_error == EROFS))) {
         read_only = TRUE;
         ofu = dio_open(pathname, DIO_READ);
         if (ValidFileHandle(ofu))
