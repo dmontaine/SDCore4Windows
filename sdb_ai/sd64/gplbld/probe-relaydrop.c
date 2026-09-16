@@ -46,11 +46,17 @@
  * Exit: 0 the question was answered (read the verdict), 2 it could not be.
  */
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <ntsecapi.h>
 #include <sddl.h>
 #include <aclapi.h>
 #include <userenv.h>
+/* AFTER windows.h, so the runtime call is given the Win32 HANDLE type -
+   probe-svcimp.c records the same ordering.  cygwin_attach_handle_to_fd is how
+   a spawned (not fork()ed) Cygwin child adopts an inherited socket handle. */
+#include <sys/cygwin.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -350,14 +356,65 @@ static int strip_privileges(HANDLE tok) {
   return 1;
 }
 
+/* A connected TCP pair on loopback: the ACCEPTED end stands in for the API
+   connection the daemon would hand the relay; the CLIENT end is what the parent
+   uses to prove the child can read and write it.  Winsock, so the handle is a
+   native SOCKET the child can inherit and adopt. */
+static int make_loopback_pair(SOCKET* accepted, SOCKET* client) {
+  SOCKET lis = INVALID_SOCKET, cli = INVALID_SOCKET, acc = INVALID_SOCKET;
+  struct sockaddr_in addr;
+  int addrlen = sizeof addr;
+
+  lis = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (lis == INVALID_SOCKET) {
+    say("REFUSED: socket(listener) %d", WSAGetLastError());
+    return 0;
+  }
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;
+  if (bind(lis, (struct sockaddr*)&addr, sizeof addr) != 0 ||
+      listen(lis, 1) != 0 ||
+      getsockname(lis, (struct sockaddr*)&addr, &addrlen) != 0) {
+    say("REFUSED: bind/listen/getsockname %d", WSAGetLastError());
+    closesocket(lis);
+    return 0;
+  }
+  cli = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (cli == INVALID_SOCKET) {
+    say("REFUSED: socket(client) %d", WSAGetLastError());
+    closesocket(lis);
+    return 0;
+  }
+  if (connect(cli, (struct sockaddr*)&addr, sizeof addr) != 0) {
+    say("REFUSED: connect %d", WSAGetLastError());
+    closesocket(lis);
+    closesocket(cli);
+    return 0;
+  }
+  acc = accept(lis, NULL, NULL);
+  closesocket(lis);
+  if (acc == INVALID_SOCKET) {
+    say("REFUSED: accept %d", WSAGetLastError());
+    closesocket(cli);
+    return 0;
+  }
+  *accepted = acc;
+  *client = cli;
+  return 1;
+}
+
 /* ======================================================================
-   THE PARENT - LocalSystem.  Mints, strips, spawns.                       */
+   THE PARENT - LocalSystem.  Mints, strips, spawns, hands over a socket.  */
 static int parent(const char* dir, const char* account) {
   char childexe[MAX_PATH], cmd[MAX_PATH * 2], childlog[MAX_PATH];
   HANDLE imp = NULL, prim = NULL;
   STARTUPINFOA si;
   PROCESS_INFORMATION pi;
   void* env = NULL;
+  SOCKET acc = INVALID_SOCKET, cli = INVALID_SOCKET;
+  WSADATA wsa;
   int ok = 0;
 
   say("probe-relaydrop PARENT");
@@ -392,9 +449,35 @@ static int parent(const char* dir, const char* account) {
   }
   say("  stripped          : all privileges removed (Low integrity deferred)");
 
+  /* --- the socket handover: the crux -----------------------------------
+     Make a connected pair; hand the ACCEPTED end to the child (an inheritable
+     handle across CreateProcessAsUser), keep the CLIENT end to prove the child
+     can read and write it.  sdwind.c:400 measured naive socket-passing to a
+     Cygwin child failing, so this is the make-or-break. */
+  if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+    say("REFUSED: WSAStartup %d", WSAGetLastError());
+    CloseHandle(prim);
+    return 2;
+  }
+  if (!make_loopback_pair(&acc, &cli)) {
+    CloseHandle(prim);
+    return 2;
+  }
+  if (!SetHandleInformation((HANDLE)acc, HANDLE_FLAG_INHERIT,
+                            HANDLE_FLAG_INHERIT)) {
+    say("REFUSED: SetHandleInformation(inherit) - %s", winerr(GetLastError()));
+    closesocket(acc);
+    closesocket(cli);
+    CloseHandle(prim);
+    return 2;
+  }
+  say("  socket handed     : accepted-end handle %llu (marked inheritable)",
+      (unsigned long long)acc);
+
   snprintf(childexe, sizeof childexe, "%s\\probe-relaydrop.exe", dir);
   snprintf(childlog, sizeof childlog, "%s\\child.log", dir);
-  snprintf(cmd, sizeof cmd, "\"%s\" --child \"%s\"", childexe, dir);
+  snprintf(cmd, sizeof cmd, "\"%s\" --child \"%s\" %llu", childexe, dir,
+           (unsigned long long)acc);
   say("  spawning          : %s", cmd);
 
   /* An explicit environment for the target account; without it Cygwin has no
@@ -410,31 +493,58 @@ static int parent(const char* dir, const char* account) {
   si.lpDesktop = (char*)"winsta0\\default";
   ZeroMemory(&pi, sizeof pi);
 
-  if (!CreateProcessAsUserA(prim, childexe, cmd, NULL, NULL, FALSE,
+  /* bInheritHandles TRUE so the accepted socket reaches the child; only that
+     handle was marked inheritable. */
+  if (!CreateProcessAsUserA(prim, childexe, cmd, NULL, NULL, TRUE,
                             CREATE_NO_WINDOW |
                                 (env ? CREATE_UNICODE_ENVIRONMENT : 0),
                             env, dir, &si, &pi)) {
     say("REFUSED: CreateProcessAsUser - %s", winerr(GetLastError()));
-    say("  (this is the row the whole probe turns on: a LocalSystem parent");
-    say("   could not start a Cygwin child under the bare token.)");
     if (env)
       DestroyEnvironmentBlock(env);
+    closesocket(acc);
+    closesocket(cli);
     CloseHandle(prim);
     return 2;
   }
-  say("  CreateProcessAsUser: launched pid %lu",
-      (unsigned long)pi.dwProcessId);
+  say("  CreateProcessAsUser: launched pid %lu", (unsigned long)pi.dwProcessId);
+
+  /* Close the parent's copy of the accepted end so only the child holds it,
+     then PING down the client end and wait for the child's PONG. */
+  closesocket(acc);
+  acc = INVALID_SOCKET;
+  {
+    const char* ping = "PING-from-parent";
+    int sent = send(cli, ping, (int)strlen(ping), 0);
+    say("  parent sent       : %d bytes on the client end", sent);
+  }
   WaitForSingleObject(pi.hProcess, 30000);
   {
     DWORD code = 0;
+    DWORD tmo = 3000;
+    char rb[128];
+    int rn;
     GetExitCodeProcess(pi.hProcess, &code);
     say("  child exit code   : %lu", (unsigned long)code);
-    ok = 1;
+    setsockopt(cli, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tmo, sizeof tmo);
+    rn = recv(cli, rb, sizeof rb - 1, 0);
+    if (rn > 0) {
+      rb[rn] = '\0';
+      say("  parent received   : [%s] (%d bytes) - the ROUND TRIP WORKED", rb,
+          rn);
+      ok = 1;
+    } else {
+      say("  parent received   : nothing (recv=%d, err %d) - the child could",
+          rn, WSAGetLastError());
+      say("                      not use the handed-over socket; see child.log.");
+      ok = 0;
+    }
   }
   CloseHandle(pi.hThread);
   CloseHandle(pi.hProcess);
   if (env)
     DestroyEnvironmentBlock(env);
+  closesocket(cli);
   CloseHandle(prim);
   (void)childlog;
   say("PARENT DONE - read child.log for what the bare child could do.");
@@ -443,7 +553,7 @@ static int parent(const char* dir, const char* account) {
 
 /* ======================================================================
    THE CHILD - the bare relay stand-in.                                    */
-static int child(const char* dir) {
+static int child(const char* dir, const char* sockarg) {
   char made[MAX_PATH];
   int nprivs;
 
@@ -459,6 +569,42 @@ static int child(const char* dir) {
   snprintf(made, sizeof made, "%s\\child-made.txt", dir);
   say("  file I/O owner    : %s", create_and_owner(made));
   say("  privilege count   : %d (0 is the goal)", nprivs);
+
+  /* The crux: adopt the inherited socket handle as a Cygwin fd and prove it
+     reads and writes.  This is what a spawned (not fork()ed) relay must do with
+     the accepted connection - fork() sets the fd up for the child, a spawn does
+     not. */
+  if (sockarg) {
+    SOCKET s = (SOCKET)(uintptr_t)strtoull(sockarg, NULL, 10);
+    int fd;
+    say("  socket handle     : %llu (inherited)", (unsigned long long)s);
+    errno = 0;
+    fd = cygwin_attach_handle_to_fd((char*)"relaysock", -1, (HANDLE)s, 1,
+                                    GENERIC_READ | GENERIC_WRITE);
+    if (fd < 0) {
+      say("  socket adopt      : FAILED (cygwin_attach_handle_to_fd errno %d %s)",
+          errno, strerror(errno));
+    } else {
+      char rb[128];
+      ssize_t rn;
+      say("  socket adopt      : ok, fd %d", fd);
+      rn = read(fd, rb, sizeof rb - 1);
+      if (rn > 0) {
+        rb[(size_t)rn] = '\0';
+        say("  socket read       : [%s] (%zd bytes)", rb, rn);
+        {
+          const char* pong = "PONG-from-child";
+          ssize_t wn = write(fd, pong, strlen(pong));
+          say("  socket write      : %zd bytes back", wn);
+        }
+      } else {
+        say("  socket read       : nothing (read=%zd errno %d %s)", rn, errno,
+            strerror(errno));
+      }
+      close(fd);
+    }
+  }
+
   say("CHILD DONE");
   return 0;
 }
@@ -488,7 +634,7 @@ int main(int argc, char* argv[]) {
       rc = parent(dir, argv[3]);
     }
   } else if (strcmp(role, "--child") == 0) {
-    rc = child(dir);
+    rc = child(dir, (argc >= 4) ? argv[3] : NULL);
   } else {
     printf("unknown role '%s'\n", role);
     rc = 2;

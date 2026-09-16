@@ -195,18 +195,39 @@ if ($privCnt -ne 0) {
     Fail "the child ran as $ranAs but still holds $privCnt privilege(s) - the strip did not take."
 }
 
-# This iteration's scope is the ACCOUNT switch, not integrity (the Low drop is
-# deferred to the next step, so Medium is the expected, correct result here).
-# Integrity is reported, not required.
+# The FOUNDATION (the account switch) must hold first; integrity is Medium by
+# design this iteration (the Low drop is deferred).
+if ($owner -notlike "*\$Account") {
+    Fail "the child ran as $ranAs, $privCnt priv(s), but the file it created is owned by '$owner', not $Account - the account switch is wrong."
+}
+
+# The CRUX: did the handed-over socket round-trip?  parent.log ($p) reports the
+# parent's side, child.log ($c) the adopt and the bytes it read.
+$adopt     = if ($c -match '(?m)socket adopt\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
+$sread     = if ($c -match '(?m)socket read\s*:\s*(.+?)\s*$')  { $Matches[1].Trim() } else { '<not reported>' }
+$roundTrip = [bool]($p -match 'ROUND TRIP WORKED')
+Say "  socket adopt      : $adopt"
+Say "  socket read       : $sread"
+Say "  round trip        : $(if ($roundTrip) { 'WORKED' } else { 'did NOT' })"
+
 Say ''
-if ($owner -like "*\$Account") {
-    Say "ANSWERED: a Cygwin child RAN as the bare account '$Account', with 0 privileges," -ForegroundColor Green
-    Say "  and did ordinary file I/O (the file it created is owned by $owner)."
-    Say "  Integrity is $integ this iteration - the Low drop is deferred by design."
-    Say "  The relay/session split's FOUNDATION holds: a LocalSystem daemon can"
-    Say "  spawn a bare-account Cygwin relay via S4U + CreateProcessAsUser."
-    Say "  NEXT: the Low-integrity drop, then handing the relay the accepted socket."
+if ($roundTrip -and ($sread -like '*PING-from-parent*')) {
+    Say "ANSWERED (FULL): the bare account '$Account' child ADOPTED the handed-over" -ForegroundColor Green
+    Say "  socket and round-tripped bytes with the parent. A daemon CAN spawn a"
+    Say "  bare-account relay AND hand it the accepted connection via an inherited"
+    Say "  handle + cygwin_attach_handle_to_fd - the per-connection-spawn"
+    Say "  architecture is viable. (Integrity Medium this iteration; Low drop and"
+    Say "  then the product build are next.)"
     Cleanup
     exit 0
 }
-Fail "the child ran as $ranAs, 0 privileges, $integ, but the file it created is owned by '$owner', not $Account - basic I/O identity is wrong."
+
+# Foundation holds, socket did not: a real finding about the MECHANISM, not a
+# falsification of the split.
+Say "PARTIAL: the account switch HOLDS (child ran as $Account, 0 privileges, file" -ForegroundColor Yellow
+Say "  owned by it), but the handed-over socket did NOT round-trip (adopt: $adopt)."
+Say "  A bare relay is viable; THIS socket-passing mechanism is not the one. Next:"
+Say "  WSADuplicateSocket, or architecture B - the bare relay owns the listener and"
+Say "  accepts its own connections (no cross-token socket handover at all)."
+Cleanup
+exit 2
