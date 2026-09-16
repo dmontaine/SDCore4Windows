@@ -271,8 +271,14 @@ try {
     $r = Invoke-Pktmon @('filter', 'add', 'sdwire', '-p', "$Port")
     if ($r.Code -ne 0) { Refuse 'pktmon filter add failed.' }
     $r = Invoke-Pktmon @('start', '--capture', '--pkt-size', '0', '--file-name', $etl)
-    if ($r.Code -ne 0 -or $r.Text -notmatch 'Log file name:') { Refuse 'pktmon start did not report a log file - the capture is not running.' }
-    $capturing = $true
+    # $capturing is set BEFORE the check: the first run (15 Sep 21:17) anchored
+    # on 'Log file name:' where pktmon prints 'Log file:', refused, and left
+    # the capture running because this flag was still false.  The anchor is
+    # now the log line naming OUR file, which only a started capture prints.
+    $capturing = ($r.Code -eq 0)
+    if (-not $capturing -or $r.Text -notmatch ('Log file:\s+' + [regex]::Escape($etl))) {
+        Refuse "pktmon start did not report logging to $etl - the capture is not running as intended."
+    }
     $null = Invoke-Pktmon @('status')
 
     # -----------------------------------------------------------------------
@@ -363,7 +369,8 @@ finally {
     }
     if ($confMoved) { if (Stop-SD) { $null = Start-SD }; $removed += 'SD restarted with the port closed' }
     if ($removed.Count) { Write-Host ('   ' + ($removed -join ', ')) } else { Write-Host '   nothing to put back' }
-    Write-Host "   evidence kept: $etl, $pcap"
+    $kept = @($etl, $pcap) | Where-Object { Test-Path -LiteralPath $_ }
+    if ($kept.Count) { Write-Host ('   evidence kept: ' + ($kept -join ', ')) }
 }
 
 # ---------------------------------------------------------------------------
