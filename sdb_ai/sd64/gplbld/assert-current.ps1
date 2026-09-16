@@ -694,6 +694,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # nowhere; stage.py and sd.iss never name it; all three listed
                   # so the instrument does not report its own tree stale.
                   'probe-relaydrop.c', 'probe-relaydrop.ps1', 'probe-relaydrop.exe',
+                  # 16 Sep 26 - probe-scmrights, the split's second socket-
+                  # handover mechanism: does MSYS2 pass a descriptor over
+                  # AF_UNIX with SCM_RIGHTS at all?  Measured NO, same token.
+                  # Ships nowhere; .c and .exe listed so the instrument does
+                  # not report its own tree stale.
+                  'probe-scmrights.c', 'probe-scmrights.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
