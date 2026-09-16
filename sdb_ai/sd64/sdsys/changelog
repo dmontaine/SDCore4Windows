@@ -26,6 +26,19 @@ while porting from it.
            to an account whose vocabulary is at an older level now goes
            straight in, and the upgrade completes without waiting.
 
+16 Sep 26  UPGRADING NOW SAYS WHAT IT IS DOING.
+
+           Upgrading brings three things forward into your existing database:
+           the dictionaries, the vocabulary of every account, and a check of
+           every file for record ids that differ only by case.  Each of those
+           ran with nothing on the screen, so on a database of any size the
+           installer looked as though it had stopped, and there was no way to
+           tell which step it was in.
+
+           Each step now names itself on the installer's page before it starts.
+           The steps that walk your accounts and your files take longer the
+           more of them you have, so this is where the wait will be.
+
 16 Sep 26  UNINSTALLING NOW ASKS ABOUT YOUR SETTINGS FILE SEPARATELY.
 
            Uninstalling has always offered to remove your SD Core database,

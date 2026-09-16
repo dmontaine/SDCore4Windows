@@ -2886,6 +2886,38 @@ end;
 
   Returns '' when it worked or had nothing to do, and a paragraph for the
   closing box when it did not. }
+{ 16 Sep 26 - RELEASE_1.1 40.  NAME THE STEP BEFORE IT BLOCKS.
+
+  The three Refresh* steps below each run a hidden sd -internal session through
+  Exec with ewWaitUntilTerminated, so the wizard's thread is stopped for as long
+  as the step takes and the reader is shown a page that does not move.  The
+  owner's requirement of 15 Sep 2026 is per-step progress, and this is it: the
+  step says what it is about to do, and the caption is painted BEFORE the call
+  that blocks.
+
+  ***A MOVING BAR IS DELIBERATELY NOT ATTEMPTED, AND THE REASON IS MEASUREMENT
+  RATHER THAN EFFORT.***  Nothing repaints while the thread is blocked - a
+  marquee gauge does not animate either, because the animation is driven by the
+  message loop this call is not running.  Making the bar move means Exec'ing
+  without waiting, pumping messages, and having the three .ps1 drivers emit
+  progress for the page to read: a much larger change, offered rather than
+  assumed.  What this fixes is the part the owner actually reported - a wizard
+  that appears frozen with no clue which step it is in.
+
+  AND THE TIMINGS THAT PROMPTED THE ROW WERE MOSTLY RELEASE_1.1 39.  Before that
+  fix each step blocked for ~5 minutes and then failed; the whole upgrade now
+  runs in about 19 seconds on this machine.  The silence is still worth fixing
+  because these two steps walk EVERY ACCOUNT and EVERY FILE, so they scale with
+  the site's data and this developer box has two accounts - but the entry's
+  "silent for minutes" should be read as 39's hang, not as today's behaviour. }
+procedure SayStep(const S: String);
+begin
+  WizardForm.StatusLabel.Caption := S;
+  { Update, not Refresh: paint this one label now, without pumping a message
+    loop that would let the reader click things during an install step. }
+  WizardForm.StatusLabel.Update;
+end;
+
 function RefreshDictionaries: String;
 var
   Code: Integer;
@@ -2893,6 +2925,10 @@ var
 begin
   Result := '';
   if DataTreeWasAbsent then Exit;
+
+  { AFTER the guard, so a first install - where this is a no-op - does not
+    announce a step that is not going to run. }
+  SayStep('Bringing this release''s dictionaries forward into your database...');
 
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
@@ -2991,6 +3027,11 @@ begin
   Result := '';
   if DataTreeWasAbsent then Exit;
 
+  { RELEASE_1.1 40.  THE LONGEST OF THE THREE ON A REAL SITE - it walks every
+    registered account, so it grows with the estate rather than with the
+    release. }
+  SayStep('Refreshing the vocabulary of every account...');
+
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
                   ExpandConstant('{app}\upgrade-voc.ps1') + '" -AppDir "' +
@@ -3061,6 +3102,10 @@ var
 begin
   Result := '';
   if DataTreeWasAbsent then Exit;
+
+  { RELEASE_1.1 40.  This one walks every FILE, not every account, so on a site
+    with real data it is the one most likely to sit still for a while. }
+  SayStep('Checking every file for record ids that differ only by case...');
 
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
