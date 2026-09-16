@@ -63,8 +63,38 @@ $msgDir = Join-Path $env:ProgramData 'SD\sdsys\messages'
 Write-Host "test-sysmsg-units: verifiers in $Gplbld"
 Write-Host "test-sysmsg-units: messages from $msgDir"
 
-if (-not (Test-Path -LiteralPath $msgDir)) {
-    Write-Host "  FAIL  $msgDir is not there - nothing could be measured" -ForegroundColor Red
+# 16 Sep 26 - "NOT THERE" AND "CANNOT LOOK" ARE DIFFERENT ANSWERS, AND THIS
+# TOLD NEITHER OF THEM APART UNTIL IT MET THE SECOND ONE.  Test-Path THROWS on
+# a directory the token may not read, so an unelevated shell older than the last
+# cycle did not get the message below: it got an UnauthorizedAccessException and
+# a stack trace, and the run scored as a FAILING CHECK (exit 1) rather than as
+# one that could not be taken (exit 2).  Measured 16 Sep 2026, twice in one
+# session - the tier was run between an uninstall and an install (absent, exit 2,
+# correct), and again after a cycle from a shell that predated it (denied, exit
+# 1, wrong).
+#
+# THE CAUSE OF THE DENIED CASE IS DOCUMENTED AND IS NOT A FAULT: a cycle
+# recreates sdusers with a NEW SID, Windows fixes group membership at sign-in,
+# so any session older than the install carries none of the SIDs the new ACLs
+# grant to.  assert-current.ps1 already says exactly this and names the cure;
+# this now points at the same place instead of dying.
+$msgDirThere = $false
+$msgDirDenied = $false
+try { $msgDirThere = Test-Path -LiteralPath $msgDir -ErrorAction Stop }
+catch { $msgDirDenied = $true }
+
+if ($msgDirDenied) {
+    Write-Host "  COULD NOT RUN  $msgDir exists but this session cannot read it - Access is denied." -ForegroundColor Yellow
+    Write-Host '  This is NOT a stale tree and NOT a missing one.  A cycle recreates the'
+    Write-Host '  sdusers group with a new SID and Windows fixes group membership at sign-in,'
+    Write-Host '  so a shell older than the install holds none of the SIDs the new ACLs grant.'
+    Write-Host '  SIGN OUT AND BACK IN, then run this again.  See PRE_RELEASE 182 and'
+    Write-Host '  assert-current.ps1, which reports the same condition the same way.'
+    exit 2
+}
+if (-not $msgDirThere) {
+    Write-Host "  COULD NOT RUN  $msgDir is not there - nothing could be measured" -ForegroundColor Yellow
+    Write-Host '  This test reads the INSTALLED messages; run it after an install.'
     exit 2
 }
 
