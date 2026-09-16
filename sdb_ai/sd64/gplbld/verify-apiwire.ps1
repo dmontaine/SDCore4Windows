@@ -362,8 +362,17 @@ try {
     $sawClear = $raw.Contains($clear)
     Note 'CONTROL: the plaintext marker is in the capture' $true $sawClear
     if (-not $sawClear) {
-        Refuse ("pktmon did not see the plaintext marker on ${CaptureHost}:$Port, so it is not seeing this traffic " +
-                'and an "absent" verdict would mean nothing.  Try -CaptureHost <this machine''s LAN address>.')
+        # MEASURED 15 Sep 2026 (runs 2-4): on this box pktmon logs only DROP
+        # events on a loopback connection (header-only RSTs, Packets total 0),
+        # never the flow packets that carry payload - Windows loopback does not
+        # traverse a filterable NDIS component.  A same-host LAN address
+        # (192.168.0.2) is still loopback, so -CaptureHost does not help; the
+        # traffic has to cross a real NIC, i.e. the peer must be another
+        # machine (drive the probe from the Linux box to this server while this
+        # capture runs).  Refusing is correct - an "absent" verdict from a
+        # capture that saw no payload would be the vacuous pass CLAUDE.md forbids.
+        Refuse ("pktmon saw no payload for ${CaptureHost}:$Port (loopback yields only drop events on this box). " +
+                'A real capture needs a remote peer so the packets cross a NIC - run the probe from another machine.')
     }
     # TLS record header: content type 22 (handshake), version 3.1 or 3.3, two
     # length bytes, then handshake type 1 (ClientHello).
