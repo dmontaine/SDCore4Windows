@@ -37,7 +37,8 @@ function Check($name, $ok, $detail) {
 # A state object shaped like Get-SdState's, with the fields each case reads.
 function New-State($h) {
     $d = @{
-        TreePresent = $true; TreeEntries = @('sdsys', 'sd.conf'); ConfPresent = $true
+        TreePresent = $true; TreeReadable = $true
+        TreeEntries = @('sdsys', 'sd.conf'); ConfPresent = $true
         SdsysPresent = $true; ProgramPresent = $false; UninsPresent = $true
         SdusersPresent = $true; SdusersMembers = @('Don', 'sdw50a')
         RouteGroups = @('sdapi', 'sdssh', 'sdsshonly'); LocalUsers = @('Don', 'sdw50a'); Taken = 'fixture'
@@ -246,6 +247,32 @@ Check 'treeabsent says yes to a deleted tree with SD still installed' `
       ((Get-CasePrecondition 'treeabsent' $taBefore '') -eq '') $null
 
 # ---------------------------------------------------------------------------
+Write-Host ''
+Write-Host '=== 7b. an unreadable tree is refused, not described ==='
+# 16 Sep 26.  Reached for real: deldb-keepconf's own end state locks an
+# unelevated shell out of the folder, because read access came through sdusers
+# and the uninstall deleted it.  Test-Path answers "absent" for a DENIED file,
+# so without this the verdict would have judged sd.conf and sdsys from an
+# answer the shell was not entitled to - confidently wrong, not merely missing.
+$fnA = Lift $ast 'Assert-TreeReadable'
+Check ("Assert-TreeReadable was found in the shipped script ({0})" -f $fnA.Count) ($fnA.Count -eq 1) `
+      'removed or renamed - an unreadable tree would then be described as an empty one'
+if ($fnA.Count -eq 1) {
+    . ([scriptblock]::Create($fnA[0].Extent.Text))
+    # Refuse exits in the real script; here it throws so the test can see it.
+    function Refuse($m) { throw "REFUSED: $m" }
+    $threw = $false
+    try { Assert-TreeReadable (New-State @{ TreePresent = $true; TreeReadable = $false }) } catch { $threw = $true }
+    Check 'a present but unreadable tree is refused' $threw $null
+    $threw = $false
+    try { Assert-TreeReadable (New-State @{}) } catch { $threw = $true }
+    Check 'a readable tree is allowed through' (-not $threw) 'it refused a tree it could read'
+    $threw = $false
+    try { Assert-TreeReadable (New-State @{ TreePresent = $false; TreeReadable = $false }) } catch { $threw = $true }
+    Check 'an ABSENT tree is not confused with an unreadable one' (-not $threw) `
+          'a deleted tree is a legitimate outcome and must not be refused'
+}
+
 Write-Host ''
 Write-Host '=== 8. mutant control, on a COPY - the live file is never touched ==='
 $sandbox = Join-Path ([IO.Path]::GetTempPath()) ("uc-mutant-" + [Guid]::NewGuid().ToString('N'))

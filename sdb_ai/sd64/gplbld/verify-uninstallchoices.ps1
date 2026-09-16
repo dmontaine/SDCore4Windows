@@ -76,9 +76,28 @@ function Step($msg)   { Write-Host ''; Write-Host "== $msg" -ForegroundColor Cya
 function Get-SdState {
     $treePresent = Test-Path -LiteralPath $DataPath -PathType Container
     $entries = @()
+    # AN UNREADABLE TREE IS NOT AN EMPTY ONE, and this cost a red run on 16 Sep
+    # 2026 - the deldb-keepconf check died with "Access to the path is denied"
+    # from an unelevated shell.  THE CAUSE IS THE FIX WORKING: Don could read
+    # the tree through sdusers, the uninstall deleted sdusers because the
+    # database went, and DelTreeExceptOne keeps the folder's ACL by design - so
+    # the ACL still names a group that no longer exists.
+    #
+    # ***THE CRASH WAS THE HARMLESS HALF.***  Test-Path on a DENIED file returns
+    # $false, so ConfPresent and SdsysPresent would have read as "absent" on a
+    # tree that still held both, and the verdict would have been confidently
+    # wrong rather than merely missing.  That is RELEASE_1.1 50's own shape -
+    # "none here" told apart from "cannot look" - so it is recorded and the
+    # caller refuses, rather than guessed at.
+    $treeReadable = $true
     if ($treePresent) {
-        $entries = @(Get-ChildItem -LiteralPath $DataPath -Force |
-                     ForEach-Object { $_.Name } | Sort-Object)
+        try {
+            $entries = @(Get-ChildItem -LiteralPath $DataPath -Force -ErrorAction Stop |
+                         ForEach-Object { $_.Name } | Sort-Object)
+        } catch {
+            $treeReadable = $false
+            $entries = @()
+        }
     }
 
     $sdusersMembers = @()
@@ -104,6 +123,7 @@ function Get-SdState {
     return [pscustomobject]@{
         Taken          = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
         TreePresent    = $treePresent
+        TreeReadable   = $treeReadable
         TreeEntries    = $entries
         ConfPresent    = (Test-Path -LiteralPath (Join-Path $DataPath 'sd.conf'))
         SdsysPresent   = (Test-Path -LiteralPath (Join-Path $DataPath 'sdsys') -PathType Container)
@@ -119,7 +139,7 @@ function Get-SdState {
 
 function Show-State($label, $s) {
     Write-Host "  $label ($($s.Taken))"
-    Write-Host "    data tree present : $($s.TreePresent)"
+    Write-Host "    data tree present : $($s.TreePresent)   readable: $($s.TreeReadable)"
     Write-Host "    tree entries      : $(if ($s.TreeEntries.Count) { $s.TreeEntries -join ', ' } else { '<none>' })"
     Write-Host "    sd.conf present   : $($s.ConfPresent)"
     Write-Host "    sdsys present     : $($s.SdsysPresent)"
@@ -261,6 +281,21 @@ function Get-UninstallVerdict($case, $before, $after, $saw, $prefix) {
 
 function Get-StatePath($case) { Join-Path $StateDir ("uninstallchoices-" + $case + ".json") }
 
+# REFUSE A TREE WE CANNOT SEE INTO, rather than describing it from Test-Path -
+# which answers "absent" for a file that is merely denied.  Reached after an
+# uninstall that deleted sdusers while keeping the folder, which is the normal
+# end state of deldb-keepconf.
+function Assert-TreeReadable($s) {
+    if ($s.TreePresent -and -not $s.TreeReadable) {
+        Refuse ('the data tree at ' + $DataPath + ' exists but cannot be listed from this shell, ' +
+                'so its contents are UNKNOWN rather than empty. Test-Path reports a denied file as ' +
+                'absent, so carrying on would judge sd.conf and sdsys from an answer this shell is ' +
+                'not entitled to. Re-run from an ELEVATED PowerShell. (Expected after an uninstall ' +
+                'that deleted the database: read access came through sdusers, which went with it, ' +
+                'and DelTreeExceptOne keeps the folder ACL by design.)')
+    }
+}
+
 # ---------------------------------------------------------------------------
 if ($List) {
     Write-Host ''
@@ -340,6 +375,7 @@ if ($Snapshot) {
 
     Step "Snapshot BEFORE the '$Case' uninstall"
     Show-State 'before' $s
+    Assert-TreeReadable $s
     $reason = Get-CasePrecondition $Case $s $Prefix
     if ($reason) { Refuse "the precondition for '$Case' does not hold: $reason" }
 
@@ -366,6 +402,7 @@ if ($Check) {
     Show-State 'before' $before
     Write-Host ''
     Show-State 'after ' $after
+    Assert-TreeReadable $after
 
     $rows = Get-UninstallVerdict $Check $before $after $Saw $Prefix
     Write-Host ''
