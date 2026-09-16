@@ -78,8 +78,9 @@ $pcap  = Join-Path $logDir ('apiwire-' + $stamp + '.pcapng')
 try { Start-Transcript -Path $log -Force | Out-Null } catch { }
 Write-Host "transcript: $log"
 
-$results = New-Object System.Collections.ArrayList
-$failed  = $false
+$results      = New-Object System.Collections.ArrayList
+$failed       = $false
+$observations = @()      # printed with the summary, never scored - see step 7
 
 function Note($check, $expected, $got) {
     $pass = ($expected -eq $got)
@@ -245,10 +246,28 @@ try {
     Write-Host '   password set'
 
     # -----------------------------------------------------------------------
-    Step 3 "Creating the file the probe will write to, in $upper"
-    $out = Invoke-SD @("LOGTO $upper", 'CREATE.FILE ZZWIRE DYNAMIC NO.QUERY')
-    if ($out -notmatch 'Created DATA part as zzwire') { Write-Host $out; Refuse 'CREATE.FILE ZZWIRE did not report the DATA part created.' }
-    Write-Host '   ZZWIRE created'
+    Step 3 "Creating the files the probe will write to, in $upper"
+    # ZZWIRE IS A DIRECTORY FILE, NOT DYNAMIC, and the reason is a finding.
+    # The 21:20 runs (15 Sep) made it DYNAMIC and the API session's write was
+    # refused 3018 ER_RDONLY: dh_open.c:120 picks read-only from the MSYS2
+    # runtime's access(W_OK), which on this noacl mount (msys64/etc/fstab) is a
+    # POSIX emulation granting write to the file's OWNER only - and %0 was
+    # created by the elevated session, so its owner is not the user, whatever
+    # the inherited sdu_ ACE says.  A DIRECTORY-file write is a real CreateFile
+    # against the real DACL and works (verify-apiidentity's ZZIDOWN).  The wire
+    # witness only needs a known plaintext to cross, so it uses that shape;
+    # the DYNAMIC case stays as an OBSERVATION row (step 7), not a verdict.
+    $out = Invoke-SD @("LOGTO $upper", 'CREATE.FILE ZZWIRE DIRECTORY NO.QUERY',
+                                       'CREATE.FILE ZZWIRED DYNAMIC NO.QUERY')
+    if ($out -notmatch 'Created DATA part as zzwire\b')  { Write-Host $out; Refuse 'CREATE.FILE ZZWIRE did not report the DATA part created.' }
+    if ($out -notmatch 'Created DATA part as zzwired\b') { Write-Host $out; Refuse 'CREATE.FILE ZZWIRED did not report the DATA part created.' }
+    $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $upper)
+    foreach ($p in @('zzwire', 'zzwired\%0', 'voc\%0')) {
+        $full = Join-Path $acctDir $p
+        $own  = if (Test-Path -LiteralPath $full) { (Get-Acl -LiteralPath $full).Owner } else { '<missing>' }
+        Write-Host ("   {0,-12} owner: {1}   (the API session runs as {2})" -f $p, $own, $Prefix)
+    }
+    Write-Host '   ZZWIRE (DIRECTORY) and ZZWIRED (DYNAMIC) created by the elevated session'
 
     # -----------------------------------------------------------------------
     Step 4 "Enabling APIPORT=$Port in the installed sd.conf and restarting SD"
@@ -298,14 +317,30 @@ try {
     # -----------------------------------------------------------------------
     Step 7 'The real thing: log in over TLS and write a record whose content must not show'
     $secret = New-Marker 'ZZWIRE-SECRET'
-    Write-Host "   secret : $secret  (written over the API into ZZWIRE ZZREC)"
-    $r = Invoke-ScramProbe 'login, attach, write the secret' $pw @(
+    $obsDyn = New-Marker 'ZZWIRE-OBSDYN'
+    $obsVoc = New-Marker 'ZZWIRE-OBSVOC'
+    Write-Host "   secret : $secret  (written over the API into ZZWIRE ZZREC - the decisive write)"
+    Write-Host "   also   : $obsDyn -> ZZWIRED ZZREC (DYNAMIC, elevated-created) and $obsVoc -> VOC ZZWIRETEST (the account's own VOC) - OBSERVED ONLY"
+    $r = Invoke-ScramProbe 'login, attach, write the secret (and the two observation writes)' $pw @(
         '--user', $Prefix, '--account', $upper, '--host', $CaptureHost, '--port', "$Port",
-        '--write', 'ZZWIRE', 'ZZREC', ('the secret is ' + $secret + ' and nothing else'))
+        '--write', 'ZZWIRE',  'ZZREC',      ('the secret is ' + $secret + ' and nothing else'),
+        '--write', 'ZZWIRED', 'ZZREC',      ('observation ' + $obsDyn),
+        '--write', 'VOC',     'ZZWIRETEST', ('observation ' + $obsVoc))
     $verified = Test-ProbeLine $r '^SCRAM: server signature VERIFIED$'
     $written  = Test-ProbeLine $r '^WRITE ZZWIRE ZZREC: WRITTEN$'
     if ($r.Code -ne 0 -or -not $verified -or -not $written) {
         Refuse 'The probe did not complete a verified login and a WRITTEN record - there is no known plaintext to look for.'
+    }
+    # OBSERVATIONS, printed and carried to the summary but NOT scored: they
+    # measure a different claim (can the account's user write files the
+    # administrator made, and its own VOC, over the API) and belong to the
+    # finding this file's step 3 comment describes, not to row 41.
+    foreach ($o in @(@('ZZWIRED ZZREC', 'a DYNAMIC file the elevated session created'),
+                     @('VOC ZZWIRETEST', "the account's own VOC"))) {
+        $line = $r.Lines | Where-Object { $_ -cmatch ('^WRITE ' + [regex]::Escape($o[0]) + ': ') } | Select-Object -First 1
+        if (-not $line) { $line = '<no WRITE line for ' + $o[0] + '>' }
+        $script:observations += ('write to ' + $o[1] + ' -> ' + $line)
+        Write-Host ('  [OBSERVED] ' + $o[1] + ': ' + $line)
     }
     Start-Sleep -Seconds 1
 
@@ -343,6 +378,16 @@ try {
     $out = Invoke-SD @("LOGTO $upper", 'CT ZZWIRE ZZREC')
     ($out -split "`r?`n") | Where-Object { $_ -match 'ZZREC|ZZWIRE-SECRET' } | ForEach-Object { Write-Host ('   | ' + $_) }
     Note 'CT ZZWIRE ZZREC shows the secret on the server' $true ($out.Contains($secret))
+    # A DIRECTORY-file record is a plain file: the same fact read a second way,
+    # with nothing of SD's in the path, and its owner says who wrote it.
+    $recFile = Join-Path $acctDir 'zzwire\ZZREC'
+    if (Test-Path -LiteralPath $recFile) {
+        $onDisk = [IO.File]::ReadAllText($recFile)
+        Write-Host ("   on disk: {0} ({1} bytes, owner {2})" -f $recFile, $onDisk.Length, (Get-Acl -LiteralPath $recFile).Owner)
+        Note 'the record file on disk holds the secret' $true ($onDisk.Contains($secret))
+    } else {
+        Note 'the record file exists on disk' $true $false
+    }
 }
 finally {
     if ($capturing) {
@@ -379,6 +424,11 @@ Write-Host '=== Summary ========================================================
 $results | Format-Table Check, Expected, Observed -AutoSize | Out-String | Write-Host
 $passed = @($results | Where-Object { $_.Expected -eq $_.Observed }).Count
 Write-Host ("{0} / {1} checks passed" -f $passed, $results.Count)
+if ($observations.Count) {
+    Write-Host ''
+    Write-Host 'Observed, not scored (a separate claim - see step 3 and step 7 comments):'
+    foreach ($o in $observations) { Write-Host ('  ' + $o) }
+}
 try { Stop-Transcript | Out-Null } catch { }
 if ($results.Count -eq 0) { Write-Host 'NO CHECK RAN'; exit 2 }
 if ($failed) { exit 1 }
