@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 15 Sep 26  Open a subfile for update and fall back to read-only, rather than
+ *            asking access(W_OK) first (RELEASE_1.1 46 - the noacl access() lie)
  * 14 Sep 26  A trigger name is loaded lower case (RELEASE_1.1 5 stage 3a)
  * 17 Aug 26  Directory files are opened DHF_NOCASE unconditionally
  * 31 Dec 23 SD launch - prior history suppressed
@@ -117,10 +119,30 @@ DH_FILE* dh_open(char path[]) {
      k_error("Overflowed directory/filename path length in dh_open()!");
      goto exit_dh_open;
   }
-  if (access(pathname, 2))
-    read_only = TRUE;
-
-  fu = dio_open(pathname, (read_only) ? DIO_READ : DIO_UPDATE);
+  /* 15 Sep 26 Windows port - RELEASE_1.1 46.  Open for update and drop to
+     read-only only if that open fails, rather than deciding with access(W_OK)
+     first.  Under the MSYS2 noacl mount access() does not consult the DACL: it
+     synthesises the mode and grants write to the file's OWNER only, so a hashed
+     file CREATE.ACCOUNT built as the elevated administrator opened DHF_RDONLY
+     for its own account's user and every write was refused ER_RDONLY, over the
+     API and ssh alike (a DIRECTORY file, which SD opens without asking access(),
+     wrote fine on the identical ACL).  A real open honours the DACL, which
+     grants the account's group Modify.  NOTE: access() asks with the REAL
+     uid/gid and open() with the EFFECTIVE - they coincide in this port (sd is
+     not setuid; the S4U session moves the effective uid) but are not
+     interchangeable in general.  Falling back on ANY failure keeps the old
+     behaviour: a file that cannot be opened at all fails the DIO_READ attempt
+     too and reaches the DHE_FILE_NOT_FOUND path below exactly as before. */
+  {
+    int32_t saved_os_error = process.os_error;
+    fu = dio_open(pathname, DIO_UPDATE);
+    if (!ValidFileHandle(fu)) {
+      read_only = TRUE;
+      fu = dio_open(pathname, DIO_READ);
+      if (ValidFileHandle(fu))
+        process.os_error = saved_os_error; /* the update failure was not the caller's error */
+    }
+  }
   if (!ValidFileHandle(fu)) {
     dh_err = DHE_FILE_NOT_FOUND;
     goto exit_dh_open;
@@ -177,10 +199,23 @@ DH_FILE* dh_open(char path[]) {
      k_error("Overflowed directory/filename path length in dh_open()!");
      goto exit_dh_open;
   }
-  if (access(pathname, 2))
-    read_only = TRUE;
-
-  ofu = dio_open(pathname, (read_only) ? DIO_READ : DIO_UPDATE);
+  /* Overflow subfile, same rule as the primary above (RELEASE_1.1 46).  If the
+     primary already forced read-only, open this one read-only too - which is
+     what the old access()-first form did, since read_only was already set. */
+  {
+    int32_t saved_os_error = process.os_error;
+    if (read_only) {
+      ofu = dio_open(pathname, DIO_READ);
+    } else {
+      ofu = dio_open(pathname, DIO_UPDATE);
+      if (!ValidFileHandle(ofu)) {
+        read_only = TRUE;
+        ofu = dio_open(pathname, DIO_READ);
+        if (ValidFileHandle(ofu))
+          process.os_error = saved_os_error;
+      }
+    }
+  }
   if (!ValidFileHandle(ofu)) {
     dh_err = DHE_FILE_NOT_FOUND;
     goto exit_dh_open;

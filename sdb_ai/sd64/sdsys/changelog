@@ -4,6 +4,26 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+15 Sep 26  AN ORDINARY ACCOUNT CAN WRITE ITS OWN FILES OVER THE API AND SSH.
+
+           A user who was not an administrator, signing in to their own account
+           over the API or over ssh, could be refused every write to a file in
+           that account - its own VOC included - with "Update to read-only
+           file", even though the account owns the file and Windows would allow
+           the write.  Creating a file, cataloguing a program, and anything
+           that changes the VOC could all fail this way.
+
+           The cause was the way SD asked Windows whether it could write: the
+           question was answered from the file's owner alone, and the files SD
+           makes when it creates an account are owned by the administrator who
+           ran CREATE.ACCOUNT, not by the account's user.  SD now decides by
+           actually opening the file for writing and only falls back to
+           read-only if that is refused, so an account writes its own files as
+           Windows permits.
+
+           Administrators were never affected, which is why this did not show up
+           until now.
+
 15 Sep 26  SDSYS IS REACHED ONLY FROM AN ELEVATED START.
 
            Running sd from an elevated prompt (Run as administrator) puts an

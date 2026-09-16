@@ -450,6 +450,10 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # a pktmon capture on the API port during a real write, with
                   # a plaintext control.  Same rule.
                   'verify-apiwire.ps1',
+                  # 15 Sep 26 - verify-vocwrite.ps1, RELEASE_1.1 46's witness:
+                  # a non-admin account writing its own VOC and an admin-created
+                  # DATA file over the API, which fix (a) in dh_open.c allows.
+                  'verify-vocwrite.ps1',
                   'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
