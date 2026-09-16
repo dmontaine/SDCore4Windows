@@ -58,6 +58,13 @@ while porting from it.
            sweep now says so and refuses instead of reporting that there was
            nothing to do.
 
+           Uninstalling when the SD Core folder has already been removed by
+           hand now offers the same question.  It used to pass straight over
+           it and delete the list on the way out, so those accounts stayed on
+           the machine, still able to sign in, with nothing left that could
+           say which ones SD Core had made.  An unattended uninstall still
+           removes no accounts.
+
 16 Sep 26  UPGRADING NO LONGER REPORTS A FAILURE ABOUT A FILE THAT IS IN USE.
 
            Upgrading checked every file for record ids differing only by case.

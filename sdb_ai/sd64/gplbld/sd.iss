@@ -5509,7 +5509,37 @@ begin
       tree is already gone, deleted by hand or by an uninstall that failed half
       way, so nothing below runs and no button is ever pressed.  There is no
       database left for sdusers to hold permissions on, and leaving it seeds the
-      next install's sdssh with accounts that no longer exist in SD. }
+      next install's sdssh with accounts that no longer exist in SD.
+
+      16 Sep 26 - RELEASE_1.1 50, THE SECOND INSTANCE, WHICH THE FIRST FIX DID
+      NOT REACH.  The entry named this path as the same shape as the one below
+      and only the one below was corrected: here the accounts question was
+      never offered AT ALL, and sdusers - the sweep's ONLY candidate set - was
+      destroyed on the way out, so nothing afterwards could even enumerate
+      what SD had made.
+
+      IT IS THE WORSE OF THE TWO, not a lesser variant.  RemoveSdGroups above
+      has already taken sdsshonly, so every SD-created account is left enabled
+      with the ssh confinement gone - which is verbatim the harm the question
+      exists to prevent - and unlike the path below, the reader was never
+      given the chance to say otherwise.
+
+      A MISSING TREE SAYS NOTHING ABOUT WHETHER THE WINDOWS ACCOUNTS SURVIVE.
+      They are Windows accounts, not tree contents; StashAccountSweep copied
+      the sweep out of the PROGRAM folder, not out of the database; and the
+      sweep reads the GROUP.  So the question is answerable here exactly as it
+      is below.  (The program folder is spelled with a brace constant in the
+      code above and deliberately not here - a Pascal comment ends at the
+      first closing brace, so naming it inside one would end this comment in
+      the middle of a sentence and hand the rest to the compiler.)
+
+      SILENT-GUARDED ON ITS OWN, because the UninstallSilent test below this
+      block is unreachable from inside it.  Same rule and same reason: an
+      unattended removal must not take accounts, and there is nobody there to
+      answer.  BEFORE RemoveSdUsersGroup, for the reason the call below
+      carries. }
+    if not UninstallSilent then
+      OfferAccountRemoval;
     RemoveSdUsersGroup;
     Exit;
   end;
