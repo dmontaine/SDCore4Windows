@@ -687,6 +687,13 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # never name; all three are listed so the instrument does not
                   # report its own tree stale.  Listed in the commit that adds it.
                   'probe-svcimp.c', 'probe-svcimp.ps1', 'probe-svcimp.exe',
+                  # 16 Sep 26 - probe-relaydrop, the relay/session split's
+                  # FOUNDATION probe (3c is dead; the split replaces it): can a
+                  # LocalSystem daemon spawn a Cygwin child as a bare dedicated
+                  # account via S4U + CreateProcessAsUser?  Measured YES.  Ships
+                  # nowhere; stage.py and sd.iss never name it; all three listed
+                  # so the instrument does not report its own tree stale.
+                  'probe-relaydrop.c', 'probe-relaydrop.ps1', 'probe-relaydrop.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
