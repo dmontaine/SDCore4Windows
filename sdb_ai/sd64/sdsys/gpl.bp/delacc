@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 15 Sep 26 Windows port - RELEASE_1.1 44: the cross-reference scan's openpath
+*           gained an ELSE (message 10188) so an account whose voc cannot be
+*           opened is skipped, not fatal to the delete.  Shared with Linux
+*           PRE_RELEASE 31; whichever port built first carried 10188.
 *  1 Sep 26 Windows port - the confirmation is preceded by 10158, which says
 *           the DATA goes and offers "modify.account x suspended" instead.
 *           10084 and 10085 named the objects and not the consequence.
@@ -225,6 +229,15 @@ deffun is_sd_user(username) calling '!is_sd_user'
                         end case
                      end
                   repeat
+               end else
+* 15 Sep 26 Windows port - RELEASE_1.1 44 / Linux PRE_RELEASE 31: this openpath
+*   had no ELSE, so an account whose voc could not be opened aborted the WHOLE
+*   delete (ER_SFNF) - a damaged tree, or on Windows a voc DACL that no longer
+*   grants the elevated deleter (logto sdsys runs as the admin's token, not
+*   root; sudo sd on Linux would bypass it).  The cross-reference scan is only a
+*   warning (report.xref), so a voc that will not open is named and skipped and
+*   the deletion continues.  10188 shared with Linux, owner's number.
+                  display sysmsg(10188, xacc)
                end
             end
          end
