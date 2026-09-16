@@ -4,6 +4,42 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+15 Sep 26  SDSYS IS REACHED ONLY FROM AN ELEVATED START.
+
+           Running sd from an elevated prompt (Run as administrator) puts an
+           administrator straight into SDSYS, as before.  What has changed is
+           the other direction.  An sd started from an ordinary, unelevated
+           prompt lands in your own account and can no longer get into SDSYS
+           at all: "logto sdsys" is refused there, even for an administrator.
+           Being an administrator is not enough on its own; you have to have
+           started elevated, which is when Windows asked you to consent.
+
+           In return, an elevated session keeps that right for as long as it
+           runs.  It can "logto" down to a personal account to work there and
+           "logto sdsys" back up again freely.  Until now leaving SDSYS ended
+           the elevated session, so coming back was refused.
+
+           The audit trail records a refusal as "session did not start
+           elevated", so the reason is the same one this note gives.
+
+15 Sep 26  delete.account NO LONGER STOPS WHEN SOME OTHER ACCOUNT'S VOC CANNOT
+           BE OPENED.
+
+           Before deleting an account, delete.account looks through every
+           other account's VOC for references to it, so it can warn you.  If
+           any one of those VOCs could not be opened - the account's directory
+           damaged, moved, or not readable - the whole command aborted with
+           "Error 3001 opening file", before it had asked whether to go on.
+           One damaged account made every other account undeletable.
+
+           The scan now skips an account it cannot look into, prints
+
+             Account X could not be opened to check for references to the
+             account being deleted, so it was skipped. The deletion continues.
+
+           and the deletion goes ahead.  The scan only ever produced a
+           warning; it should never have been able to stop the command.
+
 15 Sep 26  THE API IS ENCRYPTED: EVERY CONNECTION IS TLS 1.3.
 
            Until now only the API login was protected.  The password never
