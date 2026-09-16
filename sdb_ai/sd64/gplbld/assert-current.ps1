@@ -679,6 +679,14 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # the moment anybody used the instrument.  Listed in the commit
                   # that creates it, under section 7 step 7's rule.
                   'probe-osadmin.c', 'probe-osadmin.ps1', 'probe-osadmin.exe',
+                  # 16 Sep 26 - probe-svcimp, RELEASE_1.1 43's gate: can a
+                  # virtual service account adopt a broker-minted token across
+                  # fork()?  Measured NO without SeTcb (which is 3a), so option
+                  # 3c is dead as designed.  Its .c and .ps1 ship nowhere and its
+                  # .exe is a build product in gplbld that stage.py and sd.iss
+                  # never name; all three are listed so the instrument does not
+                  # report its own tree stale.  Listed in the commit that adds it.
+                  'probe-svcimp.c', 'probe-svcimp.ps1', 'probe-svcimp.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
