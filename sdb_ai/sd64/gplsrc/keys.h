@@ -242,6 +242,24 @@
    KERNEL to anything not $internal in any case.                             */
 #define K_INTERACTIVE        64
 
+/* 15 Sep 26 Windows port - RELEASE_1.1 45, the owner's "elevation is the only
+   door to SDSYS" model.  DID THIS PROCESS START ELEVATED?  The fourth question,
+   completing the table above: the PROCESS's own elevation, as IsElevated()
+   answers it.
+
+     K_ADMINISTRATOR     the SESSION flag, USR_ADMIN.  Set on entering SDSYS,
+                         cleared on the way out.  A LOGTO moves it.
+     K_OS_ADMINISTRATOR  the PERSON.  A LOGTO does not move it.
+     K_INTERACTIVE       the ROUTE.  A LOGTO does not move it.
+     K_OS_ELEVATED       the PROCESS's elevation.  IMMUTABLE for the process
+                         life, so a LOGTO does not move it either - which is why
+                         it, not the seed above, gates re-entry to SDSYS.
+
+   CN_SOCKET as well as the token check, for K_OS_ADMINISTRATOR's reason: an API
+   session is fork()ed by the elevated LocalSystem service, so IsElevated() is
+   TRUE for it without the guard.  Read-only, so NOT gated on HDR_INTERNAL.   */
+#define K_OS_ELEVATED        65
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

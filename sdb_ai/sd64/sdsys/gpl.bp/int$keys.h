@@ -161,6 +161,12 @@
 *   5 Sep 2026: it answers the same either side of a UAC prompt, because
 *   elevation reuses the logon session and its SIDs.
       $define K$INTERACTIVE      64      ;* Does this session have a desktop?
+* 15 Sep 26 Windows port - RELEASE_1.1 45, the owner's "elevation is the only
+*   door to SDSYS" model.  DID THIS PROCESS START ELEVATED?  The fourth question:
+*   26 is what the session may DO, 63 is WHO, 64 is the ROUTE, and this is the
+*   PROCESS's own elevation.  IMMUTABLE for the process life, so a LOGTO does not
+*   move it - which is why LOGTO SDSYS gates on this and not on the seed (26).
+      $define K$OS.ELEVATED      65      ;* Did this process start elevated?
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

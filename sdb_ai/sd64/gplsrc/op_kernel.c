@@ -515,6 +515,33 @@ void op_kernel() {
           (has_desktop && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
     } break;
 
+    /* 15 Sep 26 Windows port - RELEASE_1.1 45, the owner's "elevation is the
+       only door to SDSYS" model.  DID THIS PROCESS START ELEVATED?  The fourth
+       session question, beside K_OS_ADMINISTRATOR (the person) and
+       K_INTERACTIVE (the route): the PROCESS's own elevation.
+
+       WHY A KEY AND NOT THE SEED.  K_ADMINISTRATOR (USR_ADMIN) is set on
+       entering SDSYS and CLEARED on the way out (CPROC's LOGTO), so it cannot
+       answer "may this session return to SDSYS" after a LOGTO down to a personal
+       account.  A process's elevation is IMMUTABLE for its life, so IsElevated()
+       asked fresh at any LOGTO is the same as at start - it survives a LOGTO for
+       free, which is exactly what the re-entry gate needs.
+
+       CN_SOCKET, for K_OS_ADMINISTRATOR's reason: an API session is fork()ed by
+       the LocalSystem service, whose token is elevated, so IsElevated() answers
+       TRUE for every remote client without this guard - the kernel.c:240 trap.
+       Read-only, so not gated on HDR_INTERNAL. */
+    case K_OS_ELEVATED: {
+      PRIV_WHY why;
+      bool elevated = IsElevated(&why);
+
+      if (why != PRIV_ANSWERED)
+        priv_log_undetermined("K$OS.ELEVATED", why);
+
+      result.data.value =
+          (elevated && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
+    } break;
+
     case K_FILESTATS:
       GetInt(descr);
       if (descr->data.value) { /* Reset counters */
