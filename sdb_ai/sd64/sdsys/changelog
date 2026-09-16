@@ -4,6 +4,28 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+16 Sep 26  UPGRADING TO A NEW RELEASE NO LONGER STOPS AND ASKS ABOUT THE VOC.
+
+           Installing a new release over an existing one could appear to hang,
+           for around five minutes at a time, and then report that steps of the
+           upgrade had failed.
+
+           The cause was an old question.  When an account's vocabulary was at
+           an older release level than the program, signing in printed "Your
+           VOC is at release level ..." followed by "Update VOC to new
+           release?", and waited for an answer.  Parts of the upgrade sign in
+           behind the scenes, where there is no screen to show the question on
+           and nobody to answer it, so each of those steps waited until it gave
+           up.
+
+           That question is no longer asked.  The installer already updates
+           every registered account's vocabulary as part of an upgrade - that
+           is what makes a command a new release adds usable in an account that
+           existed before it - so asking the same thing again at sign-in was
+           both unnecessary and the thing that stopped the upgrade.  Signing in
+           to an account whose vocabulary is at an older level now goes
+           straight in, and the upgrade completes without waiting.
+
 15 Sep 26  AN ORDINARY ACCOUNT CAN WRITE ITS OWN FILES OVER THE API AND SSH.
 
            A user who was not an administrator, signing in to their own account

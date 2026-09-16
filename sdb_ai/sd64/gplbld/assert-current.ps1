@@ -180,7 +180,27 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
+$neverShipped = @(# 16 Sep 26 - RELEASE_1.1 5's real-upgrade witness.
+                  # ***LISTED LATE, AND THAT IS THE DEFECT RATHER THAN A
+                  # FOOTNOTE.***  It was created 15 Sep and not listed, and the
+                  # omission stayed invisible for a day because nothing EDITED
+                  # it: a script only springs this trap once it is newer than
+                  # the install.  On 16 Sep a one-line fix to its own probe -
+                  # the sentinel compared VOC ids to 'WHO'/'LOGIN' exactly,
+                  # while a genuine pre-D2 W1.0-0 VOC stores them lower case -
+                  # made the whole tree STALE for a file that ships nowhere,
+                  # and the cure on offer was a full cycle, MID-WAY THROUGH THE
+                  # UPGRADE RUN IT EXISTS TO MEASURE.  A cycle there would have
+                  # destroyed the pre-D2 tree and the snapshot taken against
+                  # it, so the omission very nearly cost the measurement it was
+                  # guarding.  Same shape as test-retired-wording-units.ps1
+                  # below, and the directory was swept again rather than the one
+                  # name added - it is still the only omission, so this is not
+                  # the tip of a rotted list.  Named in neither stage.py nor
+                  # sd.iss; it reads the install, plants a fixture in SDSYS and
+                  # deletes it again.
+                  'verify-realupgrade.ps1',
+                  # 12 Sep 26 - objective 2's constraint-5 measurement,
                   # PROJECT_STATUS.md section 8.  Built BOTH ways with the
                   # UCRT64 compiler to find out whether the stable ABI really
                   # forwards - it does, and the probe is kept because the

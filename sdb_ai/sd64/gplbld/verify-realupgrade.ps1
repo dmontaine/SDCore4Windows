@@ -107,6 +107,19 @@ function Show([string]$label, [string]$text) {
 # The VOC's ids are not listed (it is large); its record COUNT and two sentinel
 # records (WHO, LOGIN) stand for "nothing was lost".  Long-standing intrinsics
 # only, so W1.0-0's BCOMP and the current one both compile it.
+#
+# THE SENTINEL MATCH IS CASE-INSENSITIVE, AND THAT IS THE WHOLE POINT OF THE
+# TREE IT RUNS ON.  16 Sep 2026: this compared id to the literals 'WHO' and
+# 'LOGIN' exactly, and a genuine pre-D2 W1.0-0 VOC stores them LOWER case - so
+# SENT came back empty and -Snapshot refused (exit 2) on the one tree it was
+# written for.  Measured in the same transcript: "COPY FROM VOC TO <fix>
+# who,jack" matched on a file whose FL$NOCASE is 0 and copied 1 record, so the
+# stored spelling is 'who'.  It now folds with upcase() and reports the id AS
+# STORED, so the evidence shows the real spelling and the check still means
+# "this record survived" on BOTH sides of the upgrade - the tree is case
+# sensitive before it and NOCASE after, and the sentinel must span that.
+# The PowerShell -match that reads this is case-insensitive by default, so
+# '[who]' still satisfies '\[WHO\]'.
 $probeBasic = @'
 * zzruprobe - written by verify-realupgrade.ps1.  Safe to delete.
    open 'zzruclean' to f then
@@ -127,8 +140,8 @@ $probeBasic = @'
       loop
          readnext id from 8 else exit
          n += 1
-         if id = 'WHO' then sent := '[WHO]'
-         if id = 'LOGIN' then sent := '[LOGIN]'
+         if upcase(id) = 'WHO' then sent := '[' : id : ']'
+         if upcase(id) = 'LOGIN' then sent := '[' : id : ']'
       repeat
       crt 'VOCINFO NOCASE=' : fileinfo(v, 1008) : ' COUNT=' : n : ' SENT=' : sent
       close v
@@ -257,7 +270,20 @@ if ($Compare) {
         $logOk = Test-Path -LiteralPath $logFile
         $logText = $(if ($logOk) { Get-Content -LiteralPath $logFile -Raw } else { '' })
         Show 'nocase-upgrade.log (written by the installer''s RefreshNocase)' $logText
-        $complete = $logText -match '(?m)^\s*COMPLETE\s*$'
+        # 16 Sep 26 - THE GUTTER IS WHY THIS COULD NEVER MATCH.  This read
+        # '(?m)^\s*COMPLETE\s*$', and upgrade-nocase.ps1 relays SD's report
+        # through a "  | " gutter, so the real line is "  | COMPLETE" and \s*
+        # does not admit the pipe.  Measured on the first real upgrade: the row
+        # reported "no COMPLETE line" and exited 2 while the row BELOW it passed
+        # with Converted=10 - two checks over one log contradicting each other,
+        # which is the tell.  It gated rows 3a/3b and 2a/2b/2c, so a matcher
+        # fault read as "the pre-D2 state was not what -Snapshot recorded".
+        #
+        # trouble=True is deliberately NOT a disqualifier here.  This row asks
+        # only whether the INSTALLER RAN THE WALK, and COMPLETE is printed on
+        # the finished path only; the $ipc lock failure that sets trouble is a
+        # real but separate defect, tracked as RELEASE_1.1 51.
+        $complete = $logText -match '(?m)^\s*(?:\|\s*)?COMPLETE\s*$'
         $conv = [regex]::Match($logText, 'Converted\s+(\d+)\s+of\s+(\d+)\s+file')
         $converted = $(if ($conv.Success) { [int]$conv.Groups[1].Value } else { -1 })
         Row 'INSTALLER RAN THE WALK: nocase-upgrade.log exists and says COMPLETE' ($logOk -and $complete) `
