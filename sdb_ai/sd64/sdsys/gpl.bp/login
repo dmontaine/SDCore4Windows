@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 16 Sep 26 Windows port - RELEASE_1.1 39.  The old per-login release-mismatch
+*           prompt (5025/5026/5027) is removed; a mismatch now proceeds (the
+*           installer's UPDATE.ACCOUNTS ALL refreshes every account).
 * 14 Sep 26 Windows port - RELEASE_1.1 5.  Case inversion is no longer turned
 *           on at login (owner's ruling); PTERM CASE INVERT still sets it.
 *           $RELEASE is read as $release, then $RELEASE.  update.voc renames
@@ -1020,35 +1023,18 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
          read voc.rec from voc, "$RELEASE" else release.found = @false
       end
       if release.found then
-         * ----- Field 2 - Release level
-         s = matchfield(voc.rec<2>, "0X0A", 1)
-         if s # SD.REV.STAMP then
-            display sysmsg(5025, s) ;* Your VOC is at release level xx
-            loop
-               display char(7) :
-               display sysmsg(5026) :  ;* Update VOC to new release?
-               input s
-
-               s = upcase(s[1,1])
-               begin case
-                  case s = "N"
-                     exit
-                  case s = "Y"
-* 17 Aug 26 Windows port - THIS IS THE ONE THAT NEEDED NO VERB.  Any user gets
-*   this prompt whenever their VOC's release level differs from SD.REV.STAMP, and
-*   before the tier was recorded, answering Y restored every capability
-*   CREATE.ACCOUNT had withheld.  PROJECT_STATUS.md section 8.
-                     tier.acc.name = @who
-                     gosub get.acc.tier
-                     update.voc.f = voc
-                     gosub update.voc
-                     close update.voc.f
-                     exit
-               end case
-               display sysmsg(5027) ;* Please answer Y or N"
-            repeat
-         end
-
+* 16 Sep 26 Windows port - RELEASE_1.1 39.  THE OLD PER-LOGIN RELEASE-MISMATCH
+*   PROMPT (5025/5026/5027, Field 2) IS REMOVED.  It ran an unguarded `input` on
+*   the mode-0 path, so the installer's HIDDEN upgrade sessions
+*   (write_install_dicts, UPDATE.ACCOUNTS ALL, upgrade_nocase) blocked on it with
+*   no stdin until their driver's timeout, failing every upgrade step.  It is
+*   redundant: the installer drives UPDATE.ACCOUNTS ALL (mode 4), which reuses
+*   update.voc to refresh every account at upgrade, so a mismatch at an ordinary
+*   login simply PROCEEDS (owner, 16 Sep 2026 - "proceed silently", not
+*   self-heal).  Field 2 (release level) is no longer read; Field 3 still is.
+*   5025/5026/5027 are left in messages (6602 still uses 5027's wording; number
+*   parity with QM/Linux), and $RETIRED does not apply - it guards rewordings and
+*   requires a present replacement, and this is a removal.
          * ----- Field 3 - Command processing modes
          s = voc.rec<3>
          cursor.at.end = (index(s, 'E', 1) # 0)
