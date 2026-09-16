@@ -446,6 +446,10 @@ $neverShipped = @(# 12 Sep 26 - objective 2's constraint-5 measurement,
                   # it induces the cross-ref ELSE (a crippled voc) and scores
                   # 10188 + the deletion completing.  Same rule.
                   'verify-delacc-xref.ps1',
+                  # 15 Sep 26 - verify-apiwire.ps1, RELEASE_1.1 41's wire witness:
+                  # a pktmon capture on the API port during a real write, with
+                  # a plaintext control.  Same rule.
+                  'verify-apiwire.ps1',
                   'verify-scramlogin.ps1',
                   # 21 Aug 26 - verify-apiname.ps1, added with the section 2
                   # !valid_os_name measurement.  Listed in the same commit that
