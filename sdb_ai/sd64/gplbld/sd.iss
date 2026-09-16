@@ -746,9 +746,17 @@ Name: "{#DataDir}\sdsys\$hold"; Flags: uninsneveruninstall
 ; guaranteeing existence can only move those from a failure to a success.
 ;
 ; AND THE UNINSTALL'S "remove the database" IS UNAFFECTED, checked rather than
-; assumed: that path is DelTree(DataPath, True, True, True) in [Code], which
-; deletes the tree outright and never consults the uninstall log, so
-; uninsneveruninstall cannot keep anything the user asked to destroy.
+; assumed: that path never consults the uninstall log, so uninsneveruninstall
+; cannot keep anything the user asked to destroy.
+;
+; 16 Sep 26 - RELEASE_1.1 38 SPLIT THAT PATH IN TWO AND THE SENTENCE ABOVE HAD
+; TO CHANGE WITH IT.  It used to read "that path is DelTree(DataPath, True,
+; True, True), which deletes the tree outright"; there are now two, because the
+; configuration file is a separate question.  "Delete both" is still that same
+; DelTree; "delete the database, keep sd.conf" is DelTreeExceptOne, which walks
+; the top level and deletes everything except that one name.  NEITHER reads the
+; uninstall log, so the conclusion is unchanged - but a comment naming one call
+; as THE path is how the next reader concludes the other one cannot exist.
 Name: "{#DataDir}\sdsys\$cred"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\os.users"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\os.users.dic"; Flags: uninsneveruninstall
@@ -5237,9 +5245,17 @@ end;
   Append: False - one line, this uninstall's.  The install that follows a
   removal writes nothing here, so the newest file is always the last answer
   given, and the stamp says whether that was a minute ago or last month. }
-procedure RecordDatabaseChoice(const DataPath: String; const Deleted, Failed: Boolean);
+{ 16 Sep 26 - RELEASE_1.1 38.  IT NOW CARRIES BOTH ANSWERS, AND THAT IS WHY IT
+  GREW PARAMETERS RATHER THAN GAINING A TWIN.  The owner's 15 Sep refinement
+  makes the database and the configuration two separately selectable items, so
+  there are two answers to record - but the header above is emphatic that two
+  dialogs about one outcome is how a reader learns to click through them, and
+  an uninstall is exactly where that habit costs a database.  So: TWO log
+  lines, ONE dialog stating both. }
+procedure RecordDatabaseChoice(const DataPath: String;
+                               const Deleted, Failed, ConfDeleted, ConfFailed: Boolean);
 var
-  LogPath, Outcome, Note: String;
+  LogPath, Outcome, ConfOutcome, ConfPath, Note, Stamp, Body: String;
 begin
   if not Deleted then
     Outcome := 'KEPT'
@@ -5248,43 +5264,207 @@ begin
   else
     Outcome := 'DELETED';
 
-  LogPath := ExpandConstant('{%TEMP|C:\Windows\Temp}\sd-remove-database.log');
+  if not ConfDeleted then
+    ConfOutcome := 'KEPT'
+  else if ConfFailed then
+    ConfOutcome := 'DELETE requested, but it could NOT be removed'
+  else
+    ConfOutcome := 'DELETED';
 
+  ConfPath := AddBackslash(DataPath) + 'sd.conf';
+  LogPath  := ExpandConstant('{%TEMP|C:\Windows\Temp}\sd-remove-database.log');
+  Stamp    := GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':');
+
+  { BOTH LINES ARE WRITTEN ON EVERY PATH, INCLUDING "KEPT".  A log written only
+    when something was destroyed cannot tell "kept" from "never asked", which is
+    the distinction somebody reads it for - and with two questions there are now
+    four combinations, so a line that names only one of them is worse than none. }
   if SaveStringToFile(LogPath,
-                      GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':') +
-                      '  database ' + Outcome + '  ' + DataPath + #13#10, False) then
-    Note := #13#10#13#10 + 'This answer is recorded in:' + #13#10 + LogPath
+                      Stamp + '  database ' + Outcome     + '  ' + DataPath + #13#10 +
+                      Stamp + '  config '   + ConfOutcome + '  ' + ConfPath + #13#10, False) then
+    Note := #13#10#13#10 + 'These answers are recorded in:' + #13#10 + LogPath
   else
     { SAYING SO IS THE POINT.  A recording step that fails silently leaves
       exactly the state this was built to end. }
-    Note := #13#10#13#10 + 'This answer could NOT be recorded: ' + LogPath +
+    Note := #13#10#13#10 + 'These answers could NOT be recorded: ' + LogPath +
             ' was not writable.';
 
-  if not Deleted then
-    MsgBox('Your SD Core database was KEPT.' + #13#10#13#10 +
-           DataPath + #13#10#13#10 +
-           'Every account, every password and your configuration are still ' +
-           'there. Installing SD Core again will find them.' + Note,
-           mbInformation, MB_OK)
-  else if Failed then
-    MsgBox('Your SD Core database was to be DELETED, and some of it could ' +
-           'not be removed.' + #13#10#13#10 + DataPath + #13#10#13#10 +
-           'What is left may be in use by a running SD Core process. Treat ' +
-           'the database as GONE rather than as intact.' + Note,
+  Body := 'SD Core database: ' + Outcome + #13#10 + DataPath + #13#10#13#10 +
+          'Configuration file: ' + ConfOutcome + #13#10 + ConfPath + #13#10#13#10;
+
+  if not (Deleted or ConfDeleted) then
+    Body := Body + 'Nothing was removed. Every account, every password and your ' +
+            'configuration are still there, and installing SD Core again will ' +
+            'find them.'
+  else if Deleted and not ConfDeleted then
+    Body := Body + 'Every SD Core account and every password has been permanently ' +
+            'removed. This cannot be undone. Your configuration file was kept, so ' +
+            'the folder above still exists and holds it - installing SD Core again ' +
+            'will reuse those settings.'
+  else if ConfDeleted and not Deleted then
+    Body := Body + 'Your accounts and passwords were kept. Only the configuration ' +
+            'file was removed, so installing SD Core again will write a fresh one ' +
+            'and find your existing database.'
+  else
+    Body := Body + 'Every SD Core account, every password and your configuration ' +
+            'file have been permanently removed. This cannot be undone.';
+
+  if Failed or ConfFailed then
+    MsgBox(Body + #13#10#13#10 +
+           'Some of what you asked to remove could NOT be removed. What is left ' +
+           'may be in use by a running SD Core process. Treat anything marked for ' +
+           'deletion above as GONE rather than as intact.' + Note,
            mbError, MB_OK)
   else
-    MsgBox('Your SD Core database was DELETED.' + #13#10#13#10 +
-           DataPath + #13#10#13#10 +
-           'Every SD Core account, every password and your configuration file ' +
-           'have been permanently removed. This cannot be undone.' + Note,
+    MsgBox(Body + Note, mbInformation, MB_OK);
+end;
+
+{ 16 Sep 26 - RELEASE_1.1 38.  "Delete the database but KEEP the configuration"
+  is the one combination DelTree cannot express, because sd.conf lives INSIDE
+  the tree being deleted.
+
+  IT EMPTIES THE FOLDER RATHER THAN DELETING AND RECREATING IT, deliberately.
+  C:\ProgramData\SD carries an ACL granting sdusers modify rights over
+  everything beneath it (see secure-reclaim.ps1 and the [Dirs] block); a
+  recreated folder would inherit the default instead, leaving the kept sd.conf
+  under weaker protection than the one it replaced.  Emptying in place keeps
+  the directory object, and therefore its ACL, untouched.
+
+  REPARSE POINTS ARE SKIPPED, AND THAT IS A SAFETY GUARD RATHER THAN TIDINESS.
+  PRE_RELEASE_FIXES 41's positive control found a sweep that had resolved
+  "All Users" - a junction to C:\ProgramData - and was about to recurse through
+  it.  Nothing SD installs under its data tree is a link, so skipping one can
+  only decline to follow something that should not be there, and the count
+  below reports it rather than passing over it in silence. }
+const
+  { $400.  Inno predefines FILE_ATTRIBUTE_READONLY, HIDDEN, SYSTEM, DIRECTORY,
+    ARCHIVE, NORMAL and TEMPORARY - but NOT REPARSE_POINT, so it is named here.
+    Written out rather than left as a bare $400 at the test below, because an
+    unexplained magic number in a delete path is the thing a later reader
+    "simplifies". }
+  SD_FILE_ATTRIBUTE_REPARSE_POINT = $400;
+
+function DelTreeExceptOne(const Root, KeepName: String): Boolean;
+var
+  FR: TFindRec;
+  Full: String;
+  Ok: Boolean;
+begin
+  Ok := True;
+  if FindFirst(AddBackslash(Root) + '*', FR) then
+  begin
+    try
+      repeat
+        if (FR.Name <> '.') and (FR.Name <> '..') and
+           (CompareText(FR.Name, KeepName) <> 0) then
+        begin
+          Full := AddBackslash(Root) + FR.Name;
+          if (FR.Attributes and SD_FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+            Ok := False
+          else if (FR.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+          begin
+            if not DelTree(Full, True, True, True) then
+              Ok := False;
+          end
+          else
+            if not DeleteFile(Full) then
+              Ok := False;
+        end;
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end;
+  Result := Ok;
+end;
+
+{ ------------------------------------------------------------------------
+  THE SECOND QUESTION - the Windows accounts.  PRE_RELEASE_FIXES 39, owner's
+  ruling 29 Aug 2026.  The database question removes the SD-side records; this
+  one removes the Windows accounts themselves, and until it existed
+  uninstalling left every one of them enabled while REMOVING the sshd_config
+  ForceCommand that confined them to SD.
+
+  SEPARATE, AND DEFAULTING TO No, exactly like the database question - the
+  ruling asked for "a second separate prompt".
+
+  IT NAMES THE ACCOUNT IT IS KEEPING, IN THE QUESTION.  The ruling requires
+  the installing user to be excluded "by construction", and the instrument
+  rule applies to an uninstaller too: a wrong answer has to be visible while
+  it can still be refused, not discovered at the next sign-in.
+
+  16 Sep 26 - LIFTED OUT OF CurUninstallStepChanged INTO ITS OWN PROCEDURE,
+  AND THAT MOVE IS RELEASE_1.1 50's FIX.  It ends in three early Exits, and
+  while it sat inline those Exits were the caller's, so anything that had to
+  happen AFTER the sweep could not be written at all - which is why
+  RemoveSdUsersGroup was called before it, inside the delete branch.  That
+  ordering destroyed sdusers first, and sdusers membership is the sweep's ONLY
+  candidate set (remove-sdaccounts.ps1:22, ":91"), so choosing Delete on the
+  database silently guaranteed the accounts question could remove nothing -
+  and the script then reported success on a set it had never enumerated.
+  Measured 16 Sep 2026 on a real uninstall: "There is no sdusers group here",
+  then "SD created no accounts on this machine, so there is nothing to
+  remove".  As a procedure, the Exits are its own and the caller can order the
+  two properly.
+  ------------------------------------------------------------------------ }
+procedure OfferAccountRemoval;
+var
+  Ps, LogPath, KeepUser: String;
+  Code: Integer;
+begin
+  if SdAccountsScript = '' then
+    Exit;
+
+  KeepUser := ExpandConstant('{username}');
+  if KeepUser = '' then
+    Exit;
+
+  if not KeepOrDelete('Remove the Windows accounts SD Core created?',
+            'These are the accounts CREATE.ACCOUNT made, with their sdu_ and ' +
+            'sdg_ groups and their profiles. They are Windows accounts: they ' +
+            'keep their passwords and stay able to sign in after SD Core is gone, ' +
+            'and the ssh confinement that limited them to SD Core has just been ' +
+            'removed with the rest of SD Core''s configuration.' + #13#10#13#10 +
+            'The account ' + KeepUser + ' WILL BE KEPT, so you can still sign ' +
+            'in to Windows. If that is not the account you expect, choose Keep.' + #13#10#13#10 +
+            'Choose Keep to keep them all, which is the safe choice.') then
+    Exit;
+
+  { THROUGH cmd SO THE OUTPUT IS KEPT.  The sweep prints what it removed and
+    what it kept, and Exec cannot capture that; a window that closes is the
+    same as no report at all.  The log is named back to the user below.
+
+    THE SCRIPT REFUSES ON ITS OWN if -Keep names nobody in sdusers, or if the
+    sweep would take the last local administrator - so a wrong answer here
+    stops there rather than in the middle of the accounts. }
+  LogPath := ExpandConstant('{%TEMP|C:\Windows\Temp}\sd-remove-accounts.log');
+  Ps := ExpandConstant('{sys}\cmd.exe');
+  Exec(Ps, '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') +
+           '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+           SdAccountsScript + '" -Remove -Keep "' + KeepUser + '" > "' + LogPath + '" 2>&1"',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+
+  if Code = 0 then
+    MsgBox('The Windows accounts SD Core created have been removed, and ' + KeepUser +
+           ' was kept.' + #13#10#13#10 +
+           'What was removed and what was kept is recorded in:' + #13#10 +
+           LogPath + #13#10#13#10 +
+           'A profile whose registry hive is still loaded cannot be deleted ' +
+           'until the next restart; the log names any that were left.',
+           mbInformation, MB_OK)
+  else
+    MsgBox('The Windows accounts were NOT removed.' + #13#10#13#10 +
+           'The sweep refused rather than act on something it could not check - ' +
+           'for example if it would have removed the last account able to sign ' +
+           'in to Windows.' + #13#10#13#10 +
+           'Its reason is in:' + #13#10 + LogPath,
            mbInformation, MB_OK);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  DataPath, Ps, LogPath, KeepUser: String;
-  Code: Integer;
-  DelFailed: Boolean;
+  DataPath: String;
+  DbDelete, ConfDelete, DbFailed, ConfFailed, UsersGroupGoes: Boolean;
 begin
   if CurUninstallStep = usUninstall then
   begin
@@ -5344,99 +5524,92 @@ begin
     settings?" is how people lose data.  The choices are labelled - see
     KeepOrDelete, which carries why, and which returns "the user chose
     Delete" rather than "yes". }
-  if KeepOrDelete('Remove the SD Core database?',
+  { 16 Sep 26 - RELEASE_1.1 38.  TWO QUESTIONS, EACH SELECTABLE ON ITS OWN OR
+    TOGETHER, on the owner's refinement of 15 Sep 2026.  This was ONE question
+    that took both, and its own text admitted it ("...and your configuration
+    file"), so there was no way to keep settings while discarding accounts, or
+    the reverse.  BOTH STILL DEFAULT TO KEEP, and both are still below the
+    UninstallSilent guard above - that guard is the part that must never
+    drift, because an unattended removal taking either is the worst default. }
+  DbDelete := KeepOrDelete('Remove the SD Core database?',
             DataPath + #13#10#13#10 +
             'Deleting permanently removes EVERY SD Core account, every password and all ' +
-            'data stored in them, including the SDSYS account and your ' +
-            'configuration file.' + #13#10#13#10 +
+            'data stored in them, including the SDSYS account.' + #13#10#13#10 +
+            'Your configuration file (sd.conf) is a separate question, asked next.' + #13#10#13#10 +
             'Choose Keep to keep them, which is the normal choice - reinstalling ' +
-            'SD Core later will find them again.') then
+            'SD Core later will find them again.');
+
+  ConfDelete := KeepOrDelete('Remove the SD Core configuration file?',
+            AddBackslash(DataPath) + 'sd.conf' + #13#10#13#10 +
+            'This is the settings file: the port SD Core listens on, whether the API ' +
+            'can be reached from other computers, and the rest of the configuration ' +
+            'you or the installer chose.' + #13#10#13#10 +
+            'Choose Keep to keep it, which is the normal choice - installing SD Core ' +
+            'again will reuse these settings instead of asking afresh.');
+
+  { sd.conf LIVES INSIDE THE TREE, which is why these two answers cannot each
+    be a plain delete.  "Both" is one DelTree; "the database but NOT the
+    configuration" has to empty the folder around the one file, which is what
+    DelTreeExceptOne does and why the folder itself is left standing. }
+  DbFailed   := False;
+  ConfFailed := False;
+
+  if DbDelete then
   begin
-    { The old error box is gone rather than kept beside the new one: it said
-      less, and two dialogs about one outcome is how a reader learns to click
-      through them.  RecordDatabaseChoice states the partial failure, names the
-      path, and says to treat the database as gone. }
-    DelFailed := not DelTree(DataPath, True, True, True);
-    RecordDatabaseChoice(DataPath, True, DelFailed);
-    { PRE_RELEASE_FIXES 140.  The reader chose Delete, so no tree survives for
-      sdusers to hold permissions on.
-
-      ON THE PARTIAL-FAILURE PATH TOO, DELIBERATELY.  DelFailed means some of
-      the tree resisted, and RecordDatabaseChoice tells the reader to treat the
-      database as gone - so keeping the group would preserve a seed list for a
-      database they have been told is not coming back, which is the worse of the
-      two errors.  The group is recreated by the next install either way. }
-    RemoveSdUsersGroup;
+    if ConfDelete then
+      DbFailed := not DelTree(DataPath, True, True, True)
+    else
+      DbFailed := not DelTreeExceptOne(DataPath, 'sd.conf');
   end
-  else
-    { THE BRANCH THAT DID NOT EXIST, and its absence is most of 139: a "keep"
-      left no dialog and no file, so it was indistinguishable afterwards from
-      never having been asked. }
-    RecordDatabaseChoice(DataPath, False, False);
+  else if ConfDelete then
+  begin
+    { FileExists FIRST, because DeleteFile on a file that was never there
+      returns False and would be reported as a failure to remove something
+      that is already absent - the outcome the reader asked for. }
+    if FileExists(AddBackslash(DataPath) + 'sd.conf') then
+      ConfFailed := not DeleteFile(AddBackslash(DataPath) + 'sd.conf');
+  end;
 
-  { ------------------------------------------------------------------------
-    THE SECOND QUESTION - the Windows accounts.  PRE_RELEASE_FIXES 39, owner's
-    ruling 29 Aug 2026.  The question above removes the SD-side records; this
-    one removes the Windows accounts themselves, and until it existed
-    uninstalling left every one of them enabled while REMOVING the sshd_config
-    ForceCommand that confined them to SD.
+  { WHEN BOTH WENT, ONE DelTree TOOK THEM, so the configuration's outcome IS
+    the database's outcome; reporting them apart would invent a distinction
+    the code never made. }
+  if DbDelete and ConfDelete then
+    ConfFailed := DbFailed;
 
-    SEPARATE, AND DEFAULTING TO No, exactly like the database question - the
-    ruling asked for "a second separate prompt".
+  { ALWAYS CALLED, ON ALL FOUR COMBINATIONS.  Most of 139 was that a "keep"
+    left no dialog and no file, so afterwards it was indistinguishable from
+    never having been asked - and with two questions there are now four
+    outcomes to tell apart rather than two. }
+  RecordDatabaseChoice(DataPath, DbDelete, DbFailed, ConfDelete, ConfFailed);
 
-    IT NAMES THE ACCOUNT IT IS KEEPING, IN THE QUESTION.  The ruling requires
-    the installing user to be excluded "by construction", and the instrument
-    rule applies to an uninstaller too: a wrong answer has to be visible while
-    it can still be refused, not discovered at the next sign-in.
-    ------------------------------------------------------------------------ }
+  UsersGroupGoes := DbDelete;
 
-  if SdAccountsScript = '' then
-    Exit;
+  { RELEASE_1.1 50 - THE ACCOUNTS QUESTION RUNS WHILE sdusers STILL EXISTS, AND
+    THAT ORDERING IS THE WHOLE FIX.  OfferAccountRemoval drives a sweep whose
+    only candidate set is sdusers membership, so it must come BEFORE
+    RemoveSdUsersGroup below.  It used to come after, and the result was an
+    accounts question that could never remove anything and said so as though it
+    had looked. }
+  OfferAccountRemoval;
 
-  KeepUser := ExpandConstant('{username}');
-  if KeepUser = '' then
-    Exit;
+  { PRE_RELEASE_FIXES 140, MOVED OUT OF THE DELETE BRANCH TO HERE -
+    RELEASE_1.1 50.  The reason for removing it is unchanged: the reader chose
+    Delete, so no database survives for sdusers to hold permissions on, and
+    leaving the group seeds the next install's sdssh with accounts that no
+    longer exist in SD.  That still holds when the configuration file was kept,
+    because what survives then is sd.conf and nothing sdusers grants rights to.
 
-  if not KeepOrDelete('Remove the Windows accounts SD Core created?',
-            'These are the accounts CREATE.ACCOUNT made, with their sdu_ and ' +
-            'sdg_ groups and their profiles. They are Windows accounts: they ' +
-            'keep their passwords and stay able to sign in after SD Core is gone, ' +
-            'and the ssh confinement that limited them to SD Core has just been ' +
-            'removed with the rest of SD Core''s configuration.' + #13#10#13#10 +
-            'The account ' + KeepUser + ' WILL BE KEPT, so you can still sign ' +
-            'in to Windows. If that is not the account you expect, choose Keep.' + #13#10#13#10 +
-            'Choose Keep to keep them all, which is the safe choice.') then
-    Exit;
+    ON THE PARTIAL-FAILURE PATH TOO, DELIBERATELY.  DbFailed means some of the
+    tree resisted, and RecordDatabaseChoice tells the reader to treat the
+    database as gone - so keeping the group would preserve a seed list for a
+    database they have been told is not coming back, which is the worse of the
+    two errors.  The group is recreated by the next install either way.
 
-  { THROUGH cmd SO THE OUTPUT IS KEPT.  The sweep prints what it removed and
-    what it kept, and Exec cannot capture that; a window that closes is the
-    same as no report at all.  The log is named back to the user below.
-
-    THE SCRIPT REFUSES ON ITS OWN if -Keep names nobody in sdusers, or if the
-    sweep would take the last local administrator - so a wrong answer here
-    stops there rather than in the middle of the accounts. }
-  LogPath := ExpandConstant('{%TEMP|C:\Windows\Temp}\sd-remove-accounts.log');
-  Ps := ExpandConstant('{sys}\cmd.exe');
-  Exec(Ps, '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') +
-           '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-           SdAccountsScript + '" -Remove -Keep "' + KeepUser + '" > "' + LogPath + '" 2>&1"',
-       '', SW_HIDE, ewWaitUntilTerminated, Code);
-
-  if Code = 0 then
-    MsgBox('The Windows accounts SD Core created have been removed, and ' + KeepUser +
-           ' was kept.' + #13#10#13#10 +
-           'What was removed and what was kept is recorded in:' + #13#10 +
-           LogPath + #13#10#13#10 +
-           'A profile whose registry hive is still loaded cannot be deleted ' +
-           'until the next restart; the log names any that were left.',
-           mbInformation, MB_OK)
-  else
-    MsgBox('The Windows accounts were NOT removed.' + #13#10#13#10 +
-           'The sweep refused rather than act on something it could not check - ' +
-           'for example if it would have removed the last account able to sign ' +
-           'in to Windows.' + #13#10#13#10 +
-           'Its reason is in:' + #13#10 + LogPath,
-           mbInformation, MB_OK);
+    ***AND IT IS LAST RATHER THAN EARLIER, WHICH IS THE PART THAT WAS WRONG.***
+    Removing it first emptied the sweep's candidate set and turned the accounts
+    question into a no-op that reported success. }
+  if UsersGroupGoes then
+    RemoveSdUsersGroup;
 end;
 
 function NotOnPath(Dir: String): Boolean;

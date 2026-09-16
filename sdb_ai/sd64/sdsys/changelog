@@ -26,6 +26,52 @@ while porting from it.
            to an account whose vocabulary is at an older level now goes
            straight in, and the upgrade completes without waiting.
 
+16 Sep 26  UNINSTALLING NOW ASKS ABOUT YOUR SETTINGS FILE SEPARATELY.
+
+           Uninstalling has always offered to remove your SD Core database,
+           and choosing to remove it also took sd.conf - the settings file -
+           because that file lives inside the same folder.  There was no way
+           to keep your settings while discarding the accounts, or to discard
+           the settings while keeping the accounts.
+
+           There are now two questions instead of one, and you can answer them
+           independently.  Both still default to keeping, each says exactly
+           what it would remove and where, and an unattended uninstall (one
+           run with /VERYSILENT) still removes neither.
+
+           If you remove the database but keep the settings file, the SD Core
+           folder remains, holding only sd.conf, and installing SD Core again
+           will reuse those settings.
+
+16 Sep 26  REMOVING THE WINDOWS ACCOUNTS AT UNINSTALL NOW REALLY REMOVES THEM.
+
+           The uninstaller offers to remove the Windows accounts that
+           CREATE.ACCOUNT made.  If you also chose to remove the database, that
+           offer could not do anything: removing the database deleted the
+           sdusers group first, and that group is the list of which accounts SD
+           created.  The sweep then found no list, said there was nothing to
+           remove, and finished as though it had succeeded - leaving the
+           accounts in place and still able to sign in to Windows.
+
+           The two steps now run in the right order, so the list still exists
+           when the accounts are removed.  If the list is ever missing, the
+           sweep now says so and refuses instead of reporting that there was
+           nothing to do.
+
+16 Sep 26  UPGRADING NO LONGER REPORTS A FAILURE ABOUT A FILE THAT IS IN USE.
+
+           Upgrading checked every file for record ids differing only by case.
+           One of those files, $ipc, is used by the running SD Core service, so
+           it could never be taken for rebuilding.  Every upgrade therefore
+           ended by reporting that a file could not be read or rebuilt, and
+           suggested re-running the tool by hand - which met the same running
+           service and gave the same message.
+
+           That file is now skipped, as the account vocabulary in use is
+           already skipped and for the same reason.  Nothing is lost by it: it
+           holds working records used while SD Core is running, not ids that
+           anyone types.
+
 15 Sep 26  AN ORDINARY ACCOUNT CAN WRITE ITS OWN FILES OVER THE API AND SSH.
 
            A user who was not an administrator, signing in to their own account

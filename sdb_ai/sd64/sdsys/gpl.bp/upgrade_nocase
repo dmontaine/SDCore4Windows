@@ -29,6 +29,11 @@
 * pair, and the lookup fold serves it).
 *
 * START-HISTORY:
+* 16 Sep 26 Windows port - RELEASE_1.1 51.  $ipc is skipped like the live VOC.
+*           The service is started before this walk runs, holds $ipc open, and
+*           the walk therefore reported "1 file(s) could not be read or
+*           rebuilt" and FAILED on every healthy upgrade.  Measured on the real
+*           W1.0-0 to W1.1-0 upgrade.
 * 14 Sep 26 Windows port - three defects its first measuring run and a reading
 *           found: select lists 13-15 are out of range (0-12), so the walk
 *           stopped on its first file; old.path was read in phase 1 before
@@ -223,6 +228,30 @@ convert.one:
 *   'voc' naming itself (voc_template/voc), so add.file queued it anyway.  The
 *   test is on the opened file's path, not on how the path was spelled.
    if upcase(old.path) = upcase(fileinfo(@voc, FL$PATH)) then
+      close old.fu
+      return
+   end
+* 16 Sep 26 - RELEASE_1.1 51.  AND $ipc IS NEVER REBUILT EITHER, for the same
+*   "this one is open right now" reason as the live VOC just above.  $ipc is
+*   the inter-process communication file: the SD service holds it open for as
+*   long as SD is running, and the installer STARTS THE SERVICE BEFORE it runs
+*   this walk - measured 16 Sep 2026 on the real W1.0-0 to W1.1-0 upgrade,
+*   sdsvc.log 01:11:32 against this walk at 01:11:37.  So the walk could never
+*   have it, printed "Cannot gain exclusive access to ... $ipc" with an EMPTY
+*   "Holding it:" line, counted it under "1 file(s) could not be read or
+*   rebuilt", and upgrade-nocase.ps1 then reported FAILED on a healthy
+*   upgrade - every time.  sd.iss reads that and tells the reader to re-run
+*   the script by hand, which meets the same running service and fails in the
+*   same way, so the remedy could never work either.
+*   CONVERTING IT WOULD BUY NOTHING IN ANY CASE.  $ipc holds runtime records
+*   keyed by session, not ids anyone types, so folding their case is
+*   meaningless - this declines work that had no value, not work that was
+*   wanted and is now skipped.
+*   THE TEST IS ON THE OPENED FILE'S PATH, like the VOC test above rather than
+*   on how the file was queued, and both separators are folded first because
+*   FL$PATH may carry backslashes where @ds is '/'.
+   chk.path = convert('\', '/', old.path)
+   if upcase(field(chk.path, '/', dcount(chk.path, '/'))) = '$IPC' then
       close old.fu
       return
    end

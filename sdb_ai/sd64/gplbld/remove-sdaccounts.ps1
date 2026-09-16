@@ -91,9 +91,35 @@ try {
     $members = @(Get-LocalGroupMember -Group 'sdusers' -ErrorAction Stop |
                  ForEach-Object { ($_.Name -split '\\')[-1] })
 } catch {
+    # 16 Sep 26 - RELEASE_1.1 50.  THIS USED TO ANSWER A QUESTION IT HAD NOT
+    # ASKED.  It said "SD created no accounts on this machine, so there is
+    # nothing to remove" and exited 0 - a verdict about the ACCOUNTS drawn
+    # from the absence of the GROUP THAT NAMES THEM.  Those are not the same
+    # fact, and from here the script cannot tell them apart: a machine holding
+    # fifty SD accounts whose sdusers group has been deleted reaches this line
+    # by exactly the same route as a machine that never had one.
+    #
+    # IT WAS NOT HYPOTHETICAL.  sd.iss called RemoveSdUsersGroup inside the
+    # database-delete branch, BEFORE driving this sweep, so on 16 Sep 2026 a
+    # real uninstall in -Remove mode printed those two sentences and exited 0
+    # having enumerated nothing at all - while sdu_Don survived on disk.  The
+    # ordering is fixed in sd.iss; this half is what stops the same mistake
+    # ever being made quietly again.
     Say ''
-    Say ("There is no sdusers group here (" + $_.Exception.Message + ").")
-    Say 'SD created no accounts on this machine, so there is nothing to remove.'
+    Say ("The sdusers group could not be read (" + $_.Exception.Message + ").")
+    Say 'THAT GROUP IS THE CANDIDATE SET: CREATE.ACCOUNT adds every account it'
+    Say 'makes to it and nothing else does. Without it this script cannot tell'
+    Say '"SD created no accounts here" from "the list of them has been deleted".'
+    if ($Remove) {
+        Say ''
+        Say 'REFUSED: -Remove cannot run without the candidate set, so nothing was'
+        Say 'removed. If SD Core accounts remain, remove them by hand - or reinstall'
+        Say 'and uninstall again, which recreates the group first.'
+        exit 2
+    }
+    Say ''
+    Say 'Reporting only, so nothing was going to change either way. Read the'
+    Say 'candidate set as UNKNOWN rather than as empty.'
     exit 0
 }
 
