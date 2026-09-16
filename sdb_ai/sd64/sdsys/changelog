@@ -31,13 +31,11 @@ while porting from it.
            Upgrading brings three things forward into your existing database:
            the dictionaries, the vocabulary of every account, and a check of
            every file for record ids that differ only by case.  Each of those
-           ran with nothing on the screen, so on a database of any size the
-           installer looked as though it had stopped, and there was no way to
-           tell which step it was in.
+           ran with nothing on the screen to say which one was in progress.
 
            Each step now names itself on the installer's page before it starts.
-           The steps that walk your accounts and your files take longer the
-           more of them you have, so this is where the wait will be.
+           Two of them walk every account and every file you have, so they take
+           longer the more you have, and that is where a wait will be.
 
 16 Sep 26  UNINSTALLING NOW ASKS ABOUT YOUR SETTINGS FILE SEPARATELY.
 
