@@ -493,8 +493,18 @@ Write-Output ("transcript: " + $transcript)
 # Name => hashtable of parameters, splatted by NAME.  An empty hashtable means
 # "no arguments", which splats correctly too.
 $steps = @(
+    # 16 Sep 26 - RELEASE_1.1 45's witness, the ELEVATED half: an elevated
+    # session lands in SDSYS, round-trips SDSYS -> personal -> SDSYS, and reads
+    # sdsys\audit for the refusal REASON the UNELEVATED half (VerifyInstall1's
+    # last step) wrote - "session did not start elevated", the new gate's, and
+    # not an old-gate reason.  FIRST, so nothing between the two halves writes
+    # to or truncates the audit; it creates nothing and takes no prefix.  Run
+    # alone (-Only) without the unelevated half having run, it Skips the reason
+    # row and says why rather than passing.  It was in neither runner until now.
+    @{ Name = 'verify-elevdoor.ps1';      P = @{} },
     @{ Name = 'verify-fold.ps1';          P = @{} },
-    # 22 Aug 26 - SDNet is gone and its neighbours are not.  FIRST BECAUSE IT IS
+    # 22 Aug 26 - SDNet is gone and its neighbours are not.  EARLY (first until
+    # verify-elevdoor took the slot, 16 Sep 26) BECAUSE IT IS
     # CHEAP AND STATIC: it creates no account, needs no prefix and reads the
     # installed tree, so if the tree is not what the cycle left it says so
     # before twelve throwaway accounts have been made.

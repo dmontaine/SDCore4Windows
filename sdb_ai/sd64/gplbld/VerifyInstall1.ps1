@@ -824,7 +824,15 @@ $steps = @(
     #
     # LAST, AND CHEAP TO LOSE: it makes and removes its own fixture in don and
     # touches nothing else, so a failure here costs no other step.
-    @{ Name = 'probe-akwrite.ps1';       P = @{ Tag = "akp$Run" } }
+    @{ Name = 'probe-akwrite.ps1';       P = @{ Tag = "akp$Run" } },
+    # 16 Sep 26 - RELEASE_1.1 45's witness, the UNELEVATED half: an unelevated
+    # session lands in the personal account and LOGTO SDSYS is refused (10002).
+    # One file, run both ways by token; VerifyInstall2 runs the ELEVATED half,
+    # which reads the refusal REASON this half wrote to sdsys\audit - so this
+    # half runs FIRST, which -ThenElevated guarantees.  It creates nothing and
+    # takes no prefix.  It replaces verify-sdsyswrite (below), whose question
+    # 45 made moot.  Until now it was in neither runner - PRE_RELEASE 112's gap.
+    @{ Name = 'verify-elevdoor.ps1';     P = @{} }
 )
 
 # 28 Aug 26 - THE SUSPENDED DOOR PAIR, AS ONE STEP.  PRE_RELEASE 38, on the
@@ -861,45 +869,28 @@ if ($Run) {
     # wrapped first; the count is asserted below rather than assumed.
     $doorStep = @{ Name = 'verify-doors-suite.ps1'; P = @{ Prefix = "sddr$Run" } }
 
-    # 30 Aug 26 - PRE_RELEASE 73's verifier, and it belongs in THIS runner rather
-    # than the elevated one for a sharper version of the gate at the top of this
-    # file.  It asks whether a session that reached SDSYS by LOGTO from an
-    # UNELEVATED start can write $cred and os.users; run elevated it would pass
-    # every row and prove the opposite.  IT CANNOT BE DELEGATED TO VerifyInstall2
-    # EITHER - an elevated parent cannot make an ordinary child, because
-    # runas /trustlevel yields a RESTRICTED token rather than the user's own.
-    #
-    # ONE MORE CONSENT, NOT ONE PER LEG.  It starts the helper on SD'S OWN pipe
-    # name - gpl.bp/elevate:121 builds 'sd-elev-' : @logname - so SD's own
-    # elevate('START') inside LOGTO SDSYS finds one already serving and asks for
-    # nothing further.
-    #
-    # ***EXPECT IT RED UNTIL 68 IS FIXED, AND THAT IS THE POINT OF ADDING IT.***
-    # Two rows fail by design, the unelevated $cred and os.users writes, and
-    # three controls prove the probe is sound: setup created the account, the
-    # unelevated session reached SDSYS and READ it, and the same write from an
-    # ELEVATED session succeeded.  A GREEN run before 68 is fixed means the probe
-    # is broken, not that the product is well.
-    #
-    # IT GOES LAST DELIBERATELY.  A failing step stops this runner unless
-    # -ContinueOnFailure is given, so a known-red step anywhere else would hide
-    # every step behind it.  Last, it hides nothing.
-    $writeStep = @{ Name = 'verify-sdsyswrite.ps1'; P = @{ Prefix = "sdsw$Run" } }
-
+    # 16 Sep 26 - verify-sdsyswrite.ps1 (PRE_RELEASE 73) USED TO BE ADDED HERE
+    # AND IS RETIRED.  It asked whether a session that reached SDSYS by LOGTO
+    # from an UNELEVATED start could write $cred and os.users.  RELEASE_1.1 45
+    # (15 Sep) closed that door: an unelevated session cannot reach SDSYS at all,
+    # so the session the question was about no longer exists.  Its own control
+    # said so on b172 - "the unelevated session did not reach SDSYS, so the write
+    # rows below measure nothing", exit 2 - and it would say so on every run for
+    # ever.  The door itself is now the thing to witness, and verify-elevdoor.ps1
+    # (in the main list above, and in VerifyInstall2 for its elevated half) does
+    # that.  The file was deleted rather than left to refuse; HISTORY.md 16 Sep
+    # 2026 has the account.
     $before = @($steps).Count
-    $steps  = @($steps) + @($doorStep) + @($writeStep)
-    if (@($steps).Count -ne ($before + 2)) {
-        Write-Output ("VerifyInstall1: the step list is {0} after adding two to {1}." -f
+    $steps  = @($steps) + @($doorStep)
+    if (@($steps).Count -ne ($before + 1)) {
+        Write-Output ("VerifyInstall1: the step list is {0} after adding one to {1}." -f
                       @($steps).Count, $before)
         exit 2
     }
 } else {
-    Write-Output 'VerifyInstall1: no -Run, so the SUSPENDED door pair is NOT in this run,'
-    Write-Output '  and neither is verify-sdsyswrite.ps1 (PRE_RELEASE 73).'
-    Write-Output '  Both create a Windows account and both prefixes are single-use, so they need'
-    Write-Output '  a token to derive a fresh name from.  Add -Run <token> to include them.'
-    Write-Output '  WITHOUT THEM THIS RUNNER CANNOT SEE PRE_RELEASE 68 AT ALL - a clean run with'
-    Write-Output '  no -Run is not evidence that the LOGTO-reached SDSYS can write its stores.'
+    Write-Output 'VerifyInstall1: no -Run, so the SUSPENDED door pair is NOT in this run.'
+    Write-Output '  It creates a Windows account and its prefix is single-use, so it needs'
+    Write-Output '  a token to derive a fresh name from.  Add -Run <token> to include it.'
 }
 
 # ---------------------------------------------------------------------------
@@ -950,7 +941,7 @@ if ($Run) {
 # WHAT THIS REPLACES.  Every elevated thing below used to raise its own UAC
 # prompt: the test account's creation and its removal, verify-osusers,
 # verify-batchjob's two, verify-doors-suite's helper, verify-sdsyswrite's
-# helper, and the handover to VerifyInstall2 - the "ask for elevation about six
+# helper (that step retired 16 Sep 26), and the handover to VerifyInstall2 - the "ask for elevation about six
 # times" the banner above warns about.  ***b115 WAS LOST TO A SINGLE STRAY
 # KEYSTROKE LANDING ON ONE OF THEM***, twenty minutes gone, the step correctly
 # reporting "The operation was canceled by the user".
@@ -1218,7 +1209,7 @@ $needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1',
 # that gains the parameter without joining this list - or joins it without
 # having the parameter - fails in a second instead of costing a run its prompts.
 $helperAware = @('verify-osusers.ps1', 'verify-batchjob.ps1',
-                 'verify-doors-suite.ps1', 'verify-sdsyswrite.ps1',
+                 'verify-doors-suite.ps1',
                  # 16 Sep 26 - its five LOGTO SDSYS legs run in an elevated
                  # re-entry since RELEASE_1.1 45 closed that door to an
                  # unelevated session (ten rows red on b171).

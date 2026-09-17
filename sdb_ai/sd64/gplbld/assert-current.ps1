@@ -913,12 +913,10 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # the new file - which is exactly how verify-tiers.ps1 cost a
                   # run on 25 Aug.
                   'capture-state.ps1',
-                  # 30 Aug 26 - verify-sdsyswrite.ps1, PRE_RELEASE 73's verifier:
-                  # can a session that reached SDSYS by LOGTO from an UNELEVATED
-                  # start write $cred and os.users?  Nothing had ever asked, which
-                  # is the hole 68 lived in.  Runs from VerifyInstall1, ships
-                  # nowhere.
-                  'verify-sdsyswrite.ps1',
+                  # 30 Aug 26 - verify-sdsyswrite.ps1 was listed here; DELETED
+                  # 16 Sep 26, RELEASE_1.1 45 having closed the unelevated route
+                  # to SDSYS its question was about.  verify-elevdoor.ps1 (below)
+                  # witnesses the door instead.
                   # 31 Aug 26 - verify-basicfuncs.ps1 and its probe, the §5.23
                   # audit's value check: do the intrinsic functions and the
                   # operators return the RIGHT ANSWERS?  The six sweeps asked
