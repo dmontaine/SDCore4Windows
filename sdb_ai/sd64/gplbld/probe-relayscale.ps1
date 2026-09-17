@@ -147,29 +147,49 @@ if ($natBad -gt 0 -or $cygBad -gt 0) {
 # Held with the relocated sleep.exe, which runs on the relocated runtime.
 # ---------------------------------------------------------------------------
 Say ""
-Say "== PHASE 2: $Count MSYS2 relays ALIVE AT ONCE, in one shared namespace"
-Copy-Item "$msysbin/sleep.exe" (Join-Path $rt 'sleep.exe') -Force
-$liveExe = Join-Path $rt 'sleep.exe'
-Say "  holder exe    : $liveExe"
+Say "== PHASE 2: $Count MSYS2 relays ALIVE AT ONCE"
+# ===========================================================================
+# PHASE 2'S FIRST VERSION SCORED A VACUOUS PASS AND PUT ~50 ERROR DIALOGS ON
+# THE OWNER'S SCREEN.  It held each relay alive with a relocated sleep.exe,
+# and sleep.exe imports msys-intl-8.dll as well as msys-2.0.dll, which was not
+# copied - and msys64 is not on PATH.  Every one failed in the LOADER, showed
+# "The code execution cannot proceed because msys-intl-8.dll was not found",
+# and BLOCKED on that dialog.  A blocked process has not exited, so HasExited
+# was false and all 50 were counted alive: the phase reported 50/50 for
+# runtimes that never executed an instruction, while the owner dismissed
+# dialogs.
+#
+# TWO RULES CAME OUT OF IT, AND THE SECOND IS THE ONE THAT GENERALISES:
+#   1. Check a child's imports (objdump -p) before launching copies of it.
+#   2. NEVER COUNT A PROCESS BECAUSE IT EXISTS.  Require it to SAY something
+#      only a running one can say.  probe-lowmsys --sleep prints
+#      "msyshello: started, pid N, integrity 0xNNNN" and then holds for 6 s.
+# ===========================================================================
+$liveExe = $msysReloc            # imports msys-2.0.dll only - verified
+Say "  holder exe    : $liveExe  (--sleep, prints its own proof of life)"
 
 $live = New-Object System.Collections.ArrayList
 $holder2 = $null
-$aliveCount = 0
+$aliveCount = 0; $provenCount = 0
 try {
   $holder2 = Start-Process -FilePath "$msysbin/sleep.exe" -ArgumentList '60' -PassThru -WindowStyle Hidden
   for ($i = 0; $i -lt $Count; $i++) {
-    try { [void]$live.Add((Start-Process -FilePath $liveExe -ArgumentList '30' -PassThru -WindowStyle Hidden -ErrorAction Stop)) }
+    try {
+      [void]$live.Add((Start-Process -FilePath $liveExe -ArgumentList '--sleep' -PassThru -WindowStyle Hidden `
+                        -RedirectStandardOutput (Join-Path $stage "live$i.txt") `
+                        -RedirectStandardError  (Join-Path $stage "live$i-err.txt") -ErrorAction Stop))
+    }
     catch { Say "  start $i FAILED: $($_.Exception.Message)" }
   }
-  Start-Sleep -Milliseconds 2500
+  Start-Sleep -Milliseconds 2000
   $aliveCount = @($live | Where-Object { -not $_.HasExited }).Count
-  $died = @($live | Where-Object { $_.HasExited })
-  Say "  started       : $($live.Count)/$Count"
-  Say "  alive together: $aliveCount"
-  if ($died.Count -gt 0) {
-    $dc = ($died | ForEach-Object { try { "0x{0:x}" -f [int]$_.ExitCode } catch { '?' } } | Sort-Object -Unique) -join ', '
-    Say "  DIED EARLY    : $($died.Count)  [$dc]"
+  for ($i = 0; $i -lt $live.Count; $i++) {
+    $f = Join-Path $stage "live$i.txt"
+    if ((Test-Path $f) -and (Select-String -Path $f -Pattern 'msyshello: started' -Quiet)) { $provenCount++ }
   }
+  Say "  started       : $($live.Count)/$Count"
+  Say "  still alive   : $aliveCount   (NOT the measurement - see the header)"
+  Say "  PROVEN running: $provenCount   (said 'msyshello: started')"
 }
 finally {
   foreach ($p in $live) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }
@@ -179,18 +199,18 @@ finally {
 
 Say ""
 Say "== Verdict, phase 2"
-Say "  $Count relocated MSYS2 processes alive at once, shipped runtime held: $aliveCount survived"
-if ($aliveCount -lt $Count) {
+Say "  $Count relocated MSYS2 relays launched; $provenCount PROVED they executed, $aliveCount were merely alive"
+if ($provenCount -lt $Count) {
   Say ""
-  Say "FINDING: only $aliveCount of $Count stayed alive together."
-  Say "  The shared namespace does not carry $Count concurrent relays, which is"
-  Say "  decisive against the relocated-MSYS2 option at this load."
+  Say "FINDING: only $provenCount of $Count actually ran."
+  Say "  If that gap equals the alive count, they are blocked in the loader,"
+  Say "  not running - check the child's imports before reading anything else."
   exit 1
 }
 
 Say ""
 Say "ANSWERED: both runtimes completed every process at $Count concurrent, and"
-Say "  $Count relocated MSYS2 processes also lived together in one namespace."
+Say "  $Count relocated MSYS2 processes also PROVED they ran together."
 Say "  The measured difference is wall clock (above), and NOTE THAT Start-Process"
 Say "  DOMINATES IT - the launch figure is most of each wave - so read the RATIO,"
 Say "  which is same-launcher, not the per-process milliseconds."
