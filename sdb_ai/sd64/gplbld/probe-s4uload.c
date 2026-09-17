@@ -37,6 +37,15 @@
  *   gcc -O2 -Wall -o probe-s4uload.exe probe-s4uload.c -lsecur32 -ladvapi32
  * Driven by probe-s4uload.ps1 as a SYSTEM scheduled task (SeTcb).
  * Exit 0 answered and nothing falsified, 1 falsified, 2 could not run.
+ *
+ * MEASURED 17 Sep 2026, owner-elevated, as SYSTEM, against the installed
+ * sdrelay, n = 50: ANSWERED, nothing falsified.  SERIAL 0.4/0.5/0.6 ms
+ * (min/avg/max).  THREADS 50: 50 ok, wall 15 ms, per-mint 12.5/17.6/19.6 ms -
+ * LSA queues them, refuses none.  PROCS 50: 50/50, wall 219 ms, per-mint
+ * 1.0/1.4/2.5 ms; PROCS 100: 100/100, wall 359 ms, per-mint 1.1/6.3/12.8 ms -
+ * process start dominates.  Logon sessions 20 before, 70 at the peak with 50
+ * tokens held (exactly +50), 20 after every token closed: no leak.  Unelevated
+ * control: --mint refuses 0xC0000041 (LsaRegisterLogonProcess without SeTcb).
  */
 #include <windows.h>
 #include <ntsecapi.h>
