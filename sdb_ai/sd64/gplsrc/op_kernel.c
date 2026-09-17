@@ -376,6 +376,27 @@ void op_kernel() {
       }
       break;
 
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  K_API_PREAUTH, the other side of
+   K_HANDOFF.  keys.h carries the reasoning, including why it is two fields and
+   why the name comes from ProcessUserName() rather than ImpersonatingUser().
+
+   The pair is deliberately independent: field 1 comes from how this process
+   was STARTED (sd.c's -H) and field 2 from what Windows says its token IS, so
+   a session that was spawned pre-authenticated but cannot name itself reports
+   1 and an empty name instead of quietly looking like an ordinary session. */
+    case K_API_PREAUTH:
+      {
+        char who[MAX_USERNAME_LEN + 1];
+        char both[MAX_USERNAME_LEN + 8];
+
+        if (!api_preauth || !ProcessUserName(who, sizeof(who)))
+          who[0] = '\0';
+        snprintf(both, sizeof(both), "%d%c%s", api_preauth ? 1 : 0, FIELD_MARK,
+                 who);
+        k_put_c_string(both, &result);
+      }
+      break;
+
 /* 24 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14 (b).  TWO FIELDS, and
    the pair is the whole point: field 1 is the identity Windows says this
    thread is running as, field 2 is whether SD still holds an S4U token for it.

@@ -447,4 +447,53 @@ int HoldingUserToken(void) {
   return (s4u_token != NULL) ? 1 : 0;
 }
 
+/* ======================================================================
+   ProcessUserName()  -  who is this PROCESS, bare
+
+   RELEASE_1.1 55.  A pre-authenticated session (sd -N -H) was spawned AS the
+   user by the front, so its identity is in its own process token and it needs
+   no one to tell it: op_kernel.c's K_API_PREAUTH reads it here and hands it to
+   APISRVR, which sets the session name from it.
+
+   NOT ImpersonatingUser(), AND THE DIFFERENCE IS EASY TO MISS.  That one opens
+   the THREAD token and so answers about an impersonation; this session is not
+   impersonating anything, so it would answer 0 with an empty name - a silent
+   wrong answer of exactly the kind this file's other banners were written
+   about.  It also formats "DOMAIN\user", while an SD account name is the bare
+   one that SCRAM proved and win32_s4u_logon() was given.  Hence the domain is
+   dropped here rather than by the caller.                                  */
+
+int ProcessUserName(char* name, int namelen) {
+  HANDLE tok = NULL;
+  unsigned char buf[512];
+  char user[256];
+  char dom[256];
+  DWORD ulen;
+  DWORD dlen;
+  DWORD got = 0;
+  SID_NAME_USE use;
+  int ok = 0;
+
+  if ((name == NULL) || (namelen <= 0))
+    return 0;
+  name[0] = '\0';
+
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok))
+    return 0;
+
+  if (GetTokenInformation(tok, TokenUser, buf, sizeof(buf), &got)) {
+    TOKEN_USER* tu = (TOKEN_USER*)buf;
+
+    ulen = sizeof(user);
+    dlen = sizeof(dom);
+    if (LookupAccountSidA(NULL, tu->User.Sid, user, &ulen, dom, &dlen, &use)) {
+      snprintf(name, namelen, "%s", user);
+      ok = (name[0] != '\0');
+    }
+  }
+
+  CloseHandle(tok);
+  return ok;
+}
+
 /* END-CODE */

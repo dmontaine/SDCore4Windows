@@ -63,6 +63,19 @@ int HoldingUserToken(void);
    the handle.  Nothing is impersonated or adopted here.                    */
 void* win32_s4u_logon(const char* username);
 
+/* 17 Sep 26 - RELEASE_1.1 55.  THE PROCESS TOKEN'S USER NAME, BARE.
+   ImpersonatingUser() above cannot answer this and it is worth saying why,
+   because the two look interchangeable: it calls OpenThreadToken, so it
+   reports an IMPERSONATION, and a session spawned AS the user is not
+   impersonating anybody - it IS the user, by its process token, and that call
+   returns 0 with an empty name for it.  It also answers "DOMAIN\user", where
+   an SD account name is bare.
+
+   So a pre-authenticated session asks this instead, to learn who it is
+   without being told over a wire it does not trust.  Non-zero with the bare
+   name in name, zero if it cannot be read.                                 */
+int ProcessUserName(char* name, int namelen);
+
 #endif
 
 /* END-CODE */

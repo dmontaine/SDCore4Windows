@@ -175,6 +175,14 @@
 *   $internal only, and it FAILS CLOSED: 0 means no session was started and the
 *   caller must refuse the login.  61 stays, for ssh and the other callers.
       $define K$HANDOFF          66      ;* Spawn the session AS the user ($internal)
+* 17 Sep 26 Windows port - RELEASE_1.1 55, the other side of 66.  AM I A
+*   PRE-AUTHENTICATED SESSION, AND WHO AM I?  The session 66 spawns runs
+*   sd -N -H: the front already ran SCRAM, so this one must not run it again and
+*   must set its own name from its OWN process token, not from the wire.
+*   <1> 1 if pre-authenticated, 0 if not.  <2> the bare Windows user name.
+*   <1>=1 with <2> empty is a session that cannot name itself - REFUSE it, do
+*   not carry on unnamed.  Read-only, so not $internal-only.
+      $define K$API.PREAUTH      67      ;* <1> pre-authenticated? <2> user name
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

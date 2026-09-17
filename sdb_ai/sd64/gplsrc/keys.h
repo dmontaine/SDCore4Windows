@@ -277,6 +277,28 @@
    API stops.  See op_kernel.c, sd_tlssrv.c and win32session.c.             */
 #define K_HANDOFF            66
 
+/* 17 Sep 26 Windows port - RELEASE_1.1 55, the other side of K_HANDOFF.  AM I
+   A PRE-AUTHENTICATED SESSION, AND WHO AM I?  The session K_HANDOFF spawns
+   runs sd -N -H: the front already ran SCRAM, so this session must NOT run it
+   again, and it has to set its own name without being told over a wire.
+
+   TWO FIELDS, for K_IMPERSONATING's reason - one value cannot carry both
+   answers and the pair is what makes the failure legible:
+
+     <1>  1 if this session was started pre-authenticated, 0 if not
+     <2>  its Windows user name, bare, from its OWN PROCESS TOKEN
+
+   Field 1 = 1 with field 2 empty is a session that cannot name itself, and
+   APISRVR must refuse it rather than carry on unnamed.  Folding the two into
+   "the name, or empty" would make that case indistinguishable from an
+   ordinary session, which would then be asked to run SCRAM on a pipe.
+
+   ProcessUserName(), NOT ImpersonatingUser(): this session is not
+   impersonating, it IS the user, and win32s4u.h says what that costs to get
+   wrong.  Read-only, so NOT gated on HDR_INTERNAL - it reports this process's
+   own identity, which @logname already exposes.                            */
+#define K_API_PREAUTH        67
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2
