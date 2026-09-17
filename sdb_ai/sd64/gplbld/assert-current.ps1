@@ -198,7 +198,10 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # probe-relocattr.ps1 is the third, and it exists because the
                   # other two answered the same question two different ways.
                   'probe-relocrt.ps1', 'probe-relockey.ps1', 'probe-relayscale.ps1',
-                  'probe-relocattr.ps1',
+                  # probe-relayssl.* answers option 2's two falsified-ifs (the
+                  # OpenSSL closure, and staging it without colliding with sd's
+                  # runtime).  The .c builds an .exe, which stays gitignored.
+                  'probe-relocattr.ps1', 'probe-relayssl.ps1', 'probe-relayssl.c',
                   # 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # LISTED IN THE COMMIT THAT CREATED IT, which is the rule the
                   # entry below had to be written to establish.  It reads the
