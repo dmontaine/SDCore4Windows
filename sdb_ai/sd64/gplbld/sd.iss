@@ -2916,6 +2916,10 @@ begin
   { Update, not Refresh: paint this one label now, without pumping a message
     loop that would let the reader click things during an install step. }
   WizardForm.StatusLabel.Update;
+  { And into the setup log (/LOG=<file>), so that a caption shown for two
+    seconds on a fast box leaves a record verify-realupgrade -Compare can read
+    - and a first install, which must announce none of these, leaves none. }
+  Log('SayStep: ' + S);
 end;
 
 function RefreshDictionaries: String;

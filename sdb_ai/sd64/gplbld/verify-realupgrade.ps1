@@ -45,17 +45,46 @@
 #
 # BOUNDED: every SD session runs as a job with a timeout; any sd.exe a timed-out
 # session leaves is not this script's to kill (it starts none by name).
+#
+# -SetupLog <file> (with -Compare): RELEASE_1.1 40's witness.  Install the W1.1-0
+# build with /LOG="<file>"; sd.iss's SayStep writes each upgrade caption it puts
+# on the wizard into that log as "SayStep: <caption>", so the three captions -
+# shown for a few seconds each on a fast box - leave a record.  The three must
+# be present, in the order the steps run (dictionaries, VOCs, nocase), and the
+# file must exist: a missing log is exit 2, never a pass.  A FIRST install must
+# write none of them; that half is gated in the code (after DataTreeWasAbsent)
+# and is not measured here, because the fresh install is not this script's.
+#
+# -Prepare: the teardown that has to come BEFORE the W1.0-0 install, which was
+# four hand steps with a race in the middle (Inno's uninstaller copies itself and
+# returns at once, so a Remove-Item typed next runs while it is still working).
+# Stops SD the way cycle.ps1 does, runs unins000 /VERYSILENT and waits for the
+# Program Files tree to go, deletes BOTH trees (the uninstaller keeps the data by
+# design - RELEASE_1.1 38), proves the shipped W1.0-0 installer is the right file
+# by hash, and stops: the W1.0-0 install itself is interactive (its wizard
+# collects the SDSYS password; a silent install has none, HISTORY.md 23 Aug).
+# THE TRAP IT EXISTS FOR: installing W1.0-0 over an existing tree is a
+# DataTreeUpgrade that PRESERVES the 1.1 accounts, giving a W1.0-0/1.1 mix that
+# is not pre-D2 - -Snapshot would then refuse.
 [CmdletBinding()]
 param(
+    [switch] $Prepare,
     [switch] $Snapshot,
-    [switch] $Compare
+    [switch] $Compare,
+    [string] $SetupLog = ''
 )
 $ErrorActionPreference = 'Stop'
 
-if (($Snapshot -and $Compare) -or (-not $Snapshot -and -not $Compare)) {
-    Write-Output 'verify-realupgrade: pass exactly one of -Snapshot or -Compare.'
+$modes = @($Prepare, $Snapshot, $Compare | Where-Object { $_ }).Count
+if ($modes -ne 1) {
+    Write-Output 'verify-realupgrade: pass exactly one of -Prepare, -Snapshot or -Compare.'
+    Write-Output '  -Prepare  tears the current install down so W1.0-0 can install onto an ABSENT tree;'
     Write-Output '  -Snapshot on the W1.0-0 tree BEFORE installing the current build over the top;'
-    Write-Output '  -Compare on the upgraded tree AFTER.'
+    Write-Output '  -Compare  on the upgraded tree AFTER (with -SetupLog <file> for RELEASE_1.1 40).'
+    exit 2
+}
+if ($Snapshot -and $SetupLog) {
+    Write-Output 'verify-realupgrade: -SetupLog goes with -Compare (the log is written by the W1.1-0 install, which comes after -Snapshot).'
     exit 2
 }
 
@@ -178,9 +207,82 @@ function Remove-Fixture {
 }
 
 Write-Output '===== verify-realupgrade.ps1 ====='
-Write-Output ("  mode     : " + $(if ($Snapshot) { '-Snapshot (pre-D2 W1.0-0 tree)' } else { '-Compare (upgraded tree)' }))
+Write-Output ("  mode     : " + $(if ($Prepare) { '-Prepare (tear down for a W1.0-0 install onto an absent tree)' } elseif ($Snapshot) { '-Snapshot (pre-D2 W1.0-0 tree)' } else { '-Compare (upgraded tree)' }))
 Write-Output ("  sd.exe   : " + $sdExe)
 Write-Output ("  snapshot : " + $snapFile)
+
+# ---------------------------------------------------------------------------
+if ($Prepare) {
+    $shipped = 'C:\Users\Don\SDCoreProject\SD-Untracked\realupgrade\sd-setup-W1.0-0-SHIPPED.exe'
+    $shippedShaPrefix = 'B7D37FB6'      # PROJECT_STATUS.md handoff 73: byte-identical to SDCore-W1.0-0.zip's installer
+    $exit = 2
+    try {
+        # The W1.0-0 installer first, so a wrong or missing file is found before
+        # anything is torn down.
+        Write-Output ("  W1.0-0   : " + $shipped)
+        if (-not (Test-Path -LiteralPath $shipped)) { Write-Output '  the shipped W1.0-0 installer is not there.  Nothing torn down.'; exit 2 }
+        $sha = (Get-FileHash -LiteralPath $shipped -Algorithm SHA256).Hash
+        Write-Output ("  sha256   : " + $sha)
+        if (-not $sha.StartsWith($shippedShaPrefix)) { Write-Output "  that is not the SHIPPED W1.0-0 installer (sha256 should begin $shippedShaPrefix).  Nothing torn down."; exit 2 }
+
+        # 1. stop SD - cycle.ps1 step 1's shape: the wait is on the PROCESSES.
+        Write-Output ''
+        Write-Output '  --- 1. stopping SD ---'
+        if (Get-Service -Name SD -ErrorAction SilentlyContinue) { & "$env:SystemRoot\System32\sc.exe" stop SD | Out-Null }
+        $deadline = (Get-Date).AddSeconds(45)
+        while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+        if ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath $sdExe)) {
+            Write-Output '  a daemon is still up - asking sd -stop'
+            $stopOut = (& $sdExe -stop 2>&1 | Out-String)
+            $stopOut -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { Write-Output "    $_" }
+            $deadline = (Get-Date).AddSeconds(20)
+            while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+        }
+        $left = @(Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue)
+        if ($left.Count -gt 0) {
+            Write-Output ("  still running: " + (($left | ForEach-Object { "$($_.Name)($($_.Id))" }) -join ', ') + " - somebody's session; not killed from here.  Close it and run -Prepare again.")
+            exit 2
+        }
+        Write-Output '  SD is down (no sdwind, no sd)'
+
+        # 2. uninstall - Inno's uninstaller copies itself and returns at once, so
+        #    wait for the TREE to go, as cycle.ps1 step 5 does.
+        Write-Output ''
+        Write-Output '  --- 2. uninstalling (/VERYSILENT - keeps the data by design; step 3 removes it) ---'
+        $unins = Join-Path $appDir 'unins000.exe'
+        if (Test-Path -LiteralPath $unins) {
+            & $unins /VERYSILENT
+            $deadline = (Get-Date).AddSeconds(120)
+            while ((Test-Path -LiteralPath $appDir) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+            Write-Output ("  uninstaller ran; $appDir " + $(if (Test-Path -LiteralPath $appDir) { 'still present (RELEASE_1.1 38 keeps sd.conf - step 3 takes it)' } else { 'gone' }))
+        } else {
+            Write-Output "  nothing installed at $appDir"
+        }
+
+        # 3. both trees - the W1.0-0 install must land on an ABSENT data tree.
+        Write-Output ''
+        Write-Output '  --- 3. deleting BOTH trees ---'
+        foreach ($t in @($appDir, $dataDir)) {
+            if (Test-Path -LiteralPath $t) { Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue }
+            if (Test-Path -LiteralPath $t) { Write-Output "  could not delete $t - something still has a handle on it.  Close any SD session or Explorer window and run -Prepare again."; exit 2 }
+            Write-Output "  $t gone"
+        }
+        Row 'both trees are absent (the W1.0-0 install will be a first install, pre-D2)' ((-not (Test-Path -LiteralPath $appDir)) -and (-not (Test-Path -LiteralPath $dataDir)))
+        Row 'no sdwind or sd process remains' (@(Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue).Count -eq 0)
+        $exit = $(if ($fail -gt 0) { 1 } else { 0 })
+        if ($exit -eq 0) {
+            Write-Output ''
+            Write-Output '  NEXT (elevated): run the shipped W1.0-0 installer INTERACTIVELY, defaults, and give SDSYS a password:'
+            Write-Output "        $shipped"
+            Write-Output '  then this script with -Snapshot.'
+        }
+    }
+    catch { Write-Output ("verify-realupgrade: " + $_.Exception.Message); $exit = $(if ($fail -gt 0) { 1 } else { 2 }) }
+    Write-Output ''
+    Write-Output ("verify-realupgrade -Prepare: $pass passed, $fail failed; exit $exit")
+    exit $exit
+}
+
 if (-not (Test-Path -LiteralPath $sdExe)) { Write-Output "verify-realupgrade: no sd.exe at the path above - is SD installed?"; exit 2 }
 
 # ---------------------------------------------------------------------------
@@ -311,6 +413,36 @@ if ($Compare) {
             Row '2a. the live SDSYS VOC was LEFT case sensitive (FL$NOCASE=0 - skipped, not rebuilt)' ($p.VocNoCase -eq 0) "NOCASE=$($p.VocNoCase)"
             Row '2b. the live VOC lost no records (count did not fall; refresh may add verbs)' ($p.VocCount -ge $snap.VocCount) "was $($snap.VocCount), now $($p.VocCount)"
             Row '2c. the VOC sentinels WHO and LOGIN are still present' (($p.VocSent -match '\[WHO\]') -and ($p.VocSent -match '\[LOGIN\]')) "SENT=$($p.VocSent)"
+        }
+
+        # 4. RELEASE_1.1 40 - the upgrade captions, read back from the setup log.
+        if ($SetupLog) {
+            Write-Output ''
+            Write-Output "  --- setup log (installer run with /LOG): $SetupLog ---"
+            if (-not (Test-Path -LiteralPath $SetupLog)) {
+                Write-Output '  the setup log is not there - was the W1.1-0 installer run with /LOG="<that path>"?  Not a pass.'
+                exit 2
+            }
+            $setupText = Get-Content -LiteralPath $SetupLog -Raw
+            $sayLines = @([regex]::Matches($setupText, '(?m)^.*SayStep: .*$') | ForEach-Object { $_.Value.Trim() })
+            Show 'SayStep lines in the setup log' ($sayLines -join "`n")
+            $captions = @(
+                "Bringing this release's dictionaries forward into your database...",
+                'Refreshing the vocabulary of every account...',
+                'Checking every file for record ids that differ only by case...'
+            )
+            $positions = @()
+            foreach ($c in $captions) {
+                $i = $setupText.IndexOf('SayStep: ' + $c)
+                $positions += $i
+                Row "4. caption on the wizard, logged: '$c'" ($i -ge 0) $(if ($i -ge 0) { 'present' } else { 'ABSENT' })
+            }
+            Row '4. exactly three SayStep lines - each step announced once, none unaccounted for' ($sayLines.Count -eq 3) "count=$($sayLines.Count)"
+            Row '4. in the order the steps run: dictionaries, then VOCs, then nocase' `
+                (($positions[0] -ge 0) -and ($positions[0] -lt $positions[1]) -and ($positions[1] -lt $positions[2])) ("offsets " + ($positions -join ', '))
+        } else {
+            Write-Output ''
+            Write-Output '  (no -SetupLog given: RELEASE_1.1 40''s captions were not checked)'
         }
 
         Write-Output ''
