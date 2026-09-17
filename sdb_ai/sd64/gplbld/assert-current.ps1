@@ -180,7 +180,18 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # script into the install silently puts it back under the guard rather than
 # silently leaving it out.  That keeps the bias in the header: a false stale
 # costs one install, a false current costs an investigation.
-$neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
+$neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
+                  # LISTED IN THE COMMIT THAT CREATED IT.  Both are unelevated
+                  # drivers over probe-cygshared.exe and probe-lowmsys.exe: they
+                  # copy msys-2.0.dll into %TEMP%, hold runtimes alive, scan
+                  # \BaseNamedObjects and clean up.  They touch no installed
+                  # tree, no account and no service, and are named in neither
+                  # stage.py nor sd.iss.  They answer whether the relay could
+                  # keep ONE source by shipping its own copy of the runtime -
+                  # a question the record had rejected UNMEASURED - so they will
+                  # be re-run when that decision is revisited.
+                  'probe-relocrt.ps1', 'probe-relockey.ps1',
+                  # 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # LISTED IN THE COMMIT THAT CREATED IT, which is the rule the
                   # entry below had to be written to establish.  It reads the
                   # installed tree, the local groups and the local users, and
