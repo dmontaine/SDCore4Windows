@@ -3,13 +3,20 @@
 Free: no install, no elevation, no run token, no SD.  RELEASE_1.1 43.
 
 WHAT IT STANDS IN FOR.  sd_tlssrv.c spawns bin\\sdtlsrelay.exe once per API
-connection with two inherited sockets and speaks the frame protocol in
-sd_tls.h over one of them.  This script is that sd: it accepts a loopback
-connection, makes a socketpair, starts the relay with exactly those two
-handles inherited (PROC_THREAD_ATTRIBUTE_HANDLE_LIST, as win32relay.c does),
-sends the identity frame, reads the status frame, and then is BOTH ends of
-the conversation - the TLS client through scram-probe.py's Tls class, and sd
-through the socketpair.
+connection with three inherited sockets and speaks the frame protocol in
+sd_tls.h over two of them.  This script is that sd: it accepts a loopback
+connection, makes the two socketpairs, starts the relay with exactly those
+three handles inherited (PROC_THREAD_ATTRIBUTE_HANDLE_LIST, as win32relay.c
+does), sends the identity frame, reads the status frame, and then is BOTH
+ends of the conversation - the TLS client through scram-probe.py's Tls class,
+and sd through the socketpair.
+
+THE THIRD SOCKET is the control channel RELEASE_1.1 55 added: the front uses
+it, after SCRAM, to have the relay stand up the pipe the authenticated
+session will own.  It is silent through every row here, which is the point -
+a connection that never authenticates must behave exactly as it did before
+the channel existed.  What IS checked is that the relay looked at it: a
+control handle that is not a socket is refused by name, exit 6.
 
 THE ROW THAT IS THE POINT: the 32 bytes the relay hands sd are THE SAME 32
 bytes the client derives from its own end of the TLS session (RFC 9266
@@ -112,8 +119,9 @@ def make_identity(tmp):
 
 
 class Harness:
-    """One connection: the client socket, the accepted socket, the socketpair
-    and the relay process.  spawn() hands the relay its two handles."""
+    """One connection: the client socket, the accepted socket, the two
+    socketpairs and the relay process.  spawn() hands the relay its three
+    handles."""
 
     def __init__(self, timeout_ms=10000):
         self.timeout_ms = timeout_ms
@@ -124,17 +132,23 @@ class Harness:
         self.net, _ = lst.accept()
         lst.close()
         self.sd_end, self.relay_end = socket.socketpair()
+        # RELEASE_1.1 55's control channel, the second socketpair.  Nothing is
+        # said on it in these rows; sd_ctl is held open because the relay would
+        # otherwise read EOF on a channel the front is supposed to still hold.
+        self.sd_ctl, self.relay_ctl = socket.socketpair()
         # sd's sockets are non-blocking at the Winsock level and cannot be
         # made otherwise; the relay now sets FIONBIO itself, so this is the
         # faithful shape rather than a requirement.
         self.net.setblocking(False)
         self.relay_end.setblocking(False)
+        self.relay_ctl.setblocking(False)
         self.proc = None
 
-    def spawn(self, args=None):
-        for s in (self.net, self.relay_end):
+    def spawn(self, args=None, capture=False):
+        for s in (self.net, self.relay_end, self.relay_ctl):
             s.set_inheritable(True)
-        handles = [self.net.fileno(), self.relay_end.fileno()]
+        handles = [self.net.fileno(), self.relay_end.fileno(),
+                   self.relay_ctl.fileno()]
         si = subprocess.STARTUPINFO()
         si.lpAttributeList = {"handle_list": handles}
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -145,10 +159,12 @@ class Harness:
                                      creationflags=subprocess.CREATE_NO_WINDOW,
                                      stdin=subprocess.DEVNULL,
                                      stdout=subprocess.DEVNULL,
-                                     stderr=subprocess.DEVNULL)
+                                     stderr=(subprocess.PIPE if capture
+                                             else subprocess.DEVNULL))
         # The relay is the only holder now - sd_tlssrv.c closes its copies too.
         self.net.close()
         self.relay_end.close()
+        self.relay_ctl.close()
         return self.proc
 
     def send_identity(self, pem):
@@ -158,7 +174,15 @@ class Harness:
         self.sd_end.settimeout(deadline_s)
         buf = b""
         while len(buf) < n:
-            chunk = self.sd_end.recv(n - len(buf))
+            # A relay that exits without shutting the socketpair down - which
+            # is every refusal that happens before it touches the app side -
+            # reaches this end as WSAECONNRESET, not as a clean EOF.  Both
+            # mean "the relay is gone and said nothing more"; raising here
+            # would end the run with a traceback instead of a failed row.
+            try:
+                chunk = self.sd_end.recv(n - len(buf))
+            except ConnectionResetError:
+                return buf
             if not chunk:
                 return buf
             buf += chunk
@@ -186,7 +210,7 @@ class Harness:
             return None
 
     def close(self):
-        for s in (self.client, self.sd_end):
+        for s in (self.client, self.sd_end, self.sd_ctl):
             try:
                 s.close()
             except OSError:
@@ -366,11 +390,53 @@ def test_usage():
     check(r.returncode == SD_RELAY_EXIT_USAGE,
           "no arguments -> exit 6 (got %d)" % r.returncode)
     check(b"not a command" in r.stderr, "and says it is not a command")
-    # Two handles that are not sockets: the relay must not carry on.
+    # Three handles that are not sockets: the relay must not carry on.
     h = Harness()
-    h.spawn(args=["1", "2", "10000"])
+    h.spawn(args=["1", "2", "3", "10000"])
     code = h.exit_code()
     check(code == SD_RELAY_EXIT_USAGE, "non-socket handles -> exit 6 (got %r)" % code)
+    h.close()
+
+    # THE ROW THAT PROVES THE RELAY LOOKED AT THE CONTROL HANDLE.  net and the
+    # app side are real and only the third is not, so a relay that took argv[3]
+    # and never examined it would pass every other row in this file and fail
+    # here alone.  The refusal comes back on the app side and names it.
+    h = Harness()
+    real = [str(h.net.fileno()), str(h.relay_end.fileno())]
+    h.spawn(args=real + ["1", "10000"])
+    status, text = h.read_status()
+    check(status == SD_RELAY_EXIT_USAGE,
+          "a bad control handle -> status 6 (got %r)" % status)
+    check(b"control handle" in text, "and the refusal names it: %r" % text)
+    code = h.exit_code()
+    check(code == SD_RELAY_EXIT_USAGE, "and the relay exits 6 (got %r)" % code)
+    h.close()
+
+    # THE ARITY ITSELF.  The pre-55 form - two handles and a timeout - must be
+    # refused, not run with no control channel: a relay that quietly accepted
+    # it would hand back a connection nothing can ever take over, and the
+    # session would stay LocalSystem with every other row still green.
+    #
+    # EXIT 6 ALONE DOES NOT SAY THAT, AND THIS ROW WAS WRITTEN WRONG ONCE.  A
+    # relay that took the pre-55 form and carried on reads the TIMEOUT as the
+    # control handle, and the control-handle check then refuses it - exit 6,
+    # for a completely different reason, and the row passed against a mutant
+    # built to defeat it.  The arity refusal is the one that happens BEFORE
+    # the app side is touched, so it is told apart by what it did, not by its
+    # number: "not a command" on stderr, and NO status frame at all.
+    h = Harness()
+    real = [str(h.net.fileno()), str(h.relay_end.fileno())]
+    h.spawn(args=real + ["10000"], capture=True)
+    err = h.proc.communicate(timeout=15)[1]
+    code = h.proc.returncode
+    check(code == SD_RELAY_EXIT_USAGE,
+          "the pre-55 two-handle form -> exit 6 (got %r)" % code)
+    check(b"not a command" in err,
+          "and it refused on ARITY, saying so on stderr (got %r)" % err)
+    status, text = h.read_status()
+    check(status is None,
+          "and it never reached the app side (got status %r, %r)"
+          % (status, text))
     h.close()
 
 

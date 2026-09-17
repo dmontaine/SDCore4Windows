@@ -12,6 +12,11 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Sep 26 Windows port - RELEASE_1.1 55: a second socketpair is made before
+ *           the spawn and kept as the CONTROL channel to the relay, and
+ *           sd_tls_relay_pipe() is the front's one use of it - stand up the
+ *           handover pipe once SCRAM has named the user.  sd_tls.h's control
+ *           section is the protocol and says why it is not carried in band.
  * 16 Sep 26 Windows port - RELEASE_1.1 43: the relay is no longer fork()ed
  *           here.  It is sdtlsrelay/sdtlsrelay.c, a NATIVE program that
  *           win32relay.c starts as the bare account SD_RELAY_ACCOUNT, every
@@ -98,6 +103,12 @@
 static unsigned char server_binding[SD_TLS_BINDING_BYTES];
 static bool have_binding = false;
 
+/* The control channel to this connection's relay (sd_tls.h).  -1 until the
+   relay is spawned, and -1 for ever in a session that has no relay at all -
+   a phantom, the console, a pre-authenticated session.  Everything that reads
+   it says so out loud rather than treating -1 as "nothing to do". */
+static int relay_ctl_fd = -1;
+
 static bool write_all(int fd, const void* buf, size_t len) {
   const char* p = buf;
 
@@ -113,10 +124,10 @@ static bool write_all(int fd, const void* buf, size_t len) {
   return true;
 }
 
-/* read exactly len bytes from fd 0 within deadline_ms of waiting per byte
+/* read exactly len bytes from fd within deadline_ms of waiting per byte
    group; false on EOF, error or timeout, with errmsg saying which.        */
-static bool read_all_timed(unsigned char* buf, size_t len, int timeout_ms,
-                           const char* what, char* errmsg, size_t errlen) {
+static bool read_all_fd(int fd, unsigned char* buf, size_t len, int timeout_ms,
+                        const char* what, char* errmsg, size_t errlen) {
   size_t got = 0;
 
   while (got < len) {
@@ -124,7 +135,7 @@ static bool read_all_timed(unsigned char* buf, size_t len, int timeout_ms,
     ssize_t n;
     int pr;
 
-    p.fd = 0;
+    p.fd = fd;
     p.events = POLLIN;
     p.revents = 0;
     pr = poll(&p, 1, timeout_ms);
@@ -134,7 +145,7 @@ static bool read_all_timed(unsigned char* buf, size_t len, int timeout_ms,
       snprintf(errmsg, errlen, "TLS relay did not answer (%s)", what);
       return false;
     }
-    n = read(0, buf + got, len - got);
+    n = read(fd, buf + got, len - got);
     if (n < 0 && errno == EINTR)
       continue;
     if (n <= 0) {
@@ -145,6 +156,21 @@ static bool read_all_timed(unsigned char* buf, size_t len, int timeout_ms,
     got += (size_t)n;
   }
   return true;
+}
+
+/* The preamble is read from descriptor 0, which by then IS the app-side pair. */
+static bool read_all_timed(unsigned char* buf, size_t len, int timeout_ms,
+                           const char* what, char* errmsg, size_t errlen) {
+  return read_all_fd(0, buf, len, timeout_ms, what, errmsg, errlen);
+}
+
+/* Give up the control channel.  Every path that abandons the relay calls it,
+   so a later handover finds -1 and refuses out loud, instead of writing a
+   frame to a relay that is not there and waiting out the timeout. */
+static void relay_ctl_close(void) {
+  if (relay_ctl_fd >= 0)
+    close(relay_ctl_fd);
+  relay_ctl_fd = -1;
 }
 
 /* ======================================================================
@@ -401,6 +427,7 @@ static const char* relay_exit_text(int code) {
 int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
                        char* errmsg, size_t errlen) {
   int sp[2];
+  int ctl[2];
   unsigned char* pem = NULL;
   size_t pemlen = 0;
   unsigned char hdr[4];
@@ -446,17 +473,54 @@ int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
     goto fail_pem;
   }
 
-  /* The spawn: token minted, stripped, Low, two handles inherited and no
-     other (win32relay.c).  Descriptor 0 is the connection until the dup2
-     below. */
-  if (!win32_relay_spawn(SD_RELAY_ACCOUNT, 0, sp[1], timeout_ms, &proc, why,
-                         sizeof(why))) {
-    syslog(LOG_ERR, "SD API TLS: cannot start the relay: %s", why);
-    snprintf(errmsg, errlen, "cannot start the TLS relay (see syslog)");
+  /* RELEASE_1.1 55: the control channel, made before the spawn because the
+     relay inherits its end.  Nothing is said on it until the handover.   */
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, ctl) != 0) {
+    snprintf(errmsg, errlen, "control socketpair: %s", strerror(errno));
     close(sp[0]);
     close(sp[1]);
     goto fail_pem;
   }
+  /* Descriptors 0 and 1 are about to become the app-side pair and 2 is
+     stderr, so socketpair() answers 3 or above and this never fires today.
+     It is here because the cost of being wrong is silent: a control channel
+     sitting on descriptor 2 would take every stderr byte sd ever writes and
+     present it to the relay as a control frame. */
+  if (ctl[0] < 3) {
+    int moved = fcntl(ctl[0], F_DUPFD, 3);
+    if (moved < 0) {
+      snprintf(errmsg, errlen, "cannot move the control channel off "
+                               "descriptor %d: %s", ctl[0], strerror(errno));
+      close(sp[0]);
+      close(sp[1]);
+      close(ctl[0]);
+      close(ctl[1]);
+      goto fail_pem;
+    }
+    close(ctl[0]);
+    ctl[0] = moved;
+  }
+  /* Not across an exec: sd forks and execs phantoms, and none of them is a
+     party to this connection's handover. */
+  (void)fcntl(ctl[0], F_SETFD, FD_CLOEXEC);
+
+  /* The spawn: token minted, stripped, Low, three handles inherited and no
+     other (win32relay.c).  Descriptor 0 is the connection until the dup2
+     below. */
+  if (!win32_relay_spawn(SD_RELAY_ACCOUNT, 0, sp[1], ctl[1], timeout_ms, &proc,
+                         why, sizeof(why))) {
+    syslog(LOG_ERR, "SD API TLS: cannot start the relay: %s", why);
+    snprintf(errmsg, errlen, "cannot start the TLS relay (see syslog)");
+    close(sp[0]);
+    close(sp[1]);
+    close(ctl[0]);
+    close(ctl[1]);
+    goto fail_pem;
+  }
+  /* The relay holds its own copy now.  sd keeping this end open would mean
+     the relay never sees EOF on the control channel when sd dies. */
+  close(ctl[1]);
+  relay_ctl_fd = ctl[0];
 
   /* sd: its connection becomes the socketpair.  Closing its copies of the
      network descriptor matters - when the relay ends, the client must see
@@ -493,6 +557,7 @@ int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
     int code = win32_relay_exit_code(proc, 1000);
     syslog(LOG_INFO, "SD API TLS: relay %s (code %d)", relay_exit_text(code),
            code);
+    relay_ctl_close();
     return false;
   }
   if (status != SD_RELAY_OK) {
@@ -515,11 +580,13 @@ int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
     syslog(LOG_INFO, "SD API TLS: connection refused: %s",
            text[0] ? text : relay_exit_text((int)status));
     snprintf(errmsg, errlen, "%s", text[0] ? text : relay_exit_text((int)status));
+    relay_ctl_close();
     return false;
   }
   if (!read_all_timed(server_binding, SD_TLS_BINDING_BYTES, timeout_ms,
                       "binding", errmsg, errlen)) {
     (void)win32_relay_exit_code(proc, 1000);
+    relay_ctl_close();
     return false;
   }
 
@@ -535,11 +602,126 @@ fail_pem:
     OPENSSL_cleanse(pem, pemlen);
     free(pem);
   }
+  relay_ctl_close();
   return false;
 }
 
 const unsigned char* sd_tls_server_binding(void) {
   return have_binding ? server_binding : NULL;
+}
+
+/* ======================================================================
+   sd_tls_relay_pipe()  -  the front's one use of the control channel
+
+   RELEASE_1.1 55.  After SCRAM has named the user, the front has the relay
+   create the pipe that the session - spawned AS the user - will be handed on
+   its std handles.  The relay is the SERVER because the front is about to
+   exit and a pipe instance dies with its last server handle.
+
+   The NAME IS MADE HERE, not taken from the caller: it has to carry the
+   prefix the relay checks and it has to be unique on the machine, and one
+   place that builds it is one place that can be wrong.  Random, not just the
+   pid: the relay refuses a second instance of a name, so a predictable one is
+   a way for any local process to make a connection's handover fail.          */
+
+int sd_tls_relay_pipe(char* pipename, size_t namelen, int timeout_ms,
+                      char* why, size_t whylen) {
+  unsigned char frame[3];
+  unsigned char rnd[8];
+  char text[SD_RELAY_CTL_MAX + 1];
+  size_t len;
+  size_t i;
+  char suffix[2 * sizeof(rnd) + 1];
+  static const char hex[] = "0123456789abcdef";
+
+  if (pipename == NULL || namelen == 0) {
+    snprintf(why, whylen, "sd_tls_relay_pipe: no buffer for the pipe name");
+    return 0;
+  }
+  pipename[0] = '\0';
+
+  /* THE NULL CASE, REFUSED OUT LOUD.  A session with no relay has nothing to
+     hand over, and a handover that silently did nothing is the failure this
+     whole change exists to avoid - it would leave the session running as
+     LocalSystem, which is exactly 55. */
+  if (relay_ctl_fd < 0) {
+    snprintf(why, whylen,
+             "this session has no relay control channel, so there is nothing "
+             "to hand the connection over to");
+    return 0;
+  }
+
+  if (RAND_bytes(rnd, sizeof(rnd)) != 1) {
+    sd_tls_error_text("cannot name the handover pipe", why, whylen);
+    return 0;
+  }
+  for (i = 0; i < sizeof(rnd); i++) {
+    suffix[2 * i] = hex[(rnd[i] >> 4) & 0x0F];
+    suffix[2 * i + 1] = hex[rnd[i] & 0x0F];
+  }
+  suffix[2 * sizeof(rnd)] = '\0';
+
+  if (snprintf(pipename, namelen, "%s%lu-%s", SD_RELAY_PIPE_PREFIX,
+               (unsigned long)getpid(), suffix) >= (int)namelen) {
+    snprintf(why, whylen, "no room for the handover pipe name");
+    pipename[0] = '\0';
+    return 0;
+  }
+  len = strlen(pipename);
+  if (len > SD_RELAY_CTL_MAX) {
+    snprintf(why, whylen, "the handover pipe name is %lu bytes, over the %d "
+                          "the control channel carries",
+             (unsigned long)len, SD_RELAY_CTL_MAX);
+    pipename[0] = '\0';
+    return 0;
+  }
+
+  frame[0] = SD_RELAY_CTL_PIPE;
+  frame[1] = (unsigned char)((len >> 8) & 0xFF);
+  frame[2] = (unsigned char)(len & 0xFF);
+  if (!write_all(relay_ctl_fd, frame, sizeof(frame)) ||
+      !write_all(relay_ctl_fd, pipename, len)) {
+    snprintf(why, whylen, "cannot ask the relay for the handover pipe: %s",
+             strerror(errno));
+    pipename[0] = '\0';
+    return 0;
+  }
+
+  /* Its answer.  A relay that died rather than answering reads as EOF, which
+     read_all_fd() reports as a relay that ended - not as a yes. */
+  if (!read_all_fd(relay_ctl_fd, frame, sizeof(frame), timeout_ms, "handover",
+                   why, whylen)) {
+    pipename[0] = '\0';
+    return 0;
+  }
+  len = ((size_t)frame[1] << 8) | frame[2];
+  if (len > SD_RELAY_CTL_MAX) {
+    snprintf(why, whylen, "the relay answered the handover with %lu bytes",
+             (unsigned long)len);
+    pipename[0] = '\0';
+    return 0;
+  }
+  text[0] = '\0';
+  if (len > 0) {
+    if (!read_all_fd(relay_ctl_fd, (unsigned char*)text, len, timeout_ms,
+                     "handover", why, whylen)) {
+      pipename[0] = '\0';
+      return 0;
+    }
+    text[len] = '\0';
+  }
+
+  if (frame[0] == SD_RELAY_CTL_READY)
+    return 1;
+
+  if (frame[0] == SD_RELAY_CTL_FAILED)
+    snprintf(why, whylen, "the relay could not stand up the handover pipe: %s",
+             text[0] ? text : "no reason given");
+  else
+    snprintf(why, whylen, "the relay answered the handover with opcode %u",
+             (unsigned)frame[0]);
+  pipename[0] = '\0';
+  return 0;
 }
 
 /* END-CODE */

@@ -12,6 +12,11 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Sep 26 Windows port - RELEASE_1.1 55: the relay gains a THIRD inherited
+ *           descriptor, a control socketpair to the front, and its argv grows
+ *           by one.  The front uses it once, after SCRAM, to have the relay
+ *           stand up the handover pipe the authenticated session will own.
+ *           The section at the end of this file is the protocol.
  * 16 Sep 26 Windows port - RELEASE_1.1 43: the relay is a NATIVE program,
  *           sdtlsrelay/sdtlsrelay.c, spawned by sd as a bare account at Low
  *           integrity (win32relay.c).  The relay <-> sd frame protocol and the
@@ -140,12 +145,65 @@ int win32_admin_only(const char* path, char* why, size_t whylen);
 #define SD_RELAY_EXIT_BINDING   5
 #define SD_RELAY_EXIT_USAGE     6    /* bad argv or handles: a bug, not a peer */
 
+/* ---- The front <-> relay CONTROL channel (RELEASE_1.1 55) ------------- */
+
+/* A SECOND socketpair, made by sd before the spawn and inherited by the relay
+   beside the connection and the app-side pair.  The app-side pair is the
+   session's byte stream and has to stay one - a word said IN it would be a
+   word the client could say too.  The handover needs exactly one word said
+   out of band, so it gets a channel of its own.
+
+   WHAT IT IS FOR.  55 spawns the authenticated session AS the user and takes
+   the LocalSystem front out of the data path, so the relay must move its app
+   side from the front's socketpair to a pipe the session holds.  The relay is
+   the pipe's SERVER: it outlives the front, and a pipe instance dies with its
+   last server handle.  Only the front knows, after SCRAM, that there is going
+   to be a session at all - hence one message each way:
+
+     front -> relay   SD_RELAY_CTL_PIPE, payload the pipe's name.  "Create
+                      this as a single-instance server and be ready to cut
+                      over to it."
+     relay -> front   SD_RELAY_CTL_READY, empty payload: it exists, open the
+                      client end now.  Or SD_RELAY_CTL_FAILED with the reason
+                      as text, and the front fails the login CLOSED rather
+                      than handing the session a pipe nothing is listening on.
+
+   The CUTOVER itself needs no message: the front closes its app-side
+   descriptors gracefully when it has finished with them, and that EOF is the
+   signal (gplbld/probe-relaycutover.c measured it, and measured that a
+   forcible close instead makes the far side read ECOMM, not EOF).
+
+   FRAMING is the refusal frame's, both ways and in both processes: one opcode
+   byte, a u16 big-endian length, then that many bytes.  Uniform, so an empty
+   payload is a length of zero rather than a special case. */
+#define SD_RELAY_CTL_PIPE       1    /* front -> relay */
+#define SD_RELAY_CTL_READY      2    /* relay -> front */
+#define SD_RELAY_CTL_FAILED     3    /* relay -> front */
+#define SD_RELAY_CTL_MAX      512    /* longest payload either way */
+
+/* The handover pipe's name begins with this and the relay refuses one that
+   does not - the front is the only writer on the control channel, so this is
+   a bound on a bug rather than on an attacker, and it also refuses the empty
+   name that a truncated frame would otherwise present as a valid one. */
+#define SD_RELAY_PIPE_PREFIX  "\\\\.\\pipe\\sd-api-"
+
+/* sd_tlssrv.c, the front's half.  Have the relay stand up the handover pipe
+   and wait for its answer; non-zero when the pipe exists and the client end
+   may be opened, with pipename filled in, zero with why when it does not.
+   Called once, by the handover, after SCRAM has named the user.  The NAME IS
+   MADE THERE rather than passed in - see the function.  Refuses in a session
+   that has no control channel: there is no such thing as a handover that
+   quietly did nothing. */
+int sd_tls_relay_pipe(char* pipename, size_t namelen, int timeout_ms,
+                      char* why, size_t whylen);
+
 /* win32relay.c (windows.h, no SD header).  Mint the account's token, strip
-   it, drop it to Low, and start exe (beside sd.exe) with the two Cygwin
+   it, drop it to Low, and start exe (beside sd.exe) with the three Cygwin
    descriptors as its only inherited handles.  Non-zero on success, with
    *proc an opaque handle for win32_relay_exit_code(); zero with why on
-   failure.  The relay's argv is: <net handle> <sp handle> <timeout ms>.   */
-int win32_relay_spawn(const char* account, int net_fd, int sp_fd,
+   failure.  The relay's argv is:
+     <net handle> <sp handle> <control handle> <timeout ms>.               */
+int win32_relay_spawn(const char* account, int net_fd, int sp_fd, int ctl_fd,
                       int timeout_ms, void** proc, char* why, size_t whylen);
 /* The exit code if the relay has ended, or -1 while it runs; releases the
    handle either way (the caller asks once, at the end of the preamble).     */

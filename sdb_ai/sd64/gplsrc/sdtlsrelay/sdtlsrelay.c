@@ -13,6 +13,10 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Sep 26 Windows port - RELEASE_1.1 55: a THIRD inherited socket, the
+ *           control channel to the front, and one more argument.  The relay
+ *           holds it here; acting on it - standing up the handover pipe and
+ *           cutting the app side over to it - is the next slice.
  * 16 Sep 26 Windows port - written for RELEASE_1.1 43.  Replaces the fork()ed
  *           relay_process() in sd_tlssrv.c, which parsed an unauthenticated
  *           peer's bytes as LocalSystem.
@@ -23,12 +27,19 @@
  * ONE PROCESS PER CONNECTION, THE LINUX SHAPE.  sd (LocalSystem, in the
  * session process sdwind forked for this connection) starts this program with
  * the token of a bare local account - no groups, every privilege removed,
- * integrity Low - and exactly two inherited handles: the accepted connection,
- * and one end of the socketpair sd keeps as its own descriptors 0 and 1.  The
- * relay owns the network socket and the TLS state; sd's I/O code never
- * changes.  When either side ends, the other is closed and the process exits.
+ * integrity Low - and exactly three inherited handles: the accepted
+ * connection, one end of the socketpair sd keeps as its own descriptors 0 and
+ * 1, and one end of a second socketpair, the CONTROL channel.  The relay owns
+ * the network socket and the TLS state; sd's I/O code never changes.  When
+ * either side ends, the other is closed and the process exits.
  *
- *   sdtlsrelay.exe <net handle> <sp handle> <timeout ms>
+ *   sdtlsrelay.exe <net handle> <sp handle> <control handle> <timeout ms>
+ *
+ * THE CONTROL CHANNEL (RELEASE_1.1 55, protocol in sd_tls.h).  The app side
+ * above is the session's byte stream and has to stay one, so the handover -
+ * the one thing the front says to the relay that is not a session byte -
+ * travels on its own socketpair.  It is silent for the whole of the SCRAM
+ * window; the front speaks on it once, if the login succeeds.
  *
  * WHY NATIVE AND NOT THE MSYS2 RUNTIME sd IS BUILT WITH, MEASURED 16 Sep
  * 2026 (PROJECT_STATUS.md HANDOFF 78's box): an MSYS2 process at Low cannot
@@ -86,6 +97,7 @@
 
 static SOCKET net_sock = INVALID_SOCKET;
 static SOCKET sp_sock = INVALID_SOCKET;
+static SOCKET ctl_sock = INVALID_SOCKET;   /* the front's control channel */
 
 /* ======================================================================
    NO USER32 IN THIS PROCESS, AND THIS IS WHY THE FIRST INSTALL DIED.
@@ -228,6 +240,8 @@ static void refuse(int status, const char* text) {
   }
   if (net_sock != INVALID_SOCKET)
     closesocket(net_sock);
+  if (ctl_sock != INVALID_SOCKET)
+    closesocket(ctl_sock);
   ExitProcess((UINT)status);
 }
 
@@ -414,22 +428,27 @@ int main(int argc, char* argv[]) {
   int type, tl;
   unsigned char preamble[1 + SD_TLS_BINDING_BYTES];
 
-  if (argc != 4) {
+  if (argc != 5) {
     fprintf(stderr, "sdtlsrelay is started by sd for each API connection; "
                     "it is not a command\n");
     return SD_RELAY_EXIT_USAGE;
   }
   net_sock = (SOCKET)(uintptr_t)strtoull(argv[1], NULL, 10);
   sp_sock = (SOCKET)(uintptr_t)strtoull(argv[2], NULL, 10);
-  timeout_ms = atoi(argv[3]);
+  ctl_sock = (SOCKET)(uintptr_t)strtoull(argv[3], NULL, 10);
+  timeout_ms = atoi(argv[4]);
   if (timeout_ms <= 0)
     timeout_ms = SD_TLS_HANDSHAKE_MS;
 
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
     return SD_RELAY_EXIT_USAGE;
 
-  /* Both handles must be sockets, or nothing below can be trusted - and a
-     wrong handle is sd's bug, so say so on the channel if that one works. */
+  /* All three handles must be sockets, or nothing below can be trusted - and
+     a wrong handle is sd's bug, so say so on the channel if that one works.
+     The app side is asked first because it is the one the answer travels on;
+     a handover the relay could not have performed is worth refusing HERE,
+     where the front can still read the reason, rather than at the cutover an
+     authenticated session later waits on for ever. */
   tl = sizeof(type);
   if (getsockopt(sp_sock, SOL_SOCKET, SO_TYPE, (char*)&type, &tl) != 0) {
     sp_sock = INVALID_SOCKET;
@@ -438,6 +457,11 @@ int main(int argc, char* argv[]) {
   tl = sizeof(type);
   if (getsockopt(net_sock, SOL_SOCKET, SO_TYPE, (char*)&type, &tl) != 0)
     refuse(SD_RELAY_EXIT_USAGE, "the connection handle is not a socket");
+  tl = sizeof(type);
+  if (getsockopt(ctl_sock, SOL_SOCKET, SO_TYPE, (char*)&type, &tl) != 0) {
+    ctl_sock = INVALID_SOCKET;
+    refuse(SD_RELAY_EXIT_USAGE, "the control handle is not a socket");
+  }
 
   /* Non-blocking, whoever made them.  sd's sockets already are and refuse
      to be anything else (WSAEOPNOTSUPP, ignored here); a harness that hands
@@ -449,6 +473,8 @@ int main(int argc, char* argv[]) {
     (void)ioctlsocket(net_sock, FIONBIO, &nb);
     nb = 1;
     (void)ioctlsocket(sp_sock, FIONBIO, &nb);
+    nb = 1;
+    (void)ioctlsocket(ctl_sock, FIONBIO, &nb);
   }
 
   ctx = SSL_CTX_new(TLS_server_method());
@@ -498,6 +524,7 @@ int main(int argc, char* argv[]) {
   SSL_CTX_free(ctx);
   closesocket(net_sock);
   closesocket(sp_sock);
+  closesocket(ctl_sock);
   return 0;
 }
 

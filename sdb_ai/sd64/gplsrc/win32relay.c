@@ -14,6 +14,10 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Sep 26 Windows port - RELEASE_1.1 55: a THIRD inherited descriptor, the
+ *           control socketpair the front uses to have the relay stand up the
+ *           authenticated session's pipe.  It is passed the same way as the
+ *           other two and for the same reason (sd_tls.h's control section).
  * 16 Sep 26 Windows port - written for RELEASE_1.1 43.
  * END-HISTORY
  *
@@ -51,7 +55,7 @@
  * relay - and a socket with a live handle in another process does not close.
  * In that probe's first run the relay had inherited the client's own end,
  * and the client's close never reached sd.  PROC_THREAD_ATTRIBUTE_HANDLE_LIST
- * names the two the relay may have, and nothing else crosses.
+ * names the three the relay may have, and nothing else crosses.
  *
  * WHERE THE RELAY IS: beside sd.exe, from GetModuleFileName - the native
  * answer exepath.c's header names.  exe_directory() is not used because it
@@ -75,7 +79,7 @@
 #include "win32s4u.h"                  /* win32_s4u_logon(); no SD header */
 
 /* Declared in sd_tls.h; repeated so this file includes no SD header. */
-int win32_relay_spawn(const char* account, int net_fd, int sp_fd,
+int win32_relay_spawn(const char* account, int net_fd, int sp_fd, int ctl_fd,
                       int timeout_ms, void** proc, char* why, size_t whylen);
 int win32_relay_exit_code(void* proc, int wait_ms);
 
@@ -194,18 +198,20 @@ static int dup_inheritable(HANDLE h, HANDLE* out, const char* what, char* why,
 /* ======================================================================
    win32_relay_spawn()                                                    */
 
-int win32_relay_spawn(const char* account, int net_fd, int sp_fd,
+int win32_relay_spawn(const char* account, int net_fd, int sp_fd, int ctl_fd,
                       int timeout_ms, void** proc, char* why, size_t whylen) {
   char dir[MAX_PATH];
   char exe[MAX_PATH + 32];
-  char cmd[MAX_PATH + 128];
+  char cmd[MAX_PATH + 160];
   HANDLE imp = NULL;
   HANDLE prim = NULL;
   HANDLE net = INVALID_HANDLE_VALUE;
   HANDLE sp = INVALID_HANDLE_VALUE;
+  HANDLE ctl = INVALID_HANDLE_VALUE;
   HANDLE netInh = NULL;
   HANDLE spInh = NULL;
-  HANDLE list[2];
+  HANDLE ctlInh = NULL;
+  HANDLE list[3];
   STARTUPINFOEXA six;
   PROCESS_INFORMATION pi;
   SIZE_T alen = 0;
@@ -221,9 +227,12 @@ int win32_relay_spawn(const char* account, int net_fd, int sp_fd,
 
   net = (HANDLE)_get_osfhandle(net_fd);
   sp = (HANDLE)_get_osfhandle(sp_fd);
-  if (net == INVALID_HANDLE_VALUE || sp == INVALID_HANDLE_VALUE) {
-    snprintf(why, whylen, "no Windows handle behind descriptor %d or %d",
-             net_fd, sp_fd);
+  ctl = (HANDLE)_get_osfhandle(ctl_fd);
+  if (net == INVALID_HANDLE_VALUE || sp == INVALID_HANDLE_VALUE ||
+      ctl == INVALID_HANDLE_VALUE) {
+    snprintf(why, whylen,
+             "no Windows handle behind descriptor %d, %d or %d", net_fd, sp_fd,
+             ctl_fd);
     return 0;
   }
 
@@ -244,13 +253,15 @@ int win32_relay_spawn(const char* account, int net_fd, int sp_fd,
       !set_low_integrity(prim, why, whylen))
     goto done;
 
-  /* The two handles, and ONLY the two (description block). */
+  /* The three handles, and ONLY the three (description block). */
   if (!dup_inheritable(net, &netInh, "DuplicateHandle(connection)", why,
                        whylen) ||
-      !dup_inheritable(sp, &spInh, "DuplicateHandle(socketpair)", why, whylen))
+      !dup_inheritable(sp, &spInh, "DuplicateHandle(socketpair)", why, whylen) ||
+      !dup_inheritable(ctl, &ctlInh, "DuplicateHandle(control)", why, whylen))
     goto done;
   list[0] = netInh;
   list[1] = spInh;
+  list[2] = ctlInh;
 
   InitializeProcThreadAttributeList(NULL, 1, 0, &alen);
   six.lpAttributeList =
@@ -266,9 +277,10 @@ int win32_relay_spawn(const char* account, int net_fd, int sp_fd,
   six.StartupInfo.cb = sizeof(six);
   six.StartupInfo.lpDesktop = (char*)"winsta0\\default";
 
-  snprintf(cmd, sizeof(cmd), "\"%s\" %llu %llu %d", exe,
+  snprintf(cmd, sizeof(cmd), "\"%s\" %llu %llu %llu %d", exe,
            (unsigned long long)(uintptr_t)netInh,
-           (unsigned long long)(uintptr_t)spInh, timeout_ms);
+           (unsigned long long)(uintptr_t)spInh,
+           (unsigned long long)(uintptr_t)ctlInh, timeout_ms);
 
   /* The account's own environment block: without one the child has no
      SystemRoot, and the UCRT refuses to start. */
@@ -294,6 +306,8 @@ done:
     CloseHandle(netInh);
   if (spInh)
     CloseHandle(spInh);
+  if (ctlInh)
+    CloseHandle(ctlInh);
   if (six.lpAttributeList) {
     DeleteProcThreadAttributeList(six.lpAttributeList);
     HeapFree(GetProcessHeap(), 0, six.lpAttributeList);
