@@ -86,7 +86,11 @@ function Probe-System([string[]]$pids, [string]$label) {
     return $o
 }
 
-function Verdict([string[]]$o, [string]$pid) {
+# NOT $pid: that is an AUTOMATIC variable (the running process's id) and is
+# read-only - the parser accepts it as a parameter name and the first
+# assignment throws "Cannot overwrite variable pid".  Same class as the $args
+# trap in CLAUDE.md; cost this probe its first elevated run, 17 Sep 2026.
+function Verdict([string[]]$o, [string]$cygpid) {
     $line = $o | Where-Object { $_ -match 'kill\(pid,0\)' } | Select-Object -First 1
     if (-not $line) { return 'NO ANSWER' }
     if ($line -match 'reads this as (ALIVE|LOST)') { return $Matches[1] + '  (' + ($line -replace '^\s+', '') + ')' }
