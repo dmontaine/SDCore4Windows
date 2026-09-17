@@ -160,9 +160,10 @@ int win32_admin_only(const char* path, char* why, size_t whylen);
    last server handle.  Only the front knows, after SCRAM, that there is going
    to be a session at all - hence one message each way:
 
-     front -> relay   SD_RELAY_CTL_PIPE, payload the pipe's name.  "Create
-                      this as a single-instance server and be ready to cut
-                      over to it."
+     front -> relay   SD_RELAY_CTL_PIPE, payload the pipe's name, a NUL, and
+                      the SID (SDDL text) that may open the CLIENT end.
+                      "Create this as a single-instance server, let that one
+                      party in, and be ready to cut over to it."
      relay -> front   SD_RELAY_CTL_READY, empty payload: it exists, open the
                       client end now.  Or SD_RELAY_CTL_FAILED with the reason
                       as text, and the front fails the login CLOSED rather
@@ -186,6 +187,16 @@ int win32_admin_only(const char* path, char* why, size_t whylen);
    a bound on a bug rather than on an attacker, and it also refuses the empty
    name that a truncated frame would otherwise present as a valid one. */
 #define SD_RELAY_PIPE_PREFIX  "\\\\.\\pipe\\sd-api-"
+
+/* WHY THE SID TRAVELS RATHER THAN BEING "SY" IN THE RELAY.  The only party
+   that opens the client end is the front, and the front is LocalSystem, so
+   the relay COULD assume it.  It reads the SID out of its own token instead
+   and sends it, for two reasons: an assumption that is never checked is one
+   nothing reports when it stops holding, and a hard-coded SY makes the
+   handover reachable only by a test running as LocalSystem - so the cutover
+   would have had no free guard at all.  The relay validates the SID parses
+   before it reaches the DACL. */
+int win32_my_sid(char* out, size_t outlen, char* why, size_t whylen);
 
 /* sd_tlssrv.c, the front's half.  Have the relay stand up the handover pipe
    and wait for its answer; non-zero when the pipe exists and the client end

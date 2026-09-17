@@ -78,6 +78,7 @@
    only.  No SD header is included, so win32tls.c's rule is kept. */
 #include <winsock2.h>
 #include <windows.h>
+#include <sddl.h>                     /* the handover pipe's DACL, in SDDL */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -344,6 +345,338 @@ static int handshake(SSL* ssl, int timeout_ms, char* err, size_t errlen) {
 }
 
 /* ======================================================================
+   THE HANDOVER (RELEASE_1.1 55): the relay becomes the pipe's SERVER
+
+   WHY THE SERVER IS HERE AND NOT IN THE FRONT.  A named pipe instance dies
+   with its last SERVER handle, and the front exits as soon as the handover is
+   done - that is the whole point of 55, no LocalSystem left in the
+   authenticated data path.  So the end that has to outlive the front is the
+   end that lives here.
+
+   WHAT THE DACL IS FOR.  The only party that ever opens the CLIENT end is the
+   front, which is LocalSystem; it then hands the handle to the session it
+   spawned, and an inherited handle carries its access rather than being
+   re-checked.  So SYSTEM alone is both necessary and sufficient, and the
+   session's own account needs no ACE.  Single instance on top of that: once
+   the front has connected, nothing else can.
+
+   MEASURED BEFORE IT WAS BUILT, because it decides the topology rather than a
+   detail inside it: gplbld/probe-lowpipe.c ran this create under a token at
+   integrity Low with EVERY PRIVILEGE REMOVED - the relay's own shape - and it
+   succeeded, with a Medium control beside it so a failure would have been
+   attributable.  That probe is the same user, not the bare account in its
+   session-0 logon session, so the remainder closes on the cycle.            */
+
+static HANDLE handover_pipe = INVALID_HANDLE_VALUE;
+
+/* Defined with the rest of the pump, below. */
+static int ssl_write_all(SSL* ssl, const unsigned char* p, int len);
+
+/* One control frame to the front: opcode, u16 length, payload (sd_tls.h). */
+static int ctl_send(unsigned char op, const char* text) {
+  unsigned char hdr[3];
+  size_t len = text ? strlen(text) : 0;
+
+  if (len > SD_RELAY_CTL_MAX)
+    len = SD_RELAY_CTL_MAX;
+  hdr[0] = op;
+  hdr[1] = (unsigned char)((len >> 8) & 0xFF);
+  hdr[2] = (unsigned char)(len & 0xFF);
+  if (ctl_sock == INVALID_SOCKET)
+    return 0;
+  if (!send_all(ctl_sock, hdr, sizeof(hdr)))
+    return 0;
+  if (len > 0 && !send_all(ctl_sock, (const unsigned char*)text, len))
+    return 0;
+  return 1;
+}
+
+/* One control frame from the front.  1 got one, 0 the front closed the
+   channel, -1 it is unusable.  text is NUL-terminated on 1.               */
+static int ctl_recv(unsigned char* op, char* text, size_t textlen, size_t* got,
+                    ULONGLONG deadline) {
+  unsigned char hdr[3];
+  size_t len;
+  int r;
+
+  r = recv_all(ctl_sock, hdr, sizeof(hdr), deadline);
+  if (r != 1)
+    return r == 0 ? 0 : -1;
+  len = ((size_t)hdr[1] << 8) | hdr[2];
+  if (len > SD_RELAY_CTL_MAX || len >= textlen)
+    return -1;
+  if (len > 0 && recv_all(ctl_sock, (unsigned char*)text, len, deadline) != 1)
+    return -1;
+  text[len] = '\0';
+  *op = hdr[0];
+  *got = len;
+  return 1;
+}
+
+/* Create the handover pipe.  name is the frame's payload: the pipe's name, a
+   NUL, and the SID that may open the client end.  Non-zero with the pipe
+   standing, zero with err - and err goes back to the front, which fails the
+   login rather than handing a session a channel nothing is listening on. */
+static int make_handover_pipe(const char* name, size_t framelen, char* err,
+                              size_t errlen) {
+  SECURITY_ATTRIBUTES sa;
+  PSECURITY_DESCRIPTOR sd = NULL;
+  PSID parsed = NULL;
+  const char* sid;
+  char sddl[320];
+  size_t prefixlen = strlen(SD_RELAY_PIPE_PREFIX);
+  size_t namelen = strlen(name);
+
+  if (handover_pipe != INVALID_HANDLE_VALUE) {
+    snprintf(err, errlen, "a handover pipe already stands on this connection");
+    return 0;
+  }
+  /* The front is the only writer on this channel, so these are bounds on a
+     bug rather than on an attacker - and they also refuse the empty name and
+     the missing SID that a truncated frame would otherwise present as a
+     valid request. */
+  if (strncmp(name, SD_RELAY_PIPE_PREFIX, prefixlen) != 0 ||
+      name[prefixlen] == '\0') {
+    snprintf(err, errlen, "the handover pipe name does not begin with %s",
+             SD_RELAY_PIPE_PREFIX);
+    return 0;
+  }
+  if (namelen + 1 >= framelen) {
+    snprintf(err, errlen, "the handover request carries no SID");
+    return 0;
+  }
+  sid = name + namelen + 1;
+  /* Parsed before it reaches the SDDL, so a malformed one is refused as a
+     SID instead of becoming whatever text it happens to be. */
+  if (!ConvertStringSidToSidA(sid, &parsed)) {
+    snprintf(err, errlen, "the handover request's SID does not parse");
+    return 0;
+  }
+  LocalFree(parsed);
+  if (snprintf(sddl, sizeof(sddl), "D:(A;;GA;;;%s)", sid) >= (int)sizeof(sddl)) {
+    snprintf(err, errlen, "the handover request's SID is too long");
+    return 0;
+  }
+  if (!ConvertStringSecurityDescriptorToSecurityDescriptorA(
+          sddl, SDDL_REVISION_1, &sd, NULL)) {
+    snprintf(err, errlen, "cannot build the handover pipe's DACL (error %lu)",
+             (unsigned long)GetLastError());
+    return 0;
+  }
+  sa.nLength = sizeof(sa);
+  sa.lpSecurityDescriptor = sd;
+  sa.bInheritHandle = FALSE;
+
+  handover_pipe =
+      CreateNamedPipeA(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+                       PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1,
+                       RELAY_BUFFER * 4, RELAY_BUFFER * 4, 0, &sa);
+  LocalFree(sd);
+  if (handover_pipe == INVALID_HANDLE_VALUE) {
+    snprintf(err, errlen, "cannot create %.200s (error %lu)", name,
+             (unsigned long)GetLastError());
+    return 0;
+  }
+  return 1;
+}
+
+/* Wait for the front's client end.  It has almost always connected already -
+   the front opens it the moment it is told READY, and only then closes the
+   app side - so ERROR_PIPE_CONNECTED is the normal answer, not an error. */
+static int connect_handover(int timeout_ms) {
+  OVERLAPPED ov;
+  HANDLE ev = CreateEventA(NULL, TRUE, FALSE, NULL);
+  DWORD unused = 0;
+  int ok = 0;
+
+  if (ev == NULL)
+    return 0;
+  ZeroMemory(&ov, sizeof(ov));
+  ov.hEvent = ev;
+  if (ConnectNamedPipe(handover_pipe, &ov)) {
+    ok = 1;
+  } else {
+    DWORD e = GetLastError();
+    if (e == ERROR_PIPE_CONNECTED) {
+      ok = 1;
+    } else if (e == ERROR_IO_PENDING) {
+      if (WaitForSingleObject(ev, (DWORD)timeout_ms) == WAIT_OBJECT_0)
+        ok = GetOverlappedResult(handover_pipe, &ov, &unused, FALSE) ? 1 : 0;
+      else
+        CancelIo(handover_pipe);
+    }
+  }
+  CloseHandle(ev);
+  return ok;
+}
+
+/* ======================================================================
+   PHASE B: the client <-> the session, with the front gone
+
+   ONE THREAD, TWO KINDS OF HANDLE, AND THAT IS THE WHOLE DIFFICULTY.  The
+   network side is a socket and the session side is a pipe, and no single
+   Windows wait covers both as they are: WSAPoll takes sockets only, and
+   WaitForMultipleObjects takes kernel objects only.  So the socket is given
+   an event with WSAEventSelect and the pipe is read with OVERLAPPED I/O, and
+   one WaitForMultipleObjects covers both.
+
+   gplbld/probe-relaycutover.c measured the cutover with a 200 ms poll and a
+   PeekNamedPipe instead, and said in its own text that the product would use
+   overlapped I/O.  It would have worked - and it would have put up to 200 ms
+   on every response an API client waits for, which is a performance
+   regression against what the socketpair does today.
+
+   FD_READ IS EDGE-TRIGGERED AND THIS IS THE PART THAT HANGS IF IT IS GOT
+   WRONG.  It re-arms when a recv on the socket answers WSAEWOULDBLOCK, not
+   when data remains.  SSL_read may return a whole record while more bytes sit
+   in the socket, so a single SSL_read per signal can leave data unread with
+   no further event coming.  The cure is to drain: keep calling SSL_read until
+   it answers WANT_READ, which is precisely OpenSSL telling us its recv got
+   WSAEWOULDBLOCK and the event is armed again.  SSL_pending is checked too,
+   for bytes OpenSSL has decrypted and is holding.                          */
+
+static int pipe_write_all(HANDLE pipe, const unsigned char* buf, size_t len) {
+  OVERLAPPED ov;
+  HANDLE ev = CreateEventA(NULL, TRUE, FALSE, NULL);
+  size_t off = 0;
+  int ok = 1;
+
+  if (ev == NULL)
+    return 0;
+  while (off < len) {
+    DWORD wrote = 0;
+    ZeroMemory(&ov, sizeof(ov));
+    ov.hEvent = ev;
+    ResetEvent(ev);
+    if (!WriteFile(pipe, buf + off, (DWORD)(len - off), &wrote, &ov)) {
+      if (GetLastError() != ERROR_IO_PENDING) {
+        ok = 0;
+        break;
+      }
+      if (!GetOverlappedResult(pipe, &ov, &wrote, TRUE)) {
+        ok = 0;
+        break;
+      }
+    }
+    if (wrote == 0) {
+      ok = 0;
+      break;
+    }
+    off += wrote;
+  }
+  CloseHandle(ev);
+  return ok;
+}
+
+/* Drain everything readable from the TLS side into the pipe.  0 means the
+   client ended or the connection failed; 1 means drained for now.         */
+static int drain_net_to_pipe(SSL* ssl, HANDLE pipe) {
+  unsigned char buf[RELAY_BUFFER];
+
+  for (;;) {
+    int n = SSL_read(ssl, buf, (int)sizeof(buf));
+    if (n > 0) {
+      if (!pipe_write_all(pipe, buf, (size_t)n))
+        return 0;
+      continue;
+    }
+    {
+      int e = SSL_get_error(ssl, n);
+      if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE)
+        return 1;                      /* armed again; nothing more for now */
+      return 0;                        /* close_notify, reset, or a fault */
+    }
+  }
+}
+
+static void relay_phase_b(SSL* ssl, HANDLE pipe) {
+  WSAEVENT netev = WSACreateEvent();
+  HANDLE readev = CreateEventA(NULL, TRUE, FALSE, NULL);
+  HANDLE waits[2];
+  OVERLAPPED ov;
+  unsigned char buf[RELAY_BUFFER];
+  int pending = 0;
+
+  if (netev == WSA_INVALID_EVENT || readev == NULL)
+    goto done;
+  if (WSAEventSelect(net_sock, netev, FD_READ | FD_CLOSE) != 0)
+    goto done;
+
+  /* Drain before waiting, for what arrived during the cutover.
+     DEFENSIVE, AND SAY SO: removing this line was run as a mutant against
+     test-tlsrelay-units.py's handover rows and they all still passed, which
+     means WSAEventSelect does signal FD_READ for data already waiting in the
+     SOCKET - so the measured path does not need it.  The case it covers is
+     the other one: bytes OpenSSL has already pulled off the socket and is
+     holding, where the socket is empty and no FD_READ is ever coming.  That
+     needs two TLS records to arrive in one segment at a particular moment,
+     which the test cannot produce to order, so this is reasoning rather than
+     a measurement and is kept on those terms. */
+  if (!drain_net_to_pipe(ssl, pipe))
+    goto done;
+
+  for (;;) {
+    DWORD w;
+
+    if (!pending) {
+      DWORD got = 0;
+      ZeroMemory(&ov, sizeof(ov));
+      ov.hEvent = readev;
+      ResetEvent(readev);
+      if (!ReadFile(pipe, buf, (DWORD)sizeof(buf), &got, &ov) &&
+          GetLastError() != ERROR_IO_PENDING)
+        goto done;                     /* the session ended */
+      pending = 1;
+    }
+
+    waits[0] = (HANDLE)netev;
+    waits[1] = readev;
+    w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
+    if (w != WAIT_OBJECT_0 && w != WAIT_OBJECT_0 + 1)
+      goto done;
+
+    /* The net side.  WSAEnumNetworkEvents resets the event and says which
+       bits fired; asking with a zero wait covers the case where the pipe
+       woke us and the socket fired as well. */
+    if (WaitForSingleObject((HANDLE)netev, 0) == WAIT_OBJECT_0) {
+      WSANETWORKEVENTS ne;
+      if (WSAEnumNetworkEvents(net_sock, netev, &ne) != 0)
+        goto done;
+      if (ne.lNetworkEvents & (FD_READ | FD_CLOSE)) {
+        if (!drain_net_to_pipe(ssl, pipe))
+          goto done;
+      }
+    }
+
+    /* The session side. */
+    if (pending && WaitForSingleObject(readev, 0) == WAIT_OBJECT_0) {
+      DWORD got = 0;
+      int ok = GetOverlappedResult(pipe, &ov, &got, FALSE);
+      pending = 0;
+      if (!ok || got == 0)
+        goto done;                     /* ERROR_BROKEN_PIPE: session ended */
+      if (!ssl_write_all(ssl, buf, (int)got))
+        goto done;
+    }
+  }
+
+done:
+  if (pending)
+    CancelIo(pipe);
+  if (readev != NULL)
+    CloseHandle(readev);
+  if (netev != WSA_INVALID_EVENT)
+    WSACloseEvent(netev);
+  /* GRACEFULLY, and this is a measured lesson rather than tidiness: a
+     forcible DisconnectNamedPipe makes the far side read ECOMM(70) instead of
+     end of file, and probe-sessionpipe's leg 4 failed exactly that way until
+     it was fixed.  The session must see EOF. */
+  FlushFileBuffers(pipe);
+  CloseHandle(pipe);
+  handover_pipe = INVALID_HANDLE_VALUE;
+}
+
+/* ======================================================================
    relay()  -  copy both ways until either side ends                      */
 
 /* SSL_write the whole buffer over the non-blocking connection. */
@@ -371,11 +704,28 @@ static int ssl_write_all(SSL* ssl, const unsigned char* p, int len) {
   return 1;
 }
 
+/* PHASE A - the front is the app side.  Everything here behaved this way
+   before RELEASE_1.1 55 and still does for a connection that never
+   authenticates; what 55 adds is the third descriptor and one exit.
+
+   READING THE NET STOPS AT THE HANDOVER REQUEST, NOT AT THE CUTOVER.  Once
+   the front has asked for the pipe, SCRAM is finished and every byte the
+   client sends next belongs to the session.  Forwarding one of those to the
+   front would lose it: the front is about to exit and will never read it.
+   The front still has the server-final to flush, so the OTHER direction -
+   app side to client - keeps running until the front closes it.
+   probe-relaycutover measured the byte that arrives during the switch coming
+   out at the session; stopping one step earlier makes that window smaller
+   still.                                                                   */
+
 static void relay(SSL* ssl) {
   unsigned char buf[RELAY_BUFFER];
+  int reading_net = 1;                 /* until the handover is asked for */
+  int ctl_open = 1;                    /* until the front closes it */
 
   for (;;) {
-    WSAPOLLFD p[2];
+    WSAPOLLFD p[3];
+    int nfds = 2;
 
     p[0].fd = net_sock;
     p[0].events = POLLRDNORM;
@@ -383,15 +733,25 @@ static void relay(SSL* ssl) {
     p[1].fd = sp_sock;
     p[1].events = POLLRDNORM;
     p[1].revents = 0;
+    p[2].fd = ctl_sock;
+    p[2].events = POLLRDNORM;
+    p[2].revents = 0;
+    if (ctl_open)
+      nfds = 3;
 
     /* Decrypted bytes OpenSSL already holds are invisible to WSAPoll. */
-    if (SSL_pending(ssl) > 0) {
+    if (reading_net && SSL_pending(ssl) > 0) {
       p[0].revents = POLLRDNORM;
-    } else if (WSAPoll(p, 2, -1) < 0) {
-      return;
+    } else {
+      /* A net side nobody is reading must not be polled either, or the loop
+         spins on a readable socket it has decided to leave alone. */
+      if (!reading_net)
+        p[0].events = 0;
+      if (WSAPoll(p, nfds, -1) < 0)
+        return;
     }
 
-    if (p[0].revents & (POLLRDNORM | POLLHUP | POLLERR)) {
+    if (reading_net && (p[0].revents & (POLLRDNORM | POLLHUP | POLLERR))) {
       int n = SSL_read(ssl, buf, (int)sizeof(buf));
       if (n <= 0) {
         int e = SSL_get_error(ssl, n);
@@ -404,8 +764,22 @@ static void relay(SSL* ssl) {
 
     if (p[1].revents & (POLLRDNORM | POLLHUP | POLLERR)) {
       int n = recv(sp_sock, (char*)buf, (int)sizeof(buf), 0);
-      if (n == 0)
-        return;                        /* sd ended the session */
+      if (n == 0) {
+        /* THE FRONT HAS FINISHED.  With a pipe standing this is the cutover
+           signal; without one it is what it has always been, the end of the
+           session. */
+        if (handover_pipe == INVALID_HANDLE_VALUE)
+          return;
+        closesocket(sp_sock);
+        sp_sock = INVALID_SOCKET;
+        if (!connect_handover(SD_TLS_HANDSHAKE_MS)) {
+          CloseHandle(handover_pipe);
+          handover_pipe = INVALID_HANDLE_VALUE;
+          return;
+        }
+        relay_phase_b(ssl, handover_pipe);
+        return;
+      }
       if (n < 0) {
         if (WSAGetLastError() == WSAEWOULDBLOCK)
           continue;
@@ -413,6 +787,35 @@ static void relay(SSL* ssl) {
       }
       if (!ssl_write_all(ssl, buf, n))
         return;
+    }
+
+    if (ctl_open && (p[2].revents & (POLLRDNORM | POLLHUP | POLLERR))) {
+      unsigned char op = 0;
+      char text[SD_RELAY_CTL_MAX + 1];
+      char err[512];
+      size_t textlen = 0;
+      int r = ctl_recv(&op, text, sizeof(text), &textlen, now_ms() + 5000);
+
+      if (r != 1) {
+        /* The front closed or broke the channel.  No handover is coming; the
+           connection carries on as a pre-55 one and ends when sd does. */
+        ctl_open = 0;
+        continue;
+      }
+      if (op != SD_RELAY_CTL_PIPE) {
+        (void)ctl_send(SD_RELAY_CTL_FAILED, "unknown control opcode");
+        continue;
+      }
+      if (!make_handover_pipe(text, textlen, err, sizeof(err))) {
+        (void)ctl_send(SD_RELAY_CTL_FAILED, err);
+        continue;
+      }
+      if (!ctl_send(SD_RELAY_CTL_READY, NULL)) {
+        CloseHandle(handover_pipe);    /* the front will never open it */
+        handover_pipe = INVALID_HANDLE_VALUE;
+        return;
+      }
+      reading_net = 0;
     }
   }
 }

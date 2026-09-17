@@ -319,7 +319,7 @@ sdtlsrelay:
 	@echo Building native TLS relay
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(RELAYDIR)/sdtlsrelay.c -o $(GPLBIN)sdtlsrelay.exe \
-	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32
+	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32
 
 # 12 Sep 26 Windows port - the Python helper, PROJECT_STATUS.md 5.27.
 #

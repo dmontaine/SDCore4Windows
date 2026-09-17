@@ -82,6 +82,7 @@
 int win32_relay_spawn(const char* account, int net_fd, int sp_fd, int ctl_fd,
                       int timeout_ms, void** proc, char* why, size_t whylen);
 int win32_relay_exit_code(void* proc, int wait_ms);
+int win32_my_sid(char* out, size_t outlen, char* why, size_t whylen);
 
 #define RELAY_EXE_NAME "sdtlsrelay.exe"        /* SD_RELAY_EXE in sd_tls.h */
 
@@ -318,6 +319,41 @@ done:
     CloseHandle(prim);
   if (imp)
     CloseHandle(imp);
+  return ok;
+}
+
+/* ======================================================================
+   win32_my_sid()  -  this process's own user SID, as SDDL text
+
+   RELEASE_1.1 55.  The front tells the relay which SID may open the handover
+   pipe's client end, and the answer is the front's own: it is the only party
+   that opens it, and it then hands the HANDLE to the session it spawned,
+   which is not an access check.  Read rather than assumed - see sd_tls.h. */
+
+int win32_my_sid(char* out, size_t outlen, char* why, size_t whylen) {
+  HANDLE tok = NULL;
+  BYTE buf[1024];
+  DWORD len = 0;
+  char* text = NULL;
+  int ok = 0;
+
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
+    win_error("OpenProcessToken", why, whylen);
+    return 0;
+  }
+  if (!GetTokenInformation(tok, TokenUser, buf, sizeof(buf), &len)) {
+    win_error("GetTokenInformation(TokenUser)", why, whylen);
+  } else if (!ConvertSidToStringSidA(((TOKEN_USER*)buf)->User.Sid, &text)) {
+    win_error("ConvertSidToStringSid", why, whylen);
+  } else if (strlen(text) >= outlen) {
+    snprintf(why, whylen, "no room for the SID %s", text);
+  } else {
+    strcpy(out, text);
+    ok = 1;
+  }
+  if (text)
+    LocalFree(text);
+  CloseHandle(tok);
   return ok;
 }
 

@@ -629,6 +629,8 @@ int sd_tls_relay_pipe(char* pipename, size_t namelen, int timeout_ms,
   unsigned char frame[3];
   unsigned char rnd[8];
   char text[SD_RELAY_CTL_MAX + 1];
+  char sid[256];
+  char payload[SD_RELAY_CTL_MAX + 1];
   size_t len;
   size_t i;
   char suffix[2 * sizeof(rnd) + 1];
@@ -667,20 +669,31 @@ int sd_tls_relay_pipe(char* pipename, size_t namelen, int timeout_ms,
     pipename[0] = '\0';
     return 0;
   }
-  len = strlen(pipename);
-  if (len > SD_RELAY_CTL_MAX) {
-    snprintf(why, whylen, "the handover pipe name is %lu bytes, over the %d "
-                          "the control channel carries",
+
+  /* The payload is the name, a NUL, and the SID that may open the client end
+     - this process's own, read from its token rather than assumed to be
+     LocalSystem's (sd_tls.h says why). */
+  if (!win32_my_sid(sid, sizeof(sid), why, whylen)) {
+    pipename[0] = '\0';
+    return 0;
+  }
+  len = strlen(pipename) + 1 + strlen(sid);
+  if (len > SD_RELAY_CTL_MAX || len + 1 > sizeof(payload)) {
+    snprintf(why, whylen, "the handover request is %lu bytes, over the %d the "
+                          "control channel carries",
              (unsigned long)len, SD_RELAY_CTL_MAX);
     pipename[0] = '\0';
     return 0;
   }
+  memcpy(payload, pipename, strlen(pipename));
+  payload[strlen(pipename)] = '\0';
+  memcpy(payload + strlen(pipename) + 1, sid, strlen(sid));
 
   frame[0] = SD_RELAY_CTL_PIPE;
   frame[1] = (unsigned char)((len >> 8) & 0xFF);
   frame[2] = (unsigned char)(len & 0xFF);
   if (!write_all(relay_ctl_fd, frame, sizeof(frame)) ||
-      !write_all(relay_ctl_fd, pipename, len)) {
+      !write_all(relay_ctl_fd, payload, len)) {
     snprintf(why, whylen, "cannot ask the relay for the handover pipe: %s",
              strerror(errno));
     pipename[0] = '\0';
