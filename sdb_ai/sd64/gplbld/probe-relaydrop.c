@@ -394,7 +394,7 @@ static int parent(const char* dir, const char* account) {
   HANDLE upW = NULL, downR = NULL;
   int pong = 0, piped = 0;
 
-  say("probe-relaydrop PARENT (iteration 4)");
+  say("probe-relaydrop PARENT (iteration 5)");
   say("  running as        : %s", my_account());
   say("  SeTcbPrivilege    : %s", has_privilege("SeTcbPrivilege") ? "yes" : "NO");
   say("  SeAssignPrimary   : %s",
