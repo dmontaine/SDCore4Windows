@@ -27,7 +27,11 @@
     See the .c header.
 
     Build, from gplbld in MSYS2's bash:
-      gcc -O2 -Wall -o probe-relaydrop.exe probe-relaydrop.c -lsecur32 -ladvapi32 -lws2_32 -luserenv
+      gcc -O2 -Wall -o probe-relaydrop.exe probe-relaydrop.c probe-cygsock-cyg.c -lcygwin -lsecur32 -ladvapi32 -lws2_32 -luserenv
+    (-lcygwin FIRST - see the .c header.)
+
+    ITERATION 4 (16 Sep 26): Low integrity, a CYGWIN-accepted non-blocking
+    socket waited on with WSAPoll, and the child's report sent over the pipe.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File probe-relaydrop.ps1
@@ -124,10 +128,15 @@ $null = & icacls.exe $Stage /grant "*S-1-5-18:(OI)(CI)F" /T
 if ($LASTEXITCODE -ne 0) { Refuse "icacls could not grant SYSTEM on $Stage." }
 $null = & icacls.exe $Stage /grant "${Account}:(OI)(CI)M" /T
 if ($LASTEXITCODE -ne 0) { Refuse "icacls could not grant $Account on $Stage." }
-# Medium integrity, like the proven svcimp harness - the SYSTEM parent writes
-# parent.log here.  The Low-integrity drop (which would force a Low output dir)
-# is the next iteration, once the account switch is confirmed.
+# The stage itself stays Medium: an earlier run labelled the WHOLE stage Low and
+# the SYSTEM parent then wrote no log.  Only the child's working directory is
+# Low-labelled, so a Low child can write there if its runtime lets it.
 Say "  staged            : $Stage (SYSTEM full; $Account modify; Medium integrity)"
+$LowDir = Join-Path $Stage 'low'
+$null = New-Item -ItemType Directory -Path $LowDir -Force
+$null = & icacls.exe $LowDir /setintegritylevel '(OI)(CI)low'
+if ($LASTEXITCODE -ne 0) { Refuse "icacls could not label $LowDir Low." }
+Say "  low subdirectory  : $LowDir (Low-labelled; the child's working directory)"
 
 # ---------------------------------------------------------------------------
 Step 'Running the parent as LocalSystem'
@@ -141,7 +150,9 @@ Say '  parent            : started as SYSTEM'
 
 $pLog = Join-Path $Stage 'parent.log'
 $cLog = Join-Path $Stage 'child.log'
-$deadline = (Get-Date).AddSeconds(45)
+# Iteration 4's parent can take ~42 s at worst (1.5 s delay, 10 s PONG wait,
+# 30 s child wait), so 45 s would cut a slow failure off before it reported.
+$deadline = (Get-Date).AddSeconds(75)
 while ((Get-Date) -lt $deadline) {
     if ((Test-Path -LiteralPath $pLog) -and
         (Select-String -LiteralPath $pLog -Pattern 'PARENT DONE|REFUSED' -Quiet)) { break }
@@ -173,8 +184,10 @@ if (-not (Test-Path -LiteralPath $pLog)) {
 }
 $p = Get-Content -LiteralPath $pLog -Raw
 if ($p -match 'REFUSED') { Refuse 'the parent refused - its reason is above (likely the mint, the strip, or CreateProcessAsUser).' }
-if (-not (Test-Path -LiteralPath $cLog)) {
-    Refuse 'the child produced no log: it did not start, or could not write even a Low-integrity file. The parent''s child-exit-code line above is the next clue.'
+# Iteration 4: child.log is written by the PARENT from what the child sent over
+# the relay->sd pipe, so an absent or empty one means the child reported nothing.
+if (-not (Test-Path -LiteralPath $cLog) -or -not (Get-Content -LiteralPath $cLog -Raw)) {
+    Refuse 'the child reported nothing over the pipe: it did not start, or died before its first line. The parent''s child-exit-code line above is the next clue.'
 }
 
 # ---------------------------------------------------------------------------
@@ -183,15 +196,19 @@ Step 'Verdict'
 $c = Get-Content -LiteralPath $cLog -Raw
 $ranAs   = if ($c -match '(?m)running as\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '' }
 $privCnt = if ($c -match '(?m)privilege count\s*:\s*(\d+)') { [int]$Matches[1] } else { -1 }
-$integ   = if ($c -match '(?m)integrity level\s*:\s*(\S+)') { $Matches[1] } else { '' }
-$owner   = if ($c -match '(?m)file I/O owner\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '' }
+$integ   = if ($c -match '(?m)integrity level\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '' }
+$fcyg    = if ($c -match '(?m)file I/O cygwin\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
+$fnat    = if ($c -match '(?m)file I/O native\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
+$swait   = if ($c -match '(?m)socket wait\s*:\s*(.+?)\s*$')     { $Matches[1].Trim() } else { '<not reported>' }
 
 Say "  child ran as      : $(if ($ranAs) { $ranAs } else { '<not reported>' })"
 Say "  privilege count   : $(if ($privCnt -ge 0) { $privCnt } else { '<not reported>' })"
 Say "  integrity level   : $(if ($integ) { $integ } else { '<not reported>' })"
-Say "  file I/O owner    : $(if ($owner) { $owner } else { '<not reported>' })"
+Say "  file I/O cygwin   : $fcyg   (informational - the relay writes no files)"
+Say "  file I/O native   : $fnat   (informational)"
+Say "  socket wait       : $swait"
 
-if (-not $ranAs -or $privCnt -lt 0) { Refuse 'the child log is missing the identity or privilege lines.' }
+if (-not $ranAs -or $privCnt -lt 0 -or -not $integ) { Refuse 'the child report is missing the identity, privilege or integrity lines.' }
 
 if ($ranAs -like '*\SYSTEM' -or $ranAs -like 'NT AUTHORITY\SYSTEM') {
     Fail "the child ran as $ranAs, not the bare account - the strip/spawn did not change identity. Tier 2's mechanism does not hold as written."
@@ -203,48 +220,50 @@ if ($privCnt -ne 0) {
     Fail "the child ran as $ranAs but still holds $privCnt privilege(s) - the strip did not take."
 }
 
-# The FOUNDATION (the account switch) must hold first; integrity is Medium by
-# design this iteration (the Low drop is deferred).
-if ($owner -notlike "*\$Account") {
-    Fail "the child ran as $ranAs, $privCnt priv(s), but the file it created is owned by '$owner', not $Account - the account switch is wrong."
+# Low integrity is required, not informational (RELEASE_1.1 53).
+if ($integ -notlike 'Low*') {
+    Fail "the child ran as $ranAs with 0 privileges but at integrity '$integ', not Low - the Low drop did not take."
 }
 
-# The CRUX: did the handed-over socket round-trip?  parent.log ($p) reports the
-# parent's side, child.log ($c) the adopt and the bytes it read.
-# Iteration 3: the child uses the SOCKET through native Winsock and relays what
-# it read over an inherited pipe that the parent reads as a Cygwin fd.  Each leg
-# is anchored on wording printed only on its success path, and a leg the child
-# never attempted is refused rather than scored.
+# The handover, as the product would do it.  parent.log ($p) holds the parent's
+# side, child.log ($c) what the child sent back.  Each leg is anchored on wording
+# printed only on its success path.
 $sread     = if ($c -match '(?m)socket read\s*:\s*(.+?)\s*$')  { $Matches[1].Trim() } else { '<not reported>' }
-$pwrite    = if ($c -match '(?m)pipe write\s*:\s*(.+?)\s*$')   { $Matches[1].Trim() } else { '<not reported>' }
 $cread     = if ($c -match '(?m)pipe read\s*:\s*(.+?)\s*$')    { $Matches[1].Trim() } else { '<not reported>' }
 $pread     = if ($p -match '(?m)pipe read \(cygwin\)\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
 $roundTrip = [bool]($p -match 'ROUND TRIP WORKED')
 $piped     = [bool]($p -match 'THE PIPE CARRIED')
-Say "  socket read (child, native): $sread"
-Say "  pipe read   (child, native): $cread"
-Say "  pipe write  (child)        : $pwrite"
-Say "  pipe read   (parent, cygwin): $pread"
-Say "  socket round trip          : $(if ($roundTrip) { 'WORKED' } else { 'did NOT' })"
-Say "  pipe channel               : $(if ($piped) { 'WORKED' } else { 'did NOT' })"
+# The wait must have been real: PING goes 1500 ms after the spawn, so a poll
+# that returned at once would mean data was already queued and the
+# non-blocking case was never exercised.
+$waitedMs  = if ($swait -match 'after (\d+) ms') { [int]$Matches[1] } else { -1 }
+Say "  socket read (child, WSARecv)  : $sread"
+Say "  pipe read   (child, ReadFile) : $cread"
+Say "  pipe read   (parent, cygwin)  : $pread"
+Say "  child waited on empty socket  : $(if ($waitedMs -ge 0) { "$waitedMs ms" } else { '<not reported>' })"
+Say "  socket round trip             : $(if ($roundTrip) { 'WORKED' } else { 'did NOT' })"
+Say "  pipe channel                  : $(if ($piped) { 'WORKED' } else { 'did NOT' })"
 
-if ($sread -like 'NOT ATTEMPTED*' -or $sread -eq '<not reported>') {
-    Refuse 'the child never attempted the socket leg - the handles did not reach its command line.'
+if ($sread -eq '<not reported>') {
+    Refuse 'the child never reached the socket leg - see its report above.'
 }
 
 Say ''
-if ($roundTrip -and $piped -and ($sread -like '*PING-from-parent*')) {
-    Say "ANSWERED (FULL): the bare account '$Account' child read the inherited socket" -ForegroundColor Green
-    Say "  through native Winsock, answered on it, and exchanged bytes BOTH WAYS with"
-    Say "  a Cygwin parent over inherited duplicates of Cygwin pipe() ends.  The Linux"
-    Say "  per-connection shape - relay holds the connection, private channel to sd -"
-    Say "  has a working Windows handover.  (Integrity Medium; the Low drop is next.)"
+if ($roundTrip -and $piped -and ($sread -like '*PING-from-parent*') -and $waitedMs -ge 500) {
+    Say "ANSWERED (FULL): the bare account '$Account' child, at LOW integrity with 0" -ForegroundColor Green
+    Say "  privileges, waited on a CYGWIN-accepted non-blocking socket with WSAPoll,"
+    Say "  read it, answered on it, and exchanged bytes both ways with the Cygwin"
+    Say "  parent over inherited Cygwin pipe() ends.  The relay handover works as the"
+    Say "  product would do it; the product build is next."
     Cleanup
     exit 0
 }
+if ($roundTrip -and $piped -and $waitedMs -lt 500) {
+    Refuse "the round trip worked but the child's wait lasted $waitedMs ms - the socket was not empty when it waited, so the non-blocking case was not exercised."
+}
 
-Say "PARTIAL: the account switch HOLDS (child ran as $Account, 0 privileges, file" -ForegroundColor Yellow
-Say "  owned by it), but socket=$(if ($roundTrip) { 'ok' } else { 'FAILED' }), pipe=$(if ($piped) { 'ok' } else { 'FAILED' })."
+Say "PARTIAL: the child ran as $Account at $integ with 0 privileges, but" -ForegroundColor Yellow
+Say "  socket=$(if ($roundTrip) { 'ok' } else { 'FAILED' }), pipe=$(if ($piped) { 'ok' } else { 'FAILED' })."
 Say "  Read both logs above for which call refused."
 Cleanup
 exit 2
