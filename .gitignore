@@ -13,6 +13,10 @@ sdb_ai/sd64/bin/
 *.exe
 *.dll
 *.dll.a
+
+# Scratch output written beside a probe when it runs (the probe deletes and
+# rewrites it each run; the .c is the tracked record).
+sdb_ai/sd64/gplbld/probe-*-report.txt
 *.a
 *.o
 *.so
