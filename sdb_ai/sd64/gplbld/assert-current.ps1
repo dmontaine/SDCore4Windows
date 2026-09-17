@@ -1500,7 +1500,11 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # 16 Sep 26 - the free guard over install-service.ps1's
                   # relay-account step, after that step failed silently on
                   # its first cycle.  Ships nowhere.
-                  'test-installservice-units.ps1')
+                  'test-installservice-units.ps1',
+                  # 16 Sep 26 - the free guard over verify-lcnames.ps1's
+                  # elevated re-entry (its LOGTO SDSYS legs, since RELEASE_1.1
+                  # 45 closed that door unelevated).  Ships nowhere.
+                  'test-lcnameslegs-units.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

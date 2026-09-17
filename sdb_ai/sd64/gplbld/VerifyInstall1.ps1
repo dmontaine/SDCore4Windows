@@ -1218,7 +1218,11 @@ $needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1',
 # that gains the parameter without joining this list - or joins it without
 # having the parameter - fails in a second instead of costing a run its prompts.
 $helperAware = @('verify-osusers.ps1', 'verify-batchjob.ps1',
-                 'verify-doors-suite.ps1', 'verify-sdsyswrite.ps1')
+                 'verify-doors-suite.ps1', 'verify-sdsyswrite.ps1',
+                 # 16 Sep 26 - its five LOGTO SDSYS legs run in an elevated
+                 # re-entry since RELEASE_1.1 45 closed that door to an
+                 # unelevated session (ten rows red on b171).
+                 'verify-lcnames.ps1')
 
 # AN ArrayList RATHER THAN "$kept += $s", and the door step above says why in
 # its own words: a hashtable on the right of + is folded into an array as one

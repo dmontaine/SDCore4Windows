@@ -63,10 +63,32 @@ param(
     [string]$Account = $env:USERNAME,
     [string]$Tag     = 'lc1',
     [switch]$Keep,
-    [switch]$Cleanup
+    [switch]$Cleanup,
+
+    # 16 Sep 26 - RELEASE_1.1 45 closed LOGTO SDSYS to a session that did not
+    # start elevated, and this script has five legs that LOGTO SDSYS to read
+    # voc_template's own records (sections 3 and 6).  They ran unelevated and
+    # so were refused - ten rows red on b171, the first full run since 45 -
+    # measuring the door rather than the names.  Those legs now run in an
+    # ELEVATED re-entry of this same file: the parent writes the SD command
+    # lists to -RequestFile, the child runs each through the same Invoke-SD and
+    # writes the raw output to -ResultFile, the parent reads it back and judges
+    # exactly as before.  Internal; nobody types these.
+    [ValidateSet('', 'RunLegs')] [string]$Phase = '',
+    [string]$RequestFile = '',
+    [string]$ResultFile = '',
+    # The runner's helper pipe (PRE_RELEASE 165), so the elevated re-entry costs
+    # no consent of its own.  ADOPT ONLY - never started here (verify-osusers
+    # says why).  Not passed down to the re-entry, which is already elevated.
+    [string]$HelperPipe = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'elevate-once.ps1')
+if ($HelperPipe -ne '') {
+    $null = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step'
+}
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -133,6 +155,114 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
     }
     Remove-Job $job -Force
     return ($out -join "`n")
+}
+
+# ---------------------------------------------------------------------------
+# THE ELEVATED RE-ENTRY (see -Phase above).  The request file is sections of
+#   ### <name>
+#   <one SD command per line>
+# and the result file is the same sections holding Invoke-SD's raw output for
+# each, closed by "### END".  Nothing is judged here: the parent applies the
+# same Test-Reached / Test-StoredAs / -match rows it always did, so the ONLY
+# thing that moved is which token ran the SD session.  The child refuses the
+# null case out loud - no request, no legs, not elevated - with exit 2.
+if ($Phase -eq 'RunLegs') {
+    $lines = New-Object System.Collections.ArrayList
+    function Emit($t) { $null = $lines.Add($t) }
+    function Write-ResultFile {
+        [System.IO.File]::WriteAllLines($ResultFile, [string[]]$lines,
+                                        (New-Object System.Text.UTF8Encoding($false)))
+    }
+    if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+            ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Emit 'RESULT: elevated=no'; Write-ResultFile
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    Emit 'RESULT: elevated=yes'
+    if ($RequestFile -eq '' -or -not (Test-Path -LiteralPath $RequestFile)) {
+        Emit 'RESULT: legs=0'; Emit 'RESULT: error=no request file'; Write-ResultFile
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    $legs = [ordered]@{}
+    $cur = $null
+    foreach ($l in @(Get-Content -LiteralPath $RequestFile)) {
+        if ($l -match '^### (\S+)$') { $cur = $Matches[1]; $legs[$cur] = New-Object System.Collections.ArrayList }
+        elseif ($null -ne $cur -and $l -ne '') { $null = $legs[$cur].Add($l) }
+    }
+    Emit ('RESULT: legs=' + $legs.Count)
+    if ($legs.Count -eq 0) { Write-ResultFile; try { Stop-Transcript | Out-Null } catch { }; exit 2 }
+    foreach ($name in @($legs.Keys)) {
+        $cmds = [string[]]$legs[$name]
+        Write-Output ("  elevated leg {0}: {1}" -f $name, ($cmds -join ' ; '))
+        Emit ('### ' + $name)
+        foreach ($o in ((Invoke-SD $cmds) -split "`n")) { Emit $o }
+        Emit '### END'
+    }
+    Write-ResultFile
+    try { Stop-Transcript | Out-Null } catch { }
+    exit 0
+}
+
+# The parent's side.  Takes an ordered table name -> string[] of SD commands,
+# runs ONE elevated re-entry for the lot, and leaves name -> raw output in
+# $script:sdsysOut.  A leg the child did not answer is '' there and reads as
+# "nothing matched", which is the failing direction for every row that
+# consumes it.  A SCRIPT VARIABLE, NOT A RETURN VALUE: this function writes
+# progress lines with Write-Output, and a return value would travel in the same
+# pipeline as those lines - the caller would index an array of strings.
+# test-lcnameslegs-units.ps1 caught exactly that on the first draft.
+function Invoke-SDElevatedLegs([System.Collections.Specialized.OrderedDictionary]$legs) {
+    $answers = @{}
+    foreach ($k in @($legs.Keys)) { $answers[$k] = '' }
+    $script:sdsysOut = $answers
+    $work = Join-Path $env:TEMP ('vlc-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $null = New-Item -ItemType Directory -Path $work
+    try {
+        $req = Join-Path $work 'request.txt'
+        $res = Join-Path $work 'result.txt'
+        $body = New-Object System.Collections.ArrayList
+        foreach ($k in @($legs.Keys)) {
+            $null = $body.Add('### ' + $k)
+            foreach ($c in @($legs[$k])) { $null = $body.Add($c) }
+        }
+        [System.IO.File]::WriteAllLines($req, [string[]]$body, (New-Object System.Text.UTF8Encoding($false)))
+
+        # SINGLE-QUOTED, so backslashes are literal; an apostrophe is refused.
+        if (@(@($PSCommandPath, $req, $res) | Where-Object { $_ -match "'" }).Count -gt 0) {
+            Write-Output 'verify-lcnames: a path contains an apostrophe; the elevated launcher cannot be built safely.'
+            return
+        }
+        $call = "& '$PSCommandPath' -Phase 'RunLegs' -RequestFile '$req' -ResultFile '$res'"
+        $launcher = Join-Path $work 'phase.ps1'
+        [System.IO.File]::WriteAllText($launcher, (@($call, 'exit $LASTEXITCODE') -join "`r`n") + "`r`n",
+                                       [System.Text.Encoding]::ASCII)
+        # RULE 1: the real call, echoed before it runs.
+        Write-Output ('  elevated legs argv: ' + $call)
+        Write-Output ('  legs: ' + (@($legs.Keys) -join ', '))
+        $r = Invoke-ElevatedScript -Launcher $launcher -Why 'verify-lcnames SDSYS legs'
+        if (-not $r.Ok) {
+            Write-Output ('verify-lcnames: the elevated legs did not run: ' + $r.Reason)
+            return
+        }
+        if (-not (Test-Path -LiteralPath $res)) {
+            Write-Output '  (the elevated half wrote no result file)'
+            return
+        }
+        $cur = $null
+        $buf = New-Object System.Collections.ArrayList
+        foreach ($l in @(Get-Content -LiteralPath $res)) {
+            if ($l -match '^RESULT: (.*)$') { Write-Output ('  elevated half: ' + $Matches[1]); continue }
+            if ($l -eq '### END') { if ($null -ne $cur) { $answers[$cur] = ($buf -join "`n") }; $cur = $null; $buf.Clear(); continue }
+            if ($l -match '^### (\S+)$') { $cur = $Matches[1]; $buf.Clear(); continue }
+            if ($null -ne $cur) { $null = $buf.Add($l) }
+        }
+        $answered = @($answers.Keys | Where-Object { $answers[$_] -ne '' }).Count
+        Write-Output ("  elevated legs answered: {0} of {1}" -f $answered, $legs.Count)
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # The account DIRECTORY is lower case already (CREATEA downcases it), while the
@@ -368,7 +498,22 @@ try {
                   @{U='MESSAGES'; L='messages'},
                   @{U='QFILE';    L='qfile'},
                   @{U='OS.USERS'; L='os.users'})
-    $ctSys = Invoke-SD (@('LOGTO SDSYS') + @($sysPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($sysPairs | ForEach-Object { $_.L })))
+    # 16 Sep 26 - EVERY LOGTO SDSYS LEG IN THIS SCRIPT RUNS HERE, ONCE, ELEVATED
+    # (RELEASE_1.1 45 refuses LOGTO SDSYS to a session that did not start
+    # elevated - measured red on b171).  The command lists are unchanged; section
+    # 6's three legs are gathered into the same request so a standalone run
+    # costs one consent rather than four.  The judging stays where it was.
+    $sdsysLegs = [ordered]@{
+        sysct   = @('LOGTO SDSYS') + @($sysPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($sysPairs | ForEach-Object { $_.L }))
+        copypct = @('LOGTO SDSYS', 'CT VOC COPYP')
+        unknown = @('LOGTO SDSYS', 'ZZNOSUCHVERB')
+        copyp   = @('LOGTO SDSYS', 'COPYP')
+    }
+    Invoke-SDElevatedLegs $sdsysLegs          # fills $script:sdsysOut
+    $ctSys = $script:sdsysOut['sysct']
+    # THE DOOR ITSELF IS THE CONTROL: had the leg run unelevated, SD would say so.
+    Note 'SDSYS: the elevated leg was not refused at the door' $false ($ctSys -match 'restricted to privileged users|did not start elevated')
+    Note 'SDSYS: the elevated leg answered at all (null case refused)' $true ($ctSys -ne '')
     Note-Pairs $ctSys $sysPairs 'SDSYS: '
     # AND THE OTHER HALF OF THAT SPLIT IS ITSELF AN ASSERTION: those four are
     # administrative and must NOT have arrived in an ordinary account's VOC.
@@ -593,9 +738,10 @@ end
     Write-Output '  install, COPYP already answered "File name required", because CPROC:1436'
     Write-Output '  tests only voc.entry.type[1,1] and "Verb..." starts with V.  So the'
     Write-Output '  behaviour checks below are CONTROLS against regression, not a repair.'
-    Write-Output '  LOGTO SDSYS, because VOC_TEMPLATE becomes SDSYS s own VOC.'
+    Write-Output '  LOGTO SDSYS, because VOC_TEMPLATE becomes SDSYS s own VOC - so these'
+    Write-Output '  three legs ran in section 3 s elevated re-entry (RELEASE_1.1 45).'
 
-    $ctc = Invoke-SD @('LOGTO SDSYS', 'CT VOC COPYP')
+    $ctc = $script:sdsysOut['copypct']
     Note 'CT VOC COPYP shows a bare V type code' $true ($ctc -match '(?m)^\s*1:\s*V\s*$')
     Note 'and no longer the description text'    $false ($ctc -match 'Verb for Pick style COPY')
     Write-Output '  --- CT VOC COPYP said: ---'
@@ -603,8 +749,11 @@ end
 
     # Relative, not against a hardcoded message: COPYP must not answer the way an
     # unknown verb does, and must answer the way it did before the change.
-    $unknown = Invoke-SD @('LOGTO SDSYS', 'ZZNOSUCHVERB')
-    $copyp   = Invoke-SD @('LOGTO SDSYS', 'COPYP')
+    $unknown = $script:sdsysOut['unknown']
+    $copyp   = $script:sdsysOut['copyp']
+    # Two empty answers would be "equal" and score the row below as a PASS
+    # having measured nothing; refuse that first.
+    Note 'COPYP and the unknown-verb control both answered' $true ($copyp -ne '' -and $unknown -ne '')
     Note 'COPYP answers differently from an unknown verb' $false ($copyp -eq $unknown)
     Note 'COPYP still reaches $COPYP itself' $true ($copyp -match 'File name required')
 
