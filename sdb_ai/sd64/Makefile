@@ -68,8 +68,14 @@ COMP     := gcc
 #   needs no override.  win32tls.c's DACL calls (GetNamedSecurityInfo, GetAce,
 #   LookupAccountSid, ConvertSidToStringSid, IsWellKnownSid) are all in the
 #   -ladvapi32 already above.
+# 16 Sep 26 Windows port - RELEASE_1.1 43: -luserenv is for win32relay.c's
+#   CreateEnvironmentBlock/DestroyEnvironmentBlock - the relay is started under
+#   a foreign token and needs that account's environment (SystemRoot at least)
+#   or the UCRT refuses to start.  Its other calls (DuplicateTokenEx,
+#   AdjustTokenPrivileges, SetTokenInformation, ConvertStringSidToSid,
+#   CreateProcessAsUser) are advapi32/kernel32, already linked.
 OPENSSL_LIBS ?= -lssl -lcrypto
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 $(OPENSSL_LIBS)
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 -luserenv $(OPENSSL_LIBS)
 
 RM       := rm
 
@@ -142,7 +148,7 @@ sd: BITSIZE := 64
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(ARCH)
-sd: $(SDOBJS) sdclilib sdsvc sdpy sdtic sdfix sdconv sdidx sdwind terminfo
+sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sdpy sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -172,7 +178,7 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc sdpy terminfo check-local check-remote check-api-admin
+.PHONY: sdclilib sdsvc sdtlsrelay sdpy terminfo check-local check-remote check-api-admin
 
 # 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
 # owner's ruling: "let's get rid of the client installers all together and just
@@ -295,6 +301,25 @@ sdsvc:
 	@echo Building native service wrapper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(SVCDIR)/sdsvc.c -ladvapi32 -o $(GPLBIN)sdsvc.exe
+
+# 16 Sep 26 Windows port - RELEASE_1.1 43: THE API's TLS RELAY IS NATIVE, AND
+# FOR A REASON THAT IS MEASURED RATHER THAN CHOSEN.  sd starts one per
+# connection as a bare account at Low integrity, and an MSYS2 process cannot
+# start at Low while sd - the same runtime, Medium or higher - holds the
+# runtime's object directory (0xC0000142; gplbld/probe-lowmsys.c).  So it is
+# built like sdsvc and the client DLLs, with the UCRT64 compiler, and links the
+# same STATIC OpenSSL the client DLLs do (gplsrc/sdclilib/Makefile's
+# OPENSSL_STATIC, repeated here because the two makefiles do not share
+# variables): one file beside sd.exe, nothing of msys-2.0.dll in it.  Its own
+# directory keeps it out of TEMPSRCS' wildcard, as sdsvc/ and sdpy/ are.
+# stage.py ships it in usr\bin and checks the import table.
+RELAYDIR := $(GPLSRC)sdtlsrelay
+
+sdtlsrelay:
+	@echo Building native TLS relay
+	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
+	    $(RELAYDIR)/sdtlsrelay.c -o $(GPLBIN)sdtlsrelay.exe \
+	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32
 
 # 12 Sep 26 Windows port - the Python helper, PROJECT_STATUS.md 5.27.
 #

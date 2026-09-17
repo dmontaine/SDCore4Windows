@@ -10,6 +10,10 @@
  *           (APISRVR:566 -> op_sh.c:379) dropped it back to LocalSystem and
  *           every later write was SYSTEM's.  The runtime is now told to carry
  *           the token itself.  See "ADOPTING IT INTO THE RUNTIME" below.
+ * 16 Sep 26 Windows port - the LSA logon is lifted out as win32_s4u_logon(),
+ *           unchanged, so win32relay.c can mint the TLS relay's bare account
+ *           with the same code (RELEASE_1.1 43).  AssumeUserIdentity() is
+ *           what it was: that call, then impersonate, then adopt.
  * END-HISTORY
  *
  * WHY THIS EXISTS.  sdwind.c:491 fork()s the session, so it inherits the
@@ -180,7 +184,16 @@ static int adopt_in_runtime(HANDLE token, const char* username) {
    Returns TRUE only when the calling thread is, on return, running as the
    named user.  Anything else returns FALSE with the thread untouched.       */
 
-int AssumeUserIdentity(const char* username) {
+/* ======================================================================
+   win32_s4u_logon()  -  the S4U logon itself: an IMPERSONATION-level token
+   for a local account, or NULL
+
+   16 Sep 26 - lifted out of AssumeUserIdentity() unchanged, so that
+   win32relay.c can mint the TLS relay's bare account the same way (RELEASE_1.1
+   43).  The two traps below were each paid for once; one copy of the
+   incantation is how they stay paid for.  The caller owns the handle.       */
+
+void* win32_s4u_logon(const char* username) {
   LSA_HANDLE hlsa = NULL;
   LSA_OPERATIONAL_MODE mode = 0;
   LSA_STRING lsaname;
@@ -209,13 +222,13 @@ int AssumeUserIdentity(const char* username) {
   int ok = 0;
 
   if ((username == NULL) || (*username == '\0'))
-    return 0;
+    return NULL;
 
   /* A local account's domain is this machine.  LEAVING DomainName EMPTY GIVES
      STATUS_NOT_SUPPORTED from a call that otherwise looks right - paid for
      while writing probe-impersonate.c. */
   if (!GetComputerNameA(domain, &domainlen))
-    return 0;
+    return NULL;
 
   lsaname.Buffer = (PCHAR)S4U_ORIGIN;
   lsaname.Length = (USHORT)strlen(S4U_ORIGIN);
@@ -226,27 +239,27 @@ int AssumeUserIdentity(const char* username) {
      looks like a success until the first file open. */
   st = LsaRegisterLogonProcess(&lsaname, &hlsa, &mode);
   if (st != 0)
-    return 0;
+    return NULL;
 
   pkgname.Buffer = (PCHAR)MSV1_0_PACKAGE_NAME;
   pkgname.Length = (USHORT)strlen(MSV1_0_PACKAGE_NAME);
   pkgname.MaximumLength = (USHORT)(pkgname.Length + 1);
   st = LsaLookupAuthenticationPackage(hlsa, &pkgname, &pkg);
   if (st != 0)
-    goto exit_assume;
+    goto exit_logon;
 
   /* ONE CONTIGUOUS BLOCK.  LSA copies the whole buffer into its own process,
      so both UNICODE_STRING.Buffer pointers must point inside it. */
   wuserlen = MultiByteToWideChar(CP_ACP, 0, username, -1, NULL, 0);
   wdomlen = MultiByteToWideChar(CP_ACP, 0, domain, -1, NULL, 0);
   if ((wuserlen <= 0) || (wdomlen <= 0))
-    goto exit_assume;
+    goto exit_logon;
 
   s4ulen = (ULONG)(sizeof(MSV1_0_S4U_LOGON) + (wuserlen * sizeof(WCHAR)) +
                    (wdomlen * sizeof(WCHAR)));
   s4u = (MSV1_0_S4U_LOGON*)malloc(s4ulen);
   if (s4u == NULL)
-    goto exit_assume;
+    goto exit_logon;
   memset(s4u, 0, s4ulen);
 
   tail = (BYTE*)s4u + sizeof(MSV1_0_S4U_LOGON);
@@ -274,21 +287,45 @@ int AssumeUserIdentity(const char* username) {
 
   memcpy(source.SourceName, S4U_SOURCE, sizeof(source.SourceName));
   if (!AllocateLocallyUniqueId(&source.SourceIdentifier))
-    goto exit_assume;
+    goto exit_logon;
 
   /* Network, not Interactive: an S4U logon carries no credentials and the user
      has no right to a desktop here. */
   st = LsaLogonUser(hlsa, &origin, Network, pkg, s4u, s4ulen, NULL, &source,
                     &profile, &profilelen, &logonid, &token, &quotas, &sub);
   if ((st != 0) || (token == NULL))
-    goto exit_assume;
+    goto exit_logon;
 
-  /* Refuse an Identification-level token rather than impersonate with it:
-     ImpersonateLoggedOnUser would SUCCEED and change nothing. */
+  /* Refuse an Identification-level token rather than hand it back:
+     ImpersonateLoggedOnUser would SUCCEED with it and change nothing, and
+     DuplicateTokenEx to a primary token would fail less legibly. */
   if (!GetTokenInformation(token, TokenImpersonationLevel, &level, sizeof(level),
                            &got) ||
       (level != SecurityImpersonation))
-    goto exit_assume;
+    goto exit_logon;
+  ok = 1;
+
+exit_logon:
+  if (profile != NULL)
+    LsaFreeReturnBuffer(profile);
+  if (s4u != NULL)
+    free(s4u);
+  if (hlsa != NULL)
+    LsaDeregisterLogonProcess(hlsa);
+  if (!ok && token != NULL) {
+    CloseHandle(token);
+    token = NULL;
+  }
+  return (void*)token;
+}
+
+int AssumeUserIdentity(const char* username) {
+  HANDLE token;
+  int ok = 0;
+
+  token = (HANDLE)win32_s4u_logon(username);
+  if (token == NULL)
+    return 0;
 
   if (!ImpersonateLoggedOnUser(token))
     goto exit_assume;
@@ -311,14 +348,8 @@ int AssumeUserIdentity(const char* username) {
   ok = 1;
 
 exit_assume:
-  if (profile != NULL)
-    LsaFreeReturnBuffer(profile);
-  if (s4u != NULL)
-    free(s4u);
   if (token != NULL)
     CloseHandle(token);
-  if (hlsa != NULL)
-    LsaDeregisterLogonProcess(hlsa);
   return ok;
 }
 

@@ -1485,7 +1485,13 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # (the Windows port of Linux's), and its free guard.  A test
                   # tool like verify-scram.c; ships nowhere, listed with its
                   # commit.
-                  'scram-probe.py', 'test-scramprobe-units.py')
+                  'scram-probe.py', 'test-scramprobe-units.py',
+                  # 16 Sep 26 - RELEASE_1.1 43: the relay's free guard (drives
+                  # bin\sdtlsrelay.exe over real sockets), the hold helper
+                  # verify-relayidentity.ps1 runs, and that verifier.  None
+                  # ships; listed with the commit that creates them.
+                  'test-tlsrelay-units.py', 'relay-hold.py',
+                  'verify-relayidentity.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

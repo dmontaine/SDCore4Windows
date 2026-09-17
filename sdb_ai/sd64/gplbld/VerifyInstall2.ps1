@@ -729,6 +729,16 @@ $steps = @(
     # pair is what makes the admitted case mean anything, and no other verifier
     # makes it - verify-apiadmin measures containment, not the gates.
     @{ Name = 'verify-apiport.ps1';       P = @{ Prefix = $PortPrefix } },
+    # 16 Sep 26 - RELEASE_1.1 43: WHO the TLS relay runs as, on the install.
+    # It holds one API connection (TLS handshake and ACK, no login) and reads
+    # the one new sdtlsrelay.exe's owner (sdrelay), integrity (Low), privilege
+    # count (0), parent (sd.exe, still SYSTEM - the control that the drop is
+    # the relay's and not the session's) and modules (no msys-*), then requires
+    # the relay gone when the connection is.  ELEVATED because another
+    # account's token is not readable otherwise.  NO PREFIX: it creates nothing
+    # but a connection.  Beside verify-apiport because it needs the listener
+    # the same way and enables/restores APIPORT the same way.
+    @{ Name = 'verify-relayidentity.ps1'; P = @{} },
     # 22 Aug 26 - the SCRAM exchange spoken directly at the port, against the
     # RFC rather than against sdclilib: replay refused, client-final with no
     # client-first refused, two exchanges get different nonces, the password

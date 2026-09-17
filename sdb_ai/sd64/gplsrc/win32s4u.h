@@ -56,6 +56,13 @@ void RevertUserIdentity(void);
 int ImpersonatingUser(char* name, int namelen);
 int HoldingUserToken(void);
 
+/* 16 Sep 26 - the S4U logon on its own: an IMPERSONATION-level token (a
+   Windows HANDLE, passed as void* so this header stays free of windows.h)
+   for a local account, or NULL.  Needs SeTcbPrivilege - LocalSystem only.
+   win32relay.c mints the TLS relay's bare account with it; the caller owns
+   the handle.  Nothing is impersonated or adopted here.                    */
+void* win32_s4u_logon(const char* username);
+
 #endif
 
 /* END-CODE */

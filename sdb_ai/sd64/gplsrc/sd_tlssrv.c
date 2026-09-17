@@ -1,5 +1,5 @@
 /* SD_TLSSRV.C
- * TLS for the SD API transport: the server's relay process.
+ * TLS for the SD API transport: sd's side of the relay.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,6 +12,14 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 16 Sep 26 Windows port - RELEASE_1.1 43: the relay is no longer fork()ed
+ *           here.  It is sdtlsrelay/sdtlsrelay.c, a NATIVE program that
+ *           win32relay.c starts as the bare account SD_RELAY_ACCOUNT, every
+ *           privilege removed, at Low integrity.  This file keeps what only
+ *           LocalSystem can do - read (or create) the identity, mint the
+ *           token, spawn - and then reads the binding exactly as before.
+ *           relay_process(), relay() and the drop_privilege() note are gone
+ *           with the fork.
  * 15 Sep 26 Windows port - adopted from SD Core for Linux S.19 (RELEASE_1.1
  *           41), with the two things Windows has no equivalent for taken out
  *           and said so below: the drop to nobody, and the owner/mode check on
@@ -22,35 +30,43 @@
  * START-DESCRIPTION:
  *
  * sd_tls_relay_start() is called by start_connection() with descriptor 0 the
- * client's connection.  It forks:
+ * client's connection.  On Linux it forks; here it SPAWNS, and the shape is
+ * otherwise Linux's:
  *
- *   the relay    keeps the connection, loads the server identity, does the
- *                TLS handshake, sends sd the 32-byte channel binding, then
- *                copies bytes both ways until either side ends.
- *   sd           gets one end of a socketpair as descriptors 0 and 1, reads
- *                the binding, and carries on exactly as before.
+ *   the relay    sdtlsrelay.exe, per connection, gets the connection and one
+ *                end of a socketpair, does the TLS handshake, sends sd the
+ *                channel binding, then copies bytes both ways until either
+ *                side ends.  It runs as SD_RELAY_ACCOUNT at Low with no
+ *                privilege - the Linux "nobody" - so a flaw in the TLS code
+ *                hands an attacker a bare account, not LocalSystem.
+ *   sd           keeps the other end of the socketpair as descriptors 0 and
+ *                1, reads the binding, and carries on exactly as before.
  *
- * THE RELAY RUNS AS LocalSystem, AND THAT IS A GAP LINUX DOES NOT HAVE.  On
- * Linux the relay reads the identity as root and becomes nobody before it
- * parses one byte from the network, so a flaw in the TLS code hands nobody
- * root.  Here sd -n is fork()ed by sdwind, itself the service's child, and
- * Windows has no setuid: a Cygwin process cannot shed its token.  So the
- * relay parses network bytes with the token it was born with, which is the
- * same token the API session itself runs with today (PROJECT_STATUS.md,
- * "A REMOTE API SESSION STILL RUNS AS LocalSystem").  Recorded in
- * RELEASE_1.1 41 rather than papered over; closing it means a restricted
- * token for the whole session, which is that entry's other half.
+ * WHAT THIS REPLACES.  Until 16 Sep 2026 the relay was fork()ed here and so
+ * parsed an unauthenticated peer's bytes with the session's LocalSystem
+ * token - "THE RELAY RUNS AS LocalSystem, AND THAT IS A GAP LINUX DOES NOT
+ * HAVE", this block used to say.  Windows has no setuid, so the drop is done
+ * BEFORE the process exists: sd mints the bare account's token on its own
+ * SeTcb, strips it, labels it Low and starts the relay under it
+ * (win32relay.c).  Every step of that was measured before it was built -
+ * RELEASE_1.1 43 lists the probes.
  *
  * THE IDENTITY is one file, <identity_dir>/api.pem, holding the private key
  * and a self-signed certificate.  One file, written to a temporary name and
  * renamed, so two first connections at once cannot leave a key beside the
  * other's certificate.  It is refused unless the DIRECTORY EXISTS and both it
  * and the file grant access to nobody but SYSTEM and Administrators
- * (win32tls.c).  The relay never creates the directory: its parent,
+ * (win32tls.c).  Nothing here creates the directory: its parent,
  * C:\ProgramData\SD, is writable by every SD user, so a directory made here
  * would inherit their Modify - and one made by them first would be theirs.
  * gplbld/secure-tls.ps1 creates it at install time with the right ACL, the
  * same shape as secure-reclaim.ps1.
+ *
+ * THE RELAY CANNOT READ THAT FILE, AND MUST NOT BE ABLE TO.  So sd reads it
+ * - as LocalSystem, the way Linux's relay reads it as root before dropping -
+ * and sends the bytes down the socketpair as the first frame (sd_tls.h).  A
+ * spawn cannot inherit an open file the way a fork does, which is why the
+ * bytes travel rather than a descriptor.
  *
  * END-DESCRIPTION
  */
@@ -62,7 +78,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,18 +87,13 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
-
-#define RELAY_BUFFER 16384
-#define RELAY_EXIT_IDENTITY 2
-#define RELAY_EXIT_PRIVILEGE 3
-#define RELAY_EXIT_HANDSHAKE 4
-#define RELAY_EXIT_BINDING 5
 
 static unsigned char server_binding[SD_TLS_BINDING_BYTES];
 static bool have_binding = false;
@@ -99,6 +109,40 @@ static bool write_all(int fd, const void* buf, size_t len) {
       return false;
     p += n;
     len -= (size_t)n;
+  }
+  return true;
+}
+
+/* read exactly len bytes from fd 0 within deadline_ms of waiting per byte
+   group; false on EOF, error or timeout, with errmsg saying which.        */
+static bool read_all_timed(unsigned char* buf, size_t len, int timeout_ms,
+                           const char* what, char* errmsg, size_t errlen) {
+  size_t got = 0;
+
+  while (got < len) {
+    struct pollfd p;
+    ssize_t n;
+    int pr;
+
+    p.fd = 0;
+    p.events = POLLIN;
+    p.revents = 0;
+    pr = poll(&p, 1, timeout_ms);
+    if (pr < 0 && errno == EINTR)
+      continue;
+    if (pr <= 0) {
+      snprintf(errmsg, errlen, "TLS relay did not answer (%s)", what);
+      return false;
+    }
+    n = read(0, buf + got, len - got);
+    if (n < 0 && errno == EINTR)
+      continue;
+    if (n <= 0) {
+      snprintf(errmsg, errlen, "TLS relay ended before the session started (%s)",
+               what);
+      return false;
+    }
+    got += (size_t)n;
   }
   return true;
 }
@@ -119,8 +163,7 @@ static bool private_to_me(const char* path, const struct stat* st,
   return win32_admin_only(path, errmsg, errlen) != 0;
 }
 
-static bool create_identity(const char* path, EVP_PKEY** pkey_out,
-                            X509** cert_out, char* errmsg, size_t errlen) {
+static bool create_identity(const char* path, char* errmsg, size_t errlen) {
   EVP_PKEY* pkey = NULL;
   X509* cert = NULL;
   X509_NAME* name = NULL;
@@ -217,24 +260,29 @@ static bool create_identity(const char* path, EVP_PKEY** pkey_out,
 
 done:
   X509_NAME_free(name);   /* copied into the cert; NULL-safe on early failures */
-  if (ok) {
-    *pkey_out = pkey;
-    *cert_out = cert;
-  } else {
-    EVP_PKEY_free(pkey);
-    X509_free(cert);
-  }
+  EVP_PKEY_free(pkey);
+  X509_free(cert);
   return ok;
 }
 
-static bool load_identity(SSL_CTX* ctx, const char* dir, char* errmsg,
-                          size_t errlen) {
+/* The identity file's BYTES, checked - the directory and file ACLs, and that
+   OpenSSL can parse a key and a certificate out of them, so a corrupt file is
+   refused here with a syslog line rather than by a relay that has nowhere to
+   say so.  *pem is malloc'd; the caller wipes and frees it.               */
+static bool load_identity(const char* dir, unsigned char** pem, size_t* pemlen,
+                          char* errmsg, size_t errlen) {
   char path[4096];
   struct stat st;
+  int fd;
+  unsigned char* buf = NULL;
+  size_t got = 0;
+  BIO* bio;
   EVP_PKEY* pkey = NULL;
   X509* cert = NULL;
-  int fd;
   bool ok = false;
+
+  *pem = NULL;
+  *pemlen = 0;
 
   if (snprintf(path, sizeof(path), "%s/%s", dir, SD_TLS_IDENTITY_FILE) >=
       (int)sizeof(path)) {
@@ -256,38 +304,57 @@ static bool load_identity(SSL_CTX* ctx, const char* dir, char* errmsg,
 
   fd = open(path, O_RDONLY | O_NOFOLLOW);
   if (fd < 0 && errno == ENOENT) {
-    if (!create_identity(path, &pkey, &cert, errmsg, errlen))
+    if (!create_identity(path, errmsg, errlen))
       return false;
-  } else if (fd < 0) {
+    fd = open(path, O_RDONLY | O_NOFOLLOW);
+  }
+  if (fd < 0) {
     snprintf(errmsg, errlen, "cannot open %.300s: %s", path, strerror(errno));
     return false;
-  } else {
-    FILE* fp;
-
-    if (fstat(fd, &st) != 0 ||
-        !private_to_me(path, &st, false, errmsg, errlen)) {
-      close(fd);
-      return false;
-    }
-    fp = fdopen(fd, "r");
-    if (fp == NULL) {
-      close(fd);
-      snprintf(errmsg, errlen, "cannot read %.300s", path);
-      return false;
-    }
-    pkey = PEM_read_PrivateKey(fp, NULL, NULL, NULL);
-    cert = PEM_read_X509(fp, NULL, NULL, NULL);
-    fclose(fp);
-    if (pkey == NULL || cert == NULL) {
-      sd_tls_error_text("cannot parse the server identity", errmsg, errlen);
-      goto done;
-    }
+  }
+  if (fstat(fd, &st) != 0 || !private_to_me(path, &st, false, errmsg, errlen)) {
+    close(fd);
+    return false;
+  }
+  if (st.st_size <= 0 || st.st_size > SD_RELAY_IDENTITY_MAX) {
+    snprintf(errmsg, errlen, "%.300s is %ld bytes, which is not an identity",
+             path, (long)st.st_size);
+    close(fd);
+    return false;
+  }
+  buf = malloc((size_t)st.st_size);
+  if (buf == NULL) {
+    snprintf(errmsg, errlen, "out of memory");
+    close(fd);
+    return false;
+  }
+  while (got < (size_t)st.st_size) {
+    ssize_t n = read(fd, buf + got, (size_t)st.st_size - got);
+    if (n < 0 && errno == EINTR)
+      continue;
+    if (n <= 0)
+      break;
+    got += (size_t)n;
+  }
+  close(fd);
+  if (got != (size_t)st.st_size) {
+    snprintf(errmsg, errlen, "cannot read %.300s", path);
+    goto done;
   }
 
-  if (SSL_CTX_use_certificate(ctx, cert) != 1 ||
-      SSL_CTX_use_PrivateKey(ctx, pkey) != 1 ||
-      SSL_CTX_check_private_key(ctx) != 1) {
-    sd_tls_error_text("the server identity does not load", errmsg, errlen);
+  bio = BIO_new_mem_buf(buf, (int)got);
+  if (bio != NULL) {
+    pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    cert = PEM_read_bio_X509(bio, NULL, NULL, NULL);
+    BIO_free(bio);
+  }
+  if (pkey == NULL || cert == NULL) {
+    sd_tls_error_text("cannot parse the server identity", errmsg, errlen);
+    goto done;
+  }
+  if (X509_check_private_key(cert, pkey) != 1) {
+    sd_tls_error_text("the server identity's key and certificate do not match",
+                      errmsg, errlen);
     goto done;
   }
   ok = true;
@@ -295,161 +362,60 @@ static bool load_identity(SSL_CTX* ctx, const char* dir, char* errmsg,
 done:
   EVP_PKEY_free(pkey);
   X509_free(cert);
+  if (ok) {
+    *pem = buf;
+    *pemlen = got;
+  } else if (buf != NULL) {
+    OPENSSL_cleanse(buf, got);
+    free(buf);
+  }
   return ok;
-}
-
-/* ======================================================================
-   drop_privilege()  -  NOT ON THIS PLATFORM
-
-   Linux has "root -> nobody, for good" here: getpwnam("nobody"), setgroups,
-   setgid, setuid, then a check that root cannot be regained, then
-   PR_SET_NO_NEW_PRIVS.  None of it exists under the MSYS2 runtime in a
-   useful form - Cygwin's setuid() can only switch to a user it holds a
-   token for, and a LocalSystem process fork()ed by the service has none to
-   switch to.  The relay therefore keeps the token it started with.  The
-   description block at the top records what that costs.                  */
-
-/* ======================================================================
-   relay()  -  copy both ways until either side ends                      */
-
-static bool ssl_write_all(SSL* ssl, const char* p, int len) {
-  while (len > 0) {
-    int n = SSL_write(ssl, p, len);
-    int e;
-
-    if (n > 0) {
-      p += n;
-      len -= n;
-      continue;
-    }
-    e = SSL_get_error(ssl, n);
-    if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE)
-      continue;
-    if (e == SSL_ERROR_SYSCALL && errno == EINTR)
-      continue;
-    return false;
-  }
-  return true;
-}
-
-static void relay(SSL* ssl, int net_fd, int app_fd) {
-  char buf[RELAY_BUFFER];
-
-  for (;;) {
-    struct pollfd p[2];
-
-    p[0].fd = net_fd;
-    p[0].events = POLLIN;
-    p[0].revents = 0;
-    p[1].fd = app_fd;
-    p[1].events = POLLIN;
-    p[1].revents = 0;
-
-    /* Decrypted bytes OpenSSL already holds are invisible to poll(). */
-    if (SSL_pending(ssl) > 0) {
-      p[0].revents = POLLIN;
-    } else if (poll(p, 2, -1) < 0) {
-      if (errno == EINTR)
-        continue;
-      return;
-    }
-
-    if (p[0].revents & (POLLIN | POLLHUP | POLLERR)) {
-      int n = SSL_read(ssl, buf, sizeof(buf));
-      if (n <= 0) {
-        int e = SSL_get_error(ssl, n);
-        if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE)
-          continue;
-        return;
-      }
-      if (!write_all(app_fd, buf, (size_t)n))
-        return;
-    }
-
-    if (p[1].revents & (POLLIN | POLLHUP | POLLERR)) {
-      ssize_t n = read(app_fd, buf, sizeof(buf));
-      if (n < 0 && errno == EINTR)
-        continue;
-      if (n <= 0)
-        return;
-      if (!ssl_write_all(ssl, buf, (int)n))
-        return;
-    }
-  }
-}
-
-static void relay_process(const char* dir, int timeout_ms, int app_fd) {
-  char err[512];
-  SSL_CTX* ctx;
-  SSL* ssl;
-  unsigned char binding[SD_TLS_BINDING_BYTES];
-  const int net_fd = 0;
-
-  signal(SIGPIPE, SIG_IGN);
-  signal(SIGCHLD, SIG_DFL);
-  signal(SIGHUP, SIG_DFL);
-  signal(SIGTERM, SIG_DFL);
-  signal(SIGINT, SIG_DFL);
-  close(1);                        /* the same connection as 0 */
-
-  ctx = SSL_CTX_new(TLS_server_method());
-  if (ctx == NULL || !sd_tls_restrict_ctx(ctx)) {
-    sd_tls_error_text("cannot set up TLS", err, sizeof(err));
-    syslog(LOG_ERR, "SD API TLS: %s", err);
-    _exit(RELAY_EXIT_IDENTITY);
-  }
-  /* No resumption: every session is a full handshake with its own binding. */
-  SSL_CTX_set_num_tickets(ctx, 0);
-  SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
-
-  if (!load_identity(ctx, dir, err, sizeof(err))) {
-    syslog(LOG_ERR, "SD API TLS: %s", err);
-    _exit(RELAY_EXIT_IDENTITY);
-  }
-
-  /* Linux drops to nobody here (RELAY_EXIT_PRIVILEGE); see drop_privilege()
-     above for why this port cannot.  The exit code is kept so the numbers
-     mean the same thing on both. */
-
-  ssl = SSL_new(ctx);
-  if (ssl == NULL || SSL_set_fd(ssl, net_fd) != 1) {
-    sd_tls_error_text("cannot set up TLS", err, sizeof(err));
-    syslog(LOG_ERR, "SD API TLS: %s", err);
-    _exit(RELAY_EXIT_HANDSHAKE);
-  }
-
-  if (!sd_tls_handshake(ssl, net_fd, timeout_ms, true, err, sizeof(err))) {
-    syslog(LOG_INFO, "SD API TLS: connection refused: %s", err);
-    _exit(RELAY_EXIT_HANDSHAKE);
-  }
-
-  if (!sd_tls_export_binding(ssl, binding) ||
-      !write_all(app_fd, binding, sizeof(binding))) {
-    syslog(LOG_ERR, "SD API TLS: cannot hand over the channel binding");
-    _exit(RELAY_EXIT_BINDING);
-  }
-
-  relay(ssl, net_fd, app_fd);
-  (void)SSL_shutdown(ssl);
-  _exit(0);
 }
 
 /* ======================================================================
    sd_tls_relay_start()                                                   */
 
+/* What a relay exit code means, for the syslog line when the preamble is cut
+   short.  The numbers are Linux's (sd_tls.h). */
+static const char* relay_exit_text(int code) {
+  switch (code) {
+    case -1:
+      return "still running";
+    case 0:
+      return "exited 0 without answering";
+    case SD_RELAY_EXIT_IDENTITY:
+      return "refused the server identity";
+    case SD_RELAY_EXIT_HANDSHAKE:
+      return "TLS handshake failed";
+    case SD_RELAY_EXIT_BINDING:
+      return "could not derive the channel binding";
+    case SD_RELAY_EXIT_USAGE:
+      return "was started wrongly (a bug in sd, not the peer)";
+    case (int)0xC0000142:
+      return "could not initialise (0xC0000142: a DLL it needs is missing)";
+    default:
+      return "exited with an unexpected code";
+  }
+}
+
 int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
                        char* errmsg, size_t errlen) {
   int sp[2];
-  pid_t pid;
-  size_t got = 0;
+  unsigned char* pem = NULL;
+  size_t pemlen = 0;
+  unsigned char hdr[4];
+  unsigned char status;
+  void* proc = NULL;
+  char why[512];
 
   /* STDERR MAY BE THE CONNECTION TOO.  sdclient@.service sets only
      StandardInput=socket, and systemd's StandardOutput/StandardError default
      to inherit - so descriptor 2 is the client's socket.  Left there, anything
-     either process wrote to stderr would reach the client as plaintext in the
-     middle of the TLS stream, and sd would hold the connection open after the
-     relay ended.  Pointed at /dev/null before the fork, for both processes;
-     the relay reports through syslog. */
+     sd wrote to stderr would reach the client as plaintext in the middle of
+     the TLS stream, and sd would hold the connection open after the relay
+     ended.  Pointed at /dev/null before the handover.  (Here sdwind dup2s the
+     connection to 0 and 1 only, so this is the Linux shape kept for the day
+     it is not.) */
   {
     struct stat s0;
     struct stat s2;
@@ -466,22 +432,30 @@ int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
     }
   }
 
-  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sp) != 0) {
-    snprintf(errmsg, errlen, "socketpair: %s", strerror(errno));
+  /* The identity, read here as LocalSystem - the one thing the relay may not
+     do for itself.  Every refusal is syslogged: an operator seeing "no API
+     connection is accepted" needs the reason, and the relay has no log. */
+  if (!load_identity(identity_dir, &pem, &pemlen, why, sizeof(why))) {
+    syslog(LOG_ERR, "SD API TLS: %s", why);
+    snprintf(errmsg, errlen, "%s", why);
     return false;
   }
 
-  pid = fork();
-  if (pid < 0) {
-    snprintf(errmsg, errlen, "fork: %s", strerror(errno));
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sp) != 0) {
+    snprintf(errmsg, errlen, "socketpair: %s", strerror(errno));
+    goto fail_pem;
+  }
+
+  /* The spawn: token minted, stripped, Low, two handles inherited and no
+     other (win32relay.c).  Descriptor 0 is the connection until the dup2
+     below. */
+  if (!win32_relay_spawn(SD_RELAY_ACCOUNT, 0, sp[1], timeout_ms, &proc, why,
+                         sizeof(why))) {
+    syslog(LOG_ERR, "SD API TLS: cannot start the relay: %s", why);
+    snprintf(errmsg, errlen, "cannot start the TLS relay (see syslog)");
     close(sp[0]);
     close(sp[1]);
-    return false;
-  }
-  if (pid == 0) {
-    close(sp[0]);
-    relay_process(identity_dir, timeout_ms, sp[1]);
-    _exit(1);                      /* not reached */
+    goto fail_pem;
   }
 
   /* sd: its connection becomes the socketpair.  Closing its copies of the
@@ -490,41 +464,78 @@ int sd_tls_relay_start(const char* identity_dir, int timeout_ms,
   close(sp[1]);
   if (dup2(sp[0], 0) < 0 || dup2(sp[0], 1) < 0) {
     snprintf(errmsg, errlen, "dup2: %s", strerror(errno));
-    return false;
+    close(sp[0]);
+    (void)win32_relay_exit_code(proc, 0);
+    goto fail_pem;
   }
   if (sp[0] > 1)
     close(sp[0]);
 
-  /* The binding is the relay's first 32 bytes.  End of file here is every
-     refusal: no identity, a failed handshake, a client that never spoke. */
-  while (got < SD_TLS_BINDING_BYTES) {
-    struct pollfd p;
-    ssize_t n;
-    int pr;
+  /* First frame, sd -> relay: the identity (sd_tls.h).  Then it is wiped
+     here; the relay wipes its copy once OpenSSL holds the key. */
+  hdr[0] = (unsigned char)((pemlen >> 24) & 0xFF);
+  hdr[1] = (unsigned char)((pemlen >> 16) & 0xFF);
+  hdr[2] = (unsigned char)((pemlen >> 8) & 0xFF);
+  hdr[3] = (unsigned char)(pemlen & 0xFF);
+  if (!write_all(0, hdr, sizeof(hdr)) || !write_all(0, pem, pemlen)) {
+    snprintf(errmsg, errlen, "cannot hand the relay the server identity");
+    (void)win32_relay_exit_code(proc, 0);
+    goto fail_pem;
+  }
+  OPENSSL_cleanse(pem, pemlen);
+  free(pem);
+  pem = NULL;
 
-    p.fd = 0;
-    p.events = POLLIN;
-    p.revents = 0;
-    pr = poll(&p, 1, timeout_ms + 5000);
-    if (pr < 0 && errno == EINTR)
-      continue;
-    if (pr <= 0) {
-      snprintf(errmsg, errlen, "TLS relay did not answer");
-      return false;
+  /* The relay's answer: one status byte, then the binding - Linux's 32-byte
+     preamble, one byte later.  Anything but SD_RELAY_OK is a refusal with its
+     reason attached, and EOF is a relay that died before it could say. */
+  if (!read_all_timed(&status, 1, timeout_ms + 5000, "status", errmsg, errlen)) {
+    int code = win32_relay_exit_code(proc, 1000);
+    syslog(LOG_INFO, "SD API TLS: relay %s (code %d)", relay_exit_text(code),
+           code);
+    return false;
+  }
+  if (status != SD_RELAY_OK) {
+    unsigned char lenbuf[2];
+    char text[512];
+    size_t len;
+
+    text[0] = '\0';
+    if (read_all_timed(lenbuf, 2, 2000, "refusal", why, sizeof(why))) {
+      len = ((size_t)lenbuf[0] << 8) | lenbuf[1];
+      if (len >= sizeof(text))
+        len = sizeof(text) - 1;
+      if (read_all_timed((unsigned char*)text, len, 2000, "refusal", why,
+                         sizeof(why)))
+        text[len] = '\0';
+      else
+        text[0] = '\0';
     }
-    n = read(0, server_binding + got, SD_TLS_BINDING_BYTES - got);
-    if (n < 0 && errno == EINTR)
-      continue;
-    if (n <= 0) {
-      snprintf(errmsg, errlen,
-               "TLS relay ended before the session started (see syslog)");
-      return false;
-    }
-    got += (size_t)n;
+    (void)win32_relay_exit_code(proc, 1000);
+    syslog(LOG_INFO, "SD API TLS: connection refused: %s",
+           text[0] ? text : relay_exit_text((int)status));
+    snprintf(errmsg, errlen, "%s", text[0] ? text : relay_exit_text((int)status));
+    return false;
+  }
+  if (!read_all_timed(server_binding, SD_TLS_BINDING_BYTES, timeout_ms,
+                      "binding", errmsg, errlen)) {
+    (void)win32_relay_exit_code(proc, 1000);
+    return false;
   }
 
+  /* The relay lives as long as the connection does; sd needs no handle to
+     it.  When this process ends, its socketpair end closes and the relay
+     ends; when the relay ends, descriptor 0 reads EOF and the session ends. */
+  (void)win32_relay_exit_code(proc, 0);
   have_binding = true;
   return true;
+
+fail_pem:
+  if (pem != NULL) {
+    OPENSSL_cleanse(pem, pemlen);
+    free(pem);
+  }
+  return false;
 }
 
 const unsigned char* sd_tls_server_binding(void) {

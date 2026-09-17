@@ -4,6 +4,33 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+16 Sep 26  THE API'S ENCRYPTION NO LONGER RUNS WITH SYSTEM PRIVILEGE.
+
+           Since 15 Sep every API connection has been TLS 1.3 (below).  The
+           part of SD that handles the encryption - the "relay", one small
+           program per connection - used to run with the same privilege as
+           the SD service itself, which on Windows is the system account.
+           That meant a flaw in the encryption code could, in the worst case,
+           hand a remote caller that privilege before they had signed in.
+
+           The relay now runs as a dedicated local account, "sdrelay", with
+           every privilege removed and at low integrity - the least an
+           account can have.  It cannot read the database, the settings, or
+           the server's own key file (SD hands it the key privately when it
+           starts).  This is the same arrangement SD Core for Linux uses,
+           where the relay runs as "nobody".
+
+           WHAT YOU WILL SEE.  A new local account, sdrelay, appears in
+           Computer Management under Users.  Nobody can sign in as it - it is
+           denied every kind of sign-in - and it belongs to no group.  Leave
+           it alone: it is created when SD's service is installed and removed
+           when SD is uninstalled.  A new program, sdtlsrelay.exe, sits beside
+           sd.exe in Program Files\SD\usr\bin; while an API session is open
+           you will see one sdtlsrelay.exe process per session in Task
+           Manager, owned by sdrelay.  If that account is deleted by hand,
+           every API connection is refused until SD's service is reinstalled;
+           the SD error log says "cannot log the relay account sdrelay on".
+
 16 Sep 26  UPGRADING TO A NEW RELEASE NO LONGER STOPS AND ASKS ABOUT THE VOC.
 
            Installing a new release over an existing one could appear to hang,

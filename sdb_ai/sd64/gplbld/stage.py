@@ -123,6 +123,24 @@ PROGRAM_FILES_BIN = [
     'qmclilib.dll',             # 32-bit, for older utility programs
     'qmclient.dll',             # the same library under the current name
     'sdsvc.exe',                # native UCRT64, the service that starts SD
+    # 16 Sep 26 - RELEASE_1.1 43.  The API's TLS relay, one process per
+    # connection, started by sd as the bare account sdrelay at Low integrity.
+    # BESIDE sd.exe for the reason sdpy.exe is: win32relay.c finds it with
+    # GetModuleFileName.  Native with a static OpenSSL - it is not in DLL_SCAN
+    # (nothing to resolve), and NATIVE_ONLY below insists it stays that way.
+    'sdtlsrelay.exe',           # native UCRT64, the TLS relay
+]
+
+# 16 Sep 26 - BINARIES THAT MUST NOT IMPORT THE MSYS2 RUNTIME.  The relay's
+# whole design rests on it: an MSYS2 process cannot start at Low integrity
+# while sd holds the runtime's object directory (gplbld/probe-lowmsys.c), so a
+# relay that picked up msys-2.0.dll would die 0xC0000142 on every API
+# connection, and nothing would say why until someone read the exit code.  The
+# service wrapper has the same property for the same runtime reason (5.3),
+# recorded above as a one-off objdump on 15 Aug; this makes it a check.
+NATIVE_ONLY = [
+    'sdsvc.exe',
+    'sdtlsrelay.exe',
 ]
 
 # 12 Sep 26 - THE PYTHON HELPER, PROJECT_STATUS.md 5.27.  Staged if bin/ has
@@ -1250,6 +1268,20 @@ def main():
         dst = os.path.join(pfbin, os.path.basename(dlls[name]))
         shutil.copy2(dlls[name], dst)
         staged.add(stage, dst)
+
+    # NATIVE_ONLY: refuse a build whose native binaries import the MSYS2
+    # runtime.  Anchored on the import list, which is empty only when objdump
+    # could not read the file - so an unreadable binary is refused too, rather
+    # than passing for want of evidence.
+    for f in NATIVE_ONLY:
+        imports = imports_of(objdump, os.path.join('bin', f))
+        if not imports:
+            die('%s: objdump found no imports - not a PE file?' % f)
+        bad = [d for d in imports if d.lower().startswith('msys-')]
+        if bad:
+            die('%s imports %s: it must be native (see NATIVE_ONLY)'
+                % (f, ', '.join(bad)))
+        print('stage: %s is native (%d imports, none msys-*)' % (f, len(imports)))
 
     # Third-party editors bundled beside sd.exe.  PRE_RELEASE_FIXES 66.
     stage_editors(pfbin, staged, stage)
