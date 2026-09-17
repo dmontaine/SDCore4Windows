@@ -59,7 +59,18 @@ if ($AppDir -eq '') { $AppDir = $PSScriptRoot }
 
 $svcExe = Join-Path $AppDir 'usr\bin\sdsvc.exe'
 
+# A RECORD OF WHAT THE HIDDEN RUN SAID.  The installer runs this with
+# runhidden and reads nothing back, so until 16 Sep 2026 a failure here left
+# no trace anywhere - the relay account's creation failed on the first cycle
+# and the only evidence was a verifier an hour later.  Appended, one run
+# after another, beside reconcile-accounts.log; the data directory exists
+# by the time the installer reaches this step.  Best effort: a machine where
+# the transcript cannot start still gets its service.
+$logPath = Join-Path $env:ProgramData 'SD\install-service.log'
+try { Start-Transcript -Path $logPath -Append -Force | Out-Null } catch { }
+
 function Say($m) { Write-Output "install-service: $m" }
+Say ("{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $(if ($Install) { '-Install' } elseif ($Remove) { '-Remove' } else { '(no switch)' }))
 
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -143,6 +154,20 @@ function New-RandomPassword {
     return $s
 }
 
+# New-LocalUser caps -Description at 48 CHARACTERS and refuses a longer one at
+# parameter binding.  The first version of this was 88 characters long, the
+# refusal was caught and swallowed, and the install completed with no account
+# and no API - found by verify-relayidentity on the first cycle, 16 Sep 2026.
+# test-installservice-units.ps1 now measures this literal's length.
+$RelayDescription = 'SD API TLS relay. Do not sign in as this account'
+
+# THE VERDICT IS A SCRIPT VARIABLE, NOT A RETURN VALUE.  Say writes to the
+# pipeline, so a function that Says and then returns $false hands its caller an
+# ARRAY - strings and a boolean - and "-not (array)" is $false.  That is how
+# the swallowed refusal above still passed the gate.  The gate below also asks
+# Windows whether the account exists rather than trusting this variable alone.
+$script:RelayAccountOk = $false
+
 function Install-RelayAccount {
     $u = Get-LocalUser -Name $RelayAccount -ErrorAction SilentlyContinue
     if ($null -eq $u) {
@@ -150,11 +175,10 @@ function Install-RelayAccount {
         try {
             $u = New-LocalUser -Name $RelayAccount -Password $sec -PasswordNeverExpires `
                 -AccountNeverExpires -UserMayNotChangePassword `
-                -Description 'SD API TLS relay. Runs sdtlsrelay.exe at low integrity; nobody signs in as this account.' `
-                -ErrorAction Stop
+                -Description $RelayDescription -ErrorAction Stop
         } catch {
             Say "could not create the relay account ${RelayAccount}: $($_.Exception.Message)"
-            return $false
+            return
         }
         Say "created the relay account $RelayAccount (no group, random unused password)"
     } else {
@@ -177,10 +201,10 @@ function Install-RelayAccount {
     $rc = [SdLsaRights]::Add($u.SID.Value, [string[]]$RelayDenies)
     if ($rc -ne 0) {
         Say "LsaAddAccountRights failed (win32=$rc) denying logon to $RelayAccount"
-        return $false
+        return
     }
     Say "  denied interactive, remote interactive, batch and service logon"
-    return $true
+    $script:RelayAccountOk = $true
 }
 
 function Remove-RelayAccount {
@@ -230,9 +254,18 @@ if (-not (Test-Path $svcExe)) {
 }
 
 # The relay account BEFORE the service: the service's first API connection
-# asks LSA for it.  A failure here is a failed install, not a warning - every
-# API connection would be refused with "cannot log the relay account on".
-if (-not (Install-RelayAccount)) { exit 1 }
+# asks LSA for it.  The gate reads the STATE - does Windows have the account -
+# as well as the verdict, because the first cycle showed a verdict that lied
+# (see above).  A missing account is reported and makes this exit 1, but the
+# SERVICE IS STILL CREATED: without it nothing in SD runs, with it only the API
+# is refused, and each refusal says why in the SD error log ("cannot log the
+# relay account sdrelay on").  install-service.log holds this line.
+Install-RelayAccount
+$relayMissing = (-not $script:RelayAccountOk) -or
+                (-not (Get-LocalUser -Name $RelayAccount -ErrorAction SilentlyContinue))
+if ($relayMissing) {
+    Say "THE RELAY ACCOUNT $RelayAccount IS NOT IN PLACE - every API connection will be refused until it is (rerun: install-service.ps1 -Install, elevated)"
+}
 
 if ($null -ne (Get-Svc)) {
     Say "$SvcName already exists; removing it first so binPath is not stale"
@@ -274,6 +307,7 @@ if ($null -ne $s -and $s.Status -eq 'Running') {
     # moment longer than the service does.
     $w = (Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count
     Say "sdwind processes: $w"
+    if ($relayMissing) { Say 'exit 1: the service runs but the relay account is missing (above)'; exit 1 }
     exit 0
 }
 
