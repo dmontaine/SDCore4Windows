@@ -227,7 +227,19 @@ $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            # account with a profile, and the case that removes it is the one
            # being tested - so an abandoned run leaves exactly the litter this
            # sweep exists for.
-           'sdunin')
+           'sdunin',
+           # 17 Sep 26 - TWO HAND-RUN VERIFIERS THAT MAKE REAL ACCOUNTS AND ARE
+           # IN NO RUNNER, found by a census of C:\Users after b174: 36 orphaned
+           # profiles, every one with a ProfileList entry and no account, and
+           # six outside every stem here - sdvocw1 and sdvocw2 from
+           # verify-vocwrite.ps1, sdwire2 to sdwire4 from verify-apiwire.ps1,
+           # and zzinteropw, which has no digit and so is a BARE name below.
+           # Each is the sdunin shape: composed by hand from a documented
+           # -Prefix, a real Windows account, its profile left when the tool's
+           # own removal cannot take it.  Fixtures below are the names met.
+           # NO PARENTHESES IN THIS COMMENT: test-stemcoverage-units.ps1 reads
+           # the list up to the first close-paren.
+           'sdvocw', 'sdwire')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has
@@ -246,7 +258,10 @@ $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
 # A NAME MUST NOT APPEAR IN BOTH LISTS.  The checker refuses that outright:
 # "swept" and "nothing to sweep" cannot both be true of one family.
 $notProfiles = @('sdvv')
-$bare  = @('sdsshprobe', 'sdnotyet')
+# 17 Sep 26 - zzinteropw is interop-account.ps1's default account, the Linux
+# interop fixture: a real Windows account with no digit in its name.  ONE LINE:
+# test-stemcoverage-units.ps1 reads this list with a single-line regex.
+$bare  = @('sdsshprobe', 'sdnotyet', 'zzinteropw')
 $rx = '^((' + ($stems -join '|') + ')[a-z]?[0-9]+[a-z0-9]*|' +
       ($bare -join '|') + ')(\.[A-Za-z0-9-]+)?$'
 
@@ -281,6 +296,10 @@ if ($SelfTest) {
         # sdtc1, 28 PASS / 0 FAIL), and sdtcb88a is what VerifyInstall2 now
         # composes.  The trailing "a" is verify-tierchange.ps1:281, not a typo.
         'sdtc1a', 'sdtcb88a',
+        # 17 Sep 26 - the six orphaned profiles the C:\Users census found
+        # outside every stem, by name: verify-vocwrite's, verify-apiwire's and
+        # the Linux interop account.  Real names, on this machine that day.
+        'sdvocw1', 'sdvocw2', 'sdwire2', 'sdwire3', 'sdwire4', 'zzinteropw',
         # 05 Sep 26 - verify-sshadmin's family (PRE_RELEASE 167).  ***IT MAKES
         # TWO ACCOUNTS PER RUN, NOT ONE***, and both suffixes are here because
         # the "a" one is a WINDOWS ADMINISTRATOR (CREATE.ACCOUNT ADMINISTRATOR
@@ -362,6 +381,11 @@ if ($SelfTest) {
         # for verify-VOCVERBS, so a later name of that shape is the plausible
         # mistake rather than an invented one.
         'sdvvb99', 'sdvvb101', 'sdvverbs', 'sdvvoc',
+        # 17 Sep 26 - the near-misses the three hand-run families open up.
+        # "sdvocwrite" and "sdwireless" start with a stem and continue with
+        # letters, so both fail on the required digit; "zzinterop" is the bare
+        # name one letter short, and a bare name matches whole or not at all.
+        'sdvocwrite', 'sdwireless', 'zzinterop', 'zzinteropwin',
         # the SD system account and the owner's
         'sdsys', 'don'
     )
