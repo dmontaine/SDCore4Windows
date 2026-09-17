@@ -755,6 +755,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # (f), the S4U mint under concurrency, run as SYSTEM against
                   # the real relay account.  Ships nowhere.
                   'probe-s4uload.c', 'probe-s4uload.ps1', 'probe-s4uload.exe',
+                  # 17 Sep 26 - RELEASE_1.1 37: probe-killzero asks kill(pid,0)
+                  # about live and killed sessions from three tokens; probe-
+                  # system asks whether the installed runtime's system() can
+                  # run anything (it cannot: no /bin/sh).  Ship nowhere.
+                  'probe-killzero.c', 'probe-killzero.ps1', 'probe-killzero.exe',
+                  'probe-system.c', 'probe-system.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
