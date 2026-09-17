@@ -746,6 +746,11 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # Ships nowhere.
                   'probe-relaysp.c', 'probe-relaysp-cyg.c', 'probe-relaysp.exe',
                   'probe-relaysp-child.c', 'probe-relaysp-child.exe',
+                  # 16 Sep 26 - probe-user32desk: does the relay start with
+                  # no reachable desktop?  The second cycle's 0xC0000142 was
+                  # USER32 initialising in a process whose bare token has no
+                  # window station.  Ships nowhere.
+                  'probe-user32desk.c', 'probe-user32desk.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes

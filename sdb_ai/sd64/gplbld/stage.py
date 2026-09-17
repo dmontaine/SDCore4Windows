@@ -138,10 +138,19 @@ PROGRAM_FILES_BIN = [
 # connection, and nothing would say why until someone read the exit code.  The
 # service wrapper has the same property for the same runtime reason (5.3),
 # recorded above as a one-off objdump on 15 Aug; this makes it a check.
-NATIVE_ONLY = [
-    'sdsvc.exe',
-    'sdtlsrelay.exe',
-]
+#
+# AND THE RELAY MAY NOT IMPORT USER32 EITHER - THE SECOND CYCLE OF ITS BUILD
+# DIED OF EXACTLY THAT, 16 Sep 2026.  USER32's initialisation connects the
+# process to a window station, and the bare account's fresh logon session has
+# no right to session 0's; the loader gives up with the SAME 0xC0000142.  The
+# static OpenSSL pulls three USER32 functions for a message box nobody will
+# ever see; sdtlsrelay.c satisfies them with stubs, and this refuses the build
+# if they come back (gplbld/probe-user32desk.c has the measurement).  Each
+# entry names the DLL-name prefixes that binary may not import.
+NATIVE_ONLY = {
+    'sdsvc.exe':      ['msys-'],
+    'sdtlsrelay.exe': ['msys-', 'user32'],
+}
 
 # 12 Sep 26 - THE PYTHON HELPER, PROJECT_STATUS.md 5.27.  Staged if bin/ has
 # it and skipped with a line of output if not.
@@ -1273,15 +1282,15 @@ def main():
     # runtime.  Anchored on the import list, which is empty only when objdump
     # could not read the file - so an unreadable binary is refused too, rather
     # than passing for want of evidence.
-    for f in NATIVE_ONLY:
+    for f, forbidden in NATIVE_ONLY.items():
         imports = imports_of(objdump, os.path.join('bin', f))
         if not imports:
             die('%s: objdump found no imports - not a PE file?' % f)
-        bad = [d for d in imports if d.lower().startswith('msys-')]
+        bad = [d for d in imports
+               if any(d.lower().startswith(p) for p in forbidden)]
         if bad:
-            die('%s imports %s: it must be native (see NATIVE_ONLY)'
-                % (f, ', '.join(bad)))
-        print('stage: %s is native (%d imports, none msys-*)' % (f, len(imports)))
+            die('%s imports %s: it may not (see NATIVE_ONLY)' % (f, ', '.join(bad)))
+        print('stage: %s imports %d DLLs, none of %s' % (f, len(imports), ', '.join(forbidden)))
 
     # Third-party editors bundled beside sd.exe.  PRE_RELEASE_FIXES 66.
     stage_editors(pfbin, staged, stage)

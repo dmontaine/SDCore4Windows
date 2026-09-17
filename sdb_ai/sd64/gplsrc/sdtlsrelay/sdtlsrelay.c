@@ -88,6 +88,46 @@ static SOCKET net_sock = INVALID_SOCKET;
 static SOCKET sp_sock = INVALID_SOCKET;
 
 /* ======================================================================
+   NO USER32 IN THIS PROCESS, AND THIS IS WHY THE FIRST INSTALL DIED.
+
+   The static libcrypto imports three USER32 functions for its fatal-error
+   path - OPENSSL_isservice() asks GetProcessWindowStation() and
+   GetUserObjectInformationW() whether it may pop a MessageBoxW().  Nothing
+   here ever reaches that path, but the IMPORT is enough: USER32's own
+   initialisation connects the process to a window station, and the bare
+   account's token - a fresh S4U logon session, in session 0 - has no right
+   to the service's WinSta0\Default.  USER32 cannot connect, the loader gives
+   up, and the process is dead before main(): STATUS_DLL_INIT_FAILED,
+   0xC0000142.  Measured on the second cycle of this build, 16 Sep 2026
+   (syslog: "relay could not initialise (0xC0000142)"), and reproduced
+   unelevated by gplbld/probe-user32desk.c: on an unreachable desktop a
+   USER32 importer dies exactly so while a non-importer runs.
+   probe-relaychild.exe, which proved the spawn, never imported USER32.
+
+   So the three imports are satisfied HERE instead of by libuser32.a.  A
+   MinGW call to a dllimport function goes through the pointer __imp_<name>;
+   defining those pointers in this object means the linker never pulls the
+   import library's members, and USER32 leaves the import table - which
+   stage.py's NATIVE_ONLY check now requires.  The stubs answer "no window
+   station", which OPENSSL_isservice() reads as "a service": no message box,
+   the text goes to stderr, which is where a headless process wants it. */
+
+static HWINSTA WINAPI stub_GetProcessWindowStation(void) { return NULL; }
+static BOOL WINAPI stub_GetUserObjectInformationW(HANDLE h, int i, PVOID p,
+                                                  DWORD n, LPDWORD need) {
+  (void)h; (void)i; (void)p; (void)n;
+  if (need) *need = 0;
+  return FALSE;
+}
+static int WINAPI stub_MessageBoxW(HWND w, LPCWSTR t, LPCWSTR c, UINT u) {
+  (void)w; (void)t; (void)c; (void)u;
+  return 0;
+}
+void* __imp_GetProcessWindowStation = (void*)stub_GetProcessWindowStation;
+void* __imp_GetUserObjectInformationW = (void*)stub_GetUserObjectInformationW;
+void* __imp_MessageBoxW = (void*)stub_MessageBoxW;
+
+/* ======================================================================
    Waiting on a non-blocking socket                                       */
 
 static ULONGLONG now_ms(void) { return GetTickCount64(); }
