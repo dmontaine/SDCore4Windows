@@ -739,6 +739,13 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # probe-relaylocal (its unelevated rehearsal).  Ship nowhere.
                   'probe-relaychild.c', 'probe-relaychild.exe',
                   'probe-relaylocal.c', 'probe-relaylocal.exe',
+                  # 16 Sep 26 - probe-relaysp: is a Cygwin socketpair() end a
+                  # pollable SOCKET in the native Low relay?  YES, both ways,
+                  # EOF propagated - RELEASE_1.1 43's open point (c) closed;
+                  # the relay<->sd channel is the socketpair sd has today.
+                  # Ships nowhere.
+                  'probe-relaysp.c', 'probe-relaysp-cyg.c', 'probe-relaysp.exe',
+                  'probe-relaysp-child.c', 'probe-relaysp-child.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
