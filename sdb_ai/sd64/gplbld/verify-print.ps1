@@ -98,9 +98,15 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
         if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
     }
     $body = "`n" + ((@('TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }
-    else { Stop-Job $job; $out = Receive-Job $job; $out += "<<TIMED OUT after $TimeoutSec s>>" }
+    # 2>&1 and stringify INSIDE the job: sd's PowerShell child writes Windows'
+    # refusal ("Settings to access printer 'x' are not valid") to stderr, which
+    # comes through sd.exe's stderr, and Receive-Job re-raises a job's error
+    # stream in the caller - where $ErrorActionPreference = 'Stop' made the
+    # refusal leg die instead of reading it (b177).  Merged as text it is
+    # evidence, in Windows' own words, of what the session was told.
+    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe 2>&1 | ForEach-Object { "$_" } } -ArgumentList $sdExe, $body
+    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job -ErrorAction SilentlyContinue }
+    else { Stop-Job $job; $out = Receive-Job $job -ErrorAction SilentlyContinue; $out += "<<TIMED OUT after $TimeoutSec s>>" }
     Remove-Job $job -Force
     return (($out -join "`n") -replace ($ESC + '\[[0-9]*[A-Za-z]'), '')
 }
