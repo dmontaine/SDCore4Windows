@@ -21,7 +21,16 @@ while porting from it.
            form; the BANNER, LANDSCAPE and printer-option settings of the
            Linux spooler are accepted and ignored.  COPIES works.  If Windows
            refuses the job - no such printer, no default printer - the session
-           now says so: "Print job not sent: ...".
+           says so in two lines: Windows' own reason ("Settings to access
+           printer 'x' are not valid.") and then "Print job not sent: ...".
+
+           ONE WINDOWS SETTING TO KNOW ABOUT.  Windows 10 and 11 ship with
+           "Let Windows manage my default printer" turned ON, and in that mode
+           your default printer silently becomes the last printer you used
+           from any program - which may be "Microsoft Print to PDF".  If you
+           have more than one printer, either turn that setting off in
+           Settings > Printers & scanners and choose your default, or name the
+           printer with AT in SETPTR.
 
 17 Sep 26  SENDMAIL SAYS IT IS NOT AVAILABLE, INSTEAD OF PRETENDING.
 

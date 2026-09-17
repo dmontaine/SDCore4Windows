@@ -28,6 +28,10 @@
  *           ruling, 17 Sep 2026: the default Windows printer, as upstream
  *           OpenQM does.  The Linux command build and its shell quoting are
  *           gone with it; git has them.
+ * 17 Sep 26 Same day: the -Command text catches its own error and writes
+ *           only the message, so a wrong AT name shows the user one sentence
+ *           from Windows and one from SD, not PowerShell's six-line dump
+ *           (seen on verify-print b177/b178).  Owner: "fix powershell dump".
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -163,11 +167,17 @@ void spool_print_job(PRINT_UNIT* pu) {
   }
 
   /* The job text is read once; each copy is one Out-Printer.  With no -Name
-     Out-Printer uses the session user's default printer. */
+     Out-Printer uses the session user's default printer.  The try/catch is
+     for the user's screen: PowerShell's child shares this session's stderr,
+     and an uncaught error there is six lines of CategoryInfo and carets
+     before the one line below that says what happened.  The catch leaves
+     Windows' own sentence ("Settings to access printer 'x' are not valid.")
+     and exit 1. */
   if (snprintf(script, sizeof(script),
                "$ErrorActionPreference = 'Stop'; "
-               "$t = Get-Content -LiteralPath %s; "
-               "1..%d | ForEach-Object { $t | Out-Printer%s%s }",
+               "try { $t = Get-Content -LiteralPath %s; "
+               "1..%d | ForEach-Object { $t | Out-Printer%s%s } } "
+               "catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
                qfile, copies,
                qprinter[0] ? " -Name " : "", qprinter) >= (int)sizeof(script)) {
     tio_printf("Print job not sent: the print command is too long\n");
