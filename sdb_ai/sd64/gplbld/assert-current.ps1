@@ -751,6 +751,10 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # USER32 initialising in a process whose bare token has no
                   # window station.  Ships nowhere.
                   'probe-user32desk.c', 'probe-user32desk.exe',
+                  # 17 Sep 26 - probe-s4uload: RELEASE_1.1 43's open point
+                  # (f), the S4U mint under concurrency, run as SYSTEM against
+                  # the real relay account.  Ships nowhere.
+                  'probe-s4uload.c', 'probe-s4uload.ps1', 'probe-s4uload.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
