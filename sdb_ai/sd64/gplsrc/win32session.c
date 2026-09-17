@@ -68,28 +68,39 @@ static int self_path(char* out, size_t outlen, char* why, size_t whylen) {
   return 1;
 }
 
-int win32_session_spawn(const char* username, const char* pipename,
-                        void** proc, unsigned long* pid, char* why,
-                        size_t whylen) {
+/* One inheritable duplicate of h in this process. */
+static int dup_inh(HANDLE h, HANDLE* out) {
+  return DuplicateHandle(GetCurrentProcess(), h, GetCurrentProcess(), out, 0,
+                         TRUE, DUPLICATE_SAME_ACCESS);
+}
+
+int win32_session_spawn(const char* username, void* pipe_client, void** proc,
+                        unsigned long* pid, char* why, size_t whylen) {
   char exe[MAX_PATH];
-  char cmd[MAX_PATH + 256];
+  char cmd[MAX_PATH + 32];
   HANDLE imp = NULL;
   HANDLE prim = NULL;
-  STARTUPINFOA si;
+  HANDLE in = NULL;
+  HANDLE out = NULL;
+  HANDLE nul = INVALID_HANDLE_VALUE;
+  HANDLE list[3];
+  SECURITY_ATTRIBUTES sa;
+  STARTUPINFOEXA six;
   PROCESS_INFORMATION pi;
+  SIZE_T alen = 0;
   void* env = NULL;
   int ok = 0;
 
   *proc = NULL;
   if (pid)
     *pid = 0;
-  ZeroMemory(&si, sizeof si);
+  ZeroMemory(&six, sizeof six);
   ZeroMemory(&pi, sizeof pi);
-  si.cb = sizeof si;
+  six.StartupInfo.cb = sizeof six;
 
-  if ((username == NULL) || (*username == '\0') || (pipename == NULL) ||
-      (*pipename == '\0')) {
-    snprintf(why, whylen, "win32_session_spawn: empty username or pipe name");
+  if ((username == NULL) || (*username == '\0') ||
+      (pipe_client == NULL) || (pipe_client == INVALID_HANDLE_VALUE)) {
+    snprintf(why, whylen, "win32_session_spawn: empty username or pipe handle");
     return 0;
   }
   if (!self_path(exe, sizeof exe, why, whylen))
@@ -111,11 +122,53 @@ int win32_session_spawn(const char* username, const char* pipename,
     goto done;
   }
 
+  /* The pipe on the session's std handles: TWO inheritable copies, one per
+     descriptor (win32pipe.c - sharing one handle across 0 and 1 breaks the
+     Cygwin fhandler and its select), handed over as std handles the way the
+     shipping -C1!0 path does; the session then reads/writes 0/1 directly with
+     working select (probe-pipestd), NOT cygwin_attach_handle_to_fd. */
+  if (!dup_inh((HANDLE)pipe_client, &in) || !dup_inh((HANDLE)pipe_client, &out)) {
+    win_error("DuplicateHandle(pipe)", why, whylen);
+    goto done;
+  }
+  /* An inheritable NUL for stderr - the session's diagnostics go to syslog, not
+     a descriptor, and USESTDHANDLES needs all three set. */
+  sa.nLength = sizeof sa;
+  sa.lpSecurityDescriptor = NULL;
+  sa.bInheritHandle = TRUE;
+  nul = CreateFileA("NUL", GENERIC_WRITE, FILE_SHARE_WRITE, &sa, OPEN_EXISTING,
+                    0, NULL);
+  if (nul == INVALID_HANDLE_VALUE) {
+    win_error("open NUL", why, whylen);
+    goto done;
+  }
+
+  six.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  six.StartupInfo.hStdInput = in;
+  six.StartupInfo.hStdOutput = out;
+  six.StartupInfo.hStdError = nul;
+  /* Exactly these three cross, nothing else (win32relay.c's correctness point:
+     bInheritHandles alone would copy every inheritable handle the front holds,
+     including the relay's and the pipe's server end). */
+  list[0] = in;
+  list[1] = out;
+  list[2] = nul;
+  InitializeProcThreadAttributeList(NULL, 1, 0, &alen);
+  six.lpAttributeList =
+      (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(GetProcessHeap(), 0, alen);
+  if (six.lpAttributeList == NULL ||
+      !InitializeProcThreadAttributeList(six.lpAttributeList, 1, 0, &alen) ||
+      !UpdateProcThreadAttribute(six.lpAttributeList, 0,
+                                 PROC_THREAD_ATTRIBUTE_HANDLE_LIST, list,
+                                 sizeof list, NULL, NULL)) {
+    win_error("PROC_THREAD_ATTRIBUTE_HANDLE_LIST", why, whylen);
+    goto done;
+  }
+
   /* NO privilege strip and NO integrity drop - the user's own session, the
-     user's own rights (win32session.h).  -A marks it a pre-authenticated API
-     session whose I/O is the pipe; -N is the API connection type. */
-  if (snprintf(cmd, sizeof cmd, "\"%s\" -N -A \"%s\"", exe, pipename) >=
-      (int)sizeof cmd) {
+     user's own rights (win32session.h).  -A: a pre-authenticated API session
+     whose I/O is already on 0/1; -N is the API connection type. */
+  if (snprintf(cmd, sizeof cmd, "\"%s\" -N -A", exe) >= (int)sizeof cmd) {
     snprintf(why, whylen, "session command line too long");
     goto done;
   }
@@ -125,11 +178,11 @@ int win32_session_spawn(const char* username, const char* pipename,
   if (!CreateEnvironmentBlock(&env, prim, FALSE))
     env = NULL;
 
-  si.lpDesktop = (char*)"winsta0\\default";
-  if (!CreateProcessAsUserA(prim, exe, cmd, NULL, NULL, FALSE,
-                            CREATE_NO_WINDOW |
+  six.StartupInfo.lpDesktop = (char*)"winsta0\\default";
+  if (!CreateProcessAsUserA(prim, exe, cmd, NULL, NULL, TRUE,
+                            CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT |
                                 (env ? CREATE_UNICODE_ENVIRONMENT : 0),
-                            env, NULL, &si, &pi)) {
+                            env, NULL, &six.StartupInfo, &pi)) {
     win_error("CreateProcessAsUser(session)", why, whylen);
     goto done;
   }
@@ -140,6 +193,18 @@ int win32_session_spawn(const char* username, const char* pipename,
   ok = 1;
 
 done:
+  /* The child holds its own copies now; the front keeps none of the
+     inheritable duplicates. */
+  if (in)
+    CloseHandle(in);
+  if (out)
+    CloseHandle(out);
+  if (nul != INVALID_HANDLE_VALUE)
+    CloseHandle(nul);
+  if (six.lpAttributeList) {
+    DeleteProcThreadAttributeList(six.lpAttributeList);
+    HeapFree(GetProcessHeap(), 0, six.lpAttributeList);
+  }
   if (env)
     DestroyEnvironmentBlock(env);
   if (prim)
