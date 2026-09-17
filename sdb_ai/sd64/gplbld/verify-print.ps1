@@ -17,7 +17,8 @@
       WHOSE NAME IS A FILE PATH, which Windows spools straight into that file.
       <Prefix>a is the printer SETPTR names with AT; <Prefix>d is made the
       running user's DEFAULT for the run (the previous default is recorded and
-      put back).  Neither touches paper.
+      put back).  Neither touches paper.  The driver ships STAGED, not
+      installed; if this run has to install it, it removes it again.
 
     Legs, each an SD session driven through sd.exe:
       1. named   SETPTR 0,...,1,AT <Prefix>a,BRIEF then LIST ... LPTR: the
@@ -118,8 +119,23 @@ $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Refuse 'Run this from an ELEVATED PowerShell - it creates two local printers.' }
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -ne 0) { Refuse 'assert-current says the install is not current. Cycle first.' }
-if (-not (Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue)) { Refuse "the '$Driver' printer driver is not on this machine; it ships with Windows, so something is off." }
 if (-not (Get-Service Spooler -ErrorAction SilentlyContinue) -or (Get-Service Spooler).Status -ne 'Running') { Refuse 'the Print Spooler service is not running.' }
+# Get-PrinterDriver lists INSTALLED drivers.  Windows ships this one STAGED in
+# the driver store (prnge001.inf) and installs it on first use, so a box that has
+# never made a text printer has it in the store and not in the list - measured
+# 17 Sep 2026, run b175, where the first version of this check refused on
+# exactly that.  Add-PrinterDriver -Name installs it from the store; if this run
+# installed it, cleanup removes it again so the box is left as it was found.
+$installedDriver = $false
+if (-not (Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue)) {
+    Write-Host "  '$Driver' is not installed; installing it from the driver store"
+    try { Add-PrinterDriver -Name $Driver } catch { Refuse "the '$Driver' printer driver is not installed and Add-PrinterDriver could not install it from the driver store: $($_.Exception.Message)" }
+    if (-not (Get-PrinterDriver -Name $Driver -ErrorAction SilentlyContinue)) { Refuse "Add-PrinterDriver returned and '$Driver' is still not listed." }
+    $installedDriver = $true
+    Write-Host "  installed (this run will remove it again)"
+} else {
+    Write-Host "  '$Driver' is already installed (left in place at the end)"
+}
 if (Get-Printer -Name $PrnA -ErrorAction SilentlyContinue) { Refuse "a printer named $PrnA already exists - a stale run? remove it first." }
 if (Get-Printer -Name $PrnD -ErrorAction SilentlyContinue) { Refuse "a printer named $PrnD already exists - a stale run? remove it first." }
 
@@ -191,6 +207,9 @@ finally {
         foreach ($f in @($FileA, $FileD)) { try { if (Get-PrinterPort -Name $f -ErrorAction SilentlyContinue) { Remove-PrinterPort -Name $f } } catch { Write-Host "  could not remove port ${f}: $($_.Exception.Message)" } }
         try { if (Test-Path -LiteralPath $Stage) { Remove-Item -LiteralPath $Stage -Recurse -Force } } catch { }
         Note 'cleanup: both printers gone' $false ([bool](Get-Printer -Name $PrnA -ErrorAction SilentlyContinue) -or [bool](Get-Printer -Name $PrnD -ErrorAction SilentlyContinue))
+        if ($installedDriver) {
+            try { Remove-PrinterDriver -Name $Driver; Write-Host "  '$Driver' driver removed again (this run installed it)" } catch { Write-Host "  could not remove the '$Driver' driver this run installed: $($_.Exception.Message)" }
+        }
     } else {
         Write-Host "  -Keep: $PrnA, $PrnD and $Stage left in place"
     }
