@@ -706,6 +706,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # Ships nowhere; listed so the instrument does not report
                   # its own tree stale.
                   'probe-cygsock.c', 'probe-cygsock-cyg.c', 'probe-cygsock.exe',
+                  # 16 Sep 26 - probe-cygshared (native) and probe-lowmsys
+                  # (MSYS2): is what a relay can write set by its runtime or
+                  # its token?  Token - Low integrity writes no MSYS2 section,
+                  # and MSYS2 runs at Low (RELEASE_1.1 43, 53).  Ship nowhere.
+                  'probe-cygshared.c', 'probe-cygshared.exe',
+                  'probe-lowmsys.c', 'probe-lowmsys.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
