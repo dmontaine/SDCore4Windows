@@ -151,6 +151,7 @@ param(
     # It is still derived from -Run, because a fixed prefix passes once and
     # fails every run after (54).
     [string]$VocPrefix   = '',   # verify-vocverbs.ps1  - files, no account
+    [string]$PrnPrefix   = '',   # verify-print.ps1     - two printers, no account (RELEASE_1.1 54)
     # 30 Aug 26 - verify-profiledir.ps1, PRE_RELEASE_FIXES 54.  It was in
     # NEITHER runner, so 36's last leg had never fired since the day it was
     # written.  VerifyInstall2 is the right runner and VerifyInstall1 is not,
@@ -266,6 +267,9 @@ if ($Run) {
     # hand.  verify-vocverbs makes files, not accounts, so this is shorter than
     # the account prefixes and needs no Windows-name constraint.
     if (-not $VocPrefix)   { $VocPrefix   = "sdvv$Run" }
+    # 17 Sep 26 - verify-print names two Windows PRINTERS from this; a fixed
+    # name would collide with a stale run's printer, so it too comes from -Run.
+    if (-not $PrnPrefix)   { $PrnPrefix   = "sdprn$Run" }
     # THE PREFIX MUST COME FROM THE -Run TOKEN, as sdacctb48/sdtiertb48 already
     # do and as 54 says in as many words.  verify-profiledir.ps1 refuses a spent
     # stem by design, so a FIXED prefix would pass once and fail on every later
@@ -807,6 +811,15 @@ $steps = @(
     # It also now asserts its VOC record is gone after cleanup (26 and 31's
     # lesson), a row that fails rather than repairs quietly.
     @{ Name = 'verify-createfilecase.ps1'; P = @{} },
+    # 17 Sep 26 - RELEASE_1.1 54: SETPTR mode 1 prints to a Windows printer -
+    # the one named with AT, or the user's default - through Out-Printer, and
+    # says so when Windows refuses.  It makes two file-port printers on the
+    # Generic / Text Only driver (nothing on paper), sets one as the default
+    # for the run and puts the previous default back, and reads the job text
+    # out of the port files.  ELEVATED because Add-Printer is.  Here beside
+    # the other SDSYS-state steps: its sessions run in SDSYS and leave nothing
+    # behind but two spool files it deletes.
+    @{ Name = 'verify-print.ps1';          P = @{ Prefix = $PrnPrefix } },
     # 14 Sep 26 - RELEASE_1.1 5 stage 2b's upgrade leg.  It plants the old
     # upper-case TYPE and @ID in SDSYS's DICT VOC, runs the INSTALLED
     # upgrade-dicts.ps1, and requires them replaced rather than twinned, with a

@@ -6,24 +6,68 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 3, or (at your option)
  * any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- * 
+ *
  * START-HISTORY:
+ * 17 Sep 26 Windows port - RELEASE_1.1 54: spool_print_job() hands the job
+ *           to WINDOWS PRINTING through PowerShell's Out-Printer - the
+ *           session user's default printer, or the one SETPTR named with AT
+ *           - started with fork/execl and waited for, no shell.  Until now
+ *           it built an "lp" line and ran it through system(), and the
+ *           install has no shell and no lp: every mode-1 job was written,
+ *           then vanished with no message (gplbld/probe-system.c measured
+ *           system() answering 127 under the installed runtime).  Owner's
+ *           ruling, 17 Sep 2026: the default Windows printer, as upstream
+ *           OpenQM does.  The Linux command build and its shell quoting are
+ *           gone with it; git has them.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
  * START-DESCRIPTION:
  *
- * Linux printers work by diverting the output to the prt subdirectory of
- * the Q_M_SYS account and then feeding this file to the Linux spooler.
+ * Printers work by diverting the output to the prt subdirectory of the
+ * SDSYS account and then feeding this file to the spooler.  On Linux the
+ * spooler is lp; here it is Windows printing, reached through PowerShell:
+ *
+ *   powershell.exe -NoProfile -NonInteractive -Command
+ *       "Get-Content -LiteralPath '<job file>' | Out-Printer"
+ *   ... | Out-Printer -Name '<printer>'          when SETPTR ... AT <printer>
+ *
+ * Out-Printer with no -Name IS the Windows default printer.  THAT IS PER
+ * USER: a console session prints to the signed-in user's default; an API or
+ * ssh session runs as the SD user through S4U or sshd with no profile loaded
+ * and may have no default printer at all, so such a session should name the
+ * printer in SETPTR.  That is how Windows printers work, not a defect here.
+ *
+ * WHAT CARRIES OVER AND WHAT DOES NOT.  COPIES n becomes n passes over the
+ * job.  AT names the printer.  BANNER, the -o options string and LANDSCAPE
+ * had lp meanings and have no Out-Printer equivalent; they are accepted by
+ * SETPTR as before and ignored here, and the description of SETPTR in the
+ * documentation is where that is said to the user.  Out-Printer sends the
+ * text as the printer's default form.
+ *
+ * WHY fork/execl AND NOT system().  system() is "/bin/sh -c" and the install
+ * ships no shell (RELEASE_1.1 37 found the same thing in sdwind).  PowerShell
+ * is found the way op_sh.c finds it, sd_powershell_path(), and started
+ * directly; the arguments go to execl() as separate strings, so the only
+ * quoting is PowerShell's own inside the -Command text, where a single quote
+ * in a name is doubled.  The child is waited for, because end_file() removes
+ * the job file the moment this returns - a job handed to a child that has not
+ * yet read it would print nothing.
+ *
+ * FAILURES ARE SAID, ON THE TERMINAL.  The old code's only message was for an
+ * over-long command line; a spooler that failed said nothing.  Now a launch
+ * that cannot happen, or a PowerShell that exits non-zero (no such printer,
+ * no default printer), is reported with tio_printf() so the user who typed
+ * the PRINT sees why nothing came out.
  *
  * END-DESCRIPTION
  *
@@ -33,6 +77,8 @@
 #include "sd.h"
 #include "tio.h"
 #include "config.h"
+
+#include <sys/wait.h>
 
 #define FILE_BUFF_SIZE 1024
 
@@ -62,121 +108,98 @@ void end_printer(pu) PRINT_UNIT* pu;
   }
 }
 
-/* Modified by Composer AI - 2026/06/10.
-   Helper for spool_print_job(): copies src into dst wrapped in single
-   quotes with any embedded single quote rewritten as '\'' so the value
-   cannot inject shell commands when passed to system(). Returns the
-   number of characters written, or -1 if it does not fit. */
-static int shell_quote_arg(char* dst, int dst_size, const char* src) {
+/* ======================================================================
+   ps_quote()  -  src inside PowerShell single quotes, ' doubled
+
+   Returns the length written, or -1 if it does not fit.  Single quotes are
+   the only character PowerShell interprets inside a single-quoted string, so
+   doubling them is the whole of the escaping.                             */
+
+static int ps_quote(char* dst, int dst_size, const char* src) {
   int n = 0;
 
-  if (n >= dst_size - 1)
+  if (dst_size < 3)
     return -1;
   dst[n++] = '\'';
   for (; *src != '\0'; src++) {
     if (*src == '\'') {
-      if (n + 4 >= dst_size)
+      if (n + 3 >= dst_size)
         return -1;
-      dst[n++] = '\'';
-      dst[n++] = '\\';
       dst[n++] = '\'';
       dst[n++] = '\'';
     } else {
-      if (n + 1 >= dst_size)
+      if (n + 2 >= dst_size)
         return -1;
       dst[n++] = *src;
     }
   }
-  if (n + 2 > dst_size)
-    return -1;
   dst[n++] = '\'';
   dst[n] = '\0';
   return n;
 }
-/* -------------------- */
 
 /* ======================================================================
-   spool_print_job()                                                      */
+   spool_print_job()  -  Hand the finished job file to Windows printing   */
 
 void spool_print_job(PRINT_UNIT* pu) {
-  char cmd[300];
-  /* Modified by Composer AI - 2026/06/10.
-     The command was assembled with unbounded sprintf() calls into a fixed
-     300 byte buffer. Long printer names, banners, options or pathnames
-     overflowed the stack buffer. Build the command with bounded snprintf()
-     calls instead and refuse to run a truncated command.
-     Additionally, the printer name, banner, options and pathname are now
-     passed through shell_quote_arg() so shell metacharacters in them
-     cannot inject commands into the system() call. */
-  /* char* p;
+  char psh[MAX_PATHNAME_LEN + 1];
+  char qfile[MAX_PATHNAME_LEN + 8];
+  char qprinter[MAX_PATHNAME_LEN + 8];
+  char script[2 * MAX_PATHNAME_LEN + 256];
+  int copies = (pu->copies > 1) ? pu->copies : 1;
+  pid_t cpid;
+  int status = 0;
 
-  if (pu->spooler != NULL) {
-    p = cmd + sprintf(cmd, "%s ", pu->spooler);
-  } else if (pcfg.spooler[0] != '\0') {
-    p = cmd + sprintf(cmd, "%s ", pcfg.spooler);
-  } else {
-    p = cmd + sprintf(cmd, "lp ");
+  if (ps_quote(qfile, sizeof(qfile), pu->file.pathname) < 0) {
+    tio_printf("Print job not sent: the job file's name is too long\n");
+    return;
+  }
+  qprinter[0] = '\0';
+  if (pu->printer_name != NULL && pu->printer_name[0] != '\0') {
+    if (ps_quote(qprinter, sizeof(qprinter), pu->printer_name) < 0) {
+      tio_printf("Print job not sent: the printer name is too long\n");
+      return;
+    }
   }
 
-  if (pu->copies > 1)
-    p += sprintf(p, " -n %d", pu->copies); / * Copies * /
-  if (pu->printer_name != NULL)
-    p += sprintf(p, " -d %s", pu->printer_name); / * Printer * /
-  if (pu->banner != NULL)
-    p += sprintf(p, " -t \"%s\"", pu->banner); / * Banner * /
-  if (pu->options != NULL)
-    p += sprintf(p, " -o \"%s\"", pu->options); / * Options * /
-  if (pu->flags & PU_LAND)
-    p += sprintf(p, " -o \"landscape\"");
-
-  p += sprintf(p, " '%s' > /dev/null", pu->file.pathname); / * File to print * /
-
-  system(cmd); */
-  int n;
-  char qbuf[300];
-
-  if (pu->spooler != NULL) {
-    n = snprintf(cmd, sizeof(cmd), "%s ", pu->spooler);
-  } else if (pcfg.spooler[0] != '\0') {
-    n = snprintf(cmd, sizeof(cmd), "%s ", pcfg.spooler);
-  } else {
-    n = snprintf(cmd, sizeof(cmd), "lp ");
-  }
-
-  if ((pu->copies > 1) && (n < (int)sizeof(cmd)))
-    n += snprintf(cmd + n, sizeof(cmd) - n, " -n %d", pu->copies); /* Copies */
-  if ((pu->printer_name != NULL) && (n < (int)sizeof(cmd))) { /* Printer */
-    if (shell_quote_arg(qbuf, sizeof(qbuf), pu->printer_name) < 0)
-      goto cmd_too_long;
-    n += snprintf(cmd + n, sizeof(cmd) - n, " -d %s", qbuf);
-  }
-  if ((pu->banner != NULL) && (n < (int)sizeof(cmd))) { /* Banner */
-    if (shell_quote_arg(qbuf, sizeof(qbuf), pu->banner) < 0)
-      goto cmd_too_long;
-    n += snprintf(cmd + n, sizeof(cmd) - n, " -t %s", qbuf);
-  }
-  if ((pu->options != NULL) && (n < (int)sizeof(cmd))) { /* Options */
-    if (shell_quote_arg(qbuf, sizeof(qbuf), pu->options) < 0)
-      goto cmd_too_long;
-    n += snprintf(cmd + n, sizeof(cmd) - n, " -o %s", qbuf);
-  }
-  if ((pu->flags & PU_LAND) && (n < (int)sizeof(cmd)))
-    n += snprintf(cmd + n, sizeof(cmd) - n, " -o \"landscape\"");
-
-  if (n < (int)sizeof(cmd)) { /* File to print */
-    if (shell_quote_arg(qbuf, sizeof(qbuf), pu->file.pathname) < 0)
-      goto cmd_too_long;
-    n += snprintf(cmd + n, sizeof(cmd) - n, " %s > /dev/null", qbuf);
-  }
-
-  if (n >= (int)sizeof(cmd)) {
-cmd_too_long:
-    fprintf(stderr, "spool_print_job: print command too long - job not spooled\n");
+  /* The job text is read once; each copy is one Out-Printer.  With no -Name
+     Out-Printer uses the session user's default printer. */
+  if (snprintf(script, sizeof(script),
+               "$ErrorActionPreference = 'Stop'; "
+               "$t = Get-Content -LiteralPath %s; "
+               "1..%d | ForEach-Object { $t | Out-Printer%s%s }",
+               qfile, copies,
+               qprinter[0] ? " -Name " : "", qprinter) >= (int)sizeof(script)) {
+    tio_printf("Print job not sent: the print command is too long\n");
     return;
   }
 
-  system(cmd);
-  /* -------------------- */
+  sd_powershell_path(psh, sizeof(psh));
+
+  cpid = fork();
+  if (cpid < 0) {
+    tio_printf("Print job not sent: cannot start PowerShell (errno %d)\n", errno);
+    return;
+  }
+  if (cpid == 0) {
+    execl(psh, "powershell.exe", "-NoProfile", "-NonInteractive",
+          "-ExecutionPolicy", "Bypass", "-Command", script, (char*)NULL);
+    _exit(127);                       /* only reached if exec failed */
+  }
+  if (waitpid(cpid, &status, 0) < 0) {
+    tio_printf("Print job sent, but its outcome could not be read (errno %d)\n", errno);
+    return;
+  }
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 127)
+      tio_printf("Print job not sent: PowerShell did not start (%s)\n", psh);
+    else if (qprinter[0])
+      tio_printf("Print job not sent: Windows refused it for printer %s (exit %d) - is the name right?\n",
+                 pu->printer_name, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+    else
+      tio_printf("Print job not sent: Windows refused it for the default printer (exit %d) - is one set for this user?\n",
+                 WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+  }
 }
 
 /* END-CODE */

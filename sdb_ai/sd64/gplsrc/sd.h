@@ -403,6 +403,9 @@ bool tio_init(void);
 int tio_printf(char * tmpl, ...);
 void tio_shut(void);
 void tio_write(char * s);
+/* op_sh.c - 17 Sep 26: Windows PowerShell's path, for sh() and the print
+   spooler (linuxprt.c) alike. */
+void sd_powershell_path(char * buf, int len);
 void freescrn(SCREEN_IMAGE * image);
 void break_key(void);
 int16_t keyin(int timeout);

@@ -262,7 +262,9 @@ $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
 #
 # A NAME MUST NOT APPEAR IN BOTH LISTS.  The checker refuses that outright:
 # "swept" and "nothing to sweep" cannot both be true of one family.
-$notProfiles = @('sdvv')
+# 17 Sep 26 - sdprn: verify-print.ps1 composes sdprn<Run>, which names two
+# PRINTERS and two spool files, no account and no profile.  ONE LINE, as $bare.
+$notProfiles = @('sdvv', 'sdprn')
 # 17 Sep 26 - zzinteropw is interop-account.ps1's default account, the Linux
 # interop fixture: a real Windows account with no digit in its name.  ONE LINE:
 # test-stemcoverage-units.ps1 reads this list with a single-line regex.
@@ -388,6 +390,9 @@ if ($SelfTest) {
         # for verify-VOCVERBS, so a later name of that shape is the plausible
         # mistake rather than an invented one.
         'sdvvb99', 'sdvvb101', 'sdvverbs', 'sdvvoc',
+        # 17 Sep 26 - the second $notProfiles family, verify-print's printers:
+        # the two names a run really composes, and the word-shaped near-miss.
+        'sdprnb175a', 'sdprnb175d', 'sdprinter',
         # 17 Sep 26 - the near-misses the three hand-run families open up.
         # "sdvocwrite" and "sdwireless" start with a stem and continue with
         # letters, so both fail on the required digit; "zzinterop" is the bare

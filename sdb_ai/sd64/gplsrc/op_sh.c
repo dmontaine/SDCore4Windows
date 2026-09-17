@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Sep 26 Windows port - sd_powershell_path() lifted out of sh_execute()
+ *           so linuxprt.c's spooler finds PowerShell the same way
+ *           (RELEASE_1.1 54).
  * 13 Sep 26 Windows port - os_permitted() split: tests 2 and 3 are now
  *           os_user_permitted(), and sd_os_permitted() - the Python gate -
  *           calls THAT, without the HDR_INTERNAL test.  The gate ran inside
@@ -366,6 +369,37 @@ Private void sh(bool capture) {
 /* ======================================================================
    sh_execute()  -  Execute SH command                                    */
 
+/* ======================================================================
+   sd_powershell_path()  -  Where Windows PowerShell is, as a POSIX path
+
+   17 Sep 26 Windows port - lifted out of sh_execute() for linuxprt.c
+   (RELEASE_1.1 54), unchanged in substance.
+
+   The path is derived from SystemRoot rather than written as C:\Windows,
+   because the system drive is not guaranteed.  It contains no spaces, which
+   sh_execute() relies on: clparse() splits on them and does not honour
+   quotes, which is why PowerShell is named by its real location rather than
+   through a wrapper.  SystemRoot arrives as C:\WINDOWS; the separators are
+   folded so the whole path is one spelling - sdrealpath() accepts either,
+   but consistency keeps the value that gets logged and reported readable.  */
+
+void sd_powershell_path(char *buf, int len) {
+  const char *sysroot;
+  char *pp;
+
+  sysroot = getenv("SystemRoot");
+  if ((sysroot == NULL) || (*sysroot == '\0'))
+    sysroot = "C:/Windows";
+
+  snprintf(buf, (size_t)len,
+           "%s/System32/WindowsPowerShell/v1.0/powershell.exe", sysroot);
+
+  for (pp = buf; *pp != '\0'; pp++) {
+    if (*pp == '\\')
+      *pp = '/';
+  }
+}
+
 Private void sh_execute(char *command) {
 #define PIPE_BUFFER_SIZE 2048
   char buffer[PIPE_BUFFER_SIZE];
@@ -407,24 +441,11 @@ Private void sh_execute(char *command) {
   char dflt_sh[MAX_PATHNAME_LEN + 64];
   char dflt_sh1[MAX_PATHNAME_LEN + 96]; /* 05 Sep 26 - see the SH1 note below */
   char psh[MAX_PATHNAME_LEN + 1];
-  const char *sysroot;
-  char *pp;
 
-  sysroot = getenv("SystemRoot");
-  if ((sysroot == NULL) || (*sysroot == '\0'))
-    sysroot = "C:/Windows";
-
-  snprintf(psh, sizeof(psh),
-           "%s/System32/WindowsPowerShell/v1.0/powershell.exe", sysroot);
-
-  /* SystemRoot arrives as C:\WINDOWS.  Fold the separators so the whole path
-     is one spelling; sdrealpath() accepts either, but consistency here keeps
-     the value that gets logged and reported readable.                       */
-
-  for (pp = psh; *pp != '\0'; pp++) {
-    if (*pp == '\\')
-      *pp = '/';
-  }
+  /* 17 Sep 26 - the derivation moved to sd_powershell_path() below so that
+     linuxprt.c's print spooler (RELEASE_1.1 54) finds PowerShell the same
+     way; the comments that explained it moved with it. */
+  sd_powershell_path(psh, sizeof(psh));
 
   snprintf(dflt_sh, sizeof(dflt_sh), "%s -NoProfile -NoLogo", psh);
 

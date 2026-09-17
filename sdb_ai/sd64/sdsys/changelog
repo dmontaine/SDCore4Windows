@@ -4,6 +4,34 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+17 Sep 26  PRINTING GOES TO A WINDOWS PRINTER.
+
+           SETPTR mode 1 - the spooled print unit - now sends the job to a
+           Windows printer: the one named with AT, or your default printer
+           when none is named, the same as OpenQM does.  Until now a mode-1
+           job was handed to a Linux print command that does not exist on
+           Windows, and the job disappeared without a message.
+
+           WHAT TO KNOW.  "Your default printer" means the default for the
+           Windows user the session runs as.  At the console that is you.  A
+           session over the API or ssh runs as your SD account's Windows user
+           with no desktop signed in, and may have no default printer set -
+           name the printer in SETPTR (SETPTR 0,80,60,0,0,1,AT "Printer Name")
+           for those.  The job is sent as plain text in the printer's default
+           form; the BANNER, LANDSCAPE and printer-option settings of the
+           Linux spooler are accepted and ignored.  COPIES works.  If Windows
+           refuses the job - no such printer, no default printer - the session
+           now says so: "Print job not sent: ...".
+
+17 Sep 26  SENDMAIL SAYS IT IS NOT AVAILABLE, INSTEAD OF PRETENDING.
+
+           The BASIC SENDMAIL statement relied on a Linux mail program that
+           does not exist on Windows.  It used to report success and send
+           nothing.  It now sets STATUS() to 12, "This operation is not
+           supported on this platform", and sends nothing.  Sending mail from
+           SD on Windows would need a mail server to be configured; nobody has
+           asked for it, so it is not built.
+
 17 Sep 26  A SESSION THAT DIES WITHOUT SIGNING OFF IS NOW CLEARED UP WITHIN
            FIVE MINUTES.
 

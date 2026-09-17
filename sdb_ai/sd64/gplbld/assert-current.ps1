@@ -761,6 +761,10 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # run anything (it cannot: no /bin/sh).  Ship nowhere.
                   'probe-killzero.c', 'probe-killzero.ps1', 'probe-killzero.exe',
                   'probe-system.c', 'probe-system.exe',
+                  # 17 Sep 26 - verify-print.ps1, RELEASE_1.1 54's witness:
+                  # SETPTR mode 1 to a Windows printer.  Runs from
+                  # VerifyInstall2, ships nowhere.
+                  'verify-print.ps1',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
