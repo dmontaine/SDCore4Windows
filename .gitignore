@@ -82,3 +82,8 @@ docs/sample/*.html
 # bin/ and stage/.
 .claude/settings.local.json
 .claude/hooks/__pycache__/
+
+# 17 Sep 26 - audit scratch written into the workspace root by a tool outside
+# this project (muse-audit-*.md).  A "git add -A" swept the first one into
+# commit 541e1cd; the owner had it untracked.  Ignored so it cannot happen again.
+muse-audit-*.md
