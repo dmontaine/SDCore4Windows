@@ -239,7 +239,12 @@ $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            # own removal cannot take it.  Fixtures below are the names met.
            # NO PARENTHESES IN THIS COMMENT: test-stemcoverage-units.ps1 reads
            # the list up to the first close-paren.
-           'sdvocw', 'sdwire')
+           'sdvocw', 'sdwire',
+           # 17 Sep 26 - the one profile the post-reboot sweep left of 36:
+           # sdapitls1, a hand-run verify-apiport prefix from the 15 Sep TLS
+           # work.  "sdapi" does not reach it because the pattern allows ONE
+           # letter between stem and digits and "tls" is three.
+           'sdapitls')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has
@@ -300,6 +305,8 @@ if ($SelfTest) {
         # outside every stem, by name: verify-vocwrite's, verify-apiwire's and
         # the Linux interop account.  Real names, on this machine that day.
         'sdvocw1', 'sdvocw2', 'sdwire2', 'sdwire3', 'sdwire4', 'zzinteropw',
+        # 17 Sep 26 - the one of the 36 the reboot-and-sweep left behind.
+        'sdapitls1',
         # 05 Sep 26 - verify-sshadmin's family (PRE_RELEASE 167).  ***IT MAKES
         # TWO ACCOUNTS PER RUN, NOT ONE***, and both suffixes are here because
         # the "a" one is a WINDOWS ADMINISTRATOR (CREATE.ACCOUNT ADMINISTRATOR
@@ -386,6 +393,8 @@ if ($SelfTest) {
         # letters, so both fail on the required digit; "zzinterop" is the bare
         # name one letter short, and a bare name matches whole or not at all.
         'sdvocwrite', 'sdwireless', 'zzinterop', 'zzinteropwin',
+        # "sdapitls" opens up: a word after it fails on the required digit.
+        'sdapitlsprobe', 'sdapitlsx',
         # the SD system account and the owner's
         'sdsys', 'don'
     )
