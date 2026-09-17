@@ -166,9 +166,12 @@ int win32_session_spawn(const char* username, void* pipe_client, void** proc,
   }
 
   /* NO privilege strip and NO integrity drop - the user's own session, the
-     user's own rights (win32session.h).  -A: a pre-authenticated API session
-     whose I/O is already on 0/1; -N is the API connection type. */
-  if (snprintf(cmd, sizeof cmd, "\"%s\" -N -A", exe) >= (int)sizeof cmd) {
+     user's own rights (win32session.h).  -H: a pre-authenticated API session
+     whose I/O is already on 0/1; -N is the API connection type.  NOT -A:
+     sd.c folds the option letter with UpperCase() and -A is already "query
+     account", so a session spawned with it would ask for an account name and
+     never set api_preauth. */
+  if (snprintf(cmd, sizeof cmd, "\"%s\" -N -H", exe) >= (int)sizeof cmd) {
     snprintf(why, whylen, "session command line too long");
     goto done;
   }

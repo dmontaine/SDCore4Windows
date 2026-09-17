@@ -28,12 +28,18 @@
  *           to select() and sd's input layer spins on it, while a native pipe
  *           handed over as a std handle wraps as a real fhandler_pipe with
  *           working select (the shipping -C1!0 shape).
+ * 17 Sep 26 Windows port - the spawned command line is "-N -H", not "-N -A".
+ *           Slice 2 moved the pre-authenticated flag to -H because sd.c's
+ *           option switch folds the letter with UpperCase() and -A is already
+ *           "query account"; this file was not changed with it, so the session
+ *           would have been spawned asking for an account name with
+ *           api_preauth still FALSE.
  * END-HISTORY
  *
  * win32_session_spawn() mints the user's token on the LocalSystem front's
  * SeTcbPrivilege (win32_s4u_logon, no password - SCRAM never gives the server
  * one), makes it primary, and CreateProcessAsUser's sd AS the user with
- * "-N -A": -N is the API connection type, -A tells sd it is a PRE-AUTHENTICATED
+ * "-N -H": -N is the API connection type, -H tells sd it is a PRE-AUTHENTICATED
  * session whose I/O is already on descriptors 0 and 1 (this pipe) and that it
  * must NOT spawn a relay or run the SCRAM handshake (the front already did).
  * The user is not passed - the session IS the user and reads its own identity
