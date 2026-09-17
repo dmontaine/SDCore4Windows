@@ -17,8 +17,10 @@
       WHOSE NAME IS A FILE PATH, which Windows spools straight into that file.
       <Prefix>a is the printer SETPTR names with AT; <Prefix>d is made the
       running user's DEFAULT for the run (the previous default is recorded and
-      put back).  Neither touches paper.  The driver ships STAGED, not
-      installed; if this run has to install it, it removes it again.
+      put back, and "Let Windows manage my default printer" is turned off for
+      the run because it ignores SetDefaultPrinter - also put back).  Neither
+      touches paper.  The driver ships STAGED, not installed; if this run has
+      to install it, it removes it again.
 
     Legs, each an SD session driven through sd.exe:
       1. named   SETPTR 0,...,1,AT <Prefix>a,BRIEF then LIST ... LPTR: the
@@ -59,6 +61,7 @@ $PrnD    = $Prefix + 'd'          # the default for the run
 $FileA   = Join-Path $Stage ($PrnA + '.prn')
 $FileD   = Join-Path $Stage ($PrnD + '.prn')
 $Marker  = 'ZZPRINT' + $Prefix.ToUpper()
+$DefaultKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows'   # the user's default printer and LegacyDefaultPrinterMode
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -68,6 +71,10 @@ Write-Host "transcript: $log"
 
 $results = New-Object System.Collections.ArrayList
 $failed  = $false
+$refused = ''          # a SETUP: message - the run could not arrange its own preconditions, exit 2
+$setMode = $false      # this run changed LegacyDefaultPrinterMode and must put it back
+$prevMode = $null
+$sizeAfterNamed = 0
 $prevDefault = $null
 $madeA = $false; $madeD = $false; $madePortA = $false; $madePortD = $false
 
@@ -107,6 +114,12 @@ function Wait-Job-File([string]$path, [int]$seconds = 20) {
         Start-Sleep -Milliseconds 500
     }
     return (Test-Path -LiteralPath $path)
+}
+
+# 0 for a file that is not there, so a leg that expects "unchanged" can read a
+# size before and after without dying on the absent case (b176 did).
+function File-Size([string]$path) {
+    if (Test-Path -LiteralPath $path) { return [long](Get-Item -LiteralPath $path).Length } else { return [long]0 }
 }
 
 function Show($label, $text) {
@@ -154,9 +167,25 @@ try {
     Write-Host "  $PrnD -> $FileD"
     $prevDefault = (Get-CimInstance Win32_Printer | Where-Object { $_.Default } | Select-Object -First 1).Name
     Write-Host ("  previous default printer: " + $(if ($prevDefault) { $prevDefault } else { '(none)' }))
+    # "Let Windows manage my default printer" (LegacyDefaultPrinterMode 0, the
+    # Windows 10+ default) makes Windows set the default to the LAST-USED printer
+    # and ignore a programmatic SetDefaultPrinter - measured 17 Sep 2026, run
+    # b176: the call returned, the default stayed "Microsoft Print to PDF", and
+    # the default leg's job went there.  Per-user, so it is turned off for the
+    # run and put back in cleanup.  The SD sessions below run as this same user,
+    # so this is the default they see.
+    $prevMode = (Get-ItemProperty -Path $DefaultKey -ErrorAction SilentlyContinue).LegacyDefaultPrinterMode
+    Write-Host ("  LegacyDefaultPrinterMode before: " + $(if ($null -ne $prevMode) { $prevMode } else { '(absent)' }))
+    Set-ItemProperty -Path $DefaultKey -Name LegacyDefaultPrinterMode -Value 1 -Type DWord; $setMode = $true
     $net = New-Object -ComObject WScript.Network
     $net.SetDefaultPrinter($PrnD)
     $nowDefault = (Get-CimInstance Win32_Printer | Where-Object { $_.Default } | Select-Object -First 1).Name
+    Write-Host "  default printer now: $nowDefault"
+    if ($nowDefault -ne $PrnD) {
+        # Not a product finding: the default leg cannot be measured against a
+        # default this run does not control, so stop here rather than score it.
+        throw "SETUP: could not make $PrnD the default printer for the run (it is '$nowDefault'); the default leg would measure nothing."
+    }
     Note 'the run''s default printer is the file-port printer' $PrnD $nowDefault
     Note 'control: neither port file exists before any job' $false ((Test-Path -LiteralPath $FileA) -or (Test-Path -LiteralPath $FileD))
 
@@ -171,6 +200,7 @@ try {
     Show "$PrnA file" $textA
     Note 'named: the job carries the listing (WHO)' $true ($textA -match '\bWHO\b')
     Note 'named: nothing arrived at the default printer''s file' $false (Test-Path -LiteralPath $FileD)
+    $sizeAfterNamed = File-Size $FileA
 
     # -----------------------------------------------------------------------
     Step 3 'default: SETPTR ... with no AT - the default Windows printer'
@@ -182,26 +212,40 @@ try {
     $textD = $(if ($arrived) { Get-Content -LiteralPath $FileD -Raw } else { '' })
     Show "$PrnD file" $textD
     Note 'default: the job carries the listing (WHO)' $true ($textD -match '\bWHO\b')
+    if (-not $arrived) {
+        Write-Host ("  where it went instead: default printer is now '" + (Get-CimInstance Win32_Printer | Where-Object { $_.Default } | Select-Object -First 1).Name + "'; " + $PrnA + "'s file is " + (File-Size $FileA) + " bytes (was " + $sizeAfterNamed + ")")
+    }
 
     # -----------------------------------------------------------------------
     Step 4 'refusal: a printer that does not exist'
-    $sizeA = (Get-Item -LiteralPath $FileA).Length
-    $sizeD = (Get-Item -LiteralPath $FileD).Length
+    $sizeA = File-Size $FileA
+    $sizeD = File-Size $FileD
     $out = Invoke-SD @('SETPTR 0,80,60,0,0,1,AT zz-no-such-printer,BRIEF', "LIST VOC WITH @ID = ""WHO"" @ID LPTR")
     Show 'session' $out
     Note 'refusal: the session said the job was not sent, naming the printer' $true ($out -match 'Print job not sent: Windows refused it for printer zz-no-such-printer')
     Start-Sleep -Seconds 3
-    Note 'refusal: no job went to the named file instead' $sizeA (Get-Item -LiteralPath $FileA).Length
-    Note 'refusal: no job went to the default file instead' $sizeD (Get-Item -LiteralPath $FileD).Length
+    Note 'refusal: no job went to the named file instead' $sizeA (File-Size $FileA)
+    Note 'refusal: no job went to the default file instead' $sizeD (File-Size $FileD)
 }
 catch {
-    Write-Host ("verify-print: " + $_.Exception.Message) -ForegroundColor Red
-    $failed = $true
+    if ($_.Exception.Message -like 'SETUP:*') {
+        $refused = $_.Exception.Message.Substring(6).Trim()
+        Write-Host ("verify-print: " + $refused) -ForegroundColor Yellow
+    } else {
+        Write-Host ("verify-print: " + $_.Exception.Message) -ForegroundColor Red
+        $failed = $true
+    }
 }
 finally {
     Write-Host ''
     Write-Host '=== cleanup ==='
     try { if ($prevDefault) { (New-Object -ComObject WScript.Network).SetDefaultPrinter($prevDefault); Write-Host "  default printer put back: $prevDefault" } } catch { Write-Host "  could not restore the default printer: $($_.Exception.Message)" }
+    if ($setMode) {
+        try {
+            if ($null -ne $prevMode) { Set-ItemProperty -Path $DefaultKey -Name LegacyDefaultPrinterMode -Value $prevMode -Type DWord; Write-Host "  LegacyDefaultPrinterMode put back: $prevMode" }
+            else { Remove-ItemProperty -Path $DefaultKey -Name LegacyDefaultPrinterMode; Write-Host "  LegacyDefaultPrinterMode removed again (was absent)" }
+        } catch { Write-Host "  could not restore LegacyDefaultPrinterMode: $($_.Exception.Message)" }
+    }
     if (-not $Keep) {
         foreach ($p in @($PrnA, $PrnD)) { try { if (Get-Printer -Name $p -ErrorAction SilentlyContinue) { Remove-Printer -Name $p } } catch { Write-Host "  could not remove printer ${p}: $($_.Exception.Message)" } }
         foreach ($f in @($FileA, $FileD)) { try { if (Get-PrinterPort -Name $f -ErrorAction SilentlyContinue) { Remove-PrinterPort -Name $f } } catch { Write-Host "  could not remove port ${f}: $($_.Exception.Message)" } }
@@ -219,6 +263,7 @@ Write-Host ''
 $results | Format-Table -AutoSize | Out-String | Write-Host
 $pass = ($results | Where-Object { $_.Expected -eq $_.Observed }).Count
 Write-Host ("verify-print: {0} of {1} checks passed" -f $pass, $results.Count)
+if ($refused) { Refuse $refused }
 try { Stop-Transcript | Out-Null } catch { }
 if ($failed) { exit 1 }
 exit 0
