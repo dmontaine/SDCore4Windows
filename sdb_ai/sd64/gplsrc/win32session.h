@@ -45,12 +45,15 @@
  * The user is not passed - the session IS the user and reads its own identity
  * from its token.
  *
- * pipe_client is the pipe's CLIENT end, opened by the FRONT (LocalSystem opens
- * the sole client end, so no other process is on the pipe; that plus the pipe's
- * single instance and its SID-DACL is the bind).  It is duplicated into TWO
- * inheritable handles - one per descriptor, as win32pipe.c requires for a
- * duplex pipe - and handed over as the session's std handles.  Nothing else is
- * inherited.
+ * pipename is the handover pipe the RELAY has already created as server
+ * (sd_tls_relay_pipe()).  The client end is opened HERE, by the front: it runs
+ * as LocalSystem and the pipe's DACL names LocalSystem alone, so no other
+ * process can be on the pipe, and that with the pipe's single instance is the
+ * bind.  The handle is duplicated into TWO inheritable copies - one per
+ * descriptor, as win32pipe.c requires for a duplex pipe - and handed over as
+ * the session's std handles.  Nothing else is inherited, and the front keeps
+ * no copy: the session must be the only holder or its close will not reach
+ * the relay.
  *
  * Unlike win32_relay_spawn() it does NOT strip privileges or lower integrity:
  * this is the user's own session and must have the user's own rights, exactly
@@ -66,8 +69,9 @@
 
 #include <stddef.h>
 
-int win32_session_spawn(const char* username, void* pipe_client, void** proc,
-                        unsigned long* pid, char* why, size_t whylen);
+int win32_session_spawn(const char* username, const char* pipename,
+                        void** proc, unsigned long* pid, char* why,
+                        size_t whylen);
 
 /* Close the process handle win32_session_spawn() returned. */
 void win32_session_close(void* proc);

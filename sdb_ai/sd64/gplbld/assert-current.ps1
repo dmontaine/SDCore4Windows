@@ -1509,6 +1509,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # ships; listed with the commit that creates them.
                   'test-tlsrelay-units.py', 'relay-hold.py',
                   'verify-relayidentity.ps1',
+                  # 17 Sep 26 - RELEASE_1.1 55: the free guard that keeps the
+                  # kernel key numbers in gplsrc/keys.h and gpl.bp/int$keys.h
+                  # equal, and probe-lowpipe.c, which measured that the relay's
+                  # Low, zero-privilege token can create the handover pipe.
+                  # Neither ships; listed with the commit that creates them.
+                  'test-kernelkeys-units.py', 'probe-lowpipe.c',
                   # 16 Sep 26 - the free guard over install-service.ps1's
                   # relay-account step, after that step failed silently on
                   # its first cycle.  Ships nowhere.

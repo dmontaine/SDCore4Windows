@@ -47,6 +47,13 @@
 #include "locks.h"
 /* 23 Aug 26 Windows port - K_ASSUME_USER, PROJECT_STATUS.md 7 step 14. */
 #include "win32s4u.h"
+/* 17 Sep 26 Windows port - K_HANDOFF, RELEASE_1.1 55.  Neither header brings
+   windows.h in: win32session.h declares the spawn with a void*, and sd_tls.h
+   is careful to carry no Windows type (its own note says why). */
+#include "win32session.h"
+#include "sd_tls.h"
+
+#include <syslog.h>
 
 #include <sys/wait.h>
 /* 16 Aug 26 Windows port - cygwin_conv_path(), for K_WINPATH.  sysseg.c
@@ -303,6 +310,69 @@ void op_kernel() {
           if (AssumeUserIdentity(uname))
             result.data.value = 1;
         }
+      }
+      break;
+
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  K_HANDOFF.  keys.h carries the
+   reasoning; this is the mechanism, in the order it has to happen:
+
+     1. the relay stands up the handover pipe and says READY (sd_tlssrv.c)
+     2. the pipe's client end is opened and handed to a NEW sd, started as the
+        authenticated user, on its std handles (win32session.c)
+     3. the caller sends nothing more and exits, which closes the app-side
+        socketpair - and THAT is what makes the relay cut over to the pipe
+
+   STEP 3 IS THE CALLER'S AND CANNOT BE DONE HERE.  The front still has to get
+   the SCRAM server-final out before it goes, so the order in APISRVR is: send
+   v=ssig, call this, then return.  Closing the app side here would take the
+   server-final with it.
+
+   IT FAILS CLOSED AND SAYS WHY IN syslog.  The BASIC caller gets 1 or 0 and
+   nothing else - there is nowhere for a reason to go on the wire, because the
+   client is mid-login - so every refusal is syslogged with the username.  A
+   handover that returned 0 silently would present as a connection that closed
+   for no reason, with the operator's only clue being that it happened at
+   login.  syslog goes to the Windows Application log, provider sd_Log.
+
+   NOTE THE ASYMMETRY WITH K_ASSUME_USER: that one changes THIS process, so
+   its 1 means "I am now the user".  This one's 1 means "somebody else is, and
+   the connection is theirs" - this process is still LocalSystem and its only
+   remaining job is to stop.                                                 */
+    case K_HANDOFF:
+      {
+        char uname[MAX_USERNAME_LEN + 1];
+        char pipename[256];
+        char why[512];
+        void* proc = NULL;
+        unsigned long spawned = 0;
+
+        result.data.value = 0;
+        if ((k_get_c_string(descr, uname, MAX_USERNAME_LEN) <= 0) ||
+            !(process.program.flags & HDR_INTERNAL)) {
+          syslog(LOG_ERR, "SD API: handover refused: %s",
+                 (process.program.flags & HDR_INTERNAL)
+                     ? "no user name was given"
+                     : "the caller is not an $internal program");
+          break;
+        }
+        if (!sd_tls_relay_pipe(pipename, sizeof(pipename),
+                               SD_TLS_HANDSHAKE_MS, why, sizeof(why))) {
+          syslog(LOG_ERR, "SD API: cannot hand %s's session over: %s", uname,
+                 why);
+          break;
+        }
+        if (!win32_session_spawn(uname, pipename, &proc, &spawned, why,
+                                 sizeof(why))) {
+          syslog(LOG_ERR, "SD API: cannot start %s's session: %s", uname, why);
+          break;
+        }
+        /* Nothing waits on it: this process is about to exit, and the session
+           lives as long as the connection does.  The handle is closed so the
+           front leaves nothing of itself behind. */
+        win32_session_close(proc);
+        syslog(LOG_INFO, "SD API: session for %s started as pid %lu on %s",
+               uname, spawned, pipename);
+        result.data.value = 1;
       }
       break;
 

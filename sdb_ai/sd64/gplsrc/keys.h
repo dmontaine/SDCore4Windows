@@ -260,6 +260,23 @@
    TRUE for it without the guard.  Read-only, so NOT gated on HDR_INTERNAL.   */
 #define K_OS_ELEVATED        65
 
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  HAND THIS CONNECTION OVER TO A
+   SESSION THAT IS THE USER.  It replaces K_ASSUME_USER for the API and is the
+   whole of 55's fix: K_ASSUME_USER adopts the user IN PLACE with seteuid, so
+   the process's REAL token stays LocalSystem's underneath and SeTcb with it.
+   This spawns a NEW process as the user - nothing of LocalSystem in it, the
+   Linux port's setuid session - and moves the connection to it.
+
+   Three steps, and it is 0 unless all three happen: have the relay stand up
+   the handover pipe, open its client end, and CreateProcessAsUser sd on it.
+   $internal only, like K_ASSUME_USER, and FAILS CLOSED for the same reason -
+   a front that carried on after a failed handover would be the LocalSystem
+   session 55 exists to abolish.  The caller refuses the login on 0.
+
+   K_ASSUME_USER STAYS: ssh and the other callers still use it, and only the
+   API stops.  See op_kernel.c, sd_tlssrv.c and win32session.c.             */
+#define K_HANDOFF            66
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

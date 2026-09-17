@@ -167,6 +167,14 @@
 *   PROCESS's own elevation.  IMMUTABLE for the process life, so a LOGTO does not
 *   move it - which is why LOGTO SDSYS gates on this and not on the seed (26).
       $define K$OS.ELEVATED      65      ;* Did this process start elevated?
+* 17 Sep 26 Windows port - RELEASE_1.1 55.  HAND THIS CONNECTION OVER TO A
+*   SESSION THAT IS THE USER.  Replaces K$ASSUME.USER for the API and is the
+*   whole of 55's fix: 61 adopts the user in place with seteuid, so the real
+*   token stays LocalSystem's underneath; this spawns a NEW process as the user
+*   over the relay's handover pipe - the Linux port's setuid session.
+*   $internal only, and it FAILS CLOSED: 0 means no session was started and the
+*   caller must refuse the login.  61 stays, for ssh and the other callers.
+      $define K$HANDOFF          66      ;* Spawn the session AS the user ($internal)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

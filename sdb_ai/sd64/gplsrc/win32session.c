@@ -74,12 +74,14 @@ static int dup_inh(HANDLE h, HANDLE* out) {
                          TRUE, DUPLICATE_SAME_ACCESS);
 }
 
-int win32_session_spawn(const char* username, void* pipe_client, void** proc,
-                        unsigned long* pid, char* why, size_t whylen) {
+int win32_session_spawn(const char* username, const char* pipename,
+                        void** proc, unsigned long* pid, char* why,
+                        size_t whylen) {
   char exe[MAX_PATH];
   char cmd[MAX_PATH + 32];
   HANDLE imp = NULL;
   HANDLE prim = NULL;
+  HANDLE client = INVALID_HANDLE_VALUE;
   HANDLE in = NULL;
   HANDLE out = NULL;
   HANDLE nul = INVALID_HANDLE_VALUE;
@@ -98,13 +100,26 @@ int win32_session_spawn(const char* username, void* pipe_client, void** proc,
   ZeroMemory(&pi, sizeof pi);
   six.StartupInfo.cb = sizeof six;
 
-  if ((username == NULL) || (*username == '\0') ||
-      (pipe_client == NULL) || (pipe_client == INVALID_HANDLE_VALUE)) {
-    snprintf(why, whylen, "win32_session_spawn: empty username or pipe handle");
+  if ((username == NULL) || (*username == '\0') || (pipename == NULL) ||
+      (*pipename == '\0')) {
+    snprintf(why, whylen, "win32_session_spawn: empty username or pipe name");
     return 0;
   }
   if (!self_path(exe, sizeof exe, why, whylen))
     return 0;
+
+  /* The client end.  NOT overlapped: the session reads and writes it as
+     ordinary descriptors 0 and 1 through Cygwin's fhandler_pipe, and
+     overlapped-ness is a property of the handle, not of the pipe - the
+     relay's server end is overlapped and this one need not be. */
+  client = CreateFileA(pipename, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                       OPEN_EXISTING, 0, NULL);
+  if (client == INVALID_HANDLE_VALUE) {
+    char what[512];
+    snprintf(what, sizeof what, "open the handover pipe %.300s", pipename);
+    win_error(what, why, whylen);
+    return 0;
+  }
 
   /* The user's token, minted on the front's SeTcb - no password.  Impersonation
      level from S4U; CreateProcessAsUser wants a primary token. */
@@ -127,7 +142,7 @@ int win32_session_spawn(const char* username, void* pipe_client, void** proc,
      Cygwin fhandler and its select), handed over as std handles the way the
      shipping -C1!0 path does; the session then reads/writes 0/1 directly with
      working select (probe-pipestd), NOT cygwin_attach_handle_to_fd. */
-  if (!dup_inh((HANDLE)pipe_client, &in) || !dup_inh((HANDLE)pipe_client, &out)) {
+  if (!dup_inh(client, &in) || !dup_inh(client, &out)) {
     win_error("DuplicateHandle(pipe)", why, whylen);
     goto done;
   }
@@ -196,8 +211,12 @@ int win32_session_spawn(const char* username, void* pipe_client, void** proc,
   ok = 1;
 
 done:
-  /* The child holds its own copies now; the front keeps none of the
-     inheritable duplicates. */
+  /* The child holds its own copies now; the front keeps none of them, and
+     none of the client end either.  A copy left open here would mean the
+     session's close never reaches the relay and the connection would hang
+     rather than end. */
+  if (client != INVALID_HANDLE_VALUE)
+    CloseHandle(client);
   if (in)
     CloseHandle(in);
   if (out)
