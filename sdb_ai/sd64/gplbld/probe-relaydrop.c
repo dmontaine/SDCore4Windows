@@ -45,6 +45,14 @@
  *           a Low-labelled subdirectory, Cygwin open() and native CreateFile
  *           both, and reported - informational, the relay writes no files.
  *
+ * RUN 1 (owner-elevated, 16 Sep 2026): the child died before its first line,
+ * exit 0xC0000142 (DLL init failed).  Iteration 3 - identical at Medium - ran,
+ * so Low broke initialisation in THIS launch context (session 0, fresh account,
+ * winsta0\default, CREATE_NO_WINDOW); unelevated, the same user at Low in its own
+ * session ran fine.  So the parent now runs TRIALS first - a native exe at Low,
+ * the MSYS2 exe at Low three ways (desktop, inherited desktop, console), and a
+ * Medium control - and does the handover with the first Low launch that ran.
+ *
  * FALSIFIED-IF: the child is not the bare account at Low with 0 privileges, or
  * its WSAPoll/WSARecv does not return PING, or the parent's Cygwin read of the
  * pipe lacks RELAYED:PING-from-parent or GOT:PLAINTEXT-to-relay, or the parent
@@ -424,6 +432,50 @@ static int set_low_integrity(HANDLE tok) {
   return ok;
 }
 
+/* One trial launch: start exe under tok with the given desktop and creation
+   flags, inherit nothing, wait up to 15 s, return the exit code (or a marker
+   for "could not create" / "still running").  0xC0000142 is DLL init failed. */
+#define TRIAL_NOCREATE 0xFFFFFFF0UL
+#define TRIAL_TIMEOUT  0xFFFFFFF1UL
+static DWORD trial(const char* label, HANDLE tok, const char* exe,
+                   const char* args, const char* desktop, DWORD flags,
+                   const char* cwd) {
+  char cmd[MAX_PATH * 2];
+  STARTUPINFOA si;
+  PROCESS_INFORMATION pi;
+  void* env = NULL;
+  DWORD code = TRIAL_NOCREATE;
+
+  snprintf(cmd, sizeof cmd, "\"%s\"%s%s", exe, args ? " " : "", args ? args : "");
+  CreateEnvironmentBlock(&env, tok, FALSE);
+  ZeroMemory(&si, sizeof si);
+  si.cb = sizeof si;
+  si.lpDesktop = (char*)desktop;
+  ZeroMemory(&pi, sizeof pi);
+  if (!CreateProcessAsUserA(tok, exe, cmd, NULL, NULL, FALSE,
+                            flags | (env ? CREATE_UNICODE_ENVIRONMENT : 0), env,
+                            cwd, &si, &pi)) {
+    say("  trial %s: CreateProcessAsUser FAILED - %s", label,
+        winerr(GetLastError()));
+  } else {
+    if (WaitForSingleObject(pi.hProcess, 15000) == WAIT_TIMEOUT) {
+      TerminateProcess(pi.hProcess, 99);
+      code = TRIAL_TIMEOUT;
+    } else {
+      GetExitCodeProcess(pi.hProcess, &code);
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    say("  trial %s: exit %lu (0x%08lx)%s", label, (unsigned long)code,
+        (unsigned long)code,
+        code == 0xC0000142UL ? " = DLL INIT FAILED"
+        : code == TRIAL_TIMEOUT ? " = still running at 15 s, terminated" : "");
+  }
+  if (env)
+    DestroyEnvironmentBlock(env);
+  return code;
+}
+
 static int dup_inheritable(HANDLE h, HANDLE* out) {
   return DuplicateHandle(GetCurrentProcess(), h, GetCurrentProcess(), out, 0,
                          TRUE, DUPLICATE_SAME_ACCESS);
@@ -433,8 +485,10 @@ static int dup_inheritable(HANDLE h, HANDLE* out) {
    THE PARENT - LocalSystem, standing in for sd.                           */
 static int parent(const char* dir, const char* account) {
   char childexe[MAX_PATH], cmd[MAX_PATH * 3], lowdir[MAX_PATH],
-       childlog[MAX_PATH];
-  HANDLE imp = NULL, prim = NULL;
+       childlog[MAX_PATH], nativeexe[MAX_PATH];
+  HANDLE imp = NULL, prim = NULL, primMed = NULL;
+  const char* desk = "winsta0\\default";
+  DWORD cflags = CREATE_NO_WINDOW;
   STARTUPINFOA si;
   PROCESS_INFORMATION pi;
   void* env = NULL;
@@ -470,11 +524,65 @@ static int parent(const char* dir, const char* account) {
   CloseHandle(imp);
   say("  primary token     : %s", token_account(prim));
 
-  if (!strip_privileges(prim) || !set_low_integrity(prim)) {
+  if (!strip_privileges(prim) ||
+      !DuplicateTokenEx(prim, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation,
+                        TokenPrimary, &primMed) ||
+      !set_low_integrity(prim)) {
+    say("REFUSED: strip / Medium copy / Low drop - %s", winerr(GetLastError()));
     CloseHandle(prim);
     return 2;
   }
-  say("  stripped          : all privileges removed, integrity set to Low");
+  say("  stripped          : all privileges removed; a Medium copy kept for the control; integrity set to Low");
+
+  /* ---- TRIALS: iteration 4's first run died 0xC0000142 (DLL init failed)
+     at Low with desktop winsta0\default and CREATE_NO_WINDOW; iteration 3,
+     identical at Medium, ran.  Separate the suspects before the handover. */
+  snprintf(childexe, sizeof childexe, "%s\\probe-relaydrop.exe", dir);
+  snprintf(lowdir, sizeof lowdir, "%s\\low", dir);
+  snprintf(nativeexe, sizeof nativeexe, "%s\\probe-cygshared.exe", dir);
+  {
+    DWORD t1, t2, t3, t4, t5;
+    t1 = trial("T1 native, Low, winsta0\\default, NO_WINDOW", prim, nativeexe,
+               NULL, "winsta0\\default", CREATE_NO_WINDOW, lowdir);
+    t2 = trial("T2 msys,   Low, winsta0\\default, NO_WINDOW", prim, childexe,
+               "--hello", "winsta0\\default", CREATE_NO_WINDOW, lowdir);
+    t3 = trial("T3 msys,   Low, inherited desktop, NO_WINDOW", prim, childexe,
+               "--hello", NULL, CREATE_NO_WINDOW, lowdir);
+    t4 = trial("T4 msys,   Low, winsta0\\default, console", prim, childexe,
+               "--hello", "winsta0\\default", 0, lowdir);
+    t5 = trial("T5 msys,   Medium, winsta0\\default, NO_WINDOW (control)",
+               primMed, childexe, "--hello", "winsta0\\default",
+               CREATE_NO_WINDOW, lowdir);
+    say("  trials summary    : native-Low=%s msys-Low-default=%s msys-Low-inherit=%s msys-Low-console=%s msys-Medium=%s",
+        t1 == 0 || t1 == 2 ? "RAN" : "died", t2 == 7 ? "RAN" : "died",
+        t3 == 7 ? "RAN" : "died", t4 == 7 ? "RAN" : "died",
+        t5 == 7 ? "RAN" : "died");
+    if (t5 != 7) {
+      say("REFUSED: the Medium control did not run (exit 0x%08lx) - the trials cannot isolate Low.",
+          (unsigned long)t5);
+      CloseHandle(primMed);
+      CloseHandle(prim);
+      return 2;
+    }
+    if (t2 == 7) {
+      desk = "winsta0\\default";
+      cflags = CREATE_NO_WINDOW;
+    } else if (t3 == 7) {
+      desk = NULL;
+      cflags = CREATE_NO_WINDOW;
+    } else if (t4 == 7) {
+      desk = "winsta0\\default";
+      cflags = 0;
+    } else {
+      say("REFUSED: no Low configuration let the MSYS2 child initialise - the handover is not attempted.");
+      CloseHandle(primMed);
+      CloseHandle(prim);
+      return 2;
+    }
+    say("  handover config   : desktop %s, flags %s (first Low trial that ran)",
+        desk ? desk : "<inherited>", cflags ? "CREATE_NO_WINDOW" : "0 (console)");
+  }
+  CloseHandle(primMed);
 
   /* The connection, held the way sd holds it: a CYGWIN-accepted fd. */
   if (cyg_pair(&acc, &cli) != 0) {
@@ -504,8 +612,6 @@ static int parent(const char* dir, const char* account) {
   say("  pipes handed      : relay->sd write %llu, sd->relay read %llu",
       (unsigned long long)(uintptr_t)upW, (unsigned long long)(uintptr_t)downR);
 
-  snprintf(childexe, sizeof childexe, "%s\\probe-relaydrop.exe", dir);
-  snprintf(lowdir, sizeof lowdir, "%s\\low", dir);
   snprintf(childlog, sizeof childlog, "%s\\child.log", dir);
   snprintf(cmd, sizeof cmd, "\"%s\" --child \"%s\" %llu %llu %llu", childexe,
            lowdir, (unsigned long long)(uintptr_t)sockInh,
@@ -523,12 +629,11 @@ static int parent(const char* dir, const char* account) {
 
   ZeroMemory(&si, sizeof si);
   si.cb = sizeof si;
-  si.lpDesktop = (char*)"winsta0\\default";
+  si.lpDesktop = (char*)desk; /* the configuration the trials chose */
   ZeroMemory(&pi, sizeof pi);
 
   if (!CreateProcessAsUserA(prim, childexe, cmd, NULL, NULL, TRUE,
-                            CREATE_NO_WINDOW |
-                                (env ? CREATE_UNICODE_ENVIRONMENT : 0),
+                            cflags | (env ? CREATE_UNICODE_ENVIRONMENT : 0),
                             env, lowdir, &si, &pi)) {
     say("REFUSED: CreateProcessAsUser - %s", winerr(GetLastError()));
     if (env)
@@ -707,6 +812,10 @@ static int child(const char* dir, const char* sockarg, const char* uparg,
 int main(int argc, char* argv[]) {
   char logpath[MAX_PATH];
   int rc;
+
+  /* Trial mode: reaching main at all means the MSYS2 runtime initialised. */
+  if (argc == 2 && strcmp(argv[1], "--hello") == 0)
+    return 7;
 
   /* Occupy descriptors 0-2 if the launcher left them closed, so no pipe or
      socket fd lands on stdout (iteration 2's artifact). */

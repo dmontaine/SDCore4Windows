@@ -50,6 +50,7 @@ $ErrorActionPreference = 'Stop'
 $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Exe     = Join-Path $Gplbld 'probe-relaydrop.exe'
 $MsysDll = 'C:\msys64\usr\bin\msys-2.0.dll'
+$NativeExe = Join-Path $Gplbld 'probe-cygshared.exe'
 $Task    = 'relaydropparent'
 $Stage   = 'C:\ProgramData\relaydrop-run'
 
@@ -96,6 +97,7 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
     exit 2
 }
 if (-not (Test-Path -LiteralPath $Exe))     { Write-Host "COULD NOT RUN: no $Exe - build it first (see the .c header)." -ForegroundColor Yellow; exit 2 }
+if (-not (Test-Path -LiteralPath $NativeExe)) { Write-Host "COULD NOT RUN: no $NativeExe - build it first (see probe-cygshared.c's header; trial T1 needs it)." -ForegroundColor Yellow; exit 2 }
 if (-not (Test-Path -LiteralPath $MsysDll)) { Write-Host "COULD NOT RUN: no $MsysDll - the child cannot start without it." -ForegroundColor Yellow; exit 2 }
 
 # ---------------------------------------------------------------------------
@@ -123,6 +125,9 @@ if (Test-Path -LiteralPath $Stage) { Remove-Item -LiteralPath $Stage -Recurse -F
 $null = New-Item -ItemType Directory -Path $Stage -Force
 Copy-Item -LiteralPath $Exe     -Destination $Stage -Force
 Copy-Item -LiteralPath $MsysDll -Destination $Stage -Force
+# Trial T1's native program: does ANY process initialise at Low in this launch
+# context, or only MSYS2 ones fail?
+Copy-Item -LiteralPath $NativeExe -Destination $Stage -Force
 
 $null = & icacls.exe $Stage /grant "*S-1-5-18:(OI)(CI)F" /T
 if ($LASTEXITCODE -ne 0) { Refuse "icacls could not grant SYSTEM on $Stage." }
@@ -150,9 +155,10 @@ Say '  parent            : started as SYSTEM'
 
 $pLog = Join-Path $Stage 'parent.log'
 $cLog = Join-Path $Stage 'child.log'
-# Iteration 4's parent can take ~42 s at worst (1.5 s delay, 10 s PONG wait,
-# 30 s child wait), so 45 s would cut a slow failure off before it reported.
-$deadline = (Get-Date).AddSeconds(75)
+# Iteration 4's parent can take ~42 s at worst for the handover (1.5 s delay,
+# 10 s PONG wait, 30 s child wait) plus up to 75 s of trials (5 x 15 s), so a
+# shorter wait would cut a slow failure off before it reported.
+$deadline = (Get-Date).AddSeconds(150)
 while ((Get-Date) -lt $deadline) {
     if ((Test-Path -LiteralPath $pLog) -and
         (Select-String -LiteralPath $pLog -Pattern 'PARENT DONE|REFUSED' -Quiet)) { break }
@@ -183,7 +189,16 @@ if (-not (Test-Path -LiteralPath $pLog)) {
     Refuse 'no parent log - read the task Last Result above (0x0 = ran clean but wrote nothing; nonzero = a launch/run error).'
 }
 $p = Get-Content -LiteralPath $pLog -Raw
-if ($p -match 'REFUSED') { Refuse 'the parent refused - its reason is above (likely the mint, the strip, or CreateProcessAsUser).' }
+# The trials' own outcome is a measurement, not a harness failure: if no Low
+# launch let the MSYS2 child initialise while the Medium control did, that is
+# the answer for this configuration and is scored as one.
+$trials = if ($p -match '(?m)trials summary\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<no trials ran>' }
+Say ''
+Say "  trials            : $trials"
+if ($p -match 'no Low configuration let the MSYS2 child initialise') {
+    Fail "no Low launch let the MSYS2 child initialise, while the Medium control did ($trials). An MSYS2 relay at Low does not start in this context as tried; read the per-trial exit codes above."
+}
+if ($p -match 'REFUSED') { Refuse 'the parent refused - its reason is above (likely the mint, the strip, the Medium control, or CreateProcessAsUser).' }
 # Iteration 4: child.log is written by the PARENT from what the child sent over
 # the relay->sd pipe, so an absent or empty one means the child reported nothing.
 if (-not (Test-Path -LiteralPath $cLog) -or -not (Get-Content -LiteralPath $cLog -Raw)) {
