@@ -52,6 +52,19 @@
  * session ran fine.  So the parent now runs TRIALS first - a native exe at Low,
  * the MSYS2 exe at Low three ways (desktop, inherited desktop, console), and a
  * Medium control - and does the handover with the first Low launch that ran.
+ * RUN 2: native at Low RAN; MSYS2 at Low died 0xC0000142 all three ways; MSYS2
+ * at Medium RAN.  Cause, reproduced unelevated (probe-lowmsys.c): a Low MSYS2
+ * process cannot open the runtime's object directory that a Medium-or-higher
+ * process of the same runtime - here this parent, in the product sd - created.
+ *
+ * ===========================================================================
+ * ITERATION 5 - THE RELAY CHILD IS NATIVE (probe-relaychild.c, UCRT64).
+ * This file is now the PARENT only: an MSYS2 process standing in for sd, with
+ * everything from iteration 4 unchanged (Low token, Cygwin-accepted socket,
+ * PING 1500 ms late, two Cygwin pipes, the child's report over the pipe).  The
+ * trials are replaced by one PREFLIGHT: probe-relaychild.exe --hello at Low must
+ * exit 7 before the handover is attempted.  The file-I/O lines above now come
+ * from the native child, native CreateFile only.
  *
  * FALSIFIED-IF: the child is not the bare account at Low with 0 privileges, or
  * its WSAPoll/WSARecv does not return PING, or the parent's Cygwin read of the
@@ -60,9 +73,10 @@
  *
  * Build, from gplbld in MSYS2's MSYS bash.  -lcygwin FIRST: recv/send/socket/
  * accept exist in both msys-2.0 and ws2_32, and probe-cygsock-cyg.c must get
- * Cygwin's (check with objdump -p).  So THIS file calls only names Winsock
- * alone has (WSAStartup, WSAPoll, WSARecv, WSASend, closesocket).
+ * Cygwin's (check with objdump -p).
  *   gcc -O2 -Wall -o probe-relaydrop.exe probe-relaydrop.c probe-cygsock-cyg.c -lcygwin -lsecur32 -ladvapi32 -lws2_32 -luserenv
+ * and the child, NATIVE, in an MSYS2 UCRT64 bash (see probe-relaychild.c):
+ *   gcc -O2 -Wall -o probe-relaychild.exe probe-relaychild.c -lws2_32 -ladvapi32
  *
  * Exit: 0 answered (read the verdict), 2 it could not be.
  */
@@ -188,124 +202,6 @@ static int has_privilege(const char* priv) {
   }
   CloseHandle(t);
   return found;
-}
-
-/* Every privilege on the process token - so "no privileges" is measured, not
-   assumed.  0 held is the point for the child. */
-static int dump_privileges(void) {
-  HANDLE t;
-  BYTE buf[8192];
-  DWORD len = 0;
-  TOKEN_PRIVILEGES* tp;
-  DWORD i;
-  int count = -1;
-
-  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &t)) {
-    say("  privileges        : <OpenProcessToken failed: %s>",
-        winerr(GetLastError()));
-    return -1;
-  }
-  if (GetTokenInformation(t, TokenPrivileges, buf, sizeof buf, &len)) {
-    tp = (TOKEN_PRIVILEGES*)buf;
-    count = (int)tp->PrivilegeCount;
-    say("  privileges (%d held):", count);
-    for (i = 0; i < tp->PrivilegeCount; i++) {
-      char nm[64];
-      DWORD nl = sizeof nm;
-      if (LookupPrivilegeNameA(NULL, &tp->Privileges[i].Luid, nm, &nl))
-        say("    %s", nm);
-    }
-  } else {
-    say("  privileges        : <GetTokenInformation failed: %s>",
-        winerr(GetLastError()));
-  }
-  CloseHandle(t);
-  return count;
-}
-
-/* The token's integrity level as a printable string. */
-static const char* integrity_level(void) {
-  static char out[64];
-  HANDLE t;
-  BYTE buf[256];
-  DWORD len = 0;
-  DWORD rid = 0;
-
-  snprintf(out, sizeof out, "unknown");
-  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &t))
-    return out;
-  if (GetTokenInformation(t, TokenIntegrityLevel, buf, sizeof buf, &len)) {
-    TOKEN_MANDATORY_LABEL* ml = (TOKEN_MANDATORY_LABEL*)buf;
-    UCHAR cnt = *GetSidSubAuthorityCount(ml->Label.Sid);
-    rid = *GetSidSubAuthority(ml->Label.Sid, cnt - 1);
-    if (rid < SECURITY_MANDATORY_LOW_RID)
-      snprintf(out, sizeof out, "Untrusted (0x%lx)", (unsigned long)rid);
-    else if (rid < SECURITY_MANDATORY_MEDIUM_RID)
-      snprintf(out, sizeof out, "Low (0x%lx)", (unsigned long)rid);
-    else if (rid < SECURITY_MANDATORY_HIGH_RID)
-      snprintf(out, sizeof out, "Medium (0x%lx)", (unsigned long)rid);
-    else if (rid < SECURITY_MANDATORY_SYSTEM_RID)
-      snprintf(out, sizeof out, "High (0x%lx)", (unsigned long)rid);
-    else
-      snprintf(out, sizeof out, "System (0x%lx)", (unsigned long)rid);
-  }
-  CloseHandle(t);
-  return out;
-}
-
-static const char* owner_of(const char* path) {
-  static char out[256];
-  PSID owner = NULL;
-  PSECURITY_DESCRIPTOR sd = NULL;
-  char name[128], dom[128];
-  DWORD nl = sizeof name, dl = sizeof dom;
-  SID_NAME_USE use;
-
-  if (GetNamedSecurityInfoA(path, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION,
-                            &owner, NULL, NULL, NULL, &sd) != ERROR_SUCCESS) {
-    snprintf(out, sizeof out, "<owner unreadable>");
-    return out;
-  }
-  if (LookupAccountSidA(NULL, owner, name, &nl, dom, &dl, &use))
-    snprintf(out, sizeof out, "%s\\%s", dom, name);
-  else
-    snprintf(out, sizeof out, "<sid unresolved>");
-  if (sd)
-    LocalFree(sd);
-  return out;
-}
-
-/* File I/O through the Cygwin runtime. */
-static const char* cygwin_create(const char* path) {
-  static char out[300];
-  int fd;
-  unlink(path);
-  fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
-  if (fd < 0) {
-    snprintf(out, sizeof out, "<could not create: errno %d %s>", errno,
-             strerror(errno));
-    return out;
-  }
-  write(fd, "x", 1);
-  close(fd);
-  snprintf(out, sizeof out, "created, owner %s", owner_of(path));
-  return out;
-}
-
-/* The same through Win32, to tell a runtime refusal from a token refusal. */
-static const char* native_create(const char* path) {
-  static char out[300];
-  DWORD w;
-  HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
-                         FILE_ATTRIBUTE_NORMAL, NULL);
-  if (h == INVALID_HANDLE_VALUE) {
-    snprintf(out, sizeof out, "<could not create: %s>", winerr(GetLastError()));
-    return out;
-  }
-  WriteFile(h, "x", 1, &w, NULL);
-  CloseHandle(h);
-  snprintf(out, sizeof out, "created, owner %s", owner_of(path));
-  return out;
 }
 
 /* ======================================================================
@@ -485,8 +381,8 @@ static int dup_inheritable(HANDLE h, HANDLE* out) {
    THE PARENT - LocalSystem, standing in for sd.                           */
 static int parent(const char* dir, const char* account) {
   char childexe[MAX_PATH], cmd[MAX_PATH * 3], lowdir[MAX_PATH],
-       childlog[MAX_PATH], nativeexe[MAX_PATH];
-  HANDLE imp = NULL, prim = NULL, primMed = NULL;
+       childlog[MAX_PATH];
+  HANDLE imp = NULL, prim = NULL;
   const char* desk = "winsta0\\default";
   DWORD cflags = CREATE_NO_WINDOW;
   STARTUPINFOA si;
@@ -524,65 +420,29 @@ static int parent(const char* dir, const char* account) {
   CloseHandle(imp);
   say("  primary token     : %s", token_account(prim));
 
-  if (!strip_privileges(prim) ||
-      !DuplicateTokenEx(prim, TOKEN_ALL_ACCESS, NULL, SecurityImpersonation,
-                        TokenPrimary, &primMed) ||
-      !set_low_integrity(prim)) {
-    say("REFUSED: strip / Medium copy / Low drop - %s", winerr(GetLastError()));
+  if (!strip_privileges(prim) || !set_low_integrity(prim)) {
     CloseHandle(prim);
     return 2;
   }
-  say("  stripped          : all privileges removed; a Medium copy kept for the control; integrity set to Low");
+  say("  stripped          : all privileges removed, integrity set to Low");
 
-  /* ---- TRIALS: iteration 4's first run died 0xC0000142 (DLL init failed)
-     at Low with desktop winsta0\default and CREATE_NO_WINDOW; iteration 3,
-     identical at Medium, ran.  Separate the suspects before the handover. */
-  snprintf(childexe, sizeof childexe, "%s\\probe-relaydrop.exe", dir);
+  /* ---- PREFLIGHT: the NATIVE relay child must initialise at Low before the
+     handover is attempted.  Iteration 4's trials: native at Low ran, MSYS2 at
+     Low died 0xC0000142 because this parent - an MSYS2 process of the same
+     runtime - already holds the runtime's object directory. */
+  snprintf(childexe, sizeof childexe, "%s\\probe-relaychild.exe", dir);
   snprintf(lowdir, sizeof lowdir, "%s\\low", dir);
-  snprintf(nativeexe, sizeof nativeexe, "%s\\probe-cygshared.exe", dir);
   {
-    DWORD t1, t2, t3, t4, t5;
-    t1 = trial("T1 native, Low, winsta0\\default, NO_WINDOW", prim, nativeexe,
-               NULL, "winsta0\\default", CREATE_NO_WINDOW, lowdir);
-    t2 = trial("T2 msys,   Low, winsta0\\default, NO_WINDOW", prim, childexe,
-               "--hello", "winsta0\\default", CREATE_NO_WINDOW, lowdir);
-    t3 = trial("T3 msys,   Low, inherited desktop, NO_WINDOW", prim, childexe,
-               "--hello", NULL, CREATE_NO_WINDOW, lowdir);
-    t4 = trial("T4 msys,   Low, winsta0\\default, console", prim, childexe,
-               "--hello", "winsta0\\default", 0, lowdir);
-    t5 = trial("T5 msys,   Medium, winsta0\\default, NO_WINDOW (control)",
-               primMed, childexe, "--hello", "winsta0\\default",
-               CREATE_NO_WINDOW, lowdir);
-    say("  trials summary    : native-Low=%s msys-Low-default=%s msys-Low-inherit=%s msys-Low-console=%s msys-Medium=%s",
-        t1 == 0 || t1 == 2 ? "RAN" : "died", t2 == 7 ? "RAN" : "died",
-        t3 == 7 ? "RAN" : "died", t4 == 7 ? "RAN" : "died",
-        t5 == 7 ? "RAN" : "died");
-    if (t5 != 7) {
-      say("REFUSED: the Medium control did not run (exit 0x%08lx) - the trials cannot isolate Low.",
-          (unsigned long)t5);
-      CloseHandle(primMed);
+    DWORD pf = trial("preflight: native relay child --hello at Low", prim,
+                     childexe, "--hello", desk, cflags, lowdir);
+    if (pf != 7) {
+      say("REFUSED: the native relay child did not initialise at Low (exit 0x%08lx) - the handover is not attempted.",
+          (unsigned long)pf);
       CloseHandle(prim);
       return 2;
     }
-    if (t2 == 7) {
-      desk = "winsta0\\default";
-      cflags = CREATE_NO_WINDOW;
-    } else if (t3 == 7) {
-      desk = NULL;
-      cflags = CREATE_NO_WINDOW;
-    } else if (t4 == 7) {
-      desk = "winsta0\\default";
-      cflags = 0;
-    } else {
-      say("REFUSED: no Low configuration let the MSYS2 child initialise - the handover is not attempted.");
-      CloseHandle(primMed);
-      CloseHandle(prim);
-      return 2;
-    }
-    say("  handover config   : desktop %s, flags %s (first Low trial that ran)",
-        desk ? desk : "<inherited>", cflags ? "CREATE_NO_WINDOW" : "0 (console)");
+    say("  preflight         : native relay child initialised at Low (exit 7)");
   }
-  CloseHandle(primMed);
 
   /* The connection, held the way sd holds it: a CYGWIN-accepted fd. */
   if (cyg_pair(&acc, &cli) != 0) {
@@ -720,102 +580,11 @@ static int parent(const char* dir, const char* account) {
   return (pong && piped) ? 0 : 2;
 }
 
-/* ======================================================================
-   THE CHILD - the bare, Low, 0-privilege relay stand-in.                  */
-static int child(const char* dir, const char* sockarg, const char* uparg,
-                 const char* downarg) {
-  SOCKET s = (SOCKET)(uintptr_t)strtoull(sockarg, NULL, 10);
-  HANDLE pw = (HANDLE)(uintptr_t)strtoull(uparg, NULL, 10);
-  HANDLE pr = (HANDLE)(uintptr_t)strtoull(downarg, NULL, 10);
-  char path[MAX_PATH], rb[128] = {0}, got[64] = {0};
-  WSADATA wsa;
-  int nprivs, rn = -1, e;
-  DWORD gn = 0, t0;
-
-  report = pw; /* every say() from here goes to the parent */
-
-  say("probe-relaydrop CHILD (iteration 4)");
-  say("  running as        : %s", my_account());
-  say("  runtime uid/euid  : %d / %d", (int)getuid(), (int)geteuid());
-  say("  integrity level   : %s", integrity_level());
-  say("  SeImpersonate     : %s",
-      has_privilege("SeImpersonatePrivilege") ? "yes" : "no");
-  say("  SeTcbPrivilege    : %s",
-      has_privilege("SeTcbPrivilege") ? "yes" : "no");
-  nprivs = dump_privileges();
-  say("  privilege count   : %d (0 is the goal)", nprivs);
-  snprintf(path, sizeof path, "%s\\child-cygwin.txt", dir);
-  say("  file I/O cygwin   : %s", cygwin_create(path));
-  snprintf(path, sizeof path, "%s\\child-native.txt", dir);
-  say("  file I/O native   : %s", native_create(path));
-  say("  handles           : socket %llu, relay->sd %llu, sd->relay %llu",
-      (unsigned long long)s, (unsigned long long)(uintptr_t)pw,
-      (unsigned long long)(uintptr_t)pr);
-
-  if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-    say("  socket read       : WSAStartup failed %d", WSAGetLastError());
-  } else {
-    WSAPOLLFD p;
-    int pollr;
-    p.fd = s;
-    p.events = POLLRDNORM;
-    p.revents = 0;
-    t0 = GetTickCount();
-    pollr = WSAPoll(&p, 1, 10000);
-    e = pollr < 0 ? WSAGetLastError() : 0;
-    say("  socket wait       : WSAPoll=%d revents=0x%x err=%d after %lu ms", pollr,
-        p.revents, e, (unsigned long)(GetTickCount() - t0));
-    if (pollr == 1) {
-      WSABUF wb;
-      DWORD got_n = 0, fl = 0;
-      wb.len = sizeof rb - 1;
-      wb.buf = rb;
-      if (WSARecv(s, &wb, 1, &got_n, &fl, NULL, NULL) == 0) {
-        rn = (int)got_n;
-        rb[rn] = '\0';
-        say("  socket read       : [%s] (%d bytes, WSARecv)", rb, rn);
-      } else {
-        say("  socket read       : nothing (WSARecv err %d)", WSAGetLastError());
-      }
-    } else {
-      say("  socket read       : nothing (the wait did not report data)");
-    }
-  }
-
-  if (ReadFile(pr, got, sizeof got - 1, &gn, NULL))
-    say("  pipe read         : [%s] (%lu bytes, native ReadFile)", got,
-        (unsigned long)gn);
-  else
-    say("  pipe read         : FAILED - %s", winerr(GetLastError()));
-
-  if (rn > 0) {
-    say("RELAYED:%s|GOT:%s", rb, got);
-    {
-      WSABUF wb;
-      DWORD sent = 0;
-      const char* pong = "PONG-from-child";
-      wb.len = (ULONG)strlen(pong);
-      wb.buf = (char*)pong;
-      if (WSASend(s, &wb, 1, &sent, 0, NULL, NULL) == 0)
-        say("  socket write      : %lu bytes back (WSASend)", (unsigned long)sent);
-      else
-        say("  socket write      : FAILED (WSASend err %d)", WSAGetLastError());
-    }
-  }
-  closesocket(s);
-  CloseHandle(pr);
-  say("CHILD DONE");
-  CloseHandle(pw);
-  return 0;
-}
+/* The relay child is probe-relaychild.c, a native program (iteration 5). */
 
 int main(int argc, char* argv[]) {
   char logpath[MAX_PATH];
   int rc;
-
-  /* Trial mode: reaching main at all means the MSYS2 runtime initialised. */
-  if (argc == 2 && strcmp(argv[1], "--hello") == 0)
-    return 7;
 
   /* Occupy descriptors 0-2 if the launcher left them closed, so no pipe or
      socket fd lands on stdout (iteration 2's artifact). */
@@ -834,10 +603,7 @@ int main(int argc, char* argv[]) {
       fclose(lg);
     return rc;
   }
-  if (argc == 6 && strcmp(argv[1], "--child") == 0)
-    return child(argv[2], argv[3], argv[4], argv[5]);
-
   printf("usage: probe-relaydrop.exe --parent <dir> <account>\n"
-         "       probe-relaydrop.exe --child <lowdir> <socket> <up> <down>\n");
+         "       (the child is probe-relaychild.exe, staged beside it)\n");
   return 2;
 }

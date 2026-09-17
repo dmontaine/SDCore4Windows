@@ -28,10 +28,17 @@
 
     Build, from gplbld in MSYS2's bash:
       gcc -O2 -Wall -o probe-relaydrop.exe probe-relaydrop.c probe-cygsock-cyg.c -lcygwin -lsecur32 -ladvapi32 -lws2_32 -luserenv
-    (-lcygwin FIRST - see the .c header.)
+    (-lcygwin FIRST - see the .c header.)  And the NATIVE child, from gplbld in
+    an MSYS2 UCRT64 bash:
+      gcc -O2 -Wall -o probe-relaychild.exe probe-relaychild.c -lws2_32 -ladvapi32
 
     ITERATION 4 (16 Sep 26): Low integrity, a CYGWIN-accepted non-blocking
     socket waited on with WSAPoll, and the child's report sent over the pipe.
+    ITERATION 5: the child is probe-relaychild.exe, a native program - an MSYS2
+    child cannot start at Low while the MSYS2 parent holds the runtime.  A
+    preflight (--hello at Low, exit 7) replaces iteration 4's trials.
+    Unelevated rehearsal of everything but the account switch:
+    probe-relaylocal.c.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File probe-relaydrop.ps1
@@ -50,7 +57,7 @@ $ErrorActionPreference = 'Stop'
 $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Exe     = Join-Path $Gplbld 'probe-relaydrop.exe'
 $MsysDll = 'C:\msys64\usr\bin\msys-2.0.dll'
-$NativeExe = Join-Path $Gplbld 'probe-cygshared.exe'
+$NativeExe = Join-Path $Gplbld 'probe-relaychild.exe'
 $Task    = 'relaydropparent'
 $Stage   = 'C:\ProgramData\relaydrop-run'
 
@@ -97,7 +104,7 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
     exit 2
 }
 if (-not (Test-Path -LiteralPath $Exe))     { Write-Host "COULD NOT RUN: no $Exe - build it first (see the .c header)." -ForegroundColor Yellow; exit 2 }
-if (-not (Test-Path -LiteralPath $NativeExe)) { Write-Host "COULD NOT RUN: no $NativeExe - build it first (see probe-cygshared.c's header; trial T1 needs it)." -ForegroundColor Yellow; exit 2 }
+if (-not (Test-Path -LiteralPath $NativeExe)) { Write-Host "COULD NOT RUN: no $NativeExe - build it first (native, UCRT64; see probe-relaychild.c's header)." -ForegroundColor Yellow; exit 2 }
 if (-not (Test-Path -LiteralPath $MsysDll)) { Write-Host "COULD NOT RUN: no $MsysDll - the child cannot start without it." -ForegroundColor Yellow; exit 2 }
 
 # ---------------------------------------------------------------------------
@@ -125,8 +132,8 @@ if (Test-Path -LiteralPath $Stage) { Remove-Item -LiteralPath $Stage -Recurse -F
 $null = New-Item -ItemType Directory -Path $Stage -Force
 Copy-Item -LiteralPath $Exe     -Destination $Stage -Force
 Copy-Item -LiteralPath $MsysDll -Destination $Stage -Force
-# Trial T1's native program: does ANY process initialise at Low in this launch
-# context, or only MSYS2 ones fail?
+# Iteration 5: the relay child is this NATIVE program (an MSYS2 child cannot
+# start at Low while the MSYS2 parent holds the runtime - iteration 4).
 Copy-Item -LiteralPath $NativeExe -Destination $Stage -Force
 
 $null = & icacls.exe $Stage /grant "*S-1-5-18:(OI)(CI)F" /T
@@ -155,10 +162,10 @@ Say '  parent            : started as SYSTEM'
 
 $pLog = Join-Path $Stage 'parent.log'
 $cLog = Join-Path $Stage 'child.log'
-# Iteration 4's parent can take ~42 s at worst for the handover (1.5 s delay,
-# 10 s PONG wait, 30 s child wait) plus up to 75 s of trials (5 x 15 s), so a
-# shorter wait would cut a slow failure off before it reported.
-$deadline = (Get-Date).AddSeconds(150)
+# The parent can take ~42 s at worst for the handover (1.5 s delay, 10 s PONG
+# wait, 30 s child wait) plus up to 15 s of preflight, so a shorter wait would
+# cut a slow failure off before it reported.
+$deadline = (Get-Date).AddSeconds(90)
 while ((Get-Date) -lt $deadline) {
     if ((Test-Path -LiteralPath $pLog) -and
         (Select-String -LiteralPath $pLog -Pattern 'PARENT DONE|REFUSED' -Quiet)) { break }
@@ -189,16 +196,13 @@ if (-not (Test-Path -LiteralPath $pLog)) {
     Refuse 'no parent log - read the task Last Result above (0x0 = ran clean but wrote nothing; nonzero = a launch/run error).'
 }
 $p = Get-Content -LiteralPath $pLog -Raw
-# The trials' own outcome is a measurement, not a harness failure: if no Low
-# launch let the MSYS2 child initialise while the Medium control did, that is
-# the answer for this configuration and is scored as one.
-$trials = if ($p -match '(?m)trials summary\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<no trials ran>' }
-Say ''
-Say "  trials            : $trials"
-if ($p -match 'no Low configuration let the MSYS2 child initialise') {
-    Fail "no Low launch let the MSYS2 child initialise, while the Medium control did ($trials). An MSYS2 relay at Low does not start in this context as tried; read the per-trial exit codes above."
+# The preflight's own outcome is a measurement, not a harness failure: a native
+# program at Low ran in iteration 4's trials, so if the native relay child does
+# not initialise here, that is an answer and is scored as one.
+if ($p -match 'native relay child did not initialise at Low') {
+    Fail 'the native relay child did not initialise at Low as the bare account (the preflight exit code is above). Iteration 4''s trial T1 - a native exe at Low - ran, so compare the two programs.'
 }
-if ($p -match 'REFUSED') { Refuse 'the parent refused - its reason is above (likely the mint, the strip, the Medium control, or CreateProcessAsUser).' }
+if ($p -match 'REFUSED') { Refuse 'the parent refused - its reason is above (likely the mint, the strip, the Low drop, or CreateProcessAsUser).' }
 # Iteration 4: child.log is written by the PARENT from what the child sent over
 # the relay->sd pipe, so an absent or empty one means the child reported nothing.
 if (-not (Test-Path -LiteralPath $cLog) -or -not (Get-Content -LiteralPath $cLog -Raw)) {
@@ -212,15 +216,13 @@ $c = Get-Content -LiteralPath $cLog -Raw
 $ranAs   = if ($c -match '(?m)running as\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '' }
 $privCnt = if ($c -match '(?m)privilege count\s*:\s*(\d+)') { [int]$Matches[1] } else { -1 }
 $integ   = if ($c -match '(?m)integrity level\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '' }
-$fcyg    = if ($c -match '(?m)file I/O cygwin\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
-$fnat    = if ($c -match '(?m)file I/O native\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
+$fnat   = if ($c -match '(?m)file I/O native\s*:\s*(.+?)\s*$') { $Matches[1].Trim() } else { '<not reported>' }
 $swait   = if ($c -match '(?m)socket wait\s*:\s*(.+?)\s*$')     { $Matches[1].Trim() } else { '<not reported>' }
 
 Say "  child ran as      : $(if ($ranAs) { $ranAs } else { '<not reported>' })"
 Say "  privilege count   : $(if ($privCnt -ge 0) { $privCnt } else { '<not reported>' })"
 Say "  integrity level   : $(if ($integ) { $integ } else { '<not reported>' })"
-Say "  file I/O cygwin   : $fcyg   (informational - the relay writes no files)"
-Say "  file I/O native   : $fnat   (informational)"
+Say "  file I/O native   : $fnat   (informational - the relay writes no files)"
 Say "  socket wait       : $swait"
 
 if (-not $ranAs -or $privCnt -lt 0 -or -not $integ) { Refuse 'the child report is missing the identity, privilege or integrity lines.' }
@@ -265,8 +267,8 @@ if ($sread -eq '<not reported>') {
 
 Say ''
 if ($roundTrip -and $piped -and ($sread -like '*PING-from-parent*') -and $waitedMs -ge 500) {
-    Say "ANSWERED (FULL): the bare account '$Account' child, at LOW integrity with 0" -ForegroundColor Green
-    Say "  privileges, waited on a CYGWIN-accepted non-blocking socket with WSAPoll,"
+    Say "ANSWERED (FULL): the bare account '$Account' NATIVE child, at LOW integrity" -ForegroundColor Green
+    Say "  with 0 privileges, waited on a CYGWIN-accepted non-blocking socket with WSAPoll,"
     Say "  read it, answered on it, and exchanged bytes both ways with the Cygwin"
     Say "  parent over inherited Cygwin pipe() ends.  The relay handover works as the"
     Say "  product would do it; the product build is next."

@@ -712,6 +712,11 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 38 and 50's uninstall witnesses.
                   # and MSYS2 runs at Low (RELEASE_1.1 43, 53).  Ship nowhere.
                   'probe-cygshared.c', 'probe-cygshared.exe',
                   'probe-lowmsys.c', 'probe-lowmsys.exe',
+                  # 16 Sep 26 - probe-relaychild (the NATIVE relay stand-in
+                  # probe-relaydrop iteration 5 spawns at Low) and
+                  # probe-relaylocal (its unelevated rehearsal).  Ship nowhere.
+                  'probe-relaychild.c', 'probe-relaychild.exe',
+                  'probe-relaylocal.c', 'probe-relaylocal.exe',
                   # 29 Aug 26 - verify-txn.ps1, the regression guard for
                   # PRE_RELEASE 11 / UPSTREAM 17: a nested COMMIT used to
                   # orphan the outer transaction's cache and lose its writes
