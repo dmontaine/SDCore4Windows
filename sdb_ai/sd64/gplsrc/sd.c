@@ -388,6 +388,21 @@ Private bool comlin(int argc, char *argv[]) {
           dump_sysseg(TRUE);
           exit(0);
 
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  PRE-AUTHENTICATED API SESSION.
+   The LocalSystem front (a "sd -N -Q" that did the TLS relay and SCRAM) spawns
+   this process AS the authenticated user with the plaintext pipe already on 0
+   and 1 (win32session.c hands it over as std handles, not a socket).  -H marks
+   that: it is an API server session like -Q (same binary telnet modes), but
+   pre-authenticated - it starts no relay and sends no ACK (linuxio.c) and runs
+   no SCRAM (APISRVR); it is already the user it runs as.  It rides with -N,
+   which sets CN_SOCKET.                                                      */
+        case 'H': /* Pre-authenticated API session (RELEASE_1.1 55) */
+          is_sdApiSrvr = TRUE;
+          api_preauth = TRUE;
+          telnet_binary_mode_in = TRUE;
+          telnet_binary_mode_out = TRUE;
+          break;
+
         case 'K': /* Kill user */
           check_admin();
           if (++arg < argc) {

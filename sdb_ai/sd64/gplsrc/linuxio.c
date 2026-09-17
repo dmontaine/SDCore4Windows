@@ -162,6 +162,15 @@ bool start_connection(int unused) {
          client still waits for it before speaking.                          */
     }
   /* 20240127 mab mods to handle IPv6 */
+    /* 17 Sep 26 Windows port - RELEASE_1.1 55: a PRE-AUTHENTICATED session has
+       a PIPE on descriptor 0, not a socket, so getsockname() and the peer
+       switch below do not apply - they would fall to the default and refuse.
+       The front already identified and admitted the peer; the session inherits
+       that decision.  ip_addr is a marker here (the real peer address is the
+       front's to plumb through if a per-request gate needs it).             */
+    if (api_preauth) {
+      strcpy(ip_addr, "pipe");
+    } else {
     n = sizeof(sa);
     getsockname(0, (struct sockaddr *)&sa, &n);
     switch (sa.ss_family){
@@ -276,6 +285,7 @@ bool start_connection(int unused) {
           syslog (LOG_INFO,"Invalid Network Socket Type UNKNOW");
           return FALSE; /* Error */
     }
+    } /* end !api_preauth peer identification */
 
     /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: EVERY API CONNECTION IS
        TLS 1.3.  AFTER the peer is recorded above: once descriptor 0 is the
@@ -283,7 +293,13 @@ bool start_connection(int unused) {
        relay.  BEFORE the ACK, so the ACK and everything after it travel
        inside TLS.  BEFORE bind_sysseg(), so the relay never maps SD's shared
        memory.  See sd_tlssrv.c.                                            */
-    if (is_sdApiSrvr) {
+    /* 17 Sep 26 Windows port - RELEASE_1.1 55: a PRE-AUTHENTICATED session
+       (api_preauth, sd.c's -H) skips ALL of this.  Its LocalSystem front
+       already stood up the relay and ran SCRAM; descriptors 0 and 1 are the
+       plaintext pipe the relay cut over to, and the client is long past the
+       ACK.  Starting a second relay or sending a second ACK here would be
+       wrong on both counts.                                                  */
+    if (is_sdApiSrvr && !api_preauth) {
       char tls_dir[MAX_PATHNAME_LEN + 16];
       char tls_err[512];
 

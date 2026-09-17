@@ -42,6 +42,13 @@ Public char* entry_dir init(NULL); /* Current directory on entry */
 Public bool is_bootstrap init(FALSE);  /* Bootstrap build (install process) */
 Public bool is_phantom init(FALSE);  /* Process is a phantom */
 Public bool is_sdApiSrvr init(FALSE); /* Process is a sdApiSrvr */
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  A PRE-AUTHENTICATED API session:
+   the LocalSystem front did the TLS relay and SCRAM, then spawned this process
+   AS the authenticated user (win32session.c) with the plaintext pipe already on
+   descriptors 0 and 1.  So this session must NOT start its own relay or ACK
+   (linuxio.c) and must NOT run the SCRAM handshake (APISRVR) - it is already
+   logged in as the user it runs as.  Set by sd.c's -H, alongside is_sdApiSrvr. */
+Public bool api_preauth init(FALSE); /* Pre-authenticated API session (-H) */
 Public bool is_nt init(FALSE);       /* Windows NT/2000/XP? */
 
 Public int phantom_user_index init(0); /* User table index for phantom */
