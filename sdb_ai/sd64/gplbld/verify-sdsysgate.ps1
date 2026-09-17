@@ -19,6 +19,8 @@
 # paths:
 #
 #     CPROC:2637  identity gate       audit 'reason=not an administrator'
+#                 (since RELEASE_1.1 45: one gate at CPROC:2774, audit
+#                  'reason=session did not start elevated' - see below)
 #     CPROC:2651  elevation failed    audit 'reason=elevation refused or unavailable'
 #
 # and for THIS script's subject the elevation would fail anyway: the account it
@@ -47,10 +49,19 @@
 # NOT hold for an administrator, and nothing here should be copied to one.
 #
 # ***SO THE DECISIVE READING IS THE AUDIT REASON, AND ONLY THAT.***  The two
-# paths differ nowhere else.  'reason=not an administrator' means the identity
-# gate fired; 'reason=elevation refused or unavailable' means execution reached
-# the elevate call, which is the defect this entry is about.  The second is a
-# DISQUALIFIER here, not a pass.
+# paths differ nowhere else.  The gate's reason means the gate before the
+# elevate call fired; 'reason=elevation refused or unavailable' means execution
+# reached the elevate call, which is the defect this entry is about.  The
+# second is a DISQUALIFIER here, not a pass.
+#
+# 17 Sep 26 - THE GATE'S REASON IS 'session did not start elevated' SINCE
+# RELEASE_1.1 45, NOT 'not an administrator'.  45 made elevation the only door
+# to SDSYS and asks both halves - started elevated, SD administrator tier - as
+# one test with one reason (CPROC:2774).  Owner, 17 Sep 2026: the two are one
+# fact, because a Windows administrator never holds a standard-tier SD account
+# (5.22); so the subject here, a non-administrator, is correctly audited under
+# that reason and the product was not changed.  The old wording is now the
+# control that the regate took.
 #
 # ***WHICH IS WHY THIS RUNS ELEVATED AND LIVES IN VerifyInstall2.***  The audit
 # trail is locked to SYSTEM and Administrators by secure-audit.ps1 - measured
@@ -332,9 +343,26 @@ try {
     Note 'the tail carries this session s LOGIN record' $true `
          ($tail -match 'LOGIN account=') $true
 
-    # ***THE MEASUREMENT.***  Present = the identity gate fired.
-    Note 'refused BY IDENTITY (reason=not an administrator)' $true `
-         ($tail -match 'LOGTO REFUSED account=SDSYS reason=not an administrator') $true
+    # ***THE MEASUREMENT.***  Present = the gate BEFORE elevate('START') fired.
+    #
+    # 17 Sep 26 - RELEASE_1.1 45 folded the two halves of that gate - did the
+    # session start elevated, is @logname an SD administrator - into one test
+    # with one audit reason, 'session did not start elevated', and this row
+    # went red on b173 (the first full suite since 45) still anchored on the old
+    # 'not an administrator'.  Owner's ruling, 17 Sep 2026: the two halves are
+    # ONE FACT - "a windows administrator should never hold a standard tier sd
+    # account; if they are an administrator created by sd then they have an sd
+    # administrator account" (5.22) - so a non-administrator being audited under
+    # the one reason is correct, not a lost distinction, and the product is not
+    # changed.  What this row proves is unchanged: the refusal came from the
+    # gate that runs BEFORE the elevate call, and the disqualifier below still
+    # says the elevate call was never reached - which is the whole of 62.
+    Note 'refused at the door (reason=session did not start elevated)' $true `
+         ($tail -match 'LOGTO REFUSED account=SDSYS reason=session did not start elevated') $true
+    # CONTROL: not the pre-45 gate's reason, which would mean the regate had
+    # not taken (verify-elevdoor.ps1 makes the same check for an administrator).
+    Note 'and NOT the pre-45 reason (not an administrator)' $false `
+         ($tail -match 'reason=not an administrator') $true
 
     # ***THE DISQUALIFIER.***  Present = execution reached elevate('START'),
     # which is the defect.  Over ssh that call fails for want of a desktop and
