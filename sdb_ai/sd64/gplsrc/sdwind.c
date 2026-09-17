@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Sep 26 Windows port - RELEASE_1.1 37: check_lost_users() starts
+ *                      "sd -cleanup" with fork/execl and waits for it, not
+ *                      system() - the install has no /bin/sh, so system()
+ *                      returned 127 unchecked and the sweep never reaped
+ *                      anything.  It logs the lost user and any failure.
  * 21 Aug 26 Windows port - the API listener binds EVERY INTERFACE, not just
  *                      loopback.  Owner's decision: the API is reached at the
  *                      port and the ssh tunnel is no longer part of the
@@ -201,10 +206,10 @@ int main() {
     }
 
     /* REAPED HERE RATHER THAN IN A SIGCHLD HANDLER, deliberately.  SIG_IGN
-       would auto-reap but then make system() in check_lost_users() fail with
-       ECHILD, and a handler would have to be reasoned about against the
-       SIGCHLD system() blocks around itself.  A zombie living until the next
-       loop pass costs nothing.                                             */
+       would auto-reap but then make check_lost_users()'s waitpid() on its
+       cleanup child fail with ECHILD (it was system() until 17 Sep 26, same
+       reasoning), and a handler would have to be reasoned about against that
+       wait.  A zombie living until the next loop pass costs nothing.       */
     while (waitpid(-1, NULL, WNOHANG) > 0)
       ;
 
@@ -241,8 +246,10 @@ void check_lost_users() {
   int16_t u;
   int16_t num_checked = 0;
   bool lost_user_detected = FALSE;
+  int16_t lost_uid = 0;             /* the first lost slot, for the log */
+  int32_t lost_pid = 0;
   char bindir[MAX_PATHNAME_LEN + 1];
-  /* Room for the directory plus "'/sd' -cleanup" and its terminator. */
+  /* Room for the directory plus "/sd" and its terminator. */
   char cmd[MAX_PATHNAME_LEN + 20];
 
   StartExclusive(SHORT_CODE, 69);
@@ -263,6 +270,8 @@ void check_lost_users() {
 
       if (kill(pid, 0) && (errno != EPERM)) {
         lost_user_detected = TRUE;
+        lost_uid = uptr->uid;
+        lost_pid = pid;
         break;
       }
     }
@@ -292,13 +301,59 @@ void check_lost_users() {
        pcode.old, not executables (PROJECT_STATUS.md 5.8).  sd lives beside
        this daemon, so ask where that is.  A daemon has no useful stdout, so
        failures go to the error log rather than to printf.                 */
+    /* 17 Sep 26 Windows port - RELEASE_1.1 37.  NOT system(): THAT NEVER RAN
+       ON AN INSTALL.  system() is "/bin/sh -c", and the install ships sd.exe
+       and sdwind.exe with no shell - measured with gplbld/probe-system.c
+       under the installed runtime: /bin/sh absent, system("echo alive") 127
+       with errno ENOENT, and the -cleanup line in this very quoting the
+       same.  The return was never tested, so a lost user was detected every
+       five minutes and nothing followed, silently: a killed session's slot
+       and record lock outlived the tick by 5 m 45 s on 15 Sep 2026 and would
+       have outlived every tick after it.  The detection above is NOT the
+       fault - gplbld/probe-killzero.ps1 asked kill(pid, 0) from this daemon's
+       own token and session about a live console session (ALIVE) and a
+       killed one (LOST), and sd -cleanup by hand removed the dead slots and
+       kept the live one.  Only the link between them was broken.
+
+       So the child is started the way accept_api_session() starts a session:
+       fork(), execl(), no shell.  Then waited for HERE, by pid, so the
+       reaping loop in the main routine cannot take it first and so its exit
+       can be reported; a daemon that logs nothing on success is the reason
+       the 15 Sep observation could not say which half had failed.       */
     if (!exe_directory(bindir, sizeof(bindir))) {
-        log_message("Cleanup not run: cannot locate the SD program directory");
-      } else if (snprintf(cmd, sizeof(cmd), "'%s/sd' -cleanup", bindir) >= (int)sizeof(cmd)) {
-        log_message("Cleanup not run: overflowed path/filename buffer");
+      log_message("Cleanup not run: cannot locate the SD program directory");
+    } else if (snprintf(cmd, sizeof(cmd), "%s/sd", bindir) >= (int)sizeof(cmd)) {
+      log_message("Cleanup not run: overflowed path/filename buffer");
+    } else {
+      char msg[MAX_PATHNAME_LEN + 120];
+      pid_t cpid;
+      int status = 0;
+
+      snprintf(msg, sizeof(msg), "Lost user %d (pid %d): running %s -cleanup",
+               (int)lost_uid, (int)lost_pid, cmd);
+      log_message(msg);
+
+      cpid = fork();
+      if (cpid < 0) {
+        snprintf(msg, sizeof(msg), "Cleanup not run: fork failed (errno %d)", errno);
+        log_message(msg);
+      } else if (cpid == 0) {
+        execl(cmd, "sd", "-cleanup", (char*)NULL);
+        _exit(127);                /* only reached if exec failed */
       } else {
-        system(cmd);
+        if (waitpid(cpid, &status, 0) < 0) {
+          snprintf(msg, sizeof(msg), "Cleanup started but could not be waited for (errno %d)", errno);
+          log_message(msg);
+        } else if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+          snprintf(msg, sizeof(msg), "Cleanup did not complete: %s %d",
+                   WIFEXITED(status) ? "exit code" : "signal",
+                   WIFEXITED(status) ? WEXITSTATUS(status) : WTERMSIG(status));
+          log_message(msg);
+        }
+        /* A clean exit says nothing here: cleanup() itself logs every slot it
+           removed ("Cleanup removed user ..."), and that is the record.   */
       }
+    }
     /* -------------------- */
   }
 }

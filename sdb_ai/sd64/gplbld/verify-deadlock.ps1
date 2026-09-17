@@ -4,9 +4,12 @@
 #
 #   powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\sd4windows\sdb_ai\sd64\gplbld\verify-deadlock.ps1
 #
-# Exit 0 "(gone)" was reported and SD stayed usable, 1 a check failed (a hang,
-# a forced logout, SD unusable afterwards), 2 the fixed path was not reached or
-# the test could not be built.
+# Exit 0 the daemon reclaimed the killed owner within the window and errlog
+# shows it was the daemon (RELEASE_1.1 37 witnessed) and SD stayed usable;
+# 1 a check failed (a hang, a forced logout, SD unusable afterwards, or the
+# owner NOT reclaimed); 2 the test could not be built or the instrument check
+# refused.  17 Sep 26: "(gone)" (RELEASE_1.1 7) is reported if seen but no
+# longer expected - see the verdict block for why it is unreachable here.
 #
 # ***READ THIS BEFORE RUNNING IT.*** Owner's go-ahead, 14 Sep 2026: "yes, after
 # 3b's cycle".  PROJECT_STATUS.md section 4 records that killing sd sessions
@@ -267,17 +270,38 @@ try {
     Row 'no probe was answered "Forced logout"' ($seen -notcontains 'forced')
     Row 'every probe ran to PROBE-DONE' ($seen -notcontains 'noprobe')
     $gone = ($seen -contains 'gone')
+    # 17 Sep 26 - RELEASE_1.1 37 IS THE THING THIS RUN CAN WITNESS, AND 7 IS NOT.
+    # 37's cause was measured (the daemon's cleanup never ran on an install:
+    # system() has no shell) and fixed in sdwind.c; with it fixed the daemon's
+    # five-minute tick reaps the killed owner's slot AND its locks together, so
+    # the probe goes "named" then "none" - and the daemon writes two errlog
+    # lines while it does: "Lost user N (pid P): running ... -cleanup" and
+    # cleanup()'s own "Cleanup removed user N (pid P, ...)".  Both are read
+    # here, because a "none" that arrived some other way (a hand-run cleanup,
+    # a restart) is not the daemon's work.  "(gone)" - a lock outliving its
+    # owner's slot - cannot occur on this tree since PRE_RELEASE 24 made
+    # remove_user() give the locks away with the slot, under the same two
+    # semaphores GETLOCKS reads under; the fix in op_lock.c stays as defence and
+    # this script no longer scores its absence as a miss.
+    $reclaimed = (($seen -contains 'named') -and ($seen[-1] -eq 'none'))
+    Row '37: the killed owner was reclaimed within the window (named, then none)' $reclaimed ("saw " + (($seen | Select-Object -Unique) -join ' then '))
+    $errlog = Join-Path $sdsys 'errlog'
+    $tail = ''
+    try { $tail = (Get-Content -LiteralPath $errlog -Tail 40 -ErrorAction Stop) -join "`n" } catch { $tail = '' }
+    $daemonLine  = $tail -match ('Lost user \d+ \(pid \d+\): running .*-cleanup')
+    $removedLine = $tail -match ('Cleanup removed user \d+ \(pid \d+, ')
+    Row '37: errlog carries the DAEMON''s "Lost user ... running ... -cleanup" line' $daemonLine
+    Row '37: errlog carries cleanup()''s "Cleanup removed user" line' $removedLine
+    Row '37: control - no "Cleanup not run" / "Cleanup did not complete" in the tail' (-not ($tail -match 'Cleanup not run|Cleanup did not complete'))
     if ($gone) {
-        Row 'DECISIVE: GETLOCKS reported the dead owner as "(gone)"' $true
+        Row '7: GETLOCKS reported the dead owner as "(gone)" - a state 24 should make unreachable; READ THE RUN' $true
     } else {
         Write-Output ''
-        Write-Output ("  NOT REACHED: the probe saw " + (($seen | Select-Object -Unique) -join ' then ') + ", never '(gone)'.")
-        Write-Output '  The fixed line never ran.  This is not a pass.  If every probe said "named",'
-        Write-Output '  the killed owner stayed mapped AND its lock stayed held for the whole window'
-        Write-Output '  (RELEASE_1.1_FIXES 37, seen 15 Sep 2026); if the last said "none", the slot'
-        Write-Output '  and the lock were reclaimed together.  Neither reaches "(gone)".'
+        Write-Output ("  7: '(gone)' not seen - the probe saw " + (($seen | Select-Object -Unique) -join ' then ') + ".  Expected: a lock cannot")
+        Write-Output '     outlive its owner''s slot since PRE_RELEASE 24, so the fixed line in op_lock.c is a'
+        Write-Output '     defence with no witness here.  Not scored (RELEASE_1.1_FIXES 7, 17 Sep 2026).'
     }
-    $exit = $(if ($fail -gt 0) { 1 } elseif ($gone) { 0 } else { 2 })
+    $exit = $(if ($fail -gt 0) { 1 } elseif ($reclaimed -and $daemonLine -and $removedLine) { 0 } else { 2 })
 }
 catch {
     Write-Output ("verify-deadlock: " + $_.Exception.Message)

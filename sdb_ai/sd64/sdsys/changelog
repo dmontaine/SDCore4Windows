@@ -4,6 +4,24 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+17 Sep 26  A SESSION THAT DIES WITHOUT SIGNING OFF IS NOW CLEARED UP WITHIN
+           FIVE MINUTES.
+
+           If an SD session ended without OFF - a crashed program, a closed
+           terminal, a lost network connection - its user slot and any record
+           locks it held stayed behind until an administrator ran "sd -cleanup"
+           by hand, elevated.  Meanwhile anybody else reading those records
+           waited or was refused.
+
+           The SD service checks for such sessions every five minutes and was
+           finding them; the step that should have followed - running the
+           cleanup - never ran on an installed system, and nothing said so.
+           It runs now, and the error log records both halves: the session
+           that was found gone ("Lost user ... running sd -cleanup") and what
+           the cleanup removed ("Cleanup removed user ...").  Running
+           "sd -cleanup" by hand still works and is still the immediate remedy
+           if you do not want to wait for the next check.
+
 16 Sep 26  THE API'S ENCRYPTION NO LONGER RUNS WITH SYSTEM PRIVILEGE.
 
            Since 15 Sep every API connection has been TLS 1.3 (below).  The
