@@ -31,6 +31,11 @@
 # gplbld/test-stalebin-units.ps1 drives it.
 #
 # START-HISTORY:
+# 17 Sep 26 Windows port - RELEASE_1.1 55: gpl.src (sd64\gpl.src, a sibling of
+#           gplsrc\) is now checked as source too - it was invisible to the
+#           recursive gplsrc\ scan and a change there alone reported "nothing
+#           to compile" while bin\ was missing sd.exe.  Get-BinaryStaleness
+#           only; Get-BinBinaries and Test-IsSdSource unchanged.
 # 03 Sep 26 Windows port - lifted out of assert-current.ps1 unchanged, so
 #           cycle.ps1's new step 0 and the guard cannot disagree.  The rule,
 #           the exclusions and their reasons are as they were; only the file
@@ -170,8 +175,27 @@ function Get-BinaryStaleness([string]$sd64) {
 
     $uncompiled = @(Get-ChildItem -LiteralPath $gplsrc -Recurse -File -ErrorAction SilentlyContinue |
                     Where-Object { (Test-IsSdSource $_.FullName $_.Name) -and
-                                   $_.LastWriteTime -gt $oldest.LastWriteTime } |
-                    Sort-Object LastWriteTime -Descending)
+                                   $_.LastWriteTime -gt $oldest.LastWriteTime })
+
+    # 17 Sep 26 Windows port - RELEASE_1.1 55.  gpl.src NAMES WHAT LINKS INTO
+    # sd (Makefile's SDSRCS/SDOBJS, comment beside them) and lives at
+    # sd64\gpl.src - a SIBLING of gplsrc\, not under it - so the recursive scan
+    # above cannot see it change BY CONSTRUCTION.  Measured the hard way:
+    # win32session.c compiled clean under the *.c wildcard but was never in
+    # gpl.src, so "make sd" linked without it (undefined reference); adding it
+    # to gpl.src fixed the link but left this function still reporting
+    # "nothing to compile" on the next run, because nothing here ever looked
+    # at gpl.src's own mtime - staging then refused with "bin/ is missing
+    # sd.exe" on a tree step 0 had just called current.  Checked as ONE FILE,
+    # not scanned as a directory: gpl.src is not a place source lives, it IS
+    # the list of what does.
+    $gplSrcList = Join-Path $sd64 'gpl.src'
+    if ((Test-Path -LiteralPath $gplSrcList) -and
+        (Get-Item -LiteralPath $gplSrcList).LastWriteTime -gt $oldest.LastWriteTime) {
+        $uncompiled = @($uncompiled) + @(Get-Item -LiteralPath $gplSrcList)
+    }
+
+    $uncompiled = @($uncompiled | Sort-Object LastWriteTime -Descending)
 
     return @{ ok = $true; reason = ''; binaries = $binaries; oldest = $oldest;
               uncompiled = $uncompiled; stale = ($uncompiled.Count -gt 0) }

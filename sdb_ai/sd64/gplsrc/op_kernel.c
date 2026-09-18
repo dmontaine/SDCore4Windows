@@ -51,6 +51,7 @@
    windows.h in: win32session.h declares the spawn with a void*, and sd_tls.h
    is careful to carry no Windows type (its own note says why). */
 #include "win32session.h"
+#include "win32group.h"   /* K_GROUP_MEMBER's live SAM query */
 #include "sd_tls.h"
 
 #include <syslog.h>
@@ -373,6 +374,45 @@ void op_kernel() {
         syslog(LOG_INFO, "SD API: session for %s started as pid %lu on %s",
                uname, spawned, pipename);
         result.data.value = 1;
+      }
+      break;
+
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  K_GROUP_MEMBER.  keys.h carries
+   the reasoning; this is the mechanism.  The argument is "user<FM>group" so
+   that one descriptor carries both, the way K_IMPERSONATING returns two.
+
+   THREE ANSWERS, AND THE THIRD IS THE POINT: -1 means the question could not
+   be answered, and a caller must not read it as "not a member".  The reason
+   goes to the audit trail rather than to the caller, because the caller gets
+   one integer and a BASIC program cannot be handed a sentence - and because
+   the trail is the thing that was missing when this failure was silent.    */
+    case K_GROUP_MEMBER:
+      {
+        char both[MAX_USERNAME_LEN + 264];
+        char why[512];
+        char* sep;
+        int member = 0;
+
+        result.data.value = -1;
+        if (k_get_c_string(descr, both, sizeof(both) - 1) <= 0) {
+          audit_message("GROUP.MEMBER could not tell: no user and group given");
+          break;
+        }
+        sep = strchr(both, FIELD_MARK);
+        if (sep == NULL) {
+          audit_message("GROUP.MEMBER could not tell: no group given");
+          break;
+        }
+        *sep = '\0';
+
+        if (win32_group_has_member(both, sep + 1, &member, why, sizeof(why))) {
+          result.data.value = member;
+        } else {
+          char note[640];
+
+          snprintf(note, sizeof(note), "GROUP.MEMBER could not tell: %s", why);
+          audit_message(note);
+        }
       }
       break;
 

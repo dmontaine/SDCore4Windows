@@ -19,6 +19,24 @@
 *
 *
 * START-HISTORY:
+* 17 Sep 26 Windows port - RELEASE_1.1 55 SLICE 6, FIX AFTER b182: the
+*           kernel(K$ASSUME.USER) call is REMOVED from vb.scram.final.  It
+*           adopted the user in place (seteuid), so the front had dropped the
+*           SeTcbPrivilege that K$HANDOFF needs one statement later to S4U-mint
+*           that same user's token - the handoff returned 0 in the same second
+*           and no session was ever spawned.  int$keys.h:171 already said 66
+*           "replaces K$ASSUME.USER for the API"; slice 6 added the handoff and
+*           left the call in.  61 is untouched for ssh.  Measured on b182 by a
+*           temporary K$AUDIT pair around the call, because every K_HANDOFF
+*           syslog line was itself lost - syslog was being called by a process
+*           that was no longer LocalSystem.  sysmsg 5277 now has no caller.
+* 17 Sep 26 Windows port - RELEASE_1.1 55 SLICE 6: THE HANDOFF.  A successful
+*           SCRAM login (vb.scram.final) no longer sets logged.in - it sets
+*           scram.handoff, and the dispatcher calls K$HANDOFF right after the
+*           server-final reaches the wire, then ends the session either way.
+*           A pre-authenticated session (sd -N -H, spawned by that call)
+*           reads K$API.PREAUTH at start-up and skips SCRAM entirely.
+*           Messages 10189, new; 10160 reused.  Uncycled - HISTORY.md 17 Sep.
 *  5 Sep 26 Windows port - AN ADMINISTRATOR IS REFUSED A REMOTE API SESSION,
 *           in vb.scram.final after the proof and beside the sdapi test.  This
 *           is the API half of the 5 Sep ruling; the ssh half is LOGIN's gate.
@@ -223,6 +241,37 @@ if not(kernel(K$CPROC.LEVEL,0)) then
    alias.targets = ''
    default.style.rec = ''
    logname = kernel(K$USERNAME, 0)
+
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  A PRE-AUTHENTICATED
+*   SESSION (sd -N -H, spawned by K$HANDOFF) SKIPS SCRAM ENTIRELY - it is
+*   already running as the authenticated user by its own PROCESS TOKEN
+*   (win32session.c), not by impersonation, so there is no proof left to run.
+*   K$API.PREAUTH's two fields are deliberately independent (op_kernel.c,
+*   int$keys.h): <1> is how this process was STARTED, <2> is what Windows
+*   says its token IS, read with ProcessUserName() rather than
+*   ImpersonatingUser() - which reports an impersonation and would answer 0
+*   with an empty name for exactly this session.  <1>=1 with <2>='' is that
+*   trap made visible: pre-authenticated but unable to name itself, refused
+*   here rather than left to enter the request loop with no identity.
+   api.preauth = kernel(K$API.PREAUTH, 0)
+   if api.preauth<1> = 1 then
+      if api.preauth<2> = '' then
+         abort.message = sysmsg(10189)
+         * Pre-authenticated session could not determine its user name
+         goto connection.failed
+      end
+
+      set.name = kernel(K$SET.USERNAME, api.preauth<2>)
+      if set.name # api.preauth<2> then
+         abort.message = sysmsg(10160)
+         * Authentication succeeded but the session could not take your user name
+         goto connection.failed
+      end
+
+      logname = api.preauth<2>
+      logged.in = @true
+   end
+
    mat qproc.breakpoint.value = ''
    user.var.names = ''
    user.var.values = ''
@@ -316,6 +365,10 @@ scram.serverkey = ''   ;* From $cred, base64
 * handlers goes through that one exit.
 scram.audit.name = ''   ;* Name as PRESENTED, sanitised - see scram.clean.name
 scram.refuse.reason = '';* Why this exchange was refused; '' = not refused
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  Set by vb.scram.final on
+* success; read once, right after the reply below reaches the wire, to hand
+* this connection off to a new session running as the authenticated user.
+scram.handoff = @false
 
 loop
    unload.object               ;* Unload inactive object code
@@ -418,6 +471,34 @@ return.status.set: ;* Return to here if ST already set
    end
 
    writepkt iconv(server.error, 'ISL'):iconv(st, 'ILL'):response
+
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  THE HANDOFF, RIGHT AFTER
+*   THE SERVER-FINAL IS ON THE WIRE.  scram.handoff is set only by
+*   vb.scram.final's success path, immediately above the writepkt this
+*   dispatcher just did - calling K$HANDOFF any earlier would close the app
+*   side with the server-final still unsent (see the header there).
+*   K$HANDOFF's own refusal is syslogged with the username (op_kernel.c) -
+*   there is nowhere left on the wire for a reason, the client is already
+*   past the last reply this session will ever send.  done = @true either
+*   way: on success the new session has the connection, on failure closed is
+*   the only safe end for a session that just told K$HANDOFF to give this
+*   connection away.
+   if scram.handoff then
+      scram.handoff = @false
+* 17 Sep 26 Windows port - RELEASE_1.1 55.  THE RETURN IS TAKEN, AND A FAILED
+*   HANDOFF IS AUDITED.  K$HANDOFF syslogs its own reason (op_kernel.c), but
+*   that was measured SILENT for two whole runs while this path still had
+*   K$ASSUME.USER in front of it - syslog from a process that is no longer
+*   LocalSystem does not arrive - so the one record that says "this connection
+*   was given away and the handover refused" goes to the audit trail, which
+*   worked throughout.  On success nothing is written: the new session's own
+*   LOGIN record is the evidence, and this runs on every API login.
+      handoff.ok = kernel(K$HANDOFF, scram.user)
+      if not(handoff.ok) then
+         void kernel(K$AUDIT, 'API HANDOVER FAILED user=' : scram.user : ' - see syslog; the connection is closed')
+      end
+      done = @true
+   end
 until done
 repeat
 
@@ -510,6 +591,17 @@ end
 account.path = ''
 acc.group = ''
 acc.tier = ''
+* 17 Sep 26 Windows port - RELEASE_1.1 55.  ***EVERY REFUSAL HERE NAMES ITS
+*   BRANCH ON THE AUDIT TRAIL, AND THAT IS KEPT RATHER THAN REMOVED WITH THE
+*   DIAGNOSTICS IT ARRIVED WITH.***  All five refusals answer the caller with
+*   the same sysmsg(10003) on purpose, so a client cannot tell "no such
+*   account" from "not granted" from "suspended" - right against an attacker,
+*   and it left an administrator with no way at all to find out why a login
+*   was refused.  RELEASE_1.1 55 spent EIGHT CYCLES on a refusal that turned
+*   out to be a failed group lookup, because nothing recorded which of the
+*   five fired.  The trail is not the wire: it is readable by an
+*   administrator and by nobody else, so naming the branch there costs the
+*   attacker nothing and costs the operator nothing to have.
 openpath @sdsys:@ds:'accounts' to acc.f then
    read acc.rec from acc.f, new.account then
       account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
@@ -520,6 +612,7 @@ openpath @sdsys:@ds:'accounts' to acc.f then
 end
 
 if account.path = '' then
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=1 no.path.in.register')
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -540,6 +633,7 @@ end
 *   API session runs as LocalSystem and never carries a person's elevation, so
 *   the bypass that reasoning rests on does not exist on this route.
 if upcase(trim(acc.tier, ' ', 'B')) = 'SUSPENDED' then
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=2 suspended')
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -622,12 +716,39 @@ end
 *   the program; vb.scram.final needs it too now.  See the note beside it.
 
 if acc.group = '' then
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=3 no.group.in.register')
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
 end
 
-if not(is_grp_member(kernel(K$USERNAME, 0), acc.group)) then
+* 17 Sep 26 Windows port - RELEASE_1.1 55.  ***"COULD NOT TELL" IS NOT "NO",
+*   AND READING IT AS ONE COST SEVEN RUNS.***  is_grp_member answers @false
+*   both when the user is genuinely not in the group and when the lookup could
+*   not be made at all, and this line used to take the first reading silently.
+*   It refused a pre-authenticated session's own account with sysmsg(10003) -
+*   "not granted" - when what had actually happened was that the session could
+*   not start a child process (0xC0000142; win32group.c has the measurement).
+*   Nothing in the trail said which, because all five refusals here share one
+*   message by design.
+*
+*   THE GRANT CHECK STILL FAILS CLOSED - an access test must - but the two
+*   cases are now DISTINGUISHED and recorded: is_grp_member sets STATUS 1 when
+*   it could not tell, and K$GROUP.MEMBER has already put the reason on the
+*   audit trail.  A refusal nobody can account for is the thing this pair of
+*   changes exists to stop.
+acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
+acc.told = status()
+
+if acc.told # 0 then
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group)
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   goto revert.to.old.account
+end
+
+if not(acc.member) then
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -655,6 +776,7 @@ end
 *   enumerate the register's state for an attacker.  CPROC says more because a
 *   local caller has already proved who they are.
 if not(tier_allows(kernel(K$USERNAME, 0), new.account)) then
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=5 tier')
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -664,6 +786,15 @@ end
 *   is_grp_member is '!ps_script' and that fork()s (op_sh.c:379) - and a fork
 *   silently reverts this thread to the service's token.  Checking immediately
 *   after it is what separates "lost at the group check" from "lost later".
+* 17 Sep 26 Windows port - ***THE REASON ABOVE IS NOW STALE AND THE CHECK IS
+*   KEPT ANYWAY.***  RELEASE_1.1 55: is_grp_member no longer runs '!ps_script'
+*   and no longer forks - it asks K$GROUP.MEMBER - so nothing here reverts a
+*   thread's token any more.  But a PRE-AUTHENTICATED session is the user by
+*   its PROCESS token and has no impersonation to lose, while a forked
+*   LocalSystem session still does, and both routes reach this line.  Keeping
+*   it costs one call and still separates "lost at the group check" from
+*   "lost later"; deleting it because one of its two callers changed is how a
+*   check stops covering the caller that never did.
 
 id.point = 'LOGTO group check'
 gosub check.identity
@@ -1647,40 +1778,49 @@ vb.scram.final:
                scram.storedkey = ''
                scram.serverkey = ''
 
-* 23 Aug 26 Windows port - BECOME THE USER.  PROJECT_STATUS.md 7 step 14,
-*   shape (b), owner's decision 23 Aug 2026.
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  ***K$ASSUME.USER IS GONE
+*   FROM THIS PATH, AND LEAVING IT IN IS WHAT BROKE THE FIRST TWO RUNS.***
+*   int$keys.h:171 says it outright - K$HANDOFF "replaces K$ASSUME.USER for
+*   the API" - and slice 6 added the handoff without taking this away.
 *
-*   WHY IT IS HERE AND NOT AT THE FORK.  sdwind.c:491 fork()s this session, so
-*   it inherits the service's LocalSystem token; and it cannot be fixed there,
-*   because SCRAM runs in this program, after the execl, so at fork time
-*   sdwind does not yet know who is calling.  This line is the first moment
-*   the answer exists.
+*   ***MEASURED, b182, 17 Sep 2026.***  K$ASSUME.USER adopts the user in place
+*   with CW_SET_EXTERNAL_TOKEN + seteuid, so from here on the process's
+*   EFFECTIVE identity is the ordinary user.  K$HANDOFF then has to S4U-mint
+*   that user's token to spawn the session (win32session.c:126,
+*   win32_s4u_logon), and ***S4U IS GRANTED ON SeTcbPrivilege***, which the
+*   user's token does not carry and LocalSystem's does.  So the front dropped
+*   the one privilege the handoff needs, one statement before needing it:
+*   K$HANDOFF returned 0 in the same second, with no session spawned.
 *
-*   AND IT IS BEFORE logged.in, WHICH IS THE WHOLE OF THE CONTROL.  A refusal
-*   here leaves logged.in false, so the dispatcher goes on admitting only 24,
-*   25, 47 and 48 and the caller has authenticated into nothing.  Setting
-*   logged.in first and impersonating afterwards would leave a session that
-*   believes it is the user while holding the service's token, which is worse
-*   than one that never started.
+*   ***AND THE REFUSAL WAS INVISIBLE, WHICH IS WHY b181 READ AS "NEVER
+*   CALLED".***  Every K_HANDOFF exit syslogs (op_kernel.c:341-377) and NONE
+*   of them reached the Application log - because syslog was being called
+*   after this line too, by a process that was no longer LocalSystem.  The
+*   K$AUDIT pair in the dispatcher is what finally showed the 0.
 *
-*   NO PASSWORD IS INVOLVED.  SCRAM never gives this server the password - it
-*   holds StoredKey and ServerKey, and those two lines above have just cleared
-*   even those.  The identity comes from an S4U logon, which is granted on
-*   SeTcbPrivilege rather than on a credential.  win32s4u.c.
+*   NOTHING IS LOST BY REMOVING IT.  The front serves no request after the
+*   server-final - it hands the connection over and ends - so it never opens
+*   anything that the user's identity would have confined.  The session that
+*   DOES serve is the user by its own PROCESS token, which is the whole of
+*   55's fix.  ***61 STAYS FOR ssh AND ITS OTHER CALLERS*** (int$keys.h:172);
+*   it is only this path that must not use it.
 *
-*   THE WINDOW THIS DOES NOT CLOSE: everything before this line ran as
-*   LocalSystem, and handles opened then keep that access - the shared segment
-*   and $cred among them.  The account's own files are opened at LOGTO, which
-*   is after, and that is what makes this worth doing.
-               if not(kernel(K$ASSUME.USER, scram.user)) then
-                  scram.refuse.reason = 'could not assume the Windows identity of the authenticated user'
-                  abort.message = sysmsg(5277) ;* Authentication succeeded but...
-                  server.error = SV$ON.ERROR
-                  goto exit.vb.scram.fail
-               end
+*   ***sysmsg 5277 NOW HAS NO CALLER ANYWHERE IN gpl.bp*** - checked, not
+*   assumed; this was its only one.  The record is left in sdsys/messages
+*   rather than deleted: an orphaned message costs nothing, and removing a
+*   shipped message is an upgrade question of its own.  If the handoff ever
+*   needs a "succeeded but could not become you" refusal, 5277 is the wording
+*   already written for it.
 
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  NOT logged.in - this
+*   session's job ends the moment the server-final is on the wire.  The
+*   handoff cannot happen here: the dispatcher's writepkt at
+*   return.status.set sends the reply AFTER this gosub returns, so calling
+*   K$HANDOFF now would close the app side with the server-final still
+*   unsent.  scram.handoff tells the dispatcher to hand off immediately
+*   after that writepkt, win or lose - see the header there.
                response = 'v=' : scram.ssig
-               logged.in = @true
+               scram.handoff = @true
 
                return
 

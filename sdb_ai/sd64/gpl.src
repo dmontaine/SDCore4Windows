@@ -86,6 +86,8 @@ win32relay
 win32s4u
 win32pipe
 win32vt
+win32session
+win32group
 sdtermlb
 strings
 sysdump

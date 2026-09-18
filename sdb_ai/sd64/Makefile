@@ -74,8 +74,14 @@ COMP     := gcc
 #   or the UCRT refuses to start.  Its other calls (DuplicateTokenEx,
 #   AdjustTokenPrivileges, SetTokenInformation, ConvertStringSidToSid,
 #   CreateProcessAsUser) are advapi32/kernel32, already linked.
+# 17 Sep 26 Windows port - RELEASE_1.1 55: -lnetapi32 is for win32group.c's
+#   NetLocalGroupGetMembers/NetApiBufferFree, the live group lookup that
+#   replaced the PowerShell gpl.bp/is_grp_member used to run - a
+#   pre-authenticated API session cannot start a child process at all
+#   (0xC0000142, measured b190).  Its ConvertStringSidToSid and
+#   LookupAccountSid halves are advapi32, already above.
 OPENSSL_LIBS ?= -lssl -lcrypto
-L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 -luserenv $(OPENSSL_LIBS)
+L_FLAGS    := -lm -lcrypt -ldl -lbsd -L$(LIBSODIUM) -lsodium -ladvapi32 -lsecur32 -luserenv -lnetapi32 $(OPENSSL_LIBS)
 
 RM       := rm
 
@@ -103,6 +109,18 @@ RM       := rm
 # EVERYTHING.  A full build is a couple of minutes and this codebase has no
 # header hygiene to lean on; -MMD dependency files would be more precise and
 # would also be a thing to get wrong.  Correctness first.
+# 17 Sep 26 Windows port - RELEASE_1.1 55: gpl.src, NOT A WILDCARD, IS WHAT
+# LINKS INTO sd.  win32session.c (win32_session_spawn/close) was written and
+# compiled clean - TEMPSRCS below picks up every gplsrc/*.c for the .c.o rule
+# and the header-dependency line further down - but nothing added its name to
+# gpl.src, so SDOBJS never carried win32session.o and "make sd" LINKED
+# WITHOUT IT: op_kernel.o's calls to both functions went to the linker as
+# undefined references, caught only because they are actually called.  A
+# gplsrc/*.c file that is never called from anything in gpl.src's existing
+# closure would compile, sit in gplobj/ unused, and never be missed this way.
+# Adding a new file to gplsrc/ needs its bare name added to gpl.src too,
+# same as the trap TEMPSRCS documents two paragraphs down for a different
+# reason (headers, not linking).
 SDHDRS   := $(wildcard $(GPLSRC)*.h)
 SDSRCS   := $(shell cat $(GPLDOTSRC))
 SDTEMP   := $(addsuffix .o,$(SDSRCS))

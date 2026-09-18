@@ -219,6 +219,33 @@ Note ($s.ok -and -not $s.stale) 'a rebuilt localtest exe and an edited .md leave
      (($s.uncompiled | ForEach-Object { $_.Name }) -join ', ')
 
 Write-Host ''
+Write-Host '--- Get-BinaryStaleness: gpl.src is source too, though it sits beside gplsrc\, not under it'
+
+# 17 Sep 26 - gpl.src lists what LINKS INTO sd (Makefile SDSRCS) and is a
+# SIBLING of gplsrc\, so the recursive scan above cannot see it change by
+# construction.  Measured the hard way: win32session.c was added to gplsrc\
+# and compiled clean under the wildcard, but nothing added its name to
+# gpl.src, so "make sd" linked without it - and even after gpl.src was fixed,
+# this function still reported "nothing to compile" because nothing here
+# looked at gpl.src's own mtime.
+$s = Get-BinaryStaleness $tmp
+Note ($s.ok -and -not $s.stale) 'no gpl.src present leaves the tree current (baseline)' `
+     ('ok=' + $s.ok + ' stale=' + $s.stale)
+
+Touch (Join-Path $tmp 'gpl.src') $new
+$s = Get-BinaryStaleness $tmp
+Note ($s.ok -and $s.stale) 'gpl.src newer than the oldest binary IS stale'
+Note ((@($s.uncompiled) | Where-Object { $_.Name -eq 'gpl.src' }).Count -eq 1) `
+     'and gpl.src itself is named' (($s.uncompiled | ForEach-Object { $_.Name }) -join ', ')
+
+Remove-Item -LiteralPath (Join-Path $tmp 'gpl.src') -Force
+Touch (Join-Path $tmp 'gpl.src') $old
+$s = Get-BinaryStaleness $tmp
+Note ($s.ok -and -not $s.stale) 'a gpl.src older than the binaries does not trip it' `
+     ('ok=' + $s.ok + ' stale=' + $s.stale)
+Remove-Item -LiteralPath (Join-Path $tmp 'gpl.src') -Force
+
+Write-Host ''
 Write-Host '--- Get-BinaryStaleness: it answers rather than guessing'
 
 $empty = Join-Path ([System.IO.Path]::GetTempPath()) ('stalebin-empty-' + [System.Guid]::NewGuid().ToString('N'))

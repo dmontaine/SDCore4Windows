@@ -299,6 +299,26 @@
    own identity, which @logname already exposes.                            */
 #define K_API_PREAUTH        67
 
+/* 17 Sep 26 Windows port - RELEASE_1.1 55.  IS A NAMED USER IN A NAMED LOCAL
+   GROUP?  A live SAM query with no child process (win32group.c).
+
+   IT EXISTS BECAUSE A PRE-AUTHENTICATED SESSION CANNOT RUN POWERSHELL.
+   gpl.bp/is_grp_member ran Get-LocalGroupMember through os.execute; measured
+   on b190, a session spawned AS the user by K_HANDOFF starts PowerShell and
+   the child dies in DLL init with 0xC0000142 - a non-interactive S4U token
+   cannot attach to winsta0\default, and only a POSIX console program like
+   sd.exe survives that because it never loads user32.
+
+   NOT K_IN_GROUP: in_group() (ingroup.c) reads the CALLING process's own
+   groups and cannot be asked about another user at all.
+
+   THE ARGUMENT IS "user<FM>group" AND THE ANSWER IS THREE-VALUED: 1 member,
+   0 not a member, -1 COULD NOT TELL.  The third value is the whole reason the
+   key is shaped this way - collapsing it into 0 is what made a DLL-init
+   failure read as "not granted" for seven runs.  Not $internal-gated: it
+   answers about Windows groups, which any caller can already read.        */
+#define K_GROUP_MEMBER       68
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

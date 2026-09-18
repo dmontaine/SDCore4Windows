@@ -18,6 +18,14 @@
 *
 *
 * START-HISTORY:
+* 17 Sep 26 Windows port - RELEASE_1.1 55: asks K$GROUP.MEMBER instead of
+*           running PowerShell through os.execute.  A pre-authenticated API
+*           session cannot start a child process at all (0xC0000142, measured
+*           b190), so every caller in such a session got @false and the
+*           account gate read it as "not granted".  Same live SAM question, no
+*           child, and "could not tell" is now distinct from "not a member".
+*           The description's own "COST TO KNOW ABOUT" paragraph predicted
+*           this change; it is done, in C, as win32group.c.
 * 15 Aug 26 Windows port - a group given as a SID is asked for with -SID.
 *           Get-LocalGroupMember -Group refuses one, so "is this user an
 *           administrator?" used to answer false for everybody.
@@ -44,22 +52,30 @@
 *    registered for SD use".  Nothing about it looked like a missing file.
 *    See PROJECT_STATUS.md section 6.
 *
-*    Get-LocalGroupMember is asked instead, and it distinguishes the three
-*    answers the caller needs, which parsing "net localgroup" output does not
-*    do without depending on the language Windows is installed in:
+*    K$GROUP.MEMBER is asked instead - a live NetLocalGroupGetMembers lookup
+*    in C (gplsrc/win32group.c) - and it distinguishes the three answers the
+*    caller needs, which parsing "net localgroup" output does not do without
+*    depending on the language Windows is installed in:
 *
-*       exit 0   a member          -> @true,  status 0
-*       exit 1   not a member      -> @false, status 0
-*       exit 2   no such group     -> @false, status 1
+*       1    a member                -> @true,  status 0
+*       0    not a member            -> @false, status 0
+*      -1    COULD NOT TELL          -> @false, status 1
 *
 *    Membership is compared on the last backslash-delimited component, so
-*    MACHINE\don and don both match don.
+*    MACHINE\don and don both match don.  A group may be named as a SID, which
+*    win32group.c resolves before the lookup.
 *
-*    COST TO KNOW ABOUT: this starts PowerShell, which is slow enough to
-*    notice on a path that runs at every login.  The fast answer is
-*    getgrnam() behind a KERNEL key - it is already known to resolve Windows
-*    local groups correctly (PROJECT_STATUS.md section 4) - but that is new C
-*    code and this is not.
+*    WHAT REPLACED THE POWERSHELL, AND WHY.  This ran Get-LocalGroupMember
+*    through os.execute until 17 Sep 2026.  The paragraph that stood here
+*    called that a cost worth knowing about - "slow enough to notice on a path
+*    that runs at every login" - and said the fast answer was a KERNEL key but
+*    "that is new C code and this is not".  RELEASE_1.1 55 forced the issue:
+*    an API session spawned AS the user cannot start ANY child process, so the
+*    PowerShell answer was not slow there, it was unobtainable.  The C is now
+*    written.  getgrnam() was NOT the route taken - in_group() answers only
+*    about the CALLING process's own groups and cannot be asked about another
+*    user - so the key does a live lookup by name, which also keeps the
+*    revocation semantics apisrvr's sdapi test depends on.
 *
 * END-DESCRIPTION
 *
@@ -68,6 +84,12 @@
 $internal
 function is_grp_member(user,group)
 $catalog !is_grp_member
+
+* 17 Sep 26 Windows port - this file had no $include at all; K$GROUP.MEMBER
+*   needs one.  The header is $defines only.  (It arrived as a temporary
+*   diagnostic aid and is now load-bearing - do not remove it with the
+*   diagnostics.)
+$include int$keys.h
 
 deffun valid_os_name(name) calling '!valid_os_name'
 
@@ -89,46 +111,58 @@ if upcase(user) = upcase(group) then return @true
 *   below, so they are validated first.  !valid_os_name permits letters,
 *   digits, dot, underscore and hyphen only, which is what makes the quoting
 *   below sufficient rather than merely tidy.
+* 17 Sep 26 Windows port - ***THE SHELL COMMAND IS GONE AND THIS CHECK STAYS,
+*   ON PURPOSE.***  There is no quoting left to protect, so the reason above no
+*   longer applies - but the check is still what refuses a malformed name
+*   cheaply and with status 1, and it is what keeps the @fm-joined argument to
+*   K$GROUP.MEMBER free of anything that could be read as a separator.  Kept
+*   with its reason corrected rather than deleted with its reason.
 if not(valid_os_name(user)) or not(valid_os_name(group)) then
    set.status 1
    return user_found
 end
 
-* 14 Aug 26 Windows port - SH1 now names PowerShell, so the command IS the
-*   script.  There is no bash layer to quote against any more; what is written
-*   here is what PowerShell reads.  Both names have been through
-*   !valid_os_name, so neither can carry a quote.  Output is discarded: this
-*   runs at login and PowerShell's error text is not the user's business.
-* 15 Aug 26 Windows port - A SID NAMES A GROUP TOO, AND -Group WILL NOT TAKE
-*   ONE.  Measured 15 Aug 2026: Get-LocalGroupMember -Group "S-1-5-32-544"
-*   answers "Group S-1-5-32-544 was not found", while -SID "S-1-5-32-544"
-*   returns its members.  Without this, asking whether somebody is a Windows
-*   administrator - which HAS to be asked by SID, because the name is
-*   translated on a localised Windows - took the "no such group" path and
-*   therefore answered FALSE, silently, for every administrator alive.
-*   !os_group already accepts either; this makes the pair consistent.
-   if group[1,2] = 'S-' or group[1,2] = 's-' then
-      sel = '-SID "'
-   end else
-      sel = '-Group "'
-   end
-
-   ps = 'try { $ms = Get-LocalGroupMember ' : sel : group
-   ps := '" -ErrorAction Stop } catch { exit 2 }; '
-   ps := 'foreach ($m in $ms) { if ((($m.Name -split "\\")[-1]) -ieq "'
-   ps := user : '") { exit 0 } }; exit 1'
-
-   os.execute ps
-
-   stat = os.error()
+* 15 Aug 26 Windows port - A SID NAMES A GROUP TOO, and it must keep working:
+*   asking whether somebody is a Windows administrator HAS to be asked by SID,
+*   because the name is translated on a localised Windows.  When this ran
+*   PowerShell that meant -SID rather than -Group (measured 15 Aug 2026:
+*   -Group "S-1-5-32-544" answered "not found", so the check silently answered
+*   FALSE for every administrator alive).  win32group.c now resolves the SID
+*   itself, so the requirement survives the mechanism that carried it.
+* 17 Sep 26 Windows port - RELEASE_1.1 55.  ***NO CHILD PROCESS.***  This ran
+*   PowerShell's Get-LocalGroupMember through os.execute, and a
+*   PRE-AUTHENTICATED API session - one spawned AS the user by K$HANDOFF -
+*   CANNOT START POWERSHELL AT ALL.  Measured on b190: CreateProcess succeeds
+*   and the child dies in DLL initialisation with 0xC0000142, because the
+*   session is on a non-interactive S4U token pointed at winsta0\default and
+*   user32 cannot attach; sd.exe itself survives only because a POSIX console
+*   program never loads user32.  The front, still LocalSystem, answered the
+*   same question in the same run - so it was never the data.
+*
+*   K$GROUP.MEMBER IS THE SAME QUESTION, LIVE, IN C (win32group.c): a
+*   NetLocalGroupGetMembers lookup by NAME.  Not K$IN.GROUP, whose in_group()
+*   reads the CALLING process's own groups and cannot be asked about another
+*   user.  Keeping a LIVE query rather than a token test also keeps the
+*   semantics apisrvr's sdapi test relies on - a grant removed in Windows
+*   takes effect on the next connection, with no sign-out.
+*
+*   ***THREE ANSWERS, AND THE THIRD IS WHY THIS WAS SILENT FOR SEVEN RUNS.***
+*   -1 is "could not tell" - a lookup that failed, or a group that does not
+*   exist - and it is NOT the same as 0.  It still returns @false, because
+*   failing closed is right for an access check, but it sets STATUS 1 so a
+*   caller can tell the two apart, and the reason is on the audit trail
+*   (op_kernel.c writes it).  The old code could not make that distinction:
+*   a shell that never ran and a real "no" both arrived as @false.
+   grp.answer = kernel(K$GROUP.MEMBER, user : @fm : group)
 
    begin case
-      case stat = 0
+      case grp.answer = 1
          user_found = @true
-      case stat = 1
+      case grp.answer = 0
          user_found = @false
       case 1
-         * no such group, or PowerShell could not be run at all
+         * Could not tell.  Fail closed, and say so in status().
+         user_found = @false
          set.status 1
    end case
 

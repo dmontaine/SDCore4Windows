@@ -183,6 +183,16 @@
 *   <1>=1 with <2> empty is a session that cannot name itself - REFUSE it, do
 *   not carry on unnamed.  Read-only, so not $internal-only.
       $define K$API.PREAUTH      67      ;* <1> pre-authenticated? <2> user name
+* 17 Sep 26 Windows port - RELEASE_1.1 55.  IS A NAMED USER IN A NAMED LOCAL
+*   GROUP?  A live SAM query with NO CHILD PROCESS, which is what a
+*   pre-authenticated session needs: one spawned AS the user by 66 cannot start
+*   PowerShell at all (measured b190 - the child dies in DLL init, 0xC0000142,
+*   because a non-interactive S4U token cannot attach to winsta0\default).
+*   !is_grp_member uses this instead of os.execute.
+*   ARGUMENT "user" : @fm : "group".  THREE ANSWERS: 1 member, 0 not a member,
+*   -1 COULD NOT TELL - and a caller that reads -1 as 0 restores the defect
+*   this replaced, where a failed lookup read as "not granted".
+      $define K$GROUP.MEMBER     68      ;* 1 member, 0 not, -1 could not tell
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

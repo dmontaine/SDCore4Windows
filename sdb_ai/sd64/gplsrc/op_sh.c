@@ -593,6 +593,21 @@ Private void sh_execute(char *command) {
     }
 
     execv(argv[0], argv);
+
+    /* 17 Sep 26 Windows port - RELEASE_1.1 55.  execv() RETURNS ONLY ON
+       FAILURE, and until now the child simply FELL THROUGH into the parent's
+       code below - a forked child running the parent's cleanup, closing the
+       parent's pipes and reporting to the parent's caller.  Found while
+       chasing something else; it is a defect in its own right.
+
+       127 IS THE VALUE ON PURPOSE: it is the convention every caller of
+       os.error() already reads as "could not run the command", and
+       gpl.bp/is_grp_member's old three-way test was written against it.
+       No log line from here - this is a forked Cygwin child about to exec and
+       audit_message() takes ERRLOG_SEM and writes a file, so a child that
+       deadlocked on it would hang the session.  The reason belongs to the
+       caller, which still has errno's effect visible in the status.        */
+    _exit(127);
   } else if (cpid == -1) /* Error */
   {
     /* Modified by Composer AI - 2026/06/10.

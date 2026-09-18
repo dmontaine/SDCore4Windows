@@ -4,6 +4,39 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+17 Sep 26  AN API SESSION NOW RUNS AS THE USER WHO LOGGED IN.
+
+           When you log in over the API, SD now starts your session as your
+           own Windows user.  Until now the session ran as the service
+           account, which on Windows is LocalSystem - the most privileged
+           account on the machine - and only pretended to be you for some
+           checks.  Files your program created came out owned by you, but the
+           session could still reach anything LocalSystem could.
+
+           WHAT YOU GET.  The session can read and write exactly what your
+           Windows user may, and nothing more.  A file your user has no
+           permission on is now refused, and the audit trail records the
+           session under your name.
+
+           ***WHAT MIGHT STOP WORKING, AND IT IS THE POINT RATHER THAN A
+           FAULT.***  An API program that used to read or write a file your
+           Windows user has no access to WILL NOW BE REFUSED.  That worked
+           before only because the session was effectively the system
+           account.  If something that used to work now says it cannot open a
+           file, check the file's Windows permissions for the account you log
+           in as - that is the answer, not a bug.
+
+           OS COMMANDS FROM AN API SESSION DO NOT WORK IN THIS RELEASE.
+           OS.EXECUTE and SH from a session that logged in over the API
+           cannot start a program: Windows will not let a process started this
+           way launch anything that needs a desktop, which includes
+           PowerShell.  Console SD sessions and ssh are unaffected.  If your
+           API code shells out, keep that work on the console for now.
+
+           LOGGING IN IS ALSO A LITTLE FASTER.  The check for which accounts
+           you may enter used to start PowerShell every time; it now asks
+           Windows directly.
+
 17 Sep 26  PRINTING GOES TO A WINDOWS PRINTER.
 
            SETPTR mode 1 - the spooled print unit - now sends the job to a
