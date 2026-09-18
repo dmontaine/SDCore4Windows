@@ -1041,8 +1041,18 @@ tier.set:
 *   moved, and tier.os.write still grants the operating-system access that the
 *   27 Aug ruling makes a rule for this tier - os.execute is NOT a remote door
 *   and 58 does not touch it.
+*
+* 18 Sep 26 Windows port, later - ***THE API COMES BACK, ssh DOES NOT.***
+*   RELEASE_1.1_FIXES.md 62.  The owner narrowed 58 the same day: "the
+*   administrator should not be able to reach the machine through ssh or api,
+*   but should be able to use the api locally", because an administrative
+*   Windows GUI app has to reach the database.  So promotion now WITHDRAWS ssh
+*   and GRANTS the API, and LOGIN's peer test is what keeps the API local.
+*   Both lines are stated rather than one left to inertia: an account promoted
+*   from a tier that had neither must GAIN the API, and one promoted from a
+*   tier that had both must LOSE ssh.
       want.ssh = @false
-      want.api = @false
+      want.api = @true
       gosub route.apply
       if route.failed then
          @system.return.code = -ER$FAILED

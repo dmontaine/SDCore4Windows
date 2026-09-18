@@ -224,16 +224,37 @@ $RETIRED = @(
     # elsewhere (10076/10077/10078 describe the OTHER tiers, whose routes did
     # not change).  Registering the bare phrase would have gone red on four
     # messages that are right.
+    # ***RE-AIMED THE SAME DAY, AND THE MECHANISM IS WORTH SEEING.***  58's own
+    # replacement string became the retired one twelve hours later, when the
+    # owner narrowed the ruling (RELEASE_1.1 62: no ssh, but the API from this
+    # machine).  The 58 pair was "but only from this machine" -> "refused for an
+    # administrator, from every machine"; 10175 now says neither, so registering
+    # 58's replacement as retired is what stops the intermediate wording
+    # surviving in a second copy.  ***THIS IS THE ONE CASE WHERE A REGISTRATION
+    # MUST MOVE IN THE SAME COMMIT AS THE MESSAGE***: leave it and the lint goes
+    # red on its own replacement-present row, which is exactly what it did.
+    # ***AND THE FIRST ATTEMPT AT THIS PAIR WAS ITSELF THE TRAP***: I registered
+    # "refused for an administrator, from every machine" as retired, which is a
+    # SUBSTRING of its own replacement, so the lint would have found the retired
+    # phrase alive inside the new text and failed forever.  A retired string has
+    # to be a fragment the new wording does NOT contain.
     @{ Ref = 'R1.1-58'
-       Retired     = 'but only from this machine'
-       Replacement = 'refused for an administrator, from every machine' }
+       Retired     = 'ssh and the API are refused'
+       Replacement = 'ssh is refused for an administrator' }
     # 10083 was MODIFY.ACCOUNT's refusal to take the routes AWAY; the refusal
     # stands and its REASON inverted - it now refuses granting them.  gpl.bp is
     # not in this corpus, so MODIFYA's own comments quoting the old text cannot
     # trip this; they were corrected in the same commit for truthfulness.
     @{ Ref = 'R1.1-58b'
        Retired     = 'always has both ssh and the API'
-       Replacement = 'cannot be granted to one' }
+       Replacement = 'no ssh, and the API only from this machine' }
+    # 62's own intermediate.  10083 read "cannot be granted to one" for half a
+    # day, between 58 and 62, and that wording is false under 62 - the API IS
+    # granted, it is the ssh that is not.  Registered so the half-day version
+    # cannot survive in a copy somebody made from it.
+    @{ Ref = 'R1.1-58d'
+       Retired     = 'cannot be granted to one'
+       Replacement = 'no ssh, and the API only from this machine' }
     # 58c - THE WIZARD SAID IT TWICE, which is 121's shape and the reason this
     # phrase is registered rather than just corrected: sd.iss described who ssh
     # admits on the options page (2108) AND in the script's own result string
@@ -241,7 +262,14 @@ $RETIRED = @(
     # Ref 117's REPLACEMENT and would have gone red here if reworded.
     @{ Ref = 'R1.1-58c'
        Retired     = 'SD Core users and administrators'
-       Replacement = 'Administrators have no remote access at all' }
+       Replacement = 'Administrators cannot sign in over ssh at all' }
+    # 62 again: "no remote access at all" was 58's wording and is false once the
+    # API is allowed from this machine.  Three copies in sd.iss carried it for
+    # half a day, which is 58c's own lesson repeating - the wizard says this
+    # kind of thing more than once.
+    @{ Ref = 'R1.1-58e'
+       Retired     = 'have no remote access at all'
+       Replacement = 'can use the API only from this computer' }
 )
 
 # --------------------------------------------------------------------------

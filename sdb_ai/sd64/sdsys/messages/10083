@@ -1,1 +1,1 @@
-%1 is an administrator; ssh and the API cannot be granted to one
+%1 is an administrator: no ssh, and the API only from this machine

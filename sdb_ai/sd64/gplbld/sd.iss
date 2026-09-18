@@ -2109,8 +2109,10 @@ begin
        'straight into SD Core instead of a command prompt. That is the point of ' +
        'confining ssh to SD Core: an account SD Core creates cannot get a shell ' +
        'on this computer.' + #13#10#13#10 +
-       'Administrators have no remote access at all - not ssh and not the API. ' +
-       'SD Core is administered at the console, or through a remote desktop or ' +
+       'Administrators cannot sign in over ssh at all, and can use the API only ' +
+       'from this computer - which is how an administrative application reaches ' +
+       'the database. A sign-in from another machine is refused. SD Core itself ' +
+       'is administered at the console, or through a remote desktop or ' +
        'remote-control product installed as a service. Port forwarding is ' +
        'turned off for every ssh session, so an SD Core account cannot reach ' +
        'another service on this computer through it.' + #13#10#13#10 +
@@ -2427,7 +2429,7 @@ begin
       test-retired-wording-units.ps1 (Ref 117), so it is kept word for word;
       only the tail changed. }
     Result := 'ssh is now limited to members of "sdssh", and port forwarding is off. ' +
-              'Administrators have no remote access at all and are not in that group. ' +
+              'Administrators cannot sign in over ssh at all and are not in that group. ' +
               'Any existing sshd_config was kept as sshd_config.before-sd.';
   end
   else if Code = 2 then
@@ -4206,7 +4208,19 @@ begin
       created, so on a tree that already has sdssh it declines to seed and
       changes nobody's access.  Gating it would instead risk leaving the groups
       missing on a tree that lost them.  The ordering note above still holds -
-      the seeding step must precede the AllowGroups write whenever both run. }
+      the seeding step must precede the AllowGroups write whenever both run.
+
+      18 Sep 26 - AND "CHANGES NOBODY'S ACCESS" IS NO LONGER TRUE, ON PURPOSE.
+      RELEASE_1.1 62 and 63.  That script now also enforces the administrator
+      route rule - no ssh for an administrator, the API for one - and THAT half
+      deliberately changes access on an existing tree, because 58 and 62 bind
+      what the verbs grant from now on and migrate nothing, while sdssh and
+      sdapi are Windows local groups whose membership survives a cycle.
+      Measured on b197: the owner's own account held both routes on a tree the
+      new build had just installed.  The seeding half is unchanged and still
+      declines on a tree it did not create.  ***BEING UNGATED IS NOW LOAD-BEARING
+      RATHER THAN MERELY HARMLESS***: gate this step and the rule stops reaching
+      the accounts that predate it, which is the whole of 63. }
     if not TrueUpgrade then
     begin
       SshLimit := ApplyAllowGroups;
@@ -4949,7 +4963,7 @@ begin
            'have stopped before this point.' + #13#10#13#10 +
            'SD Core WILL NOW CONFIGURE IT, and this is not optional: ssh is limited to ' +
            'SD Core users, and every ssh session goes straight into ' +
-           'SD Core rather than a command prompt. Administrators have no remote access at all, ' +
+           'SD Core rather than a command prompt. Administrators cannot sign in over ssh at all, ' +
            'and port forwarding is turned off for every session. ' +
            'scp and sftp stop working for ' +
            'everyone on this computer as a result. Your existing sshd_config is ' +

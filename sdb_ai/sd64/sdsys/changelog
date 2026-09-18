@@ -4,34 +4,43 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
-18 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh OR THE API.
-           ADMINISTRATION IS AT THE CONSOLE.
+18 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh AT ALL, AND CAN
+           USE THE API ONLY FROM THIS COMPUTER.
 
-           An account created with the ADMINISTRATOR keyword now has no
-           remote access at all.  It is not put in the sdssh or sdapi
-           groups, the ssh server is told not to accept the administrators
-           group, and MODIFY.ACCOUNT refuses to grant either route to an
-           administrator.  Administer SD Core at the console, or through a
-           remote desktop or remote-control product installed as a service.
+           An account created with the ADMINISTRATOR keyword is no longer
+           put in the sdssh group, and the ssh server is told not to accept
+           the administrators group either - so an administrator's ssh
+           login is refused before it reaches SD Core, from any machine
+           including this one.
+
+           THE API STILL WORKS, FROM A PROGRAM RUNNING ON THIS COMPUTER.
+           That is how an administrative application reaches the database.
+           A sign-in from another machine is refused, as it has been since
+           W1.0-0.  MODIFY.ACCOUNT refuses to change either route for an
+           administrator: the ssh is off and the API is on, and neither is
+           a setting.
 
            ***WHAT MIGHT STOP WORKING.***  If you administered SD Core by
-           signing in over ssh, or ran an administrator's program against
-           the API - including from this same machine, which did work until
-           now - that will be refused.  ssh says the account is not allowed;
-           the API says "is not permitted to use the API".  Use an ordinary
-           SD Core account for remote work, or work at the console.
+           signing in over ssh - including to this machine - that is now
+           refused, and ssh says the account is not allowed rather than SD
+           Core saying it.  Use an ordinary SD Core account for remote
+           work, or administer at the console, or through a remote desktop
+           or remote-control product installed as a service.
 
-           WHY.  A sign-in that does not come from the console is not
-           filtered by Windows' own administrator prompt, so an
-           administrator who signs in remotely with a password holds full
-           administrator rights on the machine straight away.  Removing the
-           route removes that, and it cannot be turned back on by a keyword.
+           WHY ssh AND NOT THE API.  A sign-in that does not come from the
+           console is not filtered by Windows' own administrator prompt, so
+           an administrator who signs in from another machine with a
+           password holds full administrator rights straight away.  A
+           program running on this computer as an administrator could
+           already do that much, so allowing it changes nothing - which is
+           why the API stays and ssh does not.
 
            CREATE.ACCOUNT NOW REFUSES A CONTRADICTION INSTEAD OF IGNORING
-           IT.  "CREATE.ACCOUNT USER name ADMINISTRATOR BOTH" used to be
-           accepted; it now stops and says so, rather than creating an
-           account with less access than you asked for.  Leave the route
-           keyword off, or say NONE.
+           IT.  "CREATE.ACCOUNT USER name ADMINISTRATOR BOTH" and
+           "... ADMINISTRATOR SSH" ask for ssh, and "... ADMINISTRATOR
+           NONE" asks to give up the API; all three now stop and say so,
+           rather than creating an account whose access differs from what
+           you asked for.  Leave the route keyword off, or say API.
 
 18 Sep 26  PORT FORWARDING IS TURNED OFF FOR ssh SESSIONS.
 

@@ -1835,17 +1835,33 @@ more.args:
 *   refusal from a success.  So the verb refuses, before anything is created,
 *   and names the same rule MODIFY.ACCOUNT names (10083).
 *
-*   NONE IS STILL ACCEPTED, because it asks for what the tier already gives -
-*   access.given is set by NONE too, so the test is on the FLAGS rather than on
-*   access.given, which would refuse the one keyword that agrees with us.
-      if access.ssh or access.api then
+* 18 Sep 26 Windows port, later - ***THE OWNER NARROWED IT: NO ssh, BUT THE API
+*   FROM THIS MACHINE.***  RELEASE_1.1_FIXES.md 62.  His words: "the
+*   administrator should not be able to reach the machine through ssh or api,
+*   but should be able to use the api locally", and the reason is concrete -
+*   "administrative apps written as windows gui apps would not be able to reach
+*   the database otherwise".  So the forced state is ssh OFF, api ON, and
+*   ***WHAT CONFINES THE API TO THIS MACHINE IS LOGIN'S PEER TEST***
+*   (PRE_RELEASE 170), not the absence of the grant.
+*
+*   AND THAT IS SAFE ONLY BECAUSE 58's DisableForwarding SHIPPED WITH IT: the
+*   peer test reads accept()'s address, and an "ssh -L" forward makes a remote
+*   connection arrive from 127.0.0.1.  Three things hold it - the peer test, no
+*   forwarding, and no administrator ssh at all, so they cannot build the
+*   tunnel themselves.
+*
+*   THE REFUSAL NOW TESTS "DOES THE REQUEST DIFFER FROM THE RULE", which is why
+*   it is not simply "was a keyword given".  SSH and BOTH ask for ssh; NONE
+*   asks to give up the API.  All three are refused.  API asks for exactly what
+*   the tier gets, so it is accepted - a caller who says it out loud is right.
+      if access.given and (access.ssh or not(access.api)) then
          @system.return.code = -ER$FAILED
          stop sysmsg(10083, acc.uname)
-         * %1 is an administrator; ssh and the API cannot be granted to one
+         * %1 is an administrator: no ssh, and the API only from this machine
       end
       access.given = @true
       access.ssh = @false
-      access.api = @false
+      access.api = @true
 * 27 Aug 26 Windows port - AND THE OPERATING SYSTEM, WITHOUT ELEVATING.  Owner,
 *   27 Aug 2026.  It sits with ssh and the API because it is the third of the
 *   three he named, AND IT IS THE SAME KIND OF RULE: none of the three can be
