@@ -42,8 +42,15 @@
  *
  * The transport half deliberately repeats what OpenSocket() in sdclilib.c
  * does - dotted quad through inet_addr, anything else through
- * gethostbyname, then connect, then read the ACK - so that it fails where the
- * library fails, for the same reason.
+ * gethostbyname, connect, then the TLS 1.3 handshake, then read the ACK
+ * through TLS - so that it fails where the library fails, for the same
+ * reason.
+ *
+ * 17 Sep 26 - RELEASE_1.1 56.  The ACK moved INSIDE TLS when the server's
+ * relay began wrapping every session (RELEASE_1.1 41), so a plaintext recv()
+ * here read nothing and timed out - the exact signature of a dead server, on
+ * a server that was fine.  sd_tls.c is compiled straight into this tool
+ * (Makefile) because the DLL does not export the handshake symbols.
  */
 
 #include <stdio.h>
@@ -51,6 +58,7 @@
 #include <string.h>
 #include <winsock2.h>
 #include "qmclilib.h"
+#include "sd_tls.h"
 
 #define SD_ACK '\x06'
 
@@ -86,9 +94,10 @@ static int transport_probe(const char* host, int port) {
     struct hostent* hostdata;
     unsigned long ip;
     unsigned int n1, n2, n3, n4;
-    DWORD timeout = 5000;
     char ack;
     int n;
+    SD_TLS_CLIENT* tls;
+    char tls_err[256];
 
     if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0) {
         printf("  FAILED  WSAStartup\n");
@@ -136,37 +145,51 @@ static int transport_probe(const char* host, int port) {
     }
     printf("  ok      TCP connection established\n");
 
-    /* The server sends ACK once it is ready to talk.  Without the timeout a
-       server that accepts and then says nothing would hang here rather than
-       report anything. */
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout,
-               sizeof(timeout));
-    n = recv(sock, &ack, 1, 0);
+    /* TLS 1.3 first, exactly as OpenSocket() does: the server's relay takes
+       the socket and completes the handshake before SD says a word, and the
+       ACK below arrives inside it.  No certificate check - the SCRAM login
+       binds to this channel, which is what authenticates the server.  Its own
+       timeout means a server that accepts and then says nothing is reported
+       rather than hung on. */
+    tls = sd_tls_client_start(sock, SD_TLS_HANDSHAKE_MS + 5000, tls_err,
+                              sizeof(tls_err));
+    if (tls == NULL) {
+        printf("  FAILED  TLS handshake: %s\n", tls_err);
+        printf("\n  The port is open and accepted the socket, but the TLS\n"
+               "  handshake did not complete.  Either what is behind the port\n"
+               "  is not an SD server, or the server's relay closed the\n"
+               "  connection before the protocol started.  The server's own\n"
+               "  log will say which.\n");
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+
+    /* The server sends ACK once it is ready to talk, now through TLS. */
+    n = sd_tls_client_read(tls, &ack, 1);
     if (n == 0) {
         printf("  FAILED  server closed the connection without sending ACK\n");
-        printf("\n  The port is open but the service behind it did not talk.\n"
+        printf("\n  TLS succeeded but the service behind it did not talk.\n"
                "  That is the signature of a misconfigured sdclient entry -\n"
                "  wrong program path, wrong user, or the server refusing the\n"
                "  connection before the protocol starts.  The server's own\n"
                "  log will say which.\n");
-    } else if (n == SOCKET_ERROR) {
-        int err = WSAGetLastError();
-        if (err == WSAETIMEDOUT)
-            printf("  FAILED  no ACK within 5 seconds - connection accepted, "
-                   "server silent\n");
-        else
-            report_winsock("recv()", err);
+    } else if (n < 0) {
+        printf("  FAILED  TLS read failed while waiting for the ACK\n");
     } else if (ack != SD_ACK) {
         printf("  FAILED  first byte was 0x%02x, expected ACK (0x06)\n",
                (unsigned char)ack);
-        printf("\n  Something is listening, but it is not an SD server.\n");
+        printf("\n  Something is listening and speaks TLS, but it is not an\n"
+               "  SD server.\n");
     } else {
-        printf("  ok      server sent ACK - the transport is fine\n");
+        printf("  ok      server sent ACK through TLS - the transport is fine\n");
+        sd_tls_client_end(tls);
         closesocket(sock);
         WSACleanup();
         return 0;
     }
 
+    sd_tls_client_end(tls);
     closesocket(sock);
     WSACleanup();
     return 1;

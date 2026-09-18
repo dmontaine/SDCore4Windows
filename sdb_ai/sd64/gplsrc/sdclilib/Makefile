@@ -217,10 +217,17 @@ $(QMDLL2): $(QMSRCS) $(TLSSRC) $(HDRS) qmclilib.h $(QMDEF2)
 # a claim about the library mvDeveloper actually loads rather than about the
 # protocol in the abstract.  Built from this tree since 4 Sep 2026 - see the
 # note at SDCONNECT above for what its absence cost.
-$(SDCONNECT): tools/sd_connect.c qmclilib.h $(QMDLL)
+# 17 Sep 26 - RELEASE_1.1 56.  sd_tls.c is compiled straight in and OpenSSL
+# static-linked, the same way the DLL does it, because the ACK the transport
+# probe waits for now arrives inside TLS and the DLL does not export the
+# handshake symbols.  OPENSSL_STATIC ends in the libs sd_tls.c needs, so it
+# comes after the sources.
+$(SDCONNECT): tools/sd_connect.c $(TLSSRC) sd_tls.h qmclilib.h $(QMDLL)
 	$(call check_cc32)
 	PATH="$(CC32PATH)" $(CC32) -std=c11 -Wall -Wextra -Wpedantic \
-	  -o $@ tools/sd_connect.c -I. -L. -lqmclilib -lws2_32
+	  -Wno-unknown-pragmas $(LDFLAGS32) \
+	  -o $@ tools/sd_connect.c $(TLSSRC) -I. -L. -lqmclilib \
+	  $(OPENSSL_STATIC)
 
 check: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2)
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o smoke-test.exe \
