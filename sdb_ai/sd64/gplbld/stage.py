@@ -526,10 +526,22 @@ SDSYS_RETIRED = [
 # mean trusting DataTreeWasAbsent to answer a question about {app}, which is a
 # different directory with a different lifecycle.
 #
-# EMPTY IS THE CORRECT STATE TODAY, measured 25 Aug 2026: every .ps1 in
-# C:\Program Files\SD is still named in this file.  assert-current section B4
-# is what will say when that stops being true.
+# EMPTY WAS THE CORRECT STATE UNTIL 18 SEP 2026, and this is the first entry.
+# The note above said assert-current section B4 would say when it stopped being
+# true, and it did - of this entry, on the first run after adopt-account.ps1 was
+# deleted: "1 file(s) in C:\Program Files\SD are no longer shipped by stage.py or
+# sd.iss".  That is the mechanism working, not a nuisance: the file is in every
+# install made before today.
 PF_RETIRED = [
+    # 18 Sep 26 - RELEASE_1.1 64.  The install's own account step used to be this
+    # script, which gave the INSTALLING Windows administrator an SD account.  The
+    # decision allows one administrator, SDSYS, reached only by the Windows
+    # account of that name, so the file is gone from the tree and named here:
+    # Inno's [Files] copies and overwrites and never removes a file that is
+    # ABSENT from the new version, so without this an upgraded machine keeps
+    # adopt-account.ps1 in {app} forever.
+    ('adopt-account.ps1',
+     'RELEASE_1.1 64 deleted ADOPT with the tier teardown; install-sdsys.ps1 replaced it'),
 ]
 
 SDSYS_PRESERVE = [
@@ -1415,7 +1427,7 @@ def main():
                    # so assert-current watches it like the rest of these - do
                    # NOT add it to that script's $neverShipped list.
                    'micro-home.ps1',
-                   'adopt-account.ps1', 'install-service.ps1',
+                   'install-sdsys.ps1', 'install-service.ps1',
                    # 22 Aug 26 - the POST-INSTALL CHECK, offered as a
                    # checkbox on the installer's last page.  It ships, so
                    # assert-current watches it like the rest of these - do

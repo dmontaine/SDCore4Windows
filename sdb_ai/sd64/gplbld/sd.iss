@@ -960,9 +960,11 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; worse, rewrite a pending script before the elevated helper ran it.  This
 ; creates SDSYS\pstmp with a per-creator ACL; secure-psdir.ps1 has the detail.
 ;
-; ORDER: after the icacls, as above, AND BEFORE adopt-account.ps1, which runs
-; at ssPostInstall and is the install's own first caller of !ps_script.  [Run]
-; finishes before ssPostInstall, so being in this section is enough.
+; ORDER: after the icacls, as above, and before anything that can call
+; !ps_script.  The step this used to name - adopt-account.ps1, which ran at
+; ssPostInstall and was the install's own first caller - is deleted with the
+; tier teardown, RELEASE_1.1 64.  The position is kept because secure-psdir.ps1
+; fails closed and has to be in place before any caller exists.
 ;
 ; NOT A [Dirs] ENTRY, deliberately.  Creating anything under {#DataDir}\sdsys
 ; before [Files] runs risks the installer's own "a database is already here"
@@ -1110,9 +1112,10 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; "sd -start" had to be typed after every restart.
 ;
 ; BEFORE the account step in [Code], which is why it is here rather than at
-; ssPostInstall: adopt-account.ps1 starts SD itself if it has to, and having
-; the service already running means it does not have to - one less thing to
-; race, and that race cost an install earlier the same day.
+; ssPostInstall.  That step used to be adopt-account.ps1, which started SD
+; itself if it had to; it is install-sdsys.ps1 now, which never talks to SD at
+; all - it creates a Windows account.  The ordering is kept because the service
+; should be running before the wizard reports anything about SD.
 ;
 ; No Tasks: condition and no Check:.  A shipped .ps1 rather than inline sc.exe
 ; for the reason above the ssh entry - sc.exe binPath quoting inside an Inno
@@ -3169,22 +3172,21 @@ end;
    first place, and is a better outcome than an upgrade silently removing a file
    somebody may have noticed. *)
 
-function AdoptAccount: Integer;
+function MakeSdsysAccount: Integer;
 var
   Code: Integer;
   Ps: String;
 begin
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  { -AppDir IS PASSED, NOT LEFT TO THE SCRIPT.  Its default used to be
-    $PSScriptRoot, which comes out EMPTY in a param default when the script is
-    an advanced one with a mandatory parameter - so the step failed on a real
-    install with nothing readable.  Setup knows where it put the files; say so.
+  { -DataDir IS PASSED, NOT LEFT TO THE SCRIPT, for the reason the step this
+    replaces records: its default used to be $PSScriptRoot, which comes out
+    EMPTY in a param default when the script is an advanced one with a mandatory
+    parameter - so the step failed on a real install with nothing readable.
+    Setup knows where it put the data; say so.
     Do not start a line in this file with a square bracket, even in a comment:
     ISCC scans for section tags first and answers "Invalid section tag". }
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-                  ExpandConstant('{app}\adopt-account.ps1') + '" -User "' +
-                  ExpandConstant('{username}') + '" -AppDir "' +
-                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{app}\install-sdsys.ps1') + '" -DataDir "' +
                   ExpandConstant('{#DataDir}') + '"',
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
@@ -3194,13 +3196,23 @@ begin
   Result := Code;
 end;
 
-{ AND THE INSTALL ENDS IN AN SD SESSION, WHICH IS HOW THE PASSWORD IS TAKEN.
-  Owner's decision, 21 Aug 2026: the installing user's password is collected by
+{ 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
+  HISTORY IN FRONT OF LIVE CODE.  PasswordStepWanted is False and can never be
+  True again (see its assignment), so finish-install.ps1 is launched without
+  -WithPassword and no SD session is opened at the end of an install.  The
+  reason is that there is no adopted account to give a credential to: the one
+  account is SDSYS, and it authenticates with its WINDOWS password, which
+  install-sdsys.ps1 generates and prints.  Removing the dead half of
+  finish-install.ps1 is owed with this note.  The paragraphs below say what the
+  step WAS for, and are kept for the day somebody asks why. }
+
+{ AND THE INSTALL ENDED IN AN SD SESSION, WHICH IS HOW THE PASSWORD WAS TAKEN.
+  Owner's decision, 21 Aug 2026: the installing user's password was collected by
   leaving them in SD at the end of the install, not by an installer password
-  page.  ADOPT creates no Windows user and sets no password, so the account
-  AdoptAccount has just made has no credential, and LOGIN's require.credential
-  asks for one before the prompt appears.  This function only opens the door;
-  the asking is SD's.
+  page.  ADOPT created no Windows user and set no password, so the account it
+  had just made had no credential, and LOGIN's require.credential asked for one
+  before the prompt appeared.  This function only opened the door; the asking
+  was SD's.
 
   ELEVATED, AND THEREFORE HERE RATHER THAN AS A "postinstall" [Run] CHECKBOX,
   which is what the approved plan called for.  The gravestone in the [Run]
@@ -3208,8 +3220,9 @@ end;
   step; a postinstall checkbox fixes only the third:
 
     1. sd -internal needed a running server.  Answered - [Run] installs and
-       starts the service before this, and adopt-account.ps1 stops a server
-       only if it started that server itself.
+       starts the service before this, and the step that started SD itself when
+       it had to was adopt-account.ps1, deleted with the tier teardown
+       (RELEASE_1.1 64).  install-sdsys.ps1 needs no server at all.
     2. Inno logs a postinstall entry as "Run as: Original user", so it runs on
        the UNELEVATED token.  THIS ONE IS STILL FATAL AND IS THE WHOLE REASON
        FOR THE DIFFERENT SHAPE.  That token does not carry sdusers until the
@@ -4006,7 +4019,7 @@ var
     installer just declined to touch. }
   UpgMsg: String;
   RouteMsg: String;
-  AdoptCode: Integer;
+  SdsysCode: Integer;
   AccountMsg: String;
   CredMsg: String;
   DenyMsg: String;
@@ -4264,8 +4277,14 @@ begin
                     'marked [locked] alone apart from verbs, which are always ' +
                     'brought forward.' + #13#10#13#10;
 
-    { Same rule - an unattended install must still end with a usable account. }
-    AdoptCode := AdoptAccount;
+    { Same rule - an unattended install must still end with a usable account.
+      WHAT IT CALLS CHANGED ON 18 SEP 2026, RELEASE_1.1 64: this was
+      AdoptAccount, which gave the INSTALLING user an SD account.  The decision
+      allows one administrator, SDSYS, reached only by the Windows account of
+      that name - so the step creates that account instead, from
+      install-sdsys.ps1, and the code it returns means the same thing: 0 made,
+      2 already there, 1 or 3 could not. }
+    SdsysCode := MakeSdsysAccount;
 
     { AFTER adopt, so the register this reads is the finished one.  See the
       function: this is the step that undoes an uninstall having deleted
@@ -4281,7 +4300,7 @@ begin
       install rather than on the next one.  See SecureAccountDirs. }
     AcctAclMsg := SecureAccountDirs;
 
-    case AdoptCode of
+    case SdsysCode of
       0: begin
            { DO NOT START A LINE WITH #13, even in the middle of an expression.
              ISPP reads a leading "#" as a preprocessor directive and answers
@@ -4304,8 +4323,15 @@ begin
              expected", pointing at a line that looks like English.  Same class
              as the square bracket the AdoptAccount comment warns about, and it
              cost a compile here on 23 Aug 2026. }
-           AccountMsg := 'You also have an SD Core account of your own, named ' +
-                         Lowercase(ExpandConstant('{username}')) + '.' + #13#10#13#10;
+           { 18 Sep 26 - RELEASE_1.1 64.  THIS SENTENCE SAID THE DECISION'S
+             OPPOSITE.  It read: you also have an SD Core account of your own,
+             named don - which was true while ADOPT minted one, and is what the
+             decision forbids.  What the install leaves behind is not an account
+             for the reader but the key to the only account there is: SDSYS,
+             bound to the Windows account of that name. }
+           AccountMsg := 'SD Core has ONE administrator account, SDSYS, and it is a Windows ' +
+                         'account: SD Core admits nobody as an administrator except an ELEVATED ' +
+                         'session of it.' + #13#10#13#10;
            { REPLACED "Type sd to use it; there is no password to set, because
              Windows has already authenticated you."  The second half stopped
              being true on 21 Aug 2026 and was the wrong half of the truth even
@@ -4325,8 +4351,8 @@ begin
              by itself, after the installer has apparently finished, has every
              reason to think something has gone wrong. }
            AccountMsg := AccountMsg +
-                         'ONE WINDOW OPENS AFTER THIS INSTALLER CLOSES, and it does two ' +
-                         'things in turn.' + #13#10#13#10;
+                         'ONE WINDOW OPENS AFTER THIS INSTALLER CLOSES, and it checks the ' +
+                         'installation.' + #13#10#13#10;
 
            { 25 Aug 26 - WHAT THE PASSWORD IS FOR DEPENDS ON THE INSTALL, and
              the full-install sentence is false on a stand-alone system: there
@@ -4350,30 +4376,24 @@ begin
              reach this account from another machine" on a machine still running
              the API.  A false claim of isolation is worse than the inert
              tickbox the ruling set out to remove. }
-           if (not SshServerPresentAfterwards) and (not ApiListenerAfterwards) then
-             AccountMsg := AccountMsg +
-                         '    1. SD Core opens so you can give that account a password. A ' +
-                         'PASSWORD IS REQUIRED even here: SD Core asks for one every time you ' +
-                         'open the account and will not let a session go on without it. ' +
-                         'Nothing can reach this account from another machine - no ssh server ' +
-                         'was installed and the SD Core API is switched off - but that decides ' +
-                         'WHO could use it, not whether it needs a password. It closes by ' +
-                         'itself once you have set one.' + #13#10#13#10
-           else
-             AccountMsg := AccountMsg +
-                         '    1. SD Core opens so you can give that account a password. A ' +
-                         'PASSWORD IS REQUIRED: SD Core asks for one every time you open the ' +
-                         'account and will not let a session go on without it. It is also what ' +
-                         'reaches the account from ANOTHER machine, over ssh or the API. It ' +
-                         'closes by itself once you have set it.' + #13#10#13#10;
+           { 18 Sep 26 - THE STEP IT NUMBERED IS GONE, RELEASE_1.1 64, and so is
+             the ssh/api split that decided how to word it.  Both arms described
+             a window that opened SD so the reader could set a password on the
+             account the install had just given them.  No account is given any
+             more, and SDSYS authenticates with its WINDOWS password - which
+             install-sdsys.ps1 generated and printed at the END of
+             install-sdsys.log.  What is left to say is where to read it. }
+           AccountMsg := AccountMsg +
+                         '    1. Read the password for SDSYS at the end of ' +
+                         ExpandConstant('{#DataDir}') + '\install-sdsys.log, change it if you ' +
+                         'want to, then sign in as SDSYS and start SD Core from an ELEVATED ' +
+                         'prompt. That is the only way in, by design, and it is the account ' +
+                         'that can create the others.' + #13#10#13#10;
 
            AccountMsg := AccountMsg +
                          '    2. The same window then checks the installation and tells ' +
                          'you what it found. It only reads; it changes nothing, and it ' +
                          'asks before it starts.' + #13#10#13#10 +
-                         'The password step can run now, before you sign out, because it ' +
-                         'borrows the installer''s rights. If you skip it, SD Core asks again ' +
-                         'the first time you open the account.' + #13#10#13#10 +
       { 23 Aug 26 - WHAT SKIPPING ACTUALLY COSTS, owner's instruction the same
         day.  The paragraph above named ssh and the API and stopped there, which
         reads as "some features are unavailable".  It is stronger than that.
@@ -4393,15 +4413,16 @@ begin
         REMOTE DESKTOP IS NAMED because it is the case people get wrong: it
         feels like connecting from another computer and is not.  5.6.2 puts it
         with the physical console, on the administrator's side of the line. }
-                         'A PASSWORD IS REQUIRED. Until this account has one it cannot be used ' +
-                         'at all - not here at the keyboard, not over ssh, and not through the ' +
-                         'SD Core API. Skipping the step does not leave you a keyboard-only ' +
-                         'account; SD Core asks again the first time you open it, and will not ' +
-                         'let a session go on without one.' + #13#10#13#10;
+                         'AND SDSYS HAS NO SD PASSWORD TO SET: it authenticates by its Windows ' +
+                         'identity, checked once, at logon. What that Windows password buys is ' +
+                         'the ELEVATION it is admitted by, so change it from the SDSYS account ' +
+                         'whenever you like - SD Core never asks you for it.' + #13#10#13#10;
          end;
       { Lower case for the reason given at code 0 above. }
-      2: AccountMsg := 'Your SD Core account, ' + Lowercase(ExpandConstant('{username}')) +
-                       ', was already there and has been left alone.' + #13#10#13#10;
+      { 18 Sep 26 - CODE 2 IS ABOUT SDSYS NOW, RELEASE_1.1 64: the install found
+        the Windows account already there and left it alone. }
+      2: AccountMsg := 'The SDSYS account was already there, so it was left alone - ' +
+                       'including its password, which is the one you set before.' + #13#10#13#10;
     else
       { Named rather than buried: without an account the person who just
         installed SD cannot use it at all, and the recovery is one command.
@@ -4413,27 +4434,31 @@ begin
         recorded in PROJECT_STATUS.md 7 step 1f, that K$INTERNAL is not a wall
         but stays undocumented, not in the changelog and not in this dialog.
 
-        adopt-account.ps1 ships beside sd.exe and is what the installer itself
-        ran, so naming it gives the user the SAME code path rather than a
-        second, hand-driven one - and it keeps the verb out of sight. }
-      { 29 Aug 26 - WHICH REFUSAL YOU GET DEPENDS ON HOW FAR ADOPT GOT, so it is
-        no longer named.  This said "your account is not in the register", which
-        is one of two messages now: PRE_RELEASE_FIXES 56 clause 2 removed
-        LOGIN's administrator exemption from the sdusers gate, so a failed adopt
-        that never reached the group is refused earlier, with "this user is not
-        registered for SD use" instead.  THE RECOVERY IS UNCHANGED AND STILL
-        WORKS - adopt-account.ps1 goes in through "sd -internal", which is
-        exempt from that gate by design and is the reason this branch is a
-        setback rather than a lockout. }
-      AccountMsg := 'SD Core could NOT give you an account automatically (code ' +
-                    IntToStr(AdoptCode) + '). Until one exists, "sd" will refuse you: ' +
-                    'being a Windows administrator is not by itself an SD Core account, and ' +
-                    'there is no exception for one. Put it right from an ELEVATED ' +
-                    'PowerShell prompt:' + #13#10#13#10 +
-                    '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\adopt-account.ps1" -User ' +
-                    ExpandConstant('{username}') + #13#10#13#10 +
+        { 18 Sep 26 - AND THE RECOVERY IS A DIFFERENT SCRIPT, RELEASE_1.1 64.
+          This block said that adopt-account.ps1 ships beside sd.exe and is what
+          the installer itself ran, so naming it gave the user the SAME code
+          path - and 29 Aug 26 added that it goes in through "sd -internal",
+          which is exempt from the sdusers gate so the branch was a setback
+          rather than a lockout.  Both halves describe a script that no longer
+          exists.  What the installer runs now is install-sdsys.ps1, which
+          creates a WINDOWS account and never speaks to SD at all, so the
+          recovery named in the message below needs no server and no verb. }
+      { 18 Sep 26 - REWRITTEN WITH THE STEP IT REPORTS, RELEASE_1.1 64.  It said
+        "SD Core could NOT give you an account automatically", named
+        adopt-account.ps1 and told the reader to run it by hand - a script that
+        no longer exists.  TWO FACTS REPLACED THE FIRST HALF: there is no
+        account to be given any more (an administrator signs in as the Windows
+        SDSYS account instead), and the account the install DOES need is the
+        Windows one, which is the only thing this branch can have failed to
+        make.  The recovery is the same script the step itself runs. }
+      AccountMsg := 'SD Core could NOT create its administrator account (code ' +
+                    IntToStr(SdsysCode) + '). Until it exists there is no way into SD Core ' +
+                    'at all: SDSYS is the only administrator, and it is reached from an ' +
+                    'ELEVATED session of the Windows account of that name. Put it right from ' +
+                    'an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+                    '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\install-sdsys.ps1"' + #13#10#13#10 +
                     'What went wrong is recorded in ' + ExpandConstant('{#DataDir}') +
-                    '\adopt-account.log' + #13#10#13#10;
+                    '\install-sdsys.log' + #13#10#13#10;
     end;
 
     { /SUPPRESSMSGBOXES DOES NOT SUPPRESS THESE.  Measured 14 Aug 2026: a
@@ -4822,7 +4847,16 @@ begin
       whether the install got this far at all, and whether an account was just
       made and therefore has no password yet. }
     InstallReachedPostInstall := True;
-    PasswordStepWanted := (AdoptCode = 0);
+    { 18 Sep 26 - THERE IS NO PASSWORD STEP ANY MORE, RELEASE_1.1 64, and the
+      variable is kept rather than unpicked so the two hooks that read it need
+      no surgery in the same change.  It was '(AdoptCode = 0)': the install gave
+      the installing user an account with no credential, and finish-install.ps1
+      opened SD at the end for them to set one.  Nobody is adopted now, and the
+      one account - SDSYS - authenticates with its WINDOWS password, which
+      install-sdsys.ps1 generates and prints into its own log.  So there is
+      nothing for SD to ask for, and no session is opened.  Removing the dead
+      -WithPassword half of finish-install.ps1 is owed with it. }
+    PasswordStepWanted := False;
   end;
 end;
 
@@ -4844,7 +4878,7 @@ begin
     FinishedLabel IS THE STOCK LABEL and setting its Caption is the supported
     way to change it; there is no need for a custom page.  Only the ACCOUNT
     half varies, so the text is fixed rather than built. }
-  if (CurPageID = wpFinished) and InstallReachedPostInstall and PasswordStepWanted then
+  if (CurPageID = wpFinished) and InstallReachedPostInstall then
   begin
     { THE LABEL HAS TO BE GROWN BEFORE IT IS FILLED, and the first version of
       this did not - the owner's screenshot showed the text cut off mid-sentence

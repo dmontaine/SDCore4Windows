@@ -1600,10 +1600,10 @@ $shipsAs = { param($n) $shipEvidence -match ("[""'\\/]" + [regex]::Escape($n)) }
 # strip, and a failure is fatal rather than a note: it means the evidence this
 # whole section reasons from has been eaten.
 #
-# BOTH CANARIES ARE REAL SHIP LINES, one per file and per syntax - adopt-account
-# is an sd.iss [Files] Source entry, deny-logon is a stage.py tuple member - so
-# a strip that breaks either syntax is caught by the one that uses it.
-$shipCanaries = @('adopt-account.ps1', 'deny-logon.ps1')
+# BOTH CANARIES ARE REAL SHIP LINES, one per file and per syntax - install-sdsys
+# is named in an sd.iss line and in stage.py, deny-logon is a stage.py tuple
+# member - so a strip that breaks either syntax is caught by the one that uses it.
+$shipCanaries = @('install-sdsys.ps1', 'deny-logon.ps1')
 $canaryMissing = @($shipCanaries | Where-Object { -not (& $shipsAs $_) })
 if ($shipEvidence.Trim().Length -eq 0 -or $canaryMissing.Count -gt 0) {
     Write-Host ''

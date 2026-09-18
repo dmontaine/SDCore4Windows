@@ -3,8 +3,12 @@
 #   powershell -ExecutionPolicy Bypass -File secure-psdir.ps1 -Path "C:\ProgramData\SD\sdsys\pstmp"
 #
 # PROJECT_STATUS.md 7 step 4.  Run by the installer, AFTER the icacls that
-# secures the data tree and BEFORE adopt-account.ps1, which reaches SDSYS and
-# is the install's own first caller of !ps_script.
+# secures the data tree and BEFORE anything that can call !ps_script.  The step
+# it used to name - adopt-account.ps1, which reached SDSYS and was the install's
+# own first caller - is deleted with the tier teardown, RELEASE_1.1 64, so the
+# position is kept rather than the reason: !ps_script fails closed without this
+# directory, and it is the protection that has to be in place before any caller
+# exists, not one particular caller's.
 #
 # WHAT THIS CLOSES, measured 16 Aug 2026.  !ps_script used to write each script
 # into the CURRENT ACCOUNT DIRECTORY, which for an SDSYS session is

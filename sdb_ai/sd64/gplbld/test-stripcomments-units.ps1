@@ -108,8 +108,8 @@ Section '2. THE OVER-STRIP CONTROL: real ship lines must survive'
 $stageP = Join-Path $PSScriptRoot 'stage.py'
 if (Test-Path -LiteralPath $issPath) {
     $s = Get-StrippedText -Path $issPath -Kind 'iss'
-    $p = "[""'\\/]" + [regex]::Escape('adopt-account.ps1')
-    Check 'sd.iss still ships adopt-account.ps1 after stripping' `
+    $p = "[""'\\/]" + [regex]::Escape('install-sdsys.ps1')
+    Check 'sd.iss still ships install-sdsys.ps1 after stripping' `
           ($s -match $p) 'an sd.iss [Files] Source line was stripped away'
 }
 if (Test-Path -LiteralPath $stageP) {
