@@ -47,10 +47,19 @@ $ErrorActionPreference = 'Stop'
 
 # The prefixes the account-creating verifiers use.  Keep in step with them:
 # verify-createaccount.ps1 (sdacct), verify-sshonly.ps1 (sdsshprobe),
-# verify-tiers.ps1 (sdtiert), verify-tierapi.ps1 (sdtapi),
 # verify-accountacl.ps1 (sdacl), verify-routes.ps1 (sdrt),
 # verify-apiadmin.ps1 (sdapia), verify-catgate.ps1 (sdcatg),
 # verify-delaccount.ps1 (sddel).
+#
+# 18 Sep 26 - verify-tiers.ps1 (sdtiert), verify-tierapi.ps1 (sdtapi) AND
+# verify-tierchange.ps1 (sdtc) ARE NOT HERE ANY MORE.  RELEASE_1.1 64 deleted
+# all three with the tiers, so no runner composes those families.  THEY ARE NOT
+# STRUCK FROM $stems BELOW, AND THAT IS DELIBERATE: this sweep is what removes
+# the litter their runs already left, and MEASURED on this machine the same day,
+# sdtierb1961 and sdtierb1962 are still there as Windows accounts - and as
+# profiles - from the elevated run that b196 voided.  A stem struck when its
+# test is retired leaves exactly that litter unsweepable, which is the confusion
+# this file was written to end.
 # A trailing digit or the ".<COMPUTERNAME>" suffix Windows adds is allowed.
 #
 # 21 Aug 26 - A TRAILING LETTER IS ALLOWED TOO.  A prefix is a STEM here, not
@@ -217,6 +226,12 @@ $ErrorActionPreference = 'Stop'
 #   CREATE.ACCOUNT PROGRAMMER SSH and removed by DELETE.ACCOUNT, the same shape
 #   as sdpw directly above.  The fixture below is the name the first supported
 #   run (-Run b141) composes; it had not yet been produced when written.
+# 18 Sep 26 - 'sdtiert', 'sdtapi' AND 'sdtc' NAME RETIRED FAMILIES, and this is
+# the one place in this file where a stem with no live verifier is the right
+# entry: test-stemcoverage-units.ps1 reports them as "Stems with no family in
+# either runner (retired tests, NOT a failure)", so the sweep still finds the
+# litter while nothing is falsely claiming coverage.  See the note at the head
+# of this file for the measurement behind it.
 $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',

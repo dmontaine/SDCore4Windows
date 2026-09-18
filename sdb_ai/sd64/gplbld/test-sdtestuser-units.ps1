@@ -11,8 +11,10 @@
 #
 # BOTH TRAPS BELOW WERE REAL, AND BOTH WERE WRITTEN WRONG FIRST TIME:
 #
-#   * "CREATE.ACCOUNT USER x STANDARD SSH" - STANDARD is NOT a keyword, it is
-#     the default (CREATEA:272).  Naming it passes an unrecognised token.
+#   * "CREATE.ACCOUNT USER x STANDARD SSH" - STANDARD was never a keyword, it
+#     was the default (CREATEA:272).  Under RELEASE_1.1 64 all three tier words
+#     are REFUSED, and the rule is now the stronger one: the line names a route
+#     and nothing else.
 #   * "DELETE.ACCOUNT x NO.QUERY" - there is no NO.QUERY on that verb.  The
 #     confirmation is "input yn" looping "until yn = 'Y' or 'N'" (DELACC:249),
 #     so a blank line does not escape it, it SPINS.
@@ -64,43 +66,48 @@ foreach ($l in $mk) {
 # lines where three were meant and the password prompt then eats the next
 # command.
 Note 'create: line count' 3 $mk.Count
-Note 'create: the command' 'CREATE.ACCOUNT USER sdtub60 PROGRAMMER SSH' $mk[0]
+Note 'create: the command' 'CREATE.ACCOUNT USER sdtub60 SSH' $mk[0]
 Note 'create: password supplied twice' $true (($mk[1] -ceq 'PwPwPw-Aa9') -and ($mk[2] -ceq 'PwPwPw-Aa9'))
-NoteTrue 'create: does NOT name the STANDARD tier (it is the default, not a keyword)' `
-         ($mk[0] -notmatch '\bSTANDARD\b')
+# 18 Sep 26 - RELEASE_1.1 64.  ONE ROW REPLACES THREE: standard, programmer and
+# administrator are all gone from CREATE.ACCOUNT, and the middle one is the
+# change - the line named PROGRAMMER until today, which the verb now refuses
+# with sysmsg 2018 and stops, leaving no account behind for the unelevated half
+# to run as.  A row per word would defend the same claim three times.
+NoteTrue 'create: names NO tier keyword - 64 refuses all three as syntax' `
+         ($mk[0] -notmatch '\b(STANDARD|PROGRAMMER|ADMINISTRATOR)\b')
 NoteTrue 'create: names the SSH route' ($mk[0] -match '\bSSH\b')
 
 # ***THIS ROW SAID "does NOT grant ADMINISTRATOR or PROGRAMMER" UNTIL b60, AND
 # THE ROW WAS THE BUG.***  It encoded the STANDARD choice as a rule, so the test
 # would have defended the mistake against a correction.  b60 measured it: SD
-# answered "BASIC is not in your VOC" and "RUN is not in your VOC", and
-# sdsys/newvoc/TIER.OMIT.STANDARD lists both verbs among the 42 a standard
-# account does not get.  All four verifiers compile a probe.
+# answered "BASIC is not in your VOC" and "RUN is not in your VOC", because
+# sdsys/tier.policy/omit.standard listed both verbs among the 42 a standard
+# account did not get.  All four verifiers compile a probe.
 #
-# SPLIT IN TWO, because the two halves are not the same claim.  ADMINISTRATOR is
-# the one that must never appear - it is what LOGIN elevates into SDSYS under
-# PRE_RELEASE 56, and an administrator test account would measure SDSYS while
-# reporting an ordinary account, which is the whole failure 59 exists to fix.
-NoteTrue 'create: grants PROGRAMMER, because STANDARD has no basic or run' `
-         ($mk[0] -match '\bPROGRAMMER\b')
-NoteTrue 'create: NEVER grants ADMINISTRATOR - that would land the session in SDSYS' `
+# WHAT SURVIVES OF THAT IS THE ADMINISTRATOR HALF, and it is the stronger half
+# now.  RELEASE_1.1 64 gives SD exactly ONE administrator, SDSYS, reached only
+# by the Windows SDSYS account at LOGIN - so an account that came out
+# ADMINISTRATOR would measure SDSYS while reporting an ordinary account, which
+# is the failure 59 exists to fix.
+NoteTrue 'create: NEVER names ADMINISTRATOR - that account is SDSYS and only SDSYS' `
          ($mk[0] -notmatch '\bADMINISTRATOR\b')
 
-# AND THE TIER IS CHECKED AGAINST THE SHIPPED RECORD, NOT AGAINST THIS COMMENT.
-# The omit list is what the product actually reads, so if a future change gives
-# standard accounts 'basic' back, this row says the tier can be lowered again
-# rather than leaving the reason to fade into a paragraph nobody re-reads.
-# 13 Sep 26 - RELEASE_1.1 5: the list moved from newvoc/TIER.OMIT.STANDARD to
-# tier.policy/omit.standard (it is control data, not a VOC record).
-$omitRec = Join-Path (Split-Path $here -Parent) 'sdsys\tier.policy\omit.standard'
-if (Test-Path -LiteralPath $omitRec) {
-    $omit = ([IO.File]::ReadAllText($omitRec) -split '\r?\n') | ForEach-Object { $_.Trim() }
-    Write-Output ('  tier.policy/omit.standard: ' + @($omit | Where-Object { $_ -ne '' }).Count + ' lines')
-    NoteTrue 'the record really withholds basic from standard (else the tier could drop)' `
-             ($omit -contains 'basic')
-    NoteTrue 'and run' ($omit -contains 'run')
+# AND WHY AN ORDINARY ACCOUNT CAN HOST THE PROBES IS CHECKED AGAINST THE TREE,
+# NOT AGAINST THIS COMMENT.  The old check read the shipped omit list and
+# asserted it withheld 'basic' and 'run'.  RELEASE_1.1 64 deleted the list with
+# the tiers and builds every account from the WHOLE of NEWVOC - so the check
+# turns round: the verbs the probes need must be IN the directory every account
+# is copied from.  Same idiom, opposite direction, and it is still the shipped
+# data that answers rather than a paragraph nobody re-reads.
+$newvoc = Join-Path (Split-Path $here -Parent) 'sdsys\newvoc'
+if (Test-Path -LiteralPath $newvoc -PathType Container) {
+    $vocNames = @(Get-ChildItem -LiteralPath $newvoc -File | ForEach-Object { $_.Name })
+    Write-Output ('  sdsys/newvoc: ' + $vocNames.Count + ' names')
+    NoteTrue 'newvoc really holds basic (else no account could host a probe)' `
+             ($vocNames -contains 'basic')
+    NoteTrue 'and run' ($vocNames -contains 'run')
 } else {
-    Note 'tier.policy/omit.standard is where this expects it' $true $false
+    Note 'sdsys/newvoc is where this expects it' $true $false
 }
 
 # ---------------------------------------------------------------- delete

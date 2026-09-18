@@ -85,7 +85,7 @@ function Invoke-SdAdmin([string[]]$SdLines) {
         the ssh channel rather than a file.  The rule is about handing sd.exe
         its own stdin.
 
-        LOGTO SDSYS FIRST, matching verify-doors-admin.ps1, verify-tiers.ps1 and
+        LOGTO SDSYS FIRST, matching verify-doors-admin.ps1 and
         verify-createaccount.ps1 - every elevated script here that has ever
         created an account carries it, and all were green on b59, which is
         post-56.  Under 56 an administrator should already land in SDSYS at

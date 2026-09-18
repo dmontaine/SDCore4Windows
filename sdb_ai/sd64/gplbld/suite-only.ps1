@@ -85,9 +85,9 @@ function Select-SuiteSteps {
 
     # A name may be typed with or without .ps1.  Compared case-insensitively,
     # DELIBERATELY: these are Windows filenames and NTFS does not distinguish
-    # them either, so refusing 'Verify-Tiers' would be this tool inventing a
-    # rule the file system does not have.  That is the opposite of the -cne
-    # rule this tree uses for hashes, and it is written down so nobody
+    # them either, so refusing 'Verify-CreateAccount' would be this tool
+    # inventing a rule the file system does not have.  That is the opposite of
+    # the -cne rule this tree uses for hashes, and it is written down so nobody
     # "tightens" it.
     $norm = @($wanted | ForEach-Object {
         if ($_ -match '(?i)\.ps1$') { $_ } else { $_ + '.ps1' }

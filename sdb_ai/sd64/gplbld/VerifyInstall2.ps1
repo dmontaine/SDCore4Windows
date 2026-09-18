@@ -86,7 +86,10 @@ param(
     # one step with a fresh name without spending a whole new token.
     [string]$Run = '',
 
-    [string]$TierPrefix = 'sdtierg',   # MUST be one nobody has used - see PROJECT_STATUS.md
+    # 18 Sep 26 - $TierPrefix ('sdtierg') WAS HERE AND WENT WITH verify-tiers.ps1,
+    # RELEASE_1.1 64.  ITS WARNING IS KEPT BECAUSE IT IS NOT ABOUT TIERS: a
+    # prefix MUST be one nobody has used, or CREATE.ACCOUNT refuses the name and
+    # the step fails several minutes in looking like a product fault.
     [string]$Account    = 'sdacct14',  # likewise; sdacct1..13 are spent
     # 20 Aug 26 - verify-accountacl.ps1's throwaway account.  LOWER CASE ONLY,
     # unlike the two above: CREATEA downcases the user name and the directory
@@ -125,7 +128,8 @@ param(
     [string]$NamePrefix  = '',   # verify-apiname.ps1   - one account
     [string]$PortPrefix  = '',   # verify-apiport.ps1   - one account
     [string]$ScramPrefix = '',   # verify-scramlogin.ps1 - one account
-    [string]$TierApiPrefix = '', # verify-tierapi.ps1   - one account per tier
+    # 18 Sep 26 - $TierApiPrefix WAS HERE AND WENT WITH verify-tierapi.ps1,
+    # RELEASE_1.1 64.
     [string]$ApiIdPrefix = '',   # verify-apiidentity.ps1 - one account
     # 29 Aug 26 - verify-sdsysgate.ps1, PRE_RELEASE 62.  One throwaway
     # non-administrator account, created and removed inside the step.  Lower
@@ -171,11 +175,10 @@ param(
     # NOTHING.***  Corrected 1 Sep 2026, PRE_RELEASE_FIXES 112; the measurement
     # is in the longer note beside the step itself, below.
     #
-    # THIS RUNNER AND NOT THE OTHER: its own header says the middle three rows
-    # need "an elevated piped session", and it takes a -Prefix for a throwaway
-    # account.  Lower case only, like the prefixes above, because CREATEA
-    # downcases the name and the directory takes it verbatim.
-    [string]$TcPrefix    = '',   # verify-tierchange.ps1 - one account
+    # 18 Sep 26 - $TcPrefix WAS HERE AND WENT WITH verify-tierchange.ps1,
+    # RELEASE_1.1 64.  It kept the rule every prefix here keeps: lower case only,
+    # like the ones above, because CREATEA downcases the name and the directory
+    # takes it verbatim.
     # 04 Sep 26 - verify-privundetermined.ps1, PRE_RELEASE_FIXES 96's witness.
     # One throwaway PROGRAMMER account reached over the API, because a socket
     # session is the only one on this machine that does NOT get USR_ADMIN and so
@@ -203,7 +206,7 @@ param(
     # usually 30 to 90 seconds of it.
     #
     #     VerifyInstall2.ps1 -Run b76 -Only verify-delaccount
-    #     VerifyInstall2.ps1 -Run b76 -Only verify-tiers,verify-tierapi
+    #     VerifyInstall2.ps1 -Run b76 -Only verify-createaccount,verify-doors
     #
     # Comma or semicolon separated, with or without .ps1, case-insensitive.
     # The filter is shared with VerifyInstall1 (suite-only.ps1); its header
@@ -244,7 +247,6 @@ if ($Run) {
         Write-Output '  Lower case letters and digits only - it becomes part of a Windows account name.'
         exit 2
     }
-    if (-not $PSBoundParameters.ContainsKey('TierPrefix'))    { $TierPrefix    = "sdtiert$Run" }
     if (-not $PSBoundParameters.ContainsKey('Account'))       { $Account       = "sdacct$Run"  }
     if (-not $PSBoundParameters.ContainsKey('AclPrefix'))     { $AclPrefix     = "sdacl$Run"   }
     if (-not $PSBoundParameters.ContainsKey('ApiPrefix'))     { $ApiPrefix     = "sdapia$Run"  }
@@ -256,7 +258,6 @@ if ($Run) {
     if (-not $NamePrefix)    { $NamePrefix    = "sdapin$Run" }
     if (-not $PortPrefix)    { $PortPrefix    = "sdapi$Run"  }
     if (-not $ScramPrefix)   { $ScramPrefix   = "sdscram$Run" }
-    if (-not $TierApiPrefix) { $TierApiPrefix = "sdtapi$Run" }
     if (-not $ApiIdPrefix) { $ApiIdPrefix = "sdapiid$Run" }
     if (-not $GatePrefix)  { $GatePrefix  = "sdgate$Run" }
     if (-not $SshAdminPrefix) { $SshAdminPrefix = "sdsadm$Run" }
@@ -275,10 +276,10 @@ if ($Run) {
     # stem by design, so a FIXED prefix would pass once and fail on every later
     # run on the same machine - which reads like a product fault and is not one.
     if (-not $ProfPrefix)  { $ProfPrefix  = "sdprof$Run" }
-    # 31 Aug 26 - and verify-tierchange.ps1's, for the reason directly above:
-    # it creates a throwaway account, so a FIXED prefix would pass once and
-    # collide on every later run on the same machine.
-    if (-not $TcPrefix)    { $TcPrefix    = "sdtc$Run" }
+    # 18 Sep 26 - verify-tierchange.ps1's $TcPrefix derivation WAS HERE ('sdtc'),
+    # with the rule it shared with every prefix on this list: a FIXED prefix
+    # passes once and collides on every later run on the same machine, which
+    # reads like a product fault and is not one.
     # 04 Sep 26 - PRE_RELEASE 96's verifier.  Derived from -Run for 54's reason,
     # and with one of its own: the run WRITES a record named after this prefix
     # into sdsys\os.users, and refuses to start if one is already there.  A
@@ -298,14 +299,13 @@ if ($Run) {
 # fresh literals here would just add six more to that pile.
 foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $SshPrefix },
                  @{ N = 'NamePrefix'; V = $NamePrefix }, @{ N = 'PortPrefix'; V = $PortPrefix },
-                 @{ N = 'ScramPrefix'; V = $ScramPrefix }, @{ N = 'TierApiPrefix'; V = $TierApiPrefix },
-                 # 31 Aug 26 - verify-tierchange.ps1's, added with the step.
-                 # It is listed HERE and not only above because a prefix that
-                 # is empty at this point reaches CREATE.ACCOUNT as a bare
-                 # "sd" name; refusing by name costs nothing and the step
-                 # cannot then fail several minutes later looking like a
-                 # product fault.
-                 @{ N = 'TcPrefix'; V = $TcPrefix })) {
+                 @{ N = 'ScramPrefix'; V = $ScramPrefix }
+                 # 18 Sep 26 - verify-tierapi.ps1's $TierApiPrefix WAS HERE, and
+                 # so was verify-tierchange.ps1's $TcPrefix, with a note saying
+                 # why a prefix empty at this point is worth refusing by name.
+                 # Both went with their steps, RELEASE_1.1 64; the reason is in
+                 # the comment above for the prefixes that remain.
+                 )) {
     if (-not $p.V) {
         Write-Output ("VerifyInstall2: -{0} was not given and -Run was not either." -f $p.N)
         Write-Output '  Simplest: VerifyInstall2.ps1 -Run <token nobody has used>'
@@ -322,7 +322,7 @@ if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 
 # An account name is an OS user name.  Anything with a space or a leading dash
 # is a mangled argument, not a name - see the header.
-foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account'; V = $Account })) {
+foreach ($p in @(@{ N = 'Account'; V = $Account })) {
     if ($p.V -notmatch '^[A-Za-z][A-Za-z0-9_.]*$') {
         Write-Output ("VerifyInstall2: -{0} is '{1}', which is not a usable account name." -f $p.N, $p.V)
         Write-Output '  Letters, digits, dot and underscore only, starting with a letter.'
@@ -348,7 +348,7 @@ foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix';
                  # 22 Aug 26 - the six new ones, same rule and the same reason.
                  @{ N = 'CatPrefix';   V = $CatPrefix },  @{ N = 'SshPrefix';     V = $SshPrefix },
                  @{ N = 'NamePrefix';  V = $NamePrefix }, @{ N = 'PortPrefix';    V = $PortPrefix },
-                 @{ N = 'ScramPrefix'; V = $ScramPrefix },@{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
+                 @{ N = 'ScramPrefix'; V = $ScramPrefix })) {
     if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
         Write-Output ("VerifyInstall2: -{0} is '{1}'." -f $p.N, $p.V)
         Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
@@ -370,15 +370,15 @@ foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix';
 # surfaced, and every account made before it would still need removing by hand.
 # This asks all thirteen up front and names every clash at once.
 $claimed = @()
-foreach ($p in @(@{ N = 'TierPrefix'; V = $TierPrefix }, @{ N = 'Account';     V = $Account },
+foreach ($p in @(@{ N = 'Account';     V = $Account },
                  @{ N = 'AclPrefix';  V = $AclPrefix },  @{ N = 'ApiPrefix';   V = $ApiPrefix },
                  @{ N = 'RoutePrefix';V = $RoutePrefix },@{ N = 'RulesPrefix'; V = $RulesPrefix },
                  @{ N = 'DelPrefix';  V = $DelPrefix },  @{ N = 'CatPrefix';   V = $CatPrefix },
                  @{ N = 'SshPrefix';  V = $SshPrefix },  @{ N = 'NamePrefix';  V = $NamePrefix },
-                 @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix },
-                 @{ N = 'TierApiPrefix'; V = $TierApiPrefix })) {
+                 @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix })) {
     # -Name "<p>*" catches the derived forms too: verify-routes makes <p>s and
-    # <p>a, verify-delaccount <p>s, <p>b and <p>h, verify-tiers <p>1..3.
+    # <p>a, verify-delaccount <p>s, <p>b and <p>h.  (verify-tiers <p>1..3 was
+    # here too, and went with the file, RELEASE_1.1 64.)
     #
     # 30 Aug 26 - <p>h is the third one, PRE_RELEASE_FIXES.md 65 and 36.  It is
     # the subject whose profile is pinned open, so DELETE.ACCOUNT reaches
@@ -539,40 +539,31 @@ $steps = @(
     # list.
     @{ Name = 'verify-cmdaudit.ps1';      P = @{} },
     @{ Name = 'verify-createaccount.ps1'; P = @{ Account = $Account } },
-    @{ Name = 'verify-tiers.ps1';         P = @{ Prefix  = $TierPrefix } },
-    # 31 Aug 26 - PRE_RELEASE_FIXES 107, on the owner's ruling.  DIRECTLY AFTER
-    # verify-tiers BECAUSE IT IS THE REST OF THE SAME QUESTION: PRE_RELEASE 19
-    # lists seven things the tier change needs proved, verify-tiers section 6
-    # covers four and SAYS IN ITS OWN OUTPUT that it does not cover the rest.
-    # This is the middle three - the required access keyword, what leaves with
-    # ADMINISTRATOR, and the "left alone" count.  (The three DOORS are still
-    # covered by neither; they need an unelevated session, an ssh login and an
-    # API pair, which is PRE_RELEASE 38.)
+    # 18 Sep 26 - verify-tiers.ps1 AND verify-tierchange.ps1 WERE HERE, ONE AFTER
+    # THE OTHER, AND BOTH ARE DELETED WITH THEIR SUBJECT.  RELEASE_1.1 64.
     #
-    # IT WAS IN NEITHER RUNNER UNTIL TODAY, found by re-deriving
-    # VerifyInstall1's header counts from the directory rather than adjusting
-    # them by one - the check that file's header demands after the same
-    # invariant broke on 24 Aug 2026.
+    # verify-tiers proved three VOC counts against sdsys\tier.policy, the 42
+    # withheld verbs and the 21 administration verbs; verify-tierchange proved
+    # the middle three rows of PRE_RELEASE 19 - the required access keyword, what
+    # left an account with ADMINISTRATOR, and tier.del.one's "left alone" count.
+    # tier.policy is deleted, the keywords are refused as syntax and every
+    # account is now built from the whole of NEWVOC, so neither file has a
+    # subject left.
     #
-    # ***IT IS THE PARENT OF NOTHING, AND THIS COMMENT USED TO SAY IT WAS THE
-    # PARENT OF TWO.  WIRING IT IN PUT ONE VERIFIER BACK, NOT THREE.***
-    # Corrected 1 Sep 2026, PRE_RELEASE_FIXES 112.  The claim was that it
-    # "raises verify-acctmsgs.ps1 and verify-vocverbs.ps1".  Measured rather
-    # than re-read: verify-tierchange.ps1 names those two ONLY in comments
-    # (:94, :120), and the one external script it actually invokes is
-    # assert-current.ps1 (:261).
+    # ***WHAT THEY ALSO HELD IS OWED TO A SUCCESSOR, NOT DROPPED***: an ordinary
+    # account's whole-of-NEWVOC count, the SUSPENDED/UNSUSPENDED register round
+    # trip, the tier keywords refused, and the update.voc @ID case machinery go
+    # to a new verify-accountmodel.ps1 - which cannot be wired in here today,
+    # because RELEASE_1.1 64 gives SD exactly one administrator and that
+    # administrator is reached only by the Windows SDSYS account at LOGIN.  That
+    # account does not exist on any machine yet; the installer slice creates it.
+    # PROJECT_STATUS.md's START HERE box carries the same note.
     #
-    # ***SO BOTH OF THEM ARE STILL RUN BY NOTHING***: neither appears as a
-    # Name = '...' step in EITHER runner.  Their only other mentions are
-    # assert-current.ps1's roster, which checks that they exist rather than
-    # running them, and test-acctmsgs-units / test-vocverbs-units, which lift
-    # functions out of them without driving an install.
-    #
-    # THE COST OF THE OLD WORDING IS ON THE RECORD: -Only verify-tierchange was
-    # handed over as PRE_RELEASE 100's deciding step BECAUSE of this comment,
-    # ran green at 28 of 28, and drove no index at all.  A comment naming what
-    # a step covers gets read as evidence, and nobody re-derives a signpost.
-    @{ Name = 'verify-tierchange.ps1';    P = @{ Prefix  = $TcPrefix } },
+    # THE LAST THING THE PAIR HAD TO SAY IS WORTH KEEPING IN FRONT OF WHOEVER
+    # WIRES THE SUCCESSOR IN: a comment naming what a step covers gets read as
+    # evidence.  "-Only verify-tierchange" was handed over as PRE_RELEASE 100's
+    # deciding step because of a claim in this very block, ran green at 28 of 28,
+    # and drove no index at all.
     # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
     # CREATE.ACCOUNT, so it belongs BEFORE verify-peerlog for the error-log
     # reason the routes/rules comment below spells out.
@@ -769,16 +760,19 @@ $steps = @(
     # VerifyInstall2".  It was in NEITHER runner, so its checks for entries 5,
     # 13, 14 and 15 have never run since the day it was written.
     #
-    # HERE RATHER THAN LAST, because verify-tierapi below is last for a stated
-    # reason - it is the only step needing a binary from outside this
-    # repository - and taking that place would cost that reason.
+    # HERE RATHER THAN LAST, because the step that held the last place did so
+    # for a stated reason - it was the only one needing a binary from outside
+    # this repository - and taking that place would cost that reason.  (That
+    # step is gone, RELEASE_1.1 64; the reasoning is kept because whatever
+    # replaces it inherits the place.)
     #
     # LATE RATHER THAN EARLY, because it is the one step that creates and
     # deletes FILES IN SDSYS.  Nothing after it counts SDSYS state, so its churn
     # cannot perturb another step's arithmetic.  Checked rather than assumed:
-    # verify-tiers' COUNT VOC rows are taken after LOGTO <tier account>, so they
-    # count the ACCOUNT's VOC and not SDSYS's, and this could in fact have gone
-    # anywhere - the placement is belt to that braces.
+    # the COUNT VOC rows elsewhere in the suite are taken after a LOGTO into the
+    # account under test, so they count the ACCOUNT's VOC and not SDSYS's, and
+    # this could in fact have gone anywhere - the placement is belt to that
+    # braces.
     #
     # IT CLEANS UP AFTER ITSELF AND PROVES IT: its section 9 deletes both
     # fixtures and then asserts sdsys\messages survived the run, so a cleanup
@@ -845,17 +839,24 @@ $steps = @(
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.
     #
-    # 04 Sep 26 - THE REASON IT WAS PUT LAST IS GONE, AND THE ORDER STAYS.
-    # PRE_RELEASE_FIXES 161.  This used to be "the only step that needs a binary
-    # from OUTSIDE this repository - sd-connect.exe from the sdclilib32 tree",
-    # placed last so that its absence cost nothing before it.  "make sd" now
-    # builds sd-connect.exe into bin\client32, so nothing here reaches outside
-    # the tree.  ***AND "THE ONLY STEP" WAS WRONG WHEN IT WAS WRITTEN***:
-    # verify-doors.ps1 carried the same default, and it SKIPS its API door
-    # rather than refusing - so on b116, with the tree deleted, this step
-    # exited 2 while doors passed with a door untested.  Last is still a fine
-    # place for it; it is no longer a mitigation for anything.
-    @{ Name = 'verify-tierapi.ps1';       P = @{ Prefix = $TierApiPrefix } },
+    # 18 Sep 26 - DELETED, RELEASE_1.1 64, WITH THE TIERS IT DROVE.  It spent one
+    # throwaway account per tier and read each tier's VOC count over
+    # sd-connect.exe, which is the only thing on this machine that links the real
+    # qmclilib.dll.  Every account is now at the same level and the count is the
+    # whole of NEWVOC for all of them, so the comparison has no second term.
+    #
+    # ***THE PART WORTH REBUILDING IS THE CLIENT, NOT THE COMPARISON.*** "The
+    # real library, not an inference about the protocol" is a reading no other
+    # step here takes, and it is owed to the slice that re-aims
+    # verify-apiremote.ps1 and verify-apiidentity.ps1 - RELEASE_1.1 64 deletes
+    # the remote door's administrator test and gives the API to every account, so
+    # both of those files move anyway.
+    #
+    # (The 04 Sep 26 note that stood here - "the reason it was put last is gone,
+    # and the order stays", about PRE_RELEASE 161 and "make sd" building
+    # sd-connect.exe into bin\client32 - is about the PLACE, not about this
+    # step, and whatever inherits the place inherits its reading: no step in
+    # this list needs a binary from outside the repository.)
 
     # 03 Sep 26 - LAST, AND IT HAS TO BE LAST.  PRE_RELEASE 93 and 65, owner's
     # instruction after the b107 witness.  It measures the residue THIS run
@@ -863,7 +864,7 @@ $steps = @(
     # checks the right records went and the valid ones stayed.
     #
     # ***IT IS NOT verify-register RUN AGAIN, AND IT CANNOT BE.***
-    # verify-tierapi above leaves its register records behind ON PURPOSE, so a
+    # The steps before it leave their register records behind ON PURPOSE, so a
     # plain verify-register placed here would find them and go red on EVERY
     # run - and a permanently red guard is what teaches people to ignore
     # guards.  The owner ruled sweep-then-verify; the file's header has the

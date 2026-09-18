@@ -169,7 +169,7 @@ if (-not (Get-Command Add-RegisterSweep -ErrorAction SilentlyContinue)) {
     $vi2 = @(
         @{ Name = 'verify-fold.ps1';          P = @{} },
         @{ Name = 'verify-catgate.ps1';       P = @{ Account = 'sdcatgb999' } },
-        @{ Name = 'verify-tiers.ps1';         P = @{ Prefix = 'sdtiertb999' } },
+        @{ Name = 'verify-accountmodel.ps1';  P = @{ Prefix = 'sdamodelb999' } },
         @{ Name = 'verify-twins.ps1';         P = @{} },
         @{ Name = 'verify-emptyprefix.ps1';   P = @{ Prefix = '' } },
         @{ Name = 'verify-registersweep.ps1'; P = @{} }
@@ -195,7 +195,7 @@ if (-not (Get-Command Add-RegisterSweep -ErrorAction SilentlyContinue)) {
     Check 'CONTROL: a full run is left alone (the sweep is already last)' 'False' $r.Added
     Check 'and keeps all six steps'                                      6 $r.Steps.Count
 
-    $sel = Select-SuiteSteps -Steps $vi2 -Only 'verify-tiers,verify-registersweep' -Runner 'T'
+    $sel = Select-SuiteSteps -Steps $vi2 -Only 'verify-accountmodel,verify-registersweep' -Runner 'T'
     $r = Add-RegisterSweep -Selected $sel.Steps -AllSteps $vi2 -Partial $sel.Partial
     Check 'a run that already selected the sweep does not get it twice' 'False' $r.Added
     Check 'and runs it once'                                           1 (@($r.Steps | Where-Object { $_.Name -eq 'verify-registersweep.ps1' }).Count)

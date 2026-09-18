@@ -21,7 +21,12 @@ $gplbld  = $PSScriptRoot
 # IDENTICAL" comment as the other three, and a copy that claims that without
 # anything checking it is a comment that rots on the first edit.
 $targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1', 'verify-cmdaudit.ps1',
-             'verify-vocverbs.ps1', 'verify-acctmsgs.ps1', 'verify-tierchange.ps1',
+             'verify-vocverbs.ps1', 'verify-acctmsgs.ps1',
+             # 18 Sep 26 - verify-tierchange.ps1 WAS HERE AND THE FILE IS DELETED,
+             # RELEASE_1.1 64: every row it asserted was tier machinery.  It
+             # carried one copy of Write-Verdict, so there is one fewer to
+             # compare - the counts below are derived from this list rather than
+             # typed, which is why nothing else moves.
              'verify-doors.ps1', 'verify-doors-admin.ps1',
              # 31 Aug 26 - verify-logtoaccess.ps1 (PRE_RELEASE 91) carries the
              # ninth copy.  Added here in the commit that creates it, because a

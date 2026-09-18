@@ -29,34 +29,32 @@
 # step list and removes it after - CLAUDE.md's rule, "pursue it by removing the
 # need for a prompt, not by skipping the step".
 #
-# ***THE ACCOUNT IS PROGRAMMER TIER, AND THAT IS MEASURED RATHER THAN CHOSEN.
-# DO NOT "TIDY" IT BACK TO STANDARD ON LEAST-PRIVILEGE GROUNDS.***
+# ***THERE IS NO TIER KEYWORD ON THE CREATE LINE, AND THAT IS MEASURED RATHER
+# THAN TIDIED.***  18 Sep 2026, RELEASE_1.1 64: the tiered account structure is
+# gone.  CREATE.ACCOUNT no longer takes standard, programmer or administrator -
+# PROGRAMMER and ADMINISTRATOR are REFUSED with sysmsg 2018 and the account is
+# not made (createa's keyword loop), and standard was only ever a default.  So
+# the line says the route and nothing else.
 #
-# This said STANDARD until 29 Aug 2026, with the reasoning "standard is also the
-# tier these verifiers want - the least-privileged thing that can hold an
-# account".  That was wrong, and -Run b60 said so in SD's own words:
-#
-#     :BASIC BP SDNOCASE
-#     BASIC is not in your VOC
-#     :RUN BP SDNOCASE
-#     RUN is not in your VOC
-#
-# sdsys/tier.policy/omit.standard lists the 42 verbs a standard account does not
-# get, and 'basic' and 'run' are both on it - as are 'ed', 'edit', 'micro',
-# 'create.file', 'copy', 'delete' and 'rename'.  ***ALL FOUR VERIFIERS THIS
-# EXISTS FOR COMPILE AND RUN A BASIC PROBE***, so STANDARD cannot host any of
-# them.  Read from the record itself, not inferred from the failure.
+# WHAT THE ACCOUNT GETS IS THE WHOLE OF NEWVOC, which is what a PROGRAMMER-tier
+# account always received - so "every non-SDSYS account, user and group, is at
+# today's PROGRAMMER level" is TRUE here, and this file is one of the places
+# that has to keep being true.  It said PROGRAMMER until today for the same
+# reason, and it was measured into that: -Run b60 answered "BASIC is not in your
+# VOC" and "RUN is not in your VOC" while the line said STANDARD, and
+# sdsys/tier.policy/omit.standard listed both verbs among the 42 a standard
+# account did not get.  ***THE OMIT LIST IS DELETED WITH THE TIERS, AND THE
+# CHECK THAT REPLACED IT ASKS THE TREE INSTEAD*** - test-sdtestuser-units.ps1
+# now asserts that newvoc, out of which every account is built, really holds
+# 'basic' and 'run'.  The old check named the shipped record; this one names the
+# directory that record used to be subtracted from.
 #
 # ***IT IS STILL A REAL NON-ADMINISTRATOR, WHICH IS THE WHOLE POINT OF 59.***
-# The tier that matters is ADMINISTRATOR: that is the one LOGIN elevates into
-# SDSYS under PRE_RELEASE 56, and it is what these verifiers must not be.
-# PROGRAMMER is not it - verify-doors creates its accounts PROGRAMMER for
-# exactly this reason and its logto is subject to every ordinary gate.
-#
-# PROGRAMMER IS A KEYWORD; STANDARD IS NOT.  Only PROGRAMMER and ADMINISTRATOR
-# are (CREATEA:272), standard being the default - so naming STANDARD would pass
-# an unrecognised token, which is why the line below could not simply be
-# corrected by swapping one word for another when it was written.
+# The account that matters is SDSYS: RELEASE_1.1 64 gives SD exactly one
+# administrator, reached only by the Windows SDSYS account at LOGIN, and every
+# other Windows administrator is refused.  These verifiers must not be it - a
+# throwaway account that landed in SDSYS would measure SDSYS while reporting an
+# ordinary account, which is the failure 59 exists to fix.
 
 # ***NO Set-StrictMode HERE, AND THAT IS DELIBERATE - IT WAS HERE AND IT LEAKED.***
 # Measured 29 Aug 2026, not assumed: Set-StrictMode applies to the CURRENT scope
@@ -375,10 +373,11 @@ function New-SdTestUserScript {
         stdin, which is why the password appears as two bare lines after the
         command rather than as an argument.
 
-        PROGRAMMER, because STANDARD does not get 'basic' or 'run' and all four
-        verifiers compile a probe - the header above has the measurement.  Never
-        STANDARD, which is the default and is NOT a keyword (CREATEA:272), so
-        naming it would pass an unrecognised token.
+        NO TIER KEYWORD AT ALL.  RELEASE_1.1 64 removed the tiers and refuses
+        the two keywords that were left as a syntax error, so naming one would
+        stop the verb; the account is built from the whole of NEWVOC, which is
+        what the four verifiers this exists for need in order to compile a
+        probe.  The header above has the measurement.
 
         SSH is the route - the account needs no API access to be driven here. #>
     param(
@@ -386,7 +385,7 @@ function New-SdTestUserScript {
         [Parameter(Mandatory = $true)][string]$Password
     )
     Set-StrictMode -Version Latest
-    return @(('CREATE.ACCOUNT USER ' + $Name + ' PROGRAMMER SSH'), $Password, $Password)
+    return @(('CREATE.ACCOUNT USER ' + $Name + ' SSH'), $Password, $Password)
 }
 
 function Remove-SdTestUserScript {

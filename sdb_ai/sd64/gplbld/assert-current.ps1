@@ -433,7 +433,20 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # be - it SHIPS to {app}, exactly like upgrade-dicts.ps1, so
                   # it stays under the guard.
                   'test-upgradevoc-units.ps1',
-                  'assert-current.ps1', 'cycle.ps1', 'verify-tiers.ps1',
+                  # 18 Sep 26 - verify-tiers.ps1 WAS HERE AND IS RETIRED.
+                  # RELEASE_1.1 64 removed the tiered account structure, so the
+                  # three VOC tiers it proved - the counts 355/397/420, the 42
+                  # withheld verbs, the 21 administration verbs and the
+                  # tier.policy cross-check - no longer exist to be proved.
+                  # WHAT IT ALSO HELD IS OWED, NOT DROPPED: the whole-of-NEWVOC
+                  # proof for an ordinary account, the SUSPENDED/UNSUSPENDED
+                  # record round trip and the update.voc @ID case machinery go
+                  # to a new gplbld/verify-accountmodel.ps1, which cannot be
+                  # written until the installer slice creates the Windows SDSYS
+                  # account it must run as.  See PROJECT_STATUS.md's START HERE
+                  # box for why that is a blocking dependency rather than a
+                  # preference.
+                  'assert-current.ps1', 'cycle.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',
                   'verify-credacl.ps1', 'verify-nocase.ps1',
@@ -880,7 +893,13 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # already recorded for remote_connect_test.c.
                   'verify-setpw.ps1',
                   # 20 Aug 26 - and the tier/API verifier, same reasoning.
-                  'verify-tierapi.ps1',
+                  # 18 Sep 26 - DELETED, RELEASE_1.1 64.  It drove sd-connect.exe
+                  # against three throwaway accounts, one per tier, and read
+                  # each tier's VOC count - the tiers are gone and so is the
+                  # question.  Its surviving half, "a real client library can
+                  # attach to an ordinary account and a wrong password is
+                  # refused", is owed to verify-apiremote.ps1 and
+                  # verify-apiidentity.ps1 in the same slice that re-aims them.
                   # 20 Aug 26 - section 8's per-account ACL verifier, same
                   # reasoning again.  It is the one that would hurt most to
                   # leave out: it CALLS this script and refuses on a non-zero
@@ -1288,7 +1307,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # 28 Aug 26 - verify-tierchange.ps1, PROJECT_STATUS item 5.5
                   # and the three rows of PRE_RELEASE 19 that verify-tiers
                   # section 6 does not cover.  Same rule, same commit.
-                  'verify-tierchange.ps1',
+                  # 18 Sep 26 - DELETED, RELEASE_1.1 64.  Every row it asserted
+                  # was tier machinery: the access keyword a promotion had to
+                  # name, what left an account with ADMINISTRATOR (Windows
+                  # Administrators membership and the os.users record) and
+                  # tier.del.one's "kept" count.  All of it is deleted in the
+                  # product, so there is nothing left for the file to measure.
                   # 28 Aug 26 - verify-doors.ps1 and verify-doors-admin.ps1, the
                   # SUSPENDED door pair: PRE_RELEASE 19's last row and 38.  Same
                   # rule, same commit.  They are a PAIR because the two halves
@@ -1325,11 +1349,18 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # 19 found verify-tierapi.ps1 claiming ADMINISTRATOR = 417
                   # while verify-tiers.ps1 claimed 416 and the tree said 416.
                   # One fact in two files with nothing comparing them.  It
-                  # re-derives all three counts from sdsys/newvoc and checks
+                  # re-derived all three counts from sdsys/newvoc and checked
                   # both files against the TREE rather than against each other,
                   # because two files agreeing on a wrong number is exactly as
-                  # broken as two disagreeing.  No install, no elevation.
-                  'test-tiercounts-units.ps1',
+                  # broken as two disagreeing.
+                  # 18 Sep 26 - DELETED, RELEASE_1.1 64, AND ITS SUBJECT IS GONE
+                  # RATHER THAN MOVED: there is one count now, not three, and it
+                  # has ONE home - sdsys/newvoc, out of which every account is
+                  # built.  Nothing duplicates it, so there is nothing left for
+                  # a cross-check to compare.  The positive-control idiom it
+                  # carried (-Dir, "a test nobody has watched fail") lives on in
+                  # test-reclaim-units.ps1 and test-stemcoverage-units.ps1, both
+                  # still listed below.
                   # 31 Aug 26 - test-stemcoverage-units.ps1, PRE_RELEASE 86's
                   # checker.  ***LISTED AFTER IT SPRANG THE TRAP, NOT BEFORE,
                   # AND THAT IS THE POINT OF WRITING IT DOWN AGAIN.*** It was

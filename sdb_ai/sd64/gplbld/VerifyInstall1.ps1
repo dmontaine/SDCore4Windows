@@ -93,6 +93,42 @@
 #        the owner ruled it into VerifyInstall2 - RELEASE_1.1 32, whose matcher
 #        repairs came first.
 #
+# 18 Sep 26 - RE-DERIVED FROM THE DIRECTORY, AND IT NO LONGER CLOSES.  The
+# reason for the look was RELEASE_1.1 64, which deleted verify-tiers.ps1,
+# verify-tierchange.ps1 and verify-tierapi.ps1 from VerifyInstall2 and
+# test-tiercounts-units.ps1 - the free guard that used to be this file's first
+# step - and what it found is bigger than that.  IT IS REPORTED RATHER THAN
+# PATCHED, because the rule above is "re-derive, do not adjust a number" and
+# because six files below have no reason I have checked:
+#
+#     67 verify-*.ps1 in the directory
+#     25 named in this file           (unchanged by this slice)
+#     33 named in VerifyInstall2.ps1  (36 before the three deletions)
+#     -- 57 distinct accounted for, TEN not named in either table:
+#
+#   verify-doors.ps1, verify-doors-admin.ps1  CHILDREN of verify-doors-suite.ps1
+#   verify-acctmsgs.ps1                       a child of those
+#   verify-upgrade.ps1                        CANNOT be a step: a two-phase
+#                                             hand-run that brackets an
+#                                             installer run
+#   verify-apiwire.ps1, verify-deadlock.ps1, verify-delacc-xref.ps1,
+#   verify-realupgrade.ps1, verify-uninstallchoices.ps1, verify-vocwrite.ps1
+#                                             ***UNACCOUNTED FOR.  I DID NOT
+#                                             CHECK A REASON FOR THESE SIX, SO
+#                                             I ASSERT NONE.***
+#
+# AND THE INTERSECTION IS NO LONGER EMPTY: verify-elevdoor.ps1 IS NAMED IN BOTH
+# TABLES.  That may be right - it has a leg on each side of the door - but the
+# rule below says a file named twice "would run twice, spend two prefixes from
+# one token, and the second run would fail on residue the first left", and
+# nothing in either file says why this one is the exception.  Settle it, or drop
+# one of the two rows; do not re-word this paragraph.
+#
+# SO THE LEDGER IS NOT CURRENTLY A PROPERTY THIS FILE HOLDS.  The numbers above
+# are a MEASUREMENT taken on 18 Sep 2026, not a claim about the tree tomorrow,
+# and whoever adds or removes the next verifier owes the six reasons and the
+# elevdoor answer as well as their own row.  Then this block moves down.
+#
 # 12 Sep 26 - RE-DERIVED AGAIN, on adding verify-promptenter.ps1
 # (RELEASE_1.1_FIXES 6, owner's ruling).  THE BLOCK BELOW READ 49 / 20 / 25 AND
 # WAS STALE IN TWO COLUMNS AGAIN - the directory has grown by three and
@@ -390,7 +426,8 @@ if (-not $Yes) {
     Write-Output '  ---------------------------------------------------------------------'
     Write-Output '  It runs the checks that need an ORDINARY account, then hands over to'
     Write-Output '  VerifyInstall2 for the ones that need an administrator.  Together they'
-    Write-Output '  exercise account creation and deletion, the permission tiers, the file'
+    Write-Output '  exercise account creation and deletion, the account and group'
+    Write-Output '  model, the file'
     Write-Output '  and catalogue ACLs, ssh and API logins, and the audit trail.'
     Write-Output ''
     Write-Output '  BEFORE YOU SAY YES, it will:'
@@ -492,36 +529,30 @@ Write-Output ("transcript: " + $transcript)
 # Name => hashtable of parameters, splatted by NAME.  An empty hashtable means
 # "no arguments", which splats correctly too.  See VerifyInstall2.ps1's
 # comment for why this is a hashtable and not an array: an array binds
-# POSITIONALLY and silently gave verify-tiers.ps1 a $Prefix of "-Prefix".
+# POSITIONALLY and silently gave the step then in that place a $Prefix of
+# "-Prefix" (it was verify-tiers.ps1, deleted 18 Sep 2026, RELEASE_1.1 64).
 $steps = @(
-    # 30 Aug 26 - FIRST, AND IT IS THE ONLY STEP THAT COULD BE.
-    # PRE_RELEASE_FIXES 82.  It is not a verifier: it reads
-    # ..\sdsys\newvoc in the SOURCE tree and the two tier verifiers beside it,
-    # re-derives all three VOC counts, and checks each file against the
-    # directory.  No install, no elevation, no account, no prefix, no run
-    # token, and under a second.
+    # 18 Sep 26 - test-tiercounts-units.ps1 WAS HERE, AS THE FIRST STEP, AND IT
+    # IS DELETED WITH ITS SUBJECT.  RELEASE_1.1 64.  It read ..\sdsys\newvoc in the
+    # SOURCE tree, re-derived the three tier VOC counts and checked
+    # verify-tiers.ps1 and verify-tierapi.ps1 against the directory.
     #
-    # WHY IT IS WORTH A STEP AT ALL.  A stale tier count does not fail here -
-    # it fails at verify-tiers and verify-tierapi, two of the most expensive
-    # steps in the suite, one of them LAST in the elevated half.  On 30 Aug 2026
-    # -Run b70 was spent discovering that verify-tierapi still carried 416 after
-    # 78 took ADMINISTRATOR to 419; this file, run afterwards, named it in under
-    # a second.  It had been written on 28 Aug for that exact failure and was
-    # wired into nothing, so the guard sat unrun while the failure it was
-    # written for happened again.
+    # THERE IS ONE COUNT NOW, NOT THREE, AND IT HAS ONE HOME.  Every account is
+    # built from the whole of newvoc, and nothing else in the tree carries a
+    # second copy of that number to disagree with it - which is the only thing
+    # the file ever existed to catch (it was written on 28 Aug 2026 after -Run
+    # b52 step 19 found verify-tierapi claiming ADMINISTRATOR = 417 while
+    # verify-tiers claimed 416 and the tree said 416).  A guard whose two sides
+    # are the same file would pass vacuously, and a vacuous green is worse than
+    # a missing row because it reads like evidence.
     #
-    # ***IT DOES NOT WEAKEN verify-credacl's CLAIM TO BE FIRST***, which the
-    # comment above states and which matters: credacl fails if this session is
-    # somehow privileged, and must do so before passing steps suggest the tree
-    # is fine.  This step cannot pass or fail on privilege - it never looks at a
-    # token, an ACL or the installed tree - so a green line from it says nothing
-    # about the thing credacl is guarding.  It says the SOURCE is
-    # self-consistent, which is a different claim and is a precondition for
-    # believing either tier step later.
-    @{ Name = 'test-tiercounts-units.ps1'; P = @{} },
-    # 30 Aug 26 - PRE_RELEASE 86's unbuilt recommendation, and it is here for the
-    # REASON THE STEP ABOVE GIVES, not by analogy with it: a guard that exists
-    # and runs nowhere is what let 86 happen at all.  clean-test-profiles.ps1
+    # ***THE FIRST STEP IS ONCE AGAIN verify-credacl.ps1, AND ITS CLAIM IS
+    # UNHARMED.*** That was true of the deleted step and it stays true: it never
+    # looked at a token, an ACL or the installed tree, so it could neither pass
+    # nor fail on privilege.  The paragraph above still holds as written.
+    # 30 Aug 26 - PRE_RELEASE 86's unbuilt recommendation, and it is here for its
+    # own reason rather than by analogy with a step that is gone: a guard that
+    # exists and runs nowhere is what let 86 happen at all.  clean-test-profiles.ps1
     # carries a hand-kept stem list, a verifier that invents a name family must
     # add its stem there, and that has now been missed FOUR TIMES over three
     # occasions - sddr (45), sdgate and sdtu (86), sdprof and sdsw (found by this
