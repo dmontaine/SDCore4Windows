@@ -36,6 +36,10 @@
 *   grants a tier change voided.  It can name none now: the tier ordering it
 *   measured is the first casualty of RELEASE_1.1 64, and every non-SDSYS
 *   account is one level.
+* 18 Sep 26 Windows port - RELEASE_1.1 64 SLICE 4.  THE ADMINISTRATOR REFUSALS
+*   IN route.set AND os.set ARE GONE WITH THE TIERS: a Windows administrator's
+*   SD account is an ordinary account and sets its routes and its OS.USERS
+*   fields like any other.  Messages 10083, 10106 and 10175 leave with them.
 * 18 Sep 26 Windows port - RELEASE_1.1 64 SLICE 3.  SUSPENDED MOVES TO ITS OWN
 *   FIELD AND THE TIER MACHINERY GOES.  ACC$SUSPENDED (field 5) holds
 *   'SUSPENDED' or ''; tier.set collapses to the equality guard, the
@@ -142,20 +146,19 @@
 * four words are CREATE.ACCOUNT's, so access is said one way whether an account
 * is being made or changed.
 *
-* AN ADMINISTRATOR IS REFUSED (10083) and a GROUP ACCOUNT is refused (10087).
-* 18 Sep 26 Windows port - ***THE REFUSAL IS UNCHANGED AND ITS REASON IS
-* INVERTED.***  RELEASE_1.1_FIXES.md 58.  It read "Administrators always have
-* both - owner's rule, 21 Aug 2026", so the routes could not be taken away;
-* the owner's ruling of 18 Sep 2026 gives an administrator NO remote door at
-* all, so they cannot be granted either.  Same guard, same message number, new
-* wording (10083).  CREATEA carries the why; nothing in the logic below moved,
-* which is why this is a comment change and not a code one.
-* A group account has no Windows user to put in a group; it is reached with LOGTO.
+* A GROUP ACCOUNT IS REFUSED (10087).  A group account has no Windows user to
+* put in a group; it is reached with LOGTO.
 *
-* THE FOUR OS FORMS REFUSE AN ADMINISTRATOR TOO (10106), and a group account
-* (10105).  Owner's rule, 27 Aug 2026: "administrators have full access, there
-* should be no way to turn it off."  They are four switches over two fields
-* rather than four names for one state, so SH-OFF leaves OS.EXECUTE alone.
+* THE ADMINISTRATOR REFUSALS ARE GONE, 18 Sep 26 - RELEASE_1.1 64.  The tiers
+* are removed, so a Windows administrator's SD account is an ordinary account
+* and sets its routes and its OS.USERS fields like any other; the only limit
+* on what it can do is the one Windows imposes.  The 21 Aug / 27 Aug rules and
+* the 18 Sep 58/62 posture this description used to record died with the tier
+* that made the account an administrator.
+*
+* THE FOUR OS FORMS REFUSE A GROUP ACCOUNT (10105).  They are four switches
+* over two fields rather than four names for one state, so SH-OFF leaves
+* OS.EXECUTE alone.
 *
 * THE TWO REMOTE ROUTES, AND THERE IS NO THIRD.  The console and Remote Desktop
 * are denied to every account SD creates - sdsshonly, applied by CREATE.ACCOUNT
@@ -507,13 +510,11 @@ account.user:
 *   alone would leave a caller unable to tell a no-op from a change, and this
 *   is a verb people run twice when they are not sure it took.
 *
-*   ADMINISTRATORS ARE REFUSED, and this guard is NEW.  Owner's rule, 21 Aug
-*   2026: "all administrators have access to both ssh and api ... the whole
-*   purpose of ADMINISTRATOR is that it gives unlimited access."  So there is
-*   nothing here for them to set, and silently ignoring the request would be
-*   worse than refusing it - the caller would believe the access had narrowed.
-*   BY SID, like CREATEA's test, because BUILTIN\Administrators is translated
-*   on a localised Windows.
+*   THE ADMINISTRATOR REFUSAL IS GONE, 18 Sep 26 - RELEASE_1.1 64.  The tiers
+*   are removed, so a Windows administrator's SD account is an ordinary
+*   account: it sets its routes like any other, and the only limit on what it
+*   can do is the one Windows imposes.  What the 21 Aug / 27 Aug / 5 Sep /
+*   18 Sep 58-62 refusals guarded no longer exists to guard.
 *
 *   NO sdsshonly GUARD, for the reason the routines this replaced gave: that
 *   group carries SeDenyInteractiveLogonRight and no verb in this program
@@ -540,13 +541,6 @@ route.set:
 
    gosub account.user
    if not(user.ok) then return
-
-   if is_grp_member(acc.user, "S-1-5-32-544") then
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10083, acc.user) ;* %1 is an administrator; ssh and the API
-      * cannot be granted to one.  RELEASE_1.1 58, owner 18 Sep 2026.
-      return
-   end
 
    gosub route.apply
 
@@ -630,27 +624,12 @@ route.apply:
 * op_sh.c's os_permitted() for OS.EXECUTE and by EDIT's check.permitted for the
 * two screen editors.
 *
-* ***AN ADMINISTRATOR IS REFUSED HERE, THE SAME WAY route.set REFUSES ONE.***
-* Owner, 27 Aug 2026: "administrators have full access, there should be no way
-* to turn it off."  All three routes are a RULE for an administrator - ssh, the
-* API and the operating system - and none of them is this verb's to change.
-*
-* THAT REVERSES WHAT THIS BANNER SAID FOR ONE DAY, and the argument it made is
-* recorded because it was a reasonable one that he overruled: operating-system
-* access looked like a DEFAULT, since CREATE.ACCOUNT grants it unasked, against
-* ssh and the API which are granted by rule.  He ruled it is a rule.
-*
-* BOTH DIRECTIONS, not just the OFF forms, which is also what route.set does.
-* "os-on" for an administrator is asking this verb to set something it does not
-* decide, and answering "done" to it would be a lie about where the state comes
-* from.
-*
-* THE COST, SAID RATHER THAN HIDDEN: an administrator adopted over a Windows
-* user who already had an os.users record saying "no" keeps that record -
-* grant.os.access leaves an existing one exactly as it is (10103) - and no verb
-* can now change it.  The record is ordinary data and an elevated session
-* passes every gate that reads it, so "ed os.users <name>" from SDSYS is the
-* way out.  Page 26 of the SD TCL reference already names it.
+* ***THE ADMINISTRATOR REFUSAL IS GONE WITH THE TIERS, 18 Sep 26 - RELEASE_1.1
+* 64.***  A Windows administrator's SD account is an ordinary account: it can
+* turn its own operating-system access on and off like any other, and the only
+* limit on what it can do is the one Windows imposes.  The 27 Aug rule this
+* banner records - that none of the three routes could be taken away from an
+* administrator - died with the tier that made the account an administrator.
 *
 * A MISSING RECORD READS AS "no" IN BOTH FIELDS, exactly as both gates read it,
 * so turning something off that was never on is "nothing changed" and writes
@@ -669,26 +648,6 @@ os.set:
 
    gosub account.user
    if not(user.ok) then return
-
-*  AN ADMINISTRATOR IS REFUSED, exactly as route.set refuses one.  Owner,
-*  27 Aug 2026: "administrators have full access, there should be no way to
-*  turn it off."  BY SID, so the two guards cannot drift and neither depends on
-*  a group name a localised Windows translates.
-*
-*  ITS OWN MESSAGE, NOT 10083.  That one is about the other two routes - as of
-*  18 Sep 2026 it says ssh and the API "cannot be granted to one" (RELEASE_1.1
-*  58); a caller told it after typing "os-off" would read it as the wrong
-*  refusal.  ***AND THE TWO NOW POINT IN OPPOSITE DIRECTIONS, WHICH IS WHY
-*  KEEPING THEM SEPARATE MATTERS MORE THAN IT DID***: operating-system access
-*  is a rule that CANNOT BE TAKEN AWAY from an administrator (10106), while ssh
-*  and the API are a rule that CANNOT BE GIVEN (10083).  One message for both
-*  would now be false in one direction whichever way it was worded.
-   if is_grp_member(acc.user, "S-1-5-32-544") then
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10106, acc.user)
-      * %1 is an administrator and always reaches the operating system
-      return
-   end
 
    openpath @sdsys : @ds : 'os.users' to osu.f else
       @system.return.code = -ER$FAILED

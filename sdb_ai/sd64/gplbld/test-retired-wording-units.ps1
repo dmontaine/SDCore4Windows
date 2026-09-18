@@ -222,7 +222,7 @@ $RETIRED = @(
     # replacement string became the retired one twelve hours later, when the
     # owner narrowed the ruling (RELEASE_1.1 62: no ssh, but the API from this
     # machine).  The 58 pair was "but only from this machine" -> "refused for an
-    # administrator, from every machine"; 10175 now says neither, so registering
+    # administrator, from every machine"; 10175 is DELETED by 64, so registering
     # 58's replacement as retired is what stops the intermediate wording
     # surviving in a second copy.  ***THIS IS THE ONE CASE WHERE A REGISTRATION
     # MUST MOVE IN THE SAME COMMIT AS THE MESSAGE***: leave it and the lint goes
@@ -232,38 +232,38 @@ $RETIRED = @(
     # SUBSTRING of its own replacement, so the lint would have found the retired
     # phrase alive inside the new text and failed forever.  A retired string has
     # to be a fragment the new wording does NOT contain.
-    @{ Ref = 'R1.1-58'
+    # RELEASE_1.1 64 - THE ADMINISTRATOR-ROUTE WORDING LEAVES WITH 58 AND 62.
+    # 10083 and 10175 are deleted, the three sd.iss wizard strings are
+    # rewritten, and the one truth that replaces all of it is the per-account
+    # model, said once in the wizard: "Every account decides its own ssh and
+    # API access".  Each removed phrasing registers against it.
+    @{ Ref = 'R1.1-64b'
        Retired     = 'ssh and the API are refused'
-       Replacement = 'ssh is refused for an administrator' }
-    # 10083 was MODIFY.ACCOUNT's refusal to take the routes AWAY; the refusal
-    # stands and its REASON inverted - it now refuses granting them.  gpl.bp is
-    # not in this corpus, so MODIFYA's own comments quoting the old text cannot
-    # trip this; they were corrected in the same commit for truthfulness.
-    @{ Ref = 'R1.1-58b'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64c'
        Retired     = 'always has both ssh and the API'
-       Replacement = 'no ssh, and the API only from this machine' }
-    # 62's own intermediate.  10083 read "cannot be granted to one" for half a
-    # day, between 58 and 62, and that wording is false under 62 - the API IS
-    # granted, it is the ssh that is not.  Registered so the half-day version
-    # cannot survive in a copy somebody made from it.
-    @{ Ref = 'R1.1-58d'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64d'
        Retired     = 'cannot be granted to one'
-       Replacement = 'no ssh, and the API only from this machine' }
-    # 58c - THE WIZARD SAID IT TWICE, which is 121's shape and the reason this
-    # phrase is registered rather than just corrected: sd.iss described who ssh
-    # admits on the options page (2108) AND in the script's own result string
-    # (2386).  A third copy at 2419 kept its opening clause deliberately - it is
-    # Ref 117's REPLACEMENT and would have gone red here if reworded.
-    @{ Ref = 'R1.1-58c'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64e'
        Retired     = 'SD Core users and administrators'
-       Replacement = 'Administrators cannot sign in over ssh at all' }
-    # 62 again: "no remote access at all" was 58's wording and is false once the
-    # API is allowed from this machine.  Three copies in sd.iss carried it for
-    # half a day, which is 58c's own lesson repeating - the wizard says this
-    # kind of thing more than once.
-    @{ Ref = 'R1.1-58e'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64f'
        Retired     = 'have no remote access at all'
-       Replacement = 'can use the API only from this computer' }
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64g'
+       Retired     = 'ssh is refused for an administrator'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64h'
+       Retired     = 'no ssh, and the API only from this machine'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64i'
+       Retired     = 'Administrators cannot sign in over ssh at all'
+       Replacement = 'Every account decides its own ssh and API access' }
+    @{ Ref = 'R1.1-64j'
+       Retired     = 'can use the API only from this computer'
+       Replacement = 'Every account decides its own ssh and API access' }
 )
 
 # --------------------------------------------------------------------------

@@ -2109,13 +2109,12 @@ begin
        'straight into SD Core instead of a command prompt. That is the point of ' +
        'confining ssh to SD Core: an account SD Core creates cannot get a shell ' +
        'on this computer.' + #13#10#13#10 +
-       'Administrators cannot sign in over ssh at all, and can use the API only ' +
-       'from this computer - which is how an administrative application reaches ' +
-       'the database. A sign-in from another machine is refused. SD Core itself ' +
-       'is administered at the console, or through a remote desktop or ' +
-       'remote-control product installed as a service. Port forwarding is ' +
-       'turned off for every ssh session, so an SD Core account cannot reach ' +
-       'another service on this computer through it.' + #13#10#13#10 +
+       'Every account decides its own ssh and API access: CREATE.ACCOUNT and ' +
+       'MODIFY.ACCOUNT take SSH, API, BOTH or NONE, and no account has a route ' +
+       'it did not ask for. SD Core itself is administered from an elevated ' +
+       'session of its own Windows account. Port forwarding is turned off for ' +
+       'every ssh session, so an SD Core account cannot reach another service ' +
+       'on this computer through it.' + #13#10#13#10 +
        'THE COST, SAID PLAINLY, AND ONLY IF YOU INSTALL THE SERVER: scp and sftp ' +
        'STOP WORKING FOR EVERYONE on this computer, because the command is forced ' +
        'and there is no subsystem left to run. Remote-control tools that copy files ' +
@@ -2423,13 +2422,12 @@ begin
       a compile error - caught by check-iss.ps1 rather than by a cycle. }
   begin
     AllowGroupsWrote := True;
-    { 18 Sep 26 - RELEASE_1.1 58.  The administrators group left AllowGroups on
-      the owner's ruling, and port forwarding is disabled in the same block.
-      ***THE FIRST CLAUSE IS A REGISTERED REPLACEMENT*** in
-      test-retired-wording-units.ps1 (Ref 117), so it is kept word for word;
-      only the tail changed. }
+    { 18 Sep 26 - RELEASE_1.1 64.  The administrators clause left this string
+      with the tiers: AllowGroups names sdssh and nothing else, and ssh
+      admission is the account's own grant.  The first clause is a registered
+      replacement in test-retired-wording-units.ps1 (Ref 117), kept word for
+      word; only the tail changed. }
     Result := 'ssh is now limited to members of "sdssh", and port forwarding is off. ' +
-              'Administrators cannot sign in over ssh at all and are not in that group. ' +
               'Any existing sshd_config was kept as sshd_config.before-sd.';
   end
   else if Code = 2 then
@@ -4963,8 +4961,8 @@ begin
            'have stopped before this point.' + #13#10#13#10 +
            'SD Core WILL NOW CONFIGURE IT, and this is not optional: ssh is limited to ' +
            'SD Core users, and every ssh session goes straight into ' +
-           'SD Core rather than a command prompt. Administrators cannot sign in over ssh at all, ' +
-           'and port forwarding is turned off for every session. ' +
+           'SD Core rather than a command prompt. Port forwarding is turned ' +
+           'off for every session. ' +
            'scp and sftp stop working for ' +
            'everyone on this computer as a result. Your existing sshd_config is ' +
            'kept beside it as sshd_config.before-sd. Uninstalling SD Core removes ' +

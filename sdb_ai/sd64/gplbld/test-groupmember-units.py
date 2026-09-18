@@ -119,19 +119,17 @@ FAIL_CLOSED = {
         "skipped and os_group ADDMEM/DELMEM reports its own failure",
     ("modifya", "user.ok = is_grp_member(acc.user,'sdusers')"):
         "account.user: a could-not-tell refuses with 10020, fail closed",
-    ("modifya", 'if is_grp_member(acc.user, "S-1-5-32-544") then'):
-        "the administrator refusals (two sites, same line): asked about the "
-        "well-known SID, which always resolves; a could-not-tell lets the "
-        "change proceed, which os_group then reports on its own",
     ("modifya", "has.ssh = is_grp_member(acc.user, 'sdssh')"):
         "route change: a could-not-tell reads as 'does not have it', so the "
         "idempotent ADDMEM runs and reports its own failure",
     ("modifya", "has.api = is_grp_member(acc.user, 'sdapi')"):
         "route change: same as has.ssh",
-    ("modifya", 'was.admin = is_grp_member(acc.user, "S-1-5-32-544")'):
-        "tier change: well-known SID, always resolves; a could-not-tell would "
-        "skip the downgrade-out-of-administrator wording only",
 }
+
+# 18 Sep 26 - RELEASE_1.1 64 DELETED TWO DECLARED SITES: the administrator
+# refusal in route.set and the tier-set was.admin probe.  The tiers are gone,
+# so nothing asks about the Administrators SID in MODIFYA any more; the sites
+# and their entries above left together.
 
 checks = 0
 fails = 0

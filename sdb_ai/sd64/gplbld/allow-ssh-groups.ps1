@@ -56,6 +56,14 @@
 #      lock its author out.  SD's OWN block is exempt: it is fenced by the
 #      markers below, so re-running replaces it rather than stacking.
 #
+# 18 Sep 26, LATER THE SAME DAY - ***THE RESULT STANDS BUT THE REASON CHANGED:
+# RELEASE_1.1 64 REMOVES THE TIERS.***  The list stays sdssh-alone, not because
+# an administrator has no remote door (64 gives every account ssh), but because
+# routes are per-account memberships and no account is special: ssh admission
+# is the account's own sdssh grant, and a Windows administrator's SD account is
+# an ordinary account.  The 58 entry below is kept as the record of the
+# earlier ruling; DisableForwarding stays under either model.
+#
 # 18 Sep 26 - ***ADMINISTRATORS ARE NOT IN THIS LIST ANY MORE. THE CONSOLE IS
 # THE ONLY DOOR THEY HAVE.***  Owner's ruling, 18 Sep 2026, asked for as "the
 # most secure solution that is possible": an administrator gets NO remote door,
