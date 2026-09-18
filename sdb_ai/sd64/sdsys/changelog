@@ -4,8 +4,46 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+18 Sep 26  THE TIERS ARE REMOVED, AND WITH THEM THE ADMINISTRATOR ACCOUNT.
+
+           STANDARD, PROGRAMMER and ADMINISTRATOR are gone.  Every account
+           is one kind of account: it has the whole vocabulary, ssh and
+           the API are its to choose (CREATE.ACCOUNT and MODIFY.ACCOUNT),
+           and nothing SD does is tiered.  The only limit on what an
+           account can do is the one imposed by Windows.
+
+           The owner's ruling, 18 Sep 2026: an administrator should be
+           able to reach the machine, and to reach the database through
+           the API.  The restriction in the earlier 18 Sep entry below (no
+           ssh for an administrator, API only from this computer) is
+           REPLACED by this change: ssh and the API are for every account.
+
+           ***WHAT GOES.***  CREATE.ACCOUNT no longer takes a tier keyword
+           - standard, programmer and administrator are refused as syntax
+           errors - and MODIFY.ACCOUNT no longer accepts them either.
+           LIST ACCOUNTS no longer shows a tier column; it shows the
+           account's suspension state instead.  The one account in SD with
+           special powers is SDSYS, and it is reached only by the elevated
+           Windows SDSYS account.
+
+           ***WHAT STAYS.***  Suspension.  MODIFY.ACCOUNT <account>
+           SUSPENDED denies the account every SD door - local login, ssh,
+           the API and logto - and changes nothing on Windows.  It is
+           lifted with the new keyword UNSUSPENDED; naming a tier used to
+           be the only way to lift it, and the tier keywords are gone,
+           which is why the new keyword exists.
+
+           ***WHAT MIGHT STOP WORKING.***  An account no longer gains
+           Windows administrator membership, or the administration
+           vocabulary, when it is created - the elevated Windows SDSYS
+           account is the way to administer the system.  Scripts that
+           named a tier keyword when creating or modifying accounts must
+           drop the keyword, and scripts that lifted a suspension by
+           naming a tier must say UNSUSPENDED.
+
 18 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh AT ALL, AND CAN
            USE THE API ONLY FROM THIS COMPUTER.
+           ***REPLACED LATER THE SAME DAY BY THE ENTRY ABOVE.***
 
            An account created with the ADMINISTRATOR keyword is no longer
            put in the sdssh group, and the ssh server is told not to accept

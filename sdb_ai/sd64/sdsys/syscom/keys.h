@@ -299,58 +299,22 @@
       *   14 Aug still carry a grant list there, and an installed tree is never
       *   upgraded (section 6), so a new meaning for field 4 would read those
       *   as data of the new kind.  Start at field 5.
-      $define ACC$TIER         5     ;* STANDARD, PROGRAMMER, ADMINISTRATOR
-      *                              ;*   or SUSPENDED
-      $define ACC$PRIOR.TIER   6     ;* the tier SUSPENDED displaced
-      * 27 Aug 26 Windows port - SUSPENDED IS A FOURTH TIER, AND FIELD 6 IS WHAT
-      *   IT DISPLACED.  Owner, 27 Aug 2026: a fourth trust level "so that an
-      *   account can be temporarily denied access".  MODIFY.ACCOUNT sets it.
+      $define ACC$SUSPENDED    5     ;* 'SUSPENDED' or '' - whether the
+      *                              ;*   account is temporarily denied entry
+      * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIERS ARE GONE, AND FIELD 5
+      *   IS THE SUSPENSION STATE RATHER THAN A FOURTH TIER.  It holds the word
+      *   SUSPENDED while the account is denied entry and '' otherwise.
+      *   MODIFY.ACCOUNT SUSPENDED / UNSUSPENDED are its only writers; LOGIN,
+      *   CPROC and APISRVR are its readers.  Every account's VOC is the whole
+      *   of NEWVOC whatever this field says, so a suspension changes nothing
+      *   about the VOC.
       *
-      *   IT IS A TIER AND NOT A FLAG, which is his wording and decides the
-      *   shape: one field answers "what may this account do", so LIST ACCOUNTS
-      *   has one column and nobody has to combine two.  The cost is that the
-      *   tier it replaced would be lost, and field 6 is what stops that.
-      *
-      *   FIELD 6 IS WRITTEN ONLY ON THE WAY IN, and that rule is the whole of
-      *   why it is safe.  MODIFY.ACCOUNT's EQUALITY GUARD is what enforces it:
-      *   a second "suspended" on an already-suspended account returns at that
-      *   guard (sysmsg 10110) and never reaches the field-6 write, so SUSPENDED
-      *   cannot displace the real prior tier.  Any move to a named tier clears
-      *   field 6, because it has then been used.  (An inner "old tier is not
-      *   SUSPENDED" test at the write was unreachable and was removed -
-      *   PRE_RELEASE 21.)
-      *
-      *   NOTHING READS IT TO ACT EXCEPT THE VOC DELTA.  Owner's ruling: there
-      *   is no "resume" keyword, so coming back always names the destination -
-      *   "modify.account x programmer".  What field 6 answers is the OTHER
-      *   half, which the caller cannot supply: which tier's VOC the account is
-      *   currently holding, and therefore what has to be added or removed.
-      *
-      *   BLANK IS NORMAL AND MEANS "not suspended".  It is also what every
-      *   account written before today carries, which reads correctly.
-      *
-      *   FIELD 6 IS NOT POISONED THE WAY FIELD 4 IS - nothing has ever written
-      *   it - so this is an ordinary first use rather than a reuse.
-      * 17 Aug 26 Windows port - THE TIER IS RECORDED BECAUSE IT HAS TO OUTLIVE
-      *   CREATE.ACCOUNT.  Section 8's VOC tiers were a create-time decision with
-      *   nothing persisting them, and LOGIN's update.voc re-copies the whole of
-      *   NEWVOC - so a standard account got its compiler and its editors back
-      *   the first time the release stamp moved and the user answered Y to
-      *   "Update VOC to new release?" (LOGIN, the $RELEASE test).  That prompt
-      *   needs no privilege, and the verb reaching the same routine deliberately,
-      *   UPDATE.ACCOUNTS, is CPROC internal verb 15 and is ungated.  LOGIN now
-      *   reads this field and applies the omit list CREATEA applied.
-      *
-      *   FIELD 5 BECAUSE FIELD 4 IS POISONED, per the note above.  This is the
-      *   first use of the "start at field 5" that note reserved.
-      *
-      *   A BLANK FIELD MEANS THE FULL VOC - the pre-tier behaviour - and that is
-      *   the safe way round twice over.  Blank can only occur on an account
-      *   created before this change, and such an account already holds a full
-      *   VOC: reading blank as STANDARD would take nothing away from it (an
-      *   update only writes, never deletes) but would stop a release update
-      *   refreshing records it is entitled to.  It is also the same direction as
-      *   a missing TIER.OMIT.STANDARD, which CREATEA reads as "no policy".
+      *   FIELD 6 (ACC$PRIOR.TIER) IS DELETED WITH THE TIERS.  It existed only
+      *   to remember the tier a suspension displaced so the VOC delta on the
+      *   way back could be computed; there is no tier to displace and no VOC
+      *   delta any more, so nothing writes or reads it.  FIELD 4 REMAINS
+      *   POISONED, per the note above: records written between 13 and 14 Aug
+      *   2026 still carry a grant list there.
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

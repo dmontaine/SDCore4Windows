@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 18 Sep 26 Windows port - RELEASE_1.1 64 SLICE 3.  THE TIER WRITE IS GONE:
+*            the account record is no longer written with a tier field, since
+*            there is none to record and ACC$SUSPENDED starts blank.  The
+*            "tier" variable survives only for the dead ADMINISTRATOR arms.
 * 14 Sep 26 Windows port - a new account's $hold.dic gets @id, not @ID, as the
 *   shipped dictionaries do.  RELEASE_1.1_FIXES.md 5, stage 2b.
 * 02 Sep 26 Windows port - COMMENT ONLY, TWICE.  The block at the newvoc copy
@@ -179,9 +183,9 @@
 *   Linux ones - "/home/sd/user_accounts" is not where anything lives on this
 *   port.  The current grammar is in START-DESCRIPTION below, and what a user
 *   is shown is the syntax message at :747.  Read either of those; this block
-*   is kept because the REASONING under it - the three tiers, why the tier is
-*   written to ACC$TIER, why none of them is a wall - is still true and is
-*   cited from elsewhere.
+*   is kept as the historical record of the tiers.  RELEASE_1.1 64 (18 Sep
+*   2026) REMOVED them - the tier keywords, the ACC$TIER write and the three
+*   VOC shapes are gone; see START-HISTORY and RELEASE_1.1_FIXES.md 64.
 *
 *  Rem was
 *    CREATE.ACCOUNT acc.name pathname {NO.QUERY}
@@ -337,16 +341,21 @@ deffun ps_script(script) calling '!ps_script'
 *   of NEWVOC, ADMINISTRATOR gets that plus the administration verbs named in
 *   TIER.ADD.ADMINISTRATOR.  An administrator is a programmer and more.
 *
-*   A STRING RATHER THAN A FLAG, and not for taste: it is written to the
-*   ACCOUNTS record (ACC$TIER) and read back by LOGIN, so a person running
-*   LIST ACCOUNTS should be able to see which tier an account is without a
-*   lookup table.  It replaced a boolean full.voc, which could not tell
-*   PROGRAMMER from ADMINISTRATOR at all.
+*   A STRING RATHER THAN A FLAG, and not for taste: it was written to the
+*   ACCOUNTS record (ACC$TIER) and read back by LOGIN, so LIST ACCOUNTS could
+*   show which tier an account was without a lookup table.  It replaced a
+*   boolean full.voc, which could not tell PROGRAMMER from ADMINISTRATOR at
+*   all.  RELEASE_1.1 64 removed the write; the string survives only for the
+*   dead ADMINISTRATOR arms - see the 18 Sep note below.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE DEFAULT IS PROGRAMMER.  It was
 *   STANDARD, and STANDARD is the level this decision abolishes: every
 *   non-SDSYS account is to hold today's PROGRAMMER access.  So an account
 *   created with no tier keyword now gets the wanted level by default rather
 *   than the one on its way out.
+*
+*   THE REGISTER WRITE IS GONE TOO.  Nothing is recorded on the account record
+*   any more (see the note at the write); the variable survives only because
+*   the dead ADMINISTRATOR arms still read it until ADOPT leaves.
 *
 *   DEFAULT ONLY - NOT THE RULING'S OTHER HALF.  The site that still ACCEPTS
 *   standard / programmer / administrator as keywords is separate and is NOT
@@ -1090,18 +1099,13 @@ PW.TRY.AGAIN:
    case upcase(acc.type) = "GROUP"
      acc.rec<ACC$GROUP> = group_name
    end case
-* 17 Aug 26 Windows port - RECORD THE TIER, PROJECT_STATUS.md section 8.  The VOC
-*   above is a create-time decision and nothing kept it: LOGIN's update.voc
-*   re-copies the whole of NEWVOC, so without this a standard account got its
-*   compiler and editors back the first time the release stamp moved and the user
-*   answered Y to "Update VOC to new release?".  LOGIN reads this field.
-*
-*   ON EVERY PATH, INCLUDING ADOPT.  This write is outside the USER/GROUP case
-*   above and outside the branch that calls make.account, so an adopted account
-*   is recorded like any other - which matters, because ADOPT is how the
-*   installer's own account is created and it takes no tier keyword, so it lands
-*   STANDARD.  See SYSCOM/KEYS.H for what a blank field means.
-   acc.rec<ACC$TIER> = tier
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER WRITE IS GONE WITH THE
+*   FIELDS.  Nothing is recorded on the account record any more: there is no
+*   tier to record, ACC$SUSPENDED starts blank (nothing can suspend an account
+*   that does not exist yet), and the VOC walk at LOGIN copies the whole of
+*   NEWVOC for every account, so there is no omit list for the record to carry.
+*   The "tier" variable above survives only for the dead ADMINISTRATOR arms
+*   that leave with ADOPT - see the note on the add.rec arm.
    write acc.rec to acc.f, acc.name
    close acc.f
 

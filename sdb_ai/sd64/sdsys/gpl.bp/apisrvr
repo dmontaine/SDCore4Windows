@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  The administrator remote-API gate
+*           in vb.scram.final is gone with the tiers: sdadmin is deleted with
+*           the tier fields and the API is for every account now.  The
+*           suspension test in vb.account reads ACC$SUSPENDED (field 5).
 * 17 Sep 26 Windows port - RELEASE_1.1 55 SLICE 6, FIX AFTER b182: the
 *           kernel(K$ASSUME.USER) call is REMOVED from vb.scram.final.  It
 *           adopted the user in place (seteuid), so the front had dropped the
@@ -191,16 +195,6 @@ deffun valid_os_name(name) calling '!valid_os_name'
 *   EARLIER in the flow but LATER in the file - so leaving the declaration
 *   where it was would compile today and break the moment either routine moved.
 deffun is_grp_member(user,group) calling '!is_grp_member'
-*  5 Sep 26 Windows port - AND THE ADMINISTRATOR TIER ITSELF, PRE_RELEASE_FIXES
-*   170.  vb.scram.final asks whether the name just proven is an SD
-*   administrator, to refuse it a REMOTE API session.  Declared up here with
-*   the other two for the reason the is_grp_member note above gives: its caller
-*   is earlier in the flow and later in the file.
-*
-*   !peer_local is a SUBROUTINE and needs no declaration - it answers "did this
-*   session arrive from this machine", and it is the same routine LOGIN's
-*   peer.local.test calls, so the two doors cannot drift apart.
-deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
 * If this is the first time through, initialise various things in
 * the SYSCOM common block.
@@ -598,12 +592,12 @@ end
 *   the ERRGEN trap in PROJECT_STATUS.md section 6 and what bootstrap.py
 *   line 229 refuses a build for.
 
-* 27 Aug 26 Windows port - acc.tier is read here for the same reason acc.group
-*   is, and initialised beside it: inside the block where acc.rec is known to
-*   be assigned.  See the note above.
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  acc.tier and its read below are
+*   gone with the tier fields; the suspension test reads ACC$SUSPENDED inside
+*   the same block, for the reason the acc.group note above gives.
 account.path = ''
 acc.group = ''
-acc.tier = ''
+acc.suspended = ''
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  ***EVERY REFUSAL HERE NAMES ITS
 *   BRANCH ON THE AUDIT TRAIL, AND THAT IS KEPT RATHER THAN REMOVED WITH THE
 *   DIAGNOSTICS IT ARRIVED WITH.***  All five refusals answer the caller with
@@ -619,7 +613,7 @@ openpath @sdsys:@ds:'accounts' to acc.f then
    read acc.rec from acc.f, new.account then
       account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
       acc.group = acc.rec<ACC$GROUP>
-      acc.tier = acc.rec<ACC$TIER>
+      acc.suspended = acc.rec<ACC$SUSPENDED>
    end
    close acc.f
 end
@@ -632,9 +626,9 @@ if account.path = '' then
 end
 
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
-*   2026: a fourth tier "so that an account can be temporarily denied access".
-*   The third door, after LOGIN and CPROC's logto.authorised; an API caller
-*   reaches an account through neither.
+*   2026: "an account can be temporarily denied access".  The third door,
+*   after LOGIN and CPROC's logto.authorised; an API caller reaches an account
+*   through neither.
 *
 *   IT REUSES sysmsg(10003), WHICH IS THE RULE HERE AND NOT LAZINESS.  Every
 *   refusal in this routine gives the same text, so a caller cannot tell "no
@@ -645,7 +639,10 @@ end
 *   NO ELEVATION EXEMPTION, unlike CPROC's - there is nothing to exempt.  An
 *   API session runs as LocalSystem and never carries a person's elevation, so
 *   the bypass that reasoning rests on does not exist on this route.
-if upcase(trim(acc.tier, ' ', 'B')) = 'SUSPENDED' then
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
+*   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
+if upcase(trim(acc.suspended, ' ', 'B')) = 'SUSPENDED' then
    void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=2 suspended')
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
@@ -1668,60 +1665,12 @@ vb.scram.final:
                   goto exit.vb.scram.fail
                end
 
-*  5 Sep 26 Windows port - AND AN ADMINISTRATOR MAY NOT DO IT FROM ANOTHER
-*   MACHINE.  PRE_RELEASE_FIXES 170, the API half of the 5 Sep ruling whose ssh
-*   half is LOGIN's gate, witnessed on b122.  Owner: "remote admin through api
-*   or ssh is just a security nightmare waiting to happen", refined the same
-*   day to "if I am at the console, everything works, only remote access is
-*   denied".  REMOTE is what is denied, not the API.
-*
-*   ***IT HAS TO BE HERE, BECAUSE LOGIN DOES NOT RUN FOR THIS ROUTE.***  This
-*   program is the top-level program for an API connection - the K$CPROC.LEVEL
-*   test at the head of the file is what says so - so CPROC never runs and
-*   CPROC's "call '$LOGIN'" never happens.  LOGIN's peer test was therefore
-*   unreachable for an API session, and nothing anywhere asked whether an
-*   administrator might open a remote API session at all.
-*
-*   ***AND IT IS NOT tier_allows's QUESTION.***  vb.account asks "may this
-*   person enter THAT account", which is about a target; this asks "may this
-*   person open a REMOTE session at all", which is about the caller.  A test
-*   at the LOGTO point could not have answered it, and that is why the gate is
-*   here rather than beside the one that already existed.
-*
-*   ***WHY THIS WAS WORTH BUILDING AND NOT JUST DOCUMENTING.***  kernel.c's
-*   CN_SOCKET term already denies an API session USR_ADMIN, so it cannot reach
-*   SDSYS - but OS.EXECUTE does not come from USR_ADMIN.  os_permitted()
-*   (op_sh.c) returns TRUE on USR_ADMIN *or* on the os.users record for the
-*   username, CREATE.ACCOUNT grants every administrator SH and OS.EXECUTE, and
-*   MODIFY.ACCOUNT refuses to take them away.  The forked session's token is
-*   LocalSystem.  So this closes remote operating-system command execution as
-*   SYSTEM, which is the thing the ruling was made about.
-*
-*   THE NAME IS scram.user, FOR THE REASON THE sdapi TEST ABOVE GIVES:
-*   K$SET.USERNAME has not run yet, so kernel(K$USERNAME,0) would still hold
-*   whatever the forked session started with.
-*
-*   AFTER THE PROOF, AND DISTINCT, FOR THE REASON THAT TEST ALSO GIVES.  A
-*   caller reaching this line has already produced a valid proof, so naming
-*   the rule tells it nothing it does not hold.
-*
-*   IT REUSES sysmsg(10174), THE ssh REFUSAL, AND THAT IS THE POINT.  One rule,
-*   one wording - 10174 already reads "ssh and the API still work for an
-*   administrator ON this machine", which is this gate seen from the other
-*   side.  A second phrasing would be a second thing to keep true, and
-*   gplbld/test-retired-wording-units.ps1 exists because that goes wrong.
-*
-*   NOT A CONSOLE CASE, SO NO K$INTERACTIVE TERM.  LOGIN's gate carries one
-*   because a console session must be admitted; every session reaching here
-*   arrived over a socket, so locality is the whole of the question.
-               call !peer_local(api.peer.local, api.peer.addr)
-               if sd_admin_tier(scram.user) and not(api.peer.local) then
-                  scram.refuse.reason = 'administrator on a remote API session from ' : api.peer.addr
-                  abort.message = sysmsg(10174)
-                  * An administrator may not sign in to this machine from another one
-                  server.error = SV$ON.ERROR
-                  goto exit.vb.scram.fail
-               end
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR REMOTE-API GATE
+*   IS GONE WITH THE TIERS.  There is no SD administrator tier to test any
+*   more - sdadmin is deleted with the tier fields - and the API is for every
+*   account now.  The 5 Sep 2026 block this replaces (PRE_RELEASE_FIXES 170)
+*   refused a remote API session on sd_admin_tier(scram.user) and !peer_local;
+*   both of its terms are deleted with it.
 
                * THE IDENTITY IS THE NAME THAT WAS PROVEN, UNCONDITIONALLY.
                * vb.login consulted config('APILOGIN') here and, when it was 0,

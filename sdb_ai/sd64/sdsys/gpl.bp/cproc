@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  The administrator-as-themselves
+*            bypass in logto.authorised is gone with the tiers and sdadmin
+*            with it; there is no SD administrator tier to test any more and
+*            LOGTO refuses SDSYS outright (int.logto).  The suspension test
+*            reads ACC$SUSPENDED (field 5), the tier fields are gone.
 * 15 Sep 26 Windows port - RELEASE_1.1 45.  int.logto's SDSYS gate keys on
 *            K$OS.ELEVATED (did this session START elevated), not
 *            K$OS.ADMINISTRATOR - so "logto sdsys" from an unelevated session is
@@ -237,13 +242,6 @@ deffun errtext(err) calling '!errtext'
 * rev 0.9.0 *
 * 14 Aug 26 Windows port - restored with the ACC$GROUP test in logto.authorised
 deffun is_grp_member(user,group) calling '!is_grp_member'
-* 31 Aug 26 Windows port - the SD half of "administrator", PRE_RELEASE_FIXES 91.
-* ***HALF OF A TEST: ALWAYS WRITE kernel(K$OS.ADMINISTRATOR, 0) BESIDE IT.***
-* 5.22 - "both a windows administrator and an sd administrator".  SDADMIN's
-* header says why the Windows half cannot be folded in.  Two gates here use it,
-* int.logto's SDSYS test and logto.authorised, and LOGIN's landing case is the
-* third.
-deffun sd_admin_tier(user) calling '!sd_admin_tier'
 * 16 Aug 26 Windows port - entering SDSYS obtains OS privilege for the session
 * and leaving it gives that privilege up.  There is deliberately no verb:
 * PROJECT_STATUS.md 7 step 4.
@@ -4069,93 +4067,31 @@ logto.authorised:
       return
    end
 
-* 31 Aug 26 Windows port - AND SO DOES AN ADMINISTRATOR AS THEMSELVES.
-*   PRE_RELEASE_FIXES 91, PROJECT_STATUS.md 5.22.  Owner, 31 Aug 2026:
-*   "Administrators logged in as themselves need to have full access to
-*   everything EXCEPT the ability to issue the restricted administrator
-*   commands."  Entering an account is access, not a restricted command, so it
-*   is on the "as themselves" side of that line.
-*
-*   ***THE TWO TESTS ABOVE CANNOT ANSWER THIS, AND UNTIL TODAY NOTHING DID.***
-*   Both read session state.  K$ADMINISTRATOR is cleared at :2825 on the way
-*   out of SDSYS - the owner's ruling of 16 Aug 2026, "LOGTO ends the elevated
-*   session" - so an administrator who came in elevated lost the master key on
-*   their FIRST logto and was refused with 10003 on their second.  And the
-*   unelevated route never had it: LOGIN sets the flag only on its SDSYS case
-*   (:591, :674), so an administrator signing in AS THEMSELVES - which is the
-*   only thing an ssh session can do, because UAC has no desktop there - was
-*   refused on their first logto and every one after it.
-*
-*   ***ACCESS AND PRIVILEGE ARE DIFFERENT QUESTIONS.***  Which accounts a
-*   person may ENTER must not be answered with the flag that says what the
-*   session may DO: dropping the second must not drop the first.  os_permitted()
-*   at op_sh.c:167 is the shape to copy - it keys on process.username, the
-*   person who connected, which is why OS.EXECUTE already survives a LOGTO.
-*
-*   ***DO NOT REUSE LOGIN:573's PAIR HERE.***  It reads kernel(K$ADMINISTRATOR,
-*   -1) AND kernel(K$OS.ADMINISTRATOR, 0), and its first half is the very flag
-*   :2825 clears and LOGIN never sets for an unelevated administrator - so the
-*   pair is FALSE in both of the cases this exists to admit, and would fix
-*   nothing.  LOGIN asks "did this session START elevated, so should it land in
-*   SDSYS"; this asks "may this person enter this account".  Same words,
-*   different questions - LOGIN's own note at :543 says so from the other side,
-*   that K$OS.ADMINISTRATOR is true for the unelevated administrator it must
-*   NOT send to SDSYS.  That is exactly the person this must admit.
-*
-*   BOTH HALVES ARE ASKED OF THE PERSON, WHICH IS THE WHOLE POINT.
-*   K$OS.ADMINISTRATOR is asked of Windows on every call and a LOGTO cannot
-*   move it (keys.h:201); it carries op_kernel.c's CN_SOCKET guard, so an API
-*   session cannot claim it.  The SD half is the tier on the person's OWN
-*   account in the register - "an administrator has to be both a windows
-*   administrator and an sd administrator", 5.22 - and that register entry is
-*   the only thing in the system that says SD administrator.  The sdadmins
-*   Windows group is NOT it: the installer creates it and nothing reads it.
-*
-*   SUSPENDED IS NOT RESOLVED THROUGH ACC$PRIOR.TIER HERE, AND THAT IS THE
-*   OPPOSITE OF TIERGATE ON PURPOSE.  TIERGATE keeps a suspended person's RANK
-*   so a grant survives the suspension; this asks whether they are an
-*   administrator right now, and a suspended one is not.  LOGIN refuses them at
-*   the front door, so the only session this can reach is one already running
-*   when the suspension landed - which is the case worth denying.
-*
-*   REFUSED RATHER THAN GUESSED on every unreadable case - no register, no
-*   record for the person, an empty or unknown tier.  TIERGATE's rule, and
-*   GRANTA's before it.  A missing register must not promote everybody.
-*
-*   ***THREE GATES ASK THIS NOW, SO THE REGISTER READ IS A CATALOGUED
-*   FUNCTION AND NOT A TEST WRITTEN OUT HERE.***  It was inline for one hour,
-*   when there was one caller; the owner's ruling of 31 Aug 2026 made it three
-*   across two programs - int.logto's SDSYS gate above, LOGIN's landing case,
-*   and this - which is exactly TIERGATE's "one place the decision is made".
-*   !sd_admin_tier carries the SUSPENDED policy, the refuse-rather-than-guess
-*   rule and its own file variable; SDADMIN's header has all three.
-*
-*   ***THE CONJUNCTION STAYS WRITTEN OUT, AND SDADMIN SAYS WHY IT MUST BE.***
-*   K$OS.ADMINISTRATOR asks Windows about THIS process and takes no user, so
-*   folding it into a function with a "user" argument would make that argument
-*   a lie.  Both halves, at every gate, where a reader can see the whole rule.
-   if kernel(K$OS.ADMINISTRATOR, 0) and sd_admin_tier(@logname) then
-      logto.ok = @true
-      return
-   end
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR-AS-THEMSELVES
+*   BYPASS IS GONE WITH THE TIERS.  There is no SD administrator tier to test
+*   any more - sdadmin is deleted with the tier fields - and an
+*   administrator's only SD account is SDSYS, which int.logto refuses
+*   outright.  The elev.obtained bypass above still stands as dead code, kept
+*   deliberately for the elevation-machinery change; see the note at int.logto.
 
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
-*   2026: a fourth tier "so that an account can be temporarily denied access".
-*   LOGIN shuts the front door; this is the other one, because an account
-*   reached with LOGTO never goes through LOGIN at all.
+*   2026: "an account can be temporarily denied access".  LOGIN shuts the front
+*   door; this is the other one, because an account reached with LOGTO never
+*   goes through LOGIN at all.
 *
-*   ***AFTER THE TWO PRIVILEGED BYPASSES ABOVE, AND THAT IS A JUDGEMENT CALL
-*   RATHER THAN HIS RULING.***  An elevated session and an internal one can
-*   still enter a suspended account.  The reasoning: he has ruled twice today
-*   that an administrator's access cannot be turned off, an administrator
-*   investigating a suspended account is the ordinary reason to look at one,
-*   and anyone elevated can lift the suspension anyway - so refusing them buys
-*   no security and costs the obvious diagnostic.  What a suspension denies is
-*   THE ACCOUNT'S OWN USER, which is the group test below.
+*   ***AFTER THE PRIVILEGED BYPASS ABOVE, AND THAT IS A JUDGEMENT CALL RATHER
+*   THAN HIS RULING.***  An elevated session can still enter a suspended
+*   account: investigating a suspended account is the ordinary reason to look
+*   at one, and anyone elevated can lift the suspension anyway - so refusing
+*   them buys no security and costs the obvious diagnostic.  What a suspension
+*   denies is THE ACCOUNT'S OWN USER, which is the group test below.
 *
 *   IF THAT IS WRONG, THE FIX IS TO MOVE THIS BLOCK ABOVE THE INTERNAL TEST at
 *   the top of the routine, not to add a second test here.
-   if upcase(trim(acc.record<ACC$TIER>, ' ', 'B')) = 'SUSPENDED' then
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
+*   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
+   if upcase(trim(acc.record<ACC$SUSPENDED>, ' ', 'B')) = 'SUSPENDED' then
       display sysmsg(10107, new.account) ;* Account %1 is suspended
       return
    end

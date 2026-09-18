@@ -145,6 +145,10 @@
 *                      that APISRVR can make the same decision.  The gosub
 *                      stays and the gate above it is unchanged; only the
 *                      copy of the rule has gone.  PRE_RELEASE_FIXES 170
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  The administrator remote-session
+*                      gate, sd_admin_tier and peer.local.test are gone with
+*                      the tiers; the suspension test reads ACC$SUSPENDED and
+*                      get.acc.tier is deleted with the tier fields.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -190,12 +194,6 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   within a normal session" - is untouched: this is not within a session, it
 *   is what decides which account the session begins in.
 deffun elevate(action,arg) calling '!elevate'
-* 31 Aug 26 Windows port - the SD half of "administrator", PRE_RELEASE_FIXES 91.
-* ***HALF OF A TEST: ALWAYS WRITE kernel(K$OS.ADMINISTRATOR, 0) BESIDE IT.***
-* 5.22 - "both a windows administrator and an sd administrator".  SDADMIN's
-* header says why the Windows half cannot be folded in.  One gate here, the
-* landing case below; CPROC has the other two.
-deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
    ok = @false
    admin.login = @false
@@ -215,16 +213,6 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   bootstrap.  '' is also the value that means "no command was given", which
 *   is the interactive session and the common case.
    batch.command = ''
-
-* 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Set here, at the top,
-*   rather than left to the three call sites that do set them, because BCOMP's
-*   "is not assigned a value" is what bootstrap.py line 229 fails the whole
-*   bootstrap on, and both are read in update.voc - textually far above the
-*   get.acc.tier that assigns them.  '' is also the value that means "full VOC",
-*   so if a call site added later forgets, the behaviour is the pre-tier one
-*   rather than a silently reduced account.
-   update.voc.tier = ''
-   tier.acc.name = ''
 
 * 21 Aug 26 Windows port - and cred.ok for the same reason and in the same
 *   place: require.credential assigns it, and it is READ at the call site,
@@ -317,9 +305,11 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 
    if mode = 2 or mode = 3 or mode = 4 then  ;* Just doing a VOC upgrade or install
       if mode = 2 or mode = 4 then           ;* VOC update
-* 17 Aug 26 Windows port - this is UPDATE.ACCOUNTS (CPROC internal verb 15), which
-*   is ungated, so the account's own tier decides what it may copy back in.
-*   PROJECT_STATUS.md section 8.
+* 17 Aug 26 Windows port - this is UPDATE.ACCOUNTS (CPROC internal verb 15),
+*   which is ungated.  PROJECT_STATUS.md section 8.
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  EVERY ACCOUNT'S VOC IS THE WHOLE OF
+*   NEWVOC, so there is no tier to read before this walk and get.acc.tier is
+*   gone with the tier fields.
 * 04 Sep 26 Windows port - MODE 4 IS THE SAME WORK WITH THE QUESTION ANSWERED BY
 *   THE CALLER.  PRE_RELEASE_FIXES 70.  It is what "UPDATE.ACCOUNTS ALL" asks
 *   for, and the installer runs that on an upgrade through
@@ -327,8 +317,6 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   than getting one of its own: 70's ruling is "the installer calls the
 *   existing all-accounts path, not a new one", and two copies of "refresh
 *   every account" would drift apart at the first tier change.
-         tier.acc.name = @who
-         gosub get.acc.tier
          update.voc.f = voc
          gosub update.voc
          close update.voc.f
@@ -393,9 +381,6 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   carelessness: they stopped a release update quietly stripping a suspended
 *   administrator's VOC to a standard one, after which lifting the suspension
 *   would not put it back.  There is no standard VOC to strip it to any more.
-*
-*   NOTE: get.acc.tier below still reads ACC$TIER and ACC$PRIOR.TIER and is dead
-*   for the same reason.  It goes WITH THE FIELDS, not here.
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
@@ -521,114 +506,14 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
      end
   end
 
-* 05 Sep 26 Windows port - AN ADMINISTRATOR GETS NO ssh AND NO API SESSION AT
-*   ALL.  PRE_RELEASE_FIXES 167, owner's ruling of 5 Sep 2026: "remote ssh and
-*   api access is totally denied to administrators".  PROJECT_STATUS.md 5.25.
-*
-*   ***IT REFUSES THE SESSION, IT DOES NOT NARROW IT, AND THE DIFFERENCE IS THE
-*   RULING.***  An earlier reading of this had an administrator arriving over
-*   ssh land in their personal account with fewer rights.  That is not what was
-*   ruled and it does not hold anyway - see the next paragraph.
-*
-*   ***WHY THE SEED ALONE COULD NOT DO IT: THERE ARE THREE DOORS INTO SDSYS AND
-*   THE SEED IS READ BY ONE.***  kernel.c's USR_ADMIN seed decides the landing
-*   case at :675 below.  It decides NOTHING about LOGTO: CPROC:2707 gates
-*   "logto sdsys" on K$OS.ADMINISTRATOR and sd_admin_tier, and CPROC:4072 does
-*   the same for int.logto.  Neither reads the seed - and CPROC:2858 SETS it on
-*   entering SDSYS, so a session refused the landing gets everything back by
-*   typing one command.  elevate('START') cannot stop that either:
-*   sd-elevate.ps1:126 short-circuits "exit 0" when the token is already an
-*   administrator's, which over ssh it is, because sshd runs as LocalSystem and
-*   builds an UNFILTERED token (measured 5 Sep 2026 - PRE_RELEASE 167).
-*
-*   Refusing the connection here closes all three at once, before an account is
-*   chosen, which is why it is here and not at each gate.
-*
-*   ***THE TIER IS THE QUESTION, NOT THE WINDOWS GROUP.***  sd_admin_tier reads
-*   ACC$TIER from the register - the only thing in the system that says SD
-*   administrator (5.22) - and carries the SUSPENDED policy and the
-*   refuse-rather-than-guess rule with it.  A Windows administrator who holds
-*   an ordinary SD account is not doing administration and keeps ssh; that is
-*   the person 5.6.2 was written for.
-*
-*   ***K$INTERACTIVE IS THE ROUTE AND IS DELIBERATELY NOT THE ELEVATION.***
-*   An administrator at an UNELEVATED console must pass here: they land in
-*   their own account below and reach SDSYS with LOGTO, which is where UAC is
-*   asked.  Testing the seed instead would refuse them.  op_kernel.c's key
-*   folds CN_SOCKET in, so this one test answers for the API as well as ssh.
-*
-*   INTERNAL IS EXEMPT, for the sdusers gate's reason directly above: the
-*   bootstrap runs "sd -internal SECOND.COMPILE" on a machine that may have no
-*   register at all, and sd.c gates that path on its own.
-*
-*   A PHANTOM NEEDS NO EXEMPTION AND THAT IS MEASURED FROM THE CODE, NOT HOPED.
-*   op_phantom() forks and execs, so a phantom carries the token of the session
-*   that started it: one spawned from a console administrator's session is
-*   interactive and passes here, and one spawned from an ssh session cannot
-*   exist, because this line refused the ssh session first.  Owner's ruling,
-*   5 Sep 2026: inheritance stands.
-   if not(kernel(K$INTERNAL,-1)) then
-*     @logname, NOT lgn.id, MATCHING THE OTHER THREE GATES.  They all read
-*     sd_admin_tier(@logname) - :675 here, CPROC:2707 and CPROC:4072 - and one
-*     gate asking the same question of a different variable is how the four
-*     drift apart.  The two hold the same value at this point; the consistency
-*     is the reason, not a correction.
-* 05 Sep 26 Windows port - ***REMOTE IS WHAT IS DENIED, NOT ssh AND THE API.***
-*   Owner's refinement, 5 Sep 2026, after the first build refused LOCAL ssh too:
-*   "my lockout from remote API and SSH is fine.  However, local API and SSH
-*   should continue to work - if I am at the console, everything works, only
-*   remote access is denied."
-*
-*   ***THE FIRST BUILD GOT THIS WRONG AND verify-sshadmin PROVED IT.***  That
-*   step ssh'd to LOCALHOST and was refused, and it was scored as the gate
-*   working.  It was: the gate as specified.  The specification was narrower
-*   than the ruling, because an ssh session carries S-1-5-2 NETWORK and no
-*   S-1-5-4 INTERACTIVE whether the client is across the subnet or on the box -
-*   so the token cannot tell local from remote and K$INTERACTIVE alone denies
-*   both.
-*
-*   ***SO THE SECOND TERM IS THE PEER, AND SD ALREADY HAS IT BOTH WAYS.***
-*     ssh - ENV('SSH_CLIENT'), which sshd sets and a client CANNOT forge:
-*           measured on this machine, sshd_config has no AcceptEnv and leaves
-*           PermitUserEnvironment at its default of "no".  Field 1 is the
-*           client address.
-*     API - system(42), which is my_uptr->ip_addr, filled from accept()'s peer
-*           in linuxio.c.  op_sys.c case 42.
-*   Neither needed a C change; ENV is a BASIC intrinsic (OP.ENV) and 42 was
-*   already read by the network test above.
-*
-*   ***FAIL CLOSED WHEN THE ORIGIN CANNOT BE ESTABLISHED, WHICH IS THE WHOLE
-*   REASON THIS IS "PROVABLY LOCAL" AND NOT "NOT PROVABLY REMOTE".***  A
-*   session with no desktop, no SSH_CLIENT and no peer address is one whose
-*   origin nothing here can vouch for - an unattended scheduled task is exactly
-*   that shape - and the owner already ruled those fall to batch.jobs rather
-*   than carrying administrator rights.  Admitting the unknown case would
-*   reopen the hole under a different name.
-*
-*   THE CONSOLE NEVER REACHES THE PEER TEST.  K$INTERACTIVE answers first and
-*   is true there, elevated or not, so an administrator at the machine is
-*   admitted before anything is asked about addresses.
-*   A GOSUB RATHER THAN A CATALOGUED FUNCTION, FOR NOW, AND THE PRECEDENT IS IN
-*   THIS TREE.  CPROC:4062 records that !sd_admin_tier "was inline for one hour,
-*   when there was one caller" and became catalogued only when the owner's
-*   ruling made it three.  This has one caller: LOGIN refuses the CONNECTION, so
-*   CPROC's two SDSYS gates are unreachable for a session this turns away.  If a
-*   second caller ever appears, catalogue it then - one decision, one place.
-*
-*   ***AND IT IS COMPUTED BEFORE THE TEST, NOT INSIDE IT, BECAUSE "and" DOES NOT
-*   SHORT-CIRCUIT.***  CREATEA:382 records that in terms and the defect it cost
-*   went unnoticed from 10 June to 21 Aug 2026.  Every term of the condition
-*   below runs for every login anyway, so computing this first costs nothing and
-*   removes the temptation to write it as a function call that looks lazy.
-      gosub peer.local.test          ;* sets peer.local
-      if sd_admin_tier(@logname) and not(kernel(K$INTERACTIVE, 0)) ~
-         and not(peer.local) then
-         display sysmsg(10174) ;* An administrator may not sign in REMOTELY
-         audit.account = 'SDSYS'
-         audit.reason = 'administrator on a remote session with no interactive desktop'
-         goto terminate.connection
-      end
-   end
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR PEER GATE IS GONE
+*   WITH THE TIERS.  ssh and the API are for every account now, and SDSYS is
+*   reached only by the elevated Windows SDSYS session (the landing case
+*   below), so there is no administrator session left to refuse here.  The
+*   5 Sep 2026 block this replaces (PRE_RELEASE_FIXES 167 and 169) refused an
+*   administrator's remote session with 10174 before an account was chosen,
+*   on sd_admin_tier, K$INTERACTIVE and !peer_local; all three of its terms
+*   are deleted with it.
 
 * 14 Sep 26 Windows port - RELEASE_1.1 5.  CASE INVERSION IS NO LONGER TURNED ON
 *   AT LOGIN.  Owner's ruling, 14 Sep 2026.  This was "s = pterm(PT$INVERT,
@@ -916,8 +801,8 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
    audit.account = initial.account
 
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
-*   2026: a fourth tier "so that an account can be temporarily denied access".
-*   MODIFY.ACCOUNT writes SUSPENDED to ACC$TIER and this is the door it shuts.
+*   2026: "an account can be temporarily denied access".  MODIFY.ACCOUNT
+*   writes SUSPENDED and this is the door it shuts.
 *
 *   AFTER THE CASE STATEMENT, NOT INSIDE IT, so it covers both arms with one
 *   test.  Both have acc.rec read by the time they leave, and both reach here;
@@ -934,7 +819,10 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   AND IT IS UNCONDITIONAL, elevation included.  "sd -internal" is forced to
 *   SDSYS by sd.c and MODIFY.ACCOUNT refuses to touch SDSYS at all (2202), so
 *   there is no account this can lock a bootstrap out of.
-   if upcase(trim(acc.rec<ACC$TIER>, ' ', 'B')) = 'SUSPENDED' then
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
+*   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
+   if upcase(trim(acc.rec<ACC$SUSPENDED>, ' ', 'B')) = 'SUSPENDED' then
       display sysmsg(10107, initial.account) ;* Account %1 is suspended
       audit.reason = 'the account is suspended'
       goto terminate.connection
@@ -1449,56 +1337,6 @@ require.credential:
 * holds by the time this runs, so consulting it cannot consult one account's
 * list while running in another - there is no second name to disagree with.
 
-* ======================================================================
-* PEER.LOCAL.TEST  -  did this session come from THIS machine?
-*
-* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167 and 169, the owner's
-* refinement of 5 Sep 2026: "local API and SSH should continue to work - if I am
-* at the console, everything works, only remote access is denied."  Sets
-* peer.local.  PROJECT_STATUS.md 5.25.
-*
-* ***IT PROVES LOCAL RATHER THAN DISPROVING REMOTE, AND THAT IS THE WHOLE
-* DESIGN.***  peer.local starts FALSE and only a recognised loopback address
-* sets it true.  A session whose origin nothing here can establish - no
-* SSH_CLIENT, no peer address, no desktop - stays false and is refused by the
-* caller.  An unattended scheduled task is exactly that shape, and the owner
-* ruled on 5 Sep that those fall to batch.jobs rather than carry administrator
-* rights.  Written the other way round - "refuse only what is provably remote" -
-* the unknown case would be ADMITTED, which reopens 167's hole under a new name.
-*
-* ***TWO SOURCES, BECAUSE THE TWO TRANSPORTS TELL SD DIFFERENT THINGS.***
-*   ssh   ENV('SSH_CLIENT'), set by sshd.  SD is started by sshd on a pty, not
-*         on a socket, so system(42) is EMPTY for an ssh session and this is
-*         the only source.  Field 1 of three, space separated: client address,
-*         client port, server port.
-*   API   system(42) - my_uptr->ip_addr, filled from accept()'s peer address in
-*         linuxio.c and read at op_sys.c case 42.
-*
-* ***SSH_CLIENT CANNOT BE FORGED BY THE CLIENT, AND THAT WAS CHECKED RATHER
-* THAN ASSUMED.***  Measured on this machine 5 Sep 2026: sshd_config carries no
-* AcceptEnv line and leaves PermitUserEnvironment at its default of "no", so a
-* client may not send environment variables and may not plant them in
-* authorized_keys.  sshd sets SSH_CLIENT itself, after authentication.  IF
-* EITHER OF THOSE SETTINGS EVER CHANGES, THIS TEST STOPS BEING A SECURITY
-* SIGNAL - allow-ssh-groups.ps1 is where that would happen.
-*
-* IPv6 AND IPv4 BOTH, AND THE MAPPED FORM TOO.  A loopback ssh may present as
-* 127.0.0.1, as ::1, or as ::ffff:127.0.0.1 depending on the client's address
-* family.  All three are this machine.  The whole 127.0.0.0/8 block is loopback,
-* not just 127.0.0.1, so the test is on the leading octet.
-
-peer.local.test:
-*  5 Sep 26 Windows port - THE RULE ITSELF MOVED TO !peer_local.
-*    PRE_RELEASE_FIXES 170.  APISRVR has to make the same decision and could
-*    not reach this gosub: it is the top-level program for an API connection,
-*    so CPROC never runs and CPROC's "call '$LOGIN'" never happens.  Copying
-*    the case statement over would have left two copies of one security rule.
-*    The comment above this label, about the leading octet, describes what
-*    !peer_local now does; gpl.bp/peer_local carries the full reasoning.
-   call !peer_local(peer.local, peer.addr)
-
-   return
-
 batch.permitted:
    batch.ok = @false
 
@@ -1853,44 +1691,6 @@ accept.without.query:
    close sdsys.file
 *  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
 *  routine any more, so there is nothing to close here.
-
-   return
-
-*
-* ======================================================================
-* GET.ACC.TIER  -  Read an account's VOC tier from the ACCOUNTS register
-*
-* 17 Aug 26 Windows port - PROJECT_STATUS.md section 8.  Takes tier.acc.name and
-*   sets update.voc.tier for the routine above.  A missing register, a missing
-*   record or a record written before tiers existed all give '', which
-*   update.voc reads as the full VOC - see SYSCOM/KEYS.H.
-*
-*   ITS OWN FILE VARIABLE, deliberately.  update.voc is called from inside a loop
-*   that has ACCOUNTS open on acc.f with a select list active on channel 12, and
-*   reusing either would end that walk part way through with no error and no sign
-*   of it.  That call site does not come through here - it has the record already
-*   - but the next one might.
-
-get.acc.tier:
-   update.voc.tier = ''
-
-   openpath @sdsys:@ds:'accounts' to tier.acc.f then
-      read tier.acc.rec from tier.acc.f, upcase(tier.acc.name) then
-         update.voc.tier = tier.acc.rec<ACC$TIER>
-
-*        27 Aug 26 Windows port - SUSPENDED IS NOT A VOC TIER, so resolve it to
-*        the tier it displaced.  The same substitution as the walk above, and
-*        it is here as well as there because these are two independent call
-*        sites and neither can see the other's.  A suspended account cannot
-*        reach LOGIN at all, but UPDATE.ACCOUNTS can be run in an account that
-*        was suspended and un-suspended since, and the walk above reaches every
-*        account whatever its state.
-         if upcase(update.voc.tier) = 'SUSPENDED' then
-            update.voc.tier = tier.acc.rec<ACC$PRIOR.TIER>
-         end
-      end
-      close tier.acc.f
-   end
 
    return
 end

@@ -36,6 +36,14 @@
 *   grants a tier change voided.  It can name none now: the tier ordering it
 *   measured is the first casualty of RELEASE_1.1 64, and every non-SDSYS
 *   account is one level.
+* 18 Sep 26 Windows port - RELEASE_1.1 64 SLICE 3.  SUSPENDED MOVES TO ITS OWN
+*   FIELD AND THE TIER MACHINERY GOES.  ACC$SUSPENDED (field 5) holds
+*   'SUSPENDED' or ''; tier.set collapses to the equality guard, the
+*   self-suspend guard and one register write.  voc.delta, tier.rank,
+*   tier.layer, tier.build.rec, tier.add.one, tier.del.one, tier.os.write,
+*   tier.os.remove and the was.admin / need.access paths are deleted: there is
+*   no tier to move between and every account's VOC is the whole of NEWVOC,
+*   so a suspension changes nothing about the VOC.
 * 28 Aug 26 Windows port - the ADD and DELETE arms write a K$AUDIT record, as
 *   GRANT and REVOKE already did.  The same group edit through two verbs left
 *   a trail through only one of them.  PRE_RELEASE_FIXES.md 27.
@@ -115,27 +123,19 @@
 * MODIFY.ACCOUNT account NONE              - neither
 * MODIFY.ACCOUNT account SH-ON | SH-OFF    - the SH verb and "!"
 * MODIFY.ACCOUNT account OS-ON | OS-OFF    - OS.EXECUTE and the screen editors
-* MODIFY.ACCOUNT account STANDARD | PROGRAMMER | ADMINISTRATOR | SUSPENDED
-* MODIFY.ACCOUNT account STANDARD | PROGRAMMER  SSH | API | BOTH | NONE
-*                                          - when leaving ADMINISTRATOR
+* MODIFY.ACCOUNT account SUSPENDED | UNSUSPENDED
 *
-* THE TIER IS ABSOLUTE TOO, and it moves in any direction with no intermediate
-* step: an account can go PROGRAMMER, STANDARD, SUSPENDED and back to any of
-* them.  Naming a tier on a suspended account lifts the suspension into that
-* tier.  There is no "resume" keyword - owner's ruling, 27 Aug 2026: coming
-* back always names the destination.
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIERS ARE GONE, AND THESE ARE
+*   THE TWO STATE FORMS THAT REMAIN.  SUSPENDED writes SUSPENDED to
+*   ACC$SUSPENDED (field 5) and UNSUSPENDED clears it; nothing else in the
+*   account moves either way - no Windows membership, no os.users record, no
+*   VOC change, because every account's VOC is the whole of NEWVOC whatever the
+*   field says.
 *
-* SUSPENDED DENIES ACCESS AND CHANGES NOTHING ELSE.  The VOC is left exactly as
-* it is, no Windows group membership moves, and the tier it displaced is kept
-* in ACC$PRIOR.TIER so the VOC delta on the way back knows where the account is
-* coming from.  Three doors refuse a suspended account: LOGIN, CPROC's
-* logto.authorised and APISRVR's vb.account.
-*
-* LEAVING ADMINISTRATOR TAKES THREE THINGS AWAY and one of them must be named.
-* Windows Administrators membership and the os.users record go automatically -
-* the account held both BECAUSE it was an administrator - but ssh and the API
-* were a rule and become keyword-set, so the caller says what they are to be
-* (10111 if they do not).
+* SUSPENDED DENIES ACCESS AND CHANGES NOTHING ELSE.  No Windows group
+*   membership moves and the VOC is left exactly as it is, which is what makes
+*   lifting one free.  Three doors refuse a suspended account: LOGIN, CPROC's
+*   logto.authorised and APISRVR's vb.account.
 *
 * THE KEYWORD IS ABSOLUTE.  It says what the account's remote access is, and
 * whatever it does not name is withdrawn - so API takes ssh away.  The same
@@ -195,42 +195,14 @@ deffun ps_script(script) calling '!ps_script'
 
    parser = "!PARSER"
 
-* 27 Aug 26 Windows port - ASSIGNED HERE FOR BCOMP, NOT FOR THE LOGIC.  LOGIN
-*   carries the same block for the same reason and says it plainly: "is not
-*   assigned a value" is a compile WARNING, and bootstrap.py line 229 fails the
-*   WHOLE bootstrap on one.  BCOMP reads the source in order, so a variable set
-*   in a routine that stands textually BELOW the routine reading it counts as
-*   unassigned however the control flow actually runs.
-*
-*   THE TWO THAT ACTUALLY NEED IT are rank.out, which voc.delta reads and
-*   tier.rank sets forty lines further down, and the route.apply trio, which
-*   tier.set reads.  The rest are here because listing only the two that fail
-*   today invites the next routine to be inserted in the wrong place and fail
-*   the bootstrap with no clue why.
-*
-*   EVERY VALUE IS ALSO THE SAFE ONE.  rank.out is 2 - PROGRAMMER, which is
-*   what a blank tier means (SYSCOM/KEYS.H) - and the counters are zero, so a
-*   path that somehow skipped the work reports having done nothing rather than
-*   reporting somebody else's numbers.
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  WHAT REMAINS OF THE OLD BCOMP
+*   BLOCK, after the tier machinery it existed for went with the tiers.
+*   want.tier is the one state word the caller named - SUSPENDED or
+*   UNSUSPENDED - and the route.* trio serve route.set, which is untouched.
    want.tier          = ''
-   rank.in            = ''
-   rank.out           = 2
-   tier.dir           = ''
-   tier.id            = ''
-   tier.got           = @false
-   tier.rec           = ''
-   tier.layer.rec     = ''
-   tier.from.template = @false
-   tmpl.open          = @false
    route.failed       = @false
    route.same         = @false
    route.stat         = 0
-   voc.ok             = @true
-   voc.added          = 0
-   voc.removed        = 0
-   voc.kept           = 0
-   voc.failed         = 0
-   voc.skipped        = @false
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
    
@@ -346,20 +318,9 @@ deffun ps_script(script) calling '!ps_script'
             os.want  = @false
             gosub os.set
 
-* 27 Aug 26 Windows port - THE TIER, WHICH WAS A CREATE-TIME PROPERTY UNTIL
-*   TODAY.  Owner, 27 Aug 2026: "an administrator account should be able to be
-*   downgraded to programmer or standard", and a fourth level, SUSPENDED, "so
-*   that an account can be temporarily denied access".
-*
-*   FOUR NAMES FOR ONE STATE, like SSH/API/BOTH/NONE and unlike the OS
-*   switches.  The keyword says what the account IS, and the same three words
-*   are CREATE.ACCOUNT's - SUSPENDED is the one only this verb can set, because
-*   there is no reason to create an account already denied.
-*
-*   IN ANY DIRECTION, AND WITH NO INTERMEDIATE STEP.  His question, and it
-*   decided the shape: an account can go programmer -> standard -> suspended
-*   and back to any of them, never needing to be un-suspended first.  Naming a
-*   tier on a suspended account lifts the suspension into that tier.
+* 27 Aug 26 Windows port - owner, 27 Aug 2026: a fourth state, SUSPENDED, "so
+*   that an account can be temporarily denied access".  RELEASE_1.1 64 keeps
+*   it and removes the tiers it sat beside.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE THREE TIER KEYWORDS ARE GONE,
 *   AND THEY ARE DELETED RATHER THAN REFUSED BECAUSE OF THE RDPACCOUNT
 *   PRECEDENT ABOVE.  A caller who still types standard, programmer or
@@ -385,12 +346,11 @@ deffun ps_script(script) calling '!ps_script'
 *        removes that route, so the lift needs a name of its own, and the
 *        owner's ruling is to keep suspend AND unsuspend.
 *
-*        IT LANDS AT PROGRAMMER because that is the only level a non-SDSYS
-*        account holds.  When suspension moves to its own field this case
-*        becomes "clear the state" rather than "set a level", and that is the
-*        change to make then - not a reason to leave it undone now.
+*        IT CLEARS THE FIELD RATHER THAN SETS A LEVEL, now that suspension has
+*        its own field (ACC$SUSPENDED).  want.tier carries the keyword so the
+*        messages can say what was asked for; tier.set writes ''.
          case upcase(action) = 'UNSUSPENDED'
-            want.tier = 'PROGRAMMER'
+            want.tier = 'UNSUSPENDED'
             gosub tier.set
 
          case 1
@@ -824,55 +784,33 @@ os.set:
    return
 
 * ======================================================================
-* STANDARD / PROGRAMMER / ADMINISTRATOR / SUSPENDED - change the account's tier.
+* SUSPENDED / UNSUSPENDED - set the account's suspension state.
 *
-* 27 Aug 26 Windows port - owner, 27 Aug 2026.  The tier was a create-time
-* property until today; ACC$TIER outlived CREATE.ACCOUNT but nothing could
-* change it.  His two rulings: an administrator account may be downgraded, and
-* there is a fourth level, SUSPENDED, that denies access temporarily.
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THIS IS ALL THAT IS LEFT OF THE OLD
+*   tier.set, and it is all a suspension ever needed.  The tier machinery it
+*   used to carry - Windows membership moves, the route and os.users blocks,
+*   voc.delta and field 6 - went with the tiers; SYSCOM/KEYS.H says why field
+*   6 is gone.  A suspension changes nothing on Windows and nothing in the
+*   VOC, so the state write below is the whole operation.
 *
-* THE ORDER OF WORK IS CHOSEN FOR WHAT A FAILURE LEAVES BEHIND.  Windows first,
-* then the VOC, and the register LAST.  Every step before the register write is
-* idempotent - a group the user is already in, a record already written, a VOC
-* entry already copied or already gone - so a run that dies part way leaves the
-* register saying the OLD tier and re-running the same command converges.  The
-* register first would leave the opposite: a record claiming a tier the account
-* does not have, which is the failure ACC$TIER exists to prevent.
-*
-* FIELD 6 IS WRITTEN ONLY ON THE WAY IN TO SUSPENDED, and it is the EQUALITY
-* GUARD at the top of tier.set that makes that true - a second
-* "modify.account x suspended" returns there (sysmsg 10110) and never reaches
-* the field-6 write, so it cannot overwrite the real prior tier with SUSPENDED.
-* Any move to a named tier clears it, because it has then been used.  There was
-* an inner "if old.tier # 'SUSPENDED'" at the write as well; it was unreachable
-* and is gone (PRE_RELEASE 21).  See SYSCOM/KEYS.H.
+* THE ORDER OF WORK IS CHOSEN FOR WHAT A FAILURE LEAVES BEHIND.  Every step
+*   before the register write is a read, and the write is one field, so a run
+*   that dies part way leaves the register saying the OLD state and re-running
+*   the same command converges.
 *
 * NOTHING IS WITHDRAWN ON WINDOWS FOR A SUSPENSION, which is the owner's
-* ruling and is what makes lifting one free.  The stated cost is in LOGIN
-* beside the refusal: the ssh connection is still accepted and SD refuses the
-* login, rather than sshd refusing the connection.
+*   ruling and is what makes lifting one free.  The stated cost is in LOGIN
+*   beside the refusal: the ssh connection is still accepted and SD refuses
+*   the login, rather than sshd refusing the connection.
 tier.set:
-   old.tier   = upcase(trim(acc.rec<ACC$TIER>, ' ', 'B'))
-   prior.tier = upcase(trim(acc.rec<ACC$PRIOR.TIER>, ' ', 'B'))
-   grp.acct   = (group.name[1,4] = 'sdg_')
+   old.state = upcase(trim(acc.rec<ACC$SUSPENDED>, ' ', 'B'))
+   new.state = ''
+   if want.tier = 'SUSPENDED' then new.state = 'SUSPENDED'
 
-*  THE EQUALITY GUARD.  It also protects field 6: a second suspend of an
-*  already-suspended account returns here, so the field-6 write below never
-*  sees old.tier = 'SUSPENDED'.  PRE_RELEASE 21.
-   if old.tier = want.tier then
+*  THE EQUALITY GUARD.  "suspended" on a suspended account and "unsuspended"
+*  on any other both land here, so a no-op writes nothing and reports 10110.
+   if old.state = new.state then
       crt sysmsg(10110, acc.name, want.tier) ;* %1 is already %2; nothing changed
-      return
-   end
-
-*  A GROUP ACCOUNT CAN HOLD ANY TIER BUT ADMINISTRATOR.  Its VOC is built the
-*  same way and it can be suspended - LOGTO is how it is reached and CPROC
-*  refuses a suspended one - but ADMINISTRATOR means a Windows group
-*  membership and there is no single person behind a group account to put in
-*  it.  CREATE.ACCOUNT's GROUP arm reaches neither create_user() nor
-*  set_passwd() for the same reason.
-   if grp.acct and want.tier = 'ADMINISTRATOR' then
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
    end
 
@@ -890,218 +828,12 @@ tier.set:
       end
    end
 
-   acc.user  = ''
-   was.admin = @false
-   if not(grp.acct) then
-      gosub account.user
-      if not(user.ok) then return
-*     BY SID AND NOT BY THE TIER FIELD, the same test route.set uses.  It is
-*     also the only test that is right here: an account suspended while it was
-*     an administrator still carries the Windows membership, so its ACC$TIER
-*     reads SUSPENDED while Windows still calls it an administrator.  Asking
-*     Windows answers "what is actually true" in both cases.
-      was.admin = is_grp_member(acc.user, "S-1-5-32-544")
-   end
-
-*  A DOWNGRADE OUT OF ADMINISTRATOR MUST NAME THE ACCESS, and this is the
-*  owner's ruling of 27 Aug 2026 rather than a default chosen here.  An
-*  administrator has ssh and the API as a rule; below that tier they are
-*  keyword-set, so the downgrade has to land somewhere and nothing here is
-*  entitled to pick.  SUSPENDED is exempt: it withdraws nothing on Windows, so
-*  there is no state for the caller to choose.
-   need.access = @false
-   if was.admin then
-      if want.tier # 'ADMINISTRATOR' and want.tier # 'SUSPENDED' then
-         need.access = @true
-      end
-   end
-
-   if need.access then
-      call @parser(PARSER$GET.TOKEN, token.type, access.word, keyword)
-      want.ssh  = @false
-      want.api  = @false
-      access.ok = @true
-
-      if token.type = PARSER$END then
-         access.ok = @false
-      end else
-         begin case
-            case upcase(access.word) = 'SSH'
-               want.ssh = @true
-            case upcase(access.word) = 'API'
-               want.api = @true
-            case upcase(access.word) = 'BOTH'
-               want.ssh = @true
-               want.api = @true
-            case upcase(access.word) = 'NONE'
-               want.ssh = @false
-               want.api = @false
-            case 1
-               access.ok = @false
-         end case
-      end
-
-      if not(access.ok) then
-         @system.return.code = -ER$ARGS
-         crt sysmsg(10111, acc.name)
-         * Say what remote access %1 is to have: ssh, api, both or none
-         return
-      end
-   end
-
-*  ---- Windows first.  See the banner: everything before the register write
-*  ---- is idempotent, so a failure here leaves the old tier standing.
-   tier.stat = 0
-
-   if want.tier = 'ADMINISTRATOR' and not(grp.acct) and not(was.admin) then
-      tier.stat = os_group("ADDMEM", "S-1-5-32-544", acc.user)
-*
-* 18 Sep 26 Windows port - ***AND THE ROUTES GO WITH THE PROMOTION.***
-*   RELEASE_1.1_FIXES.md 58 and 62.  An administrator has no remote door, and
-*   CREATE.ACCOUNT refuses to give one - but PROMOTION arrived here holding
-*   whatever the account already had, so
-*
-*       CREATE.ACCOUNT USER x PROGRAMMER BOTH
-*       MODIFY.ACCOUNT  x ADMINISTRATOR
-*
-*   produced a Windows administrator still in sdssh AND sdapi.  ***THAT PUTS
-*   THE BOUNDARY BACK ON LOGIN'S PEER TEST, WHICH IS THE ONE DEPENDENCY 58 WAS
-*   CHOSEN TO REMOVE*** - sshd admits sdssh and APISRVR admits sdapi, so both
-*   doors open and only the peer address refuses the remote half.
-*
-*   IT IS 58's OWN DEFECT AND NOT A PRE-EXISTING ONE.  Before 58 an
-*   administrator was MEANT to hold both routes, so there was nothing to
-*   remove here; 58 closed the creation path and left this one open.  Found by
-*   sweeping MODIFYA after b196, not by a test - which is why the row in
-*   gplbld/verify-tierchange.ps1 was added in the same commit.
-*
-*   ***THE FIX IS NOT HERE, AND THE FIRST ATTEMPT AT IT WAS.***  Removing the
-*   two groups at this point would have been undone forty lines below, where
-*   the promotion block sets want.ssh/want.api and calls route.apply - which
-*   is where the routes are actually decided.  Written down because the wrong
-*   place looks more natural than the right one: this is where Administrators
-*   is added, so it reads like where membership belongs.
-   end
-
-   if tier.stat = 0 and need.access then
-      tier.stat = os_group("DELMEM", "S-1-5-32-544", acc.user)
-   end
-
-   if tier.stat # 0 then
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10114, acc.name) ;* Unable to change the tier of %1
-      return
-   end
-
-*  ---- The two routes and the operating system, for the two tier moves that
-*  ---- change them.  A suspension changes neither.
-   if want.tier = 'ADMINISTRATOR' and not(grp.acct) then
-* 18 Sep 26 Windows port - ***PROMOTION TAKES THE ROUTES AWAY; IT USED TO GRANT
-*   THEM.***  RELEASE_1.1_FIXES.md 58 and 62.  These two lines read
-*   "want.ssh = @true / want.api = @true" - the 21 Aug rule that an
-*   administrator always has both - so
-*
-*       CREATE.ACCOUNT USER x PROGRAMMER BOTH
-*       MODIFY.ACCOUNT  x ADMINISTRATOR
-*
-*   produced a Windows administrator in sdssh AND sdapi.  ***THAT PUT THE
-*   BOUNDARY BACK ON LOGIN'S PEER TEST, THE ONE DEPENDENCY 58 WAS CHOSEN TO
-*   REMOVE***: sshd admits sdssh and APISRVR admits sdapi, so both doors open
-*   and only the peer address refuses the remote half.
-*
-*   IT IS 58's OWN DEFECT, NOT A PRE-EXISTING ONE - before 58 the grant was
-*   correct - and 58 closed the CREATION path and left the PROMOTION path
-*   granting.  Found by sweeping this verb after b196 rather than by a test,
-*   which is why verify-tierchange.ps1 gained a row in the same commit.
-*
-*   NOTHING ELSE IN THE BLOCK CHANGES.  route.apply still applies the state
-*   both ways (its ADDMEM/DELMEM pair), say.access still reports it when it
-*   moved, and tier.os.write still grants the operating-system access that the
-*   27 Aug ruling makes a rule for this tier - os.execute is NOT a remote door
-*   and 58 does not touch it.
-*
-* 18 Sep 26 Windows port, later - ***THE API COMES BACK, ssh DOES NOT.***
-*   RELEASE_1.1_FIXES.md 62.  The owner narrowed 58 the same day: "the
-*   administrator should not be able to reach the machine through ssh or api,
-*   but should be able to use the api locally", because an administrative
-*   Windows GUI app has to reach the database.  So promotion now WITHDRAWS ssh
-*   and GRANTS the API, and LOGIN's peer test is what keeps the API local.
-*   Both lines are stated rather than one left to inertia: an account promoted
-*   from a tier that had neither must GAIN the API, and one promoted from a
-*   tier that had both must LOSE ssh.
-      want.ssh = @false
-      want.api = @true
-      gosub route.apply
-      if route.failed then
-         @system.return.code = -ER$FAILED
-         crt sysmsg(10081, acc.user, route.stat)
-         return
-      end
-      if not(route.same) then gosub say.access
-      gosub tier.os.write
-   end
-
-   if need.access then
-      gosub route.apply
-      if route.failed then
-         @system.return.code = -ER$FAILED
-         crt sysmsg(10081, acc.user, route.stat)
-         return
-      end
-      if route.same then
-         crt sysmsg(10080, acc.user)
-      end else
-         gosub say.access
-      end
-      gosub tier.os.remove
-   end
-
-*  ---- The VOC.  Owner's ruling: at once, not at the next login.
-   voc.from = old.tier
-   if voc.from = 'SUSPENDED' then voc.from = prior.tier
-   voc.to = want.tier
-
-*  A SUSPENSION LEAVES THE VOC EXACTLY AS IT IS.  A suspended account cannot be
-*  entered, so its VOC decides nothing while the suspension lasts, and leaving
-*  it alone is what makes the round trip lossless: the delta on the way back is
-*  computed from field 6 against the tier the caller names.
-   if voc.to = 'SUSPENDED' then voc.to = voc.from
-
-   voc.ok      = @true
-   voc.added   = 0
-   voc.removed = 0
-   voc.kept    = 0
-   voc.failed  = 0
-   voc.skipped = @false
-
-   if old.tier = 'SUSPENDED' and prior.tier = '' then
-*     Field 6 empty on a suspended account means the record was hand-edited or
-*     written before this change.  There is no honest "from" tier, and guessing
-*     one would either strip verbs the account is entitled to or add verbs it
-*     is not.  Say so and leave the VOC alone.
-      voc.skipped = @true
-   end else
-      gosub voc.delta
-   end
-
-   if not(voc.ok) then
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10114, acc.name)
-      return
-   end
-
-*  ---- The register, last.
+*  ---- The register, last.  Readu, because two administrators editing one
+*  ---- account at once is rare and silently lost state is not a thing to
+*  ---- leave to chance.
    readu tier.rec.new from acc.f, acc.name else tier.rec.new = acc.rec
 
-   tier.rec.new<ACC$TIER> = want.tier
-   if want.tier = 'SUSPENDED' then
-*     old.tier is necessarily NOT 'SUSPENDED' here: the equality guard at the
-*     top of tier.set returned already if it were.  That guard, not an inner
-*     test, is what stops a second suspend overwriting field 6.  PRE_RELEASE 21.
-      tier.rec.new<ACC$PRIOR.TIER> = old.tier
-   end else
-      tier.rec.new<ACC$PRIOR.TIER> = ''
-   end
+   tier.rec.new<ACC$SUSPENDED> = new.state
 
    tier.written = @true
    write tier.rec.new to acc.f, acc.name on error tier.written = @false
@@ -1109,28 +841,11 @@ tier.set:
    if not(tier.written) then
       release acc.f, acc.name
       @system.return.code = -ER$FAILED
-      crt sysmsg(10114, acc.name)
+      crt sysmsg(10114, acc.name) ;* Unable to change the state of %1
       return
    end
 
    crt sysmsg(10109, acc.name, want.tier) ;* Account %1 is now %2
-
-   if voc.skipped then
-      crt sysmsg(10108, acc.name)
-      * %1 has no record of the tier it held, so its VOC was left alone
-   end else
-      crt sysmsg(10113, voc.added, voc.removed, voc.kept)
-      * VOC: %1 records added, %2 removed, %3 left alone
-   end
-
-*  31 Aug 26 Windows port - PRE_RELEASE_FIXES.md 97.  Reported OUTSIDE the
-*  voc.skipped branch above, because a delete that failed has to be said
-*  whether or not the counts were printed, and 10113 has no field for it.
-   if voc.failed then
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10157, voc.failed, acc.name)
-      * VOC: %1 record(s) could not be removed, so %2 still has them
-   end
 
 *  1 Sep 26 Windows port - SUSPENDED SAYS WHAT IT DID *AND WHAT IT DID NOT DO*.
 *  PRE_RELEASE_FIXES.md 111, owner's ruling 1 Sep 2026: "suspend an account and
@@ -1142,344 +857,19 @@ tier.set:
 *  Windows administrator rights.  If it read that way to the people who wrote
 *  it, it reads that way to an administrator suspending somebody in a hurry.
 *
-*  EVERY CLAIM IN 10159 IS FROM THE CODE, not from the name of the tier.  All
-*  SD access goes: LOGIN:687 covers local login AND ssh, since both arrive
-*  through LOGIN; APISRVR:518 covers the API; CPROC:4039 covers LOGTO.  Nothing
-*  on Windows changes - entry 20's ruling, and it is correct.  And the elevated
-*  door is shut too: LOGIN:625 gates the SDSYS landing case on
-*  sd_admin_tier(@logname), which SDADMIN:121 refuses unless ACC$TIER is exactly
-*  ADMINISTRATOR, so a suspended administrator falls through to an ordinary
-*  login and :687 refuses that.  The message must not imply otherwise.
+*  EVERY CLAIM IN 10159 IS FROM THE CODE, not from the name of the state.  All
+*  SD access goes: LOGIN covers local login AND ssh, since both arrive through
+*  LOGIN; APISRVR covers the API; CPROC covers LOGTO.  Nothing on Windows
+*  changes - entry 20's ruling, and it is correct.  The message must not imply
+*  otherwise.
 *
-*  SUSPENDED ONLY.  Every other tier's consequences are obvious from its name.
+*  SUSPENDED ONLY.  Unsuspending obviously lifts access; there is nothing to
+*  explain.
    if want.tier = 'SUSPENDED' then
       crt sysmsg(10159, acc.name)
       * what suspending took, what it left alone, and what lifts it
    end
 
-   return
-
-* ======================================================================
-* voc.delta  -  bring the account's VOC from tier voc.from to tier voc.to.
-*
-* 27 Aug 26 Windows port - A DELTA AND NOT A REBUILD, and that is forced rather
-* than chosen.  CREATE.ACCOUNT builds a VOC into an empty directory and then
-* writes the account's file pointers into it; re-running that build on a live
-* account would copy NEWVOC over the top of every F pointer the account has
-* accumulated.  What can be done safely is to move only the records the two
-* tiers disagree about.
-*
-* THE THREE TIERS NEST, which is what makes a delta expressible at all:
-*   STANDARD       NEWVOC less TIER.OMIT.STANDARD
-*   PROGRAMMER     NEWVOC entire
-*   ADMINISTRATOR  NEWVOC entire, plus TIER.ADD.ADMINISTRATOR from VOC_TEMPLATE
-* so STANDARD is a subset of PROGRAMMER is a subset of ADMINISTRATOR, and the
-* difference between any two is one or both of the two named lists.  Going up
-* copies a layer in; going down takes it out.
-*
-* THE LISTS ARE READ, NOT REPRODUCED.  TIER.OMIT.STANDARD and
-* TIER.ADD.ADMINISTRATOR live in NEWVOC and are the same records CREATE.ACCOUNT
-* and LOGIN read.  This routine holds the tier ARITHMETIC and no tier data, so
-* a verb added to either list reaches all three readers at once.
-*
-* ***A DOWNGRADE DELETES ONLY WHAT IT WOULD HAVE WRITTEN.*** Each id is rebuilt
-* from the source file exactly as CREATE.ACCOUNT would have built it and
-* compared with what the account's VOC actually holds; a record that differs is
-* one somebody has edited or replaced, and it is COUNTED AND LEFT.  Deleting by
-* id alone would silently destroy a user's own work under a verb's name, and
-* the count is reported so "left alone" is visible rather than assumed.
-voc.delta:
-   if voc.from = voc.to then return
-
-   rank.in = voc.from
-   gosub tier.rank
-   from.rank = rank.out
-
-   rank.in = voc.to
-   gosub tier.rank
-   to.rank = rank.out
-
-   if from.rank = to.rank then return
-
-   tier.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-
-   openpath tier.path:@ds:'voc' to tvoc.f else
-      voc.ok = @false
-      return
-   end
-
-   openpath @sdsys:@ds:'newvoc' to tnewvoc.f else
-      close tvoc.f
-      voc.ok = @false
-      return
-   end
-
-* 18 Sep 26 Windows port - RELEASE_1.1 64.  TIER.POLICY IS GONE AND SO IS THE
-*   TIER DELTA IT FED.  There are no ranks left to move between, so no layer
-*   list is read and voc.delta has nothing to do - every account already holds
-*   the PROGRAMMER VOC.  The register write below is untouched; SUSPEND and
-*   UNSUSPEND still run through the same path, which is why this routine is not
-*   simply deleted.
-
-   tmpl.open = @false
-
-   if to.rank > from.rank then
-      tier.dir = 'ADD'
-
-      if from.rank < 2 then
-         tier.layer.rec = ''
-         tier.from.template = @false
-         gosub tier.layer
-      end
-
-      if to.rank = 3 then
-         tier.layer.rec = ''
-         gosub tier.open.template
-         if tmpl.open then
-            tier.from.template = @true
-            gosub tier.layer
-         end
-      end
-   end else
-      tier.dir = 'DEL'
-
-      if from.rank = 3 then
-         tier.layer.rec = ''
-         gosub tier.open.template
-         if tmpl.open then
-            tier.from.template = @true
-            gosub tier.layer
-         end
-      end
-
-      if to.rank < 2 then
-         tier.layer.rec = ''
-         tier.from.template = @false
-         gosub tier.layer
-      end
-   end
-
-*  THE CLOSE IS A GOSUB AND NOT A "close tvoctmpl.f", for the BCOMP reason at
-*  the top of this program: tvoctmpl.f is opened in tier.open.template, which
-*  stands below here, so naming the file variable at this point would be its
-*  first textual appearance and would read as unassigned.  A gosub to a label
-*  below is ordinary and costs nothing.
-   if tmpl.open then gosub tier.close.template
-   close tnewvoc.f
-   close tvoc.f
-   return
-
-* ======================================================================
-* tier.rank  -  1 STANDARD, 2 PROGRAMMER, 3 ADMINISTRATOR.
-*
-* BLANK IS 2 AND THAT IS DELIBERATE, matching SYSCOM/KEYS.H and LOGIN's
-* update.voc: a blank ACC$TIER means the pre-tier full VOC, which is a
-* programmer's set.  Reading it as STANDARD would make the first tier change an
-* account ever saw delete 42 verbs it has always had.
-tier.rank:
-   rank.out = 2
-   begin case
-      case rank.in = 'STANDARD'      ; rank.out = 1
-      case rank.in = 'ADMINISTRATOR' ; rank.out = 3
-   end case
-   return
-
-* ======================================================================
-* tier.open.template  -  open SDSYS VOC_TEMPLATE, once, for the administrator
-* layer.  Its failure is not fatal to the whole delta: the standard layer may
-* already have been applied, and reporting a partial move truthfully beats
-* undoing work that was correct.
-tier.open.template:
-   if tmpl.open then return
-   openpath @sdsys:@ds:'voc_template' to tvoctmpl.f then
-      tmpl.open = @true
-   end else
-      voc.ok = @false
-   end
-   return
-
-* ======================================================================
-* tier.close.template  -  the other half, and it is a routine only so that
-* every mention of tvoctmpl.f stands below the openpath that assigns it.  See
-* the note at voc.delta's call to it.
-tier.close.template:
-   close tvoctmpl.f
-   tmpl.open = @false
-   return
-
-* ======================================================================
-* tier.layer  -  walk one list record and add or delete each id it names.
-* Field 1 of both list records is a description, so the walk starts at 2 - the
-* same bound CREATE.ACCOUNT and LOGIN use.
-tier.layer:
-   layer.count = dcount(tier.layer.rec, @fm)
-   if layer.count > 1 then
-      for layer.i = 2 to layer.count
-         tier.id = tier.layer.rec<layer.i>
-         if tier.dir = 'ADD' then
-            gosub tier.add.one
-         end else
-            gosub tier.del.one
-         end
-      next layer.i
-   end
-   return
-
-* ======================================================================
-* tier.build.rec  -  read tier.id from the layer's source file, exactly as
-* CREATE.ACCOUNT writes it.
-*
-* THE RECORD IS COPIED WHOLE, and it must stay that way for the same reason it
-* used to be transformed: it is what makes a rebuilt record byte-comparable
-* with one CREATE.ACCOUNT wrote, which is the whole basis of the "delete only
-* what we would have written" rule in voc.delta.  THE RULE DID NOT CHANGE.
-* WHAT CHANGED IS WHAT CREATE.ACCOUNT WRITES.
-*
-* 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 1.  Two lines used to stand
-*   here, the type-letter transformation copied from CREATEA:
-*
-*     tier.rec<1> = if upcase(tier.rec[1,1]) = 'P' then tier.rec<1>[1,2] else tier.rec[1,1]
-*     if upcase(tier.rec<1>) = 'K' and tier.rec<3> # '' then  ... same for rec<3> ...
-*
-*   PRE_RELEASE_FIXES 136 removed them from CREATEA on 2 Sep 26 - field 1 is
-*   the DESCRIPTION whose first character is the type code, and reducing it
-*   left every created account with a bare "F" where SDSYS shows a sentence -
-*   and this copy was missed.  The banner above then ASSERTED an agreement
-*   that no longer held, so anyone checking the comment was told the two were
-*   in step.
-*
-*   IT BROKE BOTH DIRECTIONS, AND ONLY ONE WAS OBVIOUS.  tier.del.one compares
-*   the rebuilt record with the account's: the rebuilt one was stripped and the
-*   account's is whole, so nothing ever matched and a downgrade deleted nothing
-*   while still reporting a tier change.  tier.add.one WRITES the rebuilt
-*   record, so an upgrade put the bare-letter records back - 136's own defect,
-*   reachable through a verb 136 never visited.
-*
-*   Found by SD Core for Linux while auditing this port; it reported the
-*   downgrade half.
-*
-* THE SOURCE FILE IS CHOSEN BY A FLAG RATHER THAN PASSED, because assigning one
-* file variable to another is not a thing this codebase does anywhere and this
-* is not the place to find out whether it works.
-tier.build.rec:
-   tier.got = @false
-
-   if tier.from.template then
-      read tier.rec from tvoctmpl.f, tier.id then tier.got = @true
-   end else
-      read tier.rec from tnewvoc.f, tier.id then tier.got = @true
-   end
-
-   return
-
-* ======================================================================
-* tier.add.one  -  copy one id into the account's VOC.  An id the source file
-* does not hold is counted as nothing rather than reported: the lists and the
-* files they name are shipped together, and a mismatch is a packaging fault
-* that verify-tiers already measures.
-tier.add.one:
-   gosub tier.build.rec
-   if tier.got then
-      write tier.rec to tvoc.f, tier.id
-      voc.added = voc.added + 1
-   end
-   return
-
-* ======================================================================
-* tier.del.one  -  remove one id from the account's VOC, but only if what is
-* there is what a tier build would have put there.  See voc.delta's banner.
-tier.del.one:
-   gosub tier.build.rec
-   if tier.got then
-      read tier.old.rec from tvoc.f, tier.id then
-         if tier.old.rec = tier.rec then
-*           31 Aug 26 Windows port - TAKE THE ANSWER.  PRE_RELEASE_FIXES.md 97.
-*           This was "delete ... on error null" followed by an UNCONDITIONAL
-*           voc.removed increment, so a delete that failed was counted as a
-*           removal and 10113 reported it as one: the account kept the higher
-*           tier's verb while :1058 printed 10109 "Account %1 is now %2".
-*           The read above has already established the record exists, so the
-*           "on error null" was not absorbing "not found" - it was absorbing a
-*           real failure.  A failure is NOT voc.kept: that bucket means
-*           deliberately left alone because it differs from the tier build.
-*           The flag idiom is this file's own - see tier.os.write at :1420.
-            tier.del.ok = @true
-            delete tvoc.f, tier.id on error tier.del.ok = @false
-            if tier.del.ok then
-               voc.removed = voc.removed + 1
-            end else
-               voc.failed = voc.failed + 1
-            end
-         end else
-            voc.kept = voc.kept + 1
-         end
-      end
-   end
-   return
-
-* ======================================================================
-* tier.os.write  -  an account being made an ADMINISTRATOR reaches the
-* operating system, both fields, whatever the record said before.
-*
-* IT OVERWRITES AN EXISTING RECORD, which is the opposite of CREATE.ACCOUNT's
-* grant.os.access, and the difference is that the tier is MOVING here.  There,
-* an existing "no" is somebody's decision about an account that already exists
-* and a create-time default has no business overruling it.  Here somebody has
-* just said "make this an administrator", and by the owner's rule of 27 Aug
-* 2026 an administrator always reaches the operating system.
-tier.os.write:
-   openpath @sdsys : @ds : 'os.users' to tosu.f else
-      crt sysmsg(10104, acc.user)
-      return
-   end
-
-   tosu.rec    = 'yes'
-   tosu.rec<2> = 'yes'
-
-   tosu.ok = @true
-   write tosu.rec to tosu.f, acc.user on error tosu.ok = @false
-   close tosu.f
-
-   if tosu.ok then
-      crt sysmsg(10102, acc.user, 'yes', 'yes')
-      * os.users: %1 has SH %2, OS.EXECUTE %3
-   end else
-      crt sysmsg(10104, acc.user)
-   end
-
-   return
-
-* ======================================================================
-* tier.os.remove  -  a downgraded administrator loses the record the tier gave
-* them.  Owner's ruling, 27 Aug 2026: it exists BECAUSE they are an
-* administrator, so it goes when that does.  DELETE.ACCOUNT removes it the same
-* way, with the same "on error null" - an absent record is the wanted state.
-tier.os.remove:
-   openpath @sdsys : @ds : 'os.users' to tosu.f else
-      crt sysmsg(10104, acc.user)
-      return
-   end
-
-*  31 Aug 26 Windows port - TAKE THE ANSWER.  PRE_RELEASE_FIXES.md 97.  This
-*  was "delete ... on error null" with nothing between it and the 10115 below
-*  but a close, so a failed delete left the grant record in place while the
-*  administrator was told it was gone - 65's symptom by a second route.
-*  The failure message is the one the openpath branch above already uses:
-*  10104 is scoped to os.users and "so nothing has changed" is true of it.
-*  DELACC:499 keeps its bare "on error null" deliberately and is NOT this
-*  defect - it asserts nothing, so it states no falsehood.
-   tosu.ok = @true
-   delete tosu.f, acc.user on error tosu.ok = @false
-   close tosu.f
-
-   if tosu.ok then
-      crt sysmsg(10115, acc.user) ;* os.users: the record for %1 is removed
-   end else
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10104, acc.user)
-      * Unable to change operating-system access for %1; os.users could not
-      * be updated, so nothing has changed.
-   end
    return
 
 * ======================================================================
