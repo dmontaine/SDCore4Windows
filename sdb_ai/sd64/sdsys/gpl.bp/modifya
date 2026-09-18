@@ -977,6 +977,32 @@ tier.set:
 
    if want.tier = 'ADMINISTRATOR' and not(grp.acct) and not(was.admin) then
       tier.stat = os_group("ADDMEM", "S-1-5-32-544", acc.user)
+*
+* 18 Sep 26 Windows port - ***AND THE ROUTES GO WITH THE PROMOTION.***
+*   RELEASE_1.1_FIXES.md 58 and 62.  An administrator has no remote door, and
+*   CREATE.ACCOUNT refuses to give one - but PROMOTION arrived here holding
+*   whatever the account already had, so
+*
+*       CREATE.ACCOUNT USER x PROGRAMMER BOTH
+*       MODIFY.ACCOUNT  x ADMINISTRATOR
+*
+*   produced a Windows administrator still in sdssh AND sdapi.  ***THAT PUTS
+*   THE BOUNDARY BACK ON LOGIN'S PEER TEST, WHICH IS THE ONE DEPENDENCY 58 WAS
+*   CHOSEN TO REMOVE*** - sshd admits sdssh and APISRVR admits sdapi, so both
+*   doors open and only the peer address refuses the remote half.
+*
+*   IT IS 58's OWN DEFECT AND NOT A PRE-EXISTING ONE.  Before 58 an
+*   administrator was MEANT to hold both routes, so there was nothing to
+*   remove here; 58 closed the creation path and left this one open.  Found by
+*   sweeping MODIFYA after b196, not by a test - which is why the row in
+*   gplbld/verify-tierchange.ps1 was added in the same commit.
+*
+*   ***THE FIX IS NOT HERE, AND THE FIRST ATTEMPT AT IT WAS.***  Removing the
+*   two groups at this point would have been undone forty lines below, where
+*   the promotion block sets want.ssh/want.api and calls route.apply - which
+*   is where the routes are actually decided.  Written down because the wrong
+*   place looks more natural than the right one: this is where Administrators
+*   is added, so it reads like where membership belongs.
    end
 
    if tier.stat = 0 and need.access then
@@ -992,8 +1018,31 @@ tier.set:
 *  ---- The two routes and the operating system, for the two tier moves that
 *  ---- change them.  A suspension changes neither.
    if want.tier = 'ADMINISTRATOR' and not(grp.acct) then
-      want.ssh = @true
-      want.api = @true
+* 18 Sep 26 Windows port - ***PROMOTION TAKES THE ROUTES AWAY; IT USED TO GRANT
+*   THEM.***  RELEASE_1.1_FIXES.md 58 and 62.  These two lines read
+*   "want.ssh = @true / want.api = @true" - the 21 Aug rule that an
+*   administrator always has both - so
+*
+*       CREATE.ACCOUNT USER x PROGRAMMER BOTH
+*       MODIFY.ACCOUNT  x ADMINISTRATOR
+*
+*   produced a Windows administrator in sdssh AND sdapi.  ***THAT PUT THE
+*   BOUNDARY BACK ON LOGIN'S PEER TEST, THE ONE DEPENDENCY 58 WAS CHOSEN TO
+*   REMOVE***: sshd admits sdssh and APISRVR admits sdapi, so both doors open
+*   and only the peer address refuses the remote half.
+*
+*   IT IS 58's OWN DEFECT, NOT A PRE-EXISTING ONE - before 58 the grant was
+*   correct - and 58 closed the CREATION path and left the PROMOTION path
+*   granting.  Found by sweeping this verb after b196 rather than by a test,
+*   which is why verify-tierchange.ps1 gained a row in the same commit.
+*
+*   NOTHING ELSE IN THE BLOCK CHANGES.  route.apply still applies the state
+*   both ways (its ADDMEM/DELMEM pair), say.access still reports it when it
+*   moved, and tier.os.write still grants the operating-system access that the
+*   27 Aug ruling makes a rule for this tier - os.execute is NOT a remote door
+*   and 58 does not touch it.
+      want.ssh = @false
+      want.api = @false
       gosub route.apply
       if route.failed then
          @system.return.code = -ER$FAILED

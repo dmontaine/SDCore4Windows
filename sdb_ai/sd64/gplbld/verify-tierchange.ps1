@@ -184,6 +184,25 @@ function Get-AccountTier($name) {
     return $f[4]
 }
 
+# 18 Sep 26 - THE TWO REMOTE ROUTES AS ONE WORD, for RELEASE_1.1 58 and 62.
+# Same shape as verify-routes.ps1's Routes(): 'ssh', 'api', 'ssh+api' or 'none'.
+# A group that cannot be read is not the same as a group the account is not in,
+# so a failure to enumerate says so rather than answering 'none' - that would
+# report the ruled state for a machine where the groups had been deleted.
+function Get-Routes([string]$name) {
+    $r = @()
+    foreach ($g in @('sdssh', 'sdapi')) {
+        try {
+            $m = Get-LocalGroupMember -Group $g -ErrorAction Stop
+            foreach ($x in $m) {
+                if ($x.Name -match ('\\' + [regex]::Escape($name) + '$')) { $r += $g.Substring(2) }
+            }
+        } catch { return ('UNREADABLE:' + $g) }
+    }
+    if ($r.Count -eq 0) { return 'none' }
+    return ($r -join '+')
+}
+
 # BY SID, not by the name "Administrators", which is localised.  MODIFYA itself
 # uses S-1-5-32-544 for the same reason.
 function Test-LocalAdmin([string]$name) {
@@ -343,6 +362,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $accts $acct.ToUpper()))) {
 Note 'ACC$TIER is PROGRAMMER' 'PROGRAMMER' (Get-AccountTier $acct) $true
 Note 'a PROGRAMMER is not a Windows administrator' $false (Test-LocalAdmin $acct) $true
 
+# 18 Sep 26 - THE "BEFORE" HALF OF SECTION 2's ROUTE CHECK.  RELEASE_1.1 58 and
+# 62.  This account was created with BOTH, and section 2 asserts the promotion
+# takes both away - which means nothing unless it HAD them, so it is measured
+# here rather than assumed from the keyword.
+$routesBefore = Get-Routes $acct
+Note 'a PROGRAMMER given BOTH holds both routes' 'ssh+api' $routesBefore $true
+
 Show-SD 'count the PROGRAMMER VOC' @(('LOGTO ' + $acct.ToUpper()), 'COUNT VOC') @()
 $P = Get-VocCount $lastSD
 Note 'the PROGRAMMER VOC was counted' $true ($P -gt 0) $true
@@ -364,6 +390,28 @@ Note 'ACC$TIER is ADMINISTRATOR' 'ADMINISTRATOR' (Get-AccountTier $acct) $true
 # their removal in section 4 is a CHANGE and not just an absence.
 Note 'promoted: now a Windows administrator' $true (Test-LocalAdmin $acct) $true
 Note 'promoted: an os.users record exists'   $true (Test-OsUser $acct) $true
+
+# ***18 Sep 26 - AND THE THING THE TIER NOW TAKES AWAY.  RELEASE_1.1 58 AND 62.***
+# This account was created PROGRAMMER **BOTH** (section 1), so at this point it
+# held ssh and the API; an administrator may hold neither.  MODIFYA used to set
+# want.ssh/want.api TRUE on promotion - the 21 Aug rule - which meant
+#
+#     CREATE.ACCOUNT USER x PROGRAMMER BOTH
+#     MODIFY.ACCOUNT  x ADMINISTRATOR
+#
+# produced a Windows administrator still in sdssh AND sdapi, putting the
+# boundary back on LOGIN's peer test: the one dependency 58 was chosen to
+# remove.  ***NOTHING TESTED THIS PATH***, which is why 58 shipped with the
+# creation path closed and the promotion path granting - the defect was found
+# by reading MODIFYA after b196, not by a run.
+#
+# THE SETUP IS WHAT MAKES IT DECISIVE, and it is already here: the account has
+# both routes on the line above, so 'none' below is a REMOVAL rather than an
+# account that never had them.
+# BEFORE and AFTER, not just after.  $routesBefore is measured in section 1,
+# because "none" here means nothing unless something was taken.
+Note 'promoted: ssh and the API were TAKEN AWAY' 'none' (Get-Routes $acct) $true
+Write-Output ("  routes before the promotion: " + $routesBefore + "  -> after: " + (Get-Routes $acct))
 
 Show-SD 'count the ADMINISTRATOR VOC' @(('LOGTO ' + $acct.ToUpper()), 'COUNT VOC') @()
 $A = Get-VocCount $lastSD
