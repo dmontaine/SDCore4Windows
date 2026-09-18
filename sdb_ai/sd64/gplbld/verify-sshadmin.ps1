@@ -18,6 +18,16 @@
 #
 #   ADMINISTRATOR via localhost   ADMITTED, runs a command    <- local is allowed
 #   ADMINISTRATOR via the LAN IP  REFUSED, message 10174      <- the gate
+#
+# ***18 Sep 26 - RELEASE_1.1 58 CHANGED BOTH LEGS AND THE LAYER THAT REFUSES.***
+# An administrator now gets NO ssh session from any address, loopback included
+# (the owner withdrew the local exception: "I don't have any problem with it not
+# being available on the local computer"), and the refusal happens in SSHD
+# rather than in SD, because the administrators group left AllowGroups.  So
+# message 10174 and LOGIN's audit line are now ABSENCES to assert rather than
+# evidence to find - LOGIN is never reached - and the discriminator is the TIER
+# against the control, not the route against itself.  The leg table above is
+# kept as the shape this file was built for; the rows below are what it does.
 #   PROGRAMMER    via localhost   ADMITTED, runs a command    <- the CONTROL
 #
 # ***IT IS REMOTE THAT IS DENIED, NOT ssh.***  Owner's refinement, 5 Sep 2026:
@@ -187,7 +197,12 @@ try {
 
     # ADMINISTRATOR is matched on the token TEXT (CREATEA:1524) and cannot be
     # abbreviated.  SSH so the account may be reached at all.
-    $outA = Invoke-SD @(('CREATE.ACCOUNT USER ' + $adminAcct + ' ADMINISTRATOR SSH'), $adminPw, $adminPw)
+    # 18 Sep 26 - "SSH" REMOVED.  RELEASE_1.1 58: an administrator gets no
+    # remote door, and CREATE.ACCOUNT now REFUSES the combination rather than
+    # overriding it, so the old command created nothing and this script exited 2
+    # on b196 with "an account was not created".  The keyword that matters here
+    # is ADMINISTRATOR - the tier is the whole subject of the test.
+    $outA = Invoke-SD @(('CREATE.ACCOUNT USER ' + $adminAcct + ' ADMINISTRATOR'), $adminPw, $adminPw)
     Write-Output '  --- CREATE.ACCOUNT (administrator) said: ---'
     Write-Output $outA
 
@@ -332,13 +347,30 @@ try {
     # SD PRINTS ITS BANNER ON THE REFUSAL PATH TOO - measured on b120, where the
     # refused leg showed the full banner and then 10174 - so the banner is the
     # signal that SD ran at all, and its absence means the leg measured nothing.
-    if ($textR -notmatch '(?i)SD Core for Windows') {
-        Write-Output 'verify-sshadmin: the REMOTE leg never reached SD - no banner in its output.'
-        Write-Output ("  ssh exit {0}. The connection failed; nothing was measured about the gate." -f $rr.ExitCode)
-        Write-Output '  NOT scored as a refusal: an ssh that never connected looks identical to'
-        Write-Output '  a session SD turned away, and calling that a pass is the defect this'
-        Write-Output '  check exists to refuse.'
-        exit 2
+    # ***18 Sep 26 - THIS GUARD IS INVERTED, AND THE REASON IS THE WHOLE OF
+    # RELEASE_1.1 58.***  The paragraphs above are kept because their argument
+    # is still the right one for a refusal that happens INSIDE SD: a connection
+    # that never happened looks identical to a session SD turned away, so the
+    # banner was the proof that SD had run at all.
+    #
+    # 58 MOVED THE REFUSAL OUT OF SD.  The administrators group left sshd's
+    # AllowGroups, so an administrator is now refused BEFORE AUTHENTICATION -
+    # sshd never starts a session, SD never runs, and there is no banner and can
+    # never be one.  Requiring the banner here would exit 2 forever on the
+    # correct product, which is the "guard nothing can reach" trap.
+    #
+    # WHAT REPLACES IT, and it is stronger than what it replaces: the CONTROL
+    # leg below must show a banner over the SAME route, which is what proves ssh
+    # works on this machine; and these legs must show sshd's own refusal.  So a
+    # dead ssh server cannot pass - it would take the control down with it.
+    $adminBanner = ($textR -match '(?i)SD Core for Windows')
+    if ($adminBanner) {
+        Write-Output 'verify-sshadmin: the administrator REACHED SD over ssh - the banner is in its output.'
+        Write-Output ("  ssh exit {0}.  Under RELEASE_1.1 58 sshd should have refused this before" -f $rr.ExitCode)
+        Write-Output '  authentication: the administrators group is not in AllowGroups.  Getting a'
+        Write-Output '  session means that entry is back, or the block was never applied - check'
+        Write-Output '  gplbld/allow-ssh-groups.ps1 and C:\ProgramData\ssh\sshd_config.'
+        Write-Output '  Scored below rather than exited on, because it is a product failure.'
     }
 
     Write-Output '=== 4. LEG B - the CONTROL, a PROGRAMMER, over the same route ====='
@@ -367,29 +399,43 @@ try {
         exit 2
     }
 
-    # ***LEG A - LOCAL - MUST BE ADMITTED.***  The owner's refinement of 5 Sep
-    # 2026.  A live session answers WHO with the account name and a user number;
-    # that is the SUCCESS wording, and the refusal path cannot print it.
-    $localRan = ($textA -match '(?i)\b' + [regex]::Escape($adminAcct) + '\b')
-    Note 'LOCAL: an administrator over loopback IS admitted' $true $localRan $true
-
-    # And the disqualifier for the same leg: the refusal text must NOT appear.
-    $localRefused = ($textA -match '(?i)may not sign in')
-    Note 'LOCAL: no refusal message was shown' $false $localRefused $true
-
-    # ***LEG B - REMOTE - MUST BE REFUSED.***  Anchored on 10174's own wording,
-    # which appears only when the gate fired, and disqualified by a live session.
-    $remoteMsg = ($textR -match '(?i)may not sign in')
-    Note 'REMOTE: the refusal message (10174) was shown' $true $remoteMsg $true
-
+    # ***18 Sep 26 - BOTH ADMINISTRATOR LEGS ARE REFUSALS NOW, AND THE REFUSAL
+    # IS THE TRANSPORT'S RATHER THAN SD'S.***  RELEASE_1.1 58.  Leg A was "MUST
+    # BE ADMITTED" under the owner's 5 Sep refinement; he withdrew that on
+    # 18 Sep - "I don't have any problem with it not being available on the
+    # local computer" - so the pair below no longer differs by route.
+    #
+    # ANCHORED ON POSITIVE EVIDENCE OF THE REFUSAL, not on the absence of a
+    # session, which is the rule this file already argues for at length: an ssh
+    # that never connected and a session turned away look identical unless
+    # something positive distinguishes them.  What is positive now is sshd's own
+    # wording on stderr plus a non-zero ssh exit, with the CONTROL's banner
+    # standing as proof that the route works at all.
+    $localRan  = ($textA -match '(?i)\b' + [regex]::Escape($adminAcct) + '\b')
     $remoteRan = ($textR -match '(?i)\b' + [regex]::Escape($adminAcct) + '\b')
-    Note 'REMOTE: the administrator did NOT reach a session' $false $remoteRan $true
 
-    # ***AND THE PAIR IS THE POINT.***  Same account, same password, same host,
-    # two addresses.  If both legs went the same way the gate is not reading the
-    # route at all - it is admitting everything or refusing everything - and
-    # either of those can look like a pass on a single leg.
-    Note 'the two routes were treated DIFFERENTLY' $true ($localRan -ne $remoteRan) $true
+    $localDenied  = (($ra.ExitCode -ne 0) -and ($ra.Err -match '(?i)permission denied|not allowed'))
+    $remoteDenied = (($rr.ExitCode -ne 0) -and ($rr.Err -match '(?i)permission denied|not allowed'))
+
+    Note 'LOCAL: sshd refused the administrator before authentication'  $true  $localDenied  $true
+    Note 'LOCAL: it reached no session'                                 $false $localRan     $true
+    Note 'REMOTE: sshd refused the administrator before authentication' $true  $remoteDenied $true
+    Note 'REMOTE: it reached no session'                                $false $remoteRan    $true
+
+    # ***AND SD MUST NOT HAVE BEEN CONSULTED.***  10174 is LOGIN's refusal, and
+    # LOGIN runs only after authentication.  Its presence would mean sshd let
+    # the account through and SD caught it - the product still refusing, but one
+    # layer later than 58 intends, and exactly the regression to notice.
+    $peerMsgSeen = (($textA -match '(?i)may not sign in') -or ($textR -match '(?i)may not sign in'))
+    Note 'NEITHER leg reached LOGIN (10174 absent)' $false $peerMsgSeen $true
+    Note 'NEITHER leg reached SD at all (no banner)' $false `
+         (($textA -match '(?i)SD Core for Windows') -or $adminBanner) $true
+
+    # ***THE DISCRIMINATOR IS THE TIER, NOT THE ROUTE.***  The old row here
+    # required legs A and B to differ, which 58 makes false by design and which
+    # would have failed a correct product.  One route, two tiers: the control got
+    # a session over the same transport and the administrator did not.
+    Note 'the TIER decided: control in, administrator out' $true ($controlRan -and -not $remoteRan) $true
 
     Write-Output ''
     Write-Output '=== 6. the audit trail, after - THE DECISIVE READING =============='
@@ -404,19 +450,30 @@ try {
     # Written on the refusal path and nowhere else.  LOGIN sets audit.reason =
     # 'administrator on a remote session with no interactive desktop' and
     # terminate.connection writes "LOGIN REFUSED account=... reason=...".
+    #
+    # ***18 Sep 26 - AND IT MUST NOT BE THERE ANY MORE.***  RELEASE_1.1 58.
+    # LOGIN runs only after authentication, and sshd now refuses an
+    # administrator before that - so neither the refusal line nor an admission
+    # line can exist for this account.  Their PRESENCE is the regression: it
+    # would mean sshd admitted the account and SD caught it one layer later.
     $auditSaysRefused = ($tail -match '(?i)LOGIN REFUSED' -and
                          $tail -match '(?i)remote session with no interactive desktop')
-    Note 'the audit records the REMOTE refusal, with the reason' $true $auditSaysRefused $true
+    Note 'the audit has NO LOGIN refusal for it (sshd refused first)' $false $auditSaysRefused $true
 
-    # AND THE ADMISSION IS IN THE SAME FILE.  One trail should now carry three
-    # lines - the local administrator admitted, the remote one refused, and the
-    # control admitted - which is what tells "the gate reads the route" from
-    # "something refused something".
     $auditSaysAdmitted = ($tail -match ('(?i)LOGIN account=' + [regex]::Escape($adminAcct)))
-    Note 'the audit records the LOCAL admission too' $true $auditSaysAdmitted $true
+    Note 'the audit has NO admission for the administrator'           $false $auditSaysAdmitted $true
 
-    # A trail that did not move at all means the session never reached LOGIN -
-    # which is not the gate working, it is the measurement failing.
+    # ***THE CONTROL IS WHAT MUST BE IN THE TRAIL NOW, AND IT IS WHAT KEEPS THE
+    # TWO ROWS ABOVE HONEST.***  They are absences, and an absence also holds
+    # when the audit file is not being written at all - a broken path, a
+    # permission change, LOGIN never running for anybody.  The control DID
+    # authenticate, so its line must be present: that proves the trail is live
+    # and the absences above mean what they say.
+    $auditSaysControl = ($tail -match ('(?i)LOGIN account=' + [regex]::Escape($progAcct)))
+    Note 'the audit records the CONTROL admission (so the trail is live)' $true $auditSaysControl $true
+
+    # A trail that did not move at all means nothing reached LOGIN - which is
+    # not the gate working, it is the measurement failing.
     Note 'the audit trail actually moved' $true (($after.Length - $before.Length) -gt 0) $true
 
 } finally {

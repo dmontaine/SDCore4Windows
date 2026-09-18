@@ -578,7 +578,7 @@ $holdStream = $null
 # ---------------------------------------------------------------------------
 try {
     # -----------------------------------------------------------------------
-    Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR BOTH"
+    Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR"
 
     # 30 Aug 26 - ADMINISTRATOR, and the keyword is the whole of the change.
     # PRE_RELEASE_FIXES.md 65: only an ADMINISTRATOR-tier USER account is ever
@@ -590,8 +590,14 @@ try {
     # Windows Administrators for the seconds it exists, because since
     # PROJECT_STATUS.md 5.6.1 that is what the tier IS.  Step 4's control is
     # deliberately not given it.
+    # 18 Sep 26 - "BOTH" REMOVED.  RELEASE_1.1 58: an administrator gets no
+    # remote door, and CREATE.ACCOUNT now REFUSES the combination rather than
+    # overriding it silently, so the old command stopped this step dead.  The
+    # keyword that matters here is ADMINISTRATOR - it is what gives the subject
+    # an os.users record, which is the thing step 3 measures - and the route was
+    # never part of what this file tests.
     $pw  = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR BOTH", $pw, $pw)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR", $pw, $pw)
     $made += $sdAcc
 
     $sdRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $sdAcc.ToUpper())
@@ -898,7 +904,8 @@ try {
     # no logon and no password, and it releases the moment the stream closes.
     $heldRec  = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $heldAcc.ToUpper())
     $hpw      = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out      = Invoke-SD @("CREATE.ACCOUNT USER $heldAcc ADMINISTRATOR BOTH", $hpw, $hpw)
+    # 18 Sep 26 - "BOTH" REMOVED, same as step 1: RELEASE_1.1 58.
+    $out      = Invoke-SD @("CREATE.ACCOUNT USER $heldAcc ADMINISTRATOR", $hpw, $hpw)
     $made    += $heldAcc
 
     if (-not (Test-Path -LiteralPath $heldRec)) {

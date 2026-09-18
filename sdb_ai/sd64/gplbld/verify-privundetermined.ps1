@@ -953,9 +953,18 @@ try {
 
             # --- and sdapi membership NOBODY GRANTED.  Step 6 had to ask for the
             # PROGRAMMER account; this one is expected to be in it already.
+            #
+            # ***18 Sep 26 - IT IS NOT IN sdapi ANY MORE, AND THAT IS THE RULING
+            # RATHER THAN A REGRESSION.***  RELEASE_1.1 58: an administrator gets
+            # no remote door, so CREATEA stops joining the tier to sdapi.  The
+            # row is RENAMED rather than flipped - entry 64 forbids changing an
+            # Expected to match what was observed, and the file's own
+            # RULED-behaviour row below was written under that rule - because
+            # what is asserted now is a different claim: that the tier is
+            # DELIBERATELY absent, with no keyword having asked either way.
             $adminInApi = [bool](Get-LocalGroupMember -Group 'sdapi' -ErrorAction SilentlyContinue |
                                  Where-Object { $_.Name -like ("*\" + $adminAcct) })
-            Note 'composition: it is in sdapi with NO keyword given' $true $adminInApi
+            Note 'composition: it is NOT in sdapi, no keyword given (RULED, 58)' $false $adminInApi
 
             $bytes2 = New-Object byte[] 18
             ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes2)
@@ -994,8 +1003,22 @@ try {
                     # SCORED, because verify-tierapi already says this is true and
                     # a False here would contradict a green suite step rather than
                     # settle a policy question.
-                    Note 'composition: the API ADMITTED an ADMINISTRATOR-tier account' 'YES' $aConnect
-                    Note 'composition: the probe reached the attempt' $true $aTried
+                    #
+                    # ***18 Sep 26 - THE API NOW REFUSES THIS ACCOUNT, BY RULING.***
+                    # RELEASE_1.1 58.  Both rows are RENAMED and re-anchored rather
+                    # than flipped: the claim is no longer "did it get in" but "was
+                    # it refused, and refused by the gate we intend".  Anchored on
+                    # 10073's own words, which only the sdapi gate prints
+                    # (apisrvr:1690), NOT on PROBE.CONNECT=NO alone - a connection
+                    # fails for a dozen reasons and "no session" would pass for
+                    # every one of them.
+                    $aApiRefused = ($aOut -match '(?i)is not permitted to use the API')
+                    Note 'composition: the API REFUSED it (RULED, 58)'      $true  $aApiRefused
+                    Note 'composition: and it got no session'               'NO'   $aConnect
+                    # AND NOT BY THE PEER TEST.  10174 would mean the account
+                    # reached the peer test, i.e. it was still in sdapi - the
+                    # regression 58's own verifier watches for.
+                    Note 'composition: not refused by the peer test (10174)' $false ($aOut -match '(?i)may not sign in')
 
                     # ***A ROW WAS DELETED HERE AND THE REASON IS WORTH KEEPING.***
                     # PRE_RELEASE 158.  It read
@@ -1040,24 +1063,46 @@ try {
                     # withholds os.execute from a CN_SOCKET session - the obvious
                     # fix, and the one deliberately NOT taken - would silently make
                     # the shipped documentation false.  This row is what notices.
-                    Note 'composition: the RULED behaviour - a remote administrator reaches the OS' `
-                         $true ($aWho -ne '')
+                    #
+                    # ***18 Sep 26 - IT NOTICED, AND THE ANSWER WAS "A RULING", NOT
+                    # "A SILENT CLOSE".  THIS ROW DID ITS JOB AND IS NOW REWRITTEN
+                    # RATHER THAN DELETED.***  RELEASE_1.1 58 closed the path from
+                    # the other end: it did NOT withhold os.execute from a
+                    # CN_SOCKET session (still deliberately not taken), it removed
+                    # the administrator's API access, so the composition cannot be
+                    # reached at all.  PRE_RELEASE 157's accepted behaviour is
+                    # SUPERSEDED, and the shipped documentation under 80 is now
+                    # false and is tracked as RELEASE_1.1 61 rather than left to be
+                    # discovered - which is exactly what the sentence above
+                    # demanded of whoever closed it.
+                    #
+                    # THE NEW CLAIM, and it is deliberately paired: the OS is not
+                    # reached AND the reason is the API refusal measured above. On
+                    # its own, "$aWho is empty" passes for every possible failure,
+                    # which is the shape this file keeps warning about.
+                    Note 'composition: the RULED behaviour - a remote administrator reaches NO session, so no OS (58)' `
+                         $true (($aWho -eq '') -and $aApiRefused)
 
                     Write-Host ''
                     if ($aWho -ne '') {
-                        Write-Host 'COMPOSITION RESULT: OS.EXECUTE ran in a remote API session - AS RULED.' -ForegroundColor Cyan
-                        Write-Host ('  on an ADMINISTRATOR-tier account this script gave NO keyword and NO record.') -ForegroundColor Cyan
-                        Write-Host ('  It reported its identity as: ' + $aWho) -ForegroundColor Cyan
-                        Write-Host '  Three rulings compose to produce this: an administrator always has the API' -ForegroundColor Cyan
-                        Write-Host '  (21 Aug), always has os.execute (27 Aug), and os.users is the authority' -ForegroundColor Cyan
-                        Write-Host '  below USR_ADMIN (op_sh.c).  The port is reachable off-machine over ssh -L.' -ForegroundColor Cyan
-                        Write-Host '  ACCEPTED BY THE OWNER, 4 Sep 2026.  PRE_RELEASE_FIXES 157; the API page' -ForegroundColor Cyan
-                        Write-Host '  must say so in plain words, which is 80.' -ForegroundColor Cyan
+                        Write-Host 'COMPOSITION RESULT: OS.EXECUTE ran in a remote API session - THE RULING HAS BEEN UNDONE.' -ForegroundColor Red
+                        Write-Host ('  It reported its identity as: ' + $aWho) -ForegroundColor Red
+                        Write-Host '  RELEASE_1.1 58 removed the administrator tier from sdapi, so an API session' -ForegroundColor Red
+                        Write-Host '  should not exist for this account at all.  Getting one means the sdapi' -ForegroundColor Red
+                        Write-Host '  grant is back - check CREATEA''s tier branch and allow-ssh-groups.ps1.' -ForegroundColor Red
+                        Write-Host '  This was ACCEPTED behaviour until 18 Sep 2026 (PRE_RELEASE 157); it is not now.' -ForegroundColor Red
+                    } elseif ($aApiRefused) {
+                        Write-Host 'COMPOSITION RESULT: the API refused the administrator - AS RULED (58).' -ForegroundColor Cyan
+                        Write-Host '  No session, so OS.EXECUTE was never reached.  PRE_RELEASE 157''s composition' -ForegroundColor Cyan
+                        Write-Host '  - an administrator reaching the OS over the API, accepted 4 Sep 2026 - is' -ForegroundColor Cyan
+                        Write-Host '  now unreachable by construction.  os.execute itself is UNCHANGED and still' -ForegroundColor Cyan
+                        Write-Host '  a rule for the tier (27 Aug): the os.users rows above measure that, and the' -ForegroundColor Cyan
+                        Write-Host '  console is where an administrator uses it.' -ForegroundColor Cyan
                     } elseif ($aRefused) {
-                        Write-Host 'COMPOSITION RESULT: OS.EXECUTE was REFUSED by name - THE RULED BEHAVIOUR HAS CHANGED.' -ForegroundColor Red
-                        Write-Host '  This was ACCEPTED on 4 Sep 2026 and the shipped documentation says it happens.' -ForegroundColor Red
-                        Write-Host '  Read the refusal above, then correct PRE_RELEASE_FIXES 157 AND the API page' -ForegroundColor Red
-                        Write-Host '  under 80 - a silent close leaves the documentation false.' -ForegroundColor Red
+                        Write-Host 'COMPOSITION RESULT: it got in and OS.EXECUTE was refused by name - NEITHER RULING.' -ForegroundColor Red
+                        Write-Host '  58 says it should not have got a session; 27 Aug says os.execute is a rule' -ForegroundColor Red
+                        Write-Host '  for this tier.  Both are contradicted, so read the refusal above before' -ForegroundColor Red
+                        Write-Host '  touching either - this is not the CN_SOCKET withholding that 157 rejected.' -ForegroundColor Red
                     } else {
                         Write-Host 'COMPOSITION RESULT: undetermined - the probe never reached the attempt.' -ForegroundColor Yellow
                     }

@@ -16,8 +16,13 @@
 
     WHAT IT ESTABLISHES, and the last two are the ones that matter:
 
-      - a STANDARD, a PROGRAMMER and an ADMINISTRATOR account can each log in
-        over SCRAM and attach to their own account
+      - a STANDARD and a PROGRAMMER account can each log in over SCRAM and
+        attach to their own account, and an ADMINISTRATOR account is REFUSED -
+        RELEASE_1.1 58, owner 18 Sep 2026: the tier has no remote door at all.
+        (This read "all three can each log in" until that ruling; the API leg
+        of the administrator tier is now an expected refusal, anchored on
+        message 10073.  The VOC count below is unaffected - it goes through
+        LOGTO, not the API.)
       - what each tier can DO once in, as a VOC count: 355 / 397 / 420.  A
         standard account connects perfectly well and then has no BASIC, ED or
         RUN, which is the answer to "can a standard user use mvDeveloper"
@@ -173,6 +178,11 @@ function Test-Connect([string]$user, [string]$pw, [string]$account) {
     $rc = $LASTEXITCODE
     if ($rc -eq 2) { Write-Host ($o -join "`n"); Refuse 'sd-connect rejected its arguments - this is a bug in this script, not a refusal.' }
     Write-Host ('     sd-connect: ' + (($o | Select-String -Pattern '  ok |  FAILED') -join '; '))
+    # 18 Sep 26 - THE TEXT IS KEPT, NOT JUST THE VERDICT.  RELEASE_1.1 58 made
+    # one of the tiers an expected REFUSAL, and "no session" passes for every
+    # possible failure - a dead listener, a wrong password, a shut firewall.
+    # Step 5 anchors that tier on the refusal's own wording instead.
+    $script:LastConnectOut = ($o -join "`n")
     return ($rc -eq 0)
 }
 
@@ -299,7 +309,14 @@ try {
         $t | Add-Member -NotePropertyName SdPw -NotePropertyValue (
             ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1')
 
-        $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword + ' BOTH').Trim()
+        # 18 Sep 26 - NO ROUTE KEYWORD FOR THE ADMINISTRATOR TIER.  RELEASE_1.1
+        # 58: the tier gets no remote door, and CREATE.ACCOUNT now REFUSES
+        # "ADMINISTRATOR BOTH" rather than overriding it - so appending BOTH to
+        # every tier refused the third account and the Refuse below stopped the
+        # script.  The other two keep BOTH: CREATE.ACCOUNT USER requires a route
+        # to be stated for them (createa:480).
+        $route = if ($t.Keyword -eq 'ADMINISTRATOR') { '' } else { 'BOTH' }
+        $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword + ' ' + $route).Trim()
         Write-Host ("  " + $cmd)
         $null = Invoke-SD @($cmd, $winPw, $winPw)
         # THE REGISTER RECORD, NOT THE OUTPUT TEXT - SD echoes the command it
@@ -376,9 +393,33 @@ try {
 
     # -----------------------------------------------------------------------
     Step 5 'Each tier logs in through the 32-bit client mvDeveloper uses'
+    #
+    # ***18 Sep 26 - TWO TIERS CONNECT AND ONE IS REFUSED, BY RULING.***
+    # RELEASE_1.1 58: an administrator has no API at all, so this step no longer
+    # establishes the header's "a STANDARD, a PROGRAMMER and an ADMINISTRATOR
+    # account can each log in over SCRAM" - the header is corrected with it.
+    #
+    # THE ROWS ARE SPLIT RATHER THAN THE EXPECTED VALUE FLIPPED, which entry 64
+    # forbids by name: the administrator's row asserts a different claim (it was
+    # REFUSED, and refused by the sdapi gate) and is anchored on message 10073's
+    # own words, not on the absence of a session.  A bare "did not connect"
+    # would pass against a dead listener, and step 4's rows are the only other
+    # thing standing between this step and that.
     foreach ($t in $Tiers) {
         Write-Host ('  ' + $t.Tier + ' as ' + $t.Name)
-        Note ($t.Tier + ' connects') $true (Test-Connect $t.Name $t.SdPw $t.Name)
+        $got = Test-Connect $t.Name $t.SdPw $t.Name
+        if ($t.Keyword -eq 'ADMINISTRATOR') {
+            Note ($t.Tier + ' is REFUSED the API (RULED, 58)') $false $got
+            Note ($t.Tier + ' refused with 10073, by the sdapi gate') $true `
+                 ([bool]($script:LastConnectOut -match '(?i)is not permitted to use the API'))
+            # 10174 would mean it reached the peer test, i.e. it was still in
+            # sdapi - the regression verify-apiremote watches for too.
+            Note ($t.Tier + ' not refused by the peer test (10174)') $false `
+                 ([bool]($script:LastConnectOut -match '(?i)may not sign in'))
+        }
+        else {
+            Note ($t.Tier + ' connects') $true $got
+        }
     }
 
     # -----------------------------------------------------------------------

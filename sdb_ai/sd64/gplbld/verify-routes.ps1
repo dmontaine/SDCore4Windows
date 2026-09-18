@@ -322,7 +322,15 @@ try {
     # so an SD administrator could not use the API at all.  ssh they reached
     # anyway, because allow-ssh-groups.ps1 names Administrators in its own
     # right, which is why sdapi is the half that was actually broken.
-    Note 'admin has both routes'        'ssh+api' (Routes $admAcc)
+    #
+    # ***18 Sep 26 - AND IT IS BACK TO NEITHER GROUP, DELIBERATELY THIS TIME.***
+    # RELEASE_1.1 58, owner's ruling: an administrator gets no remote door at
+    # all.  So the 21 Aug closure is REVERSED, and the paragraph above is kept
+    # because it explains what the two groups mean and why sdapi was the half
+    # that mattered.  ***THE DIFFERENCE FROM THE PRE-21-AUG STATE IS THE ssh
+    # HALF***: back then an administrator still reached ssh through
+    # AllowGroups' own Administrators entry, and that entry is now gone too.
+    Note 'admin has NEITHER route'      'none'    (Routes $admAcc)
     # 05 Sep 26 - 10078 -> 10175.  PRE_RELEASE_FIXES 169 (a).  An administrator
     # still HOLDS both routes - the row directly above still passes, and 169 (b)
     # is why: the grant survives and cannot be taken away.  What changed is the
@@ -332,7 +340,14 @@ try {
     # ADMINISTRATOR tier before the three general cases, so the ordinary "both"
     # account still gets 10078 - and THAT row, further down this file, still
     # passes.  b123 showed exactly that pair: this one red, the other green.
-    Note 'admin: message 10175 shown (this machine only)' $true (Shown $a.Out 10175)
+    #
+    # 18 Sep 26 - ***THE MESSAGE NUMBER IS THE SAME AND ITS WORDS ARE NOT.***
+    # RELEASE_1.1 58 rewrote 10175 from "ssh and the API, but only from this
+    # machine" to "no routes" - so this row still checks that the TIER gets its
+    # own sentence before the three general cases, which is the property worth
+    # holding, and the label no longer quotes the old text.  The sentence above
+    # about the grant surviving is exactly what 58 reversed.
+    Note 'admin: message 10175 shown (its own tier sentence)' $true (Shown $a.Out 10175)
 
     # -----------------------------------------------------------------------
     Step 3 "RDPACCOUNT is gone"
@@ -395,9 +410,20 @@ try {
     # THE SECOND CHECK IS THE ONE THAT COULD FAIL QUIETLY.  A route.set that
     # printed 10083 and carried on would pass the message check and leave an
     # administrator with no API, which is exactly the state Phase 2 closed.
-    $out = Invoke-SD @("MODIFY.ACCOUNT $admAcc NONE")
-    Note 'admin refused: message 10083' $true     (Shown $out 10083)
-    Note 'admin still has both routes'  'ssh+api' (Routes $admAcc)
+    #
+    # ***18 Sep 26 - THE REFUSAL IS UNCHANGED AND THE DANGEROUS DIRECTION HAS
+    # REVERSED, SO THE PROBE CHANGED WITH IT.***  RELEASE_1.1 58: an
+    # administrator has no route and cannot be given one, so asking for NONE now
+    # asks for what they already have - a refusal there proves the guard fired
+    # but not that it protects anything.  ***BOTH is the ask that would do harm
+    # if the guard leaked***, and it is what this now sends: a route.set that
+    # printed 10083 and carried on would pass the message check and leave an
+    # administrator holding ssh AND the API, which is the state 58 exists to
+    # prevent.  10083's own wording inverted with it ("cannot be granted to
+    # one").
+    $out = Invoke-SD @("MODIFY.ACCOUNT $admAcc BOTH")
+    Note 'admin refused: message 10083' $true  (Shown $out 10083)
+    Note 'admin STILL has neither route' 'none' (Routes $admAcc)
     Note 'admin still NOT in sdsshonly' $false    (InGroup 'sdsshonly' $admAcc)
     Note 'admin can still sign in'      'admitted' (InteractiveLogon $admAcc $a.Password)
 

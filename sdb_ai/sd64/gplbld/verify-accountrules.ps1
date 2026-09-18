@@ -505,7 +505,18 @@ try {
         # administrator always has both.  Before Phase 2 an ADOPTed account
         # joined NEITHER, and APISRVR requires sdapi with no exemption - so the
         # person who installed SD could not use its API.
-        Note 'CONTROL: an ADOPTed account has both routes' 'ssh+api' (Routes $installUser)
+        #
+        # ***18 Sep 26 - NEITHER ROUTE, AND THIS ROW IS THE ONE THAT SHOWS THE
+        # RULING'S REAL COST.***  RELEASE_1.1 58: an administrator gets no
+        # remote door, and ADOPT forces the ADMINISTRATOR tier - so THE ACCOUNT
+        # THE INSTALLER ADOPTS FOR THE PERSON INSTALLING now has no ssh and no
+        # API, from any address including this machine.  That is the state the
+        # paragraph above says Phase 2 was written to escape, restored on
+        # purpose: the answer for a local application is a PROGRAMMER-tier
+        # account with API access, not an administrator.  The account still
+        # keeps its Windows sign-in rights and stays out of sdsshonly - the two
+        # rows below - so the console is unaffected.
+        Note 'CONTROL: an ADOPTed account has NEITHER route' 'none' (Routes $installUser)
         # 10040, not 10034: ADOPT must not put a borrowed login into sdsshonly.
         Note 'CONTROL: it kept its sign-in rights (10040)' $true `
              ($logText -match [regex]::Escape($installUser + ' keeps the Windows sign-in rights it already had'))

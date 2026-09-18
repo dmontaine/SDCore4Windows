@@ -534,7 +534,17 @@ foreach ($t in $Tiers) {
         exit 2
     }
     $pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-    $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword + ' BOTH').Trim()
+    # 18 Sep 26 - NO ROUTE KEYWORD FOR THE ADMINISTRATOR TIER.  RELEASE_1.1 58:
+    # an administrator gets no remote door, and CREATE.ACCOUNT now REFUSES
+    # "ADMINISTRATOR BOTH" rather than overriding it silently - so appending
+    # BOTH to every tier stopped this script dead on its third account with
+    # "wrote no accounts record", which is the refusal below working exactly as
+    # written.  The other two tiers keep BOTH: what is under test here is which
+    # VERBS each tier gets, and the route is incidental to that - but it must
+    # stay for STANDARD and PROGRAMMER, because CREATE.ACCOUNT USER requires a
+    # route to be stated for them and refuses silence (createa:480).
+    $route = if ($t.Keyword -eq 'ADMINISTRATOR') { '' } else { 'BOTH' }
+    $cmd = ('CREATE.ACCOUNT USER ' + $t.Name + ' ' + $t.Keyword + ' ' + $route).Trim()
     Write-Output ("  " + $cmd)
     $out = Invoke-SD @($cmd, $pw, $pw)
     # 19 Aug 26 - THE REGISTER RECORD, NOT THE OUTPUT TEXT.  This used to be
