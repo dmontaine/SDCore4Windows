@@ -1,1 +1,1 @@
-SD routes for %1: ssh and the API, but only from this machine.\n\nAdministration happens at the console, or through a remote desktop or\nremote-control product installed as a service. A sign-in from another\nmachine is refused.
+SD routes for %1: none.\n\nssh and the API are refused for an administrator, from every machine\nincluding this one. Administration happens at the console, or through a\nremote desktop or remote-control product installed as a service.

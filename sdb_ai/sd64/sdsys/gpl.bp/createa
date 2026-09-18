@@ -1103,6 +1103,11 @@ PW.TRY.AGAIN:
 *   TWO OF THE THREE ALREADY HELD.  more.args below gives an ADMINISTRATOR both
 *   ssh and the API and no keyword can take either away - his rule of 21 Aug
 *   2026, and MODIFY.ACCOUNT refuses to remove them for the same reason (10083).
+*   [18 Sep 26 - ***THE TWO THAT HELD NO LONGER DO, AND OS.EXECUTE - THE ONE HE
+*   MET HERE - IS UNTOUCHED.***  RELEASE_1.1 58: an administrator now gets
+*   NEITHER ssh NOR the API, on the owner's 18 Sep ruling, so the sentence above
+*   records what the 27 Aug ruling was answered against rather than what the
+*   verb does.  The os.execute half of that ruling stands exactly as written.]
 *   OS.EXECUTE was the one that did not, and it is the one he met: an
 *   UNELEVATED session belonging to the ADMINISTRATOR-tier account the installer
 *   creates was refused "edit is not available to don", because EDIT's
@@ -1778,10 +1783,69 @@ more.args:
 *   for this tier.  ***THE GATE IS LOGIN'S PEER TEST, NOT A GROUP MEMBERSHIP***,
 *   which is why nothing here needed narrowing - and why narrowing it would be
 *   the wrong fix, since it would take local ssh from an administrator too.
+*
+* 18 Sep 26 Windows port - ***AND NOW IT IS NARROWED, ON A RULING THAT REPLACES
+*   THE PREMISE OF EVERY PARAGRAPH ABOVE.  AN ADMINISTRATOR GETS NEITHER ROUTE.
+*   THE CONSOLE IS THE ONLY DOOR THEY HAVE.***  RELEASE_1.1_FIXES.md 58.  Owner,
+*   18 Sep 2026, asked for "the most secure solution that is possible", having
+*   given up the thing the 5 Sep refinement was protecting: "ssh on the local
+*   machine is a convenience for us, but we can use a virtual machine to test
+*   ssh instead.  I don't have any problem with it not being available on the
+*   local computer."
+*
+*   ***THE 21 Aug RULE IS NOT BEING REINTERPRETED, IT IS SUPERSEDED.***  "All
+*   administrators have access to both ssh and api ... the whole purpose of
+*   ADMINISTRATOR is that it gives unlimited access" was the owner's own
+*   sentence and it is now his own reversal.  Unlimited access to SD is what the
+*   tier still means - at the console, where it cannot be reached from a
+*   network.  MODIFY.ACCOUNT's 10083 inverts with it: it used to refuse taking
+*   the routes AWAY from an administrator, and now refuses GRANTING them.
+*
+*   ***WHY, IN ONE SENTENCE: A REMOTE ADMINISTRATOR SESSION IS WORSE THAN ANY
+*   DEFECT IT WOULD PROTECT AGAINST.***  A non-interactive logon is not
+*   UAC-filtered, so an administrator authenticating over ssh or the API with a
+*   password holds an UNFILTERED administrator token - no elevation prompt, no
+*   defect required.  Measured on the way to this ruling (18 Sep 2026): the API
+*   gate's own peer test cannot see through an "ssh -L" tunnel, because the
+*   forwarded connection is opened by sshd ON THIS HOST and arrives from
+*   127.0.0.1 - written down in verify-apiremote:54-58 on 5 Sep 2026 and acted
+*   on today.  So the peer test was the only layer, and it was reachable.
+*
+*   ***TWO LAYERS NOW, AND THIS IS THE ONE THAT DOES NOT DEPEND ON AN
+*   ADDRESS.***  allow-ssh-groups.ps1 drops the administrators group from
+*   AllowGroups and sets DisableForwarding, so sshd refuses an administrator
+*   before authentication and nobody can tunnel; the two lines below mean that
+*   even a connection the API believes is local belongs to no administrator,
+*   because APISRVR tests sdapi membership inside the SCRAM handshake
+*   (APISRVR:1362 - it has no administrator exemption, which used to be the gap
+*   the 21 Aug grant closed and is now the property being relied on).
+*   LOGIN's peer test (PRE_RELEASE 170, witnessed b126) STAYS as the third.
+*
+*   os.sh and os.exec below are NOT touched: the 27 Aug ruling is about reaching
+*   the operating system from inside SD, at the console, and no part of it is a
+*   remote door.
    if tier = 'ADMINISTRATOR' then
+* 18 Sep 26 Windows port - ***AND A ROUTE ASKED FOR OUT LOUD IS REFUSED, NOT
+*   SILENTLY DROPPED.***  RELEASE_1.1 58.  Until this ruling ADMINISTRATOR and
+*   BOTH agreed, so "CREATE.ACCOUNT USER x ADMINISTRATOR BOTH" was a normal
+*   thing to type - gplbld/verify-apiremote.ps1 typed exactly that.  With the
+*   routes gone, overriding the keyword without a word would hand back an
+*   account that does LESS than the operator asked for and say nothing, which
+*   is the shape CLAUDE.md's instrument rules forbid: the caller cannot tell a
+*   refusal from a success.  So the verb refuses, before anything is created,
+*   and names the same rule MODIFY.ACCOUNT names (10083).
+*
+*   NONE IS STILL ACCEPTED, because it asks for what the tier already gives -
+*   access.given is set by NONE too, so the test is on the FLAGS rather than on
+*   access.given, which would refuse the one keyword that agrees with us.
+      if access.ssh or access.api then
+         @system.return.code = -ER$FAILED
+         stop sysmsg(10083, acc.uname)
+         * %1 is an administrator; ssh and the API cannot be granted to one
+      end
       access.given = @true
-      access.ssh = @true
-      access.api = @true
+      access.ssh = @false
+      access.api = @false
 * 27 Aug 26 Windows port - AND THE OPERATING SYSTEM, WITHOUT ELEVATING.  Owner,
 *   27 Aug 2026.  It sits with ssh and the API because it is the third of the
 *   three he named, AND IT IS THE SAME KIND OF RULE: none of the three can be
@@ -1957,11 +2021,19 @@ set.access:
 *   LOGIN's peer test.  So the fix is a truthful message, not a narrower grant,
 *   and MODIFY.ACCOUNT's refusal to remove the two (10083) keeps its reason.
 *
+* 18 Sep 26 Windows port - ***AND IT IS NOW A NARROWER GRANT AS WELL AS A
+*   TRUTHFUL MESSAGE.***  RELEASE_1.1_FIXES.md 58.  The grant above is
+*   access.ssh = @false and access.api = @false for this tier, so this case
+*   reports no routes rather than local-only ones.  ***THE TIER CASE IS STILL
+*   FIRST AND STILL NEEDED***: with both flags false it would otherwise fall to
+*   "no remote access at all" (10079), which is true but says nothing about
+*   WHY, and this is the one tier whose answer is a rule rather than a choice.
+*
 *   BEFORE THE THREE GENERAL CASES, so the tier answers first and the ordinary
 *   messages keep meaning exactly what they always did for the other tiers.
    begin case
       case tier = 'ADMINISTRATOR'
-         crt sysmsg(10175,acc.uname) ;* ssh and the API, from this machine only
+         crt sysmsg(10175,acc.uname) ;* no routes; the console is the only door
       case access.ssh and access.api
          crt sysmsg(10078,acc.uname) ;* may sign in over ssh and use the API
       case access.ssh

@@ -214,6 +214,34 @@ $RETIRED = @(
     @{ Ref = '141'
        Retired     = 'Until then it'
        Replacement = 'is not recognized' }
+    # RELEASE_1.1 58 - AN ADMINISTRATOR HAS NO REMOTE DOOR AT ALL.  Owner's
+    # ruling, 18 Sep 2026.  Both phrases described the posture 58 replaced and
+    # both were TRUE when written, which is exactly the class this lint exists
+    # for: the claim is now false and the old words read as authoritative.
+    #
+    # 10175 said "ssh and the API, but only from this machine" - registered on
+    # the qualifier rather than on "ssh and the API", which is still correct
+    # elsewhere (10076/10077/10078 describe the OTHER tiers, whose routes did
+    # not change).  Registering the bare phrase would have gone red on four
+    # messages that are right.
+    @{ Ref = 'R1.1-58'
+       Retired     = 'but only from this machine'
+       Replacement = 'refused for an administrator, from every machine' }
+    # 10083 was MODIFY.ACCOUNT's refusal to take the routes AWAY; the refusal
+    # stands and its REASON inverted - it now refuses granting them.  gpl.bp is
+    # not in this corpus, so MODIFYA's own comments quoting the old text cannot
+    # trip this; they were corrected in the same commit for truthfulness.
+    @{ Ref = 'R1.1-58b'
+       Retired     = 'always has both ssh and the API'
+       Replacement = 'cannot be granted to one' }
+    # 58c - THE WIZARD SAID IT TWICE, which is 121's shape and the reason this
+    # phrase is registered rather than just corrected: sd.iss described who ssh
+    # admits on the options page (2108) AND in the script's own result string
+    # (2386).  A third copy at 2419 kept its opening clause deliberately - it is
+    # Ref 117's REPLACEMENT and would have gone red here if reworded.
+    @{ Ref = 'R1.1-58c'
+       Retired     = 'SD Core users and administrators'
+       Replacement = 'Administrators have no remote access at all' }
 )
 
 # --------------------------------------------------------------------------

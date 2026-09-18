@@ -17,6 +17,14 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Sep 26 Windows port - RELEASE_1.1 60: the two username copies out of the
+ *                      shared segment are bounded.  The segment is writable by
+ *                      every SD user by design and nothing terminates that
+ *                      field, so strcpy() into a char[MAX_USERNAME_LEN+1] on
+ *                      the stack ran as far as the next zero byte the writer
+ *                      chose.  cleanup() is the sharp one: sdwind fork/execs
+ *                      "sd -cleanup" as LocalSystem.  The bound is not the fix
+ *                      for the class - see the note at that site and 59.
  * 04 Sep 26 Windows port - reap_lost_user(), so LOGOUT n can reclaim a slot
  *                      whose process is gone instead of marking it
  *                      "(logout pending)" for ever.  PRE_RELEASE_FIXES.md 16
@@ -271,7 +279,16 @@ bool reap_lost_user(int16_t user) {
     if ((uptr->uid != 0) && (uptr->uid == user)) {
       pid = uptr->pid;
       if (!process_exists(pid)) {
-        strcpy(username, (char*)(uptr->username));
+        /* 18 Sep 26 Windows port - RELEASE_1.1 60.  BOUNDED, because the
+           source is in the shared segment and the segment is writable by
+           every SD user by design (stage.py:600).  username is
+           char[MAX_USERNAME_LEN+1] in both places, and nothing guarantees the
+           copy in the segment is terminated: strcpy() would run on into
+           ip_addr and past it, as far as the next zero byte the writer chose
+           to leave, overflowing this stack buffer.  See the note in
+           cleanup(). */
+        memcpy(username, (char*)(uptr->username), MAX_USERNAME_LEN);
+        username[MAX_USERNAME_LEN] = '\0';
         remove_user(uptr);
         log_printf("LOGOUT reaped user %d (pid %d, %s) - process was gone.\n",
                    (int)user, pid, username);
@@ -321,7 +338,24 @@ void cleanup() {
       pid = uptr->pid;
       if (!process_exists(pid)) {
         user_no = uptr->uid;
-        strcpy(username, (char*)(uptr->username));
+        /* 18 Sep 26 Windows port - RELEASE_1.1 60.  BOUNDED - AND THIS SITE IS
+           THE ONE THAT MATTERS, because sdwind fork/execs "sd -cleanup" and
+           sdwind runs as LocalSystem, so the writer of these bytes is an
+           ordinary SD user and the reader is a privileged process.  Measured
+           18 Sep 2026: C:\ProgramData\SD\shm\sd_shm_716d0301 grants
+           ace\sdusers (RX,W), and an ordinary Medium account opened it for
+           write with a control refused.
+
+           ***THE BOUND IS NOT THE FIX FOR THE CLASS, ONLY FOR THIS LINE.***
+           UPtr(n) takes its base, its stride AND its count from the same
+           writable segment (sysseg->user_table, ->user_entry_size,
+           ->max_users), so bounding the loop below would look like hardening
+           and would not be: the walk can be aimed before it is counted.  The
+           remedy is RELEASE_1.1 59 - no privileged process maps this segment -
+           and this copy is fixed because it is cheap, not because it is
+           sufficient. */
+        memcpy(username, (char*)(uptr->username), MAX_USERNAME_LEN);
+        username[MAX_USERNAME_LEN] = '\0';
         remove_user(uptr);
         log_printf("Cleanup removed user %d (pid %d, %s).\n", (int)user_no, pid,
                    username);

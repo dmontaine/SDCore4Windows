@@ -146,8 +146,14 @@
 * is being made or changed.
 *
 * AN ADMINISTRATOR IS REFUSED (10083) and a GROUP ACCOUNT is refused (10087).
-* Administrators always have both - owner's rule, 21 Aug 2026 - and a group
-* account has no Windows user to put in a group; it is reached with LOGTO.
+* 18 Sep 26 Windows port - ***THE REFUSAL IS UNCHANGED AND ITS REASON IS
+* INVERTED.***  RELEASE_1.1_FIXES.md 58.  It read "Administrators always have
+* both - owner's rule, 21 Aug 2026", so the routes could not be taken away;
+* the owner's ruling of 18 Sep 2026 gives an administrator NO remote door at
+* all, so they cannot be granted either.  Same guard, same message number, new
+* wording (10083).  CREATEA carries the why; nothing in the logic below moved,
+* which is why this is a comment change and not a code one.
+* A group account has no Windows user to put in a group; it is reached with LOGTO.
 *
 * THE FOUR OS FORMS REFUSE AN ADMINISTRATOR TOO (10106), and a group account
 * (10105).  Owner's rule, 27 Aug 2026: "administrators have full access, there
@@ -599,7 +605,8 @@ route.set:
 
    if is_grp_member(acc.user, "S-1-5-32-544") then
       @system.return.code = -ER$FAILED
-      crt sysmsg(10083, acc.user) ;* %1 is an administrator and always has both
+      crt sysmsg(10083, acc.user) ;* %1 is an administrator; ssh and the API
+      * cannot be granted to one.  RELEASE_1.1 58, owner 18 Sep 2026.
       return
    end
 
@@ -730,9 +737,14 @@ os.set:
 *  turn it off."  BY SID, so the two guards cannot drift and neither depends on
 *  a group name a localised Windows translates.
 *
-*  ITS OWN MESSAGE, NOT 10083.  That one says "always has both ssh and the
-*  API", which is true and is about the other two routes; a caller told it
-*  after typing "os-off" would read it as the wrong refusal.
+*  ITS OWN MESSAGE, NOT 10083.  That one is about the other two routes - as of
+*  18 Sep 2026 it says ssh and the API "cannot be granted to one" (RELEASE_1.1
+*  58); a caller told it after typing "os-off" would read it as the wrong
+*  refusal.  ***AND THE TWO NOW POINT IN OPPOSITE DIRECTIONS, WHICH IS WHY
+*  KEEPING THEM SEPARATE MATTERS MORE THAN IT DID***: operating-system access
+*  is a rule that CANNOT BE TAKEN AWAY from an administrator (10106), while ssh
+*  and the API are a rule that CANNOT BE GIVEN (10083).  One message for both
+*  would now be false in one direction whichever way it was worded.
    if is_grp_member(acc.user, "S-1-5-32-544") then
       @system.return.code = -ER$FAILED
       crt sysmsg(10106, acc.user)

@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Is an SD administrator refused a REMOTE API session, and still admitted a
-    LOCAL one?
+    Is an SD administrator refused an API session from ANY address, while a
+    non-administrator is still admitted over the same remote route?
 
 .DESCRIPTION
     PRE_RELEASE_FIXES.md 170.  This is the API half of the 5 Sep 2026 ruling
@@ -21,41 +21,72 @@
     which is also why it must not regress.  This one needs an ADMINISTRATOR and
     two different routes to the same machine.
 
+    ***18 Sep 26 - RELEASE_1.1 58 INVERTED LEG A, AND THE PARAGRAPHS BELOW ARE
+    REWRITTEN RATHER THAN PATCHED.  AN ADMINISTRATOR NOW HAS NO API AT ALL.***
+    Owner's ruling, 18 Sep 2026, asked for as "the most secure solution that is
+    possible", giving up the local convenience the 5 Sep refinement protected:
+    "I don't have any problem with it not being available on the local
+    computer."  CREATEA no longer joins an ADMINISTRATOR-tier account to sdapi,
+    so the refusal now comes from APISRVR's sdapi gate (apisrvr:1685, message
+    10073) rather than from the peer test (apisrvr:1744, message 10174).
+
     THE THREE LEGS, AND THE CONTROL IS SCORED FIRST.
 
       CONTROL  a PROGRAMMER over the LAN address        MUST BE ADMITTED
-      LEG A    the ADMINISTRATOR over 127.0.0.1         MUST BE ADMITTED
+      LEG A    the ADMINISTRATOR over 127.0.0.1         MUST BE REFUSED
       LEG B    the SAME ADMINISTRATOR over the LAN IP   MUST BE REFUSED
 
-    THE CONTROL GATES THE REST.  If a non-administrator cannot connect over the
-    LAN address either, the listener or the firewall is shut and leg B's
-    refusal says nothing about the gate.  Without it, a machine with no remote
-    API at all would score a confident green.
+    THE CONTROL GATES THE REST, AND IT NOW CARRIES MORE WEIGHT THAN IT DID.  If
+    a non-administrator cannot connect over the LAN address either, the listener
+    or the firewall is shut and both admin legs would be refused for reasons
+    that have nothing to do with the tier.  Without it, a machine with no remote
+    API at all would score a confident green - and since BOTH admin legs are now
+    expected to fail, the control is the only thing standing between this script
+    and a green it has not earned.
 
-    AND THE PAIR IS THE POINT.  Legs A and B are the same account, the same
-    password and the same host; the ONLY variable is the address.  If both go
-    the same way the gate is not reading the route - it is admitting or
-    refusing everything - and either can look like a pass on a single leg.
+    ***THE DISCRIMINATOR MOVED FROM THE ADDRESS TO THE TIER.***  It used to be
+    legs A vs B - same account, same password, only the address differing.  That
+    pair is now expected to go the SAME way, so it can no longer discriminate.
+    What decides now is CONTROL vs the two admin legs: one route, two tiers,
+    admitted for the non-administrator and refused for the administrator.
 
-    LEG A IS THE OWNER'S OWN CASE.  He runs a local application against the API
-    on 127.0.0.1 as an administrator account, which is what made "is a LOCAL
-    API session admitted" a ruling rather than a detail.  A green leg B with a
-    red leg A is not a partial pass, it is a broken product.
+    ***AND 10174 IS NOW UNREACHABLE OVER THE API, WHICH THIS SCRIPT ASSERTS
+    RATHER THAN MOURNS.***  The sdapi gate stands in front of the peer test, so
+    an administrator is refused before the peer test is consulted.  The peer
+    test is NOT being retired - it is the last line if a later change ever puts
+    an administrator back in sdapi - but a guard nothing can reach is a guard
+    nobody will notice breaking, so the rows below require the refusal to be
+    10073 and require 10174 to be ABSENT.  If 10174 ever comes back here, an
+    administrator reached the peer test, which means the sdapi grant regressed.
 
     WHAT IT ANCHORS ON.  tests/api_admin_probe.c prints PROBE.CONNECT=YES only
     after SDConnect() returned a session, and PROBE.CONNECT=NO with SDError()
     otherwise.  The success wording therefore cannot appear on the refusal
     path, which is the rule CLAUDE.md states after ZZIDALLOW.  The refusal is
-    scored twice over: message 10174's own words, and the audit line APISRVR
-    writes at exit.vb.scram.fail - "API REFUSED user=... reason=administrator
-    on a remote API session from ..." - which is written there and nowhere
+    scored twice over: message 10073's own words ("is not permitted to use the
+    API"), and the audit line APISRVR writes at exit.vb.scram.fail - "API
+    REFUSED user=... reason=not in sdapi" - which is written there and nowhere
     else, and which a session that never reached the gate cannot produce.
+    (Until 18 Sep 2026 both anchors were the peer test's: 10174 and "reason=
+    administrator on a remote API session from <addr>".  RELEASE_1.1 58 put the
+    sdapi gate in front of it, so those are now the wording of a refusal that
+    should no longer be reachable - which is why 10174's ABSENCE is a scored row
+    rather than a deletion.)
 
-    WHAT IT DOES NOT COVER, AND IT IS WRITTEN DOWN RATHER THAN ASSUMED AWAY.
-    An "ssh -L" tunnel terminates on this host, so a tunnelled API connection
-    is accepted FROM 127.0.0.1 and this gate reads it as local.  No peer test
-    can see through that; it is an sshd matter (AllowTcpForwarding, or a Match
-    block).  PRE_RELEASE_FIXES 170 carries it.
+    ***WHAT IT DID NOT COVER IS NOW CLOSED TWICE OVER, 18 Sep 2026, AND THIS
+    PARAGRAPH IS WHY IT WAS FOUND.***  It read: "An 'ssh -L' tunnel terminates
+    on this host, so a tunnelled API connection is accepted FROM 127.0.0.1 and
+    this gate reads it as local.  No peer test can see through that; it is an
+    sshd matter (AllowTcpForwarding, or a Match block).  PRE_RELEASE_FIXES 170
+    carries it."  ***EVERY WORD TRUE, AND NOTHING ACTED ON IT FOR THIRTEEN
+    DAYS*** - the caveat sat inside an entry that was struck through as DONE, so
+    it had no open row of its own, and the live sshd_config still read
+    "#AllowTcpForwarding yes" (commented, default yes) when it was measured.
+    RELEASE_1.1 58 closes it from both ends: allow-ssh-groups.ps1 writes
+    DisableForwarding, so there is no tunnel to build; and an administrator is
+    no longer in sdapi, so a connection the API believes is local belongs to no
+    administrator even if one were built.  The lesson kept for the next reader:
+    ***A CAVEAT INSIDE A CLOSED ENTRY IS NOT TRACKED BY ANYTHING.***
 
     IT CHANGES THE INSTALLED SYSTEM AND PUTS IT BACK: two throwaway Windows and
     SD accounts, an sd.conf APIPORT line, and two SD restarts.  The accounts go
@@ -286,7 +317,12 @@ try {
     # and for a reason that looked like a product fault until the transcript
     # was read.  BOTH is what the ADMINISTRATOR tier forces anyway, so this
     # names what the account actually gets.
-    $outA = Invoke-SD @(('CREATE.ACCOUNT USER ' + $adminAcct + ' ADMINISTRATOR BOTH'), $adminPw, $adminPw)
+    # 18 Sep 26 - "BOTH" REMOVED.  RELEASE_1.1 58: an administrator gets no
+    # remote route, and CREATE.ACCOUNT now REFUSES the combination rather than
+    # overriding it silently (createa, the tier branch in more.args), so the
+    # old command would stop this script at step 4 with 10083.  The account
+    # still needs to BE an administrator - that is what legs A and B test.
+    $outA = Invoke-SD @(('CREATE.ACCOUNT USER ' + $adminAcct + ' ADMINISTRATOR'), $adminPw, $adminPw)
     Write-Output '  --- CREATE.ACCOUNT (administrator) said: ---'
     Write-Output $outA
 
@@ -391,10 +427,12 @@ try {
                   $(if ($lanIp) { $lanIp } else { '<none>' }))
 
     # REFUSE THE NULL CASE.  With no reachable routable address there is no
-    # remote leg, and leg A alone would show an administrator ADMITTED with
-    # nothing demonstrating that a remote one is refused - a green meaning
-    # nothing.  This is also the honest answer on a machine whose firewall
-    # keeps the API loopback-only, which is the shipped default.
+    # remote leg and no CONTROL - and since RELEASE_1.1 58 made BOTH admin legs
+    # refusals, the control is the only row left that can fail for the right
+    # reason.  Without it every remaining row would pass on a machine with no
+    # remote API at all: a green meaning nothing.  This is also the honest
+    # answer on a machine whose firewall keeps the API loopback-only, which is
+    # the shipped default.
     if (-not $lanIp) {
         Write-Output ''
         Write-Output '  No non-loopback IPv4 address on this machine accepts a connection on the'
@@ -417,9 +455,10 @@ try {
     Write-Output $rc.Text
 
     # -----------------------------------------------------------------------
-    Step 6 'LEG A - the ADMINISTRATOR over 127.0.0.1 - MUST BE ADMITTED'
-    Write-Output '  Owner, 5 Sep 2026: "local API and SSH should continue to work".'
-    Write-Output '  This is his own case - a local application on 127.0.0.1 as an administrator.'
+    Step 6 'LEG A - the ADMINISTRATOR over 127.0.0.1 - MUST BE REFUSED'
+    Write-Output '  RELEASE_1.1 58, owner 18 Sep 2026: an administrator has no API at all,'
+    Write-Output '  local included.  This leg was MUST BE ADMITTED until that ruling; it is'
+    Write-Output '  inverted, not deleted, because the local case is the one that changed.'
     $ra = Invoke-Api '127.0.0.1' $adminAcct $adminPw $adminAcct.ToUpper() 'WHO'
     Write-Output ("  client exit {0}" -f $ra.Rc)
     Write-Output '  --- the client said: ---'
@@ -447,29 +486,36 @@ try {
         Refuse 'the control leg failed, so the gate cannot be measured.'
     }
 
-    # LEG A - LOCAL - MUST BE ADMITTED.  PROBE.CONNECT=YES is printed only
-    # after SDConnect() returned a session, so the refusal path cannot say it.
+    # 18 Sep 26 - RELEASE_1.1 58.  BOTH ADMIN LEGS ARE REFUSALS NOW, and each is
+    # scored on the success anchor's ABSENCE and on 10073's own wording being
+    # PRESENT.  Both halves, because a connection can fail for a dozen reasons
+    # that are not this gate - and with no leg expected to succeed, "it did not
+    # connect" on its own is the cheapest possible false green.
     $localIn = ($ra.Text -match 'PROBE\.CONNECT=YES')
-    Note 'LOCAL: an administrator over loopback IS admitted' $true $localIn
+    Note 'LOCAL: the administrator did NOT get a session' $false $localIn
 
-    # And the disqualifier for the same leg: the refusal wording must NOT appear.
-    $localRefused = ($ra.Text -match '(?i)may not sign in')
-    Note 'LOCAL: no refusal message was shown' $false $localRefused
+    $localMsg = ($ra.Text -match '(?i)is not permitted to use the API')
+    Note 'LOCAL: message 10073 was returned to the client' $true $localMsg
 
-    # LEG B - REMOTE - MUST BE REFUSED, scored on the success anchor's ABSENCE
-    # and on 10174's own wording being PRESENT.  Both, because a connection can
-    # fail for a dozen reasons that are not this gate.
     $remoteIn = ($rb.Text -match 'PROBE\.CONNECT=YES')
     Note 'REMOTE: the administrator did NOT get a session' $false $remoteIn
 
-    $remoteMsg = ($rb.Text -match '(?i)may not sign in to this machine from another one')
-    Note 'REMOTE: message 10174 was returned to the client' $true $remoteMsg
+    $remoteMsg = ($rb.Text -match '(?i)is not permitted to use the API')
+    Note 'REMOTE: message 10073 was returned to the client' $true $remoteMsg
 
-    # ***AND THE PAIR IS THE POINT.***  Same account, same password, same host,
-    # two addresses.  If both legs went the same way the gate is not reading the
-    # route at all - it is admitting everything or refusing everything - and
-    # either of those can look like a pass on a single leg.
-    Note 'the two routes were treated DIFFERENTLY' $true ($localIn -ne $remoteIn)
+    # ***AND 10174 MUST BE ABSENT FROM BOTH.***  The sdapi gate (apisrvr:1685)
+    # stands in front of the peer test (apisrvr:1744), so an administrator
+    # cannot reach the peer test any more.  If this wording comes back, the
+    # sdapi grant regressed and an administrator got further than it should.
+    $peerMsg = (($ra.Text -match '(?i)may not sign in') -or
+                ($rb.Text -match '(?i)may not sign in'))
+    Note 'NEITHER leg reached the peer test (10174 absent)' $false $peerMsg
+
+    # ***THE DISCRIMINATOR IS THE TIER, NOT THE ADDRESS.***  The old row here
+    # required legs A and B to differ, which is now false BY DESIGN and would
+    # have failed a correct product.  One route, two tiers: the control got in
+    # over the LAN address and the administrator did not.
+    Note 'the TIER decided: control in, administrator out' $true ($controlIn -and -not $remoteIn)
 
     # -----------------------------------------------------------------------
     Step 9 'the audit trail, after - THE DECISIVE READING'
@@ -483,14 +529,23 @@ try {
 
     # Written at exit.vb.scram.fail and nowhere else.  A session that never
     # reached the gate cannot produce this line.
+    #
+    # 18 Sep 26 - RELEASE_1.1 58: THE REASON IN THE TRAIL CHANGED WITH THE GATE.
+    # It used to be "administrator on a remote API session from <addr>", written
+    # by the peer test; the sdapi gate now refuses first and writes "not in
+    # sdapi" (apisrvr:1689).  ***THE ADDRESS ROW WENT WITH IT, AND THAT IS A
+    # REAL LOSS, RECORDED RATHER THAN PAPERED OVER***: the sdapi reason does not
+    # name the peer, so the trail no longer distinguishes which route the
+    # refusal came from.  Both admin legs are refused either way, and the
+    # per-leg client wording above is what tells them apart.
     $auditRefused = ($tail -match '(?i)API REFUSED' -and
-                     $tail -match '(?i)administrator on a remote API session')
-    Note 'the audit records the REMOTE refusal, with the reason' $true $auditRefused
+                     $tail -match '(?i)not in sdapi')
+    Note 'the audit records the refusal, with the reason' $true $auditRefused
 
-    # AND THE ADDRESS IS IN IT, which is what distinguishes "the gate fired"
-    # from "the gate fired for some other reason".
-    $auditAddr = ($tail -match ('(?i)remote API session from\s+' + [regex]::Escape($lanIp)))
-    Note 'the refusal names the address it refused' $true $auditAddr
+    # The account is named even though the route is not, so the line can still
+    # be tied to the leg that produced it.
+    $auditUser = ($tail -match ('(?i)user=\s*' + [regex]::Escape($adminAcct.ToLower())))
+    Note 'the refusal names the account it refused' $true $auditUser
 
     # A trail that did not move at all means the session never reached APISRVR -
     # which is not the gate working, it is the measurement failing.

@@ -2080,7 +2080,17 @@ if ($stale) {
     Write-Output 'REFUSING - any measurement taken now describes a tree that no longer exists.'
     Write-Output ''
     Write-Output 'Run one cycle, from an ELEVATED PowerShell:'
-    Write-Output ("    " + (Join-Path $PSScriptRoot 'cycle.ps1'))
+    # 18 Sep 26 - WITH THE POLICY SWITCH.  RELEASE_1.1 58 (found while it was
+    # refusing 58's own stale tree).  This printed a BARE path, and the owner's
+    # shells read ExecutionPolicy "Undefined" in every scope - which on a
+    # desktop edition is Restricted - so the command this script hands over
+    # answered PSSecurityException in his terminal on 12 Sep 2026 while working
+    # in an agent's shell at Process=Bypass.  RELEASE_1.1 11 fixed 175 sites SD
+    # PRINTS and 32 more in the docs; this one is in the tooling and was missed,
+    # which is CLAUDE.md's "every command you hand over" rule owed by a script
+    # rather than by a person.
+    Write-Output ("    powershell -ExecutionPolicy Bypass -File " +
+                  (Join-Path $PSScriptRoot 'cycle.ps1'))
     Write-Output ''
     # 17 Aug 26 - IT NAMES THE SCRIPT, NOT THE STEPS.  This used to print
     # "stage.py --force --bootstrap, ISCC, uninstall, delete BOTH trees,

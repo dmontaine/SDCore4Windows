@@ -4,6 +4,47 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+18 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh OR THE API.
+           ADMINISTRATION IS AT THE CONSOLE.
+
+           An account created with the ADMINISTRATOR keyword now has no
+           remote access at all.  It is not put in the sdssh or sdapi
+           groups, the ssh server is told not to accept the administrators
+           group, and MODIFY.ACCOUNT refuses to grant either route to an
+           administrator.  Administer SD Core at the console, or through a
+           remote desktop or remote-control product installed as a service.
+
+           ***WHAT MIGHT STOP WORKING.***  If you administered SD Core by
+           signing in over ssh, or ran an administrator's program against
+           the API - including from this same machine, which did work until
+           now - that will be refused.  ssh says the account is not allowed;
+           the API says "is not permitted to use the API".  Use an ordinary
+           SD Core account for remote work, or work at the console.
+
+           WHY.  A sign-in that does not come from the console is not
+           filtered by Windows' own administrator prompt, so an
+           administrator who signs in remotely with a password holds full
+           administrator rights on the machine straight away.  Removing the
+           route removes that, and it cannot be turned back on by a keyword.
+
+           CREATE.ACCOUNT NOW REFUSES A CONTRADICTION INSTEAD OF IGNORING
+           IT.  "CREATE.ACCOUNT USER name ADMINISTRATOR BOTH" used to be
+           accepted; it now stops and says so, rather than creating an
+           account with less access than you asked for.  Leave the route
+           keyword off, or say NONE.
+
+18 Sep 26  PORT FORWARDING IS TURNED OFF FOR ssh SESSIONS.
+
+           Every ssh session already went straight into SD Core rather than
+           a command prompt.  The ssh server is now also told to refuse port
+           forwarding, so an SD Core account cannot use its ssh login to
+           reach another service on the computer, or to reach another
+           computer through it.
+
+           ***WHAT MIGHT STOP WORKING.***  "ssh -L", "ssh -R" and "ssh -D"
+           against this machine will be refused.  scp and sftp were already
+           unavailable, because the session command is forced.
+
 17 Sep 26  AN API SESSION NOW RUNS AS THE USER WHO LOGGED IN.
 
            When you log in over the API, SD now starts your session as your

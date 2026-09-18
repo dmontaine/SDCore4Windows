@@ -442,6 +442,27 @@ try {
         Note 'AllowGroups no longer names sdusers' $false ($line -match '\bsdusers\b')
         Note 'sshd_config has a ForceCommand line' $true $force
 
+        # 18 Sep 26 - RELEASE_1.1 58, THE TWO ROWS THE NEW POSTURE NEEDS.  An
+        # administrator has no remote door at all (owner, 18 Sep 2026), and
+        # forwarding is off because ForceCommand never constrained it and a
+        # tunnelled API connection reads as local to LOGIN's peer test.
+        Note 'DisableForwarding is set'            $true (@($body | Where-Object { $_ -match '^\s*DisableForwarding\s+yes\b' }).Count -gt 0)
+
+        # BY SID, RESOLVED TO A NAME - "Administrators" is renamed on a
+        # localised Windows, so the literal would pass there by not matching.
+        # AND A LOOKUP THAT FAILED IS NOT AN ABSENCE: if the name cannot be
+        # resolved this row FAILS and says so, rather than reporting the
+        # comfortable answer.  Same lesson as K$GROUP.MEMBER's three-valued
+        # contract (RELEASE_1.1 55).
+        $adminGrp = Get-LocalGroup -SID 'S-1-5-32-544' -ErrorAction SilentlyContinue
+        if ($null -eq $adminGrp) {
+            Write-Host '   could not resolve S-1-5-32-544 - the next row is UNPROVEN, not passing' -ForegroundColor Yellow
+            Note 'AllowGroups names no administrators group' $true $false
+        }
+        else {
+            Note 'AllowGroups names no administrators group' $false ($line -match ('\b' + [regex]::Escape($adminGrp.Name) + '\b'))
+        }
+
         if ($allow.Count -eq 0 -and -not $force) {
             $sshd = Join-Path $env:SystemRoot 'System32\OpenSSH\sshd.exe'
             Write-Host ''

@@ -2105,10 +2105,15 @@ begin
 
        'IF YOU INSTALL THE ssh SERVER, EVERY SSH SESSION GOES STRAIGHT INTO SD Core, ' +
        'AND THAT PART IS NOT AN OPTION' + #13#10#13#10 +
-       'SD Core limits ssh to SD Core users and administrators, and puts every ssh session ' +
+       'SD Core limits ssh to SD Core users, and puts every ssh session ' +
        'straight into SD Core instead of a command prompt. That is the point of ' +
        'confining ssh to SD Core: an account SD Core creates cannot get a shell ' +
        'on this computer.' + #13#10#13#10 +
+       'Administrators have no remote access at all - not ssh and not the API. ' +
+       'SD Core is administered at the console, or through a remote desktop or ' +
+       'remote-control product installed as a service. Port forwarding is ' +
+       'turned off for every ssh session, so an SD Core account cannot reach ' +
+       'another service on this computer through it.' + #13#10#13#10 +
        'THE COST, SAID PLAINLY, AND ONLY IF YOU INSTALL THE SERVER: scp and sftp ' +
        'STOP WORKING FOR EVERYONE on this computer, because the command is forced ' +
        'and there is no subsystem left to run. Remote-control tools that copy files ' +
@@ -2383,7 +2388,7 @@ begin
                   ' -SdExe "' + ExpandConstant('{app}\usr\bin\sd.exe') + '"',
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
-    Result := 'ssh could NOT be limited to SD Core users and administrators: the script did not run.';
+    Result := 'ssh could NOT be limited to SD Core users: the script did not run.';
     Exit;
   end;
 
@@ -2416,7 +2421,13 @@ begin
       a compile error - caught by check-iss.ps1 rather than by a cycle. }
   begin
     AllowGroupsWrote := True;
-    Result := 'ssh is now limited to members of "sdssh" and the administrators group. ' +
+    { 18 Sep 26 - RELEASE_1.1 58.  The administrators group left AllowGroups on
+      the owner's ruling, and port forwarding is disabled in the same block.
+      ***THE FIRST CLAUSE IS A REGISTERED REPLACEMENT*** in
+      test-retired-wording-units.ps1 (Ref 117), so it is kept word for word;
+      only the tail changed. }
+    Result := 'ssh is now limited to members of "sdssh", and port forwarding is off. ' +
+              'Administrators have no remote access at all and are not in that group. ' +
               'Any existing sshd_config was kept as sshd_config.before-sd.';
   end
   else if Code = 2 then
@@ -4937,8 +4948,10 @@ begin
            'why this install is going ahead. If somebody had changed it, SD Core would ' +
            'have stopped before this point.' + #13#10#13#10 +
            'SD Core WILL NOW CONFIGURE IT, and this is not optional: ssh is limited to ' +
-           'SD Core users and administrators, and every ssh session goes straight into ' +
-           'SD Core rather than a command prompt. scp and sftp stop working for ' +
+           'SD Core users, and every ssh session goes straight into ' +
+           'SD Core rather than a command prompt. Administrators have no remote access at all, ' +
+           'and port forwarding is turned off for every session. ' +
+           'scp and sftp stop working for ' +
            'everyone on this computer as a result. Your existing sshd_config is ' +
            'kept beside it as sshd_config.before-sd. Uninstalling SD Core removes ' +
            'its block and restarts the ssh server, which leaves the file as it ' +

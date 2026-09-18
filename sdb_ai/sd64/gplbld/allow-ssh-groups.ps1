@@ -56,32 +56,60 @@
 #      lock its author out.  SD's OWN block is exempt: it is fenced by the
 #      markers below, so re-running replaces it rather than stacking.
 #
-# THE LIST MUST INCLUDE ADMINISTRATORS, or the machine's own administrator
-# loses ssh - the caution in 5.6.2, and the reason this is an offer rather than
-# something a verb does silently.
+# 18 Sep 26 - ***ADMINISTRATORS ARE NOT IN THIS LIST ANY MORE. THE CONSOLE IS
+# THE ONLY DOOR THEY HAVE.***  Owner's ruling, 18 Sep 2026, asked for as "the
+# most secure solution that is possible": an administrator gets NO remote door,
+# neither ssh nor the API, and losing LOCAL admin ssh is accepted - "ssh on the
+# local machine is a convenience for us, but we can use a virtual machine to
+# test ssh instead.  I don't have any problem with it not being available on the
+# local computer."  RELEASE_1.1_FIXES.md 58.
 #
-# 05 Sep 26 - ***AND 167 IS NOT A REASON TO TAKE IT OUT. READ THIS BEFORE YOU
-# DO.***  PRE_RELEASE_FIXES 169 (c).  167 denies an administrator ssh FROM
-# ANOTHER MACHINE, and the obvious hardening looks like dropping Administrators
-# from this list so sshd refuses them before they authenticate.  ***THAT WOULD
-# BREAK THE RULING RATHER THAN ENFORCE IT.***  The owner's refinement of the
-# same day keeps LOCAL ssh working for an administrator - "if I am at the
-# console, everything works, only remote access is denied" - and AllowGroups
-# cannot tell one from the other: it matches on the GROUP, not the source, so
-# removing the entry takes loopback with it.
+# ***THE ARGUMENT THAT STOOD HERE WAS SOUND AND IS KEPT, BECAUSE ONLY ITS
+# PREMISE DIED.***  It read: "THE LIST MUST INCLUDE ADMINISTRATORS, or the
+# machine's own administrator loses ssh - the caution in 5.6.2"; and, on
+# 5 Sep 26, "AND 167 IS NOT A REASON TO TAKE IT OUT.  READ THIS BEFORE YOU DO.
+# ... THAT WOULD BREAK THE RULING RATHER THAN ENFORCE IT.  The owner's
+# refinement of the same day keeps LOCAL ssh working for an administrator - 'if
+# I am at the console, everything works, only remote access is denied' - and
+# AllowGroups cannot tell one from the other: it matches on the GROUP, not the
+# source, so removing the entry takes loopback with it."  ***EVERY WORD OF THAT
+# IS STILL TRUE.  WHAT CHANGED IS THAT LOOPBACK ssh IS NO LONGER WANTED***, so
+# the property AllowGroups cannot express is one nobody needs expressed.  The
+# same paragraph also said the "Match Address 127.0.0.1,::1" hardening "IS THE
+# OWNER'S TO ASK FOR" - he asked for more than it, and a group line he now gets
+# to write plainly is safer than a Match block whose scope runs to end of file.
 #
-# ***SO THE LOCAL/REMOTE DECISION LIVES IN SD, IN LOGIN'S PEER TEST***, which
-# reads SSH_CLIENT and can see the difference.  The cost, stated plainly: a
-# remote administrator still AUTHENTICATES here and is refused a moment later
-# by SD, rather than being turned away by the transport.
+# ***AND LOGIN'S PEER TEST STAYS.***  PRE_RELEASE 170 is witnessed (b126) and is
+# not being retired: it now guards a door the transport has already shut, which
+# is the arrangement to want.  What is NOT acceptable is a single layer, and the
+# reason is in the next paragraph.
 #
-# THE HARDENING THAT WOULD CLOSE THAT IS A "Match Address 127.0.0.1,::1" BLOCK
-# admitting Administrators only from loopback - sshd CAN discriminate that way,
-# where AllowGroups cannot.  It is NOT done here, and deliberately: a Match
-# block runs to the next Match or to end of file, this script already has to
-# reason about the "Match Group administrators" block Windows ships (see below),
-# and getting it wrong locks the author out of the machine.  ***IT IS A REAL
-# IMPROVEMENT AND IT IS THE OWNER'S TO ASK FOR***, not a tidy to slip in.
+# 18 Sep 26 - ***DisableForwarding, BECAUSE ForceCommand DOES NOT CONSTRAIN A
+# FORWARD AND THE API'S PEER TEST CANNOT SEE THROUGH ONE.***  verify-apiremote
+# wrote this down on 5 Sep and nothing acted on it: "an 'ssh -L' tunnel
+# terminates on this host, so a tunnelled API connection is accepted FROM
+# 127.0.0.1 and this gate reads it as local.  No peer test can see through
+# that; it is an sshd matter".  Measured 18 Sep 2026 on this machine:
+# sshd_config line 58 read "#AllowTcpForwarding yes" - commented, so the default
+# (yes) applied - PermitOpen was unset, and "ssh -N" opens no session channel at
+# all, so ForceCommand is never consulted on that path.  So any sdssh member
+# could have sshd open a connection to 127.0.0.1:4243 on their behalf.
+#
+#   - DisableForwarding covers tcp, StreamLocal, agent, X11 and tun in one
+#     keyword rather than four that can drift apart.  It is a recognised keyword
+#     in the shipped server - OpenSSH_for_Windows_9.5p2, and the keyword table
+#     was checked in the binary against a negative control.
+#   - It is GLOBAL, like ForceCommand and for the same reason: the rule is about
+#     the route in, not about who took it.  Nothing in gplbld forwards - the one
+#     match across the directory was verify-apiremote's comment above - so no
+#     verifier pays for this.
+#   - scp and sftp were already gone with ForceCommand; this takes port
+#     forwarding, which was the half that survived it.
+#
+# ***TWO INDEPENDENT LAYERS, DELIBERATELY.***  Administrators leave sdapi in the
+# same change (CREATEA, MODIFYA), so a tunnelled connection now reaches a door
+# that admits no administrator even if it believes the peer is local.  Either
+# layer alone would hold; neither alone is where the boundary should rest.
 #
 # ***AND SSH_CLIENT ONLY WORKS AS A SECURITY SIGNAL WHILE THIS FILE LEAVES THE
 # ENVIRONMENT ALONE.***  Measured 5 Sep 2026: sshd_config carries no AcceptEnv
@@ -141,9 +169,21 @@ $end     = '# --- END SD ssh-only model ---'
 
 # Returns the AllowGroups patterns, or $null with a reason on stdout.
 function Get-Patterns {
-    $admins = Get-LocalGroup -SID 'S-1-5-32-544' -ErrorAction SilentlyContinue
-    if ($null -eq $admins) {
-        Write-Output "allow-ssh-groups: cannot resolve S-1-5-32-544 - refusing to guess at the administrators group"
+    # 18 Sep 26 - THE REFUSAL CHANGED TARGET WITH THE LIST.  It used to resolve
+    # S-1-5-32-544 and refuse if it could not, because the administrators group
+    # was one of the two names written here; that name is gone (see the header),
+    # so the guard would have been left measuring nothing - and a guard that
+    # cannot fail is the vacuous pass PROJECT_STATUS.md 0 forbids.
+    #
+    # WHAT IS WORTH REFUSING NOW IS THE LOCKOUT THE PARAGRAPH BELOW DESCRIBES.
+    # sdssh is the ONLY name in the line now, so writing it while the group does
+    # not exist denies ssh to everybody, with no administrators entry left to
+    # get back in through.  sd.iss calls sync-route-groups.ps1 first, which
+    # creates and seeds it, so this should never fire on an install - it fires
+    # for a hand run in the wrong order, which is exactly when it is wanted.
+    $sdssh = Get-LocalGroup -Name 'sdssh' -ErrorAction SilentlyContinue
+    if ($null -eq $sdssh) {
+        Write-Output "allow-ssh-groups: the sdssh group does not exist - refusing to write an AllowGroups line that would deny ssh to every account (run gplbld/sync-route-groups.ps1 first)"
         return $null
     }
     # 21 Aug 26 Windows port - sdssh, NOT sdusers.  sdusers grants access to the
@@ -158,7 +198,9 @@ function Get-Patterns {
     # this line against an empty group locks all of them out at the next sshd
     # restart.  gplbld/sync-route-groups.ps1 creates it and seeds it from
     # sdusers, and sd.iss calls that FIRST - see the ordering comment there.
-    $names = @('sdssh', $admins.Name)
+    # 18 Sep 26 - sdssh ALONE.  The administrators group left this list on the
+    # owner's 18 Sep ruling; the header carries the argument it replaced.
+    $names = @('sdssh')
     $out = New-Object System.Collections.ArrayList
     foreach ($n in $names) {
         $null = $out.Add($n)
@@ -195,7 +237,11 @@ function Remove-OurBlock([string[]]$lines) {
 
 # See the header: before the first Match, or at the end if there is none.
 #
-# EXACTLY THREE LINES, AND NO BLANK ONE FOR READABILITY.  A blank line looks
+# NO BLANK LINE FOR READABILITY.  (This said "EXACTLY THREE LINES" until
+# 18 Sep 26, when DisableForwarding made it four, or five with ForceCommand.
+# The count was never the point and naming it here invited this comment to rot;
+# verify-allowgroups asserts the arithmetic, which is where it belongs.)
+# A blank line looks
 # harmless and is not: it falls outside the markers, so Remove-OurBlock leaves
 # it behind and every apply/remove cycle grows the file by one line.  Measured
 # 14 Aug 2026 - the round trip was not byte-identical and a second run was not
@@ -224,14 +270,22 @@ function Remove-OurBlock([string[]]$lines) {
 # forced, so there is no subsystem left to run.  That follows from the
 # decision; it is not a side effect that was missed.
 function Add-OurBlock([string[]]$lines, [string[]]$patterns, [string]$sdexe = '') {
+    # 18 Sep 26 - DisableForwarding IN BOTH ARMS.  It does not depend on whether
+    # SdExe resolved: a build that could not find sd.exe still must not leave
+    # port forwarding open, and putting it in one arm only is how the two arms
+    # drift.  See the header for why it is here at all.
     if ($sdexe) {
         $block = @($begin,
                    ('AllowGroups ' + ($patterns -join ' ')),
                    ('ForceCommand "' + $sdexe + '"'),
+                   'DisableForwarding yes',
                    $end)
     }
     else {
-        $block = @($begin, ('AllowGroups ' + ($patterns -join ' ')), $end)
+        $block = @($begin,
+                   ('AllowGroups ' + ($patterns -join ' ')),
+                   'DisableForwarding yes',
+                   $end)
     }
     $at = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {

@@ -69,8 +69,47 @@ Show 'AllowGroups present'                1     ($new | Select-String -Pattern '
 # THE ONE THAT MATTERS.  Inside a Match block it would apply to that block's
 # users only, which reads as working and is the opposite of what it says.
 Show 'it is BEFORE the first Match'       'yes' $(if ($ai -and $mi -and $ai -lt $mi) { 'yes' } else { 'no' })
-Show 'three lines added and nothing lost' ($default.Count + 3) $new.Count
-Write-Output ("  wrote: " + ($new | Where-Object { $_ -like 'AllowGroups*' }))
+# 18 Sep 26 - FOUR, not three: DisableForwarding joined the block (RELEASE_1.1
+# 58).  Add-OurBlock is called here WITHOUT an sdexe, so the arm under test is
+# begin + AllowGroups + DisableForwarding + end.  The five-line arm is the
+# installed one and is covered by the row below it.
+Show 'four lines added and nothing lost'  ($default.Count + 4) $new.Count
+Write-Output ("  wrote: " + ($new | Where-Object { $_ -like 'AllowGroups*' -or $_ -like 'DisableForwarding*' }))
+
+# 18 Sep 26 - THE FORWARDING ROWS.  RELEASE_1.1 58.  ForceCommand does not
+# constrain a forward, and a forwarded connection to the API is accepted from
+# 127.0.0.1, so LOGIN's peer test reads it as local - verify-apiremote:54-58
+# wrote that down on 5 Sep 2026 and nothing acted on it until now.
+Show 'DisableForwarding present'          1     ($new | Select-String -Pattern '^DisableForwarding yes$').Count
+# Inside a Match block it would apply to that block's users only, which reads
+# as working and is the opposite of what it says - the same trap as AllowGroups.
+$di = ($new | Select-String -Pattern '^DisableForwarding' | Select-Object -First 1).LineNumber
+Show 'and BEFORE the first Match'         'yes' $(if ($di -and $mi -and $di -lt $mi) { 'yes' } else { 'no' })
+
+# Both arms carry it, so a build that could not resolve sd.exe still closes
+# forwarding.  This is the arm the installer actually writes.
+$withExe = Add-OurBlock $default $patterns 'C:\Program Files\SD\usr\bin\sd.exe'
+Show 'five lines with ForceCommand'       ($default.Count + 5) $withExe.Count
+Show 'ForceCommand arm forwards too'      1     ($withExe | Select-String -Pattern '^DisableForwarding yes$').Count
+Show 'and it is removable'                'yes' $(if (((Remove-OurBlock $withExe) -join "`n") -eq ($default -join "`n")) { 'yes' } else { 'no' })
+
+# THE ADMINISTRATORS ENTRY IS GONE FROM THE REAL PATTERN LIST, and that is
+# Get-Patterns' business rather than the editing under test here - so it is
+# asserted against the source text, the same way the functions are lifted.
+# Owner's ruling, 18 Sep 2026: an administrator has no remote door at all.
+# ON THE AST, NOT ON THE TEXT, AND THE FIRST VERSION OF THIS WAS WRONG.  It
+# matched the function's source for "S-1-5-32-544" and went red on the COMMENT
+# that explains why that lookup was removed - a check reading prose as code,
+# which is the trap PROJECT_STATUS.md 0 names.  String constants come from the
+# parser, and comments are not in it.
+$patAst = ($ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Get-Patterns' }, $true))[0]
+$patStr = @($patAst.FindAll({ $args[0] -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) | ForEach-Object { $_.Value })
+# Control: the lift worked at all.  Zero string constants would pass both of
+# the rows below by measuring nothing.
+Show 'Get-Patterns string constants found' 'yes' $(if ($patStr.Count -gt 0) { 'yes' } else { 'no' })
+Show 'Get-Patterns names sdssh'            'yes' $(if ($patStr -contains 'sdssh') { 'yes' } else { 'no' })
+Show 'and names no administrators group'   'yes' $(if (-not ($patStr -match 'S-1-5-32-544')) { 'yes' } else { 'no' })
+Show 'and refuses a missing sdssh group'   'yes' $(if (($patStr -match 'does not exist').Count -gt 0) { 'yes' } else { 'no' })
 
 Write-Output ""
 Write-Output "=== re-running replaces, it does not stack ============================="
