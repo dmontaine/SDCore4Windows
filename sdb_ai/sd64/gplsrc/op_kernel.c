@@ -323,17 +323,28 @@ void op_kernel() {
      3. the caller sends nothing more and exits, which closes the app-side
         socketpair - and THAT is what makes the relay cut over to the pipe
 
-   STEP 3 IS THE CALLER'S AND CANNOT BE DONE HERE.  The front still has to get
-   the SCRAM server-final out before it goes, so the order in APISRVR is: send
-   v=ssig, call this, then return.  Closing the app side here would take the
-   server-final with it.
+   TWO CALLS, AND THE SPLIT IS THE POINT (RELEASE_1.1 57).  Step 1 is made
+   by a PREPARE call - the argument "<user><FM>P" - and steps 2-3 by the
+   COMMIT call, plain "<user>".  The caller MUST prepare BEFORE the SCRAM
+   server-final goes out: asking the relay for the pipe is what stops it
+   reading the net, so asked any later (as APISRVR did until 57) a fast
+   client's first post-login request is read off the net and forwarded to
+   THIS front, which is past its last read and drops it -
+   test-tlsrelay-units.py's test_handover_pre_request_byte measures exactly
+   that window.  Prepared first, no client byte can exist before the request:
+   the client cannot speak until it has seen the server-final, which is
+   written after the prepare.  The commit may come after the server-final;
+   only the caller's exit (step 3) closes the app side, and by then the pipe
+   stands.  A commit with no prepare refuses, because that order cannot end
+   anywhere safe.
 
-   IT FAILS CLOSED AND SAYS WHY IN syslog.  The BASIC caller gets 1 or 0 and
-   nothing else - there is nowhere for a reason to go on the wire, because the
-   client is mid-login - so every refusal is syslogged with the username.  A
-   handover that returned 0 silently would present as a connection that closed
-   for no reason, with the operator's only clue being that it happened at
-   login.  syslog goes to the Windows Application log, provider sd_Log.
+   IT FAILS CLOSED AND SAYS WHY IN syslog.  The BASIC caller gets 1 or 0 for
+   each call and nothing else - there is nowhere for a reason to go on the
+   wire, because the client is mid-login - so every refusal is syslogged with
+   the username.  A handover that returned 0 silently would present as a
+   connection that closed for no reason, with the operator's only clue being
+   that it happened at login.  syslog goes to the Windows Application log,
+   provider sd_Log.
 
    NOTE THE ASYMMETRY WITH K_ASSUME_USER: that one changes THIS process, so
    its 1 means "I am now the user".  This one's 1 means "somebody else is, and
@@ -341,14 +352,16 @@ void op_kernel() {
    remaining job is to stop.                                                 */
     case K_HANDOFF:
       {
-        char uname[MAX_USERNAME_LEN + 1];
+        char uname[MAX_USERNAME_LEN + 4];
         char pipename[256];
         char why[512];
+        static char handoff_pipe[256];  /* the pipe the "<FM>P" call stood up */
         void* proc = NULL;
         unsigned long spawned = 0;
+        char* mode;
 
         result.data.value = 0;
-        if ((k_get_c_string(descr, uname, MAX_USERNAME_LEN) <= 0) ||
+        if ((k_get_c_string(descr, uname, MAX_USERNAME_LEN + 3) <= 0) ||
             !(process.program.flags & HDR_INTERNAL)) {
           syslog(LOG_ERR, "SD API: handover refused: %s",
                  (process.program.flags & HDR_INTERNAL)
@@ -356,15 +369,38 @@ void op_kernel() {
                      : "the caller is not an $internal program");
           break;
         }
-        if (!sd_tls_relay_pipe(pipename, sizeof(pipename),
-                               SD_TLS_HANDSHAKE_MS, why, sizeof(why))) {
-          syslog(LOG_ERR, "SD API: cannot hand %s's session over: %s", uname,
-                 why);
+        mode = strchr(uname, FIELD_MARK);
+        if (mode != NULL)
+          *mode++ = '\0';
+        if (mode != NULL && strcmp(mode, "P") == 0) {
+          /* PREPARE.  Stand the pipe up and remember it; the commit below
+             spawns on it.  syslog on refusal, 0 to the caller. */
+          if (!sd_tls_relay_pipe(pipename, sizeof(pipename),
+                                 SD_TLS_HANDSHAKE_MS, why, sizeof(why))) {
+            syslog(LOG_ERR, "SD API: cannot stand up %s's handover pipe: %s",
+                   uname, why);
+            break;
+          }
+          snprintf(handoff_pipe, sizeof(handoff_pipe), "%s", pipename);
+          result.data.value = 1;
           break;
         }
-        if (!win32_session_spawn(uname, pipename, &proc, &spawned, why,
+        if (mode != NULL) {
+          syslog(LOG_ERR, "SD API: handover refused for %s: unknown mode",
+                 uname);
+          break;
+        }
+        /* COMMIT.  Spawn the session on the pipe the prepare stood up. */
+        if (handoff_pipe[0] == '\0') {
+          syslog(LOG_ERR, "SD API: handover refused for %s: no handover pipe "
+                 "stands - the prepare must precede the server-final",
+                 uname);
+          break;
+        }
+        if (!win32_session_spawn(uname, handoff_pipe, &proc, &spawned, why,
                                  sizeof(why))) {
           syslog(LOG_ERR, "SD API: cannot start %s's session: %s", uname, why);
+          handoff_pipe[0] = '\0';
           break;
         }
         /* Nothing waits on it: this process is about to exit, and the session
@@ -372,7 +408,8 @@ void op_kernel() {
            front leaves nothing of itself behind. */
         win32_session_close(proc);
         syslog(LOG_INFO, "SD API: session for %s started as pid %lu on %s",
-               uname, spawned, pipename);
+               uname, spawned, handoff_pipe);
+        handoff_pipe[0] = '\0';
         result.data.value = 1;
       }
       break;

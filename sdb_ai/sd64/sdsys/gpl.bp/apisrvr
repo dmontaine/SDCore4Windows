@@ -32,10 +32,13 @@
 *           that was no longer LocalSystem.  sysmsg 5277 now has no caller.
 * 17 Sep 26 Windows port - RELEASE_1.1 55 SLICE 6: THE HANDOFF.  A successful
 *           SCRAM login (vb.scram.final) no longer sets logged.in - it sets
-*           scram.handoff, and the dispatcher calls K$HANDOFF right after the
-*           server-final reaches the wire, then ends the session either way.
-*           A pre-authenticated session (sd -N -H, spawned by that call)
-*           reads K$API.PREAUTH at start-up and skips SCRAM entirely.
+*           scram.handoff, and the dispatcher calls K$HANDOFF twice around the
+*           server-final: the '<FM>P' PREPARE before the writepkt (57 - that
+*           call is what stops the relay reading the net, so no byte the
+*           client sends in reply can be forwarded to a front past its last
+*           read), the COMMIT right after it, then the session ends either
+*           way.  A pre-authenticated session (sd -N -H, spawned by that
+*           call) reads K$API.PREAUTH at start-up and skips SCRAM entirely.
 *           Messages 10189, new; 10160 reused.  Uncycled - HISTORY.md 17 Sep.
 *  5 Sep 26 Windows port - AN ADMINISTRATOR IS REFUSED A REMOTE API SESSION,
 *           in vb.scram.final after the proof and beside the sdapi test.  This
@@ -470,19 +473,34 @@ return.status.set: ;* Return to here if ST already set
       writeseq '< ' : s[1,4] : ' ' : s[5,8] : ' ' : s[13,1000] to log.f else null
    end
 
+* RELEASE_1.1 57.  THE PREPARE, BEFORE THE SERVER-FINAL GOES OUT.  The '<FM>P'
+*   call asks the relay for the handover pipe and nothing else, and asking is
+*   what stops the relay reading the net (sdtlsrelay.c).  Run here, before the
+*   writepkt below, no byte the client sends in reply to the server-final can
+*   be read off the net and forwarded to this front, which is past its last
+*   read.  b194 measured the other order: asked at the tail, a C-speed
+*   client's first post-login request arrived first and was dropped here -
+*   test-tlsrelay-units.py, test_handover_pre_request_byte.  scram.handoff is
+*   set only by vb.scram.final's success path, immediately above.
+   if scram.handoff then
+      handoff.ready = kernel(K$HANDOFF, scram.user : @FM : 'P')
+      if not(handoff.ready) then
+         void kernel(K$AUDIT, 'API HANDOVER FAILED user=' : scram.user : ' - the relay would not stand up the handover pipe; see syslog')
+      end
+   end
+
    writepkt iconv(server.error, 'ISL'):iconv(st, 'ILL'):response
 
-* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  THE HANDOFF, RIGHT AFTER
-*   THE SERVER-FINAL IS ON THE WIRE.  scram.handoff is set only by
-*   vb.scram.final's success path, immediately above the writepkt this
-*   dispatcher just did - calling K$HANDOFF any earlier would close the app
-*   side with the server-final still unsent (see the header there).
-*   K$HANDOFF's own refusal is syslogged with the username (op_kernel.c) -
-*   there is nowhere left on the wire for a reason, the client is already
-*   past the last reply this session will ever send.  done = @true either
-*   way: on success the new session has the connection, on failure closed is
-*   the only safe end for a session that just told K$HANDOFF to give this
-*   connection away.
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6, split by 57.  THE COMMIT,
+*   AFTER THE SERVER-FINAL IS ON THE WIRE.  The prepare above has already
+*   stood the handover pipe up - which is what stops the relay reading the
+*   net, so a client byte sent in reply to this very writepkt cannot be
+*   forwarded to this front.  K$HANDOFF's own refusal is syslogged with the
+*   username (op_kernel.c) - there is nowhere left on the wire for a reason,
+*   the client is already past the last reply this session will ever send.
+*   done = @true either way: on success the new session has the connection,
+*   on failure closed is the only safe end for a session that just told
+*   K$HANDOFF to give this connection away.
    if scram.handoff then
       scram.handoff = @false
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  THE RETURN IS TAKEN, AND A FAILED
@@ -493,9 +511,11 @@ return.status.set: ;* Return to here if ST already set
 *   was given away and the handover refused" goes to the audit trail, which
 *   worked throughout.  On success nothing is written: the new session's own
 *   LOGIN record is the evidence, and this runs on every API login.
-      handoff.ok = kernel(K$HANDOFF, scram.user)
-      if not(handoff.ok) then
-         void kernel(K$AUDIT, 'API HANDOVER FAILED user=' : scram.user : ' - see syslog; the connection is closed')
+      if handoff.ready then
+         handoff.ok = kernel(K$HANDOFF, scram.user)
+         if not(handoff.ok) then
+            void kernel(K$AUDIT, 'API HANDOVER FAILED user=' : scram.user : ' - see syslog; the connection is closed')
+         end
       end
       done = @true
    end
@@ -1812,13 +1832,13 @@ vb.scram.final:
 *   needs a "succeeded but could not become you" refusal, 5277 is the wording
 *   already written for it.
 
-* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  NOT logged.in - this
-*   session's job ends the moment the server-final is on the wire.  The
-*   handoff cannot happen here: the dispatcher's writepkt at
-*   return.status.set sends the reply AFTER this gosub returns, so calling
-*   K$HANDOFF now would close the app side with the server-final still
-*   unsent.  scram.handoff tells the dispatcher to hand off immediately
-*   after that writepkt, win or lose - see the header there.
+* 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6, order fixed by 57.  NOT
+*   logged.in - this session's job ends with the handover.  The handoff
+*   itself still cannot happen here: nothing in this gosub can send the
+*   server-final, and the prepare must precede it - the dispatcher makes
+*   the prepare call before the writepkt at return.status.set and the
+*   commit after it, win or lose - see the header there.  scram.handoff
+*   is only the flag that says both belong to this login.
                response = 'v=' : scram.ssig
                scram.handoff = @true
 

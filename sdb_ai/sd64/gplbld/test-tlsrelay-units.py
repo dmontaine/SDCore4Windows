@@ -13,10 +13,13 @@ and sd through the socketpair.
 
 THE THIRD SOCKET is the control channel RELEASE_1.1 55 added: the front uses
 it, after SCRAM, to have the relay stand up the pipe the authenticated
-session will own.  It is silent through every row here, which is the point -
-a connection that never authenticates must behave exactly as it did before
-the channel existed.  What IS checked is that the relay looked at it: a
-control handle that is not a socket is refused by name, exit 6.
+session will own.  It is silent through every row that never authenticates,
+which is the point - such a connection must behave exactly as it did before
+the channel existed.  The handover rows below drive it for real, and one of
+them - test_handover_pre_request_byte, RELEASE_1.1 57 - drives APISRVR's OWN
+order around it: server-final first, the client's next byte second, the
+request last.  Read that function before touching either the relay's
+reading_net or APISRVR's handoff block.
 
 THE ROW THAT IS THE POINT: the 32 bytes the relay hands sd are THE SAME 32
 bytes the client derives from its own end of the TLS session (RFC 9266
@@ -458,6 +461,109 @@ def my_sid():
     return parts[1]
 
 
+def test_handover_pre_request_byte(mod, pem):
+    """RELEASE_1.1 57 - APISRVR's OWN order around the handover, measured.
+
+    THE PRODUCT'S ORDER, read from the source: APISRVR writes the SCRAM
+    server-final (writepkt, apisrvr:473) and only THEN calls K$HANDOFF, which
+    asks the relay for the handover pipe (sd_tls_relay_pipe -> SD_RELAY_CTL_
+    PIPE).  This test drives that order: server-final first, the client's
+    first post-auth byte next, the request LAST.
+
+    WHAT HAPPENS IN THAT WINDOW is what sd_tlsrelay.c's own comment forbids:
+    reading_net is still 1 (no request has arrived), so the relay reads the
+    client's byte off the net and forwards it to the FRONT's app side - the
+    comment says so outright: "Forwarding one of those to the front would
+    lose it: the front is about to exit and will never read it."  The first
+    row below asserts the byte ARRIVES AT THE FRONT; the last asserts the
+    SESSION never gets it.  Both are deterministic here because the harness
+    controls every send.
+
+    WHY THIS IS A PASSING ROW AND NOT A RED ONE.  The relay is correct: while
+    no request has been made it must keep serving an ordinary connection, and
+    this file's test_handover already proves the fixed order (request first,
+    server-final second - its "byte sent during the switch" row) delivers
+    the byte to the session.  THE DEFECT IS THE ORDER THE PRODUCT CALLS THEM
+    IN: it puts the client's first post-auth byte in exactly this window,
+    where a Python-speed client misses it (its reply lands after the request)
+    and a C-speed client hits it (the reply lands first).  The fix is in
+    APISRVR/K$HANDOFF, not here.  These rows exist so the hazard stays named:
+    if a relay change ever starts silently swallowing a pre-request byte
+    instead of delivering it somewhere the test can see, the first row goes
+    red and this comment is the argument that follows.
+    """
+    print("handover: the product's order - a byte sent before the request")
+    h = Harness()
+    h.spawn()
+    h.send_identity(pem)
+
+    result = {}
+
+    def client_side():
+        try:
+            result["tls"] = mod.Tls(h.client)
+        except Exception as e:  # noqa: BLE001
+            result["error"] = str(e)
+
+    t = threading.Thread(target=client_side)
+    t.start()
+    status, binding = h.read_status()
+    t.join(20)
+    if status != SD_RELAY_OK or "error" in result:
+        bad("pre-request byte: the session did not start (%r, %s)"
+            % (status, result.get("error", "")))
+        h.close()
+        return
+    tls = result["tls"]
+
+    # The SCRAM window, both ways, as it is today.
+    tls.sendall(b"SCRAM-client-final")
+    check(h.recv_exact(18) == b"SCRAM-client-final", "the SCRAM window works")
+
+    # APISRVR STEP ONE: the server-final reaches the client while the
+    # handover request has NOT been made.
+    h.sd_end.sendall(b"v=server-final")
+    check(with_deadline(lambda: tls.recv(64)) == b"v=server-final",
+          "the server-final reaches the client before the request")
+
+    # APISRVR STEP TWO: the client's first post-auth byte, in the window the
+    # product's order opens.  The relay is still reading the net, so this one
+    # goes to the front's app side rather than waiting for a session.
+    tls.sendall(b"FIRST-POST-AUTH-BYTE")
+    got = h.recv_exact(20, deadline_s=5.0)
+    check(got == b"FIRST-POST-AUTH-BYTE",
+          "THE BYTE SENT BEFORE THE REQUEST REACHED THE FRONT (got %r)" % got)
+    if got != b"FIRST-POST-AUTH-BYTE":
+        h.close()
+        return
+
+    # APISRVR STEP THREE: only now the request - and it is too late for the
+    # byte above, which no session will ever see.
+    name = PIPE_PREFIX + "unittest-pre-%d" % os.getpid()
+    h.ctl_send_pipe(name + "\0" + my_sid())
+    op, body = h.ctl_recv()
+    check(op == CTL_READY,
+          "the relay answered SD_RELAY_CTL_READY (got %r, %r)" % (op, body))
+
+    # The front opens the client end, then closes the app side - the cutover.
+    try:
+        pipe = open(name, "r+b", buffering=0)
+    except OSError as e:
+        bad("the front could not open the handover pipe %s: %s" % (name, e))
+        h.close()
+        return
+    h.sd_end.close()
+
+    # THE HARM, PINNED: the session never receives the byte - it was consumed
+    # by the front.  A read with a deadline; a timed-out pipe read leaves the
+    # handle unusable (measured, see test_handover), so this ends the test.
+    got = with_deadline(lambda: pipe.read(20), seconds=3.0)
+    check(got is None or got == b"",
+          "and the session did NOT receive it - the byte was consumed by "
+          "the front (got %r)" % got)
+    h.close()
+
+
 def test_handover(mod, pem):
     """RELEASE_1.1 55's cutover, driven end to end.
 
@@ -756,6 +862,7 @@ def main():
         test_bad_identity(pem)
         test_silent_client(pem)
         test_plaintext_client(pem)
+        test_handover_pre_request_byte(mod, pem)
         test_handover(mod, pem)
         test_handover_refusals(mod, pem)
         test_usage()

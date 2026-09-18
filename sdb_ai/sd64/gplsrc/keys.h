@@ -273,6 +273,16 @@
    a front that carried on after a failed handover would be the LocalSystem
    session 55 exists to abolish.  The caller refuses the login on 0.
 
+   TWO CALLS SINCE RELEASE_1.1 57: the PREPARE - argument "<user><FM>P" -
+   has the relay stand the pipe up and must be made BEFORE the SCRAM
+   server-final is written; the COMMIT - plain "<user>" - spawns the
+   session on the standing pipe and may follow the server-final.  Asked
+   any later than before it, the relay is still reading the net when the
+   client answers the server-final, and a fast client's first request is
+   forwarded to a front that is past its last read and dropped - b194,
+   measured by test-tlsrelay-units.py's test_handover_pre_request_byte.
+   A commit with no standing pipe refuses.
+
    K_ASSUME_USER STAYS: ssh and the other callers still use it, and only the
    API stops.  See op_kernel.c, sd_tlssrv.c and win32session.c.             */
 #define K_HANDOFF            66
