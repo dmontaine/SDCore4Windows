@@ -342,7 +342,18 @@ deffun ps_script(script) calling '!ps_script'
 *   LIST ACCOUNTS should be able to see which tier an account is without a
 *   lookup table.  It replaced a boolean full.voc, which could not tell
 *   PROGRAMMER from ADMINISTRATOR at all.
-   tier = 'STANDARD'
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE DEFAULT IS PROGRAMMER.  It was
+*   STANDARD, and STANDARD is the level this decision abolishes: every
+*   non-SDSYS account is to hold today's PROGRAMMER access.  So an account
+*   created with no tier keyword now gets the wanted level by default rather
+*   than the one on its way out.
+*
+*   DEFAULT ONLY - NOT THE RULING'S OTHER HALF.  The site that still ACCEPTS
+*   standard / programmer / administrator as keywords is separate and is NOT
+*   changed here: the owner's ruling is that those keywords are REFUSED with a
+*   syntax error, and refusing them wants the parse site in front of a reader
+*   first.  Until then a caller can still ask for STANDARD explicitly.
+   tier = 'PROGRAMMER'
 * 27 Aug 26 Windows port - OPERATING-SYSTEM ACCESS IS A CREATE-TIME PROPERTY
 *   TOO, as remote access became one on 21 Aug.  Owner, 27 Aug 2026: "sh-on"
 *   and "os-on" on CREATE.ACCOUNT, and both ways round on MODIFY.ACCOUNT.
@@ -1266,16 +1277,11 @@ make.account:
       stop sysmsg(6018) ;* Cannot open SDSYS NEWVOC
    end
 
-* 13 Sep 26 Windows port - RELEASE_1.1 5.  THE TIER POLICY LISTS LIVE IN THEIR
-*   OWN FILE NOW, sdsys/tier.policy, not in NEWVOC.  They are control data -
-*   verb-id lists - not VOC records, so keeping them in a VOC file dropped a
-*   malformed entry into LIST VOC and forced the copy loop below to skip them.
-*   Fail-safe if the file will not open: no policy, which is the full VOC for a
-*   STANDARD account and a programmer's VOC for an ADMINISTRATOR (who is told so
-*   the first time they type CREATE.ACCOUNT) - the same direction the lists have
-*   always failed.  Owner's ruling, 13 Sep 2026.
-   tierpol.open = @false
-   openpath @sdsys:@ds:'tier.policy' to tierpol.f then tierpol.open = @true
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER POLICY FILE IS NO LONGER
+*   CONSULTED, so an account is built from the whole of NEWVOC - the PROGRAMMER
+*   level, which is what every non-SDSYS account now holds.  There is no
+*   STANDARD to withhold from and no ADMINISTRATOR to add to.  The file itself
+*   goes with this change: sdsys/tier.policy is deleted from the tree.
 
 * 17 Aug 26 Windows port - THE TIER OMIT LIST, PROJECT_STATUS.md section 8.
 *   A standard account gets NEWVOC less the records named in NEWVOC's own
@@ -1309,10 +1315,11 @@ make.account:
 *     A copy.it flag round the write says the same thing in constructs this
 *     file already uses.
    omit.rec = ''
-   if tier = 'STANDARD' and tierpol.open then
-      read omit.rec from tierpol.f, 'omit.standard' else omit.rec = ''
-   end
-   omit.count = dcount(omit.rec, @fm)
+*  18 Sep 26 - RELEASE_1.1 64: no omit list is read, so nothing below is
+*  filtered and the account gets the whole of NEWVOC.  omit.count MUST STILL BE
+*  ASSIGNED - the copy loop reads it, and ERRGEN dies on a use with no
+*  assignment - and 0 is what makes that loop a no-op.  Do not delete this line.
+   omit.count = 0
 
    select newvoc.f to 11
    loop
@@ -1458,9 +1465,17 @@ make.account:
 *   "Verb to unlock records" into "V", so the copy works even though the record
 *   it came from does not.  SDSYS's own UNLOCK is still broken; fixing that is a
 *   data change to VOC_TEMPLATE and is not this.
+*  18 Sep 26 - RELEASE_1.1 64: the ADMINISTRATOR tier is being abolished, so
+*  this arm is on its way out - CREATE.ACCOUNT refuses the keyword.  It is left
+*  standing for now because its body is also the VOC_TEMPLATE copy, which is
+*  the right shape if a second administration level is ever wanted; what it
+*  must NOT do is read a tier.policy that no longer exists.  NOTE FOR THE NEXT
+*  SLICE: ADOPT still forces tier = 'ADMINISTRATOR' below, so this arm is
+*  REACHABLE through the install, and with an empty add.rec an adopted account
+*  gets no administration verbs.  That is RELEASE_1.1 64's "ADOPT's tier
+*  default" and it has to be settled with the SDSYS identity, not here.
    if tier = 'ADMINISTRATOR' then
       add.rec = ''
-      if tierpol.open then read add.rec from tierpol.f, 'add.administrator' else add.rec = ''
       add.count = dcount(add.rec, @fm)
 
       if add.count > 1 then
@@ -1489,7 +1504,8 @@ make.account:
    end
 
    close newvoc.f
-   if tierpol.open then close tierpol.f
+*  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
+*  program any more, so there is nothing to close here.
 
    * Set up $COMMAND,STACK VOC entry
 
@@ -1595,7 +1611,25 @@ more.args:
 *   CPROC internal verb 15 and tests nothing, and ENCRYPT.FIELD points at
 *   $CRYPTO, which does not exist in this tree at all - it is as broken in
 *   SDSYS's own VOC as it will be here.
-            tier = 'ADMINISTRATOR'
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR KEYWORD IS
+*   REFUSED.  Owner's ruling, 18 Sep 2026: "There will be one and only one
+*   administrator account SDSYS ... all other windows administrators will be
+*   refused."  No verb may mint a second one, and this is the verb that could.
+*
+*   IT REFUSES RATHER THAN ACCEPTS-AND-IGNORES, which is the same shape the
+*   owner ruled for CREATE.ACCOUNT's route keywords on 18 Sep: a request that
+*   cannot be honoured must not come back looking like it was.
+*
+*   make.admin HAS ALREADY BEEN SET ABOVE by the time this line runs.  That is
+*   harmless and deliberate: the refusal stops the verb before any Windows
+*   account is created (create_user is reached later), so nothing is built.
+*   Removing the earlier assignment instead would leave the two halves of
+*   "administrator" written in two places and free to drift.
+*
+*   IT REUSES 2018, THE UNRECOGNISED-TOKEN MESSAGE, and that is not laziness:
+*   the keyword now IS unrecognised.  A fresh number would have to be
+*   registered in sdsys/messages and read by nothing else.
+            stop sysmsg(2018, token)
 
 * 17 Aug 26 Windows port - PROGRAMMER, section 8.  A programmer works at the
 *   prompt and builds things: compiler, cataloguer, editors, and the shell
@@ -1618,7 +1652,13 @@ more.args:
 *   silently, because the account would still be a Windows administrator and
 *   would still look right everywhere except its VOC.
          case upcase(token) = 'PROGRAMMER'
-            if tier # 'ADMINISTRATOR' then tier = 'PROGRAMMER'
+*          18 Sep 26 Windows port - RELEASE_1.1 64.  REFUSED WITH THE OTHER TIER
+*          KEYWORDS.  There is nothing left for it to ask for: PROGRAMMER is
+*          the default at :356 and the only level a non-SDSYS account holds,
+*          so the keyword is redundant rather than wrong - and a redundant
+*          keyword that is still accepted is a tier vocabulary the product no
+*          longer has.  2018 is the unrecognised-token message.
+            stop sysmsg(2018, token)
 
 * 21 Aug 26 Windows port - RDPACCOUNT WAS A CASE HERE AND IS GONE.  Owner's
 *   decision, 21 Aug 2026 - see the sdsshonly branch above for why.  A caller
@@ -1744,16 +1784,27 @@ more.args:
 *   administrator is an SD administrator.  So their SD account gets an
 *   administrator's VOC.
 *
-*   WITHOUT THIS THE INSTALLING USER LANDS STANDARD, with no BASIC, no ED and no
-*   CATALOG, because adopt-account.ps1 passes no tier keyword and never had one
-*   to pass.  That is a regression the tier work itself would have introduced,
-*   and it would have shown up as "SD is broken after installing it".
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADOPT PROMOTION IS GONE.  This
+*   line made an adopted account an SD administrator, and the decision leaves
+*   exactly one administrator - SDSYS - with every other Windows administrator
+*   refused.  ADOPT must not mint a second one.
 *
-*   A DEFAULT, NOT AN OVERRIDE.  It applies only when no keyword was given, so
-*   an explicit PROGRAMMER on the same line still wins.  make.admin is
-*   deliberately untouched: ADOPT changes nothing about the Windows account, and
-*   the person is already in Administrators.
-   if adopt and tier = 'STANDARD' then tier = 'ADMINISTRATOR'
+*   THE REASON IT EXISTED IS NOW HANDLED EARLIER, so this is not a removal of a
+*   fix.  It read: without it the installing user lands STANDARD, with no
+*   BASIC, no ED and no CATALOG, and it promoted them so the install looked
+*   usable.  The default at :356 is PROGRAMMER now, so an adopted account
+*   lands there with the full VOC and nothing needs promoting.
+*   adopt-account.ps1 still passes no tier keyword, and that is now the whole
+*   of what it needs to do.
+*
+*   make.admin IS UNTOUCHED AND THAT IS NOT AN OVERSIGHT: ADOPT CHANGES NOTHING
+*   ABOUT THE WINDOWS ACCOUNT (the 15 Aug rule), the person is already in
+*   BUILTIN\Administrators, and what the decision takes away is their SD
+*   administer rights - not their Windows ones.
+*
+*   THIS ALSO MAKES THE `tier = 'ADMINISTRATOR'` BRANCHES BELOW UNREACHABLE:
+*   the keyword is refused at :1614 and this was the only other way in.  They
+*   are left standing as dead code and go with ADOPT itself and the installer.
 
 * 21 Aug 26 Windows port - AN ADMINISTRATOR ALWAYS HAS BOTH ROUTES, and no
 *   keyword can take either away.  Owner's rule, 21 Aug 2026: "all

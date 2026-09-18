@@ -292,19 +292,13 @@ SDSYS_SHIP = [
     # 17 Aug 26 - AND THAT RULE STILL HOLDS AFTER THE VOC TIERS, which is why
     # CREATEA gives an ADMINISTRATOR account its nine administration verbs by
     # reading them OUT of voc_template rather than by moving them into newvoc.
-    # 13 Sep 26 - THE TIER LISTS ARE NO LONGER IN NEWVOC.  RELEASE_1.1 5: they
-    # were TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR, verb-id lists rather
-    # than VOC records, and a VOC file must hold only VOC records or LIST VOC
-    # trips on them.  They moved to their own directory file, tier.policy, which
-    # is not a VOC and is opened by path.  They still fail safe in one direction:
-    # a lost or empty omit list is read as "no policy" and gives the full VOC,
-    # harmless while newvoc holds nothing administrative.  PROJECT_STATUS.md
-    # section 8.
+    # 18 Sep 26 - THE TIER LISTS ARE GONE WITH THE TIERS, RELEASE_1.1 64, and the
+    # tier.policy directory is deleted.  RELEASE_1.1 5 had moved
+    # TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR out of newvoc into it,
+    # because a VOC file must hold only VOC records or LIST VOC trips on them.
+    # THE POINT STILL STANDS: DO NOT PUT VERB LISTS BACK IN NEWVOC.
     ('newvoc',        'the VOC a newly created account is given'),
     ('voc_template',  "the administrative superset; becomes SDSYS's own VOC"),
-    # 13 Sep 26 - RELEASE_1.1 5.  Not a VOC: two records (omit.standard,
-    # add.administrator) read by CREATEA, LOGIN and MODIFYA to layer the tiers.
-    ('tier.policy',   'the tier verb-id lists; read by the tier code, not a VOC'),
     ('messages',      'sysmsg() text'),
     ('sd.voclib',     'library routines'),
     ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
@@ -478,8 +472,9 @@ SDSYS_MIRROR = [
     ('syscom',       'include records'),
     ('newvoc',       'read by CREATEA; never written'),
     ('voc_template', 'read by CREATEA and UPDATE.ACCOUNTS; never written'),
-    # 13 Sep 26 - RELEASE_1.1 5.  The tier policy lists, moved out of newvoc.
-    ('tier.policy',  'read by CREATEA/LOGIN/MODIFYA; never written'),
+    # 18 Sep 26 - tier.policy is NOT listed here any more.  RELEASE_1.1 64
+    # deleted it with the tiers; a mirror entry for a directory that no longer
+    # ships would make "installed but not in source" mean the wrong thing.
     ('messages',     'sysmsg text'),
     ('sd.voclib',    'library routines'),
     # 25 Aug 26 - bp IS NO LONGER A MIRROR, and it stopped qualifying the

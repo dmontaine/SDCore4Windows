@@ -383,18 +383,19 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 * 17 Aug 26 Windows port - the register record is already read, so the tier comes
 *   straight off it rather than through get.acc.tier - which would reopen
 *   ACCOUNTS underneath this very walk.  PROJECT_STATUS.md section 8.
-* 27 Aug 26 Windows port - AND A SUSPENDED ACCOUNT IS UPDATED AT THE TIER IT
-*   HELD, not at SUSPENDED.  This walk visits every account in the register,
-*   suspended ones included, and update.voc reads anything that is not blank,
-*   PROGRAMMER or ADMINISTRATOR as "apply the standard omit list".  Without
-*   this line a release update would quietly strip a suspended administrator's
-*   VOC to a standard one, and lifting the suspension would not put it back:
-*   the account would then be an administrator holding a standard VOC, which
-*   is exactly the failure the tier field was added to stop.
-                           update.voc.tier = acc.rec<ACC$TIER>
-                           if upcase(update.voc.tier) = 'SUSPENDED' then
-                              update.voc.tier = acc.rec<ACC$PRIOR.TIER>
-                           end
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER LOOKUP IS GONE, and it is
+*   dead code rather than a behaviour change: update.voc no longer reads
+*   update.voc.tier at all, because the omit list it fed is deleted with the
+*   tiers.  This walk updates every account's VOC to the whole of NEWVOC
+*   whatever its state, so it does not need to know a tier to do it.
+*
+*   WHAT THE 27 Aug LINES WERE FOR, kept so the removal is not mistaken for
+*   carelessness: they stopped a release update quietly stripping a suspended
+*   administrator's VOC to a standard one, after which lifting the suspension
+*   would not put it back.  There is no standard VOC to strip it to any more.
+*
+*   NOTE: get.acc.tier below still reads ACC$TIER and ACC$PRIOR.TIER and is dead
+*   for the same reason.  It goes WITH THE FIELDS, not here.
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
@@ -838,8 +839,27 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 *   CREATEA'S DID***: that one passed an UNASSIGNED variable, and @logname is
 *   always set by the time this case is reached.  A person with no record in
 *   the register gets @false, not a run-time error.
-      case kernel(K$ADMINISTRATOR, -1) and kernel(K$OS.ADMINISTRATOR, 0) and ~
-           sd_admin_tier(@logname)
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  SDSYS IS ENTERED BY THE WINDOWS
+*   SDSYS ACCOUNT AND BY NOBODY ELSE.  Owner's decision, 18 Sep 2026: "There
+*   will be one and only one administrator account SDSYS, which will also be
+*   tied to a Windows account administrator account of the same name ... Only
+*   the Windows SDSYS account will have access to SD as an administrator from
+*   an elevated session, all other windows administrators will be refused."
+*
+*   BOTH OLD TERMS ARE WITHDRAWN, and the fault was not that either was too
+*   narrow: together they admitted EVERY Windows administrator who was also an
+*   SD administrator, so this case matched exactly the people the decision now
+*   refuses.  K$OS.ADMINISTRATOR is the person's Windows membership and
+*   sd_admin_tier is a register tier that this change deletes; the question is
+*   neither of those.
+*
+*   THE IDENTITY IS @logname.  That is measured rather than convenient: it is
+*   what the sdusers gate above tests and it is the name the OPERATING SYSTEM
+*   authenticated, so it is the WINDOWS account the decision names.  K$ADMINISTRATOR
+*   is the process-start elevation seed and remains the second half - elevation
+*   is immutable, so it still answers correctly after a logto, which is why the
+*   case kept it and :695 uses it for the internal route too.
+      case upcase(@logname) = 'SDSYS' and kernel(K$ADMINISTRATOR, -1)
          initial.account = 'SDSYS'
 
          read acc.rec from acc.f, initial.account else
@@ -869,6 +889,20 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
          admin.login = @true
 
       case 1
+*        18 Sep 26 Windows port - RELEASE_1.1 64.  SDSYS IS ELEVATED OR IT IS
+*        NOTHING.  An UNELEVATED session belonging to the Windows SDSYS account
+*        misses the case above and falls to here, where initial.account would
+*        name SDSYS and let it in without the elevation the decision requires.
+*        Refuse rather than land.  (The sdusers gate above would usually catch
+*        this first, but "usually" is not a gate, and the account the decision
+*        is most specific about is not the one to leave to a second line.)
+         if upcase(@logname) = 'SDSYS' and not(kernel(K$ADMINISTRATOR, -1)) then
+            display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+            audit.account = 'SDSYS'
+            audit.reason = 'SDSYS requires an elevated session'
+            goto terminate.connection
+         end
+
          initial.account = upcase(@logname)
 
          read acc.rec from acc.f, initial.account else
@@ -1567,39 +1601,21 @@ update.voc:
       goto abort.login
    end
 
-* 13 Sep 26 Windows port - RELEASE_1.1 5.  The tier policy lists moved out of
-*   NEWVOC into sdsys/tier.policy (they are verb-id lists, not VOC records).
-*   Fail-safe if it will not open: no omit list, which is the full VOC - the
-*   direction the list has always failed.  See CREATEA for the full note.
-   tierpol.open = @false
-   openpath @sdsys:@ds:'tier.policy' to tierpol.f then tierpol.open = @true
-
-* 17 Aug 26 Windows port - THE TIER FILTER, PROJECT_STATUS.md section 8.  THIS
-*   ROUTINE WAS THE HOLE IN THE VOC TIERS.  CREATEA gives a standard account
-*   NEWVOC less the capabilities in TIER.OMIT.STANDARD; this routine then
-*   re-copied the whole of NEWVOC and handed them straight back - the compiler,
-*   the cataloguer, both editors, COPY and DELETE.CATALOG.
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER FILTER IS GONE WITH THE
+*   TIERS.  The omit list is no longer read, so an account is given the whole
+*   of NEWVOC - which is exactly what a PROGRAMMER-tier account has always
+*   received, and PROGRAMMER is the level every non-SDSYS account now holds.
 *
-*   AND IT IS REACHED WITHOUT ANY PRIVILEGE.  Two ways: UPDATE.ACCOUNTS, which is
-*   CPROC internal verb 15 and tests nothing, and - worse, because it needs no
-*   verb at all - the $RELEASE test below, which asks any user "Update VOC to new
-*   release?" whenever the account's release level differs from SD.REV.STAMP.
-*   One Y and the tier was gone.  So the tiers survived exactly until the next
-*   release stamp, which is not a boundary anybody would have noticed moving.
-*
-*   THE TIER COMES FROM THE ACCOUNTS RECORD, field 5, written by CREATEA.  The
-*   caller sets update.voc.tier, because the three call sites know the account by
-*   two different routes: two of them are the current account (@who) and the
-*   third is walking the whole register with the record already in hand.
-*
-*   BLANK MEANS THE FULL VOC - the pre-tier behaviour.  See SYSCOM/KEYS.H for
-*   why that is the safe way round rather than reading blank as STANDARD.
+*   The filter that stood here from 17 Aug 2026 was a real fix in its day: this
+*   routine re-copied NEWVOC wholesale and handed a STANDARD account back the
+*   compiler, the cataloguer, both editors, COPY and DELETE.CATALOG, reachable
+*   through UPDATE.ACCOUNTS or the $RELEASE prompt with no privilege at all.
+*   It has no subject now.  The history is in HISTORY.md, not here.
    omit.rec = ''
-   omit.tier = upcase(update.voc.tier)
-   if omit.tier # '' and omit.tier # 'PROGRAMMER' and omit.tier # 'ADMINISTRATOR' and tierpol.open then
-      read omit.rec from tierpol.f, 'omit.standard' else omit.rec = ''
-   end
-   omit.count = dcount(omit.rec, @fm)
+*  18 Sep 26 - omit.count is STILL ASSIGNED because the loop at the end of this
+*  select reads it, and BCOMP's ERRGEN dies on a use with no assignment.  Zero
+*  is what makes that loop a no-op; do not delete this line.
+   omit.count = 0
 
    select sdsys.file to 11
    loop
@@ -1835,7 +1851,8 @@ accept.without.query:
    end
 
    close sdsys.file
-   if tierpol.open then close tierpol.f
+*  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
+*  routine any more, so there is nothing to close here.
 
    return
 

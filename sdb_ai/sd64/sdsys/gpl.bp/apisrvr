@@ -191,13 +191,6 @@ deffun valid_os_name(name) calling '!valid_os_name'
 *   EARLIER in the flow but LATER in the file - so leaving the declaration
 *   where it was would compile today and break the moment either routine moved.
 deffun is_grp_member(user,group) calling '!is_grp_member'
-* 29 Aug 26 Windows port - the tier ordering on grants, PRE_RELEASE_FIXES 57.
-* The API is a door of its own and reaches an account through neither LOGIN
-* nor logto.authorised, so the rule has to be applied here too or this verb is
-* the way round it.  !tier_allows is $internal, which is what lets it read
-* @sdsys/accounts from a network session - net_path_permitted's allow-list
-* does not include that file.
-deffun tier_allows(user,account) calling '!tier_allows'
 *  5 Sep 26 Windows port - AND THE ADMINISTRATOR TIER ITSELF, PRE_RELEASE_FIXES
 *   170.  vb.scram.final asks whether the name just proven is an SD
 *   administrator, to refuse it a REMOTE API session.  Declared up here with
@@ -774,33 +767,16 @@ if not(acc.member) then
    goto revert.to.old.account
 end
 
-* 29 Aug 26 Windows port - AND THE TIER ORDERING, PRE_RELEASE_FIXES 57.  Owner's
-*   rule, 29 Aug 2026: a grant may go down or sideways, never up.
-*
-*   ***THIS IS THE FOURTH DOOR AND IT WOULD HAVE BEEN THE WAY ROUND THE
-*   RULE.***  The same reasoning that put the ACC$GROUP test here on 17 Aug
-*   applies unchanged: an API session reaches an account through neither LOGIN
-*   nor CPROC's logto.authorised, so a rule enforced only there is not enforced
-*   for this route.  A granted standard user could have reached a programmer
-*   account over the API and had its whole verb set.
-*
-*   THE IDENTITY IS kernel(K$USERNAME,0), the same one the group test above
-*   uses, and for the same reason: it is what K$SET.USERNAME wrote after the
-*   SCRAM proof and what audit_message() stamps records with.  A tier check
-*   able to disagree with the grant check about WHO is being tested would be
-*   worse than no check.
-*
 *   IT REUSES sysmsg(10003) LIKE EVERY OTHER REFUSAL IN THIS ROUTINE, which is
 *   the rule here and not laziness - a caller cannot tell "no such account"
 *   from "not granted" from "suspended" from this, so the API does not
 *   enumerate the register's state for an attacker.  CPROC says more because a
 *   local caller has already proved who they are.
-if not(tier_allows(kernel(K$USERNAME, 0), new.account)) then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=5 tier')
-   server.error = SV$ERROR
-   error.msg = sysmsg(10003) ;* User not allowed in requested account
-   goto revert.to.old.account
-end
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER-ORDERING CHECK THAT STOOD
+*   HERE IS GONE WITH THE TIERS.  The ACC$GROUP test above is the whole of this
+*   routine's access rule now, and the identity note above it is why that is
+*   enough on this route.
 
 * 24 Aug 26 Windows port - PROJECT_STATUS.md 7 step 14.  RIGHT HERE, because
 *   is_grp_member is '!ps_script' and that fork()s (op_sh.c:379) - and a fork

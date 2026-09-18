@@ -251,11 +251,6 @@ deffun sd_admin_tier(user) calling '!sd_admin_tier'
 * second now, because an administrator is elevated AT LOGIN and lands in
 * SDSYS.  PRE_RELEASE_FIXES 56; ELEVATE's own header carries the reasoning.
 deffun elevate(action,arg) calling '!elevate'
-* 29 Aug 26 Windows port - the tier ordering on grants, PRE_RELEASE_FIXES 57.
-* logto.authorised is the LOAD-BEARING caller: the grant is a Windows group
-* membership, so it can be made outside SD entirely, and a tier can move after
-* a legal grant with nothing revisiting the group.
-deffun tier_allows(user,account) calling '!tier_allows'
 * rev 0.9.0 *
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 
@@ -2771,29 +2766,32 @@ int.logto:
 *   SDSYS via LOGTO+UAC) now that ssh/API admins are denied any session anyway,
 *   and neutralises the 16 Aug "LOGTO ends the elevated session" clear for
 *   re-entry.  keys.h's four-question table carries K$OS.ELEVATED (65).
-      if not(kernel(K$OS.ELEVATED, 0) and sd_admin_tier(@logname)) then
-         display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-         void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=session did not start elevated')
-         unwinding = 2
-         return
-      end
-
-      elev.rc = elevate('START', '')
-      if elev.rc = 0 then
-         elev.obtained = @true
-*        The security-relevant half of the trail: privilege was obtained, by
-*        whom, and when.  The LOGTO itself is recorded further down.
-         void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
-      end
-      if elev.rc # 0 then
-         display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-*        THE FAILED STEP-UP, which PROJECT_STATUS.md 7 step 4 calls the single
-*        most interesting line in the trail.  Recorded before the return,
-*        because the return unwinds and no later point knows this happened.
-         void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=elevation refused or unavailable')
-         unwinding = 2
-         return
-      end
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ELEVATION STEP-UP IS GONE WITH
+*   THE DOOR IT OPENED.  Owner's decision, 18 Sep 2026: "There will be one and
+*   only one administrator account SDSYS ... It will not be available with
+*   LOGTO."  The condition above is WITHDRAWN rather than tightened: a session
+*   that started elevated and held an SD administrator was still a route in,
+*   and the model gives SDSYS exactly one way in - the Windows SDSYS account,
+*   at LOGIN, from an elevated session.
+*
+*   NOTHING HERE CALLS elevate('START') ANY MORE, deliberately: a UAC consent
+*   must not be drawn to reach a door that is shut.  The helper was still
+*   re-registered here on re-entry and that goes with it.
+*
+*   CONSEQUENCE, STATED SO IT IS NOT DISCOVERED LATER AS A MYSTERY: elev.obtained
+*   can no longer be set true anywhere - it is initialised @false at :2657 and
+*   this was its only writer - so the two elev.obtained privileged bypasses in
+*   logto.authorised, :4064 and :4199, are now DEAD CODE.  They are left
+*   standing because they still compile and still read an assigned variable;
+*   deleting them belongs with the rest of the elevation machinery.
+*
+*   AND THE INTERNAL DOOR IS NOT THIS.  "sd -internal" is forced to SDSYS by
+*   sd.c and never reaches int.logto at all, so it is unaffected by this
+*   refusal.  Binding IT to the Windows SDSYS identity is the other half of 64.
+      display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+      void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=SDSYS is not reachable by LOGTO')
+      unwinding = 2
+      return
    end
 
    * Look for options
@@ -4167,34 +4165,11 @@ logto.authorised:
       return
    end
 
-* 29 Aug 26 Windows port - AND THE GRANT MUST NOT GO UPWARD.  Owner's rule,
-*   29 Aug 2026: "standard accounts can not be given access to programmer
-*   accounts, programmer accounts can be given access to standard accounts."
-*   PRE_RELEASE_FIXES 57.
-*
-*   ***THIS IS THE GATE.  GRANTA'S COPY IS COURTESY AND THIS ONE IS LOAD
-*   BEARING.***  The grant IS Windows group membership, so an administrator
-*   can add somebody to sdu_<name> with "net localgroup" without going near
-*   SD; and MODIFY.ACCOUNT can promote an account long after a legal grant was
-*   made, with nothing revisiting the group afterwards.  Neither of those
-*   reaches a check at grant time.  Both reach this one.
-*
-*   AFTER THE GROUP TEST, NOT BEFORE, so only somebody who was actually
-*   granted learns anything from the refusal.  A caller who was never granted
-*   still gets the undifferentiated 10003 above and cannot use this message to
-*   probe tiers.
-*
-*   THE PRIVILEGED BYPASSES ABOVE ARE UNAFFECTED and must be: an administrator
-*   never reaches here, so "only Windows administrators can enter SDSYS" is
-*   not this test's job - int.logto refuses SDSYS to a non-administrator
-*   before the register is even read.  !tier_allows refuses SDSYS by name as
-*   well, which is belt and braces rather than the mechanism.
-   if not(tier_allows(@logname, new.account)) then
-      display sysmsg(10126, new.account, ~
-                     upcase(trim(acc.record<ACC$TIER>, ' ', 'B')), @logname)
-      void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=tier')
-      return
-   end
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER-ORDERING GATE THAT STOOD
+*   HERE IS GONE WITH THE TIERS, and the group test above is the whole of this
+*   rule now.  What that leaves is worth stating rather than discovering: the
+*   grant IS Windows group membership, so "net localgroup" can still make one
+*   without SD knowing, and that test is what holds when it does.
 
    logto.ok = @true
 
