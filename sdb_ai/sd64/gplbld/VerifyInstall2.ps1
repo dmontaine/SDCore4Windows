@@ -164,21 +164,18 @@ param(
     # no profile directory, which is the thing that makes the doors fixture
     # single-use and expensive.
     [string]$ProfPrefix  = '',   # verify-profiledir.ps1 - one account
-    # 31 Aug 26 - verify-tierchange.ps1, PRE_RELEASE_FIXES 107, on the owner's
-    # ruling.  SAME STORY AS $ProfPrefix DIRECTLY ABOVE and found the same way:
-    # it was in NEITHER runner, so the three rows of PRE_RELEASE 19 it covers
-    # had never fired since the day it was written.
-    #
-    # THIS USED TO ADD "and because it RAISES verify-acctmsgs.ps1 and
-    # verify-vocverbs.ps1, three verifiers went unrun together rather than
-    # one."  ***THAT WAS FALSE - IT RAISES NEITHER, AND BOTH ARE STILL RUN BY
-    # NOTHING.***  Corrected 1 Sep 2026, PRE_RELEASE_FIXES 112; the measurement
-    # is in the longer note beside the step itself, below.
-    #
-    # 18 Sep 26 - $TcPrefix WAS HERE AND WENT WITH verify-tierchange.ps1,
-    # RELEASE_1.1 64.  It kept the rule every prefix here keeps: lower case only,
-    # like the ones above, because CREATEA downcases the name and the directory
-    # takes it verbatim.
+    # 18 Sep 26 - $TcPrefix WAS HERE AND WENT WITH verify-tierchange.ps1 AND ITS
+    # STEP, RELEASE_1.1 64.  ITS TWO NOTES DID NOT GO WITH IT, because neither
+    # was about tiers: (a) it was in NEITHER runner until 31 Aug 2026, so the
+    # three rows of PRE_RELEASE 19 it covered had never fired since the day it
+    # was written - SAME STORY AS $ProfPrefix DIRECTLY ABOVE and found the same
+    # way; and (b) THIS USED TO CLAIM IT "RAISES verify-acctmsgs.ps1 and
+    # verify-vocverbs.ps1, three verifiers went unrun together rather than one",
+    # WHICH WAS FALSE - it raised neither, and both are still run by nothing
+    # (corrected 1 Sep 2026, PRE_RELEASE_FIXES 112; the measurement is in the
+    # longer note beside the step, below).  A parameter's rule outlives the
+    # parameter when the rule is "re-derive from the directory, do not trust a
+    # signpost".
     # 04 Sep 26 - verify-privundetermined.ps1, PRE_RELEASE_FIXES 96's witness.
     # One throwaway PROGRAMMER account reached over the API, because a socket
     # session is the only one on this machine that does NOT get USR_ADMIN and so

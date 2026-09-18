@@ -315,8 +315,11 @@ if ($SelfTest) {
         'sdprofb78', 'sdswb78', 'sdswa1', 'sdswa5',
         # 31 Aug 26 - verify-tierchange's family (PRE_RELEASE 108).  Both real
         # shapes: sdtc1a is the account the 28 Aug run really made (-Prefix
-        # sdtc1, 28 PASS / 0 FAIL), and sdtcb88a is what VerifyInstall2 now
-        # composes.  The trailing "a" is verify-tierchange.ps1:281, not a typo.
+        # sdtc1, 28 PASS / 0 FAIL), and sdtcb88a is what VerifyInstall2
+        # composed.  The trailing "a" is the fixture's own shape
+        # (verify-tierchange.ps1:281, RETIRED 18 Sep 2026 WITH THE TIERS,
+        # RELEASE_1.1 64), not a typo.  The entries STAY because the litter is
+        # real and this sweep is what removes it.
         'sdtc1a', 'sdtcb88a',
         # 17 Sep 26 - the six orphaned profiles the C:\Users census found
         # outside every stem, by name: verify-vocwrite's, verify-apiwire's and
