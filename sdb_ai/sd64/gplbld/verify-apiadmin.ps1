@@ -158,7 +158,12 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 function Invoke-SDIn([string]$account, [string[]]$commands) {
     # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
     # so the initial TERM below is wiped by any further LOGTO in $commands.
-    # Full write-up in verify-tiers.ps1's Invoke-SD.
+    # Full write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
+    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
+    # and is now written down nowhere, which one of these slices has to fix.  AND
+    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
+    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
+    # the measurement.
     $expanded = New-Object System.Collections.ArrayList
     foreach ($c in $commands) {
         $null = $expanded.Add($c)
