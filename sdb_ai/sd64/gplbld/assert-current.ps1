@@ -1515,6 +1515,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # Low, zero-privilege token can create the handover pipe.
                   # Neither ships; listed with the commit that creates them.
                   'test-kernelkeys-units.py', 'probe-lowpipe.c',
+                  # 17 Sep 26 - RELEASE_1.1 55: the free guard over
+                  # K$GROUP.MEMBER's three-valued contract (builds the probe
+                  # against the live win32group.c with the sd toolchain and
+                  # asks it real questions), and the probe it builds.  Neither
+                  # ships; listed with the commit that creates them.
+                  'test-groupmember-units.py', 'probe-groupmember.c',
                   # 16 Sep 26 - the free guard over install-service.ps1's
                   # relay-account step, after that step failed silently on
                   # its first cycle.  Ships nowhere.
