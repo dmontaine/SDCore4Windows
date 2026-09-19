@@ -54,7 +54,11 @@ while porting from it.
            it: it is what lets you reach SD Core FROM ANOTHER COMPUTER,
            over ssh or through the SD API, which the account is allowed to
            do.  Signing in at this keyboard never asks for it.
-           MODIFY.PASSWORD changes it whenever you like.
+
+           To change it later, start SD Core from an ELEVATED prompt and it
+           asks you.  MODIFY.PASSWORD is an SDSYS command, so an ordinary
+           account cannot type it; an administrator can set anybody's from
+           an SDSYS session.
 
            ***SIGN OUT AND BACK IN BEFORE TYPING sd.***  Windows decides
            what groups your session belongs to when you sign in, so the

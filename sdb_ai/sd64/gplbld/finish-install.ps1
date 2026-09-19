@@ -413,7 +413,8 @@ function Set-AttachedAccountPassword {
     # SDSYS.  Here it is CHECKABLE, so it is checked rather than reasoned about.
     if (Test-Path -LiteralPath $credFile) {
         Write-Wrapped -Text ("The account $Account already has an SD Core password, so it was " +
-            'left alone.  MODIFY.PASSWORD changes it whenever you like.')
+            'left alone.  An administrator changes it from an SDSYS session with ' +
+            "MODIFY.PASSWORD $Account.")
         Write-Host ''
         return $true
     }
@@ -437,8 +438,31 @@ function Set-AttachedAccountPassword {
             # check_admin() before accepting a command line at all, and
             # SET_ACC_PASSWORD refuses an account other than your own without
             # K$ADMINISTRATOR.  This runs on Setup's token.
+            #
+            # ***-internal IS WHAT MAKES THE VERB REACHABLE, AND LEAVING IT OUT
+            # IS WHY THE FIRST BUILD OF THIS STEP FAILED ON A REAL INSTALL***
+            # with "MODIFY.PASSWORD is not in your VOC", three times, exactly as
+            # designed and to no purpose.  MODIFY.PASSWORD lives in
+            # sdsys/voc_template, NOT in sdsys/newvoc - it is an SDSYS verb, and
+            # an ordinary account's vocabulary does not contain it.  sd.c:607-612
+            # sets forced_account = "SDSYS" for an internal session, which is the
+            # whole reason attach-account.ps1 can call CREATE.ACCOUNT (also
+            # voc_template-only) from the same installer.
+            #
+            # THE CODE THIS WAS RESTORED FROM DID NOT NEED IT, AND ITS OWN
+            # COMMENT SAID WHY: under PRE_RELEASE 56's model an elevated session
+            # LANDED IN SDSYS, so the verb was already in reach.  RELEASE_1.1 64
+            # narrowed that landing to the Windows SDSYS account, so an elevated
+            # session of the installing user now lands in their OWN account.  The
+            # restored code carried a precondition 64 had removed.
+            #
+            # AND IT CHANGES WHAT IS ASKED, FOR THE BETTER: from SDSYS this is
+            # setting SOMEBODY ELSE'S password, which SET_ACC_PASSWORD does NOT
+            # require the current one for - "an administrator resetting a
+            # forgotten password does not know it".  So the person types the new
+            # password twice and is never asked for one they do not have.
             $p = Start-Process -FilePath $SdExe `
-                    -ArgumentList '-QUIET', 'MODIFY.PASSWORD', $Account `
+                    -ArgumentList '-internal', '-QUIET', 'MODIFY.PASSWORD', $Account `
                     -NoNewWindow -Wait -PassThru -ErrorAction Stop
             $null = $p
             Write-Host ''
@@ -471,10 +495,17 @@ function Set-AttachedAccountPassword {
     # THE ESCAPE IS NAMED, NOT SILENT.  An account with no credential still
     # works at this keyboard, so the install is not broken - but it cannot be
     # reached remotely, and SD Core will ask again at the next ELEVATED sign-in.
+    # 19 Sep 26 - THIS USED TO END "or you can set one at any time by typing:
+    # MODIFY.PASSWORD", WHICH THE READER CANNOT DO.  That verb is in
+    # sdsys/voc_template and not in sdsys/newvoc, so it is an SDSYS verb and an
+    # ordinary account has no such command - the same fact that broke the step
+    # above.  Telling somebody to type a command their account does not have is
+    # worse than telling them nothing.  What IS true is the elevated sign-in.
     Write-Wrapped -Text ("No SD Core password was set for $Account.  You can still use SD Core at " +
         'this keyboard, but nothing can reach the account from another computer until one is ' +
-        'set.  SD Core will ask again the next time you start it from an ELEVATED prompt, or you ' +
-        'can set one at any time by typing:  MODIFY.PASSWORD') -Color Yellow
+        'set.  SD Core asks again the next time you start it from an ELEVATED prompt, which is ' +
+        'the simplest way to put it right.  An administrator can also set it from an SDSYS ' +
+        "session with:  MODIFY.PASSWORD $Account") -Color Yellow
     Write-Host ''
     return $false
 }

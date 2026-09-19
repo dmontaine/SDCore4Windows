@@ -4645,10 +4645,14 @@ begin
                         PASSWORD AT FIRST SIGN-IN, which was true for one day.  The
                         window now ASKS, because 68 gives the account ssh and the API
                         by default and an account cannot use either without one. }
+                      { 19 Sep 26 - THIS SAID "MODIFY.PASSWORD changes it at any time", WHICH
+                        THE READER CANNOT DO: that verb is in voc_template and not in newvoc,
+                        so it belongs to SDSYS and an ordinary account has no such command. }
                       'The window that opens after this one asks you for an SD Core password ' +
                       'for that account. It is separate from your Windows password and is ' +
                       'needed only to reach SD Core FROM ANOTHER COMPUTER, over ssh or through ' +
-                      'the SD API. MODIFY.PASSWORD changes it at any time.' + #13#10#13#10 +
+                      'the SD API. To change it later, start SD Core from an ELEVATED prompt ' +
+                      'and it will ask.' + #13#10#13#10 +
                       'SIGN OUT AND BACK IN BEFORE TYPING sd. Windows decides group ' +
                       'membership when you sign in, so this session does not yet carry the ' +
                       'access the new account was given.' + #13#10#13#10;
