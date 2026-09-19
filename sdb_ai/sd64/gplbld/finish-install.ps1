@@ -166,6 +166,22 @@ function Set-SdsysPassword {
     # takes - but it does it in a HIDDEN window (sd.iss's Exec, SW_HIDE), so this
     # is the first place in the whole install where a person can be asked.
     #
+    # ***18 Sep 26, LATER STILL - AND IT ASKS ON "ALREADY THERE" TOO, WHICH IS
+    # THE OWNER'S SECOND RULING AND IT REVERSES THIS STEP'S OWN PREMISE.***  The
+    # twelfth pass prompted only when the install MADE the account, on the
+    # reasoning "a reinstall cannot overwrite a working password" - and the
+    # 21:28:44 run measured the hole in that word: install-sdsys.ps1 answered
+    # "SDSYS already exists" (code 2) over an account whose generated password
+    # was never known to anybody, and install-sdsys.log is OVERWRITTEN per run,
+    # so the 17:55:27 password is not recoverable from anywhere.  An existing
+    # password is not thereby a working one.  His words, verbatim, because the
+    # model is load-bearing: "the only way to administer SD is to login to the
+    # computer as the Windows user SDSYS ... Once connected the sdsys windows
+    # user is in the sdsys sd account.  No other user has access to the SDSYS
+    # account at all and the sdsys windows user only has access if logged in
+    # locally, no remote access.  So without an sdsys password being entered at
+    # install time there is no way to manage sd."
+    #
     # ***HERE RATHER THAN IN install-sdsys.ps1, AND THAT IS MEASURED RATHER THAN
     # PREFERRED.***  That step runs at ssPostInstall, WHILE THE WIZARD IS STILL
     # ON SCREEN, and a console prompt there is the fault the owner met on 22 Aug
@@ -176,20 +192,30 @@ function Set-SdsysPassword {
     # AND IT CANNOT HANG AN INSTALL.  Redirected stdin means nobody is at a
     # console - the same guard check-install.ps1 uses - so the prompt is skipped
     # and the generated password is printed instead.
-    param([string] $LogFile)
+    param([string] $LogFile, [switch] $Existing)
 
     Write-Host '  SET THE PASSWORD FOR SDSYS' -ForegroundColor White
     Write-Host ''
-    Write-Wrapped -Text ('You sign in to Windows as SDSYS and start SD Core from an elevated ' +
-        'prompt, and this account is the only way into SD.  Type the password you want for it.  ' +
-        'It is not shown as you type, and you are asked twice.')
+    if ($Existing) {
+        Write-Wrapped -Text ('The SDSYS account was already on this machine, and its password is ' +
+            'whatever it already was - which nothing shows and nothing keeps a copy of.  This is ' +
+            'the moment to set it: you sign in to Windows as SDSYS and start SD Core from an ' +
+            'elevated prompt, and this account is the only way into SD.  Type the password you ' +
+            'want for it.  It is not shown as you type, and you are asked twice.')
+    } else {
+        Write-Wrapped -Text ('You sign in to Windows as SDSYS and start SD Core from an elevated ' +
+            'prompt, and this account is the only way into SD.  Type the password you want for it.  ' +
+            'It is not shown as you type, and you are asked twice.')
+    }
     Write-Host ''
 
     if ([Console]::IsInputRedirected) {
-        Write-Wrapped -Text ('Nobody is at this console, so nothing is asked and the generated ' +
-            'password stands.')
-        Write-Host ''
-        Show-GeneratedPassword -LogFile $LogFile
+        if ($Existing) { Keep-ExistingPassword } else {
+            Write-Wrapped -Text ('Nobody is at this console, so nothing is asked and the generated ' +
+                'password stands.')
+            Write-Host ''
+            Show-GeneratedPassword -LogFile $LogFile
+        }
         return
     }
 
@@ -199,13 +225,19 @@ function Set-SdsysPassword {
         $a = Read-Host '  New SDSYS password' -AsSecureString
         if ($a.Length -eq 0) {
             # AN EMPTY LINE IS A DELIBERATE ANSWER rather than a mistake: SD's own
-            # credential prompt ends the session on one (130's ruling), and here
-            # it means "keep the generated one" - which is then printed, so it is
-            # shown rather than hunted for in a file.
+            # credential prompt ends the session on one (130's ruling).  On a
+            # fresh account it means "keep the generated one" - which is then
+            # printed, so it is shown rather than hunted for in a file.  On an
+            # EXISTING account there is nothing generated this run and no copy
+            # of the old one anywhere, so keeping is said plainly and with its
+            # cure, because "kept a password nobody knows" is the state the
+            # owner's ruling exists to end.
             Write-Host ''
-            Write-Wrapped -Text ('No password typed, so the one the install generated stands.')
-            Write-Host ''
-            Show-GeneratedPassword -LogFile $LogFile
+            if ($Existing) { Keep-ExistingPassword } else {
+                Write-Wrapped -Text ('No password typed, so the one the install generated stands.')
+                Write-Host ''
+                Show-GeneratedPassword -LogFile $LogFile
+            }
             return
         }
         $b = Read-Host '  Type it again' -AsSecureString
@@ -239,12 +271,17 @@ function Set-SdsysPassword {
         Write-Host ''
         # THE LOG IS THE RECORD OF THIS MACHINE'S WAY IN, so the password it
         # printed a minute ago is not left standing as though it still worked.
-        try {
-            Add-Content -Path $LogFile -ErrorAction Stop -Value (
-                (Get-Date -Format 's') + '  the password printed above was REPLACED by one set in ' +
-                'the finishing window.  No copy of it is kept here.')
-        } catch {
-            Write-Host ('  (Could not note that in ' + $LogFile + ': ' + $_.Exception.Message + ')') -ForegroundColor Yellow
+        # On -Existing nothing was printed from the log - nothing was generated
+        # this run - so there is no line to kill, and the note would say a
+        # replacement happened where none was shown.
+        if (-not $Existing) {
+            try {
+                Add-Content -Path $LogFile -ErrorAction Stop -Value (
+                    (Get-Date -Format 's') + '  the password printed above was REPLACED by one set in ' +
+                    'the finishing window.  No copy of it is kept here.')
+            } catch {
+                Write-Host ('  (Could not note that in ' + $LogFile + ': ' + $_.Exception.Message + ')') -ForegroundColor Yellow
+            }
         }
         return
     }
@@ -276,6 +313,22 @@ function Show-GeneratedPassword {
         'wish, from the SDSYS account or from an elevated prompt.')
 }
 
+function Keep-ExistingPassword {
+    # THE -Existing KEEP PATH, IN ITS OWN FUNCTION BECAUSE TWO CALL SITES NEED
+    # THE SAME WORDS: the redirected-stdin skip and a deliberate empty line.
+    # Nothing was generated this run and install-sdsys.log keeps no copy of any
+    # earlier one - it is OVERWRITTEN per run, measured 18 Sep 2026 - so there
+    # is nothing to print and the honest sentence says so.  The cure rides with
+    # it because "kept a password nobody knows" is exactly the state the
+    # owner's ruling exists to end, and a reader who kept by mistake has one
+    # line telling them the way out.
+    Write-Wrapped -Text ('The password this account already has stays.  Nothing was generated this ' +
+        'time and no copy of it exists anywhere, so it cannot be shown.  If it is not known, set ' +
+        'one from any elevated PowerShell prompt:' + '  Set-LocalUser -Name SDSYS -Password ' +
+        '(Read-Host -AsSecureString)')
+    Write-Host ''
+}
+
 Write-Host ''
 Write-Host '  SD is installed.' -ForegroundColor White
 Write-Host '  ================'
@@ -296,9 +349,16 @@ switch ($SdsysCode) {
         Set-SdsysPassword -LogFile $SdsysLog
     }
     2 {
-        Write-Wrapped -Text ('The SDSYS account was already on this machine, so this install left ' +
-            'it alone - including its password, which is the one set before.')
-        Write-Host ''
+        # 18 Sep 26, later still - THE OWNER'S SECOND RULING: THE PROMPT IS OWED
+        # HERE TOO.  "SDSYS already exists" is the case his machine is in, and
+        # the twelfth pass's "a reinstall cannot overwrite a working password"
+        # assumed the existing password was known to somebody - the 21:28:44 run
+        # measured that it was not, and the log it was written to is overwritten
+        # per run.  Without a password entered at install time there is no way
+        # to manage SD at all, so the window asks on both codes that mean the
+        # account EXISTS (0 made, 2 already there) and leaves the asking-out to
+        # the empty line, which says what keeping means.
+        Set-SdsysPassword -LogFile $SdsysLog -Existing
     }
     default {
         Write-Wrapped -Text ('No password is set here.  Either the install reported that it could ' +
