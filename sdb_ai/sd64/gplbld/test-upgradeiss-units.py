@@ -107,18 +107,32 @@ def main():
         check('emitted a non-empty pair of sections',
               len(dels) > 0 and len(copies) > 0,
               'an empty emit passes every absence check below')
+        # ***18 Sep 26 - PF_RETIRED IS NO LONGER EMPTY, AND THAT IS WHAT THESE
+        # TWO WIDE CHECKS WERE NOT READY FOR.***  Its entries are {app} deletes,
+        # deliberately NEITHER paired with a copy NOR gated - the second block
+        # below has asserted both properties for an injected name since this
+        # file was written, and RELEASE_1.1 64 put the FIRST REAL NAME in the
+        # list (adopt-account.ps1).  Counting those lines in with the data
+        # tree's made the pairing row read '16 deletes vs 14 copies + 1
+        # retired' and the gating row fail on the one entry that must not carry
+        # a Check: - two red rows on a CORRECT emitter, which is the shape that
+        # teaches a reader to ignore the file.  The two populations are
+        # separated here, and the {app} one is checked against PF_RETIRED by
+        # name instead of being counted in.
+        tree_dels = [l for l in dels if '\\sdsys\\' in l]
+        app_dels  = [l for l in dels if '{app}' in l]
         retired = [n for n, _w in S.SDSYS_RETIRED]
         check('delete and copy are paired, apart from the retired names',
-              len(dels) == len(copies) + len(retired),
+              len(tree_dels) == len(copies) + len(retired),
               '%d deletes vs %d copies + %d retired'
-              % (len(dels), len(copies), len(retired)))
+              % (len(tree_dels), len(copies), len(retired)))
         check('one copy per replace name', len(replace) == len(copies))
         for n in retired:
             check('RETIRED %s is deleted and NOT copied back' % n,
-                  any(('\\sdsys\\%s"' % n) in l for l in dels) and
+                  any(('\\sdsys\\%s"' % n) in l for l in tree_dels) and
                   not any(('\\sdsys\\%s' % n) in l for l in copies))
-        check('every entry is gated on DataTreeUpgrade',
-              all('Check: DataTreeUpgrade' in l for l in dels + copies))
+        check('every data-tree entry is gated on DataTreeUpgrade',
+              all('Check: DataTreeUpgrade' in l for l in tree_dels + copies))
 
         for n in preserve:
             check('PRESERVED %s appears in neither section' % n,
@@ -143,15 +157,22 @@ def main():
               'changelog' not in [n for n, _w in S.SDSYS_SHIP] and
               'changelog' not in [n for n, _w in S.SDSYS_EMPTY])
 
-        # PF_RETIRED is empty today, so its entry shape has to be exercised by
-        # putting one in.  An empty list emitting nothing is the correct state
-        # and proves nothing about what happens when a name is added.
         # Asserted on the ENTRY lines, not on the whole file - the header
         # prose mentions {app}, and the first draft of this check matched that
         # and failed on its own documentation.
-        check('PF_RETIRED emits no entry while it is empty',
-              (len(S.PF_RETIRED) > 0) or
-              not any('{app}' in l for l in dels + copies))
+        #
+        # AND THE REAL LIST IS NOW EXERCISED, not just an injected name: 64
+        # put adopt-account.ps1 in it, so the positive case is the first place
+        # a reader sees what the shipped entry looks like.
+        check('exactly one {app} delete per PF_RETIRED name',
+              len(app_dels) == len(S.PF_RETIRED),
+              'got %d for %d name(s)' % (len(app_dels), len(S.PF_RETIRED)))
+        for n, _w in S.PF_RETIRED:
+            check('PF_RETIRED %s is deleted under {app}, ungated, and not '
+                  'copied back' % n,
+                  any((('{app}\\%s"' % n) in l and 'Check:' not in l)
+                      for l in app_dels) and
+                  not any(('\\%s' % n) in l for l in copies))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

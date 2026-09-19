@@ -97,7 +97,7 @@ FAIL_CLOSED = {
     ("createa", "if not(is_grp_member(acc.uname,'sdusers')) then"):
         "create account: a could-not-tell goes on to os_group ADDMEM, which "
         "is idempotent and reports its own failure",
-    ("createa", 'if adopt or is_grp_member(acc.uname, "S-1-5-32-544") then'):
+    ("createa", 'if is_grp_member(acc.uname, "S-1-5-32-544") then'):
         "create account: asked about the well-known Administrators SID, "
         "which always resolves; a could-not-tell would add the user to "
         "sdsshonly, which os_group can undo",
@@ -130,6 +130,15 @@ FAIL_CLOSED = {
 # refusal in route.set and the tier-set was.admin probe.  The tiers are gone,
 # so nothing asks about the Administrators SID in MODIFYA any more; the sites
 # and their entries above left together.
+#
+# ***AND A THIRD MOVED RATHER THAN LEFT: THE createa KEY, WHEN ADOPT LEFT THE
+# VERB.***  Seventh pass of the same day.  The line was 'if adopt or
+# is_grp_member(acc.uname, "S-1-5-32-544") then' and is now 'if
+# is_grp_member(acc.uname, "S-1-5-32-544") then'; only the KEY above moved with
+# it.  THE KEY IS THE STRIPPED SOURCE LINE AND NOT A LINE NUMBER precisely so
+# this is a two-character edit rather than a hunt - and the test was found RED
+# on the tree that made the change, naming the old line 'stale' and the new one
+# 'UNCLASSIFIED', which is the pair of rows it exists to produce.
 
 checks = 0
 fails = 0

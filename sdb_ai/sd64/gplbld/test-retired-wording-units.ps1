@@ -106,9 +106,26 @@ $RETIRED = @(
     # straight past them.  THE LESSON IS ABOUT THE LINT ITSELF: it proves the
     # PHRASES registered here are gone, never that the CLAIM is - a copy worded
     # differently escapes it, and only reading the screen caught these.
+    # 18 Sep 26 - 130c RE-AIMED, RELEASE_1.1 64.  Its replacement string,
+    # "PASSWORD IS REQUIRED even here", had ONE copy: item 1 of the installer's
+    # closing box, in each of the two arms that worded that step by whether ssh
+    # or the API was reachable.  Slice 6 deleted both arms, because the step they
+    # numbered - give the account this install just made a password - no longer
+    # happens: there is one account, SDSYS, and it authenticates with its WINDOWS
+    # password.  The replacement therefore left with the paragraph, and this row
+    # went RED on its own "replacement present" line, which is the pair's second
+    # half doing exactly what it is for.
+    #
+    # RE-AIMED AND NOT DELETED, because the RETIRED half still earns its place:
+    # "you do not need one here" is still false, and item 1's wording could come
+    # back in a new paragraph.  A row with no retired half catches nothing.
+    # "A password is required" is the sentence 130's fix put in the shipped text
+    # and it is still on the screen in both remaining places (finish-install.ps1
+    # :307, messages/10089).  It is ALREADY 130's replacement, and sharing one is
+    # this file's own practice: the ten R1.1-64b..j rows share a single sentence.
     @{ Ref = '130c'
        Retired     = 'NOT NEED ONE HERE'
-       Replacement = 'PASSWORD IS REQUIRED even here' }
+       Replacement = 'A password is required' }
     @{ Ref = '130d'
        Retired     = 'not need one at this machine'
        Replacement = 'will not let a session go on without it' }
