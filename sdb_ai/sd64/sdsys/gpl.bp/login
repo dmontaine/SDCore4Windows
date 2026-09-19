@@ -199,6 +199,8 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 *   within a normal session" - is untouched: this is not within a session, it
 *   is what decides which account the session begins in.
 deffun elevate(action,arg) calling '!elevate'
+* 19 Sep 26 Windows port - RELEASE_1.1 75's rule, shared with the Linux port.
+deffun pw_complex(pw) calling '!pw_complex'
 
    ok = @false
    admin.login = @false
@@ -1301,6 +1303,29 @@ require.credential:
 *     loop with no way to leave but killing the process.
       if pw1 = '' then exit
 
+* 19 Sep 26 Windows port - RELEASE_1.1 75.  SD'S OWN RULE, BEFORE THE REPEAT IS
+*   ASKED FOR.  Owner's ruling, taken on the Linux side and binding in both
+*   ports.  A weak entry counts as one of the three attempts, like a mismatch.
+*
+*   AFTER THE EMPTY TEST, NEVER BEFORE IT.  An empty line is the documented way
+*   out of this prompt and an empty string fails the rule too, so checking
+*   first would answer somebody leaving with a complaint about length.
+*
+*   WRITTEN OUT RATHER THAN SHARING THE MISMATCH ARM'S TAIL, and the three
+*   duplicated lines are the cheaper of two bad options.  The alternative was a
+*   CONTINUE inside a block IF, which the note below records this file as
+*   deliberately not using; a flag threaded through the arm below would make
+*   the common path harder to read to save three lines on the rare one.
+      if not(pw_complex(pw1)) then
+         display sysmsg(10920)  ;* A password needs at least 8 characters...
+         display sysmsg(10921, cred.tries, cred.max.tries) ;* That was attempt %1 of %2
+         if cred.tries >= cred.max.tries then
+            cred.ok = @false
+            display sysmsg(10101, cred.max.tries)
+            return
+         end
+      end else
+
       display sysmsg(10091) :  ;* Repeat new password:
       input pw2 HIDDEN
       display
@@ -1337,6 +1362,7 @@ require.credential:
             return
          end
       end
+      end  ;* the complexity arm above
    repeat
 
    cred.ok = @false

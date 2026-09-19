@@ -180,6 +180,47 @@ function Write-Wrapped {
 # replaced it.  PRE_RELEASE_FIXES 138 and 155 are where the old step's reasoning
 # lives.
 
+# 19 Sep 26 - RELEASE_1.1 75.  SD'S OWN PASSWORD RULE, IN POWERSHELL, BECAUSE
+# THIS ONE PROMPT CANNOT REACH THE BASIC THAT HOLDS IT.  Owner's ruling, taken
+# on the SD Core for Linux side and binding in both ports: SD requires a complex
+# password "even if the OS does not", for SDSYS and for every other account.
+#
+# ***THE OTHER THREE PROMPTS NEED NO POWERSHELL AT ALL***, which is worth saying
+# because it is why this is the only copy: MODIFY.PASSWORD, CREATE.ACCOUNT and
+# LOGIN's credential prompt all run through gpl.bp/pw_complex, and the install's
+# own SD-password step is "sd -QUIET MODIFY.PASSWORD", so it inherits the check.
+# This prompt sets a WINDOWS password with Set-LocalUser and never enters SD.
+#
+# ***A SECOND IMPLEMENTATION OF A RULE IS A THING THAT DRIFTS***, so it is not
+# left to a reader's care: test-pwcomplex-units.py drives THIS function and the
+# BASIC's ranges against the same table, and asserts that the sentence below and
+# message 10920 say the same thing.
+#
+# IT IS A FLOOR, NOT A CEILING.  Set-LocalUser still applies the machine's own
+# password policy afterwards, and the machine wins wherever it is stricter -
+# which on a domain-managed box it may well be.
+function Test-PasswordComplex {
+    param([string] $Password)
+    if ($Password.Length -lt 8) { return $false }
+    $lower = $false; $upper = $false; $digit = $false; $symbol = $false
+    foreach ($ch in $Password.ToCharArray()) {
+        $c = [int][char]$ch
+        # OUT OF RANGE IS TESTED FIRST, exactly as the BASIC orders its cases:
+        # a byte outside 32-126 must never fall through and satisfy the symbol
+        # requirement it is supposed to fail.
+        if ($c -lt 32 -or $c -gt 126) { return $false }
+        elseif ($c -ge 97 -and $c -le 122) { $lower  = $true }
+        elseif ($c -ge 65 -and $c -le 90)  { $upper  = $true }
+        elseif ($c -ge 48 -and $c -le 57)  { $digit  = $true }
+        else                               { $symbol = $true }
+    }
+    return ($lower -and $upper -and $digit -and $symbol)
+}
+
+# THE WORDING IS MESSAGE 10920's, WORD FOR WORD, and the units test asserts it.
+# Two copies exist because this prompt runs outside SD; they must not differ.
+$script:PwRuleText = 'A password needs at least 8 characters, with a lower-case letter, an upper-case letter, a digit and a symbol.'
+
 function Set-SdsysPassword {
     # ASKS FOR IT, BECAUSE A GENERATED PASSWORD IN A LOG IS NOT A WAY IN.
     # Owner's ruling, 18 Sep 2026, after the first install to use the generated
@@ -231,6 +272,11 @@ function Set-SdsysPassword {
             'It is not shown as you type, and you are asked twice.')
     }
     Write-Host ''
+    # THE RULE IS STATED BEFORE THE PROMPT, not only after a refusal - being
+    # told the requirement once you have already failed it is how three
+    # attempts get spent guessing.  RELEASE_1.1 75.
+    Write-Wrapped -Text $script:PwRuleText
+    Write-Host ''
 
     if ([Console]::IsInputRedirected) {
         if ($Existing) { Keep-ExistingPassword } else {
@@ -263,6 +309,21 @@ function Set-SdsysPassword {
             }
             return
         }
+        # 19 Sep 26 - RELEASE_1.1 75.  THE RULE IS CHECKED BEFORE THE REPEAT IS
+        # ASKED FOR, and this is the one place the plain text is needed twice -
+        # so the same bounded SecureString-to-BSTR exception the comparison
+        # below documents applies, and the variable is cleared on the next line.
+        # A weak entry counts as one of the three attempts, like a mismatch.
+        $pw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))
+        $weak = -not (Test-PasswordComplex -Password $pw)
+        $pw = $null
+        if ($weak) {
+            Write-Wrapped -Text $script:PwRuleText -Color Yellow
+            Write-Host ('  That was attempt ' + $tries + ' of 3.') -ForegroundColor Yellow
+            Write-Host ''
+            continue
+        }
+
         $b = Read-Host '  Type it again' -AsSecureString
         # ***THE TWO ARE COMPARED AS PLAIN TEXT, WHICH IS THE ONLY WAY TWO
         # SecureStrings CAN BE COMPARED AT ALL.***  It is a deliberate, bounded

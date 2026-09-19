@@ -75,6 +75,8 @@ $catalog !set_passwd
 
 deffun valid_os_name(name) calling '!valid_os_name'
 deffun ps_script(script) calling '!ps_script'
+* 19 Sep 26 Windows port - RELEASE_1.1 75's rule, shared with the Linux port.
+deffun pw_complex(pw) calling '!pw_complex'
 
 $include int$keys.h
 
@@ -107,6 +109,27 @@ end
 
    if pw1 = '' or pw1 # pw2 then
       set.status 3
+      return pass_set
+   end
+
+* 19 Sep 26 Windows port - RELEASE_1.1 75.  SD'S OWN RULE, CHECKED BEFORE THE
+*   PASSWORD GOES ANYWHERE.  Owner's ruling, taken on the Linux side and
+*   binding in both ports: SD requires a complex password "even if the OS does
+*   not", for SDSYS and for every other account.
+*
+*   STATUS 7 RATHER THAN REUSING 1.  Status 1 means WINDOWS refused it, and
+*   the caller already tells the two apart for a reason recorded at
+*   createa:813 - a mistyped pair is fixed by retyping, a refusal never is.
+*   "SD refused it" is a third thing again: retyping the SAME password will
+*   not help, but a DIFFERENT one will, and only a distinct status can say so.
+*
+*   AFTER THE MATCH TEST, DELIBERATELY.  This prompt has no retry loop of its
+*   own - the caller owns that - so the order only decides which reason is
+*   reported when a password is both mistyped and weak, and "they did not
+*   match" is the one the typist can act on without knowing the rule.
+   if not(pw_complex(pw1)) then
+      pw1 = '' ; pw2 = ''
+      set.status 7
       return pass_set
    end
 

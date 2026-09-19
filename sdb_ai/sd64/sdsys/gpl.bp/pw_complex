@@ -1,0 +1,109 @@
+* PW_COMPLEX(pw)
+* Is pw strong enough for SD to accept?
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 19 Sep 26 Windows port - new.  RELEASE_1.1 75.  Owner's ruling, taken on the
+*           SD Core for Linux side and binding in both ports under CLAUDE.md's
+*           parity rule: "The requirement for the complex password is
+*           reasonable for access to the database, if possible I would prefer
+*           that SD require it even if the OS does not for both SDSYS and any
+*           other accounts."
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    x = !pw_complex(pw)
+*
+*    Returns @true when pw satisfies SD's password rule, @false otherwise.
+*    It sets no status and touches nothing: it is a predicate over a string.
+*
+*    THE RULE, and it is a CONTRACT SHARED WITH THE LINUX PORT rather than a
+*    local choice - the two implementations are checked against the same
+*    table, so do not "improve" it on one side only:
+*
+*      - at least 8 characters, no maximum;
+*      - at least one lower-case letter    a-z;
+*      - at least one upper-case letter    A-Z;
+*      - at least one digit                0-9;
+*      - at least one SYMBOL, which means any OTHER printable ASCII
+*        character, 32 to 126 - AND SPACE COUNTS AS ONE;
+*      - any character outside 32-126 fails outright: a tab, a control
+*        character, or anything non-ASCII such as an accented letter.
+*
+*    WHY ASCII CODE RANGES RATHER THAN CHARACTER CLASSES.  The rule is
+*    written in BASIC here and in bash on the Linux side, and a byte range
+*    reads the same in both; "is this a letter" does not, once a locale is
+*    involved.  The Linux agent asked for it in these terms.
+*
+*    WHY NON-ASCII FAILS RATHER THAN COUNTING AS A SYMBOL.  A password is
+*    typed again later, on a console whose encoding nobody has promised - and
+*    on this port it may also be handed to Windows, which stores it as UTF-16
+*    while SD holds bytes.  A character that survives one round trip and not
+*    the next is a lockout, so it is refused at the door where the refusal
+*    can still be explained.
+*
+*    WHAT IT DOES NOT DO.  It does not check a dictionary, a history, or the
+*    account name - Linux's PAM stack does some of that and this deliberately
+*    does not try to reproduce it.  ***AND IT IS NOT THE ONLY RULE IN FORCE
+*    ON THIS PORT***: the callers that set a WINDOWS password still hand it
+*    to Windows afterwards, and the machine's own policy can refuse what this
+*    accepts.  SD's rule is a floor, never a ceiling.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function pw_complex(pw)
+$catalog !pw_complex
+
+   pw.len = len(pw)
+   if pw.len < 8 then return @false
+
+   got.lower = @false
+   got.upper = @false
+   got.digit = @false
+   got.symbol = @false
+
+*  ONE PASS, AND THE ORDER OF THE CASES IS THE RULE.  The out-of-range test
+*  is first so that a byte outside 32-126 can never fall through to the
+*  symbol arm and satisfy the very requirement it is supposed to fail.
+   for pw.i = 1 to pw.len
+      pw.c = seq(pw[pw.i, 1])
+      begin case
+      case pw.c < 32 or pw.c > 126
+         return @false
+      case pw.c >= 97 and pw.c <= 122
+         got.lower = @true
+      case pw.c >= 65 and pw.c <= 90
+         got.upper = @true
+      case pw.c >= 48 and pw.c <= 57
+         got.digit = @true
+      case @true
+         got.symbol = @true
+      end case
+   next pw.i
+
+   if not(got.lower)  then return @false
+   if not(got.upper)  then return @false
+   if not(got.digit)  then return @false
+   if not(got.symbol) then return @false
+
+return @true
+end

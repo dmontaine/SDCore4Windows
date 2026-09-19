@@ -100,12 +100,50 @@ function New-RandomPassword {
     # 32 characters from a CSPRNG, on install-service.ps1's alphabet and for its
     # reason: it has to satisfy New-LocalUser and the password policy at once,
     # and be unguessable.  Unlike the relay's, this one is USED by a person.
-    $bytes = New-Object byte[] 32
-    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    #
+    # 19 Sep 26 - AND IT NOW HAS TO SATISFY SD'S OWN RULE TOO, RELEASE_1.1 75.
+    # ***THIS IS NOT A THEORETICAL TIDY-UP.***  The password this generates is
+    # the one a person is shown and types, and from this release SD refuses a
+    # password with no digit in it - so a draw that happened to contain none
+    # would hand the operator a password that SD itself would not accept if
+    # they tried to set it by hand.  32 characters make that vanishingly
+    # unlikely and "vanishingly unlikely" is not a guarantee; drawing again is.
+    #
+    # THE LOOP IS BOUNDED AND SAYS SO IF IT EVER RUNS OUT.  An unbounded retry
+    # over a CSPRNG cannot hang in practice, but a bounded one cannot hang in
+    # principle either, and a silent infinite loop inside a HIDDEN install step
+    # is the worst shape this script could take.
     $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%+=?'
-    $s = ''
-    foreach ($b in $bytes) { $s += $chars[$b % $chars.Length] }
+    for ($draw = 1; $draw -le 20; $draw++) {
+        $bytes = New-Object byte[] 32
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $s = ''
+        foreach ($b in $bytes) { $s += $chars[$b % $chars.Length] }
+        if (Test-GeneratedPasswordComplex -Password $s) { return $s }
+    }
+    Say 'WARNING: 20 generated passwords in a row failed SD password rule - using the last.'
     return $s
+}
+
+# THE RULE, AGAIN, AND THE THIRD COPY IS DELIBERATE RATHER THAN CARELESS.
+# gpl.bp/pw_complex holds it for everything inside SD; finish-install.ps1 holds
+# it for the prompt that sets the SDSYS password; this one exists because this
+# script runs BEFORE either is reachable - at ssPostInstall, in a hidden window,
+# with no SD session and nothing dot-sourced.  test-pwcomplex-units.py drives
+# all three against one table so they cannot drift apart.
+function Test-GeneratedPasswordComplex {
+    param([string] $Password)
+    if ($Password.Length -lt 8) { return $false }
+    $lower = $false; $upper = $false; $digit = $false; $symbol = $false
+    foreach ($ch in $Password.ToCharArray()) {
+        $c = [int][char]$ch
+        if ($c -lt 32 -or $c -gt 126) { return $false }
+        elseif ($c -ge 97 -and $c -le 122) { $lower  = $true }
+        elseif ($c -ge 65 -and $c -le 90)  { $upper  = $true }
+        elseif ($c -ge 48 -and $c -le 57)  { $digit  = $true }
+        else                               { $symbol = $true }
+    }
+    return ($lower -and $upper -and $digit -and $symbol)
 }
 
 function Test-SdsysMembership([string] $Group) {

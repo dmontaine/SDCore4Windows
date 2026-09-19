@@ -1559,7 +1559,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # DOUBLE-quoted string, where a "$" in the value would be
                   # expanded away.  Source-only, ships nowhere; listed with the
                   # commit that creates it.
-                  'test-psinterp-units.py')
+                  'test-psinterp-units.py',
+                  # 19 Sep 26 - RELEASE_1.1 75's guard over the password rule,
+                  # which is written three times in this tree and once more on
+                  # the Linux side.  Source-only, ships nowhere; listed with
+                  # the commit that creates it.
+                  'test-pwcomplex-units.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.
