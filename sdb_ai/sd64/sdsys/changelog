@@ -4,6 +4,29 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+19 Sep 26  CREATE.ACCOUNT NO LONGER MAKES YOU SAY HOW AN ACCOUNT IS
+           REACHED.  THE ANSWER DEFAULTS TO BOTH.
+
+           CREATE.ACCOUNT USER <name> used to refuse unless you added
+           SSH, API, BOTH or NONE.  Now the keyword is optional: leave it
+           out and the account gets both ssh and the API, which is what
+           every account is entitled to.
+
+               CREATE.ACCOUNT USER james
+               CREATE.ACCOUNT USER james BOTH     (the same thing)
+               CREATE.ACCOUNT USER james API      (the API only)
+               CREATE.ACCOUNT USER james NONE     (neither; LOGTO only)
+
+           ***NOTHING IS TAKEN AWAY.***  All four words still work and
+           still mean what they meant, NONE included - an application
+           account you reach only with LOGTO is still made by saying NONE
+           and meaning it.  What has gone is the refusal when you say
+           nothing at all.
+
+           ***AND IT IS STILL THE ADMINISTRATOR'S CHOICE, BOTH WAYS.***
+           MODIFY.ACCOUNT <name> takes the same four words and can turn
+           either route off and back on again at any time.
+
 18 Sep 26  THE INSTALL NOW GIVES YOU AN SD CORE ACCOUNT OF YOUR OWN.
 
            Installing SD Core creates an ordinary SD Core account for the

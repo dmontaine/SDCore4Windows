@@ -16,12 +16,25 @@
 # an internal-only, marker-gated keyword that a console session can never
 # type.  See CREATEA's ATTACH case for the verb's half and its gating record.
 #
-# THE ROUTE KEYWORD IS BOTH, SAID OUT LOUD.  The owner's 64 ruling: "All
-# accounts will have remote ssh and api access", and the keyword is REQUIRED
-# (10082) - the old adopt call passed none and the 15:07:23 install measured
-# what that costs: the verb stopped at "Say who may reach this account" with
-# nobody to answer.  MODIFY.ACCOUNT narrows it any time afterwards, from the
-# SDSYS session.
+# NO ROUTE KEYWORD IS PASSED, AND THAT IS A CHANGE - RELEASE_1.1 68, 19 Sep
+# 2026.  It used to pass BOTH because the keyword was REQUIRED (10082): the old
+# adopt call passed none and the 15:07:23 install measured what that cost - the
+# verb stopped at "Say who may reach this account" with nobody to answer.  68
+# made silence mean BOTH, on the owner's ruling that "every non-sdsys account
+# has the potential to have ssh and api access by default, but it is the admins
+# choice if it should stay on".  So the account still gets both routes; the
+# difference is that the DEFAULT says so rather than this line.
+# MODIFY.ACCOUNT narrows it any time afterwards, from the SDSYS session, and
+# widens it again - the owner was explicit that it is a two-way door.
+#
+# THE POINT OF DROPPING IT IS PARITY, NOT TIDINESS.  Linux's teardown deleted
+# the route grammar outright, so BOTH is an "Unexpected token" there; with 68
+# both ports run the identical install line, which is what the owner asked for
+# when he said the solution must be the same on the two systems.
+#
+# ***IT WILL FAIL AGAINST A PRE-68 TREE***, stopping at 10082 with nobody to
+# answer - the exact 15:07:23 failure above, arrived at from the other side.
+# The verb and this script have to move together.
 #
 # NO PASSWORD IS SET, AND NONE IS NEEDED FOR THE CONSOLE.  ATTACH touches
 # nothing about the Windows account - the person's Windows password is their
@@ -254,7 +267,7 @@ try {
     try {
         Set-Content -LiteralPath $marker -Encoding utf8 -Value @(
             "Written by attach-account.ps1 for $User at $(Get-Date -Format 's').",
-            "It permits ONE 'CREATE.ACCOUNT USER $User BOTH ATTACH' and is deleted on use.",
+            "It permits ONE 'CREATE.ACCOUNT USER $User ATTACH' and is deleted on use.",
             'It authorises that name only - the name is part of this file name.',
             'If this file is still here, the install did not finish - delete it.')
     }
@@ -273,7 +286,7 @@ try {
         # Separate arguments, not one string: the same shape PROJECT_STATUS.md 7
         # step 0 records for every other -internal command, and not piped,
         # because a piped session has its own traps.
-        $r = Invoke-Sd @('-internal', 'CREATE.ACCOUNT', 'USER', $User, 'BOTH', 'ATTACH')
+        $r = Invoke-Sd @('-internal', 'CREATE.ACCOUNT', 'USER', $User, 'ATTACH')
 
         # JUDGED ON THE RECORD, NOT ON THE EXIT STATUS.  CREATE.ACCOUNT reports
         # failure through @system.return.code and a message; the process status
@@ -285,7 +298,7 @@ try {
             $result = 0
         }
         else {
-            Say "attach-account: CREATE.ACCOUNT USER $User BOTH ATTACH did not create an account"
+            Say "attach-account: CREATE.ACCOUNT USER $User ATTACH did not create an account"
             Say $r.Text
             $result = 1
         }

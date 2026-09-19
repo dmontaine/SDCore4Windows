@@ -18,6 +18,15 @@
 * 
 * 
 * START-HISTORY:
+* 19 Sep 26 Windows port - RELEASE_1.1 68.  THE ROUTE KEYWORD IS OPTIONAL AND
+*            SILENCE MEANS BOTH.  Owner: "every non-sdsys account has the
+*            potential to have ssh and api access by default, but it is the
+*            admins choice if it should stay on."  The 21 Aug refusal (10082)
+*            is withdrawn - it existed because the silent default was an
+*            arbitrary "ssh yes, API no", and 64 replaced the arbitrariness
+*            with a ruling.  NONE is still sayable; access.given still tells
+*            it from silence.  Also the parity fix: Linux deleted the route
+*            grammar, so this is what lets both ports run one install line.
 * 18 Sep 26 Windows port - RELEASE_1.1 67.  THE ATTACH ARM FOLDS THE NAME
 *            UNCONDITIONALLY.  It folded only in its else, and for an attached
 *            account the is_user match IS the premise, so it never folded: the
@@ -284,8 +293,9 @@
 *
 * START-DESCRIPTION:
 *
-* CREATE.ACCOUNT USER  <user name> SSH | API | BOTH | NONE
-*                        {ADMINISTRATOR | PROGRAMMER} {NO.QUERY}
+* CREATE.ACCOUNT USER  <user name> {SSH | API | BOTH | NONE} {NO.QUERY}
+*                        - the route defaults to BOTH when nothing is said
+*                          (RELEASE_1.1 68); the tier words went with 64
 * CREATE.ACCOUNT GROUP <group name> {NO.QUERY}
 * CREATE.ACCOUNT OTHER <account name> <path name> {NO.QUERY}
 *
@@ -474,8 +484,10 @@ deffun ps_script(script) calling '!ps_script'
 *   account's console way in is the Windows password the person already has,
 *   and require.credential offers to set an SD one at their first elevated
 *   interactive login.  NO TIER ANYWHERE: an attached account is an ordinary
-*   account - every account is, under 64 - and the route keyword is required
-*   of it like any other (10082).
+*   account - every account is, under 64 - and the route keyword is optional
+*   for it like any other: RELEASE_1.1 68 made silence mean BOTH, so the
+*   install no longer passes one.  (It was REQUIRED when this was written,
+*   which is why attach-account.ps1 used to say BOTH.)
    attach = @false
    attach.marker = @sdsys:@ds:'$attach'
 
@@ -498,7 +510,7 @@ deffun ps_script(script) calling '!ps_script'
    group_name = ''   ;* will be set to callers entered group name on group create, no case changes
    begin case
    case upcase(acc.type) = 'USER' 
-*    CREATE.ACCOUNT USER <user acct name>  SSH|API|BOTH|NONE  {NO.QUERY}
+*    CREATE.ACCOUNT USER <user acct name>  {SSH|API|BOTH|NONE}  {NO.QUERY}
      pathname = CONFIG('USRDIR')
      if pathname = '' then pathname = 'C:\ProgramData\SD\user_accounts'
      call @parser(PARSER$GET.TOKEN, token.type, acc.uname, keyword)
@@ -561,9 +573,34 @@ deffun ps_script(script) calling '!ps_script'
 *
 *   THE USER ARM ONLY.  more.args is shared with GROUP and OTHER, which have no
 *   Windows user and therefore no route to set; the check cannot live inside it.
+* 19 Sep 26 Windows port - RELEASE_1.1 68.  SILENCE MEANS BOTH NOW, AND THE
+*   REFUSAL ABOVE IS WITHDRAWN.  Owner's ruling, 18/19 Sep 2026: "every
+*   non-sdsys account has the potential to have ssh and api access by default,
+*   but it is the admins choice if it should stay on", and on read-back "the
+*   default is on, but it can be turned off, and back on again as the admin
+*   wishes".
+*
+*   THE 21 Aug REASONING ABOVE IS NOT WRONG, IT IS SUPERSEDED, and the
+*   difference matters to whoever reads both.  It argued that "nothing said"
+*   must not be confused with a decision, which was right while the silent
+*   default was "ssh yes, API no" - an arbitrary answer nobody had chosen.  64
+*   removed the arbitrariness: every account now HAS both routes by ruling, so
+*   the default is the ruling rather than a guess, and a caller who says
+*   nothing gets what the owner says they should get.
+*
+*   access.given STILL EARNS ITS KEEP, and this is the line that would tempt
+*   somebody to delete it: NONE and "nothing said" are still different, they
+*   simply no longer differ in whether we REFUSE.  NONE sets the flags false
+*   deliberately; silence now sets them true.  Collapsing the two would make
+*   NONE unsayable.
+*
+*   AND IT IS THE PARITY FIX.  Linux's teardown deleted the route grammar
+*   outright, so BOTH is an unexpected token there; keeping the capability and
+*   dropping the requirement is what lets both ports run the same install line,
+*   sd -internal CREATE.ACCOUNT USER <name> ATTACH.  RELEASE_1.1 68.
      if not(access.given) then
-       @system.return.code = -ER$ARGS
-       stop sysmsg(10082) ;* Say who may reach this account: SSH, API, BOTH or NONE
+       access.ssh = @true
+       access.api = @true
      end
 
      * Is the user a valid os user?
@@ -904,8 +941,9 @@ PW.TRY.AGAIN:
    case 1
 *   invalid command arg
 * rev 0.9.0 
-    crt 'Command Syntax: CREATE.ACCOUNT USER <user name> SSH | API | BOTH | NONE'
+    crt 'Command Syntax: CREATE.ACCOUNT USER <user name> {SSH | API | BOTH | NONE}'
     crt '                  {NO.QUERY}'
+    crt '                  Omit the route and the account gets both ssh and the API.'
     crt '                CREATE.ACCOUNT GROUP <group name> {NO.QUERY}'
     @system.return.code = -ER$ARGS
     stop 
