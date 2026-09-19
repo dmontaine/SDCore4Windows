@@ -97,10 +97,15 @@ FAIL_CLOSED = {
     ("createa", "if not(is_grp_member(acc.uname,'sdusers')) then"):
         "create account: a could-not-tell goes on to os_group ADDMEM, which "
         "is idempotent and reports its own failure",
-    ("createa", 'if is_grp_member(acc.uname, "S-1-5-32-544") then'):
+    ("createa", 'if attach or is_grp_member(acc.uname, "S-1-5-32-544") then'):
         "create account: asked about the well-known Administrators SID, "
         "which always resolves; a could-not-tell would add the user to "
-        "sdsshonly, which os_group can undo",
+        "sdsshonly, which os_group can undo.  RELEASE_1.1 66 put 'attach or' "
+        "in front of it: an ATTACHED account takes the keeps-its-rights "
+        "branch whatever the lookup says, so for the one account that "
+        "reaches this site with attach set the answer cannot matter - and "
+        "that is the point, since taking a logon right from somebody who "
+        "already signs in at this console is the 15 Aug 2026 lockout",
     ("granta", "if is_grp_member(user, grp) then"):
         "grant: a could-not-tell falls through to os_group ADDMEM, which "
         "reports its own failure rather than claiming success",
@@ -130,6 +135,18 @@ FAIL_CLOSED = {
 # refusal in route.set and the tier-set was.admin probe.  The tiers are gone,
 # so nothing asks about the Administrators SID in MODIFYA any more; the sites
 # and their entries above left together.
+#
+# 18 Sep 26, LATER - RELEASE_1.1 66 REWORDED THE createa SDSSHONLY SITE, AND
+# THIS GUARD CAUGHT IT EXACTLY AS DESIGNED, ONE COMMIT LATE.  The key is the
+# call's own stripped TEXT, so putting "attach or" in front of the condition
+# made the declared site read STALE and the new one UNCLASSIFIED - two reds,
+# both naming the line.  That is the partition working: a caller cannot be
+# reworded without somebody re-deciding which half it is in.
+#
+# WHAT IT COST, AND IT IS THE LESSON RATHER THAN THE FIX: the 66 commit ran
+# four of the free tier's forty-seven and this was not among them, so it went
+# red IN THAT COMMIT and was found only when 67 ran the gpl.bp-walking guards.
+# CLAUDE.md says run the free tier on EVERY change; four is not the free tier.
 #
 # ***AND A THIRD MOVED RATHER THAN LEFT: THE createa KEY, WHEN ADOPT LEFT THE
 # VERB.***  Seventh pass of the same day.  The line was 'if adopt or

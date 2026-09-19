@@ -18,6 +18,19 @@
 * 
 * 
 * START-HISTORY:
+* 18 Sep 26 Windows port - RELEASE_1.1 67.  THE ATTACH ARM FOLDS THE NAME
+*            UNCONDITIONALLY.  It folded only in its else, and for an attached
+*            account the is_user match IS the premise, so it never folded: the
+*            first witnessed install left accounts\don pointing at
+*            user_accounts\Don with group sdu_Don - the 22 Aug 2026 symptom at
+*            :912 mirrored.  A narrow exception to :695's "pre create the os
+*            user" escape hatch, which is left alone.
+* 18 Sep 26 Windows port - RELEASE_1.1 66.  THE INSTALL-ONLY DOOR IS BACK, AS
+*            ATTACH, because 10038 means the person who installs SD can
+*            otherwise never have an account: SDSYS covers administration and
+*            gives them nothing of their own.  Marker-gated, K$INTERNAL, one
+*            shot, and the account it mints is ORDINARY.  The marker name
+*            changed with the keyword so a leftover $adopt cannot open it.
 * 18 Sep 26 Windows port - RELEASE_1.1 64 SLICE 3.  THE TIER WRITE IS GONE:
 *            the account record is no longer written with a tier field, since
 *            there is none to record and ACC$SUSPENDED starts blank.
@@ -604,12 +617,44 @@ deffun ps_script(script) calling '!ps_script'
 *   the one crossing, and it exists for exactly one caller:
 *   gplbld/attach-account.ps1, at ssPostInstall, for the user who
 *   authenticated the elevation prompt.  With attach set, this case MATCHES
-*   (the premise is that the Windows account exists), folds the name to the
-*   spelling this machine uses, and falls out of the begin case PAST
-*   create_user and set_passwd to the SD half - no OS account is created and
-*   no password is set, the account already being the user's.
+*   (the premise is that the Windows account exists), folds the name, and
+*   falls out of the begin case PAST create_user and set_passwd to the SD
+*   half - no OS account is created and no password is set, the account
+*   already being the user's.
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 67.  IT FOLDS UNCONDITIONALLY NOW, AND
+*   THAT IS A DELIBERATE NARROW EXCEPTION TO THE LINE AT :695, NOT AN OVERSIGHT
+*   BEING CORRECTED.  This read "if is_user(acc.uname) else acc.uname =
+*   downcase(...)" - folding only in its else - so a name found under its typed
+*   spelling was never folded.  FOR AN ATTACHED ACCOUNT THE MATCH IS THE
+*   PREMISE, so it never folded at all, and the first witnessed install left
+*   "sdsys\accounts\don" pointing at "user_accounts\Don" with group "sdu_Don".
+*   THAT IS THE 22 Aug 2026 SYMPTOM MIRRORED - see :912, where the owner's
+*   ruling was made "on seeing sdsys\accounts\DON sitting beside
+*   user_accounts\don for the same person".  The register key folds at :937
+*   whatever happens here, so leaving this unfolded guarantees the mismatch.
+*
+*   :695's COMMENT IS THE THING TO READ BEFORE CHANGING THIS BACK: "if you
+*   don't want this, pre create the os user" - a pre-created OS account keeping
+*   its own spelling is an ESCAPE HATCH somebody may have used on purpose, and
+*   it is left alone.  ATTACH is not that case: the installing user did not
+*   pre-create anything for SD's benefit, their Windows account merely predates
+*   SD, so the hatch's rationale does not reach them and the only account it
+*   would ever apply to is the installer's own.
+*
+*   SAFE BECAUSE THE WINDOWS LOOKUP IS CASE-INSENSITIVE, MEASURED RATHER THAN
+*   ASSUMED: Get-LocalUser 'don' resolves the account Windows spells 'Don',
+*   with 'donzzz' refused as the control.  So os_group("ADDMEM", ...) and the
+*   sdu_ group built from acc.uname at :1193 and :1231 all reach the same
+*   Windows account under the folded name.  Nothing on the attach path creates
+*   an OS object under the typed spelling - create_user and set_passwd are both
+*   skipped - so there is no second spelling left anywhere to disagree with.
+*
+*   THE MARKER IS UNAFFECTED: it is built at the acc.uname assignment in the
+*   USER arm with its own explicit downcase(), before this point, so folding
+*   here cannot move it.
        if attach then
-         if is_user(acc.uname) else acc.uname = downcase(acc.uname)
+         acc.uname = downcase(acc.uname)
        end else
          @system.return.code = -ER$ARGS
          stop sysmsg(10038, acc.uname) ;* Windows account %1 already exists
