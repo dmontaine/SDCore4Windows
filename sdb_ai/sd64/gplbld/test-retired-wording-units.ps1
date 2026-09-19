@@ -47,9 +47,11 @@ $ErrorActionPreference = 'Continue'
 $gplbld = ($PSScriptRoot -replace '\\', '/')
 $sd64   = (Split-Path -Parent $PSScriptRoot) -replace '\\', '/'
 $msgDir = "$sd64/sdsys/messages"
+$bpDir  = "$sd64/sdsys/gpl.bp"
 
 Write-Host "test-retired-wording-units: gplbld   $gplbld"
 Write-Host "test-retired-wording-units: messages $msgDir"
+Write-Host "test-retired-wording-units: gpl.bp   $bpDir"
 
 # --------------------------------------------------------------------------
 # THE REGISTER.  One row per retirement.  Retired = must not appear anywhere;
@@ -97,9 +99,16 @@ $RETIRED = @(
     @{ Ref = '130'
        Retired     = 'set no password for now'
        Replacement = 'A password is required' }
+    # 19 Sep 26 - 130b AND 130e RE-AIMED, RELEASE_1.1 69, AND THIS IS THE
+    # "registration moves in the same commit as the message" case the 58 note
+    # below describes.  Their replacement was "cannot be used at all", which 69
+    # has just retired in its turn - leave it and both rows go red on their own
+    # replacement-present line.  The RETIRED halves still earn their place:
+    # "works only at this computer" is still false, because the account is
+    # reachable at the keyboard AND cannot be reached from anywhere else.
     @{ Ref = '130b'
        Retired     = 'works only at this computer'
-       Replacement = 'cannot be used at all' }
+       Replacement = 'cannot be reached from another computer' }
     # 130c/130d - TWO COPIES THE FIRST SWEEP MISSED, found on a screen rather
     # than by grep.  They said the same false thing in different words, so
     # searching for "no password" and "works only at this computer" walked
@@ -137,7 +146,42 @@ $RETIRED = @(
     # password" - turned up the outlier.
     @{ Ref = '130e'
        Retired     = 'used only at this computer from a session run as administrator'
-       Replacement = 'cannot be used AT ALL' }
+       Replacement = 'cannot be reached from another computer' }
+    # RELEASE_1.1 69 - AND 130's OWN REPLACEMENT IS NOW THE RETIRED PHRASE.
+    # "cannot be used at all" was true while LOGIN demanded a credential on
+    # EVERY login; 64 narrowed that gate to an ELEVATED session and 66 creates
+    # the installing user's account with no $cred on purpose, so an unelevated
+    # console login to a passwordless account works - which the OWNER measured
+    # on his own machine, unelevated, on 19 Sep 2026.  A shipped message
+    # contradicting what the reader has just done is the class §0 treats most
+    # harshly.
+    #
+    # ***FOUR COPIES, AND THE FOURTH IS WHY gpl.bp JOINED THE CORPUS.***
+    # messages/10089, messages/10101, sd.iss's /SILENT refusal, and a
+    # hard-coded crt block in set_acc_password that this lint could not see.
+    # Two rows rather than one because the two copies of the claim are worded
+    # differently - the messages say "at all: not here at the keyboard", the
+    # installer says "AT ALL - not at this computer" - which is 130c/130d's
+    # lesson arriving again: register the CLAIM in each spelling it has.
+    @{ Ref = 'R1.1-69'
+       Retired     = 'not here at the keyboard'
+       Replacement = 'It still works here at the keyboard' }
+    @{ Ref = 'R1.1-69b'
+       Retired     = 'used AT ALL - not at this'
+       Replacement = 'cannot be reached from another computer' }
+    # The claim that SD asks on EVERY login is the same defect one sentence
+    # later, and it had its own two spellings.  BOTH RETIRED HALVES ARE
+    # FRAGMENTS THAT FITTED ON ONE SOURCE LINE OF THE OLD TEXT, which is this
+    # corpus's rule and is easy to get wrong: the obvious phrase
+    # "asks again the first time you open the account," straddled two crt
+    # statements in the old set_acc_password, so registering it would have
+    # guarded nothing while looking like a guard.
+    @{ Ref = 'R1.1-69c'
+       Retired     = 'for one every time you open the account'
+       Replacement = 'from an ELEVATED prompt' }
+    @{ Ref = 'R1.1-69d'
+       Retired     = 'SD asks again the first time you open'
+       Replacement = 'from an ELEVATED prompt' }
     # 70 - the verb is update.accountS, and the closing box no longer tells the
     # reader to visit every account by hand.  One run in SDSYS, answering Y,
     # updates all of them - measured 2 Sep 2026 on guest Test 10, where one
@@ -287,8 +331,30 @@ $RETIRED = @(
 # THE CORPUS, read once into memory.
 #   messages/*   : pure user text, each file scanned whole (Line = 0).
 #   sd.iss, *.ps1: scanned with line-comments stripped (test-*/verify-* excluded).
+#   gpl.bp/*     : hard-coded crt/display text, comment-stripped, scanned whole.
+#
+# 19 Sep 26 - gpl.bp JOINED THE CORPUS, RELEASE_1.1 69, AND IT IS THE THIRD TIME
+# A COPY WAS FOUND BY READING RATHER THAN BY THIS LINT.  130's own note says the
+# claim had "SEVEN copies across messages, sd.iss and hard-coded crt lines" -
+# so the crt lines were always in scope for the SWEEPS and never in scope for
+# the GUARD, and 69's fourth copy duly sat in set_acc_password:241-245 while
+# this file reported every registered phrase absent.
+#
+# SCANNED WHOLE, PER FILE, AND THAT IS A COST WORTH NAMING.  222 files and
+# ~78,000 lines: one corpus entry per line would make Find-Any walk 78,000
+# strings for each of ~60 phrases, and this test has to stay in the free tier.
+# Whole-file entries keep it at 222.  What that loses is the line number (a
+# gpl.bp hit is reported by file, like a message) and any phrase that STRADDLES
+# two source lines - a paragraph built from consecutive crt statements is on
+# consecutive lines and Get-StrippedText joins with a newline, deliberately, so
+# a phrase cannot be invented across a break the reader sees as two lines.
+# ***REGISTER PHRASES THAT FIT ON ONE crt LINE.***  69's do.
 if (-not (Test-Path -LiteralPath $msgDir)) {
     Write-Host "messages directory not found: $msgDir"
+    exit 2
+}
+if (-not (Test-Path -LiteralPath $bpDir)) {
+    Write-Host "gpl.bp directory not found: $bpDir"
     exit 2
 }
 
@@ -315,6 +381,12 @@ foreach ($f in (Get-ChildItem -LiteralPath $gplbld -File -Filter '*.ps1')) {
 # spelling its paragraph warns about.  ONE COPY, TWO CALLERS, the suite-only.ps1
 # precedent.  The reading below is unchanged; only where the functions live is.
 . (Join-Path $PSScriptRoot 'strip-comments.ps1')
+
+$bpFiles = @(Get-ChildItem -LiteralPath $bpDir -File)
+foreach ($f in $bpFiles) {
+    [void]$corpus.Add(@{ File = ('gpl.bp/' + $f.Name); Line = 0
+                         Text = (Get-StrippedText -Path $f.FullName -Kind 'basic') })
+}
 
 $scriptLineCount = 0
 $flatCount       = 0
@@ -365,8 +437,8 @@ foreach ($sf in $scriptFiles) {
     }
 }
 
-Write-Host ("test-retired-wording-units: corpus = {0} message file(s) + {1} script file(s), {2} non-blank script line(s) after comment-strip" -f `
-    $msgFiles.Count, $scriptFiles.Count, $scriptLineCount)
+Write-Host ("test-retired-wording-units: corpus = {0} message file(s) + {1} script file(s) + {2} gpl.bp file(s), {3} non-blank script line(s) after comment-strip" -f `
+    $msgFiles.Count, $scriptFiles.Count, $bpFiles.Count, $scriptLineCount)
 Write-Host ("test-retired-wording-units: {0} retired phrase(s) registered" -f $RETIRED.Count)
 Write-Host ''
 
@@ -393,6 +465,8 @@ function Check($name, $ok, $detail) {
 Write-Host '=== 0. the null case is refused: the corpus is real ==='
 Check ("at least 100 message files were read (got $($msgFiles.Count))") ($msgFiles.Count -ge 100) $null
 Check ("at least one script file was read (got $($scriptFiles.Count))") ($scriptFiles.Count -ge 1) $null
+Check ("at least 100 gpl.bp files were read (got $($bpFiles.Count))") ($bpFiles.Count -ge 100) `
+      'the BASIC half of the corpus is empty or nearly so, and every gpl.bp row below would pass vacuously'
 Check ("script lines survived the comment-strip (got $scriptLineCount)") ($scriptLineCount -ge 1) $null
 # A flattening that silently flattened NOTHING looks identical to one that
 # worked - PRE_RELEASE 131 says so in as many words - so it is asserted, not
@@ -422,6 +496,21 @@ Check ("text inside a Pascal (* *) comment is stripped ($($inParenC.Count) hit(s
 $const = Find-Any '{app}'
 Check ("an Inno constant is NOT mistaken for a comment ($($const.Count) hit(s))") ($const.Count -gt 0) `
       'the brace strip is eating shipped text, which is a worse fault than the one it fixes'
+
+# 19 Sep 26 - RELEASE_1.1 69.  THE BASIC HALF GETS THE SAME THREE CONTROLS, in
+# the same both-directions shape: shipped text must survive the strip, and both
+# comment forms must not.  The ";*" row is the one that matters most, because
+# this tree echoes a message's own text after the call that displays it, and an
+# unstripped echo would make every such message look like it has two copies.
+$bpShipped = Find-Any 'Cannot open voc_template directory'
+Check ("a gpl.bp crt literal SURVIVES the strip ($($bpShipped.Count) hit(s))") ($bpShipped.Count -gt 0) `
+      'bbproc:~ has this as shipped crt text - the basic strip is eating code, so every gpl.bp row below is blind'
+$bpStar = Find-Any 'START-HISTORY'
+Check ("a whole-line * comment is stripped ($($bpStar.Count) hit(s))") ($bpStar.Count -eq 0) `
+      ("208 gpl.bp files open with a START-HISTORY block and none of it is shipped text: " + ($bpStar -join ', '))
+$bpTrail = Find-Any 'Interactive session startup'
+Check ("a trailing ;* comment is stripped ($($bpTrail.Count) hit(s))") ($bpTrail.Count -eq 0) `
+      ("login:228 carries this after ';*' - an echoed sysmsg text would read as a second copy: " + ($bpTrail -join ', '))
 
 Write-Host ''
 Write-Host '=== 2. every retired phrase is GONE, and its replacement is present ==='

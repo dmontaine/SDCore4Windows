@@ -1368,13 +1368,42 @@ secure.account.dir:
 *   OS_GROUP's shape rather than an invention.  The helper runs elevated; if
 *   this ever ran anywhere else the icacls would fail confusingly, so it says
 *   exit 5 instead.
+*
+* 19 Sep 26 Windows port - SINGLE QUOTES, NOT DOUBLE.  RELEASE_1.1 72, reported
+*   by the Linux port, who lost a cycle to the POSIX form of the same fault.
+*
+*   A DOUBLE-QUOTED PowerShell STRING INTERPOLATES, AND pathname CAN CARRY A
+*   "$".  It is CONFIG('USRDIR') plus the account name (:514, :904), and on the
+*   OTHER arm it is a pathname the administrator TYPES (:934) - neither is
+*   checked for "$", and ospath(..., OS$PATHNAME) at :997 does not reject one.
+*   PowerShell would expand "$whatever" to nothing, leaving a SHORTER path, and
+*   "icacls /inheritance:r" would then strip the inherited ACEs from whatever
+*   that shorter path turns out to be - the parent, in the worst case.
+*
+*   NOTHING IS WRONG TODAY and this is not a bug report: every path this tree
+*   actually produces is "$"-free.  It is one config setting away from being
+*   one, which is why it is closed structurally rather than by a rule about
+*   what administrators may type.
+*
+*   THE SHAPE IS CRED_SET's (cred_set:192), which has always done this: a
+*   PowerShell single-quoted string is LITERAL.  The embedded-quote doubling is
+*   the part cred_set can skip and this cannot - cred_set builds from an
+*   account name, and a Windows directory may legitimately contain "'".
+*
+*   THE SID GRANTS KEEP THEIR DOUBLE QUOTES ON PURPOSE.  They are constants
+*   with no interpolation in them, and leaving them alone keeps this diff to
+*   the two lines that take a variable.
+   q = char(39)
+   sad.path  = q : change(pathname,  q, q:q) : q
+   sad.grant = q : change(sad.group, q, q:q) : ':(OI)(CI)(M)' : q
+
    sad.ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
    sad.ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
    sad.ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
-   sad.ps := '& icacls.exe "' : pathname : '" /inheritance:r'
+   sad.ps := '& icacls.exe ' : sad.path : ' /inheritance:r'
    sad.ps := ' /grant "*S-1-5-18:(OI)(CI)(F)"'
    sad.ps := ' /grant "*S-1-5-32-544:(OI)(CI)(F)"'
-   sad.ps := ' /grant "' : sad.group : ':(OI)(CI)(M)" | Out-Null; '
+   sad.ps := ' /grant ' : sad.grant : ' | Out-Null; '
    sad.ps := 'exit $LASTEXITCODE'
 
    sad.rc = ps_script(sad.ps)

@@ -42,7 +42,32 @@ function Check($label, $ok, $detail) {
         if ($detail) { Write-Host ("         " + $detail) -ForegroundColor Red }
     }
 }
-function Section($m) { Write-Host ''; Write-Host ("=== " + $m + " ===") }
+# 19 Sep 26 - A SECTION THAT RAN NO CHECKS USED TO SCORE AS A CLEAN RUN, AND
+# THIS FILE'S OWN HEADER FORBIDS THAT.  RELEASE_1.1 69.  Adding the basic kind,
+# the first run of section 4b threw on parameter binding - Get-StrippedText
+# still carried the two-value ValidateSet - so every Check in it was skipped,
+# and the script printed "PASSED - 31 of 31" with the error text on the screen
+# above it.  $ErrorActionPreference is 'Continue' here on purpose, so a
+# non-terminating error inside a section is not going to end the run; what was
+# missing is anybody ASKING whether the section did anything.
+#
+# THE FLOOR IS COUNTED, NOT WRITTEN DOWN.  A hard-coded "at least N checks"
+# rots the moment a row is added or removed; each section simply has to have
+# moved the tally.
+$script:sectionName  = ''
+$script:sectionStart = 0
+$script:emptySections = New-Object System.Collections.ArrayList
+function Close-Section {
+    if ($script:sectionName -ne '' -and ($script:pass + $script:fail) -eq $script:sectionStart) {
+        [void]$script:emptySections.Add($script:sectionName)
+    }
+}
+function Section($m) {
+    Close-Section
+    $script:sectionName  = $m
+    $script:sectionStart = $script:pass + $script:fail
+    Write-Host ''; Write-Host ("=== " + $m + " ===")
+}
 
 # --------------------------------------------------------------------------
 Section '0. dot-sourcing must not impose StrictMode on the caller'
@@ -226,6 +251,41 @@ try {
 }
 
 # --------------------------------------------------------------------------
+# 19 Sep 26 - RELEASE_1.1 69.  THE ROW THAT MATTERS HERE IS THE TRAILING ";*",
+# because this tree echoes a message's own text after the call that displays it
+# ("display sysmsg(10170) ;* Every registered account ..."), and an unstripped
+# one would read to the wording lint as a SECOND COPY of the shipped message.
+# A stripper that only handled whole-line "*" would pass every other row below.
+Section '4b. the basic kind, for sdsys/gpl.bp'
+$fx3 = Join-Path ([System.IO.Path]::GetTempPath()) ('stripfx-' + [Guid]::NewGuid().ToString('N') + '.bas')
+Set-Content -LiteralPath $fx3 -Value @(
+    '* a whole-line remark naming secret-eleven',
+    '   * an INDENTED whole-line remark naming secret-twelve',
+    '! the bang form, naming secret-thirteen',
+    '!!          case token.string = ''secret-fourteen''',
+    "   crt 'kept-eleven'",
+    '   display sysmsg(10170) ;* echoing secret-fifteen after the call',
+    "   crt 'kept-twelve'"
+) -Encoding ASCII
+try {
+    $t3 = Get-StrippedText -Path $fx3 -Kind 'basic'
+    Check 'a whole-line * remark is stripped'          ($t3 -notmatch 'secret-eleven')   $null
+    Check 'an INDENTED whole-line * remark is stripped' ($t3 -notmatch 'secret-twelve')  `
+          'the test is anchored at column 1, and this tree indents comments inside subroutines'
+    Check 'a whole-line ! remark is stripped'          ($t3 -notmatch 'secret-thirteen') $null
+    Check 'the "!!" commented-out-code form is stripped' ($t3 -notmatch 'secret-fourteen') $null
+    Check 'a trailing ;* remark is stripped'           ($t3 -notmatch 'secret-fifteen')  `
+          'an echoed sysmsg text would read as a second copy of the shipped message'
+    Check 'the code before a trailing ;* survives'     ($t3 -match 'sysmsg\(10170\)')    `
+          'the ;* rule is eating the statement as well as the remark'
+    Check 'a shipped crt line survives'                ($t3 -match 'kept-eleven')        $null
+    Check 'a shipped crt line AFTER a stripped one survives' ($t3 -match 'kept-twelve')  `
+          'stripping did not stop at the end of the line it started on'
+} finally {
+    Remove-Item -LiteralPath $fx3 -Force -ErrorAction SilentlyContinue
+}
+
+# --------------------------------------------------------------------------
 Section '5. refusals and edges'
 $missing = @(Get-StrippedLines -Path (Join-Path ([System.IO.Path]::GetTempPath()) 'no-such-file-xyz.iss') -Kind 'iss')
 Check ("a missing file yields no lines rather than throwing: {0}" -f $missing.Count) ($missing.Count -eq 0) $null
@@ -234,6 +294,13 @@ $threw = $false
 try { $null = Get-StrippedLines -Path $issPath -Kind 'nonsense' } catch { $threw = $true }
 Check 'an unknown Kind is refused rather than silently treated as one' $threw `
       'ValidateSet is missing, so a typo would scan with the wrong rules'
+
+# --------------------------------------------------------------------------
+Section '6. the null case: every section above ran at least one check'
+Check ("no section was skipped ({0} empty)" -f $script:emptySections.Count) `
+      ($script:emptySections.Count -eq 0) `
+      ('a section produced no [PASS]/[FAIL] rows at all, so its subject was never measured: ' +
+       ($script:emptySections -join '; '))
 
 # --------------------------------------------------------------------------
 Write-Host ''

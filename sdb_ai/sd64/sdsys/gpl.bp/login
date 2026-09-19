@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 19 Sep 26 Windows port - RELEASE_1.1 69.  No code change: the comment block
+*           at require.credential claimed a passwordless account cannot exist,
+*           which 64 (elevated-only gate) and 66 (accounts created with no
+*           $cred) made false.  Corrected in place; the messages it points at
+*           (10089, 10101) are reworded in the same commit.
 * 16 Sep 26 Windows port - RELEASE_1.1 39.  The old per-login release-mismatch
 *           prompt (5025/5026/5027) is removed; a mismatch now proceeds (the
 *           installer's UPDATE.ACCOUNTS ALL refreshes every account).
@@ -1260,6 +1265,28 @@ require.credential:
 *   SO THE BEHAVIOUR IS UNCHANGED AND ONLY THE MESSAGES MOVED.  The empty line
 *   still ends the session; 10089, 10095 and 10101 now say that is what it
 *   does.  Do not restore the offer without making it true first.
+*
+* 19 Sep 26 Windows port - THE PARAGRAPH ABOVE IS NOW FALSE AND IS KEPT FOR THE
+*   RECORD RATHER THAN DELETED.  RELEASE_1.1 69.  "THAT ACCOUNT CANNOT EXIST"
+*   rested on "this prompt fires on every login", which was true when it was
+*   written and is not true now:
+*
+*     * RELEASE_1.1 64 left the gate at :1080-1089 asking only when
+*       K$ADMINISTRATOR answers true - an ELEVATED session - and this routine
+*       has no other call site, so an UNELEVATED console login is never asked;
+*     * RELEASE_1.1 66 then creates the installing user's account with NO
+*       $cred on purpose, so a passwordless account is now the normal state of
+*       a freshly installed machine rather than an unreachable corner.
+*
+*   THE OWNER MEASURED IT ON HIS OWN MACHINE on 19 Sep 2026 - unelevated,
+*   straight in, no password - and nothing in this tree reported it first.
+*   THE BEHAVIOUR IS STILL RIGHT AND ONLY THE WORDING MOVED, again: 10089 and
+*   10101 no longer claim the account is unusable at the keyboard, because it
+*   is not.  What a missing credential costs is the REMOTE doors, ssh and the
+*   API, which is what those messages now say.
+*
+*   DO NOT RE-DERIVE THE OLD CLAIM FROM THE OLD PARAGRAPH.  It reads as
+*   authoritative and it is a gravestone.
    cred.max.tries = 3
    cred.tries = 0
 

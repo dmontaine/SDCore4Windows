@@ -126,10 +126,29 @@ function Remove-ParenStarComment([string]$line, [ref]$inComment) {
 # Inno's ";" is honoured ONLY at the start of a line, because "[Files]" entries
 # separate their parameters with ";" and a mid-line rule would eat every Source
 # line in the installer.
+#
+# 19 Sep 26 - "basic" JOINS THEM, FOR sdsys/gpl.bp.  RELEASE_1.1 69.  A claim
+# that is wrong in a shipped message is usually wrong in a hard-coded crt line
+# too, and the wording lint could not see gpl.bp at all: 69's fourth copy sat in
+# set_acc_password and was found by reading, which is the third time this tree
+# has found a copy that way.
+#
+# TWO FORMS, AND BOTH ARE NEEDED.  A line whose first non-blank character is "*"
+# or "!" is a whole-line comment (SD BASIC takes either, and "!!" is the
+# commented-out-code habit in this tree).  ";*" starts a trailing comment, and
+# that is the form that MATTERS here, because this tree's habit is to echo a
+# message's own text after the call that displays it -
+# "display sysmsg(10170) ;* Every registered account will have its VOC updated".
+# Left in, every such line would read as a second copy of the message and the
+# lint would report retired wording alive in a file that merely mentions it.
+#
+# NO "REM": measured on 19 Sep 2026, sdsys/gpl.bp has none.  The same string
+# caveat as "hash" applies - a ";*" inside a literal ends the line - and the
+# caller's own controls bound it, which is this file's standing policy.
 function Get-StrippedLines {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
-        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash')] [string] $Kind
+        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash', 'basic')] [string] $Kind
     )
 
     $result = New-Object System.Collections.ArrayList
@@ -152,6 +171,13 @@ function Get-StrippedLines {
         $t = [string]$rawLine
         if ($Kind -eq 'hash') {
             $i = $t.IndexOf('#'); if ($i -ge 0) { $t = $t.Substring(0, $i) }
+        } elseif ($Kind -eq 'basic') {
+            $lead = $t.TrimStart()
+            if ($lead.StartsWith('*') -or $lead.StartsWith('!')) {
+                $t = ''
+            } else {
+                $i = $t.IndexOf(';*'); if ($i -ge 0) { $t = $t.Substring(0, $i) }
+            }
         } else {
             # 04 Sep 26 - A SECTION HEADER IS THE WHOLE LINE, AND LEAVING THAT
             # UNANCHORED COST A DIAGNOSIS.  PRE_RELEASE_FIXES 70.  These two
@@ -189,7 +215,7 @@ function Get-StrippedLines {
 function Get-StrippedText {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
-        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash')] [string] $Kind
+        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash', 'basic')] [string] $Kind
     )
     return (((Get-StrippedLines -Path $Path -Kind $Kind) | ForEach-Object { $_.Text }) -join "`n")
 }

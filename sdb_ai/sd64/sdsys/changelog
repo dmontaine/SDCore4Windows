@@ -4,6 +4,25 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+19 Sep 26  THE "THIS ACCOUNT NEEDS A PASSWORD" MESSAGE SAID SOMETHING YOUR
+           OWN MACHINE DISPROVED.
+
+           It said that until an account has a password it "cannot be used
+           at all: not here at the keyboard, not over ssh, and not through
+           the SD API".  The first of those three has not been true since
+           the install began creating your account for you: you can sign
+           in at this computer's keyboard without an SD Core password.
+
+           What a missing password really costs is the REMOTE doors.  The
+           message now says that, and adds that the account still works at
+           the keyboard.  Four places said it - the two messages, the
+           refusal a silent install prints, and MODIFY.PASSWORD's own
+           explanation - and all four are corrected.
+
+           Nothing about the behaviour has changed.  An elevated session
+           still asks you to set a password and still will not go on
+           without one; an ordinary session still does not ask.
+
 19 Sep 26  YOU CAN CHANGE YOUR OWN SD CORE PASSWORD.
 
            MODIFY.PASSWORD is now a command every account has.  Typed on

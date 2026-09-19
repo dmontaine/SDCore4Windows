@@ -1553,7 +1553,13 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # 16 Sep 26 - the free guard over verify-lcnames.ps1's
                   # elevated re-entry (its LOGTO SDSYS legs, since RELEASE_1.1
                   # 45 closed that door unelevated).  Ships nowhere.
-                  'test-lcnameslegs-units.ps1')
+                  'test-lcnameslegs-units.ps1',
+                  # 19 Sep 26 - RELEASE_1.1 72's register: which gpl.bp
+                  # PowerShell builders interpolate a BASIC variable inside a
+                  # DOUBLE-quoted string, where a "$" in the value would be
+                  # expanded away.  Source-only, ships nowhere; listed with the
+                  # commit that creates it.
+                  'test-psinterp-units.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

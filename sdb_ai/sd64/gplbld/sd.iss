@@ -1527,8 +1527,13 @@ begin
      WHY IT IS A RULING AND NOT A PRECAUTION.  The install ENDS by asking for a
      password - DeinitializeSetup runs the step only when not silent - so a
      silent install finishes with an EMPTY credential register: no account
-     reachable over ssh or through the API, and an elevated "sd <command>" at a
-     console stops at the credential prompt with nobody to answer it.  The tree
+     reachable over ssh or through the API, and an elevated INTERACTIVE session
+     stops at the credential prompt with nobody to answer it.  (19 Sep 2026,
+     RELEASE_1.1 69: this used to read "an elevated 'sd <command>' at a
+     console", which the batch exemption of 22 Aug 2026 had already made
+     false - login:1081 hoists batch.command out and the gate requires it
+     EMPTY, so a one-shot command never stops.  The ruling is unaffected; the
+     example was.)  The tree
      otherwise looks complete and nothing said a word.  That cost two sessions
      in Aug 2026, handed over as an unexplained hang in SD's start-up, and it
      was neither in start-up nor in SD.
@@ -1550,10 +1555,11 @@ begin
       'SD Core cannot be installed silently.' + #13#10#13#10 +
       'Installing ends by asking for a password, and a silent install has ' +
       'nobody to ask. It would finish with NO password set for any account, ' +
-      'and an account without a password cannot be used AT ALL - not at this ' +
-      'computer, not over ssh, and not through the SD Core API. SD Core asks ' +
-      'for one every time you open the account and will not let a session go ' +
-      'on without it.' + #13#10#13#10 +
+      'and an account without a password cannot be reached from another computer ' +
+      '- not over ssh, and not through the SD Core API. It still works at this ' +
+      'computer''s keyboard, and SD Core asks for one whenever you open the ' +
+      'account from an ELEVATED prompt and will not let a session go on ' +
+      'without it.' + #13#10#13#10 +
       'Run the installer normally instead. You can do that at this computer''s ' +
       'keyboard, or through Remote Desktop or similar remote-control software - ' +
       'both work, because a person is there to answer.',
