@@ -653,6 +653,20 @@ deffun ps_script(script) calling '!ps_script'
 *   THE MARKER IS UNAFFECTED: it is built at the acc.uname assignment in the
 *   USER arm with its own explicit downcase(), before this point, so folding
 *   here cannot move it.
+*
+*   ***DO NOT TAKE THIS LINE FROM THE LINUX TREE. IT IS THE ONE PLACE THE TWO
+*   PORTS' createa MUST DIFFER, AND THEIR AGENT SAID SO IN WRITING (19 Sep
+*   2026).***  They hit the same fault and fixed it a DIFFERENT way, because
+*   LINUX OS USER NAMES ARE CASE-SENSITIVE: folding theirs unconditionally
+*   would chown to a user that does not exist when the login really is "Don".
+*   So their createa keeps the uid as the Linux user spells it - for chown,
+*   sdusers and sdu_ membership - and folds only the account name, the
+*   directory, the sdu_ group NAME and ACC$GROUP.  Windows has no such split
+*   to make: the SAM is case-INSENSITIVE (measured above), so one fold serves
+*   every use and the split would be dead weight here.  createa is shared
+*   BASIC and both ports pull each other's shapes, so a future merge that
+*   brings their arm across would not fail loudly - it would simply stop
+*   folding the Windows name again and put RELEASE_1.1 67 back.
        if attach then
          acc.uname = downcase(acc.uname)
        end else
