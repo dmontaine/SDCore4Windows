@@ -75,6 +75,21 @@ param(
     # knows nothing about is how you overwrite a working one.
     [int] $SdsysCode = -1,
 
+    # 19 Sep 26 - RELEASE_1.1 70.  WHO THE INSTALL ATTACHED, AND HOW IT WENT.
+    #
+    # -User CAME BACK, UNDER A NAME THAT SAYS WHERE IT COMES FROM.  The note
+    # above records why the old one was dangerous - it defaulted from
+    # $env:USERNAME, and a wrong value sets the password on the WRONG ACCOUNT -
+    # and its own advice is followed here: Setup hands this over explicitly and
+    # there is NO DEFAULT.  Empty means nobody said, and nothing is asked.
+    [string] $AttachUser = '',
+
+    # attach-account.ps1's exit code, passed through by RunFinishingStep: 0 it
+    # MADE the account, 2 it was already there, 1 or 3 it could not.  -1 is the
+    # default and means NOBODY TOLD US - a hand run - so the prompt is skipped
+    # rather than guessed at, exactly as -SdsysCode is.
+    [int] $AttachCode = -1,
+
     # Passed straight through to check-install.ps1.
     [switch] $Yes
 )
@@ -83,6 +98,14 @@ $ErrorActionPreference = 'Stop'
 
 if ($AppDir -eq '') { $AppDir = Join-Path $env:ProgramFiles 'SD' }
 $Check = Join-Path $AppDir 'check-install.ps1'
+
+# 19 Sep 26 - $SdExe AND $SysDir ARE BACK WITH THE STEP THAT NEEDED THEM,
+# RELEASE_1.1 70.  The note below records them leaving with the -WithPassword
+# half; they return for the same two jobs and no others - the sd.exe the
+# password step starts, and the data tree, read for ONE question: did a
+# credential appear in $cred.
+$SdExe  = Join-Path $AppDir 'usr\bin\sd.exe'
+$SysDir = Join-Path (Join-Path $env:ProgramData 'SD') 'sdsys'
 
 # 18 Sep 26 - $SdExe AND $SysDir WENT WITH THE PASSWORD STEP, RELEASE_1.1 64.
 # $SdExe was the sd.exe that step started; $SysDir was the data tree, read for
@@ -338,6 +361,124 @@ Write-Host ''
 # used to describe the account and send the reader to install-sdsys.log for the
 # password.  Now it either ASKS for that password or says which case this is.
 # Write-Wrapped is used for the text deliberately: these are the page's own
+# 19 Sep 26 - RELEASE_1.1 70.  THE INSTALLING USER'S SD PASSWORD, ASKED HERE
+# AND REQUIRED.
+#
+# WHY IT IS ASKED AT ALL, when the 18 Sep ruling was that the install asks for
+# NO SD password.  That ruling's reason was "the installing user has already
+# logged in to the OS with a password, and that login reaches their SD account"
+# - TRUE, AND ONLY ABOUT THE CONSOLE.  RELEASE_1.1 68 then gave every account
+# ssh and the API by DEFAULT, so the install was handing out routes the account
+# could not authenticate on.  The owner's ruling, 19 Sep 2026: ask during the
+# install and say it is only needed for remote access.
+#
+# ATTACH IS THE ONLY PATH THAT PRODUCES A CREDENTIAL-LESS ACCOUNT, which is why
+# one prompt closes the whole hole.  An ordinary CREATE.ACCOUNT calls
+# !set_passwd, which writes the Windows password AND $cred (createa:72, :844);
+# ATTACH deliberately skips it, because the Windows account already exists and
+# is not ours to touch.  So exactly one account per machine lands here.
+#
+# THE PASSWORD IS NEVER AN ARGUMENT.  SET_ACC_PASSWORD's own header states that
+# as a rule and refuses a trailing token on purpose - "a second word is more
+# likely a password than a keyword".  So MODIFY.PASSWORD is STARTED in this
+# window and asks for itself, twice, hidden; nothing here ever holds the
+# plaintext, and it cannot reach a command line, a log or the command stack.
+#
+# -QUIET SUPPRESSES THE VERB'S OWN EXPLANATORY PARAGRAPH, which this window has
+# already given in its own words.  PRE_RELEASE_FIXES 155 added the switch for
+# exactly this caller.
+#
+# REQUIRED MEANS ASKED AGAIN, NOT ENFORCED - and the difference is stated rather
+# than hidden.  Nothing in an installer can stop somebody closing the window, so
+# "required" here is: ask, verify a credential actually appeared, and ask again
+# if it did not, up to $maxTries.  After that it prints the one command that
+# puts it right rather than looping forever at somebody who has decided not to.
+function Set-AttachedAccountPassword {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Account,
+        [int] $MaxTries = 3
+    )
+
+    $credDir  = Join-Path $SysDir '$cred'
+    $credFile = Join-Path $credDir $Account.ToLowerInvariant()
+
+    # THE STORE IS READABLE HERE AND NOWHERE ELSE: secure-cred.ps1 locks $cred
+    # to SYSTEM and Administrators, so this test works only because this window
+    # is elevated - the same token the password step itself needs.
+    #
+    # ALREADY SET IS NOT A FAILURE AND MUST NOT BE OVERWRITTEN.  On a reinstall
+    # over a tree whose accounts were kept, the credential is the one the person
+    # has been using; asking again would replace a working password with a
+    # freshly invented one, which is the fault the sixteenth pass had to fix for
+    # SDSYS.  Here it is CHECKABLE, so it is checked rather than reasoned about.
+    if (Test-Path -LiteralPath $credFile) {
+        Write-Wrapped -Text ("The account $Account already has an SD Core password, so it was " +
+            'left alone.  MODIFY.PASSWORD changes it whenever you like.')
+        Write-Host ''
+        return $true
+    }
+
+    Write-Host ("SD Core password for $Account") -ForegroundColor White
+    Write-Wrapped -Text ('This is NOT your Windows password and it does not replace it.  Signing ' +
+        'in at this keyboard still uses Windows, and nothing about your Windows account has been ' +
+        'changed.  This password is what lets you reach SD Core FROM ANOTHER COMPUTER - over ssh, ' +
+        'or through the SD API - which this account is allowed to do.')
+    Write-Host ''
+    Write-Wrapped -Text ('You will be asked to type it twice.  What you type is not shown.')
+    Write-Host ''
+
+    for ($try = 1; $try -le $MaxTries; $try++) {
+        try {
+            # THE ACCOUNT IS ITS OWN ARGUMENT, not glued into a string: sd.c
+            # joins argv from the first non-switch onward, so three elements
+            # arrive as "MODIFY.PASSWORD <account>".
+            #
+            # IT NEEDS THE ELEVATED TOKEN AND HAS IT TWICE OVER - sd.c calls
+            # check_admin() before accepting a command line at all, and
+            # SET_ACC_PASSWORD refuses an account other than your own without
+            # K$ADMINISTRATOR.  This runs on Setup's token.
+            $p = Start-Process -FilePath $SdExe `
+                    -ArgumentList '-QUIET', 'MODIFY.PASSWORD', $Account `
+                    -NoNewWindow -Wait -PassThru -ErrorAction Stop
+            $null = $p
+            Write-Host ''
+        }
+        catch {
+            Write-Host ''
+            Write-Host ('  SD Core could not be started: ' + $_.Exception.Message) -ForegroundColor Red
+            break
+        }
+
+        # ***KEEP THIS CHECK.  IT IS THE ONE THAT CAUGHT THE 24 Aug 2026
+        # REGRESSION***, when a login-path change meant the prompt never
+        # appeared and the step passed anyway.  It covers the whole class: a
+        # verb that was refused, a session that never started, a $cred that was
+        # not writable, and an empty line typed at the prompt.
+        if (Test-Path -LiteralPath $credFile) {
+            Write-Wrapped -Text ("Password set.  $Account can now be reached over ssh and through " +
+                'the SD API.')
+            Write-Host ''
+            return $true
+        }
+
+        if ($try -lt $MaxTries) {
+            Write-Wrapped -Text ('No password was set, so nothing can reach this account from ' +
+                'another computer yet.  A password is required - trying again.') -Color Yellow
+            Write-Host ''
+        }
+    }
+
+    # THE ESCAPE IS NAMED, NOT SILENT.  An account with no credential still
+    # works at this keyboard, so the install is not broken - but it cannot be
+    # reached remotely, and SD Core will ask again at the next ELEVATED sign-in.
+    Write-Wrapped -Text ("No SD Core password was set for $Account.  You can still use SD Core at " +
+        'this keyboard, but nothing can reach the account from another computer until one is ' +
+        'set.  SD Core will ask again the next time you start it from an ELEVATED prompt, or you ' +
+        'can set one at any time by typing:  MODIFY.PASSWORD') -Color Yellow
+    Write-Host ''
+    return $false
+}
+
 # words, and gplbld/test-wraptext-units.ps1 lifts the function out of this file.
 Write-Wrapped -Text ('SD Core is installed.  Its one account is SDSYS, and that is the account ' +
     'that can create the others: sign in as SDSYS and start SD Core from an ELEVATED prompt.')
@@ -367,6 +508,42 @@ switch ($SdsysCode) {
             'that account.  To set one, from an elevated prompt:  Set-LocalUser -Name SDSYS ' +
             '-Password (Read-Host -AsSecureString)')
         Write-Host ''
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 19 Sep 26 - AND THE INSTALLING USER'S OWN SD PASSWORD, RELEASE_1.1 70.
+#
+# AFTER SDSYS, because that is the order they matter in: SDSYS is how the
+# machine is administered and this is how the person uses it from elsewhere.
+#
+# BOTH CODES THAT MEAN THE ACCOUNT EXISTS ARE ASKED - 0 made, 2 already there -
+# and unlike the SDSYS block above, the "already there" case does not have to be
+# reasoned about: the function READS $cred and leaves a credential that is
+# already set alone.  A reinstall over kept accounts therefore cannot overwrite
+# a working password, which is the fault the sixteenth pass had to fix for SDSYS
+# precisely because a Windows password cannot be inspected that way.
+switch ($AttachCode) {
+    { $_ -in 0, 2 } {
+        if ($AttachUser -ne '') {
+            $null = Set-AttachedAccountPassword -Account $AttachUser
+        }
+        else {
+            # THE NULL CASE, REFUSED OUT LOUD.  A code saying an account exists
+            # with no name to go with it is a wiring fault in sd.iss, not a
+            # normal path, and setting a password on a guessed name is the exact
+            # danger the old -User default was condemned for.
+            Write-Wrapped -Text ('Setup reported that an account was attached but did not say ' +
+                'whose, so no password was asked for.  Start SD Core from an ELEVATED prompt and ' +
+                'it will ask.') -Color Yellow
+            Write-Host ''
+        }
+    }
+    default {
+        # 1, 3 or -1.  Nothing is said about a password for an account that was
+        # not made - attach-account.log already carries why, and sd.iss's own
+        # closing dialog names the recovery.  A hand run of this script lands
+        # here too, which is why it is silence rather than a warning.
     }
 }
 

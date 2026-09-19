@@ -3411,9 +3411,22 @@ begin
     CREDENTIAL: nothing secret crosses this line.  The owner's ruling, after the
     first install to use the generated password: "never asked for or printed so
     no way to get in". }
+  { 19 Sep 26 - AND WHO WAS ATTACHED, RELEASE_1.1 70.  -AttachUser and
+    -AttachCode are the same shape as -SdsysCode above and carry the same
+    guarantee: AN INTEGER AND A NAME, NEVER A CREDENTIAL.  The password itself
+    is typed at MODIFY.PASSWORD's own hidden prompts inside that window, so
+    nothing secret crosses this line either.
+
+    THE NAME IS PASSED EXPLICITLY AND NEVER DEFAULTED, which is the whole of
+    what the old -User parameter got wrong: it defaulted from the environment,
+    and a wrong value sets a password on the WRONG ACCOUNT.  This is the same
+    username constant AttachInstallerAccount used, so the account asked about
+    is the account that was made. }
   Args := '-NoProfile -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\finish-install.ps1') + '" -AppDir "' +
-          ExpandConstant('{app}') + '" -SdsysCode ' + IntToStr(SdsysCode);
+          ExpandConstant('{app}') + '" -SdsysCode ' + IntToStr(SdsysCode) +
+          ' -AttachUser "' + ExpandConstant('{username}') + '"' +
+          ' -AttachCode ' + IntToStr(AttachCode);
 
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
               Args, ExpandConstant('{#DataDir}'), SW_SHOW,
@@ -4626,10 +4639,16 @@ begin
                       'It is reachable over ssh and the API, and MODIFY.ACCOUNT narrows ' +
                       'that whenever you like.' + #13#10#13#10 +
                       'NOTHING ABOUT YOUR WINDOWS ACCOUNT WAS CHANGED - your Windows ' +
-                      'password is unchanged and is still what signs you in. SD Core did ' +
-                      'not set a password of its own for this account; it will offer you ' +
-                      'one the first time you sign in, and MODIFY.PASSWORD sets one at any ' +
-                      'time.' + #13#10#13#10 +
+                      'password is unchanged and is still what signs you in at this ' +
+                      'keyboard.' + #13#10#13#10 +
+                      { 19 Sep 26 - RELEASE_1.1 70.  THIS SAID SD CORE WOULD OFFER A
+                        PASSWORD AT FIRST SIGN-IN, which was true for one day.  The
+                        window now ASKS, because 68 gives the account ssh and the API
+                        by default and an account cannot use either without one. }
+                      'The window that opens after this one asks you for an SD Core password ' +
+                      'for that account. It is separate from your Windows password and is ' +
+                      'needed only to reach SD Core FROM ANOTHER COMPUTER, over ssh or through ' +
+                      'the SD API. MODIFY.PASSWORD changes it at any time.' + #13#10#13#10 +
                       'SIGN OUT AND BACK IN BEFORE TYPING sd. Windows decides group ' +
                       'membership when you sign in, so this session does not yet carry the ' +
                       'access the new account was given.' + #13#10#13#10;

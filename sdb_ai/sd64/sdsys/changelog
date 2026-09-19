@@ -44,11 +44,17 @@ while porting from it.
            Running the installer again is not another one.
 
            ***NOTHING ABOUT YOUR WINDOWS ACCOUNT CHANGES.***  Your Windows
-           password is untouched and is still what signs you in.  No SD
-           Core password is set for the new account either: SD Core offers
-           you one the first time you sign in, and MODIFY.PASSWORD sets
-           one whenever you like.  Your Windows sign-in rights are left
-           exactly as they were.
+           password is untouched and is still what signs you in at this
+           keyboard.  Your Windows sign-in rights are left exactly as they
+           were.
+
+           ***THE INSTALL ASKS YOU FOR ONE SD CORE PASSWORD FOR THAT
+           ACCOUNT***, in the window that opens after the installer
+           finishes.  It is not your Windows password and does not replace
+           it: it is what lets you reach SD Core FROM ANOTHER COMPUTER,
+           over ssh or through the SD API, which the account is allowed to
+           do.  Signing in at this keyboard never asks for it.
+           MODIFY.PASSWORD changes it whenever you like.
 
            ***SIGN OUT AND BACK IN BEFORE TYPING sd.***  Windows decides
            what groups your session belongs to when you sign in, so the
