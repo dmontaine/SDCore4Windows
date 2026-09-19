@@ -76,6 +76,25 @@ $ErrorActionPreference = 'Stop'
 # and NOTHING ELSE, and LogonUser alone creates no profile.  A profile needs
 # LoadUserProfile, an ssh session or userenv!CreateProfile.
 #
+# ***18 Sep 26 - AND THIS IS THE ONLY NAME RULE IN THE TREE.  ANYTHING ELSE THAT
+# SWEEPS BY NAME IS WRONG, AND ONE ALREADY DELETED THE PROJECT DIRECTORY.***
+# cleanup-devlitter.ps1's home-directory section matched a PREFIX instead -
+# `Get-ChildItem -LiteralPath $env:USERPROFILE -Filter 'sd*'` with a keep list of
+# ONE name, `sdout` - and in `C:\Users\Don` that filter matches
+# **`SDCoreProject`**, the directory holding sd4windows, SDCore4Linux and
+# SDCoreWindowsDocs.  It removed them with -Recurse -Force.  The rule was written
+# for a home where the projects sat under `Projects\`; the home moved and the rule
+# did not.  RELEASE_1.1 65 records it, the script is deleted (e228f38) and it must
+# not come back.
+#
+# FOUR PARTS FOR ANY FUTURE SWEEP, AND NONE OF THEM IS OPTIONAL:
+#   1. match with $rx below, NEVER with a -Filter prefix;
+#   2. a candidate carries a RUN SUFFIX - a bare stem is a guess, not a name;
+#   3. print every candidate with its FULL PATH before removing anything, and
+#      refuse the run when a name is not in this file's fixtures;
+#   4. never point -Recurse -Force at a child of a home directory on the
+#      strength of its name alone.
+#
 # IT DOES WIDEN THE BLAST RADIUS BY ONE CHARACTER and that is accepted rather
 # than overlooked: the stems stay specific, and the third safety test below - a
 # profile whose SID still has a local account is refused outright - is what
