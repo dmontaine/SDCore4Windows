@@ -823,23 +823,33 @@ if (($iGcat -lt $nGcat) -or ($iOut -lt $nOut)) {
 # ---------------------------------------------------------------------------
 # Step 9 - DID ANYBODY GET A PASSWORD?
 #
-# ADDED 23 Aug 2026, after this cost two sessions.  sd.iss:1276 is
-# "if InstallReachedPostInstall and not WizardSilent then RunFinishingStep;",
-# and RunFinishingStep (sd.iss:1211) is where the password is taken - by leaving
-# the user in an SD session, the owner's decision of 21 Aug 2026.  SO A -Silent
-# INSTALL COLLECTS NO PASSWORD AT ALL, and the tree otherwise looks complete.
+# ADDED 23 Aug 2026, after this cost two sessions: a -Silent install skipped the
+# finishing step, which was where the password was taken, and the tree then
+# looked complete with no credential anywhere - handed over as an unexplained
+# hang.
 #
-# WHAT THAT COSTS, and it is not only the login: no ssh, no API, and any
-# ELEVATED session that runs "sd <command>" from a console stops at the
-# credential prompt and blocks for ever, because LOGIN:639 sees a tty and
-# assumes somebody is there to type.  That is the fault the forty-fourth session
-# handed over as an unexplained start-up hang.
+# ***18 SEP 2026, RELEASE_1.1 64 - REWRITTEN: THE STEP IT WATCHED FOR NO LONGER
+# EXISTS, AND NEITHER DOES THE STATE IT WARNED ABOUT.***  No install collects an
+# SD password now.  The one account is SDSYS, it signs in with its WINDOWS
+# password (asked for, since the same day, by finish-install.ps1's window), and
+# the SD credential register is EMPTY on a fresh install BY DESIGN - this cycle
+# printed exactly that.  What the count still tells a reader is which of the two
+# states an installation is in, so it is kept and the message corrected rather
+# than the check deleted.  The -Silent half is unreachable besides: sd.iss
+# refuses to install silently at all, by the gate added at InitializeSetup the
+# same day this note was written.
 #
-# READ, NOT INFERRED FROM -Silent.  A non-silent install where the user pressed
-# Enter on an empty line is the same state and deserves the same warning; and if
-# the step is ever fixed to run silently this check keeps working unchanged.
-# This script is already elevated, which is what makes $cred readable at all -
-# it is SYSTEM and Administrators only.
+# ***AND ONE CLAUSE OF THE OLD WARNING WAS FALSE WHEN IT WAS WRITTEN.***  It said
+# an ELEVATED session running "sd <command>" at a console stops at the credential
+# prompt and blocks for ever.  It does not: login:1082 tests `batch.command = ''`
+# before calling require.credential, so A COMMAND LINE IS BATCH AND DOES NOT
+# PROMPT - section 7 step 9's ruling, which is the same ruling that broke the old
+# password step.  The prompt belongs to an elevated INTERACTIVE session, and that
+# is the state the message below now names.
+#
+# READ, NOT INFERRED.  The count comes off the register itself; this script is
+# already elevated, which is what makes $cred readable at all - it is SYSTEM and
+# Administrators only.
 Write-Host ""
 $credDir = Join-Path $env:ProgramData 'SD\sdsys\$cred'
 $nCred   = 0
@@ -847,11 +857,11 @@ try   { $nCred = @(Get-ChildItem -LiteralPath $credDir -File -Force -ErrorAction
 catch { $nCred = -1 }
 
 if ($nCred -eq 0) {
-    Write-Host "NO ACCOUNT HAS A PASSWORD - the credential register is empty." -ForegroundColor Yellow
-    Write-Host "  A -Silent install skips the password step entirely (sd.iss:1276)." -ForegroundColor Yellow
-    Write-Host "  Until one is set: no ssh, no API, and an ELEVATED 'sd <command>' at a" -ForegroundColor Yellow
-    Write-Host "  console will BLOCK at the password prompt - which stalls the verify suite." -ForegroundColor Yellow
-    Write-Host "  Set one now, at a console:  sd" -ForegroundColor Yellow
+    Write-Host "NO SD ACCOUNT HAS A PASSWORD - the SD credential register is empty." -ForegroundColor Yellow
+    Write-Host "  EXPECTED after an install since RELEASE_1.1 64: nothing collects an SD password," -ForegroundColor Yellow
+    Write-Host "  and SDSYS signs in with its WINDOWS password.  A register entry appears the first" -ForegroundColor Yellow
+    Write-Host "  time an account sets one - an ELEVATED INTERACTIVE 'sd', which asks (login:1082)." -ForegroundColor Yellow
+    Write-Host "  A command line is batch and does not prompt, so the verify suite is not stalled." -ForegroundColor Yellow
 } elseif ($nCred -lt 0) {
     Write-Host "Could not read $credDir - cannot say whether any account has a password." -ForegroundColor Yellow
 } else {
