@@ -1138,9 +1138,11 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ;
 ; Both are now answered by finish-install.ps1, launched from DeinitializeSetup
 ; once the wizard has gone - see RunFinishingStep and DeinitializeSetup in
-; the Code section.  It ran the password step and the check IN ORDER, in ONE
-; window; the password step went with the adopted account (RELEASE_1.1 64), so
-; what is left in that window is the check, and Setup waits on neither.
+; the Code section.  It does two things IN ORDER in one window: it ASKS FOR THE
+; SDSYS PASSWORD when the install has just made that account, and then it runs
+; the check.  The old password step went with the adopted account (RELEASE_1.1
+; 64); what replaced it is a WINDOWS password, asked for where the person can see
+; it.  Setup waits on neither.
 
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;
@@ -1164,6 +1166,17 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; And "nowait" meant the console vanished before either message could be read,
 ; so it looked to the user as though nothing had happened at all.  If a password
 ; step is ever wanted back, all three have to be fixed together.
+;
+; ***18 SEP 2026, RELEASE_1.1 64 - THE REASONING ABOVE IS SUPERSEDED AND THE STEP
+; IS BACK, SOMEWHERE ELSE.  It rested on "the SDSYS password is no longer what
+; confers administration", which was true while every Windows administrator was
+; also an SD administrator.  64 makes SDSYS the ONLY administrator and reaches it
+; only through the Windows account of that name - so that password IS the way in.
+; The install asks for it now, in finish-install.ps1's window rather than in the
+; wizard, because the wizard is still on screen at ssPostInstall (fault 1 above
+; in a new coat).  THE MEASUREMENT STANDS AND IS WHY IT LIVES THERE: an
+; unelevated postinstall Run entry cannot set a Windows password, and the
+; finishing window runs on Setup's elevated token after the wizard has gone.***
 
 [UninstallRun]
 ; THE SERVICE GOES FIRST, and the order is load-bearing.  Removing it stops it,
@@ -3304,9 +3317,17 @@ begin
     which is deleted.  The script reads neither now, so passing them would be a
     call that says something its callee does not believe.  -AppDir stays, and is
     still passed rather than defaulted. }
+  { 18 Sep 26, LATER THE SAME DAY - -SdsysCode IS NEW, AND IT IS WHAT MAKES THE
+    WINDOW ASK FOR THE SDSYS PASSWORD.  It is install-sdsys.ps1's exit code as
+    MakeSdsysAccount returned it - 0 it made the account, 2 it was already there -
+    and finish-install.ps1 prompts only on 0, so a reinstall cannot overwrite a
+    working password with a prompt nobody asked for.  AN INTEGER AND NOT A
+    CREDENTIAL: nothing secret crosses this line.  The owner's ruling, after the
+    first install to use the generated password: "never asked for or printed so
+    no way to get in". }
   Args := '-NoProfile -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\finish-install.ps1') + '" -AppDir "' +
-          ExpandConstant('{app}') + '"';
+          ExpandConstant('{app}') + '" -SdsysCode ' + IntToStr(SdsysCode);
 
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
               Args, ExpandConstant('{#DataDir}'), SW_SHOW,
@@ -4382,16 +4403,22 @@ begin
            { 18 Sep 26 - THE STEP IT NUMBERED IS GONE, RELEASE_1.1 64, and so is
              the ssh/api split that decided how to word it.  Both arms described
              a window that opened SD so the reader could set a password on the
-             account the install had just given them.  No account is given any
-             more, and SDSYS authenticates with its WINDOWS password - which
-             install-sdsys.ps1 generated and printed at the END of
-             install-sdsys.log.  What is left to say is where to read it. }
+             account the install had just given them.  No account is given to
+             them any more.
+
+             18 Sep 26, LATER - AND THE PASSWORD IS ASKED FOR NOW, so this item
+             says WHERE rather than where to read it.  install-sdsys.ps1
+             generates one inside a HIDDEN window (Exec above, SW_HIDE) and the
+             owner's verdict on the first install to use it was "never asked for
+             or printed so no way to get in"; the finishing window asks for it
+             now, so this paragraph promises the question instead of sending the
+             reader to a log. }
            AccountMsg := AccountMsg +
-                         '    1. Read the password for SDSYS at the end of ' +
-                         ExpandConstant('{#DataDir}') + '\install-sdsys.log, change it if you ' +
-                         'want to, then sign in as SDSYS and start SD Core from an ELEVATED ' +
-                         'prompt. That is the only way in, by design, and it is the account ' +
-                         'that can create the others.' + #13#10#13#10;
+                         '    1. The window that opens in a moment will ask you to SET THE ' +
+                         'PASSWORD FOR SDSYS, then check the installation. Sign in as SDSYS ' +
+                         'with that password and start SD Core from an ELEVATED prompt. That ' +
+                         'is the only way in, by design, and it is the account that can ' +
+                         'create the others.' + #13#10#13#10;
 
            AccountMsg := AccountMsg +
                          '    2. The same window then checks the installation and tells ' +

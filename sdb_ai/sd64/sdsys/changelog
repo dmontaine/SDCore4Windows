@@ -41,14 +41,19 @@ while porting from it.
            drop the keyword, and scripts that lifted a suspension by
            naming a tier must say UNSUSPENDED.
 
-           ***THE INSTALL NO LONGER ASKS YOU FOR A PASSWORD, AND NO LONGER
-           MAKES YOU AN SD ACCOUNT.***  It used to adopt your Windows account
-           as an SD account and then open SD at the end of the install so you
-           could give that account a password - and, since 4 Sep 2026, give
-           SDSYS one as well, which is why it asked twice.  What it makes now
-           is SDSYS, reached by signing in to Windows as SDSYS, and SDSYS signs
-           in to SD with its WINDOWS password - which the install generates and
-           prints at the end of install-sdsys.log in the SD data directory.
+           ***THE INSTALL NO LONGER MAKES YOU AN SD ACCOUNT, AND THE ONE
+           PASSWORD IT ASKS FOR IS WINDOWS'.***  It used to adopt your Windows
+           account as an SD account and then open SD at the end of the install
+           so you could give that account a password - and, since 4 Sep 2026,
+           give SDSYS one as well, which is why it asked twice.  What it makes
+           now is SDSYS, reached by signing in to Windows as SDSYS, and SDSYS
+           signs in to SD with its WINDOWS password.  ***THE INSTALL ASKS YOU
+           FOR THAT PASSWORD***, in the window it opens after the wizard: 18 Sep
+           2026, and the first install to generate one instead is why - "the
+           password for the SDSYS account was never asked for or printed so no
+           way to get in".  Press Enter on an empty line and the generated
+           password is printed in that same window, and it is written to
+           install-sdsys.log in the SD data directory.
            Nothing in the install asks for an SD password, and no SD session
            opens when the install finishes.
 

@@ -41,14 +41,19 @@
 #                    SeDenyInteractiveLogonRight would lock SDSYS out of its own
 #                    console.
 #
-# THE PASSWORD IS GENERATED, PRINTED AND LOGGED, FOR THE SAME REASON THE RELAY
-# ACCOUNT'S IS.  Nobody types it but the owner, who has to sign in as SDSYS to
-# administer SD at all, so it is shown at the end of the run and written to this
-# script's log beside the tree.  SD's own credential register is empty at install
+# THE PASSWORD IS GENERATED, PRINTED AND LOGGED, AND SOMEBODY ASKS FOR A BETTER
+# ONE A MOMENT LATER.  The generated one exists because the account needs a
+# password the instant it is created, and because a hand run of this script has
+# nobody to ask - but this script runs in a HIDDEN window (sd.iss's Exec,
+# SW_HIDE), so nobody ever SEES it.  Owner's ruling, 18 Sep 2026, after the first
+# install to use it: "the password for the SDSYS account was never asked for or
+# printed so no way to get in".  finish-install.ps1 therefore ASKS for that
+# password in its window - which opens after the wizard, on Setup's elevated
+# token - and when it sets one it appends a line to this log saying the printed
+# password was replaced, so the log never stands as a working credential after
+# it has stopped being one.  SD's own credential register is empty at install
 # (the cycle prints "NO ACCOUNT HAS A PASSWORD") and a console login is by
 # Windows identity, so SD needs no password of SDSYS's - this one is Windows'.
-# The account keeps it until somebody changes it, and `net user SDSYS *` does
-# that at any time.
 #
 # EXIT CODES, and sd.iss reports each one differently:
 #   0  the account was created or brought back into shape

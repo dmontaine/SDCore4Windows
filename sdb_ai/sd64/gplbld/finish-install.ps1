@@ -67,6 +67,14 @@ param(
     # future step that needs to know who is installing should be handed it
     # explicitly rather than defaulting it.
 
+    # WHAT SETUP DID WITH THE SDSYS ACCOUNT - install-sdsys.ps1's own exit code,
+    # passed through by RunFinishingStep: 0 it MADE the account, 2 it was already
+    # there, 1 or 3 it could not.  -1 is the default and means NOBODY TOLD US - a
+    # hand run of this script - and the prompt below is then skipped rather than
+    # guessed at, because offering to set the password of an account this run
+    # knows nothing about is how you overwrite a working one.
+    [int] $SdsysCode = -1,
+
     # Passed straight through to check-install.ps1.
     [switch] $Yes
 )
@@ -144,36 +152,163 @@ function Write-Wrapped {
 # is how an install collected a password for the account it had just adopted -
 # and then read $cred to prove one had actually been written, because a prompt
 # that never appeared would otherwise have been indistinguishable from a
-# success.  RELEASE_1.1 64 removed the adopted account: the one account is
-# SDSYS, whose password install-sdsys.ps1 generates and prints into its own log
-# before the wizard closes.  No session is opened here any more, so nothing sets
-# a password and nothing has one to verify.  PRE_RELEASE_FIXES 138 (why it ran
-# twice, and why no verifier can exercise a credential prompt) and 155 (the
-# page's margins and wrap width) are where that reasoning lives.
+# success.  RELEASE_1.1 64 removed the adopted account, and this window now asks
+# for the SDSYS WINDOWS password instead - Set-SdsysPassword below is what
+# replaced it.  PRE_RELEASE_FIXES 138 and 155 are where the old step's reasoning
+# lives.
+
+function Set-SdsysPassword {
+    # ASKS FOR IT, BECAUSE A GENERATED PASSWORD IN A LOG IS NOT A WAY IN.
+    # Owner's ruling, 18 Sep 2026, after the first install to use the generated
+    # one: "the password for the SDSYS account was never asked for or printed so
+    # no way to get in".  install-sdsys.ps1 still generates one - the account
+    # needs a password the moment it exists, and that is the path a hand run
+    # takes - but it does it in a HIDDEN window (sd.iss's Exec, SW_HIDE), so this
+    # is the first place in the whole install where a person can be asked.
+    #
+    # ***HERE RATHER THAN IN install-sdsys.ps1, AND THAT IS MEASURED RATHER THAN
+    # PREFERRED.***  That step runs at ssPostInstall, WHILE THE WIZARD IS STILL
+    # ON SCREEN, and a console prompt there is the fault the owner met on 22 Aug
+    # 2026 - the wizard sitting open behind a window of ours.  This script runs
+    # from DeinitializeSetup, after the wizard has gone, in a window the install
+    # already opens.
+    #
+    # AND IT CANNOT HANG AN INSTALL.  Redirected stdin means nobody is at a
+    # console - the same guard check-install.ps1 uses - so the prompt is skipped
+    # and the generated password is printed instead.
+    param([string] $LogFile)
+
+    Write-Host '  SET THE PASSWORD FOR SDSYS' -ForegroundColor White
+    Write-Host ''
+    Write-Wrapped -Text ('You sign in to Windows as SDSYS and start SD Core from an elevated ' +
+        'prompt, and this account is the only way into SD.  Type the password you want for it.  ' +
+        'It is not shown as you type, and you are asked twice.')
+    Write-Host ''
+
+    if ([Console]::IsInputRedirected) {
+        Write-Wrapped -Text ('Nobody is at this console, so nothing is asked and the generated ' +
+            'password stands.')
+        Write-Host ''
+        Show-GeneratedPassword -LogFile $LogFile
+        return
+    }
+
+    $tries = 0
+    while ($tries -lt 3) {
+        $tries++
+        $a = Read-Host '  New SDSYS password' -AsSecureString
+        if ($a.Length -eq 0) {
+            # AN EMPTY LINE IS A DELIBERATE ANSWER rather than a mistake: SD's own
+            # credential prompt ends the session on one (130's ruling), and here
+            # it means "keep the generated one" - which is then printed, so it is
+            # shown rather than hunted for in a file.
+            Write-Host ''
+            Write-Wrapped -Text ('No password typed, so the one the install generated stands.')
+            Write-Host ''
+            Show-GeneratedPassword -LogFile $LogFile
+            return
+        }
+        $b = Read-Host '  Type it again' -AsSecureString
+        # ***THE TWO ARE COMPARED AS PLAIN TEXT, WHICH IS THE ONLY WAY TWO
+        # SecureStrings CAN BE COMPARED AT ALL.***  It is a deliberate, bounded
+        # exception: the strings exist in this process for the length of the
+        # comparison and are dropped on the next line.  Everything else here
+        # keeps them as SecureStrings, including the call that sets the account's
+        # password - so nothing is passed as an argument, which is the exposure
+        # sd-elevate.ps1 measured (Win32_Process.CommandLine shows it verbatim).
+        $pa = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))
+        $pb = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($b))
+        $same = ($pa -ceq $pb)
+        $pa = $null; $pb = $null
+        if (-not $same) {
+            Write-Host '  They did not match.  Try again.' -ForegroundColor Yellow
+            Write-Host ''
+            continue
+        }
+        try {
+            Set-LocalUser -Name 'SDSYS' -Password $a -ErrorAction Stop
+        } catch {
+            # A REFUSAL BY THE PASSWORD POLICY IS NOT A FAILED INSTALL.  Windows
+            # says why, and saying it here is the difference between a retry and
+            # a lockout.
+            Write-Host ('  Windows refused that password: ' + $_.Exception.Message) -ForegroundColor Yellow
+            Write-Host ''
+            continue
+        }
+        Write-Host '  The SDSYS password is set.' -ForegroundColor Green
+        Write-Host ''
+        # THE LOG IS THE RECORD OF THIS MACHINE'S WAY IN, so the password it
+        # printed a minute ago is not left standing as though it still worked.
+        try {
+            Add-Content -Path $LogFile -ErrorAction Stop -Value (
+                (Get-Date -Format 's') + '  the password printed above was REPLACED by one set in ' +
+                'the finishing window.  No copy of it is kept here.')
+        } catch {
+            Write-Host ('  (Could not note that in ' + $LogFile + ': ' + $_.Exception.Message + ')') -ForegroundColor Yellow
+        }
+        return
+    }
+
+    Write-Host '  Three attempts.  The generated password stands.' -ForegroundColor Yellow
+    Write-Host ''
+    Show-GeneratedPassword -LogFile $LogFile
+}
+
+function Show-GeneratedPassword {
+    # READS THE PASSWORD BACK OUT OF THE LOG install-sdsys.ps1 WROTE, and refuses
+    # out loud when it cannot find it: an empty answer here would read as "no
+    # password exists", which is the one reading worse than none.
+    param([string] $LogFile)
+    $shown = ''
+    try {
+        $hit = Select-String -LiteralPath $LogFile -Pattern 'SDSYS WINDOWS PASSWORD' -Context 0, 1 -ErrorAction Stop
+        if ($hit) { $shown = (($hit[-1].Context.PostContext) -join ' ').Trim() }
+    } catch { }
+    if ($shown -eq '') {
+        Write-Wrapped -Text ('The generated password could not be read back from ' + $LogFile +
+            '.  Open that file yourself: the line after "SDSYS WINDOWS PASSWORD" is the password.')
+        Write-Host ''
+        return
+    }
+    Write-Host ('  SDSYS password: ' + $shown) -ForegroundColor Cyan
+    Write-Host ''
+    Write-Wrapped -Text ('That is the password the install generated.  Change it whenever you ' +
+        'wish, from the SDSYS account or from an elevated prompt.')
+}
 
 Write-Host ''
 Write-Host '  SD is installed.' -ForegroundColor White
 Write-Host '  ================'
 Write-Host ''
 
-# 18 Sep 26 - WHAT THIS WINDOW SAYS NOW THAT THE PASSWORD STEP HAS GONE.  It is
-# the same news the installer's closing dialog carries, at the point where the
-# person is still looking at an install window rather than at a wizard.
-#
-# IT DOES NOT PRINT THE PASSWORD AND MUST NOT.  install-sdsys.ps1 prints it once,
-# into a log only SYSTEM and Administrators can read, and the log is the record.
-#
-# AND IT IS WRITTEN FOR BOTH CASES WITHOUT KNOWING WHICH ONE THIS IS.
-# install-sdsys.ps1 prints the password only when it MADE the account - on a
-# machine that already had SDSYS it leaves the account alone and prints nothing -
-# so "if this install made that account" is the honest qualifier rather than a
-# hedge.  Write-Wrapped is used for it deliberately: this is the page's own text,
-# and gplbld/test-wraptext-units.ps1 lifts the function out of this file.
+# 18 Sep 26 - WHAT THIS WINDOW SAYS NOW, AND WHY IT SAYS LESS THAN IT DID.  It
+# used to describe the account and send the reader to install-sdsys.log for the
+# password.  Now it either ASKS for that password or says which case this is.
+# Write-Wrapped is used for the text deliberately: these are the page's own
+# words, and gplbld/test-wraptext-units.ps1 lifts the function out of this file.
 Write-Wrapped -Text ('SD Core is installed.  Its one account is SDSYS, and that is the account ' +
-    'that can create the others: sign in as SDSYS and start SD Core from an ELEVATED prompt.  ' +
-    'If this install made that account, its Windows password is printed at the end of ' +
-    'install-sdsys.log in the SD data directory.')
+    'that can create the others: sign in as SDSYS and start SD Core from an ELEVATED prompt.')
 Write-Host ''
+
+$SdsysLog = Join-Path (Join-Path $env:ProgramData 'SD') 'install-sdsys.log'
+switch ($SdsysCode) {
+    0 {
+        Set-SdsysPassword -LogFile $SdsysLog
+    }
+    2 {
+        Write-Wrapped -Text ('The SDSYS account was already on this machine, so this install left ' +
+            'it alone - including its password, which is the one set before.')
+        Write-Host ''
+    }
+    default {
+        Write-Wrapped -Text ('No password is set here.  Either the install reported that it could ' +
+            'not make the SDSYS account - install-sdsys.log beside the data tree says what ' +
+            'happened - or this window is being run by hand, where nothing can be known about ' +
+            'that account.  To set one, from an elevated prompt:  Set-LocalUser -Name SDSYS ' +
+            '-Password (Read-Host -AsSecureString)')
+        Write-Host ''
+    }
+}
 
 # ---------------------------------------------------------------------------
 # AND ON TO THE CHECK.  Called rather than launched: same window, same console,
