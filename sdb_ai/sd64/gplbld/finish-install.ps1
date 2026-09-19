@@ -413,8 +413,7 @@ function Set-AttachedAccountPassword {
     # SDSYS.  Here it is CHECKABLE, so it is checked rather than reasoned about.
     if (Test-Path -LiteralPath $credFile) {
         Write-Wrapped -Text ("The account $Account already has an SD Core password, so it was " +
-            'left alone.  An administrator changes it from an SDSYS session with ' +
-            "MODIFY.PASSWORD $Account.")
+            'left alone.  Type  MODIFY.PASSWORD  in SD Core to change your own at any time.')
         Write-Host ''
         return $true
     }
@@ -495,17 +494,17 @@ function Set-AttachedAccountPassword {
     # THE ESCAPE IS NAMED, NOT SILENT.  An account with no credential still
     # works at this keyboard, so the install is not broken - but it cannot be
     # reached remotely, and SD Core will ask again at the next ELEVATED sign-in.
-    # 19 Sep 26 - THIS USED TO END "or you can set one at any time by typing:
-    # MODIFY.PASSWORD", WHICH THE READER CANNOT DO.  That verb is in
-    # sdsys/voc_template and not in sdsys/newvoc, so it is an SDSYS verb and an
-    # ordinary account has no such command - the same fact that broke the step
-    # above.  Telling somebody to type a command their account does not have is
-    # worse than telling them nothing.  What IS true is the elevated sign-in.
+    # 19 Sep 26 - THIS SENTENCE HAS BEEN WRONG IN BOTH DIRECTIONS IN ONE DAY,
+    # WHICH IS WHY IT CARRIES A NOTE.  It first said "type MODIFY.PASSWORD",
+    # which the reader could not do - the verb was in voc_template only.
+    # RELEASE_1.1 71 then put it in newvoc on the owner's ruling, so they CAN,
+    # but only for their OWN account: set_acc_password:123-126 refuses another
+    # account without K$ADMINISTRATOR.  The qualifier is the whole point and
+    # must not be dropped the next time this is tidied.
     Write-Wrapped -Text ("No SD Core password was set for $Account.  You can still use SD Core at " +
         'this keyboard, but nothing can reach the account from another computer until one is ' +
-        'set.  SD Core asks again the next time you start it from an ELEVATED prompt, which is ' +
-        'the simplest way to put it right.  An administrator can also set it from an SDSYS ' +
-        "session with:  MODIFY.PASSWORD $Account") -Color Yellow
+        'set.  Type  MODIFY.PASSWORD  in SD Core to set your own at any time, or start SD Core ' +
+        'from an ELEVATED prompt and it asks you.') -Color Yellow
     Write-Host ''
     return $false
 }

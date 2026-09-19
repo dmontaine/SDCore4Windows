@@ -4,6 +4,21 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+19 Sep 26  YOU CAN CHANGE YOUR OWN SD CORE PASSWORD.
+
+           MODIFY.PASSWORD is now a command every account has.  Typed on
+           its own it changes your own password: it asks for your current
+           one, then the new one twice.
+
+           ***NAMING SOMEBODY ELSE'S ACCOUNT STILL NEEDS ADMINISTRATOR
+           RIGHTS.***  MODIFY.PASSWORD <account> sets that account's
+           password without asking for the old one - an administrator
+           resetting a forgotten password does not know it - and an
+           ordinary account is refused.
+
+           Before this the command belonged to SDSYS alone, so an ordinary
+           account had no way to change its own password.
+
 19 Sep 26  CREATE.ACCOUNT NO LONGER MAKES YOU SAY HOW AN ACCOUNT IS
            REACHED.  THE ANSWER DEFAULTS TO BOTH.
 
@@ -55,10 +70,8 @@ while porting from it.
            over ssh or through the SD API, which the account is allowed to
            do.  Signing in at this keyboard never asks for it.
 
-           To change it later, start SD Core from an ELEVATED prompt and it
-           asks you.  MODIFY.PASSWORD is an SDSYS command, so an ordinary
-           account cannot type it; an administrator can set anybody's from
-           an SDSYS session.
+           To change it later, type MODIFY.PASSWORD in SD Core.  You are
+           asked for your current password and then the new one, twice.
 
            ***SIGN OUT AND BACK IN BEFORE TYPING sd.***  Windows decides
            what groups your session belongs to when you sign in, so the
