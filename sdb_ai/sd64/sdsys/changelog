@@ -41,6 +41,24 @@ while porting from it.
            drop the keyword, and scripts that lifted a suspension by
            naming a tier must say UNSUSPENDED.
 
+           ***THE INSTALL NO LONGER ASKS YOU FOR A PASSWORD, AND NO LONGER
+           MAKES YOU AN SD ACCOUNT.***  It used to adopt your Windows account
+           as an SD account and then open SD at the end of the install so you
+           could give that account a password - and, since 4 Sep 2026, give
+           SDSYS one as well, which is why it asked twice.  What it makes now
+           is SDSYS, reached by signing in to Windows as SDSYS, and SDSYS signs
+           in to SD with its WINDOWS password - which the install generates and
+           prints at the end of install-sdsys.log in the SD data directory.
+           Nothing in the install asks for an SD password, and no SD session
+           opens when the install finishes.
+
+           ***WHAT MIGHT STOP WORKING.***  If you set a password during an
+           install and expected that account to be there afterwards, it is not
+           made any more.  Sign in to Windows as SDSYS, start SD Core from an
+           elevated prompt, and create the accounts you want with
+           CREATE.ACCOUNT; the password of an SD account you create is yours to
+           set with MODIFY.PASSWORD.
+
 18 Sep 26  AN ADMINISTRATOR CAN NO LONGER SIGN IN OVER ssh AT ALL, AND CAN
            USE THE API ONLY FROM THIS COMPUTER.
            ***REPLACED LATER THE SAME DAY BY THE ENTRY ABOVE.***
@@ -879,6 +897,10 @@ previous one.
            before.
 
 04 Sep 26  THE PASSWORD PAGE AT THE END OF AN INSTALL READS BETTER.
+           ***THE PAGE IS GONE AS OF 18 Sep 2026 - SEE THE ENTRY AT THE TOP OF
+           THIS SECTION.  There is no password page, because there is no
+           password to collect: the install makes SDSYS, and its password is
+           its Windows one.***
 
            It asks for two passwords - your own account and SDSYS - and it
            used to repeat the same five-line paragraph about what pressing
@@ -1001,6 +1023,10 @@ previous one.
            accounts do not have the command.
 
 04 Sep 26  INSTALLING NOW ASKS FOR TWO PASSWORDS, AND SAYS WHY.
+           ***REPLACED 18 Sep 2026 - SEE THE ENTRY AT THE TOP OF THIS SECTION.
+           Installing does not ask for a password any more, and the two
+           accounts below are not the ones it makes: SDSYS is, and it uses its
+           WINDOWS password.***
 
            If you are an administrator you have TWO SD accounts, and until now
            the installer set a password for only one of them.

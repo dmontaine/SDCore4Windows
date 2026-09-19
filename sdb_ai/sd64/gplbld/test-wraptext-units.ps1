@@ -79,9 +79,17 @@ function Wrap {
 }
 
 # --------------------------------------------------------------- the width
-# The real string from finish-install.ps1's 2-of-2 call - the one that broke.
-$purpose = 'This is where SD puts you when you run it as administrator.  It is a ' +
-           'different account from the one above and needs its own password.'
+# The string the window says, wrapped by the same call.  It WAS the 2-of-2
+# $Purpose - "the one that broke" - and that string went with the password step
+# (RELEASE_1.1 64; the gravestone where Invoke-PasswordStep stood says so).  What
+# this row needs is a LIVE string rather than that particular one: the page still
+# says this, and the installer's closing dialog says the same thing to the same
+# person.
+$purpose = 'SD Core is installed.  Its one account is SDSYS, and that is the ' +
+           'account that can create the others: sign in as SDSYS and start SD ' +
+           'Core from an ELEVATED prompt.  If this install made that account, ' +
+           'its Windows password is printed at the end of install-sdsys.log in ' +
+           'the SD data directory.'
 
 $lines = Wrap -Text $purpose
 Note 'it wraps at all (more than one line)' $true ($lines.Count -gt 1)

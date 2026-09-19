@@ -1138,8 +1138,9 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ;
 ; Both are now answered by finish-install.ps1, launched from DeinitializeSetup
 ; once the wizard has gone - see RunFinishingStep and DeinitializeSetup in
-; the Code section.  It runs the password step and the check IN ORDER, in ONE
-; window, and Setup is not waiting on either.
+; the Code section.  It ran the password step and the check IN ORDER, in ONE
+; window; the password step went with the adopted account (RELEASE_1.1 64), so
+; what is left in that window is the check, and Setup waits on neither.
 
 ; THERE IS DELIBERATELY NO "SET THE SDSYS PASSWORD" STEP.
 ;
@@ -1273,12 +1274,13 @@ var
     on the first page would still open an SD session on a machine that has just
     had nothing installed.
 
-    PasswordStepWanted is false on the reinstall case (adopt code 2), where the
-    account was left alone and keeps whatever password it had.  There is then
-    nothing to ask for, and finish-install.ps1 says so rather than leaving a
-    reader wondering what became of the step it promised them. }
+    ***18 Sep 26 - PasswordStepWanted STOOD HERE AND IS GONE, RELEASE_1.1 64.***
+    It was '(AdoptCode = 0)' - true only when the install had just MADE the
+    person's account, which is exactly when there was a credential to collect.
+    Nothing collects one any more, so the variable, its assignment in
+    ssPostInstall and the '-WithPassword' it gated in RunFinishingStep all left
+    together. }
   InstallReachedPostInstall: Boolean;
-  PasswordStepWanted: Boolean;
 
 { 30 Aug 26 - IS THE EXISTING ssh SERVER'S FIREWALL RULE ALREADY OPEN TO THE
   NETWORK?  PRE_RELEASE_FIXES 76.  Called once from InitializeSetup, and only
@@ -3197,14 +3199,15 @@ begin
 end;
 
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
-  HISTORY IN FRONT OF LIVE CODE.  PasswordStepWanted is False and can never be
-  True again (see its assignment), so finish-install.ps1 is launched without
-  -WithPassword and no SD session is opened at the end of an install.  The
-  reason is that there is no adopted account to give a credential to: the one
-  account is SDSYS, and it authenticates with its WINDOWS password, which
-  install-sdsys.ps1 generates and prints.  Removing the dead half of
-  finish-install.ps1 is owed with this note.  The paragraphs below say what the
-  step WAS for, and are kept for the day somebody asks why. }
+  HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
+  install, and nothing here asks for a password: there is no adopted account to
+  give a credential to.  The one account is SDSYS, and it authenticates with its
+  WINDOWS password, which install-sdsys.ps1 generates and prints before the
+  wizard closes.  ***THE DEAD HALF OF finish-install.ps1 WENT WITH IT - the
+  -WithPassword switch, -User, Invoke-PasswordStep and the two calls to it,
+  which is the whole of what this function existed to launch.***  THE PARAGRAPHS
+  BELOW ARE THE ONLY PLACE THE STEP'S REASONING IS RECORDED IN THIS FILE, so
+  they stay: they say what the step WAS for, for the day somebody asks why. }
 
 { AND THE INSTALL ENDED IN AN SD SESSION, WHICH IS HOW THE PASSWORD WAS TAKEN.
   Owner's decision, 21 Aug 2026: the installing user's password was collected by
@@ -3268,42 +3271,42 @@ var
 begin
   { REWRITTEN 22 Aug 2026, owner: "put them both in one script, call sd for the
     password and then move on to the post validation", and put both AFTER the
-    installer window has closed.
+    installer window has closed.  ONE OF THE TWO WENT IN RELEASE_1.1 64 - the
+    password step, with the adopted account - so this launches the check.
 
     THIS USED TO Exec sd.exe DIRECTLY, from ssPostInstall.  Two faults came of
     that on a real install: the wizard stayed on screen behind the SD window,
     and the CHECK was a separate Finished-page tickbox, so ONE ACTION ASKED THE
-    USER TWICE.  Setup now launches ONE script which does the password step and
-    the check in order, in ONE window.
+    USER TWICE.  Setup launches ONE script, in ONE window, and that is still the
+    answer to both faults.
 
-    -QUIET STILL, and it lives in finish-install.ps1 now rather than here.
+    ELEVATED, AND THAT IS NOT A CHOICE.  The check runs on Setup's token because
+    the password step needed it and the two shared one window: the gravestone in
+    the Run section records why - an unelevated token does not carry sdusers
+    until the user signs out, so it cannot open the data tree, and
+    SecureCredStore had locked $cred to SYSTEM and Administrators.  THAT IS A
+    REAL TRADE and is written up in finish-install.ps1's header: the check
+    answers the database question about the ADMINISTRATOR token, says so twice
+    on screen, and the Start Menu shortcut is the run that answers it properly
+    after a sign-out.
 
-    ELEVATED, AND THAT IS NOT A CHOICE.  The password step needs Setup's token:
-    the gravestone in the Run section records why - an unelevated token does not
-    carry sdusers until the user signs out, so it cannot open the data tree, and
-    SecureCredStore has just locked $cred to SYSTEM and Administrators.  The
-    check therefore runs elevated too, which is a REAL TRADE and is written up
-    in finish-install.ps1's header: it answers the database question about the
-    ADMINISTRATOR token, says so twice on screen, and the Start Menu shortcut is
-    the run that answers it properly after a sign-out.
-
-    ewNoWait, so Setup does not sit behind the window it just opened.  The
-    script itself waits on SD - it can afford to, nothing is holding it open but
-    the user, and that wait is what sequences the two steps.
+    ewNoWait, so Setup does not sit behind the window it just opened.  Nothing
+    waits on SD here any more, because nothing here starts one: the script's own
+    wait, which is what used to sequence the two steps, went with the first of
+    them.
 
     A PROCEDURE, NOT A FUNCTION.  Exec answers whether the process STARTED and
-    nothing here can learn more: the script outlives this call, so whether a
-    password was set is unknowable from Setup. }
-  { -User IS PASSED, NOT LEFT TO $env:USERNAME.  Setup knows who is installing;
-    the script would otherwise be guessing from its own process, and it uses the
-    name to look for a credential afterwards.  Same rule as -AppDir, which
-    adopt-account.ps1 records costing a real install when it was defaulted. }
+    nothing here can learn more: the script outlives this call, so what the
+    check found is unknowable from Setup. }
+  { 18 Sep 26 - -User AND -WithPassword ARE GONE FROM THIS CALL, RELEASE_1.1 64.
+    -User named whose credential to set, and was then the account name the script
+    looked for in $cred afterwards; -WithPassword was gated on PasswordStepWanted,
+    which is deleted.  The script reads neither now, so passing them would be a
+    call that says something its callee does not believe.  -AppDir stays, and is
+    still passed rather than defaulted. }
   Args := '-NoProfile -ExecutionPolicy Bypass -File "' +
           ExpandConstant('{app}\finish-install.ps1') + '" -AppDir "' +
-          ExpandConstant('{app}') + '" -User "' +
-          ExpandConstant('{username}') + '"';
-  if PasswordStepWanted then
-    Args := Args + ' -WithPassword';
+          ExpandConstant('{app}') + '"';
 
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
               Args, ExpandConstant('{#DataDir}'), SW_SHOW,
@@ -4841,22 +4844,19 @@ begin
       "sd".  There is nothing a box could say that the next thing they do will
       not. }
     { 22 Aug 26 - RECORDED HERE, RUN LATER.  This used to call the password step
-      directly, which opened SD while the wizard was still on screen.  Both the
-      password step and the check now run from DeinitializeSetup, once the
-      window has gone, so all that happens here is remembering what was decided:
-      whether the install got this far at all, and whether an account was just
-      made and therefore has no password yet. }
+      directly, which opened SD while the wizard was still on screen.  The check
+      runs from DeinitializeSetup now, once the window has gone, so all that
+      happens here is remembering that the install got this far. }
     InstallReachedPostInstall := True;
-    { 18 Sep 26 - THERE IS NO PASSWORD STEP ANY MORE, RELEASE_1.1 64, and the
-      variable is kept rather than unpicked so the two hooks that read it need
-      no surgery in the same change.  It was '(AdoptCode = 0)': the install gave
-      the installing user an account with no credential, and finish-install.ps1
-      opened SD at the end for them to set one.  Nobody is adopted now, and the
-      one account - SDSYS - authenticates with its WINDOWS password, which
-      install-sdsys.ps1 generates and prints into its own log.  So there is
-      nothing for SD to ask for, and no session is opened.  Removing the dead
-      -WithPassword half of finish-install.ps1 is owed with it. }
-    PasswordStepWanted := False;
+    { 18 Sep 26 - THERE IS NO PASSWORD STEP ANY MORE, RELEASE_1.1 64, SO THE
+      VARIABLE THAT SAID WHETHER TO RUN ONE IS DELETED RATHER THAN LEFT FALSE.
+      PasswordStepWanted was '(AdoptCode = 0)' - true only when the install had
+      just made the person's account, with no credential - and nothing opens a
+      session to collect one now.  The one account is SDSYS, and it
+      authenticates with its WINDOWS password, which install-sdsys.ps1 generates
+      and prints into its own log.  finish-install.ps1's dead -WithPassword half
+      left in the same change, so this hook remembers one thing: THAT THE
+      INSTALL GOT THIS FAR, which is what DeinitializeSetup's guard reads. }
   end;
 end;
 
