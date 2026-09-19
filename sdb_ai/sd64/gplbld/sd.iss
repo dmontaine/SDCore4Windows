@@ -1292,8 +1292,19 @@ var
     person's account, which is exactly when there was a credential to collect.
     Nothing collects one any more, so the variable, its assignment in
     ssPostInstall and the '-WithPassword' it gated in RunFinishingStep all left
-    together. }
+    together.
+
+    ***18 Sep 26, LATER STILL - AND SdsysCode BELONGS HERE, WHICH THE CYCLE'S
+    OWN COMPILE HAD TO SAY.***  The twelfth pass passed it to
+    RunFinishingStep's command line but left the variable a LOCAL of
+    CurStepChanged, and ISCC answered "Unknown identifier 'SdsysCode'" at the
+    use - the first compiler to see the file, because nothing in a session
+    compiles [Code].  It is install-sdsys.ps1's exit code (0 made the account,
+    2 it was already there, 1 or 3 could not), assigned at ssPostInstall and
+    read by the finishing window, which is this block's own rule above: what
+    the wizard's last window needs has to outlive the step that learned it. }
   InstallReachedPostInstall: Boolean;
+  SdsysCode: Integer;
 
 { 30 Aug 26 - IS THE EXISTING ssh SERVER'S FIREWALL RULE ALREADY OPEN TO THE
   NETWORK?  PRE_RELEASE_FIXES 76.  Called once from InitializeSetup, and only
@@ -1438,6 +1449,17 @@ begin
      The question is about the machine as we found it, so it is asked once,
      here, exactly as the data tree above is. *)
   SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
+
+  (* 18 Sep 26 - SdsysCode STARTS AT 2 AND NOT AT ITS ZERO INITIALISATION.
+    A script-level Integer arrives 0, and 0 is install-sdsys.ps1's "the account
+    was MADE" - the one reading that makes the finishing window ask for the
+    SDSYS password.  ssPostInstall overwrites it before the window can read it
+    on every path the InstallReachedPostInstall gate admits, so this is the
+    second line of defence rather than the mechanism, exactly like the
+    WizardSilent check beside this value's readers: an unset SdsysCode must
+    refuse to ask rather than ask.  2 is install-sdsys.ps1's own "already
+    there", the code whose meaning is "nothing to ask". *)
+  SdsysCode := 2;
 
   (* 30 Aug 26 - AND, IF ONE IS ALREADY HERE, HOW EXPOSED IT ALREADY IS.
      PRE_RELEASE_FIXES 76.  This is the default state of the "allow remote
@@ -4043,7 +4065,10 @@ var
     installer just declined to touch. }
   UpgMsg: String;
   RouteMsg: String;
-  SdsysCode: Integer;
+  { 18 Sep 26, later still - SdsysCode IS NO LONGER DECLARED HERE: it is
+    script-level now (the var block under [Code]), because RunFinishingStep
+    reads it after this procedure has returned and a local cannot cross that
+    boundary - the cycle's ISCC compile said so at the use. }
   AccountMsg: String;
   CredMsg: String;
   DenyMsg: String;
