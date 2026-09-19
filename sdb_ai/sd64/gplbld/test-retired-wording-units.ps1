@@ -176,6 +176,15 @@ $RETIRED = @(
     # "asks again the first time you open the account," straddled two crt
     # statements in the old set_acc_password, so registering it would have
     # guarded nothing while looking like a guard.
+    # RELEASE_1.1 74 - 10158 OFFERED THE READER A TIER, AND 64 ABOLISHED TIERS.
+    # Reported by the Linux port, 19 Sep 2026, who had the same stale line and
+    # proposed the replacement text; checked here before it was believed.  The
+    # KEYWORD DIFFERS BETWEEN THE PORTS and the difference is real rather than
+    # a typo: ours is MODIFY.ACCOUNT <account> UNSUSPENDED (modifya:355), so
+    # their "unsuspend" would name a word this tree refuses.  Told them.
+    @{ Ref = 'R1.1-74'
+       Retired     = 'can be given a tier again later'
+       Replacement = 'lets it back in' }
     @{ Ref = 'R1.1-69c'
        Retired     = 'for one every time you open the account'
        Replacement = 'from an ELEVATED prompt' }

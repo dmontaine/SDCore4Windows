@@ -1,0 +1,1 @@
+Account directory %1 was not removed; remove it by hand.\n\nEverything else about the deletion has been done. The usual reasons are a file\nstill open in that directory and an access rule that denies the delete.

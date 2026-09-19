@@ -4,6 +4,29 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+19 Sep 26  DELETE.ACCOUNT NOW TELLS YOU WHEN THE ACCOUNT'S DIRECTORY DID
+           NOT GO.
+
+           It asks you to confirm, saying the files cannot be recovered -
+           and then deleted the directory without ever checking that the
+           deletion worked.  A file still open in that directory, or an
+           access rule that denies the delete, left it on disk and nothing
+           said so.
+
+           Everything else about the deletion always happened and still
+           does.  What is new is the message naming the directory and
+           asking you to remove it by hand.
+
+19 Sep 26  DELETE.ACCOUNT'S WARNING OFFERED SOMETHING THAT NO LONGER
+           EXISTS.
+
+           It suggested suspending the account instead, and said a
+           suspended account "can be given a tier again later".  Account
+           tiers were removed from SD Core in this release.  It now names
+           the command that reverses a suspension:
+
+               MODIFY.ACCOUNT <account> UNSUSPENDED
+
 19 Sep 26  THE "THIS ACCOUNT NEEDS A PASSWORD" MESSAGE SAID SOMETHING YOUR
            OWN MACHINE DISPROVED.
 

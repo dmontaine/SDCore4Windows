@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 19 Sep 26 Windows port - RELEASE_1.1 73: the account directory's deletion is
+*           checked and 10919 is displayed when it survives.  OS$DELETE's
+*           result was assigned to "yn" and never read.  Reported by the Linux
+*           port, which took message number 10919 first; checked here before it
+*           was believed.
 * 15 Sep 26 Windows port - RELEASE_1.1 44: the cross-reference scan's openpath
 *           gained an ELSE (message 10188) so an account whose voc cannot be
 *           opened is skipped, not fatal to the delete.  Shared with Linux
@@ -303,8 +308,32 @@ deffun is_sd_user(username) calling '!is_sd_user'
       stop sysmsg(6030) ;* Account deletion abandoned
    end
 
+* 19 Sep 26 Windows port - SAY SO WHEN THE DIRECTORY DOES NOT GO.  Reported by
+*   the SD Core for Linux port, 19 Sep 2026, and CHECKED HERE BEFORE IT WAS
+*   BELIEVED: the line below assigned OS$DELETE's result to "yn" and nothing
+*   ever read it - "yn" is the confirmation answer, finished with at :301 and
+*   not looked at again - so a delete that failed was indistinguishable from
+*   one that worked, right after a prompt that had promised the files would go.
+*
+*   THEY MET IT FOR A REAL REASON AND WE MAY MEET IT FOR DIFFERENT ONES.  On
+*   Linux an sdsys session cannot delete a 755 subtree the account's own user
+*   made.  Here the likelier causes are an open handle and an ACL, and neither
+*   is rare enough to leave silent.
+*
+*   THE STATE IS TESTED, NOT THE RETURN CODE, which is the instrument rule:
+*   OS$DELETE's result says what the call reported, OS$EXISTS says what is
+*   actually on disk, and it is the second that the reader cares about.
+*
+*   THE DELETION CARRIES ON.  Everything after this - the group, the OS
+*   account, the accounts record - is still worth doing, and the record is
+*   deleted LAST on purpose (the note below) so a re-run can finish the job.
+*   Message 10919 is Linux's number, taken there first and free in both trees;
+*   using it keeps one id for one fact across the two ports.
    if dir.exists then
-      yn = ospath(pathname, OS$DELETE)
+      da.deleted = ospath(pathname, OS$DELETE)
+      if ospath(pathname, OS$EXISTS) then
+         display sysmsg(10919, pathname) ;* Account directory %1 was not removed
+      end
    end
 
 * 14 Aug 26 Windows port - THE ACCOUNTS RECORD IS NOW DELETED LAST, not here.
