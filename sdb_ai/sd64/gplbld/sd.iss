@@ -1305,6 +1305,12 @@ var
     the wizard's last window needs has to outlive the step that learned it. }
   InstallReachedPostInstall: Boolean;
   SdsysCode: Integer;
+  { 18 Sep 26 - RELEASE_1.1 66.  attach-account.ps1's exit code (0 the account
+    was made, 2 it was already there, 1 refused, 3 no server), assigned at
+    ssPostInstall and read by the closing dialog.  Script-level for the reason
+    the paragraph above had to learn from a failed compile: what the wizard's
+    last window needs has to outlive the step that learned it. }
+  AttachCode: Integer;
 
 { 30 Aug 26 - IS THE EXISTING ssh SERVER'S FIREWALL RULE ALREADY OPEN TO THE
   NETWORK?  PRE_RELEASE_FIXES 76.  Called once from InitializeSetup, and only
@@ -1460,6 +1466,15 @@ begin
     refuse to ask rather than ask.  2 is install-sdsys.ps1's own "already
     there", the code whose meaning is "nothing to ask". *)
   SdsysCode := 2;
+
+  (* 18 Sep 26 - AND AttachCode STARTS AT 2 FOR EXACTLY THE SAME REASON,
+    RELEASE_1.1 66.  A script-level Integer arrives 0, and 0 is
+    attach-account.ps1's "the account was MADE" - the one reading that makes
+    the closing dialog tell the reader they have an account.  On any path that
+    does not reach ssPostInstall nothing has been made, so an unset AttachCode
+    must say nothing rather than announce an account that is not there.  2 is
+    the script's own "already there", the code that claims nothing. *)
+  AttachCode := 2;
 
   (* 30 Aug 26 - AND, IF ONE IS ALREADY HERE, HOW EXPOSED IT ALREADY IS.
      PRE_RELEASE_FIXES 76.  This is the default state of the "allow remote
@@ -3233,6 +3248,55 @@ begin
   Result := Code;
 end;
 
+(* 18 Sep 26 - THE INSTALLING USER'S OWN ACCOUNT, RELEASE_1.1 66.
+
+   SDSYS COVERS ADMINISTRATION AND DOES NOT GIVE THE PERSON WHO INSTALLED SD AN
+   ACCOUNT.  CREATE.ACCOUNT refuses every name that already has a Windows
+   account - createa's is_user case, message 10038 - and under 64 nothing else
+   mints one, so that refusal is a permanent wall rather than an inconvenience:
+   after install day the installing user can never have an account at all.  The
+   owner met it directly, logged in as SDSYS and unable to create his own.
+   attach-account.ps1 crosses it once, through CREATEA's install-only ATTACH
+   keyword, and mints an ORDINARY account - no tier, the route keyword said like
+   anybody's.
+
+   THE STEP EXISTED AND DID NOTHING FOR ONE INSTALL, which is why this comment
+   is here rather than a line of code on its own.  The verb half was written,
+   compiled and shipped on 18 Sep 2026 while nothing in this file called the
+   script and nothing in stage.py shipped it; the install ran clean and made no
+   account, and only the empty accounts register said so.  A capability nothing
+   invokes is indistinguishable from one that was never built.
+
+   -User IS THE ELEVATION'S USER, NOT THE DESKTOP'S.  Inno's username constant
+   is the account that authenticated the elevation prompt, which is the person
+   installing - not necessarily whoever double-clicked.  -AppDir and -DataDir
+   are passed rather than left to the script's defaults for the reason
+   MakeSdsysAccount records above: a PSScriptRoot default comes out EMPTY in an
+   advanced script's param block, and Setup knows where it put both trees.
+
+   SW_HIDE, so everything the script has to say goes to its own log - which is
+   what the script is built for and why it logs at all. *)
+function AttachInstallerAccount: Integer;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\attach-account.ps1') + '" -User "' +
+                  ExpandConstant('{username}') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    { -1 means the process never started, which is not one of the script's own
+      codes and must not be read as one of them. }
+    Result := -1;
+    Exit;
+  end;
+  Result := Code;
+end;
+
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
   HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
   install, and nothing here asks for a password: there is no adopted account to
@@ -4070,6 +4134,11 @@ var
     reads it after this procedure has returned and a local cannot cross that
     boundary - the cycle's ISCC compile said so at the use. }
   AccountMsg: String;
+  { 18 Sep 26 - RELEASE_1.1 66.  What the closing dialog says about the
+    INSTALLING user's own ordinary account, separately from AccountMsg, which
+    is about SDSYS.  They are two different accounts answering two different
+    questions and a reader needs both. }
+  AttachMsg: String;
   CredMsg: String;
   DenyMsg: String;
   OsuMsg: String;
@@ -4335,6 +4404,22 @@ begin
       2 already there, 1 or 3 could not. }
     SdsysCode := MakeSdsysAccount;
 
+    { 18 Sep 26 - AND THE INSTALLING USER'S OWN ORDINARY ACCOUNT, RELEASE_1.1
+      66.  See AttachInstallerAccount for why it is needed at all: 10038 makes
+      this the only moment such an account can ever be created.
+
+      IT SITS EXACTLY WHERE AdoptAccount USED TO, AND THE TWO COMMENTS BELOW
+      ARE WHY.  Both say "AFTER adopt" and both were written against that step
+      standing here: RestoreSshOnly reads the register and wants the finished
+      one, and SecureAccountDirs stamps the account directories and wants this
+      install's account rather than the next install's.  Putting the call here
+      satisfies both without either needing to change.
+
+      AFTER SDSYS rather than before it, so that a failure to make the
+      administrator account is reported first - it is the one the machine
+      cannot be managed without. }
+    AttachCode := AttachInstallerAccount;
+
     { AFTER adopt, so the register this reads is the finished one.  See the
       function: this is the step that undoes an uninstall having deleted
       sdsshonly and taken every membership with it. }
@@ -4516,6 +4601,63 @@ begin
                     '\install-sdsys.log' + #13#10#13#10;
     end;
 
+    (* 18 Sep 26 - AND WHAT THE INSTALLING USER'S OWN ACCOUNT CAME TO,
+       RELEASE_1.1 66.  Reported separately from SDSYS above because they are
+       two accounts and the reader needs both answers: SDSYS is how the machine
+       is administered, this is how the person who installed it uses SD.
+
+       LOWER CASE, for the reason the code-0 branch above records at length:
+       CREATEA downcases the register key, so LIST ACCOUNTS answers the folded
+       spelling and naming it any other way sends the reader looking for an
+       account spelled a way nothing in the product spells it.  The username
+       constant expands to the WINDOWS name and may be mixed case, which is why
+       this folds rather than just dropping the call.
+
+       AND IT TELLS THEM TO SIGN OUT, WHICH IS NOT A FORMALITY.  CREATEA adds
+       the account to sdusers, and WINDOWS FIXES GROUP MEMBERSHIP AT SIGN-IN -
+       so the session that ran this installer does not carry sdusers and "sd"
+       from it cannot open the database.  The account is correct and the token
+       is stale.  Saying only "you have an account now" would send somebody
+       straight into a permission error on a healthy install. *)
+    case AttachCode of
+      0: AttachMsg := 'You also have an ordinary SD Core account of your own, named ' +
+                      Lowercase(ExpandConstant('{username}')) + '. It is an ordinary ' +
+                      'account, not an administrator: administration is SDSYS''s, above. ' +
+                      'It is reachable over ssh and the API, and MODIFY.ACCOUNT narrows ' +
+                      'that whenever you like.' + #13#10#13#10 +
+                      'NOTHING ABOUT YOUR WINDOWS ACCOUNT WAS CHANGED - your Windows ' +
+                      'password is unchanged and is still what signs you in. SD Core did ' +
+                      'not set a password of its own for this account; it will offer you ' +
+                      'one the first time you sign in, and MODIFY.PASSWORD sets one at any ' +
+                      'time.' + #13#10#13#10 +
+                      'SIGN OUT AND BACK IN BEFORE TYPING sd. Windows decides group ' +
+                      'membership when you sign in, so this session does not yet carry the ' +
+                      'access the new account was given.' + #13#10#13#10;
+      { Nothing to announce: the account was there before this install, so it
+        is not news and its password and routes are whatever they already were. }
+      2: AttachMsg := '';
+    else
+      { NAMED RATHER THAN BURIED, the same rule as the SDSYS branch above, and
+        here the consequence is the one the step exists to prevent: 10038 means
+        this account cannot be created later by ordinary means, so a reader who
+        is not told now may never find out that the door has shut.
+
+        THE RECOVERY IS THE SCRIPT, NOT THE VERB.  Owner's standing instruction,
+        15 Aug 2026: the internal keyword is not public, and this dialog is one
+        of the places that must not document it.  The script ships beside
+        sd.exe and is the same code path the installer itself just ran, so
+        naming it gives the reader exactly what failed and nothing more. }
+      AttachMsg := 'SD Core could NOT create an SD Core account for you (code ' +
+                   IntToStr(AttachCode) + '). SD Core only admits accounts it creates, and it ' +
+                   'will not create one for a Windows account that already exists - so this ' +
+                   'is the one moment such an account can be made, and running the installer ' +
+                   'again is not another one. Put it right from an ELEVATED PowerShell ' +
+                   'prompt:' + #13#10#13#10 +
+                   '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\attach-account.ps1" -User ' + Lowercase(ExpandConstant('{username}')) + #13#10#13#10 +
+                   'What went wrong is recorded in ' + ExpandConstant('{#DataDir}') +
+                   '\attach-account.log' + #13#10#13#10;
+    end;
+
     { /SUPPRESSMSGBOXES DOES NOT SUPPRESS THESE.  Measured 14 Aug 2026: a
       /VERYSILENT /SUPPRESSMSGBOXES install still stopped and waited for OK on
       both boxes below, so an unattended deployment would hang until somebody
@@ -4655,6 +4797,13 @@ begin
              machine will not actually enforce. }
            MarkerMsg +
            AccountMsg +
+           { 18 Sep 26 - RELEASE_1.1 66.  IMMEDIATELY AFTER AccountMsg, because
+             the two answer the reader's one question in order: SDSYS is how
+             this machine is administered, and this is the account they
+             themselves will use.  Empty on a reinstall, which is the common
+             case and is why it is its own string rather than a paragraph
+             welded into AccountMsg's branches. }
+           AttachMsg +
            { CORRECTED 15 Aug 2026, owner, on two counts.
 
              "with SD started: sd -start" was wrong twice over - SD is started

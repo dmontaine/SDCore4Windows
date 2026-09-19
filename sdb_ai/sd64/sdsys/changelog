@@ -4,6 +4,38 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+18 Sep 26  THE INSTALL NOW GIVES YOU AN SD CORE ACCOUNT OF YOUR OWN.
+
+           Installing SD Core creates an ordinary SD Core account for the
+           person doing the installing, named after their Windows account.
+           It is an ordinary account, not an administrator: administration
+           is SDSYS's.  It can be reached over ssh and through the API,
+           and MODIFY.ACCOUNT narrows that at any time.
+
+           ***WHY IT HAPPENS AT INSTALL TIME AND NOT LATER.***  SD Core
+           only admits accounts it creates itself, and it will not create
+           one for a Windows account that already exists - it answers
+           "Windows account <name> already exists".  Anybody installing SD
+           Core signed in to Windows before SD Core was there, so the
+           install is the one moment an account can be made for them.
+           Running the installer again is not another one.
+
+           ***NOTHING ABOUT YOUR WINDOWS ACCOUNT CHANGES.***  Your Windows
+           password is untouched and is still what signs you in.  No SD
+           Core password is set for the new account either: SD Core offers
+           you one the first time you sign in, and MODIFY.PASSWORD sets
+           one whenever you like.  Your Windows sign-in rights are left
+           exactly as they were.
+
+           ***SIGN OUT AND BACK IN BEFORE TYPING sd.***  Windows decides
+           what groups your session belongs to when you sign in, so the
+           session that ran the installer does not yet carry the access
+           the new account was given.
+
+           If the step cannot be completed, the window at the end of the
+           install says so, names the command that puts it right, and
+           points at C:\ProgramData\SD\attach-account.log.
+
 18 Sep 26  THE TIERS ARE REMOVED, AND WITH THEM THE ADMINISTRATOR ACCOUNT.
 
            STANDARD, PROGRAMMER and ADMINISTRATOR are gone.  Every account

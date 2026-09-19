@@ -433,6 +433,38 @@ deffun ps_script(script) calling '!ps_script'
 *   OTHER, which share more.args and never assign acc.uname.  Nothing writes
 *   this bare name any more, so it cannot exist on a delivered system.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  the one-shot ADOPT marker is gone.
+*
+* 18 Sep 26 Windows port, LATER STILL - AND THE ONE-SHOT MARKER IS BACK, AS
+*   ATTACH, ON THE OWNER'S REQUIREMENT THAT THE INSTALL CREATE HIS OWN REGULAR
+*   ACCOUNT.  His words: "during the install, the regular sd account for the
+*   installer needs to be created as well since you can't create an account
+*   later because sd only recognizes accounts it creates" - and the second
+*   half is measured in this file: the is_user case below refuses every
+*   existing Windows account with 10038, and under 64 nothing else can give
+*   one an SD account.  The installer's name can only cross that refusal at
+*   install time.  gplbld/attach-account.ps1 writes this file immediately
+*   before running the verb and removes it again afterwards; more.args
+*   accepts ATTACH only while it is there, and deletes it on acceptance.
+*
+*   THE MARKER NAME CHANGED WITH THE KEYWORD ($attach, not $adopt) so a
+*   leftover marker from the old install cannot open the new door - and the
+*   reasoning is otherwise unchanged from the ADOPT paragraphs above, which
+*   this restores rather than rewrites: install-only, one shot, and naming
+*   the one account it authorises.
+*
+*   AND THE WINDOWS HALF IS SKIPPED THE OLD WAY: the is_user case MATCHES for
+*   an attached account (the Windows account exists - that is the premise),
+*   folds the name, and falls out of the begin case PAST create_user and
+*   set_passwd to the SD half.  ATTACH CHANGES NOTHING ABOUT THE OPERATING
+*   SYSTEM ACCOUNT - the 15 Aug rule, standing.  No user is made, no password
+*   is set, no logon right is touched, and there is no $cred write: the
+*   account's console way in is the Windows password the person already has,
+*   and require.credential offers to set an SD one at their first elevated
+*   interactive login.  NO TIER ANYWHERE: an attached account is an ordinary
+*   account - every account is, under 64 - and the route keyword is required
+*   of it like any other (10082).
+   attach = @false
+   attach.marker = @sdsys:@ds:'$attach'
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -472,6 +504,14 @@ deffun ps_script(script) calling '!ps_script'
 *   is_user test below folds only in its else, so an account found under its
 *   typed spelling was never folded.
 * 18 Sep 26 - RELEASE_1.1 64: dead assignment, commented out with its own tail kept: :@ds:'$adopt.':downcase(acc.uname)
+*
+* 18 Sep 26, LATER STILL - AND IT IS ALIVE AGAIN, AS THE ATTACH MARKER BUILD.
+*   Both reasons recorded above still hold and are why this is in this arm
+*   rather than in more.args: the subroutine is shared with GROUP and OTHER,
+*   which never assign acc.uname, and AND does not short-circuit.  The
+*   DOWNCASE reason holds too - the is_user test below folds only in its
+*   else, and the marker must carry the name as this machine spells it.
+     attach.marker = @sdsys:@ds:'$attach.':downcase(acc.uname)
 
      * any other args? (specifically no.query)
      * rem we may abort in this routine
@@ -552,14 +592,44 @@ deffun ps_script(script) calling '!ps_script'
 *   install used to take that exception for the installing user; what replaces
 *   it is the Windows SDSYS account, which is in the register from the start
 *   and needs no CREATE.ACCOUNT at all.
+*
+* 18 Sep 26, LATER STILL - AND THE EXCEPTION IS BACK, AS ATTACH, BECAUSE THE
+*   PARAGRAPH ABOVE ANSWERED THE ADMIN QUESTION AND NOT THE INSTALLER'S OWN.
+*   The owner, the same day: "during the install, the regular sd account for
+*   the installer needs to be created as well since you can't create an
+*   account later because sd only recognizes accounts it creates."  SDSYS
+*   covers administration; it does not give the PERSON who installed SD an
+*   account, and this refusal is the wall that keeps them from ever getting
+*   one.  The ATTACH keyword - install-only, marker-gated, in more.args - is
+*   the one crossing, and it exists for exactly one caller:
+*   gplbld/attach-account.ps1, at ssPostInstall, for the user who
+*   authenticated the elevation prompt.  With attach set, this case MATCHES
+*   (the premise is that the Windows account exists), folds the name to the
+*   spelling this machine uses, and falls out of the begin case PAST
+*   create_user and set_passwd to the SD half - no OS account is created and
+*   no password is set, the account already being the user's.
+       if attach then
+         if is_user(acc.uname) else acc.uname = downcase(acc.uname)
+       end else
+         @system.return.code = -ER$ARGS
+         stop sysmsg(10038, acc.uname) ;* Windows account %1 already exists
+       end
+
+     case attach
+*      ATTACH names an OS account that is not there, so there is nothing to
+*      attach to.  Creating it instead would be the opposite of what was
+*      asked - the account exists in Windows and the SD account must be bound
+*      to THAT one, or `sd` at the person's console lands nowhere.
        @system.return.code = -ER$ARGS
-       stop sysmsg(10038, acc.uname) ;* Windows account %1 already exists
+       stop sysmsg(6074)  ;*    Invalid user name
 
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE 'ADOPT' CASE IS DELETED WITH THE
 *   KEYWORD.  It read: ADOPT names an OS account that is not there, so there is
 *   nothing to adopt, and creating it instead would be the opposite of what was
 *   asked.  Nothing can reach it now, and "creating it" is the only behaviour
 *   left - which is what the arm above refuses when the name already exists.
+*   LATER THE SAME DAY: the case above IS that arm, restored as ATTACH - same
+*   refusal, same reason, new name.
 
      case no.query
 * 14 Aug 26 Windows port - this branch used to be reachable only when the name
@@ -1015,7 +1085,15 @@ PW.TRY.AGAIN:
 *   entry here either: allow-ssh-groups.ps1 names the Administrators group in
 *   AllowGroups in its own right, so an administrator reaches ssh whatever
 *   sdssh says, and adding one would suggest a lever that does not exist.
-        if is_grp_member(acc.uname, "S-1-5-32-544") then
+*
+* 18 Sep 26, later still - AND AN ATTACHED ACCOUNT JOINS THE ADMINISTRATOR IN
+*   THE ELSE, which is where ADOPT stood before it.  The rule is wider than
+*   administrators: sdsshonly is a pair of DENY RIGHTS, and a person who
+*   already signs in at this console - which is the premise of ATTACH, the
+*   Windows account exists - would have a logon right taken away by an SD
+*   verb.  That is the 15 Aug lockout, and it was observed on this machine
+*   the first day ADOPT ran.  10040's wording is exactly true of them too.
+        if attach or is_grp_member(acc.uname, "S-1-5-32-544") then
           crt sysmsg(10040,acc.uname)   ;* %1 keeps the Windows sign-in rights it already had
         end else
 *         PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
@@ -1746,6 +1824,26 @@ more.args:
 *   opened by anybody who can write that file, which is why it was deletable on
 *   acceptance and removed in a finally; the flow that used it is gone rather
 *   than narrowed, so nothing takes its place.
+*
+* 18 Sep 26, LATER STILL - AND THE DOOR IS BACK, AS ATTACH, BECAUSE THE OWNER
+*   NAMED WHAT THE PARAGRAPH ABOVE MISSED: the install's way in is the Windows
+*   SDSYS account, true - but the PERSON who installed still has no account of
+*   their own, and 10038 above means they never can after install day ("you
+*   can't create an account later because sd only recognizes accounts it
+*   creates").  His requirement: "during the install, the regular sd account
+*   for the installer needs to be created as well."  Every paragraph of gating
+*   above is restored with the door it belonged to, and the one change of
+*   substance is 64's: the account this mints is ORDINARY - no tier, no
+*   administration verbs, the route keyword required like anybody's.
+*
+*   AND IT STAYS AN UNRECOGNISED TOKEN WHEN THE MARKER IS ABSENT, which is
+*   why the test is in the case condition rather than inside the branch: the
+*   fall-through is "Unexpected token (ATTACH)".  A refusal naming the keyword
+*   would confirm to whoever guessed it that it exists.
+         case upcase(token) = 'ATTACH' and kernel(K$INTERNAL, -1) and ospath(attach.marker, OS$EXISTS)
+            attach = @true
+            void ospath(attach.marker, OS$DELETE)
+
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
       end case

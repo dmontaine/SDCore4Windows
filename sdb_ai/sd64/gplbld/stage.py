@@ -1427,6 +1427,21 @@ def main():
                    # so assert-current watches it like the rest of these - do
                    # NOT add it to that script's $neverShipped list.
                    'micro-home.ps1',
+                   # 18 Sep 26 - RELEASE_1.1 66.  It gives the INSTALLING user
+                   # their own ordinary SD account, through CREATEA's
+                   # install-only ATTACH door.  CREATE.ACCOUNT refuses every
+                   # name that already has a Windows account (10038), and under
+                   # 64 nothing else mints one - so without this step the person
+                   # who installed SD can never have an account at all.
+                   #
+                   # IT SHIPS BECAUSE sd.iss RUNS IT FROM {app}, the same reason
+                   # as the rest of this list, and a script left out of it is a
+                   # call pointing at nothing.  THAT IS NOT A HYPOTHETICAL HERE:
+                   # the verb half was written, compiled and shipped on 18 Sep
+                   # while this line was missing, and the install silently made
+                   # no account.  So assert-current watches it like the rest -
+                   # do NOT add it to that script's $neverShipped list.
+                   'attach-account.ps1',
                    'install-sdsys.ps1', 'install-service.ps1',
                    # 22 Aug 26 - the POST-INSTALL CHECK, offered as a
                    # checkbox on the installer's last page.  It ships, so
