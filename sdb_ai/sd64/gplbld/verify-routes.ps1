@@ -1,21 +1,33 @@
 <#
 .SYNOPSIS
     The two remote routes: does the create-time keyword decide them, is
-    MODIFY.ACCOUNT absolute rather than additive, does an administrator get both
-    and refuse to be changed, and is RDPACCOUNT gone?
+    MODIFY.ACCOUNT absolute rather than additive, are the tier keywords refused
+    at create time, is SDSYS outside MODIFY.ACCOUNT's reach, and is RDPACCOUNT
+    gone?
 
 .DESCRIPTION
-    Owner's rule, 21 Aug 2026: NOBODY SD CREATES REACHES THE KEYBOARD UNLESS
-    THEY ARE AN ADMINISTRATOR, and the two routes that remain - ssh and the API
-    - are settable per account.  This measures all three halves of that.
+    Owner's rule, 21 Aug 2026: NOBODY SD CREATES REACHES THE KEYBOARD, and the
+    two routes that remain - ssh and the API - are settable per account.  That
+    half SURVIVED RELEASE_1.1 64: the four keywords SSH | API | BOTH | NONE are
+    as they were.  What 64 took, 18 Sep 2026, is everything the keywords used
+    to sit beside - the tiers - and this rig is re-aimed to the model that is
+    left: one administrator, SDSYS, tied to the Windows account of the same
+    name; every other account ordinary, with its routes said at create time
+    and movable afterwards by keyword alone.
 
-    REWRITTEN 21 AUG 2026 FOR PHASE 2's FOUR KEYWORDS.  It asserted the
-    SSH / NO.SSH / API / NO.API pairs and messages 10063-10071, which no longer
-    exist; between Phase 2 and this rewrite it refused with exit 2 rather than
-    scoring eight failures that would have looked like a broken feature.
+    RE-AIMED 18 SEP 2026, RELEASE_1.1 64 SLICE 5b - THE FIRST SDSYS-RUN RIG.
+    The old file opened every session with "LOGTO SDSYS", refused outright at
+    cproc:2789 (10002) since slices 1-2, created an ADMINISTRATOR control
+    account the verb now refuses (2018), and asserted messages 10083 and 10175,
+    deleted by slice 4.  Under 64 the rig RUNS AS THE WINDOWS SDSYS ACCOUNT,
+    ELEVATED: LOGIN's landing case (upcase(@logname) = 'SDSYS' and the session
+    elevated) delivers the SDSYS SD account with nothing to type, and every
+    other Windows administrator is refused at the same door.  The identity
+    check below refuses a run from any other account rather than letting it
+    measure a 5052 cascade from the caller's own session.
 
     THE ONE ASSERTION THAT MATTERS MOST IS THAT "API" TAKES ssh AWAY.  The
-    keyword now says what the access IS, not what to add, so
+    keyword says what the access IS, not what to add, so
     "MODIFY.ACCOUNT x API" on an account that had ssh leaves it with the API
     ALONE.  An additive implementation passes every other check in this file:
     the account ends up in sdapi either way, and only the sdssh membership
@@ -31,11 +43,16 @@
       admitted      the account may sign in at a console or over Remote Desktop
       refused 1385  ERROR_LOGON_TYPE_NOT_GRANTED - the deny right applies
 
-    ITS CONTROL IS AN ADMINISTRATOR ACCOUNT MADE IN THE SAME RUN.  "the standard
-    account is refused" means nothing on a machine where everybody is refused -
-    a broken LogonUser call, a wrong password, a disabled account all read the
-    same way.  The administrator must be ADMITTED, seconds apart, on the same
-    install.
+    ITS CONTROL IS THE PROBE ITSELF, WRONG PASSWORD FIRST.  The 21 Aug rig
+    controlled the refusal with an ADMINISTRATOR account made in the same run,
+    admitted seconds apart; under 64 no account this rig can create is
+    admitted - they all join sdsshonly - and the Windows SDSYS password is not
+    this rig's to probe.  So the subject is offered a WRONG password first:
+    LogonUser validates credentials before the logon-type right, so a working
+    probe answers 1326 (ERROR_LOGON_FAILURE) there and 1385 on the right one.
+    A broken call cannot produce that pair - it fails both rows identically -
+    and a reader who sees 1385 on the wrong-password row has falsified the
+    probe's ordering, not the product's deny.
 
     AND THE INVARIANT IS RE-CHECKED AFTER EVERY ssh AND API CHANGE.  That is
     the whole point of deleting RDPACCOUNT: no verb in MODIFY.ACCOUNT may put
@@ -49,16 +66,19 @@
     control; either alone does not.
 
 .PARAMETER Prefix
-    Stem for the throwaway accounts: <prefix>s (standard) and <prefix>a
-    (administrator, the control).  Use a stem nobody has used - CREATE.ACCOUNT
-    refuses a name it has seen.  A third name, <prefix>x, is offered to
-    CREATE.ACCOUNT with the dead RDPACCOUNT keyword and must NOT be created.
+    Stem for the throwaway accounts: <prefix>s (the subject) and <prefix>a
+    (offered the ADMINISTRATOR keyword, must NOT be created).  Use a stem
+    nobody has used - CREATE.ACCOUNT refuses a name it has seen, and a leftover
+    register record for <prefix>a would fail this rig's own probe.  A third
+    name, <prefix>x, is offered with the dead RDPACCOUNT keyword and must NOT
+    be created either.
 
 .PARAMETER Keep
     Leave the accounts behind for poking at.  They still need DELETE.ACCOUNT.
 
 .EXAMPLE
-    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-routes.ps1 -Prefix sdrt1
+    From an elevated PowerShell signed in as the Windows SDSYS account:
+    C:\Users\Don\SDCoreProject\sd4windows\sdb_ai\sd64\gplbld\verify-routes.ps1 -Prefix sdrt1
 #>
 
 [CmdletBinding()]
@@ -77,17 +97,26 @@ $ErrorActionPreference = 'Stop'
 #
 # NOW IT REFUSES IF ANY OF THEM IS STILL THERE.  Phase 2 retired all nine, so a
 # tree that still has one is a tree this script's assertions do not describe -
-# an install that predates Phase 2, most likely, and every route check below
+# an install that predates Phase 2, most likely - and every route check below
 # would be measuring the old verb.  Same guard, pointed the other way, and it
 # costs nothing on a correct install.
-$retired = @(10063, 10064, 10065, 10066, 10067, 10068, 10069, 10070, 10071)
+#
+# 18 Sep 26 - RELEASE_1.1 64 SLICE 5b: THE SAME GUARD NOW COVERS 64's OWN
+# DELETIONS.  Slice 4 retired 10083 (the administrator route refusal), 10106
+# and 10175 with the tiers; this rig no longer asserts any of them, and a tree
+# that still HAS them predates the teardown - its CREATE.ACCOUNT would accept
+# the ADMINISTRATOR keyword this rig expects refused, and its MODIFY.ACCOUNT
+# would take an SDSYS subject this rig expects turned away.  Refusing beats
+# scoring either as a broken feature.
+$retired = @(10063, 10064, 10065, 10066, 10067, 10068, 10069, 10070, 10071,
+             10083, 10106, 10175)
 $left = @($retired | Where-Object {
     Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\messages\' + $_)) })
 if ($left.Count -gt 0) {
     Write-Host ''
-    Write-Host 'verify-routes: THE INSTALLED TREE PREDATES PHASE 2.' -ForegroundColor Yellow
-    Write-Host ('  Messages Phase 2 retired are still installed: ' + ($left -join ', ')) -ForegroundColor Yellow
-    Write-Host '  This script asserts SSH | API | BOTH | NONE and messages 10076-10083,' -ForegroundColor Yellow
+    Write-Host 'verify-routes: THE INSTALLED TREE PREDATES THIS RIG.' -ForegroundColor Yellow
+    Write-Host ('  Messages a completed teardown retired are still installed: ' + ($left -join ', ')) -ForegroundColor Yellow
+    Write-Host '  This script asserts the four route keywords against a tierless verb,' -ForegroundColor Yellow
     Write-Host '  so it would be measuring a verb that is no longer the one under test.' -ForegroundColor Yellow
     Write-Host '  Run a cycle.' -ForegroundColor Yellow
     exit 2
@@ -165,21 +194,22 @@ function Shown($out, [int]$n) {
 
 # Blank first line absorbs the pipe's BOM, TERM stops pagination, OFF ends it.
 function Invoke-SD([string[]]$commands) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any LOGTO in $commands and long
-    # LIST/COUNT output paginates on a stdin the pipe can no longer answer.
-    # Full write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
+    # 18 Sep 26 - RELEASE_1.1 64 SLICE 5b: THE LOGTO SDSYS PREFIX IS GONE WITH
+    # THE TIER IT REACHED.  LOGTO SDSYS is refused outright at cproc:2789
+    # (10002) since slices 1-2, and the refusal is the model working: SDSYS is
+    # entered by the WINDOWS SDSYS ACCOUNT at LOGIN (the landing case, which is
+    # the identity the pre-flight below demands) and by nobody else.  So this
+    # rig pipes commands into a session that ALREADY IS SDSYS, and there is no
+    # account switch to protect against any more.
+    #
+    # THE TERM-AFTER-LOGTO TRAP IS WRITTEN HERE BECAUSE ITS LAST HOME DIED: the
+    # full write-up was in verify-tiers.ps1's Invoke-SD, deleted 18 Sep 2026
+    # with the tiers.  LOGIN re-inits terminal geometry on every account switch
+    # (LOGIN:201-209), so the initial TERM below is wiped by any LOGTO in
+    # $commands and long LIST/COUNT output paginates on a stdin the pipe can no
+    # longer answer.  Nothing here sends LOGTO now; if a future edit ever adds
+    # one, a TERM 200,9999 must follow it in the same batch.
+    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
     $out = $body | & $sdExe
     return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
@@ -231,9 +261,26 @@ if ($Prefix -notmatch '^[a-z][a-z0-9_]*$') {
           'account takes it verbatim.')
 }
 
+# 18 Sep 26 - RELEASE_1.1 64 SLICE 5b: THE IDENTITY IS THE GATE NOW, AND IT IS
+# READ THE WAY THE PRODUCT READS IT.  LOGIN's landing case tests @logname -
+# the name the OPERATING SYSTEM authenticated - so this uses WindowsIdentity
+# rather than $env:USERNAME, which a runas context can leave pointing at the
+# wrong person.  Under 64 an elevated session of ANY OTHER Windows account
+# lands in that account's own SD session (or is refused for having none), and
+# every restricted verb below would answer 5052 - a cascade of refusals that
+# would read as a broken product rather than a rig run from the wrong seat.
+$winId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+if (($winId -split '\\')[-1] -ine 'SDSYS') {
+    Fail ("this rig runs as the WINDOWS SDSYS ACCOUNT, elevated - this session is '$winId'.  " +
+          'Every other Windows administrator is refused the SDSYS session (10002); ' +
+          'sign in as SDSYS and run it from there.')
+}
+if (-not (Get-LocalUser -Name 'SDSYS' -ErrorAction SilentlyContinue)) {
+    Fail 'there is no Windows SDSYS account - the installer makes it (install-sdsys.ps1); run a cycle.'
+}
 $pr = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'this needs an ELEVATED PowerShell - CREATE_USER needs an elevated token.'
+    Fail 'this needs an ELEVATED PowerShell - CREATE_USER needs an elevated token, and the landing case requires one for SDSYS.'
 }
 
 & (Join-Path $Gplbld 'assert-current.ps1')
@@ -246,8 +293,8 @@ foreach ($g in @('sdsshonly', 'sdssh', 'sdapi')) {
     }
 }
 
-$stdAcc = $Prefix + 's'    # standard - confined to ssh, no API
-$admAcc = $Prefix + 'a'    # administrator - the control
+$stdAcc = $Prefix + 's'    # the subject - created with SSH alone
+$admAcc = $Prefix + 'a'    # offered the ADMINISTRATOR keyword, must NOT be created
 $rdpAcc = $Prefix + 'x'    # offered with RDPACCOUNT, must NOT be created
 $made   = @()
 
@@ -300,59 +347,49 @@ try {
     # route change below, and starting it with one route is what lets step 4
     # see the other one being taken away.
     $s = New-Acct $stdAcc 'SSH' ''
-    Note 'message 10034 shown (ssh only)'   $true (Shown $s.Out 10034)
+    Note 'message 10034 shown (denied console and RDP)' $true (Shown $s.Out 10034)
     Note 'message 10076 shown (ssh, not the API)' $true (Shown $s.Out 10076)
     Note 'IS in sdsshonly'                  $true  (InGroup 'sdsshonly' $stdAcc)
     # THE KEYWORD IS THE WHOLE OF IT, 21 Aug 2026.  If this reads 'ssh+api'
     # then SSH granted the API as well and the four words mean nothing.
     Note 'routes are ssh alone'             'ssh'  (Routes $stdAcc)
     Note 'may NOT sign in at the keyboard'  'refused 1385' (InteractiveLogon $stdAcc $s.Password)
+    # 18 Sep 26, RELEASE_1.1 64 SLICE 5b - THE CONTROL, REPLACING THE
+    # ADMINISTRATOR ACCOUNT THE OLD RIG MADE.  Under 64 no account this rig
+    # creates can be ADMITTED at a console - they all join sdsshonly - and the
+    # Windows SDSYS password is not this rig's to probe.  So the probe is
+    # controlled on the subject itself: a WRONG password must answer 1326
+    # (ERROR_LOGON_FAILURE), because LogonUser validates credentials before
+    # the logon-type right, and only the right password reaches the deny.
+    # A dead P/Invoke fails both rows the same way, so this pair cannot pass
+    # on a broken probe - and if THIS row reads 1385, the ordering claim in
+    # the header is what broke, not the product's deny.
+    Note 'CONTROL: wrong password answers 1326, not 1385' 'refused 1326' (InteractiveLogon $stdAcc ($s.Password + 'X'))
 
     # -----------------------------------------------------------------------
-    Step 2 "THE CONTROL: an administrator CAN sign in, and gets both routes"
+    Step 2 "The tier keywords are REFUSED at create time, and nothing is made"
 
-    # Without this, step 1's refusal would pass on a machine where LogonUser
-    # refuses everybody - a wrong password, a disabled account, a broken
-    # P/Invoke all read as "refused" and none of them is the deny right.
+    # 18 Sep 26, RELEASE_1.1 64.  ADMINISTRATOR was the lever that made the old
+    # control account, and 64 took the tiers it named: there is one
+    # administrator, SDSYS, and it is not created by a verb.  The keyword is
+    # refused in createa's more.args with 2018 - the unrecognised-token
+    # message, re-used deliberately because the token now IS unrecognised -
+    # BEFORE any Windows account, group or register record exists, so the
+    # machine is untouched by the refusal.  The three rows below say exactly
+    # that: refused, and nothing left behind.
     #
-    # NO ACCESS KEYWORD IS GIVEN, and that is an assertion in itself: the tier
-    # sets access.given, so an administrator creation must not be refused with
-    # 10082 for staying silent.
-    $a = New-Acct $admAcc '' 'ADMINISTRATOR'
-    Note 'admin is in Administrators'   $true  (InGroup 'Administrators' $admAcc)
-    Note 'admin NOT in sdsshonly'       $false (InGroup 'sdsshonly' $admAcc)
-    Note 'admin CAN sign in'            'admitted' (InteractiveLogon $admAcc $a.Password)
-    # THE PHASE 2 GAP CLOSURE.  Before 21 Aug 2026 the administrator branch
-    # joined NEITHER group, and APISRVR:1362 requires sdapi with no exemption -
-    # so an SD administrator could not use the API at all.  ssh they reached
-    # anyway, because allow-ssh-groups.ps1 names Administrators in its own
-    # right, which is why sdapi is the half that was actually broken.
-    #
-    # ***18 Sep 26 - AND IT IS BACK TO NEITHER GROUP, DELIBERATELY THIS TIME.***
-    # RELEASE_1.1 58, owner's ruling: an administrator gets no remote door at
-    # all.  So the 21 Aug closure is REVERSED, and the paragraph above is kept
-    # because it explains what the two groups mean and why sdapi was the half
-    # that mattered.  ***THE DIFFERENCE FROM THE PRE-21-AUG STATE IS THE ssh
-    # HALF***: back then an administrator still reached ssh through
-    # AllowGroups' own Administrators entry, and that entry is now gone too.
-    Note 'admin has NEITHER route'      'none'    (Routes $admAcc)
-    # 05 Sep 26 - 10078 -> 10175.  PRE_RELEASE_FIXES 169 (a).  An administrator
-    # still HOLDS both routes - the row directly above still passes, and 169 (b)
-    # is why: the grant survives and cannot be taken away.  What changed is the
-    # sentence CREATE.ACCOUNT prints about them, because 167 denies an
-    # administrator both FROM ANOTHER MACHINE and 10078's bare "ssh and the API"
-    # had become false in the dangerous direction.  CREATEA:1883 reports the
-    # ADMINISTRATOR tier before the three general cases, so the ordinary "both"
-    # account still gets 10078 - and THAT row, further down this file, still
-    # passes.  b123 showed exactly that pair: this one red, the other green.
-    #
-    # 18 Sep 26 - ***THE MESSAGE NUMBER IS THE SAME AND ITS WORDS ARE NOT.***
-    # RELEASE_1.1 58 rewrote 10175 from "ssh and the API, but only from this
-    # machine" to "no routes" - so this row still checks that the TIER gets its
-    # own sentence before the three general cases, which is the property worth
-    # holding, and the label no longer quotes the old text.  The sentence above
-    # about the grant surviving is exactly what 58 reversed.
-    Note 'admin: message 10175 shown (its own tier sentence)' $true (Shown $a.Out 10175)
+    # WHAT THE OLD STEP MEASURED, FOR THE RECORD: an administrator account made
+    # in the same run - in Administrators, not in sdsshonly, ADMITTED at the
+    # console (the LogonUser control), holding no route (58's posture), and
+    # carrying its own sentence, 10175.  58, 62 and the tier structure they
+    # described are superseded by 64; the messages are gone; the control the
+    # step existed to provide lives in step 1 now, as the wrong-password row.
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $admAcc ADMINISTRATOR")
+    Note 'ADMINISTRATOR refused (message 2018)' $true (Shown $out 2018)
+    Note 'no ACCOUNTS record was written'       $false (Test-Path -LiteralPath (
+             Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $admAcc.ToUpper())))
+    Note 'no Windows account was created'       $false ([bool](
+             Get-LocalUser -Name $admAcc -ErrorAction SilentlyContinue))
 
     # -----------------------------------------------------------------------
     Step 3 "RDPACCOUNT is gone"
@@ -405,32 +442,29 @@ try {
     Note 'still refused at the keyboard' 'refused 1385' (InteractiveLogon $stdAcc $s.Password)
 
     # -----------------------------------------------------------------------
-    Step 5 "an administrator is REFUSED, and nothing moves"
+    Step 5 "SDSYS is NOT A SUBJECT: MODIFY.ACCOUNT refuses it, and nothing moves"
 
-    # Owner's rule, 21 Aug 2026: administrators always have both, so there is
-    # nothing to set.  It is refused with a message rather than ignored - the
-    # difference matters, because silence would read as success to whoever
-    # typed it.
+    # 18 Sep 26, RELEASE_1.1 64.  The old step sent BOTH to the control account
+    # and asserted the administrator route refusal, 10083 - deleted by slice 4
+    # with the tiers it guarded.  What the refusal PROTECTED survives as a
+    # different property: SDSYS itself, the one administrator, is outside the
+    # account verb's reach entirely (modifya refuses the name with 2202 before
+    # it even reads the register), and its position - no remote route, no
+    # keyboard deny - is the installer's to set and no verb's to move.
     #
-    # THE SECOND CHECK IS THE ONE THAT COULD FAIL QUIETLY.  A route.set that
-    # printed 10083 and carried on would pass the message check and leave an
-    # administrator with no API, which is exactly the state Phase 2 closed.
+    # BOTH IS STILL THE ASK, for the reason it was before: it is the harmless
+    # direction to ask in and the harmful one for the guard to leak.  A
+    # route.set that printed 2202 and carried on would join SDSYS to sdssh and
+    # sdapi - the row below reads 'none' and would catch it - which is exactly
+    # the remote door 64's SDSYS is built without.
     #
-    # ***18 Sep 26 - THE REFUSAL IS UNCHANGED AND THE DANGEROUS DIRECTION HAS
-    # REVERSED, SO THE PROBE CHANGED WITH IT.***  RELEASE_1.1 58: an
-    # administrator has no route and cannot be given one, so asking for NONE now
-    # asks for what they already have - a refusal there proves the guard fired
-    # but not that it protects anything.  ***BOTH is the ask that would do harm
-    # if the guard leaked***, and it is what this now sends: a route.set that
-    # printed 10083 and carried on would pass the message check and leave an
-    # administrator holding ssh AND the API, which is the state 58 exists to
-    # prevent.  10083's own wording inverted with it ("cannot be granted to
-    # one").
-    $out = Invoke-SD @("MODIFY.ACCOUNT $admAcc BOTH")
-    Note 'admin refused: message 10083' $true  (Shown $out 10083)
-    Note 'admin STILL has neither route' 'none' (Routes $admAcc)
-    Note 'admin still NOT in sdsshonly' $false    (InGroup 'sdsshonly' $admAcc)
-    Note 'admin can still sign in'      'admitted' (InteractiveLogon $admAcc $a.Password)
+    # AND THE ACCOUNT THIS RIG RUNS AS is the one that would pay for a leak
+    # here: sdsshonly's deny lands on the next sign-in, so a guard that let a
+    # route verb touch it would be closing the console door on SDSYS itself.
+    $out = Invoke-SD @('MODIFY.ACCOUNT SDSYS BOTH')
+    Note 'SDSYS refused: message 2202'     $true  (Shown $out 2202)
+    Note 'SDSYS STILL has no route'        'none' (Routes 'SDSYS')
+    Note 'SDSYS still NOT in sdsshonly'    $false (InGroup 'sdsshonly' 'SDSYS')
 
     # -----------------------------------------------------------------------
     Step 6 "sshd allows sdssh and no longer allows sdusers"
@@ -473,10 +507,12 @@ try {
         Note 'AllowGroups no longer names sdusers' $false ($line -match '\bsdusers\b')
         Note 'sshd_config has a ForceCommand line' $true $force
 
-        # 18 Sep 26 - RELEASE_1.1 58, THE TWO ROWS THE NEW POSTURE NEEDS.  An
-        # administrator has no remote door at all (owner, 18 Sep 2026), and
-        # forwarding is off because ForceCommand never constrained it and a
-        # tunnelled API connection reads as local to LOGIN's peer test.
+        # 18 Sep 26 - DisableForwarding, WRITTEN FOR 58 AND KEPT FOR 64.  58 is
+        # superseded, but the row survives on its own merits: sdssh is the only
+        # name in AllowGroups under either model (allow-ssh-groups.ps1 keeps
+        # sdssh-alone "for the 64 reason"), and forwarding is off because
+        # ForceCommand never constrained it and a tunnelled API connection
+        # reads as local to LOGIN's peer test.
         Note 'DisableForwarding is set'            $true (@($body | Where-Object { $_ -match '^\s*DisableForwarding\s+yes\b' }).Count -gt 0)
 
         # BY SID, RESOLVED TO A NAME - "Administrators" is renamed on a
@@ -547,14 +583,14 @@ finally {
             if (Test-Path -LiteralPath $prof) { Remove-Item -LiteralPath $prof -Recurse -Force -ErrorAction SilentlyContinue }
         }
         # 30 Aug 26 - AND THE os.users RECORD IS NAMED NOW.  PRE_RELEASE_FIXES.md
-        # 65: the ADMINISTRATOR-tier subject is given one at create time, this
-        # block removes the Windows LOGIN and not the grant, and the line below
-        # listed only the register - so the one artefact that is a PERMISSION
-        # went unmentioned.  DELETE.ACCOUNT clears it as of the same entry's fix
-        # to DELACC; before that fix the recovery named here did not.
+        # 65, re-aimed for 64: the record is written for a subject given OS
+        # access (sh-on / os-on) at create time - none of this rig's accounts
+        # asks for one, but a -Keep run might - and this block removes the
+        # Windows LOGIN and not the grant, so the line below names the one
+        # artefact that is a PERMISSION.  DELETE.ACCOUNT clears it.
         Write-Host '   ACCOUNTS records left in place - remove with DELETE.ACCOUNT'
-        Write-Host ('   sdsys\os.users records left in place too, for any ADMINISTRATOR-tier ' +
-                    'subject - the same DELETE.ACCOUNT takes them')
+        Write-Host ('   sdsys\os.users records left in place too, for any subject given ' +
+                    'OS access - the same DELETE.ACCOUNT takes them')
     } else {
         Write-Host ''
         Write-Host ("-Keep: " + ($made -join ', ') + " are still there.") -ForegroundColor Yellow
@@ -578,6 +614,7 @@ if ($failed) {
 
 Write-Host ''
 Write-Host ('verify-routes: the keyboard is shut, the four keywords say what the access IS, ' +
-            'an administrator has both and cannot be changed, and RDPACCOUNT is gone.') -ForegroundColor Green
+            'the tier keywords are refused at create time, MODIFY.ACCOUNT refuses SDSYS ' +
+            'as a subject, and RDPACCOUNT is gone.') -ForegroundColor Green
 try { Stop-Transcript | Out-Null } catch { }
 exit 0
