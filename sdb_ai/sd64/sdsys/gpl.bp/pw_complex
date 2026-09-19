@@ -18,6 +18,12 @@
 *
 *
 * START-HISTORY:
+* 19 Sep 26 Windows port - the case block takes the LINUX PORT'S SHAPE: the
+*           symbol arm names 32-126 itself and the catch-all returns @false,
+*           so an unmatched byte is refused whatever the arm order.  Mine put
+*           the out-of-range test first and let the catch-all mean "symbol",
+*           which fails OPEN if the arms are ever reordered.  Their offer,
+*           19 Sep 14:00, and the behaviour is identical on all 13 rows.
 * 19 Sep 26 Windows port - new.  RELEASE_1.1 75.  Owner's ruling, taken on the
 *           SD Core for Linux side and binding in both ports under CLAUDE.md's
 *           parity rule: "The requirement for the complex password is
@@ -81,22 +87,34 @@ $catalog !pw_complex
    got.digit = @false
    got.symbol = @false
 
-*  ONE PASS, AND THE ORDER OF THE CASES IS THE RULE.  The out-of-range test
-*  is first so that a byte outside 32-126 can never fall through to the
-*  symbol arm and satisfy the very requirement it is supposed to fail.
+*  ONE PASS, AND THE CATCH-ALL FAILS CLOSED.  ***THIS IS THE LINUX PORT'S
+*  SHAPE AND IT REPLACED A WORSE ONE OF MINE ON 19 Sep 2026.***  The first
+*  version put the out-of-range test in the FIRST arm and let the catch-all
+*  mean "symbol", which is correct only while that arm stays first: move it
+*  and a byte outside 32-126 falls through to the catch-all and SATISFIES the
+*  requirement it is supposed to fail - it fails OPEN, and the only thing
+*  standing between the tree and that was a guard asserting nobody had
+*  reordered the arms.
+*
+*  HERE THE SYMBOL ARM NAMES ITS OWN RANGE and the catch-all RETURNS FALSE,
+*  so a character that matches nothing is refused no matter how the arms are
+*  ordered.  A reordering can still break the rule - put the symbol arm first
+*  and letters stop counting as letters - but it then refuses valid passwords
+*  rather than accepting invalid ones, and that is the direction to fail in.
+*  ***A SHAPE THAT CANNOT FAIL OPEN BEATS A CHECK THAT REPORTS IT.***
    for pw.i = 1 to pw.len
       pw.c = seq(pw[pw.i, 1])
       begin case
-      case pw.c < 32 or pw.c > 126
-         return @false
       case pw.c >= 97 and pw.c <= 122
          got.lower = @true
       case pw.c >= 65 and pw.c <= 90
          got.upper = @true
       case pw.c >= 48 and pw.c <= 57
          got.digit = @true
-      case @true
+      case pw.c >= 32 and pw.c <= 126
          got.symbol = @true
+      case 1
+         return @false
       end case
    next pw.i
 

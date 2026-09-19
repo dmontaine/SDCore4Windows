@@ -205,14 +205,16 @@ function Test-PasswordComplex {
     $lower = $false; $upper = $false; $digit = $false; $symbol = $false
     foreach ($ch in $Password.ToCharArray()) {
         $c = [int][char]$ch
-        # OUT OF RANGE IS TESTED FIRST, exactly as the BASIC orders its cases:
-        # a byte outside 32-126 must never fall through and satisfy the symbol
-        # requirement it is supposed to fail.
-        if ($c -lt 32 -or $c -gt 126) { return $false }
-        elseif ($c -ge 97 -and $c -le 122) { $lower  = $true }
+        # THE SYMBOL ARM NAMES ITS OWN RANGE AND THE CATCH-ALL FAILS CLOSED,
+        # which is gpl.bp/pw_complex's shape and the Linux port's before that.
+        # A character matching nothing is refused however these are ordered;
+        # the earlier version tested out-of-range first and let the final else
+        # mean "symbol", which fails OPEN the moment anybody reorders it.
+        if     ($c -ge 97 -and $c -le 122) { $lower  = $true }
         elseif ($c -ge 65 -and $c -le 90)  { $upper  = $true }
         elseif ($c -ge 48 -and $c -le 57)  { $digit  = $true }
-        else                               { $symbol = $true }
+        elseif ($c -ge 32 -and $c -le 126) { $symbol = $true }
+        else                               { return $false }
     }
     return ($lower -and $upper -and $digit -and $symbol)
 }

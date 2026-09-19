@@ -109,20 +109,32 @@ Check ("minimum length comes from the file (got '$($wantLen.Groups[1].Value)')")
 
 $cases = [regex]::Matches($basCode, '(?m)^\s*case\s+(.+?)\s*$')
 Check ("the case block was found (got $($cases.Count) case arms)") ($cases.Count -eq 5) `
-      'expected 5 arms: out-of-range, lower, upper, digit, catch-all'
+      'expected 5 arms: lower, upper, digit, symbol-with-its-own-range, catch-all'
+
+# ***THE PROPERTY THAT MATTERS IS "THE CATCH-ALL FAILS CLOSED", NOT THE ORDER,
+# AND THAT IS A CHANGE OF MIND RECORDED HERE ON PURPOSE.***  The first version
+# of pw_complex tested out-of-range in the FIRST arm and let the catch-all mean
+# "symbol", so the rule was correct only while nobody reordered the arms - and
+# this section existed to assert that nobody had.  The Linux port's shape makes
+# the reordering harmless in the dangerous direction: the symbol arm names
+# 32-126 itself, so a character matching nothing reaches the catch-all and is
+# REFUSED however the arms are ordered.  A shape that cannot fail open beats a
+# check that reports it, so the check changed to match the shape.
+$symbolArm = @($cases | Where-Object { $_.Groups[1].Value -match '32' -and $_.Groups[1].Value -match '126' })
+Check ("the SYMBOL arm names its own range 32-126 (got $($symbolArm.Count))") ($symbolArm.Count -eq 1) `
+      'no arm tests 32-126, so the catch-all is deciding what a symbol is'
 if ($cases.Count -eq 5) {
-    Check 'arm 1 is the OUT-OF-RANGE test, and it must be first' `
-          ($cases[0].Groups[1].Value -match '<\s*32' -and $cases[0].Groups[1].Value -match '>\s*126') `
-          ("a byte outside 32-126 would fall through to the catch-all and SATISFY the symbol " +
-           "requirement it exists to fail.  arm 1 reads: " + $cases[0].Groups[1].Value)
-    Check 'arm 2 is a-z (97-122)' `
-          ($cases[1].Groups[1].Value -match '97' -and $cases[1].Groups[1].Value -match '122') $cases[1].Groups[1].Value
-    Check 'arm 3 is A-Z (65-90)' `
-          ($cases[2].Groups[1].Value -match '65' -and $cases[2].Groups[1].Value -match '90') $cases[2].Groups[1].Value
-    Check 'arm 4 is 0-9 (48-57)' `
-          ($cases[3].Groups[1].Value -match '48' -and $cases[3].Groups[1].Value -match '57') $cases[3].Groups[1].Value
-    Check 'arm 5 is the catch-all that marks a symbol' `
-          ($cases[4].Groups[1].Value -match '@true') $cases[4].Groups[1].Value
+    Check 'the LAST arm is the catch-all and it RETURNS FALSE' `
+          ($cases[4].Groups[1].Value -match '^1$' -and
+           $basCode -match '(?ms)case\s+1\s*\r?\n\s*return\s+@false') `
+          ("a character matching no arm must be refused.  If the catch-all marks a symbol " +
+           "instead, an out-of-range byte SATISFIES the requirement it exists to fail. " +
+           "last arm reads: " + $cases[4].Groups[1].Value)
+    foreach ($a in @(@{N='a-z'; L='97'; H='122'}, @{N='A-Z'; L='65'; H='90'}, @{N='0-9'; L='48'; H='57'})) {
+        $hit = @($cases | Where-Object { $_.Groups[1].Value -match $a.L -and $_.Groups[1].Value -match $a.H })
+        Check ("an arm tests $($a.N) ($($a.L)-$($a.H))") ($hit.Count -eq 1) `
+              'the range is missing or written twice'
+    }
 }
 foreach ($n in @('got.lower', 'got.upper', 'got.digit', 'got.symbol')) {
     Check ("all four requirements are asserted at the end: $n") `
@@ -134,17 +146,25 @@ foreach ($n in @('got.lower', 'got.upper', 'got.digit', 'got.symbol')) {
 # The BASIC's rule, rebuilt FROM WHAT WAS JUST EXTRACTED rather than from a
 # second hand-written copy, and driven over the table.  This is what makes the
 # section above more than a spelling check.
+# $Scramble reverses the three letter/digit arms against the symbol arm, which
+# is how section 5 proves the shape is order-safe in the direction that counts.
+# $OpenCatchAll restores the OLD, worse shape - catch-all means "symbol" - so
+# the rows it breaks are visible rather than argued about.
 function Test-FromExtracted {
-    param([string] $Password, [int] $Min, [int] $Lo, [int] $Hi)
+    param([string] $Password, [int] $Min, [int] $Lo, [int] $Hi,
+          [switch] $Scramble, [switch] $OpenCatchAll)
     if ($Password.Length -lt $Min) { return $false }
     $l = $false; $u = $false; $d = $false; $s = $false
     foreach ($ch in $Password.ToCharArray()) {
         $c = [int][char]$ch
-        if ($c -lt $Lo -or $c -gt $Hi) { return $false }
-        elseif ($c -ge 97 -and $c -le 122) { $l = $true }
+        $inSym = ($c -ge $Lo -and $c -le $Hi)
+        if ($Scramble -and $inSym) { $s = $true; continue }
+        if     ($c -ge 97 -and $c -le 122) { $l = $true }
         elseif ($c -ge 65 -and $c -le 90)  { $u = $true }
         elseif ($c -ge 48 -and $c -le 57)  { $d = $true }
-        else                               { $s = $true }
+        elseif ($inSym)                    { $s = $true }
+        elseif ($OpenCatchAll)             { $s = $true }
+        else                               { return $false }
     }
     return ($l -and $u -and $d -and $s)
 }
@@ -229,22 +249,39 @@ foreach ($f in @('set_acc_password', 'set_passwd', 'login')) {
 
 # --------------------------------------------------------------------------
 Section '5. MUTANTS, on text - the live files are never edited'
-# (a) the out-of-range arm moved last: a TAB would then satisfy "symbol".
-$mut = Test-FromExtracted -Password ("Abcdef1" + [char]9) -Min 8 -Lo 0 -Hi 255
-Check 'widening the range to 0-255 lets the TAB row pass, so the range is load-bearing' `
-      ($mut -eq $true) 'the range is not what refuses a control character, so section 1 guards nothing'
-# (b) the minimum dropped to 7 must accept the 7-character row.
-$mut = Test-FromExtracted -Password 'Abcde1!' -Min 7 -Lo 32 -Hi 126
-Check 'dropping the minimum to 7 accepts the 7-character row' ($mut -eq $true) `
-      'the length test is not what refuses it, so the extracted minimum guards nothing'
-# (c) a planted case-order fault in a COPY of the BASIC text is caught by the
-#     section-1 reader.  The live file is read again afterwards and compared.
 $before = (Get-FileHash -LiteralPath $bas -Algorithm SHA256).Hash
-$mutText = $basCode -replace 'case pw\.c < 32 or pw\.c > 126', 'case pw.c < 0 or pw.c > 255'
-$mutCases = [regex]::Matches($mutText, '(?m)^\s*case\s+(.+?)\s*$')
-$caught = -not ($mutCases[0].Groups[1].Value -match '<\s*32')
-Check 'a reordered/widened first arm is caught by the section-1 reader' $caught `
-      'the reader would not notice the range being widened'
+$tab = "Abcdef1" + [char]9
+
+# (a) THE SHAPE'S WHOLE POINT, DRIVEN RATHER THAN ASSERTED.  Reorder so the
+#     symbol arm wins over the letter and digit arms and the TAB row must
+#     STILL be refused: an out-of-range byte matches no arm either way.
+Check 'ORDER-SAFE: with the arms scrambled, the TAB row is still refused' `
+      ((Test-FromExtracted -Password $tab -Min 8 -Lo 32 -Hi 126 -Scramble) -eq $false) `
+      'reordering the arms let a control character through, which is the failure the shape exists to prevent'
+# ...and the scramble does break the rule, in the SAFE direction, which is
+# what stops this row passing for the wrong reason.
+Check 'ORDER-SAFE is not vacuous: the scramble does refuse a GOOD password too' `
+      ((Test-FromExtracted -Password 'Abcdef1!' -Min 8 -Lo 32 -Hi 126 -Scramble) -eq $false) `
+      'the scramble changed nothing at all, so the row above proves nothing about ordering'
+
+# (b) THE OLD SHAPE, RESTORED, MUST ACCEPT WHAT THE NEW ONE REFUSES.  This is
+#     the defect the Linux port's version removed: a catch-all meaning
+#     "symbol" counts an out-of-range byte as one.
+Check 'the OLD open catch-all accepts the TAB row - the reason the shape changed' `
+      ((Test-FromExtracted -Password $tab -Min 8 -Lo 0 -Hi 0 -OpenCatchAll) -eq $true) `
+      'the old shape is not actually looser, so the change was not worth making'
+
+# (c) the minimum dropped to 7 must accept the 7-character row.
+Check 'dropping the minimum to 7 accepts the 7-character row' `
+      ((Test-FromExtracted -Password 'Abcde1!' -Min 7 -Lo 32 -Hi 126) -eq $true) `
+      'the length test is not what refuses it, so the extracted minimum guards nothing'
+
+# (d) a catch-all that marks a symbol is caught by the section-1 reader.
+$mutText = $basCode -replace '(?ms)case\s+1\s*\r?\n\s*return\s+@false', "case 1`n         got.symbol = @true"
+$caught = -not ($mutText -match '(?ms)case\s+1\s*\r?\n\s*return\s+@false')
+Check 'a catch-all changed to mark a symbol is caught by the section-1 reader' $caught `
+      'the reader would not notice the catch-all failing open'
+
 $after = (Get-FileHash -LiteralPath $bas -Algorithm SHA256).Hash
 Check 'the live pw_complex is byte-identical after the mutants' ($before -eq $after) `
       "before $before after $after"

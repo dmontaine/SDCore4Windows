@@ -137,11 +137,14 @@ function Test-GeneratedPasswordComplex {
     $lower = $false; $upper = $false; $digit = $false; $symbol = $false
     foreach ($ch in $Password.ToCharArray()) {
         $c = [int][char]$ch
-        if ($c -lt 32 -or $c -gt 126) { return $false }
-        elseif ($c -ge 97 -and $c -le 122) { $lower  = $true }
+        # The symbol arm names its own range and the catch-all fails closed -
+        # gpl.bp/pw_complex's shape.  See the note there for why it is not the
+        # other way round.
+        if     ($c -ge 97 -and $c -le 122) { $lower  = $true }
         elseif ($c -ge 65 -and $c -le 90)  { $upper  = $true }
         elseif ($c -ge 48 -and $c -le 57)  { $digit  = $true }
-        else                               { $symbol = $true }
+        elseif ($c -ge 32 -and $c -le 126) { $symbol = $true }
+        else                               { return $false }
     }
     return ($lower -and $upper -and $digit -and $symbol)
 }
