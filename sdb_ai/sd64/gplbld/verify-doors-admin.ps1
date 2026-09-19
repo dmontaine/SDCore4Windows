@@ -556,7 +556,7 @@ if ($Phase -eq 'Remove') {
         Write-Output '  standing - PRE_RELEASE 39.  DELETE.ACCOUNT cannot reach these, so the'
         Write-Output '  removal is a Windows one and is deliberately NOT done here: this script'
         Write-Output '  deletes accounts it can see SD records for, and nothing else.'
-        Write-Output '  cleanup-devlitter.ps1 owns that job (ELEVATED, -List first).'
+        Write-Output '  No script does this removal (cleanup-devlitter.ps1 is gone - owner ruling, 18 Sep 2026).'
     }
 
     # Read from disk, not from what DELETE.ACCOUNT said - PRE_RELEASE 41.

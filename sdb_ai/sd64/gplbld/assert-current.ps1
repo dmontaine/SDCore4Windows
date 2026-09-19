@@ -1016,17 +1016,11 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # profile behind each run and nothing had ever removed them.
                   # Ships nowhere - it is run by hand, elevated.
                   'clean-test-profiles.ps1',
-                  # 26 Aug 26 - cleanup-devlitter.ps1, section 7 step 18's one
-                  # command: the leaked Windows users and sdu_ groups, then the
-                  # profile sweep above, then the home directory, then the spent
-                  # VM clone.  Listed in the commit that created it, per step
-                  # 7's rule - a script not on this list makes the tree report
-                  # stale because it exists, and then every verifier refuses.
-                  #
-                  # It reads its name pattern OUT OF clean-test-profiles.ps1
-                  # rather than carrying a copy, so the two cannot drift; both
-                  # are on this list for the same reason and neither ships.
-                  'cleanup-devlitter.ps1',
+                  # 18 Sep 26 - cleanup-devlitter.ps1 WAS HERE AND IS GONE.
+                  # Owner's ruling, 18 Sep 2026: it swept the home directory
+                  # for anything matching sd* and took SDCoreProject with it.
+                  # DO NOT RE-ADD THE NAME.  clean-test-profiles.ps1 above
+                  # remains the profile sweep, run by hand, elevated.
                   # 26 Aug 26 - mkdoc.py AND mkpdf.ps1 WERE HERE AND ARE GONE
                   # FROM THIS REPOSITORY.  Owner's ruling, 26 Aug 2026,
                   # question 15: the documentation toolchain follows the
