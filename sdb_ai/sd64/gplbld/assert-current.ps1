@@ -1620,7 +1620,14 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # nothing pulls - so it ships nowhere and guards nothing on
                   # its own; test-msgreserved-units.py holds the judgements it
                   # produces.  Listed with the commit that creates it.
-                  'scan-msgdiff.py')
+                  'scan-msgdiff.py',
+                  # 20 Sep 26 - the free guard over RELEASE_1.1 76's driver
+                  # re-aim scope: every gplbld script still sending a live
+                  # "LOGTO SDSYS" prefix, hand-declared by role (DRIVER, GATE,
+                  # FIXTURE, COMMENT) so the count stays checked rather than
+                  # guessed.  Source-only, ships nowhere, listed with the
+                  # commit that creates it.
+                  'test-logtoreaim-units.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.
