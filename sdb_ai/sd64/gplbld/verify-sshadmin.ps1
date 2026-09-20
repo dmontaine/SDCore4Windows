@@ -176,25 +176,33 @@ $apiPw     = New-SdTestPassword
 $nonePw    = New-SdTestPassword
 
 # One ssh leg: prints EVERYTHING (the instrument rule) and returns the pieces the verdict reads.
+#
+# ***IT PRINTS WITH Write-Host AND NEVER Write-Output, AND THE FIRST VERSION DID NOT.***  In
+# PowerShell a function's Write-Output lines ARE its return value, so every line printed here was
+# folded into the caller's variable with the object at the end: $leg became an ARRAY, ".Ran" was not
+# a property of it, and the owner's b202 run died with "The property 'Ran' cannot be found" on the
+# first leg.  This is memory note ps-function-output-trap's FOURTH occurrence and verify-pygate's
+# Invoke-Leg records the same defect (b141).  Write-Host reaches the transcript and the step log
+# (the runner captures every stream) without touching the return value.
 function Invoke-Leg([string]$Label, [string]$Acct, [string]$Pw, [string]$SshHost) {
-    Write-Output ('=== ' + $Label + ' ===')
+    Write-Host ('=== ' + $Label + ' ===')
     $r = $null
     try {
         $r = Invoke-SdAsTestUser -Name $Acct -Password $Pw -Commands @('WHO') -SshHost $SshHost
     } catch {
-        Write-Output ("verify-sshadmin: could not drive ssh as {0} to {1} - {2}" -f $Acct, $SshHost, $_.Exception.Message)
+        Write-Host ("verify-sshadmin: could not drive ssh as {0} to {1} - {2}" -f $Acct, $SshHost, $_.Exception.Message)
         exit 2
     }
     $text = ($r.Out | Out-String)
-    Write-Output ("  ssh exit {0}, {1} characters of output" -f $r.ExitCode, $text.Length)
-    Write-Output '  --- the session said: ---'
-    Write-Output $text
+    Write-Host ("  ssh exit {0}, {1} characters of output" -f $r.ExitCode, $text.Length)
+    Write-Host '  --- the session said: ---'
+    Write-Host $text
     if ($r.Err -ne '') {
         # PRINTED, BECAUSE b121 THREW IT AWAY: "ssh exit 255" arrived with no reason attached.
-        Write-Output '  --- ssh stderr ---'
-        Write-Output $r.Err
+        Write-Host '  --- ssh stderr ---'
+        Write-Host $r.Err
     }
-    Write-Output ''
+    Write-Host ''
     return [pscustomobject]@{
         Text   = $text
         Err    = "$($r.Err)"

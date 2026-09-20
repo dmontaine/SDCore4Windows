@@ -35,7 +35,9 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
     # An administrator's local session lands in SDSYS (PRE_RELEASE 56), so the
     # LOGTO is what puts this in an ordinary account's BP rather than SDSYS's.
     $body = "`n" + ((@("LOGTO $account", 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    if ($body.Contains([char]13)) { Write-Output 'REFUSED: CR in the SD body'; exit 2 }
+    # Write-Host, not Write-Output: inside a function the caller captures the output, so the
+    # refusal text was swallowed by "$x = Invoke-SD ..." and exit 2 left nothing on screen.
+    if ($body.Contains([char]13)) { Write-Host 'REFUSED: CR in the SD body'; exit 2 }
     $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } -ArgumentList $sdExe, $body
     if (Wait-Job $job -Timeout $TimeoutSec) { $o = Receive-Job $job } else { $o = '<TIMEOUT>'; Stop-Job $job }
     Remove-Job $job -Force

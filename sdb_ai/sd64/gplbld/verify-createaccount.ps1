@@ -198,12 +198,15 @@ function Start-SD {
     $null = Start-Process -FilePath $sdExe -ArgumentList '-start' -NoNewWindow
     for ($i = 0; $i -lt 30; $i++) {
         if ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
-            Write-Output "  sdwind is up"
+            # Write-Host, NOT Write-Output (20 Sep 26): a function's Write-Output lines ARE its return
+            # value, so "if (-not (Start-SD))" saw a two-element array - always true - and a server
+            # that never started read as started.  See test-outputtrap-units.ps1.
+            Write-Host "  sdwind is up"
             return $true
         }
         Start-Sleep -Milliseconds 500
     }
-    Write-Output "  sdwind did not appear within 15 seconds"
+    Write-Host "  sdwind did not appear within 15 seconds"
     return $false
 }
 

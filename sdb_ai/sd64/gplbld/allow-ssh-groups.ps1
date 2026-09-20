@@ -191,7 +191,13 @@ function Get-Patterns {
     # for a hand run in the wrong order, which is exactly when it is wanted.
     $sdssh = Get-LocalGroup -Name 'sdssh' -ErrorAction SilentlyContinue
     if ($null -eq $sdssh) {
-        Write-Output "allow-ssh-groups: the sdssh group does not exist - refusing to write an AllowGroups line that would deny ssh to every account (run gplbld/sync-route-groups.ps1 first)"
+        # Write-Host, NOT Write-Output (20 Sep 26): a function's Write-Output lines ARE its return
+        # value, so this refusal text was folded into $patterns as a SECOND element next to the
+        # $null below, "$null -eq $patterns" was false, and the caller carried on to write an
+        # AllowGroups line containing the refusal message.  Found by the scan that
+        # test-outputtrap-units.ps1 now makes permanent.  (This file ships; the path is only
+        # reachable when sdssh does not exist, which sd.iss's order prevents.)
+        Write-Host "allow-ssh-groups: the sdssh group does not exist - refusing to write an AllowGroups line that would deny ssh to every account (run gplbld/sync-route-groups.ps1 first)"
         return $null
     }
     # 21 Aug 26 Windows port - sdssh, NOT sdusers.  sdusers grants access to the

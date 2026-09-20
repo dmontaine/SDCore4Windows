@@ -410,7 +410,10 @@ if (Test-Path -LiteralPath $resultFile) { Remove-Item -LiteralPath $resultFile -
 function Invoke-BatchJobPhase([string]$Phase) {
     $vals = @($PSCommandPath, $Phase, $account, $resultFile)
     if (@($vals | Where-Object { $_ -match "'" }).Count -gt 0) {
-        Write-Output 'verify-batchjob: a value contains an apostrophe; cannot build the launcher.'
+        # Write-Host, NOT Write-Output, on every path of this function (20 Sep 26): its Write-Output
+        # lines were its return value, so $elevOk was ALWAYS a non-empty array - true - and "elevation did
+        # not happen" could never be detected: a failed setup phase read as a successful one.
+        Write-Host 'verify-batchjob: a value contains an apostrophe; cannot build the launcher.'
         return $false
     }
     $work = Join-Path $env:TEMP ('vbj-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -421,10 +424,10 @@ function Invoke-BatchJobPhase([string]$Phase) {
         [System.IO.File]::WriteAllText($launcher,
             (@($call, 'exit $LASTEXITCODE') -join "`r`n") + "`r`n",
             [System.Text.Encoding]::ASCII)
-        Write-Output ('  elevated phase argv: ' + $call)
+        Write-Host ('  elevated phase argv: ' + $call)
         $r = Invoke-ElevatedScript -Launcher $launcher -Why ('verify-batchjob ' + $Phase)
         if (-not $r.Ok) {
-            Write-Output ("verify-batchjob: elevation did not happen: " + $r.Reason)
+            Write-Host ("verify-batchjob: elevation did not happen: " + $r.Reason)
             return $false
         }
         return ($r.ExitCode -eq 0)

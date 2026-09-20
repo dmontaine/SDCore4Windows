@@ -202,11 +202,15 @@ Assert-SdSeat -Label 'verify-apiremote'
 function Stop-SD {
     $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
     if (-not $svc) {
-        Write-Output ("  Stop-SD: no service named '{0}' on this machine." -f $SvcName)
-        Write-Output  '  That is this script being wrong about the name, not SD failing to stop.'
+        # Write-Host, NOT Write-Output (20 Sep 26): a function's Write-Output lines ARE its return
+        # value, so "if (-not (Stop-SD))" saw a non-empty array - always true - and this very
+        # branch, whose whole point is to be LOUD about a wrong service name, was reported to its
+        # caller as success.  See test-outputtrap-units.ps1.
+        Write-Host ("  Stop-SD: no service named '{0}' on this machine." -f $SvcName)
+        Write-Host  '  That is this script being wrong about the name, not SD failing to stop.'
         # Get-Service returns ServiceController, which has Name/DisplayName and
         # NO PathName - reaching for one throws under Set-StrictMode.
-        Write-Output ('  Services that look like it: ' +
+        Write-Host ('  Services that look like it: ' +
                       ((Get-Service | Where-Object { $_.DisplayName -like '*String Database*' } |
                         ForEach-Object { $_.Name }) -join ', '))
         return $false

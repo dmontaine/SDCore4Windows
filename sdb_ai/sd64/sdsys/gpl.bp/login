@@ -1275,13 +1275,25 @@ internal.gate:
       gate.writer = trim(gate.writer[1, 80])
 
 *     "Now", on the marker's own clock: write a scratch file and read ITS mtime.
+*     ***OPENSEQ DOES NOT CREATE A FILE, AND THE FIRST VERSION OF THIS BLOCK ASSUMED IT DID.***
+*     On a path that does not exist op_seqio.c takes the ELSE clause and leaves the file variable
+*     unopened - "Does not exist, take ELSE clause" - and only CREATE makes the file.  The first
+*     version was "openseq ... overwrite to ... then ... end else null", so the scratch file was
+*     never written, the age stayed -1, and the marker was treated as FRESH for ever: an 11-minute-old
+*     marker was ADMITTED (audit: "age=-1") on the owner's b202 run of verify-internalgate, leg D.
+*     Nothing but that witness could have said so, which is what it measures expiry for.  A stale
+*     scratch file from a crashed run would be OLD, so it is deleted first; a newly created file's
+*     mtime is "now", so nothing needs to be written to it.
       gate.stamp = @sdsys : @ds : '$internal.now'
-      openseq gate.stamp overwrite to gate.sf then
-         writeseq 'now' to gate.sf else null
+      void ospath(gate.stamp, OS$DELETE)
+      openseq gate.stamp to gate.sf else
+         create gate.sf else gate.sf = ''
+      end
+      if ospath(gate.stamp, OS$EXISTS) then
          closeseq gate.sf
          gate.now = ospath(gate.stamp, OS$DTM)
          if gate.now > 0 and gate.mtime > 0 then gate.age = gate.now - gate.mtime
-      end else null
+      end
       void ospath(gate.stamp, OS$DELETE)
 
 *     THE CONSUMER CLOSES THE WINDOW: delete before deciding, so no path below leaves it open.

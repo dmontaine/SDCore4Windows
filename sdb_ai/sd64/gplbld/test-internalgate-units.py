@@ -122,6 +122,21 @@ def gate_problems(login_text):
     if "could not be consumed" not in body:
         p.append("a marker that cannot be deleted is not refused")
 
+    # ***THE AGE MUST BE MEASURABLE.*** OPENSEQ on a path that does not exist takes its ELSE clause
+    # and leaves the file variable unopened (op_seqio.c: "Does not exist, take ELSE clause"); only
+    # CREATE makes the file.  The first version of the gate opened the scratch file with OPENSEQ
+    # alone, never created it, left the age at -1, and treated EVERY marker as fresh - so an
+    # 11-minute-old marker was admitted (b202, verify-internalgate leg D) and nothing else could
+    # have said so, because the fallback for "age unknown" is deliberately lenient.
+    if not re.search(r"openseq gate\.stamp to gate\.sf else\s+create gate\.sf else", body):
+        p.append("the age scratch file is opened but never CREATEd (OPENSEQ does not create; the age stays -1)")
+    i_stale = body.find("ospath(gate.stamp, OS$DELETE)")
+    i_open = body.find("openseq gate.stamp")
+    if i_stale < 0 or i_open < 0 or i_stale > i_open:
+        p.append("a stale scratch file is not deleted BEFORE it is opened (an old one would read as 'now')")
+    if "gate.age = gate.now - gate.mtime" not in body:
+        p.append("the age is never computed from the two mtimes")
+
     # every use is audited: admission by the gate, refusal by terminate.connection with a reason
     for reason in ("no internal marker", "the internal marker had expired"):
         if ("audit.reason = '" + reason + "'") not in body:
@@ -172,6 +187,9 @@ row("%1" in msg_text and msg_text.strip() != "",
     "message 10922 exists and takes the writer as %1 (the Linux agent was told this number is taken)", msg)
 mut5 = login.replace("display sysmsg(10922, gate.writer)", "null")
 row(any("not announced" in x for x in gate_problems(mut5)), "MUTANT: a gate that stops announcing an admission is caught")
+mut6 = login.replace("create gate.sf else gate.sf = ''", "gate.sf = ''")
+row(any("never CREATEd" in x for x in gate_problems(mut6)),
+    "MUTANT: the age scratch file opened with OPENSEQ and never created (the b202 defect) is caught")
 mut4 = login.replace("gate.expiry = 600", "gate.expiry = 0")
 row(any("expiry" in x for x in gate_problems(mut4)), "MUTANT: a changed expiry is caught (the writers' docs and the witness assume 600)")
 

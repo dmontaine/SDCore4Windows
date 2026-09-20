@@ -129,7 +129,10 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
 # ErrorActionPreference Stop becomes a terminating error.  The script writes
 # everything it has to say to stdout (Say -> Write-Output).
 function Invoke-Upgrade {
-    Write-Output ("  powershell -ExecutionPolicy Bypass -File " + $upScript + " -AppDir " + $appDir)
+    # Write-Host, NOT Write-Output (20 Sep 26): the command line was folded into the return value, so
+    # callers received @('command line', <result>) and only worked because member enumeration finds
+    # .Text and .Code on the one element that has them - which Set-StrictMode would have refused.
+    Write-Host ("  powershell -ExecutionPolicy Bypass -File " + $upScript + " -AppDir " + $appDir)
     $ErrorActionPreference = 'Continue'
     $o = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $upScript -AppDir $appDir)
     $c = $LASTEXITCODE
