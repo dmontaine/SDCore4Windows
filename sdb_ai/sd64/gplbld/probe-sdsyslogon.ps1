@@ -178,14 +178,17 @@ try {
     Say ('the Security log could not be read: ' + $_.Exception.Message)
 }
 
-if ($rows.Count -eq 0) {
+# ***THE REFUSAL NO LONGER EXITS HERE, AND THE 19 Sep RUN IS WHY.***  It did,
+# and it skipped the two tables below - which are the only things that can tell
+# "nobody signed in" from "somebody did and it was not this account".  A null
+# case must REFUSE THE VERDICT, not suppress the evidence: the exit code is
+# still 2 at the end, after everything has been printed.
+$nothingForAccount = ($rows.Count -eq 0)
+if ($nothingForAccount) {
     Say ("NO logon row for {0} in the last {1} minutes." -f $Account, $Minutes)
-    Say 'REFUSED: "nothing was attempted" and "the attempt was refused" are different'
-    Say 'answers, and an empty set cannot tell them apart.  Switch user, try the'
-    Say 'sign-in, come back and run this again - or raise -Minutes to cover it.'
-    Write-Output ''
-    Write-Output 'probe-sdsyslogon: nothing measured'
-    exit 2
+    Say '"Nothing was attempted" and "the attempt was refused" are different answers,'
+    Say 'and an empty set cannot tell them apart - so read the unfiltered table below'
+    Say 'before concluding anything.  This run will exit 2.'
 }
 
 Say ("{0} row(s) in the window" -f $rows.Count)
@@ -249,5 +252,16 @@ Write-Output '  seconds later by a 4634 is the shape the owner described: admitt
 Write-Output '  then the session ended before a desktop - and that points at the shell'
 Write-Output '  or the profile rather than at the credential.'
 Write-Output ''
+if ($nothingForAccount) {
+    Write-Output ('probe-sdsyslogon: NOTHING WAS MEASURED ABOUT ' + $Account.ToUpper() +
+                  ' - no logon row for it in the window.')
+    Write-Output '  If the unfiltered table above is empty for the minute you tried, the'
+    Write-Output '  operating system never began a logon at all, and the next place to look'
+    Write-Output '  is the sign-in screen rather than anything SD installed.  If it holds'
+    Write-Output '  rows for ANOTHER account at that minute, say which - that is a different'
+    Write-Output '  and more interesting answer.'
+    Write-Output '  Try the sign-in, then run this again within the window.'
+    exit 2
+}
 Write-Output 'probe-sdsyslogon: read the rows above; this script concludes nothing on its own.'
 exit 0
