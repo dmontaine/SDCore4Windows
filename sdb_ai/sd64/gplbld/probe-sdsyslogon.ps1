@@ -126,9 +126,11 @@ if ($Watch -gt 0) {
 
     if ($found.Count -eq 0) {
         Say ("nothing but machine-account activity in {0} minute(s)." -f $Watch)
-        Say 'THE OPERATING SYSTEM RECORDED NO LOGON ATTEMPT AT ALL.  If you did try the'
-        Say 'sign-in during that time, LSA never saw a credential - which puts the fault'
-        Say 'at the sign-in screen itself, not in anything SD installed or configured.'
+        Say 'THE OPERATING SYSTEM RECORDED NO LOGON ROW AT ALL - and what that MEANS'
+        Say 'depends entirely on the audit-policy section below.  With failure auditing ON'
+        Say 'it says LSA never saw a credential, and the fault is at the sign-in screen.'
+        Say 'With failure auditing OFF it says nothing whatever: a refused sign-in would'
+        Say 'leave no trace either.  Read that section before drawing the conclusion.'
     } else {
         Say ("{0} row(s) arrived while watching:" -f $found.Count)
         foreach ($e in ($found | Sort-Object TimeCreated)) {
@@ -146,6 +148,47 @@ if ($Watch -gt 0) {
     }
     Write-Output ''
     Say 'the tables below cover the ordinary window as well'
+}
+
+# ---------------------------------------------------------------- audit policy
+# ***READ THIS BEFORE BELIEVING ANY ABSENCE BELOW, AND IT IS A CORRECTION THIS
+# SCRIPT OWED.***  The 19 Sep run concluded "LSA never validated a credential"
+# from the fact that no 4625 appeared for the owner's attempts.  That inference
+# is only sound if FAILURE auditing is ON.  4624s are plainly audited - the
+# probe spawns produced dozens - but success and failure are separate settings
+# in the same subcategory, and a machine with Success-only auditing records a
+# refused sign-in NOWHERE.  So the absence of a 4625 would mean nothing at all,
+# and the conclusion drawn from it would have been an instrument fault of
+# exactly the kind CLAUDE.md's rule 3 describes: a confident verdict from a
+# probe that never reached the condition it claimed to measure.
+Head 'is a FAILED logon even audited on this machine?'
+$auditOk = $false
+try {
+    $ap = & "$env:SystemRoot\System32\auditpol.exe" /get /subcategory:"Logon","Logoff","Account Lockout" 2>&1
+    foreach ($l in $ap) {
+        $t = ([string]$l).TrimEnd()
+        if ($t -match '\S') { Say $t }
+    }
+    $logonRow = $ap | Where-Object { $_ -match '^\s+Logon\s{2,}' }
+    if ($logonRow) {
+        $auditOk = ([string]$logonRow -match 'Failure')
+        if ($auditOk) {
+            Say 'FAILURE auditing is ON, so an absent 4625 really does mean no refusal was recorded.'
+        } else {
+            Say '*** FAILURE AUDITING IS OFF FOR "Logon". ***  A refused sign-in is recorded'
+            Say 'NOWHERE on this machine, so an absent 4625 proves NOTHING - it cannot tell a'
+            Say 'refusal from an attempt that never happened.  Turn it on for the length of one'
+            Say 'attempt, elevated, and the next run can read the refusal:'
+            Say '    auditpol /set /subcategory:"Logon" /failure:enable'
+            Say 'and afterwards, to leave the machine as it was:'
+            Say '    auditpol /set /subcategory:"Logon" /failure:disable'
+        }
+    } else {
+        Say 'REFUSED: auditpol printed no Logon row - the audit policy could not be read, so'
+        Say 'nothing below can be concluded from an absence.'
+    }
+} catch {
+    Say ('auditpol could not be run: ' + $_.Exception.Message)
 }
 
 # --------------------------------------------------------------- user rights
@@ -289,7 +332,14 @@ try {
     $all = Get-WinEvent -FilterHashtable @{ LogName = 'Security'; StartTime = $since
                                             Id = 4624, 4625 } -ErrorAction Stop
 } catch { Say ('could not be read: ' + $_.Exception.Message) }
-Say ("{0} logon row(s) in total, of which {1} name {2}" -f $all.Count, $rows.Count, $Account)
+# ***COMPARE LIKE WITH LIKE.***  The first version printed "98 logon row(s) in
+# total, of which 112 name SDSYS" - a subset larger than its set, and therefore
+# a sentence that cannot be true.  $rows counts five event ids (logons, logoffs
+# and explicit-credential rows); $all counts two.  The count that belongs here
+# is how many of THESE rows name the account.
+$allNamed = @($all | Where-Object { $_.Message -match ([regex]::Escape($Account)) })
+Say ("{0} logon row(s) (4624/4625) in the window, of which {1} name {2}" -f `
+     $all.Count, $allNamed.Count, $Account)
 $byMin = $all | Group-Object { '{0:HH:mm}' -f $_.TimeCreated } | Sort-Object Name
 foreach ($g in $byMin) {
     $names = ($g.Group | ForEach-Object {
