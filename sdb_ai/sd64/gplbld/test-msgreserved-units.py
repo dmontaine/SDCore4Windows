@@ -43,6 +43,16 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 MESSAGES = os.path.normpath(os.path.join(HERE, os.pardir, "sdsys", "messages"))
 
+# ***THESE TABLES COME FROM THE OTHER PORT'S MAIL AND MUST NEVER BE DERIVED
+# FROM THE LOCAL CLONE OF IT.***  Asked by the Linux agent on 20 Sep 2026, and
+# it is the right question: there IS a clone of their tree beside this
+# repository, nothing pulls it, and on that day it was 22 commits and one day
+# behind.  A table built by reading it would have reported 10919-10922 FREE -
+# which is exactly the failure these tables exist to prevent, arriving through
+# the back door.  gplbld/scan-msgdiff.py reads that clone and is a REPORT for a
+# person to judge; what a person concludes is typed in here by hand, from what
+# the other port SAID.  Do not wire the two together.
+#
 # id -> (who holds it, when it was reserved, what it says there)
 #
 # 10174 was OURS until RELEASE_1.1 64 (commit e0c8d90, 18 Sep 2026) deleted it

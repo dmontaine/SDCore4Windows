@@ -62,10 +62,31 @@ def ids(d):
 
 
 def git_head(path):
+    """The commit actually read, WITH ITS DATE AND AGE IN HOURS.
+
+    ***THE DATE IS THE POINT, NOT DECORATION - ADDED 20 Sep 2026 WHEN THE
+    LINUX AGENT PUT A NUMBER ON OUR CLONE: 22 COMMITS AND ONE DAY BEHIND.***
+    A bare hash looks authoritative and says nothing about staleness; a reader
+    cannot tell 3b81fb6 from a commit made ten minutes ago.  The age can be
+    computed with no network at all, so there is no excuse for not printing
+    it, and it is what turns "this is a clone" from a caveat into a number.
+    """
     try:
-        out = subprocess.run(["git", "-C", path, "log", "--oneline", "-1"],
-                             capture_output=True, text=True, timeout=30)
-        return out.stdout.strip() or "(no git answer)"
+        out = subprocess.run(
+            ["git", "-C", path, "log", "-1", "--format=%h %ad %s",
+             "--date=format:%Y-%m-%d %H:%M"],
+            capture_output=True, text=True, timeout=30)
+        line = out.stdout.strip()
+        if not line:
+            return "(no git answer)"
+        age = subprocess.run(
+            ["git", "-C", path, "log", "-1", "--format=%ct"],
+            capture_output=True, text=True, timeout=30).stdout.strip()
+        if age.isdigit():
+            import time
+            hours = (time.time() - int(age)) / 3600.0
+            line += "   [%.0f hours old]" % hours
+        return line
     except Exception as exc:
         return "(git failed: %s)" % exc
 
