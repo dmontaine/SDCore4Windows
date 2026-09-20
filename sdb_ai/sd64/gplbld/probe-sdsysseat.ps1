@@ -399,8 +399,19 @@ public static class SdSeat {
             // The linked token is an IMPERSONATION token; CreateProcessWithTokenW
             // needs a PRIMARY one.  0xF01FF = TOKEN_ALL_ACCESS, 2 = SecurityImpersonation,
             // 1 = TokenPrimary.
-            if (!DuplicateTokenEx(linked, 0xF01FF, IntPtr.Zero, 2, 1, out primary))
-                return "DuplicateTokenEx failed, Win32 " + Marshal.GetLastWin32Error();
+            if (!DuplicateTokenEx(linked, 0xF01FF, IntPtr.Zero, 2, 1, out primary)) {
+                int e = Marshal.GetLastWin32Error();
+                string extra = (e == 1346)
+                  ? " (ERROR_BAD_IMPERSONATION_LEVEL - MEASURED 19 Sep 2026 AND THIS CLOSES"
+                  + " ROUTE C: without SeTcbPrivilege, TokenLinkedToken hands back an"
+                  + " IDENTIFICATION-level token (level 1), which can be READ but not"
+                  + " duplicated to a primary token, so no process can be started with it."
+                  + " That is why HISTORY.md:48615 could read the linked token from an"
+                  + " ordinary session and why this cannot spawn with it - reading and"
+                  + " spawning are different rights.)"
+                  : "";
+                return "DuplicateTokenEx failed, Win32 " + e + extra;
+            }
 
             STARTUPINFO si = new STARTUPINFO();
             si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
