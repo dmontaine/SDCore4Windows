@@ -49,9 +49,9 @@
 # writes the item back.  Only zzdrkeep and the zzdrtmp scratch ids are deleted
 # by name, and they fold to nothing shipped.
 #
-# IT MUST RUN ELEVATED: it drives an SDSYS session (LOGTO SDSYS from an
-# unelevated pipe hangs at UAC - verify-pyapi.ps1) and upgrade-dicts.ps1 runs
-# sd -internal.  It changes shipped state only by re-running the upgrade step,
+# IT MUST RUN ELEVATED, AND SDSYS MUST BE SIGNED IN: it drives an SDSYS session
+# through the SDSYS seat (sdsys-seat.ps1, RELEASE_1.1 76) and upgrade-dicts.ps1
+# runs sd -internal.  It changes shipped state only by re-running the upgrade step,
 # which rewrites the same 78 records the install wrote and recompiles them.
 #
 # NEVER RUN RED AS A SCRIPT.  assert-current refuses it on an install without
@@ -110,16 +110,18 @@ function Row([string]$name, [bool]$ok, [string]$detail) {
     else     { Write-Output "  [FAIL] $name"; Write-Output "         $detail" }
 }
 
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }
-    else {
-        Stop-Job $job; $out = Receive-Job $job
-        $out += ''; $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token, and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file; the TERM
+# line this sent first is added by the helper.  A seat that did not run THROWS
+# rather than returning ''.  SDSYS must be signed in: `query session` shows its
+# row.  upgrade-dicts.ps1 (Invoke-Upgrade below) is the shipped step and still
+# runs sd -internal from this elevated shell, exactly as the installer does.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # The installed upgrade step, exactly as the installer runs it.  NO 2>&1: in
@@ -150,6 +152,11 @@ function Test-ShippedLower([string]$text) {
     }
     return $true
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE PLANTING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no plant behind,
+# not a thrown error at the first SD call that reads as a product failure.
+Assert-SdSeat -Label 'verify-dictrename'
 
 $logExisted = Test-Path -LiteralPath $upLog
 $exit = 2

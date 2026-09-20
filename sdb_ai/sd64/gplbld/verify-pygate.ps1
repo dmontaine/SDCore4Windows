@@ -220,25 +220,21 @@ Write-Output ''
 # -RedirectStandardInput hands sd.exe a FILE HANDLE and SD answers
 # ":Process terminated" and runs nothing - written down 14 Aug 2026 and paid
 # for again on 29 Aug.  Nothing here may use it.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token, and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file; the TERM
+# line this sent first is added by the helper.  A seat that did not run THROWS
+# rather than returning ''.  SDSYS must be signed in: `query session` shows its
+# row.  A call that hits the timeout is stopped and throws; it does not return
+# what SD had printed (the report is written when sd.exe exits) - RELEASE_1.1 76.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
     if ($null -eq $commands -or $commands.Count -eq 0) {
         throw 'Invoke-SD: no commands given; that would start a session, measure nothing and look like a pass.'
     }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** It leaves the session's user-table slot and locks behind, so"
-        $out += "*** sdwind will not shut down and cycle.ps1 will refuse to start."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # ------------------------------------------------------------- the errlog
@@ -320,6 +316,11 @@ function Invoke-Leg([string]$label) {
 }
 
 # ------------------------------------------------------------- the account
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no account behind,
+# not a thrown error at the first CREATE.ACCOUNT that reads as a product failure.
+Assert-SdSeat -Label 'verify-pygate'
 
 $password = New-SdTestPassword
 $created  = $false

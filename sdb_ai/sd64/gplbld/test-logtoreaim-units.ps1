@@ -111,9 +111,8 @@ $DECLARED = [ordered]@{
     'probe-osex.ps1'              = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'probe-tasklock.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-accountrules.ps1'     = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-acctmsgs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
-    'verify-apiremote.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    'verify-apiremote.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder; NOT CONVERTED ON PURPOSE (20 Sep 2026) - its admin leg creates the administrator account 64 abolished (PENDING in test-acctkeywords-units.py), so a swapped driver would still die at step 1 - convert it WITH the rewrite of that leg, which is the owner''s ruling on what the leg should measure now' }
     'verify-catgate.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     # verify-createaccount.ps1 IS NOT HERE: IT WAS CONVERTED (20 Sep 2026, the
     # PILOT for sdsys-seat.ps1) - its SD calls now run as a task inside SDSYS's
@@ -134,19 +133,22 @@ $DECLARED = [ordered]@{
     # packet capture is ruled a dead end here, 15 Sep).  apiwire and vocwrite FAILED
     # their first run - they LOGTO into a personal account, which the seat refuses -
     # and were re-built on the seat's -Internal switch, then passed.
-    'verify-createfilecase.ps1'   = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory lines' }
+    #
+    # ***THE SUITE-STEP GROUP IS NOT HERE EITHER - CONVERTED 20 Sep 2026 (the
+    # morning after the mechanical group), NOT YET WITNESSED - SDSYS was no longer
+    # signed in:*** verify-twins,
+    # verify-nonet, verify-dictrename, verify-fold, verify-createfilecase,
+    # verify-accountrules, verify-vocverbs, and then verify-pygate, verify-pyapi and
+    # verify-nocaseupgrade.  Same shape as the mechanical group: a
+    # one-line Invoke-SD over Invoke-SdSeatText and an Assert-SdSeat before anything
+    # is made.  verify-twins uses BOTH doors (plain, and -Internal for the one thing
+    # only sd -internal can build, a case-sensitive file).  The sd -internal legs of
+    # verify-createfilecase and verify-accountrules are NOT seat calls - they run
+    # from the elevated shell on purpose and are the shipped scripts' shape.
     'verify-delaccount.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-dictrename.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-doors-admin.ps1'      = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-fold.ps1'             = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-nonet.ps1'            = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-nocaseupgrade.ps1'    = @{ Role = 'DRIVER'; Why = 'prefix sent unless -internal; the -internal leg is the one escape already in the tree' }
-    'verify-pyapi.ps1'           = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
-    'verify-pygate.ps1'           = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-sshadmin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder (also PENDING in test-acctkeywords-units.py for the ADMINISTRATOR keyword - two separate defects in one file)' }
-    'verify-twins.ps1'            = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    'verify-sshadmin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder (also PENDING in test-acctkeywords-units.py for the ADMINISTRATOR keyword - two separate defects in one file); NOT CONVERTED ON PURPOSE (20 Sep 2026): its subject is the administrator account 64 abolished, so convert it WITH the rewrite of what it measures' }
     'verify-uninstallchoices.ps1' = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-vocverbs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
 
     'verify-lcnames.ps1'          = @{ Role = 'CALLER_SUPPLIED'; Why = "Invoke-SD sends no prefix itself; the CALLERS' own command arrays open with the literal 'LOGTO SDSYS'" }
 
@@ -200,9 +202,12 @@ Write-Output ''
 # THE CONTROL FILE MUST BE ONE THAT IS STILL UNCONVERTED, and it was
 # verify-createaccount.ps1 until that became the pilot (20 Sep 2026): the day a
 # control file is converted this check fails with "found 0", which is the
-# instrument saying its known-live example has stopped being live.  When
-# verify-fold.ps1 is converted, pick another one from the DRIVER rows below.
-$controlName = 'verify-fold.ps1'
+# instrument saying its known-live example has stopped being live.  verify-fold.ps1
+# was the control until it was converted (20 Sep 2026); sdtestuser-admin.ps1 is one
+# of the two files that need a different mechanism (it runs in VerifyInstall1,
+# which must stay unelevated), so it is the one least likely to be converted next.
+# When it is, pick another one from the DRIVER rows below.
+$controlName = 'sdtestuser-admin.ps1'
 $controlFile = Join-Path $gplbld $controlName
 $controlLines = @(Get-StrippedLines -Path $controlFile -Kind hashblock)
 $controlHit = @($controlLines | Where-Object { $_.Text -match $rx })

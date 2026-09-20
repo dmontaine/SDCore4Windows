@@ -61,7 +61,8 @@ if ($LASTEXITCODE -ne 0) {
 $wpr = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $wpr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'verify-nocaseupgrade: this needs an ELEVATED session and this one is not.'
-    Write-Output '  It builds case-sensitive files with sd -internal and runs upgrade-nocase.ps1.'
+    Write-Output '  It builds case-sensitive files with sd -internal, through the SDSYS seat, and'
+    Write-Output '  runs upgrade-nocase.ps1.'
     exit 2
 }
 
@@ -93,29 +94,31 @@ function Row([string]$name, [bool]$ok, [string]$detail = '') {
     else { $script:fail++; Write-Output ("  [FAIL] " + $name + $(if ($detail) { "  ->  $detail" } else { '' })) }
 }
 
-function Invoke-Bounded([string[]]$lines, [bool]$internal, [int]$TimeoutSec = 120) {
-    $pre = @()
-    if (-not $internal) { $pre = @('LOGTO SDSYS') }
-    $body = "`n" + ((@($pre) + @('TERM 200,9999') + $lines + @('OFF')) -join "`n") + "`n"
-    $before = @(Get-Process -Name 'sd' -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-    $job = Start-Job -ScriptBlock {
-        param($exe, $text, $int)
-        if ($int) { $text | & $exe '-internal' 2>&1 } else { $text | & $exe 2>&1 }
-    } -ArgumentList $sdExe, $body, $internal
-    $killed = $false
-    $killedPids = @()
-    if (-not (Wait-Job $job -Timeout $TimeoutSec)) {
-        $killed = $true
-        Stop-Job $job -ErrorAction SilentlyContinue
-        foreach ($p in @(Get-Process -Name 'sd' -ErrorAction SilentlyContinue)) {
-            # Recorded into the returned text, not Write-Output: see Get-Probe.
-            if ($before -notcontains $p.Id) { $killedPids += $p.Id; try { $p.Kill() } catch { } }
-        }
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THE PLAIN LEG USED TO SEND IS REFUSED
+# (10002) FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an
+# elevated, interactive token, and an elevated Don is not one.  So BOTH legs go to
+# a task inside SDSYS's own live session: the plain one as it was, the case-
+# sensitive builder through the seat's -Internal door (sd.exe -internal, the only
+# maker of a case-sensitive file).  SDSYS must be signed in: `query session` shows
+# its row.
+#
+# ***THE SEAT'S THROW IS TURNED BACK INTO TEXT HERE, AND THAT IS DELIBERATE.***
+# Every other converted verifier lets Invoke-SdSeatText throw, but this one's
+# cleanup runs through THIS function inside a finally block, and a throw there
+# would skip the rest of the sweep and leave the fixtures behind.  A seat that did
+# not run comes back as a "*** THE SDSYS SEAT DID NOT RUN" line, so every row that
+# reads output fails on it and the run ends exit 2 with the cleanup still done.
+# The old version killed stray sd.exe processes on a timeout; the seat stops its
+# own task instead, and its report is written when sd.exe exits, so a timed-out call
+# returns no SD text (RELEASE_1.1 76's known limit).
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-Bounded([string[]]$lines, [bool]$internal, [int]$TimeoutSec = 180) {
+    try {
+        return [string](Invoke-SdSeatText -Commands $lines -TimeoutSec $TimeoutSec -Internal:$internal)
+    } catch {
+        return [string]("`n*** THE SDSYS SEAT DID NOT RUN: " + $_.Exception.Message)
     }
-    $out = (@(Receive-Job $job -ErrorAction SilentlyContinue) | Out-String) -replace ([char]27 + '\[[0-9]*[A-Za-z]'), ''
-    Remove-Job $job -Force -ErrorAction SilentlyContinue
-    if ($killed) { $out += "`n*** SD DID NOT FINISH IN $TimeoutSec s - killed stray sd.exe PID(s): $($killedPids -join ', ') - a timed-out session can leave its slot and locks (PROJECT_STATUS.md section 6)" }
-    return [string]$out
 }
 function Show([string]$label, [string]$text) {
     Write-Output ("  --- " + $label + " ---")
@@ -188,6 +191,12 @@ function Remove-Fixtures {
     return @(Get-ChildItem -LiteralPath $sdsys -Force -ErrorAction SilentlyContinue |
              Where-Object { $_.Name -match '^(?i)zznu' } | ForEach-Object { $_.Name })
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE BOTH SEAT DOORS BEFORE BUILDING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no fixture behind,
+# not a run of rows that fail on empty output.  See sdsys-seat.ps1.
+Assert-SdSeat -Label 'verify-nocaseupgrade'
+Assert-SdSeat -Label 'verify-nocaseupgrade' -Internal
 
 $exit = 2
 $logLenBefore = $(if (Test-Path -LiteralPath $logFile) { (Get-Item -LiteralPath $logFile).Length } else { -1 })

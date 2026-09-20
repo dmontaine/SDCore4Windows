@@ -24,10 +24,10 @@
 # would pass whichever case was written and prove nothing - verify-lcnames.ps1
 # makes the same point.
 #
-# ***IT MUST RUN ELEVATED.***  It drives an SDSYS session, and LOGTO SDSYS from
-# an unelevated pipe reaches elevate('START')'s UAC consent and hangs (the
-# lesson verify-pyapi.ps1 records).  The fixture is created in SDSYS and removed
-# again; it needs no account.
+# ***IT MUST RUN ELEVATED, AND SDSYS MUST BE SIGNED IN.***  It drives an SDSYS
+# session through the SDSYS seat (sdsys-seat.ps1, RELEASE_1.1 76), which
+# registers a task for the OS SDSYS account and so needs an elevated caller.  The
+# fixture is created in SDSYS and removed again; it needs no account.
 #
 # ***AND IT RESTORES NOTHING BECAUSE IT CHANGES NO SHIPPED STATE*** - it creates
 # one throwaway file named from the clock and deletes all of it, sweeping any
@@ -49,8 +49,8 @@ $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $pr = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'verify-createfilecase: this needs an ELEVATED session and this one is not.'
-    Write-Output '  It drives an SDSYS session; LOGTO SDSYS from an unelevated pipe hangs at a'
-    Write-Output '  UAC consent nothing can answer (see verify-pyapi.ps1).  Run it elevated.'
+    Write-Output '  It drives an SDSYS session through a task registered for the OS SDSYS account,'
+    Write-Output '  and registering one needs an elevated PowerShell (see sdsys-seat.ps1).'
     exit 2
 }
 
@@ -70,17 +70,23 @@ Write-Output ("  expected : VOC id '" + $lower + "', directory '" + $lower + "' 
 
 if (-not (Test-Path -LiteralPath $sdExe)) { Write-Output "  no sd.exe at $sdExe"; exit 2 }
 
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }
-    else {
-        Stop-Job $job; $out = Receive-Job $job
-        $out += ''; $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** The usual cause is an unelevated session hanging at LOGTO SDSYS."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no fixture behind,
+# not a thrown error at the first SD call that reads as a product failure.
+Assert-SdSeat -Label 'verify-createfilecase'
+
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token, and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file; the TERM
+# line this sent first is added by the helper.  A seat that did not run THROWS
+# rather than returning ''.  SDSYS must be signed in: `query session` shows its
+# row.  The sd -internal PTERM DISPLAY leg further down is NOT a seat call: it
+# runs from this elevated shell on purpose, as the owner's measurement did.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # ---- sweep any leftover of this family, THEN create the fixture ------------

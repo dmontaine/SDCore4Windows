@@ -2,7 +2,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File verify-pyapi.ps1
 #
-# UNELEVATED is fine and is how it was run.  Exit 0 the whole path works,
+# ***ELEVATED POWERSHELL, AND SDSYS MUST BE SIGNED IN*** (the SDSYS seat,
+# sdsys-seat.ps1, RELEASE_1.1 76; the corrected note further down says why an
+# unelevated run was never correct).  Exit 0 the whole path works,
 # 1 a step failed, 2 the fixture could not be built (never a FAIL).
 #
 # WHAT IT MEASURES.  BASIC -> !PY_* -> SDEXT/SDPYOBJ -> sdpy_client -> the pipe
@@ -103,27 +105,28 @@ if (-not (Test-Path -LiteralPath $sdpyExe)) {
 }
 Write-Output ("  helper size  : " + (Get-Item -LiteralPath $sdpyExe).Length + " bytes")
 
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** Check for a stray sdwind before running a cycle."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token, and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file.  The
+# TERM line this sent first, and again after every LOGTO the caller sent, is added
+# by the helper (Expand-SeatCommands).  A seat that did not run THROWS rather than
+# returning ''.  SDSYS must be signed in: `query session` shows its row.
+#
+# ***THE COVERAGE THE HEADER DESCRIBES IS UNCHANGED:*** the seat's token is
+# elevated, so USR_ADMIN is set and may_start_helper() still takes its "an
+# administrator always may" branch.  This measures the PLUMBING, not the OS.USERS
+# route, exactly as before.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE PLANTING ANYTHING, so a
+# missing SDSYS session, or an unelevated shell, is exit 2 ("could not run") and
+# not a thrown error at the first SD call that reads as a Python fault.
+Assert-SdSeat -Label 'verify-pyapi'
 
 # --- fixture --------------------------------------------------------------
 Write-Output ''
@@ -216,21 +219,10 @@ $out = Invoke-SD @($cmd)
 Write-Output '  --- BASIC said: ---'
 Write-Output $out
 if (-not (Test-Path -LiteralPath (Join-Path $sysBpOut $ctlName))) {
-    # NAME THE REAL CAUSE RATHER THAN THE SYMPTOM.  "no object produced" sends a
-    # reader looking at the compiler when the session never got past the LOGTO,
-    # and the two look identical in the exit code.  This diagnosis sat on the
-    # CREATE.FILE step until 13 Sep 2026; BASIC is the first SD call now.
-    if ($out -match 'did not finish in' -and $out -notmatch 'error\(s\)') {
-        Write-Output ''
-        Write-Output '  IT HUNG BEFORE THE COMPILER ANSWERED, AND THE USUAL CAUSE IS ELEVATION.'
-        Write-Output '  An unelevated LOGTO SDSYS reaches elevate(''START''), which raises a'
-        Write-Output '  UAC consent (CPROC:2687).  Nothing driven down a pipe can answer'
-        Write-Output '  one, so it waits until the timeout.'
-        Write-Output ''
-        Write-Output '  RUN THIS FROM AN ELEVATED PowerShell.  See the header for what'
-        Write-Output '  that costs: USR_ADMIN takes the gate''s permissive branch, so this'
-        Write-Output '  measures the plumbing and not the OS.USERS route.'
-    }
+    # A seat that did not run THROWS (Invoke-SdSeatText), so reaching here means SD
+    # answered and the compiler produced no object - the reason is in what BASIC
+    # said above.  The old "it hung at an unelevated LOGTO SDSYS" diagnosis that
+    # stood here describes a route this script no longer takes.
     Write-Output '  no object produced - the probe cannot run'
     foreach ($p in $fixtures) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }

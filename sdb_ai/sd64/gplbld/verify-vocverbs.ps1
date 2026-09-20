@@ -14,10 +14,11 @@
 # the same as working, and PRE_RELEASE_FIXES.md marks each of them "COMPILED
 # AND INSTALLED - UNTESTED" on purpose.  This is the witness.
 #
-# RUN IT ELEVATED, AND THAT IS NOT A PREFERENCE.  Every session here starts
-# with LOGTO SDSYS, which is administrator-only, and the fixtures are created
-# in the SDSYS account directory, which the step 15 ACL lock closes to an
-# ordinary token.
+# RUN IT ELEVATED, AND THAT IS NOT A PREFERENCE, AND SDSYS MUST BE SIGNED IN.
+# Every session here runs as a task registered for the OS SDSYS account (the
+# SDSYS seat, sdsys-seat.ps1, RELEASE_1.1 76), which needs an elevated caller,
+# and the fixtures are created in the SDSYS account directory, which the step 15
+# ACL lock closes to an ordinary token.
 #
 # ***THE ONE CHECK THAT SEPARATES A FIX FROM AN ACCIDENT, PER ENTRY.***  Each
 # entry anchors on wording the tool prints ONLY on the path under test, and
@@ -178,28 +179,24 @@ function Get-CreatedName([string]$text, [string]$part) {
 # following lines - including OFF.  A regressed build therefore hangs, and this
 # branch is what turns that into a legible failure instead of a stray sd.exe
 # nobody accounts for.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** It also leaves the session's user-table slot and locks behind,"
-        $out += "*** so sdwind will not shut down and cycle.ps1 will refuse to"
-        $out += "*** start.  Stop-Process the sdwind PID it names."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token, and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file.  The TERM
+# line this sent first, and again after every LOGTO the caller sent, is added by
+# the helper (Expand-SeatCommands).  SDSYS must be signed in: `query session` shows
+# its row.
+#
+# ***THE TIMEOUT BRANCH ABOVE DESCRIBES THE OLD JOB, NOT THIS.***  The seat's task
+# writes its report when sd.exe EXITS, so a call that hits the timeout is stopped
+# and THROWS ("the task wrote no report within Ns"); it does not return what SD
+# had printed, and the prompt that stopped it is not visible here.  A regressed
+# build still fails legibly as a bounded throw and not a stray sd.exe, but reading
+# WHICH prompt means running that session by hand.  See RELEASE_1.1 76.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # EVERY SESSION'S RAW OUTPUT IS PRINTED, unconditionally.  CLAUDE.md, "an
@@ -252,9 +249,9 @@ $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $pr = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'verify-vocverbs: this needs an ELEVATED PowerShell and this one is not.'
-    Write-Output '  Every session here starts with LOGTO SDSYS, which is administrator-only,'
-    Write-Output '  and the fixtures are written inside the SDSYS account directory, which the'
-    Write-Output '  step 15 ACL lock closes to an ordinary token.'
+    Write-Output '  Every session here runs as a task registered for the OS SDSYS account, which'
+    Write-Output '  needs an elevated caller, and the fixtures are written inside the SDSYS'
+    Write-Output '  account directory, which the step 15 ACL lock closes to an ordinary token.'
     exit 2
 }
 
@@ -302,6 +299,11 @@ Write-Output ("  sdsys   {0}" -f $sdsys)
 Write-Output ("  prefix  {0}" -f $Prefix)
 Write-Output ("  names   {0}" -f ($allNames -join ', '))
 Write-Output ''
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CLEARING OR CREATING
+# ANYTHING, so a missing SDSYS session is exit 2 ("could not run") and not a
+# thrown error at the first SD call that reads as a product failure.
+Assert-SdSeat -Label 'verify-vocverbs'
 
 # ------------------------------------------------------- 0. clear the ground
 #

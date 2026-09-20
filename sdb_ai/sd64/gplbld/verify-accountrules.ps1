@@ -150,24 +150,20 @@ function Shown($out, [int]$n, [string[]]$vals) {
 # Blank first line absorbs the pipe's BOM, TERM stops pagination, OFF ends it.
 # The pipe is not a convenience: Start-Process -RedirectStandardInput hands SD a
 # FILE handle and SD answers "Process terminated" and exits (section 6).
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token (cproc:2789), and an elevated Don is not one.  So the commands
+# go to a task inside SDSYS's own live session and the text comes back through a
+# file.  The TERM line this sent first, and again after every LOGTO the caller sent
+# (LOGIN re-inits terminal geometry on each account switch, LOGIN:201-209, and long
+# LIST/COUNT output paginates on a stdin nothing can answer), is added by the
+# helper (Expand-SeatCommands).  A seat that did not run THROWS rather than
+# returning ''.  SDSYS must be signed in: `query session` shows its row.  The bound
+# is 180 s where the old in-process pipe was unbounded.
+. (Join-Path $Gplbld 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any LOGTO in $commands and long
-    # LIST/COUNT output paginates on a stdin the pipe can no longer answer.
-    # Full write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 # ADOPT is gated on K$INTERNAL, which means "sd -internal", which means separate
@@ -274,6 +270,11 @@ if ($missing.Count -gt 0) {
 }
 
 if (-not (Start-SD)) { Fail 'SD would not start, and step 4 needs a server for sd -internal.' }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no account behind,
+# not a thrown error at the first CREATE.ACCOUNT that reads as a product failure.
+Assert-SdSeat -Label 'verify-accountrules'
 
 Add-Type -AssemblyName System.Web
 

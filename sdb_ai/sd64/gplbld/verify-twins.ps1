@@ -38,8 +38,9 @@
 # instead of refusing.  assert-current refuses this on an install without the
 # change, so the red half is the scratch run recorded in RELEASE_1.1 5.
 #
-# BOUNDED: every SD session is a job, killed after the timeout; it plants only
-# zztw* names in SDSYS and deletes them, and asserts none is left.
+# BOUNDED: every SD session is a task in the SDSYS seat (sdsys-seat.ps1), killed
+# after the timeout; it plants only zztw* names in SDSYS and deletes them, and
+# asserts none is left.  ***SDSYS MUST BE SIGNED IN*** (RELEASE_1.1 76).
 
 $ErrorActionPreference = 'Stop'
 & (Join-Path $PSScriptRoot 'assert-current.ps1')
@@ -65,23 +66,21 @@ function Row([string]$name, [bool]$ok, [string]$detail = '') {
     else { $script:fail++; Write-Output ("  [FAIL] " + $name + ($(if ($detail) { "  ->  $detail" } else { '' }))) }
 }
 
-# A LOGTO SDSYS session (elevated lands in SDSYS anyway; explicit for clarity).
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe 2>&1 } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }
-    else { Stop-Job $job; $out = Receive-Job $job; $out += "*** SD did not finish in $TimeoutSec s" }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token, and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file; the TERM
+# line this sent first is added by the helper.  A seat that did not run THROWS
+# rather than returning ''.  SDSYS must be signed in: `query session` shows its row.
+# Both doors are the seat's: plain for the ordinary legs, -Internal for the one
+# thing only sd -internal can do (build a case-sensitive file).
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
-# sd -internal, the only way to build a case-sensitive file.  It runs in SDSYS.
-function Invoke-SDInternal([string[]]$commands, [int]$TimeoutSec = 60) {
-    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe '-internal' 2>&1 } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }
-    else { Stop-Job $job; $out = Receive-Job $job; $out += "*** SD -internal did not finish in $TimeoutSec s" }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+function Invoke-SDInternal([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec -Internal)
 }
 function Listed([string]$text) {
     $m = [regex]::Match($text, '(?m)^(\d+) record\(s\) (listed|counted)')
@@ -104,6 +103,12 @@ function Cleanup {
     }
     return $left
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE BOTH SEAT DOORS BEFORE PLANTING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run"), not a thrown error at the
+# first SD call that reads as a product failure.  See sdsys-seat.ps1.
+Assert-SdSeat -Label 'verify-twins'
+Assert-SdSeat -Label 'verify-twins' -Internal
 
 $exit = 2
 try {

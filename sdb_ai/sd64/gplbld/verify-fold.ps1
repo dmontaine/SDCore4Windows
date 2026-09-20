@@ -88,43 +88,26 @@ function Note($check, $expected, $got) {
 # and the window is dead with no output at all, because this function only
 # returns when SD exits.  Three runs were lost that way on 18 Aug 2026.
 #
-# The job is killed at the timeout and WHATEVER SD PRINTED IS RETURNED, so the
-# prompt that caused it is visible instead of being trapped in a hung pipe.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any LOGTO in $commands.  Full
-    # write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** The last line above is the prompt that stopped it."
-        $out += "*** AND IT LEFT DEBRIS: killing the job kills the session without"
-        $out += "*** letting it deregister, so its user-table slot and any record"
-        $out += "*** locks it held stay behind.  A later DELETE.FILE on the same"
-        $out += "*** name then blocks SILENTLY, and cycle.ps1 will refuse to start"
-        $out += "*** with 'SD is still running: sdwind(N)' because sdwind will not"
-        $out += "*** shut down while it thinks a session is attached.  Both were"
-        $out += "*** seen on 18 Aug 2026.  Stop-Process the sdwind PID it names."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token (cproc:2789), and an elevated Don is not one.  So the commands
+# go to a task inside SDSYS's own live session and the text comes back through a
+# file.  The TERM line this sent first, and again after every LOGTO the caller sent
+# (LOGIN re-inits terminal geometry on each account switch, LOGIN:201-209), is
+# added by the helper (Expand-SeatCommands).  SDSYS must be signed in: `query
+# session` shows its row.
+#
+# ***WHAT THE BOUND NOW COSTS, MEASURED FROM THE HELPER'S SOURCE RATHER THAN A RUN:***
+# the seat's task writes its report when sd.exe EXITS, so a call that hits the
+# timeout is stopped and THROWS ("the task wrote no report within Ns") - it does
+# NOT return whatever SD had printed, and the prompt that stopped it is no longer
+# visible in this script's output.  The old job returned it.  A hung call is still
+# bounded, and the task is stopped, but diagnosing it now means running the same
+# commands by hand.  Recorded in RELEASE_1.1 76 as a known limit of the helper.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # "0 record(s) counted" is success; "File not found" is the defect.  Both are
@@ -183,6 +166,9 @@ if ($Cleanup) {
         Write-Output 'verify-fold: -Cleanup needs an ELEVATED PowerShell - it deletes through SD.'
         exit 2
     }
+    # 20 Sep 26 - RELEASE_1.1 76: it deletes through the SDSYS seat now, so prove it
+    # first; a missing SDSYS session is exit 2, not a throw half way through the sweep.
+    Assert-SdSeat -Label 'verify-fold -Cleanup'
     Write-Output ("removing " + $lc + " and " + $uc)
     Remove-Made
     exit 0
@@ -200,6 +186,11 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     Write-Output 'verify-fold: this needs an ELEVATED PowerShell - it works in SDSYS.'
     exit 2
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no fixture behind,
+# not a thrown error at the first SD call that reads as a product failure.
+Assert-SdSeat -Label 'verify-fold'
 
 # ---------------------------------------------------------------------------
 Write-Output ''

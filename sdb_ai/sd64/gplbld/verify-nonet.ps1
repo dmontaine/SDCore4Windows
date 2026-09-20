@@ -62,34 +62,18 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
-# Bounded - see verify-fold.ps1 for why, and for what a timed-out call leaves
-# behind.  Nothing here should ever prompt; the timeout is the safety net.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any LOGTO in $commands.  Full
-    # write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += "*** SD did not finish in $TimeoutSec s - Stop-Process the sdwind PID."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
+# FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
+# interactive token (cproc:2789), and an elevated Don is not one.  So the commands
+# go to a task inside SDSYS's own live session and the text comes back through a
+# file.  The TERM line this sent first, and again after every LOGTO the caller sent
+# (LOGIN re-inits terminal geometry on each account switch, LOGIN:201-209), is
+# added by the helper (Expand-SeatCommands).  A seat that did not run THROWS rather
+# than returning ''.  SDSYS must be signed in: `query session` shows its row.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 & (Join-Path $PSScriptRoot 'assert-current.ps1')
@@ -104,6 +88,11 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     Write-Output 'verify-nonet: this needs an ELEVATED PowerShell - it works in SDSYS.'
     exit 2
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE MEASURING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run"), not a thrown error at the
+# first SD call that reads as a product failure.  See sdsys-seat.ps1.
+Assert-SdSeat -Label 'verify-nonet'
 
 # ---------------------------------------------------------------------------
 Write-Output ''
