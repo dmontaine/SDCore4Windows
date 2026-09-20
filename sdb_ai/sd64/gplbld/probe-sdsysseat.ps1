@@ -462,6 +462,69 @@ function Invoke-ViaLinkedToken([string]$ps1, [string]$outFile, [int]$seconds) {
                         's (child exit code ' + $exitCode + ')' }) }
 }
 
+# ===========================================================================
+# ROUTE D - A TASK INSIDE THE ACCOUNT'S OWN LIVE INTERACTIVE SESSION.
+#
+# ***THIS ONE DOES NOT DEFEAT THE GATE, IT SATISFIES IT.***  Routes B and C
+# tried to manufacture the two properties kernel.c:299 wants.  This asks for a
+# session that HAS them: the account is signed in - a real desktop, a real
+# S-1-5-4 - and switched away from with fast user switching, so its session
+# stays alive while somebody else works.  A task registered with LogonType
+# INTERACTIVE runs inside that session, and RunLevel Highest gets the elevated
+# linked token, which the Task Scheduler service CAN obtain because it runs as
+# SYSTEM and holds SeTcbPrivilege - the exact privilege route C lacked.
+#
+# NO PASSWORD IS PASSED HERE AT ALL.  An interactive-logon task uses the
+# session that is already there, so there is nothing to store and nothing to
+# hand over.
+#
+# IT REFUSES THE NULL CASE LOUDLY, because a task registered against an
+# account with no session does not fail - it simply never runs, and an absent
+# report would read as "the route does not work" when it means "nobody signed
+# in".
+function Get-InteractiveSession([string]$account) {
+    # qwinsta shares no code with anything else here, which is what makes it a
+    # control rather than a second opinion from the same source.
+    $out = & "$env:SystemRoot\System32\qwinsta.exe" 2>&1
+    if ($LASTEXITCODE -ne 0 -and $null -eq $out) {
+        return @{ Ok = $false; Why = 'qwinsta produced nothing - the session list could not be read'; Line = '' }
+    }
+    foreach ($l in $out) {
+        $t = [string]$l
+        if ($t -match ('(?i)\s' + [regex]::Escape($account) + '\s')) {
+            return @{ Ok = $true; Why = ''; Line = $t.Trim() }
+        }
+    }
+    return @{ Ok = $false; Line = ''
+              Why = ("no session for {0} in qwinsta - sign in as {0} once, then switch back to your own session (Ctrl+Alt+Del > Switch user, or Win+L); the session stays alive behind yours" -f $account) }
+}
+
+function Invoke-ViaInteractiveTask([string]$ps1, [string]$outFile, [int]$seconds) {
+    $name = 'SDVerifySdsysSeatI_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+                  -Argument ('-ExecutionPolicy Bypass -File "{0}"' -f $ps1)
+    try {
+        $principal = New-ScheduledTaskPrincipal -UserId (Get-Principal) `
+                        -LogonType Interactive -RunLevel Highest
+        Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Force | Out-Null
+    } catch {
+        return @{ Ok = $false; Task = $name; Why = ('Register-ScheduledTask (Interactive) refused: ' + $_.Exception.Message) }
+    }
+    $null = $tasksMade.Add($name)
+    try {
+        Start-ScheduledTask -TaskName $name
+    } catch {
+        return @{ Ok = $false; Task = $name; Why = ('Start-ScheduledTask refused: ' + $_.Exception.Message) }
+    }
+    $got = Wait-For $outFile $seconds
+    $last = '<not read>'
+    try { $last = (Get-ScheduledTaskInfo -TaskName $name).LastTaskResult } catch { }
+    return @{ Ok = $got; Task = ($name + ', LastTaskResult ' + $last)
+              Why = $(if ($got) { '' } else {
+                        'the task produced no output within ' + $seconds +
+                        's (LastTaskResult ' + $last + ')' }) }
+}
+
 function Invoke-ViaStartProcess([string]$ps1, [string]$outFile, [int]$seconds) {
     try {
         Start-Process -FilePath 'powershell.exe' `
@@ -529,25 +592,56 @@ try {
     Write-TokenFacts $c 'route C'
     Note 'route C produced a report at all' $true ($null -ne $c)
 
+    # ------------------------------------------------------------------ route D
+    Head 'route D - a task inside the account''s OWN live interactive session'
+    Say 'The owner''s choice, 19 Sep 2026.  It does not manufacture the two properties'
+    Say 'the gate wants - it asks for a session that HAS them.  No password is passed.'
+
+    $sess = Get-InteractiveSession $Account
+    if (-not $sess.Ok) {
+        Say $sess.Why
+        Note ("{0} has a live interactive session to run in" -f $Account) $true $false
+        $d = $null
+    } else {
+        Say ('qwinsta: ' + $sess.Line)
+        Note ("{0} has a live interactive session to run in" -f $Account) $true $true
+
+        $dOut = Join-Path $WorkDir 'routeD.txt'
+        $dPs1 = Join-Path $WorkDir 'routeD.ps1'
+        Remove-Item -LiteralPath $dOut -ErrorAction SilentlyContinue
+        Write-SpawnScript $dPs1 $tokenScript $dOut
+        Say ('principal: ' + (Get-Principal) + '  LogonType Interactive  RunLevel Highest')
+        $dRun = Invoke-ViaInteractiveTask $dPs1 $dOut 60
+        Say ('task: ' + $dRun.Task)
+        if (-not $dRun.Ok) { Say $dRun.Why }
+        $d = Get-TokenFacts (Read-Report $dOut)
+        Write-TokenFacts $d 'route D'
+        Note 'route D produced a report at all' $true ($null -ne $d)
+    }
+
     # ------------------------------------------------------- the decisive rows
-    Head 'what the three routes answered'
+    Head 'what the four routes answered'
 
     $aElev = ($null -ne $a -and $a.IsAdmin -and -not $a.DenyOnly)
     $bElev = ($null -ne $b -and $b.IsAdmin -and -not $b.DenyOnly)
     $cElev = ($null -ne $c -and $c.IsAdmin -and -not $c.DenyOnly)
+    $dElev = ($null -ne $d -and $d.IsAdmin -and -not $d.DenyOnly)
     $aSeat = Test-Seat $a
     $bSeat = Test-Seat $b
     $cSeat = Test-Seat $c
+    $dSeat = Test-Seat $d
     Say ("route A: elevated={0}  interactive={1}  SEAT={2}" -f `
          $aElev, $(if ($null -ne $a) { $a.Interactive } else { '<none>' }), $aSeat)
     Say ("route B: elevated={0}  interactive={1}  SEAT={2}" -f `
          $bElev, $(if ($null -ne $b) { $b.Interactive } else { '<none>' }), $bSeat)
     Say ("route C: elevated={0}  interactive={1}  SEAT={2}" -f `
          $cElev, $(if ($null -ne $c) { $c.Interactive } else { '<none>' }), $cSeat)
-    Note 'a route gave an ELEVATED session as the account'    $true ($aElev -or $bElev -or $cElev)
-    Note 'a route satisfied BOTH terms SD tests (the seat)'   $true ($aSeat -or $bSeat -or $cSeat)
+    Say ("route D: elevated={0}  interactive={1}  SEAT={2}" -f `
+         $dElev, $(if ($null -ne $d) { $d.Interactive } else { '<none>' }), $dSeat)
+    Note 'a route gave an ELEVATED session as the account'    $true ($aElev -or $bElev -or $cElev -or $dElev)
+    Note 'a route satisfied BOTH terms SD tests (the seat)'   $true ($aSeat -or $bSeat -or $cSeat -or $dSeat)
 
-    if (-not ($aElev -or $bElev -or $cElev)) {
+    if (-not ($aElev -or $bElev -or $cElev -or $dElev)) {
         Write-Output ''
         Write-Output 'probe-sdsysseat: NEITHER ROUTE IS ELEVATED, so LOGIN''s landing case cannot'
         Write-Output '  match and the suite cannot be given its seat this way.  THAT IS AN ANSWER,'
@@ -564,7 +658,7 @@ try {
     # confirmed prediction rather than a product failure - scoring it as a FAIL
     # would blame SD for obeying 5.25.  The SD leg still runs, because the
     # refusal is the evidence.
-    $expectRefusal = -not ($aSeat -or $bSeat -or $cSeat)
+    $expectRefusal = -not ($aSeat -or $bSeat -or $cSeat -or $dSeat)
     if ($expectRefusal) {
         Write-Output ''
         Write-Output '  NO ROUTE IS A SEAT.  A AND B FAIL OPPOSITE HALVES OF ONE CONJUNCTION:'
@@ -583,8 +677,8 @@ try {
 
     # Prefer a route that IS a seat; failing that, the elevated one, because a
     # refusal from the closest route is the most informative one to capture.
-    $route = $(if ($cSeat) { 'C' } elseif ($bSeat) { 'B' } elseif ($aSeat) { 'A' }
-               elseif ($cElev) { 'C' } elseif ($bElev) { 'B' } else { 'A' })
+    $route = $(if ($dSeat) { 'D' } elseif ($cSeat) { 'C' } elseif ($bSeat) { 'B' } elseif ($aSeat) { 'A' }
+               elseif ($dElev) { 'D' } elseif ($cElev) { 'C' } elseif ($bElev) { 'B' } else { 'A' })
     Say ("driving sd.exe through route {0}" -f $route)
     if ($expectRefusal) { Say 'PREDICTION: SD refuses with 10002, because no route is a seat.' }
 
@@ -608,6 +702,11 @@ Set-Content -LiteralPath '@@OUT@@' -Value (($out -join "`n") + "`nENDOFREPORT") 
         'C' {
             $sdRun = Invoke-ViaLinkedToken $sdPs1 $sdOut 90
             if ($sdRun.Task -ne '') { Say ('spawned: ' + $sdRun.Task) }
+        }
+        'D' {
+            Say ('principal: ' + (Get-Principal) + '  LogonType Interactive  RunLevel Highest')
+            $sdRun = Invoke-ViaInteractiveTask $sdPs1 $sdOut 90
+            Say ('task: ' + $sdRun.Task)
         }
         default { $sdRun = Invoke-ViaStartProcess $sdPs1 $sdOut 90 }
     }
