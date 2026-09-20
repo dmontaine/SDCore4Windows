@@ -44,13 +44,13 @@
                          SDSYS, so every one of these is currently BROKEN and
                          is what 76's re-aim has to fix.  ***RELEASE_1.1 78
                          WAS THE BLOCKER AND IS CLOSED (20 Sep 2026): NOT A
-                         DEFECT, SDSYS SIGNS IN AT THE CONSOLE.***  What the
-                         re-aim now waits on is route D's live measurement
-                         (76) - the fix is "stop sending LOGTO SDSYS, assume
-                         the process already IS SDSYS", which cannot be
-                         written correctly until that says how a process
-                         becomes SDSYS.  Written in the conditional because
-                         nothing here is built.
+                         DEFECT, SDSYS SIGNS IN AT THE CONSOLE.***  Route D
+                         (76) then measured a working seat: a task in SDSYS's
+                         own live session.  So the fix is NOT "stop sending
+                         LOGTO SDSYS" - it is a shared helper that hands each
+                         sd.exe call to that task and reads the output back,
+                         adopted here 34 times.  Written in the conditional
+                         because nothing here is built.
 
       CALLER_SUPPLIED   Same defect, different shape: Invoke-SD itself sends
                          no prefix, and the CALLING code passes 'LOGTO SDSYS'
@@ -245,8 +245,8 @@ foreach ($r in ($byRole.Keys | Sort-Object)) {
 $reaimCount = @($DECLARED.Keys | Where-Object { $ROLES_NEEDING_REAIM -contains $DECLARED[$_].Role }).Count
 Write-Output ''
 Write-Output ("*** RELEASE_1.1 76's DRIVER RE-AIM, CHECKED SCOPE: {0} file(s) still send a live LOGTO SDSYS prefix that RELEASE_1.1 64 slices 1-2 refuse (10002). ***" -f $reaimCount)
-Write-Output '    78 is closed (not a defect: SDSYS signs in). What the re-aim waits on now is'
-Write-Output '    route D''s live measurement - see RELEASE_1.1 76 before writing the fix, not this.'
+Write-Output '    78 is closed (not a defect: SDSYS signs in) and route D is a measured seat, so what'
+Write-Output '    the re-aim needs is a shared helper, not a prefix deletion - see RELEASE_1.1 76.'
 
 # --- mutant control, on a COPY of the directory, never the live files ------
 Write-Output ''
