@@ -1627,7 +1627,14 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # FIXTURE, COMMENT) so the count stays checked rather than
                   # guessed.  Source-only, ships nowhere, listed with the
                   # commit that creates it.
-                  'test-logtoreaim-units.ps1')
+                  'test-logtoreaim-units.ps1',
+                  # 20 Sep 26 - RELEASE_1.1 76's SDSYS seat: the shared helper
+                  # that runs sd.exe as a task inside SDSYS's own live session,
+                  # and its free guard.  Both are harness only - the helper is
+                  # dot-sourced by verifiers that run from source and nothing
+                  # installs either - so they ship nowhere.  Listed with the
+                  # commit that creates them.
+                  'sdsys-seat.ps1', 'test-sdsysseat-units.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

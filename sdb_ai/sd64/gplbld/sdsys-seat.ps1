@@ -1,0 +1,275 @@
+# sdsys-seat.ps1 - run sd.exe AS THE OS SDSYS ACCOUNT, inside its own live console
+# session, and hand the output back.  Dot-sourced; it defines functions and runs
+# nothing.  RELEASE_1.1 76.
+#
+# WHY THIS EXISTS.  RELEASE_1.1 64 made the Windows SDSYS account the only SD
+# administrator, and SD reaches SDSYS only from a process that IS that OS account
+# with a token that is BOTH elevated AND interactive (kernel.c:299).  "LOGTO SDSYS"
+# and "sd -ASDSYS" from any other account are refused (10002).  So a verifier that
+# needs SDSYS cannot send a prefix - it has to run sd.exe as SDSYS.
+#
+# THE SEAT, MEASURED (probe-sdsysseat.ps1, owner's run 19 Sep 2026 23:33): a
+# scheduled task registered for the account with LogonType Interactive and
+# RunLevel Highest runs INSIDE that account's already-signed-in session - even a
+# DISCONNECTED one - with a High-integrity token, Administrators enabled and
+# S-1-5-4 present.  SD then answers WHO with "<n> SDSYS".  Routes that mint a
+# session instead (Start-Process -Credential: filtered; a plain scheduled task:
+# batch, no S-1-5-4; the linked token: refused 1346) are not seats.  No password
+# is involved at all, which is why nothing here can leak one.
+#
+# WHAT IT NEEDS.  (1) The CALLER elevated - registering a task for another
+# account needs it, so this belongs to the elevated tier only.  (2) SDSYS SIGNED
+# IN and left signed in (the owner's ruling, 19 Sep 2026): sign in once per boot
+# using the login name SDSYS, then switch back.  ***A task registered for an
+# account with no session does not fail - it never runs***, so both are checked
+# before anything is registered and refused out loud.
+#
+# ***IT REFUSES A SEAT THAT IS NOT ONE.***  The task script reports the identity
+# and the two token facts it actually ran with, in a header, and this validates
+# them: the identity must be the account asked for, the token must be elevated,
+# and it must be interactive.  A run that produced output as the WRONG account,
+# or as SDSYS without the seat, would otherwise look like SD refusing the
+# command - which is the failure the instrument rules exist to stop.  The end
+# marker is required for the same reason: a report cut off mid-write is not a
+# report.
+#
+# A FUNCTION THAT RETURNS A VALUE PRINTS NOTHING (probe-sdsysseat.ps1's rule,
+# paid for on 19 Sep 2026): every function here returns its value and the CALLER
+# prints.  Write-Output inside one would fold its lines into the return value.
+#
+# NO Set-StrictMode AT FILE SCOPE.  A dot-sourced file's strict mode binds the
+# CALLER (the suite-only.ps1 trap).
+#
+# TEST SEAM.  $script:SeatTestHooks, when a caller sets it, replaces the four
+# things that need a real machine: Elevated, Qwinsta, SdExe and Runner.
+# test-sdsysseat-units.ps1 drives every decision through it.  Production callers
+# never set it.  The lines tagged "MUT-" are the checks the unit test mutates to
+# prove its own fixtures can tell a broken helper from a good one.
+
+function Get-SeatHook([string]$Name) {
+    $h = Get-Variable -Name SeatTestHooks -Scope Script -ErrorAction SilentlyContinue
+    if ($null -ne $h -and $null -ne $h.Value -and $h.Value.ContainsKey($Name)) {
+        return @{ Has = $true; Value = $h.Value[$Name] }
+    }
+    return @{ Has = $false; Value = $null }
+}
+
+function New-SeatResult([bool]$Ok, [string]$Text, [string]$Why, [string]$Detail, $Session) {
+    return [pscustomobject]@{ Ok = $Ok; Text = $Text; Why = $Why; Detail = $Detail; Session = $Session }
+}
+
+function Test-SeatCallerElevated {
+    $hk = Get-SeatHook 'Elevated'
+    if ($hk.Has) { return [bool]$hk.Value }
+    $pr = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# Finds the account's session in qwinsta's table.  Active and Disc both count: a
+# disconnected session is a seat (measured).  The name must stand alone - SDSYS2
+# and xSDSYS are other accounts.  Lines can be injected for the unit test.
+function Get-SeatSession {
+    param([string]$Account = 'SDSYS', [string[]]$Lines = $null)
+    if ($null -eq $Lines) {
+        $hk = Get-SeatHook 'Qwinsta'
+        if ($hk.Has) {
+            $Lines = @($hk.Value)
+        } else {
+            $Lines = @(& (Join-Path $env:SystemRoot 'System32\qwinsta.exe') 2>&1 | ForEach-Object { [string]$_ })
+        }
+    }
+    $clean = @($Lines | Where-Object { $_ -match '\S' })
+    if ($clean.Count -eq 0) {
+        return @{ Ok = $false; Id = -1; State = ''; Line = ''
+                  Why = 'qwinsta produced nothing - the session list could not be read' }
+    }
+    $rx = '(?i)(^|\s)' + [regex]::Escape($Account) + '\s+(\d+)\s+(Active|Disc)\b'
+    foreach ($l in $clean) {
+        if ($l -match $rx) {
+            return @{ Ok = $true; Id = [int]$Matches[2]; State = $Matches[3]; Line = $l.Trim(); Why = '' }
+        }
+    }
+    return @{ Ok = $false; Id = -1; State = ''; Line = ''
+              Why = ("no live session for {0} in qwinsta.  Sign in as {0} once - at the switch-user screen pick " +
+                     "the login name {0}, NOT your own account's tile - then switch back; the session stays alive " +
+                     "behind yours.  A task registered without one does not fail, it never runs.") -f $Account }
+}
+
+# The whole check on what the seat wrote.  Value in, value out.
+function ConvertFrom-SeatReport {
+    param([string]$Raw, [string]$Account = 'SDSYS', [int]$MaxBytes = 4194304)
+    $bad = { param($why) return @{ Ok = $false; Text = ''; Why = $why; Identity = ''; Admin = $false; Interactive = $false } }
+
+    if ([string]::IsNullOrEmpty($Raw)) { return (& $bad 'the seat wrote an empty report') }
+    if ([Text.Encoding]::UTF8.GetByteCount($Raw) -gt $MaxBytes) {
+        return (& $bad ("the seat's report is larger than {0} bytes - a runaway loop, not an answer" -f $MaxBytes))
+    }
+    $lines = @($Raw -split "`r?`n")
+    if (-not ($lines[0] -match '^SEAT identity=(\S+) admin=(True|False) interactive=(True|False)\s*$')) {
+        return (& $bad 'the seat report has no SEAT header - it did not come from the task script')
+    }
+    $id    = $Matches[1]
+    $admin = ($Matches[2] -eq 'True')
+    $inter = ($Matches[3] -eq 'True')
+
+    $idRx = '(?i)\\' + [regex]::Escape($Account) + '$'
+    if (-not ($id -match $idRx)) { return (& $bad ("the seat ran as '{0}', not {1}: the output is not {1}'s, and LOGTO cannot reach it from another account" -f $id, $Account)) } #MUT-ID
+    if (-not $admin) { return (& $bad ("the seat's token is not elevated (Administrators is not enabled) - SD will refuse it with 10002")) } #MUT-ADMIN
+    if (-not $inter) { return (& $bad ("the seat's token is not interactive (no S-1-5-4) - a batch logon is elevated and still refused with 10002")) } #MUT-INTERACTIVE
+    if ($Raw -notmatch 'ENDOFSEAT\s*$') { return (& $bad 'the seat report has no end marker - it was cut off or is still being written') } #MUT-MARKER
+
+    $body = @()
+    if ($lines.Count -gt 1) { $body = @($lines[1..($lines.Count - 1)] | Where-Object { $_ -ne 'ENDOFSEAT' }) }
+    $text = ($body -join "`n") -replace ([string][char]27 + '\[[0-9;?]*[A-Za-z]'), ''
+    return @{ Ok = $true; Text = $text; Why = ''; Identity = $id; Admin = $admin; Interactive = $inter }
+}
+
+# Builds the script the task runs.  .Replace() rather than -replace: the
+# replacements are PATHS and a regex replacement string is not a literal one
+# (CLAUDE.md's backslash rule, met by building the text rather than escaping).
+#
+# ORDER MATTERS AND THE UNIT TEST PINS IT: the input file - which can hold a
+# test account's password - is read and DELETED before sd.exe starts, so it
+# does not sit on disk for the length of the run.  The report is written to a
+# .tmp and RENAMED, so the caller can never see half of it.
+function New-SeatScript {
+    param([string]$SdExe, [string]$InFile, [string]$OutFile)
+    $t = @'
+$sd   = '@@SD@@'
+$inF  = '@@IN@@'
+$outF = '@@OUT@@'
+$id   = [Security.Principal.WindowsIdentity]::GetCurrent()
+$pr   = New-Object Security.Principal.WindowsPrincipal($id)
+$hdr  = 'SEAT identity=' + $id.Name +
+        ' admin=' + $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) +
+        ' interactive=' + $pr.IsInRole((New-Object Security.Principal.SecurityIdentifier('S-1-5-4')))
+$in   = [IO.File]::ReadAllText($inF)
+Remove-Item -LiteralPath $inF -Force
+$out  = $in | & $sd 2>&1
+$body = $hdr + "`n" + (($out | ForEach-Object { [string]$_ }) -join "`n") + "`nENDOFSEAT"
+[IO.File]::WriteAllText($outF + '.tmp', $body, (New-Object Text.UTF8Encoding($false)))
+Move-Item -LiteralPath ($outF + '.tmp') -Destination $outF -Force
+'@
+    return $t.Replace('@@SD@@', $SdExe).Replace('@@IN@@', $InFile).Replace('@@OUT@@', $OutFile)
+}
+
+# The real runner: a task in the account's own live session.  Never called by
+# the unit test (it needs elevation and a session); test-sdsysseat-units.ps1
+# checks its shape from the AST instead.
+#
+# AllowStartIfOnBatteries / DontStopIfGoingOnBatteries: a task's default is to
+# NOT start on battery, and it fails as a silent "never ran".  This tree is
+# moving to a laptop (owner, 28 Aug 2026), so that default would surface as a
+# verifier that hangs until its timeout for no visible reason.
+function Invoke-SeatTask {
+    param([string]$Ps1, [string]$OutFile, [int]$Seconds, [string]$Account)
+    $name = 'SDVerifySdsysSeatRun_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $made = $false
+    try {
+        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' `
+                         -Argument ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $Ps1)
+        $principal = New-ScheduledTaskPrincipal -UserId ($env:COMPUTERNAME + '\' + $Account) `
+                         -LogonType Interactive -RunLevel Highest
+        $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+                         -ExecutionTimeLimit (New-TimeSpan -Seconds ($Seconds + 30))
+        Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+        $made = $true
+        Start-ScheduledTask -TaskName $name
+        $deadline = (Get-Date).AddSeconds($Seconds)
+        while (-not (Test-Path -LiteralPath $OutFile) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 300 }
+        $got  = Test-Path -LiteralPath $OutFile
+        $last = '<not read>'
+        try { $last = (Get-ScheduledTaskInfo -TaskName $name).LastTaskResult } catch { }
+        if (-not $got) { try { Stop-ScheduledTask -TaskName $name -ErrorAction Stop } catch { } }
+        return @{ Ok = $got; Detail = ('task {0}, LastTaskResult {1}' -f $name, $last)
+                  Why = $(if ($got) { '' } else {
+                      ('the task wrote no report within {0}s (LastTaskResult {1}; 267011 means it never ran, 267009 that it was still running)' -f $Seconds, $last) }) }
+    } catch {
+        return @{ Ok = $false; Detail = $name; Why = ('the scheduled task could not be run: ' + $_.Exception.Message) }
+    } finally {
+        if ($made) { try { Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop } catch { } }
+    }
+}
+
+# Creates the work directory if needed and lets the account write into it - the
+# task, running as SDSYS, has to be able to write its report there.
+function Initialize-SeatWorkDir {
+    param([string]$Dir, [string]$Account)
+    if (-not (Test-Path -LiteralPath $Dir)) { $null = New-Item -ItemType Directory -Path $Dir -Force }
+    $acl  = Get-Acl -LiteralPath $Dir
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+                $Account, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $acl.AddAccessRule($rule)
+    Set-Acl -LiteralPath $Dir -AclObject $acl
+}
+
+# THE ENTRY POINT.  Runs the commands in sd.exe as the account and returns
+# @{ Ok; Text; Why; Detail; Session }.  Ok is false - with Why saying which
+# precondition or which validation failed - and Text empty in every refusal, so
+# a caller cannot mistake "the seat did not run" for "SD printed nothing".
+# "OFF" is appended, and a leading newline is the BOM sink Invoke-SD always had.
+function Invoke-SdViaSeat {
+    param(
+        # AllowEmptyCollection / AllowNull: without them PowerShell's own binder
+        # answers an empty list with a TERMINATING error before the refusal below
+        # can run, and the helper's promise - a result object with a Why on EVERY
+        # refusal - would not hold for the caller most likely to hit it, one that
+        # builds its command list conditionally.  Found by the unit test.
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [AllowNull()] [AllowEmptyString()] [string[]] $Commands,
+        [string] $Account    = 'SDSYS',
+        [int]    $TimeoutSec = 90,
+        [string] $WorkDir    = '',
+        [int]    $MaxBytes   = 4194304
+    )
+    $cmds = @($Commands | Where-Object { $_ -ne $null })
+    if ($cmds.Count -eq 0 -or -not (@($cmds | Where-Object { $_ -match '\S' }).Count)) {
+        return (New-SeatResult $false '' 'no commands were given - there is nothing to run' '' $null)
+    }
+    if (-not (Test-SeatCallerElevated)) {
+        return (New-SeatResult $false '' 'the caller is not elevated - registering a task for another account needs an elevated PowerShell' '' $null)
+    }
+    $sess = Get-SeatSession -Account $Account
+    if (-not $sess.Ok) { return (New-SeatResult $false '' $sess.Why '' $sess) }
+
+    $hkSd = Get-SeatHook 'SdExe'
+    $sdExe = if ($hkSd.Has) { [string]$hkSd.Value } else { Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe' }
+    if (-not $hkSd.Has -and -not (Test-Path -LiteralPath $sdExe)) {
+        return (New-SeatResult $false '' ("there is no {0} - SD is not installed" -f $sdExe) '' $sess)
+    }
+
+    $hkRun = Get-SeatHook 'Runner'
+    if ($WorkDir -eq '') { $WorkDir = Join-Path $env:ProgramData 'SD-verify\sdsysseat' }
+    try {
+        if (-not $hkRun.Has) { Initialize-SeatWorkDir -Dir $WorkDir -Account $Account }
+        elseif (-not (Test-Path -LiteralPath $WorkDir)) { $null = New-Item -ItemType Directory -Path $WorkDir -Force }
+    } catch {
+        return (New-SeatResult $false '' ('the work directory {0} could not be prepared: {1}' -f $WorkDir, $_.Exception.Message) '' $sess)
+    }
+
+    $tag  = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+    $inF  = Join-Path $WorkDir ('seat-' + $tag + '.in')
+    $ps1  = Join-Path $WorkDir ('seat-' + $tag + '.ps1')
+    $outF = Join-Path $WorkDir ('seat-' + $tag + '.out')
+    try {
+        $body = "`n" + ((@($cmds) + @('OFF')) -join "`n") + "`n"
+        [IO.File]::WriteAllText($inF, $body, (New-Object Text.UTF8Encoding($false)))
+        Set-Content -LiteralPath $ps1 -Value (New-SeatScript -SdExe $sdExe -InFile $inF -OutFile $outF) -Encoding UTF8
+
+        $run = if ($hkRun.Has) { & $hkRun.Value $ps1 $outF $TimeoutSec $Account }
+               else { Invoke-SeatTask -Ps1 $ps1 -OutFile $outF -Seconds $TimeoutSec -Account $Account }
+        if (-not $run.Ok) { return (New-SeatResult $false '' $run.Why $run.Detail $sess) }
+
+        $raw = ''
+        if (Test-Path -LiteralPath $outF) {
+            if ((Get-Item -LiteralPath $outF).Length -gt ($MaxBytes * 3)) { $raw = 'x' * ($MaxBytes + 1) }
+            else { $raw = [IO.File]::ReadAllText($outF, [Text.Encoding]::UTF8) }
+        }
+        $rep = ConvertFrom-SeatReport -Raw $raw -Account $Account -MaxBytes $MaxBytes
+        if (-not $rep.Ok) { return (New-SeatResult $false '' $rep.Why $run.Detail $sess) }
+        return (New-SeatResult $true $rep.Text '' $run.Detail $sess)
+    } finally {
+        foreach ($f in @($inF, $ps1, $outF, ($outF + '.tmp'))) {
+            try { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction Stop } } catch { }
+        }
+    }
+}

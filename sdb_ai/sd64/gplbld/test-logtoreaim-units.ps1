@@ -119,7 +119,13 @@ $DECLARED = [ordered]@{
     'verify-apiremote.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-apiwire.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-catgate.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-createaccount.ps1'    = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    # verify-createaccount.ps1 IS NOT HERE: IT WAS CONVERTED (20 Sep 2026, the
+    # PILOT for sdsys-seat.ps1) - its SD calls now run as a task inside SDSYS's
+    # own session, so it sends no prefix.  Its row had to go in the same commit,
+    # because a declaration for a file that no longer carries the phrase is a
+    # STALE DECLARATION and fails the partition check below.  Each further
+    # conversion deletes its row the same way, and the count printed at the end
+    # falls by one.
     'verify-createfilecase.ps1'   = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory lines' }
     'verify-delaccount.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-delacc-xref.ps1'      = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
@@ -187,10 +193,16 @@ Write-Output ''
 # pass this same night read the wrong hashtable keys, got $null for every
 # comparison, and reported "0 live" everywhere - a confident, wrong all-clear.
 # If this control ever fails, nothing below can be trusted.
-$controlFile = Join-Path $gplbld 'verify-createaccount.ps1'
+# THE CONTROL FILE MUST BE ONE THAT IS STILL UNCONVERTED, and it was
+# verify-createaccount.ps1 until that became the pilot (20 Sep 2026): the day a
+# control file is converted this check fails with "found 0", which is the
+# instrument saying its known-live example has stopped being live.  When
+# verify-fold.ps1 is converted, pick another one from the DRIVER rows below.
+$controlName = 'verify-fold.ps1'
+$controlFile = Join-Path $gplbld $controlName
 $controlLines = @(Get-StrippedLines -Path $controlFile -Kind hashblock)
 $controlHit = @($controlLines | Where-Object { $_.Text -match $rx })
-Check 'CONTROL: the stripper finds a known-live LOGTO SDSYS line (verify-createaccount.ps1)' `
+Check ('CONTROL: the stripper finds a known-live LOGTO SDSYS line (' + $controlName + ')') `
       ($controlHit.Count -ge 1) ("found " + $controlHit.Count + " - the stripper or its key names are wrong")
 if ($controlHit.Count -eq 0) {
     Write-Output ''
@@ -261,7 +273,7 @@ if ($MyInvocation.UnboundArguments -contains '--gplbld') {
         # The control check needs its known-live file too, or the mutant run
         # refuses on a dead instrument before it ever reaches the partition -
         # which is correct behaviour, but not what THIS control is testing.
-        Copy-Item -LiteralPath (Join-Path $gplbld 'verify-createaccount.ps1') -Destination $tmp
+        Copy-Item -LiteralPath (Join-Path $gplbld $controlName) -Destination $tmp
         # Plant an UNDECLARED live occurrence: a file with the phrase and no
         # entry in $DECLARED must fail the partition check.
         Set-Content -LiteralPath (Join-Path $tmp 'zz-planted.ps1') -Value @(

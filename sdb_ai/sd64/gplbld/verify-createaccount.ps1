@@ -14,6 +14,14 @@
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #
+# ELEVATED POWERSHELL, AND SDSYS MUST BE SIGNED IN (20 Sep 26, RELEASE_1.1 76).
+# Run it from your own elevated prompt - you do not switch to SDSYS.  Its SD
+# calls run as a task inside SDSYS's own live console session, so SDSYS needs
+# one: sign in once per boot using the login name SDSYS, switch back, and leave
+# it.  `query session` should show an SDSYS row that is Active or Disc.  With no
+# such session the run stops at "proving the SDSYS seat", exit 2, before
+# anything is created.
+#
 # WHY.  CREATE.ACCOUNT has been run once, on 14 Aug 2026, but the sdsshonly
 # group did not exist then - so the ssh-only branch at CREATEA line 400 has
 # never executed.  It is also the branch that can leave a mess: it `stop`s on
@@ -98,6 +106,15 @@ if ($LASTEXITCODE -ne 0) {
     try { Stop-Transcript | Out-Null } catch { }
     exit 2
 }
+
+# 20 Sep 26 - RELEASE_1.1 76.  THE SDSYS SEAT.  CREATE.ACCOUNT is reachable only
+# from the OS SDSYS account's own elevated, interactive session, and "LOGTO SDSYS"
+# from any other account is refused (10002) - so this script's SD calls run as a
+# TASK INSIDE SDSYS's live session, not as a prefix.  It needs SDSYS signed in
+# (sign in once per boot with the login name SDSYS, then switch back), and it is
+# the PILOT for the other 33 verifiers that still send LOGTO.  sdsys-seat.ps1
+# has the mechanism and its measurement; test-sdsysseat-units.ps1 is its guard.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $Account)
@@ -297,14 +314,18 @@ function SshPassword($pass) {
 # The leading "`n" is the BOM sink - see the header.  It has to stay: the BOM
 # still lands on the first line whichever form is used.
 function Invoke-SD([string[]]$commands) {
-    # 15 Aug 26 - "sd -ASDSYS" IS REFUSED NOW, and this is the whole change on
-    # this side.  Nobody logs in to an account but their own (gpl.bp/login,
-    # owner's rule 15 Aug 2026); an administrator arrives in their own account
-    # and reaches SDSYS with LOGTO, which is where the elevated bypass lives.
-    # The elevation this script already requires is what makes the LOGTO pass.
-    $body = "`n" + ((@('LOGTO SDSYS') + $commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    # 20 Sep 26 - RELEASE_1.1 76.  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS
+    # REFUSED (10002) FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT
+    # with an elevated, interactive token (RELEASE_1.1 64), and an elevated Don
+    # is not one.  So the commands go to a task inside SDSYS's own live session
+    # (sdsys-seat.ps1) and the output comes back through a file; the BOM sink,
+    # the appended OFF and the ANSI stripping this function always did are done
+    # there.  ***A SEAT THAT DID NOT RUN THROWS RATHER THAN RETURNING ''*** -
+    # an empty string here would read as "SD printed nothing" and every check
+    # below would then fail for a reason invisible in its own output.
+    $r = Invoke-SdViaSeat -Commands $commands
+    if (-not $r.Ok) { throw ('the SDSYS seat did not run: ' + $r.Why + '  [' + $r.Detail + ']') }
+    return $r.Text
 }
 
 function Test-Member($group, $name) {
@@ -406,6 +427,28 @@ try {
             Write-Output "verify-createaccount: SD would not start"
             exit 2
         }
+    }
+
+    # 20 Sep 26 - RELEASE_1.1 76.  THE SEAT IS PROVEN BEFORE ANYTHING IS
+    # CREATED.  CREATE.ACCOUNT makes a real Windows account, so a run that only
+    # discovers at the first SD call that SDSYS has no live session would leave
+    # one behind for the catch block to clean up - and would fail with exit 1,
+    # which reads as a product defect, when it is the precondition.  WHO is the
+    # cheapest command that says who SD thinks it is.  ANCHORED ON THE SUCCESS
+    # WORDING ("<n> SDSYS") with the refusal wording as a disqualifier, because
+    # SDSYS appears in the refusal too; and the raw text is printed either way.
+    Write-Output "  proving the SDSYS seat (a task inside SDSYS's own live session) ..."
+    $seat = Invoke-SdViaSeat -Commands @('WHO')
+    Write-Output ("  seat: Ok={0}  {1}" -f $seat.Ok, $seat.Detail)
+    if (-not $seat.Ok) {
+        Write-Output ("verify-createaccount: the SDSYS seat did not run - " + $seat.Why)
+        exit 2
+    }
+    Write-Output "  --- what SD said to WHO ---"
+    ($seat.Text -split "`n") | Where-Object { $_ -match '\S' } | ForEach-Object { Write-Output ("    " + $_.Trim()) }
+    if ($seat.Text -match 'restricted to privileged users' -or $seat.Text -notmatch '(?m)^\s*\d+\s+SDSYS\b') {
+        Write-Output "verify-createaccount: SD did not answer WHO as SDSYS, so nothing below would measure CREATE.ACCOUNT."
+        exit 2
     }
 
     # Same alphabet as verify-sshonly.ps1: no ambiguous glyphs, and nothing
