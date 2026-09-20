@@ -75,11 +75,105 @@ Write-Output ('  script  : ' + $PSCommandPath)
 Write-Output ('  account : ' + $Account)
 Write-Output ('  window  : the last ' + $Minutes + ' minutes')
 
+# =======================================================================
+# WINLOGON'S OWN VERDICT ON THE SIGN-IN, AND IT RUNS BEFORE THE ELEVATION GATE
+# BECAUSE IT NEEDS NO ELEVATION.
+#
+# ***ADDED 20 Sep 2026, AND IT REVERSES WHAT THE 19 Sep RUN WAS READ TO
+# MEAN.***  Microsoft-Windows-Winlogon/Operational logs id 1 "Authentication
+# started" and id 2 "Authentication stopped. Result <n>" for every console
+# sign-in.  All ten of the owner's SDSYS attempts logged **Result 0**.
+#
+# ***AND RESULT 0 IS SUCCESS, WHICH IS CALIBRATED RATHER THAN ASSUMED.***  The
+# log on this machine reaches back to 25 Aug 2026 and holds 62 rows of Result 0
+# and 8 of **Result 1326** - ERROR_LOGON_FAILURE, "the user name or password is
+# incorrect".  ***EVERY 1326 IS FOLLOWED WITHIN SECONDS BY A RESULT 0***
+# (18 Sep 18:05:46 and :48 both 1326, then 18:06:01 Result 0), which is a
+# person mistyping and then getting it right.  A month of the owner's own
+# working sign-ins are Result 0.  So the value is not a guess: the failure
+# value exists, it is different, and it is present in this very log.
+#
+# THAT IS WHY IT IS PRINTED EVEN WHEN THE SECURITY LOG CANNOT BE READ.
+# "Winlogon says the authentication SUCCEEDED and LSA recorded no logon" is a
+# completely different finding from "the sign-in was refused", and the 19 Sep
+# run could not tell them apart because it never read this log.  ***AN
+# UNELEVATED RUN USED TO PRINT NOTHING BUT A REFUSAL***, so the one piece of
+# evidence that needed no elevation was the one nobody could get.
+function Show-WinlogonAuth([int]$Minutes) {
+    Head 'what WINLOGON says about the sign-in (no elevation needed)'
+    $since = (Get-Date).AddMinutes(-$Minutes)
+    try {
+        $auth = @(Get-WinEvent -FilterHashtable @{
+                      LogName = 'Microsoft-Windows-Winlogon/Operational'; Id = 1, 2 } `
+                  -MaxEvents 400 -ErrorAction Stop | Sort-Object TimeCreated)
+        $inWin = @($auth | Where-Object { $_.TimeCreated -ge $since })
+        # THE CALIBRATION IS TAKEN FROM THE WHOLE LOG, NOT FROM THE WINDOW,
+        # because a window with no failure in it cannot calibrate anything.
+        $res = @{}
+        foreach ($e in ($auth | Where-Object { $_.Id -eq 2 })) {
+            $v = 'unparsed'
+            if ($e.Message -match 'Result\s+(\S+?)\.?\s*$') { $v = $Matches[1] }
+            if (-not $res.ContainsKey($v)) { $res[$v] = 0 }
+            $res[$v] = $res[$v] + 1
+        }
+        if ($auth.Count -gt 0) {
+            Say ("this log reaches back to {0:yyyy-MM-dd HH:mm} and holds {1} authentication row(s)" -f
+                 $auth[0].TimeCreated, $auth.Count)
+        } else {
+            Say 'this log holds no authentication rows at all - nothing below is measurable.'
+            return
+        }
+        # ***THE CONTROL, AND IT REFUSES THE NULL CASE OUT LOUD.***  Without a
+        # known FAILURE value in this log, Result 0 means nothing and this
+        # section must say so rather than report a success it cannot recognise.
+        $sawFailure = @($res.Keys | Where-Object { $_ -ne '0' -and $_ -ne 'unparsed' })
+        foreach ($k in ($res.Keys | Sort-Object)) {
+            $what = if ($k -eq '0') { 'success' }
+                    elseif ($k -eq '1326') { 'ERROR_LOGON_FAILURE - bad user name or password' }
+                    else { 'a non-zero result, i.e. a failure' }
+            Say ("  Result {0,-6} {1,4} time(s)   {2}" -f $k, $res[$k], $what)
+        }
+        if ($sawFailure.Count -eq 0) {
+            Say '  CONTROL MISSING: this log holds no FAILED authentication, so "Result 0"'
+            Say '  cannot be read as success here - it is simply the only value seen.'
+        } else {
+            Say '  CONTROL PRESENT: a failing Result exists in this log and differs from 0,'
+            Say '  so Result 0 on a row below really is Winlogon reporting SUCCESS.'
+        }
+        Say ("{0} authentication row(s) inside the last {1} minute(s):" -f $inWin.Count, $Minutes)
+        foreach ($s in @($inWin | Where-Object { $_.Id -eq 1 })) {
+            $stop = $inWin | Where-Object { $_.Id -eq 2 -and $_.TimeCreated -ge $s.TimeCreated } |
+                    Select-Object -First 1
+            $v = '(no stop row)'
+            if ($stop -and $stop.Message -match 'Result\s+(\S+?)\.?\s*$') { $v = 'Result ' + $Matches[1] }
+            Say ('  {0:HH:mm:ss}  authentication started  ->  {1}' -f $s.TimeCreated, $v)
+        }
+        if ($inWin.Count -eq 0) {
+            Say '  NONE - so no console sign-in was attempted in this window at all,'
+            Say '  whatever the tables below say.'
+        }
+    } catch {
+        # Same trap as the Security section below: a FilterHashtable that
+        # matches nothing THROWS, so "this machine has never logged a console
+        # authentication" and "this log is unreadable" would otherwise share a
+        # branch and both print as a fault.
+        if ($_.Exception.Message -match 'No events were found') {
+            Say 'this log holds no authentication rows at all - nothing here is measurable.'
+        } else {
+            Say ('Winlogon/Operational could not be read: ' + $_.Exception.Message)
+        }
+    }
+}
+
 $pr = New-Object Security.Principal.WindowsPrincipal(
           [Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Output 'probe-sdsyslogon: this needs an ELEVATED PowerShell - the Security log, the'
-    Write-Output '  user-rights assignment and the profile ACL are all elevated reads.'
+    Show-WinlogonAuth $Minutes
+    Write-Output ''
+    Write-Output 'probe-sdsyslogon: the rest of this needs an ELEVATED PowerShell - the Security'
+    Write-Output '  log, the user-rights assignment and the profile ACL are all elevated reads.'
+    Write-Output '  The section above is the whole of what an ordinary prompt can measure, and'
+    Write-Output '  on the 19 Sep evidence it is the section that matters most.'
     exit 2
 }
 
@@ -340,16 +434,152 @@ try {
 $allNamed = @($all | Where-Object { $_.Message -match ([regex]::Escape($Account)) })
 Say ("{0} logon row(s) (4624/4625) in the window, of which {1} name {2}" -f `
      $all.Count, $allNamed.Count, $Account)
+# ***THE NAME THIS TABLE PRINTED WAS THE WRONG ONE, AND IT MADE THE TABLE
+# USELESS FOR THE ONE QUESTION IT EXISTS TO ANSWER - MEASURED 20 Sep 2026.***
+# A 4624 message carries "Account Name:" TWICE: once under Subject, which is
+# who REQUESTED the logon, and once under New Logon, which is who logged ON.
+# A console sign-in is requested by Winlogon, so Subject is the machine
+# account - and a single -match takes the FIRST one, so every row in the
+# owner's 19 Sep run printed "ACE$".  All 37 of them, for every account on the
+# machine including his own.
+#
+# ***SO THE CLOSING ADVICE WAS UNFOLLOWABLE***: it says "if it holds rows for
+# ANOTHER account at that minute, say which", and the table could not name any
+# account but the machine's.  A reader acting on it would go looking at the
+# computer account, which is not what logged on.  (4625 is the same shape -
+# Subject, then "Account For Which Logon Failed" - so the last match is the
+# right one on both ids.)
+# ***IT RETURNS ONE STRING AND IS NAMED IN THE SINGULAR, BECAUSE THE PLURAL
+# VERSION OF IT WAS WRONG AND THE DRIVER CAUGHT IT.***  The first form returned
+# "@($name)" and every caller wrote "(Get-LogonNames $m)[0]" - but PowerShell
+# UNROLLS a one-element array on return, so the caller got the STRING and "[0]"
+# indexed its first CHARACTER.  It printed "S" for SDSYS and "D" for Don.
+# Same family as this tree's "a function that returns a value prints nothing"
+# rule: what a function hands back is not always the shape it was written as.
+function Get-LogonName([string]$msg) {
+    $m = [regex]::Matches($msg, '(?m)^\s*Account Name:\s*(\S.*)$')
+    if ($m.Count -eq 0) { return '?' }
+    # The LAST is New Logon / the account that failed.  The first is kept only
+    # when it is the only one, so a message shaped differently still says
+    # something rather than nothing.
+    return $m[$m.Count - 1].Groups[1].Value.Trim()
+}
+$bothNames = 0
 $byMin = $all | Group-Object { '{0:HH:mm}' -f $_.TimeCreated } | Sort-Object Name
 foreach ($g in $byMin) {
     $names = ($g.Group | ForEach-Object {
-        if ($_.Message -match '(?m)^\s*Account Name:\s*(\S.*)$') { $Matches[1].Trim() } else { '?' }
+        $mm = [regex]::Matches($_.Message, '(?m)^\s*Account Name:\s*(\S.*)$')
+        if ($mm.Count -gt 1) { $bothNames++ }
+        Get-LogonName $_.Message
     } | Sort-Object -Unique) -join ', '
     Say ('{0}  {1,3} row(s)  {2}' -f $g.Name, $g.Count, $names)
+}
+# THE INSTRUMENT SAYS WHAT IT DID.  If this count is 0 on a machine with
+# console sign-ins, the extraction above is reading a message shape this
+# script has not seen, and the names beside it are not to be trusted.
+Say ("{0} of {1} row(s) carried BOTH a Subject and a New Logon account name - the one printed above is the New Logon one" -f
+     $bothNames, $all.Count)
+
+# THE SAME SECTION AN UNELEVATED RUN GETS, printed here for an elevated one so
+# that one run carries both halves and they can be read against each other.
+Show-WinlogonAuth $Minutes
+
+# =======================================================================
+# EVERY Security EVENT, OF ANY ID, IN THE MINUTE AROUND EACH AUTHENTICATION.
+#
+# ***THIS IS THE SECTION THE 20 Sep FINDING ASKS FOR, AND IT EXISTS BECAUSE
+# EVERY TABLE ABOVE FILTERS BY ID.***  The tables above ask for 4624/4625 and
+# friends, so they can only ever answer "was there a logon".  Winlogon now says
+# the credential was ACCEPTED while those tables stay empty - and the next
+# question is not "was there a logon" but "what did LSA do AT ALL", which no
+# id-filtered query can answer.  4672 (special privileges), 4648 (explicit
+# credentials), 5379 (credential-manager read), 4798, an audit-policy change:
+# any of them would narrow this, and all of them are invisible above.
+#
+# IT IS ANCHORED ON THE AUTHENTICATION TIMES RATHER THAN ON THE WINDOW, so it
+# prints a readable handful instead of an hour of noise, and it says out loud
+# when it has nothing to anchor on.
+Head 'every Security event, ANY id, around each authentication'
+try {
+    $anchors = @(Get-WinEvent -FilterHashtable @{
+                     LogName = 'Microsoft-Windows-Winlogon/Operational'; Id = 1
+                     StartTime = $since } -ErrorAction Stop | Sort-Object TimeCreated)
+} catch { $anchors = @() }
+if ($anchors.Count -eq 0) {
+    Say 'no authentication in the window to anchor on, so there is nothing to print here.'
+    Say 'That is not a clean result - it means no console sign-in was attempted.'
+} else {
+    foreach ($a in $anchors) {
+        $t0 = $a.TimeCreated.AddSeconds(-30)
+        $t1 = $a.TimeCreated.AddSeconds(30)
+        Say ('--- {0:HH:mm:ss} +/- 30s' -f $a.TimeCreated)
+        $near = @()
+        $readFailed = $false
+        try {
+            $near = @(Get-WinEvent -FilterHashtable @{
+                          LogName = 'Security'; StartTime = $t0; EndTime = $t1 } `
+                      -ErrorAction Stop | Sort-Object TimeCreated)
+        } catch {
+            # ***"No events were found" IS AN EXCEPTION, NOT AN EMPTY RESULT,
+            # AND TREATING IT AS A READ FAILURE WOULD DESTROY THIS SECTION'S
+            # WHOLE POINT - measured 20 Sep 2026 while driving this code.***
+            # Get-WinEvent THROWS when a FilterHashtable matches nothing, so a
+            # bare catch turns "the log is genuinely silent in this minute" -
+            # the finding - into "could not be read", which reads as an
+            # instrument fault.  The two must not share a branch.
+            #
+            # ***AND THIS SECTION MUST STAY BELOW THE ELEVATION GATE BECAUSE OF
+            # IT.***  Measured the same day: an UNELEVATED prompt asking for the
+            # Security log gets the very same "No events were found" message
+            # rather than an access error - so out here the branch below would
+            # report a silent log on a run that was never allowed to look.  The
+            # gate is what makes "empty" mean empty.  Do not move it up.
+            if ($_.Exception.Message -match 'No events were found') {
+                $near = @()
+            } else {
+                $readFailed = $true
+                Say ('    COULD NOT READ the Security log: ' + $_.Exception.Message)
+            }
+        }
+        # THE NULL CASE IS SAID, NOT LEFT AS A BLANK.  An empty minute in the
+        # Security log around an authentication Winlogon called successful is
+        # itself the finding, and a silent gap here would read as "nothing to
+        # report".
+        if ($readFailed) {
+            Say '    (no verdict for this minute - the read failed, which is not the same'
+            Say '     as the log being silent)'
+        } elseif ($near.Count -eq 0) {
+            Say '    NOTHING - the Security log has no event of any id in this minute.'
+            Say '    Read with the WINLOGON section above: an authentication Winlogon'
+            Say '    called successful, and LSA recorded nothing at all.'
+        } else {
+            Say ('    {0} event(s):' -f $near.Count)
+            foreach ($e in $near) {
+                $who  = Get-LogonName $e.Message
+                # TaskDisplayName is EMPTY on some providers - measured on this
+                # machine's Application log - so the provider is the fallback
+                # rather than a blank column that says nothing.
+                $task = $e.TaskDisplayName
+                if ([string]::IsNullOrWhiteSpace($task)) { $task = $e.ProviderName }
+                Say ('    {0:HH:mm:ss}  id {1,-6} {2,-28} {3}' -f
+                     $e.TimeCreated, $e.Id, $task, $who)
+            }
+        }
+    }
 }
 
 # Winlogon's own notifications, which mark a session starting and ending even
 # when no credential was ever validated - the pairs the owner's attempts left.
+#
+# ***AND THE 6000 PAIR THE 19 Sep RUN SINGLED OUT IS NOISE - MEASURED
+# 20 Sep 2026.***  Its text is "The winlogon notification subscriber
+# <SessionEnv> was unavailable to handle a notification event".  SessionEnv is
+# Remote Desktop Configuration, and RDP is OFF on this machine
+# (fDenyTSConnections 1, TermService stopped), so that subscriber is
+# unavailable at EVERY session transition - twenty rows in 150 minutes,
+# bracketing the working sign-ins exactly as they bracket the failing ones.
+# ***THE TEXT IS PRINTED NOW AND NOT ONLY THE ID***, because an id with no
+# text is what made it look like a lead.
 Head 'Winlogon notifications in the window (a session began and ended)'
 # ***NOT FilterHashtable WITH ProviderName.***  Measured twice on 19 Sep 2026,
 # the second time in this very script: "@{LogName='Application';
@@ -364,7 +594,8 @@ try {
                            $_.TimeCreated -ge $since })
     Say ("{0} row(s)" -f $wl.Count)
     foreach ($e in ($wl | Sort-Object TimeCreated | Select-Object -Last 20)) {
-        Say ('{0:HH:mm:ss}  id {1}' -f $e.TimeCreated, $e.Id)
+        Say ('{0:HH:mm:ss}  id {1}  {2}' -f $e.TimeCreated, $e.Id,
+             ((($e.Message -replace "`r?`n", ' ') -replace '\s+', ' ')))
     }
 } catch { Say ('none, or unreadable: ' + $_.Exception.Message) }
 
@@ -385,6 +616,17 @@ if ($nothingForAccount) {
     Write-Output '  is the sign-in screen rather than anything SD installed.  If it holds'
     Write-Output '  rows for ANOTHER account at that minute, say which - that is a different'
     Write-Output '  and more interesting answer.'
+    # ***AND THE THIRD READING IS THE ONE THE 19 Sep RUN ACTUALLY PRODUCED, SO
+    # IT IS NAMED HERE RATHER THAN LEFT TO BE INFERRED.***  If the WINLOGON
+    # section above shows an authentication in the same minute with Result 0,
+    # then the credential WAS accepted and LSA still wrote nothing - which is
+    # neither "nobody tried" nor "it was refused", and rules out the password,
+    # the deny rights and the sign-in screen all at once.  The next place to
+    # look is between authentication and session creation: the profile, the
+    # shell, and whatever a Security-log read around that exact second shows.
+    Write-Output '  BUT IF WINLOGON ABOVE REPORTS Result 0 IN THAT SAME MINUTE, read neither'
+    Write-Output '  of those: the credential was ACCEPTED and no logon was recorded, which is'
+    Write-Output '  a third answer and the one that needs the next measurement.'
     Write-Output '  Try the sign-in, then run this again within the window.'
     exit 2
 }
