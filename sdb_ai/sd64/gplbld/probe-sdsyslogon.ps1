@@ -55,7 +55,15 @@
 param(
     [string] $Account = 'SDSYS',
     # How far back to read the Security log.  The attempt must be inside it.
-    [int]    $Minutes = 60
+    [int]    $Minutes = 60,
+
+    # ***-Watch REMOVES THE COORDINATION PROBLEM, WHICH IS WHAT COST THE FIRST
+    # THREE RUNS.***  Twice the owner ran this on a window with no attempt in
+    # it, because the attempt has to happen BEFORE the read and the sign-in
+    # screen is not where the command is.  With -Watch the script takes a
+    # baseline, tells him to go and try it NOW, and polls until something
+    # happens - so the evidence cannot fall outside the window.  Minutes.
+    [int]    $Watch = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +87,66 @@ $u = Get-LocalUser -Name $Account -ErrorAction SilentlyContinue
 if ($null -eq $u) { Write-Output ("probe-sdsyslogon: there is no local {0} account." -f $Account); exit 2 }
 $sid = $u.SID.Value
 Say ('SID     : ' + $sid)
+
+# --------------------------------------------------------------------- watch
+if ($Watch -gt 0) {
+    Head ("WATCHING - go and try the sign-in NOW ({0} minute(s))" -f $Watch)
+    Write-Output ''
+    Write-Output '  1. Ctrl+Alt+Del  ->  Switch user'
+    Write-Output ('  2. choose {0}, type its password, let it do whatever it does' -f $Account)
+    Write-Output '  3. come back to this session - this window is watching and will say'
+    Write-Output '     what the operating system recorded while you were away.'
+    Write-Output ''
+
+    # The baseline is a RECORD ID, not a time: clocks and log latency both
+    # wander, and "newer than record N" cannot miss an event that arrived
+    # while this was starting.
+    $baseSec = 0
+    try { $baseSec = (Get-WinEvent -LogName Security -MaxEvents 1 -ErrorAction Stop).RecordId } catch { }
+    $baseApp = 0
+    try { $baseApp = (Get-WinEvent -LogName Application -MaxEvents 1 -ErrorAction Stop).RecordId } catch { }
+    Say ("baseline: Security record {0}, Application record {1}" -f $baseSec, $baseApp)
+    if ($baseSec -eq 0) { Say 'REFUSED: no baseline from the Security log - the watch would prove nothing'; exit 2 }
+
+    $deadline = (Get-Date).AddMinutes($Watch)
+    $found = @()
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 3
+        try {
+            $new = @(Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4624, 4625, 4634, 4648 } `
+                        -MaxEvents 60 -ErrorAction Stop |
+                     Where-Object { $_.RecordId -gt $baseSec })
+        } catch { $new = @() }
+        # Only a row naming a REAL user is interesting; the machine account
+        # logs on constantly and would end the watch immediately.
+        $user = @($new | Where-Object { $_.Message -notmatch ('(?m)^\s*Account Name:\s*' +
+                                        [regex]::Escape($env:COMPUTERNAME) + '\$') })
+        if ($user.Count -gt 0) { $found = $user; break }
+    }
+
+    if ($found.Count -eq 0) {
+        Say ("nothing but machine-account activity in {0} minute(s)." -f $Watch)
+        Say 'THE OPERATING SYSTEM RECORDED NO LOGON ATTEMPT AT ALL.  If you did try the'
+        Say 'sign-in during that time, LSA never saw a credential - which puts the fault'
+        Say 'at the sign-in screen itself, not in anything SD installed or configured.'
+    } else {
+        Say ("{0} row(s) arrived while watching:" -f $found.Count)
+        foreach ($e in ($found | Sort-Object TimeCreated)) {
+            $who = '?'
+            if ($e.Message -match '(?m)^\s*Account Name:\s*(\S.*)$') { $who = $Matches[1].Trim() }
+            $type = ''
+            if ($e.Message -match '(?m)^\s*Logon Type:\s*(\d+)') { $type = 'type ' + $Matches[1] }
+            $st = ''
+            if ($e.Message -match '(?m)^\s*Status:\s*(\S+)')     { $st = ' status ' + $Matches[1] }
+            if ($e.Message -match '(?m)^\s*Sub Status:\s*(\S+)') { $st += ' sub ' + $Matches[1] }
+            $what = switch ($e.Id) { 4624 {'LOGON OK'} 4625 {'LOGON FAILED'} 4634 {'logoff'}
+                                     4648 {'explicit-credential logon'} default {'id ' + $e.Id} }
+            Write-Output ('  {0:HH:mm:ss}  {1,-26} {2,-22} {3}{4}' -f $e.TimeCreated, $what, $who, $type, $st)
+        }
+    }
+    Write-Output ''
+    Say 'the tables below cover the ordinary window as well'
+}
 
 # --------------------------------------------------------------- user rights
 Head 'the local user-rights assignment - who is DENIED an interactive logon'
@@ -233,10 +301,17 @@ foreach ($g in $byMin) {
 # Winlogon's own notifications, which mark a session starting and ending even
 # when no credential was ever validated - the pairs the owner's attempts left.
 Head 'Winlogon notifications in the window (a session began and ended)'
+# ***NOT FilterHashtable WITH ProviderName.***  Measured twice on 19 Sep 2026,
+# the second time in this very script: "@{LogName='Application';
+# ProviderName='Microsoft-Windows-Winlogon'}" answers "The specified providers
+# do not write events to any of the specified logs" on this machine, while
+# reading the log and filtering in the pipeline returns the same events
+# perfectly.  The first time it happened I worked around it and then wrote the
+# failing form in here anyway.
 try {
-    $wl = Get-WinEvent -FilterHashtable @{ LogName = 'Application'
-                                           ProviderName = 'Microsoft-Windows-Winlogon'
-                                           StartTime = $since } -ErrorAction Stop
+    $wl = @(Get-WinEvent -LogName Application -MaxEvents 400 -ErrorAction Stop |
+            Where-Object { $_.ProviderName -eq 'Microsoft-Windows-Winlogon' -and
+                           $_.TimeCreated -ge $since })
     Say ("{0} row(s)" -f $wl.Count)
     foreach ($e in ($wl | Sort-Object TimeCreated | Select-Object -Last 20)) {
         Say ('{0:HH:mm:ss}  id {1}' -f $e.TimeCreated, $e.Id)
