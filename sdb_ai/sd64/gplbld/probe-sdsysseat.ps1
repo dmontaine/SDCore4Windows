@@ -28,10 +28,26 @@
     ***SO IT MEASURES BOTH SPAWN ROUTES AND THEN ASKS SD.***
 
       Route A  Start-Process -Credential (CreateProcessWithLogonW).  The cheap
-               one.  EXPECTED FILTERED - the expectation is written down so a
-               surprise is visible as a surprise.
+               one.  ***MEASURED ON THE OWNER'S RUN, 19 Sep 2026, AND IT IS
+               FILTERED, WHICH IS WHAT THIS FILE PREDICTED IN WRITING***:
+               identity=ace\SDSYS, isadmin=False, BUILTIN\Administrators
+               "Group used for deny only", Mandatory Label\Medium Mandatory
+               Level.  So the spawn WORKS and the token is Medium - LOGIN's
+               landing case cannot match through it, and route A is not the
+               seat.  The row is kept because it is the control: it proves the
+               credential and the work directory are right, so a failure in
+               route B is route B's.
       Route B  a scheduled task registered with RunLevel Highest, which is the
-               documented way to ask for the full token explicitly.
+               documented way to ask for the full token explicitly.  ***ITS
+               FIRST ATTEMPT NEVER RAN***: the principal was '.\SDSYS' and
+               Register-ScheduledTask answered "No mapping between account
+               names and security IDs was done" (0x80070534).  ".\" is a shell
+               convention, not an LSA one, and Start-Process -Credential
+               accepts the same string happily - two APIs disagreeing about a
+               name, with only one of them saying so.  It is
+               "<COMPUTER>\<ACCOUNT>" now, and a registration failure is
+               REPORTED rather than thrown, because the first run ended
+               mid-sentence with route B unmeasured and no summary at all.
 
     Each route reports its INTEGRITY LEVEL and whether BUILTIN\Administrators is
     enabled or "deny only" - the distinction PROJECT_STATUS.md:7187 records -
@@ -167,29 +183,50 @@ function Wait-For([string]$path, [int]$seconds) {
     return (Test-Path -LiteralPath $path)
 }
 
-function Read-Report([string]$path, [string]$label) {
+# ***A FUNCTION THAT RETURNS A VALUE PRINTS NOTHING, AND THAT IS A RULE HERE
+# RATHER THAN A STYLE.***  Measured on the owner's 19 Sep run: the first
+# version of this file had Read-Report and Show-Token call Say(), which writes
+# to the OUTPUT stream - so every one of those lines was captured into the
+# caller's variable instead of reaching the screen.  The token report was read
+# correctly and NOBODY SAW IT, $a came back as a three-element array rather
+# than the hashtable, and the elevated test below would have read $a.IsAdmin as
+# null on a good measurement.  An instrument that hides what it measured is the
+# thing CLAUDE.md's rule 1 exists to stop, and this is that defect arriving
+# through PowerShell's plumbing rather than through a missing Write-Output.
+# So: value in, value out, and the CALLER prints.
+function Read-Report([string]$path) {
     if (-not (Test-Path -LiteralPath $path)) { return $null }
-    $t = Get-Content -LiteralPath $path -Raw
-    if ($t -notmatch 'ENDOFREPORT') {
-        Say ("{0}: the report is TRUNCATED - the spawn died part way through" -f $label)
-    }
-    return $t
+    return (Get-Content -LiteralPath $path -Raw)
 }
 
-function Show-Token($text, [string]$label) {
+function Get-TokenFacts($text) {
     if ($null -eq $text) { return $null }
     $who = ''
     if ($text -match 'identity=(.+)') { $who = $Matches[1].Trim() }
-    $isAdmin = ($text -match 'isadmin=True')
     $mand = '<not reported>'
     foreach ($l in ($text -split "`r?`n")) {
         if ($l -match 'Mandatory Label\\(\S+)') { $mand = $Matches[1] }
     }
-    $denyOnly = ($text -match '(?m)^BUILTIN\\Administrators.*deny only')
-    Say ("{0}: identity={1}" -f $label, $who)
+    return @{
+        Who       = $who
+        IsAdmin   = [bool]($text -match 'isadmin=True')
+        Mand      = $mand
+        DenyOnly  = [bool]($text -match '(?m)^BUILTIN\\Administrators.*deny only')
+        Whole     = [bool]($text -match 'ENDOFREPORT')
+    }
+}
+
+function Write-TokenFacts($facts, [string]$label) {
+    if ($null -eq $facts) {
+        Say ("{0}: NO REPORT - the spawn wrote nothing at all" -f $label)
+        return
+    }
+    if (-not $facts.Whole) {
+        Say ("{0}: the report is TRUNCATED - the spawn died part way through" -f $label)
+    }
+    Say ("{0}: identity={1}" -f $label, $facts.Who)
     Say ("{0}: integrity={1}  isadmin={2}  Administrators-deny-only={3}" -f `
-         $label, $mand, $isAdmin, $denyOnly)
-    return @{ Who = $who; IsAdmin = [bool]$isAdmin; Mand = $mand; DenyOnly = [bool]$denyOnly }
+         $label, $facts.Mand, $facts.IsAdmin, $facts.DenyOnly)
 }
 
 # Registers a task, runs it, waits for its output file, and unregisters it.  A
@@ -197,49 +234,71 @@ function Show-Token($text, [string]$label) {
 # that carries a stored password re-registers its principal, and re-registering
 # is the thing being measured.
 $tasksMade = New-Object System.Collections.ArrayList
+
+# ***THE PRINCIPAL IS "<COMPUTER>\<ACCOUNT>", NOT ".\<ACCOUNT>" - MEASURED ON
+# THE OWNER'S 19 Sep RUN, WHERE THIS COST THE WHOLE ROUTE.***  Register-
+# ScheduledTask answered "No mapping between account names and security IDs was
+# done" (HRESULT 0x80070534) for '.\SDSYS'.  ".\" is a SHELL convention for
+# "this machine"; the Task Scheduler service hands the string to LSA, which has
+# never heard of it.  Start-Process -Credential accepts the same string
+# happily, which is what makes this worth a paragraph: the two APIs disagree
+# about a name, and only one of them says so.
+function Get-Principal { return ($env:COMPUTERNAME + '\' + $Account) }
+
+# It REPORTS a registration failure instead of dying on it.  The first version
+# let the exception out and the run stopped with route B unmeasured and no
+# summary at all - the owner's run ended mid-sentence.
 function Invoke-ViaTask([string]$ps1, [string]$outFile, [int]$seconds) {
     $name = 'SDVerifySdsysSeat_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
-    Say ('task name: ' + $name)
-    Say ('task runs: powershell -ExecutionPolicy Bypass -File "' + $ps1 + '"')
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
                   -Argument ('-ExecutionPolicy Bypass -File "{0}"' -f $ps1)
-    Register-ScheduledTask -TaskName $name -Action $action `
-        -User ('.\' + $Account) -Password $cred.GetNetworkCredential().Password `
-        -RunLevel Highest -Force | Out-Null
+    try {
+        Register-ScheduledTask -TaskName $name -Action $action `
+            -User (Get-Principal) -Password $cred.GetNetworkCredential().Password `
+            -RunLevel Highest -Force | Out-Null
+    } catch {
+        return @{ Ok = $false; Task = $name; Why = ('Register-ScheduledTask refused: ' + $_.Exception.Message) }
+    }
     $null = $tasksMade.Add($name)
-    Start-ScheduledTask -TaskName $name
+    try {
+        Start-ScheduledTask -TaskName $name
+    } catch {
+        return @{ Ok = $false; Task = $name; Why = ('Start-ScheduledTask refused: ' + $_.Exception.Message) }
+    }
     $got = Wait-For $outFile $seconds
-    if (-not $got) { Say ('task produced no output within ' + $seconds + 's') }
-    return $got
+    return @{ Ok = $got; Task = $name
+              Why = $(if ($got) { '' } else { 'the task produced no output within ' + $seconds + 's' }) }
 }
 
 function Invoke-ViaStartProcess([string]$ps1, [string]$outFile, [int]$seconds) {
-    Say ('command: powershell -ExecutionPolicy Bypass -File "' + $ps1 + '"  (as ' + $Account + ')')
     try {
         Start-Process -FilePath 'powershell.exe' `
             -ArgumentList @('-ExecutionPolicy', 'Bypass', '-File', $ps1) `
             -Credential $cred -WorkingDirectory $WorkDir -WindowStyle Hidden
     } catch {
-        Say ('Start-Process refused: ' + $_.Exception.Message)
-        return $false
+        return @{ Ok = $false; Task = ''; Why = ('Start-Process refused: ' + $_.Exception.Message) }
     }
     $got = Wait-For $outFile $seconds
-    if (-not $got) { Say ('the spawn produced no output within ' + $seconds + 's') }
-    return $got
+    return @{ Ok = $got; Task = ''
+              Why = $(if ($got) { '' } else { 'the spawn produced no output within ' + $seconds + 's' }) }
 }
 
 try {
     # ------------------------------------------------------------------ route A
     Head 'route A - Start-Process -Credential (CreateProcessWithLogonW)'
-    Say 'EXPECTED FILTERED.  Written down so that an elevated answer here reads as'
-    Say 'the surprise it would be - it would make route B unnecessary.'
+    Say 'MEASURED FILTERED on 19 Sep 2026 - Medium integrity, Administrators deny'
+    Say 'only.  It is re-run as the CONTROL: it proves the credential and the work'
+    Say 'directory are right, so a failure in route B belongs to route B.'
 
     $aOut = Join-Path $WorkDir 'routeA.txt'
     $aPs1 = Join-Path $WorkDir 'routeA.ps1'
     Remove-Item -LiteralPath $aOut -ErrorAction SilentlyContinue
     Write-SpawnScript $aPs1 $tokenScript $aOut
-    $null = Invoke-ViaStartProcess $aPs1 $aOut 30
-    $a = Show-Token (Read-Report $aOut 'route A') 'route A'
+    Say ('command: powershell -ExecutionPolicy Bypass -File "' + $aPs1 + '"  (as ' + $Account + ')')
+    $aRun = Invoke-ViaStartProcess $aPs1 $aOut 30
+    if (-not $aRun.Ok) { Say $aRun.Why }
+    $a = Get-TokenFacts (Read-Report $aOut)
+    Write-TokenFacts $a 'route A'
     Note 'route A produced a report at all' $true ($null -ne $a)
 
     # ------------------------------------------------------------------ route B
@@ -249,8 +308,13 @@ try {
     $bPs1 = Join-Path $WorkDir 'routeB.ps1'
     Remove-Item -LiteralPath $bOut -ErrorAction SilentlyContinue
     Write-SpawnScript $bPs1 $tokenScript $bOut
-    $null = Invoke-ViaTask $bPs1 $bOut 60
-    $b = Show-Token (Read-Report $bOut 'route B') 'route B'
+    Say ('principal: ' + (Get-Principal))
+    Say ('task runs: powershell -ExecutionPolicy Bypass -File "' + $bPs1 + '"')
+    $bRun = Invoke-ViaTask $bPs1 $bOut 60
+    Say ('task name: ' + $bRun.Task)
+    if (-not $bRun.Ok) { Say $bRun.Why }
+    $b = Get-TokenFacts (Read-Report $bOut)
+    Write-TokenFacts $b 'route B'
     Note 'route B produced a report at all' $true ($null -ne $b)
 
     # ------------------------------------------------------- the decisive rows
@@ -291,10 +355,19 @@ Set-Content -LiteralPath '@@OUT@@' -Value (($out -join "`n") + "`nENDOFREPORT") 
 '@
     Write-SpawnScript $sdPs1 ($sdScript.Replace('@@SD@@', $sdExe)) $sdOut
 
-    if ($useTask) { $null = Invoke-ViaTask $sdPs1 $sdOut 90 }
-    else          { $null = Invoke-ViaStartProcess $sdPs1 $sdOut 90 }
+    if ($useTask) {
+        Say ('principal: ' + (Get-Principal))
+        $sdRun = Invoke-ViaTask $sdPs1 $sdOut 90
+        Say ('task name: ' + $sdRun.Task)
+    } else {
+        $sdRun = Invoke-ViaStartProcess $sdPs1 $sdOut 90
+    }
+    if (-not $sdRun.Ok) { Say $sdRun.Why }
 
-    $sdText = Read-Report $sdOut 'sd'
+    $sdText = Read-Report $sdOut
+    if ($null -ne $sdText -and $sdText -notmatch 'ENDOFREPORT') {
+        Say 'the SD report is TRUNCATED - the spawn died part way through'
+    }
     Note 'the spawned seat produced SD output at all' $true ($null -ne $sdText)
     if ($null -ne $sdText) {
         Write-Output '  --- raw sd output ---'
