@@ -86,7 +86,34 @@ RESERVED = {
     "10193": ("SD Core for Linux", "20 Sep 2026", "Account %1 is now suspended"),
     "10194": ("SD Core for Linux", "20 Sep 2026", "%1 is not suspended; nothing changed"),
     "10195": ("SD Core for Linux", "20 Sep 2026", "sdsys without an sdsys login"),
+    # ***10922 - THE FIFTH COLLISION THIS PROJECT HAS HAD, AND THE ONLY ONE OF THE FOUR THE
+    # LINUX AGENT REPORTED ON 20 Sep 2026 THAT WAS REAL.***  This port took it that afternoon for
+    # "Internal session admitted (opened by %1)", telling the other side it sat in a block "we
+    # already use" - without checking their tree.  It had shipped there the day before (8c78e44,
+    # 19 Sep) as apisrvr's refusal of an SDSYS API session from anyone but the sdsys user, on a
+    # security path with an anchored witness row.  THIS PORT MOVED: the message is 12000, the first
+    # of the Windows block agreed the same evening.  Declared on THEIR mail, not on our read of the
+    # clone on this disk, which is behind.
+    "10922": ("SD Core for Linux", "19 Sep 2026",
+              "SDSYS may use the API only from a process running as the sdsys user"),
 }
+
+# ***THE BLOCK CONVENTION, AGREED WITH THE LINUX AGENT 20 Sep 2026 UNDER THE OWNER'S DELEGATION***
+# ("I am the owner of both.  I am satisfied with whatever is agreed on between the two ports"),
+# after first-come-and-tell-the-other-side had failed on 10176-10181 and 10922:
+#
+#   0-10029      upstream's own range - neither port touches it
+#   10030-10999  SHARED LEGACY: everything either port has shipped there stays where it is; a NEW
+#                collision in it is a defect, so check the other port's tree (and its MAIL, not a
+#                clone that may be behind) before taking a number here
+#   11000-11999  LINUX'S BLOCK: this port never allocates from it
+#   12000-12999  WINDOWS' BLOCK: every message this port allocates from now on takes the next number
+#                here; 12000 is "Internal session admitted (opened by %1)"
+#
+# The two ranges below are what the guard can see: nothing in Linux's block, and nothing in ours
+# that is not in ours to hold.  It cannot see whether a legacy id is shared on purpose.
+LINUX_BLOCK = (11000, 11999)
+WINDOWS_BLOCK = (12000, 12999)
 
 # ***A COLLISION IS AN ID LIVE IN BOTH TREES WITH DIFFERENT TEXT, WHICH IS A
 # DIFFERENT FACT FROM A RESERVATION AND MUST NOT BE FILED AS ONE***: a reserved
@@ -198,6 +225,23 @@ check("no reserved id has a record here (%d reserved, %d records)"
       bad == [],
       "re-allocated: " + ", ".join(bad) + " - pick another number and tell the "
       "other port")
+
+# --- the block convention ---------------------------------------------------
+in_linux_block = sorted(i for i in present if LINUX_BLOCK[0] <= int(i) <= LINUX_BLOCK[1])
+check("nothing in LINUX'S block (%d-%d) has a record here" % LINUX_BLOCK,
+      in_linux_block == [],
+      "present: " + ", ".join(in_linux_block) + " - that range is the other port's to allocate from")
+beyond = sorted(i for i in present if int(i) > WINDOWS_BLOCK[1])
+check("nothing above the Windows block (>%d) has a record here" % WINDOWS_BLOCK[1],
+      beyond == [],
+      "present: " + ", ".join(beyond) + " - an id past our block has no owner under the convention")
+in_windows_block = sorted(i for i in present if WINDOWS_BLOCK[0] <= int(i) <= WINDOWS_BLOCK[1])
+check("CONTROL: the Windows block holds this port's first allocation (12000)",
+      "12000" in in_windows_block,
+      "12000 is gone - the gate's announcement in login points at it")
+check("MUTANT: a planted id in Linux's block is caught",
+      sorted(i for i in (present | {"11500"}) if LINUX_BLOCK[0] <= int(i) <= LINUX_BLOCK[1]) == ["11500"],
+      "the block check would miss a re-allocation")
 
 # --- the declared collisions, which must still BE collisions ---------------
 #

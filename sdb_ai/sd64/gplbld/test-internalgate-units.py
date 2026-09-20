@@ -146,8 +146,8 @@ def gate_problems(login_text):
     if "gate.writer[1, 80]" not in body:
         p.append("the writer text is not capped (the file is writable by more than the installer)")
     # R4: an admission is SAID ON THE SCREEN as well as audited, so it lands in every transcript
-    if not re.search(r"if gate\.ok then.*?display sysmsg\(10922, gate\.writer\)", body, re.S):
-        p.append("an admission is not announced on the screen (display sysmsg(10922, gate.writer))")
+    if not re.search(r"if gate\.ok then.*?display sysmsg\(12000, gate\.writer\)", body, re.S):
+        p.append("an admission is not announced on the screen (display sysmsg(12000, gate.writer))")
     return p
 
 
@@ -181,11 +181,13 @@ if i_d > 0 and i_ok > 0:
     row(any("AFTER" in x for x in gate_problems(m2)), "MUTANT: a delete moved after the decision is caught")
 mut3 = login.replace("gosub internal.gate\n            if not(gate.ok) then goto terminate.connection", "gosub internal.gate")
 row(any("not followed by" in x for x in gate_problems(mut3)), "MUTANT: a call site that ignores gate.ok is caught")
-msg = os.path.join(SD64, "sdsys", "messages", "10922")
+msg = os.path.join(SD64, "sdsys", "messages", "12000")
 msg_text = read(msg) if os.path.isfile(msg) else ""
 row("%1" in msg_text and msg_text.strip() != "",
-    "message 10922 exists and takes the writer as %1 (the Linux agent was told this number is taken)", msg)
-mut5 = login.replace("display sysmsg(10922, gate.writer)", "null")
+    "message 12000 exists and takes the writer as %1 (first of the Windows block, agreed with the Linux agent)", msg)
+row(not os.path.isfile(os.path.join(SD64, "sdsys", "messages", "10922")),
+    "10922 is NOT here: Linux shipped it on 19 Sep as an SDSYS API refusal, and this port's first guess at it was wrong")
+mut5 = login.replace("display sysmsg(12000, gate.writer)", "null")
 row(any("not announced" in x for x in gate_problems(mut5)), "MUTANT: a gate that stops announcing an admission is caught")
 mut6 = login.replace("create gate.sf else gate.sf = ''", "gate.sf = ''")
 row(any("never CREATEd" in x for x in gate_problems(mut6)),
@@ -305,6 +307,8 @@ row("'$internal'" in marker_ps1 and "'$internal'" in bootstrap, "the writers nam
 row("UTF8Encoding($false)" in marker_ps1, "the PowerShell writer is UTF-8 WITHOUT a BOM (LOGIN reads line 1 with READSEQ)")
 row("encoding='ascii'" in bootstrap and "pid=%d" in bootstrap, "the Python writer is ASCII and writes 'pid='")
 row("pid={1}" in marker_ps1, "the PowerShell writer writes 'pid='")
+row(("messages" + chr(92) + "12000") in witness and "ANNOUNCED" in witness,
+    "the witness reads message 12000 from the install and scores the announcement (R4)")
 for phrase in ("no internal marker", "the internal marker had expired", "INTERNAL SESSION ADMITTED account=SDSYS"):
     row(phrase in witness, "the witness (verify-internalgate.ps1) asserts the exact audit wording: " + phrase)
 code_only = "\n".join(ln for ln in witness.splitlines() if not ln.lstrip().startswith("#"))

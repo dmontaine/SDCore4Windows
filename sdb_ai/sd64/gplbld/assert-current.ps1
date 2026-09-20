@@ -1644,7 +1644,17 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # seat, so SD commands (and cleanup) can be run as SDSYS from an
                   # ordinary elevated prompt.  Harness only, ships nowhere; listed
                   # with the commit that creates it.
-                  'sdsys-run.ps1')
+                  'sdsys-run.ps1',
+                  # 20 Sep 26 - RELEASE_1.1 82's internal-session gate: its free
+                  # guard, its witness (a VerifyInstall2 step that runs from
+                  # source) and the print-and-return scan.  Harness only, ship
+                  # nowhere.  THESE THREE WERE MISSED IN THE COMMITS THAT
+                  # CREATED THEM and assert-current reported each as source
+                  # newer than the install, so an edit to a guard demanded a
+                  # cycle.  mail.sh is the mailbox sender: it runs from the
+                  # agent's shell against the P: drive and touches no install.
+                  'verify-internalgate.ps1', 'test-internalgate-units.py',
+                  'test-outputtrap-units.ps1', 'mail.sh')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

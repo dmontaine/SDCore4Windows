@@ -81,6 +81,17 @@ $termText = ((Get-Content -LiteralPath $msg5024 -Raw) -replace '\s+', ' ').Trim(
 Write-Output ("  5024   : '" + $termText + "'  (what a refused session prints)")
 if ($termText -eq '') { Write-Output 'verify-internalgate: message 5024 is empty - leg A would have nothing to look for'; exit 2 }
 
+# THE ANNOUNCEMENT, R4: an admitted session says so on the screen, with message 12000 - the first
+# of the Windows block of the shared message space (it was 10922 for one afternoon, until Linux's
+# 19 Sep 10922 was found).  Its wording is READ FROM THE INSTALL: the text before %1 is what must
+# appear ahead of the writer's name on an admission and NOWHERE on a refusal.
+$msg12000 = Join-Path $sdsys 'messages\12000'
+if (-not (Test-Path -LiteralPath $msg12000)) { Write-Output ('verify-internalgate: missing ' + $msg12000 + ' - the admission has no announcement to look for'); exit 2 }
+$annPrefix = (((Get-Content -LiteralPath $msg12000 -Raw) -split '%1')[0] -replace '\s+', ' ').Trim()
+Write-Output ("  12000  : '" + $annPrefix + " <writer>)'  (what an admitted session prints)")
+if ($annPrefix -eq '') { Write-Output 'verify-internalgate: message 12000 has no text before %1 - the announcement rows would match everything'; exit 2 }
+$annRx = [regex]::Escape($annPrefix).Replace('\ ', '\s+')
+
 $pass = 0
 $fail = 0
 function Row([string]$name, [bool]$ok, [string]$detail = '') {
@@ -166,6 +177,7 @@ try {
     Row ("A: the refusal text SD prints was shown ('" + $termText + "')") ($a.Text -match [regex]::Escape($termText)) $a.Text
     Row 'A: the audit trail names the reason: no internal marker' (($null -ne $ad) -and ($ad -match 'LOGIN REFUSED account=SDSYS reason=no internal marker')) "delta: $ad"
     Row 'A: and no admission was recorded' (($null -ne $ad) -and ($ad -notmatch 'INTERNAL SESSION ADMITTED')) "delta: $ad"
+    Row 'A: and the admission announcement (message 12000) was NOT shown' ($a.Text -notmatch $annRx) $a.Text
 
     # ---- B. a fresh marker: the CONTROL -------------------------------------
     Write-Output ''
@@ -178,6 +190,8 @@ try {
     $ad = Get-AuditDelta $before
     Row 'B: WHO answered as SDSYS - the session was opened' ($b.Text -match $whoRx) $b.Text
     Row 'B: and the refusal text was NOT shown' ($b.Text -notmatch [regex]::Escape($termText)) $b.Text
+    # R4 - THE ANNOUNCEMENT, anchored on the success wording: the message's own text, then THIS writer's name.
+    Row 'B: the admission was ANNOUNCED on the screen (message 12000, then the writer)' ($b.Text -match ($annRx + '\s*verify-internalgate')) $b.Text
     Row 'B: the marker was CONSUMED (LOGIN deletes it on admission)' (-not (Test-Path -LiteralPath $marker))
     Row 'B: the audit says who wrote it and how old it was' (($null -ne $ad) -and ($ad -match 'INTERNAL SESSION ADMITTED account=SDSYS writer=verify-internalgate pid=\d+ .* age=-?\d+')) "delta: $ad"
 

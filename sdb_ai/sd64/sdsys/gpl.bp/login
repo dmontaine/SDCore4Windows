@@ -1315,9 +1315,11 @@ internal.gate:
    if gate.ok then
       void kernel(K$AUDIT, 'INTERNAL SESSION ADMITTED account=' : initial.account : ' writer=' : gate.writer : ' age=' : gate.age)
 *     AND SAID ON THE SCREEN, so it lands in every transcript and installer log that captures this
-*     session (RELEASE_1.1 82 R4: a bypass must announce itself).  10922 is in the Windows-only block
-*     of the shared message space; the Linux agent was told before it was taken.
-      display sysmsg(10922, gate.writer) ;* Internal session admitted (opened by %1)
+*     session (RELEASE_1.1 82 R4: a bypass must announce itself).  12000 is the FIRST message in the
+*     Windows block of the shared message space (12000-12999, agreed with the Linux agent 20 Sep
+*     2026).  IT WAS 10922 FOR ONE AFTERNOON, and Linux had shipped 10922 (an SDSYS API refusal)
+*     the day before - the guess that 10919-10922 were "ours" was made without checking their side.
+      display sysmsg(12000, gate.writer) ;* Internal session admitted (opened by %1)
    end
    return
 
