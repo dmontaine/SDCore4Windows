@@ -128,12 +128,12 @@ $DECLARED = [ordered]@{
     # verify-apiname, verify-apiport, verify-apiwire, verify-delacc-xref,
     # verify-profiledir, verify-scramlogin, verify-vocwrite.  Their Invoke-SD is a
     # one-line call to Invoke-SdSeatText and each proves the seat with
-    # Assert-SdSeat before creating anything.  SIX OF THE EIGHT WITNESSED ON A REAL
-    # MACHINE (20 Sep 2026: profiledir, accountacl, apiname, apiport, scramlogin,
-    # delacc-xref).  apiwire and vocwrite FAILED their first run - they LOGTO into a
-    # personal account, which the seat refuses - and were re-built on the seat's
-    # -Internal switch; they are hand-run and NOT YET
-    # WITNESSED ON A REAL MACHINE.
+    # Assert-SdSeat before creating anything.  ALL EIGHT WITNESSED ON A REAL MACHINE,
+    # 20 Sep 2026: profiledir, accountacl, apiname, apiport, scramlogin, delacc-xref
+    # and vocwrite fully; apiwire through every step this machine can measure (its
+    # packet capture is ruled a dead end here, 15 Sep).  apiwire and vocwrite FAILED
+    # their first run - they LOGTO into a personal account, which the seat refuses -
+    # and were re-built on the seat's -Internal switch, then passed.
     'verify-createfilecase.ps1'   = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory lines' }
     'verify-delaccount.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-dictrename.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
