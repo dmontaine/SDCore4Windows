@@ -15,11 +15,13 @@
     cannot.
 
     -Commands is ONE string, commands and their answers separated by ";".  A
-    command that asks a question is answered by the NEXT item - "DELETE.FILE ZZWIRE;Y"
-    - because the whole list is piped in, and a prompt with no answer waits until the
-    timeout.  (A comma-separated list does NOT work through "powershell -File": it
-    arrives as one string.)  An SD command that itself contains a semicolon cannot be
-    sent this way.
+    command that asks a question is answered by the NEXT item - "DELETE.ACCOUNT X;Y" -
+    because the whole list is piped in, and a prompt with no answer waits until the
+    timeout.  (Measured 20 Sep 2026: DELETE.FILE asks NOTHING for an ordinary file, so
+    "DELETE.FILE ZZX;Y" only adds a harmless "Y is not in your VOC" - give an answer
+    only to a command that really asks.)  A comma-separated list does NOT work through
+    "powershell -File": it arrives as one string.  An SD command that itself contains a
+    semicolon cannot be sent this way.
 
     -Internal runs "sd.exe -internal", the DEVELOPMENT door (RELEASE_1.1 82): it is
     what admits a LOGTO to a personal account, because the seat's OS user (SDSYS) is
