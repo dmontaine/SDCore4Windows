@@ -150,10 +150,15 @@ $hdr  = 'SEAT identity=' + $id.Name +
         ' interactive=' + $pr.IsInRole((New-Object Security.Principal.SecurityIdentifier('S-1-5-4')))
 $in   = [IO.File]::ReadAllText($inF)
 Remove-Item -LiteralPath $inF -Force
-$out  = $in | & $sd @@ARGS@@2>&1
-$body = $hdr + "`n" + (($out | ForEach-Object { [string]$_ }) -join "`n") + "`nENDOFSEAT"
-[IO.File]::WriteAllText($outF + '.tmp', $body, (New-Object Text.UTF8Encoding($false)))
+$u8   = New-Object Text.UTF8Encoding($false)
+$part = $outF + '.part'
+[IO.File]::WriteAllText($part, ($hdr + "`n"), $u8)
+$all  = New-Object System.Collections.ArrayList
+$in | & $sd @@ARGS@@2>&1 | ForEach-Object { $l = [string]$_; $null = $all.Add($l); [IO.File]::AppendAllText($part, ($l + "`n"), $u8) }
+$body = $hdr + "`n" + ($all -join "`n") + "`nENDOFSEAT"
+[IO.File]::WriteAllText($outF + '.tmp', $body, $u8)
 Move-Item -LiteralPath ($outF + '.tmp') -Destination $outF -Force
+Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
 '@
     $sdArgs = $(if ($Internal) { "'-internal' " } else { '' })
     return $t.Replace('@@SD@@', $SdExe).Replace('@@IN@@', $InFile).Replace('@@OUT@@', $OutFile).Replace('@@ARGS@@', $sdArgs)
@@ -278,7 +283,23 @@ function Invoke-SdViaSeat {
 
         $run = if ($hkRun.Has) { & $hkRun.Value $ps1 $outF $TimeoutSec $Account }
                else { Invoke-SeatTask -Ps1 $ps1 -OutFile $outF -Seconds $TimeoutSec -Account $Account }
-        if (-not $run.Ok) { return (New-SeatResult $false '' $run.Why $run.Detail $sess) }
+        if (-not $run.Ok) {
+            # ***WHAT SD HAD PRINTED WHEN IT WAS STOPPED.***  The task appends every line to
+            # <report>.part as sd.exe prints it, so a call that hit its timeout still says
+            # where it stopped.  Before this, a hang returned no text at all and the prompt
+            # that caused it had to be found by reading the product's source - which is
+            # exactly what verify-accountrules cost on 20 Sep 2026 (CREATE.ACCOUNT with no
+            # keyword had stopped being refused, and sat at "Password:" for 180 s).
+            $why = $run.Why
+            $partF = $outF + '.part'
+            try {
+                if (Test-Path -LiteralPath $partF) {
+                    $tail = @(Get-Content -LiteralPath $partF -Tail 25 -Encoding UTF8 | Where-Object { $_ -match '\S' })
+                    if ($tail.Count) { $why += '  WHAT SD HAD PRINTED WHEN IT WAS STOPPED (last lines): ' + (($tail | ForEach-Object { $_.Trim() }) -join ' | ') }
+                }
+            } catch { }
+            return (New-SeatResult $false '' $why $run.Detail $sess)
+        }
 
         $raw = ''
         if (Test-Path -LiteralPath $outF) {
@@ -289,7 +310,7 @@ function Invoke-SdViaSeat {
         if (-not $rep.Ok) { return (New-SeatResult $false '' $rep.Why $run.Detail $sess) }
         return (New-SeatResult $true $rep.Text '' $run.Detail $sess)
     } finally {
-        foreach ($f in @($inF, $ps1, $outF, ($outF + '.tmp'))) {
+        foreach ($f in @($inF, $ps1, $outF, ($outF + '.tmp'), ($outF + '.part'))) {
             try { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction Stop } } catch { }
         }
     }

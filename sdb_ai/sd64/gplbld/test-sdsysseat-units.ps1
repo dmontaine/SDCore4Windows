@@ -325,6 +325,47 @@ Check 'the -Internal run REALLY handed "-internal" to the program (observed, not
 # so \S then matched the first character of the NEXT line and this failed on a
 # perfectly clean run - a check that could not pass.  Same-line whitespace only.
 Check 'and it is the only argument (no smuggled extras)' (-not ($raw2 -match '(?m)^ARGS=-internal[ \t]+\S')) $raw2
+
+# --- A HANG STILL SAYS WHERE IT STOPPED ---------------------------------------
+# 20 Sep 2026: verify-accountrules sat at a password prompt for 180 s and the seat threw with
+# NO text, so the cause had to be found by reading createa.  The generated script now appends
+# each line to <report>.part as sd prints it, and the caller quotes the tail when it gives up.
+# Observed here on the real generated script, against a fake sd that prints one line and hangs.
+$wd3 = Join-Path $tmp 'work3'
+$null = New-Item -ItemType Directory -Path $wd3 -Force
+$hangSd = Join-Path $tmp 'hang-sd.cmd'
+Set-Content -LiteralPath $hangSd -Value @('@echo off', '@echo FIRSTLINE-BEFORE-THE-HANG', '@ping -n 14 127.0.0.1 >nul') -Encoding ASCII
+$inH = Join-Path $wd3 'h.in'; $ps1H = Join-Path $wd3 'h.ps1'; $outH = Join-Path $wd3 'h.out'
+[IO.File]::WriteAllText($inH, "`nWHO`nOFF`n")
+Set-Content -LiteralPath $ps1H -Encoding UTF8 -Value (New-SeatScript -SdExe $hangSd -InFile $inH -OutFile $outH)
+$pp = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ps1H) -PassThru -WindowStyle Hidden
+$partText = ''
+$until = (Get-Date).AddSeconds(20)
+while ((Get-Date) -lt $until) {
+    if (Test-Path -LiteralPath ($outH + '.part')) {
+        try { $partText = [IO.File]::ReadAllText($outH + '.part') } catch { $partText = '' }
+        if ($partText -match 'FIRSTLINE-BEFORE-THE-HANG') { break }
+    }
+    Start-Sleep -Milliseconds 300
+}
+$reportWhileHung = Test-Path -LiteralPath $outH
+$null = & taskkill.exe /PID $pp.Id /T /F 2>&1
+Start-Sleep -Milliseconds 500
+Check 'WHILE sd is still running, the .part file holds the header and the line sd already printed' (($partText -match '^SEAT identity=') -and ($partText -match 'FIRSTLINE-BEFORE-THE-HANG')) $partText
+Check 'and the final report does NOT exist yet (the hang was real, not a finished run)' (-not $reportWhileHung) 'the report appeared while sd was still hanging'
+
+$script:SeatTestHooks = @{
+    Elevated = $true; Qwinsta = $qw; SdExe = $fakeSd
+    Runner   = { param($Ps1, $OutFile, $Seconds, $Account)
+                 [IO.File]::WriteAllText($OutFile + '.part', "SEAT identity=x`nCreating account`nPassword: `n")
+                 return @{ Ok = $false; Detail = 'fake hang'; Why = 'the task wrote no report within 3s' } }
+}
+$wd4 = Join-Path $tmp 'work4'
+$rh = Invoke-SdViaSeat -Commands @('CREATE.ACCOUNT USER zz') -Account $me -WorkDir $wd4 -TimeoutSec 3
+Check 'a timed-out call is still a refusal (Ok is false, no text)' ((-not $rh.Ok) -and $rh.Text -eq '') "Ok=$($rh.Ok)"
+Check 'its Why quotes what SD had printed when it was stopped, ending at the prompt' (($rh.Why -match 'WHAT SD HAD PRINTED WHEN IT WAS STOPPED') -and ($rh.Why -match 'Password:')) $rh.Why
+Check 'and it still carries the original timeout reason' ($rh.Why -match 'wrote no report within 3s') $rh.Why
+Check 'the .part file is removed afterwards (work directory clean)' (@(Get-ChildItem -LiteralPath $wd4 -Force -ErrorAction SilentlyContinue).Count -eq 0) ((Get-ChildItem -LiteralPath $wd4 -Force | ForEach-Object Name) -join ',')
 $script:SeatTestHooks = $null
 
 # ---------------------------------------------------------------------------
@@ -446,6 +487,57 @@ foreach ($f in @(Get-ChildItem -LiteralPath $gplbld -Filter '*.ps1' | Where-Obje
 # THE NULL CASE, refused out loud: a scan that found no script using the seat measured nothing.
 Check ('the scan found the scripts that use the seat ({0}; more than 15)' -f $touching) ($touching -gt 15) "found $touching - the walk or the seat function names are wrong"
 Check 'EVERY script that uses the seat loads it before its first script-scope call' ($problems.Count -eq 0) ($problems -join ' | ')
+
+# ---------------------------------------------------------------------------
+Section '8. a step that THROWS cannot end a suite run (both runners guard the step call)'
+# ***MEASURED 20 Sep 2026***: the steps run in the runner's own process and most set
+# $ErrorActionPreference = 'Stop', so a terminating error inside one propagated out of
+# "& $path @splat" and ended the WHOLE suite - verify-createfilecase's "Assert-SdSeat is not
+# recognized" did exactly that, and the steps after it never ran.  A one-loop reproduction gave
+# "unguarded: LOOP ENDED BY ..." against "guarded: thrower.ps1=1 ; fine.ps1=0".  The seat adds a
+# NEW way to throw (Invoke-SdSeatText throws when the seat does not run), so this matters more
+# now than before.  Only a try/catch that sits INSIDE the step loop counts: VerifyInstall1 wraps
+# the whole loop in a try/finally already, and that is exactly the shape that lets the throw
+# end the run.
+function Get-StepGuard([string]$Path) {
+    $t = $null; $e = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$t, [ref]$e)
+    if ($e.Count -gt 0) { return @{ Calls = 0; Unguarded = @('does not parse') } }
+    $calls = @($ast.FindAll({ param($x)
+        $x -is [System.Management.Automation.Language.CommandAst] -and
+        $x.InvocationOperator -eq 'Ampersand' -and
+        $x.CommandElements.Count -ge 2 -and
+        $x.CommandElements[0].Extent.Text -eq '$path' -and
+        $x.Extent.Text -match '@splat' }, $true))
+    $bad = @()
+    foreach ($c in $calls) {
+        $p = $c.Parent; $try = $null; $loop = $null
+        while ($null -ne $p) {
+            if ($null -eq $try -and $p -is [System.Management.Automation.Language.TryStatementAst]) { $try = $p }
+            if ($null -eq $loop -and $p -is [System.Management.Automation.Language.ForEachStatementAst]) { $loop = $p }
+            $p = $p.Parent
+        }
+        $ok = ($null -ne $try -and $null -ne $loop -and $try.CatchClauses.Count -gt 0 -and
+               $try.Extent.StartOffset -ge $loop.Extent.StartOffset)
+        if (-not $ok) { $bad += ('line ' + $c.Extent.StartLineNumber) }
+    }
+    return @{ Calls = $calls.Count; Unguarded = $bad }
+}
+$gOk  = Join-Path $tmp 'runner-guarded.ps1'
+$gBad = Join-Path $tmp 'runner-unguarded.ps1'
+$gFin = Join-Path $tmp 'runner-tryfinally-only.ps1'
+Set-Content -LiteralPath $gOk  -Encoding UTF8 -Value @('foreach ($s in $steps) {', '  $path = $s.Name; $splat = @{}', '  try { & $path @splat; $code = $LASTEXITCODE } catch { $code = 1 }', '}')
+Set-Content -LiteralPath $gBad -Encoding UTF8 -Value @('foreach ($s in $steps) {', '  $path = $s.Name; $splat = @{}', '  & $path @splat', '  $code = $LASTEXITCODE', '}')
+Set-Content -LiteralPath $gFin -Encoding UTF8 -Value @('try {', 'foreach ($s in $steps) {', '  $path = $s.Name; $splat = @{}', '  & $path @splat', '}', '} finally { }')
+$sOk = Get-StepGuard $gOk; $sBad = Get-StepGuard $gBad; $sFin = Get-StepGuard $gFin
+Check 'CONTROL: a step call inside a try/catch inside the loop is guarded (and was found)' (($sOk.Calls -eq 1) -and ($sOk.Unguarded.Count -eq 0)) "calls=$($sOk.Calls) unguarded=$($sOk.Unguarded -join ',')"
+Check 'MUTANT: an unguarded step call is flagged' (($sBad.Calls -eq 1) -and ($sBad.Unguarded.Count -eq 1)) "calls=$($sBad.Calls) unguarded=$($sBad.Unguarded -join ',')"
+Check 'MUTANT: a try/FINALLY around the whole loop (VerifyInstall1''s old shape) does not count as a guard' (($sFin.Calls -eq 1) -and ($sFin.Unguarded.Count -eq 1)) "calls=$($sFin.Calls) unguarded=$($sFin.Unguarded -join ',')"
+foreach ($rn in 'VerifyInstall1.ps1', 'VerifyInstall2.ps1') {
+    $g = Get-StepGuard (Join-Path $gplbld $rn)
+    Check ("$rn calls its steps (the scan found $($g.Calls) call site(s), not zero)") ($g.Calls -ge 1) 'the walk found no "& $path @splat" - the shape changed and this guard is looking at nothing'
+    Check ("$rn guards every step call with a try/catch inside the loop") ($g.Unguarded.Count -eq 0) ($g.Unguarded -join ',')
+}
 
 } finally {
     $script:SeatTestHooks = $null

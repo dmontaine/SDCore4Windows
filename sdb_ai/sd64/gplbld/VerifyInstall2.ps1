@@ -1098,8 +1098,17 @@ foreach ($s in $steps) {
     if (-not $Quiet) {
         Write-Output ''
         Write-Output ('===== ' + $s.Name + ' ' + $shown + ' =====')
-        & $path @splat
-        $code = $LASTEXITCODE
+        # 20 Sep 26 - A STEP THAT THROWS ENDS ITSELF, NOT THE RUN.  The steps run in
+        # this process and most set $ErrorActionPreference = 'Stop', so a terminating
+        # error inside one - "Assert-SdSeat is not recognized" was the one that showed
+        # it - propagated out of the call and ended the WHOLE suite there, and the steps
+        # after it never ran.  It is now scored as that step failing.
+        try { & $path @splat; $code = $LASTEXITCODE }
+        catch {
+            $code = 1
+            Write-Output ('[FAIL] the step threw and was stopped: ' + $_.Exception.Message)
+            Write-Output ([string]$_.ScriptStackTrace)
+        }
         Close-LeakedTranscripts $s.Name
         $lines += ('{0,-28} {1,-22} exit {2}{3}' -f $s.Name, $shown, $code,
                    $(if ($code -eq 2) { '  COULD NOT RUN' } else { '' }))
@@ -1114,8 +1123,16 @@ foreach ($s in $steps) {
     # *> captures ALL streams - output, error, warning, verbose, debug and
     # information.  Write-Host goes to the INFORMATION stream in PowerShell 5+,
     # which is why it is caught here and would not have been in 2.0.
-    & $path @splat *> $stepLog
-    $code = $LASTEXITCODE
+    # 20 Sep 26 - A STEP THAT THROWS ENDS ITSELF, NOT THE RUN (see the same note in the
+    # branch above).  The message goes into the step's own log with the [FAIL] marker,
+    # so it is surfaced below like any other failing row; Out-File -Append writes the
+    # encoding *> used for the file.
+    try { & $path @splat *> $stepLog; $code = $LASTEXITCODE }
+    catch {
+        $code = 1
+        ('[FAIL] the step threw and was stopped: ' + $_.Exception.Message + [Environment]::NewLine +
+         [string]$_.ScriptStackTrace) | Out-File -LiteralPath $stepLog -Append
+    }
     Close-LeakedTranscripts $s.Name
 
     # Surfaced from the file, never from a pipe the file did not also get.

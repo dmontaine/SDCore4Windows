@@ -1368,8 +1368,16 @@ foreach ($s in $steps) {
     Write-Output ''
     Write-Output ('===== ' + $s.Name + ' =====')
     $splat = $s.P
-    & $path @splat
-    $code = $LASTEXITCODE
+    # 20 Sep 26 - A STEP THAT THROWS ENDS ITSELF, NOT THE RUN.  The steps run in this
+    # process under $ErrorActionPreference = 'Stop', so a terminating error inside one
+    # propagated out of this call and ended the whole suite there.  It is now scored as
+    # that step failing, and the steps after it still run.
+    try { & $path @splat; $code = $LASTEXITCODE }
+    catch {
+        $code = 1
+        Write-Output ('[FAIL] the step threw and was stopped: ' + $_.Exception.Message)
+        Write-Output ([string]$_.ScriptStackTrace)
+    }
 
     # 28 Aug 26 - CLOSE WHAT THE STEP LEFT OPEN, AND SAY SO.  PRE_RELEASE 40.
     #
