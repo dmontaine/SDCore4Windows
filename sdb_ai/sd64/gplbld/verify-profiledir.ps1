@@ -136,10 +136,17 @@ function Shown($out, [int]$n, [string[]]$vals) {
 }
 
 # Blank first line absorbs the pipe's BOM, TERM stops pagination, OFF ends it.
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot, witnessed 18/18 on 19 Sep).  THE "LOGTO SDSYS" PREFIX THIS USED
+# TO SEND IS REFUSED (10002) FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS
+# ACCOUNT with an elevated, interactive token, and an elevated Don is not one.  So
+# the commands go to a task inside SDSYS's own live session and the text comes back
+# through a file.  The TERM line this sent first is added by the helper
+# (Expand-SeatCommands).  A seat that did not run THROWS rather than returning ''
+# (Invoke-SdSeatText).  SDSYS must be signed in: `query session` shows its row.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 function Test-SdRunning { return ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) }
@@ -210,6 +217,12 @@ if (Test-Path -LiteralPath $fixture) { Fail "$fixture already exists - this test
 if (Test-Path -LiteralPath (Join-Path $profilesRoot $control)) { Fail "the CONTROL name already has a directory - it would be refused for the same reason as the subject and prove nothing" }
 
 if (-not (Start-SD)) { Fail 'sdwind did not start' }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE MAKING THE FIXTURE, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no leftover
+# directory behind - and not a thrown error at the first SD call that reads as a
+# product failure.  See sdsys-seat.ps1.
+Assert-SdSeat -Label 'verify-profiledir'
 
 # --- [1] the fixture -------------------------------------------------------
 

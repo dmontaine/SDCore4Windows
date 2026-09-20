@@ -273,3 +273,81 @@ function Invoke-SdViaSeat {
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# THE SHARED "TERM" HANDLING, ONCE.  RELEASE_1.1 76, the mechanical group.
+#
+# Eight verifiers each carried their own copy of this.  A pipe cannot answer
+# "Press RETURN to continue", so a long LIST or CT paginates and blocks for ever;
+# TERM 200,9999 stops it.  And LOGIN re-initialises the terminal geometry on
+# EVERY account switch (LOGIN:201-209), so a TERM sent before a LOGTO is wiped
+# by it and has to be sent again after each one.  The pilot needs none of this -
+# it uses NO.PAGE and sends no LOGTO - so it does not call these.
+#
+# The result is an array: CALLERS WRAP IT IN @() because PowerShell unrolls a
+# one-element array on return, and Invoke-SdViaSeat's -Commands is a string[].
+function Expand-SeatCommands([string[]]$Commands) {
+    $out = New-Object System.Collections.ArrayList
+    $null = $out.Add('TERM 200,9999')
+    foreach ($c in @($Commands)) {
+        $null = $out.Add($c)
+        if ($c -match '^\s*LOGTO\b') { $null = $out.Add('TERM 200,9999') } #MUT-TERMAFTER
+    }
+    return $out.ToArray()
+}
+
+# THE PRECHECK, ONCE.  verify-createaccount.ps1 (the pilot) carried this inline; a
+# verifier calls it BEFORE it creates anything.  CREATE.ACCOUNT makes a real
+# Windows account, so a run that only finds out at its first SD call that SDSYS has
+# no live session would fail with a thrown error - exit 1, a stack trace, and every
+# appearance of a product defect - when it is the precondition, which is exit 2
+# ("could not be run").  WHO is the cheapest command that says who SD thinks it is.
+# ANCHORED ON THE SUCCESS WORDING ("<n> SDSYS") with the refusal wording as a
+# disqualifier, because SDSYS appears in the refusal too; and SD's raw answer is
+# printed either way.
+#
+# THIS ONE PRINTS AND EXITS, AND SAYS SO IN ITS NAME: it is an Assert, it returns
+# nothing, and a caller must not capture it.  It ends the calling SCRIPT with exit 2.
+function Assert-SdSeat {
+    param([Parameter(Mandatory = $true)] [string] $Label, [int] $TimeoutSec = 90, [string] $WorkDir = '')
+    Write-Output "  proving the SDSYS seat (a task inside SDSYS's own live session) ..."
+    $seat = Invoke-SdViaSeat -Commands @('WHO') -TimeoutSec $TimeoutSec -WorkDir $WorkDir
+    Write-Output ("  seat: Ok={0}  {1}" -f $seat.Ok, $seat.Detail)
+    # Stop-Transcript BEFORE exit 2, as the verifiers' own Refuse() does: a
+    # transcript left running can swallow the NEXT verifier's output into this
+    # one's file when they share a process.  Harmless when none is running.
+    if (-not $seat.Ok) {
+        Write-Output ($Label + ': the SDSYS seat did not run - ' + $seat.Why)
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+    Write-Output '  --- what SD said to WHO ---'
+    foreach ($l in @($seat.Text -split "`n")) { if ($l -match '\S') { Write-Output ('    ' + $l.Trim()) } }
+    if ($seat.Text -match 'restricted to privileged users' -or $seat.Text -notmatch '(?m)^\s*\d+\s+SDSYS\b') {
+        Write-Output ($Label + ': SD did not answer WHO as SDSYS, so nothing below would measure what it claims to.')
+        try { Stop-Transcript | Out-Null } catch { }
+        exit 2
+    }
+}
+
+# What each converted verifier's Invoke-SD calls: the commands (with the TERM
+# handling) go to the seat and the output TEXT comes back.
+#
+# ***IT THROWS WHEN THE SEAT DID NOT RUN, RATHER THAN RETURNING ''.***  An empty
+# string would read as "SD printed nothing" and every check below the call would
+# then fail for a reason invisible in its own output - the null case the
+# instrument rules exist to stop.  The message carries the seat's Why and its
+# Detail (task id, LastTaskResult).
+function Invoke-SdSeatText {
+    param(
+        [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [AllowNull()] [AllowEmptyString()] [string[]] $Commands,
+        [int]    $TimeoutSec = 90,
+        [string] $WorkDir    = ''
+    )
+    if (@($Commands | Where-Object { $_ -match '\S' }).Count -eq 0) {
+        throw 'the SDSYS seat was given no commands - there is nothing to run'
+    }
+    $r = Invoke-SdViaSeat -Commands @(Expand-SeatCommands $Commands) -TimeoutSec $TimeoutSec -WorkDir $WorkDir
+    if (-not $r.Ok) { throw ('the SDSYS seat did not run: ' + $r.Why + '  [' + $r.Detail + ']') }
+    return $r.Text
+}

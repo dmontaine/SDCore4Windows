@@ -94,15 +94,19 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 
 # Drives an SD session from SDSYS; verify-scramlogin's shape, with the TERM
 # re-issued after every LOGTO because LOGIN resets terminal geometry.
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot, witnessed 18/18 on 19 Sep).  THE "LOGTO SDSYS" PREFIX THIS USED
+# TO SEND IS REFUSED (10002) FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS
+# ACCOUNT with an elevated, interactive token, and an elevated Don is not one.  So
+# the commands go to a task inside SDSYS's own live session and the text comes back
+# through a file.  The TERM handling this function carried - first line, and again
+# after every LOGTO - lives in the helper now (Expand-SeatCommands) with its own
+# guard.  THE "LOGTO $upper" CALLS BELOW STILL WORK: SDSYS -> a personal account is
+# allowed; only the way BACK (LOGTO SDSYS) is refused, and nothing here goes back.
+# A seat that did not run THROWS rather than returning '' (Invoke-SdSeatText).
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 function Stop-SD {
@@ -232,6 +236,10 @@ try {
     # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
     # (createa's keyword case, sysmsg 2018 - the whole command stops and no
     # account is made), so the access keyword is the whole of the line.
+    # 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
+    # missing SDSYS session is exit 2 ("could not run") and not a thrown error at the
+    # first SD call that reads as a product failure.  See sdsys-seat.ps1.
+    Assert-SdSeat -Label 'verify-apiwire'
     $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix API", $winPw, $winPw)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upper))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $Prefix." }
     $madeAcct = $true

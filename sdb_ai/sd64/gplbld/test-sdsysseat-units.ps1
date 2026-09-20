@@ -201,6 +201,68 @@ $r = Invoke-SdViaSeat -Commands @('WHO') -WorkDir $wd
 Check 'a runner that says Ok but wrote NO FILE is refused (the null case)' (-not $r.Ok) 'no file, and it was accepted'
 
 # ---------------------------------------------------------------------------
+Section '3b. the shared TERM handling and the throwing wrapper (the mechanical group)'
+$e = @(Expand-SeatCommands @('CT VOC X'))
+Check 'TERM 200,9999 is the FIRST line, then the command' ($e.Count -eq 2 -and $e[0] -eq 'TERM 200,9999' -and $e[1] -eq 'CT VOC X') ($e -join ' / ')
+$e = @(Expand-SeatCommands @('LOGTO ZZ', 'CT A', '  logto QQ', 'CT B'))
+$want = @('TERM 200,9999', 'LOGTO ZZ', 'TERM 200,9999', 'CT A', '  logto QQ', 'TERM 200,9999', 'CT B')
+Check 'TERM is re-issued after EVERY LOGTO (LOGIN resets the geometry on each switch)' (($e -join '|') -ceq ($want -join '|')) ($e -join ' / ')
+Check 'the match is case-insensitive and tolerates leading space (both LOGTOs were followed)' ($e.Count -eq 7) "count=$($e.Count)"
+$e = @(Expand-SeatCommands @('LOGTOX', 'DELETE.ACCOUNT LOGTOFOO'))
+Check 'a word that merely STARTS with LOGTO is not a LOGTO (no extra TERM)' ($e.Count -eq 3) ($e -join ' / ')
+$e = @(Expand-SeatCommands @('WHO'))
+Check 'a single command still comes back as an array of two, not unrolled to a string' ($e.Count -eq 2) "count=$($e.Count)"
+
+$script:SeatTestHooks = $hooks
+$script:behave = { param($o) [IO.File]::WriteAllText($o, (Report 'ace\SDSYS' 'True' 'True' "`n:WHO`n44 SDSYS")); return @{ Ok = $true; Detail = 'fake'; Why = '' } }
+$t = Invoke-SdSeatText -Commands @('WHO') -WorkDir $wd
+Check 'Invoke-SdSeatText returns the TEXT, a string, not a result object' (($t -is [string]) -and $t -match '44 SDSYS') ("type=" + $t.GetType().Name)
+Check 'and the input it sent starts with the newline sink, then TERM, then the command, then OFF' ($script:seenIn -ceq "`nTERM 200,9999`nWHO`nOFF`n") ($script:seenIn -replace "`n", '~')
+$threw = ''
+$script:behave = { param($o) return @{ Ok = $false; Detail = 'task X, LastTaskResult 267011'; Why = 'the task wrote no report within 90s' } }
+try { $null = Invoke-SdSeatText -Commands @('WHO') -WorkDir $wd } catch { $threw = $_.Exception.Message }
+Check 'a seat that did not run THROWS rather than returning an empty string' ($threw -match 'did not run') "threw='$threw'"
+Check '... and the throw carries the seat''s reason and its detail' ($threw -match 'no report' -and $threw -match '267011') $threw
+$threw = ''
+try { $null = Invoke-SdSeatText -Commands @() -WorkDir $wd } catch { $threw = $_.Exception.Message }
+Check 'no commands THROWS (the binder does not answer for it)' ($threw -match 'no commands') "threw='$threw'"
+$threw = ''
+try { $null = Invoke-SdSeatText -Commands @('', '  ') -WorkDir $wd } catch { $threw = $_.Exception.Message }
+Check 'only-blank commands THROW too' ($threw -match 'no commands') "threw='$threw'"
+$script:SeatTestHooks = $null
+
+# Assert-SdSeat ENDS THE CALLING SCRIPT with exit 2, so it can only be observed
+# from OUTSIDE one: each case is a tiny script run in a child process, with the
+# hooks set inside it.  The exit code and the text are the whole assertion.
+function Invoke-AssertChild([string]$name, [string]$hooksLiteral) {
+    $p = Join-Path $tmp ('assert-' + $name + '.ps1')
+    $body = @(
+        ('. ''' + $modPath + ''''),
+        ('$script:SeatTestHooks = ' + $hooksLiteral),
+        ('Assert-SdSeat -Label ''verify-fixture'' -WorkDir ''' + (Join-Path $tmp ('awork-' + $name)) + ''''),
+        'Write-Output ''REACHED-AFTER-ASSERT''')
+    Set-Content -LiteralPath $p -Value $body -Encoding UTF8
+    $o = & powershell -NoProfile -ExecutionPolicy Bypass -File $p 2>&1 | ForEach-Object { [string]$_ }
+    return @{ Code = $LASTEXITCODE; Text = ($o -join "`n") }
+}
+$goodRun = '{ param($Ps1,$OutFile,$Seconds,$Account) $t = ''SEAT identity=ace\SDSYS admin=True interactive=True'' + "`n" + ''__BODY__'' + "`nENDOFSEAT"; [IO.File]::WriteAllText($OutFile, $t); return @{ Ok = $true; Detail = ''fake''; Why = '''' } }'
+$hk = { param($body, $elevated = '$true', $qw = '''   SDSYS   9  Disc''')
+        '@{ Elevated = ' + $elevated + '; Qwinsta = @(' + $qw + '); SdExe = ''x''; Runner = ' + ($goodRun.Replace('__BODY__', $body)) + ' }' }
+
+$c = Invoke-AssertChild 'good' (& $hk '44 SDSYS')
+Check 'Assert-SdSeat on a good seat CONTINUES (exit 0, the script reaches the next line)' ($c.Code -eq 0 -and $c.Text -match 'REACHED-AFTER-ASSERT') "exit=$($c.Code) $($c.Text)"
+Check '... and prints SD''s raw WHO answer (the rule: show the output every time)' ($c.Text -match '44 SDSYS' -and $c.Text -match 'what SD said to WHO') $c.Text
+$c = Invoke-AssertChild 'nosess' (& $hk '44 SDSYS' '$true' '''>console  Don  2  Active''')
+Check 'Assert-SdSeat with NO SDSYS session ends the script with EXIT 2, not 1' ($c.Code -eq 2 -and $c.Text -notmatch 'REACHED-AFTER-ASSERT') "exit=$($c.Code)"
+Check '... and names the precondition and the login name' ($c.Text -match 'seat did not run' -and $c.Text -match 'login name SDSYS') $c.Text
+$c = Invoke-AssertChild 'notelev' (& $hk '44 SDSYS' '$false')
+Check 'Assert-SdSeat from a non-elevated caller is exit 2' ($c.Code -eq 2 -and $c.Text -match 'not elevated') "exit=$($c.Code) $($c.Text)"
+$c = Invoke-AssertChild 'refused' (& $hk 'SDSYS Account access is restricted to privileged users')
+Check 'a seat that ran but whose SD REFUSED (the refusal wording) is exit 2 - anchored on success, not on the name' ($c.Code -eq 2 -and $c.Text -match 'did not answer WHO as SDSYS') "exit=$($c.Code) $($c.Text)"
+$c = Invoke-AssertChild 'nowho' (& $hk 'something else entirely')
+Check 'a WHO answer with no "<n> SDSYS" is exit 2' ($c.Code -eq 2) "exit=$($c.Code)"
+
+# ---------------------------------------------------------------------------
 Section '4. the generated script, EXECUTED, against a fake sd.exe'
 $fakeSd = Join-Path $tmp 'fake-sd.cmd'
 Set-Content -LiteralPath $fakeSd -Value @('@echo off', '@findstr "^"') -Encoding ASCII
@@ -274,6 +336,22 @@ foreach ($m in $mutants) {
     $mut = & { . $sb; ConvertFrom-SeatReport -Raw $m.Raw -Account 'SDSYS' }
     Check ("LIVE refuses the fixture for {0}" -f $m.What) (-not $live.Ok) 'the live file accepted it'
     Check ("the MUTANT (no {0}) ACCEPTS it - the fixture can tell them apart" -f $m.What) ($mut.Ok) 'the mutant refused too: this fixture proves nothing'
+}
+# A fifth mutant, of a different KIND: not a validator refusal but a line that
+# must be present for the output to be right.  With the after-LOGTO TERM removed,
+# a LOGTO's geometry reset is never undone and a long LIST after it paginates on
+# a pipe that cannot answer - the hang this handling exists to prevent.
+$tag = 'MUT-TERMAFTER'
+$tagged = @([regex]::Matches($modText, '(?m)^.*#' + [regex]::Escape($tag) + '\s*$'))
+Check ("{0} appears on exactly one line of the live module" -f $tag) ($tagged.Count -eq 1) ("found $($tagged.Count)")
+if ($tagged.Count -eq 1) {
+    $mutText = $modText.Replace($tagged[0].Value, '')
+    Check 'the mutant really differs from the live file (the after-LOGTO TERM removed)' ($mutText -ne $modText) 'the mutation changed nothing'
+    $liveN = @(Expand-SeatCommands @('LOGTO ZZ', 'CT A')).Count
+    $sb = [scriptblock]::Create($mutText)
+    $mutN = & { . $sb; @(Expand-SeatCommands @('LOGTO ZZ', 'CT A')).Count }
+    Check 'LIVE re-issues TERM after the LOGTO (4 lines)' ($liveN -eq 4) "live=$liveN"
+    Check 'the MUTANT does not (3 lines) - the fixture can tell them apart' ($mutN -eq 3) "mutant=$mutN"
 }
 $after = (Get-FileHash -LiteralPath $modPath -Algorithm SHA256).Hash
 Check 'the live module is byte-identical after the mutants (SHA-256)' ($after -eq $liveHash) "before=$liveHash after=$after"

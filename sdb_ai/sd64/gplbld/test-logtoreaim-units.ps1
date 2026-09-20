@@ -111,13 +111,9 @@ $DECLARED = [ordered]@{
     'probe-osex.ps1'              = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'probe-tasklock.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-accountacl.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-accountrules.ps1'     = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-acctmsgs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
-    'verify-apiname.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-apiport.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-apiremote.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-apiwire.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-catgate.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     # verify-createaccount.ps1 IS NOT HERE: IT WAS CONVERTED (20 Sep 2026, the
     # PILOT for sdsys-seat.ps1) - its SD calls now run as a task inside SDSYS's
@@ -126,23 +122,27 @@ $DECLARED = [ordered]@{
     # STALE DECLARATION and fails the partition check below.  Each further
     # conversion deletes its row the same way, and the count printed at the end
     # falls by one.
+    #
+    # ***THE MECHANICAL GROUP IS NOT HERE EITHER - CONVERTED THE SAME DAY (20 Sep
+    # 2026) AFTER THE PILOT PASSED 18/18 ON A REAL MACHINE:*** verify-accountacl,
+    # verify-apiname, verify-apiport, verify-apiwire, verify-delacc-xref,
+    # verify-profiledir, verify-scramlogin, verify-vocwrite.  Their Invoke-SD is a
+    # one-line call to Invoke-SdSeatText and each proves the seat with
+    # Assert-SdSeat before creating anything.  BUILT AND FREE-TIER GREEN, NOT YET
+    # WITNESSED ON A REAL MACHINE.
     'verify-createfilecase.ps1'   = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory lines' }
     'verify-delaccount.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-delacc-xref.ps1'      = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-dictrename.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-doors-admin.ps1'      = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-fold.ps1'             = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-nonet.ps1'            = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-nocaseupgrade.ps1'    = @{ Role = 'DRIVER'; Why = 'prefix sent unless -internal; the -internal leg is the one escape already in the tree' }
-    'verify-profiledir.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-pyapi.ps1'            = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
+    'verify-pyapi.ps1'           = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
     'verify-pygate.ps1'           = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-scramlogin.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-sshadmin.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder (also PENDING in test-acctkeywords-units.py for the ADMINISTRATOR keyword - two separate defects in one file)' }
+    'verify-sshadmin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder (also PENDING in test-acctkeywords-units.py for the ADMINISTRATOR keyword - two separate defects in one file)' }
     'verify-twins.ps1'            = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-uninstallchoices.ps1' = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-vocverbs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
-    'verify-vocwrite.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
 
     'verify-lcnames.ps1'          = @{ Role = 'CALLER_SUPPLIED'; Why = "Invoke-SD sends no prefix itself; the CALLERS' own command arrays open with the literal 'LOGTO SDSYS'" }
 
