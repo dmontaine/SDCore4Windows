@@ -97,23 +97,49 @@ if (-not (Test-Path -LiteralPath $cfg)) {
                 'SeBatchLogonRight')
     $lines = Get-Content -LiteralPath $cfg -Encoding Unicode
     $seen = 0
+
+    # The SIDs this account is judged by: its own, and every group it is in.
+    # A deny right on ANY of them lands on the account.
+    $mySids = @($sid)
+    foreach ($g in (Get-LocalGroup)) {
+        try {
+            if (Get-LocalGroupMember -Group $g.Name -ErrorAction Stop |
+                Where-Object { $_.SID.Value -eq $sid }) { $mySids += $g.SID.Value }
+        } catch { }
+    }
+    Say ('judged by ' + $mySids.Count + ' SID(s): its own and its groups')
+
     foreach ($w in $wanted) {
         $row = $lines | Where-Object { $_ -match ('^\s*' + $w + '\s*=') }
         if ($null -eq $row) { Say ("{0,-34} (not assigned to anybody)" -f $w); continue }
         $seen++
-        $vals = ($row -split '=', 2)[1].Trim() -split ','
-        $names = foreach ($v in $vals) {
-            $v = $v.Trim()
-            $n = $v
-            try {
-                if ($v.StartsWith('*')) {
-                    $n = (New-Object Security.Principal.SecurityIdentifier($v.Substring(1))
-                          ).Translate([Security.Principal.NTAccount]).Value + '  [' + $v.Substring(1) + ']'
-                }
-            } catch { $n = $v + '  [unresolvable]' }
-            $n
+        $vals = @(($row -split '=', 2)[1].Trim() -split ',' | ForEach-Object { $_.Trim() })
+
+        # ***THE VERDICT FIRST, THE LIST SECOND.***  The first version of this
+        # printed 47 raw SIDs on one line and left the reader to find the one
+        # that mattered by eye - which is rule 1 of the instrument section
+        # failing in the other direction: everything shown, nothing said.
+        $hit = @()
+        foreach ($v in $vals) {
+            $bare = $v.TrimStart('*')
+            if ($mySids -contains $bare) { $hit += $bare }
         }
-        Say ("{0,-34} {1}" -f $w, ($names -join ' ; '))
+        $named = @(); $dead = 0
+        foreach ($v in $vals) {
+            if (-not $v.StartsWith('*')) { $named += $v; continue }
+            try {
+                $named += (New-Object Security.Principal.SecurityIdentifier($v.Substring(1))
+                          ).Translate([Security.Principal.NTAccount]).Value
+            } catch { $dead++ }
+        }
+        Say ("{0,-34} {1} entr(y/ies): {2}{3}" -f $w, $vals.Count,
+             $(if ($named.Count) { $named -join ' ; ' } else { '(none that resolve)' }),
+             $(if ($dead) { "  + $dead SID(s) that no longer resolve (deleted accounts)" } else { '' }))
+        if ($hit.Count) {
+            Say ("   *** {0} APPLIES TO {1}, through SID {2} ***" -f $w, $Account, ($hit -join ', '))
+        } else {
+            Say ("   {0} does NOT apply to {1} - neither its SID nor any group it is in" -f $w, $Account)
+        }
     }
     if ($seen -eq 0) { Say 'REFUSED: not one of these rights was found in the export - the parse is blind' }
     Remove-Item -LiteralPath $cfg -ErrorAction SilentlyContinue
@@ -176,6 +202,43 @@ foreach ($r in ($rows | Sort-Object TimeCreated)) {
     }
     Write-Output ('  {0:HH:mm:ss}  {1,-26} {2}{3}' -f $r.TimeCreated, $what, $type, $status)
 }
+
+# ***AND THE SAME WINDOW WITHOUT THE NAME FILTER, WHICH IS THE ROW THAT
+# MATTERED ON 19 Sep 2026.***  The first run showed 112 rows naming SDSYS and
+# NOT ONE of them inside the minutes the owner was trying to sign in - every
+# row belonged to a probe spawn.  An absence measured through a filter is not
+# an absence: if a console attempt had been logged under a slightly different
+# name, or as a failure that names nobody, the filtered table could not show
+# it.  So the unfiltered count is printed beside it, and the two together are
+# what say "the operating system never began a logon" rather than "this script
+# did not find one".
+Head 'every logon row in the window, WHOEVER it names'
+$all = @()
+try {
+    $all = Get-WinEvent -FilterHashtable @{ LogName = 'Security'; StartTime = $since
+                                            Id = 4624, 4625 } -ErrorAction Stop
+} catch { Say ('could not be read: ' + $_.Exception.Message) }
+Say ("{0} logon row(s) in total, of which {1} name {2}" -f $all.Count, $rows.Count, $Account)
+$byMin = $all | Group-Object { '{0:HH:mm}' -f $_.TimeCreated } | Sort-Object Name
+foreach ($g in $byMin) {
+    $names = ($g.Group | ForEach-Object {
+        if ($_.Message -match '(?m)^\s*Account Name:\s*(\S.*)$') { $Matches[1].Trim() } else { '?' }
+    } | Sort-Object -Unique) -join ', '
+    Say ('{0}  {1,3} row(s)  {2}' -f $g.Name, $g.Count, $names)
+}
+
+# Winlogon's own notifications, which mark a session starting and ending even
+# when no credential was ever validated - the pairs the owner's attempts left.
+Head 'Winlogon notifications in the window (a session began and ended)'
+try {
+    $wl = Get-WinEvent -FilterHashtable @{ LogName = 'Application'
+                                           ProviderName = 'Microsoft-Windows-Winlogon'
+                                           StartTime = $since } -ErrorAction Stop
+    Say ("{0} row(s)" -f $wl.Count)
+    foreach ($e in ($wl | Sort-Object TimeCreated | Select-Object -Last 20)) {
+        Say ('{0:HH:mm:ss}  id {1}' -f $e.TimeCreated, $e.Id)
+    }
+} catch { Say ('none, or unreadable: ' + $_.Exception.Message) }
 
 Write-Output ''
 Write-Output 'READ IT LIKE THIS.  A 4625 names the refusal in its Status/Sub Status'
