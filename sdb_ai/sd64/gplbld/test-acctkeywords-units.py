@@ -60,20 +60,26 @@ DECLARED = {
 }
 
 # ***THE PARTITION'S SECOND HALF, AND IT IS NOT A WAY TO HIDE A RED ROW.***
-# These three do not carry a keyword by accident: their whole subject is the
+# These do not carry a keyword by accident: their whole subject is the
 # administrator ACCOUNT that 64 abolished, so deleting the word would leave a
 # rig measuring something that cannot exist.  64 names each of them under
 # "verifiers that retire or are rewritten" and RELEASE_1.1 76 tracks the work.
 # They print as PEND, loudly, with the entry that owes them; a PEND that has
 # stopped naming a refused keyword has been dealt with and its line here must
 # go, which is a FAIL rather than a quiet pass.
+#
+# ***verify-privundetermined.ps1 LEFT THIS TABLE ON 20 Sep 2026, AND THE ROW
+# ABOVE IS WHAT MADE IT LEAVE.***  Its Step 8 - the ADMINISTRATOR-tier
+# composition - was retired and its body deleted, so the file stopped naming a
+# refused keyword, and this guard went RED on the same run naming the stale
+# declaration.  That is the half of the partition nobody writes tests for, and
+# it worked on its first real use: the fix landed and the declaration would
+# otherwise have sat here claiming work that was already done.
 PENDING = {
     "verify-sshadmin.ps1":
         "the subject is an SD administrator account - RELEASE_1.1 64, 76",
     "verify-apiremote.ps1":
         "its admin leg creates one - RELEASE_1.1 64, 76",
-    "verify-privundetermined.ps1":
-        "the composition leg creates one - RELEASE_1.1 64, 76",
 }
 
 passed = 0
