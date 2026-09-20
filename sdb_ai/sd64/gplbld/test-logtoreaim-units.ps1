@@ -135,8 +135,12 @@ $DECLARED = [ordered]@{
     # and were re-built on the seat's -Internal switch, then passed.
     #
     # ***THE SUITE-STEP GROUP IS NOT HERE EITHER - CONVERTED 20 Sep 2026 (the
-    # morning after the mechanical group), NOT YET WITNESSED - SDSYS was no longer
-    # signed in:*** verify-twins,
+    # morning after the mechanical group).  WITNESSED THE SAME AFTERNOON, -Run b200
+    # and b201: fold, nonet, vocverbs, createfilecase, dictrename, twins,
+    # nocaseupgrade, pyapi and pygate pass through the seat; verify-accountrules
+    # ran through it too but its SUBJECT is stale (RELEASE_1.1 68 withdrew the
+    # refusal its step 1 expects, 64 abolished the ADOPT its step 4 tests) and it
+    # needs a rewrite.***  The group: verify-twins,
     # verify-nonet, verify-dictrename, verify-fold, verify-createfilecase,
     # verify-accountrules, verify-vocverbs, and then verify-pygate, verify-pyapi and
     # verify-nocaseupgrade.  Same shape as the mechanical group: a
