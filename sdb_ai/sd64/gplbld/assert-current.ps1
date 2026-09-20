@@ -1564,7 +1564,55 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # which is written three times in this tree and once more on
                   # the Linux side.  Source-only, ships nowhere; listed with
                   # the commit that creates it.
-                  'test-pwcomplex-units.ps1')
+                  'test-pwcomplex-units.ps1',
+                  # 19 Sep 26 - RELEASE_1.1 76's guard over the account
+                  # keywords 64 made syntax errors, and 78's two probes.
+                  # ***ALL THREE LISTED LATE, THE DAY AFTER THEY WERE
+                  # CREATED***, which is the omission the two notes above
+                  # describe, arrived at again by an author who had just read
+                  # them.  It cost nothing only because nothing edited them
+                  # before it was noticed - the trap springs once a script is
+                  # newer than the install - and the cure on offer would have
+                  # been a full cycle for three files that ship nowhere.
+                  #
+                  # ***AND THE DIRECTORY WAS SWEPT RATHER THAN THE NAMES
+                  # ADDED, WHICH IS WHAT THE EARLIER NOTES ASK FOR.  IT DID
+                  # NOT COME BACK CLEAN, AND THE EARLIER NOTES' "STILL THE
+                  # ONLY OMISSION" NO LONGER HOLDS.***  Sixteen gplbld files
+                  # were named in neither stage.py, sd.iss nor this list
+                  # (README.md makes seventeen and is documentation, which
+                  # Test-IsSdSource drops).  Four are now listed - the two
+                  # free guards and the two probes above - and the other
+                  # TWELVE are LEFT WATCHED DELIBERATELY, so the reason is
+                  # recorded here rather than rediscovered: COMP_PCODE,
+                  # CREATE_INSTALL_DICT_FILE and INSTALL_FILE_INFO are BASIC
+                  # source the pcode build reads (pcode_bld.py:125), so a
+                  # change to one CAN reach the install and should charge a
+                  # cycle; and probe-pipestd{,-child}.c, probe-sessionpipe
+                  # {,-child}.c, probe-sessionsp{,-child,-cyg}.c and
+                  # probe-relaycutover{,-drive}.c are answered probes nobody
+                  # is editing - listing them would be exempting files at rest
+                  # rather than files in hand, which is how a list of names
+                  # turns into a list nobody can justify.
+                  #
+                  # ***AND THE SWEEP HAS A TRAP OF ITS OWN, PAID FOR HERE:
+                  # NAMING A FILE IN THESE COMMENTS MAKES A NAME-BASED SWEEP
+                  # THINK IT IS LISTED.***  The obvious sweep asks whether the
+                  # file name appears in stage.py, sd.iss or this script - and
+                  # the three BASIC sources above vanished from its output the
+                  # moment this paragraph mentioned them, while they are still
+                  # watched and still should be.  A sweeper wanting the real
+                  # answer must read the ARRAY, not the file.
+                  'test-acctkeywords-units.py',
+                  'probe-sdsyslogon.ps1', 'probe-sdsysseat.ps1',
+                  # 19 Sep 26 - the free guard that keeps a message number
+                  # reserved by the SD Core for Linux port from being
+                  # re-allocated here.  A DELETION in one port is as invisible
+                  # to the other as an allocation: 64 deleted 10174, it is
+                  # live on Linux, and every scan of this tree reports it free.
+                  # Reads sdsys/messages and nothing else; source-only, ships
+                  # nowhere, listed with the commit that creates it.
+                  'test-msgreserved-units.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.
