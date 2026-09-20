@@ -251,6 +251,74 @@ try {
 }
 
 # --------------------------------------------------------------------------
+# 20 Sep 26 - RELEASE_1.1 81.  THE ROW THAT MATTERS HERE IS "a # comment that
+# MENTIONS <#", because it is the one a naive fix gets wrong and it is the one
+# this tree actually writes: strip-comments.ps1's own header, and
+# test-logtoreaim-units.ps1's table, both discuss "<# #>" inside ordinary "#"
+# comments.  A stripper that ran a block pass BEFORE the hash pass would open a
+# block on that line and swallow every line down to the next "#>" ANYWHERE in
+# the file - a silent over-strip, which for assert-current's caller is the
+# expensive direction its own header names.  Every other row below passes under
+# that broken ordering; only this one fails.
+Section '4a. the hashblock kind, for .ps1'
+$fx4 = Join-Path ([System.IO.Path]::GetTempPath()) ('stripfx-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+Set-Content -LiteralPath $fx4 -Value @(
+    '<#',
+    '.SYNOPSIS',
+    '    help prose naming secret-sixteen',
+    '.DESCRIPTION',
+    '    more prose naming secret-seventeen, with no hash of its own',
+    '#>',
+    "$" + "keep1 = 'kept-sixteen'",
+    "$" + "keep2 = 'kept-seventeen'   # trailing remark naming secret-eighteen",
+    '# a whole-line remark that MENTIONS <# and does not close it',
+    "$" + "keep3 = 'kept-eighteen'",
+    "$" + "keep4 = 'kept-nineteen' <# an inline block naming secret-nineteen #> + 'kept-twenty'",
+    '<# an unterminated block opens here, naming secret-twenty'
+) -Encoding ASCII
+try {
+    $t4 = Get-StrippedText -Path $fx4 -Kind 'hashblock'
+    Check 'a <# #> help block is stripped'            ($t4 -notmatch 'secret-sixteen')    `
+          'comment-based-help prose is reaching the caller as live script text'
+    Check 'a block line with no # of its own is stripped too' ($t4 -notmatch 'secret-seventeen') `
+          'only the lines carrying a # were being cut, which is the whole defect'
+    Check 'code after the closing #> survives'        ($t4 -match 'kept-sixteen')         `
+          'the block state never cleared, so the rest of the file was eaten'
+    Check 'a trailing # remark is still stripped'     ($t4 -notmatch 'secret-eighteen')   `
+          'the block rule displaced the plain hash rule instead of joining it'
+    Check 'code before that trailing # survives'      ($t4 -match 'kept-seventeen')       $null
+
+    Check 'a # comment MENTIONING <# does NOT open a block' ($t4 -match 'kept-eighteen')  `
+          ('THE ORDERING ROW: a block pass run before the hash pass opens a block on a ' +
+           'line comment that merely discusses one, and swallows the file from there')
+
+    Check 'an inline <# #> span is removed'           ($t4 -notmatch 'secret-nineteen')   $null
+    Check 'code BEFORE an inline span survives'       ($t4 -match 'kept-nineteen')        $null
+    Check 'code AFTER an inline span survives'        ($t4 -match 'kept-twenty')          `
+          'the machine stopped at the span instead of resuming after it'
+    Check 'an unterminated block runs to end of file' ($t4 -notmatch 'secret-twenty')     $null
+} finally {
+    Remove-Item -LiteralPath $fx4 -Force -ErrorAction SilentlyContinue
+}
+
+# ***THE REFUSAL, AND IT IS THE HALF THAT KEEPS THE FIX FROM ROTTING.***  'hash'
+# is the obvious name and a later caller with a .ps1 in hand would reach for it;
+# that is exactly how the 655 leaked lines happened.  So the pair is refused at
+# the call site rather than answered wrongly.  Driven on a path that does not
+# exist, because the refusal must come BEFORE the Test-Path early return - a
+# caller that got the Kind wrong should hear about the Kind, not receive an
+# empty result it will read as "no hits".
+$ghost = Join-Path ([System.IO.Path]::GetTempPath()) 'no-such-file-xyz.ps1'
+$refused = $false
+try { $null = Get-StrippedLines -Path $ghost -Kind 'hash' } catch { $refused = $true }
+Check "Kind 'hash' on a .ps1 is REFUSED, even for a missing file" $refused `
+      'a caller can still strip a .ps1 with the kind that cannot see its block comments'
+$stillOk = $true
+try { $null = Get-StrippedLines -Path $stageP -Kind 'hash' } catch { $stillOk = $false }
+Check "Kind 'hash' on a .py is still accepted" $stillOk `
+      'the refusal is too wide and has broken assert-current, whose stage.py read is correct'
+
+# --------------------------------------------------------------------------
 # 19 Sep 26 - RELEASE_1.1 69.  THE ROW THAT MATTERS HERE IS THE TRAILING ";*",
 # because this tree echoes a message's own text after the call that displays it
 # ("display sysmsg(10170) ;* Every registered account ..."), and an unstripped

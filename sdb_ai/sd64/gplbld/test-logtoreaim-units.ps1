@@ -19,9 +19,18 @@
     stays true as files change.
 
     ***IT USES THE SHARED STRIPPER, NOT A COPY.***  gplbld/strip-comments.ps1
-    is dot-sourced directly - Get-StrippedLines's 'hash' kind, the same
+    is dot-sourced directly - Get-StrippedLines's 'hashblock' kind, the same
     function assert-current.ps1 and the wording lint already trust - so this
     guard can never disagree with them about what counts as a comment.
+    ***'hashblock' RATHER THAN 'hash' SINCE 20 Sep 2026, RELEASE_1.1 81***:
+    'hash' knows only "#" to end of line, and building this guard is what found
+    that PowerShell's block-comment form was invisible to it.  'hash' is now
+    REFUSED on a .ps1 outright, so this call site cannot quietly drift back.
+
+    (That form is not spelled out here, and the reason is worth the line: the
+    first draft of this paragraph WROTE it, the closing delimiter ended this
+    very help block forty lines early, and the file stopped parsing.  The same
+    shape the fix is about, one level up.)
 
     ***A LIVE "LOGTO SDSYS" IS NOT ONE THING, AND SORTING THEM MATTERS.***
     Reading every hit by hand (20 Sep 2026) found four different roles wearing
@@ -142,19 +151,26 @@ $DECLARED = [ordered]@{
     'test-lcnameslegs-units.ps1'  = @{ Role = 'FIXTURE'; Why = 'embeds a synthetic script as test data; no live invocation of its own' }
     'test-sdtestuser-units.ps1'   = @{ Role = 'FIXTURE'; Why = "asserts sdtestuser-admin.ps1's OWN source contains the prefix - must be edited in lockstep the day that driver is re-aimed, or it will fail asserting a prefix the product no longer sends" }
 
-    # ***COMMENT, BUT INVISIBLE TO THE 'hash' STRIPPER - A GAP FOUND BUILDING
-    # THIS GUARD, NOT FIXED HERE.***  Get-StrippedLines's 'hash' Kind truncates
-    # a line at its first '#'; it has no idea of PowerShell's <# ... #> BLOCK
-    # comment, so a prose line inside a comment-based-help header that happens
-    # to carry no '#' of its own (most of them) passes through unstripped.
-    # Both of these are entirely inside a <# .SYNOPSIS / .DESCRIPTION #> block
-    # - read and confirmed by hand, 20 Sep 2026 - and neither sends anything.
-    # ***THIS LIKELY ALSO AFFECTS assert-current.ps1's SHIP-DETECTION AND
-    # test-retired-wording-units.ps1's LINT, BOTH OF WHICH USE THE SAME 'hash'
-    # KIND ON .ps1 FILES*** - not verified here, not this entry's to fix, and
-    # named so it is not lost.
-    'probe-sdsysseat.ps1'         = @{ Role = 'COMMENT'; Why = 'inside its <# #> help block, no live "#" on the line - a strip-comments.ps1 gap, not a driver' }
-    'verify-routes.ps1'           = @{ Role = 'COMMENT'; Why = 'inside its <# #> help block, describing the OLD file it replaced - a strip-comments.ps1 gap, not a driver' }
+    # ***THERE IS NO "COMMENT" ROLE ANY MORE, AND ITS DISAPPEARANCE IS THE
+    # POINT.***  20 Sep 26, RELEASE_1.1 81.  This table used to carry two -
+    # probe-sdsysseat.ps1 and verify-routes.ps1 - whose "LOGTO SDSYS" sat
+    # inside a <# .SYNOPSIS #> help block that the stripper's 'hash' Kind could
+    # not see, so they arrived here looking live and had to be declared away by
+    # hand.  81 gave the stripper a 'hashblock' Kind that reads the block, and
+    # the two rows stopped being reachable: they are comments now, to the
+    # instrument as well as to a reader, so the guard never sees them.
+    #
+    # ***A DECLARATION THAT EXISTS ONLY TO EXCUSE AN INSTRUMENT'S BLIND SPOT IS
+    # A BUG WEARING A TABLE ROW.***  Deleting these two is what fixing the
+    # stripper LOOKS like from here, and it is why the partition check that
+    # fails a stale declaration is the row that matters: it is what forced the
+    # deletion in the same commit rather than leaving two dead excuses behind.
+    #
+    # The gap was also predicted to affect assert-current.ps1's ship-detection.
+    # ***CHECKED, 20 Sep 2026: IT DOES NOT.***  That script strips only
+    # stage.py ('hash') and sd.iss ('iss'), and stage.py contains no "<#" at
+    # all - Python has no such form.  The wording lint WAS affected: 655 lines
+    # across 19 files.  Measured, not assumed, and recorded in 81.
 }
 
 $ROLES_NEEDING_REAIM = @('DRIVER', 'CALLER_SUPPLIED', 'DRIVER+GATE')
@@ -169,7 +185,7 @@ Write-Output ''
 # comparison, and reported "0 live" everywhere - a confident, wrong all-clear.
 # If this control ever fails, nothing below can be trusted.
 $controlFile = Join-Path $gplbld 'verify-createaccount.ps1'
-$controlLines = @(Get-StrippedLines -Path $controlFile -Kind hash)
+$controlLines = @(Get-StrippedLines -Path $controlFile -Kind hashblock)
 $controlHit = @($controlLines | Where-Object { $_.Text -match $rx })
 Check 'CONTROL: the stripper finds a known-live LOGTO SDSYS line (verify-createaccount.ps1)' `
       ($controlHit.Count -ge 1) ("found " + $controlHit.Count + " - the stripper or its key names are wrong")
@@ -181,8 +197,9 @@ if ($controlHit.Count -eq 0) {
 
 # --- the scan ----------------------------------------------------------------
 # EXCLUDES ITS OWN FILE.  $DECLARED's Why-strings quote the very phrase this
-# scans for, in double-quoted PowerShell strings the 'hash' stripper cannot
-# tell from code - so without this a guard would fail naming itself.
+# scans for, in double-quoted PowerShell strings no stripper can tell from
+# code - so without this a guard would fail naming itself.  'hashblock' does
+# not help here and is not meant to: those strings ARE live script text.
 $selfName = Split-Path -Leaf $PSCommandPath
 $scripts = @(Get-ChildItem -LiteralPath $gplbld -Filter *.ps1 -File | Where-Object { $_.Name -ne $selfName })
 Check 'CONTROL: the gplbld directory has a full set of scripts (150+)' `
@@ -190,7 +207,7 @@ Check 'CONTROL: the gplbld directory has a full set of scripts (150+)' `
 
 $found = [ordered]@{}
 foreach ($f in ($scripts | Sort-Object Name)) {
-    $stripped = @(Get-StrippedLines -Path $f.FullName -Kind hash)
+    $stripped = @(Get-StrippedLines -Path $f.FullName -Kind hashblock)
     $hit = @($stripped | Where-Object { $_.Text -match $rx })
     if ($hit.Count -gt 0) { $found[$f.Name] = $hit }
 }

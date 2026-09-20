@@ -225,7 +225,10 @@ if (-not (Test-Path -LiteralPath $fw)) {
     Write-Host '  REFUSED: api-firewall.ps1 not found beside sd.iss.' -ForegroundColor Red
     exit 2
 }
-$fwLines = @(Get-StrippedLines -Path $fw -Kind 'hash')
+# 20 Sep 26 - "hashblock" is the .ps1 Kind now (RELEASE_1.1 81); 'hash' is
+# refused on a .ps1.  api-firewall.ps1 carries no <# #> block today, so this
+# changes no row here - it is the call site moving with the rule.
+$fwLines = @(Get-StrippedLines -Path $fw -Kind 'hashblock')
 Check 'api-firewall.ps1 declares -ScopeFile' 1 @($fwLines | Where-Object { $_.Text -match '\[string\]\$ScopeFile' }).Count
 Check 'it writes the file'                   1 @($fwLines | Where-Object { $_.Text -match 'WriteAllText\(\$ScopeFile' }).Count
 

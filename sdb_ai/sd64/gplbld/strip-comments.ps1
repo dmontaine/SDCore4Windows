@@ -115,10 +115,77 @@ function Remove-ParenStarComment([string]$line, [ref]$inComment) {
     return $out
 }
 
+# 20 Sep 26 - POWERSHELL'S "<# #>" BLOCK, AND THE ORDER OF THE TWO RULES IS THE
+# WHOLE PROBLEM.  RELEASE_1.1 81.  Neither rule is safe run before the other as
+# a separate pass, which is why this is ONE left-to-right machine and not a
+# third Remove-* function stacked in front of the hash truncation:
+#
+#   * HASH FIRST eats the block's own opener.  "<#" contains a "#", so
+#     truncating at the first "#" leaves "<" and the block is never seen.
+#   * BLOCK FIRST eats the rest of the FILE the moment an ordinary "#" comment
+#     mentions "<#" - which this tree's comments do, because they document this
+#     very gap.  test-logtoreaim-units.ps1:146-148 is exactly that line, and it
+#     would have opened a block running to the next "#>" anywhere below.
+#
+# SO THE MACHINE DECIDES AT EACH "#" WHICH RULE IT IS UNDER: preceded by "<" it
+# opens a block, otherwise it ends the line and everything after it goes.  A "#"
+# mentioned inside a line comment is therefore never read as an opener, because
+# the line comment has already ended the line.
+#
+# The same string caveat as "hash": a "<#" inside a string literal opens a
+# block.  Bounded by the caller's own controls, which is this file's standing
+# policy, and test-retired-wording-units' control would report it as an
+# over-strip rather than as a silent pass.
+function Remove-HashComment([string]$line, [ref]$inBlock) {
+    $out = ''
+    $i   = 0
+    while ($i -lt $line.Length) {
+        if ($inBlock.Value) {
+            $j = $line.IndexOf('#>', $i)
+            if ($j -lt 0) { return $out }          # block runs past end of line
+            $inBlock.Value = $false
+            $i = $j + 2
+            continue
+        }
+        $h = $line.IndexOf('#', $i)
+        if ($h -lt 0) { $out += $line.Substring($i); break }
+        if ($h -gt $i -and $line[$h - 1] -eq '<') {
+            $out += $line.Substring($i, $h - 1 - $i)   # text before the "<#"
+            $inBlock.Value = $true
+            $i = $h + 1
+            continue
+        }
+        # NO THIRD BRANCH FOR "$h -eq $i WITH A '<' BEHIND IT".  A first draft
+        # had one and it is unreachable: the loop only re-enters this arm just
+        # after an opener (previous char "#") or just after a closer (previous
+        # char ">"), so the character before $i is never "<".  Left as a note
+        # rather than as code, because a branch nothing can reach is a branch
+        # nothing can test.
+        $out += $line.Substring($i, $h - $i)            # line comment: rest goes
+        break
+    }
+    return $out
+}
+
 # THE KINDS ARE NAMED BY WHAT THEY COMMENT WITH, NOT BY EXTENSION, and "hash"
-# covers .ps1 AND .py deliberately: both take "#" to end of line and neither
-# caller has a file where the difference would show.  Naming it for the syntax
-# stops a third caller assuming a Python-specific rule that is not here.
+# covers .py: it takes "#" to end of line and nothing else.
+#
+# 20 Sep 26 - "hashblock" IS THE .ps1 KIND, AND THE SENTENCE THAT USED TO STAND
+# HERE WAS FALSIFIED BY MEASUREMENT.  RELEASE_1.1 81.  It read: *"hash covers
+# .ps1 AND .py deliberately ... neither caller has a file where the difference
+# would show"*.  A caller does.  test-retired-wording-units.ps1 strips every
+# non-test, non-verify gplbld .ps1 with "hash", and 655 LINES of "<# #>" prose
+# across 19 files were reaching its corpus as live script text - in a tree whose
+# documented habit is to QUOTE the retired wording in a comment beside the fix,
+# which is the exact shape PRE_RELEASE 131 created this file to stop.
+#
+# ***THE WRONG KIND IS REFUSED RATHER THAN LEFT TO THE CALLER'S JUDGEMENT.***
+# "hash" is the obvious name, and a later caller reaching for it with a .ps1 in
+# hand would silently reinstate this defect.  Get-StrippedLines throws on that
+# pair, so the mistake is loud at the call site instead of quiet in the answer.
+# The other direction is NOT policed: "hashblock" on a .py file is harmless
+# unless a literal contains "<#", and a rule for that would add a failure mode
+# to prevent a hypothetical.
 #
 # WHAT IS DELIBERATELY NOT DONE: a "#" inside a string literal still ends the
 # line.  Doing it properly means a string parser per language, and the cost of
@@ -148,8 +215,17 @@ function Remove-ParenStarComment([string]$line, [ref]$inComment) {
 function Get-StrippedLines {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
-        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash', 'basic')] [string] $Kind
+        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash', 'hashblock', 'basic')] [string] $Kind
     )
+
+    # 20 Sep 26 - RELEASE_1.1 81.  BEFORE Test-Path, so a missing .ps1 refuses
+    # too: a caller that got the Kind wrong should hear about the Kind, not be
+    # handed an empty result it will read as "no hits".
+    if ($Kind -eq 'hash' -and [System.IO.Path]::GetExtension($Path) -eq '.ps1') {
+        throw ("strip-comments: Kind 'hash' cannot read a .ps1 - it has no idea of " +
+               "PowerShell's <# #> block, so the prose inside one would be returned as " +
+               "live script text.  Use 'hashblock'.  (" + $Path + ")")
+    }
 
     $result = New-Object System.Collections.ArrayList
     # NO UNARY COMMA ON EITHER RETURN, AND IT WAS THERE FOR ONE RUN.  The comma
@@ -165,12 +241,15 @@ function Get-StrippedLines {
     $inCode    = $false
     $inComment = $false
     $inParen   = $false
+    $inBlock   = $false
 
     foreach ($rawLine in (Get-Content -LiteralPath $Path)) {
         $n++
         $t = [string]$rawLine
         if ($Kind -eq 'hash') {
             $i = $t.IndexOf('#'); if ($i -ge 0) { $t = $t.Substring(0, $i) }
+        } elseif ($Kind -eq 'hashblock') {
+            $t = Remove-HashComment $t ([ref]$inBlock)
         } elseif ($Kind -eq 'basic') {
             $lead = $t.TrimStart()
             if ($lead.StartsWith('*') -or $lead.StartsWith('!')) {
@@ -215,7 +294,11 @@ function Get-StrippedLines {
 function Get-StrippedText {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
-        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash', 'basic')] [string] $Kind
+        # 20 Sep 26 - RELEASE_1.1 81.  THE TWO ValidateSets MUST BE ADDED TO
+        # TOGETHER, and this file has already paid for forgetting: a Kind added
+        # to Get-StrippedLines and not to this wrapper made every caller of the
+        # wrapper throw on a Kind the other function accepted.
+        [Parameter(Mandatory = $true)] [ValidateSet('iss', 'hash', 'hashblock', 'basic')] [string] $Kind
     )
     return (((Get-StrippedLines -Path $Path -Kind $Kind) | ForEach-Object { $_.Text }) -join "`n")
 }

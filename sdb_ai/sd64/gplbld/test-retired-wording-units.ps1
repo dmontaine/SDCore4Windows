@@ -381,7 +381,16 @@ $issPath = "$gplbld/sd.iss"
 if (Test-Path -LiteralPath $issPath) { $scriptFiles += @{ Path = $issPath; Name = 'sd.iss'; Strip = 'iss' } }
 foreach ($f in (Get-ChildItem -LiteralPath $gplbld -File -Filter '*.ps1')) {
     if ($f.Name -like 'test-*' -or $f.Name -like 'verify-*') { continue }
-    $scriptFiles += @{ Path = $f.FullName; Name = $f.Name; Strip = 'hash' }
+    # 20 Sep 26 - "hashblock", NOT "hash".  RELEASE_1.1 81.  "hash" truncates a
+    # line at its first "#" and knows nothing of PowerShell's <# #> block, so
+    # 655 lines of comment-based-help prose across 19 of these files were
+    # reaching this corpus as live script text.  Nothing was firing on it, which
+    # is the only reason it went unnoticed - but this lint's whole subject is
+    # wording that a comment QUOTES beside the fix, so the day a registered
+    # phrase landed in a .SYNOPSIS it would have cried wolf on the documentation
+    # of the very fix it guards.  That is PRE_RELEASE 131 verbatim, from the one
+    # comment syntax the stripper it produced did not cover.
+    $scriptFiles += @{ Path = $f.FullName; Name = $f.Name; Strip = 'hashblock' }
 }
 
 # 02 Sep 26 - THE STRIPPERS MOVED TO strip-comments.ps1, PRE_RELEASE_FIXES 143.
