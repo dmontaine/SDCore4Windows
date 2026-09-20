@@ -155,6 +155,24 @@ if ($null -eq $secret -or $secret.Length -eq 0) {
 }
 $cred = New-Object System.Management.Automation.PSCredential(('.\' + $Account), $secret)
 
+# ***A TRANSCRIPT, BECAUSE THE 19 Sep RUN'S ANSWER SCROLLED OFF.***  Route C
+# failed and printed its Win32 error to a console the owner had already
+# scrolled past, so the one fact the run existed to produce could not be read
+# back.  VerifyInstall1 has kept a transcript since 22 Aug for exactly this;
+# a probe whose whole output is the result has no less need of one.  The
+# password cannot reach it: Read-Host -AsSecureString above echoes nothing,
+# and it is read before this starts.
+$logPath = Join-Path $WorkDir ('probe-sdsysseat-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+$transcribing = $false
+try {
+    Start-Transcript -LiteralPath $logPath -ErrorAction Stop | Out-Null
+    $transcribing = $true
+    Write-Output ('  transcript    : ' + $logPath)
+} catch {
+    Write-Output ('  transcript    : COULD NOT START - ' + $_.Exception.Message)
+    Write-Output '    (the run continues; read the console, and say so if a line is missing)'
+}
+
 # The report a spawned process writes.  whoami is deliberately beside the .NET
 # check: they share no code, so agreement is evidence and disagreement is a
 # finding.
@@ -412,9 +430,25 @@ function Invoke-ViaLinkedToken([string]$ps1, [string]$outFile, [int]$seconds) {
                            (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),
                            $cmd, $WorkDir, [ref]$pid2)
     if ($why -ne '') { return @{ Ok = $false; Task = ''; Why = $why } }
+
+    # ***"IT STARTED AND WROTE NOTHING" AND "IT NEVER STARTED" ARE DIFFERENT
+    # ANSWERS, AND THE 19 Sep RUN COULD NOT TELL THEM APART.***  The child's
+    # exit code is the thing that separates them: a PowerShell that could not
+    # find its script, or threw writing the report, exits non-zero and says so
+    # here rather than leaving an absent file to be read as a failed spawn.
+    $exitCode = '<still running>'
+    $p = Get-Process -Id $pid2 -ErrorAction SilentlyContinue
+    if ($null -ne $p) {
+        if ($p.WaitForExit($seconds * 1000)) { $exitCode = $p.ExitCode }
+    } else {
+        $exitCode = '<gone before it could be read>'
+    }
+
     $got = Wait-For $outFile $seconds
-    return @{ Ok = $got; Task = ('pid ' + $pid2)
-              Why = $(if ($got) { '' } else { 'the spawn produced no output within ' + $seconds + 's' }) }
+    return @{ Ok = $got; Task = ('pid ' + $pid2 + ', child exit code ' + $exitCode)
+              Why = $(if ($got) { '' } else {
+                        'the spawn produced no output within ' + $seconds +
+                        's (child exit code ' + $exitCode + ')' }) }
 }
 
 function Invoke-ViaStartProcess([string]$ps1, [string]$outFile, [int]$seconds) {
@@ -510,8 +544,7 @@ try {
         Write-Output '  option - the suite run from an SDSYS sign-in - or a deliberate decision'
         Write-Output '  about LocalAccountTokenFilterPolicy, which is a machine-wide UAC change'
         Write-Output '  and is the owner''s to make.'
-        Write-Output ("probe-sdsysseat: {0} passed, {1} failed" -f $pass, $fail)
-        exit 1
+        exit 1   # the counts and the transcript are closed by the finally
     }
 
     # ***MEASURED 19 Sep 2026 AND THE TWO ROUTES FAIL OPPOSITE HALVES.***  Route
@@ -601,10 +634,19 @@ Set-Content -LiteralPath '@@OUT@@' -Value (($out -join "`n") + "`nENDOFREPORT") 
         Write-Output ''
         Write-Output ("  {0} scheduled task(s) unregistered - no stored credential outlives this run" -f $tasksMade.Count)
     }
+    # THE SUMMARY IS WRITTEN HERE, INSIDE THE finally, so that it reaches the
+    # transcript on EVERY path - including the two "exit 1" arms above, which
+    # are the paths a reader most needs the counts from.  Stopping the
+    # transcript first and summarising after would have left the log ending
+    # mid-run, which is the defect this whole block is here to fix.
+    Write-Output ''
+    Write-Output ("probe-sdsysseat: {0} passed, {1} failed" -f $pass, $fail)
+    Write-Output ("  work directory left in place for reading: {0}" -f $WorkDir)
+    if ($transcribing) {
+        Write-Output ("  transcript    : " + $logPath)
+        Stop-Transcript | Out-Null
+    }
 }
 
-Write-Output ''
-Write-Output ("probe-sdsysseat: {0} passed, {1} failed" -f $pass, $fail)
-Write-Output ("  work directory left in place for reading: {0}" -f $WorkDir)
 if ($fail -gt 0) { exit 1 }
 exit 0
