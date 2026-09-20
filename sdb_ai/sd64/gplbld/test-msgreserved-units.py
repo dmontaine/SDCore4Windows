@@ -61,70 +61,65 @@ MESSAGES = os.path.normpath(os.path.join(HERE, os.pardir, "sdsys", "messages"))
 RESERVED = {
     "10174": ("SD Core for Linux", "19 Sep 2026",
               "apisrvr's refusal of a REMOTE session claiming SDSYS"),
+    # ***THE 10176-10181 COLLISION IS SETTLED AND THIS BLOCK IS WHAT IT BECAME
+    # - 20 Sep 2026, the two agents deciding it under the owner's delegation
+    # ("decide between the two how to synchronize the two systems").***  THE
+    # LINUX PORT MOVED; we keep 10176-10181, which are now simply ours and
+    # appear in neither table.  Their six are at 10190-10195 (SDCore4Linux
+    # 348a5f4) and must stay ABSENT here.
+    #
+    # WHY THEY MOVED AND NOT US, recorded because the reasoning is the useful
+    # part: their cycle was owed anyway so their re-witness was FREE, while our
+    # elevated half cannot run at all until RELEASE_1.1 76, itself parked
+    # behind 78.  Our 27 real sites we could not re-prove beat their 44 they
+    # could re-prove for nothing.  Not a count contest - a question of which
+    # port could prove its own tree today.
+    #
+    # ***DECLARED ON THEIR REPORT, NOT ON OUR OWN READ, AND THAT IS STATED
+    # RATHER THAN GLOSSED.***  The clone of their tree on this disk is not
+    # pulled (the owner's checkout, his call), so it still shows the old
+    # numbers.  What this table asserts is only what it can: that 10190-10195
+    # have no record HERE.
+    "10190": ("SD Core for Linux", "20 Sep 2026", "root is not SD's administrator"),
+    "10191": ("SD Core for Linux", "20 Sep 2026", "SD administration needs a local session"),
+    "10192": ("SD Core for Linux", "20 Sep 2026", "Account %1 is no longer suspended"),
+    "10193": ("SD Core for Linux", "20 Sep 2026", "Account %1 is now suspended"),
+    "10194": ("SD Core for Linux", "20 Sep 2026", "%1 is not suspended; nothing changed"),
+    "10195": ("SD Core for Linux", "20 Sep 2026", "sdsys without an sdsys login"),
 }
 
-# ***AND THE THING THIS GUARD WAS BUILT TO PREVENT HAS ALREADY HAPPENED ONCE -
-# FOUND 20 Sep 2026, THE NIGHT THE GUARD WAS WRITTEN.***  A COLLISION is an id
-# that is LIVE IN BOTH TREES WITH DIFFERENT TEXT, which is a different fact
-# from a reservation and must not be filed as one: a reserved id is absent here
-# and must stay absent, a collided id is present here and should not be.
+# ***A COLLISION IS AN ID LIVE IN BOTH TREES WITH DIFFERENT TEXT, WHICH IS A
+# DIFFERENT FACT FROM A RESERVATION AND MUST NOT BE FILED AS ONE***: a reserved
+# id is absent here and must stay absent, a collided id is present here and
+# should not be.  The two assert OPPOSITE things, which is why the table below
+# exists at all rather than being folded into RESERVED.
 #
-# 10177 is the first.  Linux held it, orphaned; their 19 Sep teardown deleted it
-# as dead text; four hours later their owner's ruling gave it a caller and it
-# was restored WITH ITS ORIGINAL BYTES.  Ours has been live for days on an
-# entirely different subject.  Neither port could see the other, and neither did
-# anything wrong.
+# ***IT IS EMPTY, AND IT IS EMPTY BECAUSE THE ONE COLLISION THIS PROJECT HAS
+# EVER HAD WAS FOUND AND SETTLED IN ONE NIGHT - 20 Sep 2026, RELEASE_1.1 79.***
+# The history is worth the paragraph because an empty table looks like a table
+# nothing has ever used:
 #
-# ***IT IS DECLARED, NOT FIXED, AND THE DECLARATION IS ASSERTED SO IT CANNOT GO
-# STALE QUIETLY.***  Renumbering a shipped record is the owner's call, not this
-# agent's, so the guard's job is to keep the collision visible and to fail the
-# moment the declaration stops being true - if our record disappears or is
-# renumbered, the row below is wrong and this test goes red asking for it to be
-# updated.  A declaration nobody re-checks is how a PENDING becomes a place to
-# hide; test-acctkeywords-units.py makes the same demand of its own.
+#   The guard was written to stop a FUTURE collision.  Its first real use found
+#   one already on disk - 10177, live in both ports with different text.
+#   Reporting it sent the Linux agent to look at the RANGE rather than the id,
+#   and it was SIX: 10176-10181, two contiguous blocks allocated in the same
+#   week, ours the case-insensitivity conversion and theirs their teardown's.
+#   Neither port could see the other and neither did anything wrong.
 #
-# ***AND IT IS NOT ONE ID, IT IS SIX - 10176 THROUGH 10181, A WHOLE
-# CONTIGUOUS BLOCK, CONFIRMED 20 Sep 2026 BY READING BOTH TREES.***  The Linux
-# agent went looking at the range rather than the id after we reported 10177,
-# and the two ports allocated two blocks of six in the same week: ours is the
-# case-insensitivity conversion (RELEASE_1.1 5 / D2), theirs is their
-# teardown's - root refused, sdsys local-only, the three suspension messages,
-# and the sdsys-without-a-login refusal.  All six of ours are WIRED, and four
-# of the six have verifiers, so none of them is cheap to move either.
+#   The two agents settled it under the owner's delegation - "decide between
+#   the two how to synchronize the two systems" - and the LINUX PORT MOVED, to
+#   10190-10195 (SDCore4Linux 348a5f4), because their cycle was owed anyway so
+#   their re-witness was free, while this tree's elevated half cannot run at
+#   all until RELEASE_1.1 76.  Their six are in RESERVED above; ours are now
+#   simply ours and appear in neither table.
 #
-# ***CHECKED HERE BEFORE IT WAS BELIEVED, WHICH IS THIS TREE'S RULE FOR A LINUX
-# REPORT.***  gplbld/scan-msgdiff.py compares the two trees on this disk and
-# found five of the six directly; the sixth (10181) is newer than the local
-# Linux clone, so it rests on their report rather than on our own read, and
-# that is said rather than glossed.
+# SO A ROW HERE IS FOR A COLLISION THAT CANNOT BE SETTLED AT ONCE.  Put the id
+# here, with both texts and our wiring, and the check below will fail the
+# moment our record stops existing - a stale declaration is a FAIL, not a quiet
+# pass, the same demand test-acctkeywords-units.py makes of its own PENDING.
 #
 # id -> (what OUR record says, who wires it here, what THEIRS says)
 COLLISION = {
-    "10176": ("Record ids are case insensitive in every file, so CASE is not accepted",
-              "sdsys/gpl.bp/configf and createf, witnessed by gplbld/verify-twins.ps1",
-              "This is a root session, and root is not SD's administrator"),
-    "10177": ("'%1' and '%2' differ only by case in %3 - CONFIGURE.FILE's twin refusal",
-              "sdsys/gpl.bp/configf:385, witnessed by gplbld/verify-twins.ps1",
-              "SD administration needs a local session - CPROC's refusal of a "
-              "remote sdsys session (Linux S.35, 20 Sep 2026)"),
-    "10178": ("WARNING: %1 file(s) hold %2 record id(s) that differ only by case",
-              "sdsys/gpl.bp/upgrade_nocase, witnessed by gplbld/verify-nocaseupgrade.ps1",
-              "Account %1 is no longer suspended"),
-    "10179": ("Converted %1 of %2 file(s) to case insensitive ids",
-              "sdsys/gpl.bp/upgrade_nocase, witnessed by gplbld/verify-nocaseupgrade.ps1",
-              "Account %1 is now suspended"),
-    "10180": ("Checking every file for record ids that differ only by case...",
-              "sdsys/gpl.bp/upgrade_nocase",
-              "%1 is not suspended; nothing changed"),
-    # ***THE ONE ROW WE HAVE NOT SEEN OURSELVES.***  The Linux clone on this
-    # disk is older than their tree and does not carry a 10181 at all, so this
-    # row is THEIR report, not our measurement.  It is declared anyway because
-    # leaving it out would make the block look like five.
-    "10181": ("Rename or delete one id of each pair, then convert that file with "
-              "CONFIGURE.FILE NO.CASE",
-              "sdsys/gpl.bp/upgrade_nocase",
-              "This session runs as sdsys but the machine was not logged in as "
-              "sdsys - REPORTED by the Linux port, newer than our clone of it"),
 }
 
 # NOT CLAIMED BY EITHER PORT, recorded so a later session does not have to ask
@@ -241,9 +236,20 @@ check("an id recorded as free on both sides really is free here (%s)"
       "other port is still being told that it is")
 
 # --- mutants, on synthetic lists: the live tree is never written -----------
+# ***THE MUTANT DRIVES A SYNTHETIC TABLE, NOT THE LIVE ONE, AND THE REASON IS
+# THAT THE LIVE ONE WENT EMPTY.***  While COLLISION held six rows the obvious
+# mutant - remove them from `present` and expect them reported - worked.  The
+# night the collision was settled the table emptied, and that same mutant
+# started comparing [] against [] and PASSING WITH NOTHING DRIVEN: the vacuous
+# pass section 0 forbids, arriving by the table it guards being fixed.  A
+# synthetic row cannot empty.
+_synth = {"19998": ("ours", "wired here", "theirs")}
 check("MUTANT: a declared collision whose record has gone is caught",
-      stale_collisions(COLLISION, present - set(COLLISION)) == sorted(COLLISION),
+      stale_collisions(_synth, present) == ["19998"],
       "the staleness check would not notice our record disappearing")
+check("CONTROL: a declared collision that IS present is not reported stale",
+      stale_collisions(_synth, present | set(_synth)) == [],
+      "the staleness check cries stale over a record that is there")
 check("CONTROL: an empty collision table reports nothing stale",
       stale_collisions({}, set()) == [],
       "an empty table must not manufacture a finding")
