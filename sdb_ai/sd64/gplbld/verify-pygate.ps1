@@ -362,17 +362,23 @@ try {
     Write-Output ("  Administrators has {0} member(s); '{1}' among them: {2}" -f
                   $admins.Count, $account, ($admins -contains $account))
 
-    # THE THIRD CONTROL.  CREATEA writes an os.users record ("yes","yes") for
-    # every ADMINISTRATOR-tier account (PRE_RELEASE 2).  This one is PROGRAMMER
-    # and must have got none, or leg A is measuring a record instead of its
-    # absence.  A record here is a product change nobody asked for, and the
-    # run cannot proceed on its premise, so it is scored AND refused.
+    # THE THIRD CONTROL.  CREATEA writes an os.users record ("yes","yes") only
+    # for an account asked for one - grant.os.access, reached by the SH-ON and
+    # OS-ON keywords.  This account is created with neither and must have got
+    # none, or leg A is measuring a record instead of its absence.  A record
+    # here is a product change nobody asked for, and the run cannot proceed on
+    # its premise, so it is scored AND refused.
+    #
+    # 19 Sep 26 - the two paragraphs here used to say "for every
+    # ADMINISTRATOR-tier account (PRE_RELEASE 2) ... this one is PROGRAMMER".
+    # RELEASE_1.1 64 abolished the tiers and refuses both keywords; the premise
+    # is unchanged and its REASON is now the keyword, not the level.
     $recordAfterCreate = (Test-Path -LiteralPath $record)
-    Note 'CREATE.ACCOUNT PROGRAMMER wrote NO os.users record (leg A''s premise)' $false $recordAfterCreate $true
+    Note 'CREATE.ACCOUNT with no SH-ON/OS-ON wrote NO os.users record (leg A''s premise)' $false $recordAfterCreate $true
     if ($recordAfterCreate) {
         Write-Output ("verify-pygate: {0} exists straight after CREATE.ACCOUNT." -f $record)
-        Write-Output '  CREATEA writes one for ADMINISTRATOR accounts only (PRE_RELEASE 2); this is'
-        Write-Output '  PROGRAMMER.  Either the tier keyword was not honoured or CREATEA changed.'
+        Write-Output '  CREATEA writes one only where SH-ON or OS-ON was asked for, and this'
+        Write-Output '  account was created with neither.  CREATEA has changed.'
         Write-Output '  Leg A cannot be measured on this premise, so nothing below runs.'
         exit 2
     }

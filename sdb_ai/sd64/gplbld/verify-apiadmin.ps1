@@ -281,7 +281,10 @@ try {
     # wants is the one its own test needs, and what this test needs is an
     # account that can reach nothing until 7b grants it.  It uses no ssh
     # either - every probe here goes over the API - so NONE rather than SSH.
-    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix PROGRAMMER NONE", $winPw, $winPw)
+    # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
+    # (createa's keyword case, sysmsg 2018 - the whole command stops and no
+    # account is made), so the access keyword is the whole of the line.
+    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix NONE", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made

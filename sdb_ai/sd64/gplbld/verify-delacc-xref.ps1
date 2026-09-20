@@ -137,14 +137,17 @@ try {
     # asked "Say who may reach this account" and was fed the password.  Neither
     # account needs a route; the scan opens their voc from disk.  Password shape
     # copied from verify-delaccount (GeneratePassword + 'aA1!' meets complexity).
+    # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
+    # (createa's keyword case, sysmsg 2018 - the whole command stops and no
+    # account is made), so the access keyword is the whole of the line.
     $winPwA = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $accA PROGRAMMER NONE", $winPwA, $winPwA)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $accA NONE", $winPwA, $winPwA)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upA))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $accA." }
     $madeA = $true
     Write-Host "   $accA created"
 
     $winPwB = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $accB PROGRAMMER NONE", $winPwB, $winPwB)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $accB NONE", $winPwB, $winPwB)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upB))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $accB." }
     $madeB = $true
     Write-Host "   $accB created"

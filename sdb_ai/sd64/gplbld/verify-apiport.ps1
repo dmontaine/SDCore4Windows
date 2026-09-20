@@ -229,7 +229,10 @@ try {
     # cannot fail is the shape of instrument fault this project has paid for
     # five times.  No ssh is used here either - the client goes straight to the
     # port - so NONE rather than SSH.
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER NONE", $winPw, $winPw)
+    # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
+    # (createa's keyword case, sysmsg 2018 - the whole command stops and no
+    # account is made), so the access keyword is the whole of the line.
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix NONE", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made

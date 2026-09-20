@@ -587,7 +587,12 @@ if (-not $osRead.ok) {
     # installer laid down and nothing has adopted an account yet.
     Log ('reconcile-accounts: no OS.USERS file at {0} yet - nothing to reconcile.' -f $osUsersDir)
 } elseif ($osRecords.Count -eq 0) {
-    Log 'reconcile-accounts: 0 records in OS.USERS.  That is an ordinary state - only ADMINISTRATOR-tier accounts get one.'
+    # 19 Sep 26 - RELEASE_1.1 64 and 74.  This used to read "only
+    # ADMINISTRATOR-tier accounts get one", which named a tier that no longer
+    # exists.  What writes the file now is the SH-ON / OS-ON keywords at
+    # CREATE.ACCOUNT (createa's grant.os.access) and MODIFY.ACCOUNT's os.set -
+    # so an empty file means nobody has been given either.
+    Log 'reconcile-accounts: 0 records in OS.USERS.  That is an ordinary state - a record exists only where SH or OS.EXECUTE was granted.'
 } else {
     Log ('reconcile-accounts: {0} OS.USERS record(s) to consider' -f $osRecords.Count)
 

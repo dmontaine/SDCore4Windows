@@ -21,7 +21,8 @@
     NON-ADMINISTRATOR, ON PURPOSE.  An SD administrator is refused over the API
     from any other machine (apisrvr's remote-admin refusal), so an admin account
     could not exercise the remote path even if it had a credential.  The account
-    is PROGRAMMER tier with API access (member of sdapi via the API keyword) and
+    is an ordinary account with API access (member of sdapi via the API keyword)
+    - RELEASE_1.1 64 abolished the tiers, so there is no level to name - and
     is asserted NOT to be a Windows Administrator - the same control
     verify-scramlogin.ps1 uses.
 
@@ -177,7 +178,7 @@ if (Test-Path -LiteralPath $accRec) {
     Die "$upper is still in the ACCOUNTS register.  Remove it with -Remove (DELETE.ACCOUNT) first." 2
 }
 
-Step "Creating the throwaway PROGRAMMER + API account $Name"
+Step "Creating the throwaway API account $Name"
 
 # CREATE.ACCOUNT USER also makes a Windows account and needs a Windows password
 # on stdin twice.  It is generated and never used by the interop - the API
@@ -185,7 +186,10 @@ Step "Creating the throwaway PROGRAMMER + API account $Name"
 Add-Type -AssemblyName System.Web
 $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
 
-$out = Invoke-SD @("CREATE.ACCOUNT USER $Name PROGRAMMER API", $winPw, $winPw)
+# 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
+# (createa's keyword case, sysmsg 2018 - the whole command stops and no account
+# is made), so the access keyword is the whole of the line.
+$out = Invoke-SD @("CREATE.ACCOUNT USER $Name API", $winPw, $winPw)
 if (-not (Test-Path -LiteralPath $accRec)) {
     Write-Host $out
     Die 'CREATE.ACCOUNT did not register the account.' 1

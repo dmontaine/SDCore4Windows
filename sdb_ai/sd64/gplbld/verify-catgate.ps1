@@ -403,7 +403,10 @@ if ($inRegister) {
 
 Add-Type -AssemblyName System.Web
 $pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-$out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' PROGRAMMER BOTH'), $pw, $pw)
+# 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
+# (createa's keyword case, sysmsg 2018 - the whole command stops and no account
+# is made), so the access keyword is the whole of the line.
+$out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' BOTH'), $pw, $pw)
 if (-not (Test-Path -LiteralPath $acctDir)) {
     Write-Output '  --- SD said: ---'; Write-Output $out
     Write-Output '  CREATE.ACCOUNT produced no account directory'

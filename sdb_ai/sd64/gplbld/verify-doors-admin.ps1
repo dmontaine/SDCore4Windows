@@ -130,8 +130,13 @@ function Get-AccountField($name, $ix) {
     if ([string]::IsNullOrEmpty($f[$ix])) { return '<blank>' }
     return $f[$ix]
 }
-function Get-AccountTier($name)      { return (Get-AccountField $name 4) }
-function Get-AccountPriorTier($name) { return (Get-AccountField $name 5) }
+# 19 Sep 26 - RELEASE_1.1 64 TOOK BOTH TIER FIELDS AND GAVE SLOT 5 TO THE
+# SUSPENSION.  ACC$TIER (field 5) and ACC$PRIOR.TIER (field 6) are gone;
+# ACC$SUSPENDED is field 5 now (syscom/keys.h:302) and holds 'SUSPENDED' or
+# nothing.  These readers were asserting a tier on the byte the suspension now
+# lives in - they would have read '<blank>' on a healthy account and reported a
+# product regression.  Index 4 is unchanged; what it MEANS is not.
+function Get-AccountSuspended($name) { return (Get-AccountField $name 4) }
 
 function Test-WinUser([string]$name) {
     try { $null = Get-LocalUser -Name $name -ErrorAction Stop; return $true } catch { return $false }
@@ -350,8 +355,10 @@ if ($Phase -eq 'Create') {
         exit 2
     }
 
+    # 19 Sep 26 - PROGRAMMER removed, RELEASE_1.1 64: the keyword is refused
+    # with sysmsg 2018 and the refusal stops the whole command.
     Show-SD 'create the account' @(
-        ('CREATE.ACCOUNT USER ' + $acct + ' PROGRAMMER BOTH'), $pw, $pw) @($pw)
+        ('CREATE.ACCOUNT USER ' + $acct + ' BOTH'), $pw, $pw) @($pw)
 
     Note 'the ACCOUNTS record exists' $true (Test-Path -LiteralPath (Join-Path $accts $acctU)) $true
     if (-not (Test-Path -LiteralPath (Join-Path $accts $acctU))) {
@@ -359,7 +366,7 @@ if ($Phase -eq 'Create') {
         Write-Verdict 'verify-doors-admin'
         exit 2
     }
-    Note 'ACC$TIER is PROGRAMMER' 'PROGRAMMER' (Get-AccountTier $acct) $true
+    Note 'ACC$SUSPENDED is blank on a new account' '<blank>' (Get-AccountSuspended $acct) $true
     Note 'the Windows account exists' $true (Test-WinUser $acct) $true
 
     # ***THE API DOOR NEEDS AN SD PASSWORD AND CREATE.ACCOUNT DOES NOT SET ONE.***
@@ -411,7 +418,7 @@ if ($Phase -eq 'Create') {
     # which keeps the measuring half on a single -Password; they are still two
     # separate accounts with two separate credentials.
     Show-SD 'create the helper account' @(
-        ('CREATE.ACCOUNT USER ' + $helper + ' PROGRAMMER SSH'), $pw, $pw) @($pw)
+        ('CREATE.ACCOUNT USER ' + $helper + ' SSH'), $pw, $pw) @($pw)
     Note 'the helper ACCOUNTS record exists' $true `
          (Test-Path -LiteralPath (Join-Path $accts $helperU)) $true
     Note 'the helper Windows account exists' $true (Test-WinUser $helper) $true
@@ -482,16 +489,18 @@ if ($Phase -eq 'Suspend') {
         Write-Output ("verify-doors-admin: no ACCOUNTS record for {0} - run -Phase Create first." -f $acctU)
         exit 2
     }
-    Note 'before: ACC$TIER is PROGRAMMER' 'PROGRAMMER' (Get-AccountTier $acct) $true
+    Note 'before: ACC$SUSPENDED is blank' '<blank>' (Get-AccountSuspended $acct) $true
 
     Show-SD 'suspend' @(('MODIFY.ACCOUNT ' + $acctU + ' SUSPENDED')) @()
 
     Note 'suspend says 10109 "Account X is now SUSPENDED"' 'said' `
          (Get-Said $lastSD ('Account\s+' + [regex]::Escape($acctU) + '\s+is now\s+SUSPENDED')) $true
-    Note 'after: ACC$TIER is SUSPENDED' 'SUSPENDED' (Get-AccountTier $acct) $true
-    # Field 6 is what makes the round trip lossless, and it is also the proof
-    # that the suspension went through tier.set rather than being typed in.
-    Note 'ACC$PRIOR.TIER kept the tier it displaced' 'PROGRAMMER' (Get-AccountPriorTier $acct) $true
+    Note 'after: ACC$SUSPENDED is SUSPENDED' 'SUSPENDED' (Get-AccountSuspended $acct) $true
+    # 19 Sep 26 - THE ACC$PRIOR.TIER ROW IS DELETED WITH THE FIELD, RELEASE_1.1
+    # 64.  It proved the round trip was lossless because a suspension used to
+    # DISPLACE a tier and have to put it back; there is no tier to displace now,
+    # so the state is one field with two values and the two rows above are the
+    # whole of it.  Nothing is lost that still exists to lose.
 
     # ***THE WINDOWS SIDE MUST NOT HAVE MOVED.***  MODIFYA:98 - "SUSPENDED
     # denies access and changes nothing else".  If the account had been dropped

@@ -334,8 +334,11 @@ if ($Make) {
     $pw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     # NONE: CREATE.ACCOUNT refuses (10082) unless told how the account is
     # reached, and this one needs no route - it exists to be swept away.
+    # 19 Sep 26 - PROGRAMMER removed: RELEASE_1.1 64 refuses it with sysmsg
+    # 2018 and the refusal stops the whole command.  (The LOGTO SDSYS prefix
+    # above is refused now too - RELEASE_1.1 76, the elevated suite's re-aim.)
     $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999',
-                       "CREATE.ACCOUNT USER $Prefix PROGRAMMER NONE", $pw, $pw, 'OFF')) -join "`n") + "`n"
+                       "CREATE.ACCOUNT USER $Prefix NONE", $pw, $pw, 'OFF')) -join "`n") + "`n"
     $out = $body | & $SdExe
     $out = (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
     Write-Host '   --- raw CREATE.ACCOUNT output ---'

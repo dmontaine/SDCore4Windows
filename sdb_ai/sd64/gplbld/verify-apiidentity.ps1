@@ -341,7 +341,10 @@ try {
     Step 1 "Creating the throwaway account $Prefix"
     $winPw = 'Zz!' + [Guid]::NewGuid().ToString('N').Substring(0, 12) + 'aA9'
     $apiPw = 'Qq!' + [Guid]::NewGuid().ToString('N').Substring(0, 12) + 'bB8'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix PROGRAMMER API", $winPw, $winPw)
+    # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
+    # (createa's keyword case, sysmsg 2018 - the whole command stops and no
+    # account is made), so the access keyword is the whole of the line.
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix API", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     if (-not (Test-Path -LiteralPath $accRec)) { Write-Host $out; Refuse 'CREATE.ACCOUNT did not register the account.' }
     $made = $true

@@ -451,8 +451,14 @@ Write-Output '=== PRE_RELEASE 22 arm A: a mismatched pair says so (10118) ======
 # THE UNWIND IS PART OF THE TEST.  Answering N to 10008 must take the whole
 # creation back out (CREATEA:549), so the absence of the Windows account
 # afterwards is both the clean-up and a check.
+#
+# 19 Sep 26 - PROGRAMMER IS GONE FROM ALL FOUR CREATE LINES IN THIS FILE.
+# RELEASE_1.1 64 refuses the keyword with sysmsg 2018, which stops the whole
+# command, so every one of these entries would have measured a message that
+# was never printed.  BOTH is untouched - the route is what these entries are
+# about.  test-acctkeywords-units.py is the guard.
 Show-SD 'entry 22 arm A' @(
-    ('CREATE.ACCOUNT USER ' + $acctMis + ' PROGRAMMER BOTH'),
+    ('CREATE.ACCOUNT USER ' + $acctMis + ' BOTH'),
     $pw1,
     $pw2,
     'N') @($pw1, $pw2)
@@ -488,7 +494,7 @@ Write-Output ''
 Write-Output '=== PRE_RELEASE 22 arm B: a refused password says so (10119) =============='
 
 Show-SD 'entry 22 arm B' @(
-    ('CREATE.ACCOUNT USER ' + $acctLong + ' PROGRAMMER BOTH'),
+    ('CREATE.ACCOUNT USER ' + $acctLong + ' BOTH'),
     $pwLong,
     $pwLong,
     'N') @($pwLong)
@@ -547,7 +553,7 @@ Write-Output ''
 Write-Output '=== PRE_RELEASE 37: the two access lines no longer contradict ============='
 
 Show-SD 'entry 37' @(
-    ('CREATE.ACCOUNT USER ' + $acctReal + ' PROGRAMMER BOTH'),
+    ('CREATE.ACCOUNT USER ' + $acctReal + ' BOTH'),
     $pwOk,
     $pwOk) @($pwOk)
 $a37 = $lastSD
@@ -586,7 +592,7 @@ Write-Output ''
 Write-Output '=== PRE_RELEASE 27: MODIFY.ACCOUNT ADD/DELETE writes an audit record ======'
 
 Show-SD 'entry 27 fixture: a second SD user to add' @(
-    ('CREATE.ACCOUNT USER ' + $acctUser + ' PROGRAMMER BOTH'),
+    ('CREATE.ACCOUNT USER ' + $acctUser + ' BOTH'),
     $pwU,
     $pwU) @($pwU)
 $a27f = $lastSD

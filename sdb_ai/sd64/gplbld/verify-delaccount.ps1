@@ -74,11 +74,14 @@
     0's coverage away for 6/7/8's; this pays for one more account and loses
     neither.  Step 3 and its checks are untouched.
 
-    WHICH IS WHY THE SD-MADE SUBJECT IS AN ADMINISTRATOR.  Only an
-    ADMINISTRATOR-tier USER account is ever given an os.users record (CREATEA,
-    grant.os.access), so a STANDARD subject would have scored "the record is
+    WHICH IS WHY THE SD-MADE SUBJECT IS CREATED WITH SH-ON OS-ON.  Only an
+    account given operating-system access has an os.users record (CREATEA,
+    grant.os.access), so a subject without one would have scored "the record is
     gone" by never having had one - the same vacuous pass the profile half
-    above was redesigned to refuse.  Three states are required rather than one:
+    above was redesigned to refuse.  (Until 19 Sep 2026 the lever was the
+    ADMINISTRATOR keyword; RELEASE_1.1 64 abolished the tiers and refuses it
+    with 2018, and SH-ON OS-ON asks the same routine for the same record.)
+    Three states are required rather than one:
     ABSENT before the run (preflight), PRESENT after CREATE.ACCOUNT (step 1),
     ABSENT again after DELETE.ACCOUNT (step 3).  The control account in step 4
     is deliberately left a plain one.
@@ -583,7 +586,7 @@ $holdStream = $null
 # ---------------------------------------------------------------------------
 try {
     # -----------------------------------------------------------------------
-    Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR"
+    Step 1 "SD makes an account of its own: CREATE.ACCOUNT USER $sdAcc SH-ON OS-ON"
 
     # 30 Aug 26 - ADMINISTRATOR, and the keyword is the whole of the change.
     # PRE_RELEASE_FIXES.md 65: only an ADMINISTRATOR-tier USER account is ever
@@ -601,8 +604,17 @@ try {
     # keyword that matters here is ADMINISTRATOR - it is what gives the subject
     # an os.users record, which is the thing step 3 measures - and the route was
     # never part of what this file tests.
+    #
+    # 19 Sep 26 - AND ADMINISTRATOR IS REFUSED NOW TOO.  RELEASE_1.1 64 took
+    # the tiers; createa's keyword case answers sysmsg 2018 and stops the whole
+    # command, so this step would have made no account at all.  SH-ON OS-ON
+    # asks grant.os.access for the record DIRECTLY - it is the same routine and
+    # the same two fields - which is what this step was ever after.  IT ALSO
+    # DROPS THE SIDE EFFECT THE PARAGRAPH ABOVE HAD TO DECLARE: the subject is
+    # no longer a member of Windows Administrators for the seconds it exists,
+    # because that was what the tier meant and the tier is gone.
     $pw  = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR", $pw, $pw)
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $sdAcc SH-ON OS-ON", $pw, $pw)
     $made += $sdAcc
 
     $sdRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $sdAcc.ToUpper())
@@ -625,11 +637,12 @@ try {
     # requires it gone.  Three states, because two of them would be satisfied
     # by a run that never had a record at all.
     #
-    # THE TIER IS ASSERTED THROUGH THE ARTEFACT IT PRODUCES, not by reading
-    # ACCOUNTS field 5: if grant.os.access ever stopped running, the tier would
-    # still read ADMINISTRATOR and this leg would silently have nothing to
-    # measure again.  The record is what step 3 is about, so the record is what
-    # is checked.
+    # THE ACCESS IS ASSERTED THROUGH THE ARTEFACT IT PRODUCES, not by reading
+    # the keyword back: if grant.os.access ever stopped running, the command
+    # line would still say SH-ON OS-ON and this leg would silently have nothing
+    # to measure again.  The record is what step 3 is about, so the record is
+    # what is checked.  (Field 5 of ACCOUNTS is not a tier any more either -
+    # RELEASE_1.1 64 gave the slot to ACC$SUSPENDED.)
     $osuRec = Get-OsUsersRecord $sdAcc
     Note 'CREATE.ACCOUNT wrote an os.users record' $true ([bool]$osuRec)
     if ($osuRec) {
@@ -642,7 +655,7 @@ try {
         Note 'os.users field 1 (SH) is yes'         'yes' ($osuF[0])
         Note 'os.users field 2 (OS.EXECUTE) is yes' 'yes' ($osuF[1])
     } else {
-        Fail ("CREATE.ACCOUNT USER $sdAcc ADMINISTRATOR made no os.users record.  " +
+        Fail ("CREATE.ACCOUNT USER $sdAcc SH-ON OS-ON made no os.users record.  " +
               'Step 3 cannot measure that the record goes when there was none to go, ' +
               'so this stops rather than reporting a green leg that tested nothing.')
     }
@@ -910,7 +923,10 @@ try {
     $heldRec  = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $heldAcc.ToUpper())
     $hpw      = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     # 18 Sep 26 - "BOTH" REMOVED, same as step 1: RELEASE_1.1 58.
-    $out      = Invoke-SD @("CREATE.ACCOUNT USER $heldAcc ADMINISTRATOR", $hpw, $hpw)
+    # 19 Sep 26 - AND ADMINISTRATOR -> SH-ON OS-ON, same as step 1 and for the
+    # same reason: RELEASE_1.1 64 refuses the keyword with 2018 and the record
+    # is what this leg is about.
+    $out      = Invoke-SD @("CREATE.ACCOUNT USER $heldAcc SH-ON OS-ON", $hpw, $hpw)
     $made    += $heldAcc
 
     if (-not (Test-Path -LiteralPath $heldRec)) {
@@ -924,7 +940,7 @@ try {
     $hOsu = Get-OsUsersRecord $heldAcc
     Note 'CREATE.ACCOUNT wrote its os.users record' $true ([bool]$hOsu)
     if (-not $hOsu) {
-        Fail ("CREATE.ACCOUNT USER $heldAcc ADMINISTRATOR made no os.users record.  " +
+        Fail ("CREATE.ACCOUNT USER $heldAcc SH-ON OS-ON made no os.users record.  " +
               'This leg exists to watch that record go, so it stops rather than ' +
               'reporting a green branch that measured nothing.')
     }
