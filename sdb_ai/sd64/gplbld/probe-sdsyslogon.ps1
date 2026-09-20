@@ -2,6 +2,16 @@
 .SYNOPSIS
     WHY CAN THE SDSYS ACCOUNT NOT SIGN IN AT THE CONSOLE?  RELEASE_1.1 78.
 
+    ***CLOSED 20 SEP 2026 - NOT A DEFECT.  SDSYS SIGNS IN AT THE CONSOLE; THE
+    OWNER HAD BEEN CHOOSING THE WRONG LOGIN NAME.***  The premise below is
+    false.  What answered it, unelevated and in seconds, was
+    Microsoft-Windows-TerminalServices-LocalSessionManager/Operational: its
+    "User:" field names the account that AUTHENTICATED (Id 21 logon, Id 25
+    reconnect, Id 41 arbitration).  Winlogon's "Authentication stopped.
+    Result 0" says a credential was accepted and NOT whose.  This script never
+    read that log.  Kept as the record; see RELEASE_1.1_FIXES.md 78 before
+    running it for a "cannot sign in" report - ask which login name was used.
+
 .DESCRIPTION
     ***THIS STOPPED BEING A TEST-RIG QUESTION THE MOMENT IT WAS MEASURED.***
     RELEASE_1.1 64 made the Windows SDSYS account the ONLY administrator SD
