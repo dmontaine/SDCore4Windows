@@ -53,6 +53,41 @@ RESERVED = {
               "apisrvr's refusal of a REMOTE session claiming SDSYS"),
 }
 
+# ***AND THE THING THIS GUARD WAS BUILT TO PREVENT HAS ALREADY HAPPENED ONCE -
+# FOUND 20 Sep 2026, THE NIGHT THE GUARD WAS WRITTEN.***  A COLLISION is an id
+# that is LIVE IN BOTH TREES WITH DIFFERENT TEXT, which is a different fact
+# from a reservation and must not be filed as one: a reserved id is absent here
+# and must stay absent, a collided id is present here and should not be.
+#
+# 10177 is the first.  Linux held it, orphaned; their 19 Sep teardown deleted it
+# as dead text; four hours later their owner's ruling gave it a caller and it
+# was restored WITH ITS ORIGINAL BYTES.  Ours has been live for days on an
+# entirely different subject.  Neither port could see the other, and neither did
+# anything wrong.
+#
+# ***IT IS DECLARED, NOT FIXED, AND THE DECLARATION IS ASSERTED SO IT CANNOT GO
+# STALE QUIETLY.***  Renumbering a shipped record is the owner's call, not this
+# agent's, so the guard's job is to keep the collision visible and to fail the
+# moment the declaration stops being true - if our record disappears or is
+# renumbered, the row below is wrong and this test goes red asking for it to be
+# updated.  A declaration nobody re-checks is how a PENDING becomes a place to
+# hide; test-acctkeywords-units.py makes the same demand of its own.
+#
+# id -> (what OUR record says, who wires it here, what THEIRS says)
+COLLISION = {
+    "10177": ("'%1' and '%2' differ only by case in %3 - CONFIGURE.FILE's twin refusal",
+              "sdsys/gpl.bp/configf:385, witnessed by gplbld/verify-twins.ps1",
+              "SD administration needs a local session - CPROC's refusal of a "
+              "remote sdsys session (Linux S.35, 20 Sep 2026)"),
+}
+
+# NOT CLAIMED BY EITHER PORT, recorded so a later session does not have to ask
+# again: 10175 was deleted here by 64 and measured free on the Linux side too,
+# so it is the one id both ports know to be free.  10913, 10914 and 10915 were
+# deleted on the Linux side on 14 Sep when MODIFY.PASSWORD stopped driving
+# passwd(1); they are not claimed and were never ours.
+FREE_BOTH_SIDES = ("10175",)
+
 # An id we expect to be PRESENT, so that "10174 is absent" is known to mean
 # absent rather than "this script is looking at nothing".  Its neighbour.
 CONTROL_PRESENT = "10173"
@@ -75,6 +110,13 @@ def reallocated(reserved, present):
     """Reserved ids that this tree has records for, sorted.  The whole
     decision, isolated so the mutants below can drive it on a list."""
     return sorted(i for i in reserved if i in present)
+
+
+def stale_collisions(collision, present):
+    """Declared collisions this tree no longer has a record for, sorted.  The
+    opposite assertion to reallocated(), isolated for the same reason: so the
+    mutant below can drive it on a list the live tree never sees."""
+    return sorted(i for i in collision if i not in present)
 
 
 def message_ids(directory):
@@ -116,7 +158,49 @@ check("no reserved id has a record here (%d reserved, %d records)"
       "re-allocated: " + ", ".join(bad) + " - pick another number and tell the "
       "other port")
 
+# --- the declared collisions, which must still BE collisions ---------------
+#
+# THE ASSERTION IS THE OTHER WAY ROUND FROM A RESERVATION, and that is the
+# whole reason these are two tables.  A reserved id must be ABSENT here; a
+# collided id must be PRESENT, because the declaration says so.  If ours has
+# gone - renumbered, deleted, moved - the row is stale and this must go red
+# rather than pass for the wrong reason.
+for i in sorted(COLLISION):
+    ours, wired, theirs = COLLISION[i]
+    print("  COLLISION %s - LIVE IN BOTH TREES WITH DIFFERENT TEXT" % i)
+    print("     here  : %s" % ours)
+    print("     wired : %s" % wired)
+    print("     Linux : %s" % theirs)
+stale = stale_collisions(COLLISION, present)
+check("every declared collision still has a record here (%d declared)"
+      % len(COLLISION),
+      stale == [],
+      "no longer present: " + ", ".join(stale) + " - if it was renumbered, say "
+      "so in COLLISION and tell the other port; a stale declaration is a FAIL, "
+      "not a quiet pass")
+
+# THE PARTITION.  An id cannot be both reserved and collided: the first says
+# "absent here", the second says "present here", and a number in both tables
+# would make one of the two checks above meaningless whichever way it went.
+overlap = sorted(set(RESERVED) & set(COLLISION))
+check("RESERVED and COLLISION do not name the same id",
+      overlap == [], "in both tables: " + ", ".join(overlap))
+check("nothing recorded as free on BOTH sides is claimed in either table",
+      all(i not in RESERVED and i not in COLLISION for i in FREE_BOTH_SIDES),
+      "FREE_BOTH_SIDES contradicts a claim above")
+check("an id recorded as free on both sides really is free here (%s)"
+      % ", ".join(FREE_BOTH_SIDES),
+      all(i not in present for i in FREE_BOTH_SIDES),
+      "one of them has acquired a record here - it is no longer free, and the "
+      "other port is still being told that it is")
+
 # --- mutants, on synthetic lists: the live tree is never written -----------
+check("MUTANT: a declared collision whose record has gone is caught",
+      stale_collisions(COLLISION, present - set(COLLISION)) == sorted(COLLISION),
+      "the staleness check would not notice our record disappearing")
+check("CONTROL: an empty collision table reports nothing stale",
+      stale_collisions({}, set()) == [],
+      "an empty table must not manufacture a finding")
 check("MUTANT: a reserved id present in the tree is caught",
       reallocated(RESERVED, present | set(RESERVED)) == sorted(RESERVED),
       "the detector missed a planted re-allocation")
