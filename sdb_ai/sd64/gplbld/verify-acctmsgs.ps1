@@ -383,10 +383,16 @@ if ($taken.Count -gt 0) {
     exit 2
 }
 
-$pw1  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-$pw2  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-$pwOk = [System.Web.Security.Membership]::GeneratePassword(24, 6)
-$pwU  = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+# 20 Sep 26 - RELEASE_1.1 83: SD's pw_complex (RELEASE_1.1 75) needs lower, upper,
+# digit AND symbol, and a bare GeneratePassword(24, 6) lacks a digit 5.7 % of the
+# time (measured, 20,000 samples) - SD then re-prompts, eats the next piped line
+# and spins at EOF: the run HANGS.  'aA1!' guarantees all four classes.  These four
+# are the ORDINARY passwords; the deliberately weak one comes from
+# Select-RefusedPassword below and is not touched here.
+$pw1  = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
+$pw2  = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
+$pwOk = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
+$pwU  = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
 # ***ARM B'S PASSWORD IS CHOSEN FROM THE POLICY, NOT GUESSED.***  Three cases,
 # in the order of how certain the refusal is:
 #

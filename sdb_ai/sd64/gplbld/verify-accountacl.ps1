@@ -259,7 +259,11 @@ try {
     # outright without a prompt.  The password is Windows' and is never used
     # again by this script - nothing here logs in.
     Add-Type -AssemblyName System.Web
-    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+    # 20 Sep 26 - RELEASE_1.1 83: SD's pw_complex (RELEASE_1.1 75) needs lower, upper,
+    # digit AND symbol, and a bare GeneratePassword(24, 6) lacks a digit 5.7 % of the
+    # time (measured, 20,000 samples) - SD then re-prompts, eats the next piped line
+    # and spins at EOF: the run HANGS.  'aA1!' guarantees all four classes.
+    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
 
     # 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
     # missing SDSYS session is exit 2 ("could not run") and not a thrown error at the

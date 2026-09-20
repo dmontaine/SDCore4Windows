@@ -380,7 +380,11 @@ try {
     # same thing - $winPw is Windows', $pw is the SD credential and the only
     # one this test ever uses.  verify-apiport.ps1 has the long version.
     Add-Type -AssemblyName System.Web
-    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+    # 20 Sep 26 - RELEASE_1.1 83: SD's pw_complex (RELEASE_1.1 75) needs lower, upper,
+    # digit AND symbol, and a bare GeneratePassword(24, 6) lacks a digit 5.7 % of the
+    # time (measured, 20,000 samples) - SD then re-prompts, eats the next piped line
+    # and spins at EOF: the run HANGS.  'aA1!' guarantees all four classes.
+    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
 
     # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
     # (createa's keyword case, sysmsg 2018 - the whole command stops and no
@@ -404,7 +408,11 @@ try {
     # way, and so the "is it on the wire" search is unambiguous.
     $bytes = New-Object byte[] 18
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
-    $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
+    # 20 Sep 26 - RELEASE_1.1 83: base64 alphanumerics + 'aA1' has NO SYMBOL, which SD's
+    # pw_complex (RELEASE_1.1 75) refuses EVERY time - MODIFY.PASSWORD re-prompts, eats
+    # the next piped line and spins at EOF: the run HANGS.  '-' is the one symbol safe
+    # through bash -lc, cmd and the askpass helper, and it is not first.
+    $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + '-aA1'
 
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
     $set = ($out -match 'Password set for account')

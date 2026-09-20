@@ -251,7 +251,11 @@ try {
     # environment to the probe) - and searchable in the capture unambiguously.
     $bytes = New-Object byte[] 18
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
-    $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
+    # 20 Sep 26 - RELEASE_1.1 83: base64 alphanumerics + 'aA1' has NO SYMBOL, which SD's
+    # pw_complex (RELEASE_1.1 75) refuses EVERY time - MODIFY.PASSWORD re-prompts, eats
+    # the next piped line and spins at EOF: the run HANGS.  '-' is the one symbol safe
+    # through bash -lc, cmd and the askpass helper, and it is not first.
+    $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + '-aA1'
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $upper), $pw, $pw)
     if ($out -notmatch 'Password set for account') { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
     Write-Host '   password set'

@@ -1634,7 +1634,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # dot-sourced by verifiers that run from source and nothing
                   # installs either - so they ship nowhere.  Listed with the
                   # commit that creates them.
-                  'sdsys-seat.ps1', 'test-sdsysseat-units.ps1')
+                  'sdsys-seat.ps1', 'test-sdsysseat-units.ps1',
+                  # 20 Sep 26 - RELEASE_1.1 83: the free guard that every password a
+                  # gplbld script GENERATES for SD satisfies pw_complex.  Harness
+                  # only, source-only, ships nowhere; listed with the commit that
+                  # creates it.
+                  'test-pwgen-units.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

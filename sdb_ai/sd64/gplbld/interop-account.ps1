@@ -184,7 +184,11 @@ Step "Creating the throwaway API account $Name"
 # on stdin twice.  It is generated and never used by the interop - the API
 # login uses the SD credential set below, not this - so it is not printed.
 Add-Type -AssemblyName System.Web
-$winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+# 20 Sep 26 - RELEASE_1.1 83: SD's pw_complex (RELEASE_1.1 75) needs lower, upper,
+# digit AND symbol, and a bare GeneratePassword(24, 6) lacks a digit 5.7 % of the
+# time (measured, 20,000 samples) - SD then re-prompts, eats the next piped line
+# and spins at EOF: the run HANGS.  'aA1!' guarantees all four classes.
+$winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
 
 # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
 # (createa's keyword case, sysmsg 2018 - the whole command stops and no account

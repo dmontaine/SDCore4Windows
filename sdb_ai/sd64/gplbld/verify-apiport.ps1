@@ -214,7 +214,11 @@ try {
     # ALPHANUMERIC because it is passed to make through "bash -lc", where a
     # quote or a backslash would break the command rather than the password.
     Add-Type -AssemblyName System.Web
-    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6)
+    # 20 Sep 26 - RELEASE_1.1 83: SD's pw_complex (RELEASE_1.1 75) needs lower, upper,
+    # digit AND symbol, and a bare GeneratePassword(24, 6) lacks a digit 5.7 % of the
+    # time (measured, 20,000 samples) - SD then re-prompts, eats the next piped line
+    # and spins at EOF: the run HANGS.  'aA1!' guarantees all four classes.
+    $winPw = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
 
     # NONE, AND IT HAS TO BE NONE.  Phase 2 made the access keyword compulsory
     # and this call site was first given API, which would have made step 2a
@@ -249,7 +253,11 @@ try {
     # guarantee a mix whatever the base64 came out as.
     $bytes = New-Object byte[] 18
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
-    $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + 'aA1'
+    # 20 Sep 26 - RELEASE_1.1 83: base64 alphanumerics + 'aA1' has NO SYMBOL, which SD's
+    # pw_complex (RELEASE_1.1 75) refuses EVERY time - MODIFY.PASSWORD re-prompts, eats
+    # the next piped line and spins at EOF: the run HANGS.  '-' is the one symbol safe
+    # through bash -lc, cmd and the askpass helper, and it is not first.
+    $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + '-aA1'
 
     # The account has no credential yet, so MODIFY.PASSWORD does not ask for a
     # current one - SET_ACC_PASSWORD's has.cred test.  It asks for the new one
