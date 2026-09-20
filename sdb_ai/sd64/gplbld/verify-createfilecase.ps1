@@ -70,11 +70,6 @@ Write-Output ("  expected : VOC id '" + $lower + "', directory '" + $lower + "' 
 
 if (-not (Test-Path -LiteralPath $sdExe)) { Write-Output "  no sd.exe at $sdExe"; exit 2 }
 
-# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
-# missing SDSYS session is exit 2 ("could not run") and leaves no fixture behind,
-# not a thrown error at the first SD call that reads as a product failure.
-Assert-SdSeat -Label 'verify-createfilecase'
-
 # 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
 # was the pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002)
 # FROM ANY SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated,
@@ -88,6 +83,13 @@ Assert-SdSeat -Label 'verify-createfilecase'
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
     return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
+
+# 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
+# missing SDSYS session is exit 2 ("could not run") and leaves no fixture behind,
+# not a thrown error at the first SD call that reads as a product failure.  IT
+# COMES AFTER THE DOT-SOURCE ABOVE ON PURPOSE: the first version of this call sat
+# before it and died "Assert-SdSeat is not recognized" on the owner's first run.
+Assert-SdSeat -Label 'verify-createfilecase'
 
 # ---- sweep any leftover of this family, THEN create the fixture ------------
 Write-Output ''

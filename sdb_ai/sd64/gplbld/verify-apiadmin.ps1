@@ -25,11 +25,11 @@
     THE ASSERTION IS THAT IT CANNOT.  A pass means the exposure is not there;
     a FAIL is the finding, not a broken test.  Read the summary accordingly.
 
-    WHY A PROGRAMMER-TIER ACCOUNT.  It is the least privileged tier that still
-    has RUN in its VOC - a STANDARD account has no "basic", "ed" or "run", so
-    it cannot execute the probe at all.  PROGRAMMER holds none of the
-    administration verbs, so anything it reaches, it reaches through the
-    session's OS token rather than through SD granting it.
+    WHY AN ORDINARY ACCOUNT.  There are no tiers since RELEASE_1.1 64: every
+    account is created with the full VOC that the PROGRAMMER tier used to get,
+    "basic", "ed" and "run" included, so the probe can be compiled and run in
+    it.  It holds none of the administration verbs, so anything it reaches, it
+    reaches through the session's OS token rather than through SD granting it.
 
     THE CONTROL IS THE LOCAL RUN, and without it this proves nothing.  The
     SAME compiled program is run from a local elevated session, which MUST

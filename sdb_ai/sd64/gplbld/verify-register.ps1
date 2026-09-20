@@ -263,7 +263,7 @@ $osRead = Read-Register $osUsersDir
 if (-not $osRead.ok) { Stop-Now ('OS.USERS could not be read at ' + $osUsersDir) }
 $osRecords = @($osRead.items)
 if ($osRead.absent) {
-    Write-Host ('  no OS.USERS file at ' + $osUsersDir + ' - ordinary before any ADMINISTRATOR-tier account exists')
+    Write-Host ('  no OS.USERS file at ' + $osUsersDir + ' - ordinary before any account has been given SH-ON or OS-ON')
 }
 Write-Host ('  ' + $osRecords.Count + ' OS.USERS record(s)')
 
@@ -276,11 +276,12 @@ foreach ($f in $osRecords) {
                 $(if ($why -eq '') { 'DEAD - no Windows account of that name exists' } else { $why }))
     if ($v -ne 'valid' -and $v -ne 'exempt') { $badOsu += ('{0}: {1}' -f $f.Name, $(if ($why -eq '') { 'names a Windows account that no longer exists' } else { $why })) }
 }
-# ZERO IS LEGITIMATE HERE, unlike ACCOUNTS: only an ADMINISTRATOR-tier account
-# ever gets an os.users record (CREATEA grant.os.access), so an install with
-# none is an ordinary state and is reported as such rather than scored.
+# ZERO IS LEGITIMATE HERE, unlike ACCOUNTS: an os.users record is written only
+# for a USER account given SH-ON or OS-ON (CREATEA grant.os.access; the tiers are
+# gone, RELEASE_1.1 64), so an install with none is an ordinary state and is
+# reported as such rather than scored.
 if ($osRecords.Count -eq 0) {
-    Write-Host '    (none - ordinary: only ADMINISTRATOR-tier accounts get one)'
+    Write-Host '    (none - ordinary: only accounts given SH-ON or OS-ON get one)'
 }
 Note ($badOsu.Count -eq 0) ('all ' + $osRecords.Count + ' OS.USERS records are valid') ($badOsu -join ' | ')
 

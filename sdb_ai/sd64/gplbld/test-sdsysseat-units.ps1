@@ -383,6 +383,70 @@ if ($tagged.Count -eq 1) {
 $after = (Get-FileHash -LiteralPath $modPath -Algorithm SHA256).Hash
 Check 'the live module is byte-identical after the mutants (SHA-256)' ($after -eq $liveHash) "before=$liveHash after=$after"
 
+# ---------------------------------------------------------------------------
+Section '7. every script that touches the seat loads it BEFORE it calls it (AST)'
+# ***WHY THIS EXISTS - 20 Sep 2026, THE OWNER'S FIRST ELEVATED RUN OF THE TEN.***
+# verify-createfilecase died with "Assert-SdSeat is not recognized": its Assert-SdSeat
+# call sat at script scope ELEVEN LINES ABOVE the dot-source that defines it.  The
+# unelevated dry-run I did first could not see it, because that script refuses at its
+# elevation gate BEFORE reaching either line - the dry-run proves the load and the gate
+# and nothing behind them, which is the sentence I had written about it the day before.
+# Nothing in the tree checked the order, and it is one statement in a file that is only
+# otherwise reached inside an elevated run.  A call inside a FUNCTION is not the risk (the
+# function runs later, after the dot-source), so only script-scope calls are ordered.
+$seatFns = @('Assert-SdSeat', 'Invoke-SdSeatText', 'Invoke-SdViaSeat', 'Expand-SeatCommands')
+function Get-SeatOrderProblem([string]$Path) {
+    # Returns @{ Touches = bool; Problem = string; DotLine = int; FirstTopLine = int }.
+    $t = $null; $e = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$t, [ref]$e)
+    if ($e.Count -gt 0) { return @{ Touches = $true; Problem = 'does not parse'; DotLine = -1; FirstTopLine = -1 } }
+    $cmds = @($ast.FindAll({ param($x) $x -is [System.Management.Automation.Language.CommandAst] }, $true))
+    $dots = @($cmds | Where-Object { $_.InvocationOperator -eq 'Dot' -and $_.Extent.Text -match 'sdsys-seat' })
+    $uses = @($cmds | Where-Object { $seatFns -contains $_.GetCommandName() })
+    if ($dots.Count -eq 0 -and $uses.Count -eq 0) { return @{ Touches = $false; Problem = ''; DotLine = -1; FirstTopLine = -1 } }
+    $top = @($uses | Where-Object {
+        $p = $_.Parent; $inFn = $false
+        while ($null -ne $p) { if ($p -is [System.Management.Automation.Language.FunctionDefinitionAst]) { $inFn = $true; break }; $p = $p.Parent }
+        -not $inFn })
+    # Lines are read with ForEach-Object and a missing number is a FAILURE: "Measure-Object { }" is not
+    # valid in 5.1, returns $null, and a verdict that reads $null as "in order" passes on nothing.
+    $dl = -1; $fl = -1
+    if ($dots.Count) { $dl = [int](($dots | ForEach-Object { $_.Extent.StartLineNumber } | Measure-Object -Minimum).Minimum) }
+    if ($top.Count)  { $fl = [int](($top  | ForEach-Object { $_.Extent.StartLineNumber } | Measure-Object -Minimum).Minimum) }
+    $why = ''
+    if ($dots.Count -gt 0 -and $dl -lt 1) { $why = 'a dot-source was found but its line was not read' }
+    elseif ($top.Count -gt 0 -and $fl -lt 1) { $why = 'a script-scope seat call was found but its line was not read' }
+    elseif ($uses.Count -gt 0 -and $dots.Count -eq 0) { $why = 'calls a seat function and never dot-sources the helper' }
+    elseif ($fl -ge 0 -and $dl -gt $fl) { $why = "the script-scope seat call at line $fl precedes the dot-source at line $dl" }
+    return @{ Touches = $true; Problem = $why; DotLine = $dl; FirstTopLine = $fl }
+}
+
+$fxOk  = Join-Path $tmp 'order-ok.ps1'
+$fxBad = Join-Path $tmp 'order-before.ps1'
+$fxNo  = Join-Path $tmp 'order-nodot.ps1'
+$fxFn  = Join-Path $tmp 'order-infunction.ps1'
+Set-Content -LiteralPath $fxOk  -Encoding UTF8 -Value @('. (Join-Path $PSScriptRoot ''sdsys-seat.ps1'')', 'Assert-SdSeat -Label ''x''')
+Set-Content -LiteralPath $fxBad -Encoding UTF8 -Value @('Assert-SdSeat -Label ''x''', '. (Join-Path $PSScriptRoot ''sdsys-seat.ps1'')')
+Set-Content -LiteralPath $fxNo  -Encoding UTF8 -Value @('Assert-SdSeat -Label ''x''')
+# A call inside a function that is only INVOKED later is fine: the function body runs after the dot-source.
+Set-Content -LiteralPath $fxFn  -Encoding UTF8 -Value @('function Go { Invoke-SdSeatText -Commands @(''WHO'') }', '. (Join-Path $PSScriptRoot ''sdsys-seat.ps1'')', 'Go')
+$rOk = Get-SeatOrderProblem $fxOk; $rBad = Get-SeatOrderProblem $fxBad; $rNo = Get-SeatOrderProblem $fxNo; $rFn = Get-SeatOrderProblem $fxFn
+Check 'CONTROL: a script that loads the helper first is in order, with both lines read' (($rOk.Problem -eq '') -and $rOk.DotLine -eq 1 -and $rOk.FirstTopLine -eq 2) ("problem='$($rOk.Problem)' dot=$($rOk.DotLine) call=$($rOk.FirstTopLine)")
+Check 'MUTANT: a script-scope Assert-SdSeat ABOVE the dot-source is flagged, naming both lines' (($rBad.Problem -match 'precedes the dot-source') -and $rBad.FirstTopLine -eq 1 -and $rBad.DotLine -eq 2) ("problem='$($rBad.Problem)'")
+Check 'MUTANT: a seat call with no dot-source at all is flagged' ($rNo.Problem -match 'never dot-sources') ("problem='$($rNo.Problem)'")
+Check 'a call inside a function defined before the dot-source is NOT flagged (it runs after)' ($rFn.Problem -eq '') ("problem='$($rFn.Problem)'")
+
+$touching = 0; $problems = @()
+foreach ($f in @(Get-ChildItem -LiteralPath $gplbld -Filter '*.ps1' | Where-Object { $_.Name -notmatch '^(sdsys-seat|test-)' })) {
+    $r = Get-SeatOrderProblem $f.FullName
+    if (-not $r.Touches) { continue }
+    $touching++
+    if ($r.Problem -ne '') { $problems += ($f.Name + ': ' + $r.Problem) }
+}
+# THE NULL CASE, refused out loud: a scan that found no script using the seat measured nothing.
+Check ('the scan found the scripts that use the seat ({0}; more than 15)' -f $touching) ($touching -gt 15) "found $touching - the walk or the seat function names are wrong"
+Check 'EVERY script that uses the seat loads it before its first script-scope call' ($problems.Count -eq 0) ($problems -join ' | ')
+
 } finally {
     $script:SeatTestHooks = $null
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }

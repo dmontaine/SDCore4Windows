@@ -65,8 +65,8 @@
       denied     valid, deny ACE      REFUSED + PRIV_OPEN_FAILED
 
     THE GRANTED LEG IS A FIXTURE, NOT AN INVENTION.  "no" LF "yes" is byte for
-    byte what CREATEA's grant.os.access writes for an ADMINISTRATOR-tier USER
-    account (SH no, OS.EXECUTE yes), so this leg puts the account into a state
+    byte what CREATEA's grant.os.access writes for a USER account given OS-ON
+    and not SH-ON (SH no, OS.EXECUTE yes), so this leg puts the account into a state
     the shipped product produces.  It is removed in the finally block, and the
     account is deleted with it.
 

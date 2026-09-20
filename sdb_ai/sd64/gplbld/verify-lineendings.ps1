@@ -12,9 +12,10 @@
 # source record 'ZZLETEST'".  It refused rather than scoring a pass, three runs
 # running, which is the only reason this is a repair and not a retraction.
 #
-# THE ACCOUNT IS PROGRAMMER TIER AND THAT IS NOT INCIDENTAL: sdsys/newvoc/
-# TIER.OMIT.STANDARD withholds 'basic' and 'run' from a standard account, and
-# this compiles a probe.  sdtestuser.ps1 carries the measurement.
+# THE ACCOUNT NEEDS 'basic' AND 'run' IN ITS VOC AND THAT IS NOT INCIDENTAL: this
+# compiles a probe.  There are no tiers since RELEASE_1.1 64 - every account is
+# created with the full VOC the PROGRAMMER tier used to get - so nothing here has
+# to ask for it.  sdtestuser.ps1 carries the original measurement.
 #
 # WHAT IT ASKS.  A directory file exists so that EXTERNAL EDITORS can edit its
 # records.  On Windows those editors write CRLF.  Before this fix, every
@@ -313,8 +314,10 @@ if ($out -notmatch 'REC ZZLECRLF') {
         Write-Host '   A NON-ZERO ssh EXIT IS THE SESSION, NOT THE PROBE - check sshd, that the'
         Write-Host '   account is in sdsshonly and sdssh, and that the password matches.'
     } elseif ($out -match 'is not in your VOC') {
-        Write-Host '   "not in your VOC" IS THE TIER: TIER.OMIT.STANDARD withholds basic and run,'
-        Write-Host '   so the account must be PROGRAMMER.  Check the CREATE.ACCOUNT line.'
+        Write-Host '   "not in your VOC" means the account has no basic or run in its VOC.  There are'
+        Write-Host '   no tiers since RELEASE_1.1 64 and every account is created with the full VOC,'
+        Write-Host '   so this is a defect in how the account was made: check the CREATE.ACCOUNT line'
+        Write-Host '   and the account''s VOC.'
     } elseif ($out -match 'Cannot read source record') {
         Write-Host '   THE PROBE WAS NOT WHERE SD LOOKED.  The fixtures are planted through the'
         Write-Host '   file system, so this points at the account directory rather than at SD.'
