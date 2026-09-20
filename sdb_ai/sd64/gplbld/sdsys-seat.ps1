@@ -133,7 +133,12 @@ function ConvertFrom-SeatReport {
 # does not sit on disk for the length of the run.  The report is written to a
 # .tmp and RENAMED, so the caller can never see half of it.
 function New-SeatScript {
-    param([string]$SdExe, [string]$InFile, [string]$OutFile)
+    # -Internal runs "sd.exe -internal" instead of "sd.exe".  ONLY THAT ONE FLAG IS
+    # OFFERED, AS A SWITCH AND NOT A FREE-TEXT ARGUMENT LIST: the script text is
+    # built by string replacement, and an arbitrary argument string would be an
+    # injection point into a script that runs elevated as SDSYS.  See
+    # Invoke-SdViaSeat for why a verifier needs it.
+    param([string]$SdExe, [string]$InFile, [string]$OutFile, [bool]$Internal = $false)
     $t = @'
 $sd   = '@@SD@@'
 $inF  = '@@IN@@'
@@ -145,12 +150,13 @@ $hdr  = 'SEAT identity=' + $id.Name +
         ' interactive=' + $pr.IsInRole((New-Object Security.Principal.SecurityIdentifier('S-1-5-4')))
 $in   = [IO.File]::ReadAllText($inF)
 Remove-Item -LiteralPath $inF -Force
-$out  = $in | & $sd 2>&1
+$out  = $in | & $sd @@ARGS@@2>&1
 $body = $hdr + "`n" + (($out | ForEach-Object { [string]$_ }) -join "`n") + "`nENDOFSEAT"
 [IO.File]::WriteAllText($outF + '.tmp', $body, (New-Object Text.UTF8Encoding($false)))
 Move-Item -LiteralPath ($outF + '.tmp') -Destination $outF -Force
 '@
-    return $t.Replace('@@SD@@', $SdExe).Replace('@@IN@@', $InFile).Replace('@@OUT@@', $OutFile)
+    $sdArgs = $(if ($Internal) { "'-internal' " } else { '' })
+    return $t.Replace('@@SD@@', $SdExe).Replace('@@IN@@', $InFile).Replace('@@OUT@@', $OutFile).Replace('@@ARGS@@', $sdArgs)
 }
 
 # The real runner: a task in the account's own live session.  Never called by
@@ -219,7 +225,22 @@ function Invoke-SdViaSeat {
         [string] $Account    = 'SDSYS',
         [int]    $TimeoutSec = 90,
         [string] $WorkDir    = '',
-        [int]    $MaxBytes   = 4194304
+        [int]    $MaxBytes   = 4194304,
+        # ***WHY A VERIFIER WOULD ASK FOR THIS: LOGTO TO A PERSONAL ACCOUNT.***  Found
+        # 20 Sep 2026 by the owner's run of verify-apiwire, and the comment that stood in
+        # apiwire and vocwrite ("SDSYS -> a personal account is allowed") was WRONG.
+        # cproc's logto.authorised admits a LOGTO in exactly two cases: the session is
+        # K$INTERNAL and K$ADMINISTRATOR, or the account is not suspended and the OS
+        # user (@logname) is a member of the target account's group.  The seat's
+        # @logname is SDSYS, which is in NO personal account's group, so "LOGTO
+        # SDWIRE199" is REFUSED (10003) and the commands after it run in SDSYS's OWN
+        # account - CREATE.FILE printed its success line there and left zzwire in
+        # C:\ProgramData\SD\sdsys.  The pre-64 flow got through on elev.obtained, which
+        # 64 made dead code.  -Internal runs "sd.exe -internal": forced to SDSYS, and it
+        # is K$INTERNAL, which is the first admission case.  ***THIS IS THE DEVELOPMENT
+        # DOOR - RELEASE_1.1 82 RULES IT DEVELOPMENT-ONLY - AND ONLY A DEVELOPMENT TOOL
+        # SHOULD ASK FOR IT.***  Off by default: nothing that ran without it changes.
+        [switch] $Internal
     )
     $cmds = @($Commands | Where-Object { $_ -ne $null })
     if ($cmds.Count -eq 0 -or -not (@($cmds | Where-Object { $_ -match '\S' }).Count)) {
@@ -253,7 +274,7 @@ function Invoke-SdViaSeat {
     try {
         $body = "`n" + ((@($cmds) + @('OFF')) -join "`n") + "`n"
         [IO.File]::WriteAllText($inF, $body, (New-Object Text.UTF8Encoding($false)))
-        Set-Content -LiteralPath $ps1 -Value (New-SeatScript -SdExe $sdExe -InFile $inF -OutFile $outF) -Encoding UTF8
+        Set-Content -LiteralPath $ps1 -Value (New-SeatScript -SdExe $sdExe -InFile $inF -OutFile $outF -Internal ([bool]$Internal)) -Encoding UTF8
 
         $run = if ($hkRun.Has) { & $hkRun.Value $ps1 $outF $TimeoutSec $Account }
                else { Invoke-SeatTask -Ps1 $ps1 -OutFile $outF -Seconds $TimeoutSec -Account $Account }
@@ -309,9 +330,13 @@ function Expand-SeatCommands([string[]]$Commands) {
 # THIS ONE PRINTS AND EXITS, AND SAYS SO IN ITS NAME: it is an Assert, it returns
 # nothing, and a caller must not capture it.  It ends the calling SCRIPT with exit 2.
 function Assert-SdSeat {
-    param([Parameter(Mandatory = $true)] [string] $Label, [int] $TimeoutSec = 90, [string] $WorkDir = '')
-    Write-Output "  proving the SDSYS seat (a task inside SDSYS's own live session) ..."
-    $seat = Invoke-SdViaSeat -Commands @('WHO') -TimeoutSec $TimeoutSec -WorkDir $WorkDir
+    param([Parameter(Mandatory = $true)] [string] $Label, [int] $TimeoutSec = 90, [string] $WorkDir = '', [switch] $Internal)
+    # -Internal proves the seat can reach "sd.exe -internal", the door a verifier that
+    # LOGTOs into a personal account depends on - so a run that cannot use it stops
+    # HERE, exit 2, and not at the first LOGTO with the commands silently landing in
+    # SDSYS's own account.
+    Write-Output ("  proving the SDSYS seat (a task inside SDSYS's own live session)" + $(if ($Internal) { ', through sd -internal' } else { '' }) + ' ...')
+    $seat = Invoke-SdViaSeat -Commands @('WHO') -TimeoutSec $TimeoutSec -WorkDir $WorkDir -Internal:$Internal
     Write-Output ("  seat: Ok={0}  {1}" -f $seat.Ok, $seat.Detail)
     # Stop-Transcript BEFORE exit 2, as the verifiers' own Refuse() does: a
     # transcript left running can swallow the NEXT verifier's output into this
@@ -342,12 +367,13 @@ function Invoke-SdSeatText {
     param(
         [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [AllowNull()] [AllowEmptyString()] [string[]] $Commands,
         [int]    $TimeoutSec = 90,
-        [string] $WorkDir    = ''
+        [string] $WorkDir    = '',
+        [switch] $Internal
     )
     if (@($Commands | Where-Object { $_ -match '\S' }).Count -eq 0) {
         throw 'the SDSYS seat was given no commands - there is nothing to run'
     }
-    $r = Invoke-SdViaSeat -Commands @(Expand-SeatCommands $Commands) -TimeoutSec $TimeoutSec -WorkDir $WorkDir
+    $r = Invoke-SdViaSeat -Commands @(Expand-SeatCommands $Commands) -TimeoutSec $TimeoutSec -WorkDir $WorkDir -Internal:$Internal
     if (-not $r.Ok) { throw ('the SDSYS seat did not run: ' + $r.Why + '  [' + $r.Detail + ']') }
     return $r.Text
 }

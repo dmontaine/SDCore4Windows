@@ -101,12 +101,22 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 # the commands go to a task inside SDSYS's own live session and the text comes back
 # through a file.  The TERM handling this function carried - first line, and again
 # after every LOGTO - lives in the helper now (Expand-SeatCommands) with its own
-# guard.  THE "LOGTO $upper" CALLS BELOW STILL WORK: SDSYS -> a personal account is
-# allowed; only the way BACK (LOGTO SDSYS) is refused, and nothing here goes back.
-# A seat that did not run THROWS rather than returning '' (Invoke-SdSeatText).
+# guard.  A seat that did not run THROWS rather than returning '' (Invoke-SdSeatText).
+#
+# ***-Internal, AND THE COMMENT THAT STOOD HERE WAS WRONG.***  It said the "LOGTO
+# $upper" calls below "STILL WORK: SDSYS -> a personal account is allowed".  THEY DO
+# NOT (owner's run, 20 Sep 2026: "COULD NOT RUN ... no known plaintext"): cproc's
+# logto.authorised admits a LOGTO only to a session that is K$INTERNAL and
+# K$ADMINISTRATOR, or whose OS user is a member of the target account's group - and
+# the seat's user is SDSYS, in no personal account's group.  So LOGTO $upper was
+# REFUSED (10003), CREATE.FILE ran in SDSYS's OWN account (zzwire and zzwired were
+# left in C:\ProgramData\SD\sdsys) and printed its success line there, and the API
+# session, running as the test account, then could not open them (3007).  This is a
+# DEVELOPMENT TOOL, so it takes the development door (RELEASE_1.1 82): the seat runs
+# "sd.exe -internal", which is K$INTERNAL and admits the LOGTO.
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180 -Internal)
 }
 
 function Stop-SD {
@@ -239,7 +249,7 @@ try {
     # 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
     # missing SDSYS session is exit 2 ("could not run") and not a thrown error at the
     # first SD call that reads as a product failure.  See sdsys-seat.ps1.
-    Assert-SdSeat -Label 'verify-apiwire'
+    Assert-SdSeat -Label 'verify-apiwire' -Internal
     $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix API", $winPw, $winPw)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upper))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $Prefix." }
     $madeAcct = $true
@@ -277,6 +287,18 @@ try {
     if ($out -notmatch 'Created DATA part as zzwire\b')  { Write-Host $out; Refuse 'CREATE.FILE ZZWIRE did not report the DATA part created.' }
     if ($out -notmatch 'Created DATA part as zzwired\b') { Write-Host $out; Refuse 'CREATE.FILE ZZWIRED did not report the DATA part created.' }
     $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $upper)
+    # ***ASSERT THE DESTINATION, NOT THE MESSAGE.***  "Created DATA part as zzwire" is
+    # printed in WHICHEVER account CREATE.FILE ran in, and on 20 Sep 2026 that was
+    # SDSYS's own, because the LOGTO above had been refused.  Nothing then failed until
+    # the API could not open the files - four steps later, after a capture had been
+    # started and SD restarted, reading as "no known plaintext".  The files being where
+    # this test is about to look for them is the outcome; the message is not.
+    foreach ($must in @('zzwire', 'zzwired\%0')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $acctDir $must))) {
+            Write-Host $out
+            Refuse ("CREATE.FILE reported success but $must is NOT in $upper's directory ($acctDir) - the LOGTO did not land in the account, so the file went to a different one.  Check for a 10003 above and for stray zzwire files under C:\ProgramData\SD\sdsys.")
+        }
+    }
     foreach ($p in @('zzwire', 'zzwired\%0', 'voc\%0')) {
         $full = Join-Path $acctDir $p
         $own  = if (Test-Path -LiteralPath $full) { (Get-Acl -LiteralPath $full).Owner } else { '<missing>' }

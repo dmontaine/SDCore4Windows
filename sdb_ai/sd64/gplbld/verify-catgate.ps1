@@ -373,7 +373,7 @@ Note "3035 cleanup: no $gpName left in gcat or SDSYS's private catalogue" $false
 
 # ---------------------------------------------------------------------------
 Write-Output ''
-Write-Output '=== 2. Creating a PROGRAMMER account ======================================'
+Write-Output '=== 2. Creating an ordinary account (not an administrator) ================'
 
 $inRegister = Test-Path -LiteralPath (Join-Path $sdsys ('accounts\' + $Account.ToUpper()))
 
@@ -416,7 +416,7 @@ if (-not (Test-Path -LiteralPath $acctDir)) {
     Write-Output '  CREATE.ACCOUNT produced no account directory'
     exit 2
 }
-Write-Output ("  created " + $Account + " (PROGRAMMER)")
+Write-Output ("  created " + $Account + " (an ordinary account)")
 
 # Seed and compile the programs inside the account, so the refusals below fail
 # on the privilege test and not on a missing object.  TWO of them, for the

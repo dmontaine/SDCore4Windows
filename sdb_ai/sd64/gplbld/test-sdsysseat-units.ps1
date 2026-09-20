@@ -213,8 +213,23 @@ Check 'a word that merely STARTS with LOGTO is not a LOGTO (no extra TERM)' ($e.
 $e = @(Expand-SeatCommands @('WHO'))
 Check 'a single command still comes back as an array of two, not unrolled to a string' ($e.Count -eq 2) "count=$($e.Count)"
 
+# --- -Internal: the flag reaches the script, only when asked, and only THAT flag --
+$plain = New-SeatScript -SdExe 'C:/fake/sd.exe' -InFile 'C:/fake/in' -OutFile 'C:/fake/out'
+$intl  = New-SeatScript -SdExe 'C:/fake/sd.exe' -InFile 'C:/fake/in' -OutFile 'C:/fake/out' -Internal $true
+Check 'the DEFAULT script runs plain sd (no -internal anywhere) - nothing already witnessed changes' ($plain -match '& \$sd 2>&1' -and $plain -notmatch 'internal') $plain
+Check 'the -Internal script runs sd.exe -internal' ($intl -match "& \`$sd '-internal' 2>&1") $intl
+$perrI = $null
+$null = [System.Management.Automation.Language.Parser]::ParseInput($intl, [ref]$null, [ref]$perrI)
+Check 'the -Internal script PARSES (0 errors)' (@($perrI).Count -eq 0) (($perrI | ForEach-Object Message) -join '; ')
+Check 'the two scripts differ ONLY by that argument (no other line changed)' (($intl.Replace("'-internal' ", '')) -ceq $plain) 'another line differs'
+Check 'no @@ token is left in either script (a missed replacement would run a literal "@@ARGS@@")' ($plain -notmatch '@@' -and $intl -notmatch '@@') 'a placeholder survived'
+
 $script:SeatTestHooks = $hooks
 $script:behave = { param($o) [IO.File]::WriteAllText($o, (Report 'ace\SDSYS' 'True' 'True' "`n:WHO`n44 SDSYS")); return @{ Ok = $true; Detail = 'fake'; Why = '' } }
+$null = Invoke-SdSeatText -Commands @('WHO') -WorkDir $wd -Internal
+Check 'Invoke-SdSeatText -Internal puts "-internal" in the script the runner was handed' ($script:seenScript -match "'-internal'") 'the switch did not reach New-SeatScript'
+$null = Invoke-SdSeatText -Commands @('WHO') -WorkDir $wd
+Check 'and WITHOUT the switch the script has none' ($script:seenScript -notmatch 'internal') 'a default call asked for -internal'
 $t = Invoke-SdSeatText -Commands @('WHO') -WorkDir $wd
 Check 'Invoke-SdSeatText returns the TEXT, a string, not a result object' (($t -is [string]) -and $t -match '44 SDSYS') ("type=" + $t.GetType().Name)
 Check 'and the input it sent starts with the newline sink, then TERM, then the command, then OFF' ($script:seenIn -ceq "`nTERM 200,9999`nWHO`nOFF`n") ($script:seenIn -replace "`n", '~')
@@ -234,12 +249,12 @@ $script:SeatTestHooks = $null
 # Assert-SdSeat ENDS THE CALLING SCRIPT with exit 2, so it can only be observed
 # from OUTSIDE one: each case is a tiny script run in a child process, with the
 # hooks set inside it.  The exit code and the text are the whole assertion.
-function Invoke-AssertChild([string]$name, [string]$hooksLiteral) {
+function Invoke-AssertChild([string]$name, [string]$hooksLiteral, [string]$extra = '') {
     $p = Join-Path $tmp ('assert-' + $name + '.ps1')
     $body = @(
         ('. ''' + $modPath + ''''),
         ('$script:SeatTestHooks = ' + $hooksLiteral),
-        ('Assert-SdSeat -Label ''verify-fixture'' -WorkDir ''' + (Join-Path $tmp ('awork-' + $name)) + ''''),
+        ('Assert-SdSeat -Label ''verify-fixture'' -WorkDir ''' + (Join-Path $tmp ('awork-' + $name)) + '''' + $extra),
         'Write-Output ''REACHED-AFTER-ASSERT''')
     Set-Content -LiteralPath $p -Value $body -Encoding UTF8
     $o = & powershell -NoProfile -ExecutionPolicy Bypass -File $p 2>&1 | ForEach-Object { [string]$_ }
@@ -252,6 +267,10 @@ $hk = { param($body, $elevated = '$true', $qw = '''   SDSYS   9  Disc''')
 $c = Invoke-AssertChild 'good' (& $hk '44 SDSYS')
 Check 'Assert-SdSeat on a good seat CONTINUES (exit 0, the script reaches the next line)' ($c.Code -eq 0 -and $c.Text -match 'REACHED-AFTER-ASSERT') "exit=$($c.Code) $($c.Text)"
 Check '... and prints SD''s raw WHO answer (the rule: show the output every time)' ($c.Text -match '44 SDSYS' -and $c.Text -match 'what SD said to WHO') $c.Text
+$c = Invoke-AssertChild 'good-internal' (& $hk '44 SDSYS') ' -Internal'
+Check 'Assert-SdSeat -Internal on a good seat continues and SAYS it went through sd -internal' ($c.Code -eq 0 -and $c.Text -match 'through sd -internal' -and $c.Text -match 'REACHED-AFTER-ASSERT') "exit=$($c.Code) $($c.Text)"
+$c = Invoke-AssertChild 'good-plain' (& $hk '44 SDSYS')
+Check 'and WITHOUT -Internal it does not claim to' ($c.Text -notmatch 'through sd -internal') $c.Text
 $c = Invoke-AssertChild 'nosess' (& $hk '44 SDSYS' '$true' '''>console  Don  2  Active''')
 Check 'Assert-SdSeat with NO SDSYS session ends the script with EXIT 2, not 1' ($c.Code -eq 2 -and $c.Text -notmatch 'REACHED-AFTER-ASSERT') "exit=$($c.Code)"
 Check '... and names the precondition and the login name' ($c.Text -match 'seat did not run' -and $c.Text -match 'login name SDSYS') $c.Text
@@ -265,7 +284,7 @@ Check 'a WHO answer with no "<n> SDSYS" is exit 2' ($c.Code -eq 2) "exit=$($c.Co
 # ---------------------------------------------------------------------------
 Section '4. the generated script, EXECUTED, against a fake sd.exe'
 $fakeSd = Join-Path $tmp 'fake-sd.cmd'
-Set-Content -LiteralPath $fakeSd -Value @('@echo off', '@findstr "^"') -Encoding ASCII
+Set-Content -LiteralPath $fakeSd -Value @('@echo off', '@echo ARGS=%*', '@findstr "^"') -Encoding ASCII
 $wd2 = Join-Path $tmp 'work2'
 $script:afterRun = @{}
 $script:SeatTestHooks = @{
@@ -298,6 +317,14 @@ Check ("the verdict AGREES with the token the script really had (admin=$admin in
 Check 'and the work directory is clean afterwards' (@(Get-ChildItem -LiteralPath $wd2 -Force).Count -eq 0) ((Get-ChildItem -LiteralPath $wd2 -Force | ForEach-Object Name) -join ',')
 if ($r.Ok) { Check 'an accepted run returns the echoed text without header or marker' ($r.Text -notmatch 'SEAT identity|ENDOFSEAT' -and $r.Text -match 'WHO') $r.Text }
 else       { Check 'a refused run returns NO text' ($r.Text -eq '') $r.Text }
+Check 'the default run passed sd NO arguments (the fake echoes %*)' ($raw -match '(?m)^ARGS=\s*$') $raw
+$r2 = Invoke-SdViaSeat -Commands @('WHO') -Account $me -WorkDir $wd2 -TimeoutSec 60 -Internal
+$raw2 = [string]$script:afterRun.Raw
+Check 'the -Internal run REALLY handed "-internal" to the program (observed, not read)' ($raw2 -match '(?m)^ARGS=-internal\s*$') $raw2
+# [ \t]+ AND NOT \s+: in multiline mode \s matches the NEWLINE after "ARGS=-internal",
+# so \S then matched the first character of the NEXT line and this failed on a
+# perfectly clean run - a check that could not pass.  Same-line whitespace only.
+Check 'and it is the only argument (no smuggled extras)' (-not ($raw2 -match '(?m)^ARGS=-internal[ \t]+\S')) $raw2
 $script:SeatTestHooks = $null
 
 # ---------------------------------------------------------------------------

@@ -587,7 +587,7 @@ $sids = @{ account = ''; system = 'S-1-5-18' }
 
 try {
     # -----------------------------------------------------------------------
-    Step 1 "Creating the throwaway PROGRAMMER account $Prefix"
+    Step 1 "Creating the throwaway account $Prefix (an ordinary account, not an administrator)"
 
     # PROGRAMMER because it is the least privileged tier that still has RUN in
     # its VOC - a STANDARD account has no "basic", "ed" or "run" and could not

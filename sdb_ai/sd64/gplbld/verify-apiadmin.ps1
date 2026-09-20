@@ -264,7 +264,7 @@ $pw            = ''
 
 try {
     # -----------------------------------------------------------------------
-    Step 1 "Creating the throwaway PROGRAMMER account $Prefix"
+    Step 1 "Creating the throwaway account $Prefix (an ordinary account, not an administrator)"
 
     # Two passwords, and they are not the same thing - verify-apiport.ps1 says
     # why at length.  $winPw is the WINDOWS account's and only travels down the

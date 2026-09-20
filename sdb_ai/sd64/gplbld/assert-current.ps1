@@ -1639,7 +1639,12 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # gplbld script GENERATES for SD satisfies pw_complex.  Harness
                   # only, source-only, ships nowhere; listed with the commit that
                   # creates it.
-                  'test-pwgen-units.ps1')
+                  'test-pwgen-units.ps1',
+                  # 20 Sep 26 - RELEASE_1.1 76: a command-line front for the SDSYS
+                  # seat, so SD commands (and cleanup) can be run as SDSYS from an
+                  # ordinary elevated prompt.  Harness only, ships nowhere; listed
+                  # with the commit that creates it.
+                  'sdsys-run.ps1')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.

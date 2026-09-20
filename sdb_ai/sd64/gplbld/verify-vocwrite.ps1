@@ -94,12 +94,20 @@ function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundCo
 # the commands go to a task inside SDSYS's own live session and the text comes back
 # through a file.  The TERM handling this function carried - first line, and again
 # after every LOGTO - lives in the helper now (Expand-SeatCommands) with its own
-# guard.  THE "LOGTO $upper" CALLS BELOW STILL WORK: SDSYS -> a personal account is
-# allowed; only the way BACK (LOGTO SDSYS) is refused, and nothing here goes back.
-# A seat that did not run THROWS rather than returning '' (Invoke-SdSeatText).
+# guard.  A seat that did not run THROWS rather than returning '' (Invoke-SdSeatText).
+#
+# ***-Internal, AND THE COMMENT THAT STOOD HERE WAS WRONG.***  It said the "LOGTO
+# $upper" calls below "STILL WORK: SDSYS -> a personal account is allowed".  THEY DO
+# NOT (owner's run, 20 Sep 2026, 4 of 7): cproc's logto.authorised admits a LOGTO only
+# to a session that is K$INTERNAL and K$ADMINISTRATOR, or whose OS user is a member of
+# the target account's group - and the seat's user is SDSYS, in no personal account's
+# group.  So LOGTO $upper was REFUSED (10003), CREATE.FILE ran in SDSYS's OWN account and
+# printed its success line there, and the read-back CT looked in the wrong account too.
+# This is a DEVELOPMENT TOOL, so it takes the development door (RELEASE_1.1 82): the
+# seat runs "sd.exe -internal", which is K$INTERNAL and admits the LOGTO.
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180 -Internal)
 }
 
 function Stop-SD {
@@ -206,7 +214,7 @@ try {
     Add-Type -AssemblyName System.Web
 
     # -----------------------------------------------------------------------
-    Step 1 "Creating the throwaway non-administrator account $Prefix (PROGRAMMER, reach API)"
+    Step 1 "Creating the throwaway account $Prefix (reach API, not an administrator)"
     $winPw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
     # (createa's keyword case, sysmsg 2018 - the whole command stops and no
@@ -214,12 +222,12 @@ try {
     # 20 Sep 26 - RELEASE_1.1 76: PROVE THE SDSYS SEAT BEFORE CREATING ANYTHING, so a
     # missing SDSYS session is exit 2 ("could not run") and not a thrown error at the
     # first SD call that reads as a product failure.  See sdsys-seat.ps1.
-    Assert-SdSeat -Label 'verify-vocwrite'
+    Assert-SdSeat -Label 'verify-vocwrite' -Internal
     $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix API", $winPw, $winPw)
     if (-not (Test-Path -LiteralPath (Join-Path $accts $upper))) { Write-Host $out; Refuse "CREATE.ACCOUNT did not register $Prefix." }
     $madeAcct = $true
     if (Get-LocalGroupMember -Group 'Administrators' -Member $Prefix -ErrorAction SilentlyContinue) {
-        Refuse "$Prefix is an Administrator - it would OWN its files and the test would pass vacuously.  Use a non-admin tier."
+        Refuse "$Prefix is a member of the Windows Administrators group - it would OWN its files and the test would pass vacuously.  Use an account that is not."
     }
     Write-Host "   $Prefix created and is NOT an administrator"
 
@@ -244,6 +252,15 @@ try {
     $out = Invoke-SD @("LOGTO $upper", 'CREATE.FILE ZZVOCW DYNAMIC NO.QUERY')
     if ($out -notmatch 'Created DATA part as zzvocw\b') { Write-Host $out; Refuse 'CREATE.FILE ZZVOCW did not report the DATA part created.' }
     $acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $upper)
+    # ***ASSERT THE DESTINATION, NOT THE MESSAGE.***  "Created DATA part as zzvocw" is
+    # printed in WHICHEVER account CREATE.FILE ran in, and on 20 Sep 2026 that was
+    # SDSYS's own, because the LOGTO above had been refused.  Nothing then failed
+    # until the API could not open the file - three steps later, reading as a product
+    # fault.  The file being where this test is about to look for it is the outcome.
+    if (-not (Test-Path -LiteralPath (Join-Path $acctDir 'zzvocw\%0'))) {
+        Write-Host $out
+        Refuse ("CREATE.FILE reported success but zzvocw is NOT in $upper's directory ($acctDir) - the LOGTO did not land in the account, so the file went to a different one.  Check for a 10003 above and for stray zzvocw files under C:\ProgramData\SD\sdsys.")
+    }
     foreach ($p in @('voc\%0', 'zzvocw\%0')) {
         $full = Join-Path $acctDir $p
         $own  = if (Test-Path -LiteralPath $full) { (Get-Acl -LiteralPath $full).Owner } else { '<missing>' }
