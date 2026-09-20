@@ -4,6 +4,15 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+20 Sep 26  THREE Y/N PROMPTS NOW LEAVE A SPACE BEFORE YOUR ANSWER.
+
+           "Use file '...' (y/<n>)?" and the two "OK to delete DATA portion"
+           and "OK to delete DICT portion" prompts ended at the question
+           mark with no space after it, so what you typed sat hard against
+           it.  They now match every other prompt in SD Core, and the
+           upstream SD.  What they ask, and what pressing Enter answers,
+           has not changed.
+
 19 Sep 26  SD CORE NOW REQUIRES A COMPLEX PASSWORD, EVEN WHERE WINDOWS
            DOES NOT.
 
