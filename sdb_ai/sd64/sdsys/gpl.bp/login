@@ -1302,6 +1302,10 @@ internal.gate:
    audit.account = initial.account
    if gate.ok then
       void kernel(K$AUDIT, 'INTERNAL SESSION ADMITTED account=' : initial.account : ' writer=' : gate.writer : ' age=' : gate.age)
+*     AND SAID ON THE SCREEN, so it lands in every transcript and installer log that captures this
+*     session (RELEASE_1.1 82 R4: a bypass must announce itself).  10922 is in the Windows-only block
+*     of the shared message space; the Linux agent was told before it was taken.
+      display sysmsg(10922, gate.writer) ;* Internal session admitted (opened by %1)
    end
    return
 

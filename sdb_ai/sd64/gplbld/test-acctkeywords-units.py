@@ -75,11 +75,17 @@ DECLARED = {
 # declaration.  That is the half of the partition nobody writes tests for, and
 # it worked on its first real use: the fix landed and the declaration would
 # otherwise have sat here claiming work that was already done.
+#
+# ***verify-sshadmin.ps1 LEFT THIS TABLE ON 20 Sep 2026 - REWRITTEN ON THE OWNER'S RULING
+# ("rewrite") to the ssh door end to end (a route keyword decides whether sshd admits the
+# account).  It stopped naming a refused keyword, and this guard would have gone red on the
+# stale declaration had the line stayed.***
+#
+# ***verify-apiremote.ps1 LEFT IT THE SAME DAY - REWRITTEN ON THE OWNER'S RULING ("rewrite")
+# to the API door over the network (the keyword decides, the address does not).  THE TABLE IS
+# EMPTY NOW, and that is the state the partition was built to reach: nothing in the harness
+# names a refused keyword except the one file that tests the refusal.***
 PENDING = {
-    "verify-sshadmin.ps1":
-        "the subject is an SD administrator account - RELEASE_1.1 64, 76",
-    "verify-apiremote.ps1":
-        "its admin leg creates one - RELEASE_1.1 64, 76",
 }
 
 passed = 0

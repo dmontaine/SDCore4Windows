@@ -105,14 +105,10 @@ $rx = 'logto\s+sdsys'
 # Role -> reason, read from the file and written down 20 Sep 2026.  A file not
 # in this table with a live hit is UNDECLARED and fails outright.
 $DECLARED = [ordered]@{
-    'clean-deadvoc.ps1'           = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'interop-account.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'probe-catprivate.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own elevation message' }
-    'probe-osex.ps1'              = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'probe-tasklock.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-acctmsgs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
-    'verify-apiremote.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder; NOT CONVERTED ON PURPOSE (20 Sep 2026) - its admin leg creates the administrator account 64 abolished (PENDING in test-acctkeywords-units.py), so a swapped driver would still die at step 1 - convert it WITH the rewrite of that leg, which is the owner''s ruling on what the leg should measure now' }
     'verify-catgate.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     # verify-createaccount.ps1 IS NOT HERE: IT WAS CONVERTED (20 Sep 2026, the
     # PILOT for sdsys-seat.ps1) - its SD calls now run as a task inside SDSYS's
@@ -148,10 +144,19 @@ $DECLARED = [ordered]@{
     # is made.  verify-twins uses BOTH doors (plain, and -Internal for the one thing
     # only sd -internal can build, a case-sensitive file).  The sd -internal legs of
     # verify-createfilecase and verify-accountrules are NOT seat calls - they run
-    # from the elevated shell on purpose and are the shipped scripts' shape.
+    # from the elevated shell on purpose and are the shipped scripts' shape (and
+    # since RELEASE_1.1 82 each writes LOGIN's one-shot marker first).
+    #
+    # ***AND THE OWNER'S "REWRITE" AND "CONVERT" RULINGS, 20 Sep 2026 AFTERNOON:***
+    # verify-sshadmin and verify-apiremote were REWRITTEN to what is left of their
+    # subjects (the ssh door and the API door, end to end: the route keyword decides,
+    # the address does not) and go through the seat; verify-accountrules was rewritten
+    # (silence means BOTH, and the ATTACH refusal); and the three one-shots
+    # clean-deadvoc, probe-catprivate and probe-osex were CONVERTED.  probe-osex's
+    # question changes with the conversion - see the note above its Invoke-SD.  NONE
+    # OF THESE IS WITNESSED YET.
     'verify-delaccount.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-doors-admin.ps1'      = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-sshadmin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder (also PENDING in test-acctkeywords-units.py for the ADMINISTRATOR keyword - two separate defects in one file); NOT CONVERTED ON PURPOSE (20 Sep 2026): its subject is the administrator account 64 abolished, so convert it WITH the rewrite of what it measures' }
     'verify-uninstallchoices.ps1' = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
 
     'verify-lcnames.ps1'          = @{ Role = 'CALLER_SUPPLIED'; Why = "Invoke-SD sends no prefix itself; the CALLERS' own command arrays open with the literal 'LOGTO SDSYS'" }

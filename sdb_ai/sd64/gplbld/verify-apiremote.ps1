@@ -1,108 +1,66 @@
 <#
 .SYNOPSIS
-    Is an SD administrator refused an API session from ANY address, while a
-    non-administrator is still admitted over the same remote route?
+    The API door over the network: does an account's route keyword decide whether
+    the API admits it, and does the ADDRESS it connects from make no difference?
 
 .DESCRIPTION
-    PRE_RELEASE_FIXES.md 170.  This is the API half of the 5 Sep 2026 ruling
-    whose ssh half verify-sshadmin.ps1 witnessed on b122.  Owner: "remote admin
-    through api or ssh is just a security nightmare waiting to happen",
-    refined the same day to "if I am at the console, everything works, only
-    remote access is denied".  REMOTE is what is denied, not the API.
+    ***THE NAME IS HISTORICAL AND KEPT ON PURPOSE.***  This file was written for
+    PRE_RELEASE_FIXES.md 170 to prove that an SD ADMINISTRATOR is refused an API
+    session from any non-local address while a non-administrator is admitted over
+    the same route (the 5 Sep 2026 ruling, refined by RELEASE_1.1 58 and 62).
+    RELEASE_1.1 64 abolished the administrator account type and deleted the peer
+    test that read the address, so that subject no longer exists and the script
+    died at its first step (the verb refuses the administrator tier word, 2018).
+    ***REWRITTEN 20 Sep 2026 ON THE OWNER'S RULING ("rewrite")*** to the subject
+    that is left and that only a real client over a real network address can
+    measure.  The name stays because the runner's table, the scope guards and the
+    record all name it.
 
-    WHAT IT MEASURES.  APISRVR's vb.scram.final gate, added 5 Sep 2026 after
-    the SCRAM proof and beside the sdapi test:
+    THE MODEL (RELEASE_1.1 64, 68): one administrator, SDSYS; every other account
+    is ordinary, with its routes said at create time - SSH, API, BOTH or NONE, and
+    silence means BOTH.  APISRVR's ONLY gate on the route is the sdapi group
+    (sdsys/gpl.bp/apisrvr, "not in sdapi", message 10073).  The address is not
+    read.  This rig proves both halves of that sentence:
 
-        call !peer_local(api.peer.local, api.peer.addr)
-        if sd_admin_tier(scram.user) and not(api.peer.local) then ... refuse
+      CONTROL  the API account over the LAN address       MUST BE ADMITTED
+      LEG A    the SAME account over 127.0.0.1            MUST BE ADMITTED
+      LEG B    an SSH-ONLY account over the LAN address   MUST BE REFUSED (10073)
+      LEG C    the same SSH-only account over 127.0.0.1   MUST BE REFUSED (10073)
 
-    WHY IT COULD NOT BE FOLDED INTO verify-apiadmin.ps1.  That script connects
-    over LOOPBACK with a PROGRAMMER account, so this gate never fires there -
-    which is also why it must not regress.  This one needs an ADMINISTRATOR and
-    two different routes to the same machine.
+    THE CONTROL GATES THE REST.  If an account with the API route cannot connect
+    over the LAN address, the listener or the firewall is shut and legs B and C's
+    refusals say nothing about the keyword.  Without it, a machine with no remote
+    API at all would score a confident green.
 
-    ***18 Sep 26 - THIS SCRIPT WENT ROUND A LOOP IN ONE DAY AND IS BACK WHERE
-    IT STARTED, WHICH IS WORTH KNOWING RATHER THAN HIDING.***  RELEASE_1.1 58
-    inverted leg A to MUST BE REFUSED (an administrator had no API at all) and
-    that shape was WITNESSED GREEN on b197.  RELEASE_1.1 62, the same day,
-    narrowed the ruling to ssh only - the owner: "the administrator should not
-    be able to reach the machine through ssh or api, but should be able to use
-    the api locally", because "administrative apps written as windows gui apps
-    would not be able to reach the database otherwise" - so the administrator is
-    in sdapi again, leg A is ADMITTED again, and the rows are the pre-58 ones
-    restored verbatim.
-
-    ***WHAT 58 LEFT BEHIND, AND IT IS WHAT MAKES 62 SAFE***: DisableForwarding.
-    The peer test reads accept()'s address, and an "ssh -L" tunnel makes a
-    remote connection arrive from 127.0.0.1 - so confining the API to "this
-    machine" rests on a forgeable signal unless forwarding is off.  It is off
-    (allow-ssh-groups.ps1), and an administrator cannot ssh at all, so they
-    cannot build the tunnel themselves.  ***DO NOT REMOVE THAT LINE WITHOUT
-    RE-OPENING THIS QUESTION.***
-
-    THE THREE LEGS, AND THE CONTROL IS SCORED FIRST.
-
-      CONTROL  a PROGRAMMER over the LAN address        MUST BE ADMITTED
-      LEG A    the ADMINISTRATOR over 127.0.0.1         MUST BE ADMITTED
-      LEG B    the SAME ADMINISTRATOR over the LAN IP   MUST BE REFUSED
-
-    THE CONTROL GATES THE REST.  If a non-administrator cannot connect over the
-    LAN address either, the listener or the firewall is shut and leg B's refusal
-    says nothing about the gate.  Without it, a machine with no remote API at
-    all would score a confident green.
-
-    AND THE PAIR IS THE POINT.  Legs A and B are the same account, the same
-    password and the same host; the ONLY variable is the address.  If both go
-    the same way the gate is not reading the route - it is admitting or
-    refusing everything - and either can look like a pass on a single leg.
-
-    LEG A IS THE OWNER'S OWN CASE, AND 62 IS WHY IT IS BACK.  He runs a local
-    application against the API on 127.0.0.1 as an administrator account; under
-    58 that was refused, and 62 restored it deliberately, on the reasoning that
-    a local administrator can already elevate at the console and become SYSTEM,
-    so a loopback API session concedes nothing they could not already take.
-    A green leg B with a red leg A is not a partial pass, it is a broken
-    product.
-
-    ***ONE ROW SURVIVES FROM 58's SHAPE***: 10073 must be ABSENT from leg A.
-    Under 58 its PRESENCE was the pass; now its presence means the administrator
-    is not in sdapi - 62's grant missing, or 63's migration never run here - and
-    that is a different fault from the peer test firing, so it gets its own row
-    rather than being folded into "no session".
+    AND THE PAIRS ARE THE POINT.  Control and leg A are the same account, the same
+    password and the same host, reached by two addresses: if the API read the
+    address they would differ.  Control and leg B differ ONLY in the route keyword:
+    if the API ignored the keyword they would not.  Either alone can look like a
+    pass on a single leg.
 
     WHAT IT ANCHORS ON.  tests/api_admin_probe.c prints PROBE.CONNECT=YES only
     after SDConnect() returned a session, and PROBE.CONNECT=NO with SDError()
-    otherwise.  The success wording therefore cannot appear on the refusal
-    path, which is the rule CLAUDE.md states after ZZIDALLOW.  The refusal is
-    scored twice over: message 10073's own words ("is not permitted to use the
-    API"), and the audit line APISRVR writes at exit.vb.scram.fail - "API
-    REFUSED user=... reason=not in sdapi" - which is written there and nowhere
-    else, and which a session that never reached the gate cannot produce.
-    (Until 18 Sep 2026 both anchors were the peer test's: 10174 and "reason=
-    administrator on a remote API session from <addr>".  RELEASE_1.1 58 put the
-    sdapi gate in front of it, so those are now the wording of a refusal that
-    should no longer be reachable - which is why 10174's ABSENCE is a scored row
-    rather than a deletion.)
+    otherwise.  The success wording therefore cannot appear on the refusal path,
+    which is the rule CLAUDE.md states after ZZIDALLOW.  The refusal is scored
+    twice over: message 10073's own words ("is not permitted to use the API"), and
+    the audit line APISRVR writes at exit.vb.scram.fail - "API REFUSED user=...
+    reason=not in sdapi" - which is written there and nowhere else, and which a
+    session that never reached the gate cannot produce.
 
-    ***WHAT IT DID NOT COVER IS NOW CLOSED TWICE OVER, 18 Sep 2026, AND THIS
-    PARAGRAPH IS WHY IT WAS FOUND.***  It read: "An 'ssh -L' tunnel terminates
-    on this host, so a tunnelled API connection is accepted FROM 127.0.0.1 and
-    this gate reads it as local.  No peer test can see through that; it is an
-    sshd matter (AllowTcpForwarding, or a Match block).  PRE_RELEASE_FIXES 170
-    carries it."  ***EVERY WORD TRUE, AND NOTHING ACTED ON IT FOR THIRTEEN
-    DAYS*** - the caveat sat inside an entry that was struck through as DONE, so
-    it had no open row of its own, and the live sshd_config still read
-    "#AllowTcpForwarding yes" (commented, default yes) when it was measured.
-    RELEASE_1.1 58 closes it from both ends: allow-ssh-groups.ps1 writes
-    DisableForwarding, so there is no tunnel to build; and an administrator is
-    no longer in sdapi, so a connection the API believes is local belongs to no
-    administrator even if one were built.  The lesson kept for the next reader:
-    ***A CAVEAT INSIDE A CLOSED ENTRY IS NOT TRACKED BY ANYTHING.***
+    WHAT IT DOES NOT COVER, SAID PLAINLY.  Whether the LISTENER is reachable from
+    another machine (as opposed to this machine's own LAN address) is the
+    firewall's question and needs a second machine; the interop run with the Linux
+    port is that witness.  What a connection to this machine's own LAN address
+    proves is that the API does not read the peer address and that the route
+    keyword is the only thing deciding.
 
-    IT CHANGES THE INSTALLED SYSTEM AND PUTS IT BACK: two throwaway Windows and
-    SD accounts, an sd.conf APIPORT line, and two SD restarts.  The accounts go
-    in a finally block, and anything that could not be removed is NAMED - one
-    of them is a real local administrator while it exists.
+    IT CHANGES THE INSTALLED SYSTEM AND PUTS IT BACK: two throwaway Windows and SD
+    accounts, an sd.conf APIPORT line, and two SD restarts.  The accounts go in a
+    finally block, and anything that could not be removed is NAMED.
+
+    RUN IT ELEVATED, AND SDSYS MUST BE SIGNED IN.  The accounts are made through
+    the SDSYS seat (sdsys-seat.ps1, RELEASE_1.1 76), which registers a task for the
+    OS SDSYS account and so needs an elevated caller.
 
 .PARAMETER Prefix
     Derived from -Run by the runner.  A FIXED prefix passes once and fails
@@ -163,7 +121,7 @@ function Refuse([string]$why) {
 
 function Step($n, $msg) { Write-Output ''; Write-Output "== [$n] $msg" }
 
-Write-Output 'verify-apiremote - PRE_RELEASE_FIXES.md 170 (the API half of 167)'
+Write-Output 'verify-apiremote - the API door over the network (rewritten 20 Sep 2026; the name is historical)'
 Write-Output ("  prefix : {0}" -f $Prefix)
 Write-Output ("  sd.exe : {0}" -f $sdExe)
 Write-Output ("  port   : {0}" -f $Port)
@@ -189,14 +147,13 @@ if (-not (Test-Path -LiteralPath $bash)) {
 if (-not ([Security.Principal.WindowsPrincipal] `
           [Security.Principal.WindowsIdentity]::GetCurrent()
          ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Refuse 'run this ELEVATED - it creates accounts, edits the installed sd.conf and restarts SD.'
+    Refuse 'run this ELEVATED - it creates accounts through the SDSYS seat, edits the installed sd.conf and restarts SD.'
 }
 
 # ***CHECK THE SERVICE BEFORE MAKING ACCOUNTS, NOT AFTER.***  The name was wrong
 # once (see Stop-SD), and because the check lived inside step 2 the run had
-# already created two Windows accounts - one a real local ADMINISTRATOR - and
-# edited sd.conf before it found out.  Cleanup handled it, but a guard that can
-# fire early should.
+# already created two Windows accounts and edited sd.conf before it found out.
+# Cleanup handled it, but a guard that can fire early should.
 if (-not (Get-Service -Name $SvcName -ErrorAction SilentlyContinue)) {
     Write-Output ("  looked for service : {0}" -f $SvcName)
     Write-Output ('  services matching "String Database": ' +
@@ -217,26 +174,22 @@ if (-not (Test-Path -LiteralPath $audit)) {
 }
 
 # ------------------------------------------------------------- local driver
-# Piped stdin.  Start-Process -RedirectStandardInput hands sd.exe a FILE HANDLE
-# and SD answers ":Process terminated" and runs nothing - written down 14 Aug
-# 2026 and paid for again on 29 Aug.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount was the
+# pilot).  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002) FROM ANY SESSION THAT
+# DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive token.  So the commands
+# go to a task inside SDSYS's own live session and the text comes back through a file.  A seat
+# that did not run THROWS rather than returning ''.  SDSYS must be signed in.
+. (Join-Path $here 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
     if ($null -eq $commands -or $commands.Count -eq 0) {
         throw 'Invoke-SD: no commands given; that would start a session, measure nothing and look like a pass.'
     }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
+
+# PROVE THE SEAT BEFORE MAKING ANYTHING, so a missing SDSYS session is exit 2 and leaves no
+# account and no edited sd.conf behind.
+Assert-SdSeat -Label 'verify-apiremote'
 
 # ***A SERVICE NAME THAT MATCHES NOTHING MUST BE LOUD, NOT SILENT.***  This read
 # "if (Get-Service ... -ErrorAction SilentlyContinue) { sc stop }", so a wrong
@@ -291,7 +244,7 @@ $msys = '/' + $sd64.Substring(0, 1).ToLower() + ($sd64.Substring(2) -replace '\\
 # script - PowerShell 5.1 wraps each stderr line in a NativeCommandError and
 # make writes to stderr routinely.  Two sites in this project have paid for it
 # (secure-account-dirs.ps1:95, verify-catgate.ps1:395), so it is handled here
-# once rather than at each of the three call sites.
+# once rather than at each of the call sites.
 function Invoke-Api([string]$ApiHost, [string]$User, [string]$Pw, [string]$Acct, [string]$ApiCmd) {
     $cmd = "cd '$msys' && make check-api-admin APIHOST=$ApiHost APIPORT=$Port " +
            "APIUSER=$User APIPASS='$Pw' APIACCT=$Acct APICMD='$ApiCmd'"
@@ -304,86 +257,64 @@ function Invoke-Api([string]$ApiHost, [string]$User, [string]$Pw, [string]$Acct,
     return @{ Text = (Convert-ProbeText $t); Rc = $rc }
 }
 
-$adminAcct = ($Prefix + 'a')
-$progAcct  = ($Prefix + 'p')
-$adminPw   = New-SdTestPassword
-$progPw    = New-SdTestPassword
+function InGroup($group, $user) {
+    $m = Get-LocalGroupMember -Group $group -ErrorAction SilentlyContinue |
+         Where-Object { $_.Name -like ('*\' + $user) }
+    return [bool]$m
+}
+
+# The API account (route API) and the SSH-only account (route SSH): they differ in NOTHING but
+# the keyword, which is what makes leg B a measurement of the keyword.
+$apiAcct   = ($Prefix + 'a')
+$sshAcct   = ($Prefix + 'p')
+$apiPw     = New-SdTestPassword
+$sshPw     = New-SdTestPassword
 $restoreNeeded = $false
 
 try {
     # -----------------------------------------------------------------------
-    Step 1 'two accounts: one ADMINISTRATOR, one PROGRAMMER'
+    Step 1 'two accounts: one with the API route, one with SSH only'
 
-    # ADMINISTRATOR is matched on the token TEXT (CREATEA) and cannot be
-    # abbreviated.
-    #
-    # ***THE ROUTE KEYWORD IS MANDATORY AND LEAVING IT OFF COST A RUN.***  The
-    # first version of this line read "... ADMINISTRATOR" with no keyword, on
-    # the reasoning that an administrator is granted both routes unconditionally
-    # and cannot have either removed (PRE_RELEASE 169).  That is true of the
-    # GRANT and says nothing about the SYNTAX: CREATEA's own header records
-    # "SSH, API, BOTH or NONE, required for a USER account", so the parse fell
-    # to its "invalid command arg" case, printed the syntax line and created
-    # nothing.  The step then refused at the account check below - correctly,
-    # and for a reason that looked like a product fault until the transcript
-    # was read.  BOTH is what the ADMINISTRATOR tier forces anyway, so this
-    # names what the account actually gets.
-    # 18 Sep 26 - "BOTH" REMOVED.  RELEASE_1.1 58: an administrator gets no
-    # remote route, and CREATE.ACCOUNT now REFUSES the combination rather than
-    # overriding it silently (createa, the tier branch in more.args), so the
-    # old command would stop this script at step 4 with 10083.  The account
-    # still needs to BE an administrator - that is what legs A and B test.
-    $outA = Invoke-SD @(('CREATE.ACCOUNT USER ' + $adminAcct + ' ADMINISTRATOR'), $adminPw, $adminPw)
-    Write-Output '  --- CREATE.ACCOUNT (administrator) said: ---'
+    # ***REWRITTEN 20 Sep 2026.***  This step made a real local ADMINISTRATOR and a
+    # PROGRAMMER; 64 abolished the first and refuses both keywords (2018).  The route
+    # keyword is what decides the API door now, so the pair is made by keyword alone.
+    $outA = Invoke-SD @(('CREATE.ACCOUNT USER ' + $apiAcct + ' API'), $apiPw, $apiPw)
+    Write-Output '  --- CREATE.ACCOUNT (API) said: ---'
     Write-Output $outA
 
-    $outP = Invoke-SD (New-SdTestUserScript -Name $progAcct -Password $progPw)
-    Write-Output '  --- CREATE.ACCOUNT (programmer) said: ---'
+    $outP = Invoke-SD (New-SdTestUserScript -Name $sshAcct -Password $sshPw)
+    Write-Output '  --- CREATE.ACCOUNT (SSH only) said: ---'
     Write-Output $outP
-
-    # The control needs the API explicitly; CREATE.ACCOUNT no longer joins
-    # sdapi for an ordinary tier (verify-apiadmin.ps1 step 7a is the witness).
-    $outG = Invoke-SD @('MODIFY.ACCOUNT ' + $progAcct + ' API')
-    Write-Output '  --- MODIFY.ACCOUNT ... API said: ---'
-    Write-Output $outG
 
     # ***THE CONTROL IS WINDOWS, NOT SD's WORDING.***  A verb that refused still
     # echoes the account name it was given, so reading the transcript back for
     # it is the false-positive shape CLAUDE.md names after ZZIDALLOW.
-    $madeAdmin = ($null -ne (Get-LocalUser -Name $adminAcct -ErrorAction SilentlyContinue))
-    $madeProg  = ($null -ne (Get-LocalUser -Name $progAcct  -ErrorAction SilentlyContinue))
-    Note 'the administrator account exists in Windows' $true $madeAdmin
-    Note 'the programmer account exists in Windows'    $true $madeProg
-    if (-not ($madeAdmin -and $madeProg)) {
+    $madeApi = ($null -ne (Get-LocalUser -Name $apiAcct -ErrorAction SilentlyContinue))
+    $madeSsh = ($null -ne (Get-LocalUser -Name $sshAcct -ErrorAction SilentlyContinue))
+    Note 'the API account exists in Windows'      $true $madeApi
+    Note 'the SSH-only account exists in Windows' $true $madeSsh
+    if (-not ($madeApi -and $madeSsh)) {
         # ***NAME THE MALFORMED-COMMAND CASE SEPARATELY.***  "an account was not
         # created" is true of a refused CREATE.ACCOUNT and of a mistyped one
         # alike, and the second is a fault in THIS script rather than in the
-        # product - which is exactly how the first run of it was read.  CREATEA
-        # prints "Command Syntax:" only on its invalid-argument path, so it is
-        # a safe anchor for that one cause.
-        $syntax = (($outA + "`n" + $outP + "`n" + $outG) -match 'Command Syntax:')
+        # product.  CREATEA prints "Command Syntax:" only on its invalid-argument
+        # path, so it is a safe anchor for that one cause.
+        $syntax = (($outA + "`n" + $outP) -match 'Command Syntax:')
         if ($syntax) {
             Write-Output ''
             Write-Output '  CREATE.ACCOUNT printed its SYNTAX message, so a command above is malformed'
-            Write-Output '  and this is a fault in this script, not in SD.  The route keyword'
-            Write-Output '  (SSH | API | BOTH | NONE) is REQUIRED for a USER account - CREATEA header.'
+            Write-Output '  and this is a fault in this script, not in SD.'
             Refuse 'a CREATE.ACCOUNT command was malformed - see the syntax message above.'
         }
         Refuse 'an account was not created - nothing below could measure anything.'
     }
 
-    # AND THE ADMINISTRATOR ONE MUST REALLY BE ONE, or leg B proves nothing: a
-    # refusal of a non-administrator is not the rule under test.
-    $admins = @()
-    try {
-        $admins = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction Stop |
-                    ForEach-Object { ($_.Name -split '\\')[-1].ToLower() })
-    } catch {
-        Refuse ('could not read the Administrators group - ' + $_.Exception.Message)
-    }
-    Note 'Administrators was readable'                  $true  ($admins.Count -gt 0)
-    Note 'the admin account IS a Windows administrator' $true  ($admins -contains $adminAcct)
-    Note 'the control account is NOT'                   $false ($admins -contains $progAcct)
+    # THE FIXTURE MUST BE WHAT IT CLAIMS, or leg B measures a mislabelled account: the API
+    # account holds sdapi, the SSH-only account does not.  (verify-routes.ps1 owns group
+    # membership as a subject; here it is a precondition, so it is scored as one.)
+    Note 'fixture: the API account is in sdapi'          $true  (InGroup 'sdapi' $apiAcct)
+    Note 'fixture: the SSH-only account is NOT in sdapi' $false (InGroup 'sdapi' $sshAcct)
+    Note 'fixture: the SSH-only account is in sdssh'     $true  (InGroup 'sdssh' $sshAcct)
 
     # -----------------------------------------------------------------------
     Step 2 "enabling APIPORT=$Port and restarting SD"
@@ -437,20 +368,17 @@ try {
     Write-Output ("  address for the REMOTE legs: {0}" -f
                   $(if ($lanIp) { $lanIp } else { '<none>' }))
 
-    # REFUSE THE NULL CASE.  With no reachable routable address there is no
-    # remote leg and no CONTROL - and since RELEASE_1.1 58 made BOTH admin legs
-    # refusals, the control is the only row left that can fail for the right
-    # reason.  Without it every remaining row would pass on a machine with no
-    # remote API at all: a green meaning nothing.  This is also the honest
-    # answer on a machine whose firewall keeps the API loopback-only, which is
-    # the shipped default.
+    # REFUSE THE NULL CASE.  With no reachable routable address there is no remote leg and no
+    # CONTROL: every remaining row would pass on a machine with no remote API at all, a green
+    # meaning nothing.  This is also the honest answer on a machine whose firewall keeps the
+    # API loopback-only, which is the shipped default.
     if (-not $lanIp) {
         Write-Output ''
         Write-Output '  No non-loopback IPv4 address on this machine accepts a connection on the'
         Write-Output '  API port.  That is the SHIPPED posture - remote.api is off by default - so'
-        Write-Output '  it is not a fault; it does mean the gate cannot be exercised here.'
+        Write-Output '  it is not a fault; it does mean the address pair cannot be exercised here.'
         Write-Output '  Run "remote.api on" in an SDSYS session first, and put it back afterwards.'
-        Refuse 'there is no remote route to drive, so the gate cannot be measured at all.'
+        Refuse 'there is no remote route to drive, so the door cannot be measured over the network.'
     }
 
     # -----------------------------------------------------------------------
@@ -459,92 +387,73 @@ try {
     Write-Output ("  audit is {0} bytes before" -f $before.Length)
 
     # -----------------------------------------------------------------------
-    Step 5 "CONTROL - a PROGRAMMER via $lanIp - MUST BE ADMITTED"
-    $rc = Invoke-Api $lanIp $progAcct $progPw $progAcct.ToUpper() 'WHO'
+    Step 5 "CONTROL - the API account via $lanIp - MUST BE ADMITTED"
+    $rc = Invoke-Api $lanIp $apiAcct $apiPw $apiAcct.ToUpper() 'WHO'
     Write-Output ("  client exit {0}" -f $rc.Rc)
     Write-Output '  --- the client said: ---'
     Write-Output $rc.Text
 
     # -----------------------------------------------------------------------
-    Step 6 'LEG A - the ADMINISTRATOR over 127.0.0.1 - MUST BE ADMITTED'
-    Write-Output '  RELEASE_1.1 62, owner 18 Sep 2026: "should be able to use the api locally",'
-    Write-Output '  because an administrative Windows GUI app has to reach the database.'
-    Write-Output '  This leg was MUST BE REFUSED for half a day under 58 and was witnessed'
-    Write-Output '  that way on b197; 62 narrowed 58 to ssh only, so it is admitted again.'
-    $ra = Invoke-Api '127.0.0.1' $adminAcct $adminPw $adminAcct.ToUpper() 'WHO'
+    Step 6 'LEG A - the SAME API account over 127.0.0.1 - MUST BE ADMITTED'
+    $ra = Invoke-Api '127.0.0.1' $apiAcct $apiPw $apiAcct.ToUpper() 'WHO'
     Write-Output ("  client exit {0}" -f $ra.Rc)
     Write-Output '  --- the client said: ---'
     Write-Output $ra.Text
 
     # -----------------------------------------------------------------------
-    Step 7 "LEG B - the SAME ADMINISTRATOR via $lanIp - MUST BE REFUSED"
-    $rb = Invoke-Api $lanIp $adminAcct $adminPw $adminAcct.ToUpper() 'WHO'
+    Step 7 "LEG B - the SSH-ONLY account via $lanIp - MUST BE REFUSED"
+    $rb = Invoke-Api $lanIp $sshAcct $sshPw $sshAcct.ToUpper() 'WHO'
     Write-Output ("  client exit {0}" -f $rb.Rc)
     Write-Output '  --- the client said: ---'
     Write-Output $rb.Text
 
     # -----------------------------------------------------------------------
-    Step 8 'the verdict'
-
-    # ***THE CONTROL IS SCORED FIRST AND IT GATES EVERYTHING.***  If a
-    # non-administrator cannot connect over the LAN address either, the
-    # listener or the firewall is shut and leg B's refusal says nothing.
-    $controlIn = ($rc.Text -match 'PROBE\.CONNECT=YES')
-    Note 'CONTROL: a non-administrator connects over the LAN address' $true $controlIn
-    if (-not $controlIn) {
-        Write-Output ''
-        Write-Output '  The CONTROL did not get in, so the remote route itself is suspect.'
-        Write-Output '  Leg B is NOT scored below - a refusal there would prove nothing about the gate.'
-        Refuse 'the control leg failed, so the gate cannot be measured.'
-    }
-
-    # ***18 Sep 26 - RESTORED TO THE PRE-58 ROWS, VERBATIM, BECAUSE 62 RESTORED
-    # THE BEHAVIOUR THEY MEASURE.***  RELEASE_1.1 62: the owner narrowed 58 the
-    # same day - "the administrator should not be able to reach the machine
-    # through ssh or api, but should be able to use the api locally" - so the
-    # administrator is in sdapi again, the peer test is what confines the API to
-    # this machine, and leg A is MUST BE ADMITTED once more.
-    #
-    # THE ROUND TRIP IS RECORDED RATHER THAN TIDIED AWAY.  For half a day these
-    # were four rows anchored on 10073 with 10174 required ABSENT (58: no API
-    # for an administrator at all), and that shape was WITNESSED GREEN on b197 -
-    # so the intermediate posture worked and was measured, which is worth
-    # knowing if 62 is ever revisited.  What makes 62 safe is that 58's
-    # DisableForwarding stayed: the peer test reads accept()'s address, and an
-    # ssh -L forward makes a remote connection arrive from 127.0.0.1.
-
-    # LEG A - LOCAL - MUST BE ADMITTED.  PROBE.CONNECT=YES is printed only
-    # after SDConnect() returned a session, so the refusal path cannot say it.
-    $localIn = ($ra.Text -match 'PROBE\.CONNECT=YES')
-    Note 'LOCAL: an administrator over loopback IS admitted' $true $localIn
-
-    # And the disqualifier for the same leg: the refusal wording must NOT appear.
-    $localRefused = ($ra.Text -match '(?i)may not sign in')
-    Note 'LOCAL: no refusal message was shown' $false $localRefused
-
-    # AND NOT REFUSED BY THE sdapi GATE EITHER.  10073 here would mean the
-    # administrator is not in sdapi - 62's grant missing, or 63's migration not
-    # run on this machine.  A distinct row because it is a distinct cause.
-    Note 'LOCAL: not refused by the sdapi gate (10073 absent)' $false `
-         ($ra.Text -match '(?i)is not permitted to use the API')
-
-    # LEG B - REMOTE - MUST BE REFUSED, scored on the success anchor's ABSENCE
-    # and on 10174's own wording being PRESENT.  Both, because a connection can
-    # fail for a dozen reasons that are not this gate.
-    $remoteIn = ($rb.Text -match 'PROBE\.CONNECT=YES')
-    Note 'REMOTE: the administrator did NOT get a session' $false $remoteIn
-
-    $remoteMsg = ($rb.Text -match '(?i)may not sign in to this machine from another one')
-    Note 'REMOTE: message 10174 was returned to the client' $true $remoteMsg
-
-    # ***AND THE PAIR IS THE POINT.***  Same account, same password, same host,
-    # two addresses.  If both legs went the same way the gate is not reading the
-    # route at all - it is admitting everything or refusing everything - and
-    # either of those can look like a pass on a single leg.
-    Note 'the two routes were treated DIFFERENTLY' $true ($localIn -ne $remoteIn)
+    Step 8 'LEG C - the SSH-ONLY account over 127.0.0.1 - MUST BE REFUSED'
+    $rcx = Invoke-Api '127.0.0.1' $sshAcct $sshPw $sshAcct.ToUpper() 'WHO'
+    Write-Output ("  client exit {0}" -f $rcx.Rc)
+    Write-Output '  --- the client said: ---'
+    Write-Output $rcx.Text
 
     # -----------------------------------------------------------------------
-    Step 9 'the audit trail, after - THE DECISIVE READING'
+    Step 9 'the verdict'
+
+    # ***THE CONTROL IS SCORED FIRST AND IT GATES EVERYTHING.***  If an account with the API
+    # route cannot connect over the LAN address, the listener or the firewall is shut and the
+    # refusals below say nothing about the keyword.
+    $controlIn = ($rc.Text -match 'PROBE\.CONNECT=YES')
+    Note 'CONTROL: the API account connects over the LAN address' $true $controlIn
+    if (-not $controlIn) {
+        Write-Output ''
+        Write-Output '  The CONTROL did not get in, so the network route itself is suspect.'
+        Write-Output '  Legs B and C are NOT scored below - a refusal there would prove nothing about the keyword.'
+        Refuse 'the control leg failed, so the door cannot be measured.'
+    }
+
+    # LEG A - the ADDRESS makes no difference.  PROBE.CONNECT=YES is printed only after
+    # SDConnect() returned a session, so the refusal path cannot say it.
+    $localIn = ($ra.Text -match 'PROBE\.CONNECT=YES')
+    Note 'LEG A: the same account over loopback IS admitted too' $true $localIn
+    Note 'LEG A: not refused by the sdapi gate (10073 absent)' $false `
+         ($ra.Text -match '(?i)is not permitted to use the API')
+
+    # LEGS B AND C - the KEYWORD decides.  Scored on the success anchor's ABSENCE and on 10073's
+    # own wording being PRESENT, both, because a connection can fail for a dozen reasons that are
+    # not the gate.
+    foreach ($x in @(@{ N = 'LEG B (LAN address)'; T = $rb.Text }, @{ N = 'LEG C (loopback)'; T = $rcx.Text })) {
+        Note ($x.N + ': the SSH-only account did NOT get a session') $false ($x.T -match 'PROBE\.CONNECT=YES')
+        Note ($x.N + ': message 10073 was returned to the client') $true ($x.T -match '(?i)is not permitted to use the API')
+    }
+
+    # ***THE PAIRS ARE THE POINT.***  Same account over two addresses went the SAME way (the
+    # address is not read), and two accounts differing only in keyword went DIFFERENT ways (the
+    # keyword is).  If both were true of a broken door - one that admitted everything or refused
+    # everything - a single leg would look like a pass.
+    Note 'the ADDRESS made no difference (control and leg A agree)' $true ($controlIn -eq $localIn)
+    Note 'the KEYWORD decided (API account in, SSH-only account out, on the SAME address)' $true `
+         ($controlIn -and -not ($rb.Text -match 'PROBE\.CONNECT=YES'))
+
+    # -----------------------------------------------------------------------
+    Step 10 'the audit trail, after - THE DECISIVE READING'
     $after = [IO.File]::ReadAllText($audit)
     $tail  = $after.Substring([Math]::Min($before.Length, $after.Length))
     Write-Output ("  audit grew by {0} bytes" -f ($after.Length - $before.Length))
@@ -553,22 +462,13 @@ try {
         if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) }
     }
 
-    # Written at exit.vb.scram.fail and nowhere else.  A session that never
-    # reached the gate cannot produce this line.
-    #
-    # 18 Sep 26 - RESTORED WITH LEG A.  RELEASE_1.1 62 puts the administrator
-    # back in sdapi, so the peer test refuses the remote leg again and writes
-    # its own reason - and the ADDRESS is back in the trail, which the sdapi
-    # reason could not carry.  For half a day under 58 these two rows anchored
-    # on "not in sdapi" and had no address row; that loss is what 62 undid.
-    $auditRefused = ($tail -match '(?i)API REFUSED' -and
-                     $tail -match '(?i)administrator on a remote API session')
-    Note 'the audit records the REMOTE refusal, with the reason' $true $auditRefused
-
-    # AND THE ADDRESS IS IN IT, which is what distinguishes "the gate fired"
-    # from "the gate fired for some other reason".
-    $auditAddr = ($tail -match ('(?i)remote API session from\s+' + [regex]::Escape($lanIp)))
-    Note 'the refusal names the address it refused' $true $auditAddr
+    # Written at exit.vb.scram.fail and nowhere else.  A session that never reached the gate
+    # cannot produce this line, and it NAMES THE USER, which is what ties it to leg B and not to
+    # some other refusal on the machine.
+    $auditRefused = ($tail -match ('(?i)API REFUSED user=' + [regex]::Escape($sshAcct) + '\b.*reason=not in sdapi'))
+    Note 'the audit records the SSH-only account''s refusal, with the reason (not in sdapi)' $true $auditRefused
+    Note 'the audit has NO refusal for the API account' $false `
+         ($tail -match ('(?i)API REFUSED user=' + [regex]::Escape($apiAcct) + '\b'))
 
     # A trail that did not move at all means the session never reached APISRVR -
     # which is not the gate working, it is the measurement failing.
@@ -587,7 +487,7 @@ try {
         Write-Output '  SD restarted on the restored configuration'
     }
 
-    foreach ($acct in @($adminAcct, $progAcct)) {
+    foreach ($acct in @($apiAcct, $sshAcct)) {
         $exists = ($null -ne (Get-LocalUser -Name $acct -ErrorAction SilentlyContinue))
         if (-not $exists) { continue }
         try {
@@ -599,19 +499,18 @@ try {
         }
         $still = ($null -ne (Get-LocalUser -Name $acct -ErrorAction SilentlyContinue))
         if ($still) {
-            # NAMED, LOUDLY.  One of these is a local ADMINISTRATOR with a
-            # generated password; leaving it behind silently is the worst
-            # outcome this script can have.
+            # NAMED, LOUDLY: an account with a generated password left behind silently is the
+            # worst outcome this script can have.
             Write-Output ''
             Write-Output ('  *** verify-apiremote: ACCOUNT STILL EXISTS: ' + $acct)
             Write-Output  '  *** Remove it by hand.  In an ELEVATED PowerShell:'
             Write-Output ('  ***   Remove-LocalUser -Name ' + $acct)
-            Write-Output  '  *** If it was the administrator one, check it is out of Administrators too.'
         }
     }
 }
 
 Write-Output ''
 Write-Output ("verify-apiremote: {0} passed, {1} failed" -f $pass, $fail)
+if (($pass + $fail) -eq 0) { Write-Output 'verify-apiremote: COULD NOT RUN - no decisive check ran'; exit 2 }
 if ($fail -gt 0) { exit 1 }
 exit 0

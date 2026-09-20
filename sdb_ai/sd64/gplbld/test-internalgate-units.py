@@ -130,6 +130,9 @@ def gate_problems(login_text):
         p.append("an admission is not written to the audit trail")
     if "gate.writer[1, 80]" not in body:
         p.append("the writer text is not capped (the file is writable by more than the installer)")
+    # R4: an admission is SAID ON THE SCREEN as well as audited, so it lands in every transcript
+    if not re.search(r"if gate\.ok then.*?display sysmsg\(10922, gate\.writer\)", body, re.S):
+        p.append("an admission is not announced on the screen (display sysmsg(10922, gate.writer))")
     return p
 
 
@@ -163,6 +166,12 @@ if i_d > 0 and i_ok > 0:
     row(any("AFTER" in x for x in gate_problems(m2)), "MUTANT: a delete moved after the decision is caught")
 mut3 = login.replace("gosub internal.gate\n            if not(gate.ok) then goto terminate.connection", "gosub internal.gate")
 row(any("not followed by" in x for x in gate_problems(mut3)), "MUTANT: a call site that ignores gate.ok is caught")
+msg = os.path.join(SD64, "sdsys", "messages", "10922")
+msg_text = read(msg) if os.path.isfile(msg) else ""
+row("%1" in msg_text and msg_text.strip() != "",
+    "message 10922 exists and takes the writer as %1 (the Linux agent was told this number is taken)", msg)
+mut5 = login.replace("display sysmsg(10922, gate.writer)", "null")
+row(any("not announced" in x for x in gate_problems(mut5)), "MUTANT: a gate that stops announcing an admission is caught")
 mut4 = login.replace("gate.expiry = 600", "gate.expiry = 0")
 row(any("expiry" in x for x in gate_problems(mut4)), "MUTANT: a changed expiry is caught (the writers' docs and the witness assume 600)")
 

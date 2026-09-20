@@ -63,14 +63,20 @@ if (-not (Test-Path -LiteralPath $sdExe)) {
 # ":Process terminated" and run nothing - PROJECT_STATUS.md section 6, and it
 # cost a run on 29 Aug 2026.  LOGTO SDSYS first and TERM to stop wrapping, the
 # shape every elevated script here uses; the leading blank line is a BOM sink.
+#
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1), CONVERTED ON THE OWNER'S RULING
+# ("convert").  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002) FROM ANY SESSION
+# THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive token, so the
+# commands go to a task inside SDSYS's own live session and the text comes back through a
+# file.  A seat that did not run THROWS; SDSYS must be signed in.  The TERM line this sent
+# first is added by the helper.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SdAdmin([string[]]$SdLines) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $SdLines + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($e, $t) $t | & $e } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout 120) { $raw = Receive-Job $job }
-    else { Stop-Job $job; $raw = Receive-Job $job; $raw += '*** TIMED OUT - SD is at a prompt' }
-    Remove-Job $job -Force
-    return (($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $SdLines -TimeoutSec 180)
 }
+# PROVE THE SEAT BEFORE READING OR DELETING ANYTHING: a missing SDSYS session is exit 2, and
+# "could not run" is never scored as "nothing to delete".
+Assert-SdSeat -Label 'clean-deadvoc'
 
 Write-Output ('clean-deadvoc: sd.exe ' + $sdExe)
 Write-Output ''

@@ -11,7 +11,9 @@
 #                        working as designed, and the probe needs a permitted
 #                        session.
 #
-# Unelevated, on purpose: that is the session verify-pyapi used.
+# ***CONVERTED TO THE SDSYS SEAT 20 Sep 2026 - IT NOW RUNS ELEVATED, AS SDSYS.***  It used to be
+# "unelevated, on purpose: that is the session verify-pyapi used", and the seat cannot ask that
+# question: see the note above Invoke-SD below.
 
 $ErrorActionPreference = 'Stop'
 
@@ -29,20 +31,24 @@ Write-Output ("  running as: " + $id.Name)
 Write-Output ("  elevated  : " + ([Security.Principal.WindowsPrincipal]$id).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator))
 
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) { $out = Receive-Job $job }
-    else { Stop-Job $job; $out = Receive-Job $job; $out += "*** TIMEOUT" }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1), CONVERTED ON THE OWNER'S RULING
+# ("convert").  THE "LOGTO SDSYS" PREFIX THIS USED TO SEND IS REFUSED (10002) FROM ANY SESSION
+# THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive token, so the
+# commands go to a task inside SDSYS's own live session.
+#
+# ***WHAT THIS CHANGES ABOUT THE QUESTION, SAID PLAINLY.***  The header asks whether an UNELEVATED
+# session is permitted to reach the OS from a non-internal program, and says "unelevated, on
+# purpose: that is the session verify-pyapi used".  The seat's token is ELEVATED (that is what
+# reaches SDSYS at all), so USR_ADMIN is set and os_permitted() takes its administrator branch:
+# this now answers the ELEVATED-SDSYS case only, and cannot ask the unelevated one.  That
+# question is what VerifyInstall1's throwaway test user exists for.  The probe still works and
+# still discriminates "the plumbing runs" from "the gate refused", which is what -12040's three
+# causes needed separated.  SDSYS must be signed in, and this needs an ELEVATED PowerShell.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
+Assert-SdSeat -Label 'probe-osex'
 
 foreach ($p in @($ctlDir, ($ctlDir + '.DIC'), ($ctlDir + '.OUT'))) {
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }

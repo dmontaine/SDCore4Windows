@@ -127,9 +127,16 @@ if (-not $SkipAssertCurrent) {
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
         ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Output 'probe-catprivate: this needs an ELEVATED PowerShell - LOGTO SDSYS is administrator-only.'
+    Write-Output 'probe-catprivate: this needs an ELEVATED PowerShell - the SDSYS seat registers a task for another account.'
     exit 2
 }
+
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1), CONVERTED ON THE OWNER'S RULING
+# ("convert").  The SDSYS seat is loaded and PROVED here, before the gcat backup or any fixture,
+# so a missing SDSYS session is exit 2 ("could not run") and not a thrown error at the first SD
+# call that reads as a CATALOG failure.  SDSYS must be signed in.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+Assert-SdSeat -Label 'probe-catprivate'
 
 # --- gcat backup ----------------------------------------------------------
 # Per step 15's recipe.  Copy-Item -Recurse mirrors the directory; if the
@@ -140,29 +147,14 @@ $gcatBackup = Join-Path $logDir ('gcat-backup-' + $stamp)
 Write-Output ("  backing gcat up to " + $gcatBackup)
 Copy-Item -LiteralPath $gcat -Destination $gcatBackup -Recurse -Force
 
-# --- Invoke-SD, copied from verify-catgate.ps1 unchanged ------------------
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** It also leaves the session's user-table slot and locks behind,"
-        $out += "*** so sdwind will not shut down and cycle.ps1 will refuse to"
-        $out += "*** start.  Stop-Process the sdwind PID it names."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# --- Invoke-SD, through the SDSYS seat --------------------------------------
+# It was copied from verify-catgate.ps1 with a "LOGTO SDSYS" prefix that RELEASE_1.1 64 made
+# REFUSED (10002) from any session that did not start as the OS SDSYS account.  The commands now
+# go to a task inside SDSYS's own live session and the text comes back through a file; the TERM
+# line is added by the helper.  A seat that did not run THROWS, and a call that hits its timeout
+# is stopped and throws with what SD had printed.
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # --- fixtures: CREATE.FILE, source, BASIC ---------------------------------
