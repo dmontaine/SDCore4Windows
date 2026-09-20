@@ -73,12 +73,48 @@ RESERVED = {
 # updated.  A declaration nobody re-checks is how a PENDING becomes a place to
 # hide; test-acctkeywords-units.py makes the same demand of its own.
 #
+# ***AND IT IS NOT ONE ID, IT IS SIX - 10176 THROUGH 10181, A WHOLE
+# CONTIGUOUS BLOCK, CONFIRMED 20 Sep 2026 BY READING BOTH TREES.***  The Linux
+# agent went looking at the range rather than the id after we reported 10177,
+# and the two ports allocated two blocks of six in the same week: ours is the
+# case-insensitivity conversion (RELEASE_1.1 5 / D2), theirs is their
+# teardown's - root refused, sdsys local-only, the three suspension messages,
+# and the sdsys-without-a-login refusal.  All six of ours are WIRED, and four
+# of the six have verifiers, so none of them is cheap to move either.
+#
+# ***CHECKED HERE BEFORE IT WAS BELIEVED, WHICH IS THIS TREE'S RULE FOR A LINUX
+# REPORT.***  gplbld/scan-msgdiff.py compares the two trees on this disk and
+# found five of the six directly; the sixth (10181) is newer than the local
+# Linux clone, so it rests on their report rather than on our own read, and
+# that is said rather than glossed.
+#
 # id -> (what OUR record says, who wires it here, what THEIRS says)
 COLLISION = {
+    "10176": ("Record ids are case insensitive in every file, so CASE is not accepted",
+              "sdsys/gpl.bp/configf and createf, witnessed by gplbld/verify-twins.ps1",
+              "This is a root session, and root is not SD's administrator"),
     "10177": ("'%1' and '%2' differ only by case in %3 - CONFIGURE.FILE's twin refusal",
               "sdsys/gpl.bp/configf:385, witnessed by gplbld/verify-twins.ps1",
               "SD administration needs a local session - CPROC's refusal of a "
               "remote sdsys session (Linux S.35, 20 Sep 2026)"),
+    "10178": ("WARNING: %1 file(s) hold %2 record id(s) that differ only by case",
+              "sdsys/gpl.bp/upgrade_nocase, witnessed by gplbld/verify-nocaseupgrade.ps1",
+              "Account %1 is no longer suspended"),
+    "10179": ("Converted %1 of %2 file(s) to case insensitive ids",
+              "sdsys/gpl.bp/upgrade_nocase, witnessed by gplbld/verify-nocaseupgrade.ps1",
+              "Account %1 is now suspended"),
+    "10180": ("Checking every file for record ids that differ only by case...",
+              "sdsys/gpl.bp/upgrade_nocase",
+              "%1 is not suspended; nothing changed"),
+    # ***THE ONE ROW WE HAVE NOT SEEN OURSELVES.***  The Linux clone on this
+    # disk is older than their tree and does not carry a 10181 at all, so this
+    # row is THEIR report, not our measurement.  It is declared anyway because
+    # leaving it out would make the block look like five.
+    "10181": ("Rename or delete one id of each pair, then convert that file with "
+              "CONFIGURE.FILE NO.CASE",
+              "sdsys/gpl.bp/upgrade_nocase",
+              "This session runs as sdsys but the machine was not logged in as "
+              "sdsys - REPORTED by the Linux port, newer than our clone of it"),
 }
 
 # NOT CLAIMED BY EITHER PORT, recorded so a later session does not have to ask

@@ -1612,7 +1612,15 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # live on Linux, and every scan of this tree reports it free.
                   # Reads sdsys/messages and nothing else; source-only, ships
                   # nowhere, listed with the commit that creates it.
-                  'test-msgreserved-units.py')
+                  'test-msgreserved-units.py',
+                  # 20 Sep 26 - RELEASE_1.1 79's cross-tree report: it compares
+                  # this tree's 10000-range messages against the Linux port's
+                  # clone beside this repository and prints what differs.  It
+                  # is deliberately NOT in the free tier - it reads a clone
+                  # nothing pulls - so it ships nowhere and guards nothing on
+                  # its own; test-msgreserved-units.py holds the judgements it
+                  # produces.  Listed with the commit that creates it.
+                  'scan-msgdiff.py')
 
 # 02 Sep 26 - COMMENTS ARE STRIPPED FIRST.  PRE_RELEASE_FIXES 143, and it is the
 # quote-or-slash rule below failing in the one place it was documented.
