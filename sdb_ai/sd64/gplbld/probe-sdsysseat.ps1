@@ -294,6 +294,129 @@ function Invoke-ViaTask([string]$ps1, [string]$outFile, [int]$seconds) {
               Why = $(if ($got) { '' } else { 'the task produced no output within ' + $seconds + 's' }) }
 }
 
+# ===========================================================================
+# ROUTE C - THE INTERACTIVE LOGON'S OWN LINKED TOKEN.
+#
+# ***THIS IS NOT A TRICK PLAYED ON THE GATE, AND THE DISTINCTION IS THE WHOLE
+# REASON IT IS ALLOWED TO EXIST.***  Route A already performs a real
+# INTERACTIVE logon as the account - its token carries S-1-5-4, measured - and
+# UAC hands that logon a FILTERED token.  TokenLinkedToken returns the other
+# half of that same pair: the token UAC would give if a person clicked Yes.  So
+# this starts the process with the elevated token OF AN INTERACTIVE LOGON,
+# which is exactly what clicking Yes does.  The consent is real and it is the
+# owner's: an elevated administrator, at the keyboard, typing the account's
+# password into this probe.
+#
+# ***AND THE PROPERTY IT DEPENDS ON IS ALREADY MEASURED IN THIS TREE.***
+# HISTORY.md:48615, 5 Sep 2026: "ELEVATION KEEPS S-1-5-4... INTERACTIVE true in
+# both legs, with BUILTIN\Administrators moving FALSE -> TRUE between them."
+# That was read from one ordinary session's own linked token, with the
+# Administrators move as the control that stops the two legs being one token
+# read twice.  If it holds for another account's logon, route C satisfies BOTH
+# terms of kernel.c:299 with no change to the product and no door to ship.
+#
+# CreateProcessWithTokenW, NOT CreateProcessAsUser: the first needs
+# SeImpersonatePrivilege, which an elevated administrator HAS; the second needs
+# SeAssignPrimaryTokenPrivilege, which it does not.  Every failure below
+# reports its Win32 error rather than returning a bare false.
+Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class SdSeat {
+    [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern bool LogonUser(string user, string domain, string pass,
+        int logonType, int logonProvider, out IntPtr token);
+
+    [DllImport("advapi32.dll", SetLastError=true)]
+    public static extern bool GetTokenInformation(IntPtr token, int infoClass,
+        IntPtr buffer, int length, out int returned);
+
+    [DllImport("advapi32.dll", SetLastError=true)]
+    public static extern bool DuplicateTokenEx(IntPtr existing, uint access,
+        IntPtr attrs, int impLevel, int tokenType, out IntPtr dup);
+
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public struct STARTUPINFO {
+        public int cb; public string res1; public string desktop; public string title;
+        public int x, y, xSize, ySize, xCount, yCount, fill, flags;
+        public short showWindow, res2; public IntPtr res3, stdIn, stdOut, stdErr;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROCESS_INFORMATION { public IntPtr process, thread; public int pid, tid; }
+
+    [DllImport("advapi32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern bool CreateProcessWithTokenW(IntPtr token, int logonFlags,
+        string appName, string cmdLine, int creationFlags, IntPtr env, string curDir,
+        ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool CloseHandle(IntPtr h);
+
+    // Returns "" on success, or the step that failed with its Win32 error.
+    public static string Spawn(string user, string domain, string pass,
+                               string appName, string cmdLine, string curDir, out int pid) {
+        pid = 0;
+        IntPtr filtered = IntPtr.Zero, linked = IntPtr.Zero, primary = IntPtr.Zero;
+        try {
+            // 2 = LOGON32_LOGON_INTERACTIVE, 0 = LOGON32_PROVIDER_DEFAULT
+            if (!LogonUser(user, domain, pass, 2, 0, out filtered))
+                return "LogonUser (interactive) failed, Win32 " + Marshal.GetLastWin32Error();
+
+            // 19 = TokenLinkedToken
+            int need = 0;
+            GetTokenInformation(filtered, 19, IntPtr.Zero, 0, out need);
+            if (need <= 0)
+                return "GetTokenInformation(TokenLinkedToken) sized nothing, Win32 "
+                       + Marshal.GetLastWin32Error()
+                       + " - this logon may have NO linked token (not a split-token account)";
+            IntPtr buf = Marshal.AllocHGlobal(need);
+            try {
+                if (!GetTokenInformation(filtered, 19, buf, need, out need))
+                    return "GetTokenInformation(TokenLinkedToken) failed, Win32 "
+                           + Marshal.GetLastWin32Error();
+                linked = Marshal.ReadIntPtr(buf);
+            } finally { Marshal.FreeHGlobal(buf); }
+
+            // The linked token is an IMPERSONATION token; CreateProcessWithTokenW
+            // needs a PRIMARY one.  0xF01FF = TOKEN_ALL_ACCESS, 2 = SecurityImpersonation,
+            // 1 = TokenPrimary.
+            if (!DuplicateTokenEx(linked, 0xF01FF, IntPtr.Zero, 2, 1, out primary))
+                return "DuplicateTokenEx failed, Win32 " + Marshal.GetLastWin32Error();
+
+            STARTUPINFO si = new STARTUPINFO();
+            si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+            PROCESS_INFORMATION pi;
+            // 0x08000000 = CREATE_NO_WINDOW
+            if (!CreateProcessWithTokenW(primary, 0, appName, cmdLine, 0x08000000,
+                                         IntPtr.Zero, curDir, ref si, out pi))
+                return "CreateProcessWithTokenW failed, Win32 " + Marshal.GetLastWin32Error();
+            pid = pi.pid;
+            CloseHandle(pi.thread); CloseHandle(pi.process);
+            return "";
+        } finally {
+            if (primary  != IntPtr.Zero) CloseHandle(primary);
+            if (linked   != IntPtr.Zero) CloseHandle(linked);
+            if (filtered != IntPtr.Zero) CloseHandle(filtered);
+        }
+    }
+}
+'@
+
+function Invoke-ViaLinkedToken([string]$ps1, [string]$outFile, [int]$seconds) {
+    $pid2 = 0
+    $cmd = ('"' + (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') +
+            '" -ExecutionPolicy Bypass -File "' + $ps1 + '"')
+    $why = [SdSeat]::Spawn($Account, $env:COMPUTERNAME,
+                           $cred.GetNetworkCredential().Password,
+                           (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),
+                           $cmd, $WorkDir, [ref]$pid2)
+    if ($why -ne '') { return @{ Ok = $false; Task = ''; Why = $why } }
+    $got = Wait-For $outFile $seconds
+    return @{ Ok = $got; Task = ('pid ' + $pid2)
+              Why = $(if ($got) { '' } else { 'the spawn produced no output within ' + $seconds + 's' }) }
+}
+
 function Invoke-ViaStartProcess([string]$ps1, [string]$outFile, [int]$seconds) {
     try {
         Start-Process -FilePath 'powershell.exe' `
@@ -341,21 +464,45 @@ try {
     Write-TokenFacts $b 'route B'
     Note 'route B produced a report at all' $true ($null -ne $b)
 
+    # ------------------------------------------------------------------ route C
+    Head 'route C - the interactive logon''s OWN linked token'
+    Say 'LogonUser(INTERACTIVE) -> TokenLinkedToken -> CreateProcessWithTokenW.'
+    Say 'This is what UAC does when a person clicks Yes, so it should carry S-1-5-4'
+    Say 'from the logon AND the full token from the link.  HISTORY.md:48615 measured'
+    Say 'that elevation keeps S-1-5-4 on this machine; this asks it of another'
+    Say 'account''s logon.'
+
+    $cOut = Join-Path $WorkDir 'routeC.txt'
+    $cPs1 = Join-Path $WorkDir 'routeC.ps1'
+    Remove-Item -LiteralPath $cOut -ErrorAction SilentlyContinue
+    Write-SpawnScript $cPs1 $tokenScript $cOut
+    Say ('command: powershell -ExecutionPolicy Bypass -File "' + $cPs1 + '"  (as ' + $Account + ')')
+    $cRun = Invoke-ViaLinkedToken $cPs1 $cOut 30
+    if ($cRun.Task -ne '') { Say ('spawned: ' + $cRun.Task) }
+    if (-not $cRun.Ok) { Say $cRun.Why }
+    $c = Get-TokenFacts (Read-Report $cOut)
+    Write-TokenFacts $c 'route C'
+    Note 'route C produced a report at all' $true ($null -ne $c)
+
     # ------------------------------------------------------- the decisive rows
-    Head 'what the two routes answered'
+    Head 'what the three routes answered'
 
     $aElev = ($null -ne $a -and $a.IsAdmin -and -not $a.DenyOnly)
     $bElev = ($null -ne $b -and $b.IsAdmin -and -not $b.DenyOnly)
+    $cElev = ($null -ne $c -and $c.IsAdmin -and -not $c.DenyOnly)
     $aSeat = Test-Seat $a
     $bSeat = Test-Seat $b
+    $cSeat = Test-Seat $c
     Say ("route A: elevated={0}  interactive={1}  SEAT={2}" -f `
          $aElev, $(if ($null -ne $a) { $a.Interactive } else { '<none>' }), $aSeat)
     Say ("route B: elevated={0}  interactive={1}  SEAT={2}" -f `
          $bElev, $(if ($null -ne $b) { $b.Interactive } else { '<none>' }), $bSeat)
-    Note 'a route gave an ELEVATED session as the account'    $true ($aElev -or $bElev)
-    Note 'a route satisfied BOTH terms SD tests (the seat)'   $true ($aSeat -or $bSeat)
+    Say ("route C: elevated={0}  interactive={1}  SEAT={2}" -f `
+         $cElev, $(if ($null -ne $c) { $c.Interactive } else { '<none>' }), $cSeat)
+    Note 'a route gave an ELEVATED session as the account'    $true ($aElev -or $bElev -or $cElev)
+    Note 'a route satisfied BOTH terms SD tests (the seat)'   $true ($aSeat -or $bSeat -or $cSeat)
 
-    if (-not ($aElev -or $bElev)) {
+    if (-not ($aElev -or $bElev -or $cElev)) {
         Write-Output ''
         Write-Output 'probe-sdsysseat: NEITHER ROUTE IS ELEVATED, so LOGIN''s landing case cannot'
         Write-Output '  match and the suite cannot be given its seat this way.  THAT IS AN ANSWER,'
@@ -373,10 +520,10 @@ try {
     # confirmed prediction rather than a product failure - scoring it as a FAIL
     # would blame SD for obeying 5.25.  The SD leg still runs, because the
     # refusal is the evidence.
-    $expectRefusal = -not ($aSeat -or $bSeat)
+    $expectRefusal = -not ($aSeat -or $bSeat -or $cSeat)
     if ($expectRefusal) {
         Write-Output ''
-        Write-Output '  NO ROUTE IS A SEAT, AND THE TWO FAIL OPPOSITE HALVES OF ONE CONJUNCTION:'
+        Write-Output '  NO ROUTE IS A SEAT.  A AND B FAIL OPPOSITE HALVES OF ONE CONJUNCTION:'
         Write-Output '  kernel.c:299 sets USR_ADMIN only for IsElevated() AND IsInteractive(), and'
         Write-Output '  IsInteractive() looks for S-1-5-4 in the same group list IsElevated() reads'
         Write-Output '  for 544 (sddefs.h:240, :271).  CreateProcessWithLogonW gives an INTERACTIVE'
@@ -392,9 +539,10 @@ try {
 
     # Prefer a route that IS a seat; failing that, the elevated one, because a
     # refusal from the closest route is the most informative one to capture.
-    $useTask = $(if ($bSeat) { $true } elseif ($aSeat) { $false } else { $bElev })
-    Say ("driving sd.exe through route {0}" -f $(if ($useTask) { 'B (scheduled task)' } else { 'A (Start-Process)' }))
-    if ($expectRefusal) { Say 'PREDICTION: SD refuses with 10002, because neither route is a seat.' }
+    $route = $(if ($cSeat) { 'C' } elseif ($bSeat) { 'B' } elseif ($aSeat) { 'A' }
+               elseif ($cElev) { 'C' } elseif ($bElev) { 'B' } else { 'A' })
+    Say ("driving sd.exe through route {0}" -f $route)
+    if ($expectRefusal) { Say 'PREDICTION: SD refuses with 10002, because no route is a seat.' }
 
     $sdOut = Join-Path $WorkDir 'sdwho.txt'
     $sdPs1 = Join-Path $WorkDir 'sdwho.ps1'
@@ -407,12 +555,17 @@ Set-Content -LiteralPath '@@OUT@@' -Value (($out -join "`n") + "`nENDOFREPORT") 
 '@
     Write-SpawnScript $sdPs1 ($sdScript.Replace('@@SD@@', $sdExe)) $sdOut
 
-    if ($useTask) {
-        Say ('principal: ' + (Get-Principal))
-        $sdRun = Invoke-ViaTask $sdPs1 $sdOut 90
-        Say ('task name: ' + $sdRun.Task)
-    } else {
-        $sdRun = Invoke-ViaStartProcess $sdPs1 $sdOut 90
+    switch ($route) {
+        'B' {
+            Say ('principal: ' + (Get-Principal))
+            $sdRun = Invoke-ViaTask $sdPs1 $sdOut 90
+            Say ('task name: ' + $sdRun.Task)
+        }
+        'C' {
+            $sdRun = Invoke-ViaLinkedToken $sdPs1 $sdOut 90
+            if ($sdRun.Task -ne '') { Say ('spawned: ' + $sdRun.Task) }
+        }
+        default { $sdRun = Invoke-ViaStartProcess $sdPs1 $sdOut 90 }
     }
     if (-not $sdRun.Ok) { Say $sdRun.Why }
 
