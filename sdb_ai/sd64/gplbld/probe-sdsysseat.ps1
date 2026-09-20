@@ -213,7 +213,27 @@ function Get-TokenFacts($text) {
         Mand      = $mand
         DenyOnly  = [bool]($text -match '(?m)^BUILTIN\\Administrators.*deny only')
         Whole     = [bool]($text -match 'ENDOFREPORT')
+        # ***THE SECOND HALF OF kernel.c:299'S CONJUNCTION, AND IT IS WHY THE
+        # 19 Sep RUN WAS REFUSED.***  USR_ADMIN is set only when IsElevated()
+        # AND IsInteractive() are both true, and IsInteractive() looks for
+        # S-1-5-4 (SD_INTERACTIVE_GID 4, sddefs.h:271) in the very group list
+        # IsElevated() reads for 544.  A BATCH logon carries S-1-5-3 instead,
+        # so a scheduled task is elevated and NOT interactive - which is
+        # PROJECT_STATUS.md 5.25 working exactly as it was ruled: "a session
+        # whose origin cannot be established stays refused, which is what keeps
+        # an unattended scheduled task out".
+        Interactive = [bool]($text -match '(?m)^NT AUTHORITY\\INTERACTIVE\b')
+        Batch       = [bool]($text -match '(?m)^NT AUTHORITY\\BATCH\b')
     }
+}
+
+# The product's own test, in one place, so a reader does not have to go to the
+# C to learn why a route was refused.  connection_type is CN_CONSOLE for a
+# locally-run sd.exe, so the middle term of kernel.c:299 is satisfied and the
+# two that can fail are these.
+function Test-Seat($facts) {
+    if ($null -eq $facts) { return $false }
+    return ($facts.IsAdmin -and -not $facts.DenyOnly -and $facts.Interactive)
 }
 
 function Write-TokenFacts($facts, [string]$label) {
@@ -227,6 +247,10 @@ function Write-TokenFacts($facts, [string]$label) {
     Say ("{0}: identity={1}" -f $label, $facts.Who)
     Say ("{0}: integrity={1}  isadmin={2}  Administrators-deny-only={3}" -f `
          $label, $facts.Mand, $facts.IsAdmin, $facts.DenyOnly)
+    Say ("{0}: INTERACTIVE(S-1-5-4)={1}  BATCH(S-1-5-3)={2}" -f `
+         $label, $facts.Interactive, $facts.Batch)
+    Say ("{0}: SD's own test (IsElevated AND IsInteractive, kernel.c:299) = {1}" -f `
+         $label, (Test-Seat $facts))
 }
 
 # Registers a task, runs it, waits for its output file, and unregisters it.  A
@@ -322,9 +346,14 @@ try {
 
     $aElev = ($null -ne $a -and $a.IsAdmin -and -not $a.DenyOnly)
     $bElev = ($null -ne $b -and $b.IsAdmin -and -not $b.DenyOnly)
-    Say ("route A elevated: {0}" -f $aElev)
-    Say ("route B elevated: {0}" -f $bElev)
-    Note 'a route gave an ELEVATED session as the account' $true ($aElev -or $bElev)
+    $aSeat = Test-Seat $a
+    $bSeat = Test-Seat $b
+    Say ("route A: elevated={0}  interactive={1}  SEAT={2}" -f `
+         $aElev, $(if ($null -ne $a) { $a.Interactive } else { '<none>' }), $aSeat)
+    Say ("route B: elevated={0}  interactive={1}  SEAT={2}" -f `
+         $bElev, $(if ($null -ne $b) { $b.Interactive } else { '<none>' }), $bSeat)
+    Note 'a route gave an ELEVATED session as the account'    $true ($aElev -or $bElev)
+    Note 'a route satisfied BOTH terms SD tests (the seat)'   $true ($aSeat -or $bSeat)
 
     if (-not ($aElev -or $bElev)) {
         Write-Output ''
@@ -338,11 +367,34 @@ try {
         exit 1
     }
 
+    # ***MEASURED 19 Sep 2026 AND THE TWO ROUTES FAIL OPPOSITE HALVES.***  Route
+    # A is INTERACTIVE and Medium; route B is High and BATCH.  Neither is a
+    # seat, so SD below is EXPECTED to refuse, and a refusal it predicted is a
+    # confirmed prediction rather than a product failure - scoring it as a FAIL
+    # would blame SD for obeying 5.25.  The SD leg still runs, because the
+    # refusal is the evidence.
+    $expectRefusal = -not ($aSeat -or $bSeat)
+    if ($expectRefusal) {
+        Write-Output ''
+        Write-Output '  NO ROUTE IS A SEAT, AND THE TWO FAIL OPPOSITE HALVES OF ONE CONJUNCTION:'
+        Write-Output '  kernel.c:299 sets USR_ADMIN only for IsElevated() AND IsInteractive(), and'
+        Write-Output '  IsInteractive() looks for S-1-5-4 in the same group list IsElevated() reads'
+        Write-Output '  for 544 (sddefs.h:240, :271).  CreateProcessWithLogonW gives an INTERACTIVE'
+        Write-Output '  logon with a UAC-FILTERED token; a scheduled task gives a full token with a'
+        Write-Output '  BATCH logon.  SD is expected to refuse below with 10002, and that refusal is'
+        Write-Output '  PROJECT_STATUS.md 5.25 working as ruled - "a session whose origin cannot be'
+        Write-Output '  established stays refused, which is what keeps an unattended scheduled task'
+        Write-Output '  out".  The run continues so the refusal is on the record.'
+    }
+
     # ------------------------------------------------------------------- SD
     Head 'and what SD says when that seat runs it'
 
-    $useTask = $bElev
+    # Prefer a route that IS a seat; failing that, the elevated one, because a
+    # refusal from the closest route is the most informative one to capture.
+    $useTask = $(if ($bSeat) { $true } elseif ($aSeat) { $false } else { $bElev })
     Say ("driving sd.exe through route {0}" -f $(if ($useTask) { 'B (scheduled task)' } else { 'A (Start-Process)' }))
+    if ($expectRefusal) { Say 'PREDICTION: SD refuses with 10002, because neither route is a seat.' }
 
     $sdOut = Join-Path $WorkDir 'sdwho.txt'
     $sdPs1 = Join-Path $WorkDir 'sdwho.ps1'
@@ -377,8 +429,16 @@ Set-Content -LiteralPath '@@OUT@@' -Value (($out -join "`n") + "`nENDOFREPORT") 
         # not a check - 10002's refusal names SDSYS too.
         $landed  = ($sdText -match '(?m)^\s*\d+\s+SDSYS\b')
         $refused = ($sdText -match 'restricted to privileged users')
-        Note 'WHO answered "<n> SDSYS" (the landing case matched)' $true $landed
-        Note 'no 10002 refusal in the same output'                 $true (-not $refused)
+        if ($expectRefusal) {
+            # The prediction is the check.  A route that is not a seat MUST be
+            # refused; landing anyway would mean SD's gate does not hold, which
+            # is a finding in the other direction and is scored as one.
+            Note 'SD refused with 10002, as predicted for a non-seat route' $true $refused
+            Note 'and it did NOT land in SDSYS'                             $true (-not $landed)
+        } else {
+            Note 'WHO answered "<n> SDSYS" (the landing case matched)' $true $landed
+            Note 'no 10002 refusal in the same output'                 $true (-not $refused)
+        }
     }
 } finally {
     foreach ($n in $tasksMade) {
