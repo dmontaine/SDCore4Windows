@@ -108,6 +108,7 @@ if ($wanted.Count -eq 0) {
     exit 4
 }
 
+. (Join-Path $PSScriptRoot 'internal-marker.ps1')
 function Invoke-Sd {
     # NEVER "Start-Process -Wait": sdwind inherits sd's handles and outlives it,
     # so waiting on the STREAMS waits for the daemon.  Wait on the PROCESS.
@@ -116,6 +117,14 @@ function Invoke-Sd {
 
     $out = Join-Path $env:TEMP ("sd-updict-out-$PID.txt")
     $err = Join-Path $env:TEMP ("sd-updict-err-$PID.txt")
+    # RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only against a
+    # one-shot marker, which it deletes on admission; this writes one immediately
+    # before EACH session (this script runs two) and removes it afterwards in case
+    # sd never consumed it.
+    $marked = $false
+    if (@($SdArgs).Count -gt 0 -and $SdArgs[0] -ieq '-internal') {
+        $marked = Set-SdInternalMarker -SdsysDir (Join-Path $DataDir 'sdsys') -Writer 'upgrade-dicts'
+    }
     $p = Start-Process -FilePath $sd -ArgumentList $SdArgs -NoNewWindow -PassThru `
                        -RedirectStandardOutput $out -RedirectStandardError $err
     # 26 Aug 26 - TOUCH THE HANDLE OR ExitCode COMES BACK $null.  Start-Process
@@ -128,6 +137,7 @@ function Invoke-Sd {
     # and record count - so the cost was diagnostic, not a wrong verdict.
     $null = $p.Handle
     $exited = $p.WaitForExit($TimeoutMs)
+    if ($marked) { $null = Remove-SdInternalMarker -SdsysDir (Join-Path $DataDir 'sdsys') }
     $text = ''
     foreach ($f in @($out, $err)) {
         if (Test-Path $f) {

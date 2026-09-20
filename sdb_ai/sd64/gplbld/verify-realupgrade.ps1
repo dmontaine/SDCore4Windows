@@ -111,14 +111,20 @@ function Row([string]$name, [bool]$ok, [string]$detail = '') {
     if ($ok) { $script:pass++ } else { $script:fail++ }
     Write-Output ("  [" + $(if ($ok) { 'PASS' } else { 'FAIL' }) + "] " + $name + $(if ($detail) { "  ->  " + $detail } else { '' }))
 }
+. (Join-Path $PSScriptRoot 'internal-marker.ps1')
 function Invoke-Bounded([string[]]$lines, [bool]$internal, [int]$TimeoutSec = 120) {
     $body = "`n" + ((@('TERM 200,9999') + $lines + @('OFF')) -join "`n") + "`n"
+    # RELEASE_1.1 82 (D2'): LOGIN admits an "sd -internal" session only against a one-shot
+    # marker, deleted on admission - written here immediately before the session.
+    $marked = $false
+    if ($internal) { $marked = Set-SdInternalMarker -SdsysDir $sdsys -Writer 'verify-realupgrade' }
     $job = Start-Job -ScriptBlock {
         param($exe, $text, $int)
         if ($int) { $text | & $exe '-internal' 2>&1 } else { $text | & $exe 2>&1 }
     } -ArgumentList $sdExe, $body, $internal
     $done = [bool](Wait-Job $job -Timeout $TimeoutSec)
     if (-not $done) { Stop-Job $job -ErrorAction SilentlyContinue }
+    if ($marked) { $null = Remove-SdInternalMarker -SdsysDir $sdsys }
     $out = (@(Receive-Job $job -ErrorAction SilentlyContinue) | Out-String) -replace ([char]27 + '\[[0-9]*[A-Za-z]'), ''
     Remove-Job $job -Force -ErrorAction SilentlyContinue
     if (-not $done) { $out += "`n*** DID NOT FINISH IN $TimeoutSec s" }

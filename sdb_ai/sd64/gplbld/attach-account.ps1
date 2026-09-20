@@ -145,6 +145,7 @@ if (-not (Test-Path $sd)) {
 # would make the installer try to attach an account already there.
 $record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToLowerInvariant())
 
+. (Join-Path $PSScriptRoot 'internal-marker.ps1')
 function Invoke-Sd {
     <#
       Run one SD command and return its exit code and output.
@@ -159,6 +160,15 @@ function Invoke-Sd {
 
     $out = Join-Path $env:TEMP ("sd-attach-out-$PID.txt")
     $err = Join-Path $env:TEMP ("sd-attach-err-$PID.txt")
+    # RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only against a
+    # one-shot marker, which it deletes on admission; this writes one immediately
+    # before the session and removes it afterwards in case sd never consumed it.
+    # It is a DIFFERENT marker from the per-account ATTACH one written below: that
+    # one is read by CREATEA for one keyword, this one by LOGIN for one session.
+    $marked = $false
+    if (@($SdArgs).Count -gt 0 -and $SdArgs[0] -ieq '-internal') {
+        $marked = Set-SdInternalMarker -SdsysDir (Join-Path $DataDir 'sdsys') -Writer 'attach-account'
+    }
     $p = Start-Process -FilePath $sd -ArgumentList $SdArgs -NoNewWindow -PassThru `
                        -RedirectStandardOutput $out -RedirectStandardError $err
     # 26 Aug 26 - TOUCH THE HANDLE OR ExitCode COMES BACK $null.  See the same
@@ -166,6 +176,7 @@ function Invoke-Sd {
     # that prints a blank is not one.
     $null = $p.Handle
     $exited = $p.WaitForExit(120000)
+    if ($marked) { $null = Remove-SdInternalMarker -SdsysDir (Join-Path $DataDir 'sdsys') }
     $text = ''
     foreach ($f in @($out, $err)) {
         if (Test-Path $f) {

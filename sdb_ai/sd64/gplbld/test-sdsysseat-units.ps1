@@ -140,11 +140,17 @@ $script:runnerCalls = 0
 $script:seenScript = ''
 $script:seenIn = ''
 $script:behave = $null
+# MarkerDir: RELEASE_1.1 82 (D2').  -Internal now writes LOGIN's one-shot marker before it runs, so
+# EVERY test that passes -Internal must point the marker at a temp directory - without this seam
+# the unit test would write a real marker into the installed SDSYS directory.
+$mkDir = Join-Path $tmp 'markerdir'
+$null = New-Item -ItemType Directory -Path $mkDir -Force
 $hooks = @{
-    Elevated = $true
-    Qwinsta  = $qw
-    SdExe    = 'C:/fake/sd.exe'
-    Runner   = { param($Ps1, $OutFile, $Seconds, $Account)
+    Elevated  = $true
+    Qwinsta   = $qw
+    SdExe     = 'C:/fake/sd.exe'
+    MarkerDir = $mkDir
+    Runner    = { param($Ps1, $OutFile, $Seconds, $Account)
                  $script:runnerCalls++
                  $script:seenScript = [IO.File]::ReadAllText($Ps1)
                  $inF = [IO.Path]::ChangeExtension($Ps1, '.in')
@@ -262,13 +268,42 @@ function Invoke-AssertChild([string]$name, [string]$hooksLiteral, [string]$extra
 }
 $goodRun = '{ param($Ps1,$OutFile,$Seconds,$Account) $t = ''SEAT identity=ace\SDSYS admin=True interactive=True'' + "`n" + ''__BODY__'' + "`nENDOFSEAT"; [IO.File]::WriteAllText($OutFile, $t); return @{ Ok = $true; Detail = ''fake''; Why = '''' } }'
 $hk = { param($body, $elevated = '$true', $qw = '''   SDSYS   9  Disc''')
-        '@{ Elevated = ' + $elevated + '; Qwinsta = @(' + $qw + '); SdExe = ''x''; Runner = ' + ($goodRun.Replace('__BODY__', $body)) + ' }' }
+        '@{ Elevated = ' + $elevated + '; Qwinsta = @(' + $qw + '); SdExe = ''x''; MarkerDir = ''' + $mkDir + '''; Runner = ' + ($goodRun.Replace('__BODY__', $body)) + ' }' }
 
 $c = Invoke-AssertChild 'good' (& $hk '44 SDSYS')
 Check 'Assert-SdSeat on a good seat CONTINUES (exit 0, the script reaches the next line)' ($c.Code -eq 0 -and $c.Text -match 'REACHED-AFTER-ASSERT') "exit=$($c.Code) $($c.Text)"
 Check '... and prints SD''s raw WHO answer (the rule: show the output every time)' ($c.Text -match '44 SDSYS' -and $c.Text -match 'what SD said to WHO') $c.Text
 $c = Invoke-AssertChild 'good-internal' (& $hk '44 SDSYS') ' -Internal'
 Check 'Assert-SdSeat -Internal on a good seat continues and SAYS it went through sd -internal' ($c.Code -eq 0 -and $c.Text -match 'through sd -internal' -and $c.Text -match 'REACHED-AFTER-ASSERT') "exit=$($c.Code) $($c.Text)"
+# --- RELEASE_1.1 82 (D2'): -Internal writes LOGIN's one-shot marker, only when asked, and cleans it up ---
+$script:mkSeen = @{}
+$mkHooks = @{
+    Elevated = $true; Qwinsta = $qw; SdExe = 'C:/fake/sd.exe'; MarkerDir = $mkDir
+    Runner   = { param($Ps1, $OutFile, $Seconds, $Account)
+                 $mp = Join-Path $mkDir '$internal'
+                 $script:mkSeen.Present = (Test-Path -LiteralPath $mp)
+                 $script:mkSeen.Text = $(if ($script:mkSeen.Present) { [IO.File]::ReadAllText($mp) } else { '' })
+                 $script:mkSeen.Bytes = $(if ($script:mkSeen.Present) { [IO.File]::ReadAllBytes($mp) } else { @() })
+                 [IO.File]::WriteAllText($OutFile, (Report 'ace\SDSYS' 'True' 'True' "`n:WHO`n44 SDSYS"))
+                 return @{ Ok = $true; Detail = 'fake'; Why = '' } }
+}
+$script:SeatTestHooks = $mkHooks
+$null = Invoke-SdViaSeat -Commands @('WHO') -WorkDir $wd -Internal
+Check 'WITH -Internal the marker exists when the runner starts (written BEFORE the task)' ($script:mkSeen.Present) 'no $internal at runner time'
+Check 'and its first line names the writer, a pid and an ISO time' ($script:mkSeen.Text -match '^sdsys-seat pid=\d+ \d{4}-\d\d-\d\dT') $script:mkSeen.Text
+Check 'and it is ASCII with NO BOM and one line (LOGIN reads it with READSEQ)' ((@($script:mkSeen.Bytes | Where-Object { $_ -gt 127 }).Count -eq 0) -and (@($script:mkSeen.Text -split "`n" | Where-Object { $_ -ne '' }).Count -eq 1)) ($script:mkSeen.Bytes -join ',')
+Check 'and the seat removes it afterwards in case sd never consumed it' (-not (Test-Path -LiteralPath (Join-Path $mkDir '$internal'))) 'a marker was left behind'
+$script:mkSeen = @{}
+$null = Invoke-SdViaSeat -Commands @('WHO') -WorkDir $wd
+Check 'WITHOUT -Internal NO marker is written (an ordinary seat call must not open the door)' (-not $script:mkSeen.Present) 'a marker was written for a plain call'
+$noDir = Join-Path $tmp 'no-such-marker-dir'
+$script:runnerCalls = 0
+$script:SeatTestHooks = @{ Elevated = $true; Qwinsta = $qw; SdExe = 'C:/fake/sd.exe'; MarkerDir = $noDir
+    Runner = { param($Ps1, $OutFile, $Seconds, $Account) $script:runnerCalls++; return @{ Ok = $true; Detail = 'x'; Why = '' } } }
+$rn = Invoke-SdViaSeat -Commands @('WHO') -WorkDir $wd -Internal
+Check 'a marker that cannot be written is a REFUSAL with the reason, and the task is never started' ((-not $rn.Ok) -and ($rn.Why -match 'marker') -and $script:runnerCalls -eq 0) "Ok=$($rn.Ok) calls=$($script:runnerCalls) why=$($rn.Why)"
+$script:SeatTestHooks = $hooks
+
 $c = Invoke-AssertChild 'good-plain' (& $hk '44 SDSYS')
 Check 'and WITHOUT -Internal it does not claim to' ($c.Text -notmatch 'through sd -internal') $c.Text
 $c = Invoke-AssertChild 'nosess' (& $hk '44 SDSYS' '$true' '''>console  Don  2  Active''')
@@ -288,7 +323,7 @@ Set-Content -LiteralPath $fakeSd -Value @('@echo off', '@echo ARGS=%*', '@findst
 $wd2 = Join-Path $tmp 'work2'
 $script:afterRun = @{}
 $script:SeatTestHooks = @{
-    Elevated = $true; Qwinsta = $qw; SdExe = $fakeSd
+    Elevated = $true; Qwinsta = $qw; SdExe = $fakeSd; MarkerDir = $mkDir
     Runner   = { param($Ps1, $OutFile, $Seconds, $Account)
                  $inF = [IO.Path]::ChangeExtension($Ps1, '.in')
                  $script:afterRun.InBefore = (Test-Path -LiteralPath $inF)
@@ -355,7 +390,7 @@ Check 'WHILE sd is still running, the .part file holds the header and the line s
 Check 'and the final report does NOT exist yet (the hang was real, not a finished run)' (-not $reportWhileHung) 'the report appeared while sd was still hanging'
 
 $script:SeatTestHooks = @{
-    Elevated = $true; Qwinsta = $qw; SdExe = $fakeSd
+    Elevated = $true; Qwinsta = $qw; SdExe = $fakeSd; MarkerDir = $mkDir
     Runner   = { param($Ps1, $OutFile, $Seconds, $Account)
                  [IO.File]::WriteAllText($OutFile + '.part', "SEAT identity=x`nCreating account`nPassword: `n")
                  return @{ Ok = $false; Detail = 'fake hang'; Why = 'the task wrote no report within 3s' } }
@@ -387,7 +422,13 @@ Check 'it stops a task that never wrote a report' ($body -match 'Stop-ScheduledT
 
 # ---------------------------------------------------------------------------
 Section '6. MUTANT CONTROLS - each check is removed from a COPY and its fixture must then be accepted'
-$modText = [IO.File]::ReadAllText($modPath)
+# The module dot-sources internal-marker.ps1 through $PSScriptRoot, which is EMPTY inside a scriptblock
+# built from text (RELEASE_1.1 82 broke every mutant here with "Join-Path: empty string").  The functions
+# are already loaded by the test's own dot-source of the live file, so that one line is neutralised in the
+# TEXT the mutants are built from; every mutation and every "differs from live" comparison below is
+# against this text, and the live file's byte-identity is still asserted by SHA-256.
+$modText = [IO.File]::ReadAllText($modPath).Replace(". (Join-Path `$PSScriptRoot 'internal-marker.ps1')", '# (internal-marker.ps1 is already loaded by the test)')
+Check 'CONTROL: the dot-source line the mutants neutralise was really present in the live module' ($modText -ne [IO.File]::ReadAllText($modPath)) 'the module no longer dot-sources internal-marker.ps1 by that text'
 $mutants = @(
     @{ Tag = 'MUT-ID';          Raw = (Report 'ace\Don' 'True' 'True' 'x');     What = 'the identity check' },
     @{ Tag = 'MUT-ADMIN';       Raw = (Report 'ace\SDSYS' 'False' 'True' 'x');  What = 'the elevated check' },

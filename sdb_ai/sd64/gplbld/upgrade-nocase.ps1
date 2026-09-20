@@ -73,14 +73,23 @@ if (-not $AppDir) { Say 'upgrade-nocase: no -AppDir and PSScriptRoot empty; cann
 $sd = Join-Path $AppDir 'usr\bin\sd.exe'
 if (-not (Test-Path $sd)) { Say "upgrade-nocase: no sd.exe at $sd"; exit 1 }
 
+. (Join-Path $PSScriptRoot 'internal-marker.ps1')
 function Invoke-Sd {
     param([string[]] $SdArgs, [int] $TimeoutMs = 1800000)   # up to 30 min: user data can be large
     $out = Join-Path $env:TEMP ("sd-nocase-out-$PID.txt")
     $err = Join-Path $env:TEMP ("sd-nocase-err-$PID.txt")
+    # RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only against a
+    # one-shot marker, which it deletes on admission; this writes one immediately
+    # before the session and removes it afterwards in case sd never consumed it.
+    $marked = $false
+    if (@($SdArgs).Count -gt 0 -and $SdArgs[0] -ieq '-internal') {
+        $marked = Set-SdInternalMarker -SdsysDir (Join-Path $DataDir 'sdsys') -Writer 'upgrade-nocase'
+    }
     $p = Start-Process -FilePath $sd -ArgumentList $SdArgs -NoNewWindow -PassThru `
                        -RedirectStandardOutput $out -RedirectStandardError $err
     $null = $p.Handle
     $exited = $p.WaitForExit($TimeoutMs)
+    if ($marked) { $null = Remove-SdInternalMarker -SdsysDir (Join-Path $DataDir 'sdsys') }
     $text = ''
     foreach ($f in @($out, $err)) {
         if (Test-Path $f) { $text += (Get-Content $f -Raw); Remove-Item $f -Force -ErrorAction SilentlyContinue }

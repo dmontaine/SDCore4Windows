@@ -523,9 +523,20 @@ function Set-AttachedAccountPassword {
             # require the current one for - "an administrator resetting a
             # forgotten password does not know it".  So the person types the new
             # password twice and is never asked for one they do not have.
-            $p = Start-Process -FilePath $SdExe `
-                    -ArgumentList '-internal', '-QUIET', 'MODIFY.PASSWORD', $Account `
-                    -NoNewWindow -Wait -PassThru -ErrorAction Stop
+            # RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only
+            # against a one-shot marker, which it deletes on admission; this writes
+            # one immediately before the session and removes it afterwards in case
+            # sd never consumed it.
+            . (Join-Path $PSScriptRoot 'internal-marker.ps1')
+            $marked = Set-SdInternalMarker -SdsysDir $SysDir -Writer 'finish-install'
+            try {
+                $p = Start-Process -FilePath $SdExe `
+                        -ArgumentList '-internal', '-QUIET', 'MODIFY.PASSWORD', $Account `
+                        -NoNewWindow -Wait -PassThru -ErrorAction Stop
+            }
+            finally {
+                if ($marked) { $null = Remove-SdInternalMarker -SdsysDir $SysDir }
+            }
             $null = $p
             Write-Host ''
         }

@@ -80,6 +80,7 @@ if (-not (Test-Path -LiteralPath $sdExe)) { Write-Output "  no sd.exe at $sdExe"
 # row.  The sd -internal PTERM DISPLAY leg further down is NOT a seat call: it
 # runs from this elevated shell on purpose, as the owner's measurement did.
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+. (Join-Path $PSScriptRoot 'internal-marker.ps1')
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) {
     return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
@@ -216,10 +217,14 @@ try {
     $ptOut = Join-Path $env:TEMP ("sd-ptdisp-out-$PID.txt")
     $ptErr = Join-Path $env:TEMP ("sd-ptdisp-err-$PID.txt")
     Write-Output ("  command: `"$sdExe`" -internal PTERM DISPLAY")
+    # RELEASE_1.1 82 (D2'): LOGIN admits an "sd -internal" session only against a one-shot
+    # marker, deleted on admission - written here immediately before the session.
+    $ptMarked = Set-SdInternalMarker -SdsysDir $sdsys -Writer 'verify-createfilecase'
     $pp = Start-Process -FilePath $sdExe -ArgumentList @('-internal', 'PTERM', 'DISPLAY') -NoNewWindow -PassThru `
                         -RedirectStandardOutput $ptOut -RedirectStandardError $ptErr
     $null = $pp.Handle                      # upgrade-voc.ps1: or ExitCode reads $null
     $ptDone = $pp.WaitForExit(60000)
+    if ($ptMarked) { $null = Remove-SdInternalMarker -SdsysDir $sdsys }
     $ptText = ''
     foreach ($f in @($ptOut, $ptErr)) {
         if (Test-Path $f) { $ptText += (Get-Content $f -Raw); Remove-Item $f -Force -ErrorAction SilentlyContinue }

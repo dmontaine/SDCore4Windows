@@ -46,6 +46,11 @@
 # never set it.  The lines tagged "MUT-" are the checks the unit test mutates to
 # prove its own fixtures can tell a broken helper from a good one.
 
+# RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only against a one-shot
+# marker, so -Internal writes one before it starts the task.  The two functions live in
+# their own file because the installer's scripts use them too.
+. (Join-Path $PSScriptRoot 'internal-marker.ps1')
+
 function Get-SeatHook([string]$Name) {
     $h = Get-Variable -Name SeatTestHooks -Scope Script -ErrorAction SilentlyContinue
     if ($null -ne $h -and $null -ne $h.Value -and $h.Value.ContainsKey($Name)) {
@@ -276,6 +281,22 @@ function Invoke-SdViaSeat {
     $inF  = Join-Path $WorkDir ('seat-' + $tag + '.in')
     $ps1  = Join-Path $WorkDir ('seat-' + $tag + '.ps1')
     $outF = Join-Path $WorkDir ('seat-' + $tag + '.out')
+
+    # RELEASE_1.1 82 (D2').  An "-internal" session needs LOGIN's one-shot marker, and this
+    # is the ONE place the seat's -Internal door starts one, so it is written here, once,
+    # immediately before the task, and removed in the finally in case sd never consumed it.
+    # MarkerDir is a TEST SEAM: without it the unit test would write a real marker into the
+    # installed SDSYS directory.  A marker that cannot be written is a refusal, not a run
+    # that goes ahead and is then refused by LOGIN with the reason lost.
+    $hkMk = Get-SeatHook 'MarkerDir'
+    $markerDir = $(if ($hkMk.Has) { [string]$hkMk.Value } else { Join-Path (Join-Path $env:ProgramData 'SD') 'sdsys' })
+    $marked = $false
+    if ($Internal) {
+        $marked = Set-SdInternalMarker -SdsysDir $markerDir -Writer 'sdsys-seat'
+        if (-not $marked) {
+            return (New-SeatResult $false '' ("the one-shot marker LOGIN needs for an internal session could not be written in {0}" -f $markerDir) '' $sess)
+        }
+    }
     try {
         $body = "`n" + ((@($cmds) + @('OFF')) -join "`n") + "`n"
         [IO.File]::WriteAllText($inF, $body, (New-Object Text.UTF8Encoding($false)))
@@ -310,6 +331,7 @@ function Invoke-SdViaSeat {
         if (-not $rep.Ok) { return (New-SeatResult $false '' $rep.Why $run.Detail $sess) }
         return (New-SeatResult $true $rep.Text '' $run.Detail $sess)
     } finally {
+        if ($marked) { $null = Remove-SdInternalMarker -SdsysDir $markerDir }
         foreach ($f in @($inF, $ps1, $outF, ($outF + '.tmp'), ($outF + '.part'))) {
             try { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction Stop } } catch { }
         }

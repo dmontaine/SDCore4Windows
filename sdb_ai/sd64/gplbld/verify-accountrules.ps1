@@ -1,15 +1,22 @@
 <#
 .SYNOPSIS
-    The rules CREATE.ACCOUNT enforces and nothing else measures: the access
-    keyword is required, a password is mandatory, a GROUP account has neither,
-    and ADOPT is refused without the installer's one-shot marker.
+    The rules CREATE.ACCOUNT enforces and nothing else measures: silence about
+    the access keyword means BOTH routes (and NONE still means none), a password
+    is mandatory, a GROUP account has neither, and ATTACH is refused without the
+    installer's one-shot marker.
+
+    ***STEPS 1 AND 4 WERE REWRITTEN 20 Sep 2026.***  They measured the 10082
+    refusal (withdrawn by RELEASE_1.1 68) and ADOPT (abolished by 64); steps 2
+    and 3 are unchanged and were measured by no run between those changes and
+    this.
 
 .DESCRIPTION
     THIS IS THE REFUSAL SIDE OF PHASES 2 AND 3.  verify-routes.ps1 measures what
     happens when the verbs are given what they want; every check here is about
     what happens when they are not, and until this existed none of it had any
     coverage at all - PROJECT_STATUS.md listed 10082, 10086, 10087 and the ADOPT
-    gate as built-but-unmeasured.
+    gate as built-but-unmeasured.  (That paragraph is the original: 10082 and
+    ADOPT have since gone, and ATTACH and the silence rule took their places.)
 
     EVERY REFUSAL HAS A CONTROL THAT SUCCEEDS, and that is the whole design.
     "Nothing was created" passes just as happily on a build where
@@ -37,9 +44,10 @@
     does not get MADE.
 
 .PARAMETER Prefix
-    Stem for the throwaway accounts - four names are used: <prefix>n (offered
-    with no access keyword), <prefix>p (offered mismatched passwords), <prefix>g
-    (a GROUP account) and <prefix>d (a Windows account made by hand, for ADOPT).
+    Stem for the throwaway accounts - five names are used: <prefix>n (given no
+    access keyword), <prefix>o (given NONE, the control), <prefix>p (offered
+    mismatched passwords), <prefix>g (a GROUP account) and <prefix>d (a Windows
+    account made by hand, for the ATTACH refusal).
     Use a stem nobody has used: CREATE.ACCOUNT refuses a name it has seen.
 
 .PARAMETER Keep
@@ -162,6 +170,7 @@ function Shown($out, [int]$n, [string[]]$vals) {
 # returning ''.  SDSYS must be signed in: `query session` shows its row.  The bound
 # is 180 s where the old in-process pipe was unbounded.
 . (Join-Path $Gplbld 'sdsys-seat.ps1')
+. (Join-Path $Gplbld 'internal-marker.ps1')
 function Invoke-SD([string[]]$commands) {
     return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
@@ -172,9 +181,16 @@ function Invoke-SD([string[]]$commands) {
 function Invoke-SDInternal([string[]] $SdArgs) {
     $so = Join-Path $env:TEMP ("sd-acctrules-out-$PID.txt")
     $se = Join-Path $env:TEMP ("sd-acctrules-err-$PID.txt")
+    # RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only against its one-shot
+    # marker - written here, deleted by LOGIN on admission.  ***THIS IS NOT THE ATTACH
+    # MARKER:*** step 4 measures that ATTACH is refused WITHOUT createa's per-account
+    # $attach.<name> marker, so that one must stay absent; this one only gets the session
+    # started at all.
+    $marked = Set-SdInternalMarker -SdsysDir (Join-Path $Data 'sdsys') -Writer 'verify-accountrules'
     $p = Start-Process -FilePath $sdExe -ArgumentList $SdArgs -NoNewWindow -PassThru `
                        -RedirectStandardOutput $so -RedirectStandardError $se
     $exited = $p.WaitForExit(120000)
+    if ($marked) { $null = Remove-SdInternalMarker -SdsysDir (Join-Path $Data 'sdsys') }
     $text = ''
     foreach ($f in @($so, $se)) {
         if (Test-Path $f) {
@@ -278,12 +294,13 @@ Assert-SdSeat -Label 'verify-accountrules'
 
 Add-Type -AssemblyName System.Web
 
-$noKw   = $Prefix + 'n'   # offered with no access keyword
-$pwAcc  = $Prefix + 'p'   # offered two different passwords
-$grpAcc = $Prefix + 'g'   # a GROUP account
-$adpAcc = $Prefix + 'd'   # a Windows account made by hand, for ADOPT
+$noKw    = $Prefix + 'n'  # given NO access keyword - silence means BOTH (68)
+$noneAcc = $Prefix + 'o'  # given NONE, the control that tells it from silence
+$pwAcc   = $Prefix + 'p'  # offered two different passwords
+$grpAcc  = $Prefix + 'g'  # a GROUP account
+$adpAcc  = $Prefix + 'd'  # a Windows account made by hand, for the ATTACH refusal
 
-foreach ($a in @($noKw, $pwAcc, $grpAcc, $adpAcc)) {
+foreach ($a in @($noKw, $noneAcc, $pwAcc, $grpAcc, $adpAcc)) {
     if (HasUser $a) { Fail "$a already exists as a Windows account - use a fresh -Prefix." }
     if (Test-Path -LiteralPath (AcctRec $a)) {
         Fail ($a.ToUpper() + ' is still in the ACCOUNTS register - use a fresh -Prefix.')
@@ -292,35 +309,48 @@ foreach ($a in @($noKw, $pwAcc, $grpAcc, $adpAcc)) {
 if (HasGrp ('sdg_' + $grpAcc)) { Fail "sdg_$grpAcc already exists - use a fresh -Prefix." }
 
 $sentinel    = 'SDARSENTINEL'
-$adoptMarker = Join-Path $Data 'sdsys\$adopt'
+# ATTACH'S ONE-SHOT MARKER IS PER ACCOUNT (createa's attach.marker, downcased name), and
+# it replaced ADOPT's single $adopt marker when 64 abolished ADOPT.
+$adoptMarker = Join-Path $Data ('sdsys\$attach.' + $adpAcc.ToLower())
 $madeUsers   = @()      # Windows accounts this script is responsible for
 $madeGroups  = @()      # Windows groups likewise
 
 try {
     # -----------------------------------------------------------------------
-    Step 1 "CREATE.ACCOUNT USER $noKw with NO access keyword (10082)"
+    Step 1 "CREATE.ACCOUNT USER $noKw with NO access keyword: SILENCE MEANS BOTH (68)"
 
-    # Owner's decision, 21 Aug 2026: one of SSH / API / BOTH / NONE is required
-    # and there is no default, because "no route" and "nobody said" are
-    # different states and the old silent default could not tell them apart.
+    # ***REWRITTEN 20 Sep 2026.***  This step used to send the command with no
+    # keyword and expect the 10082 refusal ("say who may reach this account").
+    # RELEASE_1.1 68 WITHDREW THAT REFUSAL: silence now sets both routes and the
+    # account IS made, so SD went on to ask for a password, the piped input ran
+    # out, and the call sat at the prompt until the seat's 180 s bound threw
+    # (the owner's b200 run).  A verifier written against the rule before it
+    # moved, found stale by the first run since - the failure class
+    # test-acctkeywords-units.py exists for, on a rule it does not cover.
     #
-    # REFUSED BEFORE ANYTHING IS MADE, which is the half that matters.  CREATEA
-    # puts the test straight after more.args, so no Windows user, group,
-    # directory or register entry exists yet.
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $noKw")
-    Said "CREATE.ACCOUNT USER $noKw  (no keyword)" $out
-    Note 'message 10082 shown (say who may reach this)' $true (Shown $out 10082 @())
-    Note 'nothing at all was made'                      'nothing' (Traces $noKw)
-
-    # THE CONTROL, AND IT USES THE SAME NAME ON PURPOSE.  Refusing then
-    # succeeding on one name proves the refusal was about the missing keyword
-    # and not about the name, the machine or the verb being broken outright.
+    # WHAT IS MEASURED NOW, and every row reads Windows or the filesystem rather
+    # than SD's own wording: the account is made in full, and it holds BOTH
+    # routes.  10082 must NOT be shown - it is in the message-file check above so
+    # that "not shown" means the text was there to be looked for and was absent,
+    # not that the message file was unreadable.
     $pw  = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $noKw SSH", $pw, $pw)
-    Said "CREATE.ACCOUNT USER $noKw SSH  (the control)" $out
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $noKw", $pw, $pw)
+    Said "CREATE.ACCOUNT USER $noKw  (no keyword, matching passwords)" $out
     if (HasUser $noKw) { $script:madeUsers += $noKw }
-    Note 'CONTROL: the same name with SSH is created' 'register+directory+windows-user+sdu_group' (Traces $noKw)
-    Note 'CONTROL: routes are ssh alone'              'ssh' (Routes $noKw)
+    Note 'silence creates the account' 'register+directory+windows-user+sdu_group' (Traces $noKw)
+    Note 'silence means BOTH: routes are ssh and api' 'ssh+api' (Routes $noKw)
+    Note 'message 10082 NOT shown (the refusal 68 withdrew)' $false (Shown $out 10082 @())
+
+    # THE CONTROL: NONE IS STILL SAYABLE, and it is what tells "nobody said"
+    # from "nobody may".  Collapsing the two would make NONE unsayable (createa's
+    # own history says so), and a build that did would still pass every row
+    # above.
+    $pwN = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $noneAcc NONE", $pwN, $pwN)
+    Said "CREATE.ACCOUNT USER $noneAcc NONE  (the control)" $out
+    if (HasUser $noneAcc) { $script:madeUsers += $noneAcc }
+    Note 'CONTROL: NONE creates the account' 'register+directory+windows-user+sdu_group' (Traces $noneAcc)
+    Note 'CONTROL: NONE holds no route'      'none' (Routes $noneAcc)
 
     # -----------------------------------------------------------------------
     Step 2 "A password is mandatory, and refusing unwinds (10086)"
@@ -432,15 +462,19 @@ try {
     Note "sdg_$grpAcc group is gone"                      $false (HasGrp ('sdg_' + $grpAcc))
 
     # -----------------------------------------------------------------------
-    Step 4 "ADOPT is refused without the installer's one-shot marker"
+    Step 4 "ATTACH is refused without its one-shot marker"
 
-    # Phase 3, 21 Aug 2026.  K$INTERNAL alone is only "somebody typed
-    # sd -internal", which any elevated administrator can do; the marker is what
-    # makes ADOPT install-only.
+    # ***REWRITTEN 20 Sep 2026.***  This step tested ADOPT, which RELEASE_1.1 64
+    # abolished; ATTACH is what replaced it and it has the same shape - an
+    # internal-only keyword that createa accepts only while a one-shot marker,
+    # written for ONE call by attach-account.ps1 and deleted on use, exists for
+    # THAT account (createa's attach.marker).  K$INTERNAL alone is only
+    # "somebody typed sd -internal", which any elevated administrator can do; the
+    # marker is what makes ATTACH install-only.
     #
-    # A REAL WINDOWS ACCOUNT FIRST, because ADOPT refuses a name that is not one
-    # - and if it did that here, the refusal below would be measuring the wrong
-    # rule entirely.
+    # A REAL WINDOWS ACCOUNT FIRST, because ATTACH is for a name that already is
+    # one - and if the refusal below were about the account not existing it would
+    # be measuring the wrong rule entirely.
     $bpw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     $null = New-LocalUser -Name $adpAcc -Password (ConvertTo-SecureString $bpw -AsPlainText -Force) `
                           -Description 'made by hand, not by SD' -ErrorAction Stop
@@ -448,42 +482,40 @@ try {
 
     if (Test-Path -LiteralPath $adoptMarker) {
         Remove-Item -LiteralPath $adoptMarker -Force -ErrorAction SilentlyContinue
-        Write-Host '   removed a marker that was already there - the install left one behind' -ForegroundColor Yellow
+        Write-Host '   removed a marker that was already there - something left one behind' -ForegroundColor Yellow
     }
 
-    $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ADOPT')
-    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ADOPT  (no marker)" $out
+    $out = Invoke-SDInternal @('-internal', 'CREATE.ACCOUNT', 'USER', $adpAcc, 'ATTACH')
+    Said "sd -internal CREATE.ACCOUNT USER $adpAcc ATTACH  (no marker)" $out
 
     # AS AN UNRECOGNISED TOKEN, NOT AS A REFUSAL, and that is deliberate: a
     # keyword a console user may never use is not one they need to know exists,
     # so a message naming it would confirm the guess.  2018 is "Unexpected
     # token (%1)".
-    # THIS IS THE TEST, and since 21 Aug 2026 it is the ONLY place a verifier
-    # runs ADOPT: it must be refused.  There used to be a second, identical
-    # refusal below labelled "the marker does not work twice"; with nothing here
-    # writing a marker any more the two were the same command in the same state.
-    Note 'ADOPT refused as an unknown token (2018)' $true (Shown $out 2018 @('ADOPT'))
+    # THIS IS THE TEST, and it is the ONLY place a verifier runs ATTACH without
+    # the marker: it must be refused.  The owner's 21 Aug 2026 ruling, made for
+    # ADOPT and carried across, is that a verifier must not write the marker
+    # itself - that would re-open the very window the marker closes.
+    Note 'ATTACH refused as an unknown token (2018)' $true (Shown $out 2018 @('ATTACH'))
     Note 'no SD account was registered'             $false (Test-Path -LiteralPath (AcctRec $adpAcc))
     Note 'the Windows account is untouched'         $true  (HasUser $adpAcc)
 
-    # THE CONTROL, AND IT NOW COMES FROM THE INSTALL RATHER THAN A SECOND RUN.
-    # Owner's ruling, 21 Aug 2026: ADOPT exists to adopt the INSTALLER during the
-    # install and is not available afterwards.  This leg used to write the marker
-    # itself and run ADOPT again - which re-opened the very window the marker
-    # exists to close, and left the product looking as though it offered a door
-    # it does not.
+    # THE CONTROL COMES FROM THE INSTALL RATHER THAN A SECOND RUN.  The installer
+    # runs ATTACH exactly once (attach-account.ps1, which writes the marker for
+    # that one call and removes it) and leaves every property a control needs: the
+    # register record, no surviving marker, the untouched description, both route
+    # groups, and "keeps the Windows sign-in rights it already had" (10040) in
+    # attach-account.log.  Reading those measures the REAL attach instead of a
+    # simulation of it, and it still controls the refusal above: "ATTACH was
+    # refused" would pass on a build where ATTACH is broken outright.
     #
-    # NOTHING IS LOST, and the evidence is better.  The install runs ADOPT
-    # exactly once and leaves every property this leg used to assert: the
-    # register record, the SPENT marker, the untouched description, both route
-    # groups, and message 10040 in adopt-account.log.  Reading those measures the
-    # REAL adoption instead of a simulation of it, which is what this file's own
-    # comment already said was happening "every time" and nothing measured.
-    #
-    # IT STILL CONTROLS THE REFUSAL ABOVE.  "ADOPT was refused" would pass on a
-    # build where ADOPT is broken outright; these rows say the verb works, on the
-    # one occasion it is meant to.
-    $adoptLog = Join-Path $Data 'adopt-account.log'
+    # ***THE EXPECTED ROUTES WERE MEASURED, NOT ASSUMED (20 Sep 2026, on the
+    # install this was written against):*** the installing user is in sdssh and
+    # sdapi and in neither sdsshonly nor anything else route-shaped, and the log
+    # says "SD routes for don: ssh and the API." - silence means BOTH (68), and
+    # ATTACH does not turn that off.  The old ADOPT row expected 'none' (58: an
+    # administrator gets no remote door); 64 removed that ruling with the tiers.
+    $adoptLog = Join-Path $Data 'attach-account.log'
     $installUser = ''
     if (Test-Path -LiteralPath $adoptLog) {
         $logText = Get-Content -LiteralPath $adoptLog -Raw
@@ -495,35 +527,20 @@ try {
         # NOT SILENTLY SKIPPED.  A missing log means the refusal above has lost
         # its control, and that has to be visible rather than inferred from a
         # shorter summary.
-        Note 'adopt-account.log names the installing user' $true $false
+        Note 'attach-account.log names the installing user' $true $false
         Write-Host '   without it the refusal above has no control - see this step''s comment' -ForegroundColor Yellow
     } else {
-        Write-Host "   the install adopted: $installUser"
-        Note 'CONTROL: the install registered the adopted account' $true `
+        Write-Host "   the install attached: $installUser"
+        Note 'CONTROL: the install registered the attached account' $true `
              (Test-Path -LiteralPath (AcctRec $installUser))
         Note 'CONTROL: the marker was consumed and none survives' $false `
-             (Test-Path -LiteralPath $adoptMarker)
-        # ADOPT CHANGES NOTHING ABOUT THE WINDOWS ACCOUNT - the 15 Aug rule - so
-        # the installing user's description must not read as one SD created.
+             (Test-Path -LiteralPath (Join-Path $Data ('sdsys\$attach.' + $installUser.ToLower())))
+        # ATTACH CHANGES NOTHING ABOUT THE WINDOWS ACCOUNT - so the installing
+        # user's description must not read as one SD created.
         Note 'CONTROL: the description is not "SD account"' $false `
              (((Get-LocalUser -Name $installUser -ErrorAction SilentlyContinue).Description) -ceq 'SD account')
-        # BOTH ROUTES, because ADOPT forces tier ADMINISTRATOR and an
-        # administrator always has both.  Before Phase 2 an ADOPTed account
-        # joined NEITHER, and APISRVR requires sdapi with no exemption - so the
-        # person who installed SD could not use its API.
-        #
-        # ***18 Sep 26 - NEITHER ROUTE, AND THIS ROW IS THE ONE THAT SHOWS THE
-        # RULING'S REAL COST.***  RELEASE_1.1 58: an administrator gets no
-        # remote door, and ADOPT forces the ADMINISTRATOR tier - so THE ACCOUNT
-        # THE INSTALLER ADOPTS FOR THE PERSON INSTALLING now has no ssh and no
-        # API, from any address including this machine.  That is the state the
-        # paragraph above says Phase 2 was written to escape, restored on
-        # purpose: the answer for a local application is a PROGRAMMER-tier
-        # account with API access, not an administrator.  The account still
-        # keeps its Windows sign-in rights and stays out of sdsshonly - the two
-        # rows below - so the console is unaffected.
-        Note 'CONTROL: an ADOPTed account has NEITHER route' 'none' (Routes $installUser)
-        # 10040, not 10034: ADOPT must not put a borrowed login into sdsshonly.
+        Note 'CONTROL: an attached account has BOTH routes (silence, 68)' 'ssh+api' (Routes $installUser)
+        # 10040, not 10034: ATTACH must not put a borrowed login into sdsshonly.
         Note 'CONTROL: it kept its sign-in rights (10040)' $true `
              ($logText -match [regex]::Escape($installUser + ' keeps the Windows sign-in rights it already had'))
         Note 'CONTROL: it is not in sdsshonly' $false (InGroup 'sdsshonly' $installUser)
@@ -541,10 +558,10 @@ catch {
 finally {
     # THE MARKER GOES FIRST AND UNCONDITIONALLY.  Everything else here is a test
     # account; this one is a hole in the install-only gate, and leaving it
-    # behind would quietly re-open ADOPT for every session afterwards.
+    # behind would quietly re-open ATTACH for that account afterwards.
     if (Test-Path -LiteralPath $adoptMarker) {
         Remove-Item -LiteralPath $adoptMarker -Force -ErrorAction SilentlyContinue
-        Write-Host '   removed the ADOPT marker'
+        Write-Host '   removed the ATTACH marker'
     }
 
     if (-not $Keep) {
@@ -597,7 +614,7 @@ if ($failed) {
 }
 
 Write-Host ''
-Write-Host ('verify-accountrules: the keyword is required, the password is mandatory and unwinds, ' +
-            'a GROUP account has neither, and ADOPT needs the marker.') -ForegroundColor Green
+Write-Host ('verify-accountrules: silence means BOTH routes and NONE still means none, the password ' +
+            'is mandatory and unwinds, a GROUP account has neither, and ATTACH needs the marker.') -ForegroundColor Green
 try { Stop-Transcript | Out-Null } catch { }
 exit 0

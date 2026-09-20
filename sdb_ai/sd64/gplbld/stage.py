@@ -1442,6 +1442,12 @@ def main():
                    # no account.  So assert-current watches it like the rest -
                    # do NOT add it to that script's $neverShipped list.
                    'attach-account.ps1',
+                   # 20 Sep 26 - RELEASE_1.1 82 (D2').  DOT-SOURCED by
+                   # attach-account, finish-install and the three upgrade-*
+                   # scripts, which write LOGIN's one-shot "sd -internal"
+                   # marker before each internal session.  It must sit beside
+                   # them, and assert-current watches it like the rest.
+                   'internal-marker.ps1',
                    'install-sdsys.ps1', 'install-service.ps1',
                    # 22 Aug 26 - the POST-INSTALL CHECK, offered as a
                    # checkbox on the installer's last page.  It ships, so

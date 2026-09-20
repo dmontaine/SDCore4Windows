@@ -833,6 +833,13 @@ $steps = @(
     # indexed ones left whole and named, the control untouched.  ELEVATED, WITH
     # THE FILE STEPS, for verify-twins' reason.  NO PREFIX: fixed zznu* ids.
     @{ Name = 'verify-nocaseupgrade.ps1';  P = @{} },
+    # 20 Sep 26 - RELEASE_1.1 82 (D2'), the S4 witness for R1.  "sd -internal" is
+    # closed on an installed system and opens for exactly ONE session against a fresh
+    # one-shot marker: refused with none, admitted with a fresh one (the control),
+    # refused again the next time, refused when aged past the expiry, admitted after
+    # that, and the seat's -Internal door gets a session.  ELEVATED, and SDSYS must be
+    # signed in for its last leg (the seat).  NO PREFIX: it makes no accounts.
+    @{ Name = 'verify-internalgate.ps1';   P = @{} },
     # 22 Aug 26 - all three tiers reachable over the API, and one that should
     # not be reachable refused.
     #

@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 20 Sep 26 Windows port - RELEASE_1.1 82 (D2').  AN "sd -internal" SESSION NEEDS A
+*           ONE-SHOT MARKER, $internal in the SDSYS directory, which the new internal.gate
+*           consumes: the developer door is closed on a delivered system and opened one
+*           session at a time by the installer's steps, the bootstrap and the development
+*           verifiers.  Rollback is this file.
 * 19 Sep 26 Windows port - RELEASE_1.1 69.  No code change: the comment block
 *           at require.credential claimed a passwordless account cannot exist,
 *           which 64 (elevated-only gate) and 66 (accounts created with no
@@ -227,6 +232,12 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   that means "nothing to do", so a path added later that skips the test lets
 *   the login through rather than refusing it silently.
    cred.ok = @true
+
+* 20 Sep 26 Windows port - RELEASE_1.1 82 (D2').  gate.ok for the same reason: internal.gate
+*   assigns it and the call site READS it, and BCOMP sees the call site textually first.
+*   @true is the value that means "nothing to check", which is what every session that is
+*   not internal leaves it at.
+   gate.ok = @true
 
    is.phantom = kernel(K$IS.PHANTOM, 0)
 
@@ -590,6 +601,12 @@ deffun pw_complex(pw) calling '!pw_complex'
                audit.reason = 'SDSYS requires an elevated session'
                goto terminate.connection
             end
+* 20 Sep 26 Windows port - RELEASE_1.1 82 (D2').  AND AN INTERNAL SESSION NEEDS ITS ONE-SHOT
+*   MARKER, which internal.gate consumes.  The reasoning is in that subroutine's header; the
+*   short form is that this door is closed on a delivered system and opened, one session at a
+*   time, by whoever legitimately starts one.
+            gosub internal.gate
+            if not(gate.ok) then goto terminate.connection
          end else
             if initial.account # upcase(@logname) then
                display sysmsg(10051) ;* You can only log in to your own account
@@ -1181,6 +1198,113 @@ abort.login:
 * takes no password.  require.credential asks for one to be SET when the
 * account has none; it never asks for one to be TYPED to get in, and the two
 * are easy to confuse from a distance.
+*
+* ======================================================================
+* INTERNAL.GATE  -  an "sd -internal" session needs a one-shot marker.  Sets gate.ok.
+*
+* 20 Sep 26 Windows port - RELEASE_1.1 82 (D2').  THE OWNER'S RULINGS, 20 Sep 2026:
+*   "sd -internal should only be available as a login option during development, it
+*   should be closed ... in the system delivered to clients"; "it may be on during
+*   installation and off afterward"; and "the developer mode switch is not a published
+*   feature, it has to be discovered by looking at the source code, which is fine in an
+*   open source product."  Parity with the Linux port is the RESULT, not the method: its
+*   door is CPROC's IS_INSTALL define, recompiled at the last install step, and this one
+*   is a marker, because Windows ships built objects and has no compiler step at the
+*   client.
+*
+*   THE RULE.  An internal session is admitted only while a marker file named $internal
+*   exists in the SDSYS directory and is FRESH, and the marker is DELETED here, on
+*   admission - the CONSUMER closes the window, not the writer.  So the door is closed on
+*   a delivered system (nothing writes a marker, so "sd -internal" from anyone, an
+*   elevated administrator included, is refused), and whoever legitimately starts an
+*   internal session - the installer's own steps, the bootstrap, a development verifier,
+*   the seat's -Internal door - writes ONE marker immediately before it.  A marker that
+*   is written and never used authorises exactly one later session, and only for
+*   gate.expiry seconds.
+*
+*   WHAT IT IS NOT.  It is a speed bump for an administrator and not a boundary: an
+*   administrator can write the file by hand, and the SDSYS directory is writable by
+*   sdusers as well.  That is the ruling's own standard (unpublished, discoverable in
+*   the source), and this comment says so rather than pretending.  A non-administrator
+*   gains nothing from it: check_admin() in sd.c and K$ADMINISTRATOR at the SDSYS test
+*   above still apply to every internal session.
+*
+*   WHY IT SITS HERE AND ONLY HERE.  LOGIN is called with mode 0 once per session start
+*   (CPROC) and with mode 2 to 4 by UPDATE.ACCOUNTS, which RETURNS at the mode test near
+*   the top before it reaches this code - so one "sd -internal" invocation consumes one
+*   marker, and an internal session that then runs UPDATE.ACCOUNTS is not asked again.
+*   "sd -i" (the bootstrap, $BBPROC) never comes through LOGIN and is not affected; it is
+*   already closed on an installed system, because BBPROC refuses with "System Already
+*   Installed?" when gpl.bp.out/login exists.
+*
+*   AGE IS READ FROM THE FILESYSTEM'S OWN CLOCK.  OS$DTM returns the file's mtime as a
+*   Unix time, and BASIC has no way to ask for the current one in that base (DATE() and
+*   TIME() are local time and would need a zone offset), so a scratch file is written and
+*   ITS mtime is read: the difference is the marker's age in seconds on one clock.  If that
+*   cannot be measured (the scratch file could not be written) the age stays -1 and the
+*   marker is treated as fresh - EXPIRY IS THE WEAKER HALF and is not worth locking out an
+*   install for; consumption is what closes the window.
+*
+*   THE REFUSAL SAYS NOTHING ABOUT WHY.  It leaves through terminate.connection, so the
+*   operator sees only "Connection terminated" and the audit trail carries the reason,
+*   which is the same posture as an unrecognised ATTACH token: a switch that is not
+*   published is not one the message should name.  EVERY USE IS AUDITED, admitted or
+*   refused, with the writer's name from the marker's first line (capped, because the
+*   file is writable by more than the installer).
+*
+*   RELEASE_1.1 82 R1-R5: after a delivered install "sd -internal" gets no session (R1);
+*   the installer's steps write a marker each (R2); a crashed installer leaves at most one
+*   single-use, expiring marker (R3); every use is audited (R4); the bootstrap and the
+*   verifiers write their own (R5).  Rollback is this file alone.
+
+internal.gate:
+   gate.ok = @false
+   gate.marker = @sdsys : @ds : '$internal'
+   gate.expiry = 600           ;* seconds - see AGE above
+   gate.writer = ''
+   gate.age = -1
+
+   if ospath(gate.marker, OS$EXISTS) then
+      gate.mtime = ospath(gate.marker, OS$DTM)
+
+*     Line 1 of the marker names who wrote it.  For the audit record only.
+      openseq gate.marker to gate.mf then
+         readseq gate.writer from gate.mf else gate.writer = ''
+         closeseq gate.mf
+      end else gate.writer = ''
+      gate.writer = trim(gate.writer[1, 80])
+
+*     "Now", on the marker's own clock: write a scratch file and read ITS mtime.
+      gate.stamp = @sdsys : @ds : '$internal.now'
+      openseq gate.stamp overwrite to gate.sf then
+         writeseq 'now' to gate.sf else null
+         closeseq gate.sf
+         gate.now = ospath(gate.stamp, OS$DTM)
+         if gate.now > 0 and gate.mtime > 0 then gate.age = gate.now - gate.mtime
+      end else null
+      void ospath(gate.stamp, OS$DELETE)
+
+*     THE CONSUMER CLOSES THE WINDOW: delete before deciding, so no path below leaves it open.
+      void ospath(gate.marker, OS$DELETE)
+      if ospath(gate.marker, OS$EXISTS) then
+         audit.reason = 'the internal marker could not be consumed'
+      end else
+         if gate.age > gate.expiry then
+            audit.reason = 'the internal marker had expired'
+         end else
+            gate.ok = @true
+         end
+      end
+   end else
+      audit.reason = 'no internal marker'
+   end
+
+   audit.account = initial.account
+   if gate.ok then
+      void kernel(K$AUDIT, 'INTERNAL SESSION ADMITTED account=' : initial.account : ' writer=' : gate.writer : ' age=' : gate.age)
+   end
+   return
+
 *
 * ======================================================================
 * REQUIRE.CREDENTIAL  -  the account must have a password.  Sets cred.ok.

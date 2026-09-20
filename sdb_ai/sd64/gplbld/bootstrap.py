@@ -50,6 +50,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 # Run by bbcmp.py before there is a compiler.  Order matters: BBPROC is the
 # bootstrap paragraph processor, BCOMP the compiler it needs, PATHTKN the
@@ -61,6 +62,19 @@ BBCMP_FIRST = ['bbproc', 'bcomp', 'pathtkn']
 # its RID, so S-1-5-32-544 is always gid 544, while the NAME is translated on a
 # localised Windows.
 SD_ADMIN_GID = 544
+
+# 20 Sep 26 - RELEASE_1.1 82 (D2').  LOGIN admits an "sd -internal" session only
+# against a one-shot marker file in the SDSYS directory, and deletes it on
+# admission.  sd() below writes one immediately before EVERY internal session
+# (this script runs four) and removes it afterwards in case sd never consumed it.
+# Set by main() once the SDSYS directory is known; None means "not set", and sd()
+# then writes nothing - which is exactly how a session started before main() has
+# resolved the tree would fail, loudly, at the gate.
+#
+# THE CONTRACT WITH LOGIN is shared with gplbld/internal-marker.ps1 and checked by
+# test-internalgate-units.py: the file is named $internal, line 1 is "<writer>
+# pid=<pid> <time>", ASCII, no BOM, and LOGIN refuses one older than 10 minutes.
+INTERNAL_MARKER_DIR = None
 
 # Field mark in a stored record, as gplbld/stage.py also has it.
 FM = '\n'
@@ -146,17 +160,30 @@ def sd(sdexe, env, args, expect_fail=False):
     print('    $ ' + ' '.join(cmd))
     sys.stdout.flush()
 
+    # RELEASE_1.1 82 (D2'): the one-shot marker LOGIN needs for an internal
+    # session, written now and removed afterwards whether or not sd consumed it.
+    marker = None
+    if args and args[0].lower() == '-internal' and INTERNAL_MARKER_DIR:
+        marker = os.path.join(INTERNAL_MARKER_DIR, '$internal')
+        with open(marker, 'w', encoding='ascii', newline='\n') as mf:
+            mf.write('bootstrap.py pid=%d %s\n'
+                     % (os.getpid(), time.strftime('%Y-%m-%dT%H:%M:%S')))
+
     # Output goes to a FILE, never a pipe.  "sd -start" spawns sdwind, which
     # inherits stdout and stderr, so anything capturing them through a pipe
     # blocks until the *daemon* exits rather than until sd -start does - and
     # the daemon is meant to keep running.  It looks exactly like a hang.
     # PROJECT_STATUS.md 6.  A file handle is inherited just as happily and
     # blocks nobody.
-    with tempfile.TemporaryFile() as tf:
-        r = subprocess.run(cmd, env=env, input=b'\n',
-                           stdout=tf, stderr=subprocess.STDOUT)
-        tf.seek(0)
-        out = tf.read().decode('latin-1').replace('\r', '')
+    try:
+        with tempfile.TemporaryFile() as tf:
+            r = subprocess.run(cmd, env=env, input=b'\n',
+                               stdout=tf, stderr=subprocess.STDOUT)
+            tf.seek(0)
+            out = tf.read().decode('latin-1').replace('\r', '')
+    finally:
+        if marker and os.path.exists(marker):
+            os.remove(marker)
     for line in out.splitlines():
         print('      | ' + line)
     if r.returncode != 0 and not expect_fail:
@@ -195,6 +222,11 @@ def main():
     if not os.path.isfile(sdexe):
         die('no such sd executable: %s' % sdexe)
     check_account_record(sysdir)
+
+    # RELEASE_1.1 82 (D2'): from here on every "-internal" session sd() starts
+    # writes LOGIN's one-shot marker into THIS tree's SDSYS directory.
+    global INTERNAL_MARKER_DIR
+    INTERNAL_MARKER_DIR = sysdir
 
     env = dict(os.environ)
     if args.conf:
