@@ -109,7 +109,9 @@ $DECLARED = [ordered]@{
     # its Invoke-SD is a one-line call to Invoke-SdSeatText and it proves the seat with
     # Assert-SdSeat before it creates anything.  NOT WITNESSED: it makes a Windows
     # account and opens a firewall port, so its first run is the owner's, elevated.
-    'probe-tasklock.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    # probe-tasklock.ps1 IS NOT HERE: DELETED 21 Sep 2026 on the owner's ruling
+    # ("remove probe-tasklock") - a one-shot probe for PRE_RELEASE 24, which is
+    # closed, still sending the refused prefix.
     'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     # 20 Sep 2026, THE TWENTY-THIRD PASS: acctmsgs, catgate, delaccount, doors-admin and
     # uninstallchoices ARE NOT HERE - CONVERTED, on the owner's "convert the remaining

@@ -56,14 +56,10 @@ param(
     [string]$Account  = 'sdacct1',
     [string]$Group    = 'sdsshonly',
     [string]$Password = '',
-    # 03 Sep 26 - PRE_RELEASE_FIXES 136.  The tier keyword, which goes BETWEEN
-    # the name and the access keyword: CREATE.ACCOUNT USER <name> <tier> <SSH>.
-    # EMPTY IS THE DEFAULT AND MEANS "SAY NOTHING", which is what every run
-    # before today did, so an existing caller gets the identical command line
-    # and the identical STANDARD account.  136 needs one PROGRAMMER witness and
-    # this is the whole of what it needed.
-    [ValidateSet('', 'STANDARD', 'PROGRAMMER', 'ADMINISTRATOR')]
-    [string]$Tier     = '',
+    # 21 Sep 26 - THE -Tier PARAMETER (03 Sep, PRE_RELEASE_FIXES 136) IS GONE,
+    # RELEASE_1.1 64: there are no tiers, and CREATE.ACCOUNT refuses the old
+    # keywords with 2018.  Every run already used its empty default, so the
+    # command line below is unchanged.
     [switch]$Keep,
     [switch]$Cleanup
 )
@@ -482,12 +478,11 @@ try {
 
     Write-Output ""
     # 03 Sep 26 - THE COMMAND LINE IS BUILT ONCE AND ECHOED, rather than being
-    # described.  Rule 1 of the instrument section: a -Tier that failed to reach
-    # the command is the failure this print exists to make visible, and it is
-    # the exact shape the $args clobber had.
-    $createCmd = ('CREATE.ACCOUNT USER ' + $Account + ' ' + $Tier + ' SSH') -replace '\s+', ' '
+    # described.  Rule 1 of the instrument section: an argument that failed to
+    # reach the command is the failure this print exists to make visible, and
+    # it is the exact shape the $args clobber had.
+    $createCmd = ('CREATE.ACCOUNT USER ' + $Account + ' SSH') -replace '\s+', ' '
     Write-Output "=== 1. $createCmd ====================================="
-    Write-Output ("  tier requested: '{0}'{1}" -f $Tier, $(if ($Tier -eq '') { "  (none - SD's default)" } else { '' }))
     $sdOut = Invoke-SD @($createCmd, $plain, $plain)
     Write-Output "  --- what SD said ---"
     ($sdOut -split "`n") | Where-Object {

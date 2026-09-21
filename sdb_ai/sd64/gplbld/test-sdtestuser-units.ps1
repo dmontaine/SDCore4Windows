@@ -290,7 +290,7 @@ if ($old.Count -gt 0) { Write-Output ('  swept ' + $old.Count + ' fixture(s) lef
 Write-Output ''
 Write-Output '== 8. every CONVERTED verifier REFUSES with no test account'
 Write-Output '   (the shortcut none of them may take is falling back to the invoking user,'
-Write-Output '    who under PRE_RELEASE 56 is elevated at LOGIN and lands in SDSYS)'
+Write-Output '    who is not the throwaway non-administrator these measure)'
 
 # ***DRIVEN AS A TABLE, SO ADDING A VERIFIER ADDS A ROW RATHER THAN A COPY.***
 # The reason is the one PRE_RELEASE 59 keeps making: four near-identical
@@ -299,12 +299,9 @@ Write-Output '    who under PRE_RELEASE 56 is elevated at LOGIN and lands in SDS
 # THAT script's refusal emits, and the readings only a real run would print.
 $refusers = @(
     @{ File = 'verify-nocase.ps1';      Measured = 'DIRFILE' },
-    @{ File = 'verify-lineendings.ps1'; Measured = 'REC ZZLECRLF' },
-    # 31 Aug 26 - PRE_RELEASE 91's verifier.  Its Measured string is a ROW
-    # LABEL rather than an SD artefact, because this one plants no probe: the
-    # thing it measures is a count of arrivals, and that label is printed only
-    # once a real session has produced rows to count.
-    @{ File = 'verify-logtoaccess.ps1'; Measured = 'arrivals into ' }
+    @{ File = 'verify-lineendings.ps1'; Measured = 'REC ZZLECRLF' }
+    # 21 Sep 26 - verify-logtoaccess.ps1 (PRE_RELEASE 91) WAS HERE AND IS
+    # DELETED with the tier bypass it measured, RELEASE_1.1 64.
 )
 
 foreach ($rf in $refusers) {

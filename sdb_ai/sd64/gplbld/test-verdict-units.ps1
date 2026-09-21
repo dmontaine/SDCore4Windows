@@ -27,12 +27,10 @@ $targets = @('verify-createaccount.ps1', 'verify-sshonly.ps1', 'verify-cmdaudit.
              # carried one copy of Write-Verdict, so there is one fewer to
              # compare - the counts below are derived from this list rather than
              # typed, which is why nothing else moves.
-             'verify-doors.ps1', 'verify-doors-admin.ps1',
-             # 31 Aug 26 - verify-logtoaccess.ps1 (PRE_RELEASE 91) carries the
-             # ninth copy.  Added here in the commit that creates it, because a
-             # copy nothing compares is exactly the comment that rots on the
-             # first edit - which is what this file exists to stop.
-             'verify-logtoaccess.ps1')
+             'verify-doors.ps1', 'verify-doors-admin.ps1')
+             # 21 Sep 26 - verify-logtoaccess.ps1 (PRE_RELEASE 91) WAS HERE, the
+             # ninth copy, AND IS DELETED with the tier bypass it measured,
+             # RELEASE_1.1 64.  Same reasoning as verify-tierchange above.
 
 # Collected so the two copies can be compared to each other, not just tested
 # apart.  See the identical-copies assertion at the end.

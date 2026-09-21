@@ -114,11 +114,17 @@ function Test-Say([string]$text, [string]$pattern) {
 }
 
 # MODIFYA's refusals name the account as readily as its successes do.
-$tierBad = @('Unable to change the tier', 'is already', 'cannot suspend',
-             'no record of the tier', 'is a group account')
+# 21 Sep 26 - RE-READ AGAINST TODAY'S MESSAGES, RELEASE_1.1 64.  Two of the five
+# were tier wording that nothing prints any more, so they could never match:
+# "Unable to change the tier" is 10114's old text (now "Unable to change the
+# state"), and "no record of the tier" has no message at all - a missing
+# account is 6003 "Account name is invalid".  The other three are live
+# (10110, 10112, 10087/10105).
+$stateBad = @('Unable to change the state', 'is already', 'cannot suspend',
+              'Account name is invalid', 'is a group account')
 function Get-Said([string]$text, [string]$good) {
     if (-not (Test-Say $text $good)) { return 'not said' }
-    foreach ($b in $tierBad) { if (Test-Say $text ([regex]::Escape($b))) { return ('refused: ' + $b) } }
+    foreach ($b in $stateBad) { if (Test-Say $text ([regex]::Escape($b))) { return ('refused: ' + $b) } }
     return 'said'
 }
 

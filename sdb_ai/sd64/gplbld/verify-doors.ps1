@@ -224,11 +224,16 @@ function Invoke-SshSession([string]$User, [string]$Pw, [string]$StdIn) {
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $pr = New-Object Security.Principal.WindowsPrincipal($id)
 if ($pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    # 21 Sep 26 - THE REASON PRINTED HERE WAS TIER-ERA AND IS NOW FALSE,
+    # RELEASE_1.1 64.  It said an elevated session ENTERS a suspended account
+    # through CPROC's elevated bypass and cited verify-tiers.ps1 section 6.
+    # 64 made that bypass (elev.obtained) dead code and deleted verify-tiers;
+    # its fifth pass measured LOGTO into a suspended account REFUSED (10107)
+    # whatever the elevation.  The refusal below is kept - this file is the
+    # ordinary user's half by design - and only the stated reason changes.
     Write-Output 'verify-doors: this must run UNELEVATED and this session is elevated.'
-    Write-Output '  CPROC:3765 puts the suspension test AFTER the elevated bypass, so an'
-    Write-Output '  elevated session ENTERS a suspended account - correctly.  Measuring the'
-    Write-Output '  logto door from here would report the design working as a fault, which is'
-    Write-Output '  the exact mistake verify-tiers.ps1 section 6 declines to make.'
+    Write-Output '  This file measures the doors as an ordinary user meets them; the'
+    Write-Output '  elevated half is verify-doors-admin.ps1.'
     Write-Output '  Run verify-doors-admin.ps1 elevated; run THIS in an ordinary prompt.'
     exit 2
 }

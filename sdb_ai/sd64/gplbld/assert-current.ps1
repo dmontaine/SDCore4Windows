@@ -479,13 +479,9 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # makes the tree report STALE merely because it exists, and
                   # then every verifier that calls this one refuses.
                   'verify-apiremote.ps1',
-                  # 31 Aug 26 - verify-logtoaccess.ps1, PRE_RELEASE 91's
-                  # verifier.  Listed in the commit that creates it, for the
-                  # reason the entry directly above spells out: a gplbld script
-                  # not on this list makes the tree report STALE merely because
-                  # it exists, and then every verifier - this one included -
-                  # refuses.  Session 79 paid for that with three at once.
-                  'verify-logtoaccess.ps1',
+                  # 21 Sep 26 - verify-logtoaccess.ps1 (PRE_RELEASE 91's
+                  # verifier) WAS HERE AND IS DELETED with the tier bypass it
+                  # measured, RELEASE_1.1 64.
                   'verify-keys.ps1', 'probe-keys.ps1',
                   # 24 Aug 26 - probe-syswrites.ps1, section 7 step 15's
                   # measurement: which of the eight remaining sdusers:(M)
@@ -1402,11 +1398,13 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # re-runnable by hand and each closed an entry.
                   #   probe-nolockmsg.ps1  12 and 87.  Unelevated, seconds, no
                   #                        run token.  It is the cheap one.
-                  #   probe-tasklock.ps1   24.  Raises one consent of its own
-                  #                        for "sd -cleanup".
                   #   check-msglen.py      whether a message fits k_error()'s
                   #                        buffer once sysmsg() has expanded it.
-                  'probe-nolockmsg.ps1', 'probe-tasklock.ps1', 'check-msglen.py',
+                  # 21 Sep 26 - probe-tasklock.ps1 (PRE_RELEASE 24, closed) WAS
+                  # HERE AND IS DELETED on the owner's ruling: it sent the LOGTO
+                  # SDSYS prefix RELEASE_1.1 64 refuses, and its question is
+                  # answered.
+                  'probe-nolockmsg.ps1', 'check-msglen.py',
                   # 31 Aug 26 - probe-taskflags, PRE_RELEASE 85 and 67's
                   # instrument.  Listed in the commit that creates it, under
                   # section 7 step 7's rule.  BOTH names are needed: the
