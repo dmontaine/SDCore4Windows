@@ -600,13 +600,11 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # the AST.  Listed in the commit that created it, under step
                   # 7's rule.
                   'test-sysmsg-units.ps1',
-                  # 28 Aug 26 - test-fixlist-units.ps1, the checker for
-                  # PRE_RELEASE_FIXES.md's own index.  Owner's instruction after
-                  # a session filed three entries onto numbers the table had
-                  # been using for a week, and reported 36 open when 18 were.
-                  # Reads files only - no install, no elevation, no run number.
-                  # Listed in the commit that created it, under step 7's rule.
-                  'test-fixlist-units.ps1',
+                  # 21 Sep 26 - test-fixlist-units.ps1 WAS HERE AND IS RETIRED
+                  # with check-stale-leads.py and test-staleleads-units.py (next
+                  # to mkvocdoc.py below).  All three compared copies of task
+                  # status kept in several files; the owner collapsed those to
+                  # one, PROJECT_STATUS.md, so there is nothing left to compare.
                   # 29 Aug 26 - the PRE_RELEASE 59 trio: the throwaway
                   # non-administrator account the unelevated half runs as.
                   # sdtestuser.ps1 is DOT-SOURCED and not run, sdtestuser-admin
@@ -1150,39 +1148,14 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # the licence - so the generator makes the record FROM the
                   # file and --check asserts they still agree.
                   'mkvocdoc.py',
-                  # 26 Aug 26 - check-stale-leads.py, which reads
-                  # PROJECT_STATUS.md and reports entries whose OPENING status
-                  # claim is contradicted later in the same entry.  Listed IN
-                  # THE COMMIT THAT CREATES IT, under section 7 step 7's rule.
-                  # It reads one markdown file and writes nothing; neither
-                  # stage.py nor sd.iss names it.
-                  #
-                  # WHY IT EXISTS: on 26 Aug 2026 the owner said "i have been
-                  # getting a different list of things left to do each time i
-                  # ask", and he was right.  FOUR entries that day led with a
-                  # superseded "still open" paragraph and carried their own
-                  # correction further down - section 4's ssh-options bullet,
-                  # step 3's limitssh bullet, step 14 ("WHAT IS STILL A
-                  # DECISION" 338 lines above "STEP 14 IS CLOSED"), and item
-                  # 5's own heading.  A reader stops at the first status
-                  # sentence, so the entry lies to everyone who does not read
-                  # all of it.  Three careful reads missed what this found in
-                  # one pass, which is the argument for a script over a
-                  # resolution to read more carefully.
-                  'check-stale-leads.py',
-                  # 26 Aug 26 - test-staleleads-units.py, the control test for
-                  # the script above.  Listed IN THE COMMIT THAT CREATES IT,
-                  # under section 7 step 7's rule.  It copies PROJECT_STATUS.md
-                  # to %TEMP%, corrupts the copy seven ways and requires the
-                  # checker to fail each time; it writes nothing in the tree.
-                  #
-                  # IT IS THE ONLY REASON A CLEAN RUN OF THE CHECKER MEANS
-                  # ANYTHING.  check-stale-leads.py exits 0 on the real file,
-                  # which is indistinguishable from a script that has silently
-                  # stopped working - both print a clean run.  Case [0] is a
-                  # POSITIVE control: if the unmodified file does not pass,
-                  # every injected failure below it proves nothing.
-                  'test-staleleads-units.py',
+                  # 21 Sep 26 - check-stale-leads.py and test-staleleads-units.py
+                  # WERE HERE AND ARE RETIRED (see test-fixlist-units.ps1 above).
+                  # check-stale-leads.py existed because on 26 Aug 2026 the
+                  # owner was given a different list of things left to do each
+                  # time he asked: entries led with a superseded "still open"
+                  # paragraph and corrected it further down.  The cause was
+                  # status kept in more than one place; it is now kept in one,
+                  # and a task that finishes is deleted rather than struck.
                   # 04 Sep 26 - check-client-sync.py WAS HERE AND IS RETIRED.
                   # PRE_RELEASE_FIXES 161.  It compared the API client across
                   # three trees, because gplsrc/sdclilib was the source,
