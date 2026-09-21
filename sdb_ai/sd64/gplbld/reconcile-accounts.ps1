@@ -240,8 +240,13 @@ function Get-ReconcileRefusal([string]$kind, [string]$recordId,
 
         # SDSYS BY NAME.  PRE_RELEASE 93 names it, so it is said out loud as
         # well as covered by the rule below.
+        # 21 Sep 26 - RELEASE_1.1 96.  This used to say "sdsys has no Windows user
+        # by design", which stopped being true when install-sdsys.ps1 began
+        # creating the Windows account SDSYS (64, eighth pass).  The exemption is
+        # unchanged and still right: that account is not derived from ACC$GROUP,
+        # which is all this sweep reads, so the sweep cannot judge it.
         if ($recordId.ToLower() -eq 'sdsys') {
-            return 'exempt: sdsys has no Windows user by design'
+            return 'exempt: sdsys is SD''s own account; its Windows account is made by install-sdsys.ps1, not derived from ACC$GROUP, so this sweep does not judge it'
         }
 
         # AND EVERY OTHER ACCOUNT THAT CORRECTLY HAS NONE.  CREATEA:1042 writes
@@ -506,9 +511,13 @@ if (-not $accRead.ok) {
 
         # Rule 1 again: what the record actually said and what Windows actually
         # answered, before anything is concluded from either.
+        # 21 Sep 26 - RELEASE_1.1 96.  An empty login is never looked up
+        # (Resolve-WindowsAccount answers "not there" for it), so it printed
+        # windows=ABSENT for SDSYS and every GROUP account, which reads as a
+        # missing Windows user when nothing was asked.
         Log ('    ACC$PATH={0} ACC$GROUP={1} login={2} windows={3}' -f $path, $group, `
              $(if ($winUser -eq '') { '(none)' } else { $winUser }), `
-             $(if (-not $look.ok) { 'COULD NOT TELL' } elseif ($look.live -eq '') { 'ABSENT' } else { $look.live }))
+             $(if ($winUser -eq '') { '(not looked up: no login)' } elseif (-not $look.ok) { 'COULD NOT TELL' } elseif ($look.live -eq '') { 'ABSENT' } else { $look.live }))
 
         $why = Get-ReconcileRefusal 'accounts' $f.Name $group $path $rootNorm $winUser $look.live $look.ok
         $verdict = Get-Verdict $why

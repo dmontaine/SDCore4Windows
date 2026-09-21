@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 21 Sep 26 Windows port - RELEASE_1.1 64 leftover.  elev.obtained is deleted:
+*            it was initialised false and never set true once LOGTO stopped
+*            calling elevate('START') on 18 Sep, so its two bypasses in
+*            logto.authorised and the logto.privilege.undo routine (four
+*            callers) were dead code.  No behaviour changes.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  The administrator-as-themselves
 *            bypass in logto.authorised is gone with the tiers and sdadmin
 *            with it; there is no SD administrator tier to test any more and
@@ -2646,14 +2651,6 @@ int.logto:
       return
    end
 
-* 16 Aug 26 Windows port - CLEARED ON EVERY LOGTO, AND THAT IS THE POINT OF
-*   SETTING IT HERE RATHER THAN WHERE IT IS READ.  elev.obtained says that THIS
-*   LOGTO obtained OS privilege a few lines below, and logto.authorised admits
-*   the caller on the strength of it.  Held in a session flag instead it would
-*   carry from one LOGTO to the next, and an account the caller had just been
-*   refused would be granted on the second attempt.
-   elev.obtained = @false
-
 * 20240330 mab only root can logto sdsys
 * 14 Aug 26 Windows port - RESTORED, as elevation rather than as uid zero.  It
 *   was removed on 13 Aug on the reasoning that entering SDSYS is what confers
@@ -2776,12 +2773,10 @@ int.logto:
 *   must not be drawn to reach a door that is shut.  The helper was still
 *   re-registered here on re-entry and that goes with it.
 *
-*   CONSEQUENCE, STATED SO IT IS NOT DISCOVERED LATER AS A MYSTERY: elev.obtained
-*   can no longer be set true anywhere - it is initialised @false at :2657 and
-*   this was its only writer - so the two elev.obtained privileged bypasses in
-*   logto.authorised, :4064 and :4199, are now DEAD CODE.  They are left
-*   standing because they still compile and still read an assigned variable;
-*   deleting them belongs with the rest of the elevation machinery.
+*   21 Sep 26 - RELEASE_1.1 64 LEFTOVER, CLEARED.  elev.obtained could no longer
+*   be set true anywhere once this stopped calling elevate('START'), so its two
+*   bypasses in logto.authorised and the routine that released the helper were
+*   dead code.  All three are deleted, with the flag itself.
 *
 *   AND THE INTERNAL DOOR IS NOT THIS.  "sd -internal" is forced to SDSYS by
 *   sd.c and never reaches int.logto at all, so it is unaffected by this
@@ -2844,7 +2839,6 @@ int.logto:
 *   probed - but the TRAIL may say, and should: somebody working through account
 *   names is the pattern this exists to make visible.
       void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not in the register')
-      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2862,7 +2856,6 @@ int.logto:
 *   the caller is not in its ACC$GROUP - a refused grant, which is the other
 *   half of "who used the access" and the one an investigation starts from.
       void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not granted')
-      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2888,7 +2881,6 @@ int.logto:
 *   cause it cannot actually rule out.  It names the path SD tried.
       display sysmsg(10150, acc.rec)
       * The grant is in place, but this sign-in cannot use it yet
-      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2896,7 +2888,6 @@ int.logto:
 
    openpath "voc" to new.voc else
       display sysmsg(5163) ;* Directory is not a SD account
-      gosub logto.privilege.undo
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -4042,37 +4033,12 @@ logto.authorised:
 * the test below.  Restoring this line would re-open the divergence at the one
 * place it cannot be seen.
 
-* 16 Aug 26 Windows port - AND SO DOES A SESSION THAT HAS JUST OBTAINED
-*   PRIVILEGE.  This is what was missing when elevation was built on 16 Aug
-*   2026: LOGTO SDSYS asked UAC, the administrator consented, the helper
-*   started - and then this routine refused the very LOGTO that had just
-*   obtained the privilege.  Measured, and the trail said it plainly:
-*   "ELEVATION GRANTED account=SDSYS" and "LOGTO REFUSED account=SDSYS
-*   reason=not granted" in the same second, twice.
-*
-*   K$ADMINISTRATOR CANNOT ANSWER THIS QUESTION, WHICH IS WHY A SECOND TEST IS
-*   NEEDED RATHER THAN A CHANGE TO THAT ONE.  It reads USR_ADMIN, seeded once
-*   from IsElevated() when the process starts (kernel.c) and settable only by
-*   an $internal program.  SD stays unelevated for its whole life BY DESIGN -
-*   a Windows token is fixed at process creation, so the privilege belongs to
-*   the helper process and never to sd.exe - so that seed is false here and
-*   always will be.  The flag is set further down, once the move into SDSYS has
-*   succeeded, which is the right moment for it and far too late for this.
-*
-*   The two tests are not redundant: K$ADMINISTRATOR is the session that was
-*   ALREADY elevated - a bootstrap, "sd -internal", the installer's account
-*   step - and asks UAC for nothing.
-   if elev.obtained then
-      logto.ok = @true
-      return
-   end
-
-* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR-AS-THEMSELVES
-*   BYPASS IS GONE WITH THE TIERS.  There is no SD administrator tier to test
-*   any more - sdadmin is deleted with the tier fields - and an
-*   administrator's only SD account is SDSYS, which int.logto refuses
-*   outright.  The elev.obtained bypass above still stands as dead code, kept
-*   deliberately for the elevation-machinery change; see the note at int.logto.
+* 21 Sep 26 Windows port - RELEASE_1.1 64 leftover.  The second test that stood
+*   here - a session that had JUST obtained privilege, read from elev.obtained -
+*   is deleted with the flag (see the note at int.logto).  The
+*   administrator-as-themselves bypass went on 18 Sep: there is no SD
+*   administrator tier to test any more and an administrator's only SD account
+*   is SDSYS, which int.logto refuses outright.
 
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
 *   2026: "an account can be temporarily denied access".  LOGIN shuts the front
@@ -4108,38 +4074,6 @@ logto.authorised:
 *   without SD knowing, and that test is what holds when it does.
 
    logto.ok = @true
-
-   return
-
-* ======================================================================
-* logto.privilege.undo  -  give up privilege this LOGTO obtained and did not use
-*
-* 16 Aug 26 Windows port - EVERY WAY OUT OF LOGTO AFTER THE ELEVATION AND
-*   BEFORE THE MOVE HAS TO COME THROUGH HERE.  The privilege is obtained early,
-*   because logto.authorised needs it; the flag that gives it up on the way out
-*   of SDSYS is set late, once the move has actually happened.  Between the two
-*   are four ways to fail - SDSYS missing from the register, an unauthorised
-*   caller, a directory that cannot be entered, an account with no VOC - and on
-*   every one of them the helper is running, nothing has cleared it, and the
-*   session is back at an ordinary account with privilege still available to it.
-*   That is precisely what the owner's instruction of 16 Aug 2026 forbids:
-*   LOGTO ends the elevated session.
-*
-*   Three of the four mean a broken installation rather than a routine refusal,
-*   which is an argument for handling them and not for assuming they cannot
-*   happen: a session left privileged by a fault is worth less noise than one
-*   left privileged silently.
-*
-*   K$ADMINISTRATOR IS DELIBERATELY NOT CLEARED HERE.  It has not been set at
-*   any point this routine can be reached from - that happens after the move -
-*   so clearing it would give up a privilege the caller had when LOGTO started,
-*   which is not this routine's business.
-logto.privilege.undo:
-   if elev.obtained then
-      void elevate('STOP', '')
-      void kernel(K$AUDIT, 'ELEVATION RELEASED account=' : upcase(new.account) : ' reason=logto did not complete')
-      elev.obtained = @false
-   end
 
    return
 

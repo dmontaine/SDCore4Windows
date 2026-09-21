@@ -3970,17 +3970,16 @@ begin
       missing on a tree that lost them.  The ordering note above still holds -
       the seeding step must precede the AllowGroups write whenever both run.
 
-      18 Sep 26 - AND "CHANGES NOBODY'S ACCESS" IS NO LONGER TRUE, ON PURPOSE.
-      RELEASE_1.1 62 and 63.  That script now also enforces the administrator
-      route rule - no ssh for an administrator, the API for one - and THAT half
-      deliberately changes access on an existing tree, because 58 and 62 bind
-      what the verbs grant from now on and migrate nothing, while sdssh and
-      sdapi are Windows local groups whose membership survives a cycle.
-      Measured on b197: the owner's own account held both routes on a tree the
-      new build had just installed.  The seeding half is unchanged and still
-      declines on a tree it did not create.  ***BEING UNGATED IS NOW LOAD-BEARING
-      RATHER THAN MERELY HARMLESS***: gate this step and the rule stops reaching
-      the accounts that predate it, which is the whole of 63. }
+      21 Sep 26 - RELEASE_1.1 95: THE 18 SEP NOTE THAT STOOD HERE IS WITHDRAWN.
+      It said the script also enforced an administrator route rule (no ssh for an
+      administrator, the API for one) and that being ungated was therefore
+      load-bearing.  That rule was 62's and 63's, and RELEASE_1.1 64 superseded
+      both - every account has ssh and the API, SDSYS has neither - so the block
+      that enforced it was removed from the script and would, on a reinstall or
+      upgrade over kept accounts, have taken every Windows administrator's own
+      account out of sdssh.  The script is back to seeding only the group it
+      created, so "changes nobody's access" is true again and being ungated is
+      harmless again, for the reason given above. }
     if not TrueUpgrade then
     begin
       SshLimit := ApplyAllowGroups;

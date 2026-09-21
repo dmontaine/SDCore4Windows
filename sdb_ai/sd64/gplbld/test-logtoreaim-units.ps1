@@ -51,10 +51,10 @@
                          sd.exe call to that task and reads the output back.
                          ***21 Sep 2026: THE HELPER IS BUILT (sdsys-seat.ps1),
                          WITNESSED ON A REAL MACHINE FOR THE PILOT AND THE
-                         MECHANICAL GROUP.  TWO DRIVERS ARE STILL IN THE
-                         TABLE BELOW (verify-apiadmin, verify-privundetermined);
-                         sdtestuser-admin AND verify-lcnames WERE CONVERTED
-                         THAT DAY AND ARE UNWITNESSED.***
+                         MECHANICAL GROUP.  NO DRIVER IS LEFT IN THE TABLE
+                         BELOW: sdtestuser-admin, verify-lcnames,
+                         verify-apiadmin AND verify-privundetermined WERE ALL
+                         CONVERTED THAT DAY AND ARE UNWITNESSED.***
 
       CALLER_SUPPLIED   Same defect, different shape: Invoke-SD itself sends
                          no prefix, and the CALLING code passes 'LOGTO SDSYS'
@@ -128,22 +128,22 @@ $DECLARED = [ordered]@{
     # probe-tasklock.ps1 IS NOT HERE: DELETED 21 Sep 2026 on the owner's ruling
     # ("remove probe-tasklock") - a one-shot probe for PRE_RELEASE 24, which is
     # closed, still sending the refused prefix.
-    # ***TWO OF THE FOUR DRIVERS THE OWNER RULED "CONVERT" ON 21 Sep 2026 ARE DONE AND
-    # ARE NOT HERE; TWO ARE STILL HERE.  RELEASE_1.1 76.***  NEITHER CONVERTED ONE IS
-    # WITNESSED; each needs one elevated run with SDSYS signed in.
+    # ***ALL FOUR DRIVERS THE OWNER RULED "CONVERT" ON 21 Sep 2026 ARE DONE AND ARE NOT
+    # HERE.  RELEASE_1.1 76.***  NONE OF THE FOUR IS WITNESSED; each needs one elevated
+    # run with SDSYS signed in.
     #   sdtestuser-admin.ps1   CONVERTED: Invoke-SdAdmin is a call to Invoke-SdSeatText,
     #                          caught and turned back into text, and Assert-SdSeat runs
     #                          before anything is swept or made.
     #   verify-lcnames.ps1     CONVERTED: the RunLegs re-entry calls Invoke-SdSeatText per
     #                          leg and the four legs no longer open with the prefix.
-    # verify-apiadmin.ps1 and verify-privundetermined.ps1 NEVER MATCHED THE LITERAL PATTERN
-    # - they build "LOGTO $account" and pass 'SDSYS' in as the account - which is what the
-    # second pattern ($rx2) exists to see.  They are declared below, and each row leaves
-    # this table in the commit that converts the file.  THE DESIGN IS IN RELEASE_1.1 76'S
-    # 21 Sep STATUS (a personal-account door through the seat's -Internal switch, plus a
-    # temporary os.users record for the local OS.EXECUTE control, Set-SeatOsUsersRecord).
-    'verify-apiadmin.ps1'         = @{ Role = 'DRIVER'; Why = "Invoke-SDSys hands the literal 'SDSYS' to Invoke-SDIn, which pipes LOGTO <account> into its own sd.exe" }
-    'verify-privundetermined.ps1' = @{ Role = 'DRIVER'; Why = "Invoke-SDSys hands the literal 'SDSYS' to Invoke-SDIn, which pipes LOGTO <account> into its own sd.exe" }
+    # verify-apiadmin.ps1 AND verify-privundetermined.ps1 ARE NOT HERE: CONVERTED 21 Sep
+    # 2026 (RELEASE_1.1 76), THE LAST TWO.  They never matched the literal pattern - they
+    # built "LOGTO $account" and passed 'SDSYS' in as the account - which is what the second
+    # pattern ($rx2) exists to see, and each row had to leave this table in the commit that
+    # converted the file.  Invoke-SDSys is now a plain seat call, Invoke-SDIn goes through
+    # the seat's -Internal door and REFUSES 'SDSYS', and the local OS.EXECUTE control plants
+    # a temporary os.users\SDSYS record (Set-SeatOsUsersRecord) and removes it.  NEITHER IS
+    # WITNESSED: converted unattended, each needs one elevated run with SDSYS signed in.
     # 20 Sep 2026, THE TWENTY-THIRD PASS: acctmsgs, catgate, delaccount, doors-admin and
     # uninstallchoices ARE NOT HERE - CONVERTED, on the owner's "convert the remaining
     # verifiers" (probe-tasklock excepted, at his word).  NONE IS WITNESSED.  Four were plain

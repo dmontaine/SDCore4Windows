@@ -19,6 +19,9 @@
 * 
 *
 * START-HISTORY:
+* 21 Sep 26 Windows port - RELEASE_1.1 64 leftover: route.apply's header still
+*   said tier.set needed it and that route.set refuses administrators (10083);
+*   both were deleted on 18 Sep.  Comment only, no code.
 *  1 Sep 26 Windows port - a suspend now prints 10159: all SD access is gone
 *   (local login, ssh, the API, LOGTO) and nothing on Windows changed.  The
 *   boundary is the half an administrator gets wrong - entry 20 got it wrong
@@ -563,14 +566,14 @@ route.set:
 * want.api.  Sets route.failed, route.same and route.stat; prints nothing.
 *
 * 27 Aug 26 Windows port - SPLIT OUT OF route.set, unchanged, because tier.set
-* needs the same three group moves and must NOT inherit route.set's guards.
-* An administrator is refused by route.set (10083) and a tier change is the one
-* operation where an account's administrator-ness is itself what is moving, so
-* the guard has to sit above this and not inside it.
+* needed the same three group moves without route.set's guards.
+* 21 Sep 26 Windows port - RELEASE_1.1 64: THE REASON FOR THE SPLIT IS GONE.
+* tier.set no longer moves groups (it only suspends and unsuspends) and the
+* administrator refusal (10083) was deleted, so route.set is this routine's only
+* caller.  It stays separate because it prints nothing.
 *
-* IT PRINTS NOTHING, which is the reason it is a separate routine rather than a
-* flag.  route.set reports the resulting state; tier.set reports the tier and
-* would otherwise print two verdicts about one command.
+* IT PRINTS NOTHING, which is what keeps it apart from route.set: route.set
+* reports the resulting state, and this only moves the memberships.
 route.apply:
    route.failed = @false
    route.same   = @false

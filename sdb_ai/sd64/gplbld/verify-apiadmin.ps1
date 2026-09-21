@@ -80,7 +80,6 @@ $ErrorActionPreference = 'Stop'
 
 $Gplbld  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Sd64    = Split-Path -Parent $Gplbld
-$sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $SvcName = 'SD'
 $conf    = Join-Path $env:ProgramData 'SD\sd.conf'
 $backup  = $conf + '.before-apiadmin'
@@ -152,30 +151,37 @@ function Refuse($msg) {
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
-# Drives a local SD session in a NAMED account.  Same shape as
-# verify-apiport.ps1's helper, except that it does not go to SDSYS: the probe
-# lives in the throwaway account's BP and has to be run from there.
+# 21 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1).  THE "LOGTO SDSYS"
+# PREFIX THIS USED TO SEND IS REFUSED (10002) FROM ANY SESSION THAT DID NOT START AS
+# THE OS SDSYS ACCOUNT with an elevated, interactive token (cproc:2789), and an
+# elevated Don is not one.  So the commands go to a task inside SDSYS's own live
+# session and the text comes back through a file.  The TERM line the old helper sent
+# after every LOGTO (LOGIN re-inits terminal geometry on each account switch,
+# LOGIN:201-209) is added by the seat (Expand-SeatCommands).  A seat that did not
+# run THROWS rather than returning ''.  SDSYS must be signed in: `query session`
+# shows its row.
+#
+# TWO DOORS.  Invoke-SDSys is a plain seat call.  Invoke-SDIn moves into a PERSONAL
+# account with LOGTO, which a plain session is refused, so it uses the seat's
+# -Internal door - the same choice verify-catgate makes per call.  Invoke-SDIn
+# REFUSES 'SDSYS': asking it for SDSYS would be the old prefix by another name, and
+# test-logtoreaim-units.ps1 would (rightly) count it as a driver again.
+#
+# NOT WITNESSED: converted unattended on 21 Sep 2026.  Its first run is the owner's,
+# elevated, with SDSYS signed in - read the FIRST red as a finding about the seat or
+# the door before reverting anything.
+. (Join-Path $Gplbld 'sdsys-seat.ps1')
+
 function Invoke-SDIn([string]$account, [string[]]$commands) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any further LOGTO in $commands.
-    # Full write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
+    if ($account -ieq 'SDSYS') {
+        throw "Invoke-SDIn is for a PERSONAL account; use Invoke-SDSys for SDSYS (a LOGTO into it is refused)"
     }
-    $body = "`n" + ((@("LOGTO $account", 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    $text = Invoke-SdSeatText -Commands (@("LOGTO $account") + $commands) -TimeoutSec 180 -Internal
+    return ($text -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')
 }
 
 function Invoke-SDSys([string[]]$commands) {
-    return (Invoke-SDIn 'SDSYS' $commands)
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 function Stop-SD {
@@ -257,6 +263,29 @@ if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $
 
 $bash = 'C:\msys64\usr\bin\bash.exe'
 if (-not (Test-Path -LiteralPath $bash)) { Refuse "MSYS2 bash not found at $bash" }
+
+# 21 Sep 26 - RELEASE_1.1 76.  PROVE BOTH SEAT DOORS BEFORE ANYTHING IS CREATED, so a
+# missing SDSYS session is exit 2 ("could not run"), not a thrown error at the first SD
+# call that reads as a product failure.  Plain first, then -Internal (the door
+# Invoke-SDIn uses).  See sdsys-seat.ps1.
+Assert-SdSeat -Label 'verify-apiadmin'
+Assert-SdSeat -Label 'verify-apiadmin' -Internal
+
+# THE LOCAL OS.EXECUTE CONTROL NEEDS A TEMPORARY os.users\SDSYS RECORD, AND THIS SCRIPT
+# MUST NOT OVERWRITE SOMEBODY ELSE'S.  Read from source, NOT RUN: the seat's LOGTO into
+# the throwaway account clears USR_ADMIN (cproc calls kernel(K$ADMINISTRATOR, 0);
+# op_kernel.c:587-592, honoured only for a $internal program), so os_permitted() falls
+# through to os.users\<login name> = os.users\SDSYS, and the live os.users held ZERO
+# records on 21 Sep 2026 - so without a record the control's OS.EXECUTE is refused and
+# its row ("the probe CAN see OS.EXECUTE run") FAILS for a reason that is the fixture's,
+# not the product's.  Owner approved planting it for that one leg (21 Sep 2026); it is
+# planted immediately before the local run and removed immediately after, with a
+# `finally` backstop below.  A record that is already there is refused, not reused.
+$osUsersDir = Join-Path $env:ProgramData 'SD\sdsys\os.users'
+if (Test-Path -LiteralPath (Join-Path $osUsersDir 'SDSYS')) {
+    Refuse "os.users\SDSYS already exists - a run or a person left it.  Remove it or read it first; this script will not overwrite a permission record."
+}
+$plantedOsUsers = $false
 
 $restoreNeeded = $false
 $madeAccount   = $false
@@ -391,7 +420,24 @@ try {
     Write-Host $localOut
 
     # Separate run, because this one may abort - see the note in step 4.
-    $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+    #
+    # 21 Sep 26 - RELEASE_1.1 76: PLANTED IMMEDIATELY BEFORE AND REMOVED IMMEDIATELY
+    # AFTER (see the note at $osUsersDir).  Printed either way, so a record left
+    # behind is visible in the run's own output.
+    $plant = Set-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
+    Write-Host ("   os.users\SDSYS planted for the local OS.EXECUTE control: ok={0} {1}" -f $plant.Ok, $plant.Why)
+    Note 'fixture: os.users\SDSYS planted' $true $plant.Ok
+    if (-not $plant.Ok) { Refuse ('could not plant os.users\SDSYS: ' + $plant.Why) }
+    $plantedOsUsers = $true
+    try {
+        $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+    }
+    finally {
+        $unplant = Remove-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
+        Write-Host ("   os.users\SDSYS removed: ok={0} {1}" -f $unplant.Ok, $unplant.Why)
+        if ($unplant.Ok) { $plantedOsUsers = $false }
+    }
+    Note 'fixture: os.users\SDSYS removed after the control' $true (-not $plantedOsUsers)
     Write-Host $localOsOut
 
     $localAcct  = Get-Marker $localOut 'ACCOUNT'
@@ -753,6 +799,15 @@ finally {
         Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
         Write-Host '   sd.conf restored'
         if (Stop-SD) { $null = Start-SD }
+    }
+
+    # 21 Sep 26 - RELEASE_1.1 76: THE BACKSTOP for the os.users\SDSYS record planted for
+    # the local control.  Removed only if it is the one this run wrote (the helper
+    # refuses to touch any other) and said so out loud, because a permission record
+    # left on the list that grants shells is worse than a name in a register.
+    if ($plantedOsUsers) {
+        $r = Remove-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
+        Write-Host ("   backstop: os.users\SDSYS removed: ok={0} {1}" -f $r.Ok, $r.Why) -ForegroundColor Yellow
     }
 
     # The probe writes a namespaced record and deletes it again, but a run that

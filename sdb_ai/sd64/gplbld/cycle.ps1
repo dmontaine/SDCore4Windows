@@ -847,6 +847,12 @@ if (($iGcat -lt $nGcat) -or ($iOut -lt $nOut)) {
 # password step.  The prompt belongs to an elevated INTERACTIVE session, and that
 # is the state the message below now names.
 #
+# ***21 SEP 2026, RELEASE_1.1 96 - THE FIRST SENTENCE OF THE NOTE ABOVE HAS BEEN
+# FALSE SINCE 70.***  70 restored the attached account's password step:
+# finish-install.ps1 asks for that account's SD password, so a normal install
+# leaves ONE register entry and a count of 0 means that step set none.  The
+# message below says so; the note above is kept as the record of the 18 Sep state.
+#
 # READ, NOT INFERRED.  The count comes off the register itself; this script is
 # already elevated, which is what makes $cred readable at all - it is SYSTEM and
 # Administrators only.
@@ -858,9 +864,9 @@ catch { $nCred = -1 }
 
 if ($nCred -eq 0) {
     Write-Host "NO SD ACCOUNT HAS A PASSWORD - the SD credential register is empty." -ForegroundColor Yellow
-    Write-Host "  EXPECTED after an install since RELEASE_1.1 64: nothing collects an SD password," -ForegroundColor Yellow
-    Write-Host "  and SDSYS signs in with its WINDOWS password.  A register entry appears the first" -ForegroundColor Yellow
-    Write-Host "  time an account sets one - an ELEVATED INTERACTIVE 'sd', which asks (login:1082)." -ForegroundColor Yellow
+    Write-Host "  The installer's finish page asks for the attached account's SD password (RELEASE_1.1 70)," -ForegroundColor Yellow
+    Write-Host "  so a normal install leaves one entry; an empty register means that step set none." -ForegroundColor Yellow
+    Write-Host "  Until an account sets one, an ELEVATED INTERACTIVE 'sd' asks (login:1082)." -ForegroundColor Yellow
     Write-Host "  A command line is batch and does not prompt, so the verify suite is not stalled." -ForegroundColor Yellow
 } elseif ($nCred -lt 0) {
     Write-Host "Could not read $credDir - cannot say whether any account has a password." -ForegroundColor Yellow
