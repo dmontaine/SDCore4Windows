@@ -323,38 +323,39 @@ $RETIRED = @(
     # model, said once in the wizard: "Every account decides its own ssh and
     # API access".  Each removed phrasing registers against it.
     # 20 Sep 26 - THAT SENTENCE WAS CUT WITH THE REST OF THE WIZARD'S EXPLANATION
-    # (owner: "too verbose"), so the nine rows below now share the wizard's
-    # first sentence about the routes instead: "Accounts sign in over ssh or the
-    # SD Core API".  It is neutral, which is all a REPLACEMENT has to be - its
-    # job is to show the corrected page is what is on screen; the RETIRED halves
-    # are what stop the administrator-route claims coming back.
+    # (owner: "too verbose"), so the nine rows below shared the wizard's first
+    # sentence about the routes instead.  THAT PAGE WAS THEN DELETED ITSELF (20 Sep
+    # 26, owner's instruction), so they now share the ssh task's own label: "SD Core
+    # accounts can sign in over ssh".  It is neutral, which is all a REPLACEMENT has
+    # to be - its job is to show the corrected wording is what is on screen; the
+    # RETIRED halves are what stop the administrator-route claims coming back.
     @{ Ref = 'R1.1-64b'
        Retired     = 'ssh and the API are refused'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64c'
        Retired     = 'always has both ssh and the API'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64d'
        Retired     = 'cannot be granted to one'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64e'
        Retired     = 'SD Core users and administrators'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64f'
        Retired     = 'have no remote access at all'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64g'
        Retired     = 'ssh is refused for an administrator'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64h'
        Retired     = 'no ssh, and the API only from this machine'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64i'
        Retired     = 'Administrators cannot sign in over ssh at all'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     @{ Ref = 'R1.1-64j'
        Retired     = 'can use the API only from this computer'
-       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+       Replacement = 'SD Core accounts can sign in over ssh' }
     # 20 Sep 26 - TWO SENTENCES THE INSTALLER'S CUT FOUND FALSE, not merely long.
     # (1) The existing-SDSYS closing line said the account "was left alone -
     # including its password, which is the one you set before".  Since the owner's
@@ -537,14 +538,15 @@ Check ("a nonsense token is NOT found ($($absent.Count) hit(s))") ($absent.Count
 # 02 Sep 26 - PRE_RELEASE 131's THREE CONTROLS, one per way this can go wrong.
 # The first two FAILED before the fix and pass after; the third guards the fix
 # itself, because over-stripping would be worse than the bug it repairs.
-# 20 Sep 26 - THE STRADDLING PHRASE MOVED.  It was "offers to install one", from
-# the ssh paragraph the installer's cut removed; the summary page's subtitle now
-# breaks at the same kind of seam ("... has happened yet - ' + 'Cancel changes
-# nothing.").  Pick a new one the same way whenever the text under it is edited:
-# it has to be on screen and on NO single source line.
-$straddle = Find-Any 'happened yet - Cancel changes nothing'
+# 20 Sep 26 - THE STRADDLING PHRASE MOVED TWICE.  It was "offers to install one",
+# from an ssh paragraph the installer's cut removed; then the summary page's
+# subtitle, which was deleted with the page.  It is now the OpenSSH-present box:
+# "... which starts out matching ' + 'this computer''s current firewall rule".
+# Pick a new one the same way whenever the text under it is edited: it has to be
+# on screen and on NO single source line.
+$straddle = Find-Any 'starts out matching this computer'
 Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") ($straddle.Count -gt 0) `
-      'sd.iss renders this across the summary page subtitle''s two lines and no single line carries it - the flattening is not working'
+      'sd.iss renders this across the OpenSSH-present box''s two lines and no single line carries it - the flattening is not working'
 $inBrace = Find-Any 'Lower case for the reason given at code 0'
 Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
       ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))

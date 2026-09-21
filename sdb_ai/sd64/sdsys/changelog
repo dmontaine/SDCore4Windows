@@ -11,6 +11,11 @@ while porting from it.
            what to run if a step did not complete.  The explanations of
            why were long and are gone.  Nothing Setup does has changed.
 
+           The "Before you install" page, which listed every change Setup
+           makes to Windows, has been removed.  One of its statements -
+           that SD Core users can read each other's files - was out of
+           date: each account's directory is locked to that account.
+
            The password screen at the end now says plainly that pressing
            Enter keeps the SDSYS password as it is, and typing a new one
            changes it.  It used to say so only after you had pressed Enter.

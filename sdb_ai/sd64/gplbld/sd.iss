@@ -293,9 +293,10 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; machine that is left - Windows' own server, configured by nobody but SD -
 ; there was never a case for declining.
 ;
-; It is disclosed on the "Before you install" page instead, beside
-; "OPENSSH SERVER - INSTALLED, NOT OPTIONAL", which is where the things SD does
-; without asking are listed.
+; It was disclosed on a "Before you install" page instead, which was deleted on
+; 20 Sep 26 (owner's instruction); the ssh consequences are now said only in the
+; ssh task label, the box shown when OpenSSH is already installed, and the
+; closing dialog.
 ;
 ; ApplyAllowGroups no longer tests WizardIsTaskSelected: see its own comment.
 ; The reasoning below is kept because it is why the step exists and what it
@@ -383,8 +384,8 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; sharp edge was at the end, past a comma and inside a parenthesis, which was
 ; exactly what a reader who scanned would skip.
 ; (no Name: line here on purpose - see the 25 Aug 26 note at the top of this
-;  block.  The wording that used to be the Description now appears on the
-;  "Before you install" page as a statement.)
+;  block.  The wording that used to be the Description appeared on a
+;  "Before you install" page as a statement; that page was deleted 20 Sep 26.)
 
 ; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
 ; normally 4243, and the ssh tunnel is no longer part of the design (8, posture
@@ -1928,225 +1929,34 @@ begin
   Result := RegKeyExists(HKEY_LOCAL_MACHINE, 'SYSTEM\CurrentControlSet\Services\sshd');
 end;
 
-{ ---------------------------------------------------------------------------
-  How SD will be used, and then the page that says what this will do
-  --------------------------------------------------------------------------- }
+(* THERE IS NO "Before you install" PAGE, AND NO MODE PAGE.  Two removals, kept
+   as one gravestone because a reader arriving here looks for both.
 
-var
-  SummaryPage: TOutputMsgMemoWizardPage;
+   20 Sep 26 - THE "Before you install" PAGE (a memo listing every change Setup
+   makes to Windows, and the ssh and API consequences) WAS DELETED ON THE OWNER'S
+   INSTRUCTION: "The whole Before you install page should be deleted."  It had
+   already been cut to a list that day ("too verbose"), and its last paragraph -
+   that SD Core users can read each other's files - was false: each account
+   directory has been locked to its own sdu_ group since the "B work" (see
+   secure-account-dirs.ps1).  The page's history is in HISTORY.md and
+   PRE_RELEASE_FIXES 39, 67, 74, 75 and 141; the lesson from all of them is that a
+   page which describes behaviour is where a claim quietly goes false.
 
-(* 30 Aug 26 - THE MODE PAGE IS GONE, AND WITH IT ModePage, FullRadio,
-   StandaloneRadio, ModeMemo, StandaloneChosen, StandaloneWasMarked,
-   WriteStandaloneMarker and the '$standalone' marker.  PRE_RELEASE_FIXES 75,
-   the owner's ruling of 30 Aug 2026:
-
-     "we should remove the standalone option - if the user does a full install
-      and leaves both ssh and api unchecked, there will be no ssh server install
-      and is basically the same as a standalone install"
-
-   THE THREE DIFFERENCES IT USED TO CARRY ARE ALL ANSWERED ELSEWHERE NOW.
-   (1) The ssh server: PRE_RELEASE 67, the sshserver box gates the capability
-       install, so leaving it blank installs none.
-   (2) CREATE.ACCOUNT's blanket refusal with message 10100: removed from
-       CREATEA, which is what read the marker.
-   (3) APIPORT: the apiremote box now picks between the two sd.conf variants,
-       so an unticked box means no listener at all - "the api box unchecked
-       should mean not provide the service at all - the port should not be left
-       open."
-
-   ***AND WITH THE PAGE GOES THE ONLY IRREVERSIBLE DECISION THE INSTALLER ASKED
-   ANYONE TO MAKE***, the one its own memo had to warn "cannot be changed from
-   inside SD afterwards".  The replacement path is the owner's: "redoing the
-   install to allow ssh or api - better path than the existing standalone to
-   full."
-
-   ONE WRINKLE THAT PATH HITS, AND IT IS THE API HALF ONLY.  sd.conf is
-   onlyifdoesntexist, precisely so a reinstall never discards a configuration
-   the user edited - so a reinstall does NOT turn APIPORT back on by itself.
-   The ssh half needs nothing, because the ssh boxes read machine state.  Left
-   as documentation rather than code: the installer does not edit a config file
-   the administrator owns, and uncommenting one APIPORT line is a smaller and
-   more visible act than a silent rewrite.  Recorded in PRE_RELEASE 75. *)
-
-(* 30 Aug 26 - ShouldSkipPage IS GONE TOO, AND ITS ABSENCE IS THE WHOLE OF IT.
-   It existed only to hide the mode page on an upgrade; with no mode page there
-   is nothing it could skip, and an event function that always answers False is
-   the same as not defining one.  PRE_RELEASE_FIXES 75. *)
-
-(* AFTER THE MODE PAGE AND BEFORE THE TASKS PAGE, AND THAT ORDER IS THE POINT.
-
-   It said "after wpWelcome" until 25 Aug 2026, which was true until the mode
-   page went in between.  It is still the second page the reader sees; what
-   changed is that by the time they see it the mode is known, so it describes
-   the install they chose instead of the only one there used to be.
-
-   Inno already provides the last-chance page: Ready to Install lists the
-   destination and the ticked tasks with Cancel beside them.  What it cannot
-   show is everything this installer does that is NOT a task - two local groups,
-   a group membership, two user-rights denials, an ACL rewrite that strips
-   inherited access from the data tree, a Windows service, and the OpenSSH
-   install.  A summary at the end would come after the reader had already
-   decided; the ssh exposure checkbox in particular is a decision they were
-   being asked to take with no context at all.
-
-   IT ALSO CARRIES THE THINGS THAT USED TO BE SAID ONLY AT THE END, where they
-   were too late to act on: that Windows will not apply the sdusers membership
-   until the user signs out, and that the OpenSSH install can take minutes and
-   usually wants a restart before any account can sign in.  The closing dialog
-   still says both - somebody who has just clicked through six pages should not
-   have to remember - but saying it first is the difference between a stated
-   cost and a surprise.
-
-   A MEMO PAGE RATHER THAN InfoBeforeFile, which would mean shipping an .rtf and
-   teaching stage.py to stage it.  This needs no new file and cannot get out of
-   step with the script that does the work.
-
-   Do not start a line here with a "#" - ISPP reads it as a preprocessor
-   directive and a wrapped string constant becomes "Unknown preprocessor
-   directive".  The trap is recorded at the closing MsgBox; every #13#10 below
-   is mid-line for that reason. *)
-
-(* 25 Aug 26 - IT TAKES THE MODE AS AN ARGUMENT, AND THAT IS THE WHOLE DEFENCE
-   AGAINST THE FAULT THIS PAGE KEEPS HAVING.  The comment inside records four
-   occasions on which this text went on asserting something that had stopped
-   being true.  A single text with the ssh paragraphs edited to hedge would
-   have been a fifth: it would have had to describe both installs at once, and
-   be read by somebody doing neither.
-
-   The common paragraphs are written ONCE and the mode picks between the blocks
-   that genuinely differ.  Two whole copies of this page was the alternative,
-   and keeping two copies of a text with this history in step is not a thing to
-   take on. *)
-{ 30 Aug 26 - THE Standalone PARAMETER IS GONE.  PRE_RELEASE_FIXES 75.  It took
-  the mode as an argument "so the page cannot describe the other one"; with one
-  mode there is no other one, and the three branches it fed have collapsed to
-  their surviving arm. }
-function DisclosureText: String;
-var
-  M: String;
-begin
-  (* NOT WRAPPED BY HAND, AND THAT IS THE POINT.  CORRECTED 16 Aug 2026 on the
-     owner seeing it: the first version broke every line at about 50 characters
-     because the memo width was a guess the compiler cannot check, and the guess
-     was far too narrow - a thin column of text in a wide control, with most of
-     the page unused.
-
-     The control word-wraps.  So each paragraph below is ONE line and the memo
-     fills whatever width it actually has, at any DPI and any wizard style -
-     which is a property rather than another guess.  The source lines are broken
-     with "+" for readability; those breaks put nothing in the string.
-
-     THE INDENTS WENT WITH IT, and had to.  A two-space indent only survives on
-     the first line of a wrapped paragraph, so indented text under a heading
-     comes out with one line in and the rest flush left, which looks worse than
-     no indent at all.  Structure is carried by blank lines and capitalised
-     headings instead.
-
-     So: do not reintroduce a line break inside a paragraph here, and do not
-     indent one.  Both look fine in the source and wrong on screen. *)
-  { 25 Aug 26 - "you can change this" WAS FALSE AND THE OWNER CAUGHT IT ON THE
-    PAGE.  DisableDirPage=yes and UsePreviousAppDir=no are set at the top of
-    this file, so the wizard never shows a directory page and there is nothing
-    to change.  The text had gone on saying otherwise since before that pin
-    went in.
-
-    Both locations are now described the same way, because they now behave the
-    same way.  /DIR= on the command line still overrides it - that is Inno's
-    behaviour and is deliberately left alone - but it is not something this
-    page should offer, being an explicit act by somebody who has read the
-    reasoning, not a wizard page a user clicks past.
-
-    THAT IS THE SECOND FALSE STATEMENT FOUND ON THIS PAGE IN ONE DAY; the
-    other was "SD LEAVES IT ALONE" about an existing ssh server.  This page
-    accumulates claims that quietly stop being true when something else in the
-    file changes, exactly as the wpSelectTasks MsgBox does - and its comment
-    has been recording that pattern for three rewordings.  When changing
-    behaviour, READ THIS PAGE. }
-  { 20 Sep 26 - THIS PAGE IS A LIST NOW, AT THE OWNER'S REQUEST: "the whole
-    installer is too verbose ... only what the user needs to know to install the
-    system, not detailed explanations."  IT STILL DISCLOSES EVERY CHANGE SETUP
-    MAKES TO WINDOWS - that is what the page is for - but says each in a line and
-    drops the reasoning.  The comments that stood between the paragraphs recorded
-    which sentences had been FALSE and why (25 Aug, 29 Aug, 30 Aug, 2 Sep:
-    PRE_RELEASE_FIXES 39, 67, 74, 75 and 141); the lesson is unchanged and worth
-    keeping: THIS PAGE IS WHERE A CLAIM QUIETLY GOES FALSE when something else in
-    this file changes, so READ IT when changing behaviour.  Each paragraph is ONE
-    line and is not indented - the control word-wraps (see above). }
-  M := 'WHERE THINGS GO' + #13#10#13#10 +
-       'Program files:  C:\Program Files\SD' + #13#10 +
-       'Database:  C:\ProgramData\SD' + #13#10 +
-       'Neither location can be changed.' + #13#10#13#10 +
-
-       'WHAT SETUP CHANGES IN WINDOWS' + #13#10#13#10 +
-       'Creates the group "sdusers" and adds you to it. YOU MUST SIGN OUT AND BACK IN, or restart, before SD Core will run.' + #13#10#13#10 +
-       'Creates the group "sdsshonly", which is denied console and Remote Desktop sign-in. Accounts SD Core creates go in it; your own account does not.' + #13#10#13#10 +
-       'Restricts C:\ProgramData\SD to SYSTEM, administrators and sdusers.' + #13#10#13#10 +
-       'Installs a Windows service that starts SD Core after every restart.' + #13#10#13#10 +
-       'Adds SD Core to the system PATH, unless you clear that option.' + #13#10#13#10;
-
-  M := M +
-       'SSH AND THE SD CORE API - BOTH OPTIONAL' + #13#10#13#10 +
-       'Accounts sign in over ssh or the SD Core API; you choose on the next page. With neither, only administrators can use this computer, by typing "sd" at an elevated prompt.' + #13#10#13#10 +
-       'If you install the OpenSSH server, it downloads from Windows Update, can take several minutes with nothing on screen, and usually needs a restart. Every ssh session then goes straight into SD Core, and scp and sftp stop working for everyone on this computer. Any existing sshd_config is kept as sshd_config.before-sd.' + #13#10#13#10 +
-       'If this computer already has a different ssh server, or somebody has changed how its Windows ssh server is configured, SD Core will not install.' + #13#10#13#10;
-
-  { 29 Aug 26 - THE ACCOUNTS ARE NAMED HERE NOW.  PRE_RELEASE_FIXES 39: this
-    listed the database, the ssh server and sdusers, and said nothing about the
-    Windows accounts CREATE.ACCOUNT had made - so an administrator reading it
-    had no reason to think there was anything else to clean up.  It was wrong
-    whichever way the new prompt is answered, which is why it is fixed with it
-    rather than after it. }
-  { The uninstall paragraph names what is LEFT BEHIND (PRE_RELEASE_FIXES 39 and
-    74: the page was once wrong about it in both directions).  Measured 30 Aug
-    26: sdusers stays and sdssh, sdapi and sdsshonly are removed without asking,
-    so a kept account stops being confined and is an ordinary Windows account -
-    the removal question says that itself, at the moment it is asked. }
-  M := M +
-       'UNINSTALLING' + #13#10#13#10 +
-       'Removes SD Core. Your database and the Windows accounts SD Core created are kept unless you choose to remove them, and the group "sdusers" is always left behind.' + #13#10#13#10;
-
-  { KEPT, DELIBERATELY.  True of every install - the installing user is one
-    member of sdusers and an administrator can add others by hand - and a
-    warning is the wrong thing to drop on the strength of "there is probably
-    only one person here". }
-  M := M +
-       'ONE LIMIT' + #13#10#13#10 +
-       'SD Core users are not isolated from each other: anyone who can use SD Core on this computer can read another account''s files outside SD Core.';
-
-  Result := M;
-end;
-
-(* 30 Aug 26 - ModeChoiceText IS GONE WITH THE PAGE IT FILLED.
-   PRE_RELEASE_FIXES 75.  Its "FULL INSTALLATION" half described what every
-   install now does and is said by DisclosureText; its "STAND-ALONE" half
-   described a mode that no longer exists.  Two things it carried are worth
-   keeping and have been moved rather than dropped: the ssh cost to scp and
-   sftp, which DisclosureText already states, and the sentence about what an
-   install with no ssh server can and cannot do, which is now in SshReport's
-   closing text where it is true of a real install rather than of a mode. *)
+   30 Aug 26 - THE MODE PAGE, AND WITH IT ModePage, FullRadio, StandaloneRadio,
+   ModeMemo, StandaloneChosen, StandaloneWasMarked, WriteStandaloneMarker and the
+   '$standalone' marker.  PRE_RELEASE_FIXES 75, the owner's ruling: "we should
+   remove the standalone option - if the user does a full install and leaves both
+   ssh and api unchecked, there will be no ssh server install and is basically
+   the same as a standalone install."  Its three differences are answered
+   elsewhere: the sshserver box gates the capability install (PRE_RELEASE 67),
+   CREATE.ACCOUNT's blanket refusal 10100 is gone from CREATEA, and the apiremote
+   box picks between the two sd.conf variants.  ONE WRINKLE: sd.conf is
+   onlyifdoesntexist, so a reinstall does NOT turn APIPORT back on by itself.
+   ShouldSkipPage went with it - it existed only to hide the mode page on an
+   upgrade.  Recorded in PRE_RELEASE 75. *)
 
 procedure InitializeWizard;
 begin
-  (* 30 Aug 26 - THE MODE PAGE AND ITS TWO RADIO BUTTONS ARE GONE, AND THE
-     DISCLOSURE PAGE IS BACK ON wpWelcome WHERE IT SAT BEFORE 25 Aug 2026.
-     PRE_RELEASE_FIXES 75.  There is one installation now, so there is nothing
-     to choose between here and no reason to make the reader read two
-     descriptions of it.
-
-     THE ORDER THAT MATTERED IS PRESERVED BY THE MOVE, NOT BROKEN BY IT.  The
-     disclosure page had to come AFTER the mode choice, because it describes an
-     ssh install a stand-alone reader was about to decline.  With the choice
-     gone the page describes what every install does, so wpWelcome is the right
-     anchor again - and it still lands BEFORE wpSelectTasks, which is what the
-     ssh boxes need: the reader is told what SD does to ssh before being asked
-     how far to open it. *)
-  SummaryPage := CreateOutputMsgMemoPage(wpWelcome,
-      'Before you install',
-      'What SD Core changes on this computer',
-      'Setup changes Windows, not only its own folders. Nothing has happened yet - ' +
-      'Cancel changes nothing.',
-      DisclosureText);
-
   { 1 Sep 26 - MORE AIR BETWEEN THE TASKS.  Owner, looking at the wizard: the
     rows ran together, worst where the wrapped ssh label met its child box.  A
     taller minimum row height separates them; taken from the control's own value
@@ -4940,22 +4750,6 @@ begin
       'check the installation. Setting up is not finished until that window says so.';
   end;
 
-  (* 25 Aug 26 - THE DISCLOSURE PAGE IS RE-TEXTED EVERY TIME IT IS SHOWN, from
-     the live radio button rather than from anything remembered.
-
-     WHY IT IS DONE HERE AND NOT ONCE AT CREATION.  InitializeWizard runs before
-     the reader has chosen, so the text it seeds the page with is a guess - and
-     Back is a supported way through an Inno wizard.  Somebody who reads the
-     full disclosure, presses Back, picks stand-alone and comes forward again
-     would otherwise be shown the ssh paragraphs for an install that does not
-     install ssh.  That is precisely the failure this page has had four times,
-     arriving by a new route.
-
-     RichEditViewer.Lines.Text IS WRITABLE - checked by compiling it rather than
-     by reading the help, with a control that fails on the same line. *)
-  if CurPageID = SummaryPage.ID then
-    SummaryPage.RichEditViewer.Lines.Text := DisclosureText;
-
   { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
     in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with
     -Silent stopped here with a modal box on screen and copied not one file
@@ -5018,8 +4812,8 @@ begin
       exists on the page they are looking at.
 
       WHAT CHANGED UNDER IT.  limitssh stopped being a task; SD's ssh model now
-      applies on every install and is disclosed on the "Before you install"
-      page instead.  And a machine whose ssh server somebody else CONFIGURED no
+      applies on every install and used to be disclosed on a "Before you
+      install" page (deleted 20 Sep 26).  And a machine whose ssh server somebody else CONFIGURED no
       longer reaches this page at all - InitializeSetup refuses it.  So the
       only reader who now sees this box is one with Windows' own OpenSSH
       installed and nobody having touched its configuration, and what they need
