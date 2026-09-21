@@ -1,78 +1,52 @@
 <#
 .SYNOPSIS
-    Two of RELEASE_1.1 64's four owed items for this file: does a fresh ordinary
-    account really receive the whole of NEWVOC, and does refreshing it a second
-    time leave no duplicate or missing record behind?
+    RELEASE_1.1 64's owed whole-of-NEWVOC coverage: does a freshly created ordinary
+    account's VOC hold EVERY record NEWVOC holds, and what else does it hold?
 
 .DESCRIPTION
-    RELEASE_1.1 64 (PROJECT_STATUS.md "START HERE", 20 Sep 2026 teardown review)
-    named four things this file was owed, when it deleted verify-tiers.ps1 and
-    the tier machinery it measured: "the whole-of-NEWVOC count for an ordinary
-    account, the SUSPENDED/UNSUSPENDED register round trip, the tier keywords
-    refused, and the update.voc @ID case machinery."
+    RELEASE_1.1 64 (PROJECT_STATUS.md) named four things owed when it deleted
+    verify-tiers.ps1 and the tier machinery it measured.  Two are covered elsewhere
+    (the SUSPENDED/UNSUSPENDED round trip: verify-doors-admin.ps1 and verify-doors*.ps1;
+    the tier keywords refused at create time: verify-routes.ps1 Step 2 and
+    test-acctkeywords-units.py).  This file is the whole-of-NEWVOC count.
 
-    TWO OF THE FOUR ARE ALREADY COVERED, MEASURED THIS SESSION RATHER THAN
-    ASSUMED, AND ARE NOT REPEATED HERE:
-      - the SUSPENDED/UNSUSPENDED register round trip, and its enforcement
-        across all three doors (ssh, logto, the API) - verify-doors-admin.ps1
-        (the elevated half) and verify-doors.ps1 / verify-doors-suite.ps1.
-      - the tier keywords refused at create time (message 2018, nothing left
-        behind) - verify-routes.ps1 Step 2, live; test-acctkeywords-units.py,
-        statically, deriving the refused set from createa itself.
-    So this file is deliberately narrower than its name might suggest: it is
-    the other two, and nothing here duplicates what those already measure.
+    ***REWRITTEN 21 SEP 2026 AFTER ITS FIRST RUN (b209) COULD NOT RUN.***  Three defects,
+    all in this file and none in the product:
+      1. The count reader disqualified on "not in your VOC" anywhere in the output, and
+         that phrase came from the UPDATE.ACCOUNTS line, not from COUNT VOC, which had
+         answered "398 record(s) counted".  It now anchors ONLY on the success wording.
+      2. UPDATE.ACCOUNTS is in voc_template and NOT in newvoc, so an ordinary account
+         cannot run it; the two "refresh" steps and this header's old premise were wrong.
+         A freshly created account's VOC is NOT empty - CREATEA fills it (createa:1620+)
+         - so nothing needs refreshing before it can be measured.
+      3. The account's VOC held 398 records against NEWVOC's 395 with no refresh run, so
+         "the account's count equals NEWVOC's" was the wrong assertion.  The right one is
+         "no NEWVOC id is MISSING", and the extras are named and pinned.
 
-    "UPDATE.ACCOUNTS" DOES NOT TAKE AN ACCOUNT NAME - read from cproc:3374-3406
-    and login:324-426, not assumed. With no keyword it refreshes the CALLER'S
-    OWN current VOC (login mode 2); "UPDATE.ACCOUNTS ALL" (mode 4, SDSYS and
-    administrator only) walks the whole ACCOUNTS register and refreshes every
-    entry BY PATH, with no session switch. A plain LOGTO does NOT refresh a
-    VOC - login only reaches update.voc on modes 2, 3 or 4 - so a freshly
-    created account's VOC is empty (CREATEA creates the dynamic file and
-    nothing else, createa:1497-1499) until something runs one or the other.
-    This file uses the first form, from inside the subject account, because
-    that is what an ordinary person's first login exercises.
+    WHAT IT DOES.  As SDSYS (the seat, sdsys-seat.ps1): CREATE.ACCOUNT a throwaway account,
+    then LIST NEWVOC's ids.  Then, through the seat's -Internal door, LOGTO the account and
+    LIST its own VOC's ids.  Then it compares the two sets.  A LIST is used rather than one
+    COUNT per id, so the EXTRAS are seen and named, not only counted.
 
-    THE SDSYS SEAT, AND WHY -Internal IS NEEDED HERE SPECIFICALLY.
-    cproc:4000 (logto.authorised) admits a LOGTO only to a session that is
-    BOTH K$INTERNAL and K$ADMINISTRATOR, or to an OS user standing in the
-    target account's own group - the bare K$ADMINISTRATOR bypass was deleted
-    31 Aug 2026 (PRE_RELEASE_FIXES 91). The seat's ordinary session is SDSYS
-    but not K$INTERNAL, so a LOGTO into a throwaway personal account needs the
-    seat's -Internal door (sdsys-seat.ps1's own comment names this exact case:
-    "LOGTO to a personal account"). RELEASE_1.1 82 rules that door
-    development-only; this is a gplbld verifier, which is what it is for.
+    THE SDSYS SEAT, AND WHY -Internal IS NEEDED HERE SPECIFICALLY.  cproc (logto.authorised)
+    admits a LOGTO only to a session that is BOTH K$INTERNAL and K$ADMINISTRATOR, or to an OS
+    user standing in the target account's own group.  The seat's ordinary session is SDSYS
+    but not K$INTERNAL, so a LOGTO into a throwaway personal account needs the seat's
+    -Internal door.  RELEASE_1.1 82 rules that door development-only; this is a gplbld
+    verifier, which is what it is for.
 
-    WHAT THIS DOES NOT COVER, SAID PLAINLY - THE UPPERCASE-FALLBACK HALF OF
-    THE CASE MACHINERY IS NOT EXERCISED. login:1734-1747 is the mechanism the
-    "update.voc @ID case machinery" phrase actually names: on a rename
-    ($RELEASE -> $release, 14 Sep 2026), an account holding the OLD upper-case
-    record takes it over on an exact-id miss rather than growing a lower-case
-    twin beside it. Exercising that branch needs a fresh account's EMPTY VOC to
-    already hold an upper-case legacy record before its first refresh - and
-    every route found to plant one this session was judged too uncertain to
-    ship unverified: COPY's src/tgt file arguments resolve through the CALLING
-    session's own VOC (copy:28, "COPY FROM [DICT] src.file"), which is exactly
-    what a fresh account does not have before its first refresh, so
-    "COPY FROM NEWVOC ..." from inside it would need NEWVOC to already
-    resolve - and this agent has no elevation in this session, so a
-    path-based alternative from the SDSYS side could not be tried against a
-    live install before being written down here as fact. Shipping a leg this
-    session could not watch pass is exactly what "verify a script loads before
-    you submit it" exists to stop, extended to a mechanism rather than a
-    parse. What IS exercised instead - a second refresh creating no duplicate
-    - is the exact-match branch immediately above the fallback (the
-    "old.found" it reaches by readu on the unchanged id), which is real
-    coverage of the same subroutine's ordinary path, not a substitute for the
-    rename path. A future session with either elevation or a verified COPY
-    incantation should extend Step 3 rather than write a second file.
+    WHAT THIS DOES NOT COVER, SAID PLAINLY.  The "update.voc @ID case machinery" (the
+    upper-case-fallback half of login:1734-1747) and a SECOND refresh are not exercised:
+    UPDATE.ACCOUNTS is not reachable from an ordinary account, and "UPDATE.ACCOUNTS ALL" from
+    SDSYS would refresh every registered account, the owner's included, for the sake of one
+    throwaway.  Cover that on an upgrade run (verify-upgrade / upgrade-voc.ps1) instead.
 
 .PARAMETER Prefix
-    Stem for one throwaway account, <prefix>a. Use a stem nobody has used -
-    CREATE.ACCOUNT refuses a name it has seen.
+    Stem for one throwaway account, <prefix>a.  Use a stem nobody has used - CREATE.ACCOUNT
+    refuses a name it has seen.
 
 .PARAMETER Keep
-    Leave the account behind for poking at. It still needs DELETE.ACCOUNT.
+    Leave the account behind for poking at.  It still needs DELETE.ACCOUNT.
 
 .EXAMPLE
     From an elevated PowerShell:
@@ -89,6 +63,20 @@ $ErrorActionPreference = 'Stop'
 
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
+
+# KNOWN, AND DELIBERATELY PINNED RATHER THAN HIDDEN: COUNT NEWVOC counts one directory entry
+# that LIST NEWVOC cannot print.  newvoc/%t ("Keyword to test soundex code") is the record
+# for "~", which the directory-file id mapping stores as "%T" (op_dio3.c:42) - the 19 Aug
+# 2026 "every file name is lower case" rename made it "%t", an escape the decoder does not
+# know (RELEASE_1.1 100).  While that stands COUNT is LIST + 1.  When 100 is fixed this
+# becomes 0 and the two count rows below go red until this is changed - which is the point.
+$KnownUnlisted = 1
+
+# THE EXTRAS: what a created account's VOC holds that NEWVOC does not - the four
+# per-account file pointers CREATEA makes - pinned from the first measured run (b213,
+# 21 Sep 2026: 394 listed NEWVOC ids + these 4 = the account's 398).  $null would mean
+# "not measured yet": the run prints them and the row reads SKIP rather than passing on a guess.
+$ExpectedExtras = @('$command.stack', '$hold', '$savedlists', 'bp')
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -107,6 +95,11 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
+function Skip($check, $why) {
+    $null = $results.Add([pscustomobject]@{ Check = $check; Expected = '(skipped)'; Observed = '(skipped)' })
+    Write-Host ("  [SKIP] {0}: {1}" -f $check, $why)
+}
+
 function Fail($msg) {
     Write-Host ''
     Write-Host "STOPPED: $msg" -ForegroundColor Red
@@ -116,19 +109,29 @@ function Fail($msg) {
 
 function Step($n, $msg) { Write-Host ''; Write-Host "== [$n] $msg" -ForegroundColor Cyan }
 
-# "N record(s) counted", anchored the way verify-createfilecase.ps1's
-# Test-CountResolved already proved live: disqualified by the wording SD uses
-# when the file named does not resolve at all, which "0 record(s) counted"
-# must not be confused with (an empty or missing-record COUNT is not the same
-# as a file COUNT could not open).
-function Get-VocCount([string]$out) {
-    if ($out -match 'File not found|not in your VOC|did not finish in') { return -1 }
+# "N record(s) counted" is the ONLY thing this reads, and the FIRST such line.  It is not
+# disqualified by any other wording in the output: the b209 run died because a refusal on
+# a DIFFERENT command ("UPDATE.ACCOUNTS is not in your VOC") sat beside a good count.  No
+# match at all returns -1, which the caller turns into a refusal.
+function Get-CountLine([string]$out) {
     if ($out -match '(?m)^(\d+) record\(s\) counted') { return [int]$Matches[1] }
     return -1
 }
 
-# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT.  See the header for why -Internal
-# is needed for the LOGTO leg and not for the others.
+# "LIST <file> @ID NO.PAGE" prints an @ID column twice, one record per line, under a
+# header line of dots, and ends with "N record(s) listed".  Returns the ids AND that N, so
+# the caller can reconcile them: a listing that lost lines must not score as a smaller set.
+function Get-ListedIds([string]$out) {
+    $ids = New-Object System.Collections.ArrayList
+    foreach ($l in ($out -split "`r?`n")) {
+        if ($l -match '^(\S+)\s+\1\s*$' -and $Matches[1] -notmatch '^@ID\.') { $null = $ids.Add($Matches[1]) }
+    }
+    $said = -1
+    if ($out -match '(?m)^(\d+) record\(s\) listed') { $said = [int]$Matches[1] }
+    return [pscustomobject]@{ Ids = [string[]]$ids.ToArray(); Said = $said }
+}
+
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT.  See the header for why -Internal is needed.
 . (Join-Path $Gplbld 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands, [switch]$Internal) {
     return (Invoke-SdSeatText -Commands $commands -TimeoutSec 120 -Internal:$Internal)
@@ -157,9 +160,9 @@ if ($LASTEXITCODE -ne 0) { Fail 'the installed tree does not match source - see 
 
 if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
 
-# Prove the seat BEFORE anything is made, INCLUDING the -Internal door: this run needs
-# both, and a failure discovered only at the LOGTO step would look like a product defect
-# rather than the precondition it is.
+# Prove the seat BEFORE anything is made, INCLUDING the -Internal door: this run needs both,
+# and a failure discovered only at the LOGTO step would look like a product defect rather
+# than the precondition it is.
 Assert-SdSeat -Label 'verify-accountmodel' -Internal
 
 $acct = $Prefix + 'a'
@@ -177,74 +180,73 @@ $made = $false
 
 try {
     # -----------------------------------------------------------------------
-    Step 1 "CREATE.ACCOUNT USER $acct SSH, and COUNT NEWVOC as the expected total"
+    Step 1 "CREATE.ACCOUNT USER $acct SSH, then list NEWVOC's ids"
 
     # No -Internal: SDSYS makes its own account here, nothing LOGTOs anywhere.
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $acct SSH", $pw, $pw, 'COUNT NEWVOC')
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $acct SSH", $pw, $pw, 'COUNT NEWVOC', 'LIST NEWVOC @ID NO.PAGE')
     if (-not (Test-Path -LiteralPath $accRec)) { Write-Host $out; Fail "CREATE.ACCOUNT did not register $acct" }
     $made = $true
-
-    $newvocCount = Get-VocCount $out
     Note 'CREATE.ACCOUNT registered the account' $true (Test-Path -LiteralPath $accRec)
-    Note 'COUNT NEWVOC resolved to a real number' $true ($newvocCount -ge 0)
-    if ($newvocCount -lt 0) {
-        Fail ("COUNT NEWVOC did not answer with a parseable count - nothing below this " +
-              'point can be judged against an expected total.  Raw output above.')
+
+    $newvocCount = Get-CountLine $out
+    $nv = Get-ListedIds $out
+    Write-Host ("   COUNT NEWVOC said $newvocCount; LIST NEWVOC printed $($nv.Ids.Count) id line(s) and said $($nv.Said)")
+    Note 'COUNT NEWVOC answered with a real number' $true ($newvocCount -ge 300)
+    if ($newvocCount -lt 300) { Write-Host $out; Fail 'COUNT NEWVOC did not answer - nothing below can be judged.  Raw output above.' }
+    $wantListed = $newvocCount - $KnownUnlisted
+    Note "LIST NEWVOC printed COUNT minus the $KnownUnlisted known unlisted entry (RELEASE_1.1 100)" $wantListed $nv.Ids.Count
+    Note 'and its own "N record(s) listed" line agrees' $wantListed $nv.Said
+    if ($nv.Ids.Count -ne $wantListed) { Write-Host $out; Fail 'the NEWVOC id listing lost lines (or the known unlisted entry changed) - refusing to compare a partial set.  Raw output above.' }
+
+    # -----------------------------------------------------------------------
+    Step 2 "LOGTO $acct and list its own VOC's ids"
+
+    $out = Invoke-SD @("LOGTO $acct", 'COUNT VOC', 'LIST VOC @ID NO.PAGE', 'COUNT VOC WITH @ID = "create.account"') -Internal
+    $vocCount = Get-CountLine $out
+    $av = Get-ListedIds $out
+    Write-Host ("   COUNT VOC said $vocCount; LIST VOC printed $($av.Ids.Count) id line(s) and said $($av.Said)")
+    if ($vocCount -lt 300) { Write-Host $out; Fail "the LOGTO did not reach a VOC with a readable count.  A refused LOGTO reads 'Connection terminated'.  Raw output above." }
+    Note 'LIST VOC printed exactly as many ids as COUNT VOC said' $vocCount $av.Ids.Count
+    Note 'and its own "N record(s) listed" line agrees' $vocCount $av.Said
+    if ($av.Ids.Count -ne $vocCount) { Write-Host $out; Fail 'the account VOC id listing lost lines - refusing to compare a partial set.  Raw output above.' }
+
+    # THE PROOF THAT THE LOGTO SWITCHED ACCOUNT.  CREATE.ACCOUNT is an administration verb
+    # that lives in voc_template, SDSYS's own VOC, and in no ordinary account's.  Had the
+    # LOGTO been silently refused the session would still be SDSYS and this would count 1.
+    $counts = @([regex]::Matches($out, '(?m)^(\d+) record\(s\) counted') | ForEach-Object { [int]$_.Groups[1].Value })
+    $adminVerbs = $(if ($counts.Count -ge 2) { $counts[$counts.Count - 1] } else { -1 })
+    Note 'the account VOC does NOT hold CREATE.ACCOUNT (so the LOGTO really switched)' 0 $adminVerbs
+
+    # -----------------------------------------------------------------------
+    Step 3 'Compare the two sets'
+
+    $have = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($i in $av.Ids) { $null = $have.Add($i) }
+    $want = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($i in $nv.Ids) { $null = $want.Add($i) }
+
+    $missing = @($nv.Ids | Where-Object { -not $have.Contains($_) } | Sort-Object)
+    $extras  = @($av.Ids | Where-Object { -not $want.Contains($_) } | Sort-Object)
+    Write-Host ("   NEWVOC $($want.Count) distinct id(s); account VOC $($have.Count) distinct id(s)")
+    Write-Host ("   MISSING from the account (in NEWVOC, not in its VOC): " + $(if ($missing.Count) { $missing -join ', ' } else { '(none)' }))
+    Write-Host ("   EXTRAS in the account (in its VOC, not in NEWVOC)   : " + $(if ($extras.Count) { $extras -join ', ' } else { '(none)' }))
+
+    # THE ASSERTION THE OWED ITEM IS ABOUT: a fresh account receives the WHOLE of NEWVOC.
+    Note 'no NEWVOC id is missing from the account VOC' 0 $missing.Count
+
+    if ($null -eq $ExpectedExtras) {
+        Skip 'the account VOC holds exactly the pinned extras' ('$ExpectedExtras is not pinned yet - pin these: ' + ($extras -join ' '))
+    } else {
+        Note 'the account VOC holds exactly the pinned extras' (($ExpectedExtras | Sort-Object) -join ' ') ($extras -join ' ')
     }
-    Write-Host "   NEWVOC holds $newvocCount record(s) - this is the target for the account's own VOC"
 
     # -----------------------------------------------------------------------
-    Step 2 "LOGTO $acct and refresh its VOC for the first time"
+    Step 4 'A spot check: a name every NEWVOC has carried is actually there'
 
-    # UPDATE.ACCOUNTS with no keyword is mode 2: it refreshes the CALLER's own
-    # current VOC (login:324-340), which after the LOGTO above is this account's.
-    # This is the SAME call an ordinary first login's UPDATE.ACCOUNTS would make -
-    # nothing here is a shortcut CREATEA itself does not take.
-    $out = Invoke-SD @("LOGTO $acct", 'UPDATE.ACCOUNTS', 'COUNT VOC') -Internal
-    $firstCount = Get-VocCount $out
-
-    Note 'the LOGTO reached the account (COUNT VOC resolved)' $true ($firstCount -ge 0)
-    if ($firstCount -lt 0) {
-        Write-Host $out
-        Fail ('COUNT VOC did not answer with a parseable count after the LOGTO - see the ' +
-              'raw output above for what actually happened (a refused LOGTO reads as ' +
-              '"Connection terminated" and COUNT would then run in SDSYS''s own account, ' +
-              'which the count comparison below would catch as a mismatch, not this refusal).')
-    }
-
-    # THE ASSERTION THE FIRST OF THE FOUR OWED ITEMS IS ACTUALLY ABOUT.  Equal,
-    # not "at least" - an ordinary account is PROGRAMMER-level now and nothing
-    # else adds to or omits from NEWVOC's own copy (createa:1649-1663, the omit
-    # list is dead code kept at zero).  A count that is LOWER means the walk
-    # skipped something; HIGHER means something is in this account's VOC that
-    # NEWVOC does not ship, which COUNT VOC would not itself explain but the
-    # transcript above has the raw listing to chase.
-    Note 'the account''s VOC equals NEWVOC''s count (whole-of-NEWVOC coverage)' $newvocCount $firstCount
-
-    # -----------------------------------------------------------------------
-    Step 3 "Refresh a second time: the exact-match branch must create nothing new"
-
-    # login:1736-1737 - the FIRST thing update.voc tries for every id is an exact
-    # readu against what this account already holds.  On this second call every
-    # id it walked a moment ago is found that way, so this leg proves the
-    # exact-match path is a true no-op, not that a NEW record cannot appear
-    # twice - see the header for the fallback branch this does not reach.
-    $out = Invoke-SD @("LOGTO $acct", 'UPDATE.ACCOUNTS', 'COUNT VOC') -Internal
-    $secondCount = Get-VocCount $out
-    Note 'second refresh: COUNT VOC still resolved' $true ($secondCount -ge 0)
-    Note 'second refresh created no duplicate or missing record' $firstCount $secondCount
-
-    # -----------------------------------------------------------------------
-    Step 4 "A spot check: a name every NEWVOC has carried is actually there"
-
-    # COUNT alone cannot tell "the right 400 records" from "some other 400" -
-    # this is the one row that ties the number to an id a reader can check by
-    # eye.  WHO is chosen because it is unconditionally in NEWVOC (every
-    # session needs it) and is not one of the nine administration verbs 64's
-    # entry says NEWVOC has never carried, so its presence says nothing about
-    # whether this account was accidentally given more than PROGRAMMER level.
-    $out = Invoke-SD @("LOGTO $acct", 'COUNT VOC WITH @ID = "WHO"') -Internal
-    Note 'WHO is present in the refreshed VOC' 1 (Get-VocCount $out)
+    # WHO is chosen because it is unconditionally in NEWVOC (every session needs it) and is
+    # not one of the administration verbs 64's entry says NEWVOC has never carried.
+    $out = Invoke-SD @("LOGTO $acct", 'COUNT VOC WITH @ID = "who"') -Internal
+    Note 'WHO is present in the account VOC' 1 (Get-CountLine $out)
 }
 catch {
     $script:failed = $true
@@ -286,8 +288,7 @@ if ($failed) {
 }
 
 Write-Host ''
-Write-Host ('verify-accountmodel: a fresh account receives the whole of NEWVOC, and a second ' +
-            'refresh leaves the exact-match branch idempotent.  The rename/uppercase-fallback ' +
-            'branch is NOT covered - see the header.') -ForegroundColor Green
+Write-Host ('verify-accountmodel: a fresh account receives the whole of NEWVOC.  The extras are ' +
+            'listed above.  The case machinery and a second refresh are NOT covered - see the header.') -ForegroundColor Green
 try { Stop-Transcript | Out-Null } catch { }
 exit 0

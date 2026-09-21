@@ -408,7 +408,9 @@ try {
     Write-Output ('  listing: ' + (($sysDisk | Sort-Object) -join '  '))
 
     # SHIPPED FROM THE REPOSITORY (gplbld/stage.py SDSYS_SHIP and SDSYS_EMPTY).
-    $shipped = @('gpl.bp', 'syscom', 'newvoc', 'voc_template', 'messages',
+    # 21 Sep 26 - voc_template is NOT here: it no longer ships (stage.py
+    # SDSYS_BUILD_SEED); it is asserted ABSENT just below.
+    $shipped = @('gpl.bp', 'syscom', 'newvoc', 'messages',
                  'sd.voclib', 'accounts', 'bp', 'gpl.bp.out', 'bp.out',
                  'pcode.out', '$hold', '$cred', 'os.users', 'os.users.dic')
     # MADE BY THE BOOTSTRAP: BBPROC's FILES_LIST, plus voc at BBPROC:158.
@@ -428,6 +430,9 @@ try {
                      '$HOLD.DIC', '$MAP', '$MAP.DIC', '$IPC', 'PSTMP')) {
         Note ('sdsys ' + $n + ' absent') 0 @($sysDisk | Where-Object { $_ -ceq $n }).Count
     }
+    # 21 Sep 26 - the build seed is not installed, in either spelling.
+    Note 'sdsys voc_template absent (a build seed, not installed)' 0 `
+         @($sysDisk | Where-Object { $_ -ceq 'voc_template' }).Count
     # THE CONTROLS FOR THIS SECTION.  gcat, cat, prt, bin and terminfo were
     # lower case before any of it, so they show the listing is not folding case.
     foreach ($n in @('gcat', 'cat', 'prt', 'bin')) {

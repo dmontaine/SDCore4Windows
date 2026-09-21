@@ -267,7 +267,8 @@ try {
     # through bash -lc, cmd and the askpass helper, and it is not first.
     $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + '-aA1'
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $upper), $pw, $pw)
-    if ($out -notmatch 'Password set for account') { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
+    # 21 Sep 26 - the success wording is "Password accepted." now (was "Password set for account X").
+    if ($out -notmatch 'Password accepted\.') { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
     Write-Host '   password set'
 
     # -----------------------------------------------------------------------

@@ -4,6 +4,16 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+21 Sep 26  THE voc_template DIRECTORY IS NO LONGER INSTALLED.
+
+           The install used to leave a directory named voc_template
+           beside the SDSYS files.  It held a copy of the records that
+           become SDSYS's own VOC, and nothing on an installed system
+           ever read it: the copy into SDSYS's VOC is made when the
+           installer is built.  It is no longer installed, and an upgrade
+           removes the one an earlier release left behind.  SDSYS's VOC
+           is unchanged.
+
 20 Sep 26  THE INSTALLER SAYS LESS.
 
            Every screen the installer shows was cut down to what you need

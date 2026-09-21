@@ -57,6 +57,12 @@
 # tree into the state an upgrade-from-an-older-version would be in.  Forcing a
 # state to reach a branch is the technique verify-notyet.ps1 uses for the same
 # reason: the branch that matters most is otherwise the one never observed.
+#
+# 21 Sep 26 - THE SAME FOR sdsys\voc_template, which stopped shipping that day
+# (stage.py SDSYS_BUILD_SEED) and is on SDSYS_RETIRED so that an upgrade removes
+# the copy an earlier release installed.  An install made from the new stage.py
+# never has it, so -Snapshot plants one, with a probe file inside, when it is
+# absent; -Compare requires it gone.
 
 [CmdletBinding()]
 param(
@@ -140,7 +146,9 @@ $PRESERVE = @('$cred', 'accounts', 'cat', 'os.users', 'os.users.dic',
               'batch.jobs', 'batch.jobs.dic', 'prt', '$hold', 'bp', 'bp.out')
 
 # The computed replace list - the ship lists minus preserve.
-$REPLACE  = @('gpl.bp', 'syscom', 'newvoc', 'voc_template', 'messages',
+# 21 Sep 26 - voc_template is NOT here any more: it no longer ships, and the
+# upgrade REMOVES it (SDSYS_RETIRED) - see [S3] and [5] below.
+$REPLACE  = @('gpl.bp', 'syscom', 'newvoc', 'messages',
               'sd.voclib', 'licence', 'contrib', 'gpl.bp.out', 'gcat',
               'pcode.out', 'bin', 'terminfo', 'terminfo.src')
 
@@ -310,6 +318,18 @@ if ($Snapshot) {
     Write-Output ("  both readable back: " +
         ((Test-Path -LiteralPath $probeKeep) -and (Test-Path -LiteralPath $probeGone)))
 
+    # 21 Sep 26 - bp IS FINGERPRINTED AGAIN, NOW THE PROBE IS IN IT.  S1 recorded bp
+    # BEFORE the probe was planted, and -Compare fingerprints it AFTER the probe
+    # survived, so a preserved bp that held nothing else came back "changed" - the
+    # 21 Sep run scored 'preserved unchanged: bp' FAIL on the hash of a directory
+    # holding exactly the probe (reproduced with this file's own Get-Fingerprint:
+    # empty = E3B0..., probe only = BAC9...).  The survival of the probe is scored in
+    # [1]; this row has to compare like with like.  Created is re-read too, harmlessly:
+    # adding a file does not move a directory's creation time.
+    $sPreserve['bp'] = Get-Fingerprint (Join-Path $sdsys 'bp')
+    Write-Output ("  bp re-fingerprinted with the probe in it: " + $sPreserve['bp'].Hash.Substring(0, 16) +
+                  "  (" + $sPreserve['bp'].Count + " item(s))")
+
     Write-Output ''
     Write-Output '=== [S3] Forcing the retired name ==============================='
     # See the header.  A first install never creates sdsys\changelog, so
@@ -327,6 +347,20 @@ if ($Snapshot) {
     $appChangelog = Join-Path $appDir 'changelog'
     Write-Output ("  {app}\changelog present before: " + (Test-Path -LiteralPath $appChangelog))
 
+    # 21 Sep 26 - the second retired name, a DIRECTORY.  Planted with a file inside
+    # so the delete has something to remove, and so "gone" cannot mean "was empty".
+    $sdsysVocT = Join-Path $sdsys 'voc_template'
+    $hadVocT = Test-Path -LiteralPath $sdsysVocT
+    if ($hadVocT) {
+        Write-Output ("  sdsys\voc_template already present - left as it is: " + $sdsysVocT)
+    } else {
+        $null = New-Item -ItemType Directory -Path $sdsysVocT
+        Set-Content -LiteralPath (Join-Path $sdsysVocT 'probe') -Value `
+            'verify-upgrade.ps1 planted this to reach the SDSYS_RETIRED branch.' -Encoding ASCII
+        Write-Output ("  CREATED " + $sdsysVocT + " (with a probe file) to reach the retired-name branch")
+    }
+    Write-Output ("  sdsys\voc_template present before the upgrade: " + (Test-Path -LiteralPath $sdsysVocT))
+
     $sdExeHash = ''
     if (Test-Path -LiteralPath $sdExe) {
         $sdExeHash = (Get-FileHash -LiteralPath $sdExe -Algorithm SHA256).Hash
@@ -343,6 +377,7 @@ if ($Snapshot) {
         Replace        = $sReplace
         Unnamed        = $sUnnamed
         PlantedChangelog = (-not $hadIt)
+        PlantedVocTemplate = (-not $hadVocT)
         AppChangelog   = (Test-Path -LiteralPath $appChangelog)
     }
     $stateDir = Split-Path -Parent $StatePath
@@ -367,11 +402,21 @@ if ($Snapshot) {
     Write-Output 'NEXT: install OVER this installation - do NOT uninstall, do NOT run'
     Write-Output '  cycle.ps1, which deletes both trees.  Run the installer directly:'
     Write-Output ''
-    Write-Output '    C:\Users\dmont\sdout\sd-setup-W1.0-0.exe'
+    # 21 Sep 26 - THESE TWO LINES NAMED ANOTHER MACHINE'S PATHS AND THE OLDEST
+    # INSTALLER (C:\Users\dmont\sdout\sd-setup-W1.0-0.exe) - on this machine that is a
+    # DOWNGRADE, since sdout still holds W1.0-0.  Both are computed now: the NEWEST
+    # sd-setup-*.exe in the caller's sdout, and this script's own full path.
+    $newest = Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE 'sdout') -Filter 'sd-setup-*.exe' `
+                  -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($newest) {
+        Write-Output ('    ' + $newest.FullName + '   (built ' + $newest.LastWriteTime.ToString('dd MMM HH:mm') + ')')
+    } else {
+        Write-Output ('    (no sd-setup-*.exe in ' + (Join-Path $env:USERPROFILE 'sdout') + ' - build one first)')
+    }
     Write-Output ''
-    Write-Output 'THEN:'
+    Write-Output 'THEN, from an ELEVATED PowerShell:'
     Write-Output ''
-    Write-Output '    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-upgrade.ps1 -Compare'
+    Write-Output ('    powershell -ExecutionPolicy Bypass -File ' + $MyInvocation.MyCommand.Path + ' -Compare')
     try { Stop-Transcript | Out-Null } catch { }
     exit 0
 }
@@ -541,6 +586,11 @@ Write-Output ("  sdsys\changelog : " + $(if (Test-Path -LiteralPath $sdsysChange
 Write-Output ("  {app}\changelog : " + $(if (Test-Path -LiteralPath $appChangelog) { 'present' } else { 'GONE' }))
 Note 'sdsys\changelog was removed' $false (Test-Path -LiteralPath $sdsysChangelog)
 Note '{app}\changelog is present'  $true  (Test-Path -LiteralPath $appChangelog)
+# 21 Sep 26 - the second retired name.  It was present before (installed, or planted
+# by -Snapshot), so "gone" here is the upgrade's own doing.
+$sdsysVocT = Join-Path $sdsys 'voc_template'
+Write-Output ("  sdsys\voc_template : " + $(if (Test-Path -LiteralPath $sdsysVocT) { 'PRESENT' } else { 'gone' }))
+Note 'sdsys\voc_template was removed' $false (Test-Path -LiteralPath $sdsysVocT)
 
 Write-Output ''
 Write-Output '=== [6] What was upgraded to what ================================'
@@ -603,6 +653,22 @@ if (Test-Path -LiteralPath $probeKeep) {
     Remove-Item -LiteralPath $probeKeep -Force -ErrorAction SilentlyContinue
     Write-Output ''
     Write-Output ("  cleanup: removed " + $probeKeep)
+}
+
+# 21 Sep 26 - AND EVERYTHING -Snapshot PLANTED THAT THE UPGRADE DID NOT REMOVE.  On a
+# real upgrade all of these are already gone and this prints nothing; after a Compare
+# with no installer between (a self-test of this script) or an upgrade that failed to
+# delete a retired name, the rows above have already SCORED that, so removing the
+# litter afterwards hides nothing and keeps a planted voc_template or changelog from
+# staying in the live tree.  Only what the snapshot itself planted is touched.
+foreach ($pl in @(
+        @{ Path = $probeGone;                       Flag = $true;                          What = 'the probe planted in gcat' },
+        @{ Path = (Join-Path $sdsys 'changelog');   Flag = [bool]$state.PlantedChangelog;  What = 'the planted sdsys\changelog' },
+        @{ Path = (Join-Path $sdsys 'voc_template'); Flag = [bool]$state.PlantedVocTemplate; What = 'the planted sdsys\voc_template' })) {
+    if ($pl.Flag -and (Test-Path -LiteralPath $pl.Path)) {
+        Remove-Item -LiteralPath $pl.Path -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Output ("  cleanup: removed " + $pl.What + " (" + $pl.Path + ") - still there after the upgrade; scored above")
+    }
 }
 
 try { Stop-Transcript | Out-Null } catch { }

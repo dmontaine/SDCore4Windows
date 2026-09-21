@@ -157,6 +157,26 @@ def main():
               'changelog' not in [n for n, _w in S.SDSYS_SHIP] and
               'changelog' not in [n for n, _w in S.SDSYS_EMPTY])
 
+        # 21 Sep 26 - THE BUILD SEED.  Owner: "do not keep voc_template after the
+        # install".  The claim is about three lists and one emitted file, and each
+        # half is asserted on its own so a failure names the half that broke.
+        seeds = [n for n, _w in S.SDSYS_BUILD_SEED]
+        check('the build-seed list names voc_template (the null case: a seed '
+              'list that came out empty would pass every row below)',
+              'voc_template' in seeds, 'seeds: %s' % seeds)
+        for n in seeds:
+            check('SEED %s is on no ship, empty or preserve list' % n,
+                  n not in [x for x, _w in S.SDSYS_SHIP] and
+                  n not in [x for x, _w in S.SDSYS_EMPTY] and
+                  n not in preserve)
+            check('SEED %s is on the retired list, so an upgrade removes it' % n,
+                  n in retired)
+            check('SEED %s is not on the replace list and is not copied' % n,
+                  n not in replace and
+                  not any(('\\sdsys\\%s' % n) in l for l in copies))
+            check('SEED %s is not a mirror, so an installed copy is not "current"'
+                  % n, n not in [x for x, _w in S.SDSYS_MIRROR])
+
         # Asserted on the ENTRY lines, not on the whole file - the header
         # prose mentions {app}, and the first draft of this check matched that
         # and failed on its own documentation.
@@ -239,6 +259,63 @@ def main():
                    lambda: S.write_upgrade_iss(r, s, True))
     finally:
         S.SDSYS_RETIRED = saved
+        shutil.rmtree(r, ignore_errors=True)
+
+    # 21 Sep 26 - the removal itself.  A seed is put in the tree, removed, and the
+    # tree is then asserted to hold no seed name and every other name untouched.
+    print('build seeds:')
+    r = tempfile.mkdtemp()
+    try:
+        s = build_tree(r)
+        seeds_now = [n for n, _w in S.SDSYS_BUILD_SEED]
+        for n in seeds_now:
+            os.makedirs(os.path.join(s, n))
+            with open(os.path.join(s, n, 'rec'), 'w') as f:
+                f.write('x')
+        before = sorted(os.listdir(s))
+        check('CONTROL: every seed is in the tree before removal',
+              all(n in before for n in seeds_now), 'before: %s' % before)
+        S.remove_build_seeds(s)
+        after = sorted(os.listdir(s))
+        check('remove_build_seeds deletes every seed, contents and all',
+              not any(n in after for n in seeds_now), 'after: %s' % after)
+        check('and deletes nothing else',
+              after == [n for n in before if n not in seeds_now],
+              'before %d, after %d' % (len(before), len(after)))
+        S.remove_build_seeds(s)
+        check('and is a no-op the second time', sorted(os.listdir(s)) == after)
+        # The whole point of the step: what it leaves is accepted by the emitter.
+        try:
+            S.write_upgrade_iss(r, s, True)
+            accepted = True
+        except SystemExit as e:
+            accepted = False
+            print('    (refused: %s)' % str(e)[:80])
+        check('the emitter accepts the tree it leaves', accepted)
+    finally:
+        shutil.rmtree(r, ignore_errors=True)
+
+    # 21 Sep 26 - the two refusals a build seed adds.  Both are made by injecting
+    # into a copy of the real lists, so the guard is measured against the live
+    # rules and not against a restatement of them.
+    r = tempfile.mkdtemp()
+    try:
+        s = build_tree(r)
+        os.makedirs(os.path.join(s, 'voc_template'))
+        expect_die('a build seed still in the staged tree (would be packaged)',
+                   lambda: S.write_upgrade_iss(r, s, True))
+    finally:
+        shutil.rmtree(r, ignore_errors=True)
+
+    r = tempfile.mkdtemp()
+    saved = S.SDSYS_BUILD_SEED
+    try:
+        s = build_tree(r)
+        S.SDSYS_BUILD_SEED = saved + [('zzseed', 'a seed nobody retired')]
+        expect_die('a build seed that SDSYS_RETIRED does not name',
+                   lambda: S.write_upgrade_iss(r, s, True))
+    finally:
+        S.SDSYS_BUILD_SEED = saved
         shutil.rmtree(r, ignore_errors=True)
 
     r = tempfile.mkdtemp()

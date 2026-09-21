@@ -302,7 +302,8 @@ try {
     $restoreNeeded = $true
 
     $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
-    $set = ($out -match 'Password set for account')
+    # 21 Sep 26 - the success wording is "Password accepted." now (was "Password set for account X").
+    $set = ($out -match 'Password accepted\.')
     Note 'password set' $true $set
     if (-not $set) { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
 

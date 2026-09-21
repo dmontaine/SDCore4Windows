@@ -337,7 +337,9 @@ try {
     $pw = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '') + '-aA1'
 
     $out = Invoke-SDSys @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $pw, $pw)
-    $set = ($out -match 'Password set for account')
+    # 21 Sep 26 - SET_ACC_PASSWORD prints "Password accepted." now; it used to name the
+    # account ("Password set for account X"), and this anchor went stale with it.
+    $set = ($out -match 'Password accepted\.')
     Note 'credential set' $true $set
     if (-not $set) { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
 

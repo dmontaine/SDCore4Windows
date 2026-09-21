@@ -393,17 +393,18 @@ if ($Phase -eq 'Create') {
     # not merge them.
     Show-SD 'set the SD password the API authenticates against' @(
         ('MODIFY.PASSWORD ' + $acctU), $pw, $pw) @($pw)
-    # ANCHOR ON THE SUCCESS WORDING, CASE-SENSITIVELY.  SET_ACC_PASSWORD:252
-    # prints "Password set for account X"; :153 prints "has no password set" on
-    # a path that has NOT set one, so a match on "Password set" alone would be
+    # ANCHOR ON THE SUCCESS WORDING, CASE-SENSITIVELY.  SET_ACC_PASSWORD prints
+    # "Password accepted." on success (until 21 Sep 26 it printed "Password set for
+    # account X" and this anchor went stale); :153 prints "has no password set" on
+    # a path that has NOT set one, so a match on "password set" alone would be
     # the false positive this project keeps paying for.
     Note 'MODIFY.PASSWORD set the SD password' $true `
-         (Test-Say $lastSD 'Password set for account') $true
+         (Test-Say $lastSD 'Password accepted\.') $true
     # THE DISQUALIFIERS, from the same file: :167/:226/:241 "Password not
     # changed.", :238 "Passwords do not match.", :255 "Unable to set password".
     Note 'MODIFY.PASSWORD was not refused' $false `
          (Test-Say $lastSD 'Password not changed|Passwords do not match|Unable to set password') $true
-    if (-not (Test-Say $lastSD 'Password set for account')) {
+    if (-not (Test-Say $lastSD 'Password accepted\.')) {
         Write-Output '  The account exists but has no SD password, so the API door can never be'
         Write-Output '  ADMITTED in the Control leg and the pair would measure nothing.  Take the'
         Write-Output '  fixture away with -Phase Remove before trying again.'

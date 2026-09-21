@@ -5,8 +5,9 @@
 # Run by the installer at ssPostInstall, on an UPGRADE only.
 #
 # WHY AN UPGRADE NEEDS THIS AND A FIRST INSTALL DOES NOT.  PRE_RELEASE_FIXES 70.
-# An upgrade REPLACES the shipped vocabulary - newvoc and voc_template are on
-# stage.py's replace list - and REBUILDS NOTHING.  Every account's live VOC,
+# An upgrade REPLACES the shipped vocabulary - newvoc is on stage.py's replace
+# list (voc_template was too until 21 Sep 26; it no longer ships) - and REBUILDS
+# NOTHING.  Every account's live VOC,
 # SDSYS's own included, is built FROM those templates by the bootstrap and by
 # CREATEA, and is in neither the replace list nor the preserve list, so nothing
 # an upgrade does can reach it.  The result is that a release which adds a verb

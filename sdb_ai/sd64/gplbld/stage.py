@@ -41,8 +41,8 @@
 # bootstrap here and shipping the result means the end user needs neither Python
 # nor a compiler, and installing is a file copy.  See PROJECT_STATUS.md 5.16.
 #
-# WHY THIS IS A WHITELIST.  Everything copied is named in SDSYS_SHIP or
-# SDSYS_EMPTY below.  Nothing is copied because it happened to be in the source
+# WHY THIS IS A WHITELIST.  Everything copied is named in SDSYS_SHIP,
+# SDSYS_EMPTY or SDSYS_BUILD_SEED below.  Nothing is copied because it happened to be in the source
 # tree.  That is the point of the script rather than an implementation detail:
 # the Linux installer did "cp -R" over whole directories, which is how gplsrc
 # came to sit in the installed database for years without anyone asking why.
@@ -281,7 +281,8 @@ SDSYS_SHIP = [
     ('gpl.bp',        'BASIC source; SECOND.COMPILE compiles the lot of it'),
     ('syscom',        'include records the compile needs'),
     # 15 Aug 26 - THESE TWO DESCRIPTIONS WERE THE WRONG WAY ROUND, and they are
-    # the first thing read by anyone adding a verb.  voc_template is the
+    # the first thing read by anyone adding a verb.  voc_template (now on
+    # SDSYS_BUILD_SEED, not here - see below) is the
     # ADMINISTRATIVE superset that becomes SDSYS's own VOC; newvoc is the
     # smaller set CREATEA copies into each new account (CREATEA:520).  The
     # difference is deliberate access control - CREATE.ACCOUNT, DELETE.ACCOUNT,
@@ -298,7 +299,11 @@ SDSYS_SHIP = [
     # because a VOC file must hold only VOC records or LIST VOC trips on them.
     # THE POINT STILL STANDS: DO NOT PUT VERB LISTS BACK IN NEWVOC.
     ('newvoc',        'the VOC a newly created account is given'),
-    ('voc_template',  "the administrative superset; becomes SDSYS's own VOC"),
+    # 21 Sep 26 - voc_template IS NO LONGER ON THIS LIST.  Owner: "do not keep
+    # voc_template after the install".  Its one reader is BBPROC, which copies it
+    # into SDSYS's dynamic VOC while the bootstrap runs HERE, at build time; the
+    # installed system never opens it (createa's copy of it was deleted with the
+    # tiers, RELEASE_1.1 64).  See SDSYS_BUILD_SEED.
     ('messages',      'sysmsg() text'),
     ('sd.voclib',     'library routines'),
     ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
@@ -316,6 +321,16 @@ SDSYS_SHIP = [
     # it would break the standing instruction's muscle memory for no gain.
     ('licence',       'GPL-3.0'),
     ('contrib',       'contributor list, reachable as CONFIG CONTRIB'),
+]
+
+# 21 Sep 26 - INPUTS TO THE BOOTSTRAP THAT MUST NOT REACH THE INSTALL.  Copied into
+# the staged tree so BBPROC can read them, and DELETED from it once the bootstrap has
+# finished and been checked, before anything is packaged.  Each name here must also
+# be on SDSYS_RETIRED, so that an upgrade removes the copy an earlier release
+# installed; write_upgrade_iss() refuses the build if it is not, and if it is also on
+# a ship list.
+SDSYS_BUILD_SEED = [
+    ('voc_template', "the administrative superset BBPROC copies into SDSYS's own VOC"),
 ]
 
 # Created empty, and filled by the bootstrap when --bootstrap is given.  Their
@@ -471,7 +486,9 @@ SDSYS_MIRROR = [
     ('gpl.bp',       'BASIC source; nothing writes it at runtime'),
     ('syscom',       'include records'),
     ('newvoc',       'read by CREATEA; never written'),
-    ('voc_template', 'read by CREATEA and UPDATE.ACCOUNTS; never written'),
+    # 21 Sep 26 - voc_template is NOT listed here any more: it no longer ships
+    # (SDSYS_BUILD_SEED), so an installed copy would be the stale leftover this
+    # walk exists to report, and SDSYS_RETIRED is what removes it.
     # 18 Sep 26 - tier.policy is NOT listed here any more.  RELEASE_1.1 64
     # deleted it with the tiers; a mirror entry for a directory that no longer
     # ships would make "installed but not in source" mean the wrong thing.
@@ -508,6 +525,7 @@ SDSYS_MIRROR = [
 # halves would fight over the same path on every upgrade.
 SDSYS_RETIRED = [
     ('changelog', 'moved to {app} on 25 Aug 26 - see the note on SDSYS_SHIP'),
+    ('voc_template', 'build-time seed only from 21 Sep 26 - see SDSYS_BUILD_SEED'),
 ]
 
 # The same thing for C:\Program Files\SD.  A script this file used to copy
@@ -1006,6 +1024,21 @@ UPGRADE_COLD = '''\
 '''
 
 
+def remove_build_seeds(sdsys):
+    """Delete every SDSYS_BUILD_SEED name from the staged sdsys tree, and refuse
+    if one is still there afterwards.  Called once the bootstrap has finished and
+    been checked; a seed is an input to that step and must not be packaged."""
+    for name, _why in SDSYS_BUILD_SEED:
+        seed = os.path.join(sdsys, name)
+        if os.path.isdir(seed):
+            shutil.rmtree(seed)
+        elif os.path.exists(seed):
+            os.remove(seed)
+        if os.path.exists(seed):
+            die('could not remove the build seed %s from the staged tree' % name)
+        print('  build seed %s removed from the staged tree' % name)
+
+
 def write_upgrade_iss(stage, sdsys, bootstrapped):
     r"""Emit <stage>\upgrade.iss - the in-place data-tree upgrade entries.
 
@@ -1047,6 +1080,21 @@ def write_upgrade_iss(stage, sdsys, bootstrapped):
         die('SDSYS_RETIRED names %s, which a ship or preserve list also names '
             '- an upgrade would delete and re-create the same path'
             % ', '.join(clash))
+
+    # 21 Sep 26 - A BUILD SEED IS NEVER INSTALLED, SO AN UPGRADE MUST REMOVE THE
+    # COPY AN EARLIER RELEASE LEFT.  (A seed that a ship list ALSO names cannot get
+    # past this and the clash check above: retired-and-shipped dies there, and
+    # shipped-but-not-retired dies here.)
+    seeds = [n for n, _why in SDSYS_BUILD_SEED]
+    unretired = [n for n in seeds if n not in retired]
+    if unretired:
+        die('SDSYS_BUILD_SEED names %s, which SDSYS_RETIRED does not - an upgraded '
+            'machine would keep the copy an earlier release installed'
+            % ', '.join(unretired))
+    lingering = [n for n in seeds if os.path.exists(os.path.join(sdsys, n))]
+    if lingering:
+        die('the staged tree still holds the build seed %s - it would be packaged'
+            % ', '.join(lingering))
 
     replace = [n for n in declared if n not in preserve]
     if not replace:
@@ -1503,7 +1551,8 @@ def main():
                    'upgrade-dicts.ps1',
                    # 04 Sep 26 - the VOC step for an UPGRADE, and the same
                    # argument as the dictionary one above.  PRE_RELEASE_FIXES
-                   # 70: an upgrade replaces newvoc and voc_template and
+                   # 70: an upgrade replaces newvoc (and, until 21 Sep 26,
+                   # voc_template - now removed by SDSYS_RETIRED) and
                    # rebuilds no account's live VOC, so a verb this release
                    # adds cannot be typed in any account that already existed.
                    # This runs "sd -internal UPDATE.ACCOUNTS ALL", which is
@@ -1642,10 +1691,12 @@ def main():
     for d in PROGRAM_DATA_DIRS:
         os.makedirs(os.path.join(pd, d))
 
-    for name, _why in SDSYS_SHIP:
+    # SDSYS_BUILD_SEED is copied like a ship name - BBPROC reads it during the
+    # bootstrap below - and deleted again once that has finished.
+    for name, _why in SDSYS_SHIP + SDSYS_BUILD_SEED:
         src = os.path.join('sdsys', name)
         if not os.path.exists(src):
-            die('sdsys/%s is on the ship list but is not in the tree' % name)
+            die('sdsys/%s is on the ship or seed list but is not in the tree' % name)
         dst = os.path.join(sdsys, name)
         if os.path.isdir(src):
             copy_tree(src, dst, staged, stage)
@@ -1725,6 +1776,15 @@ def main():
         el = os.path.join(sdsys, 'errlog')
         if os.path.isfile(el):
             os.remove(el)
+
+        # 21 Sep 26 - THE BOOTSTRAP'S INPUTS GO BEFORE ANYTHING IS PACKAGED.  The
+        # seed was read into SDSYS's VOC above and the completeness check has
+        # passed, so from here it is a second copy of what the VOC already holds.
+        # Deleted only AFTER that check, so a failed bootstrap leaves the seed in
+        # the tree for whoever has to diagnose it.  Then asserted gone: this is
+        # the line that makes "do not keep voc_template after the install" true
+        # rather than intended.
+        remove_build_seeds(sdsys)
 
         # The tree gained a great deal; rebuild the record from what is there.
         staged.files = []

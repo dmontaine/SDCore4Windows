@@ -670,7 +670,8 @@ Name: "{#DataDir}\shm"; Flags: uninsneveruninstall
 ;
 ; stage.py creates sdsys\bp, sdsys\bp.out and sdsys\batch.jobs EMPTY and puts
 ; all three on the PRESERVED list - "the directory still has to exist", because
-; voc_template\bp is an F-pointer at it and secure-sysdirs.ps1 hardens it.
+; SDSYS's VOC record bp (seeded from voc_template at build time) is an
+; F-pointer at it and secure-sysdirs.ps1 hardens it.
 ;
 ; ***uninsneveruninstall ON THE [Files] TREE PROTECTS FILES, NOT AN EMPTY
 ; DIRECTORY.***  On a normal site nobody has written a BASIC program or
@@ -2709,9 +2710,10 @@ end;
 { BRING AN UPGRADED INSTALL'S ACCOUNT VOCABULARIES UP TO THE RELEASE.
   PRE_RELEASE_FIXES 70.
 
-  THE HOLE IT CLOSES.  An upgrade REPLACES newvoc and voc_template and REBUILDS
-  NOTHING.  Every account's live VOC - SDSYS's own included - is built FROM
-  those templates by the bootstrap and by CREATEA, and is named in neither
+  THE HOLE IT CLOSES.  An upgrade REPLACES newvoc and REBUILDS NOTHING (and,
+  since 21 Sep 26, REMOVES voc_template, which no longer ships).  Every account's
+  live VOC - SDSYS's own included - is built FROM those templates by the
+  bootstrap and by CREATEA, and is named in neither
   stage.py list, so nothing an upgrade does can reach it.  A release that adds
   a verb therefore shipped the verb and left no account able to type it, and
   the only cure was a sentence in the closing box asking the administrator to
