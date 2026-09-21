@@ -446,6 +446,31 @@ check-api-admin: $(DLL)
 	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./api-admin-probe.exe \
 	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)" "$(APICMD)"
 
+# 20 Sep 26 - RELEASE_1.1 84.  DOES AN API SESSION OPEN ONE NAMED FILE, THE
+# REAL CLIENT LIBRARY'S OWN WAY.  tests/api_identity_probe.c's own header has
+# the full story: SDOpen() sends the same SrvrOpen (4) request scram-probe.py
+# hand-builds, so this needs no protocol reimplementation - only a filename to
+# try.  NOT YET CALLED BY ANY gplbld SCRIPT - verify-apiidentity.ps1 still
+# drives scram-probe.py; wiring this in is future work, named in RELEASE_1.1
+# 84 rather than done blind.  APIFILE is the one new variable this target adds;
+# APIHOST/APIPORT/APIUSER/APIPASS/APIACCT are shared with check-api-admin
+# above.  Compile-checked and its CONNECT half run live against a real server
+# this session (RELEASE_1.1 84); APIFILE has never been exercised because that
+# needs a real session, which needs a real account this agent did not have.
+APIFILE ?=
+
+check-api-identity: $(DLL)
+	@if [ -z "$(APIPORT)" ] || [ -z "$(APIUSER)" ] || [ -z "$(APIACCT)" ] \
+	   || [ -z "$(APIFILE)" ]; then \
+	  echo "check-api-identity needs APIPORT, APIUSER, APIPASS, APIACCT and"; \
+	  echo "APIFILE - the fixture VOC pointer name to try opening."; \
+	  exit 2; fi
+	mkdir -p localtest
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/api-identity-probe.exe \
+	  tests/api_identity_probe.c -I. -L. -lsdclilib
+	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./api-identity-probe.exe \
+	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)" "$(APIFILE)"
+
 # 20 Aug 26 - THE PEER PROBE, which settled how the API can identify the
 # process at the other end of a connection (section 8, posture B).
 #

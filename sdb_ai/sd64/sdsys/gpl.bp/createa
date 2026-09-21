@@ -18,6 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 20 Sep 26 Windows port - RELEASE_1.1 64.  make.admin IS REMOVED.  Flagged in
+*            64's eleventh pass as owed: the variable could only ever be
+*            @true inside the ADMINISTRATOR case, which has stopped with 2018
+*            (the keyword refused) before create_user is reached since that
+*            same pass, so the branch that joined an account into Windows
+*            Administrators (messages 10032/10033, deleted with it) could
+*            never run.  Declaration, branch and assignment all gone; the
+*            surviving sdsshonly-confinement branch is unconditional now.
 * 19 Sep 26 Windows port - RELEASE_1.1 68.  THE ROUTE KEYWORD IS OPTIONAL AND
 *            SILENCE MEANS BOTH.  Owner: "every non-sdsys account has the
 *            potential to have ssh and api access by default, but it is the
@@ -360,7 +368,11 @@ deffun ps_script(script) calling '!ps_script'
 
    parser = "!PARSER"
    no.query = @false
-   make.admin = @false
+* 20 Sep 26 Windows port - RELEASE_1.1 64.  make.admin IS GONE.  It could only
+*   ever be @true inside the ADMINISTRATOR case below, which stops with 2018
+*   before create_user is reached - so the branch that joined an account into
+*   Windows Administrators could never run.  Flagged as owed in 64's eleventh
+*   pass; removed here along with that branch and the case's own assignment.
 * 17 Aug 26 Windows port - PROGRAMMER, PROJECT_STATUS.md section 8.  tier is one
 *   of STANDARD, PROGRAMMER and ADMINISTRATOR, and it decides the VOC: STANDARD
 *   gets NEWVOC less the capabilities in TIER.OMIT.STANDARD, PROGRAMMER gets all
@@ -1105,16 +1117,13 @@ PW.TRY.AGAIN:
 *   decides who administers SD.  An administrator who has not elevated does not
 *   carry Administrators in their token, so they need sdusers to reach the data
 *   tree exactly as an ordinary user does.
-        if make.admin then
-*         PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
-          stat = os_group("ADDMEM", "S-1-5-32-544", acc.uname)
-          if stat = 0 then
-            crt sysmsg(10032,acc.uname)   ;* %1 is now an SD administrator
-          end else
-            @system.return.code = -ER$FAILED
-            stop sysmsg(10033,acc.uname,stat) ;* Unable to make %1 an administrator, status: %2
-          end
-        end else
+* 20 Sep 26 Windows port - RELEASE_1.1 64.  THE make.admin BRANCH THAT STOOD
+*   HERE IS GONE (messages 10032/10033 went with it) - it joined an account
+*   into Windows Administrators, and could only run for an ADMINISTRATOR-tier
+*   account, which the keyword refusal at "more.args" now prevents before this
+*   line is ever reached.  What follows is unconditional: every account this
+*   verb creates is confined to sdsshonly, unless it is already a Windows
+*   administrator or an attached one (the "if attach or is_grp_member" below).
 
 * 14 Aug 26 Windows port - ACCOUNTS SD CREATES REACH THE MACHINE OVER SSH ONLY.
 *   Decision from the repository owner, PROJECT_STATUS.md 5.6.2.  The console
@@ -1221,7 +1230,6 @@ PW.TRY.AGAIN:
             stop sysmsg(10035,acc.uname,stat) ;* Unable to restrict %1 to ssh, status: %2
           end
         end       ;* already a Windows administrator
-        end       ;* make.admin
 
 * 21 Aug 26 Windows port - THE REMOTE ROUTE IS SET FOR EVERY USER ACCOUNT, AND
 *   THAT IS WHY IT MOVED OUT HERE.  It used to sit inside the two "else"
@@ -1791,7 +1799,6 @@ more.args:
 *   larger and riskier change than this is worth.  The cost is that it cannot
 *   be abbreviated, unlike NO.QUERY.
          case upcase(token) = 'ADMINISTRATOR'
-            make.admin = @true
 * 17 Aug 26 Windows port - AND AN ADMINISTRATOR GETS THE WHOLE VOC.  Before
 *   section 8 this line was the ONLY thing ADMINISTRATOR did, and it touched
 *   Windows group membership alone - every account got a byte-identical NEWVOC
@@ -1818,11 +1825,16 @@ more.args:
 *   owner ruled for CREATE.ACCOUNT's route keywords on 18 Sep: a request that
 *   cannot be honoured must not come back looking like it was.
 *
-*   make.admin HAS ALREADY BEEN SET ABOVE by the time this line runs.  That is
-*   harmless and deliberate: the refusal stops the verb before any Windows
-*   account is created (create_user is reached later), so nothing is built.
-*   Removing the earlier assignment instead would leave the two halves of
-*   "administrator" written in two places and free to drift.
+*   20 Sep 26 Windows port - RELEASE_1.1 64.  THE PARAGRAPH THAT STOOD HERE
+*   defended leaving "make.admin = @true" above this case label, on the
+*   grounds that the refusal below stops the verb before any Windows account
+*   is made, so the assignment was harmless.  True, but eleventh pass deleted
+*   the branch it once selected (Windows Administrators membership, messages
+*   10032/10033) and this was its only remaining reader - a variable with one
+*   dead writer and no readers is the shape that kept those arms looking
+*   alive for two passes, named at the time as the thing this cleanup would
+*   remove.  Gone now: the declaration (near no.query, above), the branch,
+*   and this assignment.
 *
 *   IT REUSES 2018, THE UNRECOGNISED-TOKEN MESSAGE, and that is not laziness:
 *   the keyword now IS unrecognised.  A fresh number would have to be
@@ -2010,7 +2022,9 @@ more.args:
 *   make.admin IS UNTOUCHED AND THAT IS NOT AN OVERSIGHT: ADOPT CHANGES NOTHING
 *   ABOUT THE WINDOWS ACCOUNT (the 15 Aug rule), the person is already in
 *   BUILTIN\Administrators, and what the decision takes away is their SD
-*   administer rights - not their Windows ones.
+*   administer rights - not their Windows ones.  (20 Sep 26 - make.admin no
+*   longer exists at all, ADOPT having gone the same way as the branch it
+*   never touched; read this paragraph as it stood when ADOPT still did.)
 *
 *   THIS ALSO MAKES THE `tier = 'ADMINISTRATOR'` BRANCHES BELOW UNREACHABLE:
 *   the keyword is refused at :1614 and this was the only other way in.  They

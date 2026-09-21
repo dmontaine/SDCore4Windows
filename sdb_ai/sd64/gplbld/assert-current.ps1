@@ -438,14 +438,17 @@ $neverShipped = @(# 16 Sep 26 - RELEASE_1.1 43's relocated-runtime measurement,
                   # three VOC tiers it proved - the counts 355/397/420, the 42
                   # withheld verbs, the 21 administration verbs and the
                   # tier.policy cross-check - no longer exist to be proved.
-                  # WHAT IT ALSO HELD IS OWED, NOT DROPPED: the whole-of-NEWVOC
-                  # proof for an ordinary account, the SUSPENDED/UNSUSPENDED
-                  # record round trip and the update.voc @ID case machinery go
-                  # to a new gplbld/verify-accountmodel.ps1, which cannot be
-                  # written until the installer slice creates the Windows SDSYS
-                  # account it must run as.  See PROJECT_STATUS.md's START HERE
-                  # box for why that is a blocking dependency rather than a
-                  # preference.
+                  # WHAT IT ALSO HELD WAS OWED, NOT DROPPED, AND TWO OF THE
+                  # FOUR ARE NOW BUILT (20 Sep 26).  The SUSPENDED/UNSUSPENDED
+                  # round trip and the tier keywords refused turned out to
+                  # already be covered - verify-doors-admin.ps1 and
+                  # verify-routes.ps1 respectively, measured rather than
+                  # assumed before concluding it.  gplbld/verify-accountmodel.ps1
+                  # is new and covers the other two: the whole-of-NEWVOC count
+                  # for an ordinary account, and the exact-match half of the
+                  # update.voc @ID case machinery - its own header says which
+                  # half of that second one it does NOT reach and why.
+                  'verify-accountmodel.ps1',
                   'assert-current.ps1', 'cycle.ps1',
                   'verify-createaccount.ps1', 'verify-sshonly.ps1',
                   'verify-allowgroups.ps1', 'verify-apiport.ps1',

@@ -278,7 +278,14 @@ $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            # sdapitls1, a hand-run verify-apiport prefix from the 15 Sep TLS
            # work.  "sdapi" does not reach it because the pattern allows ONE
            # letter between stem and digits and "tls" is three.
-           'sdapitls')
+           'sdapitls',
+           # 20 Sep 26 - "sdam" ADDED IN THE COMMIT THAT INVENTS THE FAMILY.
+           # verify-accountmodel.ps1, new, composes sdam<Run> and
+           # VerifyInstall2.ps1's AccountModelPrefix derives it.  IN $stems,
+           # NOT $notProfiles: sdam<run>a is a real Windows account made by
+           # CREATE.ACCOUNT and removed by DELETE.ACCOUNT, the same shape as
+           # sdpyg above.
+           'sdam')
 
 # THE FAMILIES THAT ARE DELIBERATELY NOT SWEPT.  A name here is one the runners
 # compose that creates no Windows account and no profile, so this script has

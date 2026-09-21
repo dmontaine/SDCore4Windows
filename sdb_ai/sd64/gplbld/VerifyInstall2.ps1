@@ -192,6 +192,14 @@ param(
     # Windows account name AND the os.users record name the run writes and
     # op_sh.c looks up verbatim.
     [string]$PyGatePrefix = '',  # verify-pygate.ps1 - one account
+    # 20 Sep 26 - verify-accountmodel.ps1's, new.  Same derivation and the same
+    # reason as every prefix above it: a fixed name collides on the Windows
+    # account (<prefix>a) on every run after the first.  Where
+    # verify-tierapi.ps1's $TierApiPrefix and verify-tierchange.ps1's $TcPrefix
+    # used to sit in this list before RELEASE_1.1 64 took their file with them -
+    # see the derivation block's comment for what replaced them and why one
+    # new file covers only part of what the two of them did.
+    [string]$AccountModelPrefix = '',  # verify-accountmodel.ps1 - one account
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -288,6 +296,10 @@ if ($Run) {
     # os.users record from the previous run.  The stem is in
     # clean-test-profiles.ps1, added in the same commit.
     if (-not $PyGatePrefix) { $PyGatePrefix = "sdpyg$Run" }
+    # 20 Sep 26 - verify-accountmodel.ps1's, for the reason every prefix above
+    # it in this block carries: a fixed name passes once and collides on the
+    # Windows account on every later run.
+    if (-not $AccountModelPrefix) { $AccountModelPrefix = "sdam$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -302,6 +314,7 @@ foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $
                  # why a prefix empty at this point is worth refusing by name.
                  # Both went with their steps, RELEASE_1.1 64; the reason is in
                  # the comment above for the prefixes that remain.
+                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix }
                  )) {
     if (-not $p.V) {
         Write-Output ("VerifyInstall2: -{0} was not given and -Run was not either." -f $p.N)
@@ -345,7 +358,10 @@ foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix';
                  # 22 Aug 26 - the six new ones, same rule and the same reason.
                  @{ N = 'CatPrefix';   V = $CatPrefix },  @{ N = 'SshPrefix';     V = $SshPrefix },
                  @{ N = 'NamePrefix';  V = $NamePrefix }, @{ N = 'PortPrefix';    V = $PortPrefix },
-                 @{ N = 'ScramPrefix'; V = $ScramPrefix })) {
+                 @{ N = 'ScramPrefix'; V = $ScramPrefix },
+                 # 20 Sep 26 - verify-accountmodel.ps1's, same rule: it derives a
+                 # Windows account name (<prefix>a) from this.
+                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix })) {
     if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
         Write-Output ("VerifyInstall2: -{0} is '{1}'." -f $p.N, $p.V)
         Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
@@ -372,7 +388,9 @@ foreach ($p in @(@{ N = 'Account';     V = $Account },
                  @{ N = 'RoutePrefix';V = $RoutePrefix },@{ N = 'RulesPrefix'; V = $RulesPrefix },
                  @{ N = 'DelPrefix';  V = $DelPrefix },  @{ N = 'CatPrefix';   V = $CatPrefix },
                  @{ N = 'SshPrefix';  V = $SshPrefix },  @{ N = 'NamePrefix';  V = $NamePrefix },
-                 @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix })) {
+                 @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix },
+                 # 20 Sep 26 - verify-accountmodel.ps1's one account, <prefix>a.
+                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix })) {
     # -Name "<p>*" catches the derived forms too: verify-routes makes <p>s and
     # <p>a, verify-delaccount <p>s, <p>b and <p>h.  (verify-tiers <p>1..3 was
     # here too, and went with the file, RELEASE_1.1 64.)
@@ -547,14 +565,19 @@ $steps = @(
     # account is now built from the whole of NEWVOC, so neither file has a
     # subject left.
     #
-    # ***WHAT THEY ALSO HELD IS OWED TO A SUCCESSOR, NOT DROPPED***: an ordinary
-    # account's whole-of-NEWVOC count, the SUSPENDED/UNSUSPENDED register round
-    # trip, the tier keywords refused, and the update.voc @ID case machinery go
-    # to a new verify-accountmodel.ps1 - which cannot be wired in here today,
-    # because RELEASE_1.1 64 gives SD exactly one administrator and that
-    # administrator is reached only by the Windows SDSYS account at LOGIN.  That
-    # account does not exist on any machine yet; the installer slice creates it.
-    # PROJECT_STATUS.md's START HERE box carries the same note.
+    # ***WHAT THEY ALSO HELD WAS OWED TO A SUCCESSOR, AND 20 SEP 26 IS WHERE IT
+    # LANDED - SPLIT ACROSS THREE FILES, NOT ONE, BECAUSE TWO OF THE FOUR TURNED
+    # OUT ALREADY COVERED.*** Checked rather than assumed before writing this:
+    # verify-doors-admin.ps1 (elevated) with verify-doors.ps1 / verify-doors-suite.ps1
+    # already drive the SUSPENDED/UNSUSPENDED register round trip and its
+    # enforcement across all three doors; verify-routes.ps1 Step 2 already proves
+    # the tier keywords refused, live, with test-acctkeywords-units.py covering it
+    # statically. verify-accountmodel.ps1, new, is the other two: the
+    # whole-of-NEWVOC count for an ordinary account, and the exact-match half of
+    # the update.voc @ID case machinery - its header names the half (the
+    # uppercase-rename fallback) it does not reach and why, honestly rather than
+    # left silent.
+    @{ Name = 'verify-accountmodel.ps1'; P = @{ Prefix = $AccountModelPrefix } },
     #
     # THE LAST THING THE PAIR HAD TO SAY IS WORTH KEEPING IN FRONT OF WHOEVER
     # WIRES THE SUCCESSOR IN: a comment naming what a step covers gets read as
