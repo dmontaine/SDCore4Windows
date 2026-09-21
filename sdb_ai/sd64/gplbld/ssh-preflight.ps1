@@ -156,8 +156,7 @@ try {
         if (-not $mine) {
             Refuse ('An ssh service that is not part of Windows is installed on this ' +
                     'computer: "' + $k.PSChildName + '" at ' + $bin + '. SD supports only ' +
-                    'the OpenSSH server that ships with Windows, so that it knows how the ' +
-                    'server is configured.')
+                    'the OpenSSH server that ships with Windows.')
         }
     }
     if ($foundAny -eq 0) { Say '  none' }
@@ -201,8 +200,7 @@ if ($listeners.Count -eq 0) {
             Say ('  ' + $l.LocalAddress + ':22 held by ' + $pname + '  ' + $path)
             if (-not (IsMicrosoftPath $path)) {
                 Refuse ('Another ssh server is already using port 22 on this computer: ' +
-                        $pname + ' (' + $path + '). Windows'' own OpenSSH server, which SD ' +
-                        'requires, cannot use port 22 at the same time.')
+                        $pname + ' (' + $path + '). SD requires Windows'' own OpenSSH server.')
             }
         }
         elseif ($pname -ieq 'sshd' -and $sshdServiceIsMicrosoft) {
@@ -215,13 +213,12 @@ if ($listeners.Count -eq 0) {
         elseif ($pname) {
             Say ('  ' + $l.LocalAddress + ':22 held by ' + $pname + '  (path unavailable)')
             Refuse ('Something other than Windows'' own ssh server is using port 22 on this ' +
-                    'computer: ' + $pname + '. Windows'' OpenSSH server, which SD requires, ' +
-                    'cannot use port 22 at the same time.')
+                    'computer: ' + $pname + '. SD requires Windows'' own OpenSSH server.')
         }
         else {
             Say ('  ' + $l.LocalAddress + ':22 held by an unknown process')
-            Blocked ('Something is using port 22 but SD could not find out what it is, so it ' +
-                     'cannot tell whether that is Windows'' own ssh server or another one.')
+            Blocked ('Something is using port 22 but SD could not tell whether it is ' +
+                     'Windows'' own ssh server.')
         }
     }
 }
@@ -266,9 +263,9 @@ function Get-Directives([string]$path) {
 if (-not (Test-Path -LiteralPath $LiveCfg)) {
     Say ('  no sshd_config at ' + $LiveCfg + ' yet - nothing has configured a server here')
 } elseif (-not (Test-Path -LiteralPath $StockCfg)) {
-    Blocked ('SD compares this computer''s ssh configuration against the copy Windows ships, ' +
-             'and that copy is missing from ' + $StockCfg + '. Without it SD cannot tell ' +
-             'whether the configuration has been changed.')
+    Blocked ('The copy of the ssh configuration that Windows ships is missing from ' +
+             $StockCfg + ', so SD cannot tell whether this computer''s configuration has ' +
+             'been changed.')
 } else {
     try {
         $live  = Get-Directives $LiveCfg
@@ -284,8 +281,7 @@ if (-not (Test-Path -LiteralPath $LiveCfg)) {
             if ($extra.Count -gt 0)   { $detail += ' Added: ' + ($extra -join '; ') + '.' }
             if ($missing.Count -gt 0) { $detail += ' Removed: ' + ($missing -join '; ') + '.' }
             Refuse ('The Windows ssh server on this computer has already been configured by ' +
-                    'somebody, and SD will not install over settings it did not write, because ' +
-                    'they can change who may connect and what happens when they do.' + $detail)
+                    'somebody, and SD will not install over settings it did not write.' + $detail)
         } else {
             Say '  unchanged from the copy Windows ships'
         }

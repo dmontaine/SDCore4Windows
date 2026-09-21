@@ -260,18 +260,27 @@ function Set-SdsysPassword {
     # and the generated password is printed instead.
     param([string] $LogFile, [switch] $Existing)
 
-    Write-Host '  SET THE PASSWORD FOR SDSYS' -ForegroundColor White
+    # 20 Sep 26 - THE PAGE SAYS THE ONE THING THAT MATTERS: ENTER KEEPS, TYPING
+    # CHANGES.  Owner, on the first real upgrade over a kept data tree: the screen
+    # "is too verbose and doesn't clearly tell the user that they can enter to keep
+    # their current password or enter a new one.  That is basically all they need
+    # to know, all the rest ends up being noise."  The empty line has always kept
+    # the password - the loop below - but nothing before the prompt said so, and
+    # the paragraph that stood here spent five lines on why the password was
+    # unknown and repeated the opening sentence's "sign in as SDSYS and start SD
+    # Core from an elevated prompt".  THE RULE STAYS, and stays before the prompt:
+    # RELEASE_1.1 75, and test-pwcomplex-units reads PwRuleText.
+    Write-Host '  SDSYS PASSWORD' -ForegroundColor White
     Write-Host ''
     if ($Existing) {
-        Write-Wrapped -Text ('The SDSYS account was already on this machine, and its password is ' +
-            'whatever it already was - which nothing shows and nothing keeps a copy of.  This is ' +
-            'the moment to set it: you sign in to Windows as SDSYS and start SD Core from an ' +
-            'elevated prompt, and this account is the only way into SD.  Type the password you ' +
-            'want for it.  It is not shown as you type, and you are asked twice.')
+        Write-Wrapped -Text ('SDSYS already has a password.  Press Enter to keep it, or type a new ' +
+            'one.  You are asked twice, and what you type is not shown.')
+        $prompt = '  New SDSYS password (Enter keeps the current one)'
     } else {
-        Write-Wrapped -Text ('You sign in to Windows as SDSYS and start SD Core from an elevated ' +
-            'prompt, and this account is the only way into SD.  Type the password you want for it.  ' +
-            'It is not shown as you type, and you are asked twice.')
+        Write-Wrapped -Text ('Type the password you want for SDSYS, or press Enter to keep the one ' +
+            'the install generated, which is then shown.  You are asked twice, and what you type ' +
+            'is not shown.')
+        $prompt = '  New SDSYS password (Enter keeps the generated one)'
     }
     Write-Host ''
     # THE RULE IS STATED BEFORE THE PROMPT, not only after a refusal - being
@@ -293,7 +302,7 @@ function Set-SdsysPassword {
     $tries = 0
     while ($tries -lt 3) {
         $tries++
-        $a = Read-Host '  New SDSYS password' -AsSecureString
+        $a = Read-Host $prompt -AsSecureString
         if ($a.Length -eq 0) {
             # AN EMPTY LINE IS A DELIBERATE ANSWER rather than a mistake: SD's own
             # credential prompt ends the session on one (130's ruling).  On a
@@ -408,10 +417,15 @@ function Keep-ExistingPassword {
     # it because "kept a password nobody knows" is exactly the state the
     # owner's ruling exists to end, and a reader who kept by mistake has one
     # line telling them the way out.
-    Write-Wrapped -Text ('The password this account already has stays.  Nothing was generated this ' +
-        'time and no copy of it exists anywhere, so it cannot be shown.  If it is not known, set ' +
-        'one from any elevated PowerShell prompt:' + '  Set-LocalUser -Name SDSYS -Password ' +
-        '(Read-Host -AsSecureString)')
+    # 20 Sep 26 - SHORTENED to what a person keeping it needs: it is unchanged,
+    # and the one line that recovers it if they never knew it.  The explanation
+    # of WHY it cannot be shown (nothing was generated, no copy exists) went with
+    # the rest of the page's noise - see Set-SdsysPassword.
+    # The command sits on its own line: wrapped inside the sentence it broke
+    # between -Password and its value, and a broken command is not copyable.
+    Write-Wrapped -Text ('The SDSYS password is unchanged.  If you do not know it, set one from an ' +
+        'elevated PowerShell prompt:')
+    Write-Host '    Set-LocalUser -Name SDSYS -Password (Read-Host -AsSecureString)'
     Write-Host ''
 }
 
@@ -481,13 +495,15 @@ function Set-AttachedAccountPassword {
         return $true
     }
 
+    # 20 Sep 26 - SHORTENED WITH THE REST OF THE INSTALLER'S SCREENS (owner: "too
+    # verbose ... only what the user needs to know").  The one fact that must
+    # survive is that this is NOT the Windows password and is only needed from
+    # ANOTHER COMPUTER - it is what stops a person reading "password" and
+    # changing their Windows one, or skipping a prompt they do need.
     Write-Host ("SD Core password for $Account") -ForegroundColor White
-    Write-Wrapped -Text ('This is NOT your Windows password and it does not replace it.  Signing ' +
-        'in at this keyboard still uses Windows, and nothing about your Windows account has been ' +
-        'changed.  This password is what lets you reach SD Core FROM ANOTHER COMPUTER - over ssh, ' +
-        'or through the SD API - which this account is allowed to do.')
-    Write-Host ''
-    Write-Wrapped -Text ('You will be asked to type it twice.  What you type is not shown.')
+    Write-Wrapped -Text ('This is not your Windows password.  It is only needed to reach SD Core ' +
+        'from another computer, over ssh or the SD API.  You are asked twice, and what you type ' +
+        'is not shown.')
     Write-Host ''
 
     for ($try = 1; $try -le $MaxTries; $try++) {
@@ -552,15 +568,13 @@ function Set-AttachedAccountPassword {
         # verb that was refused, a session that never started, a $cred that was
         # not writable, and an empty line typed at the prompt.
         if (Test-Path -LiteralPath $credFile) {
-            Write-Wrapped -Text ("Password set.  $Account can now be reached over ssh and through " +
-                'the SD API.')
+            Write-Wrapped -Text 'Password set.'
             Write-Host ''
             return $true
         }
 
         if ($try -lt $MaxTries) {
-            Write-Wrapped -Text ('No password was set, so nothing can reach this account from ' +
-                'another computer yet.  A password is required - trying again.') -Color Yellow
+            Write-Wrapped -Text 'No password was set.  A password is required - trying again.' -Color Yellow
             Write-Host ''
         }
     }
@@ -575,17 +589,16 @@ function Set-AttachedAccountPassword {
     # but only for their OWN account: set_acc_password:123-126 refuses another
     # account without K$ADMINISTRATOR.  The qualifier is the whole point and
     # must not be dropped the next time this is tidied.
-    Write-Wrapped -Text ("No SD Core password was set for $Account.  You can still use SD Core at " +
-        'this keyboard, but nothing can reach the account from another computer until one is ' +
-        'set.  Type  MODIFY.PASSWORD  in SD Core to set your own at any time, or start SD Core ' +
-        'from an ELEVATED prompt and it asks you.') -Color Yellow
+    Write-Wrapped -Text ("No SD Core password was set for $Account.  It works at this keyboard " +
+        'but not from another computer.  Set one with  MODIFY.PASSWORD  in SD Core, or start SD ' +
+        'Core from an ELEVATED prompt and it asks you.') -Color Yellow
     Write-Host ''
     return $false
 }
 
 # words, and gplbld/test-wraptext-units.ps1 lifts the function out of this file.
-Write-Wrapped -Text ('SD Core is installed.  Its one account is SDSYS, and that is the account ' +
-    'that can create the others: sign in as SDSYS and start SD Core from an ELEVATED prompt.')
+Write-Wrapped -Text ('SDSYS is the administrator account: sign in as SDSYS and start SD Core ' +
+    'from an ELEVATED prompt.')
 Write-Host ''
 
 $SdsysLog = Join-Path (Join-Path $env:ProgramData 'SD') 'install-sdsys.log'

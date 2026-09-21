@@ -321,22 +321,23 @@ function Show-SdGroupNotice {
     Write-Host $subtitle -ForegroundColor Yellow
     Write-Host '  ============================================================' -ForegroundColor Yellow
     Write-Host ''
+    # 20 Sep 26 - SHORTENED (owner: the installer is "too verbose ... only what the
+    # user needs to know").  What stays: the group is why, signing out is the cure,
+    # and the two symptoms a person will actually see if they do not.
     if ($null -eq $State.InGroup) {
-        Write-Host '  This check could not read the "sdusers" group, so it cannot tell you'
-        Write-Host '  whether the membership is waiting for a new sign-in.  Signing out and'
-        Write-Host '  back in costs a minute and settles it either way.'
+        Write-Host '  This check could not read the "sdusers" group, so it cannot tell whether'
+        Write-Host '  your membership is waiting for a new sign-in.  Signing out and back in'
+        Write-Host '  settles it either way.'
     } else {
-        Write-Host '  The installer added you to the "sdusers" group, and that membership is'
-        Write-Host '  what grants access to the SD database.  Windows applies a new group'
-        Write-Host '  only when you sign in, so this sign-in does not carry it yet.'
+        Write-Host '  The installer added you to the "sdusers" group.  Windows applies a new'
+        Write-Host '  group only when you sign in.'
     }
     Write-Host ''
-    Write-Host '  UNTIL YOU SIGN OUT AND BACK IN, OR RESTART:'
-    Write-Host '    * SD Core cannot open its database files, and'
-    Write-Host '    * a window opened before the install will say  sd  is not recognized.'
+    Write-Host '  Until you sign out and back in, or restart, SD Core cannot open its'
+    Write-Host '  database files, and a window opened before the install says  sd  is'
+    Write-Host '  not recognized.'
     Write-Host ''
-    Write-Host '  Nothing else needs doing.  Afterwards, confirm it with'
-    Write-Host '    Start Menu  ->  SD  ->  Check the SD installation'
+    Write-Host '  Afterwards, confirm it with  Start Menu  ->  SD  ->  Check the SD installation'
     Write-Host ''
 
     # The window closes when this returns, so it waits here rather than at the
@@ -366,20 +367,11 @@ if (-not $Brief) {
     # WHAT IS TRUE IS THE REASSURING HALF ANYWAY - the files are on disk and
     # nothing here writes - so saying that instead costs nothing and does not
     # have to be taken back.
-    Write-Host '  SD is installed, and this is the last step of setting it up.'
-    Write-Host '  Nothing here changes anything - it only reads - so it is safe to'
-    Write-Host '  run again whenever you like.'
-    Write-Host ''
-    Write-Host '  What it will do, and it is all reading:'
-    Write-Host ''
-    Write-Host '    * look for the SD program files and the SD service'
-    Write-Host '    * check that you can reach the database'
-    Write-Host '    * count the programs SD built during the install'
-    Write-Host '    * check the network options, if you turned any on'
-    Write-Host ''
-    Write-Host '  It creates nothing, deletes nothing, and starts and stops nothing.'
-    Write-Host '  It takes a few seconds, and you can run it again whenever you like'
-    Write-Host '  from the Start Menu: SD  ->  Check the SD installation.'
+    # 20 Sep 26 - ONE PARAGRAPH, where it was a five-item list and three
+    # reassurances (owner: "too verbose").  It keeps the two facts a person needs
+    # before answering the question below: it only reads, and it can be run again.
+    Write-Host '  This only reads; it changes nothing and takes a few seconds.  You can run'
+    Write-Host '  it again from the Start Menu:  SD  ->  Check the SD installation.'
     Write-Host ''
 }
 
@@ -406,8 +398,7 @@ if (-not $Yes) {
     }
     if ($answer -notmatch '^(y|yes)$') {
         Write-Host ''
-        Write-Host '  Nothing was checked.  The installation is unaffected either way.'
-        Write-Host '  You can run it whenever you want it:'
+        Write-Host '  Nothing was checked.  You can run it whenever you want it:'
         Rerun
         Finish $false
         exit 0
@@ -416,13 +407,9 @@ if (-not $Yes) {
 
 if ($script:elevated) {
     Write-Host ''
-    Write-Host '  NOTE: this window has administrator rights, which changes what the' -ForegroundColor Yellow
-    Write-Host '  database answers below are worth.  Administrators can open the SD' -ForegroundColor Yellow
-    Write-Host '  database whatever groups you are in, so a pass here does NOT show' -ForegroundColor Yellow
-    Write-Host '  that your ordinary sign-in can use SD.' -ForegroundColor Yellow
-    Write-Host ''
-    Write-Host '  For that answer, run this same check again from an ORDINARY window' -ForegroundColor Yellow
-    Write-Host '  - not "Run as administrator":' -ForegroundColor Yellow
+    Write-Host '  NOTE: this window has administrator rights, so a pass here does not show' -ForegroundColor Yellow
+    Write-Host '  that your ordinary sign-in can use SD.  To check that, run this again' -ForegroundColor Yellow
+    Write-Host '  from an ORDINARY window (not "Run as administrator"):' -ForegroundColor Yellow
     Rerun
 }
 
@@ -463,15 +450,11 @@ if ($onMachine -and $onProcess) {
     Ok 'You can run SD Core by typing "sd" - it is on this window''s PATH.'
 } elseif ($onMachine) {
     NotYet 'SD Core is on the system PATH, but this window does not have it yet.'
-    Info 'This is normal and it is not a fault.  A command window keeps the PATH'
-    Info 'it started with, so one opened before the install never sees the new'
-    Info 'entry and answers "sd is not recognized".  OPEN A NEW WINDOW - that is'
-    Info 'enough for this one on its own, unlike the group membership below.'
+    Info 'Not a fault: a window keeps the PATH it started with.  Open a new window.'
 } else {
     Info 'SD Core is not on the system PATH, so "sd" will not be found by name.'
-    Info 'Adding it is an optional choice in the installer.  Either run it by its'
-    Info ('full path - ' + $SdExe + ' - or install again and leave')
-    Info 'the PATH option ticked.'
+    Info ('Run it by its full path - ' + $SdExe + ' - or install again and tick')
+    Info 'the PATH option.'
 }
 
 # --- 2. the service --------------------------------------------------------
@@ -499,9 +482,8 @@ if ($sdUsers.InGroup -eq $false) {
     NotYet 'Could not read the "sdusers" group to check your membership.'
 } elseif (-not $sdUsers.InToken) {
     NotYet 'You are in the "sdusers" group, but this sign-in does not have it yet.'
-    Info 'This is normal and it is not a fault.  Windows decides what groups you'
-    Info 'are in when you sign in, so a membership added during the install does'
-    Info 'not apply until you SIGN OUT AND BACK IN.  Do that, then run this again.'
+    Info 'Not a fault: a new group applies only when you sign in.  SIGN OUT AND'
+    Info 'BACK IN, then run this again.'
 } else {
     Ok 'You are in the "sdusers" group and this sign-in has it.'
 }
@@ -524,8 +506,7 @@ if ($sysState -eq 'missing') {
         Info 'This sign-in carries the "sdusers" group, so it should be able to.'
     } else {
         NotYet 'The database could not be read on this sign-in.'
-        Info 'This is the same group membership as above, not a second problem.'
-        Info 'Sign out and back in, then run this again.'
+        Info 'Same cause as above.  Sign out and back in, then run this again.'
     }
 } else {
     Ok ('The database is in ' + $DataDir)
@@ -558,8 +539,8 @@ if ($sysState -eq 'missing') {
             }
         } else {
             Problem ("SD's program catalogue has only " + $count + ' entries and should have over 100.')
-            Info 'The install did not finish building SD. Almost nothing will work.'
-            Info 'Please report this - it is a fault in the installer, not in anything you did.'
+            Info 'The install did not finish building SD, so almost nothing will work.'
+            Info 'Please report this - it is an installer fault.'
         }
     } elseif ($sdUsers.InToken) {
         Problem 'Could not read the program catalogue, and this sign-in should be able to.'

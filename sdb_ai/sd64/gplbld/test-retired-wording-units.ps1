@@ -135,9 +135,16 @@ $RETIRED = @(
     @{ Ref = '130c'
        Retired     = 'NOT NEED ONE HERE'
        Replacement = 'A password is required' }
+    # 20 Sep 26 - THE INSTALLER'S SCREENS WERE CUT TO WHAT A PERSON NEEDS (owner:
+    # "too verbose"), which deleted the paragraphs that carried several of these
+    # rows' REPLACEMENT wording.  EACH ROW BELOW MARKED "20 Sep 26" WAS RE-AIMED AT
+    # WORDING STILL ON A SCREEN, and none was dropped: the RETIRED half is what
+    # keeps a false sentence from coming back, and it does not care how long the
+    # replacement is.  130d's silent-install refusal is now "a silent install has
+    # nobody to ask".
     @{ Ref = '130d'
        Retired     = 'not need one at this machine'
-       Replacement = 'will not let a session go on without it' }
+       Replacement = 'a silent install has nobody to ask' }
     # 130e - the TENTH copy, in the /SILENT refusal, which nobody had looked at
     # because that dialog only fires on a silent install.  Found on the third
     # sweep, after two "that is all of them" claims.  THE PATTERN IS THE POINT:
@@ -242,21 +249,29 @@ $RETIRED = @(
     # The instruction to the reader is the whole of the guard: a dialog whose
     # buttons say Keep and Delete, above a sentence that says "choose No",
     # is worse than either wording alone.
+    # 20 Sep 26 - 139 and 139b RE-AIMED: the dialogs no longer carry a "choose ..."
+    # sentence, they say which button is the normal one ("Keep is the normal
+    # choice" / "Keep is the safe choice").  The retired wording is unchanged: a
+    # dialog whose buttons say Keep and Delete must never tell the reader to
+    # choose No.
     @{ Ref = '139'
        Retired     = 'Choose No to keep them'
-       Replacement = 'Choose Keep to keep them' }
+       Replacement = 'Keep is the normal choice' }
     @{ Ref = '139b'
        Retired     = 'the account you expect, choose No'
-       Replacement = 'the account you expect, choose Keep' }
+       Replacement = 'Keep is the safe choice' }
     # 129 - "the ssh-only model" is 124's retired premise in compressed form.
     # 124 registered the long phrase; this said the same thing in four words and
     # sat in the very page 124 had corrected, which is how it survived.
+    # 20 Sep 26 - 129 and 129b RE-AIMED (see 130d): the "point of confining ssh"
+    # and "THE COST, SAID PLAINLY" paragraphs are gone; what is on screen now is
+    # "ssh is limited to SD Core users" and the cost said in one clause.
     @{ Ref = '129'
        Retired     = 'ssh-only model'
-       Replacement = 'confining ssh to SD Core' }
+       Replacement = 'ssh is limited to SD Core users' }
     @{ Ref = '129b'
        Retired     = 'THE COST, SAID PLAINLY: scp and sftp'
-       Replacement = 'ONLY IF YOU INSTALL THE SERVER' }
+       Replacement = 'scp and sftp stop working for everyone on this computer' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }
@@ -307,33 +322,53 @@ $RETIRED = @(
     # rewritten, and the one truth that replaces all of it is the per-account
     # model, said once in the wizard: "Every account decides its own ssh and
     # API access".  Each removed phrasing registers against it.
+    # 20 Sep 26 - THAT SENTENCE WAS CUT WITH THE REST OF THE WIZARD'S EXPLANATION
+    # (owner: "too verbose"), so the nine rows below now share the wizard's
+    # first sentence about the routes instead: "Accounts sign in over ssh or the
+    # SD Core API".  It is neutral, which is all a REPLACEMENT has to be - its
+    # job is to show the corrected page is what is on screen; the RETIRED halves
+    # are what stop the administrator-route claims coming back.
     @{ Ref = 'R1.1-64b'
        Retired     = 'ssh and the API are refused'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64c'
        Retired     = 'always has both ssh and the API'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64d'
        Retired     = 'cannot be granted to one'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64e'
        Retired     = 'SD Core users and administrators'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64f'
        Retired     = 'have no remote access at all'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64g'
        Retired     = 'ssh is refused for an administrator'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64h'
        Retired     = 'no ssh, and the API only from this machine'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64i'
        Retired     = 'Administrators cannot sign in over ssh at all'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
     @{ Ref = 'R1.1-64j'
        Retired     = 'can use the API only from this computer'
-       Replacement = 'Every account decides its own ssh and API access' }
+       Replacement = 'Accounts sign in over ssh or the SD Core API' }
+    # 20 Sep 26 - TWO SENTENCES THE INSTALLER'S CUT FOUND FALSE, not merely long.
+    # (1) The existing-SDSYS closing line said the account "was left alone -
+    # including its password, which is the one you set before".  Since the owner's
+    # 18 Sep ruling the finishing window asks on an existing SDSYS too, and an
+    # empty line KEEPS the password, so the sentence promised something the
+    # window was about to offer to change.  (2) The upgrade memo said an account
+    # "is never given a command its tier does not allow", and RELEASE_1.1 64
+    # abolished the tiers.  Both are gone from the screen; these keep them gone.
+    @{ Ref = '20Sep-a'
+       Retired     = 'which is the one you set before'
+       Replacement = 'was already there and was kept' }
+    @{ Ref = '20Sep-b'
+       Retired     = 'command its tier does not allow'
+       Replacement = 'Your database, your accounts and your settings are kept' }
 )
 
 # --------------------------------------------------------------------------
@@ -502,9 +537,14 @@ Check ("a nonsense token is NOT found ($($absent.Count) hit(s))") ($absent.Count
 # 02 Sep 26 - PRE_RELEASE 131's THREE CONTROLS, one per way this can go wrong.
 # The first two FAILED before the fix and pass after; the third guards the fix
 # itself, because over-stripping would be worse than the bug it repairs.
-$straddle = Find-Any 'offers to install one'
+# 20 Sep 26 - THE STRADDLING PHRASE MOVED.  It was "offers to install one", from
+# the ssh paragraph the installer's cut removed; the summary page's subtitle now
+# breaks at the same kind of seam ("... has happened yet - ' + 'Cancel changes
+# nothing.").  Pick a new one the same way whenever the text under it is edited:
+# it has to be on screen and on NO single source line.
+$straddle = Find-Any 'happened yet - Cancel changes nothing'
 Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") ($straddle.Count -gt 0) `
-      'sd.iss renders this across 1771-1772 and no single line carries it - the flattening is not working'
+      'sd.iss renders this across the summary page subtitle''s two lines and no single line carries it - the flattening is not working'
 $inBrace = Find-Any 'Lower case for the reason given at code 0'
 Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
       ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))

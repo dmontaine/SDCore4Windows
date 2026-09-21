@@ -4,6 +4,17 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+20 Sep 26  THE INSTALLER SAYS LESS.
+
+           Every screen the installer shows was cut down to what you need
+           in order to install: what Setup changes, what to do next, and
+           what to run if a step did not complete.  The explanations of
+           why were long and are gone.  Nothing Setup does has changed.
+
+           The password screen at the end now says plainly that pressing
+           Enter keeps the SDSYS password as it is, and typing a new one
+           changes it.  It used to say so only after you had pressed Enter.
+
 20 Sep 26  THREE Y/N PROMPTS NOW LEAVE A SPACE BEFORE YOUR ANSWER.
 
            "Use file '...' (y/<n>)?" and the two "OK to delete DATA portion"
