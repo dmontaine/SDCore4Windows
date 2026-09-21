@@ -114,9 +114,9 @@ $script:elevated = ([Security.Principal.WindowsPrincipal] `
     [Security.Principal.WindowsIdentity]::GetCurrent()
     ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-function Ok      ($m) { Write-Host ('  [ok]      ' + $m) -ForegroundColor Green }
-function Problem ($m) { $script:problems++; Write-Host ('  [PROBLEM] ' + $m) -ForegroundColor Red }
-function NotYet  ($m) { $script:notyet++;   Write-Host ('  [not yet] ' + $m) -ForegroundColor Yellow }
+function Ok      ($m) { Write-Host ('[ok]      ' + $m) -ForegroundColor Green }
+function Problem ($m) { $script:problems++; Write-Host ('[PROBLEM] ' + $m) -ForegroundColor Red }
+function NotYet  ($m) { $script:notyet++;   Write-Host ('[not yet] ' + $m) -ForegroundColor Yellow }
 
 # TEST-PATH THROWS ON AN ACL DENIAL RATHER THAN RETURNING $false, and this
 # script sets $ErrorActionPreference = 'Stop' - so on the ONE token this file
@@ -142,7 +142,7 @@ function Test-PathState([string] $path) {
         return 'unreadable'
     }
 }
-function Info    ($m) { if (-not $Brief) { Write-Host ('            ' + $m) -ForegroundColor DarkGray } }
+function Info    ($m) { if (-not $Brief) { Write-Host ('          ' + $m) -ForegroundColor DarkGray } }
 function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 
 # 22 Aug 26 - SAY WHEN IT IS OVER, AND CLOSE ON A KEYPRESS.  Owner's
@@ -179,17 +179,17 @@ function Section ($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan }
 # THE PATH IS BUILT FROM $AppDir rather than written out, so it stays true if
 # this is ever run from somewhere other than the install.
 function Rerun {
-    Write-Host '    Start Menu  ->  SD  ->  Check the SD installation'
-    Write-Host '  or:'
-    Write-Host ('    powershell -ExecutionPolicy Bypass -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
+    Write-Host '  Start Menu  ->  SD  ->  Check the SD installation'
+    Write-Host 'or:'
+    Write-Host ('  powershell -ExecutionPolicy Bypass -File "' + (Join-Path $AppDir 'check-install.ps1') + '"')
 }
 
 function Finish([bool] $Ran = $true) {
     Write-Host ''
     if ($Ran) {
-        Write-Host '  Test completed.' -ForegroundColor Cyan
+        Write-Host 'Test completed.' -ForegroundColor Cyan
     } else {
-        Write-Host '  Nothing was checked.' -ForegroundColor Cyan
+        Write-Host 'Nothing was checked.' -ForegroundColor Cyan
     }
 
     # 22 Aug 26 - A KEYPRESS CLOSES IT, rather than a prompt the user must type
@@ -241,9 +241,9 @@ function Finish([bool] $Ran = $true) {
     # exactly when a keypress can arrive.  The try/catch stays as a backstop for
     # a host that refuses the call outright, but it is no longer the guard.
         if ($notify) {
-            Write-Host '  Press any key to continue.' -ForegroundColor Cyan
+            Write-Host 'Press any key to continue.' -ForegroundColor Cyan
         } else {
-            Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+            Write-Host 'Press any key to close this window.' -ForegroundColor Cyan
         }
         try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
         catch { }
@@ -310,16 +310,16 @@ function Show-SdGroupNotice {
     # be read at all, and a banner asserting it anyway would be stating some-
     # thing nothing measured.
     $subtitle = if ($null -eq $State.InGroup) {
-        '    Your group membership may not be active in this sign-in yet.'
+        '  Your group membership may not be active in this sign-in yet.'
     } else {
-        '    Your group membership is not active in this sign-in yet.'
+        '  Your group membership is not active in this sign-in yet.'
     }
 
     Write-Host ''
-    Write-Host '  ============================================================' -ForegroundColor Yellow
-    Write-Host '    SIGN OUT OR RESTART NOW' -ForegroundColor Yellow
+    Write-Host '============================================================' -ForegroundColor Yellow
+    Write-Host '  SIGN OUT OR RESTART NOW' -ForegroundColor Yellow
     Write-Host $subtitle -ForegroundColor Yellow
-    Write-Host '  ============================================================' -ForegroundColor Yellow
+    Write-Host '============================================================' -ForegroundColor Yellow
     Write-Host ''
     # 20 Sep 26, LATER - THE ACTION AND NOTHING ELSE (owner: dialogs deal only with
     # the installing task; warnings and caveats go in the installer documentation).
@@ -327,19 +327,19 @@ function Show-SdGroupNotice {
     # person sees if they do not sign out ("sd is not recognized", "cannot open its
     # files") are in SDCoreWindowsDocs, GettingStarted/01-installation.md.
     if ($null -eq $State.InGroup) {
-        Write-Host '  This check could not read the "sdusers" group.  Sign out and back in.'
+        Write-Host 'This check could not read the "sdusers" group.  Sign out and back in.'
     } else {
-        Write-Host '  Sign out and back in (or restart) before using SD Core.'
+        Write-Host 'Sign out and back in (or restart) before using SD Core.'
     }
     Write-Host ''
-    Write-Host '  Afterwards, run  Start Menu  ->  SD  ->  Check the SD installation'
+    Write-Host 'Afterwards, run  Start Menu  ->  SD  ->  Check the SD installation'
     Write-Host ''
 
     # The window closes when this returns, so it waits here rather than at the
     # pause before it.  IsInputRedirected is the guard for the same measured
     # reason as Finish()'s: ReadKey BLOCKS rather than throwing with no console.
     if (-not [Console]::IsInputRedirected) {
-        Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        Write-Host 'Press any key to close this window.' -ForegroundColor Cyan
         try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
         catch { }
     }
@@ -349,8 +349,8 @@ function Show-SdGroupNotice {
 # ---------------------------------------------------------------------------
 if (-not $Brief) {
     Write-Host ''
-    Write-Host '  Checking your SD installation' -ForegroundColor White
-    Write-Host '  ============================='
+    Write-Host 'Checking your SD installation' -ForegroundColor White
+    Write-Host '============================='
     Write-Host ''
     # 22 Aug 26 - IT NO LONGER CLAIMS THE INSTALL HAS FINISHED.  Owner: "the
     # install doesn't actually finish until you close the post install script
@@ -365,7 +365,7 @@ if (-not $Brief) {
     # 20 Sep 26 - ONE PARAGRAPH, where it was a five-item list and three
     # reassurances (owner: "too verbose").  It keeps the two facts a person needs
     # before answering the question below: it only reads, and it can be run again.
-    Write-Host '  This only reads; it changes nothing.'
+    Write-Host 'This only reads; it changes nothing.'
     Write-Host ''
 }
 
@@ -382,18 +382,20 @@ if (-not $Yes) {
     # not y or yes is a no - including a bare Enter, which is what most people
     # press - so the prompt now says which one it is taking.  The angle brackets
     # are the owner's notation, 6 Sep 2026.
-    try   { $answer = Read-Host '  Run the checks now? (y/<n>)' }
+    try   { $answer = Read-Host 'Run the checks now? (y/<n>)' }
     catch {
         Write-Host ''
-        Write-Host '  Nothing is available to answer that question, so nothing was run.'
-        Write-Host '  Pass -Yes to run the checks without asking.'
+        Write-Host 'Nothing is available to answer that question, so nothing was run.'
+        Write-Host 'Pass -Yes to run the checks without asking.'
         Write-Host ''
         exit 2
     }
     if ($answer -notmatch '^(y|yes)$') {
-        Write-Host ''
-        Write-Host '  Nothing was checked.  You can run it whenever you want it:'
-        Rerun
+        # 21 Sep 26 - THE "YOU CAN RUN IT WHENEVER YOU WANT IT" BLOCK (the
+        # Start Menu / powershell -File how-to) IS GONE - owner's instruction.
+        # It also duplicated Finish($false)'s own "Nothing was checked.": this
+        # branch said it once here and Finish said it again a moment later.
+        # Removing the block removed the duplicate along with it.
         Finish $false
         exit 0
     }
@@ -401,15 +403,15 @@ if (-not $Yes) {
 
 if ($script:elevated) {
     Write-Host ''
-    Write-Host '  This window has administrator rights.  To test your own sign-in, run the' -ForegroundColor Yellow
-    Write-Host '  check again from an ORDINARY window:' -ForegroundColor Yellow
+    Write-Host 'This window has administrator rights.  To test your own sign-in, run the' -ForegroundColor Yellow
+    Write-Host 'check again from an ORDINARY window:' -ForegroundColor Yellow
     Rerun
 }
 
 $sdUsers = Get-SdUsersState
 
 # --- 1. the programs -------------------------------------------------------
-Section '  The program files'
+Section 'The program files'
 
 if (Test-Path -LiteralPath $SdExe) {
     Ok ('SD is installed in ' + $AppDir)
@@ -451,7 +453,7 @@ if ($onMachine -and $onProcess) {
 }
 
 # --- 2. the service --------------------------------------------------------
-Section '  The SD service'
+Section 'The SD service'
 
 $svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
 if ($null -eq $svc) {
@@ -465,7 +467,7 @@ if ($null -eq $svc) {
 }
 
 # --- 3. your access to the database ----------------------------------------
-Section '  Your access to the database'
+Section 'Your access to the database'
 
 if ($sdUsers.InGroup -eq $false) {
     Problem 'You are not a member of the "sdusers" group.'
@@ -483,7 +485,7 @@ if ($sdUsers.InGroup -eq $false) {
 # THE CHECK THIS FILE EXISTS FOR.  A tree that is present but has an empty
 # catalogue is the 16 Aug 2026 failure, and it looks completely healthy from
 # the outside.
-Section '  The database'
+Section 'The database'
 
 $sysState = Test-PathState $SysDir
 if ($sysState -eq 'missing') {
@@ -556,7 +558,7 @@ if ($sysState -eq 'missing') {
 # EVERY CHECK HERE IS CONDITIONAL ON THE FEATURE BEING WANTED.  Reporting "the
 # API port is closed" to somebody who never asked for the API would be noise
 # that reads like a fault.
-Section '  Remote access'
+Section 'Remote access'
 
 $apiPort = $null
 $conf = Join-Path $DataDir 'sd.conf'
@@ -657,9 +659,9 @@ if ($null -eq $sshSvc) {
 }
 
 Write-Host ''
-Write-Host '  ============================='
+Write-Host '============================='
 if ($script:problems -gt 0) {
-    Write-Host ('  Found ' + $script:problems + ' problem(s).') -ForegroundColor Red
+    Write-Host ('Found ' + $script:problems + ' problem(s).') -ForegroundColor Red
     if ($script:notyet -gt 0) {
         # 22 Aug 26 - NEUTRAL WORDING ON THIS PATH, DELIBERATELY.  It used to
         # say these checks "need you to sign out and back in", which is only
@@ -668,16 +670,16 @@ if ($script:problems -gt 0) {
         # off to do something that cannot help, and away from the fault that is
         # printed six lines above.  Each [not yet] line has already said why it
         # was skipped; the summary only counts them.
-        Write-Host ('  ' + $script:notyet + ' other check(s) could not be made - see above.') -ForegroundColor Yellow
+        Write-Host ($script:notyet.ToString() + ' other check(s) could not be made - see above.') -ForegroundColor Yellow
     }
     Finish
     exit 1
 }
 
 if ($script:notyet -gt 0) {
-    Write-Host '  Nothing is wrong.' -ForegroundColor Green
-    Write-Host ('  ' + $script:notyet + ' check(s) need you to SIGN OUT AND BACK IN before they can be made.') -ForegroundColor Yellow
-    Write-Host '  That is expected straight after installing.' -ForegroundColor Yellow
+    Write-Host 'Nothing is wrong.' -ForegroundColor Green
+    Write-Host ($script:notyet.ToString() + ' check(s) need you to SIGN OUT AND BACK IN before they can be made.') -ForegroundColor Yellow
+    Write-Host 'That is expected straight after installing.' -ForegroundColor Yellow
     Write-Host ''
     # 22 Aug 26 - SAY HOW, NOT JUST WHEN.  This used to end with "run this again
     # afterwards" and never said how to, which on a fresh install is advice
@@ -686,12 +688,12 @@ if ($script:notyet -gt 0) {
     # optional extra, it is how the check ever gets finished.  Being told to
     # repeat something unfindable is the same fault as being told to sign out
     # when that cannot help, which this file already had once.
-    Write-Host '  Afterwards, run it again from:'
+    Write-Host 'Afterwards, run it again from:'
     Rerun
     Finish
     exit 0
 }
 
-Write-Host '  Everything checks out.  SD is installed and working.' -ForegroundColor Green
+Write-Host 'Everything checks out.  SD is installed and working.' -ForegroundColor Green
 Finish
 exit 0

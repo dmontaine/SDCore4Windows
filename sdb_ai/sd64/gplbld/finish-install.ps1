@@ -131,6 +131,17 @@ function Write-Wrapped {
         [int]    $Width  = 74,
         [System.ConsoleColor] $Color
     )
+    # 20 Sep 26 - THE DEFAULT WAS '', THEN BECAME '  ' THE SAME DAY (89 SUPERSEDED
+    # BELOW), THEN WENT BACK TO '' ON 21 Sep 26 - OWNER'S RULING.  The 2-space
+    # margin made every OTHER line on this page consistent with itself, but three
+    # lines never could join it: `New password:` / `Repeat new password:` /
+    # `Password set for account X` are SET_ACC_PASSWORD's own BASIC `display`
+    # statements, printed straight to the inherited console, and this script has
+    # no safe way to re-indent a child process's output while it is also reading
+    # masked password input from that same console. Owner: "If we can't indent
+    # those lines then nothing should be indented." So nothing on this page is,
+    # any more - the whole margin is gone, not just the parts this script
+    # controls, because a PARTIAL margin was the actual defect.
     # ***IT KEEPS THE GAPS, AND THE FIRST VERSION DID NOT.***  This file writes
     # two spaces after a full stop, and "Change it with  modify.password sdsys
     # from inside SD." sets its command off with two on each side.  A wrapper
@@ -139,24 +150,71 @@ function Write-Wrapped {
     # So each word carries the whitespace that FOLLOWED it, that gap is used
     # when the next word lands on the same line, and it is discarded at a line
     # break, which is where a gap should disappear anyway.
-    $limit   = $Width - $Indent.Length
-    $line    = ''
-    $pending = ''
-    $out     = @()
+    $limit = $Width - $Indent.Length
+
+    $tokens = @()
     foreach ($m in [regex]::Matches($Text, '\S+[ \t]*')) {
         $word = $m.Value.TrimEnd(" `t")
         $gap  = $m.Value.Substring($word.Length)
-        if ($line -eq '') {
-            $line = $word
-        } elseif (($line.Length + $pending.Length + $word.Length) -le $limit) {
-            $line = $line + $pending + $word
-        } else {
-            $out += $line
-            $line = $word
-        }
-        $pending = $gap
+        $tokens += , ([PSCustomObject]@{ Word = $word; Gap = $gap })
     }
-    if ($line -ne '') { $out += $line }
+
+    function LineLength($toks) {
+        $n = $toks.Count
+        if ($n -eq 0) { return 0 }
+        $len = 0
+        for ($i = 0; $i -lt $n; $i++) {
+            $len += $toks[$i].Word.Length
+            if ($i -lt $n - 1) { $len += $toks[$i].Gap.Length }
+        }
+        return $len
+    }
+
+    # Greedy wrap into lines of TOKENS (not yet joined to strings), so the
+    # short-word pass below can move a token across a line boundary.
+    $lines = @()
+    $cur = @()
+    foreach ($t in $tokens) {
+        if ($cur.Count -eq 0) {
+            $cur = @($t)
+        } else {
+            $trial = LineLength (@($cur) + @($t))
+            if ($trial -le $limit) { $cur += $t }
+            else { $lines += , $cur; $cur = @($t) }
+        }
+    }
+    if ($cur.Count -gt 0) { $lines += , $cur }
+
+    # 21 Sep 26 - SHORT-WORD LINE-END AVOIDANCE, owner's rule ("move 'an' to
+    # the next line, an upper-case letter").  A line must not end in a word of
+    # 2 characters or fewer when another line follows it - a short function
+    # word ("a", "an", "to", "of", ...) stranded at a line break reads as
+    # orphaned from whatever it modifies on the next line.  The word is
+    # pulled down to the FRONT of the following line instead, but only when
+    # that still fits the width limit - the width constraint always wins over
+    # this one, which is cosmetic. A forward sweep lets this cascade: if the
+    # line a word was just pulled onto now itself ends short, that line is
+    # still ahead in the loop and gets the same check applied to it.
+    for ($i = 0; $i -lt $lines.Count - 1; $i++) {
+        if ($lines[$i].Count -le 1) { continue }
+        $last = $lines[$i][$lines[$i].Count - 1]
+        if ($last.Word.Length -gt 2) { continue }
+        $withMoved = @($last) + @($lines[$i + 1])
+        if ((LineLength $withMoved) -le $limit) {
+            $lines[$i]     = $lines[$i][0..($lines[$i].Count - 2)]
+            $lines[$i + 1] = $withMoved
+        }
+    }
+
+    $out = @()
+    foreach ($ln in $lines) {
+        $s = ''
+        for ($i = 0; $i -lt $ln.Count; $i++) {
+            $s += $ln[$i].Word
+            if ($i -lt $ln.Count - 1) { $s += $ln[$i].Gap }
+        }
+        $out += $s
+    }
     # ***A CALLER THAT PASSED NOTHING MUST NOT SILENTLY PRINT NOTHING.***  An
     # empty $Purpose would leave the step with no explanation and look
     # deliberate; say so instead.
@@ -270,21 +328,36 @@ function Set-SdsysPassword {
     # unknown and repeated the opening sentence's "sign in as SDSYS and start SD
     # Core from an elevated prompt".  THE RULE STAYS, and stays before the prompt:
     # RELEASE_1.1 75, and test-pwcomplex-units reads PwRuleText.
-    Write-Host '  SDSYS PASSWORD' -ForegroundColor White
-    Write-Host ''
+    # 20 Sep 26 LATER STILL - NO HEADER OR RULE PRINTED HERE ANY MORE.  Both
+    # moved out to the PASSWORDS manifest and "N of 2" section header that now
+    # wrap this call, matching SD Core for Linux's installer layout (owner,
+    # comparing this exact screen to Linux's) - a manifest naming both
+    # passwords up front, then one numbered section per password, is also
+    # where "(this Windows installation)" used to disambiguate from a Linux
+    # install now lives: the section header below says "local Windows sdsys
+    # account" instead. Layout match only, not wording-for-wording - the two
+    # ports do not ask the same number of passwords or skip the same way, and
+    # nothing here claims otherwise.
+    # 21 Sep 26 - THE PROMPT ITSELF DROPPED ITS PARENTHETICAL ("(Enter keeps
+    # the current one)" / "...the generated one"): the line above it already
+    # says what Enter does, in both branches, so the prompt just names what it
+    # wants - same shortening as the "N of M" header replacing this
+    # function's own former banner.
     if ($Existing) {
-        Write-Wrapped -Text 'SDSYS already has a password.  Press Enter to keep it, or type a new one.'
-        $prompt = '  New SDSYS password (Enter keeps the current one)'
+        # 21 Sep 26 - TWO CALLS, NOT ONE STRING - owner's rule against a line
+        # ending on a single orphaned word.  Each of these two sentences fits
+        # width 72 on its own (31 and 43 characters), so wrapping them
+        # together only ever produced a greedy break wherever the FIRST
+        # sentence happened to run out of room, landing "one." alone on its
+        # own line. Two short paragraphs read as two sentences, not as one
+        # ragged one.
+        Write-Wrapped -Text 'SDSYS already has a password.'
+        Write-Wrapped -Text 'Press Enter to keep it, or type a new one.'
     } else {
         Write-Wrapped -Text ('Type the password you want for SDSYS, or press Enter to keep the one ' +
             'the install generated.')
-        $prompt = '  New SDSYS password (Enter keeps the generated one)'
     }
-    Write-Host ''
-    # THE RULE IS STATED BEFORE THE PROMPT, not only after a refusal - being
-    # told the requirement once you have already failed it is how three
-    # attempts get spent guessing.  RELEASE_1.1 75.
-    Write-Wrapped -Text $script:PwRuleText
+    $prompt = 'SDSYS password'
     Write-Host ''
 
     if ([Console]::IsInputRedirected) {
@@ -318,36 +391,57 @@ function Set-SdsysPassword {
             }
             return
         }
-        # 19 Sep 26 - RELEASE_1.1 75.  THE RULE IS CHECKED BEFORE THE REPEAT IS
-        # ASKED FOR, and this is the one place the plain text is needed twice -
-        # so the same bounded SecureString-to-BSTR exception the comparison
-        # below documents applies, and the variable is cleared on the next line.
-        # A weak entry counts as one of the three attempts, like a mismatch.
-        $pw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))
-        $weak = -not (Test-PasswordComplex -Password $pw)
-        $pw = $null
-        if ($weak) {
-            Write-Wrapped -Text $script:PwRuleText -Color Yellow
-            Write-Host ('  That was attempt ' + $tries + ' of 3.') -ForegroundColor Yellow
-            Write-Host ''
-            continue
-        }
+        # 21 Sep 26 - THE RULE IS NOW CHECKED AFTER BOTH ENTRIES, NOT BEFORE
+        # THE REPEAT IS ASKED FOR - owner's ruling: validity is only judged
+        # once both attempts are in, so a weak first entry no longer skips
+        # asking for the confirmation. Both SecureStrings are converted to
+        # plain text together, compared, checked, and dropped in the same few
+        # lines - the same bounded exception the password-setting call below
+        # documents. A weak or mismatched pair counts as one of the three
+        # attempts either way.
+        $b = Read-Host 'Type it again' -AsSecureString
+        # A BLANK LINE ALWAYS FOLLOWS "Type it again", whichever way this
+        # turns out - owner's rule, so a person is never left wondering
+        # whether more output is still coming.
+        Write-Host ''
 
-        $b = Read-Host '  Type it again' -AsSecureString
         # ***THE TWO ARE COMPARED AS PLAIN TEXT, WHICH IS THE ONLY WAY TWO
         # SecureStrings CAN BE COMPARED AT ALL.***  It is a deliberate, bounded
         # exception: the strings exist in this process for the length of the
-        # comparison and are dropped on the next line.  Everything else here
-        # keeps them as SecureStrings, including the call that sets the account's
-        # password - so nothing is passed as an argument, which is the exposure
-        # sd-elevate.ps1 measured (Win32_Process.CommandLine shows it verbatim).
+        # comparison and are dropped on the next few lines.  Everything else
+        # here keeps them as SecureStrings, including the call that sets the
+        # account's password - so nothing is passed as an argument, which is
+        # the exposure sd-elevate.ps1 measured (Win32_Process.CommandLine
+        # shows it verbatim).
         $pa = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))
         $pb = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($b))
         $same = ($pa -ceq $pb)
+        $weak = -not (Test-PasswordComplex -Password $pa)
         $pa = $null; $pb = $null
-        if (-not $same) {
-            Write-Host '  They did not match.  Try again.' -ForegroundColor Yellow
+
+        if ($weak -or -not $same) {
+            # 21 Sep 26 - ONE STANDARD MESSAGE FOR BOTH CAUSES, owner's ruling
+            # - a mismatch and a rule violation are both "try again", and the
+            # rule itself was already shown once in the PASSWORDS manifest
+            # above, so there is nothing case-specific left worth saying here.
+            # 21 Sep 26, LATER - NO COLOUR, "ERROR: " INSTEAD.  A real cycle
+            # showed BASIC's matching message in the plain console default -
+            # the ANSI bytes 93 added did not render as yellow on this port's
+            # console - so a coloured PowerShell line next to an uncoloured
+            # BASIC one would be the SAME inconsistency 89/90 already fixed
+            # once, in the other direction. "ERROR: " stands out regardless of
+            # what the console does with colour, on both sides alike.
+            Write-Host 'ERROR: Entered password is invalid or entries do not match.'
             Write-Host ''
+            # THE ATTEMPT COUNT NAMES THE ENTRY ABOUT TO BE TYPED, NOT THE ONE
+            # JUST REJECTED - owner's ruling - so it is skipped entirely once
+            # there is no next entry to name (the third attempt falls straight
+            # through to the loop's own closing message instead).  Not an
+            # error itself, so no prefix - just no colour, matching the rest.
+            if ($tries -lt 3) {
+                Write-Host ('Attempt ' + ($tries + 1) + ' of 3')
+                Write-Host ''
+            }
             continue
         }
         try {
@@ -355,12 +449,26 @@ function Set-SdsysPassword {
         } catch {
             # A REFUSAL BY THE PASSWORD POLICY IS NOT A FAILED INSTALL.  Windows
             # says why, and saying it here is the difference between a retry and
-            # a lockout.
-            Write-Host ('  Windows refused that password: ' + $_.Exception.Message) -ForegroundColor Yellow
+            # a lockout - kept distinct from the standard message above, which
+            # only covers what THIS script itself checked.
+            Write-Host ('ERROR: Windows refused that password: ' + $_.Exception.Message)
             Write-Host ''
+            if ($tries -lt 3) {
+                Write-Host ('Attempt ' + ($tries + 1) + ' of 3')
+                Write-Host ''
+            }
             continue
         }
-        Write-Host '  The SDSYS password is set.' -ForegroundColor Green
+        # 21 Sep 26 - "Password accepted." IS THE ONE STANDARD ACCEPTANCE
+        # MESSAGE, owner's ruling. Section 2's own acceptance confirmation
+        # ("Password set for account X") cannot be unified with this one from
+        # here - see Set-AttachedAccountPassword's header comment: it is
+        # printed by SET_ACC_PASSWORD's own BASIC `display`, inherited
+        # console I/O this script does not control.
+        # 21 Sep 26, LATER - NO GREEN EITHER, same reasoning as the errors
+        # above: BASIC's identical "Password accepted." prints in the console
+        # default, so this one does too now.
+        Write-Host 'Password accepted.'
         Write-Host ''
         # THE LOG IS THE RECORD OF THIS MACHINE'S WAY IN, so the password it
         # printed a minute ago is not left standing as though it still worked.
@@ -373,15 +481,26 @@ function Set-SdsysPassword {
                     (Get-Date -Format 's') + '  the password printed above was REPLACED by one set in ' +
                     'the finishing window.  No copy of it is kept here.')
             } catch {
-                Write-Host ('  (Could not note that in ' + $LogFile + ': ' + $_.Exception.Message + ')') -ForegroundColor Yellow
+                Write-Host ('ERROR: Could not note that in ' + $LogFile + ': ' + $_.Exception.Message)
             }
         }
         return
     }
 
-    Write-Host '  Three attempts.  The generated password stands.' -ForegroundColor Yellow
-    Write-Host ''
-    Show-GeneratedPassword -LogFile $LogFile
+    # 21 Sep 26 - FOUND WHILE REDOING THE RETRY LOOP, NOT SOMETHING ASKED FOR:
+    # this fallback always claimed "the generated password stands" and called
+    # Show-GeneratedPassword, even with -Existing, where nothing was generated
+    # THIS run - the account's actual password is simply unchanged, and
+    # Show-GeneratedPassword would have gone looking in the log for something
+    # that was never written this time.
+    if ($Existing) {
+        Write-Host 'ERROR: Three attempts.  The password is unchanged.'
+        Write-Host ''
+    } else {
+        Write-Host 'ERROR: Three attempts.  The generated password stands.'
+        Write-Host ''
+        Show-GeneratedPassword -LogFile $LogFile
+    }
 }
 
 function Show-GeneratedPassword {
@@ -400,7 +519,7 @@ function Show-GeneratedPassword {
         Write-Host ''
         return
     }
-    Write-Host ('  SDSYS password: ' + $shown) -ForegroundColor Cyan
+    Write-Host ('SDSYS password: ' + $shown) -ForegroundColor Cyan
     Write-Host ''
 }
 
@@ -427,8 +546,8 @@ function Keep-ExistingPassword {
 }
 
 Write-Host ''
-Write-Host '  SD Core is installed.' -ForegroundColor White
-Write-Host '  ====================='
+Write-Host 'SD Core is installed.' -ForegroundColor White
+Write-Host '====================='
 Write-Host ''
 
 # 18 Sep 26 - WHAT THIS WINDOW SAYS NOW, AND WHY IT SAYS LESS THAN IT DID.  It
@@ -496,8 +615,20 @@ function Set-AttachedAccountPassword {
     # survive is that this is NOT the Windows password and is only needed from
     # ANOTHER COMPUTER - it is what stops a person reading "password" and
     # changing their Windows one, or skipping a prompt they do need.
-    Write-Host ("SD Core password for $Account") -ForegroundColor White
-    Write-Wrapped -Text 'This is not your Windows password.'
+    # 20 Sep 26 LATER STILL - OWN HEADER LINE REMOVED; the "2 of 2" section
+    # header that now wraps this call names the account instead, matching the
+    # PASSWORDS-manifest layout above Set-SdsysPassword.
+    # 21 Sep 26 - "This is not your Windows password." SHORTENED TO "For SD
+    # Core, not Windows." - owner's template for this exact section. THE
+    # PROMPTS THIS FUNCTION STARTS ("New password:" / "Repeat new password:")
+    # ARE NOT TOUCHED: they are not printed by this script at all.  sd.exe
+    # runs MODIFY.PASSWORD as a child process with inherited console I/O, and
+    # those two lines are `display` statements in sdsys/gpl.bp/set_acc_password
+    # (messages 10090/10091 area) - the same verb every account's password
+    # change in SD Core uses, on both ports.  Renaming them is a product wording
+    # change with a much wider blast radius than this installer screen, not a
+    # layout change, and is deliberately out of scope here.
+    Write-Wrapped -Text 'For SD Core, not Windows.'
     Write-Host ''
 
     for ($try = 1; $try -le $MaxTries; $try++) {
@@ -552,7 +683,7 @@ function Set-AttachedAccountPassword {
         }
         catch {
             Write-Host ''
-            Write-Host ('  SD Core could not be started: ' + $_.Exception.Message) -ForegroundColor Red
+            Write-Host ('ERROR: SD Core could not be started: ' + $_.Exception.Message)
             break
         }
 
@@ -562,13 +693,16 @@ function Set-AttachedAccountPassword {
         # verb that was refused, a session that never started, a $cred that was
         # not writable, and an empty line typed at the prompt.
         if (Test-Path -LiteralPath $credFile) {
-            Write-Wrapped -Text 'Password set.'
-            Write-Host ''
+            # 21 Sep 26 - NO "Password set." HERE ANY MORE - it duplicated
+            # SET_ACC_PASSWORD's own "Password set for account X", which this
+            # window already shows (inherited console I/O from the sd.exe
+            # child above). The blank line at line 587 already separates it
+            # from what comes next; this branch only needs to return.
             return $true
         }
 
         if ($try -lt $MaxTries) {
-            Write-Wrapped -Text 'No password was set.  A password is required - trying again.' -Color Yellow
+            Write-Wrapped -Text 'ERROR: No password was set.  A password is required - trying again.'
             Write-Host ''
         }
     }
@@ -583,7 +717,7 @@ function Set-AttachedAccountPassword {
     # but only for their OWN account: set_acc_password:123-126 refuses another
     # account without K$ADMINISTRATOR.  The qualifier is the whole point and
     # must not be dropped the next time this is tidied.
-    Write-Wrapped -Text "No SD Core password was set for $Account.  Set one with  MODIFY.PASSWORD  in SD Core." -Color Yellow
+    Write-Wrapped -Text "ERROR: No SD Core password was set for $Account.  Set one with  MODIFY.PASSWORD  in SD Core."
     Write-Host ''
     return $false
 }
@@ -593,6 +727,45 @@ function Set-AttachedAccountPassword {
 # SDSYS and start SD Core from an ELEVATED prompt") IS GONE: it is how to USE SD, not
 # part of installing it, and the owner's rule puts that in the installation
 # documentation.  The window goes straight to the password question.
+
+# 20 Sep 26 LATER STILL - A MANIFEST AND NUMBERED SECTIONS, MATCHING SD CORE
+# FOR LINUX'S INSTALLER LAYOUT.  Owner, looking at this exact screen next to
+# Linux's: same shape wanted, not the same wording or count - Windows asks
+# two passwords, not three, because there is no separate SD-side SDSYS
+# credential here the way Linux has one (RELEASE_1.1 64's admin-at-login
+# model). Each numbered section below still carries its own case-specific
+# text (existing vs generated, skip vs always-ask); this block only prints
+# what is coming and states the shared password rule once instead of per
+# section.
+$SdsysAsks  = $SdsysCode -in 0, 2
+$AttachAsks = ($AttachCode -in 0, 2) -and ($AttachUser -ne '')
+if ($SdsysAsks -or $AttachAsks) {
+    # 21 Sep 26 - NO TOP SEPARATOR, JUST THE BLANK LINE ABOVE THIS AND BELOW
+    # THE HEADER, MATCHING THE OWNER'S OWN REVISED TEMPLATE.  "-----" is now
+    # only what OPENS and CLOSES each numbered section below, not the manifest
+    # itself - the manifest's own edges are blank lines, like the page's own
+    # top header.  Likewise no closing separator after the rule: the "1 of 2"
+    # section immediately below opens with its own.
+    Write-Host 'PASSWORDS.' -ForegroundColor White
+    Write-Host ''
+    $n = 0
+    if ($SdsysAsks)  { $n++; Write-Host ($n.ToString() + '. the local Windows sdsys account   - administration account') }
+    if ($AttachAsks) {
+        if ($SdsysAsks) { Write-Host '' }
+        $n++; Write-Host ($n.ToString() + '. your SD Core account              - remote API access')
+    }
+    Write-Host ''
+    Write-Wrapped -Text $script:PwRuleText
+    Write-Host ''
+}
+$SdsysStep = 0
+if ($SdsysAsks) {
+    $SdsysStep++
+    Write-Host '---------------------------------------------------------------'
+    Write-Host ("$SdsysStep of " + [Math]::Max($n, 1) + ': Password for the local Windows sdsys account')
+    Write-Host '---------------------------------------------------------------'
+    Write-Host ''
+}
 
 $SdsysLog = Join-Path (Join-Path $env:ProgramData 'SD') 'install-sdsys.log'
 switch ($SdsysCode) {
@@ -630,6 +803,13 @@ switch ($SdsysCode) {
 # already set alone.  A reinstall over kept accounts therefore cannot overwrite
 # a working password, which is the fault the sixteenth pass had to fix for SDSYS
 # precisely because a Windows password cannot be inspected that way.
+if ($AttachAsks) {
+    $AttachStep = $SdsysStep + 1
+    Write-Host '---------------------------------------------------------------'
+    Write-Host ("$AttachStep of " + [Math]::Max($n, 1) + ": Password for $AttachUser" + "'s SD Core account")
+    Write-Host '---------------------------------------------------------------'
+    Write-Host ''
+}
 switch ($AttachCode) {
     { $_ -in 0, 2 } {
         if ($AttachUser -ne '') {
@@ -640,9 +820,9 @@ switch ($AttachCode) {
             # with no name to go with it is a wiring fault in sd.iss, not a
             # normal path, and setting a password on a guessed name is the exact
             # danger the old -User default was condemned for.
-            Write-Wrapped -Text ('Setup reported that an account was attached but did not say ' +
+            Write-Wrapped -Text ('ERROR: Setup reported that an account was attached but did not say ' +
                 'whose, so no password was asked for.  Start SD Core from an ELEVATED prompt and ' +
-                'it will ask.') -Color Yellow
+                'it will ask.')
             Write-Host ''
         }
     }
@@ -659,7 +839,7 @@ switch ($AttachCode) {
 # and its exit code becomes this script's, so anything reading the result of the
 # finishing step gets the check's verdict rather than "the launcher started".
 if (-not (Test-Path -LiteralPath $Check)) {
-    Write-Host ("  The installation check is missing - expected " + $Check) -ForegroundColor Red
+    Write-Host ("ERROR: The installation check is missing - expected " + $Check)
     Write-Host ''
     # PAUSE HERE TOO.  Every other ending is check-install's, which waits for a
     # key of its own; this one returns without ever reaching it.  Since -NoExit
@@ -668,7 +848,7 @@ if (-not (Test-Path -LiteralPath $Check)) {
     if (-not [Console]::IsInputRedirected) {
         # ReadKey BLOCKS rather than throwing when there is no console - see the
         # note in check-install.ps1's Finish().  IsInputRedirected is the guard.
-        Write-Host '  Press any key to close this window.' -ForegroundColor Cyan
+        Write-Host 'Press any key to close this window.' -ForegroundColor Cyan
         try   { $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') }
         catch { }
     }
