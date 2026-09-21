@@ -262,8 +262,15 @@ Name: "sshserver\sshremote"; Description: "Let other computers on your network c
 
 ; PRESENT AND CURRENTLY LOOPBACK-ONLY - default unticked, so doing nothing keeps
 ; it loopback-only.
+; 20 Sep 26 - THE GROUP HEADING IS THE MESSAGE.  A popup used to open on this page
+; to say OpenSSH was already installed and what SD would do to it; the owner: it
+; "shouldn't be the first one and the whole text could be summarized on the
+; screen where it would be chosen ... with the simple line 'The ssh server is
+; already installed.'"  The two present-server tasks are the only rows of this
+; group that show on such a machine, so their heading says it in place of
+; "SSH Server - Availability and Access".
 Name: "sshremoteshut"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    GroupDescription: "2)  SSH Server - Availability and Access:"; Flags: unchecked; \
+    GroupDescription: "2)  The ssh server is already installed."; Flags: unchecked; \
     Check: (not SshServerAbsent) and (not SshCurrentlyOpen)
 
 ; PRESENT AND CURRENTLY OPEN - default TICKED, so doing nothing leaves the
@@ -272,7 +279,7 @@ Name: "sshremoteshut"; Description: "Let other computers on your network connect
 ; but the user might want it limited to loopback so still want to deny remote
 ; access."
 Name: "sshremoteopen"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
-    GroupDescription: "2)  SSH Server - Availability and Access:"; \
+    GroupDescription: "2)  The ssh server is already installed."; \
     Check: (not SshServerAbsent) and SshCurrentlyOpen
 
 ; ===========================================================================
@@ -4750,83 +4757,17 @@ begin
       'check the installation. Setting up is not finished until that window says so.';
   end;
 
-  { CurPageChanged STILL FIRES IN SILENT MODE, and this box is the only thing
-    in the script that could block one.  MEASURED 18 Aug 2026: a cycle run with
-    -Silent stopped here with a modal box on screen and copied not one file
-    until somebody clicked OK.  The wizard form is created in silent mode and
-    simply not shown, so "the page was never displayed" is not the same as
-    "the page never changed".
-
-    THE GUARD IS THE ONE ALREADY USED at CurStepChanged rather than a second
-    idiom.  SuppressibleMsgBox was the obvious alternative and is the wrong
-    one here: it needs /SUPPRESSMSGBOXES, which the comment there records as
-    measured NOT to reach these boxes, and it would leave two ways of saying
-    the same thing in one file.
-
-    AND IT FIXES THE TEXT AS WELL AS THE HANG.  The box explains why an option
-    is "absent from this page" - which is incoherent read in a mode that shows
-    no pages, so there was nothing worth showing here anyway.  (It said "two
-    options" until 21 Aug 2026; see the note on the message itself.) }
-  if WizardSilent then
-    Exit;
-
-  { 30 Aug 26 - THE STAND-ALONE GATE IS GONE WITH THE MODE, AND THE CONDITION IS
-    NOW JUST "THIS MACHINE ALREADY HAS ssh".  PRE_RELEASE_FIXES 75 and 76.  The
-    reader who wants no ssh server does not reach this branch, because on a
-    machine that already has one there is no server for them to decline - the
-    sshserver box is not even shown. }
-  if (CurPageID = wpSelectTasks) and (not SshServerAbsent) then
-    { Notify rather than offer, which is what the repository owner asked for:
-      the option is not available and the reason is stated.
-
-      REWORDED 16 Aug 2026.  It used to say "the option to install it is
-      therefore not offered", which stops making sense once installing is not
-      an option anybody is offered.  What the reader needs now is the opposite
-      reassurance: SD requires an ssh server, this machine has one, and SD is
-      going to keep its hands off it - which is also why BOTH ssh options have
-      vanished from the page they are looking at.
-
-      SUPERSEDED 21 Aug 2026 AND KEPT VISIBLE: the last clause is no longer
-      true.  Only ONE option vanishes now - limitssh lost its Check and is
-      offered on every install.  Left here rather than edited away because the
-      history of this box is the point: three rewordings, each one made
-      necessary by a change somewhere else in the file, and each time the text
-      went on asserting the old shape until somebody noticed. }
-    { REWORDED AGAIN 21 Aug 2026, because the limitssh task lost its Check and
-      this text would otherwise be false.  It said "the two ssh options are
-      absent from this page"; only ONE is now - installing the server, and its
-      firewall rule with it.  Limiting ssh IS offered here, on any machine, and
-      the sentence has to say so, or the reader ticks a box this box has just
-      told them is not there.  Third time this file has been found asserting
-      something that had stopped being true; the pattern is worth the note.
-
-      AND AGAIN LATER THE SAME DAY, which makes the point better than the note
-      did: limitssh became ticked BY DEFAULT, so "you can still tick it" was
-      false in the other direction.  What the reader needs on a machine with
-      somebody else's ssh server is to know the box is ALREADY ticked and how
-      to refuse it. }
-    { REWORDED A FOURTH TIME, 25 Aug 2026, AND THE COMMENT ABOVE PREDICTED IT.
-      It says "each time the text went on asserting the old shape until
-      somebody noticed" - and this box was still telling the reader to untick
-      "Limit ssh to SD users and administrators", a checkbox that no longer
-      exists on the page they are looking at.
-
-      WHAT CHANGED UNDER IT.  limitssh stopped being a task; SD's ssh model now
-      applies on every install and used to be disclosed on a "Before you
-      install" page (deleted 20 Sep 26).  And a machine whose ssh server somebody else CONFIGURED no
-      longer reaches this page at all - InitializeSetup refuses it.  So the
-      only reader who now sees this box is one with Windows' own OpenSSH
-      installed and nobody having touched its configuration, and what they need
-      to know is what SD is about to do to it, not which box to untick. }
-    MsgBox('OpenSSH Server is already installed, and SD Core will use it.' + #13#10#13#10 +
-           'SD Core will configure it: ssh is limited to SD Core users, every ssh ' +
-           'session goes straight into SD Core, and scp and sftp stop working for ' +
-           'everyone on this computer. Your existing sshd_config is kept as ' +
-           'sshd_config.before-sd.' + #13#10#13#10 +
-           'Who may reach it is set by the ssh box below, which starts out matching ' +
-           'this computer''s current firewall rule. Tick it to let other computers ' +
-           'in; untick it to limit ssh to this computer only.',
-           mbInformation, MB_OK);
+  (* 20 Sep 26 - THE "OpenSSH Server is already installed" POPUP IS GONE, and with
+     it the silent-mode guard that existed only to stop that box blocking a
+     silent install.  Owner: it should not be the first thing that pops up, and
+     "the whole text could be summarized on the screen where it would be chosen
+     ... with the simple line 'The ssh server is already installed.'"  The line
+     is now the group heading of the two present-server tasks (see [Tasks]).
+     Four rewordings of the old box are in the history of PRE_RELEASE_FIXES 76
+     and HISTORY.md; the pattern they record - a box asserting a shape the file
+     had stopped having - is the reason to prefer a heading over a paragraph.
+     NOTHING ELSE IN THIS PROCEDURE CAN BLOCK A SILENT INSTALL: it only sets a
+     label caption. *)
 end;
 
 { ---------------------------------------------------------------------------

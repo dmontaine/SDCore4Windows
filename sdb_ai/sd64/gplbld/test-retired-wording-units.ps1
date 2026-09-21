@@ -263,15 +263,27 @@ $RETIRED = @(
     # 129 - "the ssh-only model" is 124's retired premise in compressed form.
     # 124 registered the long phrase; this said the same thing in four words and
     # sat in the very page 124 had corrected, which is how it survived.
-    # 20 Sep 26 - 129 and 129b RE-AIMED (see 130d): the "point of confining ssh"
-    # and "THE COST, SAID PLAINLY" paragraphs are gone; what is on screen now is
-    # "ssh is limited to SD Core users" and the cost said in one clause.
+    # 20 Sep 26 - 129 and 129b RE-AIMED (see 130d), TWICE.  The "point of confining
+    # ssh" and "THE COST, SAID PLAINLY" paragraphs went with the installer's cut and
+    # then the "Before you install" page; the OpenSSH-already-installed POPUP, which
+    # was the last place that said "ssh is limited to SD Core users" and "scp and
+    # sftp stop working for everyone on this computer", was removed the same evening
+    # at the owner's instruction (the group heading now says only "The ssh server is
+    # already installed").
+    #
+    # 129's replacement is the closing dialog's own account of what happened to an
+    # existing server.  ***129b'S REPLACEMENT IS NOT AN EQUIVALENT AND SAYS SO: THE
+    # COST SENTENCE ITSELF IS ON NO SCREEN ANY MORE.***  What remains is the one line
+    # that mentions scp and sftp at all, for an install with NO ssh server.  The
+    # RETIRED half is unchanged and still guards against the old heading returning;
+    # if the owner ever wants the cost disclosed again, this row is where its
+    # replacement goes back.
     @{ Ref = '129'
        Retired     = 'ssh-only model'
-       Replacement = 'ssh is limited to SD Core users' }
+       Replacement = 'limited ssh sign-in to its accounts' }
     @{ Ref = '129b'
        Retired     = 'THE COST, SAID PLAINLY: scp and sftp'
-       Replacement = 'scp and sftp stop working for everyone on this computer' }
+       Replacement = 'scp and sftp are unchanged' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }
@@ -538,15 +550,15 @@ Check ("a nonsense token is NOT found ($($absent.Count) hit(s))") ($absent.Count
 # 02 Sep 26 - PRE_RELEASE 131's THREE CONTROLS, one per way this can go wrong.
 # The first two FAILED before the fix and pass after; the third guards the fix
 # itself, because over-stripping would be worse than the bug it repairs.
-# 20 Sep 26 - THE STRADDLING PHRASE MOVED TWICE.  It was "offers to install one",
-# from an ssh paragraph the installer's cut removed; then the summary page's
-# subtitle, which was deleted with the page.  It is now the OpenSSH-present box:
-# "... which starts out matching ' + 'this computer''s current firewall rule".
-# Pick a new one the same way whenever the text under it is edited: it has to be
-# on screen and on NO single source line.
-$straddle = Find-Any 'starts out matching this computer'
+# 20 Sep 26 - THE STRADDLING PHRASE MOVED THREE TIMES.  It was "offers to install
+# one", from an ssh paragraph the installer's cut removed; then the summary page's
+# subtitle, deleted with the page; then the OpenSSH-present popup, deleted the same
+# evening.  It is now the silent-install refusal: "... a silent install has nobody '
+# + 'to ask.".  Pick a new one the same way whenever the text under it is edited: it
+# has to be on screen and on NO single source line.
+$straddle = Find-Any 'has nobody to ask'
 Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") ($straddle.Count -gt 0) `
-      'sd.iss renders this across the OpenSSH-present box''s two lines and no single line carries it - the flattening is not working'
+      'sd.iss renders this across the silent-install refusal''s two lines and no single line carries it - the flattening is not working'
 $inBrace = Find-Any 'Lower case for the reason given at code 0'
 Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
       ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))

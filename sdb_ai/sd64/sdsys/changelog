@@ -16,6 +16,11 @@ while porting from it.
            that SD Core users can read each other's files - was out of
            date: each account's directory is locked to that account.
 
+           On a computer that already has the OpenSSH server, the box that
+           popped up the moment the options page opened is gone.  The page
+           now just says "The ssh server is already installed." above the
+           choice of who may reach it.
+
            The password screen at the end now says plainly that pressing
            Enter keeps the SDSYS password as it is, and typing a new one
            changes it.  It used to say so only after you had pressed Enter.
