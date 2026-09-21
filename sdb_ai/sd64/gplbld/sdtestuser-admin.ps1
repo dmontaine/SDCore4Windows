@@ -55,6 +55,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'sdtestuser.ps1')
+# 21 Sep 26 - RELEASE_1.1 76: SD is driven through the SDSYS seat.  Dot-sourced
+# BEFORE the first script-scope call, which test-sdsysseat-units section 7 checks.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 
 function Say([string]$m) {
     Write-Output $m
@@ -64,7 +67,17 @@ function Say([string]$m) {
 }
 
 function Invoke-SdAdmin([string[]]$SdLines) {
-    <#  Run SD lines in an ELEVATED session and hand back what it printed.
+    <#  Run SD lines as SDSYS and hand back what it printed.
+
+        21 Sep 2026 - THROUGH THE SDSYS SEAT NOW, RELEASE_1.1 76, on the owner's
+        ruling that day ("convert", not remove).  RELEASE_1.1 64 refuses a LOGTO
+        to SDSYS (cproc, 10002), and an elevated session of the invoking user
+        lands in that user's OWN account, whose VOC has no CREATE.ACCOUNT - so
+        the direct pipe below could no longer make the test account at all.
+        sdsys-seat.ps1 runs sd.exe as a task inside SDSYS's live session and
+        does the BOM sink, the TERM after each LOGTO and the timeout itself.
+        EVERYTHING BELOW ABOUT THE PIPE, THE LOGTO AND THE JOB DESCRIBES THE OLD
+        DRIVER; it is kept because its reasons are why the seat works as it does.
 
         ***INPUT TO sd.exe MUST BE PIPED. A FILE HANDLE IS REFUSED, AND THE
         FIRST VERSION OF THIS FILE USED ONE.***  Measured on -Run b60, 29 Aug
@@ -115,21 +128,16 @@ function Invoke-SdAdmin([string[]]$SdLines) {
         this reasoning rather than two.  Everything above is why each line is
         the way it is; changing one of them in one caller only is the failure
         this shape prevents.  #>
-    $timeoutSec = 120
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $SdLines + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $timeoutSec) {
-        $raw = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $raw = Receive-Job $job
-        $raw += ''
-        $raw += ("*** SD DID NOT FINISH IN {0}s - it is waiting for input." -f $timeoutSec)
-        $raw += '*** Nothing below this line was answered.  Check for a stray sd.exe.'
+    # THE BOUND IS THE SEAT'S NOW: 180 s, as the mechanical group of 20 Sep uses,
+    # and a call that hits it THROWS carrying the last lines SD printed.  Caught
+    # here and turned back into text, so the caller's artefact check (the
+    # register record and the Windows user, before and after) still decides and
+    # the reason is on the screen rather than lost in a stack trace.
+    try {
+        return (Invoke-SdSeatText -Commands $SdLines -TimeoutSec 180)
+    } catch {
+        return ("*** THE SDSYS SEAT DID NOT RUN - nothing below was answered.`n*** " + $_.Exception.Message)
     }
-    Remove-Job $job -Force
-    return (($raw -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 }
 
 $elevated = ([Security.Principal.WindowsPrincipal](
@@ -154,6 +162,13 @@ if (-not (Test-Path -LiteralPath $sdExe)) {
     Say ('sdtestuser-admin: no sd.exe at ' + $sdExe)
     exit 2
 }
+
+# 21 Sep 26 - PROVE THE SDSYS SEAT BEFORE ANYTHING IS SWEPT OR MADE, RELEASE_1.1
+# 76.  A seat that cannot run - SDSYS not signed in is the usual cause - is
+# "could not run", exit 2, and Assert-SdSeat prints why and exits; otherwise it
+# would surface as a Create that fails its artefact check and reads as SD saying
+# no.  VerifyInstall1 then stops at "sdtestuser-admin Create exited 2".
+Assert-SdSeat -Label 'sdtestuser-admin'
 
 # ---------------------------------------------------------------- the sweep
 #

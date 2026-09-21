@@ -420,3 +420,93 @@ function Invoke-SdSeatText {
     if (-not $r.Ok) { throw ('the SDSYS seat did not run: ' + $r.Why + '  [' + $r.Detail + ']') }
     return $r.Text
 }
+
+# ---------------------------------------------------------------------------
+# THE SEAT ACCOUNT'S OWN OS.EXECUTE GRANT, FOR ONE LOCAL CONTROL LEG.
+# 21 Sep 2026, RELEASE_1.1 76 - the owner's "convert" ruling for verify-apiadmin and
+# verify-privundetermined.
+#
+# WHY A VERIFIER NEEDS IT.  Both measure that a REMOTE API session is REFUSED
+# OS.EXECUTE, and both carry a LOCAL control - the same probe, the same program,
+# where OS.EXECUTE must RUN - because a refusal is only evidence if the probe could
+# have seen a success.  Before 64 that local session was the installing
+# administrator, who held an os.users record that CREATEA wrote for the
+# ADMINISTRATOR tier (PRE_RELEASE 2).  64 abolished the tier and the install writes
+# NO os.users record (0 on the 21 Sep 01:16 install).  The seat's session is SDSYS,
+# and the LOGTO into the throwaway account clears USR_ADMIN (cproc: "LOGTO ends the
+# elevated session"; op_kernel.c K_ADMINISTRATOR, changeable only by a $internal
+# program - CPROC is one), so os_permitted() (op_sh.c) falls past its administrator
+# test to os.users\<the Windows login name> = os.users\SDSYS, finds nothing, and the
+# control is REFUSED for a MODEL reason.  Unplanted, both verifiers would fail their
+# own control and read as a product regression - the opposite of what a control is for.
+#
+# WHAT IT DOES: writes os.users\<Account> = "no" / "yes" (SH no, OS.EX yes - the bytes
+# CREATEA's grant.os.access used to write) for that one leg, and takes it away again.
+#
+# ***IT NEVER OVERWRITES A RECORD AND NEVER REMOVES ONE IT DID NOT WRITE.***  A
+# record that is already there is somebody's grant, or litter from a run that died,
+# and os.users is the list that decides who gets a shell - so the answer to "there is
+# one already" is a refusal the caller reports, not a replacement.  Remove compares
+# the bytes and deletes only an exact match.  test-sdsysseat-units section 9 removes
+# each of those two checks from a COPY (the MUT-OSREC- tags) and proves its fixtures
+# notice.
+#
+# BOTH RETURN A HASHTABLE (Ok, Path, Why) AND PRINT NOTHING.  A function that writes
+# with Write-Output AND returns a value folds its output into the return value; and a
+# hashtable rather than an array or a bool because the caller needs the reason, and
+# PowerShell's unrolling makes "empty", "one element" and "unreadable" look alike.
+#
+#   Set-SeatOsUsersRecord    -OsUsersDir <dir> [-Account SDSYS]   Ok when the record is there with the exact bytes
+#   Remove-SeatOsUsersRecord -OsUsersDir <dir> [-Account SDSYS]   Ok when NO record is there afterwards
+function Get-SeatOsUsersText { return "no`nyes`n" }
+
+# A plain login name only: the account becomes a FILE NAME under os.users, so a path
+# separator or a dot-dot would write somewhere else.
+function Test-SeatOsUsersName([string]$Account) {
+    return ($Account -match '^[A-Za-z0-9_][A-Za-z0-9_.-]*$')
+}
+
+function Set-SeatOsUsersRecord {
+    param(
+        [Parameter(Mandatory = $true)] [string] $OsUsersDir,
+        [string] $Account = 'SDSYS'
+    )
+    $bad = { param($why, $p) return @{ Ok = $false; Path = $p; Why = $why } }
+    if (-not (Test-SeatOsUsersName $Account)) {
+        return (& $bad ("'{0}' is not a plain Windows login name - nothing was written" -f $Account) '')
+    }
+    if (-not (Test-Path -LiteralPath $OsUsersDir -PathType Container)) {
+        return (& $bad ("{0} does not exist - there is no permission list to write into" -f $OsUsersDir) '')
+    }
+    $path = Join-Path $OsUsersDir $Account
+    try {
+        if (Test-Path -LiteralPath $path) { return (& $bad ("a record for {0} already exists at {1} - it is not this run's to overwrite" -f $Account, $path) $path) } #MUT-OSREC-EXISTS
+        [IO.File]::WriteAllBytes($path, [Text.Encoding]::ASCII.GetBytes((Get-SeatOsUsersText)))
+        $back = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($path))
+        if ($back -cne (Get-SeatOsUsersText)) {
+            return (& $bad ("the record was written but reads back as something else: {0}" -f ($back -replace "`n", '\n')) $path)
+        }
+        return @{ Ok = $true; Path = $path; Why = '' }
+    }
+    catch { return (& $bad ("could not write {0}: {1}" -f $path, $_.Exception.Message) $path) }
+}
+
+function Remove-SeatOsUsersRecord {
+    param(
+        [Parameter(Mandatory = $true)] [string] $OsUsersDir,
+        [string] $Account = 'SDSYS'
+    )
+    $bad = { param($why, $p) return @{ Ok = $false; Path = $p; Why = $why } }
+    if (-not (Test-SeatOsUsersName $Account)) {
+        return (& $bad ("'{0}' is not a plain Windows login name - nothing was removed" -f $Account) '')
+    }
+    $path = Join-Path $OsUsersDir $Account
+    try {
+        if (-not (Test-Path -LiteralPath $path)) { return @{ Ok = $true; Path = $path; Why = 'there was no record to remove' } }
+        $cur = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($path))
+        if ($cur -cne (Get-SeatOsUsersText)) { return (& $bad ("the record at {0} is not the one this run planted, so it was left alone" -f $path) $path) } #MUT-OSREC-OURS
+        Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+        return @{ Ok = (-not (Test-Path -LiteralPath $path)); Path = $path; Why = '' }
+    }
+    catch { return @{ Ok = (-not (Test-Path -LiteralPath $path)); Path = $path; Why = $_.Exception.Message } }
+}

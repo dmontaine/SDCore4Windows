@@ -434,14 +434,30 @@ NoteTrue 'sdtestuser-admin.ps1 uses NO -RedirectStandardInput (it drives sd.exe)
 NoteTrue 'control: sdtestuser.ps1 DOES use it, for ssh - so the check can see it' `
          ($modParams -contains '-RedirectStandardInput')
 
-# AND THE POSITIVE HALF: the piped shape and the LOGTO are actually there.
+# AND THE POSITIVE HALF: the route to SD is actually the one the file claims.
+# 21 Sep 26 - RELEASE_1.1 76, the owner's ruling: the admin half now drives sd.exe
+# through the SDSYS seat, because RELEASE_1.1 64 refuses a LOGTO to SDSYS (10002).
+# These rows asserted the OLD driver - the pipe, the LOGTO, the Wait-Job - and
+# move with it in the same change, as this file's own declaration in
+# test-logtoreaim-units said they would have to.
 $adminSrc = [IO.File]::ReadAllText($adminPath)
-NoteTrue 'the admin half pipes into sd.exe ($text | & $exe)' `
-         ($adminSrc -match '\$text\s*\|\s*&\s*\$exe')
-NoteTrue 'the admin half issues LOGTO SDSYS first, as every proven elevated script does' `
-         ($adminSrc -match "'LOGTO SDSYS'")
-NoteTrue 'the admin half bounds the wait, so a prompt is a message and not a hang' `
-         ($adminSrc -match 'Wait-Job .* -Timeout')
+NoteTrue 'the admin half dot-sources sdsys-seat.ps1' `
+         ($adminSrc -match 'sdsys-seat\.ps1')
+NoteTrue 'the admin half runs SD through the seat, bounded (Invoke-SdSeatText -TimeoutSec)' `
+         ($adminSrc -match 'Invoke-SdSeatText\s+-Commands\s+\$SdLines\s+-TimeoutSec\s+\d+')
+NoteTrue 'the admin half proves the seat before it sweeps or makes anything' `
+         ($adminSrc -match '(?m)^Assert-SdSeat\b')
+# THE NEGATIVE, WITH ITS CONTROL.  Comment lines are skipped so the history in the
+# file's own notes cannot fail it; the control proves the same scan DOES see a live
+# 'LOGTO SDSYS' where one must remain - verify-elevdoor.ps1, whose refusal of it
+# is the thing under test.
+$adminLive = @($adminSrc -split "`n" | Where-Object { $_ -notmatch '^\s*#' })
+NoteTrue 'the admin half sends no LOGTO SDSYS on a live line (64 refuses it, 10002)' `
+         (@($adminLive | Where-Object { $_ -match "'LOGTO SDSYS'" }).Count -eq 0)
+$gateLive = @([IO.File]::ReadAllText((Join-Path $here 'verify-elevdoor.ps1')) -split "`n" |
+              Where-Object { $_ -notmatch '^\s*#' })
+NoteTrue "control: the same scan DOES see a live 'LOGTO SDSYS' in verify-elevdoor.ps1" `
+         (@($gateLive | Where-Object { $_ -match "'LOGTO SDSYS'" }).Count -gt 0)
 
 Write-Output ''
 Write-Output ("test-sdtestuser-units: {0} passed, {1} failed" -f $script:pass, $script:fail)

@@ -48,15 +48,20 @@
                          (76) then measured a working seat: a task in SDSYS's
                          own live session.  So the fix is NOT "stop sending
                          LOGTO SDSYS" - it is a shared helper that hands each
-                         sd.exe call to that task and reads the output back,
-                         adopted here 34 times.  Written in the conditional
-                         because nothing here is built.
+                         sd.exe call to that task and reads the output back.
+                         ***21 Sep 2026: THE HELPER IS BUILT (sdsys-seat.ps1),
+                         WITNESSED ON A REAL MACHINE FOR THE PILOT AND THE
+                         MECHANICAL GROUP.  TWO DRIVERS ARE STILL IN THE
+                         TABLE BELOW (verify-apiadmin, verify-privundetermined);
+                         sdtestuser-admin AND verify-lcnames WERE CONVERTED
+                         THAT DAY AND ARE UNWITNESSED.***
 
       CALLER_SUPPLIED   Same defect, different shape: Invoke-SD itself sends
                          no prefix, and the CALLING code passes 'LOGTO SDSYS'
                          as the first literal command, assuming an elevated
                          administrator's own session could still reach SDSYS
-                         with it.  It cannot, for the same reason.  One file.
+                         with it.  It cannot, for the same reason.  One file
+                         (verify-lcnames.ps1), converted 21 Sep 2026.
 
       GATE              The refusal (or the elevated round-trip) IS the
                          subject under test - this is what verify-elevdoor.ps1
@@ -68,10 +73,11 @@
 
       FIXTURE           No live invocation at all: synthetic test data or an
                          assertion about ANOTHER script's own source text.
-                         test-sdtestuser-units.ps1 in particular must be
-                         updated IN LOCKSTEP with sdtestuser-admin.ps1 the day
-                         that driver is actually re-aimed, or it will assert a
-                         prefix the product no longer sends.
+                         test-sdtestuser-units.ps1 in particular had to be
+                         updated IN LOCKSTEP with sdtestuser-admin.ps1 when that
+                         driver was re-aimed (done, 21 Sep 2026): it now asserts
+                         the admin half sends NO live prefix, so the phrase is
+                         data in its rows.
 
     ***EVERY FILE IS HAND-DECLARED, NOT AUTO-SORTED, AND THAT IS A DELIBERATE
     CHOICE.***  A structural heuristic (which variable the array is assigned
@@ -100,6 +106,16 @@ function Check([string]$label, [bool]$ok, [string]$detail = '') {
 }
 
 $rx = 'logto\s+sdsys'
+# 21 Sep 26 - THE SECOND PATTERN, AND WHY THE FIRST WAS NOT ENOUGH.  RELEASE_1.1 76
+# counted three scripts still sending the refused prefix; two MORE existed that this
+# guard could not see: verify-apiadmin.ps1 and verify-privundetermined.ps1 build
+# "LOGTO $account" inside Invoke-SDIn and are called as Invoke-SDIn 'SDSYS' ..., so
+# the literal phrase is never in them.  This matches that call shape - the literal
+# SDSYS handed to the helper as its account.  It is deliberately NARROW: a bare
+# "LOGTO $var" is legitimate (verify-catgate and others move into a PERSONAL account
+# through the seat's -Internal door), and no text scan can tell such a line from one
+# whose variable happens to hold SDSYS.  Its two controls are below.
+$rx2 = 'Invoke-SDIn\s+[''"]SDSYS[''"]'
 
 # --- the declaration --------------------------------------------------------
 # Role -> reason, read from the file and written down 20 Sep 2026.  A file not
@@ -112,7 +128,22 @@ $DECLARED = [ordered]@{
     # probe-tasklock.ps1 IS NOT HERE: DELETED 21 Sep 2026 on the owner's ruling
     # ("remove probe-tasklock") - a one-shot probe for PRE_RELEASE 24, which is
     # closed, still sending the refused prefix.
-    'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    # ***TWO OF THE FOUR DRIVERS THE OWNER RULED "CONVERT" ON 21 Sep 2026 ARE DONE AND
+    # ARE NOT HERE; TWO ARE STILL HERE.  RELEASE_1.1 76.***  NEITHER CONVERTED ONE IS
+    # WITNESSED; each needs one elevated run with SDSYS signed in.
+    #   sdtestuser-admin.ps1   CONVERTED: Invoke-SdAdmin is a call to Invoke-SdSeatText,
+    #                          caught and turned back into text, and Assert-SdSeat runs
+    #                          before anything is swept or made.
+    #   verify-lcnames.ps1     CONVERTED: the RunLegs re-entry calls Invoke-SdSeatText per
+    #                          leg and the four legs no longer open with the prefix.
+    # verify-apiadmin.ps1 and verify-privundetermined.ps1 NEVER MATCHED THE LITERAL PATTERN
+    # - they build "LOGTO $account" and pass 'SDSYS' in as the account - which is what the
+    # second pattern ($rx2) exists to see.  They are declared below, and each row leaves
+    # this table in the commit that converts the file.  THE DESIGN IS IN RELEASE_1.1 76'S
+    # 21 Sep STATUS (a personal-account door through the seat's -Internal switch, plus a
+    # temporary os.users record for the local OS.EXECUTE control, Set-SeatOsUsersRecord).
+    'verify-apiadmin.ps1'         = @{ Role = 'DRIVER'; Why = "Invoke-SDSys hands the literal 'SDSYS' to Invoke-SDIn, which pipes LOGTO <account> into its own sd.exe" }
+    'verify-privundetermined.ps1' = @{ Role = 'DRIVER'; Why = "Invoke-SDSys hands the literal 'SDSYS' to Invoke-SDIn, which pipes LOGTO <account> into its own sd.exe" }
     # 20 Sep 2026, THE TWENTY-THIRD PASS: acctmsgs, catgate, delaccount, doors-admin and
     # uninstallchoices ARE NOT HERE - CONVERTED, on the owner's "convert the remaining
     # verifiers" (probe-tasklock excepted, at his word).  NONE IS WITNESSED.  Four were plain
@@ -168,7 +199,8 @@ $DECLARED = [ordered]@{
     # clean-deadvoc, probe-catprivate and probe-osex were CONVERTED.  probe-osex's
     # question changes with the conversion - see the note above its Invoke-SD.  NONE
     # OF THESE IS WITNESSED YET.
-    'verify-lcnames.ps1'          = @{ Role = 'CALLER_SUPPLIED'; Why = "Invoke-SD sends no prefix itself; the CALLERS' own command arrays open with the literal 'LOGTO SDSYS'" }
+    # (verify-lcnames.ps1 WAS THE ONE CALLER_SUPPLIED ROW, AND IS CONVERTED - see above.
+    # The role is kept in the header because a future file can have that shape.)
 
     # verify-sdsysgate.ps1 is the one file that is genuinely both: its own
     # Invoke-SD (used for setup/teardown around the real test) carries the
@@ -181,8 +213,10 @@ $DECLARED = [ordered]@{
 
     'verify-elevdoor.ps1'         = @{ Role = 'GATE'; Why = 'the unelevated refusal and the elevated round-trip ARE the thing under test; not broken by 64, not this entry to fix' }
 
-    'test-lcnameslegs-units.ps1'  = @{ Role = 'FIXTURE'; Why = 'embeds a synthetic script as test data; no live invocation of its own' }
-    'test-sdtestuser-units.ps1'   = @{ Role = 'FIXTURE'; Why = "asserts sdtestuser-admin.ps1's OWN source contains the prefix - must be edited in lockstep the day that driver is re-aimed, or it will fail asserting a prefix the product no longer sends" }
+    # test-lcnameslegs-units.ps1 IS NOT HERE: its embedded synthetic legs dropped the
+    # prefix in lockstep with verify-lcnames.ps1 (21 Sep 2026), so it carries the phrase
+    # only in its help text now, and a declaration for that is a stale one.
+    'test-sdtestuser-units.ps1'   = @{ Role = 'FIXTURE'; Why = "asserts about sdtestuser-admin.ps1's OWN source and about verify-elevdoor.ps1 as its control; since 21 Sep 2026 it asserts the admin half sends NO live prefix, so the phrase appears in its rows as data" }
 
     # ***THERE IS NO "COMMENT" ROLE ANY MORE, AND ITS DISAPPEARANCE IS THE
     # POINT.***  20 Sep 26, RELEASE_1.1 81.  This table used to carry two -
@@ -217,15 +251,15 @@ Write-Output ''
 # pass this same night read the wrong hashtable keys, got $null for every
 # comparison, and reported "0 live" everywhere - a confident, wrong all-clear.
 # If this control ever fails, nothing below can be trusted.
-# THE CONTROL FILE MUST BE ONE THAT IS STILL UNCONVERTED, and it was
-# verify-createaccount.ps1 until that became the pilot (20 Sep 2026): the day a
-# control file is converted this check fails with "found 0", which is the
-# instrument saying its known-live example has stopped being live.  verify-fold.ps1
-# was the control until it was converted (20 Sep 2026); sdtestuser-admin.ps1 is one
-# of the two files that need a different mechanism (it runs in VerifyInstall1,
-# which must stay unelevated), so it is the one least likely to be converted next.
-# When it is, pick another one from the DRIVER rows below.
-$controlName = 'sdtestuser-admin.ps1'
+# THE CONTROL FILE MUST BE ONE THAT WILL NEVER BE CONVERTED, and it has been
+# three files that were, each of which made this check fail with "found 0" the day
+# it was converted - the instrument saying its known-live example had stopped
+# being live: verify-createaccount.ps1 (the pilot, 20 Sep 2026), verify-fold.ps1
+# (20 Sep 2026), and sdtestuser-admin.ps1 (21 Sep 2026, the last DRIVER).
+# THERE IS NO DRIVER LEFT TO CHOOSE, AND THE ANSWER IS A GATE: verify-elevdoor.ps1's
+# refusal of LOGTO SDSYS is its whole subject (64 did not break it), so its live line
+# is permanent by design and this control cannot be converted out from under itself.
+$controlName = 'verify-elevdoor.ps1'
 $controlFile = Join-Path $gplbld $controlName
 $controlLines = @(Get-StrippedLines -Path $controlFile -Kind hashblock)
 $controlHit = @($controlLines | Where-Object { $_.Text -match $rx })
@@ -247,10 +281,20 @@ $scripts = @(Get-ChildItem -LiteralPath $gplbld -Filter *.ps1 -File | Where-Obje
 Check 'CONTROL: the gplbld directory has a full set of scripts (150+)' `
       ($scripts.Count -ge 150) ("found " + $scripts.Count + " - is the path right?")
 
+# THE SECOND PATTERN'S CONTROLS, and both directions matter.  The positive line is
+# the exact one that hid two scripts (verify-apiadmin.ps1:178 and
+# verify-privundetermined.ps1:373 before 21 Sep 2026); the negative is the ordinary
+# call into a personal account, which is legitimate and must never be flagged.  A
+# pattern that matched both, or neither, would score a clean scan of nothing.
+Check 'CONTROL: the second pattern matches the shape that hid two scripts' `
+      ("    return (Invoke-SDIn 'SDSYS' `$commands)" -match $rx2) 'Invoke-SDIn ''SDSYS'' was not matched'
+Check 'CONTROL: the second pattern does NOT match a call into a personal account' `
+      ("    `$out = Invoke-SDIn `$Prefix.ToUpper() @('RUN BP APIADMINPROBE')" -notmatch $rx2) 'a personal-account call was matched'
+
 $found = [ordered]@{}
 foreach ($f in ($scripts | Sort-Object Name)) {
     $stripped = @(Get-StrippedLines -Path $f.FullName -Kind hashblock)
-    $hit = @($stripped | Where-Object { $_.Text -match $rx })
+    $hit = @($stripped | Where-Object { $_.Text -match $rx -or $_.Text -match $rx2 })
     if ($hit.Count -gt 0) { $found[$f.Name] = $hit }
 }
 Check 'the scan found files to judge' ($found.psbase.Count -gt 0) ("found " + $found.psbase.Count)
@@ -283,9 +327,10 @@ foreach ($r in ($byRole.Keys | Sort-Object)) {
 
 $reaimCount = @($DECLARED.Keys | Where-Object { $ROLES_NEEDING_REAIM -contains $DECLARED[$_].Role }).Count
 Write-Output ''
-Write-Output ("*** RELEASE_1.1 76's DRIVER RE-AIM, CHECKED SCOPE: {0} file(s) still send a live LOGTO SDSYS prefix that RELEASE_1.1 64 slices 1-2 refuse (10002). ***" -f $reaimCount)
-Write-Output '    78 is closed (not a defect: SDSYS signs in) and route D is a measured seat, so what'
-Write-Output '    the re-aim needs is a shared helper, not a prefix deletion - see RELEASE_1.1 76.'
+Write-Output ("*** RELEASE_1.1 76's DRIVER RE-AIM, CHECKED SCOPE: {0} file(s) still send a live LOGTO SDSYS prefix (or hand the literal SDSYS to Invoke-SDIn) that RELEASE_1.1 64 slices 1-2 refuse (10002). ***" -f $reaimCount)
+Write-Output '    The re-aim is the seat (sdsys-seat.ps1).  A count of 0 means nothing is left to CONVERT; it'
+Write-Output '    does NOT mean the converted scripts are witnessed - each needs one elevated run with SDSYS'
+Write-Output '    signed in, and RELEASE_1.1 76 says which have had one.'
 
 # --- mutant control, on a COPY of the directory, never the live files ------
 Write-Output ''
@@ -307,12 +352,22 @@ if ($MyInvocation.UnboundArguments -contains '--gplbld') {
             '# a planted, undeclared driver',
             "`$body = `"LOGTO SDSYS`""
         )
+        # 21 Sep 26 - AND THE SHAPE THE FIRST PATTERN COULD NOT SEE: a planted call
+        # that hands the literal SDSYS to Invoke-SDIn, with no LOGTO in it at all.
+        Set-Content -LiteralPath (Join-Path $tmp 'zz-planted2.ps1') -Value @(
+            '# a planted, undeclared indirect driver',
+            "`$out = Invoke-SDIn 'SDSYS' @('WHO')"
+        )
         $mutantSelf = (Join-Path $tmp (Split-Path -Leaf $PSCommandPath))
         Copy-Item -LiteralPath $PSCommandPath -Destination $mutantSelf
         $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $mutantSelf --gplbld 2>&1
-        $mutantFailed = ($LASTEXITCODE -ne 0) -and ($out -match [regex]::Escape('zz-planted.ps1'))
-        Check 'MUTANT: an undeclared planted driver is caught by name' $mutantFailed `
+        $mutantExit = $LASTEXITCODE
+        Check 'MUTANT: an undeclared planted driver is caught by name' `
+              (($mutantExit -ne 0) -and ($out -match [regex]::Escape('zz-planted.ps1'))) `
               'the partition check did not name the planted file'
+        Check 'MUTANT: an undeclared Invoke-SDIn ''SDSYS'' (no LOGTO in it) is caught by name' `
+              (($mutantExit -ne 0) -and ($out -match [regex]::Escape('zz-planted2.ps1'))) `
+              'the second pattern did not name the planted file'
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }

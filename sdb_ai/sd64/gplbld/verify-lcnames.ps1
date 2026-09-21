@@ -86,6 +86,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'elevate-once.ps1')
+# 21 Sep 26 - RELEASE_1.1 76, the owner's ruling "convert": the SDSYS legs run
+# through the SDSYS seat inside the elevated re-entry below.  Dot-sourced BEFORE
+# the first script-scope call, which test-sdsysseat-units section 7 checks.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 if ($HelperPipe -ne '') {
     $null = Start-SdElevationHelper -Adopt $HelperPipe -Purpose 'this step'
 }
@@ -140,9 +144,10 @@ function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
     # write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
     # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
     # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
+    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USED IS REFUSED NOW (cproc:2789,
+    # 10002); 64's FIFTH PASS has the measurement.  THIS function never sent it -
+    # it drives the invoking user's own account - and the SDSYS legs that did go
+    # through the SDSYS seat since 21 Sep 2026 (the RunLegs block below).
     $expanded = New-Object System.Collections.ArrayList
     foreach ($c in $commands) {
         $null = $expanded.Add($c)
@@ -202,7 +207,19 @@ if ($Phase -eq 'RunLegs') {
         $cmds = [string[]]$legs[$name]
         Write-Output ("  elevated leg {0}: {1}" -f $name, ($cmds -join ' ; '))
         Emit ('### ' + $name)
-        foreach ($o in ((Invoke-SD $cmds) -split "`n")) { Emit $o }
+        # 21 Sep 26 - THROUGH THE SDSYS SEAT, NOT THIS PROCESS'S OWN sd.exe.
+        # RELEASE_1.1 76, the owner's ruling.  64 refuses a LOGTO to SDSYS
+        # (10002) and an elevated session of the invoking user lands in that
+        # user's own account, so the legs no longer open with "LOGTO SDSYS": the
+        # seat's session IS SDSYS.  This process is elevated, which the seat needs
+        # to register its task.  A seat that did not run THROWS; the leg's answer
+        # then stays EMPTY - the failing direction for every row that reads it -
+        # and the reason travels as a RESULT line, which the parent prints.
+        try {
+            foreach ($o in ((Invoke-SdSeatText -Commands $cmds -TimeoutSec 180) -split "`n")) { Emit $o }
+        } catch {
+            Emit ('RESULT: seat did not run for leg ' + $name + ' - ' + ($_.Exception.Message -replace '\r?\n', ' '))
+        }
         Emit '### END'
     }
     Write-ResultFile
@@ -508,11 +525,15 @@ try {
     # elevated - measured red on b171).  The command lists are unchanged; section
     # 6's three legs are gathered into the same request so a standalone run
     # costs one consent rather than four.  The judging stays where it was.
+    # 21 Sep 26 - AND THE LEGS NO LONGER OPEN WITH LOGTO SDSYS, RELEASE_1.1 76:
+    # the re-entry runs them through the SDSYS seat, whose session already IS
+    # SDSYS, and 64 refuses the LOGTO outright (10002).  The rest of each list is
+    # unchanged, so the judging below reads the same commands' output.
     $sdsysLegs = [ordered]@{
-        sysct   = @('LOGTO SDSYS') + @($sysPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($sysPairs | ForEach-Object { $_.L }))
-        copypct = @('LOGTO SDSYS', 'CT VOC COPYP')
-        unknown = @('LOGTO SDSYS', 'ZZNOSUCHVERB')
-        copyp   = @('LOGTO SDSYS', 'COPYP')
+        sysct   = @($sysPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($sysPairs | ForEach-Object { $_.L }))
+        copypct = @('CT VOC COPYP')
+        unknown = @('ZZNOSUCHVERB')
+        copyp   = @('COPYP')
     }
     Invoke-SDElevatedLegs $sdsysLegs          # fills $script:sdsysOut
     $ctSys = $script:sdsysOut['sysct']
@@ -743,8 +764,8 @@ end
     Write-Output '  install, COPYP already answered "File name required", because CPROC:1436'
     Write-Output '  tests only voc.entry.type[1,1] and "Verb..." starts with V.  So the'
     Write-Output '  behaviour checks below are CONTROLS against regression, not a repair.'
-    Write-Output '  LOGTO SDSYS, because VOC_TEMPLATE becomes SDSYS s own VOC - so these'
-    Write-Output '  three legs ran in section 3 s elevated re-entry (RELEASE_1.1 45).'
+    Write-Output '  They run as SDSYS, because VOC_TEMPLATE becomes SDSYS s own VOC - so these'
+    Write-Output '  three legs ran in section 3 s elevated re-entry, through the SDSYS seat.'
 
     $ctc = $script:sdsysOut['copypct']
     Note 'CT VOC COPYP shows a bare V type code' $true ($ctc -match '(?m)^\s*1:\s*V\s*$')

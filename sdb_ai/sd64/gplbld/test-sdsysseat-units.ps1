@@ -21,6 +21,11 @@
       6. MUTANT CONTROLS: each tagged check is removed from a copy and the fixture
          that should be refused must then be ACCEPTED - proof the fixtures can tell
          a broken helper from a good one.  The live file is asserted unchanged.
+      7. every script that uses the seat dot-sources it before its first call (AST)
+      8. both suite runners guard each step call with a try/catch inside the loop
+      9. the temporary os.users record the OS.EXECUTE control legs plant for the
+         seat account (21 Sep 2026): driven against a TEMP directory, with two
+         mutants - a record that was not planted is never overwritten or removed
 
     ***THE REFUSALS ARE THE POINT.***  A seat that ran as the wrong account, or
     without an elevated interactive token, produces output that looks exactly like
@@ -579,6 +584,100 @@ foreach ($rn in 'VerifyInstall1.ps1', 'VerifyInstall2.ps1') {
     Check ("$rn calls its steps (the scan found $($g.Calls) call site(s), not zero)") ($g.Calls -ge 1) 'the walk found no "& $path @splat" - the shape changed and this guard is looking at nothing'
     Check ("$rn guards every step call with a try/catch inside the loop") ($g.Unguarded.Count -eq 0) ($g.Unguarded -join ',')
 }
+
+# ---------------------------------------------------------------------------
+Section '9. the seat account''s temporary os.users record (Set-SeatOsUsersRecord / Remove-SeatOsUsersRecord)'
+# 21 Sep 2026, RELEASE_1.1 76.  verify-apiadmin and verify-privundetermined plant
+# os.users\SDSYS for their LOCAL OS.EXECUTE control and remove it again (the reason is
+# in sdsys-seat.ps1 above the functions).  os.users decides who gets a shell, so what
+# is proved here is the two things that must NEVER go wrong: a record that was not
+# planted is never overwritten and never deleted.  Driven against a TEMP directory -
+# the installed os.users is never touched - and each of those two checks is then
+# removed from a COPY and the fixture must notice.
+$osd  = Join-Path $tmp 'os.users'
+$osP  = Join-Path $osd 'SDSYS'
+$want = "no`nyes`n"
+$foreign = "yes`nyes`n"
+function Get-OsRecText { return [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($osP)) }
+
+foreach ($fnn in 'Set-SeatOsUsersRecord', 'Remove-SeatOsUsersRecord', 'Get-SeatOsUsersText', 'Test-SeatOsUsersName') {
+    Check ("$fnn is defined after dot-sourcing") ($null -ne (Get-Command $fnn -ErrorAction SilentlyContinue)) 'not defined'
+}
+Check 'the planted text is exactly "no" LF "yes" LF' ((Get-SeatOsUsersText) -ceq $want) ((Get-SeatOsUsersText) -replace "`n", '\n')
+
+$r = Set-SeatOsUsersRecord -OsUsersDir $osd
+Check 'Set on a MISSING directory is refused, says why, and creates nothing' ((-not $r.Ok) -and ($r.Why -match 'does not exist') -and -not (Test-Path -LiteralPath $osd)) "Ok=$($r.Ok) Why=$($r.Why)"
+$null = New-Item -ItemType Directory -Path $osd -Force
+
+$r = Set-SeatOsUsersRecord -OsUsersDir $osd
+Check 'Set writes the record' ($r.Ok -and (Test-Path -LiteralPath $osP)) "Ok=$($r.Ok) Why=$($r.Why)"
+$bytes = [IO.File]::ReadAllBytes($osP)
+Check 'the bytes are exactly n o LF y e s LF - 7 of them, no BOM, no CR' ((($bytes -join ',') -eq '110,111,10,121,101,115,10')) ($bytes -join ',')
+Check 'the result names the path it wrote' ($r.Path -eq $osP) $r.Path
+
+$r = Remove-SeatOsUsersRecord -OsUsersDir $osd
+Check 'Remove takes the planted record away, and nothing is left' ($r.Ok -and -not (Test-Path -LiteralPath $osP)) "Ok=$($r.Ok) Why=$($r.Why)"
+$r = Remove-SeatOsUsersRecord -OsUsersDir $osd
+Check 'Remove with nothing there is Ok (idempotent) and says so' ($r.Ok -and $r.Why -match 'no record') "Ok=$($r.Ok) Why=$($r.Why)"
+
+# THE TWO THAT MATTER - a FOREIGN record, one this run did not write.
+[IO.File]::WriteAllBytes($osP, [Text.Encoding]::ASCII.GetBytes($foreign))
+$r = Set-SeatOsUsersRecord -OsUsersDir $osd
+Check 'Set over a FOREIGN record is REFUSED, and says one already exists' ((-not $r.Ok) -and ($r.Why -match 'already exists')) "Ok=$($r.Ok) Why=$($r.Why)"
+Check 'and the foreign record is exactly as it was' ((Get-OsRecText) -ceq $foreign) (Get-OsRecText)
+$r = Remove-SeatOsUsersRecord -OsUsersDir $osd
+Check 'Remove of a FOREIGN record is REFUSED (Ok is false: a record is still there)' ((-not $r.Ok) -and ($r.Why -match 'not the one this run planted')) "Ok=$($r.Ok) Why=$($r.Why)"
+Check 'and the foreign record is still there, unchanged' ((Test-Path -LiteralPath $osP) -and ((Get-OsRecText) -ceq $foreign)) 'the record was touched'
+Remove-Item -LiteralPath $osP -Force
+
+# A BOM or an extra byte is not ours either - the comparison is on bytes, not on a guess.
+[IO.File]::WriteAllBytes($osP, [byte[]]([byte[]](0xEF, 0xBB, 0xBF) + [Text.Encoding]::ASCII.GetBytes($want)))
+$r = Remove-SeatOsUsersRecord -OsUsersDir $osd
+Check 'a record with a BOM in front of our text is NOT ours and is left alone' ((-not $r.Ok) -and (Test-Path -LiteralPath $osP)) "Ok=$($r.Ok)"
+Remove-Item -LiteralPath $osP -Force
+
+# The account becomes a FILE NAME, so anything that is not a plain login name is refused.
+$before = @(Get-ChildItem -LiteralPath $tmp -Recurse -Force).Count
+foreach ($badName in '..\evil', 'a/b', '..', '', ' ', 'x:y') {
+    $rs = Set-SeatOsUsersRecord -OsUsersDir $osd -Account $badName
+    $rr = Remove-SeatOsUsersRecord -OsUsersDir $osd -Account $badName
+    Check ("the name '{0}' is refused by Set and by Remove" -f $badName) ((-not $rs.Ok) -and (-not $rr.Ok) -and ($rs.Why -match 'not a plain Windows login name')) "Set Ok=$($rs.Ok) Remove Ok=$($rr.Ok)"
+}
+$afterN = @(Get-ChildItem -LiteralPath $tmp -Recurse -Force).Count
+Check 'and nothing was written anywhere under the temp tree by any of them' ($before -eq $afterN) "before=$before after=$afterN"
+$rs = Set-SeatOsUsersRecord -OsUsersDir $osd -Account 'sdsys'
+Check 'a plain lower-case login name is accepted (the same file as SDSYS on Windows)' ($rs.Ok -and (Test-Path -LiteralPath $osP)) "Ok=$($rs.Ok) Why=$($rs.Why)"
+$null = Remove-SeatOsUsersRecord -OsUsersDir $osd -Account 'SDSYS'
+Check 'and removing it under the other spelling finds the same file' (-not (Test-Path -LiteralPath $osP)) 'the record survived'
+
+# MUTANT CONTROLS: each check is removed from a COPY and the fixture that the live
+# code refuses must then be ACCEPTED, or the fixture proves nothing.
+$osMutants = @(
+    @{ Tag = 'MUT-OSREC-EXISTS'; What = 'the never-overwrite check';
+       Fx = { param($dir) [IO.File]::WriteAllBytes((Join-Path $dir 'SDSYS'), [Text.Encoding]::ASCII.GetBytes("yes`nyes`n")); $null = Set-SeatOsUsersRecord -OsUsersDir $dir
+              return [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $dir 'SDSYS'))) };
+       LiveWants = "yes`nyes`n"; MutantWants = "no`nyes`n"; Says = 'overwrote the foreign record' },
+    @{ Tag = 'MUT-OSREC-OURS'; What = 'the only-remove-our-own-bytes check';
+       Fx = { param($dir) [IO.File]::WriteAllBytes((Join-Path $dir 'SDSYS'), [Text.Encoding]::ASCII.GetBytes("yes`nyes`n")); $null = Remove-SeatOsUsersRecord -OsUsersDir $dir
+              if (Test-Path -LiteralPath (Join-Path $dir 'SDSYS')) { return 'PRESENT' } else { return 'DELETED' } };
+       LiveWants = 'PRESENT'; MutantWants = 'DELETED'; Says = 'deleted the foreign record' })
+foreach ($m in $osMutants) {
+    $tagged = @([regex]::Matches($modText, '(?m)^.*#' + [regex]::Escape($m.Tag) + '\s*$'))
+    Check ("{0} appears on exactly one line of the live module" -f $m.Tag) ($tagged.Count -eq 1) ("found $($tagged.Count)")
+    if ($tagged.Count -ne 1) { continue }
+    $mutText = $modText.Replace($tagged[0].Value, '')
+    Check ("the mutant really differs from the live file ({0} removed)" -f $m.What) ($mutText -ne $modText) 'the mutation changed nothing'
+    $mdir = Join-Path $tmp ('os-mut-' + $m.Tag)
+    $null = New-Item -ItemType Directory -Path $mdir -Force
+    $liveGot = & $m.Fx $mdir
+    Remove-Item -LiteralPath (Join-Path $mdir 'SDSYS') -Force -ErrorAction SilentlyContinue
+    $sbm = [scriptblock]::Create($mutText)
+    $mutGot = & { . $sbm; & $m.Fx $mdir }
+    Check ("LIVE keeps the foreign record for {0}" -f $m.What) ($liveGot -ceq $m.LiveWants) "live saw '$($liveGot -replace "`n", '\n')'"
+    Check ("the MUTANT (no {0}) {1} - the fixture can tell them apart" -f $m.What, $m.Says) ($mutGot -ceq $m.MutantWants) "mutant saw '$($mutGot -replace "`n", '\n')'"
+}
+$afterSeat = (Get-FileHash -LiteralPath $modPath -Algorithm SHA256).Hash
+Check 'the live module is byte-identical after the section-9 mutants (SHA-256)' ($afterSeat -eq $liveHash) "before=$liveHash after=$afterSeat"
 
 } finally {
     $script:SeatTestHooks = $null
