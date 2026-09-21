@@ -142,29 +142,25 @@ function Test-WinUser([string]$name) {
     try { $null = Get-LocalUser -Name $name -ErrorAction Stop; return $true } catch { return $false }
 }
 
-# COPIED FROM probe-catprivate.ps1:144 UNCHANGED - one string with LF
-# separators, TERM to stop pagination, OFF to end it, and a timeout that says
-# so rather than returning empty.
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THIS USED TO SEND "LOGTO SDSYS", WHICH IS REFUSED (10002) FROM ANY
+# SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive
+# token (cproc:2789), so the commands go to a task inside SDSYS's own live session and
+# the text comes back through a file.  Assert-SdSeat below refuses out loud when SDSYS
+# is not signed in, before any phase creates anything.  NOT WITNESSED: converted unrun.
+#
+# NO -Internal, AND THAT IS CHECKED RATHER THAN ASSUMED: every SD call here is
+# CREATE.ACCOUNT, MODIFY.ACCOUNT or DELETE.ACCOUNT run as SDSYS.  THE LOGTO INTO THE
+# ACCOUNT UNDER TEST IS NOT HERE - it is the unelevated half's (verify-doors.ps1), over
+# ssh, which is the whole reason there are two files.  So this script never asks the
+# seat to LOGTO to a personal account, and the door it builds the fixture for is
+# measured by something that is not a K$INTERNAL session.
+#
+# A call that hits the timeout THROWS ("the task wrote no report within Ns") rather than
+# returning what SD had printed - recorded in RELEASE_1.1 76.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** Stop-Process the sdwind PID it names."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 function Show-SD([string]$title, [string[]]$commands, [string[]]$secrets) {
@@ -208,6 +204,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Output 'verify-doors-admin: the installed tree does not match source - run a cycle first.'
     exit 2
 }
+
+# Prove the seat BEFORE any phase creates, suspends or deletes anything: a run that
+# cannot reach SDSYS would otherwise stop at its first SD call looking like a product
+# failure.  Exits 2 by itself, having stopped any transcript.
+Assert-SdSeat -Label ('verify-doors-admin -Phase ' + $Phase)
 
 Add-Type -AssemblyName System.Web
 

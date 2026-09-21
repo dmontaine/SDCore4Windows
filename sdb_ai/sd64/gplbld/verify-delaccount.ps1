@@ -234,27 +234,25 @@ function Shown($out, [int]$n, [string[]]$vals) {
     return ($p -ne '' -and $out -match $p)
 }
 
-# Blank first line absorbs the pipe's BOM, TERM stops pagination, OFF ends it.
-# The pipe is not a convenience: Start-Process -RedirectStandardInput hands SD a
-# FILE handle and SD answers "Process terminated" and exits (section 6).
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THIS USED TO SEND "LOGTO SDSYS", WHICH IS REFUSED (10002) FROM ANY
+# SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive
+# token (cproc:2789), so the commands go to a task inside SDSYS's own live session and
+# the text comes back through a file.  The helper adds the TERM line - and the one
+# after every LOGTO, which this script never sends - and the OFF.  Assert-SdSeat below
+# refuses out loud when SDSYS is not signed in, before anything is made.  NOT
+# WITNESSED: converted unrun.
+#
+# NO -Internal: every SD call here is CREATE.ACCOUNT or DELETE.ACCOUNT run as SDSYS, and
+# nothing LOGTOs into a personal account.  (RELEASE_1.1 76's row grouped this file with
+# the privilege-subject ones; reading its call sites finds no such call.)
+#
+# THE BOUND IS 180 s where there was NONE: the old pipe waited forever, and DELETE.ACCOUNT
+# over a pinned profile (step 6) is the slow call.  A call that hits it THROWS ("the task
+# wrote no report within Ns") rather than returning what SD had printed.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any LOGTO in $commands and long
-    # LIST/COUNT output paginates on a stdin the pipe can no longer answer.
-    # Full write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 
@@ -483,6 +481,11 @@ if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 if ($LASTEXITCODE -ne 0) { Fail 'the installed tree does not match source - see above' }
 
 if (-not (Test-Path -LiteralPath $sdExe)) { Fail "no $sdExe" }
+
+# Prove the seat BEFORE anything is made: this script creates Windows accounts and
+# profiles, and a run that cannot reach SDSYS would otherwise stop at its first SD call
+# looking like a product failure.  Exits 2 by itself, having stopped any transcript.
+Assert-SdSeat -Label 'verify-delaccount'
 
 # EVERY MESSAGE THIS RUN NAMES MUST BE THERE, checked before anything is made.
 #

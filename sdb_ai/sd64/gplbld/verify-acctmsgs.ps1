@@ -24,7 +24,8 @@
 #
 # RUN IT ELEVATED.  CREATE_USER needs an elevated token; so does reading
 # sdsys\audit, which secure-audit.ps1 locks to SYSTEM and Administrators; and
-# LOGTO SDSYS is administrator-only.  ***AND ENTRY 22 IS PARTLY ABOUT THAT***:
+# the SDSYS seat (which replaced "LOGTO SDSYS", 20 Sep 26) needs an elevated
+# caller.  ***AND ENTRY 22 IS PARTLY ABOUT THAT***:
 # status 5 is "SD is not running elevated", and an unelevated run would take
 # that arm instead of the two under test - passing a check that measured the
 # wrong branch.  10120 is a named disqualifier below for exactly that reason.
@@ -185,36 +186,30 @@ function Test-Say([string]$text, [string]$pattern) {
 
 # ------------------------------------------------------------------ Invoke-SD
 #
-# COPIED FROM probe-catprivate.ps1:144 UNCHANGED - the shape PROJECT_STATUS.md
-# section 6 says works.  ONE STRING with LF separators is not a style choice
-# here: an ARRAY down the pipe puts a phantom empty line after every command,
-# and THIS script is the exact case that destroyed verify-createaccount.ps1 on
-# 14 Aug 2026 - "input pw1 HIDDEN" ate the phantom, "input pw2 HIDDEN" got the
-# real password, the two differed, and the account was left with no password at
-# all.  Entry 22 arm A is that same failure as a deliberate test, so the two
-# must not be confusable.
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THIS USED TO SEND "LOGTO SDSYS", WHICH IS REFUSED (10002) FROM ANY
+# SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive
+# token (cproc:2789), so the commands now go to a task inside SDSYS's own live
+# session and the text comes back through a file.  SDSYS must be signed in (`query
+# session` shows its row); Assert-SdSeat below refuses out loud when it is not,
+# before anything is created.  NOT WITNESSED: converted unrun.
+#
+# THE LINE ALIGNMENT THIS SCRIPT DEPENDS ON IS THE SEAT'S TOO.  The old comment here
+# was about ONE STRING with LF separators: an ARRAY down the pipe put a phantom empty
+# line after every command, and this script is the case that destroyed
+# verify-createaccount.ps1 on 14 Aug 2026 - "input pw1 HIDDEN" ate the phantom,
+# "input pw2 HIDDEN" got the real password, the two differed, and the account was left
+# with no password at all.  Entry 22 arm A is that same failure as a deliberate test,
+# so the two must not be confusable.  The seat writes the input file itself, one line
+# per command, and the pilot's CREATE.ACCOUNT with two hidden password lines passed
+# 18/18 through it - but ARM A IS THE ROW TO READ on this script's first run.
+#
+# WHAT THE BOUND NOW COSTS: a call that hits the timeout THROWS ("the task wrote no
+# report within Ns") instead of returning what SD had printed, so a hung prompt ends
+# the run rather than becoming a failing row.  Recorded in RELEASE_1.1 76.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** It also leaves the session's user-table slot and locks behind,"
-        $out += "*** so sdwind will not shut down and cycle.ps1 will refuse to"
-        $out += "*** start.  Stop-Process the sdwind PID it names."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # EVERY SESSION'S RAW OUTPUT IS PRINTED, unconditionally, and the commands are
@@ -327,7 +322,7 @@ $pr = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'verify-acctmsgs: this needs an ELEVATED PowerShell and this one is not.'
     Write-Output '  CREATE_USER needs an elevated token, sdsys\audit is locked to SYSTEM and'
-    Write-Output '  Administrators, and LOGTO SDSYS is administrator-only.  Worse than'
+    Write-Output '  Administrators, and the SDSYS seat needs an elevated caller.  Worse than'
     Write-Output '  failing: unelevated, SET_PASSWD returns status 5 and CREATE.ACCOUNT'
     Write-Output '  prints 10120 - so entry 22 would take a THIRD arm and this run would be'
     Write-Output '  measuring the wrong branch.'
@@ -347,6 +342,11 @@ foreach ($p in @($sdExe, $sdsys, $audit, $accts)) {
         exit 2
     }
 }
+
+# Prove the seat BEFORE anything is created: this script makes Windows accounts, and a
+# run that cannot reach SDSYS would otherwise stop at its first SD call looking like a
+# product failure.  Exits 2 by itself, having stopped the transcript.
+Assert-SdSeat -Label 'verify-acctmsgs'
 
 Add-Type -AssemblyName System.Web
 

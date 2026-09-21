@@ -106,41 +106,45 @@ function Note($check, $expected, $got) {
         $(if ($pass) { 'PASS' } else { 'FAIL' }), $check, $expected, $got)
 }
 
-# BOUNDED - see verify-fold.ps1's copy for why.  SD prompts from places a script
-# cannot predict, each in an unbounded "until yn = 'Y' or 'N'" loop, and a hung
-# pipe returns nothing at all, so the cause is invisible.  The job is killed at
-# the timeout and whatever SD printed is returned.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 45) {
-    # LOGIN re-inits terminal geometry on every account switch (LOGIN:201-209),
-    # so the initial TERM below is wiped by any LOGTO in $commands.  Full
-    # write-up was in verify-tiers.ps1's Invoke-SD (deleted 18 Sep 2026,
-    # RELEASE_1.1 64, with the tiers).  ITS TERM-AFTER-LOGTO TRAP STILL APPLIES
-    # and is now written down nowhere, which one of these slices has to fix.  AND
-    # THE LOGTO SDSYS PREFIX EVERY DRIVER HERE USES IS REFUSED NOW (cproc:2789,
-    # 10002) - the whole elevated suite is owed that re-aim; 64's FIFTH PASS has
-    # the measurement.
-    $expanded = New-Object System.Collections.ArrayList
-    foreach ($c in $commands) {
-        $null = $expanded.Add($c)
-        if ($c -match '^\s*LOGTO\b') { $null = $expanded.Add('TERM 200,9999') }
-    }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $expanded + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** It also leaves the session's user-table slot and locks behind,"
-        $out += "*** so sdwind will not shut down and cycle.ps1 will refuse to"
-        $out += "*** start.  Stop-Process the sdwind PID it names.  See"
-        $out += "*** verify-fold.ps1's copy of this note."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THIS USED TO SEND "LOGTO SDSYS", WHICH IS REFUSED (10002) FROM ANY
+# SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive
+# token (cproc:2789), so the commands go to a task inside SDSYS's own live session and
+# the text comes back through a file.  The helper adds the TERM line - and the one after
+# every LOGTO in $commands (LOGIN re-inits terminal geometry on every account switch,
+# LOGIN:201-209) - and the OFF.  NOT WITNESSED: converted unrun.
+#
+# ***THE SUBJECT HERE IS PRIVILEGE, AND THAT IS WHY THIS DRIVER CHOOSES ITS DOOR PER
+# CALL.***  RELEASE_1.1 76's row: a LOGTO to a personal account is admitted only for a
+# session that is K$INTERNAL and K$ADMINISTRATOR, or whose OS user is in the target's
+# group - and the seat's user (SDSYS) is in no personal account's group - so the
+# unprivileged legs below (every call that starts with LOGTO) go through the seat's
+# -Internal door, and NOTHING ELSE does: the setup, the SDSYS control and the teardown
+# are plain seat calls, so the development door is asked for only where this script
+# itself LOGTOs.
+#
+# ***READ THE REFUSAL ROWS ON THE FIRST RUN BEFORE BELIEVING ANY OF THEM.***
+# -Internal adds K$INTERNAL to a session whose whole subject is who may catalogue
+# globally.  CPROC clears K$ADMINISTRATOR on the way out of SDSYS, so the unprivileged
+# leg should still be refused - but the process-wide internal_mode stays set, and if
+# some gate honours it these rows will FAIL, not pass.  THAT DIRECTION IS LOUD, and
+# this is what it rests on, read from the rows rather than assumed: every refusal row
+# REQUIRES the refusal message ('administrator privileges'), which an ADMITTED
+# catalogue call does not print; and the three destructive ones (section 4) also
+# require gcat to be unchanged, which the message cannot fake.  ONE ROW IS
+# MESSAGE-ONLY - section 3's "refused by the pre-existing GLOBAL gate" checks no file -
+# so if the door admits that call it fails on the missing message AND leaves a
+# gcat entry named after $userName that no row looks for.  Check gcat by hand after a
+# red, and run -Cleanup.
+# A red here is a finding about the door or the product, to be traced before either is
+# blamed - not a conversion to be reverted by reflex.
+#
+# A call that hits the timeout THROWS ("the task wrote no report within Ns") rather than
+# returning what SD had printed - recorded in RELEASE_1.1 76.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
+    $needsInternal = (@($commands | Where-Object { $_ -match '^\s*LOGTO\b' }).Count -gt 0)
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec -Internal:$needsInternal)
 }
 
 # TWO TEARDOWNS, NOT ONE, AND THE SPLIT IS LOAD-BEARING.  The account debris and
@@ -238,7 +242,7 @@ function Remove-Made {
     Write-Output '  ACCOUNTS register record left in place - remove with DELETE.ACCOUNT'
 }
 
-if ($Cleanup) { Remove-Made; exit 0 }
+if ($Cleanup) { Assert-SdSeat -Label 'verify-catgate -Cleanup'; Remove-Made; exit 0 }
 
 # CLAUDE.md requires a test cycle to begin with a fresh install; this is what
 # makes that enforceable rather than remembered.
@@ -254,6 +258,15 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     Write-Output 'verify-catgate: this needs an ELEVATED PowerShell - CREATE.ACCOUNT is gated on K$ADMINISTRATOR.'
     exit 2
 }
+
+# Prove BOTH seat doors before anything is created: the plain one (setup, the SDSYS
+# control, teardown) and -Internal (the unprivileged legs, which LOGTO into the test
+# account).  A run that cannot reach either would otherwise stop at its first SD call,
+# or - worse for the -Internal one - have its LOGTO refused (10003) and the commands
+# after it land in SDSYS's own account, which reads as the gate failing to refuse.
+# Each exits 2 by itself, having stopped the transcript.
+Assert-SdSeat -Label 'verify-catgate'
+Assert-SdSeat -Label 'verify-catgate' -Internal
 
 # The program both halves compile.  Trivial on purpose: this tests who may
 # catalogue, not what the compiler does.

@@ -70,6 +70,13 @@ function Fail($msg)   { Write-Host ''; Write-Host "FAILED: $msg" -ForegroundColo
 function Refuse($msg) { Write-Host ''; Write-Host "COULD NOT RUN: $msg" -ForegroundColor Yellow; exit 2 }
 function Step($msg)   { Write-Host ''; Write-Host "== $msg" -ForegroundColor Cyan }
 
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1).  -Make used to pipe
+# "LOGTO SDSYS" into sd.exe, which is refused (10002) from any session that did not
+# start as the OS SDSYS account; the one SD call it makes now goes to a task inside
+# SDSYS's own live session.  -Make is the ONLY mode that talks to SD - -Snapshot and
+# -Check read the file system and Windows - so nothing else here needs it.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+
 # ---------------------------------------------------------------------------
 # THE STATE.  Everything the five cases judge, read in one place so that
 # -Snapshot and -Check cannot drift apart in what they mean by "the state".
@@ -329,18 +336,26 @@ if ($Make) {
         Refuse "$Prefix already exists as a Windows account.  Use a fresh -Prefix."
     }
 
-    Step "Creating the SD account $Prefix (CREATE.ACCOUNT USER $Prefix PROGRAMMER NONE)"
+    # Prove the seat BEFORE anything is created: this makes a Windows account, and a
+    # run that cannot reach SDSYS would otherwise stop at the SD call looking like a
+    # product failure.  Exits 2 by itself (COULD NOT RUN), having stopped any transcript.
+    Assert-SdSeat -Label 'verify-uninstallchoices -Make'
+
+    Step "Creating the SD account $Prefix (CREATE.ACCOUNT USER $Prefix NONE)"
     Add-Type -AssemblyName System.Web
     $pw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
     # NONE: CREATE.ACCOUNT refuses (10082) unless told how the account is
     # reached, and this one needs no route - it exists to be swept away.
     # 19 Sep 26 - PROGRAMMER removed: RELEASE_1.1 64 refuses it with sysmsg
-    # 2018 and the refusal stops the whole command.  (The LOGTO SDSYS prefix
-    # above is refused now too - RELEASE_1.1 76, the elevated suite's re-aim.)
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999',
-                       "CREATE.ACCOUNT USER $Prefix NONE", $pw, $pw, 'OFF')) -join "`n") + "`n"
-    $out = $body | & $SdExe
-    $out = (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    # 2018 and the refusal stops the whole command.  20 Sep 26 - AND THE SEAT
+    # REPLACES THE "LOGTO SDSYS" PREFIX (RELEASE_1.1 76).  A seat that fails THROWS
+    # rather than returning what SD printed, so it is caught and refused by name:
+    # a thrown error here would read as a defect in the product under test.
+    try {
+        $out = Invoke-SdSeatText -Commands @("CREATE.ACCOUNT USER $Prefix NONE", $pw, $pw) -TimeoutSec 180
+    } catch {
+        Refuse ("the SDSYS seat did not run CREATE.ACCOUNT: " + $_.Exception.Message)
+    }
     Write-Host '   --- raw CREATE.ACCOUNT output ---'
     ($out -split "`r?`n") | ForEach-Object { Write-Host ('   | ' + $_) }
     Write-Host '   --- end raw output ---'

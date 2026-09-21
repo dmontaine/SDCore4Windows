@@ -99,6 +99,11 @@ param(
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'sdtestuser.ps1')
+# The SDSYS seat (RELEASE_1.1 76) is loaded HERE, with the other module, and not beside
+# Invoke-SD further down: Assert-SdSeat is called well above that function, and a
+# script-scope call that precedes the dot-source dies with "is not recognized" - the
+# 20 Sep 2026 defect test-sdsysseat-units.ps1's section 7 exists to catch.  It did.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 
 $sdExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $audit = Join-Path $env:ProgramData  'SD\sdsys\audit'
@@ -152,6 +157,11 @@ if ($LASTEXITCODE -ne 0) {
     exit 2
 }
 
+# Prove the seat BEFORE the account is created: setup and teardown need it, and a run
+# that cannot reach SDSYS would otherwise stop at the first SD call looking like a
+# product failure.  Exits 2 by itself, having stopped any transcript.
+Assert-SdSeat -Label 'verify-sdsysgate'
+
 foreach ($p in @($sdExe, $audit)) {
     if (-not (Test-Path -LiteralPath $p)) {
         Write-Output ("verify-sdsysgate: {0} does not exist - nothing could be measured." -f $p)
@@ -178,29 +188,30 @@ Write-Output ''
 
 # ------------------------------------------------------------- SD, elevated
 
-# Piped stdin, inside a job with a timeout.  Start-Process
-# -RedirectStandardInput hands sd.exe a FILE HANDLE and SD answers
-# ":Process terminated" and runs nothing - written down 14 Aug 2026 and paid
-# for again on 29 Aug.  Nothing here may use it.
-function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 60) {
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THIS USED TO SEND "LOGTO SDSYS", WHICH IS REFUSED (10002) FROM ANY
+# SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive
+# token (cproc:2789), so its setup and teardown go to a task inside SDSYS's own live
+# session and the text comes back through a file.  Assert-SdSeat below refuses out loud
+# when SDSYS is not signed in, before the account is created.  NOT WITNESSED: converted
+# unrun.
+#
+# ***ONLY THE SETUP AND TEARDOWN MOVED.  THE SUBJECT DID NOT.***  RELEASE_1.1 76's row
+# grouped this file with the privilege-subject ones, and it is the one file that carries
+# BOTH shapes: this Invoke-SD builds and removes the test account (a plain SDSYS call,
+# now the seat), while the line that IS the test - ssh in as a real non-administrator
+# and issue "LOGTO SDSYS" - goes through Invoke-SdAsTestUser and is a GATE that
+# must keep being refused.  It never touched this function and needs no -Internal.
+#
+# The empty-list guard is kept: a call with nothing to say would start a session,
+# measure nothing and look like a pass.  A call that hits the timeout THROWS ("the task
+# wrote no report within Ns") rather than returning what SD had printed - recorded in
+# RELEASE_1.1 76.  (sdsys-seat.ps1 is dot-sourced at the top of the file.)
+function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
     if ($null -eq $commands -or $commands.Count -eq 0) {
         throw 'Invoke-SD: no commands given; that would start a session, measure nothing and look like a pass.'
     }
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock { param($exe, $text) $text | & $exe } `
-                     -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout $TimeoutSec) {
-        $out = Receive-Job $job
-    } else {
-        Stop-Job $job
-        $out = Receive-Job $job
-        $out += ''
-        $out += "*** SD did not finish in $TimeoutSec s - it is waiting for input."
-        $out += "*** It leaves the session's user-table slot and locks behind, so"
-        $out += "*** sdwind will not shut down and cycle.ps1 will refuse to start."
-    }
-    Remove-Job $job -Force
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec)
 }
 
 # ------------------------------------------------------------- the account

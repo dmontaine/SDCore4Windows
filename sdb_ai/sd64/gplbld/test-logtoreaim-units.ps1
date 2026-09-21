@@ -111,8 +111,16 @@ $DECLARED = [ordered]@{
     # account and opens a firewall port, so its first run is the owner's, elevated.
     'probe-tasklock.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-acctmsgs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }
-    'verify-catgate.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    # 20 Sep 2026, THE TWENTY-THIRD PASS: acctmsgs, catgate, delaccount, doors-admin and
+    # uninstallchoices ARE NOT HERE - CONVERTED, on the owner's "convert the remaining
+    # verifiers" (probe-tasklock excepted, at his word).  NONE IS WITNESSED.  Four were plain
+    # drivers (acctmsgs, delaccount, doors-admin, uninstallchoices: CREATE/MODIFY/DELETE
+    # .ACCOUNT as SDSYS, and 76's row was wrong to group doors-admin and delaccount with the
+    # privilege-subject ones - neither LOGTOs into a personal account).  ONE is the genuine
+    # privilege-subject case: verify-catgate chooses its seat door PER CALL, -Internal only
+    # where the call itself starts with LOGTO, and its header says to read the refusal rows
+    # first.  verify-sdsysgate is re-declared below as a GATE: its driver is converted and
+    # only the deliberate gate line remains.
     # verify-createaccount.ps1 IS NOT HERE: IT WAS CONVERTED (20 Sep 2026, the
     # PILOT for sdsys-seat.ps1) - its SD calls now run as a task inside SDSYS's
     # own session, so it sends no prefix.  Its row had to go in the same commit,
@@ -158,10 +166,6 @@ $DECLARED = [ordered]@{
     # clean-deadvoc, probe-catprivate and probe-osex were CONVERTED.  probe-osex's
     # question changes with the conversion - see the note above its Invoke-SD.  NONE
     # OF THESE IS WITNESSED YET.
-    'verify-delaccount.ps1'       = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-doors-admin.ps1'      = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-    'verify-uninstallchoices.ps1' = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
-
     'verify-lcnames.ps1'          = @{ Role = 'CALLER_SUPPLIED'; Why = "Invoke-SD sends no prefix itself; the CALLERS' own command arrays open with the literal 'LOGTO SDSYS'" }
 
     # verify-sdsysgate.ps1 is the one file that is genuinely both: its own
@@ -171,7 +175,7 @@ $DECLARED = [ordered]@{
     # "a non-administrator tries LOGTO SDSYS and is refused" - which is a GATE
     # line and must not be touched by the re-aim.  Declared once, as both,
     # because the guard partitions by FILE and a file cannot be asked to pick.
-    'verify-sdsysgate.ps1'        = @{ Role = 'DRIVER+GATE'; Why = 'its own Invoke-SD carries the broken prefix (setup/teardown); a separate line 40 further on is the deliberate gate test and must survive the re-aim untouched' }
+    'verify-sdsysgate.ps1'        = @{ Role = 'GATE'; Why = "its setup/teardown Invoke-SD was CONVERTED to the seat (20 Sep 2026, unwitnessed); what is left is the deliberate -Commands @('WHO', 'LOGTO SDSYS', 'WHO') line, run over ssh as a real non-administrator, which MUST keep being refused" }
 
     'verify-elevdoor.ps1'         = @{ Role = 'GATE'; Why = 'the unelevated refusal and the elevated round-trip ARE the thing under test; not broken by 64, not this entry to fix' }
 
