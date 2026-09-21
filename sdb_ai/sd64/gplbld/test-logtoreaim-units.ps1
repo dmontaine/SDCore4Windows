@@ -105,7 +105,10 @@ $rx = 'logto\s+sdsys'
 # Role -> reason, read from the file and written down 20 Sep 2026.  A file not
 # in this table with a live hit is UNDECLARED and fails outright.
 $DECLARED = [ordered]@{
-    'interop-account.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
+    # interop-account.ps1 IS NOT HERE: CONVERTED 20 Sep 2026 (the twenty-third pass) -
+    # its Invoke-SD is a one-line call to Invoke-SdSeatText and it proves the seat with
+    # Assert-SdSeat before it creates anything.  NOT WITNESSED: it makes a Windows
+    # account and opens a firewall port, so its first run is the owner's, elevated.
     'probe-tasklock.ps1'          = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'sdtestuser-admin.ps1'        = @{ Role = 'DRIVER'; Why = 'unconditional prefix in its own body builder' }
     'verify-acctmsgs.ps1'         = @{ Role = 'DRIVER'; Why = 'unconditional prefix, plus its own explanatory line' }

@@ -79,13 +79,21 @@ function Say($m)  { Write-Host $m }
 function Step($m) { Write-Host ''; Write-Host "== $m" -ForegroundColor Cyan }
 function Die($m, $code) { Write-Host ''; Write-Host $m -ForegroundColor Red; exit $code }
 
-# Drives an SD session from SDSYS on stdin.  Verbatim shape from
-# verify-scramlogin.ps1's Invoke-SD - a blank first line absorbs the BOM, TERM
-# stops pagination, OFF ends it, and the escape strip removes erase-line codes.
+# 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
+# was the pilot).  THIS USED TO SEND "LOGTO SDSYS", WHICH IS REFUSED (10002) FROM ANY
+# SESSION THAT DID NOT START AS THE OS SDSYS ACCOUNT with an elevated, interactive
+# token (cproc:2789), and an elevated Don is not one.  So the commands go to a task
+# inside SDSYS's own live session and the text comes back through a file; the helper
+# adds the TERM line and the OFF.  SDSYS must be signed in (`query session` shows
+# its row) - Assert-SdSeat below refuses out loud when it is not, before anything is
+# created.  NOT WITNESSED: converted unrun, like the rest of this group.
+#
+# THE PASSWORDS THIS PIPES ($winPw, twice) go through the seat's input file, which
+# the task reads and DELETES before sd.exe starts.  The interactive MODIFY.PASSWORD
+# further down is NOT a seat call and must not become one: the person types that one.
+. (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands) {
-    $body = "`n" + ((@('LOGTO SDSYS', 'TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 # ---------------------------------------------------------------------------
@@ -106,6 +114,10 @@ Step 'Checking the installed tree matches source'
 if ($LASTEXITCODE -ne 0) { Die 'assert-current refuses - run gplbld/cycle.ps1 first.' 2 }
 
 if (-not (Test-Path -LiteralPath $sdExe)) { Die "No installed sd.exe at $sdExe." 2 }
+
+# Prove the seat BEFORE anything is created: a run that cannot reach SDSYS would
+# otherwise create the Windows account and stop halfway.  Exits 2 by itself.
+Assert-SdSeat -Label 'interop-account'
 
 $accRec  = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $upper)
 $credRec = Join-Path $env:ProgramData ('SD\sdsys\$cred\' + $upper)
