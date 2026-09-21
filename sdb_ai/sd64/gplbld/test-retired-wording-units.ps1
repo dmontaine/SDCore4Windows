@@ -398,9 +398,19 @@ $RETIRED = @(
     # window was about to offer to change.  (2) The upgrade memo said an account
     # "is never given a command its tier does not allow", and RELEASE_1.1 64
     # abolished the tiers.  Both are gone from the screen; these keep them gone.
+    # 20 Sep 26, LATER - RE-AIMED, NOT RE-RETIRED.  The finish-page rebuild
+    # (PROJECT_STATUS.md "START HERE") stopped AccountMsg's code-2 branch
+    # printing "The SDSYS account already existed" at all - AccountsReport's
+    # "Two accounts exist" / "One account exists" line covers both the
+    # already-there and just-made cases now, so the old replacement text is
+    # unreachable even though its literal still sits in sd.iss's source
+    # (dead, not deleted - see the comment at AccountMsg's code 2).  A scan
+    # of source text cannot tell reachable from dead, so leaving the old
+    # anchor here would have kept passing while proving nothing.  Retired
+    # unchanged: "which is the one you set before" is still gone.
     @{ Ref = '20Sep-a'
        Retired     = 'which is the one you set before'
-       Replacement = 'The SDSYS account already existed' }
+       Replacement = 'Two accounts exist: SDSYS' }
     @{ Ref = '20Sep-b'
        Retired     = 'command its tier does not allow'
        Replacement = 'Your database, accounts and settings are kept' }

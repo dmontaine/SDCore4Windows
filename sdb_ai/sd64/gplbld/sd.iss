@@ -1321,6 +1321,14 @@ var
     wizard's last page needs has to outlive the step that learned it. }
   FinishReport: String;
   FinishReportShown: Boolean;
+  { 20 Sep 26 - THE OTHER TWO PIECES OF THE FINISHED PAGE, split out of what
+    used to be all of FinishReport so the page can hold his spec's three
+    fixed status lines and "accounts exist" paragraph in fixed positions
+    rather than wherever they fell in one flat string.  Script-level for the
+    same reason as FinishReport: assembled in CurStepChanged, read in
+    CurPageChanged, which runs after that procedure has returned. }
+  StatusReport: String;
+  AccountsReport: String;
   SdsysCode: Integer;
   { 18 Sep 26 - RELEASE_1.1 66.  attach-account.ps1's exit code (0 the account
     was made, 2 it was already there, 1 refused, 3 no server), assigned at
@@ -3738,6 +3746,20 @@ begin
   end;
 end;
 
+{ 20 Sep 26 - THE DISCRIMINATOR BETWEEN A STATUS LINE AND A FAILURE
+  PARAGRAPH.  His spec wants the ssh/API results as fixed SHORT lines; the
+  functions that build them (ApplySshFirewall, ApplyApiFirewall,
+  ApplyAllowGroups, SshReport, above) also use the same Result variable to
+  carry a FAILURE, complete with an "ELEVATED PowerShell" remediation
+  command - never short.  CHECKED AGAINST THOSE FOUR FUNCTIONS' CURRENT TEXT
+  RATHER THAN ASSUMED: every failure string there carries at least one of
+  the three words below, and no success string does.  Re-check here if any
+  of those four change their wording. }
+function IsFailureText(const S: String): Boolean;
+begin
+  Result := (Pos('ELEVATED', S) > 0) or (Pos(' NOT ', S) > 0) or (Pos('FAILED', S) > 0);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
@@ -4157,8 +4179,13 @@ begin
          end;
       { Lower case for the reason given at code 0 above. }
       { 18 Sep 26 - CODE 2 IS ABOUT SDSYS NOW, RELEASE_1.1 64: the install found
-        the Windows account already there and left it alone. }
-      2: AccountMsg := 'The SDSYS account already existed.' + #13#10#13#10;
+        the Windows account already there and left it alone.
+        20 Sep 26 - AND NOW EMPTY, NOT A SENTENCE: AccountsReport's "Two
+        accounts exist" / "One account exists" line covers this case
+        already existed or just made read the same - so a paragraph here
+        would only repeat it.  Ref 20Sep-a's replacement moved with it; see
+        test-retired-wording-units.ps1. }
+      2: AccountMsg := '';
     else
       { Named rather than buried: without an account the person who just
         installed SD cannot use it at all, and the recovery is one command.
@@ -4284,11 +4311,24 @@ begin
     { ASSEMBLED, NOT SHOWN.  This was ShowSummaryBox('SD Core is installed', ...)
       - a modal box that closed before the wizard's own last page opened.  The
       Finished page draws FinishReport now (CurPageChanged). }
+    { 20 Sep 26 - THREE PIECES NOW, NOT ONE FLAT STRING.  The owner's
+      specification for the Finished page (PROJECT_STATUS.md "START HERE",
+      verbatim) is six fixed lines for a clean install - installed, sign
+      out, three short status lines, the accounts, the next screen - with no
+      slot for a failure.  Asked and answered this session: failures and
+      upgrade-specific facts still appear, as extra paragraphs, and the
+      three status lines hold only their SHORT success text, never a
+      failure's remediation block.  So FinishReport is now the EXTRA
+      paragraphs alone (empty on a clean first install, exactly his page),
+      StatusReport is the three fixed status lines below, and
+      AccountsReport is the "accounts exist" paragraph below that.
+      CurPageChanged wraps all three in the fixed template - see it for the
+      final order, which puts FinishReport straight after the sign-out
+      line. }
     FinishReport :=
-           { EMPTY ON EVERY HEALTHY INSTALL, and first when it is not.  This is
-             the one line in the box that reports a hole rather than a setting,
-             so it is read before the sign-out instruction rather than after
-             three paragraphs the reader already skimmed on the first page. }
+           { EMPTY ON EVERY HEALTHY INSTALL, and first when it is not.  This
+             is the one line in the box that reports a hole rather than a
+             setting. }
            CredMsg +
            OsuMsg +
            BjMsg +
@@ -4296,9 +4336,7 @@ begin
            PcodeMsg +
            SysdirMsg +
            AcctAclMsg +
-           { Empty on every first install and on every upgrade that worked.
-             Beside the others because it reports something that did NOT
-             happen, and the reader needs it before the settings. }
+           { Empty on every first install and on every upgrade that worked. }
            DictMsg +
            { And its pair, for the same reason.  PRE_RELEASE_FIXES 70: empty
              unless an upgrade could not refresh the account vocabularies, in
@@ -4318,82 +4356,79 @@ begin
              groups could not be set up, in which case ssh is refused to
              everyone but administrators and the person needs to know now. }
            RouteMsg +
-           'You have been added to the "sdusers" group. SIGN OUT AND BACK IN ' +
-           '(or restart) before SD Core will run.' + #13#10#13#10 +
-           { 02 Sep 26 - BOTH SYMPTOMS, BECAUSE THERE ARE TWO REASONS "sd" DOES
-             NOT RUN YET AND THIS BOX CARRIED ONLY ONE.  PRE_RELEASE_FIXES 141,
-             hit twice in one evening by the owner.  The group token is the one
-             it described; the other is PATH, which addtopath writes to the
-             MACHINE environment and an already-open window never sees.  The
-             same instruction happens to cure both, which is why it went
-             unnoticed - and that coincidence is the trap, not the mitigation:
-             a reader who opens a new window fixes PATH and still meets the
-             token error, and a reader who signs out but keeps an old window
-             open fixes the token and still meets "not recognized".  Each was
-             being told about the other one's problem. }
-           { TRIMMED 16 Aug 2026, owner: "it is even longer".  Fair - the first
-             page was added to move things EARLIER and then three paragraphs were
-             added here as well, so the box grew rather than shrank.
-
-             THE RULE FOR WHAT STAYS: this box says what the first page could not
-             know in advance - what actually happened to ssh, to the firewall and
-             to your account - plus the one instruction that is actionable right
-             now, which is signing out.  Everything else the first page already
-             said, and repeating it here is what made this unreadable.
-
-             Removed: the "SD runs as a service and restarts itself" paragraph;
-             the explanation of what LOGTO SDSYS does and why Windows asks for
-             consent; the remote-control-tool passage; and the ADMINISTRATOR
-             keyword.  The first page carries the service and what confining ssh
-             to SD Core costs - PRE_RELEASE 129 retired the old four-word name
-             for that, since the API is an independent way in and ssh was never
-             the only one;
-             the rest is reference material that belongs with the verb, not in a
-             box somebody reads once.  The bare COMMANDS stayed, because they are
-             the thing a reader comes back for.
-
-             NEVER START A LINE WITH #13#10.  ISPP reads any line whose first
-             non-blank character is "#" as a preprocessor directive, so a
-             wrapped Pascal string constant becomes "Unknown preprocessor
-             directive" and the compile aborts - line number and all, with
-             nothing to say it is about string continuation.  Mid-line is fine,
-             which is why every #13#10 in this box works.  Cost the eleventh
-             session an ISCC run, 16 Aug 2026. }
-           { The ssh pair goes here, above the account paragraph, because on a
-             machine where the install failed or wants a restart it changes what
-             the account advice MEANS - an account nobody can sign in to yet. }
-           SshMsg +
-           SshLimit +
-           SshFw +
-           ApiFw +
-           { 31 Aug 26 - EMPTY ON A FIRST INSTALL, and it is the three above
-             that are empty on an upgrade.  PRE_RELEASE_FIXES 88: exactly one
-             of the two sets is ever non-empty. }
+           { EMPTY ON A FIRST INSTALL, and empty on an upgrade that changed
+             nothing worth reporting.  PRE_RELEASE_FIXES 88, 70; RELEASE_1.1
+             5 D2 for NocaseMsg. }
            UpgMsg +
-           { 04 Sep 26 - PRE_RELEASE_FIXES 70, and it is UpgMsg's neighbour for
-             the same reason the ssh trio are: it says what this upgrade did to
-             the thing the reader would otherwise have been told to do by hand.
-             Empty on a first install, and empty on an upgrade where the step
-             failed - VocMsg above is what speaks then. }
            VocDoneMsg +
-           { RELEASE_1.1 5 D2.  Empty unless an upgrade left a file that holds a
-             case-only duplicate id, or could not convert one; beside the VOC
-             pair because it too brings a preserved part of the data tree up to
-             this release. }
            NocaseMsg +
-           { 25 Aug 26 - EMPTY ON EVERY INSTALL THAT WENT RIGHT, and it sits
-             beside the ssh pair for the same reason they do: if the marker did
-             not get written, the account advice below is describing rules this
-             machine will not actually enforce. }
-           MarkerMsg +
-           AccountMsg +
-           { 18 Sep 26 - RELEASE_1.1 66.  IMMEDIATELY AFTER AccountMsg, because
-             the two answer the reader's one question in order: SDSYS is how
-             this machine is administered, and this is the account they
-             themselves will use.  Empty on a reinstall, which is the common
-             case and is why it is its own string rather than a paragraph
-             welded into AccountMsg's branches. }
-           AttachMsg;
+           MarkerMsg;
+
+    { 20 Sep 26 - ONLY THE FAILURE HALF OF EACH, as four ifs rather than four
+      more '+' lines above, because the split is the point: the success half
+      of SshMsg, SshLimit, SshFw and ApiFw is StatusReport's job below
+      (SshLimit excepted - see there), and a message IsFailureText flags is
+      never short, so folding it into FinishReport unconditionally would
+      print its remediation block twice on one page. }
+    if IsFailureText(SshMsg) then FinishReport := FinishReport + SshMsg;
+    if IsFailureText(SshLimit) then FinishReport := FinishReport + SshLimit;
+    if IsFailureText(SshFw) then FinishReport := FinishReport + SshFw;
+    if IsFailureText(ApiFw) then FinishReport := FinishReport + ApiFw;
+
+    { 20 Sep 26 - SAME RULE FOR THE TWO ACCOUNT MESSAGES: AccountsReport
+      below carries the "already existed" and "was just made" cases, which
+      are not failures and would otherwise print twice. }
+    if IsFailureText(AccountMsg) then FinishReport := FinishReport + AccountMsg;
+    if IsFailureText(AttachMsg) then FinishReport := FinishReport + AttachMsg;
+
+    { 20 Sep 26 - THE THREE STATUS LINES, SHORT ONES ONLY.  His spec:
+      "<SSH server status line>", then the ssh and the API "user
+      availability" lines, each "short one line only".  A message
+      IsFailureText flags carries a remediation command and is never short,
+      so it is excluded here and picked up by FinishReport above instead -
+      the reader still sees it, one paragraph further down, rather than a
+      multi-line failure masquerading as a one-line status.  SshLimit is
+      DELIBERATELY NOT one of the three: its success text ("ssh is now
+      limited to members of sdssh...") is reference material the
+      installation documentation now carries, so it contributes to
+      StatusReport not at all - only its failure half appears, in
+      FinishReport above. }
+    StatusReport := '';
+    if (SshMsg <> '') and not IsFailureText(SshMsg) then
+      StatusReport := StatusReport + SshMsg;
+    if (SshFw <> '') and not IsFailureText(SshFw) then
+      StatusReport := StatusReport + SshFw;
+    if (ApiFw <> '') and not IsFailureText(ApiFw) then
+      StatusReport := StatusReport + ApiFw;
+
+    { 20 Sep 26 - "TWO ACCOUNTS EXIST: SDSYS AND <name>.  THE NEXT SCREEN
+      WILL ASK FOR THEIR PASSWORDS." - his words, checked against what the
+      finishing window (finish-install.ps1) actually does rather than
+      assumed true.  SDSYS: Set-SdsysPassword always asks, made or already
+      there, so that half is unconditional whenever SdsysCode says the
+      account exists.  THE INSTALLING USER IS NOT ALWAYS ASKED -
+      Set-AttachedAccountPassword reads $cred first and says nothing when a
+      credential is already there (measured this pass, on a real install:
+      "The account Don already has an SD Core password, so it was left
+      alone") - so the sentence is hedged rather than promising a prompt
+      that sometimes does not come.  ONE ACCOUNT if attach failed: AttachMsg's
+      failure text is already in FinishReport above with its own
+      remediation, so this line only ever reports the happy half.  NOTHING
+      AT ALL if SdsysCode itself failed: there is no "accounts exist" to
+      claim, and AccountMsg's failure text above already carries the
+      remediation. }
+    AccountsReport := '';
+    if SdsysCode in [0, 2] then
+    begin
+      if AttachCode in [0, 2] then
+        AccountsReport := 'Two accounts exist: SDSYS and ' +
+          Lowercase(ExpandConstant('{username}')) + '.' + #13#10#13#10 +
+          'The next screen will ask for the SDSYS password, and yours too ' +
+          'if it is not already set.' + #13#10#13#10
+      else
+        AccountsReport := 'One account exists: SDSYS.' + #13#10#13#10 +
+          'The next screen will ask for its password.' + #13#10#13#10;
+    end;
     { 20 Sep 26 - THE "TO GIVE SOMEBODY ELSE ACCESS" BLOCK THAT ENDED THIS BOX IS
       OUT, on the owner's rule that dialogs deal only with the installing task and
       that how-to-use text belongs in the installation documentation.  IT IS
@@ -4617,14 +4652,28 @@ begin
     mid-sentence for exactly that reason (22 Aug 26).  So the report is drawn by
     ShowFinishedReport, which lays the paragraphs out itself and falls back to a
     scrolling memo when they will not fit.  The flag stops a second CurPageChanged
-    from drawing it twice. }
+    from drawing it twice.
+
+    20 Sep 26 - AND THE WRAPPER IS NOW HIS SPEC, NOT A PARAGRAPH THIS
+    PROCEDURE WROTE.  PROJECT_STATUS.md "START HERE", verbatim, six lines
+    for a clean install.  The sign-out line is fixed text here rather than
+    built in CurStepChanged (it no longer names the sdusers group - the
+    installation documentation carries that level of detail now).
+    FinishReport, StatusReport and AccountsReport are the three pieces
+    CurStepChanged assembled - see the comment above FinishReport's
+    assignment there for what each one holds and why the split exists.  The
+    old closing sentence ("When you click Finish, a window opens...") is
+    gone: AccountsReport's own second line now says what that window will
+    ask for, which is the same information stated once rather than twice. }
   if (CurPageID = wpFinished) and InstallReachedPostInstall and not FinishReportShown then
   begin
     FinishReportShown := True;
     ShowFinishedReport('SD Core is installed.' + #13#10#13#10 +
+      'You must sign out or restart before using SD Core.' + #13#10#13#10 +
       FinishReport +
-      'When you click Finish, a window opens to set the SDSYS password and ' +
-      'check the installation. Setting up is not finished until that window says so.');
+      StatusReport +
+      AccountsReport +
+      'Information status will be available if requested.');
   end;
 
   (* 20 Sep 26 - THE "OpenSSH Server is already installed" POPUP IS GONE, and with
