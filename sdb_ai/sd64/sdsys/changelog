@@ -16,6 +16,21 @@ while porting from it.
            one of its screens is in the installation page of the
            documentation, under "Warnings and things to know".
 
+           The two popups at the end of the install - the summary and the
+           sshd_config result - are gone.  What Setup did, and any step
+           that did not complete with the command to run, is listed on
+           the wizard's last page, above the note about the window that
+           opens when you click Finish.  That page now opens with "SD Core
+           is installed."
+
+           The window that opens when you click Finish no longer prints
+           two lines of SD's own: "Internal session admitted ..." and
+           "Account X has no password set.  Setting the first one."  The
+           first is still shown for every other use of the internal door
+           and is still audited; only this window, which the installer
+           starts, is quiet.  The second follows -QUIET, like the
+           explanation beside it.
+
            The "Before you install" page, which listed every change Setup
            makes to Windows, has been removed.  One of its statements -
            that SD Core users can read each other's files - was out of

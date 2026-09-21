@@ -1312,6 +1312,15 @@ var
     read by the finishing window, which is this block's own rule above: what
     the wizard's last window needs has to outlive the step that learned it. }
   InstallReachedPostInstall: Boolean;
+  { 20 Sep 26 - THE WHOLE CLOSING REPORT, AND THE FLAG THAT KEEPS IT FROM BEING
+    DRAWN TWICE.  Owner, seeing two popups and then the wizard's own last page:
+    "Can the information on the two popups be consolidated into the final
+    screen".  ssPostInstall used to SHOW the report in a modal box (and the
+    sshd_config result in a second one); it now only ASSEMBLES it, and the
+    Finished page draws it.  Same rule as the two variables above: what the
+    wizard's last page needs has to outlive the step that learned it. }
+  FinishReport: String;
+  FinishReportShown: Boolean;
   SdsysCode: Integer;
   { 18 Sep 26 - RELEASE_1.1 66.  attach-account.ps1's exit code (0 the account
     was made, 2 it was already there, 1 refused, 3 no server), assigned at
@@ -2527,8 +2536,11 @@ begin
       gate is added the claim has to move with it." Here the claim was a
       premise in a message and it never moved. }
     if AllowGroupsWrote then
-      Result := 'OpenSSH Server was already installed. sshd_config was updated and the ' +
-                'ssh service restarted; your previous file is sshd_config.before-sd.' + #13#10#13#10
+      { 20 Sep 26 - THE PREVIOUS-FILE CLAUSE MOVED TO THE LINE UNDER THIS ONE.  The
+        sshd_config result (SshLimit) is part of the same report now and already says
+        "Any existing sshd_config was kept as sshd_config.before-sd", so saying it
+        here too printed it twice on one screen. }
+      Result := 'OpenSSH Server was already installed; the ssh service was restarted.' + #13#10#13#10
     else
       Result := 'OpenSSH Server was already installed and was not changed.' + #13#10#13#10;
     Exit;
@@ -3596,10 +3608,9 @@ end;
   The closing summary box
   --------------------------------------------------------------------------- }
 
-{ SM_CYSCREEN for the overflow test below.  Inno exposes no screen metrics of
-  its own and this is the only thing here that needs one. }
-function GetSystemMetrics(nIndex: Integer): Integer;
-  external 'GetSystemMetrics@user32.dll stdcall';
+{ 20 Sep 26 - THE GetSystemMetrics IMPORT THAT STOOD HERE (SM_CYSCREEN, for the
+  popup's overflow test) IS GONE: ShowFinishedReport measures the wizard PAGE, not
+  the desktop. }
 
 { A CUSTOM FORM RATHER THAN MsgBox, BECAUSE MsgBox HAS NO WIDTH TO SET.
   Owner, 23 Aug 2026: "this dialog is very tall, can it be made wider and
@@ -3635,118 +3646,95 @@ function GetSystemMetrics(nIndex: Integer): Integer;
   install unlucky enough to raise every warning above at once, the stack can be
   taller than the desktop with no way to reach the bottom.  When it does not
   fit this falls back to a scrolling memo holding the same string, which is no
-  worse than what shipped before. }
-procedure ShowSummaryBox(const Caption, Msg: String);
+  worse than what shipped before.
+
+  ***20 Sep 26 - THIS IS NO LONGER A POPUP.*** The owner, seeing this box, a
+  second box for the sshd_config result, and then the wizard's own last page:
+  "Can the information on the two popups be consolidated into the final
+  screen".  The procedure below keeps everything above that still applies - the
+  paragraph split on blank lines, the seven-pixel gap, and the scrolling-memo
+  fallback for a stack that will not fit - but draws it ON THE FINISHED PAGE, in
+  place of the stock label, instead of on a custom form.  What changed with the
+  move: (1) THERE IS NO TPanel HOST, because a panel paints its own grey
+  background and the modern wizard's last page is white, so the paragraphs are
+  parented to the page directly; (2) the overflow test is the PAGE'S height, not
+  the screen's, since the page is fixed-size and a stack that fits the desktop
+  can still fall off the bottom of it; (3) the label stack is held in an array
+  so it can be freed when the memo takes over.  THE MEMO FALLBACK MATTERS MORE
+  NOW THAN IT DID: the label it replaces clips silently, and what gets clipped
+  is the tail of the report - which is where the repair commands are. }
+procedure ShowFinishedReport(const Msg: String);
 var
-  F: TSetupForm;
-  Host: TPanel;
+  Page: TWinControl;
+  Para: array[0..63] of TNewStaticText;
   Memo: TNewMemo;
-  Btn: TNewButton;
-  Para: TNewStaticText;
   Rest, Chunk: String;
-  P, Y, TextW, MargX, MargY, GapY, BtnH, MaxContentH: Integer;
+  N, I, P, Y, TextW, GapY, MaxH, L, T: Integer;
 begin
-  MargX := ScaleX(14);
-  MargY := ScaleY(14);
-  GapY  := ScaleY(7);
-  BtnH  := ScaleY(23);
+  Page := WizardForm.FinishedLabel.Parent;
+  L := WizardForm.FinishedLabel.Left;
+  T := WizardForm.FinishedLabel.Top;
+  TextW := WizardForm.FinishedLabel.Width;
+  MaxH := Page.ClientHeight - T - ScaleY(8);
+  GapY := ScaleY(7);
 
-  { The height passed here is a placeholder - the content sets it below, once
-    the paragraphs have been laid out and their real heights are known. }
-  F := CreateCustomForm(ScaleX(542), ScaleY(120), False, False);
-  try
-    F.Caption := Caption;
-    TextW := F.ClientWidth - 2 * MargX;
+  WizardForm.FinishedLabel.Visible := False;
 
-    { SM_CYSCREEN is 1.  The 160 leaves the caption bar, the button row and a
-      taskbar; the only job here is to notice a stack that will not fit. }
-    MaxContentH := GetSystemMetrics(1) - ScaleY(160);
-
-    Host := TPanel.Create(F);
-    Host.Parent := F;
-    Host.Left := MargX;
-    Host.Top := MargY;
-    Host.Width := TextW;
-    Host.BevelOuter := bvNone;
-    Host.Anchors := [akLeft, akTop, akRight, akBottom];
-
-    Y := 0;
-    Rest := Msg;
-    while Rest <> '' do
+  N := 0;
+  Y := 0;
+  Rest := Msg;
+  while (Rest <> '') and (N < 64) do
+  begin
+    P := Pos(#13#10#13#10, Rest);
+    if P = 0 then
     begin
-      P := Pos(#13#10#13#10, Rest);
-      if P = 0 then
-      begin
-        Chunk := Rest;
-        Rest := '';
-      end
-      else
-      begin
-        Chunk := Copy(Rest, 1, P - 1);
-        Rest := Copy(Rest, P + 4, Length(Rest));
-      end;
-
-      { Every optional fragment above ends with a blank line, so an empty
-        chunk is the normal case rather than a malformed message. }
-      if Trim(Chunk) = '' then
-        Continue;
-
-      Para := TNewStaticText.Create(F);
-      Para.Parent := Host;
-      Para.AutoSize := False;
-      Para.WordWrap := True;
-      Para.Left := 0;
-      Para.Top := Y;
-      Para.Width := TextW;
-      Para.Caption := Chunk;
-      Para.AdjustHeight();
-      Y := Y + Para.Height + GapY;
-    end;
-
-    { No trailing gap under the last paragraph. }
-    if Y > GapY then
-      Y := Y - GapY;
-
-    if Y > MaxContentH then
-    begin
-      Host.Free();
-      Memo := TNewMemo.Create(F);
-      Memo.Parent := F;
-      Memo.Left := MargX;
-      Memo.Top := MargY;
-      Memo.Width := TextW;
-      Memo.Height := MaxContentH;
-      Memo.Anchors := [akLeft, akTop, akRight, akBottom];
-      Memo.ReadOnly := True;
-      Memo.WordWrap := True;
-      Memo.ScrollBars := ssVertical;
-      Memo.Text := Msg;
-      Y := MaxContentH;
+      Chunk := Rest;
+      Rest := '';
     end
     else
-      Host.Height := Y;
+    begin
+      Chunk := Copy(Rest, 1, P - 1);
+      Rest := Copy(Rest, P + 4, Length(Rest));
+    end;
 
-    F.ClientHeight := MargY + Y + MargY + BtnH + MargY;
+    { Every optional fragment ends with a blank line, so an empty chunk is the
+      normal case rather than a malformed message. }
+    if Trim(Chunk) = '' then
+      Continue;
 
-    Btn := TNewButton.Create(F);
-    Btn.Parent := F;
-    Btn.Caption := SetupMessage(msgButtonOK);
-    Btn.Width := F.CalculateButtonWidth([Btn.Caption]);
-    Btn.Height := BtnH;
-    Btn.Left := F.ClientWidth - Btn.Width - MargX;
-    Btn.Top := F.ClientHeight - BtnH - MargY;
-    Btn.Anchors := [akRight, akBottom];
-    Btn.ModalResult := mrOk;
-    { Cancel as well as Default, so Esc and the X button close it like OK.
-      There is nothing to decide here - the install has already happened. }
-    Btn.Default := True;
-    Btn.Cancel := True;
+    Para[N] := TNewStaticText.Create(WizardForm);
+    Para[N].Parent := Page;
+    Para[N].AutoSize := False;
+    Para[N].WordWrap := True;
+    Para[N].Left := L;
+    Para[N].Top := T + Y;
+    Para[N].Width := TextW;
+    Para[N].Caption := Chunk;
+    Para[N].AdjustHeight();
+    Y := Y + Para[N].Height + GapY;
+    N := N + 1;
+  end;
 
-    F.ActiveControl := Btn;
-    F.FlipAndCenterIfNeeded(True, WizardForm, False);
-    F.ShowModal();
-  finally
-    F.Free();
+  { No trailing gap under the last paragraph. }
+  if Y > GapY then
+    Y := Y - GapY;
+
+  { More than 64 paragraphs is not a real install, but it is not allowed to
+    silently drop the tail either: Rest <> '' sends it to the memo too. }
+  if (Y > MaxH) or (Rest <> '') then
+  begin
+    for I := 0 to N - 1 do
+      Para[I].Free();
+    Memo := TNewMemo.Create(WizardForm);
+    Memo.Parent := Page;
+    Memo.Left := L;
+    Memo.Top := T;
+    Memo.Width := TextW;
+    Memo.Height := MaxH;
+    Memo.ReadOnly := True;
+    Memo.WordWrap := True;
+    Memo.ScrollBars := ssVertical;
+    Memo.Text := Msg;
   end;
 end;
 
@@ -4107,9 +4095,10 @@ begin
              wizard closes.  Somebody who is not told that a window will open
              by itself, after the installer has apparently finished, has every
              reason to think something has gone wrong. }
-           AccountMsg := AccountMsg +
-                         'When you close this, a window opens to set the SDSYS password ' +
-                         'and check the installation.' + #13#10#13#10;
+           { 20 Sep 26 - NOTHING MORE IS SAID HERE: the Finished page's own last
+             sentence ("When you click Finish, a window opens to set the SDSYS
+             password and check the installation") now closes the same report, so
+             repeating it in this paragraph would print it twice on one screen. }
 
            { 25 Aug 26 - WHAT THE PASSWORD IS FOR DEPENDS ON THE INSTALL, and
              the full-install sentence is false on a stand-alone system: there
@@ -4169,8 +4158,7 @@ begin
       { Lower case for the reason given at code 0 above. }
       { 18 Sep 26 - CODE 2 IS ABOUT SDSYS NOW, RELEASE_1.1 64: the install found
         the Windows account already there and left it alone. }
-      2: AccountMsg := 'The SDSYS account already existed. When you close this, a window ' +
-                       'opens for the SDSYS password and the installation check.' + #13#10#13#10;
+      2: AccountMsg := 'The SDSYS account already existed.' + #13#10#13#10;
     else
       { Named rather than buried: without an account the person who just
         installed SD cannot use it at all, and the recovery is one command.
@@ -4236,7 +4224,7 @@ begin
                         not do - the verb was voc_template-only. RELEASE_1.1 71 put it in
                         newvoc on the owner's ruling, so they CAN, but only for their OWN
                         account. The qualifier is the point; do not drop it. }
-                      'The window that opens after this one asks for its password.' + #13#10#13#10;
+                      'The window that opens on Finish also asks for its password.' + #13#10#13#10;
       { Nothing to announce: the account was there before this install, so it
         is not news and its password and routes are whatever they already were. }
       2: AttachMsg := '';
@@ -4287,7 +4275,16 @@ begin
       being a MsgBox.  A MsgBox is captioned "Setup" and cannot be told
       otherwise, so the body had to say it; a TSetupForm has a caption of its
       own and saying it twice wasted the first line of a box being shortened. }
-    ShowSummaryBox('SD Core is installed',
+    { 20 Sep 26 - THE sshd_config RESULT JOINS THE REPORT, right after the ssh
+      result it belongs beside, instead of opening a second popup.  It has no
+      trailing blank line of its own (it used to be the whole of a MsgBox). }
+    if SshLimit <> '' then
+      SshLimit := SshLimit + #13#10#13#10;
+
+    { ASSEMBLED, NOT SHOWN.  This was ShowSummaryBox('SD Core is installed', ...)
+      - a modal box that closed before the wizard's own last page opened.  The
+      Finished page draws FinishReport now (CurPageChanged). }
+    FinishReport :=
            { EMPTY ON EVERY HEALTHY INSTALL, and first when it is not.  This is
              the one line in the box that reports a hole rather than a setting,
              so it is read before the sign-out instruction rather than after
@@ -4366,6 +4363,7 @@ begin
              machine where the install failed or wants a restart it changes what
              the account advice MEANS - an account nobody can sign in to yet. }
            SshMsg +
+           SshLimit +
            SshFw +
            ApiFw +
            { 31 Aug 26 - EMPTY ON A FIRST INSTALL, and it is the three above
@@ -4395,7 +4393,7 @@ begin
              themselves will use.  Empty on a reinstall, which is the common
              case and is why it is its own string rather than a paragraph
              welded into AccountMsg's branches. }
-           AttachMsg);
+           AttachMsg;
     { 20 Sep 26 - THE "TO GIVE SOMEBODY ELSE ACCESS" BLOCK THAT ENDED THIS BOX IS
       OUT, on the owner's rule that dialogs deal only with the installing task and
       that how-to-use text belongs in the installation documentation.  IT IS
@@ -4405,11 +4403,12 @@ begin
       remote-control tools, so the screen freezes.  The history (15 and 16 Aug
       2026) is in HISTORY.md. }
 
-    { Its own box rather than a paragraph in the one above: this one reports
-      what happened to a file outside SD's tree, and it can say "nothing was
-      changed", which must not be buried under six paragraphs about accounts. }
-    if SshLimit <> '' then
-      MsgBox(SshLimit, mbInformation, MB_OK);
+    { 20 Sep 26 - THE sshd_config RESULT IS NO LONGER ITS OWN BOX (owner:
+      consolidate the popups into the final screen).  The reason it had one -
+      that it reports what happened to a file outside SD's tree and can say
+      "nothing was changed", which must not be buried under six paragraphs about
+      accounts - is met by where it now sits: directly under the ssh result, ABOVE
+      the SDSYS and account paragraphs.  See FinishReport above. }
 
     if not DataTreeAbsent then
     begin
@@ -4523,19 +4522,15 @@ begin
         EVERY CLAIM BELOW COMES FROM stage.py's OWN LISTS - SDSYS_PRESERVE for
         what is kept, SDSYS_SHIP minus it for what is replaced.  Check it there
         rather than against this comment if either list moves. }
-      { PRE_RELEASE_FIXES 150, 3 Sep 26 - WIDENED, NOT TRIMMED.  With 135's
-        AccessMsg and 147's ApiRuleMsg both present this box reached ~818px as a
-        plain MsgBox (measured off sdxfer\p147-witness-keptbox.png), and a MsgBox
-        has no settable width and does not scroll, so the tail fell off a 768
-        screen.  A first pass trimmed the wording to fit; the owner's answer was
-        instead to render it through ShowSummaryBox - the same custom form the
-        healthy-install box already uses (see its header comment).  It sets a
-        width, spaces paragraphs 7px apart instead of by blank lines, and falls
-        back to a scrolling memo when even that will not fit, so a clip cannot
-        recur on any screen.  The wording is the full 135/147 text, restored:
-        the fit constraint that forced a trim is gone, and MsgBox's fixed narrow
-        column - the reason the box could not be wider - is gone with it. }
-      ShowSummaryBox('SD Core database kept',
+      { PRE_RELEASE_FIXES 150, 3 Sep 26 - WIDENED, NOT TRIMMED: with 135's
+        AccessMsg and 147's ApiRuleMsg this box reached ~818px as a plain MsgBox
+        and its tail fell off a 768 screen, so it was moved to the same custom
+        form as the healthy-install box, which scrolls when it will not fit.
+        20 Sep 26 - AND NOW IT IS NOT A BOX AT ALL: it is appended to FinishReport
+        and drawn on the Finished page with the rest, so an upgrade over a kept
+        database no longer raises a second popup.  The scrolling fallback went
+        with it (ShowFinishedReport). }
+      FinishReport := FinishReport +
              'An existing SD Core database was found at ' + ExpandConstant('{#DataDir}\sdsys') + ' ' +
              'and was kept.' + #13#10#13#10 +
              { PRE_RELEASE_FIXES 135.  Directly under the promise it qualifies,
@@ -4556,7 +4551,7 @@ begin
              { PRE_RELEASE_FIXES 147.  Last, because it is the exception to the
                sentence immediately above it: the configuration was kept and the
                rule in front of it was not.  Empty unless that was measured. }
-             ApiRuleMsg);
+             ApiRuleMsg + #13#10#13#10;
     end;
 
     { AND THE INSTALL ENDS IN SD.  Owner's decision, 21 Aug 2026: the installing
@@ -4609,38 +4604,27 @@ begin
     Setup has finished, click Finish to exit - which is now untrue by omission:
     clicking Finish opens a console window that asks for a password.
 
-    THE EXPLANATION EXISTS ALREADY, in the box at ssPostInstall, and that is
-    exactly why this is needed rather than redundant.  That box appears BEFORE
-    this page and is dismissed before the reader gets here, so at the moment
-    they decide to click Finish there is nothing on screen about it.  A window
-    that opens by itself after an installer has apparently finished reads as a
-    fault unless the page they clicked said it would.
+    20 Sep 26 - AND IT NOW CARRIES THE WHOLE REPORT.  The closing report used to
+    appear in a modal box at ssPostInstall (and a second box for the sshd_config
+    result) BEFORE this page, dismissed before the reader got here.  Owner:
+    "Can the information on the two popups be consolidated into the final
+    screen".  So this page opens with "Setup has finished", then FinishReport
+    (what happened, and any step that did not complete with the command to run),
+    then the sentence about the window that opens on Finish.
 
-    FinishedLabel IS THE STOCK LABEL and setting its Caption is the supported
-    way to change it; there is no need for a custom page.  Only the ACCOUNT
-    half varies, so the text is fixed rather than built. }
-  if (CurPageID = wpFinished) and InstallReachedPostInstall then
+    THE STOCK LABEL CLIPS SILENTLY and would hide the tail of a long report, which
+    is where the repair commands are - the first version of this page was cut off
+    mid-sentence for exactly that reason (22 Aug 26).  So the report is drawn by
+    ShowFinishedReport, which lays the paragraphs out itself and falls back to a
+    scrolling memo when they will not fit.  The flag stops a second CurPageChanged
+    from drawing it twice. }
+  if (CurPageID = wpFinished) and InstallReachedPostInstall and not FinishReportShown then
   begin
-    { THE LABEL HAS TO BE GROWN BEFORE IT IS FILLED, and the first version of
-      this did not - the owner's screenshot showed the text cut off mid-sentence
-      at "It closes by".  Inno AUTO-SIZES FinishedLabel to the stock text, which
-      is three short lines, so anything longer is simply clipped at the old
-      height.  Nothing warns: the Caption assignment succeeds and the words are
-      just not drawn.
-
-      Taken from the PARENT rather than set to a number, so it is right at any
-      DPI and font size.  The stock page leaves the whole area below the label
-      empty, so there is nothing under it to overlap. }
-    WizardForm.FinishedLabel.Height :=
-      WizardForm.FinishedLabel.Parent.ClientHeight - WizardForm.FinishedLabel.Top - ScaleY(8);
-
-    { NO HAND-WRAPPED LINES EITHER.  The label word-wraps, so the leading spaces
-      that used to indent the continuation of each numbered item fought with it
-      and made the clipping worse.  Only the breaks BETWEEN items are explicit. }
-    WizardForm.FinishedLabel.Caption :=
-      'Setup has finished installing SD Core.' + #13#10#13#10 +
+    FinishReportShown := True;
+    ShowFinishedReport('SD Core is installed.' + #13#10#13#10 +
+      FinishReport +
       'When you click Finish, a window opens to set the SDSYS password and ' +
-      'check the installation. Setting up is not finished until that window says so.';
+      'check the installation. Setting up is not finished until that window says so.');
   end;
 
   (* 20 Sep 26 - THE "OpenSSH Server is already installed" POPUP IS GONE, and with

@@ -300,7 +300,7 @@ $RETIRED = @(
     # know"); the retired half still stops the old heading returning.
     @{ Ref = '129'
        Retired     = 'ssh-only model'
-       Replacement = 'sshd_config was updated' }
+       Replacement = 'ssh is now limited to members of' }
     @{ Ref = '129b'
        Retired     = 'THE COST, SAID PLAINLY: scp and sftp'
        Replacement = 'No ssh server was installed' }
@@ -578,12 +578,12 @@ Check ("a nonsense token is NOT found ($($absent.Count) hit(s))") ($absent.Count
 # evening.  It is now the silent-install refusal: "... a silent install has nobody '
 # + 'to ask.".  Pick a new one the same way whenever the text under it is edited: it
 # has to be on screen and on NO single source line.
-# 20 Sep 26, LATER - IT MOVED A FOURTH TIME, to the ssh report's first line ("...
-# sshd_config was updated and the ' + 'ssh service restarted; ..."), because the
-# terse rule cut the silent-install refusal down to one line.
-$straddle = Find-Any 'was updated and the ssh service restarted'
+# 20 Sep 26, LATER - IT MOVED A FIFTH TIME, to the sshd_config result ("... and port
+# forwarding is off. ' + 'Any existing sshd_config was kept ..."), because the
+# consolidation of the closing popups shortened the ssh report line it had moved to.
+$straddle = Find-Any 'port forwarding is off. Any existing sshd_config'
 Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") ($straddle.Count -gt 0) `
-      'sd.iss renders this across the ssh report''s two lines and no single line carries it - the flattening is not working'
+      'sd.iss renders this across the sshd_config result''s two lines and no single line carries it - the flattening is not working'
 $inBrace = Find-Any 'Lower case for the reason given at code 0'
 Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
       ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))

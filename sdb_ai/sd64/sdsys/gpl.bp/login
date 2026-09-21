@@ -1319,7 +1319,19 @@ internal.gate:
 *     Windows block of the shared message space (12000-12999, agreed with the Linux agent 20 Sep
 *     2026).  IT WAS 10922 FOR ONE AFTERNOON, and Linux had shipped 10922 (an SDSYS API refusal)
 *     the day before - the guess that 10919-10922 were "ours" was made without checking their side.
-      display sysmsg(12000, gate.writer) ;* Internal session admitted (opened by %1)
+*     20 Sep 26 - THE INSTALLER'S OWN FINISHING WINDOW IS THE ONE EXCEPTION.  Owner, looking
+*     at that window: delete "Internal session admitted (opened by finish-install pid=... )"
+*     from it.  R4 still holds for every other use - the installer's hidden steps, the
+*     bootstrap, the verifiers and the seat all still announce, and this session is STILL
+*     AUDITED (the K$AUDIT line above is untouched).  It is deliberately NOT "-QUIET
+*     silences it": that would let any -QUIET caller hide the notice, including the hidden
+*     installer steps whose log it exists to land in.  Both halves must hold - the writer
+*     is finish-install AND the session was started -QUIET, which finish-install.ps1 does.
+      announce = @true
+      if gate.writer[1, 14] = 'finish-install' then
+         if bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET) then announce = @false
+      end
+      if announce then display sysmsg(12000, gate.writer) ;* Internal session admitted (opened by %1)
    end
    return
 

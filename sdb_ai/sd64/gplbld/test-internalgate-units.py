@@ -148,6 +148,20 @@ def gate_problems(login_text):
     # R4: an admission is SAID ON THE SCREEN as well as audited, so it lands in every transcript
     if not re.search(r"if gate\.ok then.*?display sysmsg\(12000, gate\.writer\)", body, re.S):
         p.append("an admission is not announced on the screen (display sysmsg(12000, gate.writer))")
+    # 20 Sep 26 - THE ONE EXCEPTION TO THAT ANNOUNCEMENT, AND IT MUST STAY ONE.  The owner had the
+    # installer's finishing window stop printing "Internal session admitted (opened by finish-install
+    # ...)".  R4 - the rule the Linux agent asked both ports to share - still holds for every other
+    # use (the installer's hidden steps, the bootstrap, the verifiers, the seat), so the exception
+    # needs BOTH halves: the writer is finish-install AND the session was started -QUIET.  A blanket
+    # "-QUIET silences it" would let any -QUIET caller hide the notice, and a writer-only rule would
+    # hide it from a person who did not ask for quiet.  The audit line above is untouched either way.
+    if not re.search(r"if gate\.writer\[1, 14\] = 'finish-install' then\s+"
+                     r"if bitand\(kernel\(K\$COMMAND\.OPTIONS, 0\), CMD\.QUIET\) then announce = @false", body):
+        p.append("the announcement exception is missing, or is not limited to finish-install AND -QUIET")
+    if not re.search(r"if announce then display sysmsg\(12000, gate\.writer\)", body):
+        p.append("the announcement is not conditional on the 'announce' decision")
+    if not re.search(r"announce = @true\s+if gate\.writer", body):
+        p.append("the announcement does not default to ON (announce = @true before the exception)")
     return p
 
 
@@ -189,6 +203,19 @@ row(not os.path.isfile(os.path.join(SD64, "sdsys", "messages", "10922")),
     "10922 is NOT here: Linux shipped it on 19 Sep as an SDSYS API refusal, and this port's first guess at it was wrong")
 mut5 = login.replace("display sysmsg(12000, gate.writer)", "null")
 row(any("not announced" in x for x in gate_problems(mut5)), "MUTANT: a gate that stops announcing an admission is caught")
+exc_q = "if bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET) then announce = @false"
+exc_w = "if gate.writer[1, 14] = 'finish-install' then"
+row(exc_q in login and exc_w in login,
+    "CONTROL: both halves the announcement-exception mutants remove were found in the live file")
+row(any("limited to finish-install AND -QUIET" in x for x in gate_problems(login.replace(exc_q, "announce = @false"))),
+    "MUTANT: an exception that hides the announcement from finish-install WITHOUT -QUIET is caught")
+row(any("limited to finish-install AND -QUIET" in x for x in gate_problems(login.replace(exc_w, "if @true then"))),
+    "MUTANT: a blanket '-QUIET silences the announcement' (any writer) is caught")
+row(any("limited to finish-install AND -QUIET" in x for x in gate_problems(
+        login.replace(exc_w, "if gate.writer[1, 1] = 'f' then"))),
+    "MUTANT: a widened writer match is caught")
+row(any("default to ON" in x for x in gate_problems(login.replace("announce = @true", "announce = @false"))),
+    "MUTANT: an announcement that defaults to OFF is caught")
 mut6 = login.replace("create gate.sf else gate.sf = ''", "gate.sf = ''")
 row(any("never CREATEd" in x for x in gate_problems(mut6)),
     "MUTANT: the age scratch file opened with OPENSEQ and never created (the b202 defect) is caught")

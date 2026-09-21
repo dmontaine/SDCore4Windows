@@ -427,8 +427,8 @@ function Keep-ExistingPassword {
 }
 
 Write-Host ''
-Write-Host '  SD is installed.' -ForegroundColor White
-Write-Host '  ================'
+Write-Host '  SD Core is installed.' -ForegroundColor White
+Write-Host '  ====================='
 Write-Host ''
 
 # 18 Sep 26 - WHAT THIS WINDOW SAYS NOW, AND WHY IT SAYS LESS THAN IT DID.  It
