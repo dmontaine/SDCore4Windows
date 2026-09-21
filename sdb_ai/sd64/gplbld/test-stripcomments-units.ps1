@@ -301,6 +301,61 @@ try {
     Remove-Item -LiteralPath $fx4 -Force -ErrorAction SilentlyContinue
 }
 
+# 20 Sep 26 - RELEASE_1.1 81's "Not done, and named" pair, closed as tests
+# rather than as a behaviour change - the header above Remove-HashComment
+# already calls the string-literal case "bounded by the caller's own
+# controls", the same standing policy 'hash' and 'basic' carry for their own
+# string caveats.  These two rows DOCUMENT that known shape rather than
+# fixing it, so a future edit that quietly changed it would be caught here
+# instead of discovered downstream.  A SEPARATE fixture, not appended to
+# $fx4 above: $fx4's last line is deliberately unterminated to prove a block
+# runs to end of file, so anything appended after it would be swallowed by
+# that same block and would prove nothing about the case below it.
+$fx4b = Join-Path ([System.IO.Path]::GetTempPath()) ('stripfx-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+Set-Content -LiteralPath $fx4b -Value @(
+    "$" + "strLit1 = 'kept-twentyone <# secret-twentytwo'",
+    "$" + "strLit2 = 'secret-twentythree'  #> kept-twentyfour",
+    "$" + "kept3 = 'kept-twentyfive'",
+    "$" + "hereStr = @'",
+    'line one of a here-string, kept-twentysix',
+    'a line with <# secret-twentyseven #> on it, kept-twentyeight',
+    "'@",
+    "$" + "kept4 = 'kept-twentynine'"
+) -Encoding ASCII
+try {
+    $t4b = Get-StrippedText -Path $fx4b -Kind 'hashblock'
+    # A "<#" inside an ordinary string literal opens a block exactly as a real
+    # one would, because Remove-HashComment has no idea of PowerShell string
+    # syntax - it is a left-to-right scan over "#" alone.  Kept-before, then
+    # everything through the first later "#>" is treated as in-block, then
+    # kept-after on the line that closed it.
+    Check 'text before a string-literal "<#" survives'    ($t4b -match 'kept-twentyone')     $null
+    Check 'a "<#" inside a string literal DOES open a block' ($t4b -notmatch 'secret-twentytwo') `
+          'RELEASE_1.1 81''s documented string caveat has changed shape - this must stay a known limitation, not a silent regression'
+    Check 'in-block content up to the accidental closer is eaten' ($t4b -notmatch 'secret-twentythree') $null
+    Check 'text after the accidental closer survives'     ($t4b -match 'kept-twentyfour')     `
+          'the accidental block never closed, so it ran on eating real code'
+    Check 'ordinary code after the pair is unaffected'    ($t4b -match 'kept-twentyfive')      $null
+
+    # THE OTHER NAMED GAP: a "<# ... #>" span that opens and closes on ONE
+    # LINE, where that line sits INSIDE what is, to a real PowerShell parser,
+    # a here-string (@' ... '@).  Remove-HashComment is exactly as blind to
+    # the here-string's boundaries as it is to a plain string literal above -
+    # it never sees "@'" or "'@" as anything special - so the inline span is
+    # stripped exactly as PRE_RELEASE 131's ordinary inline-block row already
+    # proves for code, and this row is what was missing: the SAME mechanic,
+    # exercised where the surrounding text is here-string content rather than
+    # live statements either side of it.
+    Check 'text before the here-string is untouched'      ($t4b -match 'kept-twentysix')      $null
+    Check 'a same-line "<# #>" span inside a here-string is stripped' ($t4b -notmatch 'secret-twentyseven') `
+          'the inline-span rule does not reach a line that happens to sit inside a here-string'
+    Check 'text after that span, same line, survives'     ($t4b -match 'kept-twentyeight')     `
+          'the machine stopped at the span instead of resuming after it, inside a here-string too'
+    Check 'code after the here-string closes is unaffected' ($t4b -match 'kept-twentynine')    $null
+} finally {
+    Remove-Item -LiteralPath $fx4b -Force -ErrorAction SilentlyContinue
+}
+
 # ***THE REFUSAL, AND IT IS THE HALF THAT KEEPS THE FIX FROM ROTTING.***  'hash'
 # is the obvious name and a later caller with a .ps1 in hand would reach for it;
 # that is exactly how the 655 leaked lines happened.  So the pair is refused at

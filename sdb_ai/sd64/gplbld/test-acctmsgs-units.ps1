@@ -47,12 +47,43 @@ function T($name, $expected, $got) {
     Write-Output ("  [{0}] {1}: expected {2}, got {3}" -f $(if($ok){'PASS'}else{'FAIL'}), $name, $expected, $got)
 }
 
+# 20 Sep 26 - RELEASE_1.1 83's RESIDUAL, THE CONTROL FOR BOTH FIXED BRANCHES.
+# gpl.bp/pw_complex's own rule, reproduced here rather than imported, because
+# this is a PowerShell test over a PowerShell function and the point is to
+# prove the GENERATED PASSWORD would clear SD's gate - the same reason the
+# real pw_complex check is not itself callable from here. Mirrors
+# pw_complex's case order for the symbol test: any 32-126 byte that is not
+# already a letter or digit counts.
+function Test-AllFourClasses([string]$pw) {
+    if ($pw.Length -lt 8) { return $false }
+    $lower = $false; $upper = $false; $digit = $false; $symbol = $false
+    foreach ($ch in $pw.ToCharArray()) {
+        $code = [int][char]$ch
+        if     ($code -ge 97 -and $code -le 122) { $lower  = $true }
+        elseif ($code -ge 65 -and $code -le 90)  { $upper  = $true }
+        elseif ($code -ge 48 -and $code -le 57)  { $digit  = $true }
+        elseif ($code -ge 32 -and $code -le 126) { $symbol = $true }
+        else                                     { return $false }   # pw_complex fails outright, not just "not a symbol"
+    }
+    return ($lower -and $upper -and $digit -and $symbol)
+}
+
 # --- a minimum length in force: one character short, whatever else is set ----
 foreach ($min in @(2, 8, 14, 20)) {
     $c = Select-RefusedPassword $min 0
     T ("min $min -> length is min-1")        ($min - 1) $c.Password.Length
     T ("min $min -> expects refusal")        'refused'  $c.Expect
 }
+# 20 Sep 26 - THE ROW THAT MATTERS: a length ONE SHORT of a real minimum
+# must otherwise clear pw_complex, or SD refuses it on complexity and this
+# arm never reaches Windows at all - measured as the actual defect, not
+# assumed: RELEASE_1.1 83 named exactly this.  14 is used because its
+# password (13 characters) is already past SD's own 8-floor, so this row
+# isolates the character-class question from the length one; min 8's own
+# row above (password length 7) is deliberately still short of SD's floor
+# too and is not expected to clear this check.
+$c = Select-RefusedPassword 14 0
+T 'min 14 -> would clear pw_complex but for the length' $true (Test-AllFourClasses $c.Password)
 
 # LENGTH WINS OVER COMPLEXITY, because a length rule is arithmetic and a
 # complexity rule is a judgement about character classes.
@@ -60,16 +91,25 @@ $c = Select-RefusedPassword 14 1
 T 'min 14 + complexity -> still the length branch' 13 $c.Password.Length
 T 'min 14 + complexity -> expects refusal'         'refused' $c.Expect
 
-# --- complexity alone ---------------------------------------------------------
+# --- complexity alone ----------------------------------------------------------
+# 20 Sep 26 - RE-AIMED WITH THE FUNCTION, RELEASE_1.1 83's OTHER RESIDUAL.
+# The password used to be deliberately ONE character class ('a' * 14), which
+# is the same bug as the length branch had: SD's OWN pw_complex refuses it on
+# complexity before Windows is ever asked, so the arm measured nothing on any
+# machine.  A password that clears SD's rule cannot be a Windows-complexity
+# probe any more either, because SD's four-class rule already implies
+# Windows' standard three-of-four one - so the row now asserts ACCEPTANCE,
+# the same shape as "no rule in force" below, and asserts the password
+# actually clears pw_complex rather than assuming the new generator does.
 $c = Select-RefusedPassword 0 1
 T 'complexity only -> 14 characters'            14 $c.Password.Length
-T 'complexity only -> one character class'      $true ($c.Password -cmatch '^[a-z]+$')
-T 'complexity only -> expects refusal'          'refused' $c.Expect
+T 'complexity only -> clears all four classes'  $true (Test-AllFourClasses $c.Password)
+T 'complexity only -> expects ACCEPTANCE'       'accepted' $c.Expect
 # min 1 is below the length branch's threshold of 2, so complexity must still
 # fire - and the result must not be SHORTER than the minimum, or it would be
 # refused for the wrong reason and the evidence would name the wrong rule.
 $c = Select-RefusedPassword 1 1
-T 'min 1 + complexity -> complexity branch'     $true ($c.Password -cmatch '^[a-z]+$')
+T 'min 1 + complexity -> complexity branch'     $true (Test-AllFourClasses $c.Password)
 T 'min 1 + complexity -> not short of the min'  $true ($c.Password.Length -ge 1)
 
 # --- no rule in force ---------------------------------------------------------

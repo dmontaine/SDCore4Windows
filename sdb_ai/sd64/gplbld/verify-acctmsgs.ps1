@@ -417,7 +417,20 @@ function Select-RefusedPassword([int]$min, [int]$complexity) {
     if ($min -ge 2) {
         # Clamped: Windows caps the minimum at 20 today, but a Substring past
         # the end of the seed would throw, and a guard costs one line.
-        $seed = 'Aa1Bb2Cc3Dd4Ee5Ff6Gg7Hh8'
+        #
+        # 20 Sep 26 - RELEASE_1.1 83's OWN RESIDUAL, CLOSED HERE: THE SEED
+        # GAINED A SYMBOL.  Without one, every password built from it fails
+        # SD's OWN pw_complex (gpl.bp/pw_complex, RELEASE_1.1 75: all four of
+        # lower, upper, digit AND symbol, checked before length even matters
+        # to a caller - pw_complex's length gate is a SEPARATE, earlier
+        # return) on COMPLEXITY grounds regardless of what length was sent -
+        # so SET_PASSWD refused it before Windows ever saw it, arm B's
+        # 'Windows refused that password' text never appeared, and the arm
+        # silently measured nothing on every machine, not only lenient ones.
+        # All four classes now, so the one thing left wrong with the
+        # password is the one character it is short of the machine's
+        # minimum - the thing this branch exists to probe.
+        $seed = 'Aa1!Bb2@Cc3#Dd4$Ee5%Ff6^Gg7&Hh8*'
         $want = [Math]::Min($min - 1, $seed.Length * 20)
         return [pscustomobject]@{
             Password = ($seed * 20).Substring(0, $want)
@@ -426,11 +439,33 @@ function Select-RefusedPassword([int]$min, [int]$complexity) {
         }
     }
     if ($complexity -eq 1) {
+        # 20 Sep 26 - RELEASE_1.1 83's OTHER RESIDUAL.  RE-AIMED, NOT PATCHED
+        # THE SAME WAY AS THE BRANCH ABOVE: a single-character-class password
+        # ('a' * $n) is the identical bug, not a different one - it fails
+        # SD's OWN pw_complex on complexity before Windows is ever asked, so
+        # this arm has never once measured what it claims to, on any policy.
+        #
+        # AND A FIXED PASSWORD CANNOT SIMPLY REPLACE IT, BECAUSE SD'S RULE NOW
+        # SUBSUMES WINDOWS' STANDARD ONE.  Windows' complexity policy
+        # (PASSFILT.DLL) requires 3 of {lower, upper, digit, symbol} plus a
+        # 6-character floor (and that the password not contain the account
+        # name, which neither SD nor this PURE function - it is handed no
+        # account name - checks); SD requires ALL FOUR classes plus an
+        # 8-character floor. Any password meeting SD's rule therefore already
+        # meets Windows' character-class and length requirements, so it is
+        # expected to be ACCEPTED here, not refused - the same shape as the
+        # "no rule in force" case below, for a different reason: not because
+        # nothing is asking, but because SD already asks for more than
+        # Windows' standard complexity check does.
         $n = [Math]::Max($min, 14)
+        $unit = 'Aa1!'
+        $pw = ($unit * [Math]::Ceiling($n / [double]$unit.Length)).Substring(0, $n)
         return [pscustomobject]@{
-            Password = ('a' * $n)
-            Why      = ("$n lower-case letters, which fails complexity on character classes, not on length")
-            Expect   = 'refused'
+            Password = $pw
+            Why      = ("$n characters meeting SD's own (stricter) rule - Windows' complexity " +
+                        "policy asks for 3 of 4 character classes and SD already requires all " +
+                        "four, so this is expected to be ACCEPTED and the arm to SKIP")
+            Expect   = 'accepted'
         }
     }
     return [pscustomobject]@{
