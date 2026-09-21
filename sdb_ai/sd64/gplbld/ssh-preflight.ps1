@@ -155,8 +155,7 @@ try {
 
         if (-not $mine) {
             Refuse ('An ssh service that is not part of Windows is installed on this ' +
-                    'computer: "' + $k.PSChildName + '" at ' + $bin + '. SD supports only ' +
-                    'the OpenSSH server that ships with Windows.')
+                    'computer: "' + $k.PSChildName + '" at ' + $bin + '.')
         }
     }
     if ($foundAny -eq 0) { Say '  none' }
@@ -200,7 +199,7 @@ if ($listeners.Count -eq 0) {
             Say ('  ' + $l.LocalAddress + ':22 held by ' + $pname + '  ' + $path)
             if (-not (IsMicrosoftPath $path)) {
                 Refuse ('Another ssh server is already using port 22 on this computer: ' +
-                        $pname + ' (' + $path + '). SD requires Windows'' own OpenSSH server.')
+                        $pname + ' (' + $path + ').')
             }
         }
         elseif ($pname -ieq 'sshd' -and $sshdServiceIsMicrosoft) {
@@ -213,7 +212,7 @@ if ($listeners.Count -eq 0) {
         elseif ($pname) {
             Say ('  ' + $l.LocalAddress + ':22 held by ' + $pname + '  (path unavailable)')
             Refuse ('Something other than Windows'' own ssh server is using port 22 on this ' +
-                    'computer: ' + $pname + '. SD requires Windows'' own OpenSSH server.')
+                    'computer: ' + $pname + '.')
         }
         else {
             Say ('  ' + $l.LocalAddress + ':22 held by an unknown process')

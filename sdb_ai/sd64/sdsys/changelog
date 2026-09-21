@@ -11,6 +11,11 @@ while porting from it.
            what to run if a step did not complete.  The explanations of
            why were long and are gone.  Nothing Setup does has changed.
 
+           The installer now gives the options and the results, and
+           nothing else.  Every warning and caveat that used to appear on
+           one of its screens is in the installation page of the
+           documentation, under "Warnings and things to know".
+
            The "Before you install" page, which listed every change Setup
            makes to Windows, has been removed.  One of its statements -
            that SD Core users can read each other's files - was out of

@@ -321,23 +321,18 @@ function Show-SdGroupNotice {
     Write-Host $subtitle -ForegroundColor Yellow
     Write-Host '  ============================================================' -ForegroundColor Yellow
     Write-Host ''
-    # 20 Sep 26 - SHORTENED (owner: the installer is "too verbose ... only what the
-    # user needs to know").  What stays: the group is why, signing out is the cure,
-    # and the two symptoms a person will actually see if they do not.
+    # 20 Sep 26, LATER - THE ACTION AND NOTHING ELSE (owner: dialogs deal only with
+    # the installing task; warnings and caveats go in the installer documentation).
+    # The "why" (Windows applies a new group only at sign-in) and the two symptoms a
+    # person sees if they do not sign out ("sd is not recognized", "cannot open its
+    # files") are in SDCoreWindowsDocs, GettingStarted/01-installation.md.
     if ($null -eq $State.InGroup) {
-        Write-Host '  This check could not read the "sdusers" group, so it cannot tell whether'
-        Write-Host '  your membership is waiting for a new sign-in.  Signing out and back in'
-        Write-Host '  settles it either way.'
+        Write-Host '  This check could not read the "sdusers" group.  Sign out and back in.'
     } else {
-        Write-Host '  The installer added you to the "sdusers" group.  Windows applies a new'
-        Write-Host '  group only when you sign in.'
+        Write-Host '  Sign out and back in (or restart) before using SD Core.'
     }
     Write-Host ''
-    Write-Host '  Until you sign out and back in, or restart, SD Core cannot open its'
-    Write-Host '  database files, and a window opened before the install says  sd  is'
-    Write-Host '  not recognized.'
-    Write-Host ''
-    Write-Host '  Afterwards, confirm it with  Start Menu  ->  SD  ->  Check the SD installation'
+    Write-Host '  Afterwards, run  Start Menu  ->  SD  ->  Check the SD installation'
     Write-Host ''
 
     # The window closes when this returns, so it waits here rather than at the
@@ -370,8 +365,7 @@ if (-not $Brief) {
     # 20 Sep 26 - ONE PARAGRAPH, where it was a five-item list and three
     # reassurances (owner: "too verbose").  It keeps the two facts a person needs
     # before answering the question below: it only reads, and it can be run again.
-    Write-Host '  This only reads; it changes nothing and takes a few seconds.  You can run'
-    Write-Host '  it again from the Start Menu:  SD  ->  Check the SD installation.'
+    Write-Host '  This only reads; it changes nothing.'
     Write-Host ''
 }
 
@@ -407,9 +401,8 @@ if (-not $Yes) {
 
 if ($script:elevated) {
     Write-Host ''
-    Write-Host '  NOTE: this window has administrator rights, so a pass here does not show' -ForegroundColor Yellow
-    Write-Host '  that your ordinary sign-in can use SD.  To check that, run this again' -ForegroundColor Yellow
-    Write-Host '  from an ORDINARY window (not "Run as administrator"):' -ForegroundColor Yellow
+    Write-Host '  This window has administrator rights.  To test your own sign-in, run the' -ForegroundColor Yellow
+    Write-Host '  check again from an ORDINARY window:' -ForegroundColor Yellow
     Rerun
 }
 
@@ -450,7 +443,7 @@ if ($onMachine -and $onProcess) {
     Ok 'You can run SD Core by typing "sd" - it is on this window''s PATH.'
 } elseif ($onMachine) {
     NotYet 'SD Core is on the system PATH, but this window does not have it yet.'
-    Info 'Not a fault: a window keeps the PATH it started with.  Open a new window.'
+    Info 'Open a new window.'
 } else {
     Info 'SD Core is not on the system PATH, so "sd" will not be found by name.'
     Info ('Run it by its full path - ' + $SdExe + ' - or install again and tick')
@@ -476,14 +469,12 @@ Section '  Your access to the database'
 
 if ($sdUsers.InGroup -eq $false) {
     Problem 'You are not a member of the "sdusers" group.'
-    Info 'That membership is what lets you open the database.  An administrator'
-    Info 'can add you with:   net localgroup sdusers "<your user name>" /add'
+    Info 'An administrator can add you with:   net localgroup sdusers "<your user name>" /add'
 } elseif ($null -eq $sdUsers.InGroup) {
     NotYet 'Could not read the "sdusers" group to check your membership.'
 } elseif (-not $sdUsers.InToken) {
     NotYet 'You are in the "sdusers" group, but this sign-in does not have it yet.'
-    Info 'Not a fault: a new group applies only when you sign in.  SIGN OUT AND'
-    Info 'BACK IN, then run this again.'
+    Info 'Sign out and back in, then run this again.'
 } else {
     Ok 'You are in the "sdusers" group and this sign-in has it.'
 }
@@ -506,7 +497,7 @@ if ($sysState -eq 'missing') {
         Info 'This sign-in carries the "sdusers" group, so it should be able to.'
     } else {
         NotYet 'The database could not be read on this sign-in.'
-        Info 'Same cause as above.  Sign out and back in, then run this again.'
+        Info 'Sign out and back in, then run this again.'
     }
 } else {
     Ok ('The database is in ' + $DataDir)
@@ -663,7 +654,6 @@ if ($null -eq $sshSvc) {
     Ok 'The ssh server is running.'
 } else {
     NotYet ('The ssh server is installed but is ' + $sshSvc.Status + '.')
-    Info 'OpenSSH often needs a restart after being installed.'
 }
 
 Write-Host ''

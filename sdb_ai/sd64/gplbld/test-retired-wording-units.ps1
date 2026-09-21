@@ -142,9 +142,12 @@ $RETIRED = @(
     # keeps a false sentence from coming back, and it does not care how long the
     # replacement is.  130d's silent-install refusal is now "a silent install has
     # nobody to ask".
+    # 20 Sep 26, LATER - THE OWNER'S TERSE RULE ("dialogs give the options, not why")
+    # cut the silent-install refusal to "SD Core cannot be installed silently. Run the
+    # installer normally.", so 130d's replacement is now its first sentence.
     @{ Ref = '130d'
        Retired     = 'not need one at this machine'
-       Replacement = 'a silent install has nobody to ask' }
+       Replacement = 'cannot be installed silently' }
     # 130e - the TENTH copy, in the /SILENT refusal, which nobody had looked at
     # because that dialog only fires on a silent install.  Found on the third
     # sweep, after two "that is all of them" claims.  THE PATTERN IS THE POINT:
@@ -211,7 +214,7 @@ $RETIRED = @(
     # part that was actually wrong.
     @{ Ref = '70'
        Retired     = 'Sign in and run this once in each account'
-       Replacement = 'refreshed the vocabulary of every registered account' }
+       Replacement = 'Every account has this release' }
     # 70b - AND THE REPLACEMENT ITSELF IS NOW RETIRED, ONE STEP LATER.  The
     # first fix made the instruction correct; the second made the instruction
     # unnecessary, because the installer now runs the walk itself
@@ -231,14 +234,22 @@ $RETIRED = @(
     # on every one of those paths.
     @{ Ref = '70b'
        Retired     = 'does not rebuild the one each account is using'
-       Replacement = 'there is nothing to run first' }
+       Replacement = 'Every account has this release' }
     # 70c - the premise the instruction rested on, retired with it.  It is the
     # sentence a reader would re-type from memory when editing this text, and
     # it is now FALSE: new commands DO appear in an existing account on their
     # own, because the upgrade puts them there.
     @{ Ref = '70c'
        Retired     = 'NEW COMMANDS DO NOT APPEAR IN AN EXISTING ACCOUNT'
-       Replacement = 'EVERY ACCOUNT ALREADY HAS THIS RELEASE' }
+       Replacement = 'Every account has this release' }
+    # 20 Sep 26 - ROWS 70, 70b AND 70c RE-AIMED TOGETHER.  Their three replacements
+    # were the three sentences of the closing box's vocabulary paragraph, which the
+    # owner's "as terse as possible" rule cut to one line: "Every account has this
+    # release's commands."  The retired halves are untouched - "Sign in and run this
+    # once in each account", "does not rebuild the one each account is using" and
+    # "NEW COMMANDS DO NOT APPEAR IN AN EXISTING ACCOUNT" are still the false claims
+    # that must not return.  (The old paragraph also said each account kept to its
+    # "own tier", which RELEASE_1.1 64 made untrue.)
     # 139 - the uninstaller's two destructive questions no longer answer to
     # Yes/No: their choices are labelled Keep and Delete (sd.iss KeepOrDelete).
     # REGISTERED BECAUSE THE OLD SENTENCE IS STILL CORRECT-SOUNDING PROSE - it
@@ -254,12 +265,16 @@ $RETIRED = @(
     # choice" / "Keep is the safe choice").  The retired wording is unchanged: a
     # dialog whose buttons say Keep and Delete must never tell the reader to
     # choose No.
+    # 20 Sep 26, LATER - "Keep is the normal/safe choice" was itself cut (the rule is
+    # options, not advice on which to choose), so these two rows now point at the
+    # questions themselves.  Their retired halves are what matter: a dialog whose
+    # buttons say Keep and Delete must never tell the reader to choose No.
     @{ Ref = '139'
        Retired     = 'Choose No to keep them'
-       Replacement = 'Keep is the normal choice' }
+       Replacement = 'Remove the SD Core database' }
     @{ Ref = '139b'
        Retired     = 'the account you expect, choose No'
-       Replacement = 'Keep is the safe choice' }
+       Replacement = 'Remove the Windows accounts SD Core created' }
     # 129 - "the ssh-only model" is 124's retired premise in compressed form.
     # 124 registered the long phrase; this said the same thing in four words and
     # sat in the very page 124 had corrected, which is how it survived.
@@ -278,12 +293,17 @@ $RETIRED = @(
     # RETIRED half is unchanged and still guards against the old heading returning;
     # if the owner ever wants the cost disclosed again, this row is where its
     # replacement goes back.
+    # 20 Sep 26, LATER STILL - THE TERSE RULE REMOVED EVERY SCP/SFTP MENTION FROM THE
+    # INSTALLER'S SCREENS, including the "scp and sftp are unchanged" line 129b had
+    # been re-aimed at.  129b's replacement is now the ssh report's first line and
+    # the cost is documented ONLY in SDCoreWindowsDocs ("Warnings and things to
+    # know"); the retired half still stops the old heading returning.
     @{ Ref = '129'
        Retired     = 'ssh-only model'
-       Replacement = 'limited ssh sign-in to its accounts' }
+       Replacement = 'sshd_config was updated' }
     @{ Ref = '129b'
        Retired     = 'THE COST, SAID PLAINLY: scp and sftp'
-       Replacement = 'scp and sftp are unchanged' }
+       Replacement = 'No ssh server was installed' }
     @{ Ref = '117'
        Retired     = 'ssh is now limited to members of "sdusers"'
        Replacement = 'ssh is now limited to members of "sdssh"' }
@@ -337,37 +357,39 @@ $RETIRED = @(
     # 20 Sep 26 - THAT SENTENCE WAS CUT WITH THE REST OF THE WIZARD'S EXPLANATION
     # (owner: "too verbose"), so the nine rows below shared the wizard's first
     # sentence about the routes instead.  THAT PAGE WAS THEN DELETED ITSELF (20 Sep
-    # 26, owner's instruction), so they now share the ssh task's own label: "SD Core
-    # accounts can sign in over ssh".  It is neutral, which is all a REPLACEMENT has
-    # to be - its job is to show the corrected wording is what is on screen; the
-    # RETIRED halves are what stop the administrator-route claims coming back.
+    # 26, owner's instruction), and the ssh task's label was then cut to "Install the
+    # OpenSSH server", so they now share the remote-ssh task's label: "Let other
+    # computers on your network connect to this one over ssh".  It is neutral, which
+    # is all a REPLACEMENT has to be - its job is to show the corrected wording is
+    # what is on screen; the RETIRED halves are what stop the administrator-route
+    # claims coming back.
     @{ Ref = 'R1.1-64b'
        Retired     = 'ssh and the API are refused'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64c'
        Retired     = 'always has both ssh and the API'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64d'
        Retired     = 'cannot be granted to one'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64e'
        Retired     = 'SD Core users and administrators'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64f'
        Retired     = 'have no remote access at all'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64g'
        Retired     = 'ssh is refused for an administrator'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64h'
        Retired     = 'no ssh, and the API only from this machine'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64i'
        Retired     = 'Administrators cannot sign in over ssh at all'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     @{ Ref = 'R1.1-64j'
        Retired     = 'can use the API only from this computer'
-       Replacement = 'SD Core accounts can sign in over ssh' }
+       Replacement = 'Let other computers on your network connect to this one over ssh' }
     # 20 Sep 26 - TWO SENTENCES THE INSTALLER'S CUT FOUND FALSE, not merely long.
     # (1) The existing-SDSYS closing line said the account "was left alone -
     # including its password, which is the one you set before".  Since the owner's
@@ -378,10 +400,10 @@ $RETIRED = @(
     # abolished the tiers.  Both are gone from the screen; these keep them gone.
     @{ Ref = '20Sep-a'
        Retired     = 'which is the one you set before'
-       Replacement = 'was already there and was kept' }
+       Replacement = 'The SDSYS account already existed' }
     @{ Ref = '20Sep-b'
        Retired     = 'command its tier does not allow'
-       Replacement = 'Your database, your accounts and your settings are kept' }
+       Replacement = 'Your database, accounts and settings are kept' }
 )
 
 # --------------------------------------------------------------------------
@@ -556,9 +578,12 @@ Check ("a nonsense token is NOT found ($($absent.Count) hit(s))") ($absent.Count
 # evening.  It is now the silent-install refusal: "... a silent install has nobody '
 # + 'to ask.".  Pick a new one the same way whenever the text under it is edited: it
 # has to be on screen and on NO single source line.
-$straddle = Find-Any 'has nobody to ask'
+# 20 Sep 26, LATER - IT MOVED A FOURTH TIME, to the ssh report's first line ("...
+# sshd_config was updated and the ' + 'ssh service restarted; ..."), because the
+# terse rule cut the silent-install refusal down to one line.
+$straddle = Find-Any 'was updated and the ssh service restarted'
 Check ("a phrase STRADDLING a '+' break is found ($($straddle.Count) hit(s))") ($straddle.Count -gt 0) `
-      'sd.iss renders this across the silent-install refusal''s two lines and no single line carries it - the flattening is not working'
+      'sd.iss renders this across the ssh report''s two lines and no single line carries it - the flattening is not working'
 $inBrace = Find-Any 'Lower case for the reason given at code 0'
 Check ("text inside a Pascal { } comment is stripped ($($inBrace.Count) hit(s))") ($inBrace.Count -eq 0) `
       ("a retirement documented beside its fix would raise a false positive: " + ($inBrace -join ', '))
