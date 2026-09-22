@@ -160,6 +160,24 @@ function Invoke-Icacls {
     finally { $ErrorActionPreference = $saved }
 }
 
+# 21 Sep 26 - RELEASE_1.1 84, THE SEAT'S SIDE EFFECT ON STEP 4.  The fixture
+# files are created by the SDSYS SEAT now (a task in SDSYS's own session), so
+# they are owned by the SDSYS-side identity, not by this elevated verifier - and
+# icacls /grant then gets "Access is denied" on %0 (measured, the b221 witness).
+# Pre-101 the console kept the caller's token, so the caller owned them and this
+# was never needed.  takeown reclaims them for the verifier (SeTakeOwnership,
+# which an elevated administrator holds) BEFORE the grants; it does not touch
+# ZZIDOWN (outside $base), so the ownership control in Step 5 is unaffected.
+function Reclaim-Ownership([string]$path, [string]$what) {
+    $saved = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $o = & takeown.exe /F $path /R /D Y 2>&1; $code = $LASTEXITCODE }
+    finally { $ErrorActionPreference = $saved }
+    if ($code -ne 0) {
+        Write-Host ($o | Out-String)
+        Refuse ("$what - takeown exited $code; the seat-created fixtures could not be reclaimed, so icacls cannot set their ACLs.")
+    }
+}
+
 # Apply a grant and REFUSE TO BELIEVE THE EXIT CODE ON ITS OWN.
 #
 # icacls exits 0 having failed on some of the items it was given: measured
@@ -728,6 +746,11 @@ try {
     # carries them there.  /inheritance:r FIRST, or the inherited sdusers:(M)
     # from C:\ProgramData\SD grants read and DENY does not deny.
     Step 4 'Setting the fixture ACLs and reading every one of them back'
+
+    # RECLAIM THE SEAT-CREATED FILES FIRST (see Reclaim-Ownership): they are
+    # owned by the SDSYS-side identity, and icacls /grant needs the verifier to
+    # own them or icacls reports "Access is denied" on %0.
+    Reclaim-Ownership $base 'the fixture tree'
 
     # GRANT FIRST, STRIP INHERITANCE SECOND.  THE OTHER ORDER SILENTLY LEAVES
     # THE CHILDREN UNTOUCHED, AND IT IS WHAT MADE RUN b25 LOOK LIKE A PRODUCT
