@@ -51,9 +51,20 @@
 # password in its window - which opens after the wizard, on Setup's elevated
 # token - and when it sets one it appends a line to this log saying the printed
 # password was replaced, so the log never stands as a working credential after
-# it has stopped being one.  SD's own credential register is empty at install
-# (the cycle prints "NO ACCOUNT HAS A PASSWORD") and a console login is by
-# Windows identity, so SD needs no password of SDSYS's - this one is Windows'.
+# it has stopped being one.  This password is the WINDOWS one.
+#
+# 22 Sep 26 - ***THE SENTENCE THAT STOOD HERE WAS FALSE AND IT COST AN HOUR.***
+# It read: "SD's own credential register is empty at install (the cycle prints
+# 'NO ACCOUNT HAS A PASSWORD') and a console login is by Windows identity, so SD
+# needs no password of SDSYS's - this one is Windows'."  The first half is true;
+# the conclusion is not.  MEASURED 21 Sep 2026: signing in to SD as the Windows
+# SDSYS account printed "Account SDSYS needs a password" and REFUSED to continue
+# without one - LOGIN demands a credential of every account, SDSYS included, and
+# an empty register at install is exactly why it asks on the first sign-in.
+# RELEASE_1.1 103.  ***OWNER'S RULING, 22 Sep 2026: "it is fine to require a
+# password at the console."***  So the behaviour stays and this comment was the
+# defect.  The password SDSYS is asked for there is an SD one, in $cred, and is
+# unrelated to the Windows password this script generates.
 #
 # EXIT CODES, and sd.iss reports each one differently:
 #   0  the account was created or brought back into shape

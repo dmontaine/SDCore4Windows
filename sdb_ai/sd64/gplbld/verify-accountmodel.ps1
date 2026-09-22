@@ -64,13 +64,21 @@ $ErrorActionPreference = 'Stop'
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
-# KNOWN, AND DELIBERATELY PINNED RATHER THAN HIDDEN: COUNT NEWVOC counts one directory entry
-# that LIST NEWVOC cannot print.  newvoc/%t ("Keyword to test soundex code") is the record
-# for "~", which the directory-file id mapping stores as "%T" (op_dio3.c:42) - the 19 Aug
-# 2026 "every file name is lower case" rename made it "%t", an escape the decoder does not
-# know (RELEASE_1.1 100).  While that stands COUNT is LIST + 1.  When 100 is fixed this
-# becomes 0 and the two count rows below go red until this is changed - which is the point.
-$KnownUnlisted = 1
+# 22 Sep 26 - RELEASE_1.1 100 IS FIXED AND THIS IS NOW 0, WHICH IS WHAT THIS CONSTANT WAS
+# BUILT TO ANNOUNCE.  It read 1, and its note said "when 100 is fixed this becomes 0 and the
+# two count rows below go red until this is changed - which is the point".  That is what
+# happened: newvoc/%t was renamed to newvoc/%T (a case-only rename, so through a temporary
+# name on NTFS), and COUNT NEWVOC and LIST NEWVOC should now agree exactly.
+#
+# WHY %T AND NOT %t, MEASURED RATHER THAN INFERRED - which was the recorded objection to the
+# fix.  op_dio4.c:1135 decodes the "~" escape by testing *(p+1) == 'T', UPPER CASE and first
+# character only; a lower-case %t falls through to the generic loop, where PRE_RELEASE 128
+# keeps an unknown escape LITERAL.  So "%t" read back as the id "%t" and never as "~".  The
+# UpperCaseString() above it at :1119 does not save it: that sits under
+# CASE_INSENSITIVE_FILE_SYSTEM, which dh_open.c:581 records as "a macro this tree never
+# defines".  The 19 Aug 2026 "every file name is lower case" rename is what broke it, and an
+# escape letter is not a name - which is why this one file is exempt from that rule.
+$KnownUnlisted = 0
 
 # THE EXTRAS: what a created account's VOC holds that NEWVOC does not - the four
 # per-account file pointers CREATEA makes - pinned from the first measured run (b213,
