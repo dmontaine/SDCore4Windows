@@ -620,7 +620,7 @@ if ($failed) {
 
 Write-Host ''
 Write-Host ('verify-routes: the keyboard is shut, the four keywords say what the access IS, ' +
-            'the tier keywords are refused at create time, MODIFY.ACCOUNT refuses SDSYS ' +
-            'as a subject, and RDPACCOUNT is gone.') -ForegroundColor Green
+            'the tier keywords are refused at create time, MODIFY.ACCOUNT gives SDSYS ' +
+            'the API route and nothing else, and RDPACCOUNT is gone.') -ForegroundColor Green
 try { Stop-Transcript | Out-Null } catch { }
 exit 0
