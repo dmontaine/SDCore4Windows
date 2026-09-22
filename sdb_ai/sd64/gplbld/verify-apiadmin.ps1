@@ -57,8 +57,24 @@
 .PARAMETER Port
     Loopback port the API listener uses.  4243 is the shipped default.
 
+.PARAMETER NoFixture
+    22 Sep 26 - RELEASE_1.1 76's owed falsification check.  Skips planting
+    os.users\SDSYS for step 5's local OS.EXECUTE control, so that leg runs
+    against the tree's real, unplanted state instead.  The header comment at
+    $osUsersDir says what this is expected to show (the control refused, for
+    a MODEL reason - os_permitted() falling through to a record that is not
+    there) - that reasoning was READ FROM SOURCE, NOT RUN, when it was
+    written, and this flag is what runs it.  The assertion this changes is
+    reported under a DIFFERENTLY NAMED check ('falsification: ...'), not a
+    flipped expected value on the existing one - entry 64 forbids flipping
+    a check's own expected value in place, and a falsification run is a
+    different claim in any case.  A run with this flag is not a substitute
+    for the ordinary witnessed run; do both.
+
 .EXAMPLE
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-apiadmin.ps1 -Prefix sdapia1
+.EXAMPLE
+    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-apiadmin.ps1 -Prefix sdapia1 -NoFixture
 #>
 
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
@@ -73,7 +89,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
-    [int] $Port = 4243
+    [int] $Port = 4243,
+    [switch] $NoFixture
 )
 
 $ErrorActionPreference = 'Stop'
@@ -426,20 +443,26 @@ try {
     # 21 Sep 26 - RELEASE_1.1 76: PLANTED IMMEDIATELY BEFORE AND REMOVED IMMEDIATELY
     # AFTER (see the note at $osUsersDir).  Printed either way, so a record left
     # behind is visible in the run's own output.
-    $plant = Set-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
-    Write-Host ("   os.users\SDSYS planted for the local OS.EXECUTE control: ok={0} {1}" -f $plant.Ok, $plant.Why)
-    Note 'fixture: os.users\SDSYS planted' $true $plant.Ok
-    if (-not $plant.Ok) { Refuse ('could not plant os.users\SDSYS: ' + $plant.Why) }
-    $plantedOsUsers = $true
-    try {
+    if ($NoFixture) {
+        Write-Host '   -NoFixture: os.users\SDSYS deliberately NOT planted for this run.' -ForegroundColor Yellow
+        Note 'falsification: os.users\SDSYS left unplanted, by request' $true $true
         $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+    } else {
+        $plant = Set-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
+        Write-Host ("   os.users\SDSYS planted for the local OS.EXECUTE control: ok={0} {1}" -f $plant.Ok, $plant.Why)
+        Note 'fixture: os.users\SDSYS planted' $true $plant.Ok
+        if (-not $plant.Ok) { Refuse ('could not plant os.users\SDSYS: ' + $plant.Why) }
+        $plantedOsUsers = $true
+        try {
+            $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+        }
+        finally {
+            $unplant = Remove-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
+            Write-Host ("   os.users\SDSYS removed: ok={0} {1}" -f $unplant.Ok, $unplant.Why)
+            if ($unplant.Ok) { $plantedOsUsers = $false }
+        }
+        Note 'fixture: os.users\SDSYS removed after the control' $true (-not $plantedOsUsers)
     }
-    finally {
-        $unplant = Remove-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
-        Write-Host ("   os.users\SDSYS removed: ok={0} {1}" -f $unplant.Ok, $unplant.Why)
-        if ($unplant.Ok) { $plantedOsUsers = $false }
-    }
-    Note 'fixture: os.users\SDSYS removed after the control' $true (-not $plantedOsUsers)
     Write-Host $localOsOut
 
     $localAcct  = Get-Marker $localOut 'ACCOUNT'
@@ -748,7 +771,22 @@ try {
     # blind probe.  This leg is the demonstration: same program, same probe,
     # permitted route, and OS.EXECUTE RUNS.  A FAIL here disqualifies the row
     # above rather than standing on its own.
-    if ($localTriedOsExec) {
+    if ($NoFixture) {
+        # THE FALSIFICATION CHECK.  See $NoFixture's help text and the header
+        # comment at $osUsersDir.  A DIFFERENT NAME from the check below, not
+        # its expected value flipped in place (entry 64).  PASS here (refused)
+        # confirms the fixture is doing real work; a FAIL (ran anyway) means
+        # USR_ADMIN, or something else, survives the seat's LOGTO under
+        # -Internal and the fixture is unneeded - read it as a finding about
+        # the seat or the -Internal door, not as licence to just delete the
+        # fixture (see PROJECT_STATUS.md entry 76).
+        if ($localTriedOsExec) {
+            Note 'falsification: WITHOUT the fixture, the control is refused' $true (-not $localRanOsExec)
+        } else {
+            Skip 'falsification: WITHOUT the fixture, the control is refused' `
+                 'the probe never reached the attempt'
+        }
+    } elseif ($localTriedOsExec) {
         Note 'control: the probe CAN see OS.EXECUTE run (local, listed administrator)' $true $localRanOsExec
     } else {
         Skip 'control: the probe CAN see OS.EXECUTE run (local, listed administrator)' `

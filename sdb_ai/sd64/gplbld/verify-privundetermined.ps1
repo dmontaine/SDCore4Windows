@@ -103,6 +103,15 @@
 .PARAMETER Port
     Loopback port the API listener uses.  4243 is the shipped default.
 
+.PARAMETER NoFixture
+    22 Sep 26 - RELEASE_1.1 76's owed falsification check.  Skips planting
+    os.users\SDSYS for step 4's local OS.EXECUTE control, so that leg runs
+    against the tree's real, unplanted state instead.  See verify-apiadmin.ps1's
+    -NoFixture help text - same fixture, same reasoning, same two scripts named
+    together in entry 76.  Reported under a DIFFERENTLY NAMED check, not a
+    flipped expected value on the existing one.  Not a substitute for the
+    ordinary witnessed run; do both.
+
 .EXAMPLE
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-privundetermined.ps1 -Prefix sdpwb113
 
@@ -110,6 +119,8 @@
     fresh prefix and a spent one fails (PRE_RELEASE 54):
 
     C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\VerifyInstall2.ps1 -Run b113 -Only verify-privundetermined
+.EXAMPLE
+    C:\Users\dmont\Projects\sd4windows\sdb_ai\sd64\gplbld\verify-privundetermined.ps1 -Prefix sdpwb113 -NoFixture
 #>
 
 # Exit 0 every decisive check passed, 1 a decisive check failed, 2 the test
@@ -120,7 +131,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
-    [int] $Port = 4243
+    [int] $Port = 4243,
+    [switch] $NoFixture
 )
 
 $ErrorActionPreference = 'Stop'
@@ -717,30 +729,45 @@ try {
     # os.users\SDSYS.  It is PLANTED IMMEDIATELY BEFORE and REMOVED IMMEDIATELY AFTER
     # (see the note at the preconditions), and printed either way so a record left
     # behind is visible in the run's own output.
-    $plant = Set-SeatOsUsersRecord -OsUsersDir $osUsers -Account 'SDSYS'
-    Write-Host ("   os.users\SDSYS planted for the local OS.EXECUTE control: ok={0} {1}" -f $plant.Ok, $plant.Why)
-    Note 'fixture: os.users\SDSYS planted' $true $plant.Ok
-    if (-not $plant.Ok) { Refuse ('could not plant os.users\SDSYS: ' + $plant.Why) }
-    $plantedOsUsers = $true
-    try {
+    if ($NoFixture) {
+        Write-Host '   -NoFixture: os.users\SDSYS deliberately NOT planted for this run.' -ForegroundColor Yellow
+        Note 'falsification: os.users\SDSYS left unplanted, by request' $true $true
         $localOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+    } else {
+        $plant = Set-SeatOsUsersRecord -OsUsersDir $osUsers -Account 'SDSYS'
+        Write-Host ("   os.users\SDSYS planted for the local OS.EXECUTE control: ok={0} {1}" -f $plant.Ok, $plant.Why)
+        Note 'fixture: os.users\SDSYS planted' $true $plant.Ok
+        if (-not $plant.Ok) { Refuse ('could not plant os.users\SDSYS: ' + $plant.Why) }
+        $plantedOsUsers = $true
+        try {
+            $localOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
+        }
+        finally {
+            $unplant = Remove-SeatOsUsersRecord -OsUsersDir $osUsers -Account 'SDSYS'
+            Write-Host ("   os.users\SDSYS removed: ok={0} {1}" -f $unplant.Ok, $unplant.Why)
+            if ($unplant.Ok) { $plantedOsUsers = $false }
+        }
+        Note 'fixture: os.users\SDSYS removed after the control' $true (-not $plantedOsUsers)
     }
-    finally {
-        $unplant = Remove-SeatOsUsersRecord -OsUsersDir $osUsers -Account 'SDSYS'
-        Write-Host ("   os.users\SDSYS removed: ok={0} {1}" -f $unplant.Ok, $unplant.Why)
-        if ($unplant.Ok) { $plantedOsUsers = $false }
-    }
-    Note 'fixture: os.users\SDSYS removed after the control' $true (-not $plantedOsUsers)
     Write-Host $localOut
     $localWho = Get-Marker $localOut 'WHOAMI'
     Write-Host ("    local whoami marker: '{0}'" -f $localWho)
     $localRefused = ($localOut -match 'not permitted to use OS\.EXECUTE')
     $localTried   = ($localOut -match 'PROBE\.OSEXEC\.TRIED') -or $localRefused
     Note 'control: the local probe reached the attempt' $true $localTried
-    Note 'control: the probe CAN see OS.EXECUTE run'    $true ($localWho -ne '')
-    if ($localWho -eq '') {
-        Write-Host '   The local control did not run OS.EXECUTE.  Every refusal below is now' -ForegroundColor Yellow
-        Write-Host '   consistent with a blind probe, so read the API legs with that in mind.' -ForegroundColor Yellow
+    if ($NoFixture) {
+        # THE FALSIFICATION CHECK.  A DIFFERENT NAME from the check below, not
+        # its expected value flipped in place (entry 64).  PASS here (did not
+        # run) confirms the fixture is doing real work; a FAIL (ran anyway)
+        # means the fixture is unneeded - read it as a finding about the seat
+        # or the -Internal door, not licence to delete the fixture (entry 76).
+        Note 'falsification: WITHOUT the fixture, OS.EXECUTE does NOT run' $true ($localWho -eq '')
+    } else {
+        Note 'control: the probe CAN see OS.EXECUTE run' $true ($localWho -ne '')
+        if ($localWho -eq '') {
+            Write-Host '   The local control did not run OS.EXECUTE.  Every refusal below is now' -ForegroundColor Yellow
+            Write-Host '   consistent with a blind probe, so read the API legs with that in mind.' -ForegroundColor Yellow
+        }
     }
 
     # -----------------------------------------------------------------------
