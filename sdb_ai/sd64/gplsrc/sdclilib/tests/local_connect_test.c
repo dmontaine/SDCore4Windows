@@ -45,8 +45,23 @@
  * that was never reached would also let it through.  So:
  *
  *   <account>  the caller is a member of its sdu_ group  -> MUST be admitted
- *   SDSYS      ACC$GROUP is "sdsys", not a Windows        -> MUST be refused
- *              group and never has been (section 6)
+ *   SDSYS      the caller is not the Windows SDSYS        -> MUST be refused
+ *              account, so the new test refuses it
+ *
+ * 22 Sep 26 - THE CONTROL IS UNCHANGED AND ITS REASON IS NOT.  RELEASE_1.1 101
+ * gave SDSYS a local route: APISRVR's vb.account now admits it when the session
+ * arrived over SDConnectLocal AND the process owner is the Windows SDSYS account
+ * AND the session is elevated.  This test runs UNELEVATED as an ordinary user,
+ * so the second term is false and SDSYS is still refused - the assertion holds
+ * exactly as before.  What changed is WHY: it used to be refused because
+ * ACC$GROUP names "sdsys", which is not a Windows group, and that test is no
+ * longer the one it meets.
+ *
+ * ***SO THIS NO LONGER PROVES "SDSYS IS ALWAYS REFUSED", ONLY "A CALLER WHO IS
+ * NOT SDSYS IS REFUSED".***  That is still the control this test needs - it is
+ * what shows the grant check ran - but nothing here exercises the ADMIT side of
+ * the new route, which needs an elevated session owned by SDSYS and therefore a
+ * run this script deliberately refuses to make.
  *
  * Only the pair means anything.  Two earlier attempts at a control/treatment
  * test elsewhere in this project proved nothing for exactly this reason.

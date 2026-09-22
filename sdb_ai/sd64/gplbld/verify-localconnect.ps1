@@ -18,8 +18,16 @@
     THE CONTROL IS THE POINT, and it is why the binary tests two accounts:
 
       <account>  the caller is a member of its sdu_ group -> MUST be admitted
-      SDSYS      ACC$GROUP names the group "sdsys", which  -> MUST be refused
-                 does not exist on Windows
+      SDSYS      the caller is not the Windows SDSYS       -> MUST be refused
+                 account, and is not elevated
+
+    22 Sep 26 - RELEASE_1.1 101 CHANGED THE REASON FOR THE CONTROL AND NOT THE
+    CONTROL.  SDSYS now HAS a local route - vb.account admits it over
+    SDConnectLocal when the process owner is the Windows SDSYS account and the
+    session is elevated - so "SDSYS is refused" is no longer a fact about the
+    account.  It is a fact about THIS caller, who is neither, and that is still
+    what proves the grant check ran.  The admit side is not tested here and
+    cannot be: this script refuses an elevated session by design.
 
     A connection that succeeds proves nothing on its own - a grant check that
     was never reached would also let it through.  Only the pair means anything,

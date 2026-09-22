@@ -19,6 +19,12 @@
 *
 *
 * START-HISTORY:
+* 22 Sep 26 Windows port - RELEASE_1.1 101.  SDSYS IS ENTERED OVER SDConnectLocal
+*   AND OVER NOTHING ELSE.  vb.local.login records the transport (local.session);
+*   vb.account admits SDSYS on that transport, the process owner being the
+*   Windows SDSYS account, and an elevated session - the same pair LOGIN's
+*   landing case tests.  No socket, no password, no sdapi grant: the SCRAM path
+*   still refuses SDSYS exactly as before.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  The administrator remote-API gate
 *           in vb.scram.final is gone with the tiers: sdadmin is deleted with
 *           the tier fields and the API is for every account now.  The
@@ -231,6 +237,14 @@ if not(kernel(K$CPROC.LEVEL,0)) then
    alias.targets = ''
    default.style.rec = ''
    logname = kernel(K$USERNAME, 0)
+
+* 22 Sep 26 Windows port - RELEASE_1.1 101.  WHICH TRANSPORT BROUGHT THIS
+*   SESSION IN, recorded once here and read only by vb.account's SDSYS test.
+*   @false until vb.local.login sets it, so every path that does NOT go through
+*   request 25 - SCRAM, and the pre-authenticated handover above - leaves it
+*   @false.  THAT DIRECTION IS THE SAFE ONE: a transport this program does not
+*   yet know about is not local.
+   local.session = @false
 
 * 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  A PRE-AUTHENTICATED
 *   SESSION (sd -N -H, spawned by K$HANDOFF) SKIPS SCRAM ENTIRELY - it is
@@ -706,6 +720,10 @@ end
 *   empty field means a record older than CREATE.ACCOUNT's group work, and
 *   inventing the name would test a group nothing else uses.
 *
+*   [NARROWED 22 Sep 26, RELEASE_1.1 101: it still refuses SDSYS on THIS path -
+*   the SCRAM one, which is every socket connection - and the separate test
+*   above admits it over SDConnectLocal only.  The reasoning below is why the
+*   ACC$GROUP test could never have admitted SDSYS, and it is still correct.]
 *   AND IT REFUSES SDSYS THROUGH THE API, which is intended and not a side
 *   effect to be fixed later.  ACCOUNTS/SDSYS carries ACC$GROUP = sdsys, which
 *   is not a Windows group and never has been (section 6), so is_grp_member
@@ -747,8 +765,63 @@ end
 *   it could not tell, and K$GROUP.MEMBER has already put the reason on the
 *   audit trail.  A refusal nobody can account for is the thing this pair of
 *   changes exists to stop.
-acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
-acc.told = status()
+* 22 Sep 26 Windows port - RELEASE_1.1 101.  SDSYS IS ENTERED FROM THIS COMPUTER
+*   AND FROM NOWHERE ELSE, AND THE TRANSPORT IS THE GATE.  Owner, 22 Sep 2026:
+*   SDSYS has "no remote access ... local access" and "no need for a sd sdsys
+*   password".  Both fall out of SDConnectLocal rather than being enforced on
+*   top of it:
+*
+*   THE ACC$GROUP TEST BELOW CANNOT BE ASKED OF SDSYS AT ALL.  Its ACC$GROUP is
+*   'sdsys', which is not a Windows group and never has been, so is_grp_member
+*   answers @false with status 1 - "could not tell", not "no".  The old refusal
+*   was therefore an accident of the register rather than a rule, which is why
+*   this is a separate test and not an extra term on that one.
+*
+*   THREE TERMS, AND EACH ONE IS DOING WORK:
+*     local.session   request 25 brought this session in.  NO SOCKET EXISTS on
+*                     that path - two anonymous pipes and a child sd.exe - so
+*                     there is no address to spoof, nothing to reach from
+*                     another machine, and nothing an "ssh -L" tunnel can carry.
+*                     That is why this is the transport test and not the peer
+*                     test PEER_LOCAL used to make: a tunnelled socket arrives
+*                     FROM 127.0.0.1 and a peer test answers "local" to it.
+*     acc.who         the process owner is the Windows account SDSYS.
+*                     vb.local.login sends NO CREDENTIALS - identity is taken
+*                     from the process that started sd.exe - so being signed in
+*                     as SDSYS IS the proof, exactly as it is at the console.
+*                     This is why no SD password is needed or consulted.
+*     K$ADMINISTRATOR the session is ELEVATED.  LOGIN's landing case is
+*                     "upcase(@logname) = 'SDSYS' and kernel(K$ADMINISTRATOR,
+*                     -1)" and this is the same pair; without it an UNELEVATED
+*                     SDSYS process would reach the system tree through a door
+*                     the console keeps shut.
+*
+*   ***THE ELEVATION TERM IS ALSO THE RISK, AND IT IS NOT YET MEASURED.***
+*   K$ADMINISTRATOR reads USR_ADMIN, which kernel.c seeds from IsElevated() AND
+*   connection_type # CN_SOCKET AND IsInteractive().  A ConnectLocal child is
+*   CN_PIPE and inherits its parent's token, so the first two hold; whether
+*   IsInteractive() answers true for it is REASONED FROM THE PHANTOM CASE
+*   (kernel.c: a forked child "tests interactive when the parent did") and has
+*   not been run.  If it answers false, SDSYS is refused here and the route
+*   simply does not work - it does not open anything.  verify-localconnect is
+*   the instrument.
+*
+*   THE sdapi GROUP IS NOT CONSULTED AND MUST NOT BE.  It is tested in
+*   vb.scram.final, on the SCRAM path only, so a grant has no meaning here -
+*   which is what makes MODIFY.ACCOUNT's refusal of SDSYS (12001) consistent
+*   rather than contradictory: there is nothing for it to grant.
+if new.account = 'SDSYS' then
+   acc.who = upcase(kernel(K$USERNAME, 0))
+   if index(acc.who, '\', 1) > 0 then acc.who = field(acc.who, '\', dcount(acc.who, '\'))
+   acc.member = local.session and (acc.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
+   acc.told = 0
+   if not(acc.member) then
+      void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 sdsys.not.local.elevated user=' : acc.who : ' local=' : local.session)
+   end
+end else
+   acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
+   acc.told = status()
+end
 
 if acc.told # 0 then
    void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group)
@@ -1349,6 +1422,15 @@ vb.local.login:
                * dsm 20240612 write lgn.rec to lgn.f, username
 
                logname = username
+
+*              22 Sep 26 Windows port - RELEASE_1.1 101.  THIS SESSION CAME IN
+*              OVER SDConnectLocal, AND THAT IS A PROPERTY NO LATER CODE CAN
+*              RE-DERIVE.  There is no socket, so there is no peer address to
+*              read: sdclilib.c:1451 makes two anonymous pipes and starts sd.exe
+*              as a CHILD of the caller, which selects CN_PIPE (sd.c:469).
+*              vb.account reads this to decide whether SDSYS may be entered.
+               local.session = @true
+
                * dsm 20240612 i = kernel(K$ADMINISTRATOR,lgn.rec<LGN$ADMIN>)
                * mab 20240219    end else      ;* System is insecure
                * mab 20240219      i = kernel(K$ADMINISTRATOR,1)    ;* All users are administrators

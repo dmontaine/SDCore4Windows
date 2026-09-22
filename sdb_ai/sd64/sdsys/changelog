@@ -4,6 +4,21 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+22 Sep 26  SDSYS CAN BE REACHED BY A LOCAL API CLIENT.
+
+           SDSYS is administered at the computer it is signed in to.  It
+           has no remote access of any kind - not ssh, not a network API
+           connection - and it needs no SD password.
+
+           What is new is that a program running on that same computer,
+           under the Windows SDSYS account in an elevated session, can now
+           reach the SDSYS account through SDConnectLocal() - the local
+           client call that starts SD directly rather than connecting over
+           the network.  It sends no password: you are identified by the
+           Windows account the program runs as, exactly as at the console.
+
+           Network API connections to SDSYS are refused as before.
+
 22 Sep 26  MODIFY.ACCOUNT SAYS WHY IT WILL NOT CHANGE SDSYS.
 
            SDSYS has no remote access: not ssh, and not the API.  That is
