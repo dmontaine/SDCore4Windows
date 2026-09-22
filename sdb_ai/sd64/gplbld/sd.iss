@@ -3435,7 +3435,7 @@ function SecureSysdirs: String;
 var
   Code: Integer;
   Ps, Script, Failed: String;
-  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf: String;
+  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, Gplbp: String;
 begin
   Result := '';
   Code := 0;
@@ -3449,6 +3449,27 @@ begin
   Bp       := ExpandConstant('{#DataDir}\sdsys\bp');
   Cat      := ExpandConstant('{#DataDir}\sdsys\cat');
   Conf     := ExpandConstant('{#DataDir}\sd.conf');
+
+  { 22 Sep 26 - voc AND gpl.bp ADDED, RELEASE_1.1 104.  They were the only two of
+    SDSYS's inherited-Modify directories left open, and nothing had ever asked
+    whether anything writes them: probe-syswrites.ps1's own root list stopped at
+    the same seven this function did.  Both were measured 22 Sep 2026 carrying
+    ace\sdusers = Modify while their six siblings read no ordinary-user write.
+
+    THE EVIDENCE IS THE SAME KIND THE OTHER SEVEN HAVE.  probe-syswrites.ps1 was
+    extended with both paths and run unelevated: an ordinary user's session and a
+    separate PHANTOM pass each changed ONLY $ipc\%0 - voc and gpl.bp untouched in
+    both.  So they meet secure-sysdirs.ps1's criterion, "directories that nothing
+    writes", which is the whole justification for locking any of them.
+
+    WHY LOCKING THEM DOES NOT BREAK THE THINGS THAT DO WRITE THEM.  SDSYS's own
+    VOC is rewritten by UPDATE.ACCOUNT / $LOGIN mode 2 run IN SDSYS, and GPL.BP is
+    written when the BASIC is recompiled - both administrator actions, and
+    Administrators keep Modify through the grant secure-sysdirs.ps1 leaves in
+    place.  $ipc is still deliberately NOT here; see that script's header, which
+    records it as the one target an ordinary session was measured writing. }
+  Voc      := ExpandConstant('{#DataDir}\sdsys\voc');
+  Gplbp    := ExpandConstant('{#DataDir}\sdsys\gpl.bp');
 
   Failed := '';
   if not LockOsUsersPath(Ps, Script, Accounts, Code) then
@@ -3464,15 +3485,20 @@ begin
   else if not LockOsUsersPath(Ps, Script, Cat, Code) then
     Failed := Cat
   else if not LockOsUsersPath(Ps, Script, Conf, Code) then
-    Failed := Conf;
+    Failed := Conf
+  else if not LockOsUsersPath(Ps, Script, Voc, Code) then
+    Failed := Voc
+  else if not LockOsUsersPath(Ps, Script, Gplbp, Code) then
+    Failed := Gplbp;
 
   if Failed = '' then
     Exit;
 
   { NAMED, NOT BURIED, like the global catalogue and the credential store: this
     ACL is the whole of a control and it fails silently if the step does not
-    run.  The path that failed is named because seven were attempted and the
-    manual command below is only worth anything if it says which one. }
+    run.  The path that failed is named because NINE were attempted (seven until
+    22 Sep 2026, then voc and gpl.bp - RELEASE_1.1 104) and the manual command
+    below is only worth anything if it says which one. }
   Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;

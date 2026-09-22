@@ -15,6 +15,13 @@
 $ErrorActionPreference = 'Continue'
 
 $sdExe = 'C:\Program Files\SD\usr\bin\sd.exe'
+# 22 Sep 26 - voc AND gpl.bp ADDED, RELEASE_1.1 104.  THE LIST WAS THE EIGHT
+# INHERITED-Modify TARGETS AS THEY STOOD IN AUGUST, AND THESE TWO WERE NEVER IN
+# IT - which is the same omission sd.iss:3444-3451 has, where secure-sysdirs.ps1
+# is handed seven paths and these two are not among them.  So the question "does
+# anything ordinary write them" had never been asked of either, and 104 cannot be
+# decided without asking it.  Measured 22 Sep 2026: both carry
+# ace\sdusers = Modify, inherited, while their six locked siblings do not.
 $roots = [ordered]@{
     'accounts' = 'C:\ProgramData\SD\sdsys\accounts'
     '$map'     = 'C:\ProgramData\SD\sdsys\$map'
@@ -24,6 +31,8 @@ $roots = [ordered]@{
     'bp'       = 'C:\ProgramData\SD\sdsys\bp'
     'cat'      = 'C:\ProgramData\SD\sdsys\cat'
     'sd.conf'  = 'C:\ProgramData\SD\sd.conf'
+    'voc'      = 'C:\ProgramData\SD\sdsys\voc'
+    'gpl.bp'   = 'C:\ProgramData\SD\sdsys\gpl.bp'
 }
 
 "who am i : $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
@@ -96,7 +105,18 @@ $before = Snapshot
 $stamp = 'ZZW' + (Get-Random -Minimum 1000 -Maximum 9999)
 $cmds = @(
     'WHO', 'COUNT VOC', "CREATE.FILE $stamp", "COUNT $stamp",
-    'LISTU', 'DATE', 'WHERE', 'LIST.LOCKS',
+    # 22 Sep 26 - LISTU AND LIST.LOCKS ARE GONE BECAUSE THEY DO NOT EXIST IN THIS
+    # PORT, AND THAT IS WHY THIS PROBE COULD NEVER REPORT A RESULT.  Neither is in
+    # sdsys/newvoc (source or installed) or in any account's VOC, so each answered
+    # "X is not in your VOC" - and the BOM guard below counts EVERY "not in VOC"
+    # line, so two of them made it conclude the BOM had eaten a verb and REFUSE
+    # its own findings.  Measured 22 Sep 2026: 15 of 15 commands echoed and the
+    # BOM ate nothing; the guard was wrong, not the session.
+    #
+    # LISTF, LISTQ and LIST.FILES replace them and were ISOLATED FIRST, which is
+    # this file's standing rule: each run alone over the same pipe, 0.0s, present
+    # in the VOC, 1809 / 1054 / 550 bytes returned.
+    'LISTF', 'DATE', 'WHERE', 'LISTQ', 'LIST.FILES',
     # 24 Aug 26 - EVERY VERB HERE WAS ISOLATED FIRST and returns over a pipe.
     # SETPTR is followed by 'Y': it asks "OK to set new parameters (Y/N)?"
     # (SETPTR:558) and hung until answered - measured, and answering it brought
@@ -149,20 +169,55 @@ foreach ($c in $cmds) {
     if ($seen) { $ran++ }
     '{0,-22} {1}' -f $c, $(if ($seen) { 'echoed' } else { 'NOT SEEN' })
 }
-# at most ONE "not in your VOC" - the BOM's own line.  Two would mean a verb
-# was eaten, which is the thing that actually matters.
-$bomHits = @([regex]::Matches($out, 'is not in your VOC')).Count
-$bom     = ($bomHits -gt 1)
+# 22 Sep 26 - ***THIS GUARD COULD NOT TELL ITS TWO CAUSES APART, AND THAT IS WHY
+# THE PROBE REFUSED EVERY RUN.***  It counted every "is not in your VOC" line and
+# read any count above one as "the BOM ate a verb".  But a line naming a verb the
+# ACCOUNT DOES NOT HAVE says nothing about the BOM, and the workload carried two
+# such verbs (LISTU, LIST.LOCKS - see the note in $cmds).  So the probe blamed a
+# swallowed verb, refused its own findings, and the cause was in its own list.
+#
+# THE FIX IS TO NAME WHAT WAS NOT FOUND RATHER THAN COUNT IT.  The BOM's line has
+# no verb in front of "is not in your VOC" (it is the BOM character itself); any
+# other such line names its subject.  So the two are distinguishable in the text,
+# and each now reports separately - a missing verb is still a refusal, because the
+# workload did not run in full, but it is reported as a MISSING VERB and says
+# which one, instead of being attributed to an encoding fault three screens away.
+# ***THE BOM IS EXCLUDED BY CHARACTER, NOT BY A REGEX CLASS - MEASURED 22 Sep 2026.***
+# The first attempt used a single-quoted character class naming the BOM by its
+# backslash-u escape.  PowerShell does not process escapes inside single quotes, so
+# the pattern matched that ESCAPE AS LITERAL TEXT and never the character - the BOM
+# was reported as a missing VERB and the probe refused itself again, which is the
+# same class of fault this guard was being fixed for.
+#
+# AND THE COMMENT ITSELF CARRIED THE BUG ONCE: written with the escape spelled out,
+# it landed in this file as a REAL BOM character mid-comment - caught by the
+# byte-scan CLAUDE.md requires, not by the parser, which accepted it with 0 errors.
+# The character is named in words here for that reason.  Do not paste it back.
+$bomChar   = [char]0xFEFF
+$trimSet   = [char[]]@($bomChar, ' ', "`t", "`r", "`n")
+$vocMisses = @([regex]::Matches($out, '(?m)^\s*(?:\|\s*)?(\S+) is not in your VOC'))
+$namedMiss = @($vocMisses | ForEach-Object { $_.Groups[1].Value } |
+               Where-Object { $_.Trim($trimSet) -ne '' } | Select-Object -Unique)
+$bomHits   = @([regex]::Matches($out, 'is not in your VOC')).Count
+$bom       = ($bomHits -gt $namedMiss.Count + 1)
+if ($namedMiss.Count) {
+    ''
+    "VERB(S) NOT IN THIS ACCOUNT'S VOC: $($namedMiss -join ', ')"
+    '  Not a BOM fault and not an encoding fault.  Either the verb does not ship'
+    '  in this port, or this account is missing it - check sdsys/newvoc first.'
+}
 $created = -not ($out -match ('No VOC record found for ' + $stamp))
 ''
 "commands echoed : $ran of $($cmds.Count)"
-"'not in VOC'   : $bomHits  (1 = the BOM's own line; >1 means a verb was eaten)"
+"'not in VOC'   : $bomHits total, of which $($namedMiss.Count) name a verb"
+"verbs missing   : $(if ($namedMiss.Count) { $namedMiss -join ', ' } else { 'none      (must be none)' })"
 "BOM ate a verb  : $bom      (must be False)"
 "CREATE.FILE took: $created  (must be True)"
 "output length   : $($out.Length) chars"
-if ($ran -lt $cmds.Count -or $bom -or -not $created) {
+if ($ran -lt $cmds.Count -or $bom -or $namedMiss.Count -or -not $created) {
     ''
     'REFUSING THE RESULT: the session did not run in full, so "untouched" above is NOT evidence.'
+    if ($namedMiss.Count) { '  Cause: the verb(s) named above are not in this VOC - fix the workload, not the encoding.' }
     exit 1
 }
 ''

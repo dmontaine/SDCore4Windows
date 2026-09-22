@@ -60,6 +60,18 @@ $sysDir  = Join-Path $dataDir 'sdsys'
 # install disagrees with the stale one.  Adding a path to sd.iss and not here
 # leaves it locked and unverified; adding it here and not to sd.iss fails this
 # script on the next install, which is the safer direction of the two.
+# 22 Sep 26 - voc AND gpl.bp ADDED WITH THE SAME CHANGE TO sd.iss, RELEASE_1.1 104,
+# which is what the paragraph above asks for: they are the two SDSYS directories
+# that kept ace\sdusers = Modify while these six were locked, and nothing had ever
+# asked whether anything writes them - probe-syswrites.ps1's root list stopped at
+# the same seven sd.iss did.  It was extended and run unelevated on 22 Sep 2026:
+# an ordinary session and a separate PHANTOM pass each changed ONLY $ipc\%0, both
+# new paths untouched, so they meet secure-sysdirs.ps1's "nothing writes it" test.
+#
+# ***THIS SCRIPT FAILS UNTIL THE NEXT CYCLE INSTALLS THAT sd.iss CHANGE, AND THAT
+# IS THE SAFE DIRECTION THE PARAGRAPH ABOVE NAMES*** - the list says what the
+# install OUGHT to look like, so a red here means the installer has not caught up,
+# not that the rule is wrong.
 $readOnly = @(
     (Join-Path $sysDir 'accounts'),
     (Join-Path $sysDir '$map'),
@@ -67,7 +79,9 @@ $readOnly = @(
     (Join-Path $sysDir 'newvoc'),
     (Join-Path $sysDir 'bp'),
     (Join-Path $sysDir 'cat'),
-    (Join-Path $dataDir 'sd.conf')
+    (Join-Path $dataDir 'sd.conf'),
+    (Join-Path $sysDir 'voc'),
+    (Join-Path $sysDir 'gpl.bp')
 )
 $ipc = Join-Path $sysDir '$ipc'
 
