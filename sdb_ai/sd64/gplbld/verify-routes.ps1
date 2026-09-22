@@ -19,12 +19,20 @@
     The old file opened every session with "LOGTO SDSYS", refused outright at
     cproc:2789 (10002) since slices 1-2, created an ADMINISTRATOR control
     account the verb now refuses (2018), and asserted messages 10083 and 10175,
-    deleted by slice 4.  Under 64 the rig RUNS AS THE WINDOWS SDSYS ACCOUNT,
+    deleted by slice 4.  Under 64 the rig RAN AS THE WINDOWS SDSYS ACCOUNT,
     ELEVATED: LOGIN's landing case (upcase(@logname) = 'SDSYS' and the session
-    elevated) delivers the SDSYS SD account with nothing to type, and every
-    other Windows administrator is refused at the same door.  The identity
-    check below refuses a run from any other account rather than letting it
-    measure a 5052 cascade from the caller's own session.
+    elevated) delivered the SDSYS SD account with nothing to type, and every
+    other Windows administrator was refused at the same door.
+
+    CONVERTED 22 SEP 2026 TO THE SDSYS SEAT, RELEASE_1.1 76.  Being the FIRST
+    rig built for the "run as SDSYS" model meant it predated the seat
+    (RELEASE_1.1 76/82) and was left requiring a real Windows sign-in switch
+    long after other verifiers stopped needing one - which is what made it
+    the one full-suite step (`b223`, 22 Sep 2026) that could not run under an
+    ordinary elevated session.  It now asks sdsys-seat.ps1 for a task inside
+    SDSYS's own live session instead: same requirement as every other
+    converted verifier (this caller elevated, SDSYS signed in somewhere), and
+    no more switching accounts to run it.
 
     THE ONE ASSERTION THAT MATTERS MOST IS THAT "API" TAKES ssh AWAY.  The
     keyword says what the access IS, not what to add, so
@@ -77,7 +85,7 @@
     Leave the accounts behind for poking at.  They still need DELETE.ACCOUNT.
 
 .EXAMPLE
-    From an elevated PowerShell signed in as the Windows SDSYS account:
+    From any elevated PowerShell, with SDSYS signed in somewhere on the machine:
     C:\Users\Don\SDCoreProject\sd4windows\sdb_ai\sd64\gplbld\verify-routes.ps1 -Prefix sdrt1
 #>
 
@@ -124,6 +132,15 @@ if ($left.Count -gt 0) {
 
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
+
+# 22 Sep 26 - RELEASE_1.1 76, CONVERTED TO THE SDSYS SEAT.  This was "THE FIRST
+# SDSYS-RUN RIG" (18 Sep, slice 5b), written before the seat existed, so it
+# piped commands into a raw sd.exe and demanded the WHOLE PROCESS be signed in
+# as the Windows SDSYS account - the thing that made running it "switch
+# accounts, paste text back and forth" (owner, 22 Sep 2026).  The seat needs
+# only an ELEVATED caller and SDSYS signed in somewhere (even disconnected);
+# see sdsys-seat.ps1's header for what that was measured to require.
+. (Join-Path $Gplbld 'sdsys-seat.ps1')
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }
@@ -192,26 +209,19 @@ function Shown($out, [int]$n) {
     return ($p -ne '' -and $out -match $p)
 }
 
-# Blank first line absorbs the pipe's BOM, TERM stops pagination, OFF ends it.
+# 22 Sep 26 - RELEASE_1.1 76.  Was a raw pipe into a session that WAS SDSYS
+# because the whole process ran as that Windows account; now it asks the seat
+# for a task inside SDSYS's own live session instead - same reason
+# verify-delaccount.ps1 and the other converted verifiers do it this way.  The
+# seat's own Expand-SeatCommands adds the TERM line and the OFF, and adds a
+# fresh TERM after any LOGTO in $commands (the trap this file's old comment
+# described); nothing here sends LOGTO, so that case still never fires.
+#
+# NO -Internal: every SD call below is CREATE.ACCOUNT, MODIFY.ACCOUNT or
+# DELETE.ACCOUNT run AS SDSYS directly - nothing LOGTOs into a personal
+# account (same reasoning as verify-delaccount.ps1's Invoke-SD).
 function Invoke-SD([string[]]$commands) {
-    # 18 Sep 26 - RELEASE_1.1 64 SLICE 5b: THE LOGTO SDSYS PREFIX IS GONE WITH
-    # THE TIER IT REACHED.  LOGTO SDSYS is refused outright at cproc:2789
-    # (10002) since slices 1-2, and the refusal is the model working: SDSYS is
-    # entered by the WINDOWS SDSYS ACCOUNT at LOGIN (the landing case, which is
-    # the identity the pre-flight below demands) and by nobody else.  So this
-    # rig pipes commands into a session that ALREADY IS SDSYS, and there is no
-    # account switch to protect against any more.
-    #
-    # THE TERM-AFTER-LOGTO TRAP IS WRITTEN HERE BECAUSE ITS LAST HOME DIED: the
-    # full write-up was in verify-tiers.ps1's Invoke-SD, deleted 18 Sep 2026
-    # with the tiers.  LOGIN re-inits terminal geometry on every account switch
-    # (LOGIN:201-209), so the initial TERM below is wiped by any LOGTO in
-    # $commands and long LIST/COUNT output paginates on a stdin the pipe can no
-    # longer answer.  Nothing here sends LOGTO now; if a future edit ever adds
-    # one, a TERM 200,9999 must follow it in the same batch.
-    $body = "`n" + ((@('TERM 200,9999') + $commands + @('OFF')) -join "`n") + "`n"
-    $out = $body | & $sdExe
-    return (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
 }
 
 $logonSig = @'
@@ -261,27 +271,16 @@ if ($Prefix -notmatch '^[a-z][a-z0-9_]*$') {
           'account takes it verbatim.')
 }
 
-# 18 Sep 26 - RELEASE_1.1 64 SLICE 5b: THE IDENTITY IS THE GATE NOW, AND IT IS
-# READ THE WAY THE PRODUCT READS IT.  LOGIN's landing case tests @logname -
-# the name the OPERATING SYSTEM authenticated - so this uses WindowsIdentity
-# rather than $env:USERNAME, which a runas context can leave pointing at the
-# wrong person.  Under 64 an elevated session of ANY OTHER Windows account
-# lands in that account's own SD session (or is refused for having none), and
-# every restricted verb below would answer 5052 - a cascade of refusals that
-# would read as a broken product rather than a rig run from the wrong seat.
-$winId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-if (($winId -split '\\')[-1] -ine 'SDSYS') {
-    Fail ("this rig runs as the WINDOWS SDSYS ACCOUNT, elevated - this session is '$winId'.  " +
-          'Every other Windows administrator is refused the SDSYS session (10002); ' +
-          'sign in as SDSYS and run it from there.')
-}
-if (-not (Get-LocalUser -Name 'SDSYS' -ErrorAction SilentlyContinue)) {
-    Fail 'there is no Windows SDSYS account - the installer makes it (install-sdsys.ps1); run a cycle.'
-}
-$pr = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Fail 'this needs an ELEVATED PowerShell - CREATE_USER needs an elevated token, and the landing case requires one for SDSYS.'
-}
+# 22 Sep 26 - RELEASE_1.1 76.  Was "THE IDENTITY IS THE GATE NOW" - this
+# process itself had to BE the Windows SDSYS account, elevated, because that
+# was the only door SD had.  The seat is a second door to the same place
+# (RELEASE_1.1 82's "development door" ruling): it needs this CALLER elevated
+# (any administrator - sdsys-seat.ps1's own Test-SeatCallerElevated) and SDSYS
+# signed in somewhere, not this process's own identity.  Prove it BEFORE
+# anything is made, same as verify-delaccount.ps1: this rig creates Windows
+# accounts, and a run that cannot reach the seat would otherwise stop at the
+# first SD call looking like a product failure rather than a rig problem.
+Assert-SdSeat -Label 'verify-routes'
 
 & (Join-Path $Gplbld 'assert-current.ps1')
 if ($LASTEXITCODE -ne 0) { Fail 'the installed tree does not match source - see above' }

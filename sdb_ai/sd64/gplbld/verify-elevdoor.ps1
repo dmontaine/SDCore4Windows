@@ -1,9 +1,20 @@
 <#
 .SYNOPSIS
-    RELEASE_1.1 45: elevation is the only door to SDSYS.  Witnesses that a
-    session which did NOT start elevated cannot `logto sdsys`, and that a session
-    which DID start elevated lands in SDSYS and can round-trip SDSYS -> personal
-    -> SDSYS.
+    RELEASE_1.1 64: elevation is NOT a door to SDSYS at all - the only way in is
+    a genuine Windows sign-in as SDSYS itself, elevated, at LOGIN.  Witnesses
+    that neither an unelevated NOR an elevated ordinary session can
+    `logto sdsys`, and that the elevated refusal carries 64's reason, not 45's.
+
+    ***UPDATED 22 Sep 2026.***  Written for RELEASE_1.1 45's "elevation is the
+    only door" model, which held from 15 Sep to 18 Sep 2026: an elevated `sd`
+    landed in SDSYS and could round-trip.  64 (18 Sep 2026) WITHDREW that door
+    outright - owner's ruling, quoted in `cproc.bp` at the refusal site:
+    "There will be one and only one administrator account SDSYS ... It will not
+    be available with LOGTO."  Found stale on `-Run b223`, 22 Sep 2026: the
+    elevated half asserted `whos[0] = SDSYS` and got `DON` (2 of 5 checks
+    failed) - the product was doing exactly what 64 and the same day's live
+    witness of 71 already confirmed; the TEST had not been updated.  See
+    HISTORY.md, 22 Sep 2026, "b223 stale-verifier finding".
 
 .DESCRIPTION
     ONE FILE, RUN BOTH WAYS, because the two halves need OPPOSITE tokens - the
@@ -15,22 +26,23 @@
                    the session must STAY in that account.  Run this FIRST - it
                    writes the refusal to sdsys\audit, which the elevated half
                    reads back.
-      ELEVATED     an elevated `sd` lands in SDSYS; `logto <user>` drops to the
-                   personal account and `logto sdsys` returns - the round-trip
-                   the 16 Aug "LOGTO ends the elevated session" rule used to
-                   break.  AND it reads sdsys\audit (which only an elevated token
-                   may open) for the unelevated half's refusal REASON.
+      ELEVATED     an elevated `sd` ALSO lands in the running user's OWN
+                   account, not SDSYS - elevation buys nothing here since 64.
+                   `logto sdsys` is refused exactly as it was unelevated, and
+                   the session stays put; there is no round-trip to prove any
+                   more.  AND it reads sdsys\audit (which only an elevated
+                   token may open) for the unelevated half's refusal REASON.
 
     ***THE AUDIT REASON IS THE DECISIVE DISCRIMINATOR, AND THAT IS NOT PEDANTRY.***
-    In a piped (non-interactive) session BOTH the old and the new gate refuse an
-    unelevated `logto sdsys`: the old one passed K$OS.ADMINISTRATOR and then
-    reached elevate('START'), which cannot draw a UAC prompt down a pipe and
-    failed - so "refused, stayed in the account" is TRUE either way and proves
-    nothing about which gate fired.  The NEW gate writes
-    'reason=session did not start elevated'; the old one wrote 'not an
-    administrator' or 'elevation refused or unavailable'.  So the elevated half
-    anchors on the new wording, and REFUSES THE NULL CASE: if no such line is in
-    the audit, it says the discriminator was not witnessed rather than passing.
+    In a piped (non-interactive) session every generation of the gate refuses an
+    unelevated `logto sdsys`, so "refused, stayed in the account" alone proves
+    nothing about which gate fired.  Three generations of reason text exist:
+    pre-45 wrote 'not an administrator' or 'elevation refused or unavailable';
+    45 (15-18 Sep) wrote 'reason=session did not start elevated'; 64 (18 Sep
+    onward) writes 'reason=SDSYS is not reachable by LOGTO'.  The elevated half
+    anchors on 64's current wording, checks it is NEITHER older reason, and
+    REFUSES THE NULL CASE: if no such line is in the audit, it says the
+    discriminator was not witnessed rather than passing.
 
     IT CHANGES NOTHING.  No account, no group, no sd.conf, no service.  It uses
     the running user's own account and SDSYS, both of which already exist.
@@ -113,7 +125,7 @@ if ($SelfTest) {
     Write-Host 'verify-elevdoor -SelfTest: no SD touched.'
     Write-Host "  running user's account : $me"
     Write-Host '  UNELEVATED half: WHO (personal), LOGTO SDSYS (refused 10002), WHO (unchanged)'
-    Write-Host '  ELEVATED  half: WHO (SDSYS), LOGTO <user> (personal), LOGTO SDSYS (back), audit reason'
+    Write-Host '  ELEVATED  half: WHO (personal, same as unelevated), LOGTO SDSYS (refused 10002), WHO (unchanged), audit reason'
     try { Stop-Transcript | Out-Null } catch { }
     exit 0
 }
@@ -155,29 +167,32 @@ if (-not $elevated) {
     Note 'the refusal is 10002' $true ($out -match [regex]::Escape((Get-SysMsg 10002)))
 
     Write-Host ''
-    Write-Host '   The DECISIVE audit reason ("session did not start elevated") cannot be'
+    Write-Host '   The DECISIVE audit reason ("SDSYS is not reachable by LOGTO") cannot be'
     Write-Host '   read from an unelevated token - run this again ELEVATED to witness it.'
 }
 else {
     # -----------------------------------------------------------------------
-    # THE ELEVATED HALF.  Lands in SDSYS; round-trips; reads the audit reason.
-    Step 1 'ELEVATED: the session lands in SDSYS, drops to the personal account, and returns'
-    $out = Invoke-SD @('WHO', "LOGTO $me", 'WHO', 'LOGTO SDSYS', 'WHO')
+    # THE ELEVATED HALF, POST-64.  Elevation buys nothing: same landing account,
+    # same refusal, same message - the only thing elevation adds is the ability
+    # to read sdsys\audit afterward for the reason text.
+    Step 1 'ELEVATED: the session lands in the personal account too, and LOGTO SDSYS is refused the same way'
+    $out = Invoke-SD @('WHO', 'LOGTO SDSYS', 'WHO')
     Write-Host '   --- raw sd output ---'
     ($out -split "`r?`n") | ForEach-Object { Write-Host ('   | ' + $_) }
 
     $whos = Get-WhoAccounts $out
     Write-Host ('   WHO accounts in order: ' + ($whos -join ', '))
-    if ($whos.Count -lt 3) { Refuse "expected three WHO reports, got $($whos.Count) - session state cannot be read." }
+    if ($whos.Count -lt 2) { Refuse "expected two WHO reports, got $($whos.Count) - session state cannot be read." }
 
-    Note 'elevated session lands in SDSYS'              'SDSYS' $whos[0]
-    Note "LOGTO $me drops to the personal account"      $me     $whos[1]
-    Note 'LOGTO SDSYS returns to SDSYS (the round-trip)' 'SDSYS' $whos[2]
+    Note 'elevated session did NOT land in SDSYS'                    $true ($whos[0] -ne 'SDSYS')
+    Note 'elevated session landed in the personal account'           $me   $whos[0]
+    Note 'after LOGTO SDSYS the session is STILL in the personal account' $whos[0] $whos[1]
+    Note 'the refusal is 10002' $true ($out -match [regex]::Escape((Get-SysMsg 10002)))
 
-    Step 2 'ELEVATED: the audit names the NEW refusal reason for the unelevated half'
-    # Only an elevated token may open the audit.  The unelevated half (run first)
-    # wrote a 'LOGTO REFUSED account=SDSYS reason=...' line; the NEW gate's reason
-    # is 'session did not start elevated'.  REFUSE THE NULL CASE: if no SDSYS
+    Step 2 'ELEVATED: the audit names the CURRENT (64) refusal reason'
+    # Only an elevated token may open the audit.  Either half's LOGTO SDSYS just
+    # wrote a 'LOGTO REFUSED account=SDSYS reason=...' line; 64's reason is
+    # 'SDSYS is not reachable by LOGTO'.  REFUSE THE NULL CASE: if no SDSYS
     # refusal is present at all, the discriminator was not witnessed.
     if (-not (Test-Path -LiteralPath $audit)) {
         Skip 'audit reason' 'no audit file present'
@@ -188,17 +203,19 @@ else {
         }
         $refusals = @([regex]::Matches($auditText, 'LOGTO REFUSED account=SDSYS[^\r\n]*'))
         if ($refusals.Count -eq 0) {
-            Skip 'audit reason' 'no "LOGTO REFUSED account=SDSYS" line - run the UNELEVATED half first'
+            Skip 'audit reason' 'no "LOGTO REFUSED account=SDSYS" line - unexpected, Step 1 just wrote one'
         } else {
             $last = $refusals[$refusals.Count - 1].Value
             Write-Host ('   last SDSYS refusal in the audit: ' + $last)
-            Note 'the newest SDSYS refusal reason is the NEW gate''s' $true (
-                $last -match 'reason=session did not start elevated')
-            # CONTROL: it must NOT be an old-gate reason, which would mean the
-            # regate did not take.
-            Note 'and NOT an old-gate reason' $false (
+            Note 'the newest SDSYS refusal reason is 64''s (not reachable by LOGTO)' $true (
+                $last -match 'reason=SDSYS is not reachable by LOGTO')
+            # CONTROL: it must NOT be an older gate's reason - neither 45's
+            # ("elevation is the only door") nor pre-45's - which would mean
+            # the withdrawal did not take.
+            Note 'and NOT an older-gate reason' $false (
                 ($last -match 'reason=not an administrator') -or
-                ($last -match 'reason=elevation refused or unavailable'))
+                ($last -match 'reason=elevation refused or unavailable') -or
+                ($last -match 'reason=session did not start elevated'))
         }
     }
 }

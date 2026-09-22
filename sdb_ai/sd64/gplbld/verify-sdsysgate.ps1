@@ -368,12 +368,29 @@ try {
     # changed.  What this row proves is unchanged: the refusal came from the
     # gate that runs BEFORE the elevate call, and the disqualifier below still
     # says the elevate call was never reached - which is the whole of 62.
-    Note 'refused at the door (reason=session did not start elevated)' $true `
-         ($tail -match 'LOGTO REFUSED account=SDSYS reason=session did not start elevated') $true
-    # CONTROL: not the pre-45 gate's reason, which would mean the regate had
-    # not taken (verify-elevdoor.ps1 makes the same check for an administrator).
-    Note 'and NOT the pre-45 reason (not an administrator)' $false `
-         ($tail -match 'reason=not an administrator') $true
+    #
+    # 22 Sep 26 - RELEASE_1.1 64 (18 Sep 2026) REPLACED 45's REASON IN TURN, and
+    # this row went red the same way b173 did: still anchored on 45's wording
+    # ('session did not start elevated') after 64 withdrew LOGTO SDSYS outright
+    # for every caller, elevated or not, and rewrote the refusal to
+    # 'SDSYS is not reachable by LOGTO' (cproc.bp:2749-2787).  64 also removed
+    # the elevate('START') call from this path entirely ("a UAC consent must not
+    # be drawn to reach a door that is shut") - so what this row proves has
+    # narrowed further: not "the identity gate fired rather than an elevation
+    # failure" (that second path no longer exists to fire), just that the
+    # refusal carries 64's current wording rather than a stale one.  Found on
+    # `-Run b223`, 22 Sep 2026 (VerifyInstall2, elevated) - the product refused
+    # correctly, the test's expected string had not been updated.  See
+    # HISTORY.md, 22 Sep 2026, and verify-elevdoor.ps1, which had the identical
+    # staleness.
+    Note 'refused at the door (reason=SDSYS is not reachable by LOGTO)' $true `
+         ($tail -match 'LOGTO REFUSED account=SDSYS reason=SDSYS is not reachable by LOGTO') $true
+    # CONTROL: not an older gate's reason - neither pre-45's nor 45's own -
+    # which would mean the withdrawal had not taken (verify-elevdoor.ps1 makes
+    # the same three-way check for an administrator).
+    Note 'and NOT an older-gate reason' $false `
+         ((($tail -match 'reason=not an administrator') -or
+           ($tail -match 'reason=session did not start elevated'))) $true
 
     # ***THE DISQUALIFIER.***  Present = execution reached elevate('START'),
     # which is the defect.  Over ssh that call fails for want of a desktop and

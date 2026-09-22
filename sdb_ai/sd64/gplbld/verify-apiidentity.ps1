@@ -1116,6 +1116,19 @@ finally {
             }
         }
         if (Test-Path -LiteralPath $base) {
+            # 22 Sep 26 - RECLAIM AGAIN, HERE.  The line-753 reclaim runs before
+            # Step 4/5, but Step 5 is the real API measurement and re-touches
+            # ZZIDALLOW's data files (%0, %1) as the SDSYS seat - so by the time
+            # teardown runs, those specific files are SDSYS-owned again and were
+            # never in $fixtures.Files (captured before Step 5 ran).  Without
+            # this, icacls /grant below gets Access Denied on exactly those
+            # files, Remove-Item fails silently (-ErrorAction SilentlyContinue),
+            # and the litter blocks the next cycle.ps1's blanket delete of
+            # C:\ProgramData\SD.  Found 22 Sep 2026 when a cycle refused to
+            # delete C:\ProgramData\SD\zzapiid-20260921-214709\allow\ZZIDALLOW,
+            # owned by ace\SDSYS, left by the b222 run that closed 84.
+            Reclaim-Ownership $base 'final cleanup'
+
             # The fixture DIRECTORIES keep Administrators, so the tree walks;
             # ZZIDUSER's FILES do not, and deleting those relies on
             # FILE_DELETE_CHILD from the parent.  Administrators is put back on

@@ -124,14 +124,26 @@
     the right thing in each.  A single "the entry is gone" would now score the
     correct keep-both behaviour as a failure.
 
+    22 Sep 26 - STEP 7 PINS <prefix>d's ACCOUNT DIRECTORY OPEN, NOT ITS
+    PROFILE - the fourth subject, and a different fix from step 6's.
+    delacc.bp:307 discarded the OS delete's own result and let a failed
+    removal of the account's DATA directory (ProgramData\SD\user_accounts\
+    <name>, not C:\Users\<name>) look identical to a successful one.  The fix
+    at delacc.bp:332-336 tests OS$EXISTS afterward and prints message 10919
+    naming whatever survived; nothing had ever driven that branch.  Same
+    FileShare.Read technique as step 6, a different file, a different tree,
+    a different code path - neither leg proves the other.
+
 .PARAMETER Prefix
-    Stem for two throwaway accounts: <prefix>s, which SD creates and must
-    delete, and <prefix>b, which already exists and must be left alone.  Use a
-    stem nobody has used - CREATE.ACCOUNT refuses a name it has seen, and the
-    spent list is in PROJECT_STATUS.md.
+    Stem for four throwaway accounts: <prefix>s, which SD creates and must
+    delete; <prefix>b, which already exists and must be left alone;
+    <prefix>h, whose WINDOWS PROFILE is pinned open to force the keep-both
+    branch; and <prefix>d, whose SD ACCOUNT DIRECTORY is pinned open to force
+    message 10919.  Use a stem nobody has used - CREATE.ACCOUNT refuses a name
+    it has seen, and the spent list is in PROJECT_STATUS.md.
 
 .PARAMETER Keep
-    Leave both subjects behind for poking at.  <prefix>b will still be there
+    Leave all subjects behind for poking at.  <prefix>b will still be there
     either way if the verb behaved; -Keep also spares it the cleanup.
 
 .EXAMPLE
@@ -508,7 +520,7 @@ Assert-SdSeat -Label 'verify-delaccount'
 # PRESENT on both delete legs below, so an unreadable message would fail those
 # checks rather than pass them.  Listed here anyway, because "the install has
 # none of them" is a far better diagnosis than two unexplained FAILs.
-$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085, 10123, 10158)
+$needMsgs = @(5051, 10025, 10028, 10036, 10037, 10075, 10084, 10085, 10123, 10158, 10919)
 $missing  = @($needMsgs | Where-Object { (Get-SysMsgPattern $_ $null) -eq '' })
 if ($missing.Count -gt 0) {
     Fail ('checks here name these messages and the install has none of them: ' +
@@ -521,8 +533,14 @@ $borrowAcc = $Prefix + 'b'   # somebody else's.  It must be left standing.
 # except that its profile is pinned open while DELETE.ACCOUNT runs, which is the
 # only way this file can reach DELETE_USER's keep-both arm.  See step 6.
 $heldAcc   = $Prefix + 'h'   # pinned open, so the profile CANNOT go.
+# 22 Sep 26 - RELEASE_1.1 73, the other half delacc.bp:307's fix left
+# unwitnessed.  Same pin technique as <p>h, a different target: this one pins
+# a file inside the account's OWN SD data directory (ProgramData\SD\
+# user_accounts\<name>), not the Windows profile - two different trees, two
+# different branches of delacc.bp.  See step 7.
+$dirHeldAcc = $Prefix + 'd'  # pinned open, so the ACCOUNT DIRECTORY cannot go.
 
-foreach ($a in @($sdAcc, $borrowAcc, $heldAcc)) {
+foreach ($a in @($sdAcc, $borrowAcc, $heldAcc, $dirHeldAcc)) {
     if (Get-LocalUser -Name $a -ErrorAction SilentlyContinue) {
         Fail "$a already exists as a Windows account - use a fresh -Prefix."
     }
@@ -584,7 +602,8 @@ $made     = @()   # Windows accounts this script is responsible for
 # 30 Aug 26 - declared HERE, not where it is opened.  The finally block closes
 # it, and a run that throws before step 6 must not then die in its own cleanup
 # on an unassigned variable - which under Set-StrictMode is what would happen.
-$holdStream = $null
+$holdStream  = $null
+$dHoldStream = $null   # step 7's pin, same reasoning
 
 # ---------------------------------------------------------------------------
 try {
@@ -1031,6 +1050,90 @@ try {
     Write-Host ''
     Write-Host ('   LEFT BEHIND ON PURPOSE: ' + $hProf + ' and its ProfileList entry.') -ForegroundColor Yellow
     Write-Host '   That IS status 6 - the next SD service start reclaims the pair.'
+
+    # -----------------------------------------------------------------------
+    Step 7 "RELEASE_1.1 73: a file held open INSIDE the account directory (not the profile)"
+
+    # 22 Sep 26 - THE OTHER HALF OF 73's FIX, NEVER WITNESSED.  delacc.bp:307
+    # discarded the OS delete's result (assigned to a variable nothing read),
+    # so a failed delete of the ACCOUNT DIRECTORY looked identical to a
+    # successful one right after "this cannot be undone."  The fix, delacc.bp
+    # :332-336, tests OS$EXISTS on pathname - the account's OWN SD data
+    # directory, ProgramData\SD\user_accounts\<name>, NOT the Windows profile
+    # step 6 pins - after the delete attempt, and prints message 10919 naming
+    # it if anything survived.  10919 has never appeared in any SD-verify
+    # transcript, checked against the full elevated suite (b223, 22 Sep 2026);
+    # this step is the first thing that can produce it.
+    #
+    # SAME TECHNIQUE AS STEP 6, DIFFERENT TARGET AND A DIFFERENT CODE PATH.  A
+    # FileShare.Read handle on one file inside the account directory blocks
+    # OS$DELETE's recursive removal of the directory above it - no interop, no
+    # logon, no password.  Step 6 pins C:\Users\<name> (the WINDOWS profile,
+    # DELETE_USER's subject); this pins ProgramData\SD\user_accounts\<name>
+    # (the ACCOUNT's OWN data, delacc.bp's subject).  Neither leg proves the
+    # other - they are different files, blocked by different opens, read by
+    # different code.
+    #
+    # NO PROFILE NEEDED.  73's subject is the account's own data directory,
+    # which CREATE.ACCOUNT makes regardless of any Windows login, so this
+    # account is left at the plain default route and nothing else.
+    $dpw = [System.Web.Security.Membership]::GeneratePassword(20, 4) + 'aA1!'
+    $out = Invoke-SD @("CREATE.ACCOUNT USER $dirHeldAcc BOTH", $dpw, $dpw)
+    $made += $dirHeldAcc
+
+    $dRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $dirHeldAcc.ToUpper())
+    $dDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $dirHeldAcc)
+    if (-not (Test-Path -LiteralPath $dRec)) {
+        Write-Host $out
+        Fail "CREATE.ACCOUNT did not register $dirHeldAcc"
+    }
+    Note 'the directory-held subject is registered'       $true (Test-Path -LiteralPath $dRec)
+    Note 'its account directory exists before the delete' $true (Test-Path -LiteralPath $dDir)
+
+    $dHoldPath = Join-Path $dDir 'sd-verify-delaccount73-hold.tmp'
+    try {
+        $dHoldStream = [System.IO.File]::Open(
+            $dHoldPath, [System.IO.FileMode]::Create,
+            [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+        $dHoldStream.WriteByte(0)
+        $dHoldStream.Flush()
+    } catch {
+        Fail ("could not pin $dHoldPath open - $($_.Exception.Message).  Without the " +
+              'pin the directory deletes cleanly and 73 stays unwitnessed.')
+    }
+    # RECORDED, NOT ASSERTED - same reasoning as step 6's pin: this could only
+    # ever pass, and the Fail above is what handles the other outcome.
+    Write-Host ("   pinned: {0}  (FileShare.Read - no FILE_SHARE_DELETE)" -f $dHoldPath)
+
+    $out = Invoke-SD @("DELETE.ACCOUNT $dirHeldAcc", 'Y', $sentinel, 'Y', 'Y')
+    Write-Host $out
+
+    $dDirLeft = Test-Path -LiteralPath $dDir
+
+    # ***THE RIG IS CHECKED BEFORE THE PRODUCT IS*** - same discipline as step
+    # 6.  If the pin did not bite, the directory went anyway and 10919 cannot
+    # have fired for a real reason; that is reported as a failure OF THE RIG,
+    # named as such, not as a green branch or a product fault.
+    if (-not $dDirLeft) {
+        Note 'the pin blocked the account directory removal (this leg is decisive)' $true $false
+        Write-Host ('   THE PIN DID NOT BITE: ' + $dDir + ' went anyway, so 73 remains ' +
+                    'unwitnessed by this run.') -ForegroundColor Red
+    } else {
+        Note 'the pin blocked the account directory removal (this leg is decisive)' $true $true
+        Note 'the account directory was NOT removed (this leg is decisive)'         $true $dDirLeft
+        Note 'message 10919 shown (this leg is decisive)' $true (Shown $out 10919 $null)
+    }
+
+    Note 'the sentinel reached the VOC - no second question (5051)' $true (Shown $out 5051 @($sentinel))
+    # THE DELETION CARRIES ON past the directory, by design (delacc.bp's own
+    # comment: "the deletion carries on").  So these three go regardless of
+    # whether the directory did - asserting that is asserting the fix did NOT
+    # regress into aborting the whole verb on a partial directory failure.
+    Note 'ACCOUNTS record is gone regardless (deletion carries on)' $false (Test-Path -LiteralPath $dRec)
+    Note 'Windows account is gone regardless (deletion carries on)' $false (
+        [bool](Get-LocalUser -Name $dirHeldAcc -ErrorAction SilentlyContinue))
+    Note 'sdu_ group is gone regardless (deletion carries on)'      $false (
+        [bool](Get-LocalGroup -Name ('sdu_' + $dirHeldAcc) -ErrorAction SilentlyContinue))
 }
 catch {
     $script:failed = $true
@@ -1051,9 +1154,19 @@ finally {
               Write-Host '   released the profile pin' } catch { }
         $holdStream = $null
     }
+    # 22 Sep 26 - STEP 7's PIN, SAME REASONING.  Left open, it would keep
+    # ProgramData\SD\user_accounts\<p>d undeletable for the sweep below - the
+    # directory surviving is what step 7 asserts DURING the run, not something
+    # to leave true afterward.
+    if ($dHoldStream) {
+        try { $dHoldStream.Close(); $dHoldStream.Dispose()
+              Write-Host ''
+              Write-Host '   released the account-directory pin' } catch { }
+        $dHoldStream = $null
+    }
 
     if (-not $Keep) {
-        Step 7 'Putting the system back'
+        Step 8 'Putting the system back'
 
         # Everything here is litter by definition: if the verb behaved, only
         # the borrowed account is left, and it is left BECAUSE the verb was
