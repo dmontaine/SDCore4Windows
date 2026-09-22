@@ -4,6 +4,25 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+22 Sep 26  SH AND ! ARE BACK ON ORDINARY ACCOUNTS.
+
+           An ordinary account's SH and ! verbs (running a shell command
+           from within SD) had gone missing. They still worked for
+           SDSYS, but no other account could even type the command - not
+           merely be refused it.
+
+           They are back. What decides whether the command actually
+           runs is unchanged: by default nobody but SDSYS can reach the
+           shell this way, and an administrator grants it to a specific
+           account with
+
+               MODIFY.ACCOUNT <account> SH-ON
+
+           (OS-ON is the separate switch for OS.EXECUTE from within a
+           BASIC program, and is unaffected by this.) The verbs were
+           only ever meant to be present-but-gated, the same as before;
+           this restores that.
+
 22 Sep 26  SDSYS CAN BE REACHED BY A LOCAL API CLIENT.
 
            SDSYS is administered at the computer it is signed in to.  It
