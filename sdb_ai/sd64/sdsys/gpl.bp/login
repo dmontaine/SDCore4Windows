@@ -18,6 +18,13 @@
 * 
 * 
 * START-HISTORY:
+* 22 Sep 26 Windows port - RELEASE_1.1 106.  THE ONLY PRIVILEGED ACCOUNT IS
+*           SDSYS.  Owner's ruling: elevation must not give any account extra
+*           SD privileges.  The ordinary-account login case now clears
+*           K$ADMINISTRATOR explicitly - kernel.c's session-start seed from
+*           IsElevated() was leaking into a direct login, since nothing had
+*           ever cleared it there (CPROC's LOGTO handler already does, on the
+*           way out of SDSYS).  See the comment at the change.
 * 20 Sep 26 Windows port - RELEASE_1.1 82 (D2').  AN "sd -internal" SESSION NEEDS A
 *           ONE-SHOT MARKER, $internal in the SDSYS directory, which the new internal.gate
 *           consumes: the developer door is closed on a delivered system and opened one
@@ -813,6 +820,34 @@ deffun pw_complex(pw) calling '!pw_complex'
          end
 
          initial.account = upcase(@logname)
+
+* 22 Sep 26 Windows port - THE ONLY PRIVILEGED ACCOUNT IS SDSYS.  Owner's
+*   ruling, 22 Sep 2026: "elevation should not give ANY user any additional SD
+*   privileges no matter if they are an administrator or not - making a user a
+*   Windows administrator does not change their use of SD in any way ... The
+*   only privileged account is SDSYS."
+*
+*   kernel.c seeds K$ADMINISTRATOR from IsElevated() at session start, before
+*   LOGIN has decided which account this session is landing in - it has to,
+*   because the SDSYS case above reads it to know whether to admit @logname =
+*   SDSYS at all.  This case is reached once that question has already been
+*   answered NO: an elevated Windows administrator signing in as themselves
+*   was landing here with the seed's TRUE still standing, and nothing had ever
+*   cleared it, so K$ADMINISTRATOR read TRUE for the rest of the session -
+*   CREATE.FILE, GLOBAL cataloguing, SH and EDIT/MICRO without an OS.USERS
+*   grant, BREAK ON USER and PDUMP of somebody else's process all read that
+*   same flag and passed on it.
+*
+*   THE FIX MIRRORS CPROC'S OWN ONE, cproc:2921, "the privilege goes with
+*   them" on the way OUT of SDSYS via LOGTO - this is the other door,
+*   straight IN, that CPROC's LOGTO handler never sees.  Clearing it here
+*   costs nothing SDSYS-only accounts have use for CPROC's LOGTO grant is
+*   untouched, and the seat's -Internal LOGTO into an ordinary account was
+*   already landing here with it cleared, which is why verify-apiadmin.ps1
+*   and verify-privundetermined.ps1 needed the os.users\SDSYS fixture for
+*   their local control leg in the first place - this makes a direct login
+*   behave the same way that path already did.
+         void kernel(K$ADMINISTRATOR, 0)
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register

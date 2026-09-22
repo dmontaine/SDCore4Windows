@@ -4,6 +4,22 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+22 Sep 26  A WINDOWS ADMINISTRATOR NO LONGER GETS EXTRA SD PRIVILEGES IN
+           THEIR OWN ACCOUNT.
+
+           Being elevated (an administrator, running SD "as administrator")
+           used to also make a few things work in your own ordinary account
+           that an ordinary session couldn't do: CATALOG ... GLOBAL,
+           DELETE.CATALOG of a global entry, SH/!/EDIT/MICRO without an
+           OS.USERS grant, BREAK ON USER, and PDUMP of another user's
+           process.
+
+           None of that was ever meant to depend on Windows elevation - it
+           is SDSYS's, and only SDSYS's. Being a Windows administrator still
+           gets you an account, still lets you install SD, and (unchanged)
+           is still what makes SDSYS itself reachable when you sign in as
+           it. It no longer does anything extra in an ordinary account.
+
 22 Sep 26  SH AND ! ARE BACK ON ORDINARY ACCOUNTS.
 
            An ordinary account's SH and ! verbs (running a shell command
