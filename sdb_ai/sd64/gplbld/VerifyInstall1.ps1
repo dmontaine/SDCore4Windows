@@ -1304,6 +1304,10 @@ if ($partial) {
     Write-Output '      This run says NOTHING about the steps it did not run.'
 }
 
+# 22 Sep 26 - RELEASE_1.1 97.  THE WHOLE-HALF TOTAL, so the summary can say
+# how long this run actually took without anyone adding up 26 per-step lines.
+$wholeSw = [Diagnostics.Stopwatch]::StartNew()
+
 $lines  = @()
 $failed = 0
 # 03 Sep 26 - PRE_RELEASE_FIXES.md 152.  COUNTED SEPARATELY, NOT COUNTED
@@ -1364,6 +1368,14 @@ foreach ($s in $steps) {
     Write-Output ''
     Write-Output ('===== ' + $s.Name + ' =====')
     $splat = $s.P
+    # 22 Sep 26 - RELEASE_1.1 97.  TIMED, SAME SHAPE AS check-free-tier.ps1
+    # ($sw = [Diagnostics.Stopwatch]::StartNew(), '{0:N1}s'), so the two
+    # summaries read the same way.  This half never had per-step durations -
+    # the "measured" figures in PROJECT_STATUS.md 97 were reconstructed after
+    # the fact from log timestamps, which is what this replaces.  Started
+    # AFTER the header line and BEFORE the step, so it times the step alone,
+    # not this loop's own bookkeeping.
+    $sw = [Diagnostics.Stopwatch]::StartNew()
     # 20 Sep 26 - A STEP THAT THROWS ENDS ITSELF, NOT THE RUN.  The steps run in this
     # process under $ErrorActionPreference = 'Stop', so a terminating error inside one
     # propagated out of this call and ended the whole suite there.  It is now scored as
@@ -1374,6 +1386,7 @@ foreach ($s in $steps) {
         Write-Output ('[FAIL] the step threw and was stopped: ' + $_.Exception.Message)
         Write-Output ([string]$_.ScriptStackTrace)
     }
+    $sw.Stop()
 
     # 28 Aug 26 - CLOSE WHAT THE STEP LEFT OPEN, AND SAY SO.  PRE_RELEASE 40.
     #
@@ -1411,7 +1424,7 @@ foreach ($s in $steps) {
     # (entry 151 made the six API verifiers honour it).  The row is annotated
     # so the summary FILE carries the distinction too, not just the console.
     if ($code -eq 2) { $refused++ }
-    $lines += ('{0,-28} exit {1}{2}' -f $s.Name, $code,
+    $lines += ('{0,-28} {1,5:N1}s  exit {2}{3}' -f $s.Name, $sw.Elapsed.TotalSeconds, $code,
                $(if ($code -eq 2) { '  COULD NOT RUN' } else { '' }))
 
     if ($code -ne 0 -and -not $ContinueOnFailure) {
@@ -1474,6 +1487,7 @@ $lines | ForEach-Object { Write-Output $_ }
 $lines | Set-Content -LiteralPath $summary -Encoding utf8
 Write-Output ''
 Write-Output ('summary written to: ' + $summary)
+Write-Output ('this half took: {0:N1}s' -f $wholeSw.Elapsed.TotalSeconds)
 
 if ($failed -gt 0) {
     # 03 Sep 26 - PRE_RELEASE 152.  SAY WHICH KIND OF RED.  A step that refused
