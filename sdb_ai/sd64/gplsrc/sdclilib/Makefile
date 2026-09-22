@@ -179,9 +179,15 @@ SDCONNECT = sd-connect.exe
 # the reason it lives in localtest/ are further down, at check-local.
 LOCALTEST = localtest/local-connect-test.exe
 
+# 22 Sep 26 - RELEASE_1.1 101.  THE ADMIT SIDE, AND IT IS BUILT BY "all" FOR THE
+# SAME REASON THE REFUSE SIDE IS: gplbld/verify-sdsyslocal.ps1 is a suite step,
+# and a step whose binary has to be hand-built is the defect 161 and 164 both
+# landed on.  It goes in localtest/ for the DLL-search reason at check-local.
+SDSYSPROBE = localtest/local-sdsys-probe.exe
+
 .PHONY: all clean check
 
-all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT) $(LOCALTEST)
+all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT) $(LOCALTEST) $(SDSYSPROBE)
 
 $(DLL): sdclilib.c $(TLSSRC) $(HDRS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -shared -o $@ sdclilib.c $(TLSSRC) \
@@ -309,6 +315,20 @@ $(LOCALTEST): tests/local_connect_test.c sdclilib.h $(DLL)
 	mkdir -p localtest
 	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o $@ \
 	  tests/local_connect_test.c -I. -L. -lsdclilib
+
+# 22 Sep 26 - RELEASE_1.1 101.  THE MIRROR OF THE RULE ABOVE, and it lives in
+# localtest/ for the identical DLL-search reason - it must load the INSTALLED
+# sdclilib.dll and sd.exe as a pair, not the freshly built library in this
+# directory.  There is NO "check-sdsyslocal" target beside check-local, and that
+# is deliberate: this probe is only meaningful from an ELEVATED session owned by
+# the Windows SDSYS account, make cannot check either of those, and make also
+# collapses every recipe failure to its own exit 2 - which would erase the six
+# distinct exit codes the probe exists to report.  gplbld/verify-sdsyslocal.ps1
+# checks the principal and runs the binary directly.
+$(SDSYSPROBE): tests/local_sdsys_probe.c sdclilib.h $(DLL)
+	mkdir -p localtest
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o $@ \
+	  tests/local_sdsys_probe.c -I. -L. -lsdclilib
 
 # 04 Sep 26 - AND IT TAKES THE ACCOUNT RATHER THAN NAMING ONE.  It used to
 # connect to the literal "DON", which is fine for a thing one person runs on
