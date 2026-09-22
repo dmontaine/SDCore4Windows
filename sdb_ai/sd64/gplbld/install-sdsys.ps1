@@ -32,16 +32,14 @@
 #                    owner start SD with "Run as administrator" and get one.
 #   sdusers          REQUIRED.  That group carries the data tree's ACL.  Without
 #                    it SDSYS is an administrator who cannot open SD's files.
-#   sdapi            NOT JOINED BY DEFAULT (RELEASE_1.1 101, owner 22 Sep 2026).
-#                    SDSYS has the API route like every other account, off until
-#                    MODIFY.ACCOUNT SDSYS API.  This script never removes it, so
-#                    a grant survives an upgrade.
-#   sdssh            NOT JOINED, AND NOT OFFERED.  Owner, 22 Sep 2026: ssh is no
-#                    use to SDSYS, which must already be signed in to be an
-#                    administrator.  MODIFY.ACCOUNT refuses SDSYS SSH.  Only the
-#                    old removal is gone; nothing here adds it.
-#   sdsshonly        NEVER.  Its SeDenyInteractiveLogonRight would lock SDSYS
-#                    out of its own console.
+#   sdssh, sdapi,    NOT JOINED, DELIBERATELY.  SDSYS has no remote door: an ssh
+#   sdsshonly        or API logon is not an elevated Windows session, so LOGIN's
+#                    own guard refuses it (10002).  Joining would put an account
+#                    that is always refused into the group that decides who may
+#                    connect - a lie in the grant, which is what entry 63 was
+#                    about.  It also keeps the account out of sdsshonly, whose
+#                    SeDenyInteractiveLogonRight would lock SDSYS out of its own
+#                    console.
 #
 # THE PASSWORD IS GENERATED, PRINTED AND LOGGED, AND SOMEBODY ASKS FOR A BETTER
 # ONE A MOMENT LATER.  The generated one exists because the account needs a
@@ -198,19 +196,10 @@ foreach ($g in @('Administrators', 'sdusers')) {
         Say ("  already in " + $g)
     }
 }
-# RELEASE_1.1 101, owner 22 Sep 2026: SDSYS has the API route like every other
-# account - off until "MODIFY.ACCOUNT SDSYS API" turns it on.  So sdapi is NOT
-# touched here: this script runs on every install, an upgrade included, and
-# stripping it would undo an administrator's grant each time.  sdssh is not
-# offered to SDSYS at all.  Off after a fresh install holds without any removal -
-# the two groups are deleted at uninstall, and sync-route-groups.ps1 leaves SDSYS
-# out of the sdssh seed.
-# sdsshonly stays removed: its deny-logon rights would lock SDSYS out of its own
-# console.
-foreach ($g in @('sdssh', 'sdsshonly')) {
+foreach ($g in @('sdssh', 'sdapi', 'sdsshonly')) {
     if (Test-SdsysMembership $g) {
         Remove-LocalGroupMember -Group $g -Member $AccountName -ErrorAction SilentlyContinue
-        Say ("  removed " + $AccountName + " from " + $g + " - it has no ssh route and must keep its console")
+        Say ("  removed " + $AccountName + " from " + $g + " - it has no remote door")
     }
 }
 
@@ -241,6 +230,6 @@ if ($created) {
 }
 
 Say ''
-Say ("OK: " + $AccountName + " is in Administrators and sdusers, and not in sdsshonly. the API is its to turn on: MODIFY.ACCOUNT SDSYS API.")
+Say ("OK: " + $AccountName + " is in Administrators and sdusers, and in no ssh or API group.")
 Say ("     log: " + $LogFile)
 if ($created) { exit 0 } else { exit 2 }

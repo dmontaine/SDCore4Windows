@@ -1,1 +1,0 @@
-SDSYS has no SD password yet, so the API will refuse it.  Set one with MODIFY.PASSWORD SDSYS

@@ -19,9 +19,6 @@
 *
 *
 * START-HISTORY:
-* 22 Sep 26 Windows port - RELEASE_1.1 101.  SDSYS may be given the API route:
-*           the ACC$GROUP entry test is replaced, for SDSYS only, by "the proven
-*           name is the Windows account SDSYS".  sdapi is still required.
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  The administrator remote-API gate
 *           in vb.scram.final is gone with the tiers: sdadmin is deleted with
 *           the tier fields and the API is for every account now.  The
@@ -709,7 +706,6 @@ end
 *   empty field means a record older than CREATE.ACCOUNT's group work, and
 *   inventing the name would test a group nothing else uses.
 *
-*   [SUPERSEDED 22 Sep 26 - SDSYS now has its own test below; kept as the record.]
 *   AND IT REFUSES SDSYS THROUGH THE API, which is intended and not a side
 *   effect to be fixed later.  ACCOUNTS/SDSYS carries ACC$GROUP = sdsys, which
 *   is not a Windows group and never has been (section 6), so is_grp_member
@@ -751,25 +747,8 @@ end
 *   it could not tell, and K$GROUP.MEMBER has already put the reason on the
 *   audit trail.  A refusal nobody can account for is the thing this pair of
 *   changes exists to stop.
-* 22 Sep 26 Windows port - SDSYS HAS THE API ROUTE LIKE EVERY OTHER ACCOUNT,
-*   OFF UNTIL MODIFY.ACCOUNT SDSYS API OR BOTH TURNS IT ON.  Owner's decision,
-*   22 Sep 2026.  This test cannot be asked of SDSYS: ACC$GROUP is 'sdsys', which
-*   is not a Windows group (the note above says so), so the answer was always
-*   "no" and the refusal was an accident of the register rather than a rule.
-*   Entry to SDSYS is instead the Windows account of that name, the same
-*   identity LOGIN's landing case tests.  THE ROUTE ITSELF IS UNCHANGED AND IS
-*   TESTED SEPARATELY: vb.scram.final has already required membership of sdapi
-*   before this line is reached, so an SDSYS that was never given the API never
-*   gets here.
-if new.account = 'SDSYS' then
-   acc.who = upcase(kernel(K$USERNAME, 0))
-   if index(acc.who, '\', 1) > 0 then acc.who = field(acc.who, '\', dcount(acc.who, '\'))
-   acc.member = (acc.who = 'SDSYS')
-   acc.told = 0
-end else
-   acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
-   acc.told = status()
-end
+acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
+acc.told = status()
 
 if acc.told # 0 then
    void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group)
@@ -841,27 +820,6 @@ read voc.rec from voc, "$PRIVATE.CATALOGUE" then
 end
 
 i = kernel(K$PRIVATE.CATALOGUE, private.catalogue)
-
-* 22 Sep 26 Windows port - RELEASE_1.1 101.  AN API SESSION IN SDSYS IS AN
-*   ADMINISTRATOR SESSION, AND EVERY OTHER API SESSION IS NOT.  Owner, 22 Sep
-*   2026: SDSYS's API route is the administrator's own choice of security level -
-*   it exists only after MODIFY.ACCOUNT SDSYS API, and the caller has already
-*   proved the SDSYS SD password (SCRAM), been found in sdapi, and been checked
-*   as the Windows account SDSYS above.  No Windows sign-in of SDSYS is needed or
-*   consulted: the service starts the session after the proof.
-*
-*   THIS IS DONE HERE BECAUSE kernel.c NEVER SEEDS THE FLAG FOR A SOCKET SESSION
-*   (CN_SOCKET, 21 Aug 26 - a LocalSystem token had made every remote client an
-*   administrator) and because LOGTO's own grant/clear (cproc, on entering and
-*   leaving SDSYS) is not in this path.  It is set AFTER every refusal above and
-*   CLEARED on entering any other account, so a LOGTO out of SDSYS gives the
-*   authority back exactly as CPROC does.  The flag is what os_permitted()
-*   reads, so this session may run OS.EXECUTE: that is the cost, and it was ruled.
-if new.account = 'SDSYS' then
-   void kernel(K$ADMINISTRATOR, 1)
-end else
-   void kernel(K$ADMINISTRATOR, 0)
-end
 
 * Run the LOGIN paragraph, if it exists
 

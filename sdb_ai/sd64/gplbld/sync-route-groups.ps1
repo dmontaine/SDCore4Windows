@@ -114,8 +114,6 @@ try {
             Say "$SeedFrom has no members - $SshGroup left empty, which is correct on a first install"
         } else {
             foreach ($m in $members) {
-                # RELEASE_1.1 101: SDSYS is never offered ssh (MODIFY.ACCOUNT refuses SDSYS SSH).
-                if ($m -ieq 'SDSYS') { Say "leaving SDSYS out of $SshGroup - it has no ssh route"; continue }
                 if ($Check) { Say "would add $m to $SshGroup"; continue }
                 try {
                     Add-LocalGroupMember -Group $SshGroup -Member $m -ErrorAction Stop
