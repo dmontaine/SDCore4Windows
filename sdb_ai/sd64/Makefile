@@ -196,7 +196,7 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc sdtlsrelay sdpy terminfo check-local check-remote check-api-admin
+.PHONY: sdclilib sdsvc sdtlsrelay sdpy terminfo check-local check-remote check-api-admin build-api-identity
 
 # 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
 # owner's ruling: "let's get rid of the client installers all together and just
@@ -304,6 +304,14 @@ check-api-admin:
 	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) \
 	  APIHOST="$(APIHOST)" APIPORT="$(APIPORT)" APIUSER="$(APIUSER)" \
 	  APIPASS="$(APIPASS)" APIACCT="$(APIACCT)" APICMD="$(APICMD)" check-api-admin
+
+# 20 Sep 26 - RELEASE_1.1 84.  Build-only route to the identity probe, handed
+# the UCRT64 compiler for the same reason as check-api-admin.  verify-apiidentity
+# builds through here and then runs localtest/api-identity-probe.exe itself, with
+# the variable --open/--write session it needs (tests/api_identity_probe.c).
+build-api-identity:
+	@PATH="$(UCRT_BIN):$$PATH" $(MAKE) --no-print-directory -C $(CLILIBDIR) CC=$(UCRT_CC) \
+	  build-api-identity
 
 # 15 Aug 26 - THE SERVICE IS NATIVE, AND ON PURPOSE.  A Windows service has to
 # call StartServiceCtrlDispatcher, and sd.exe is built against the MSYS2 POSIX

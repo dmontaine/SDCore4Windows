@@ -41,17 +41,35 @@
 # the login half works and the containment half does not.  That is a product
 # finding, not a test fault, and it should be treated as one.
 #
-# THE API CLIENT IS gplbld/scram-probe.py - 15 Sep 26, RELEASE_1.1 42.  This
-# file carried a .NET TcpClient copied from verify-scramlogin.ps1, and after
-# RELEASE_1.1 41 made every API connection TLS with the login bound to it, that
-# client could not reach the server (.NET's SslStream cannot export the RFC
-# 9266 binding).  The probe logs in, enters the account (request 3), opens each
-# fixture (request 4) and writes the ownership record (request 16) - the same
-# requests as before, one request per answer, no command parsing in the way.
-# The helpers that run it are copied from verify-scramlogin.ps1, which says
-# why each exists; if one changes, both change.
+# THE API CLIENT IS THE REAL SHIPPED LIBRARY - 20 Sep 26, RELEASE_1.1 84.
+# This used to drive gplbld/scram-probe.py, a hand-written Python
+# reimplementation of TLS+SCRAM built for RELEASE_1.1 42 because .NET's
+# SslStream could not export the RFC 9266 binding.  It now drives
+# gplsrc/sdclilib/tests/api_identity_probe.c on sdclilib - the library real
+# applications link against.  SDConnect() does the whole login AND the account
+# attach; SDOpen() sends the same vb.open (request 4) and SDWrite() the same
+# vb.write (request 16) the Python hand-built - so the wire traffic is
+# identical, but the code under test is now the product, not a stand-in.
 #
-# NOT SHIPPED - it must be on assert-current.ps1's $neverShipped list.
+# WHAT CHANGED FOR THE PARSER.  sdclilib exposes no wire server_error/status
+# getter (SDStatus returns sd_status, which SDOpen never sets), so a refused
+# open is reported as SDError()'s text alone - "OPEN NAME: REFUSED: text",
+# not the Python's "REFUSED server_error N status N".  The BOOLEAN outcome the
+# decisive checks read (opened / refused / not-seen) is unchanged.  Login and
+# attach are proven by "PROBE.CONNECT=YES"; a login refusal carries its text
+# (message 5277, "could not take your Windows identity", is the K$ASSUME.USER
+# finding, not a broken test).
+#
+# THE PROBE CARRIES NO PROTOCOL LOGIC to unit-test the way scram-probe.py did:
+# its only logic is argument parsing and the open/write loop, and the wire is
+# the shipped library's, exercised by verify-apiremote (same SDConnect) and
+# verify-scramlogin (the handshake).  So the instrument is proven by BUILDING
+# it (a zero-warning compile against the real headers) and confirming the built
+# binary is the identity probe; the decisive guards are the ALLOW control and
+# the ownership control below, exactly as before.
+#
+# NOT SHIPPED - the .exe is built into gplsrc/sdclilib/localtest, which is not
+# staged; the .c is source under gplsrc and is not installed either.
 #
 # NOT YET RUN BY ANYBODY.  Written 23 Aug 2026 at the end of a long session and
 # handed over UNRUN, deliberately: PROJECT_STATUS's START HERE says so.
@@ -77,11 +95,16 @@ $ErrorActionPreference = 'Stop'
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
-# The API client.  The request types it sends (3 account, 4 open, 16 write,
-# 47/48 SCRAM) are in scram-probe.py, whose header documents each.
-$Probe      = Join-Path $Gplbld 'scram-probe.py'
-$ProbeUnits = Join-Path $Gplbld 'test-scramprobe-units.py'
-$Python     = $null
+# The API client is the real shipped library, driven through its C probe.
+# $sd64 is the make root (MAIN); the probe is built there via "make
+# build-api-identity" and RUN from its localtest dir, the DLL-search discipline
+# gplsrc/sdclilib/Makefile's check-local documents.  bash runs both.
+$sd64      = Split-Path -Parent $Gplbld
+$bash      = 'C:\msys64\usr\bin\bash.exe'
+$ProbeExe  = Join-Path $sd64 'gplsrc\sdclilib\localtest\api-identity-probe.exe'
+# C:\a\b -> /c/a/b, as verify-apiremote.ps1 does.
+$MsysSd64  = '/' + $sd64.Substring(0, 1).ToLower() + ($sd64.Substring(2) -replace '\\', '/')
+$MsysLocal = $MsysSd64 + '/gplsrc/sdclilib/localtest'
 
 $script:checks = @()
 $script:void   = $false
@@ -219,56 +242,87 @@ function Get-WhoAccounts([string]$text) {
 }
 
 # ---------------------------------------------------------------------------
-# THE API CLIENT: gplbld/scram-probe.py - see the header.  These three helpers
-# are copied from verify-scramlogin.ps1, whose comments give the reasons:
-# prove the probe with its own unit test before believing it, run it with the
-# exact command line and the password's LENGTH printed (the password itself
-# goes in the environment), print every line it returns, and match whole
-# lines case-sensitively on wording the probe prints only on that path.
+# THE API CLIENT: gplsrc/sdclilib/tests/api_identity_probe.c - see the header.
+# The helpers below build it through the real client library and drive it the
+# way verify-apiremote.ps1 does its own C probe: run it with the exact command
+# line (the password field REDACTED, its length printed instead), print every
+# line it returns, and match whole lines case-sensitively on wording the probe
+# prints only on the path that produced it.
 # ---------------------------------------------------------------------------
 
-function Test-ProbeInstrument {
-    foreach ($f in @($Probe, $ProbeUnits)) {
-        if (-not (Test-Path -LiteralPath $f)) { Refuse "$f is missing - it is the API client this verifier drives." }
-    }
-    $cmd = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $cmd) { Refuse 'python is not on PATH - scram-probe.py is the API client this verifier drives.' }
-    $script:Python = $cmd.Source
-    Write-Host "   python : $script:Python"
-    Write-Host "   probe  : $Probe"
+# Single-quote a token for bash -lc, escaping any embedded single quote.
+function Quote-Bash([string]$s) { "'" + ($s -replace "'", "'\''") + "'" }
+
+# stderr under ErrorActionPreference='Stop' on a native command TERMINATES the
+# script (PowerShell 5.1 wraps each line in a NativeCommandError, and make
+# writes to stderr); verify-apiremote.ps1 documents the same guard.
+function Invoke-Bash([string]$command) {
     $saved = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $u  = & $script:Python $ProbeUnits 2>&1
-        $uc = $LASTEXITCODE
+        $raw  = & $bash -lc $command 2>&1
+        $code = $LASTEXITCODE
     } finally { $ErrorActionPreference = $saved }
-    foreach ($l in @($u)) { Write-Host ('   | ' + ("$l".TrimEnd("`r"))) }
-    Write-Host "   test-scramprobe-units exit $uc"
-    return $uc
+    $lines = @($raw | ForEach-Object { "$_".TrimEnd("`r") })
+    return [pscustomobject]@{ Lines = $lines; Code = $code }
 }
 
-function Invoke-ScramProbe([string]$label, [string]$password, [string[]]$probeArgs) {
+# Build the probe against the real library, then confirm the built binary is
+# the identity probe (a no-arg run prints its usage and exits 5).  A zero-
+# warning compile against the shipped headers is the instrument proof here -
+# the probe carries no protocol logic of its own; see the file header.
+function Test-ProbeInstrument {
+    if (-not (Test-Path -LiteralPath $bash)) {
+        Refuse "no MSYS2 bash at $bash - the API client is built and run through it."
+    }
+    Write-Host "   bash   : $bash"
+    Write-Host "   probe  : $ProbeExe"
+    $build = Invoke-Bash ("cd " + (Quote-Bash $MsysSd64) + " && make --no-print-directory build-api-identity")
+    foreach ($l in $build.Lines) { Write-Host ('   | ' + $l) }
+    Write-Host "   make build-api-identity exit $($build.Code)"
+    if ($build.Code -ne 0) { return $build.Code }
+    if (-not (Test-Path -LiteralPath $ProbeExe)) {
+        Write-Host "   the build reported success but $ProbeExe is not on disk"
+        return 2
+    }
+    # No-arg run: proves the binary is ours and starts.  usage -> exit 5.  The
+    # runtime PATH is needed even here - the probe is a NATIVE UCRT64 binary and
+    # resolves api-ms-win-crt-*.dll through System32, which a plain MSYS2 login
+    # shell drops from PATH (gplsrc/sdclilib/Makefile's check-local note).
+    $sanity = Invoke-Bash ("cd " + (Quote-Bash $MsysLocal) +
+              " && PATH='/c/Program Files/SD/usr/bin:/c/WINDOWS/System32':`$PATH ./api-identity-probe.exe")
+    foreach ($l in $sanity.Lines) { Write-Host ('   | ' + $l) }
+    Write-Host "   no-arg sanity exit $($sanity.Code)"
+    $usage = @($sanity.Lines | Where-Object { $_ -match '^usage: .*--open NAME' }).Count -gt 0
+    if (($sanity.Code -ne 5) -or (-not $usage)) {
+        Write-Host '   the built binary did not print the identity probe usage / exit 5'
+        return 2
+    }
+    return 0
+}
+
+# One probe run = one API session.  $probeArgs are the tokens after the five
+# fixed ones (host port user pass account): the --open / --write list.
+function Invoke-ApiProbe([string]$label, [string]$password, [string[]]$probeArgs) {
     if ($null -eq $probeArgs -or $probeArgs.Count -eq 0) {
-        Refuse "Invoke-ScramProbe '$label' was handed no arguments - it would measure nothing."
+        Refuse "Invoke-ApiProbe '$label' was handed no arguments - it would measure nothing."
     }
+    $fixed = @('127.0.0.1', "$Port", $Prefix, $password, $Prefix.ToUpper())
+    $tokens = $fixed + $probeArgs
+    $quoted = ($tokens | ForEach-Object { Quote-Bash $_ }) -join ' '
+    $command = "cd " + (Quote-Bash $MsysLocal) +
+               " && PATH='/c/Program Files/SD/usr/bin:/c/WINDOWS/System32':`$PATH" +
+               " ./api-identity-probe.exe " + $quoted
+    # The command line, with the password field shown as its length only.
+    $shown = (@('127.0.0.1', "$Port", $Prefix, ('<pw:' + $password.Length + ' chars>'), $Prefix.ToUpper()) + $probeArgs) -join ' '
     Write-Host ''
-    Write-Host "   -- scram-probe: $label"
-    Write-Host ('   command : ' + $script:Python + ' ' + $Probe + ' ' + ($probeArgs -join ' '))
-    Write-Host ('   password: in SD_SCRAM_PASSWORD, {0} characters' -f $password.Length)
-    $saved = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $env:SD_SCRAM_PASSWORD = $password
-    try {
-        $raw  = & $script:Python $Probe @probeArgs 2>&1
-        $code = $LASTEXITCODE
-    } finally {
-        Remove-Item -Path 'Env:SD_SCRAM_PASSWORD' -ErrorAction SilentlyContinue
-        $ErrorActionPreference = $saved
-    }
-    $lines = @($raw | ForEach-Object { "$_".TrimEnd("`r") })
-    foreach ($l in $lines) { Write-Host ('   | ' + $l) }
-    Write-Host "   probe exit $code"
-    return [pscustomobject]@{ Label = $label; Code = $code; Lines = $lines }
+    Write-Host "   -- api-identity-probe: $label"
+    Write-Host ('   command : ./api-identity-probe.exe ' + $shown)
+    Write-Host ('   password: passed as argv[4], {0} characters' -f $password.Length)
+    $r = Invoke-Bash $command
+    foreach ($l in $r.Lines) { Write-Host ('   | ' + $l) }
+    Write-Host "   probe exit $($r.Code)"
+    return [pscustomobject]@{ Label = $label; Code = $r.Code; Lines = $r.Lines }
 }
 
 function Get-ProbeMatch($r, [string]$pattern) {
@@ -278,10 +332,11 @@ function Get-ProbeMatch($r, [string]$pattern) {
     return $null
 }
 
-# What the probe said about one vb.open (request 4).  SERVER.ERROR IS THE
-# FIELD, NOT STATUS: vb.open sets server.error when the open fails, and the
-# probe prints OPENED only for server_error 0 with a file number in the reply.
-# Getting this wrong would have called every refusal a success.
+# What the probe said about one vb.open (request 4).  SDOpen returns a file
+# number > 0 only when the server opened the file, so the probe prints OPENED
+# with that number and REFUSED with SDError()'s text otherwise (the library
+# exposes no wire server_error getter - see the file header).  Getting the
+# OPENED/REFUSED discrimination wrong would call every refusal a success.
 #
 # NO LINE AT ALL IS NOT "REFUSED".  A probe that never reached the open - it
 # stopped at the login or the account - printed nothing for it, and reading
@@ -290,14 +345,14 @@ function Get-ProbeOpen($r, [string]$vocName) {
     $n = [regex]::Escape($vocName)
     $fno = Get-ProbeMatch $r ('^OPEN ' + $n + ': OPENED fileno (-?\d+)$')
     if ($null -ne $fno) {
-        return [pscustomobject]@{ Seen = $true; Opened = $true; ServerError = '0'; Text = '' }
+        return [pscustomobject]@{ Seen = $true; Opened = $true; Text = '' }
     }
     foreach ($l in $r.Lines) {
-        if ($l -cmatch ('^OPEN ' + $n + ': REFUSED server_error (-?\d+) status (-?\d+): (.*)$')) {
-            return [pscustomobject]@{ Seen = $true; Opened = $false; ServerError = $Matches[1]; Text = $Matches[3] }
+        if ($l -cmatch ('^OPEN ' + $n + ': REFUSED: (.*)$')) {
+            return [pscustomobject]@{ Seen = $true; Opened = $false; Text = $Matches[1] }
         }
     }
-    return [pscustomobject]@{ Seen = $false; Opened = $false; ServerError = '?'; Text = '' }
+    return [pscustomobject]@{ Seen = $false; Opened = $false; Text = '' }
 }
 
 # ---------------------------------------------------------------------------
@@ -315,13 +370,12 @@ if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 
 if (-not $Prefix) { Refuse 'pass -Prefix, e.g. -Prefix sdapiidb18.  It names the throwaway account.' }
 
-# 15 Sep 26 - RELEASE_1.1 42.  BEFORE ANY ACCOUNT IS MADE: a probe that cannot
-# run would otherwise be discovered after the system had been changed, and
-# Step 5's readings would be statements about python rather than the server.
+# 15 Sep 26 - RELEASE_1.1 42/84.  BEFORE ANY ACCOUNT IS MADE: a probe that
+# cannot build would otherwise be discovered after the system had been changed.
 Write-Host ''
-Write-Host 'Proving the API client before using it'
+Write-Host 'Building and proving the API client before using it'
 if ((Test-ProbeInstrument) -ne 0) {
-    Refuse 'test-scramprobe-units did not pass - the probe cannot be trusted, so no reading it gave would be a result.'
+    Refuse 'the API probe did not build or did not start - it cannot be trusted, so no reading it gave would be a result.'
 }
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
     Refuse "$Prefix already exists as a Windows account.  Use a -Prefix that does not."
@@ -756,41 +810,42 @@ try {
     # over when the probe exits, so every reading is taken from its output
     # and the ownership comparison reads the disk afterwards.
     #
-    # SCRAM authenticates the user; ATTACHING to an account is a separate,
-    # required step.  sdclilib.c:1241 does exactly this after login:
-    #     message_pair(SrvrAccount, account, strlen(account))
-    # Without it the session has NO account VOC, and every vb.open of ZZID*
-    # came back ER_NVR (3007) - the b19 VOID.  --account is that attach.
+    # SCRAM authenticates the user AND attaches the account in ONE call now:
+    # SDConnect() sends the login and then SrvrAccount (sdclilib.c:1241,
+    # message_pair(SrvrAccount, account, ...)).  Without the attach the session
+    # would have NO account VOC and every vb.open of ZZID* came back ER_NVR
+    # (3007) - the b19 VOID - so PROBE.CONNECT=YES is login AND attach together.
     $acctName     = $Prefix.ToUpper()
     $ownDir       = Join-Path $accPath 'ZZIDOWN'
     $localRec     = Join-Path $ownDir 'ZZLOCAL'
     $apiRec       = Join-Path $ownDir 'ZZAPI'
     $localPresent = Test-Path -LiteralPath $localRec
 
-    $probeArgs = @('--user', $Prefix, '--account', $acctName, '--port', "$Port")
+    $probeArgs = @()
     foreach ($f in $fixtures) { $probeArgs += @('--open', $f.Name) }
+    $probeArgs += @('--open', 'ZZIDOWN')
     if ($localPresent) { $probeArgs += @('--write', 'ZZIDOWN', 'ZZAPI', 'written by the API session') }
-    $r = Invoke-ScramProbe 'log in, attach, open the fixtures, write the ownership record' $apiPw $probeArgs
+    $r = Invoke-ApiProbe 'log in, attach, open the fixtures, write the ownership record' $apiPw $probeArgs
 
-    if ($null -ne (Get-ProbeMatch $r '^SCRAM: login REFUSED at request 47: (.*)$')) {
-        Refuse 'the SCRAM client-first was refused - no session to measure.'
-    }
-    if ($null -eq (Get-ProbeMatch $r '^(SCRAM: server signature VERIFIED)$')) {
-        if ($null -ne (Get-ProbeMatch $r '^SCRAM: login REFUSED at request 48: (.*)$')) {
-            Fail ('SCRAM login failed, so nothing below can be measured.  IF THE REFUSAL ABOVE IS ' +
-                  'MESSAGE 5277 - "could not take your Windows identity" - then ' +
-                  'K$ASSUME.USER refused and THAT IS THE FINDING, not a broken test.')
+    # LOGIN + ATTACH.  PROBE.CONNECT=YES is printed only after SDConnect returned
+    # a session, so it cannot appear on the refusal path.  A refusal carries the
+    # server's text: message 5277 is the K$ASSUME.USER finding, not a test fault.
+    if ($null -eq (Get-ProbeMatch $r '^(PROBE\.CONNECT=YES)$')) {
+        $refText = Get-ProbeMatch $r '^REFUSED: (.*)$'
+        if ($null -ne $refText -and $refText -match 'take your Windows identity') {
+            Fail ('The API login was refused with "could not take your Windows identity" ' +
+                  '(message 5277) - K$ASSUME.USER refused, and THAT IS THE FINDING, ' +
+                  'not a broken test.')
         }
-        Refuse "the probe did not log in (exit $($r.Code)) - its output is above; no session was measured."
+        Refuse "the probe did not get a session (exit $($r.Code)) - its output is above; nothing was measured."
     }
-    Write-Host "   logged in over the API as $Prefix"
+    Write-Host "   logged in and attached over the API as $Prefix to $acctName"
 
+    # Belt and suspenders: the attach line the probe prints once connected.
     if ($null -eq (Get-ProbeMatch $r ('^(account ' + [regex]::Escape($acctName) + ': entered)$'))) {
-        Refuse ("SrvrAccount attach to $acctName failed - the probe's reason is above.  " +
-              'Without the attach the session has no account VOC and no ' +
-              'open below could succeed - so nothing here is a result.')
+        Refuse ("the probe did not report the account attach to $acctName - " +
+              'without it the session has no account VOC, so nothing here is a result.')
     }
-    Write-Host "   attached to account $acctName"
 
     $opened = @{}
     foreach ($f in $fixtures) {
@@ -799,7 +854,7 @@ try {
             Refuse "the probe printed no OPEN line for $($f.Name) - the open was never reported, so there is no reading to score."
         }
         $opened[$f.Name] = $o
-        Write-Host ("   {0,-9} opened={1}  serverError={2}" -f $f.Name, $o.Opened, $o.ServerError)
+        Write-Host ("   {0,-9} opened={1}" -f $f.Name, $o.Opened)
         if ($o.Text) { Write-Host ("     reply: " + $o.Text.Trim()) }
     }
 
@@ -848,7 +903,7 @@ try {
         $written = Get-ProbeMatch $r '^WRITE ZZIDOWN ZZAPI: (WRITTEN)$'
         if (-not $own.Opened) {
             $script:void = $true
-            Write-Host "*** VOID: the API session could not open ZZIDOWN (serverError $($own.ServerError))." -ForegroundColor Yellow
+            Write-Host "*** VOID: the API session could not open ZZIDOWN$(if ($own.Text) { ' - ' + $own.Text.Trim() })." -ForegroundColor Yellow
         } elseif ($null -eq $written) {
             # REFUSED, NOT SENT, or no line at all - the probe's own WRITE line
             # says which, and it is printed rather than paraphrased.

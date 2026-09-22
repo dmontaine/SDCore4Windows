@@ -185,7 +185,7 @@ LOCALTEST = localtest/local-connect-test.exe
 # landed on.  It goes in localtest/ for the DLL-search reason at check-local.
 SDSYSPROBE = localtest/local-sdsys-probe.exe
 
-.PHONY: all clean check
+.PHONY: all clean check build-api-identity check-api-identity
 
 all: $(DLL) $(DLL2) $(QMDLL) $(QMDLL2) $(SDCONNECT) $(LOCALTEST) $(SDSYSPROBE)
 
@@ -466,30 +466,38 @@ check-api-admin: $(DLL)
 	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./api-admin-probe.exe \
 	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)" "$(APICMD)"
 
-# 20 Sep 26 - RELEASE_1.1 84.  DOES AN API SESSION OPEN ONE NAMED FILE, THE
-# REAL CLIENT LIBRARY'S OWN WAY.  tests/api_identity_probe.c's own header has
-# the full story: SDOpen() sends the same SrvrOpen (4) request scram-probe.py
-# hand-builds, so this needs no protocol reimplementation - only a filename to
-# try.  NOT YET CALLED BY ANY gplbld SCRIPT - verify-apiidentity.ps1 still
-# drives scram-probe.py; wiring this in is future work, named in RELEASE_1.1
-# 84 rather than done blind.  APIFILE is the one new variable this target adds;
-# APIHOST/APIPORT/APIUSER/APIPASS/APIACCT are shared with check-api-admin
-# above.  Compile-checked and its CONNECT half run live against a real server
-# this session (RELEASE_1.1 84); APIFILE has never been exercised because that
-# needs a real session, which needs a real account this agent did not have.
+# 20 Sep 26 - RELEASE_1.1 84.  DOES AN API SESSION OPEN THE FILES IT SHOULD AND
+# WRITE UNDER ITS OWN NAME, THE REAL CLIENT LIBRARY'S OWN WAY.
+# tests/api_identity_probe.c's own header has the full story: SDConnect() does
+# the TLS+SCRAM login AND the account attach, SDOpen() sends the same SrvrOpen
+# (4) request and SDWrite() the same SrvrWrite (16) that scram-probe.py
+# hand-builds, so this needs no protocol reimplementation.
+#
+# TWO TARGETS BECAUSE THE VERIFIER NEEDS A VARIABLE SESSION.  verify-apiidentity
+# opens three fixtures and writes one ownership record in ONE session, which a
+# fixed make recipe cannot pass, so it BUILDS with build-api-identity and then
+# runs localtest/api-identity-probe.exe itself with the full --open/--write arg
+# list (from inside localtest, the DLL-search discipline check-local documents).
+# check-api-identity stays for a manual single-open smoke.  APIFILE is the one
+# extra variable; APIHOST/APIPORT/APIUSER/APIPASS/APIACCT are shared above.
 APIFILE ?=
 
-check-api-identity: $(DLL)
+# build-only: compile the probe into localtest/ and stop.  $(DLL) so it relinks
+# against a fresh library; the RUN loads the INSTALLED dll off PATH (check-local).
+build-api-identity: $(DLL)
+	mkdir -p localtest
+	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/api-identity-probe.exe \
+	  tests/api_identity_probe.c -I. -L. -lsdclilib
+
+check-api-identity: build-api-identity
 	@if [ -z "$(APIPORT)" ] || [ -z "$(APIUSER)" ] || [ -z "$(APIACCT)" ] \
 	   || [ -z "$(APIFILE)" ]; then \
 	  echo "check-api-identity needs APIPORT, APIUSER, APIPASS, APIACCT and"; \
 	  echo "APIFILE - the fixture VOC pointer name to try opening."; \
 	  exit 2; fi
-	mkdir -p localtest
-	$(CC) -std=c11 -Wall -Wextra -Wpedantic -o localtest/api-identity-probe.exe \
-	  tests/api_identity_probe.c -I. -L. -lsdclilib
 	cd localtest && PATH="$(SDBIN):$(WINSYS):$$PATH" ./api-identity-probe.exe \
-	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)" "$(APIFILE)"
+	  "$(APIHOST)" "$(APIPORT)" "$(APIUSER)" "$(APIPASS)" "$(APIACCT)" \
+	  --open "$(APIFILE)"
 
 # 20 Aug 26 - THE PEER PROBE, which settled how the API can identify the
 # process at the other end of a connection (section 8, posture B).
