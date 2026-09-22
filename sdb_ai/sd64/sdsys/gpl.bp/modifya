@@ -19,6 +19,9 @@
 * 
 *
 * START-HISTORY:
+* 22 Sep 26 Windows port - RELEASE_1.1 101.  SDSYS ACCEPTS API AND NONE (was:
+*   refused with 2202).  It has no API route until one is given; every other
+*   action answers 12001 for it.  See the note at sdsys.acct.
 * 21 Sep 26 Windows port - RELEASE_1.1 64 leftover: route.apply's header still
 *   said tier.set needed it and that route.set refuses administrators (10083);
 *   both were deleted on 18 Sep.  Comment only, no code.
@@ -233,19 +236,38 @@ deffun ps_script(script) calling '!ps_script'
    end
    *
    acc.name = upcase(acc.name)   ;* account names are always upper case
-   if acc.name = 'SDSYS' then
-      stop sysmsg(2202) ;* Account name is invalid
-   end   
+* 22 Sep 26 Windows port - RELEASE_1.1 101.  SDSYS TAKES API AND NONE, AND
+*   NOTHING ELSE.  Owner, 22 Sep 2026: SDSYS has the API route like every other
+*   account, OFF until an administrator turns it on here.  It used to be refused
+*   outright (2202) before the register was read.  SSH IS NOT OFFERED, owner's
+*   ruling the same day: ssh only reaches SD through LOGIN, which admits SDSYS
+*   to an elevated interactive session and nobody else, so a grant would only
+*   be a route to the console the account already has.  Everything else this
+*   verb does is refused with 12001: ADD/DELETE name a Windows group and
+*   SDSYS's ACC$GROUP is 'sdsys', which is none; SH/OS are the account's own
+*   OS.USERS grants and SDSYS is an administrator; SUSPENDED would lock the
+*   only administrator out; SSH and BOTH are not offered.
+   sdsys.acct = (acc.name = 'SDSYS')
    *
-   read acc.rec from acc.f, acc.name else      
+   read acc.rec from acc.f, acc.name else
       stop sysmsg(6003) ;* Account name is invalid
    end
-   
+
    group.name = acc.rec<ACC$GROUP>   ;* get associated group
-   
-   if is_group(group.name) then
+
+   if sdsys.acct or is_group(group.name) then
       * Get next token, ADD or DELETE
       call @parser(PARSER$GET.TOKEN, token.type, action, keyword)
+
+      if sdsys.acct then
+         sdsys.act = upcase(action)
+         if sdsys.act = 'SSH' or sdsys.act = 'BOTH' then
+            stop sysmsg(12003) ;* ssh is not available to the SDSYS user
+         end
+         if sdsys.act # 'API' and sdsys.act # 'NONE' then
+            stop sysmsg(12001) ;* SDSYS accepts only API or NONE
+         end
+      end
 
 * 21 Aug 26 Windows port - SSH, API, BOTH and NONE.  Owner's decision, 21 Aug
 *   2026, replacing the SSH / NO.SSH / API / NO.API pairs of earlier the same
@@ -481,7 +503,14 @@ deffun ps_script(script) calling '!ps_script'
 *   mean anything about.
 account.user:
    acc.user = ''
-   if group.name[1,4] = 'sdu_' then acc.user = group.name[5,999]
+   if sdsys.acct then
+*     22 Sep 26 - RELEASE_1.1 101.  SDSYS's ACC$GROUP is 'sdsys', not sdu_ anything.
+*     Its Windows user is the account of the same name (login: the landing case
+*     tests @logname = 'SDSYS'), created by install-sdsys.ps1 in sdusers.
+      acc.user = 'SDSYS'
+   end else
+      if group.name[1,4] = 'sdu_' then acc.user = group.name[5,999]
+   end
    if acc.user = '' then
       crt sysmsg(10020,acc.name) ;* %1 is not a member of sdusers, not allowed
       user.ok = @false
@@ -555,10 +584,35 @@ route.set:
 
    if route.same then
       crt sysmsg(10080, acc.user) ;* %1 already had that access; nothing changed
+      gosub sdsys.cred.reminder
       return
    end
 
    gosub say.access
+   gosub sdsys.cred.reminder
+   return
+
+* 22 Sep 26 Windows port - RELEASE_1.1 101.  THE SECOND STEP OF SDSYS'S API ROUTE.
+*   Owner, 22 Sep 2026: remote API access for SDSYS takes two steps, this grant and
+*   MODIFY.PASSWORD SDSYS, and "there should be a reminder message".  The install
+*   sets only SDSYS's WINDOWS password, so there is normally no $cred record and
+*   the API refuses the account at the password proof however sdapi reads.  Said
+*   after the grant, and after "nothing changed" too - the person who runs the
+*   verb twice is the one who has not yet set the password.  Only when the API
+*   route is wanted and the account is SDSYS; a missing $cred file says nothing.
+sdsys.cred.reminder:
+   if sdsys.acct and want.api then
+      sdsys.has.cred = @false
+      openpath @sdsys : @ds : '$cred' to sdsys.cred.f then
+         read sdsys.cred.rec from sdsys.cred.f, 'SDSYS' then
+            if sdsys.cred.rec<CRED$STOREDKEY> # '' then sdsys.has.cred = @true
+         end
+         close sdsys.cred.f
+      end
+      if not(sdsys.has.cred) then
+         crt sysmsg(12002) ;* SDSYS has no SD password yet
+      end
+   end
    return
 
 * ======================================================================

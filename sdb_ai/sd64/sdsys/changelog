@@ -4,6 +4,35 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+22 Sep 26  SDSYS CAN BE GIVEN THE API.
+
+           SDSYS now has the API route like every other account, and it
+           starts OFF after an install.  As the SDSYS administrator you
+           turn it on, and off again, with:
+
+               MODIFY.ACCOUNT SDSYS API
+               MODIFY.ACCOUNT SDSYS NONE
+
+           Remote API access for SDSYS takes TWO steps, both done as the
+           administrator signed in at the computer as the Windows user
+           SDSYS: the grant above, and an SD password for SDSYS set with
+           MODIFY.PASSWORD SDSYS.  The installer sets only the Windows
+           password of SDSYS, so until you run MODIFY.PASSWORD SDSYS
+           the API refuses it whatever the grant says (MODIFY.ACCOUNT
+           SDSYS API reminds you when no password is set).  MODIFY.ACCOUNT
+           accepts nothing else for SDSYS: ssh is
+           not offered (SDSYS has to be signed in already to be the
+           administrator), and SUSPENDED, ADD, DELETE and the SH and OS
+           words are refused.  The installer no longer takes SDSYS out of
+           the API group each time it runs, so what you grant survives an
+           upgrade.
+
+           AN API SESSION IN SDSYS HAS ADMINISTRATOR RIGHTS, and it needs
+           no Windows sign-in of SDSYS.  Anyone who holds the SDSYS SD
+           password can then administer SD and run operating-system
+           commands over the API.  Leave the route off unless you want
+           that.
+
 21 Sep 26  THE voc_template DIRECTORY IS NO LONGER INSTALLED.
 
            The install used to leave a directory named voc_template

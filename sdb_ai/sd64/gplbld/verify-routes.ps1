@@ -442,28 +442,34 @@ try {
     Note 'still refused at the keyboard' 'refused 1385' (InteractiveLogon $stdAcc $s.Password)
 
     # -----------------------------------------------------------------------
-    Step 5 "SDSYS is NOT A SUBJECT: MODIFY.ACCOUNT refuses it, and nothing moves"
+    Step 5 "SDSYS takes API and NONE and NOTHING ELSE, and is off by default"
 
-    # 18 Sep 26, RELEASE_1.1 64.  The old step sent BOTH to the control account
-    # and asserted the administrator route refusal, 10083 - deleted by slice 4
-    # with the tiers it guarded.  What the refusal PROTECTED survives as a
-    # different property: SDSYS itself, the one administrator, is outside the
-    # account verb's reach entirely (modifya refuses the name with 2202 before
-    # it even reads the register), and its position - no remote route, no
-    # keyboard deny - is the installer's to set and no verb's to move.
+    # 22 Sep 26, RELEASE_1.1 101, owner's decision: SDSYS has the API route like
+    # every other account, off until MODIFY.ACCOUNT SDSYS API turns it on.  ssh is
+    # NOT offered (owner: SDSYS must already be signed in to use it).  The
+    # 18 Sep ruling that refused SDSYS everything (2202) is replaced; every word
+    # but API and NONE now answers 12001, which the loop pins.  SDSYS's routes are
+    # put back to none before the step ends, because a left-on route would be a
+    # remote door nobody asked for.
     #
-    # BOTH IS STILL THE ASK, for the reason it was before: it is the harmless
-    # direction to ask in and the harmful one for the guard to leak.  A
-    # route.set that printed 2202 and carried on would join SDSYS to sdssh and
-    # sdapi - the row below reads 'none' and would catch it - which is exactly
-    # the remote door 64's SDSYS is built without.
-    #
-    # AND THE ACCOUNT THIS RIG RUNS AS is the one that would pay for a leak
-    # here: sdsshonly's deny lands on the next sign-in, so a guard that let a
-    # route verb touch it would be closing the console door on SDSYS itself.
-    $out = Invoke-SD @('MODIFY.ACCOUNT SDSYS BOTH')
-    Note 'SDSYS refused: message 2202'     $true  (Shown $out 2202)
-    Note 'SDSYS STILL has no route'        'none' (Routes 'SDSYS')
+    # THE FIRST ROW READS THE STARTING STATE, and refuses a start that is not
+    # 'none': a step that begins from "api" cannot tell a grant from a leftover.
+    Note 'SDSYS starts with no route'      'none' (Routes 'SDSYS')
+    $out = Invoke-SD @('MODIFY.ACCOUNT SDSYS API')
+    Note 'SDSYS API: message 10077'        $true  (Shown $out 10077)
+    Note 'SDSYS API: routes are api'       'api'  (Routes 'SDSYS')
+    $out = Invoke-SD @('MODIFY.ACCOUNT SDSYS NONE')
+    Note 'SDSYS NONE: message 10079'       $true  (Shown $out 10079)
+    Note 'SDSYS NONE: routes are none'     'none' (Routes 'SDSYS')
+    foreach ($word in @('SSH', 'BOTH')) {
+        $out = Invoke-SD @("MODIFY.ACCOUNT SDSYS $word")
+        Note "SDSYS $word refused: message 12003" $true (Shown $out 12003)
+    }
+    foreach ($word in @('SUSPENDED', 'SH-ON', 'ADD DON')) {
+        $out = Invoke-SD @("MODIFY.ACCOUNT SDSYS $word")
+        Note "SDSYS $word refused: message 12001" $true (Shown $out 12001)
+    }
+    Note 'SDSYS ends with no route'        'none' (Routes 'SDSYS')
     Note 'SDSYS still NOT in sdsshonly'    $false (InGroup 'sdsshonly' 'SDSYS')
 
     # -----------------------------------------------------------------------
