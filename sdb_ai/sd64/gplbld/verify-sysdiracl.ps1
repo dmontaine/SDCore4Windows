@@ -265,5 +265,8 @@ if ($fatal) {
     exit 1
 }
 
-Write-Output 'verify-sysdiracl: PASSED - the seven are readable and not writable, and $ipc still is.'
+# 22 Sep 26 - "the seven" became NINE with voc and gpl.bp (RELEASE_1.1 104), and the
+# count is taken from the list rather than written into the sentence, so the next
+# path added cannot leave this line quietly wrong the way it just was.
+Write-Output ("verify-sysdiracl: PASSED - the $($readOnly.Count) are readable and not writable, and `$ipc still is.")
 exit 0
