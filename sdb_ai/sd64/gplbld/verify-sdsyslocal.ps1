@@ -43,6 +43,21 @@
     The probe binary.  "make sd" builds it; there is no reason to override this
     except to test this script.
 
+.PARAMETER AcceptStaleTree
+    Run even though assert-current says the tree is stale, and SAY SO in the
+    verdict.  ***THIS IS NOT A CONVENIENCE AND IT IS NOT FOR ROUTINE USE.***
+    CLAUDE.md allows a stale warning to be overridden by naming the warning and
+    why it does not apply - and the ONLY case that fits here is a stale file
+    that cannot affect what this probe measures.  What it measures is APISRVR's
+    installed BASIC, reached through the installed sd.exe and sdclilib.dll; a
+    change to, say, gplsrc/sdclilib/Makefile that only adds a target for a TEST
+    binary touches none of those.  A change to a gpl.bp program, to messages, or
+    to the client library itself does, and then this switch is simply a way to
+    publish a false result.
+    ***READ WHAT assert-current NAMED BEFORE USING IT***: the script prints
+    every stale file, and the verdict carries the caveat so a transcript can
+    never be mistaken for a clean run.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File verify-sdsyslocal.ps1
 #>
@@ -59,7 +74,8 @@
 # carries the full measurement; the rule is copied, not re-derived.
 [CmdletBinding()]
 param(
-    [string] $Exe = ''
+    [string] $Exe = '',
+    [switch] $AcceptStaleTree
 )
 
 $ErrorActionPreference = 'Stop'
@@ -114,12 +130,23 @@ if ($bare -ne 'SDSYS') {
 # assert-current, for the reason every other installed-tree verifier calls it:
 # a result from a tree that does not match source is void, not "probably valid".
 $assert = Join-Path $PSScriptRoot 'assert-current.ps1'
+$staleAccepted = $false
 if (Test-Path -LiteralPath $assert) {
     Say ''
     Say '--- assert-current'
     & $assert
     if ($LASTEXITCODE -ne 0) {
-        Refuse 'assert-current says the installed tree does not match source. Run a cycle first.'
+        if (-not $AcceptStaleTree) {
+            Refuse 'assert-current says the installed tree does not match source. Run a cycle first, or pass -AcceptStaleTree if you have read the stale files above and none of them can affect what this measures (see this script''s header).'
+        }
+        # SAID HERE AND AGAIN IN THE VERDICT, deliberately.  A caveat printed
+        # once, 200 lines above the answer, is one a reader scrolls past.
+        $staleAccepted = $true
+        Say ''
+        Say '  *** -AcceptStaleTree WAS GIVEN.  assert-current REFUSED above and this run'
+        Say '  *** continued anyway.  The stale files it named are listed in its output.'
+        Say '  *** This result is only as good as the claim that none of them reach'
+        Say '  *** APISRVR''s installed BASIC, sd.exe or sdclilib.dll.'
     }
 } else {
     Refuse ("assert-current.ps1 is not beside this script (looked for " + $assert + ")")
@@ -192,7 +219,14 @@ if ($sawFail) {
 }
 
 Say ''
-Say 'verify-sdsyslocal: PASSED - SDSYS was admitted over SDConnectLocal, WHO named'
-Say 'SDSYS, and an administrator-only verb ran. The local route carries an'
-Say 'administrator session.'
+if ($staleAccepted) {
+    Say 'verify-sdsyslocal: PASSED ON A STALE TREE - SDSYS was admitted over'
+    Say 'SDConnectLocal, WHO named SDSYS, and an administrator-only verb ran.'
+    Say '*** assert-current REFUSED this tree and -AcceptStaleTree overrode it, so'
+    Say '*** this is NOT a clean witness. Re-run it after the next cycle.'
+} else {
+    Say 'verify-sdsyslocal: PASSED - SDSYS was admitted over SDConnectLocal, WHO named'
+    Say 'SDSYS, and an administrator-only verb ran. The local route carries an'
+    Say 'administrator session.'
+}
 exit 0
