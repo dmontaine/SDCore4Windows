@@ -93,7 +93,6 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $Gplbld = Split-Path -Parent $MyInvocation.MyCommand.Path
-$sdExe  = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 
 # The API client is the real shipped library, driven through its C probe.
 # $sd64 is the make root (MAIN); the probe is built there via "make
@@ -200,24 +199,34 @@ function Set-FixtureAcl([string]$path, [string[]]$grants, [bool]$recurse, [strin
     Assert-Icacls (@($path, '/inheritance:r') + $tail)   "icacls /inheritance:r on $label"
 }
 
-# A local elevated SD session, for the setup only.  $null | so a console cannot
-# be handed to sd as stdin - verify-batchjob.ps1:85 has why that matters.
-function Invoke-SD([string[]]$commands) {
-    $body = "`n" + (($commands + 'OFF') -join "`n") + "`n"
-    $job = Start-Job -ScriptBlock {
-        param($exe, $text) $text | & $exe
-    } -ArgumentList $sdExe, $body
-    if (Wait-Job $job -Timeout 90) { $out = Receive-Job $job }
-    else { Stop-Job $job; $out = Receive-Job $job; $out += '*** TIMED OUT' }
-    Remove-Job $job -Force
-    # BACKTICK-e IS NOT AN ESCAPE IN WINDOWS POWERSHELL 5.1 - it arrived in
-    # PowerShell 6, so "`e[..." is the literal letter e and this strip was dead
-    # code (PROJECT_STATUS.md section 6 records the same dead line in
-    # verify-nocase.ps1 and verify-tiers.ps1).  It matters here and not there:
-    # the Step 3 checks below anchor on ^ at line start, and an unstripped
-    # [K erase-line sequence sits between the newline and the text.
-    $esc = [char]27
-    return (($out -replace "$esc\[[0-9]*[A-Za-z]", '') | Out-String)
+# THE SETUP RUNS THROUGH THE SDSYS SEAT - 21 Sep 26, RELEASE_1.1 76/84; the
+# same conversion the other four verifiers got (verify-apiadmin.ps1 carries the
+# fuller write-up).  A plain elevated sd.exe child is NOT interactive, so
+# "LOGTO SDSYS" / "sd -ASDSYS" from it is refused 10002 (sdsys-seat.ps1:7) and
+# CREATE.ACCOUNT - an SDSYS-only verb - came back "not in your VOC" (the b220
+# witness of 84, the first run of this verifier since 101 forced SDSYS to the
+# console/SDConnectLocal only).  So the setup commands go to a task inside
+# SDSYS's own live session and the text comes back through a file.
+#
+# TWO DOORS: Invoke-SDSys is a plain seat call (CREATE.ACCOUNT, MODIFY.PASSWORD,
+# DELETE.ACCOUNT as SDSYS).  Invoke-SDIn moves into the THROWAWAY account with
+# LOGTO, which a plain session is refused, so it uses the seat's -Internal door;
+# it refuses 'SDSYS' (asking it for SDSYS would be the old prefix by another
+# name).  A LOGTO from the seat keeps the login identity SDSYS, so a file the
+# setup writes (ZZLOCAL) is owned by the SDSYS-side identity, NOT the throwaway
+# user - which is exactly what the ownership control in Step 5 needs.
+. (Join-Path $Gplbld 'sdsys-seat.ps1')
+
+function Invoke-SDSys([string[]]$commands) {
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 180)
+}
+
+function Invoke-SDIn([string]$account, [string[]]$commands) {
+    if ($account -ieq 'SDSYS') {
+        throw "Invoke-SDIn is for the THROWAWAY account; use Invoke-SDSys for SDSYS (a LOGTO into it is refused)"
+    }
+    $text = Invoke-SdSeatText -Commands (@("LOGTO $account") + $commands) -TimeoutSec 180 -Internal
+    return ($text -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '')
 }
 
 # WHO prints "<session> <ACCOUNT>" or "<session> <ACCOUNT> from <ACCOUNT>".
@@ -384,6 +393,15 @@ if (Test-Path -LiteralPath (Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $
     Refuse ($Prefix.ToUpper() + ' is still in the ACCOUNTS register from an earlier run.')
 }
 
+# PROVE THE SDSYS SEAT BEFORE ANYTHING IS CREATED - RELEASE_1.1 76.  Plain
+# proves the setup verbs (CREATE.ACCOUNT et al.) reach SDSYS; -Internal proves
+# the door Step 3's LOGTO into the throwaway account depends on.  Each exits 2
+# here rather than letting a command land silently in the wrong account.  SDSYS
+# must be signed in (the seat runs a task inside its own live session).
+Write-Host ''
+Assert-SdSeat -Label 'verify-apiidentity' -TimeoutSec 180
+Assert-SdSeat -Label 'verify-apiidentity' -TimeoutSec 180 -Internal
+
 $base    = Join-Path $env:ProgramData ('SD\zzapiid-' + $stamp)
 $allowDir = Join-Path $base 'allow'
 $denyDir  = Join-Path $base 'deny'
@@ -398,14 +416,21 @@ try {
     # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
     # (createa's keyword case, sysmsg 2018 - the whole command stops and no
     # account is made), so the access keyword is the whole of the line.
-    $out = Invoke-SD @("CREATE.ACCOUNT USER $Prefix API", $winPw, $winPw)
+    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix API", $winPw, $winPw)
     $accRec = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
     if (-not (Test-Path -LiteralPath $accRec)) { Write-Host $out; Refuse 'CREATE.ACCOUNT did not register the account.' }
     $made = $true
     Write-Host "   account $Prefix created"
 
-    $out = Invoke-SD @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $apiPw, $apiPw)
-    if ($out -notmatch 'Password set') { Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.' }
+    # SUCCESS ANCHOR IS 'Password accepted.' - the wording set_acc_password prints
+    # on the positive path (set_acc_password:375, reworded 21 Sep 2026 from
+    # 'Password set for account %1').  The old 'Password set' matched the
+    # first-password notice ('has no password set...'), not the success line, and
+    # is now stale.  'ERROR: Unable to set password' is the failure line.
+    $out = Invoke-SDSys @(("MODIFY.PASSWORD " + $Prefix.ToUpper()), $apiPw, $apiPw)
+    if ($out -notmatch 'Password accepted' -or $out -match 'ERROR: Unable to set password') {
+        Write-Host $out; Refuse 'MODIFY.PASSWORD did not report success.'
+    }
     Write-Host '   API password set'
 
     # THE CONTROL ON THE CONTROL.  If CREATE.ACCOUNT ever started making
@@ -516,21 +541,25 @@ try {
     # write succeeds whichever identity the session turns out to have.  That
     # is deliberate: this probe must not test access at all.
     $wanted = $fixtures.Count + 2   # fixtures + ZZIDSRC scratch + ZZIDOWN probe
-    $out = Invoke-SD (@('WHO', "LOGTO $acct", 'WHO') +
+    # THE SEAT PREPENDS "LOGTO $acct" (Invoke-SDIn, -Internal), so the two WHOs
+    # here bracket the CREATE.FILEs and both must read $acct - if the LOGTO did
+    # not stick the files land in the wrong account.  (Old form sent its own
+    # LOGTO and counted three WHOs; the seat owns the LOGTO now, so two.)
+    $out = Invoke-SDIn $acct (@('WHO') +
                       @($fixtures | ForEach-Object { "CREATE.FILE $($_.Name) DYNAMIC NO.QUERY" }) +
                       @('CREATE.FILE ZZIDSRC DIRECTORY NO.QUERY',
                         'CREATE.FILE ZZIDOWN DIRECTORY NO.QUERY', 'WHO'))
-    Write-Host '   --- raw Invoke-SD output for Step 3a (create) ---'
+    Write-Host '   --- raw seat output for Step 3a (create) ---'
     ($out -split "`r?`n") | ForEach-Object { Write-Host ('   | ' + $_) }
     Write-Host '   --- end raw output ---'
 
     $whos = Get-WhoAccounts $out
     Write-Host ('   accounts WHO reported (in order): ' + ($whos -join ', '))
-    if ($whos.Count -lt 3) {
-        Fail "Step 3a expected three WHO reports; got $($whos.Count).  Session state cannot be trusted."
+    if ($whos.Count -lt 2) {
+        Fail "Step 3a expected two WHO reports; got $($whos.Count).  Session state cannot be trusted."
     }
-    if ($whos[1] -ne $acct -or $whos[2] -ne $acct) {
-        Fail ("LOGTO $acct was not honoured.  WHO after LOGTO said '$($whos[1])', WHO after the creates said '$($whos[2])'.  " +
+    if ($whos[0] -ne $acct -or $whos[-1] -ne $acct) {
+        Fail ("LOGTO $acct was not honoured.  WHO before the creates said '$($whos[0])', WHO after said '$($whos[-1])'.  " +
               'CREATE.FILE therefore wrote into the WRONG account.')
     }
 
@@ -626,21 +655,26 @@ try {
     # another from the API session.  Comparing the two owners is what turns
     # "the API record is owned by X" into evidence - if both come back the
     # same, ownership is not tracking the writer and the probe is void.
-    $out2 = Invoke-SD (@('WHO', "LOGTO $acct", 'WHO') +
+    # Seat owns the LOGTO (see Step 3a); two WHOs bracket the COPYs.  The last
+    # COPY writes ZZLOCAL into ZZIDOWN from the SEAT session, whose login
+    # identity stays SDSYS through the LOGTO - so ZZLOCAL is owned by the
+    # SDSYS-side identity, and Step 5's ownership control compares that against
+    # the API session's own (the throwaway user).
+    $out2 = Invoke-SDIn $acct (@('WHO') +
                        @($fixtures | ForEach-Object { "COPY FROM ZZIDSRC TO VOC $($_.Name) OVERWRITING" }) +
                        @($fixtures | ForEach-Object { "CT VOC $($_.Name)" }) +
                        @('COPY FROM ZZIDSRC TO ZZIDOWN ZZIDALLOW,ZZLOCAL OVERWRITING', 'WHO'))
-    Write-Host '   --- raw Invoke-SD output for Step 3d (copy) ---'
+    Write-Host '   --- raw seat output for Step 3d (copy) ---'
     ($out2 -split "`r?`n") | ForEach-Object { Write-Host ('   | ' + $_) }
     Write-Host '   --- end raw output ---'
 
     $whos2 = Get-WhoAccounts $out2
     Write-Host ('   accounts WHO reported (in order): ' + ($whos2 -join ', '))
-    if ($whos2.Count -lt 3) {
-        Fail "Step 3d expected three WHO reports; got $($whos2.Count) ($($whos2 -join ', ')).  Session state cannot be trusted."
+    if ($whos2.Count -lt 2) {
+        Fail "Step 3d expected two WHO reports; got $($whos2.Count) ($($whos2 -join ', ')).  Session state cannot be trusted."
     }
-    if ($whos2[1] -ne $acct -or $whos2[2] -ne $acct) {
-        Fail ("LOGTO $acct was not honoured in Step 3d.  WHO after LOGTO said '$($whos2[1])', WHO after the copies said '$($whos2[2])'.  " +
+    if ($whos2[0] -ne $acct -or $whos2[-1] -ne $acct) {
+        Fail ("LOGTO $acct was not honoured in Step 3d.  WHO before the copies said '$($whos2[0])', WHO after said '$($whos2[-1])'.  " +
               'COPY would have written into the wrong VOC.')
     }
 
@@ -1002,7 +1036,7 @@ finally {
                 $out = '*** not sent - the command sequence was malformed'
             } else {
                 Write-Host ("   sending: [0] <{0}>  [1] <{1}>" -f $lines[0], $lines[1])
-                $out = Invoke-SD $lines
+                $out = Invoke-SDSys $lines
             }
 
             # A NET UNDER THE VERB, NOT A REPLACEMENT FOR IT.  On the happy path
