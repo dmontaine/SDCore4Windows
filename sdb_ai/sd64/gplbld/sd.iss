@@ -1405,12 +1405,56 @@ begin
         '"; the remote-ssh box starts unticked.');
 end;
 
+(* 24 Sep 26 - EVERY POWERSHELL THIS INSTALLER STARTS USES WINDOWS POWERSHELL'S
+   OWN MODULES.  RELEASE_1.1 110.
+
+   On the owner's test machine install-sdsys.ps1 died at ConvertTo-SecureString
+   with "error occurred while loading the extended type data file ...
+   ObjectSecurity: The member AuditToString is already present" - so SDSYS was
+   never made.  That is Windows PowerShell 5.1 loading a SECOND
+   Microsoft.PowerShell.Security, the PowerShell 7 shape of it, which carries a
+   types file for members 5.1 already defines in its own types.ps1xml (line
+   3004 there).  5.1 finds it because PSModulePath names PowerShell 7's module
+   folders - a PowerShell 7 window passes that to everything it starts, and an
+   account can carry it in its own environment.  Reproduced 24 Sep 2026 with a
+   stand-in module first in PSModulePath: the same exception, the same inner
+   text.  Both fixes tried there worked; this is the one that does not depend
+   on where the bad value came from.
+
+   SET, NOT REMOVED.  With the variable absent, PowerShell rebuilds it from the
+   machine and user settings - which is one of the places the bad value can
+   live.  An explicit value in Setup's own environment is what every Exec, and
+   finish-install.ps1's window, inherits.  Windows PowerShell adds the user's
+   own WindowsPowerShell\Modules to it by itself; nothing SD runs needs more. *)
+function SetEnvironmentVariable(lpName: String; lpValue: String): BOOL;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+procedure UseWindowsPowerShellModules;
+var
+  Value: String;
+begin
+  Value := ExpandConstant('{commonpf64}\WindowsPowerShell\Modules;{sys}\WindowsPowerShell\v1.0\Modules');
+  Log('SD: PSModulePath was "' + GetEnv('PSModulePath') + '"');
+  if SetEnvironmentVariable('PSModulePath', Value) then
+    Log('SD: PSModulePath set to "' + Value + '" for every PowerShell this runs')
+  else
+    Log('SD: PSModulePath could NOT be set; PowerShell steps inherit it unchanged');
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  UseWindowsPowerShellModules;
+  Result := True;
+end;
+
 function InitializeSetup: Boolean;
 var
   PreflightPs, PreflightScript, PreflightReasonPath: String;
   PreflightReason: AnsiString;
   PreflightCode: Integer;
 begin
+  UseWindowsPowerShellModules;
+
   (* ASKED ONCE, BEFORE ANY FILE IS COPIED, AND THE ANSWER CACHED.
 
      A Check function is evaluated PER FILE.  When this tested DirExists
@@ -3707,6 +3751,19 @@ var
   Rest, Chunk: String;
   N, I, P, Y, TextW, GapY, MaxH, L, T: Integer;
 begin
+  { 24 Sep 26 - THE PAGE IS ALSO WRITTEN TO A FILE, RELEASE_1.1 110.  An install
+    on the owner's test machine said SDSYS "could NOT" be created, with a code;
+    by the time anybody asked, nobody remembered the wording, and the code was
+    the one fact that would have told a script that failed (1) from one that
+    never started (-1).  Appended, never replaced, so a second install does not
+    erase the first one's record.  The data tree is locked to administrators,
+    and nothing on this page is a secret - the SDSYS password is never in it.
+    A failed write changes nothing on screen: this page is the report, and the
+    file is its copy. }
+  SaveStringToFile(ExpandConstant('{#DataDir}\install-summary.log'),
+                   '=== ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':') +
+                   '  the Finished page said:' + #13#10 + Msg + #13#10#13#10, True);
+
   Page := WizardForm.FinishedLabel.Parent;
   L := WizardForm.FinishedLabel.Left;
   T := WizardForm.FinishedLabel.Top;

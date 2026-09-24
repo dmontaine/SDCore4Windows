@@ -175,6 +175,28 @@ $sshd    = Join-Path $env:SystemRoot  'System32\OpenSSH\sshd.exe'
 $begin   = '# --- BEGIN SD ssh-only model - PROJECT_STATUS.md 5.6.2 ---'
 $end     = '# --- END SD ssh-only model ---'
 
+# RELEASE_1.1 109, 24 Sep 2026 - sd.iss runs this from [Code] with no output
+# capture, so a refusal's reason went nowhere.  Append-Log writes to the same
+# file install-ssh.ps1 and ssh-firewall.ps1 use, so one install's ssh setup is
+# one file to read.  Write-Log adds console output too, for a by-hand run -
+# EXCEPT inside Get-Patterns, which returns a value: that function already
+# uses Write-Host instead of Write-Output for exactly this reason (see its own
+# comment), so it calls Append-Log alone, never Write-Log, or the fix here
+# would reintroduce the bug that comment describes.
+$LogPath = 'C:\ProgramData\SD\ssh-setup.log'
+function Append-Log {
+    param([string]$Message)
+    try {
+        $line = (Get-Date -Format 's') + ' ' + $Message
+        Out-File -FilePath $LogPath -InputObject $line -Append -Encoding utf8 -ErrorAction Stop
+    } catch {}
+}
+function Write-Log {
+    param([string]$Message)
+    Write-Output $Message
+    Append-Log $Message
+}
+
 # Returns the AllowGroups patterns, or $null with a reason on stdout.
 function Get-Patterns {
     # 18 Sep 26 - THE REFUSAL CHANGED TARGET WITH THE LIST.  It used to resolve
@@ -197,7 +219,9 @@ function Get-Patterns {
         # AllowGroups line containing the refusal message.  Found by the scan that
         # test-outputtrap-units.ps1 now makes permanent.  (This file ships; the path is only
         # reachable when sdssh does not exist, which sd.iss's order prevents.)
-        Write-Host "allow-ssh-groups: the sdssh group does not exist - refusing to write an AllowGroups line that would deny ssh to every account (run gplbld/sync-route-groups.ps1 first)"
+        $msg = "allow-ssh-groups: the sdssh group does not exist - refusing to write an AllowGroups line that would deny ssh to every account (run gplbld/sync-route-groups.ps1 first)"
+        Write-Host $msg
+        Append-Log $msg
         return $null
     }
     # 21 Aug 26 Windows port - sdssh, NOT sdusers.  sdusers grants access to the
@@ -325,14 +349,14 @@ try {
 
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Write-Output "allow-ssh-groups: not elevated - C:\ProgramData\ssh is not readable without it"
+        Write-Log "allow-ssh-groups: not elevated - C:\ProgramData\ssh is not readable without it"
         exit 1
     }
 
     if (-not (Test-Path $cfg)) {
         # sshd writes its config on first start, so this means sshd has never
         # run.  Not an error worth failing an install over.
-        Write-Output ("allow-ssh-groups: no " + $cfg + " - sshd has not started yet, nothing to edit")
+        Write-Log ("allow-ssh-groups: no " + $cfg + " - sshd has not started yet, nothing to edit")
         exit 2
     }
 
@@ -341,24 +365,24 @@ try {
     if ($Remove) {
         $new = Remove-OurBlock $lines
         if ($new.Count -eq $lines.Count) {
-            Write-Output "allow-ssh-groups: no SD block present, nothing removed"
+            Write-Log "allow-ssh-groups: no SD block present, nothing removed"
             exit 0
         }
         Set-Content -Path $cfg -Value $new -Encoding ascii
         Restart-Service sshd -ErrorAction SilentlyContinue
-        Write-Output "allow-ssh-groups: SD block removed, sshd restarted"
+        Write-Log "allow-ssh-groups: SD block removed, sshd restarted"
         exit 0
     }
 
     if (-not $Installed) {
-        Write-Output "allow-ssh-groups: -Installed not given - this rewrites sshd_config and restarts sshd, so it has to be asked for"
+        Write-Log "allow-ssh-groups: -Installed not given - this rewrites sshd_config and restarts sshd, so it has to be asked for"
         exit 2
     }
 
     $existing = Get-ExistingRestrictions $lines
     if ($existing.Count -gt 0) {
-        Write-Output "allow-ssh-groups: sshd_config already says who may connect, leaving it alone:"
-        foreach ($e in $existing) { Write-Output ("    " + $e) }
+        Write-Log "allow-ssh-groups: sshd_config already says who may connect, leaving it alone:"
+        foreach ($e in $existing) { Write-Log ("    " + $e) }
         exit 2
     }
 
@@ -377,21 +401,21 @@ try {
              -RedirectStandardOutput $outFile -RedirectStandardError $errFile
     if ($p.ExitCode -ne 0) {
         Set-Content -Path $cfg -Value $original -Encoding ascii
-        Write-Output ("allow-ssh-groups: sshd -T rejected the result, PUT THE ORIGINAL BACK.  sshd said:")
-        if (Test-Path $errFile) { Get-Content $errFile | ForEach-Object { Write-Output ("    " + $_) } }
+        Write-Log ("allow-ssh-groups: sshd -T rejected the result, PUT THE ORIGINAL BACK.  sshd said:")
+        if (Test-Path $errFile) { Get-Content $errFile | ForEach-Object { Write-Log ("    " + $_) } }
         Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
         exit 1
     }
     Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
 
     Restart-Service sshd
-    Write-Output ("allow-ssh-groups: wrote  AllowGroups " + ($patterns -join ' '))
-    Write-Output ("allow-ssh-groups: original kept at " + $backup)
-    Write-Output ("allow-ssh-groups: sshd is " + (Get-Service sshd).Status)
+    Write-Log ("allow-ssh-groups: wrote  AllowGroups " + ($patterns -join ' '))
+    Write-Log ("allow-ssh-groups: original kept at " + $backup)
+    Write-Log ("allow-ssh-groups: sshd is " + (Get-Service sshd).Status)
     exit 0
 }
 catch {
-    Write-Output ("allow-ssh-groups: FAILED - " + $_.Exception.Message)
-    Write-Output $_.ScriptStackTrace
+    Write-Log ("allow-ssh-groups: FAILED - " + $_.Exception.Message)
+    Write-Log $_.ScriptStackTrace
     exit 1
 }

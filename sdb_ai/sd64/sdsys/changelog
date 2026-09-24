@@ -4,6 +4,31 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+24 Sep 26  THE INSTALLER MAKES THE SDSYS ACCOUNT ON MORE COMPUTERS.
+
+           On some computers the installer finished by saying SD Core could
+           NOT create its administrator account, so nobody could administer
+           SD until the account was made by hand. The installer runs its
+           steps in Windows PowerShell, and on those computers Windows
+           PowerShell was picking up another version of one of its own
+           modules - the kind PowerShell 7 installs - which it cannot load.
+           The installer and uninstaller now point Windows PowerShell at its
+           own modules only.
+
+           What the installer's last page says is now also kept in
+           C:\ProgramData\SD\install-summary.log.
+
+24 Sep 26  INSTALLING THE OpenSSH SERVER WORKS ON MORE MACHINES.
+
+           On some computers the installer's "Install the OpenSSH server"
+           step failed straight away, and took the two ssh steps after it
+           down too: the closing screen said the server could NOT be
+           installed, ssh was NOT limited, and who may reach ssh had NOT
+           been set. On those computers a Windows PowerShell command SD
+           used to ask about the server was broken, although Windows' own
+           servicing tool, dism, worked. The installer, and SSH.SERVER
+           INSTALL and SSH.SERVER REMOVE, now use dism directly.
+
 22 Sep 26  A WINDOWS ADMINISTRATOR NO LONGER GETS EXTRA SD PRIVILEGES IN
            THEIR OWN ACCOUNT.
 

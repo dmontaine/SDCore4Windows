@@ -102,9 +102,48 @@ $SdsysDescription = 'SD Core administrator account'
 # not readable by the accounts it describes.
 $LogFile = Join-Path $DataDir 'install-sdsys.log'
 
+# 24 Sep 26 - A FAILED LOG WRITE IS RETRIED, AND A RETRY IS NOTED.  RELEASE_1.1
+# 110.  The header-only log it left on the test machine has two explanations:
+# the script threw (the trap below now catches that), or it ran on and every
+# write after the first was dropped by the bare catch that stood here - a file
+# held open a moment after it was created, which scanners do, would do it.  A
+# note saying a line needed more than one attempt is the evidence for the
+# second.  Worst case, a log that can never be written costs about a second a
+# line, in a step that writes about fifteen.
 function Say([string] $Message) {
     Write-Output $Message
-    try { Add-Content -Path $LogFile -Value $Message -ErrorAction Stop } catch { }
+    for ($try = 1; $try -le 5; $try++) {
+        try {
+            Add-Content -Path $LogFile -Value $Message -ErrorAction Stop
+            if ($try -gt 1) {
+                try {
+                    Add-Content -Path $LogFile -ErrorAction Stop `
+                        -Value ("  (the line above took " + $try + " attempts to write)")
+                } catch { }
+            }
+            return
+        } catch {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+}
+
+# 24 Sep 26 - ANY ERROR NOTHING BELOW CATCHES IS WRITTEN TO THE LOG.  RELEASE_1.1
+# 110.  On the owner's test machine the installer's run of this script left a
+# log holding the header line and nothing else, and the finish page said SDSYS
+# could not be made; the same script run by hand minutes later created it.  So
+# something between the header and "created the Windows account" threw, and
+# under ErrorActionPreference Stop in a hidden window its text went nowhere -
+# the only handled failure, New-LocalUser, has its own catch and would have
+# said so.  A script-level trap covers the whole file whatever its position.
+# Exit 1 is the "something failed" this script already reports.
+trap {
+    Say ("FAILED - an error this script does not handle: " +
+         $_.Exception.GetType().FullName + ": " + $_.Exception.Message)
+    Say ("  at " + $_.InvocationInfo.ScriptLineNumber + ": " +
+         ("" + $_.InvocationInfo.Line).Trim())
+    Say 'THE SDSYS ACCOUNT WAS NOT SET UP. Without it this machine has no SD administrator.'
+    exit 1
 }
 
 function New-RandomPassword {
@@ -235,9 +274,14 @@ if ($created) {
     Say 'SDSYS WINDOWS PASSWORD - shown once, and in this log:'
     Say ('    ' + $password)
     Say ''
+    # 24 Sep 26 - "No SD password is needed for that" STOOD HERE AND WAS FALSE,
+    # the same false claim RELEASE_1.1 103 corrected in the header on 22 Sep but
+    # not in what the script PRINTS.  LOGIN asks with message 10089 and will not
+    # go on without one; the owner ruled that right.
     Say 'Sign in as SDSYS, start SD from an ELEVATED console ("Run as administrator"),'
-    Say 'and you are the SD administrator. No SD password is needed for that: the'
-    Say 'session is the Windows account.'
+    Say 'and you are the SD administrator. The first time, SD asks you to choose an'
+    Say 'SD password for SDSYS and type it twice. That is expected, and it is separate'
+    Say 'from the Windows password above.'
 }
 
 Say ''

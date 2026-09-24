@@ -33,6 +33,11 @@
 # WHAT IT DOES NOT DO: it does not check whether SD accounts still need ssh.
 # That is the caller's business and SSHSRVR does it, because the account
 # register is SD's to read and this script has no session to read it with.
+#
+# 24 Sep 26 - dism.exe, NOT Get-/Remove-WindowsCapability.  RELEASE_1.1 109:
+# on the owner's test machine the cmdlets threw "Class not registered" while
+# dism.exe worked.  dism-capability.ps1, shared with install-ssh.ps1, holds why.
+# Exit codes are unchanged; a dism failure also prints dism's own lines.
 
 param(
     [switch]$Show
@@ -60,27 +65,36 @@ Say ("sshd.exe   : " + $Sshd)
 
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    # THE CHECK COMES BEFORE Get-WindowsCapability AND COVERS -Show TOO, because
-    # -Online needs elevation even to READ - measured 30 Aug 2026, it fails with
-    # "The requested operation requires elevation".  So -Show is not a
-    # read-only escape from this and the message must not imply it is.
+    # THE CHECK COMES BEFORE THE CAPABILITY QUERY AND COVERS -Show TOO, because
+    # /Online needs elevation even to READ - measured 30 Aug 2026 on the cmdlet,
+    # "The requested operation requires elevation"; dism.exe refuses the same
+    # way.  So -Show is not a read-only escape from this and the message must
+    # not imply it is.
     Say 'not elevated - Windows will not report or change a capability without it'
     exit 1
 }
 
 try {
-    $cap = Get-WindowsCapability -Online -Name $CapName
+    . (Join-Path $PSScriptRoot 'dism-capability.ps1')
+    $q = Invoke-Dism -DismArgs '/Get-CapabilityInfo', ('/CapabilityName:' + $CapName)
 } catch {
     Say ('the capability list could not be read: ' + $_.Exception.Message)
     exit 2
 }
 
-if ($null -eq $cap) {
+if ($q.Code -ne 0) {
+    Say ('the capability list could not be read: dism exited ' + $q.Code)
+    foreach ($l in $q.Lines) { Say ('    ' + $l) }
+    exit 2
+}
+
+$state = Get-CapabilityState $q
+if ($state -eq '') {
     Say 'Windows does not offer that capability on this machine at all'
     exit 2
 }
 
-Say ("state      : " + $cap.State)
+Say ("state      : " + $state)
 
 # 30 Aug 26 - "before" IS A LIE ON THE -Show PATH, because nothing comes after
 # it.  "ssh.server" with no keyword runs -Show, and the first thing it printed
@@ -105,15 +119,15 @@ if ($Show) { exit 0 }
 # NOT INSTALLED IS NOT A FAILURE, but it is not a removal either, and it must
 # not report one.  A caller that treats "nothing to do" as "done" is the null
 # case the instrument rule refuses.
-if ($cap.State -ne 'Installed') {
+if ($state -ne 'Installed') {
     Say 'it is not installed, so there is nothing to remove'
     exit 2
 }
 
-try {
-    $r = Remove-WindowsCapability -Online -Name $CapName
-} catch {
-    Say ('the removal failed: ' + $_.Exception.Message)
+$r = Invoke-Dism -DismArgs '/Remove-Capability', ('/CapabilityName:' + $CapName), '/NoRestart'
+if ($r.Code -ne 0 -and $r.Code -ne $DismRestartNeeded) {
+    Say ('the removal failed: dism exited ' + $r.Code)
+    foreach ($l in $r.Lines) { Say ('    ' + $l) }
     exit 1
 }
 
@@ -123,7 +137,7 @@ Report 'after'
 # machine that needs a restart, sshd.exe is still on disk here and the service
 # is still Running - that is not a failure and must not be reported as one.
 # What is reported is the truth: the removal is accepted and incomplete.
-if ($r.RestartNeeded -or (Test-Path -LiteralPath $Sshd)) {
+if ($r.Code -eq $DismRestartNeeded -or (Test-Path -LiteralPath $Sshd)) {
     Say 'ACCEPTED, BUT A RESTART IS NEEDED. Windows has staged the removal; the'
     Say 'ssh server is still on this machine and still running until you reboot.'
 } else {

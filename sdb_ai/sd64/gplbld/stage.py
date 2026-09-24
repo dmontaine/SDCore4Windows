@@ -1435,6 +1435,11 @@ def main():
                    # BOTH SHIP, so assert-current watches them - do NOT add
                    # either to that script's $neverShipped list.
                    'restart-sd.ps1', 'remove-ssh.ps1',
+                   # 24 Sep 26 - dism-capability.ps1, RELEASE_1.1 109.
+                   # Dot-sourced by install-ssh.ps1 and remove-ssh.ps1 from
+                   # their own directory, so it must sit beside them.  IT
+                   # SHIPS - do NOT add it to assert-current's $neverShipped.
+                   'dism-capability.ps1',
                    # 31 Aug 26 - sd-path.ps1, PRE_RELEASE_FIXES 89 and the
                    # owner's ruling of the same day.  An upgrade is to skip the
                    # tasks page and fire none of its actions, which left the

@@ -72,6 +72,19 @@ $ErrorActionPreference = 'Stop'
 
 $ruleName = 'OpenSSH-Server-In-TCP'
 
+# RELEASE_1.1 109, 24 Sep 2026 - sd.iss's [Code] Exec calls capture only the
+# exit code, so a refusal's reason went nowhere.  Same log file install-ssh.ps1
+# and allow-ssh-groups.ps1 append to, so one install's ssh setup is one file.
+$LogPath = 'C:\ProgramData\SD\ssh-setup.log'
+function Write-Log {
+    param([string]$Message)
+    Write-Output $Message
+    try {
+        $line = (Get-Date -Format 's') + ' ' + $Message
+        Out-File -FilePath $LogPath -InputObject $line -Append -Encoding utf8 -ErrorAction Stop
+    } catch {}
+}
+
 # Returns the rule, or $null.
 function Get-SshRule {
     $r = Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
@@ -98,7 +111,7 @@ function Test-RuleOpen($rule) {
 
 function Write-State($rule) {
     $addr = ($rule | Get-NetFirewallAddressFilter).RemoteAddress -join ','
-    Write-Output ("ssh-firewall: " + $rule.Name + "  Enabled=" + $rule.Enabled +
+    Write-Log ("ssh-firewall: " + $rule.Name + "  Enabled=" + $rule.Enabled +
                   "  Profile=" + $rule.Profile + "  RemoteAddress=" + $addr)
 }
 
@@ -118,7 +131,7 @@ try {
     }
 
     if ($null -eq $rule) {
-        Write-Output "ssh-firewall: no inbound OpenSSH rule found - the capability has probably not finished registering it, which a restart completes"
+        Write-Log "ssh-firewall: no inbound OpenSSH rule found - the capability has probably not finished registering it, which a restart completes"
         exit 2
     }
 
@@ -153,22 +166,22 @@ try {
     # renaming it would silently invalidate instructions already given to users.
     # What 5.9 still forbids is untouched: nothing here edits sshd_config.
     if (-not $Installed) {
-        Write-Output "ssh-firewall: -Installed not given - it is the deliberate-action gate, and this script will not change a firewall rule without it"
+        Write-Log "ssh-firewall: -Installed not given - it is the deliberate-action gate, and this script will not change a firewall rule without it"
         exit 2
     }
 
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        Write-Output "ssh-firewall: not elevated - the firewall cannot be changed without it"
+        Write-Log "ssh-firewall: not elevated - the firewall cannot be changed without it"
         exit 1
     }
 
     if ($Open -and $Restrict) {
-        Write-Output "ssh-firewall: -Open and -Restrict are contradictory"
+        Write-Log "ssh-firewall: -Open and -Restrict are contradictory"
         exit 1
     }
     if (-not $Open -and -not $Restrict) {
-        Write-Output "ssh-firewall: give -Open or -Restrict"
+        Write-Log "ssh-firewall: give -Open or -Restrict"
         exit 1
     }
 
@@ -177,7 +190,7 @@ try {
         # than "do nothing", because a REINSTALL may be widening a rule this
         # script restricted last time.
         Set-NetFirewallRule -Name $rule.Name -RemoteAddress Any -Enabled True
-        Write-Output "ssh-firewall: other computers MAY reach this machine over ssh"
+        Write-Log "ssh-firewall: other computers MAY reach this machine over ssh"
     }
     else {
         # 24 Aug 26 - 127.0.0.1 ALONE.  THIS LINE USED TO PASS @('127.0.0.1','::1')
@@ -214,7 +227,7 @@ try {
         # and reads exactly like "::1 is blocked".  That false reading was drawn
         # here first and nearly became the reason not to make this fix.
         Set-NetFirewallRule -Name $rule.Name -RemoteAddress '127.0.0.1' -Enabled True
-        Write-Output "ssh-firewall: ssh is reachable FROM THIS MACHINE ONLY"
+        Write-Log "ssh-firewall: ssh is reachable FROM THIS MACHINE ONLY"
     }
 
     # ***THE VERDICT IS GATED ON A READ-BACK, NOT ON HAVING MADE THE CALL.***
@@ -233,7 +246,7 @@ try {
     $applied = Get-NetFirewallRule -Name $rule.Name
     $wantOpen = [bool]$Open
     if ((Test-RuleOpen $applied) -ne $wantOpen) {
-        Write-Output ('ssh-firewall: FAILED - the rule was NOT changed.  Asked for ' +
+        Write-Log ('ssh-firewall: FAILED - the rule was NOT changed.  Asked for ' +
                       $(if ($wantOpen) { 'Any' } else { '127.0.0.1' }) +
                       ', the rule still reads ' +
                       ((($applied | Get-NetFirewallAddressFilter).RemoteAddress) -join ','))
@@ -245,7 +258,7 @@ try {
     exit 0
 }
 catch {
-    Write-Output ("ssh-firewall: FAILED - " + $_.Exception.Message)
-    Write-Output $_.ScriptStackTrace
+    Write-Log ("ssh-firewall: FAILED - " + $_.Exception.Message)
+    Write-Log $_.ScriptStackTrace
     exit 1
 }
