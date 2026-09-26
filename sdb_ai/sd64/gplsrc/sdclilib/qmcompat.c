@@ -1,8 +1,8 @@
 /* qmcompat.c - the one QM entry point that is not a plain alias.
  *
  * Modifications Copyright (c) 2026 Donald Montaine
- * Distributed under the GNU Lesser General Public License, version 3 or
- * later (LGPL-3.0-or-later). See LICENSE and GPLv3.txt for the full terms.
+ * Distributed under the GNU General Public License, version 3 or
+ * later (GPL-3.0-or-later). See LICENSE and GPLv3.txt for the full terms.
  *
  * Linking exception:
  *

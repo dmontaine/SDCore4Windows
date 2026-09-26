@@ -4,6 +4,13 @@ Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 
+26 Sep 26  THE CLIENT LIBRARIES ARE GPL.
+
+           The client libraries (sdclilib, qmclilib) and their headers,
+           tests and tools now carry the GNU General Public License,
+           version 3 or later, like the rest of SD. The licence text
+           shipped with SD says the same.
+
 24 Sep 26  THE INSTALLER MAKES THE SDSYS ACCOUNT ON MORE COMPUTERS.
 
            On some computers the installer finished by saying SD Core could
@@ -2794,13 +2801,13 @@ previous one.
            readable by somebody who has not started SD.
 
            AND THE LICENCE TEXT NAMED A LICENCE SD DOES NOT USE.  It said the
-           install and delete scripts were under the Black Oak Model License
+           install and delete scripts were under the Blue Oak Model License
            v1.0.0.  Those were the Linux shell scripts, which this port
            replaced entirely; nothing in SD Core carries that licence and no
            source file ever mentioned it.  The line is gone.
 
-           What is left is correct and unchanged: most of SD is GPL v3.0, the
-           API is LGPL v3.0, and anything not marked otherwise is GPL v3.0.
+           What is left: SD, including the API, is GPL v3.0, and anything not
+           marked otherwise is GPL v3.0.
 
 26 Aug 26  THERE ARE FULL-SCREEN EDITORS AGAIN: EDIT AND MICRO.
 

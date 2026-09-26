@@ -97,8 +97,6 @@ The smoke test exercises local string functions without requiring a server.
 
 ## License
 
-Licensed under the GNU Lesser General Public License, version 3 or later
-(LGPL-3.0-or-later). See [LICENSE](LICENSE) for the full LGPLv3 text.
-
-LGPLv3 incorporates the terms of the GNU General Public License version 3 by
-reference; the full GPLv3 text is included as [GPLv3.txt](GPLv3.txt).
+Licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later). See [LICENSE](LICENSE); the full GPLv3 text is included
+as [GPLv3.txt](GPLv3.txt).
