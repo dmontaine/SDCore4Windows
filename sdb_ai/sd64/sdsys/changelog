@@ -8,8 +8,8 @@ while porting from it.
 
            The client libraries (sdclilib, qmclilib) and their headers,
            tests and tools now carry the GNU General Public License,
-           version 3 or later, like the rest of SD. The licence text
-           shipped with SD says the same.
+           version 3 or later, like the rest of SD, with no linking
+           exception. The licence text shipped with SD says the same.
 
 24 Sep 26  THE INSTALLER MAKES THE SDSYS ACCOUNT ON MORE COMPUTERS.
 
