@@ -30,6 +30,11 @@
   #define AppVer "W1.1-0"
 #endif
 
+; 26 Sep 26 - OPTIONAL PYTHON INSTALL, owner's instruction: the release zip
+; carries python.org's installer in python\ beside this .exe, and an unchecked
+; task installs it for all users.  Nothing is added to the installer itself.
+; See the "installpython" task and InstallPython.
+;
 ; 15 Sep 26 - AppVer W1.0-0 -> W1.1-0 (RELEASE_1.1), owner's instruction.  This
 ; renames the installer to sd-setup-W1.1-0.exe (OutputBaseFilename), the caption
 ; and the Apps & Features entry.  SD's own release string moved in lockstep -
@@ -516,6 +521,15 @@ Name: "apiremote"; Description: "Provide the SD Core API (port 4243)"; \
     Check: ApiConfAbsent
 Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
     Flags: unchecked dontinheritcheck
+; 26 Sep 26 - PYTHON, FROM THE RELEASE ZIP.  Owner, 26 Sep 2026: the release
+; carries python.org's installer in python\ beside this .exe so nobody waits on
+; a download, and the box is unchecked.  Read from {src}, never copied into the
+; installer.  Offered only when that .exe is there AND no all-users 64-bit
+; Python 3.13+ is registered - the helper's floor, and the only scope SD can
+; reach (python-detect.ps1).  Installed FOR ALL USERS at ssPostInstall; see
+; InstallPython.
+Name: "installpython"; Description: "Install Python for all users"; \
+    GroupDescription: "4)  Python:"; Flags: unchecked; Check: PythonExeOffered
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -1337,6 +1351,12 @@ var
     the paragraph above had to learn from a failed compile: what the wizard's
     last window needs has to outlive the step that learned it. }
   AttachCode: Integer;
+  { 26 Sep 26 - python.org's installer beside this one ('' when absent), and
+    whether a usable all-users Python was already here.  Sampled once in
+    InitializeSetup: the [Tasks] Check reads them while the wizard is built,
+    and after InstallPython the live answer would change. }
+  PythonExePath: String;
+  PythonWasFound: Boolean;
 
 { 30 Aug 26 - IS THE EXISTING ssh SERVER'S FIREWALL RULE ALREADY OPEN TO THE
   NETWORK?  PRE_RELEASE_FIXES 76.  Called once from InitializeSetup, and only
@@ -1447,6 +1467,62 @@ begin
   Result := True;
 end;
 
+(* 26 Sep 26 - THE FIRST FILE MATCHING Pattern IN {src}\Dir, OR ''.  Taken
+   from SD Core Solo's sd-solo.iss (ruling 17).  A paren-star comment because a
+   brace comment ends at the first closing brace, and the source-folder
+   constant contains one. *)
+function FindBeside(Dir, Pattern: String): String;
+var
+  F: TFindRec;
+begin
+  Result := '';
+  if FindFirst(ExpandConstant('{src}\') + Dir + '\' + Pattern, F) then
+  begin
+    Result := ExpandConstant('{src}\') + Dir + '\' + F.Name;
+    FindClose(F);
+  end;
+end;
+
+(* 26 Sep 26 - IS AN ALL-USERS 64-BIT PYTHON 3.13+ REGISTERED?  The same
+   question python-detect.ps1 asks: HKLM PythonCore only, because SD's accounts
+   and API sessions cannot reach a per-user install, and an entry whose
+   InstallPath is gone does not count.  HKLM64 because Setup is a 32-bit
+   process and plain HKLM is redirected (see SdWasInstalled).  Key names are
+   "3.14", or "3.14-32" for a 32-bit build, which sdpy.exe cannot load. *)
+function PythonInHklm: Boolean;
+var
+  Names: TArrayOfString;
+  I, Minor: Integer;
+  N, Dir: String;
+begin
+  Result := False;
+  if not IsWin64 then
+    Exit;
+  if not RegGetSubkeyNames(HKLM64, 'SOFTWARE\Python\PythonCore', Names) then
+    Exit;
+  for I := 0 to GetArrayLength(Names) - 1 do
+  begin
+    N := Names[I];
+    if (Copy(N, 1, 2) = '3.') and (Pos('-', N) = 0) then
+    begin
+      Minor := StrToIntDef(Copy(N, 3, Length(N) - 2), 0);
+      Dir := '';
+      if (Minor >= 13) and
+         RegQueryStringValue(HKLM64, 'SOFTWARE\Python\PythonCore\' + N + '\InstallPath', '', Dir) and
+         (Dir <> '') and DirExists(Dir) then
+      begin
+        Log('Python ' + N + ' registered for all users at ' + Dir);
+        Result := True;
+      end;
+    end;
+  end;
+end;
+
+function PythonExeOffered: Boolean;
+begin
+  Result := (PythonExePath <> '') and not PythonWasFound;
+end;
+
 function InitializeSetup: Boolean;
 var
   PreflightPs, PreflightScript, PreflightReasonPath: String;
@@ -1525,6 +1601,12 @@ begin
      The question is about the machine as we found it, so it is asked once,
      here, exactly as the data tree above is. *)
   SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
+
+  { 26 Sep 26 - Python: the machine as we found it, for the same reason. }
+  PythonExePath := FindBeside('python', 'python-3*-amd64.exe');
+  PythonWasFound := PythonInHklm;
+  Log('Python beside the installer: "' + PythonExePath +
+      '"; all-users Python 3.13+ already registered=' + IntToStr(Ord(PythonWasFound)));
 
   (* 18 Sep 26 - SdsysCode STARTS AT 2 AND NOT AT ITS ZERO INITIALISATION.
     A script-level Integer arrives 0, and 0 is install-sdsys.ps1's "the account
@@ -3845,6 +3927,39 @@ begin
   Result := (Pos('ELEVATED', S) > 0) or (Pos(' NOT ', S) > 0) or (Pos('FAILED', S) > 0);
 end;
 
+(* 26 Sep 26 - INSTALL PYTHON FOR ALL USERS, and return what to tell the user.
+   Setup is elevated here, so InstallAllUsers=1 needs no prompt of its own.
+   PrependPath=1 because sdpy.exe finds python3.dll by the DLL search, which
+   includes PATH.  Judged by the exit code AND by an all-users registration
+   appearing: a zero exit that left only a per-user install is a failure.
+   3010 is the Windows Installer "succeeded, restart required" code.  Its own
+   log goes to the data directory beside the other install logs.  The failure
+   text carries " NOT " so IsFailureText routes it to FinishReport. *)
+function InstallPython: String;
+var
+  Params, LogPath: String;
+  Code: Integer;
+  Registered: Boolean;
+begin
+  Result := '';
+  if not (PythonExeOffered and WizardIsTaskSelected('installpython')) then
+    Exit;
+  SayStep('Installing Python...');
+  LogPath := ExpandConstant('{#DataDir}\python-install.log');
+  Params := '/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 /log "' + LogPath + '"';
+  Log('InstallPython: ' + PythonExePath + ' ' + Params);
+  if not Exec(PythonExePath, Params, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Registered := PythonInHklm;
+  Log('InstallPython: exit ' + IntToStr(Code) + ', registered for all users=' +
+      IntToStr(Ord(Registered)));
+  if ((Code = 0) or (Code = 3010)) and Registered then
+    Result := 'Python: installed for all users.' + #13#10
+  else
+    Result := 'Python was NOT installed (code ' + IntToStr(Code) + '). ' +
+              'Its log is ' + LogPath + '.' + #13#10#13#10;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
@@ -3899,6 +4014,8 @@ var
   AccessMsg: String;
   ApiRuleMsg: String;
   ApiScope: String;
+  { 26 Sep 26 - InstallPython's answer: empty when the box was not ticked. }
+  PyMsg: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -3943,6 +4060,10 @@ begin
       IT MUST STAY AFTER THE [Run] icacls, which ssPostInstall guarantees.
       $ipc is deliberately not in it; see the function. }
     SysdirMsg := SecureSysdirs;
+
+    { 26 Sep 26 - PYTHON, AFTER THE ACL STEPS: it closes no hole, so it waits
+      behind the ones that do, and it is the slowest step here. }
+    PyMsg := InstallPython;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
       accounts rather than configuring the server, and it needs nothing from
@@ -4458,6 +4579,7 @@ begin
     if IsFailureText(SshLimit) then FinishReport := FinishReport + SshLimit;
     if IsFailureText(SshFw) then FinishReport := FinishReport + SshFw;
     if IsFailureText(ApiFw) then FinishReport := FinishReport + ApiFw;
+    if IsFailureText(PyMsg) then FinishReport := FinishReport + PyMsg;
 
     { 20 Sep 26 - SAME RULE FOR THE TWO ACCOUNT MESSAGES: AccountsReport
       below carries the "already existed" and "was just made" cases, which
@@ -4484,6 +4606,9 @@ begin
       StatusReport := StatusReport + SshFw;
     if (ApiFw <> '') and not IsFailureText(ApiFw) then
       StatusReport := StatusReport + ApiFw;
+    { 26 Sep 26 - a fourth line, only when the Python box was ticked. }
+    if (PyMsg <> '') and not IsFailureText(PyMsg) then
+      StatusReport := StatusReport + PyMsg;
 
     { 20 Sep 26 - "TWO ACCOUNTS EXIST: SDSYS AND <name>.  THE NEXT SCREEN
       WILL ASK FOR THEIR PASSWORDS." - his words, checked against what the
