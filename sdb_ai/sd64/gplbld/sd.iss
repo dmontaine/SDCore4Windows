@@ -1710,7 +1710,7 @@ begin
         terse as possible and just give the options, not why they should be chosen
         or not."  So this, like every message below, says WHAT and not WHY; the
         reasons and caveats it used to carry are in the installation page of
-        SDCoreWindowsDocs (GettingStarted/01-installation.md, "Warnings and things
+        SDCore4WindowsDocs (GettingStarted/01-installation.md, "Warnings and things
         to know"). }
       'SD Core cannot be installed silently. Run the installer normally.',
       mbError, MB_OK, IDOK);

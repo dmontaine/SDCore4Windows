@@ -325,7 +325,7 @@ function Show-SdGroupNotice {
     # the installing task; warnings and caveats go in the installer documentation).
     # The "why" (Windows applies a new group only at sign-in) and the two symptoms a
     # person sees if they do not sign out ("sd is not recognized", "cannot open its
-    # files") are in SDCoreWindowsDocs, GettingStarted/01-installation.md.
+    # files") are in SDCore4WindowsDocs, GettingStarted/01-installation.md.
     if ($null -eq $State.InGroup) {
         Write-Host 'This check could not read the "sdusers" group.  Sign out and back in.'
     } else {

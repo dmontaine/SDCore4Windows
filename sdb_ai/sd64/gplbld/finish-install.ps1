@@ -538,7 +538,7 @@ function Keep-ExistingPassword {
     # the rest of the page's noise - see Set-SdsysPassword.
     # 20 Sep 26, LATER - THE RECOVERY COMMAND IS OUT OF THE SCREEN (owner: warnings
     # and caveats belong in the installer documentation, and the text gives options,
-    # not advice).  It is in SDCoreWindowsDocs, GettingStarted/01-installation.md,
+    # not advice).  It is in SDCore4WindowsDocs, GettingStarted/01-installation.md,
     # "Warnings and things to know":  Set-LocalUser -Name SDSYS -Password
     # (Read-Host -AsSecureString)  from an elevated PowerShell.
     Write-Wrapped -Text 'The SDSYS password is unchanged.'

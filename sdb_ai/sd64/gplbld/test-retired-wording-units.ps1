@@ -296,7 +296,7 @@ $RETIRED = @(
     # 20 Sep 26, LATER STILL - THE TERSE RULE REMOVED EVERY SCP/SFTP MENTION FROM THE
     # INSTALLER'S SCREENS, including the "scp and sftp are unchanged" line 129b had
     # been re-aimed at.  129b's replacement is now the ssh report's first line and
-    # the cost is documented ONLY in SDCoreWindowsDocs ("Warnings and things to
+    # the cost is documented ONLY in SDCore4WindowsDocs ("Warnings and things to
     # know"); the retired half still stops the old heading returning.
     @{ Ref = '129'
        Retired     = 'ssh-only model'
