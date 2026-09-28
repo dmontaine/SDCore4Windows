@@ -1,6 +1,21 @@
-W1.1-0 - in progress
+W1.1-1 - in progress
 -------------
-Changes since W1.0-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  Most of it
+Changes since W1.1-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
+
+27 Sep 26  ACCOUNT COMMANDS WORK WHEN SD IS STARTED FROM POWERSHELL 7.
+
+           Commands that make Windows changes for SD - setting a password,
+           creating or changing an account, the ssh and API settings - run
+           steps in Windows PowerShell. Started from a PowerShell 7 window,
+           SD passed that window's module folders on, and a step that needs
+           one of Windows PowerShell's own modules could fail to load it, so
+           the command reported that it had failed. The installer was fixed
+           for the same fault on 24 Sep; SD's own commands now point Windows
+           PowerShell at its own modules too.
+
+W1.1-0 - 26 Sep 2026
+-------------
+Changes since W1.0-0.  Most of it
 comes from SD Core for Linux, which found these faults in the Windows code
 while porting from it.
 

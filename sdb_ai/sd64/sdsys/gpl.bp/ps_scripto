@@ -21,6 +21,8 @@
 * 31 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 90.  This is
 *           !ps_script's body, MOVED here rather than copied, with the capture
 *           added; !ps_script is now a wrapper that calls it with capture off.
+* 27 Sep 26 Windows port - every script now starts by setting PSModulePath to
+*           Windows PowerShell's own module folders.  RELEASE_1.1 111.
 * END-HISTORY
 *
 *
@@ -98,6 +100,21 @@ deffun elevate(action, arg) calling '!elevate'
       set.status 1
       return rc : @fm : out
    end
+
+*  27 Sep 26 - RELEASE_1.1 111, the same clash as 110 by a second route.  An sd
+*  started from a PowerShell 7 window inherits PowerShell 7's PSModulePath and
+*  passes it to the Windows PowerShell both branches below start, and the first
+*  Security-module cmdlet (ConvertTo-SecureString in !set_passwd) then fails to
+*  load: "The member AuditToString is already present".  Setting it as the
+*  script's FIRST LINE covers the local branch and the elevated helper alike,
+*  because both run this same file.  The module loads on first use, so a line
+*  that runs before any cmdlet is early enough - measured 27 Sep 2026 with a
+*  stand-in module and this launch exactly (os.execute's command line and the
+*  Get-Content | Invoke-Expression text): the control failed to load
+*  ConvertTo-SecureString, the same script with this line first succeeded.
+*  SET, NOT REMOVED, for sd.iss's reason: an absent value is rebuilt from the
+*  machine and user settings, which is one place the bad value can live.
+   script = '$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot\system32\WindowsPowerShell\v1.0\Modules"' : @fm : script
 
 *  PSTMP, NOT THE ACCOUNT DIRECTORY, and this FAILS CLOSED if it is absent
 *  rather than falling back.  gpl.bp/ps_script's header carries the full
