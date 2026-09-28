@@ -187,7 +187,8 @@ try {
     # was the same fix (CLAUDE.md, PROJECT_STATUS's USERPROFILE entry).  An
     # unresolved USERPROFILE just fails the Test-Path below and SKIPs, which
     # is this block's designed behaviour for "not on this machine".
-    $liveStage = Join-Path $env:USERPROFILE 'stagetest'
+    # 27 Sep 26 - follows cycle.ps1's $Stage to Projects\Project_Staging.
+    $liveStage = Join-Path $env:USERPROFILE 'Projects\Project_Staging\stagetest'
     $live = @(
         @{ Log = 'cycle-20260902-194027.log'; Want = 'banner';    Note = 'the COMPLETE log of 2 Sep 19:40' },
         @{ Log = 'cycle-20260902-174446.log'; Want = 'no-banner'; Note = 'the TRUNCATED log of 2 Sep 17:44' }

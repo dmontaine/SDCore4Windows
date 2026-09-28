@@ -664,7 +664,7 @@ Source: "{#Stage}\ProgramData\sd-standalone.conf"; DestDir: "{#DataDir}"; \
 ; "'BEGIN' expected" on line 1 of a file that has no Pascal in it at all.
 ; Both measured 25 Aug 2026 against the real ISCC, the second one by doing it.
 ;
-; PASS AN ABSOLUTE /DStage.  cycle.ps1 does - it is C:\Users\dmont\stagetest by
+; PASS AN ABSOLUTE /DStage.  cycle.ps1 does - it is %USERPROFILE%\Projects\Project_Staging\stagetest by
 ; default - and it is the only supported way to build.  ISPP resolves a
 ; RELATIVE #include against the directory holding THIS file, gplbld\, while
 ; ISCC resolves a relative Source: against SourceDir; the two are not the same

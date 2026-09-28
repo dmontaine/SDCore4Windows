@@ -57,7 +57,9 @@
 
 [CmdletBinding()]
 param(
-    [string] $Stage = (Join-Path $env:USERPROFILE 'stagetest'),
+    # 27 Sep 2026 - was %USERPROFILE%\stagetest; moved under Projects\Project_Staging
+    # when the owner regrouped the project directories.
+    [string] $Stage = (Join-Path $env:USERPROFILE 'Projects\Project_Staging\stagetest'),
     [string] $Out   = (Join-Path $env:USERPROFILE 'sdout'),
     [switch] $SkipInstall
 )
