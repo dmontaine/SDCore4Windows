@@ -47,7 +47,7 @@ if ($state -ne 'poweroff') {
 # entry) - forward-slashed to match the style already here, since VBoxManage
 # and the existing "already has" comparisons below expect it.
 $homeFs = $env:USERPROFILE -replace '\\','/'
-$sdout  = "$homeFs/sdout"
+$sdout  = "$homeFs/Projects/Project_Installers/sdout"   # 27 Sep 26 - follows cycle.ps1's $Out
 $xfer   = "$homeFs/sdxfer"
 $gplbld = "$homeFs/Projects/sd4windows/sdb_ai/sd64/gplbld"
 
