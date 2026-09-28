@@ -1,15 +1,23 @@
-SD, the Multivalue String Database
+# SD Core for Windows — source tree
 
-SD is a multivalue database in the Pr1me Information tradition.  It contains open source code from the Open Source databases openQM and ScarletDME and open source code developed by the SD developers after the fork from ScarletDME.  While it shares many of the same features, it was forked to explore some new ideas as to what a modern multivalue database should contain.
+The source of SD Core for Windows, a native Windows port of SD, the multivalue
+String Database. The repository's top-level `README.md` describes the product.
 
-SD is 64 bit only and runs only on Linux.  Releases are tested on Debian, Ubuntu, Mint, CachyOS, Fedora and OpenSUSE. The installer has also installed the database successfully on Ubuntu running under the Windows Subsystem for Linux, and Ubuntu on the Raspberry Pi 5.
+SD is a multivalue database in the Pr1me Information tradition. It contains open
+source code from OpenQM and ScarletDME, code written by the SD developers after
+their fork from ScarletDME ([sdb64](https://codeberg.org/stringdatabase/sdb64)),
+and the Windows port made in this project.
 
-SD should cohabit peacefully with existing openQM and ScarletDME installations as it creates and uses a System V shared memory segment that will not conflict with OpenQM or ScarletDME.
+The tree contains no binaries. Everything is built from source.
 
-The current version of the SD repository contains no binary bits.  All features are available for auditing.  Binary files are only created during the install.
+| | |
+|---|---|
+| `sd64/gplsrc/` | the C source of the server, `sd.exe`, and the client library |
+| `sd64/sdsys/` | the SDSYS system account as shipped: `gpl.bp` (the SD BASIC system programs), `messages`, `newvoc`, `voc_template`, and the `changelog` |
+| `sd64/gplbld/` | the build: the Python tooling that compiles the SD BASIC system programs, the Inno Setup installer script `sd.iss`, the PowerShell scripts the installer places on the machine, and `cycle.ps1`, which builds and installs everything |
+| `sd64/Makefile` | builds the C half — `make sd`, run from `sd64` |
+| `sd64/examples/` | example programs, including embedded Python |
+| `sd64/terminfo.src/` | terminal definitions |
+| `sd64/bin/`, `sd64/gplobj/` | build output, not tracked |
 
-To install on one of the supported systems, use the installsd.sh script found at https://codeberg.org/stringdatabase/sd-scripts/archive/refs/heads/main.zip or, if git is installed on your computer enter in a terminal session - "git clone https://codeberg.org/stringdatabase/sd-scripts", cd to the newly created sd-scripts directory, enter - "chmod 774 *.sh", and then run the installsd.sh script.
-
-To install SD, just download and extract the scripts, make the scripts executable if needed and then run installsd.sh. The installer will handle installation of required packages, downloading and compiling of source, installation of SD into the proper directories and deletion of the temporary files. 
-
-See the sd64/sdsys/changelog file for changes in each version release.
+See `sd64/sdsys/changelog` for the changes in each version.
