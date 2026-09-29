@@ -36,15 +36,25 @@
 # apart, so it is not a proxy for the input - it IS the input.  A regression
 # that emptied batch.command would stop the "command=" form appearing here.
 #
-# RUN IT ELEVATED, AND THAT IS NOT A PREFERENCE.  Two things need it: the audit
-# trail is locked to SYSTEM and Administrators by secure-audit.ps1, so an
-# ordinary token cannot read it at all - measured, "Permission denied" - and an
-# unelevated "sd <command>" is refused unless the command is on the account's
-# batch.jobs list (section 7 step 9's gate), which would make the command case
-# untestable for a different reason.
+# RUN IT ELEVATED, AND THAT IS NOT A PREFERENCE.  The audit trail is locked to
+# SYSTEM and Administrators by secure-audit.ps1, so an ordinary token cannot
+# read it at all - measured, "Permission denied".  It also writes the account's
+# batch.jobs record, which is read-only to sdusers.
 #
-# IT SPENDS NO PREFIX, CREATES NO ACCOUNT, AND WRITES NOTHING but two ordinary
-# SD sessions' worth of audit records.
+# 29 Sep 26 - RELEASE_1.1 113 (106's fallout).  THIS SCRIPT USED TO SAY THE
+# ELEVATION ALSO LET "sd <command>" THROUGH THE COMMAND-LINE GATE.  It no longer
+# does: since 106 an elevated ordinary account goes through batch.permitted like
+# any other (login:1179), so "sd COUNT VOC" is refused - "command line carried
+# arguments" - and the "command=" audit form never appears.  Measured b233,
+# 29 Sep 2026.  So the command case now needs a command the account is allowed:
+# a one-name paragraph in the account's VOC and a line for it in batch.jobs,
+# both planted here and removed in a finally.  The planting sessions run BEFORE
+# the audit baseline is read and the removal AFTER the final read, so their own
+# LOGIN records cannot score for this run.  An existing batch.jobs record for
+# the account is never overwritten or deleted - the run refuses instead.
+#
+# IT SPENDS NO PREFIX AND CREATES NO ACCOUNT.  It writes two audit records of
+# its own plus the planting and removal sessions', and leaves nothing behind.
 
 [CmdletBinding()]
 param()
@@ -152,43 +162,119 @@ Write-Output ("verify-cmdaudit: as {0}, ELEVATED" -f $id.Name)
 Write-Output ("  sd    {0}" -f $sdExe)
 Write-Output ("  audit {0}" -f $audit)
 
-# ---------------------------------------------------------------- the probes
+# ------------------------------------------------- the command the account may run
+#
+# 29 Sep 26 - RELEASE_1.1 113.  See the header.  The paragraph is planted through
+# SD, piped, because a VOC is a dynamic file and "sd BASIC ..." on the command
+# line is exactly what the gate refuses; verify-batchjob.ps1 plants its probes
+# the same way.
+$account = $env:USERNAME.ToLower()
+$acctDir = Join-Path $env:ProgramData ('SD\user_accounts\' + $account)
+$acctBp  = Join-Path $acctDir 'bp'
+$listRec = Join-Path (Join-Path $env:ProgramData 'SD\sdsys\batch.jobs') $account
+$cmdName = 'zzcmdaudit'
+$planSrc = Join-Path $acctBp 'ZZCMDAUDW'
+$planObj = Join-Path (Join-Path $acctDir 'bp.out') 'ZZCMDAUDW'
 
-# BY LENGTH, like verify-apiname.ps1: only the bytes this run added are read,
-# so a record left by an earlier session cannot score for it.
-$before = ''
-try { $before = [IO.File]::ReadAllText($audit) } catch {
-    Write-Output ("verify-cmdaudit: the audit trail could not be read - " + $_.Exception.Message)
+foreach ($p in @($acctBp, (Split-Path -Parent $listRec))) {
+    if (-not (Test-Path -LiteralPath $p)) {
+        Write-Output ("verify-cmdaudit: refusing - no {0}" -f $p)
+        exit 2
+    }
+}
+if (Test-Path -LiteralPath $listRec) {
+    Write-Output ("verify-cmdaudit: refusing - {0} already exists." -f $listRec)
+    Write-Output '  This script grants the account one command and takes it away again, and it'
+    Write-Output '  will not overwrite or delete a batch.jobs record it did not write.'
     exit 2
 }
-Write-Output ("  audit is {0} bytes before" -f $before.Length)
-Write-Output ''
 
-# --- 1. A COMMAND LINE.  stdin is fed $null rather than inherited: this script
-#     may be run from a console, and a session that reached a prompt with a
-#     console behind it would BLOCK for ever (section 7 step 9). Nothing here
-#     depends on stdin, so closing it costs nothing and removes the hang.
-Write-Output '  running: sd COUNT VOC   (a command line)'
+# Piped SD from the account's own directory, NOTTY (stdin is the pipe).  The
+# output is returned so the caller can require the wording it anchors on.
+function Invoke-SdPiped([string[]]$commands) {
+    $body = "`n" + (($commands + 'OFF') -join "`n") + "`n"
+    Push-Location -LiteralPath $acctDir
+    try { return ($body | & $sdExe '-QUIET' 2>&1 | Out-String) }
+    finally { Pop-Location }
+}
+
+# THE CLEANUP, called on every path out.  It deletes only what this script made.
+function Remove-Grant {
+    $null = Invoke-SdPiped @(('DELETE VOC ' + $cmdName))
+    foreach ($f in @($listRec, $planSrc, $planObj)) {
+        if (Test-Path -LiteralPath $f) {
+            try { Remove-Item -LiteralPath $f -Force }
+            catch { Write-Output ("verify-cmdaudit: WARNING - could not remove {0}" -f $f) }
+        }
+    }
+}
+
 $cmdOut = ''
-try { $cmdOut = ($null | & $sdExe '-QUIET' 'COUNT' 'VOC' 2>&1 | Out-String) } catch {
-    $cmdOut = "(threw: " + $_.Exception.Message + ")"
-}
-Write-Output ("    exit {0}" -f $LASTEXITCODE)
-
-# --- 2. AN INTERACTIVE SESSION.  No command on the line; OFF is fed on stdin,
-#     which is how every other verifier drives SD. batch.command comes from the
-#     COMMAND LINE, so feeding OFF on stdin leaves it empty - which is the case
-#     under test.
-Write-Output '  running: sd            (no command, OFF piped)'
 $intOut = ''
-try { $intOut = (("`nOFF`n") | & $sdExe '-QUIET' 2>&1 | Out-String) } catch {
-    $intOut = "(threw: " + $_.Exception.Message + ")"
-}
-Write-Output ("    exit {0}" -f $LASTEXITCODE)
-Write-Output ''
+$before = ''
+$after  = ''
+try {
+    $planter = @(
+        '* ZZCMDAUDW - written by gplbld/verify-cmdaudit.ps1.  Safe to delete.'
+        "      OPEN 'voc' TO F ELSE STOP 'cannot open VOC'"
+        "      R = 'PA' : @FM : 'COUNT VOC'"
+        "      WRITE R ON F, '$cmdName'"
+        "      CRT 'ZZCMDAUDW-DONE'"
+    ) -join "`n"
+    [System.IO.File]::WriteAllText($planSrc, $planter + "`n",
+                                   [System.Text.Encoding]::GetEncoding('iso-8859-1'))
+    $plant = Invoke-SdPiped @('BASIC bp ZZCMDAUDW', 'RUN bp ZZCMDAUDW')
+    if (-not $plant.Contains('ZZCMDAUDW-DONE')) {
+        Write-Output 'verify-cmdaudit: the command could not be planted - nothing below would mean anything.'
+        Write-Output $plant
+        exit 2
+    }
+    [System.IO.File]::WriteAllText($listRec, "$cmdName`n")
+    Write-Output ("  granted {0} the command {1} (removed again at the end)" -f $account, $cmdName)
 
-$after = ''
-try { $after = [IO.File]::ReadAllText($audit) } catch { }
+    # ---------------------------------------------------------------- the probes
+
+    # BY LENGTH, like verify-apiname.ps1: only the bytes this run added are read,
+    # so a record left by an earlier session - or by the planting above - cannot
+    # score for it.
+    try { $before = [IO.File]::ReadAllText($audit) } catch {
+        Write-Output ("verify-cmdaudit: the audit trail could not be read - " + $_.Exception.Message)
+        exit 2
+    }
+    Write-Output ("  audit is {0} bytes before" -f $before.Length)
+    Write-Output ''
+
+    # --- 1. A COMMAND LINE.  stdin is fed $null rather than inherited: this script
+    #     may be run from a console, and a session that reached a prompt with a
+    #     console behind it would BLOCK for ever (section 7 step 9). Nothing here
+    #     depends on stdin, so closing it costs nothing and removes the hang.
+    #     Run from the account's own directory, as the planting was.
+    Write-Output ("  running: sd {0}   (a command line, on the account's list)" -f $cmdName)
+    Push-Location -LiteralPath $acctDir
+    try {
+        try { $cmdOut = ($null | & $sdExe '-QUIET' $cmdName 2>&1 | Out-String) } catch {
+            $cmdOut = "(threw: " + $_.Exception.Message + ")"
+        }
+        Write-Output ("    exit {0}" -f $LASTEXITCODE)
+
+        # --- 2. AN INTERACTIVE SESSION.  No command on the line; OFF is fed on
+        #     stdin, which is how every other verifier drives SD. batch.command
+        #     comes from the COMMAND LINE, so feeding OFF on stdin leaves it
+        #     empty - which is the case under test.
+        Write-Output '  running: sd            (no command, OFF piped)'
+        try { $intOut = (("`nOFF`n") | & $sdExe '-QUIET' 2>&1 | Out-String) } catch {
+            $intOut = "(threw: " + $_.Exception.Message + ")"
+        }
+        Write-Output ("    exit {0}" -f $LASTEXITCODE)
+    } finally { Pop-Location }
+    Write-Output ''
+
+    try { $after = [IO.File]::ReadAllText($audit) } catch { }
+}
+finally {
+    Remove-Grant
+}
+
 $tail = ''
 if ($after.Length -gt $before.Length) { $tail = $after.Substring($before.Length) }
 
@@ -226,8 +312,15 @@ Note 'an INTERACTIVE session was recorded without command=' $true ($bare.Count -
 
 # AND THE COMMAND ITSELF, because "command=" with the wrong text would mean
 # batch.command held something other than the command line.
-$sawCount = @($withCmd | Where-Object { $_.Command -match 'COUNT' })
+$sawCount = @($withCmd | Where-Object { $_.Command -eq $cmdName })
 Note 'the recorded command is the one that was run' $true ($sawCount.Count -ge 1) $true
+
+# 29 Sep 26 - AND THE COMMAND REALLY RAN.  "command=" is written whether or not
+# the gate then admits the line, so the record alone cannot say the grant took.
+# COUNT VOC's own output can, and a refusal cannot print it.  A refusal record
+# ("LOGIN REFUSED") is a disqualifier: it is what b233 showed for the old probe.
+Note 'the listed command ran (COUNT VOC printed its total)' $true ($cmdOut.Contains('record(s) counted')) $true
+Note 'no LOGIN REFUSED record from this run' $false ($tail -match 'LOGIN REFUSED') $true
 
 # Reported, not asserted: the account each was recorded against.
 foreach ($r in $new) {
@@ -253,6 +346,9 @@ if ($fatal) {
     Write-Output '  gate three lines below can read it. If the command form is MISSING, that'
     Write-Output '  assignment has moved or gone - which also silently restores the password'
     Write-Output '  prompt on a command line that section 7 step 9 removed.'
+    Write-Output ''
+    Write-Output '  If the audit shows "LOGIN REFUSED", the account was not allowed the command:'
+    Write-Output '  check that the batch.jobs line and the VOC paragraph were planted (above).'
 }
 
 Write-Verdict 'verify-cmdaudit'
