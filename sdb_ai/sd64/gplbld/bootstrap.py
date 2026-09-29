@@ -312,8 +312,23 @@ def main():
             # bootstrap since.  -internal means SDSYS, and needs no password
             # while SDSYS has no credential.
             print('  writing the install dictionaries')
-            sd(sdexe, env,
-               ['-internal', 'RUN', 'gpl.bp', 'write_install_dicts', 'NO.PAGE'])
+            out = sd(sdexe, env,
+                     ['-internal', 'RUN', 'gpl.bp', 'write_install_dicts',
+                      'NO.PAGE'])
+            # 29 Sep 26 - RELEASE_1.1 114, from SD Core Solo's SOLO 12.  JUDGED
+            # ON ITS OWN SUCCESS LINE.  This step printed "Invalid runfile
+            # pathname" from a staging path over 128 characters and the
+            # bootstrap carried on to exit 0, so a tree shipped with no
+            # dictionaries.  sd exits 0 either way; the program ends by
+            # printing COMPLETE, and its failures say so.
+            wid_lines = [l.strip() for l in out.splitlines()]
+            wid_bad = [w for w in ('Invalid runfile', 'ERROR OPENING',
+                                   'PROCESS ABORTED', 'READLIST EMPTY')
+                       if w.lower() in out.lower()]
+            if 'COMPLETE' not in wid_lines or wid_bad:
+                die('write_install_dicts did not complete (%s) - its output is '
+                    'above' % (', '.join(wid_bad) or 'no COMPLETE line'))
+            print('  checked: write_install_dicts printed COMPLETE')
 
             print('  compiling the system (THIRD.COMPILE)')
             out = sd(sdexe, env, ['-internal', 'THIRD.COMPILE'])

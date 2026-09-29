@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 29 Sep 26 RELEASE_1.1 114 - a runfile name longer than the header's
+ *           program_name is stored by its tail, bounded (from Solo's SOLO 12)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -271,7 +273,21 @@ found:
      necessary for runfiles and locally catalogued items but we might as
      well do it for everything.                                            */
 
-  strcpy(obj->code.ext_hdr.prog.program_name, name);
+  /* 29 Sep 26 - RELEASE_1.1 114 (SD Core Solo's SOLO 12).  A RUNFILE NAME IS A
+     PATHNAME, and a path can be longer than the header's MAX_PROGRAM_NAME_LEN,
+     which is part of the object format and cannot grow.  op_run() used to
+     refuse any path over 128 ("Invalid runfile pathname") so this strcpy could
+     not overflow; it now passes the path through, so the copy is bounded HERE.
+     The TAIL is kept - ...\gpl.bp.out\name is the part worth showing in an
+     error.  A truncated name can never strcmp-equal the full path the next
+     call passes, so the LRU search above cannot return a different program:
+     the file is simply reloaded, which is correct.                         */
+  {
+    size_t n = strlen(name);
+    const char* src = (n > MAX_PROGRAM_NAME_LEN) ? name + (n - MAX_PROGRAM_NAME_LEN) : name;
+    strncpy(obj->code.ext_hdr.prog.program_name, src, MAX_PROGRAM_NAME_LEN);
+    obj->code.ext_hdr.prog.program_name[MAX_PROGRAM_NAME_LEN] = '\0';
+  }
 
   if (is_runfile)
     obj->code.id = -(next_id++); /* Run files have negative ids */

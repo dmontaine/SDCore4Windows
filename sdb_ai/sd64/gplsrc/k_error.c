@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 29 Sep 26 RELEASE_1.1 114 - the "at line N of <program>" suffix is
+ *           snprintf-bounded; it could write past s[] (from Solo's SOLO 12)
  * 31 Aug 26 Windows port - k_error() truncated every message at about 84
  *                      characters: the vsnprintf bound read MAX_ERROR_LINES +
  *                      MAX_EMSG_LEN where the buffer is sized on the PRODUCT.
@@ -252,19 +254,26 @@ void k_error(char* message, ...) {
     longjmp(k_exit, k_exit_cause);
   }
 
+  /* 29 Sep 26 - RELEASE_1.1 114 (SD Core Solo's SOLO 12).  THESE THREE WERE
+     sprintf ONTO THE END OF A BUFFER vsnprintf MAY ALREADY HAVE FILLED.  The
+     message above can use all 240 bytes, and " at line N of <program name>"
+     (up to 128 more for the name) was then written past s[] - reachable with a
+     long %s argument, and easier once op_run() passes runfile paths up to
+     MAX_PATHNAME_LEN.  Bounded now; an over-long line is truncated, never
+     overrun.                                                              */
   n = strlen(s);
   if (process.program.flags & HDR_ITYPE) {
     // sprintf(s + n, sysmsg(1120)); /* in dictionary expression */
-    sprintf(s + n, "%s", sysmsg(1120)); /* 20Jun12 gwb #1 */
+    snprintf(s + n, sizeof(s) - n, "%s", sysmsg(1120)); /* 20Jun12 gwb #1 */
 
   } else {
     line = k_line_no(failing_offset, xcbase);
     if (line >= 0) {
-      sprintf(s + n, sysmsg(1121), (int)line,
-              ((OBJECT_HEADER*)xcbase)->ext_hdr.prog.program_name);
+      snprintf(s + n, sizeof(s) - n, sysmsg(1121), (int)line,
+               ((OBJECT_HEADER*)xcbase)->ext_hdr.prog.program_name);
     } else {
-      sprintf(s + n, sysmsg(1122),
-              ((OBJECT_HEADER*)xcbase)->ext_hdr.prog.program_name);
+      snprintf(s + n, sizeof(s) - n, sysmsg(1122),
+               ((OBJECT_HEADER*)xcbase)->ext_hdr.prog.program_name);
     }
   }
   tio_write(s);

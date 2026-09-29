@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 29 Sep 26 RELEASE_1.1 114 - op_run() takes a runfile path up to
+ *           MAX_PATHNAME_LEN, not MAX_PROGRAM_NAME_LEN (from Solo's SOLO 12)
  * 14 Sep 26 Windows port - call names are canonical LOWER case: the five
  *           UpperCaseString() calls became LowerCaseString(), and
  *           valid_call_name() accepts lower case only.  RELEASE_1.1_FIXES.md 5,
@@ -810,10 +812,14 @@ void op_run() {
  */
 
   DESCRIPTOR* descr;
-  char runfile_name[MAX_PROGRAM_NAME_LEN + 1];
+  /* 29 Sep 26 - RELEASE_1.1 114 (SD Core Solo's SOLO 12): a runfile name is a
+     PATH (CPROC builds it from fileinfo(fl$path)), so it gets a path's length.
+     It was MAX_PROGRAM_NAME_LEN, 128, and RUN of anything under a long folder
+     failed "Invalid runfile pathname".  object.c bounds its header copy.   */
+  char runfile_name[MAX_PATHNAME_LEN + 1];
 
   descr = e_stack - 1;
-  if (k_get_c_string(descr, runfile_name, MAX_PROGRAM_NAME_LEN) < 1) {
+  if (k_get_c_string(descr, runfile_name, MAX_PATHNAME_LEN) < 1) {
     k_error(sysmsg(1135));
   }
   k_dismiss();

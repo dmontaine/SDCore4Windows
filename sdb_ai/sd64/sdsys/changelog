@@ -2,6 +2,17 @@ W1.1-1 - in progress
 -------------
 Changes since W1.1-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+29 Sep 26  RUN WORKS FROM A DEEPLY NESTED FOLDER, AND A LONG ERROR LINE IS SAFE.
+
+           * RUN could fail with "Invalid runfile pathname" when the program's
+             folder was about 128 characters deep or more.  A normal install
+             is nowhere near that, but a copy of SD in a deep folder was.  The
+             path can now be up to 255 characters.
+           * An error message that named a long program could write past the
+             end of its line buffer.  The text is now cut short instead.
+           * The build now stops if the install dictionaries were not written,
+             where it used to carry on and produce an SD with none.
+
 29 Sep 26  SD CORE IS ENGLISH ONLY, AND THE LANGUAGE COMMANDS ARE GONE.
 
            SD Core for Windows has no support for other languages.  Support
