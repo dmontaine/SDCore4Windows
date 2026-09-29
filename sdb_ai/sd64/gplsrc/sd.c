@@ -242,7 +242,7 @@ int main(int argc, char *argv[]) {
   }
 
   /* Initialize English messages */
-  if (!load_language("")) {
+  if (!init_messages()) {
     clean_stop();
     return status; /* TODO: add a custom return value for this failure. */
   }

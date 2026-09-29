@@ -117,7 +117,7 @@
       $define CMD.FLASH          0x0040  ;* -F option
       $define K$CASE.SENSITIVE  36       ;* REMOVE.TOKEN() case sensitive in TKN.NAME
       $define K$PACKAGE.DATA    37       ;* Get package licence data
-      $define K$SET.LANGUAGE    38       ;* Set language for message system
+      ;* 38 retired (was K$SET.LANGUAGE) - SD is English only; do not reuse
       $define K$HSM             39       ;* Hot spot monitor
       $define K$COLLATION       40       ;* Set collation map
       $define K$GET.SDNET.CONNECTIONS  41 ;* Get details of open SDNet connections

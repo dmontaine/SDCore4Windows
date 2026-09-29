@@ -19,13 +19,15 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.1 Mar 25 mab correct output of messages with embedded newline
+ * 29 Sep 26 English only: load_language() is now init_messages(), with no
+ *           language prefix; sysmsg() reads the one catalogue.
  * END-HISTORY
  *
  * START-DESCRIPTION:
  *
  * The message library (SDSYS messages file) uses numbers to identify
- * messages. For non-English texts, the message number is prefixed by a
- * language code of up to three letters.
+ * messages. SD is English only: there is one catalogue and no language
+ * prefix.
  *
  * Message numbers are groups according to their role. Open source
  * developers should use numbers in the range 10000 to 19999.
@@ -44,8 +46,6 @@
 
 #include "sd.h"
 
-Private char prefix[3 + 1] = ""; /* Language prefix */
-
 char* month_names[12] = {"January",   "February", "March",    "April",
                          "May",       "June",     "July",     "August",
                          "September", "October",  "November", "December"};
@@ -57,10 +57,10 @@ Private int message_len;
 Private int msg_file = -1;
 
 /* ======================================================================
-   Select a language                                                      */
+   Initialise the English month and day name tables (called once at
+   start-up)                                                              */
 
-bool load_language(char* language_prefix) {
-  static bool loaded = FALSE;
+bool init_messages(void) {
   static char* default_months =
       "January,February,March,April,May,June,July,August,September,October,"
       "November,December";
@@ -74,16 +74,6 @@ bool load_language(char* language_prefix) {
      check the k_alloc() results before copying into them. */
   char* savep = NULL;
   /* -------------------- */
-
-  if (strlen(language_prefix) > 3)
-    return FALSE;
-
-  strcpy(prefix, language_prefix);
-
-  if (loaded) { /* Free old memory */
-    k_free(month_names[0]);
-    k_free(day_names[0]);
-  }
 
   /* Month names */
 
@@ -110,7 +100,6 @@ bool load_language(char* language_prefix) {
     day_names[i] = strtok(NULL, ","); */
   month_names[0] = (char*)k_alloc(83, strlen(p) + 1);
   if (month_names[0] == NULL) {
-    loaded = FALSE;
     return FALSE;
   }
   strcpy(month_names[0], p);
@@ -126,7 +115,6 @@ bool load_language(char* language_prefix) {
   day_names[0] = (char*)k_alloc(84, strlen(p) + 1);
   if (day_names[0] == NULL) {
     k_free(month_names[0]);
-    loaded = FALSE;
     return FALSE;
   }
   savep = NULL;
@@ -135,8 +123,6 @@ bool load_language(char* language_prefix) {
   for (i = 1; i < 7; i++)
     day_names[i] = strtok_r(NULL, ",", &savep);
   /* -------------------- */
-
-  loaded = TRUE;
 
   return TRUE;
 }
@@ -204,30 +190,8 @@ char* sysmsg(int msg_no) {
     /* close(msg_file); Don't need to keep it open, just checking its there */
   }
 
-  /* Open language specific msg */
-  if (prefix[0] != '\0') {
-    n = sprintf(id, "%s%d", prefix, msg_no);
-    /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cmessages%c%s", sysseg->sysdir, 
-            DS, DS, id) >= (MAX_PATHNAME_LEN + 1)) {
-      /* TODO: this should be sent to the system log. */
-      k_error("Overflowed directory/filename path length in sysmsg()!");
-      /* Modified by Composer AI - 2026/06/10.
-         Do not point "message" at a string literal (see fallback_msg
-         above); return the static fallback buffer instead. */
-      /* message = "";
-      // goto exit_sysmsg;  / * I died inside adding this. -gwb * /
-      return message; / * ...and un-died! * / */
-      snprintf(fallback_msg, sizeof(fallback_msg),
-               "[%d] Message path too long", msg_no);
-      return fallback_msg;
-      /* -------------------- */
-    }
-    msg_rec = open(path, O_RDONLY);
-  }
-
-  /* Try English messages */
-  if (msg_rec < 0) {
+  /* The one (English) catalogue */
+  {
     n = sprintf(id, "%d", msg_no);
     /* converted to snprintf() -gwb 22Feb20 */
     if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cmessages%c%s", sysseg->sysdir, 

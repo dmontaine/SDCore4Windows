@@ -593,7 +593,7 @@ function Set-AttachedAccountPassword {
     )
 
     $credDir  = Join-Path $SysDir '$cred'
-    $credFile = Join-Path $credDir $Account.ToLowerInvariant()
+    $credFile = Join-Path $credDir $Account.ToLower()
 
     # THE STORE IS READABLE HERE AND NOWHERE ELSE: secure-cred.ps1 locks $cred
     # to SYSTEM and Administrators, so this test works only because this window

@@ -151,7 +151,7 @@
 #define K_COMMAND_OPTIONS    35
 #define K_CASE_SENSITIVE     36
 #define K_PACKAGE_DATA       37
-#define K_SET_LANGUAGE       38
+/* 38 retired (was K_SET_LANGUAGE) - SD is English only; do not reuse */
 #define K_HSM                39
 #define K_COLLATION          40
 #define K_GET_SDNET_CONNECTIONS  41

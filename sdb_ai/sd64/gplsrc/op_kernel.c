@@ -114,7 +114,7 @@ void op_kernel() {
      K$CLEANUP            Clean up defunct users
      K$COMMAND.OPTIONS    Get command line option flags
      K$CASE.SENSITIVE     REMOVE.TOKEN() cases sensitivity
-     K$SET.LANGUAGE       Set language for message handler
+     (38 retired - was K$SET.LANGUAGE; SD is English only)
      K$COLLATION          Set/clear sort collation data
      K$GET.SDNET.CONNECTIONS  Get details of open SDNet connections
      K$INVALIDATE.OBJECT  Invalidate object cache
@@ -767,11 +767,6 @@ void op_kernel() {
         result.data.value = case_sensitive;
       else
         case_sensitive = (descr->data.value != 0);
-      break;
-
-    case K_SET_LANGUAGE:
-      k_get_c_string(descr, s, 3);
-      result.data.value = load_language(s);
       break;
 
     case K_HSM:

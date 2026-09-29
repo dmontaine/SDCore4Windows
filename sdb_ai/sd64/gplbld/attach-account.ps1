@@ -138,12 +138,7 @@ if (-not (Test-Path $sd)) {
 # record is a file on NTFS, so the read is case-insensitive.  It matters for
 # what gets WRITTEN, and for this test being able to say which case it expects
 # to see.
-#
-# INVARIANT FOR THE SAME REASON AS THE MARKER BELOW: SD folds with the
-# lc_chars[]/uc_chars[] ASCII maps, and .ToLower() on a Turkish locale sends
-# "I" to a dotless U+0131.  This one decides the reinstall case, so a mismatch
-# would make the installer try to attach an account already there.
-$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToLowerInvariant())
+$record = Join-Path $DataDir ('sdsys\accounts\' + $User.ToLower())
 
 . (Join-Path $PSScriptRoot 'internal-marker.ps1')
 function Invoke-Sd {
@@ -257,17 +252,10 @@ try {
     # are the same $User this script was invoked with, downcased on both sides.
     # CREATEA does it at the attach.marker assignment in the USER arm.
     #
-    # AND "Invariant" IS WHAT MAKES THAT TRUE.  SD's downcase() is a fixed
-    # ASCII byte map, lc_chars[], built A-Z -> a-z at ctype.c:61 and identity
-    # everywhere else.  .ToLower() is CULTURE-SENSITIVE: on a Turkish or Azeri
-    # locale "I" folds to a dotless U+0131, which is not what CREATEA will look
-    # for.  The names valid_os_name permits are ASCII only, so the invariant
-    # fold matches SD's map exactly.
-    #
     # WHAT IS IN IT IS STILL FOR A HUMAN.  A marker that outlives its window is
     # a hole, so anybody who finds one should be able to tell at a glance what
     # wrote it and when.
-    $marker = Join-Path $DataDir ('sdsys\$attach.' + $User.ToLowerInvariant())
+    $marker = Join-Path $DataDir ('sdsys\$attach.' + $User.ToLower())
 
     # CAUGHT RATHER THAN LEFT TO $ErrorActionPreference, which is Stop: an
     # uncaught throw here would leave the finally to run with $result never

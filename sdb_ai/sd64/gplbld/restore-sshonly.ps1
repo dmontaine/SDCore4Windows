@@ -152,7 +152,7 @@ $failed  = New-Object System.Collections.ArrayList
 $skipped = New-Object System.Collections.ArrayList
 
 foreach ($acct in ($records | Sort-Object)) {
-    $u = $acct.ToLowerInvariant()
+    $u = $acct.ToLower()
 
     $user = Get-LocalUser -Name $u -ErrorAction SilentlyContinue
     if (-not $user) {

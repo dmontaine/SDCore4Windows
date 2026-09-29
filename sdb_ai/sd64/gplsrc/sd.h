@@ -272,7 +272,7 @@ u_int32_t GetUnsignedInt(DESCRIPTOR * descr);
 
 
 /* MESSAGES.C */
-bool load_language(char * language_prefix);
+bool init_messages(void);
 char * sysmsg(int msg_no);
 
 /* NETFILES.C - REMOVED 18 Aug 2026.  SDNet (remote files over port 4245) is
