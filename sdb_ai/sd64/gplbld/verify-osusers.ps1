@@ -57,10 +57,9 @@
 #
 #   (if @LOGNAME starts listed: save its bytes, elevate, remove it)
 #   unelevated, unlisted   SH refused 10053, no marker    <- before
-#   ELEVATED,   unlisted   SH admitted                    <- elevation still
-#                                                            passes on its own
-#   ELEVATED,   unlisted   SH with a pipe refused 5240    <- the ban is intact
-#                                                            for the unlisted
+#   ELEVATED,   unlisted   SH refused 10053               <- since RELEASE_1.1 106
+#                                                            elevation is no grant
+#   ELEVATED,   unlisted   SH with a pipe refused 10053   <- (was: admitted / 5240)
 #   unelevated, LISTED     SH admitted                    <- THE OWED TEST
 #   unelevated, LISTED     SH with a pipe admitted        <- the ban is lifted
 #   unelevated, unlisted   SH refused 10053 again         <- and it was the
@@ -831,10 +830,18 @@ $resultFile = Join-Path $logDir ('verify-osusers-grant-' + $stamp + '.txt')
     }
 
     # The two controls that had to be taken while the list was still empty.
-    Note 'ELEVATED and unlisted: plain SH still runs' 'ran'     $elev['elev_plain'] $true
+    #
+    # 29 Sep 26 - RELEASE_1.1 106 (owner's ruling, 22 Sep: elevation gives an
+    # ordinary account NO extra SD privileges).  These three rows used to say the
+    # opposite - elevated and unlisted: plain SH RUNS, the pipe is refused by the
+    # ban (5240).  Measured on the W1.1-1 install, 29 Sep, verify-osusers-grant
+    # result file: elev_plain=refused, elev_piped=refused, elev_msg10053=yes,
+    # elev_msg5240=no - the same refusal an unelevated unlisted account gets, at
+    # the gate.  An elevated account is now treated exactly like an unelevated one.
+    Note 'ELEVATED and unlisted: plain SH is refused (no elevation bypass)' 'refused' $elev['elev_plain'] $true
     Note 'ELEVATED and unlisted: piped SH is refused' 'refused' $elev['elev_piped'] $true
-    Note 'ELEVATED refusal is the ban (5240), not the gate (10053)' 'yes' `
-         $(if ($elev['elev_msg5240'] -eq 'yes' -and $elev['elev_msg10053'] -eq 'no') { 'yes' } else { 'no' }) $true
+    Note 'ELEVATED refusal is the gate (10053), not the ban (5240)' 'yes' `
+         $(if ($elev['elev_msg10053'] -eq 'yes' -and $elev['elev_msg5240'] -eq 'no') { 'yes' } else { 'no' }) $true
 
     if (-not $granted) {
         Remove-Probe
