@@ -1162,10 +1162,16 @@ def sha256_of(path):
 def sd_untracked():
     """The sibling SD-Untracked tree (outside git), which holds the bundled
     binaries and the dev tooling.  Derived from this file so it follows the repo
-    on any machine that keeps the two side by side under Projects."""
+    on any machine that keeps the two side by side under Projects.
+    29 Sep 26 - the owner's regrouping (27 Sep) moved it to
+    Projects/Project_Other/SD-Untracked; looked for there first, then beside
+    the repo as before.  Same lookup as SDCore4WindowsSolo's stage.py."""
     gplbld = os.path.dirname(os.path.abspath(__file__))
     projects = os.path.abspath(
         os.path.join(gplbld, os.pardir, os.pardir, os.pardir, os.pardir))
+    grouped = os.path.join(projects, 'Project_Other', 'SD-Untracked')
+    if os.path.isdir(grouped):
+        return grouped
     return os.path.join(projects, 'SD-Untracked')
 
 
