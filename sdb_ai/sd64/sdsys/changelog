@@ -8,15 +8,18 @@ Changes since W1.1-0.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            for them had crept into W1.1-0 without being asked for, and it is
            removed.
 
-           * NLS, SET.LANGUAGE and LOAD.LANGUAGE no longer exist.  Their
-             programs are no longer installed, so an administrator cannot put
-             them back into an account's VOC (the 17 Aug 26 entry below said
-             they could).  Messages, month names and day names are English.
+           * SET.LANGUAGE and LOAD.LANGUAGE no longer exist.  Their programs
+             are no longer installed, so an administrator cannot put them
+             back into an account's VOC (the 17 Aug 26 entry below said they
+             could).  Messages, month names and day names are English.
            * The installer no longer has a special case for Turkish and Azeri
              systems (the 22 Aug 26 entry, removed).
-           * The functions and keywords that format numbers - GETNLS and
-             SETNLS in SD BASIC, and the CURRENCY, DECIMAL and THOUSANDS
-             keywords - are unchanged.
+           * NLS is back.  It was taken out of every VOC on 17 Aug 26 and this
+             release puts the verb into new VOCs again, so you can view and
+             set the currency symbol and the thousands and decimal separators
+             from the prompt.  Accounts that already exist get it from
+             UPDATE.ACCOUNTS.  GETNLS and SETNLS in SD BASIC, and the
+             CURRENCY, DECIMAL and THOUSANDS keywords, are unchanged.
 
 27 Sep 26  ACCOUNT COMMANDS WORK WHEN SD IS STARTED FROM POWERSHELL 7.
 
@@ -5002,8 +5005,9 @@ previous one.
              machinery.
            * If you had a use for MICRO, say so - an administrator can put the
              verb back into an account's VOC, and the program behind it is
-             still installed.  (The language verbs are removed for good in
-             W1.1-1 - see the 29 Sep 26 entry at the top.)
+             still installed.  (SET.LANGUAGE and LOAD.LANGUAGE are removed for
+             good in W1.1-1, and NLS is back - see the 29 Sep 26 entry at the
+             top.)
 
 17 Aug 26  Connecting a program to SD on the same machine now works.
            * SDConnectLocal() in the client library opens a connection to SD

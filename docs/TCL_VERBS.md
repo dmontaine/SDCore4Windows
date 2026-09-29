@@ -135,6 +135,7 @@ upper. What it changes is what SD prints back: `CT VOC LIST` answers
 | `MERGE.LIST` | Create a select list by merging two other lists |
 | `MESSAGE` | Send a message to selected other users |
 | `MODIFY` | Modify records in a file |
+| `NLS` | Set or report national language support values |
 | `NSELECT` | Remove items from a select list |
 | `OFF` | Synonym for `QUIT` |
 | `OPTION` | Set, clear or display options |

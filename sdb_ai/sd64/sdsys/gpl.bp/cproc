@@ -3572,7 +3572,7 @@ int.set:
 *   getting all of them right, for no user-visible gain.
 *
 *   THE PRECEDENT IS THE TREE'S OWN, and d913eac names it: op_umask and this
-*   routine "stay compiled but callerless", as $MICRO does.
+*   routine "stay compiled but callerless", as $MICRO did.
 *
 *   ***THE UMASK() BASIC FUNCTION IS LIVE - DO NOT REMOVE IT WITH THIS.***
 *   op_umask (gplsrc/op_misc.c:1503, opcode 0xCF0B) is called at every start-up
