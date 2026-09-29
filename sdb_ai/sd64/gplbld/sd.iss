@@ -27,8 +27,12 @@
   #define Stage "..\..\stage"
 #endif
 #ifndef AppVer
-  #define AppVer "W1.1-0"
+  #define AppVer "W1.1-1"
 #endif
+
+; 29 Sep 26 - AppVer W1.1-0 -> W1.1-1 (RELEASE_1.1 112, English only), owner's
+; instruction.  The release string moved in lockstep in the same five places as
+; on 15 Sep.  AppId is unchanged, so W1.1-0 -> W1.1-1 is a recognised upgrade.
 
 ; 26 Sep 26 - OPTIONAL PYTHON INSTALL, owner's instruction: the release zip
 ; carries python.org's installer in python\ beside this .exe, and an unchecked
