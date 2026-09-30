@@ -322,8 +322,16 @@ def main():
             # dictionaries.  sd exits 0 either way; the program ends by
             # printing COMPLETE, and its failures say so.
             wid_lines = [l.strip() for l in out.splitlines()]
+            # 29 Sep 26 - the stop words are the Linux port's list (its 1420
+            # mail, "make the check strict"), each one a CRT/STOP that
+            # write_install_dicts really contains (checked: lines 30-126).  Linux
+            # also keys on a "session refused" line; that wording is its own.
             wid_bad = [w for w in ('Invalid runfile', 'ERROR OPENING',
-                                   'PROCESS ABORTED', 'READLIST EMPTY')
+                                   'PROCESS ABORTED', 'READLIST EMPTY',
+                                   'NO DIRECTORY RECORDS FOUND',
+                                   'CANNOT READ TRANSFER_FILE',
+                                   'ERROR CANNOT OPEN',
+                                   'requires administrator privileges')
                        if w.lower() in out.lower()]
             if 'COMPLETE' not in wid_lines or wid_bad:
                 die('write_install_dicts did not complete (%s) - its output is '

@@ -9,12 +9,14 @@ which runs on Linux only. SD Core for Windows is SD rebuilt for Windows: a
 Windows service, a Windows installer, and Windows security in place of the
 Linux users, groups and permissions it relied on.
 
-**Current release: W1.1-0** (26 Sep 2026), distributed as a zip on SourceForge.
-W1.1-1 is in progress. See `sdb_ai/sd64/sdsys/changelog` for what has changed.
+**Current release: W1.1-1** (29 Sep 2026), distributed as a zip on SourceForge.
+It replaces W1.1-0, which carried non-English language support that should not
+have been in it; SD Core is English only. See `sdb_ai/sd64/sdsys/changelog` for
+what has changed.
 
 ## What you get
 
-- **A single installer**, `sd-setup-W1.1-0.exe`. Nothing to compile and no
+- **A single installer**, `sd-setup-W1.1-1.exe`. Nothing to compile and no
   dependencies to resolve; SD carries its own runtime beside `sd.exe`.
 - **Fixed install locations** — programs in `C:\Program Files\SD`, data and
   configuration in `C:\ProgramData\SD` (the SDSYS account and
