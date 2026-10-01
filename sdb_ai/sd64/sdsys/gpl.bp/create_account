@@ -1,0 +1,1577 @@
+* CREATE_ACCOUNT
+* Create an SD account: the body of CREATE.ACCOUNT, callable with settings
+* Copyright (c) 2007 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 02 Oct 26 Windows port - split out of CREATEA for RELEASE_1.1 116:
+*           RESTORE.ACCOUNT (shared with SD Core for Linux) creates an account
+*           that is missing, and must not parse a sentence to do it.  The
+*           signature and the settings positions (syscom/createacc.h, Linux's,
+*           copied byte for byte) were agreed by mail 1 Oct 2026; each port
+*           writes its own body.  The body below is CREATEA's, moved whole with
+*           its comments, from the USER arm's checks on; every "stop
+*           sysmsg(n, ...)" is now err = n, args and a goto exit.create (a
+*           return inside a gosub, tested by its caller), following Linux's
+*           split: never a goto out of a gosub, and the ACCOUNTS readu released
+*           at exit.create because a subroutine gets no stop's implicit
+*           release.  Earlier history is CREATEA's and stays there.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !create_account(acc.type, acc.name, settings, err)
+*
+*    acc.type  USER, GROUP or OTHER.
+*    acc.name  As typed.  The account name and register key are folded to lower
+*              case below, as CREATE.ACCOUNT always did.
+*    settings  syscom/createacc.h.  Blank fields take CREATE.ACCOUNT's
+*              defaults: both routes on for a USER account, no os.users record.
+*              The Linux-only block (31-40, CA$REUSE.SD.USER) is ignored here.
+*    err       '' when the account was made.  Otherwise the message number,
+*              then its arguments, value-mark separated - the caller shows it
+*              with sysmsg(err<1,1>, err<1,2>, ...).  Progress lines are
+*              displayed here as CREATE.ACCOUNT always displayed them.
+*
+* THE GATES ARE CHECKED HERE, NOT ONLY IN THE VERB.  This is catalogued, so a
+* program can call it without going through CREATE.ACCOUNT: the administrator
+* check, and ATTACH's -internal and one-shot marker (consumed only here), are
+* repeated.
+*
+* A NEW USER ACCOUNT ASKS FOR A PASSWORD.  NO.QUERY is refused for it (10039),
+* because making the Windows user means setting its password; the prompt and
+* its retry stay here, interactive, exactly as in CREATE.ACCOUNT.
+*
+* AN EXISTING WINDOWS USER IS REFUSED (10038) unless ATTACH, as before.  SD Core
+* for Linux's CA$REUSE.SD.USER (take over a user SD itself made) is not
+* implemented here: on Windows the API credential ($cred) is set together with
+* the Windows password, so a reused user could be left with ssh and no API.
+* That is an open question for the owner, not a decision.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine create_account(acc.type, acc.name, settings, err)
+$catalog !create_account
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include createacc.h
+
+deffun is_grp_member(user,group) calling '!is_grp_member'
+deffun os_group(action,group,member) calling '!os_group'
+deffun is_group(group) calling '!is_group'
+deffun is_user(uname) calling '!is_user'
+deffun create_user(uname) calling '!create_user'
+deffun set_passwd(uname)  calling '!set_passwd'
+deffun delete_user(uname) calling '!delete_user'
+deffun profile_dir(uname) calling '!profile_dir'
+deffun valid_os_name(name) calling '!valid_os_name'
+deffun valid_os_path(path) calling '!valid_os_path'
+deffun ps_script(script) calling '!ps_script'
+
+   err = ''
+   locked = @false
+   acc.f.open = @false
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      err = 2001  ;* Command requires administrator privileges
+      return
+   end
+
+   if umask(002) then null
+
+   acc.type = upcase(trim(acc.type))
+   acc.uname = ''
+   group_name = ''
+
+*  The settings become the variables CREATE.ACCOUNT's body has always read.
+*  A route field that is present at all is a request (CREATE.ACCOUNT's
+*  access.given); blank means on, which is RELEASE_1.1 68's "silence means
+*  BOTH".
+   access.given = settings<CA$ROUTE.SSH> # '' or settings<CA$ROUTE.API> # ''
+   access.ssh = settings<CA$ROUTE.SSH> # '0'
+   access.api = settings<CA$ROUTE.API> # '0'
+   no.query = settings<CA$NO.QUERY> = 1
+   os.sh   = settings<CA$OS.SH> = 1
+   os.exec = settings<CA$OS.EXECUTE> = 1
+
+*  ATTACH, re-checked here: -internal and the one-shot marker for THIS account
+*  (RELEASE_1.1 66).  The verb refuses the word with 2018 when either gate is
+*  shut, without naming it; a caller that bypassed the verb gets 2018 the same
+*  way, and the marker is consumed only here.
+   attach = @false
+   if settings<CA$ATTACH> = 1 then
+      attach.marker = @sdsys:@ds:'$attach.':downcase(acc.name)
+      if acc.type = 'USER' and kernel(K$INTERNAL, -1) and ospath(attach.marker, OS$EXISTS) then
+         attach = @true
+         void ospath(attach.marker, OS$DELETE)
+      end else
+         err = 2018:@vm:'ATTACH'  ;* Unexpected token (xx)
+         return
+      end
+   end
+
+   @system.return.code = -ER$ARGS     ;* Preset for argument errors
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      @system.return.code = -status()
+      err = 6000 ;* Cannot open ACCOUNTS file in SDSYS account
+      return
+   end
+   acc.f.open = @true
+
+   begin case
+   case acc.type = 'USER'
+     pathname = CONFIG('USRDIR')
+     if pathname = '' then pathname = 'C:\ProgramData\SD\user_accounts'
+     acc.uname = acc.name
+
+     * Is the user a valid os user?
+     * Check reserved names then
+     * Check user name as entered, then force to lower case and re check
+     begin case
+     
+     * is user reserved?
+     case upcase(acc.uname) = 'ROOT' 
+       @system.return.code = -ER$ARGS
+       err = 6052 ; goto exit.create ;* User name is invalid
+     
+     case upcase(acc.uname) = 'SDSYS' 
+       @system.return.code = -ER$ARGS
+       err = 6052 ; goto exit.create ;* User name is invalid
+      
+     case upcase(acc.uname) = 'SDUSERS' 
+       @system.return.code = -ER$ARGS
+       err = 6052 ; goto exit.create ;* User name is invalid
+          
+* 14 Aug 26 Windows port - THE TWO ADOPT BRANCHES ARE GONE.  They admitted any
+*   pre-existing OS user, which is not the model: the repository owner's rule
+*   of 14 Aug 2026 is that the ONLY pre-existing OS user that may be given an
+*   SD account is the installer's, done at install time, and every other SD
+*   account creates its own OS account from within SD.
+*
+*   The verb already refused, but by accident and with the wrong words.
+*   !is_user read /etc/passwd, which MSYS2 does not have, so it answered false
+*   for everyone, the adopt branches never ran, and control reached
+*   create_user(), which fails on an existing account with "Create User
+*   Failed, OS Error: 1".  Right outcome, unreadable reason - and it rested
+*   entirely on a broken lookup, so repairing !is_user on its own would have
+*   turned the refusal into a silent adoption of somebody's existing login.
+*   Both were changed together; see PROJECT_STATUS.md section 6.
+     case is_user(acc.uname) or is_user(downcase(acc.uname))
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADOPT EXCEPTION IS GONE WITH THE
+*   KEYWORD, so this is the plain refusal it always was for everybody else: an
+*   SD account is never attached to a Windows account that already exists.  The
+*   install used to take that exception for the installing user; what replaces
+*   it is the Windows SDSYS account, which is in the register from the start
+*   and needs no CREATE.ACCOUNT at all.
+*
+* 18 Sep 26, LATER STILL - AND THE EXCEPTION IS BACK, AS ATTACH, BECAUSE THE
+*   PARAGRAPH ABOVE ANSWERED THE ADMIN QUESTION AND NOT THE INSTALLER'S OWN.
+*   The owner, the same day: "during the install, the regular sd account for
+*   the installer needs to be created as well since you can't create an
+*   account later because sd only recognizes accounts it creates."  SDSYS
+*   covers administration; it does not give the PERSON who installed SD an
+*   account, and this refusal is the wall that keeps them from ever getting
+*   one.  The ATTACH keyword - install-only, marker-gated, in more.args - is
+*   the one crossing, and it exists for exactly one caller:
+*   gplbld/attach-account.ps1, at ssPostInstall, for the user who
+*   authenticated the elevation prompt.  With attach set, this case MATCHES
+*   (the premise is that the Windows account exists), folds the name, and
+*   falls out of the begin case PAST create_user and set_passwd to the SD
+*   half - no OS account is created and no password is set, the account
+*   already being the user's.
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 67.  IT FOLDS UNCONDITIONALLY NOW, AND
+*   THAT IS A DELIBERATE NARROW EXCEPTION TO THE LINE AT :695, NOT AN OVERSIGHT
+*   BEING CORRECTED.  This read "if is_user(acc.uname) else acc.uname =
+*   downcase(...)" - folding only in its else - so a name found under its typed
+*   spelling was never folded.  FOR AN ATTACHED ACCOUNT THE MATCH IS THE
+*   PREMISE, so it never folded at all, and the first witnessed install left
+*   "sdsys\accounts\don" pointing at "user_accounts\Don" with group "sdu_Don".
+*   THAT IS THE 22 Aug 2026 SYMPTOM MIRRORED - see :912, where the owner's
+*   ruling was made "on seeing sdsys\accounts\DON sitting beside
+*   user_accounts\don for the same person".  The register key folds at :937
+*   whatever happens here, so leaving this unfolded guarantees the mismatch.
+*
+*   :695's COMMENT IS THE THING TO READ BEFORE CHANGING THIS BACK: "if you
+*   don't want this, pre create the os user" - a pre-created OS account keeping
+*   its own spelling is an ESCAPE HATCH somebody may have used on purpose, and
+*   it is left alone.  ATTACH is not that case: the installing user did not
+*   pre-create anything for SD's benefit, their Windows account merely predates
+*   SD, so the hatch's rationale does not reach them and the only account it
+*   would ever apply to is the installer's own.
+*
+*   SAFE BECAUSE THE WINDOWS LOOKUP IS CASE-INSENSITIVE, MEASURED RATHER THAN
+*   ASSUMED: Get-LocalUser 'don' resolves the account Windows spells 'Don',
+*   with 'donzzz' refused as the control.  So os_group("ADDMEM", ...) and the
+*   sdu_ group built from acc.uname at :1193 and :1231 all reach the same
+*   Windows account under the folded name.  Nothing on the attach path creates
+*   an OS object under the typed spelling - create_user and set_passwd are both
+*   skipped - so there is no second spelling left anywhere to disagree with.
+*
+*   THE MARKER IS UNAFFECTED: it is built at the acc.uname assignment in the
+*   USER arm with its own explicit downcase(), before this point, so folding
+*   here cannot move it.
+*
+*   ***DO NOT TAKE THIS LINE FROM THE LINUX TREE. IT IS THE ONE PLACE THE TWO
+*   PORTS' createa MUST DIFFER, AND THEIR AGENT SAID SO IN WRITING (19 Sep
+*   2026).***  They hit the same fault and fixed it a DIFFERENT way, because
+*   LINUX OS USER NAMES ARE CASE-SENSITIVE: folding theirs unconditionally
+*   would chown to a user that does not exist when the login really is "Don".
+*   So their createa keeps the uid as the Linux user spells it - for chown,
+*   sdusers and sdu_ membership - and folds only the account name, the
+*   directory, the sdu_ group NAME and ACC$GROUP.  Windows has no such split
+*   to make: the SAM is case-INSENSITIVE (measured above), so one fold serves
+*   every use and the split would be dead weight here.  createa is shared
+*   BASIC and both ports pull each other's shapes, so a future merge that
+*   brings their arm across would not fail loudly - it would simply stop
+*   folding the Windows name again and put RELEASE_1.1 67 back.
+       if attach then
+         acc.uname = downcase(acc.uname)
+       end else
+         @system.return.code = -ER$ARGS
+         err = 10038:@vm:acc.uname ; goto exit.create ;* Windows account %1 already exists
+       end
+
+     case attach
+*      ATTACH names an OS account that is not there, so there is nothing to
+*      attach to.  Creating it instead would be the opposite of what was
+*      asked - the account exists in Windows and the SD account must be bound
+*      to THAT one, or `sd` at the person's console lands nowhere.
+       @system.return.code = -ER$ARGS
+       err = 6074 ; goto exit.create ;*    Invalid user name
+
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE 'ADOPT' CASE IS DELETED WITH THE
+*   KEYWORD.  It read: ADOPT names an OS account that is not there, so there is
+*   nothing to adopt, and creating it instead would be the opposite of what was
+*   asked.  Nothing can reach it now, and "creating it" is the only behaviour
+*   left - which is what the arm above refuses when the name already exists.
+*   LATER THE SAME DAY: the case above IS that arm, restored as ATTACH - same
+*   refusal, same reason, new name.
+
+     case no.query
+* 14 Aug 26 Windows port - this branch used to be reachable only when the name
+*   was not an existing user, and said "Invalid user name", which was already
+*   the wrong reason: the name is fine, it is NO.QUERY that cannot work.
+*   Creating an OS account means setting its password, and SET_PASSWD prompts.
+         @system.return.code = -ER$ARGS
+         err = 10039:@vm:acc.uname ; goto exit.create  ;* Cannot create %1 with NO.QUERY
+
+     case 1
+* 14 Aug 26 Windows port - THE config('CREATUSR') GATE IS GONE.  Decision from
+*   the repository owner: SD has accounts, not accounts and users as QM and
+*   ScarletDME do, so creating an account IS creating the operating system
+*   account and there is nothing to opt in to.  Asking permission to do the
+*   second half of the only thing this verb does made no sense once the two
+*   were the same thing.  The parameter still parses (config.c) and CONFIG
+*   still prints it; nothing consults it here any more.
+       * sd convention is os user names are lowercase, if you don't want this, pre create the os user
+         acc.uname = downcase(acc.uname)
+
+* 28 Aug 26 Windows port - LOOK BEFORE LEAPING.  Owner's ruling,
+*   PRE_RELEASE_FIXES.md 36: a leftover profile directory on this name used to
+*   produce a suffixed home SILENTLY, and the symptom that reached the user was
+*   ssh public-key authentication refused - days later, nowhere near the cause,
+*   because sshd reads authorized_keys under the home Windows assigned and the
+*   key was under the other one.  Refusing converts a silent wrong answer into
+*   an explained one.
+*
+*   AFTER THE downcase, NOT BEFORE.  The directory Windows will use is named
+*   after the name this verb is about to create, and that is settled one line
+*   above; testing the name as typed would ask about a path that will not be
+*   used, and answer "clear" for a directory that is really in the way.
+*
+*   IT CANNOT CLEAR THE PATH AND DOES NOT PRETEND TO.  The hive is still
+*   mounted, which is why the directory outlived its account; the message says
+*   what has to happen instead.  !delete_user records the pair and the SD
+*   service reclaims it at the next restart, so on a machine where SD made the
+*   mess the answer is genuinely just "restart, then try again".
+*
+*   STATUS() IS READ, AND THAT IS NOT DEFENSIVE PADDING.  !profile_dir returns
+*   empty both for "the path is clear" and for "PowerShell would not run", and
+*   acting on the empty alone would report a clear path on a check that never
+*   looked - the shape this project has paid for repeatedly.  A check that
+*   could not run must not be scored as a pass, so it stops the creation too:
+*   the directory is exactly the thing that cannot be undone afterwards.
+         prof.dir = profile_dir(acc.uname)
+         prof.stat = status()
+         if prof.stat # 0 then
+           @system.return.code = -ER$NOT.CREATED
+           err = 10125:@vm:acc.uname:@vm:prof.stat ; goto exit.create ;* could not check for a leftover profile
+         end
+         if prof.dir # '' then
+           @system.return.code = -ER$NOT.CREATED
+           err = 10124:@vm:acc.uname:@vm:prof.dir ; goto exit.create ;* a profile directory is already there
+         end
+
+		 * Check INVERT/NOINVERT STATUS (1=INVERT on)
+         PVAL = SYSTEM(1001)
+         IF PVAL = 1 THEN
+           CRT "Warning: **** Case Inversion is not active during password entry! ****"
+         END
+         if not(create_user(acc.uname)) then
+           * create user failed
+* 21 Aug 26 Windows port - THE MINUS WAS MISSING, and it is the one error exit
+*   in this file of twenty-five that did not have it.  gplsrc/err.h states the
+*   convention at the top: "Commands that set negative error codes into
+*   @SYSTEM.RETURN.CODE use the arithmetic inverse of the values listed below."
+*   So this left 6 where every other failure here leaves -6.
+*
+*   AND POSITIVE IS NOT AN UNUSED RANGE - it means "this many things were
+*   done".  COPY and COPYP put records.copied there, DELETE and NSELECT put
+*   record.count, GETLIST and FORMLST put a dcount.  A refused creation was
+*   leaving behind a value indistinguishable from "six records copied", and
+*   PROC:677 - "if @system.return.code < 0" - is how a PROC asks whether the
+*   command it just ran failed.  It was being told this one had not.
+*   Upstream too: UPSTREAM_FIXES.md #11.
+           @system.return.code = -ER$NOT.CREATED
+           err = 10006:@vm:STATUS() ; goto exit.create ;* Create User Failed, OS Error: %1
+         end else
+           crt sysmsg(10007,acc.uname)  ;* 'User ':acc.uname:' Created'
+           * user created set passowrd
+PW.TRY.AGAIN:
+           if not(set_passwd(acc.uname)) then
+           *  password failed
+* 28 Aug 26 Windows port - SAY WHICH FAILURE IT WAS.  10008 offered a retry and
+*   named no reason, and the two likeliest causes need opposite responses: a
+*   mistyped confirmation is fixed by typing it again, and a password Windows
+*   REFUSED will be refused for ever no matter how carefully it is retyped.
+*   Somebody hitting the second case could retype a matching pair all day.
+*
+*   !set_passwd ALREADY KNEW - the caller was throwing it away.  SET_PASSWD's
+*   START-DESCRIPTION documents the values and it sets them with set.status
+*   before every failing return: 1 Windows refused it, 2 not a valid OS user
+*   name, 3 nothing entered or the two differed, 5 SD is not elevated.  Read
+*   immediately, because anything else here would overwrite it.
+*
+*   THE RETRY IS LEFT ALONE except in the one case where it cannot work: a
+*   session that is not elevated will not become elevated by answering Y, so
+*   10120 says so rather than letting the loop offer it.  Changing the control
+*   flow is a bigger question than this entry.  PRE_RELEASE_FIXES.md 22.
+              pw.stat = status()
+              begin case
+                 case pw.stat = 3
+                    crt sysmsg(10118) ;* The two passwords did not match
+                 case pw.stat = 1
+                    crt sysmsg(10119, acc.uname) ;* Windows refused that password
+                 case pw.stat = 5
+                    crt sysmsg(10120) ;* Not elevated - retrying will not help
+* 28 Aug 26 Windows port - status 6 is the HALF-SET case, and it is new because
+*   the same prompt now sets both credentials.  Windows took the password and
+*   $cred did not, which is the one failure that leaves an account ssh will
+*   admit and the API will refuse - exactly the state PRE_RELEASE 42 was about.
+*   The retry is left offered: unlike 5, a $cred write can fail transiently,
+*   and answering N unwinds the whole account as it does for every other arm.
+                 case pw.stat = 6
+                    crt sysmsg(10122, acc.uname) ;* Windows set, $cred not
+* 19 Sep 26 Windows port - status 7 is SD'S OWN REFUSAL, RELEASE_1.1 75, and it
+*   is a third thing rather than a shade of 1.  Windows refusing a password
+*   (1) cannot be fixed by retyping it; SD refusing it can be fixed by typing
+*   a DIFFERENT one, and 10920 is the only message here that says what would
+*   satisfy the rule.  The retry is left offered for exactly that reason.
+                 case pw.stat = 7
+                    crt sysmsg(10920) ;* A password needs at least 8 characters...
+                 case 1
+                    crt sysmsg(10121, pw.stat) ;* Could not be set (status %1)
+              end case
+* 30 Aug 26 Windows port - WORDING ONLY, NO CODE CHANGE.  PRE_RELEASE_FIXES 79.
+*   The test below is "= 'Y' then retry", so anything else - an empty answer
+*   included - already falls through to the unwind.  The prompt now says so.
+              crt sysmsg(10008): ;* 'Warning, user created but password not set, Retry (y/<n>)'
+              input yn
+              if upcase(yn) = 'Y' then goto PW.TRY.AGAIN
+* 21 Aug 26 Windows port - AND ANSWERING N NOW UNWINDS.  Owner's rule, 21 Aug
+*   2026: an account cannot be created without a password.
+*
+*   IT USED TO CARRY ON.  The account was made, the message said "user created
+*   but password not set", and creation ran to completion - leaving an SD
+*   account whose Windows user has no password and therefore no $cred, which
+*   under the SCRAM login is an account nothing can ever connect to.  A warning
+*   is the wrong shape for a state that cannot be used.
+*
+*   THE UNWIND IS COMPLETE BECAUSE OF WHERE THIS SITS.  Only the Windows user
+*   exists at this point: sdu_ group, account directory, VOC and the ACCOUNTS
+*   record are all created further down.  So removing the user is the whole of
+*   it, and delete_user takes any profile with it.
+*
+*   THE PASSWORD RULE IS THE USER ARM'S ALONE.  A GROUP account reaches neither
+*   create_user() nor set_passwd() - it has no Windows user - and "no password"
+*   there means the idea does not apply, not that a requirement was waived.
+* 30 Aug 26 Windows port - THE RESULT IS READ NOW.  PRE_RELEASE_FIXES 72.
+*
+*   IT WAS "void delete_user(acc.uname)" AND THE void WAS THE DEFECT.  10086
+*   below says "Nothing was created", which is a CLAIM ABOUT WHAT JUST HAPPENED,
+*   and it was printed whether or not the removal worked.
+*
+*   MEASURED 30 Aug 2026 ON THE OWNER'S VM.  A create.account run from a session
+*   that reached SDSYS by LOGTO from an unelevated start failed at the $cred
+*   write (PRE_RELEASE 68), the owner answered N, this line ran, and the Windows
+*   account SURVIVED - in no group, so never confined by sdsshonly, and
+*   invisible to remove-sdaccounts.ps1, whose candidate set is sdusers
+*   membership.  It outlived the uninstall as an ordinary enabled login.
+*   DELETE_USER's own os.execute -> ps_script change is the other half of this.
+*
+*   A FAILED ROLLBACK IS NOT A WARNING, IT IS A DIFFERENT OUTCOME, so it gets a
+*   different message rather than a quieter version of the same one: 10086 keeps
+*   its promise and is printed only when the promise is true.
+              rollback.ok = delete_user(acc.uname)
+              @system.return.code = -ER$NOT.CREATED
+              if rollback.ok then
+                 err = 10086 ;* An account must have a password. Nothing was created.
+              end else
+                 err = 10130:@vm:acc.uname
+                 * The Windows account %1 could not be removed and is still there
+              end
+              goto exit.create
+           end
+         end
+     end case
+     
+     
+* 15 Aug 26 Windows port - uid and gid were saved here for set.owner, which has
+*   gone.  ACC$GROUP is written from "sdu_":acc.uname directly, so nothing else
+*   wanted them.
+     pathname := @ds:acc.uname
+     acc.name = acc.uname
+     
+   case acc.type = 'GROUP'
+*    CREATE.ACCOUNT GROUP <grp acct name>
+     pathname = CONFIG('GRPDIR')
+     if pathname = '' then pathname = 'C:\ProgramData\SD\group_accounts'
+     pathname := @ds:acc.name
+     if upcase(acc.name) = 'SDUSERS' then
+       @system.return.code = -ER$ARGS
+       err = 2202 ;* Account name is invalid
+       goto exit.create
+     end
+
+   case acc.type = 'OTHER'
+*    CREATE.ACCOUNT OTHER <account name> <pathname>, the path in CA$PATH
+     if upcase(acc.name) = 'SDUSERS' then
+       @system.return.code = -ER$ARGS
+       err = 2202 ;* Account name is invalid
+       goto exit.create
+     end
+     pathname = trim(settings<CA$PATH>)
+     if pathname = '' then
+       err = 6005 ;* Invalid account pathname
+       goto exit.create
+     end
+
+   case 1
+     @system.return.code = -ER$ARGS
+     err = 2018:@vm:acc.type ;* Unexpected token (xx)
+     goto exit.create
+   end case
+
+
+   * Check if already exists in ACCOUNTS file.  We will need to do this
+   * again when we are ready to create the account but doing it here
+   * saves the user typing the path name before we spot the error.
+
+   read acc.rec from acc.f, acc.name then      ;* 0275
+      @system.return.code = -ER$ACC.EXISTS
+      err = 6002 ; goto exit.create ;* Account already exists
+   end
+
+   * Validate account name
+
+* 22 Aug 26 Windows port - THE REGISTER KEY IS LOWER CASE.  Owner's instruction,
+*   on seeing "sdsys\accounts\DON" sitting beside "user_accounts\don" for the
+*   same person.  This line upcased it, and the ACCOUNTS record id is a FILE
+*   NAME, so the register was the one part of the tree still shouting after
+*   e1095ab made every SDSYS file name lower case on disk.
+*
+*   FOR A USER ACCOUNT THE NAME ARRIVES LOWER ALREADY: acc.uname is downcased at
+*   :371 before create_user, and :432 copies it into acc.name.  So this line was
+*   undoing work done two hundred lines earlier.  downcase() also covers the
+*   GROUP and OTHER arms, where the name is whatever was typed.
+*
+*   NOTHING NEEDED TO CHANGE IN THE READERS, and that was measured rather than
+*   hoped for.  A directory-file record is a file on an NTFS volume, so the
+*   lookup is case-insensitive: a probe read DON, don, Don, SDSYS and sdsys from
+*   the register and found all five.  MODIFYA:112, CPROC:2643 and LOGIN:913 keep
+*   their upcase() on the key they were HANDED and still hit the record.
+*
+*   DISPLAYED NAMES ARE UNAFFECTED, which is the other half of why this is
+*   small.  Messages upcase at the point of use - MODIFYA:112 upcases what the
+*   user typed before sysmsg(10087) ever sees it - so the register's case does
+*   not reach message text, and the verifiers asserting an upper-case name in
+*   output still hold.
+*
+*   upcase() IS THE RIGHT SPELLING FOR ASCII HERE, as downcase() is: both are
+*   SD's fixed byte maps (lc_chars/uc_chars, ctype.c:61) rather than anything
+*   locale-sensitive, and valid_os_name permits ASCII only.
+   acc.name = downcase(acc.name)
+
+   if len(acc.name) > 32 or not(alpha(acc.name[1,1])) or index(acc.name, ' ', 1) then
+      err = 6003 ; goto exit.create ;* Account name is invalid
+   end
+
+   * Validate pathname
+
+   if not(ospath(pathname, OS$PATHNAME)) then
+      err = 6005 ; goto exit.create ;* Invalid account pathname
+   end
+
+
+   * Check if already exists in ACCOUNTS file
+
+   readu acc.rec from acc.f, acc.name locked
+      err = 6006:@vm:status() ; goto exit.create ;* ACCOUNTS record is locked by user xx
+   end then
+      locked = @true
+      @system.return.code = -ER$ACC.EXISTS
+      err = 6002 ; goto exit.create ;* Account already exists
+   end
+*  02 Oct 26 Windows port - the record is locked from here until the register
+*  write below; exit.create releases it on any failure in between.
+   locked = @true
+
+   * Check parent directory exists
+
+
+   if index(pathname, @ds, 1) then
+      parent.dir = field(pathname, @ds, 1, dcount(pathname, @ds) - 1)
+      if parent.dir # '' and not(parent.dir matches "1A':") then
+         if not(ospath(parent.dir, OS$EXISTS)) then
+            @system.return.code = -ER$NO.DIR
+            err = 6008 ; goto exit.create ;* Parent directory does not exist
+         end
+      end
+   end
+
+   pathname = ospath(pathname, OS$FULLPATH)
+
+   * Check if account directory exists
+   * rev 0.9.0 we no longer support conversion of existing directoris to sd accounts
+   * too many unknows with whether this is a non sd type account (Scarlett or other)
+
+   if ospath(pathname, OS$EXISTS) then
+      @system.return.code = -ER$NOT.CREATED
+      err = 10009 ; goto exit.create ;* 'Cannot Create a New SD Account in an Existing Directory'
+   end else
+   * create the new account directory
+      create.file pathname directory on error
+         @system.return.code = -ER$NOT.CREATED
+         err = 6013 ; goto exit.create ;* Unable to create account directory
+      end
+      
+* 15 Aug 26 Windows port - THE setgid BIT IS GONE, AND SO IS sudo.  It ran
+*   "sudo chmod g+s <dir>" on every account directory to make files inherit the
+*   directory's group, which is a POSIX mechanism Windows does not have and
+*   does not need: the installer puts one inheritable ACE on
+*   C:\ProgramData\SD and NTFS applies it in the kernel to everything created
+*   underneath, including files SD writes through the MSYS2 runtime
+*   (PROJECT_STATUS.md 5.7).  It failed on every account creation and printed
+*   "Warning unable to setgid bit on Group Folder, status: 1", which §4 had to
+*   record as expected and harmless.  There is also no sudo here, and the
+*   installer deliberately does not install one.
+*   Messages 10010 and 10011 lose their only caller with it.
+
+
+     * rev 0.9.0  create group for the account *   
+      begin case
+      case upcase(acc.type) = "USER" 
+
+     *  is this user a member or sdusers?
+        if not(is_grp_member(acc.uname,'sdusers')) then
+         * not a member, add them
+          * Modified by Composer AI - 2026/06/10.
+          * Use shared !valid_os_name before os.execute (phase 2).
+          * os.name.chars = '...'
+          if not(valid_os_name(acc.uname)) then
+             crt sysmsg(10012,acc.uname,2) ;* Warning unable to add user to sdusers, user: %1 status: %2
+          end else
+* 14 Aug 26 Windows port - was: os.execute "sudo usermod -aG sdusers ":acc.uname
+* 31 Aug 26 Windows port - TAKE THE FUNCTION'S ANSWER.  PRE_RELEASE_FIXES 94,
+*   and the line directly above is the change that broke it, recorded in plain
+*   sight.  Upstream really does run an os.execute here, so ITS "stat =
+*   OS.ERROR()" is a sound witness; the port swapped in a helper that routes
+*   every writing action through ps_script (OS_GROUP:109-112, os.execute is
+*   only in the LISTMEM branch) and left the check behind.  OS.ERROR() had NO
+*   causal connection to the group add whatever - it was a stale value from an
+*   earlier, unrelated call, measured at 0 through a thousand additions.
+*   os_group returns 0 on success, so the test below is unchanged.
+*   GRANTA:240 and MODIFYA:440 are the house style this returns to.
+          stat = os_group("ADDMEM", "sdusers", acc.uname)
+          if stat = 0 then
+            crt sysmsg(10013,acc.uname)   ;* %1 added to sdusers'
+          end else
+            @system.return.code = -ER$FAILED
+            err = 10012:@vm:acc.uname:@vm:stat ; goto exit.create ;* Unable to add user %1 to sdusers, status: %2
+          end
+          end
+        end
+
+* 14 Aug 26 Windows port - ADMINISTRATOR was given on the command line, so make
+*   this account an SD administrator.  Since PROJECT_STATUS.md 5.6.1 that means
+*   one thing: put it in Windows Administrators.  There is no SD-side flag to
+*   set and no private group left to join.
+*
+*   BY SID, NOT BY NAME.  BUILTIN\Administrators is renamed on a localised
+*   Windows, so "Administrators" would work here and fail on a German machine.
+*   !os_group takes either; see its description.
+*
+*   Done AFTER sdusers rather than instead of it.  They answer different
+*   questions: sdusers grants access to the database files, Administrators
+*   decides who administers SD.  An administrator who has not elevated does not
+*   carry Administrators in their token, so they need sdusers to reach the data
+*   tree exactly as an ordinary user does.
+* 20 Sep 26 Windows port - RELEASE_1.1 64.  THE make.admin BRANCH THAT STOOD
+*   HERE IS GONE (messages 10032/10033 went with it) - it joined an account
+*   into Windows Administrators, and could only run for an ADMINISTRATOR-tier
+*   account, which the keyword refusal at "more.args" now prevents before this
+*   line is ever reached.  What follows is unconditional: every account this
+*   verb creates is confined to sdsshonly, unless it is already a Windows
+*   administrator or an attached one (the "if attach or is_grp_member" below).
+
+* 14 Aug 26 Windows port - ACCOUNTS SD CREATES REACH THE MACHINE OVER SSH ONLY.
+*   Decision from the repository owner, PROJECT_STATUS.md 5.6.2.  The console
+*   and Remote Desktop belong to administrators, who get ordinary unrestricted
+*   Windows accounts - which is why this is the "else" of the branch above.
+*
+*   THE DENY RIGHTS ARE NOT SET HERE.  They are applied ONCE, by the installer,
+*   to the group named below; joining the group is the whole of what account
+*   creation has to do.  Windows has no cmdlet for user rights assignment, so
+*   granting them per account would mean an LsaAddAccountRights P/Invoke or a
+*   secedit rewrite of the entire USER_RIGHTS area on the hot path of every
+*   account creation.  A group is also inspectable: "who is confined to ssh?"
+*   is one membership list rather than a walk through secpol.
+*
+*   IT CANNOT BE sdusers.  That grants access to the data FILES and
+*   administrators are in it too, so denying console logon there would lock
+*   administrators out of their own machine.
+*   Named literally, as 'sdusers' is above.  The installer has to know the same
+*   name and it is an Inno script, so a $define here would keep nothing in sync.
+* 15 Aug 26 Windows port - AN ADOPTED ACCOUNT IS NOT RESTRICTED, AND THIS IS A
+*   LOCKOUT FIX RATHER THAN A REFINEMENT.  ADOPT attaches an SD account to an
+*   operating system account that already exists - the installer's, and only
+*   the installer's.  That person is an administrator by definition, Inno
+*   requires elevation to install, and putting them in sdsshonly denies them
+*   SeDenyInteractiveLogonRight and SeDenyRemoteInteractiveLogonRight: they
+*   keep the session they are in and cannot log on at their own console again.
+*   Observed on this machine 15 Aug 2026, the first time ADOPT ever ran.
+*
+*   The rule is wider than the bug: ADOPT CHANGES NOTHING ABOUT THE OPERATING
+*   SYSTEM ACCOUNT.  It creates no user, sets no password, and now alters no
+*   logon right.  ADMINISTRATOR still wins if it was asked for explicitly,
+*   because that is somebody typing it.
+*
+* 15 Aug 26 Windows port - AND NO ADMINISTRATOR IS EVER CONFINED TO ssh.
+*   Owner's rule, 15 Aug 2026: an SD administrator must be able to reach the
+*   machine locally, so no account that Windows already calls an administrator
+*   may be put in sdsshonly - whatever route reaches this line.  Today ADOPT is
+*   that route; the test is here rather than beside it so the next route
+*   inherits the protection instead of rediscovering the lockout.
+*
+*   BY SID.  BUILTIN\Administrators is translated on a localised Windows, and
+*   !is_grp_member learned to accept a SID on the same day, for this call - see
+*   its history.
+* 21 Aug 26 Windows port - RDPACCOUNT IS GONE AND THE BRANCH IS FLAT AGAIN.
+*   Owner's decision, 21 Aug 2026: Remote Desktop needs Windows Server and RDP
+*   CALs, so a site that wants it is buying a commercial product, and it is
+*   outside this port's focus.  The rule it obstructed is the plain one -
+*   NOBODY SD CREATES REACHES THE KEYBOARD UNLESS THEY ARE AN ADMINISTRATOR -
+*   and RDPACCOUNT broke it: sdsshonly carries BOTH SeDenyInteractiveLogonRight
+*   and SeDenyRemoteInteractiveLogonRight, so lifting the Remote Desktop denial
+*   meant lifting the console denial with it.  The keyword said RDP and
+*   delivered a Windows sign-in by any route, this one included.
+*
+*   Deleting it was cheaper than splitting sdsshonly into two deny-groups, and
+*   the rule now holds by construction rather than by an invariant somebody has
+*   to maintain.  Messages 10056-10062 went with it.
+* 21 Aug 26 Windows port - AND sdssh IS JOINED IN THE SAME BREATH, because the
+*   two halves of "confined to ssh" are now two groups.  sdsshonly says where
+*   this account may NOT go - the console; sdssh says where it MAY - sshd.
+*
+*   IT REPLACED sdusers IN AllowGroups.  sshd used to allow sdusers
+*   (gplbld/allow-ssh-groups.ps1), which is the group that grants access to the
+*   data FILES, so "may read SD's files" and "may ssh into this machine" were
+*   one fact and ssh could not be withdrawn from an account without taking its
+*   files away with it.  They are separate now.
+*
+*   THIS IS INSIDE THE ADMINISTRATOR'S ELSE, and that is deliberate: the 15 Aug
+*   rule three comments up is that creating an account leaves the Windows
+*   account alone, and a group that decides who may connect is exactly the kind
+*   of thing it must not alter.
+*   An administrator needs no
+*   entry here either: allow-ssh-groups.ps1 names the Administrators group in
+*   AllowGroups in its own right, so an administrator reaches ssh whatever
+*   sdssh says, and adding one would suggest a lever that does not exist.
+*
+* 18 Sep 26, later still - AND AN ATTACHED ACCOUNT JOINS THE ADMINISTRATOR IN
+*   THE ELSE, which is where ADOPT stood before it.  The rule is wider than
+*   administrators: sdsshonly is a pair of DENY RIGHTS, and a person who
+*   already signs in at this console - which is the premise of ATTACH, the
+*   Windows account exists - would have a logon right taken away by an SD
+*   verb.  That is the 15 Aug lockout, and it was observed on this machine
+*   the first day ADOPT ran.  10040's wording is exactly true of them too.
+        if attach or is_grp_member(acc.uname, "S-1-5-32-544") then
+          crt sysmsg(10040,acc.uname)   ;* %1 keeps the Windows sign-in rights it already had
+        end else
+*         PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+          stat = os_group("ADDMEM", "sdsshonly", acc.uname)
+          if stat = 0 then
+* 30 Aug 26 Windows port - 10034 NO LONGER ASSERTS ssh.  PRE_RELEASE_FIXES 69.
+*   It is printed here, unconditionally, whenever the account joins sdsshonly -
+*   and sdsshonly is about the WINDOWS LOGON RIGHT, which is true for all four
+*   route values.  Its old wording added "may reach this computer only over
+*   ssh", which is true for SSH and BOTH and FALSE for API and NONE: the owner
+*   measured "create.account user james api" printing that sentence and then,
+*   immediately below it, "SD routes for JAMES: the API only, not ssh".
+*
+*   THE ROUTE LINE IS THE OTHER GATE AND IT IS ALREADY RIGHT, so the fix is for
+*   this message to stop making a claim that is not its to make and to point at
+*   the line that is.  37 prescribed the old wording against a sample that
+*   contained only SSH and BOTH - the two values it is true for.
+            crt sysmsg(10034,acc.uname)   ;* %1 is denied console and Remote Desktop
+          end else
+            @system.return.code = -ER$FAILED
+            err = 10035:@vm:acc.uname:@vm:stat ; goto exit.create ;* Unable to restrict %1 to ssh, status: %2
+          end
+        end       ;* already a Windows administrator
+
+* 21 Aug 26 Windows port - THE REMOTE ROUTE IS SET FOR EVERY USER ACCOUNT, AND
+*   THAT IS WHY IT MOVED OUT HERE.  It used to sit inside the two "else"
+*   branches above, which meant an ADMINISTRATOR account and an ADOPTed one
+*   joined NEITHER sdssh NOR sdapi.  For ssh that was harmless - an
+*   administrator reaches ssh because allow-ssh-groups.ps1 names the
+*   Administrators group in AllowGroups in its own right - but the API has no
+*   such second door: APISRVR tests sdapi membership with no administrator
+*   exemption (APISRVR:1362), so AN SD ADMINISTRATOR COULD NOT USE THE API AT
+*   ALL.  Owner's rule of 21 Aug 2026 closes that, and the code has to be here
+*   rather than in the branches for the rule to hold on every path.
+*
+*   WHAT DID NOT MOVE IS sdsshonly.  Which accounts are denied the KEYBOARD is
+*   a different question from which remote routes they may use, and the whole
+*   of the reasoning above still applies to it: an administrator must never be
+*   put in it, an adopted account must never be put in it, and no verb may lift
+*   it once set.
+*
+*   THE PARAGRAPH THAT STOOD HERE ARGUED FOR NOT JOINING sdapi and said "to
+*   make it default-on instead, add a second ADDMEM beside the one below".  Its
+*   reasoning was that an API session runs as LocalSystem and could rewrite
+*   $cred - measured 20 Aug 2026 - which the containment gate closed on 21 Aug.
+*   There is no default any more in any case: the caller says.
+        gosub set.access
+        if err # '' then goto exit.create
+
+      *
+      * create user's sd group
+        group_name = "sdu_":acc.uname
+        gosub create.group
+        if not(group_success) then
+          err = 10015:@vm:group_name:@vm:gc.why ; goto exit.create ;* Unable to create group: %1 status: %2
+        end
+
+      case upcase(acc.type) = "GROUP"
+      *
+      * create account's sd group
+* rev 1.0-1
+        group_name = downcase("sdg_" : acc.name) ;* callers entered group name, force lower case with sdg_prefix
+        gosub create.group
+        if not(group_success) then
+          err = 10015:@vm:group_name:@vm:gc.why ; goto exit.create ;* Unable to create group: %1 status: %2
+        end
+* 02 Oct 26 Windows port - CA$MEMBERS (RELEASE_1.1 116): a restored GROUP
+*   account gets its members back, as GRANT would add them (os_group ADDMEM).
+*   A member that cannot be added is named and the account still stands - the
+*   same choice SD Core for Linux made - because the group itself is made and
+*   GRANT can add the rest by hand.
+        members = settings<CA$MEMBERS>
+        for mi = 1 to dcount(members, @vm)
+          member = trim(members<1,mi>)
+          if member = '' then continue
+          stat = os_group("ADDMEM", group_name, member)
+          if stat # 0 then crt sysmsg(12006, member, group_name, stat) ;* could not be added
+        next mi
+      end case
+      
+      *      
+*     make the accountfolders and copy files    
+*     Note --> if there is a failure in make.account the program terminates
+*     We could end up with groups created and no acctual account
+*
+      gosub make.account
+      if err # '' then goto exit.create
+
+   end
+
+   * Add ACCOUNTS entry
+
+   display sysmsg(6014) ;* Adding to register of accounts...
+
+   acc.rec = ''
+   acc.rec<ACC$PATH> = pathname
+   * rev 0.9.0 add group name to ACCOUNT record
+   * group name depends on which type of ACCOUNT we are creating
+   * We do not default to ACCOUNT name because account names are (historically?) always upper case
+   * Not sure what to do about account type "OTHER" ???
+   begin case
+   case upcase(acc.type) = "USER"
+     acc.rec<ACC$GROUP> = "sdu_":acc.uname
+   case upcase(acc.type) = "GROUP"
+     acc.rec<ACC$GROUP> = group_name
+   end case
+* 02 Oct 26 Windows port - CA$DESC and CA$SUSPENDED (RELEASE_1.1 116): a
+*   restored account keeps its description and its suspension.  CREATE.ACCOUNT
+*   itself sets neither, so the record is as it always was for the verb.
+   if settings<CA$DESC> # '' then acc.rec<ACC$DESCR> = settings<CA$DESC>
+   if settings<CA$SUSPENDED> = 1 then acc.rec<ACC$SUSPENDED> = 'SUSPENDED'
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER WRITE IS GONE WITH THE
+*   FIELDS.  Nothing is recorded on the account record any more: there is no
+*   tier to record, ACC$SUSPENDED starts blank (nothing can suspend an account
+*   that does not exist yet), and the VOC walk at LOGIN copies the whole of
+*   NEWVOC for every account, so there is no omit list for the record to carry.
+*   AND THE TIER VARIABLE IS GONE WITH THEM, not merely left unused: its last
+*   three readers were the register write and the two ADMINISTRATOR arms, all
+*   deleted on 18 Sep 2026.
+   write acc.rec to acc.f, acc.name
+   locked = @false
+   close acc.f
+   acc.f.open = @false
+
+   gosub secure.account.dir
+
+* 27 Aug 26 Windows port - AN ADMINISTRATOR REACHES THE OPERATING SYSTEM
+*   WITHOUT ELEVATING.  Owner, 27 Aug 2026: administrators are to "have access
+*   to os.execute, ssh and api by default without escalating".
+*
+*   TWO OF THE THREE ALREADY HELD.  more.args below gives an ADMINISTRATOR both
+*   ssh and the API and no keyword can take either away - his rule of 21 Aug
+*   2026, and MODIFY.ACCOUNT refuses to remove them for the same reason (10083).
+*   [18 Sep 26 - ***THE TWO THAT HELD NO LONGER DO, AND OS.EXECUTE - THE ONE HE
+*   MET HERE - IS UNTOUCHED.***  RELEASE_1.1 58: an administrator now gets
+*   NEITHER ssh NOR the API, on the owner's 18 Sep ruling, so the sentence above
+*   records what the 27 Aug ruling was answered against rather than what the
+*   verb does.  The os.execute half of that ruling stands exactly as written.]
+*   OS.EXECUTE was the one that did not, and it is the one he met: an
+*   UNELEVATED session belonging to the ADMINISTRATOR-tier account the installer
+*   creates was refused "edit is not available to don", because EDIT's
+*   check.permitted and op_sh.c's os_permitted() both fall back to OS.USERS and
+*   OS.USERS ships empty.  PRE_RELEASE_FIXES item 2.
+*
+*   THE GRANT IS DATA, NOT A SECOND GATE, and that is the decision worth
+*   keeping.  There is already one list answering "may this person reach the
+*   operating system"; it is readable and editable by an administrator, and a
+*   tier test beside it would make the answer depend on two things that can
+*   disagree.  A DEFAULT, NOT A RULE: edit the record to change it.
+*
+*   IT IS KEYED BY THE WINDOWS LOGIN NAME, because OS.USERS is - the permission
+*   belongs to the person and does not move when they LOGTO somewhere else
+*   (CPROC, "@logname, NOT the account").  acc.uname is that name on both the
+*   create path and the ADOPT path.
+   gosub grant.os.access
+
+   @system.return.code = 0
+   return
+
+* ======================================================================
+* exit.create - every failure after the register is open comes here.
+*
+* A subroutine gets no stop's implicit release, so the ACCOUNTS readu taken
+* below is released here, and the file closed.  Reached only by goto from the
+* main body, never from inside a gosub: a goto out of a gosub would leave its
+* return address on the stack, and this return would resume the gosub's caller
+* instead of leaving the subroutine (SD Core for Linux's split, 1 Oct 2026).
+exit.create:
+   if locked then release acc.f, acc.name
+   if acc.f.open then close acc.f
+   return
+
+
+* ======================================================================
+* secure.account.dir  -  lock this account's directory to its own group
+*
+* 19 Aug 26 Windows port - PROJECT_STATUS.md section 8, "the B work".  The data
+*   tree grants sdusers Modify with (OI)(CI), so without this every account
+*   directory inherits it and ANY SD user can read and rewrite ANY other
+*   account's files outside SD.  Measured on the 16:54:55 install before this
+*   went in: from an ordinary session, listing another account's directory
+*   returned 6 entries and writing into it was allowed.
+*
+*   SD ALREADY REFUSES THAT SESSION, which is what makes this alignment rather
+*   than new policy: logto.authorised admits an elevated session, one that has
+*   just obtained privilege, or a member of the account's ACC$GROUP, and an
+*   ordinary administrator is none of those - measured, "User not allowed in
+*   requested account".  This brings the file layer into line with the rule
+*   CPROC has enforced since 14 Aug 2026.
+*
+*   THE GROUP COMES FROM ACC$GROUP, the field written just above, so there is
+*   no second mapping to keep in step.  An EMPTY group is skipped: locking a
+*   directory to a group nobody can be in would take the account away from its
+*   own user, and that is the one failure this must not have.
+*
+*   THROUGH !ps_script, like OS_GROUP's writing actions, so an unelevated SDSYS
+*   session can perform it - section 7 step 4.
+*
+*   THE RULE IS ALSO IN gplbld/secure-account-dirs.ps1, which is the re-apply
+*   half the installer runs for accounts that already exist.  TWO COPIES, and
+*   the guard against them drifting is a measurement rather than a shared file:
+*   gplbld/verify-accountacl.ps1 asserts that a directory this makes and one
+*   that script stamps come out with the SAME ACL.
+secure.account.dir:
+   sad.group = trim(acc.rec<ACC$GROUP>)
+   if sad.group = '' then return
+
+*   ONE LINE WITH ";" SEPARATORS AND AN ELEVATION SELF-CHECK, which is
+*   OS_GROUP's shape rather than an invention.  The helper runs elevated; if
+*   this ever ran anywhere else the icacls would fail confusingly, so it says
+*   exit 5 instead.
+*
+* 19 Sep 26 Windows port - SINGLE QUOTES, NOT DOUBLE.  RELEASE_1.1 72, reported
+*   by the Linux port, who lost a cycle to the POSIX form of the same fault.
+*
+*   A DOUBLE-QUOTED PowerShell STRING INTERPOLATES, AND pathname CAN CARRY A
+*   "$".  It is CONFIG('USRDIR') plus the account name (:514, :904), and on the
+*   OTHER arm it is a pathname the administrator TYPES (:934) - neither is
+*   checked for "$", and ospath(..., OS$PATHNAME) at :997 does not reject one.
+*   PowerShell would expand "$whatever" to nothing, leaving a SHORTER path, and
+*   "icacls /inheritance:r" would then strip the inherited ACEs from whatever
+*   that shorter path turns out to be - the parent, in the worst case.
+*
+*   NOTHING IS WRONG TODAY and this is not a bug report: every path this tree
+*   actually produces is "$"-free.  It is one config setting away from being
+*   one, which is why it is closed structurally rather than by a rule about
+*   what administrators may type.
+*
+*   THE SHAPE IS CRED_SET's (cred_set:192), which has always done this: a
+*   PowerShell single-quoted string is LITERAL.  The embedded-quote doubling is
+*   the part cred_set can skip and this cannot - cred_set builds from an
+*   account name, and a Windows directory may legitimately contain "'".
+*
+*   THE SID GRANTS KEEP THEIR DOUBLE QUOTES ON PURPOSE.  They are constants
+*   with no interpolation in them, and leaving them alone keeps this diff to
+*   the two lines that take a variable.
+   q = char(39)
+   sad.path  = q : change(pathname,  q, q:q) : q
+   sad.grant = q : change(sad.group, q, q:q) : ':(OI)(CI)(M)' : q
+
+   sad.ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+   sad.ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+   sad.ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+   sad.ps := '& icacls.exe ' : sad.path : ' /inheritance:r'
+   sad.ps := ' /grant "*S-1-5-18:(OI)(CI)(F)"'
+   sad.ps := ' /grant "*S-1-5-32-544:(OI)(CI)(F)"'
+   sad.ps := ' /grant ' : sad.grant : ' | Out-Null; '
+   sad.ps := 'exit $LASTEXITCODE'
+
+   sad.rc = ps_script(sad.ps)
+   if sad.rc # 0 then
+      display sysmsg(10055, pathname, sad.rc) ;* Could not secure %1 (%2)
+   end
+
+   return
+
+* ======================================================================
+* grant.os.access  -  write this account's OS.USERS record, if it is to have one
+*
+* 27 Aug 26 Windows port - the ruling is at the call site.  os.sh and os.exec
+* are set by "sh-on" and "os-on" in more.args and BOTH are set for an
+* ADMINISTRATOR, so this routine does not test the tier itself: what it needs
+* to know is already in the two flags, and asking twice is how two answers
+* start to disagree.
+*
+* IT WRITES BOTH FIELDS EVEN WHEN ONLY ONE WAS ASKED FOR, "no" in the other.
+* A record with one field is a record whose second field a later reader has to
+* guess at, and both gates read them positionally.
+*
+* USER ACCOUNTS ONLY.  A GROUP account has no single person behind it and
+* acc.uname is never assigned on that arm.
+*
+* AN EXISTING RECORD IS LEFT EXACTLY AS IT IS.  A "no" already in the file is
+* somebody's decision and a create-time default has no business overruling it.
+* It says so out loud rather than passing in silence, because "the
+* administrator still cannot use the shell" is otherwise a question with
+* nothing to read.
+* ======================================================================
+
+grant.os.access:
+   if not(os.sh) and not(os.exec) then return
+   if upcase(acc.type) # 'USER' then return
+   if trim(acc.uname, ' ', 'B') = '' then return
+
+   openpath @sdsys : @ds : 'os.users' to osu.f else
+      display sysmsg(10104, acc.uname)
+      * Unable to change operating-system access for %1
+      return
+   end
+
+   read osu.rec from osu.f, acc.uname then
+      close osu.f
+      display sysmsg(10103, acc.uname)
+      * %1 already has an os.users record, so it was left exactly as it was
+      return
+   end
+
+   osu.sh = 'no'
+   osu.ex = 'no'
+   if os.sh   then osu.sh = 'yes'
+   if os.exec then osu.ex = 'yes'
+   osu.rec    = osu.sh        ;* field 1 - SH
+   osu.rec<2> = osu.ex        ;* field 2 - OS.EXECUTE
+
+   osu.written = @true
+   write osu.rec to osu.f, acc.uname on error osu.written = @false
+   close osu.f
+
+   if osu.written then
+      display sysmsg(10102, acc.uname, osu.sh, osu.ex)
+      * os.users: %1 has SH %2, OS.EXECUTE %3
+   end else
+      display sysmsg(10104, acc.uname)
+   end
+
+   return
+
+* ======================================================================
+
+make.account:
+   * Set up VOC
+
+   display sysmsg(6015) ;* Creating VOC...
+* rev 0.9-3 Nov 25 move voc back to dynamic file
+   create.file pathname:@ds:'voc' dynamic on error
+      @system.return.code = -6
+      err = 6016 ; return ;* Unable to create VOC
+   end
+
+   openpath pathname:@ds:'voc' to voc.f else
+      @system.return.code = -status()
+      err = 6017 ; return ;* Unable to open new VOC
+   end
+
+   openpath @sdsys:@ds:"newvoc" to newvoc.f else
+      @system.return.code = -status()
+      err = 6018 ; return ;* Cannot open SDSYS NEWVOC
+   end
+
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIER POLICY FILE IS NO LONGER
+*   CONSULTED, so an account is built from the whole of NEWVOC - the PROGRAMMER
+*   level, which is what every non-SDSYS account now holds.  There is no
+*   STANDARD to withhold from and no ADMINISTRATOR to add to.  The file itself
+*   goes with this change: sdsys/tier.policy is deleted from the tree.
+
+* 17 Aug 26 Windows port - THE TIER OMIT LIST, PROJECT_STATUS.md section 8.
+*   A standard account gets NEWVOC less the records named in NEWVOC's own
+*   TIER.OMIT.STANDARD; PROGRAMMER and ADMINISTRATOR get all of it.
+*
+*   HELD AS DATA RATHER THAN IN THIS SOURCE, so that changing the shipped
+*   posture does not mean recompiling CREATEA, and so that what a site ships
+*   can be read as a record.  It lives in NEWVOC rather than in a new file
+*   because NEWVOC is already open here, already shipped by gplbld/stage.py,
+*   and a second file would need its own openpath, its own error message and
+*   its own reason to exist.
+*
+*   A MISSING OR EMPTY LIST GIVES EVERY ACCOUNT THE FULL VOC, which is the old
+*   behaviour exactly.  That is the safe way round for a missing file: an
+*   install that somehow loses the record behaves as it did before section 8,
+*   rather than creating accounts that cannot do anything.  It is also why the
+*   record is not created here if absent - silence means "no policy", not
+*   "empty policy".
+* 17 Aug 26 Windows port - ONLY CONSTRUCTS ALREADY USED IN THIS TREE, and that
+*   is why this is longer than it looks like it needs to be.  None of this can
+*   be compiled until the next stage.py --bootstrap, so a novel statement that
+*   turns out not to mean what it does elsewhere costs a whole cycle:
+*
+*   * NOT delete(rec, 1) to drop the description field - delete() as a dynamic
+*     array function appears NOWHERE in GPL.BP, and SDCLIENT defines a
+*     SUBROUTINE called delete, so the name is not even unambiguous.  The loop
+*     starts at field 2 instead.
+*   * NOT CONTINUE to skip a record.  BCOMP lists it as a statement, but its
+*     behaviour inside LOOP ... REPEAT is not demonstrated anywhere here, and a
+*     skip that did not skip would copy the whole VOC and look like success.
+*     A copy.it flag round the write says the same thing in constructs this
+*     file already uses.
+   omit.rec = ''
+*  18 Sep 26 - RELEASE_1.1 64: no omit list is read, so nothing below is
+*  filtered and the account gets the whole of NEWVOC.  omit.count MUST STILL BE
+*  ASSIGNED - the copy loop reads it, and ERRGEN dies on a use with no
+*  assignment - and 0 is what makes that loop a no-op.  Do not delete this line.
+   omit.count = 0
+
+   select newvoc.f to 11
+   loop
+      readnext id from 11 else exit
+
+      copy.it = @true
+
+* 13 Sep 26 Windows port - RELEASE_1.1 5.  The two copy.it = @false tests that
+*     stood here - for TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR - are gone
+*     with the records: the tier lists moved to sdsys/tier.policy, so NEWVOC no
+*     longer holds anything that is not a VOC entry and there is nothing here to
+*     skip.  An upgrade replaces NEWVOC wholesale (stage.py), so no pre-move
+*     NEWVOC survives to reintroduce them into an account.
+
+* 17 Aug 26 Windows port - an explicit comparison rather than LOCATE, and not
+*   from taste: CPROC has two LOCATE precedents and NEITHER can be copied
+*   safely.  privileged_commands is built with <-1>, which appends FIELDS, and
+*   is then searched with "locate ... in privileged_commands<1>", which
+*   searches the VALUES of field 1; aliased.commands is set to '' and never
+*   populated at all.  A membership test that silently matched nothing would
+*   omit nothing, and this whole change would look like it had worked.
+* 5 Sep 26 Windows port - privileged_commands has since been DELETED from CPROC
+*   (PRE_RELEASE_FIXES 168), so do not go looking for it.  The reasoning above
+*   is why this line is a comparison and still holds; only the example is gone.
+      if copy.it and omit.count > 1 then
+         for omit.i = 2 to omit.count       ;* field 1 is the description
+*           18 Aug 26 Windows port - AND SO IS THIS ONE, and it is the one that
+*           matters: the list holds verb ids and id is a verb id, so if either
+*           side is lower-cased without the other NOTHING is omitted and a
+*           standard account silently gets the full VOC.  5.12 (b).
+            if upcase(omit.rec<omit.i>) = upcase(id) then
+               copy.it = @false
+               omit.i = omit.count          ;* stop looking
+            end
+         next omit.i
+      end
+
+      if copy.it then
+         read rec from newvoc.f, id then
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 136.  THE RECORD IS COPIED WHOLE.
+*   Two lines used to stand here, and both threw information away:
+*
+*     rec<1> = if upcase(rec[1,1]) = 'P' then rec<1>[1,2] else rec[1,1]
+*     if upcase(rec<1>) = 'K' and rec<3> # '' then  ... same for rec<3> ...
+*
+*   Field 1 of a VOC record is the DESCRIPTION whose first character is the
+*   type code - "File - Account register", "Keyword to test for equality" -
+*   and the loop above says so in its own comment.  Reducing it to that first
+*   character left every created account with a bare "F" where SDSYS shows a
+*   sentence, which is what the owner saw in a listf on 2 Sep 2026.  Field 3
+*   of a K record is the same shape ("Verb to count records") and was stripped
+*   by the same block; four newvoc records carry one.
+*
+*   ***THE READS ARE THE PROOF THAT NOTHING NEEDED THE BARE FORM.***
+*   CPROC:1194 and :1282 test upcase(voc.rec[1,1]) and upcase(voc.rec[1,2]) -
+*   one or two characters, tolerating everything after - so the descriptive
+*   form is a working form, and the strip removed information for no gain.
+*
+* 02 Sep 26 Windows port - PRE_RELEASE_FIXES 142.  THE PARAGRAPH ABOVE USED TO
+*   CITE SDSYS INSTEAD: "its VOC is built by the bootstrap straight from
+*   voc_template, KEEPS FIELD 1 WHOLE, and SD has run on it every day".  ONLY
+*   THE MECHANISM CLAUSE IS WRONG.  Witnessed with "listf" on the 21:29:26
+*   install, which is the reading that decides this - not a grep, for the
+*   reason at the end:
+*
+*     SDSYS      16 file records, ALL 16 described.
+*     an account SD created   10 records, ALL 10 described, newvoc included.
+*
+*   SO "KEEPS FIELD 1 WHOLE" IS TRUE OF WHAT SDSYS RUNS ON, and the descriptive
+*   form is the working form after all.  What is false is "straight from
+*   voc_template": on the six records BOTH templates carry, SDSYS shows
+*   NEWVOC's wording - $ACC, $MAP, SD.VOCLIB, syscom, voc and dict.dict, every
+*   one of which is a bare "F" in voc_template - while its own extras
+*   (accounts, messages, bp, $hold) show voc_template's.  ***SDSYS's LIVE VOC
+*   IS A COPY OF NEITHER TEMPLATE ALONE, AND WHERE THE BOOTSTRAP COMPOSES IT IS
+*   STILL NOT ESTABLISHED.***  Do not re-derive it from the templates.
+*
+*   AND THIS ROUTINE ADDS A THIRD WORDING OF ITS OWN, below at :1449, :1458 and
+*   :1467 - "File for deferred prints", "File for saved select lists", "File
+*   for BASIC programs" - which are in NEITHER template.  So $hold and bp read
+*   differently in SDSYS and in a created account, by accident rather than by
+*   decision; 142 leaves that open.
+*
+*   THE ONE RECORD 142 FIXED.  newvoc was the ONLY record of the 392 the
+*   templates share where voc_template carried the text and newvoc did not,
+*   which is why a created account showed a bare "F" for it while SDSYS showed
+*   the sentence.  newvoc/newvoc now carries "File - VOC given to a new
+*   account", the wording voc_template already had.
+*
+*   ***AND THE INSTRUMENT WARNING, WHICH COST A WRONG ANSWER FOR AN HOUR.***
+*   sdsys/voc is a DYNAMIC file.  Grepping its %0 and %1 for a description
+*   returns 0 for text that "listf" plainly displays - the store holds 838
+*   printable runs of 12+ characters and only 11 contain "File", against 16
+*   file records that all have a description.  A grep HIT there proves
+*   presence; A GREP MISS PROVES NOTHING.  Reading 0 hits as "SDSYS stores it
+*   bare" is what produced the wrong version of this paragraph.  Ask the tool.
+*
+*   THE ONLY CODE THAT DEPENDED ON THE BARE FORM WAS THE 'K' TEST INSIDE THE
+*   BLOCK ITSELF, which compared the WHOLE of field 1 to 'K' and worked only
+*   because the line above had just truncated it.  It went with the strip it
+*   guarded; an exhaustive grep of gpl.bp found no other equality test against
+*   a VOC field 1.
+*
+*   AND IT IS WHAT MAKES 70's LOCK FLAG POSSIBLE: a marker written after the
+*   type code in field 1 is exactly what these lines deleted, so the lock
+*   would have been destroyed by the refresh it exists to prevent.
+            write rec to voc.f, id
+
+         end
+      end
+   repeat
+
+* 17 Aug 26 Windows port - THE ADMINISTRATION VERBS, section 8.  Owner's ruling
+*   of 17 Aug 2026, "administrators get the whole voc".  These ten live in
+*   VOC_TEMPLATE and NOT in NEWVOC, so nothing above can reach them.
+*
+*   FROM VOC_TEMPLATE RATHER THAN BY MOVING THEM INTO NEWVOC, and that is the
+*   whole design.  Moving them would invert the fallback: a lost or empty
+*   TIER.OMIT.STANDARD is read above as "no policy" and gives the full VOC, which
+*   is safe only while NEWVOC holds nothing administrative.  Put CREATE.ACCOUNT
+*   in NEWVOC and one missing record hands every account SD creates the power to
+*   make more.  The list here fails the other way: lost or empty, an
+*   administrator gets a programmer's VOC and says so the first time they type
+*   CREATE.ACCOUNT.  gplbld/stage.py's note on the two files says the same thing.
+*
+*   MODIFY.PASSWORD joined them on 17 Aug 2026, owner's ruling.  It is an
+*   administrator verb because an administrator can add it to a user's VOC if
+*   they want users setting their own; the program itself already tells the two
+*   cases apart, your own password needing the current one and anyone else's
+*   needing administrator rights, so it must NOT be gated wholesale.
+*
+*   ONLY THE ADMINISTRATION VERBS, not the whole of VOC_TEMPLATE.  The other
+*   fourteen records it does not share with NEWVOC are SDSYS's own plumbing:
+*   ACCOUNTS, BP.OUT, GPL.BP, GPL.BP.OUT and QFILE are RELATIVE file pointers, so
+*   copied here they would name files that do not exist in a user account and
+*   LIST ACCOUNTS would fail to open rather than list; FIRST, SECOND and
+*   THIRD.COMPILE are bootstrap paragraphs that compile the whole of GPL.BP;
+*   $hold and BP are already created per-account by create.dir.file below.
+*
+*   THE SAME TYPE NORMALISATION AS THE LOOP ABOVE, and it earns its place here:
+*   VOC_TEMPLATE's UNLOCK is one of the five malformed records section 8 records,
+*   carrying its description where the type letter belongs.  Normalising turns
+*   "Verb to unlock records" into "V", so the copy works even though the record
+*   it came from does not.  SDSYS's own UNLOCK is still broken; fixing that is a
+*   data change to VOC_TEMPLATE and is not this.
+*  18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR ARM STOOD HERE AND
+*  IS DELETED.  It copied VOC_TEMPLATE's administration verbs into an
+*  ADMINISTRATOR-tier account's VOC, and nothing can reach it any more: the
+*  keyword is refused by the keyword loop and ADOPT - which used to promote an
+*  adopted account into this tier - is gone.  A note here said it was left
+*  standing on purpose and would go "the day anybody decides a second level may
+*  exist; 64 says it may not" - that is this day.  WHAT IS GIVEN UP: the shape a
+*  second administration level would want, and with it the VOC_TEMPLATE copy.
+*  If one is ever wanted it is written again against the account model that
+*  exists then, rather than resurrected from a corpse.
+   close newvoc.f
+*  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
+*  program any more, so there is nothing to close here.
+
+   * Set up $COMMAND,STACK VOC entry
+
+* 19 Aug 26 Windows port - lower case, PROJECT_STATUS.md 5.12 (b).  The two
+*   readers - CPROC and LOGIN - try this spelling first and the old one second,
+*   so an account made before the rename keeps working.
+   write 'X' to voc.f, '$command.stack'
+
+* 18 Aug 26 Windows port - LOWER CASE ON DISK, PROJECT_STATUS.md 5.12 (a).  fn is
+*   the VOC id; os.name is the directory name and the text stored in VOC fields 2
+*   and 3, which is what LISTF and CT VOC show.  The two are allowed to differ -
+*   $SAVEDLISTS had been $SVLISTS on disk since before the port - so one can move
+*   without the other.
+*
+*   18 Aug 26 Windows port - AND NOW THE VOC ID, 5.12 (b), for $savedlists and
+*   then $hold.  BP and $COMMAND.STACK are still upper case and are what is left
+*   of the controls: they show a rename is per file rather than a sweep.
+*
+*   NO MIGRATION, AND THAT IS WHY THIS COULD GO FIRST.  An account created before
+*   this keeps $HOLD and $SAVEDLISTS, and its own VOC record names the directory,
+*   so it opens as it always did: NTFS matches the path case insensitively, and
+*   _VOC_REF folds the VOC id UP as well as down, so GPL.BP's hard-coded
+*   open "$savedlists" and open "$hold" still reach an upper-case id.  There is
+*   no flag day and no upgrade step.
+   * Create $hold
+
+   fn = '$hold'
+   os.name = '$hold'
+   descr = 'File for deferred prints'
+   dict = @true
+   gosub create.dir.file
+   if err # '' then return
+
+
+   * Create $savedlists
+
+   fn = '$savedlists'
+   os.name = '$svlists'
+   descr = 'File for saved select lists'
+   dict = @false
+   gosub create.dir.file
+   if err # '' then return
+
+* 20240308 mab add BP when creating new account
+  * Create BP
+
+   fn = 'bp'
+   os.name = 'bp'
+   descr = 'File for BASIC programs'
+   dict = @false
+   gosub create.dir.file
+   if err # '' then return
+
+
+   * Create private catalogue
+
+   display sysmsg(6019) ;* Creating private catalogue directory..."
+
+   s = pathname:@ds:'cat'
+   if not(ospath(s, OS$EXISTS)) then
+      create.file s directory on error
+         @system.return.code = -ER$NOT.CREATED
+         err = 6020 ; return ;* Unable to create private catalogue directory
+      end
+
+   end
+
+   return
+* ======================================================================
+
+create.dir.file:
+   display sysmsg(6021, fn) ;* Creating xx...
+
+   create.file pathname:@ds:os.name directory on error
+      @system.return.code = -ER$NOT.CREATED
+      err = 6022:@vm:fn ; return ;* Unable to create data part of xx
+   end
+
+   begin case
+      case descr[1,1]= 'F'       ; voc.rec = descr
+      case descr # ''            ; voc.rec = 'F ' : descr
+      case 1                     ; voc.rec = 'F'
+   end case
+
+   voc.rec<2> = os.name
+
+   if dict then
+*     18 Aug 26 Windows port - '.dic' lower case with the name it follows, so a
+*     per-account dictionary is $hold.dic and not $hold.DIC.  Only $hold reaches
+*     here with dict true; the shipped SDSYS dictionaries are named elsewhere.
+      create.file pathname:@ds:os.name:'.dic' dynamic on error
+         @system.return.code = -ER$NOT.CREATED
+         err = 6023:@vm:fn ; return ;* Unable to create dictionary part of xx
+      end
+
+      openpath pathname:@ds:os.name:'.dic' to dict.f else
+         @system.return.code = -status()
+         err = 6024:@vm:fn ; return ;* Unable to open dictionary part of xx
+      end
+* 20240121 mab use @VM not hard coded hex fd 
+      write raise('D':@VM:'0':@VM:@VM:fn:@VM:'10L':@VM:'S') to dict.f, '@id'
+      close dict.f
+
+      voc.rec<3> = os.name:'.dic'
+   end
+
+   write voc.rec to voc.f, fn
+
+   return
+
+
+* ======================================================================
+* 15 Aug 26 Windows port - set.owner and its seven callers are gone.  It
+*   chowned every account directory, VOC, dictionary and group folder to
+*   sdsys:sdusers or root:sdusers - three accounts that do not exist on
+*   Windows - so it failed every time and said so.  Access comes from the
+*   installer's inheritable ACE instead; see the note at the setgid removal
+*   above and PROJECT_STATUS.md 5.7.
+
+return
+
+*=======================================================================
+* set.access
+*
+* 21 Aug 26 Windows port - put the new account's Windows user into the groups
+* its remote access calls for.  access.ssh and access.api come from the SSH /
+* API / BOTH / NONE keyword in more.args, or from the ADMINISTRATOR tier, which
+* forces both.
+*
+* USER ACCOUNTS ONLY.  A GROUP account has no Windows user - the GROUP arm
+* reaches neither create_user() nor set_passwd() - and is reached with LOGTO or
+* an F pointer, so there is nothing here for it and it never calls this.
+*
+* NO "already a member" TEST, unlike MODIFY.ACCOUNT's route.set.  The Windows
+* user was created moments ago in this same verb, so it is in no groups but the
+* ones already added above; asking would be asking a question whose answer is
+* known.  The ADOPT path is the one exception and it is deliberate that it
+* joins too - owner's rule of 21 Aug 2026 is that ALL administrators have both
+* routes, and an adopted account is always ADMINISTRATOR (see more.args).
+*
+* A FAILURE STOPS THE VERB, matching every other group step here.  An account
+* whose access is not what was asked for is worse than no account: nobody would
+* re-check, and the failure would surface later as "the client cannot connect".
+set.access:
+   if access.ssh then
+*     PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+      stat = os_group("ADDMEM", "sdssh", acc.uname)
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+      end
+   end
+
+   if access.api then
+*     PRE_RELEASE_FIXES 94 - take the answer; see the sdusers site above.
+      stat = os_group("ADDMEM", "sdapi", acc.uname)
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+      end
+   end
+
+*  Says the whole resulting state, in the same four messages MODIFY.ACCOUNT
+*  uses, so an account's access reads identically whether it was just made or
+*  just changed.
+* 05 Sep 26 Windows port - ***AN ADMINISTRATOR'S ROUTES ARE LOCAL ONLY, AND
+*   SAYING "ssh and the API" WAS FALSE FROM THE MOMENT 167 LANDED.***
+*   PRE_RELEASE_FIXES 169 (a).  Found in verify-sshadmin's own PASSING
+*   transcript on b120: this verb printed "SD routes for SDSADMB120A: ssh and
+*   the API." and four seconds later LOGIN wrote "LOGIN REFUSED account=SDSYS
+*   reason=administrator...".  The same run said both.
+*
+*   ***THE GRANT IS NOT WRONG - THE SENTENCE WAS.***  :1718 forces access.ssh
+*   and access.api true for this tier and that is still right after the owner's
+*   refinement of 5 Sep: an administrator DOES use ssh and the API, from this
+*   machine.  What they cannot do is reach them from another one, which is
+*   LOGIN's peer test.  So the fix is a truthful message, not a narrower grant,
+*   and MODIFY.ACCOUNT's refusal to remove the two (10083) keeps its reason.
+*
+* 18 Sep 26 Windows port - RELEASE_1.1 64.  ***THE TIER CASE STOOD FIRST HERE AND
+*   IS DELETED, with the tier whose routes it reported.***  It printed 10175
+*   ("no routes; the console is the only door"), a message slice 4 deleted along
+*   with the administrator route model - so what stood here was unreachable code
+*   naming a message file that no longer exists.  What is left is the three
+*   general cases and the fallback, which is the whole of what an account's
+*   routes can be now: per-account, chosen when the account is made, with no
+*   rule anywhere that overrides them.
+   begin case
+      case access.ssh and access.api
+         crt sysmsg(10078,acc.uname) ;* may sign in over ssh and use the API
+      case access.ssh
+         crt sysmsg(10076,acc.uname) ;* ssh, and may not use the API
+      case access.api
+         crt sysmsg(10077,acc.uname) ;* the API, and may not sign in over ssh
+      case 1
+         crt sysmsg(10079,acc.uname) ;* no remote access at all
+   end case
+
+*  PRE_RELEASE_FIXES 125: warn (non-prohibitively) when the access just granted
+*  has no active transport on this machine.  The grant is a group membership
+*  that persists and takes effect when the transport comes on, so this is a
+*  heads-up for an account provisioned ahead of its transport, NOT a refusal -
+*  the owner ruled that provisioning first is a legitimate workflow.  Native
+*  checks only (sshd.exe on disk; sd.conf's APIPORT for the listener), so
+*  create.account gains no PowerShell probe on its hot path.
+   if access.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) then
+      crt sysmsg(10161, acc.uname)  ;* set up for ssh, but no ssh server yet
+   end
+   if access.api and (config('APIPORT') + 0) <= 0 then
+      crt sysmsg(10162, acc.uname)  ;* set up for the API, but no listener yet
+   end
+return
+
+* rev 0.9.0
+*=======================================================================
+* create.group
+* group_name - name of group to create
+* acc.type   - account type (USER/GROUP)
+* acc.uname  - user name for acc.type USER
+* return group_success t/f
+*        group_stat
+* rem: stat groupadd
+* 0 success
+* 2 invalid command syntax
+* 3 invalid argument to option
+* 4 GID not unique (when -o not used)
+* 9 group name not unique
+* 10 can't update group file
+create.group:  *
+ group_success = @TRUE
+* 02 Oct 26 Windows port - gc.why is the reason the caller returns in err as
+*   10015, so the failure is shown once, by CREATE.ACCOUNT or RESTORE.ACCOUNT,
+*   and not printed here and then again.  The two invalid-name returns below
+*   used to end the verb with a bare "stop" and no message at all.
+ gc.why = ''
+* Modified by Composer AI - 2026/06/10.
+* Use shared !valid_os_name before groupadd OS.EXECUTE (phase 2).
+* os.name.chars = '...'
+if not(valid_os_name(group_name)) then
+   group_success = @FALSE
+   gc.why = 'invalid group name'
+   return
+end
+* 21 Aug 26 Windows port - NESTED, BECAUSE "and" DOES NOT SHORT-CIRCUIT.  This
+*   was one line:
+*
+*      if upcase(acc.type) = 'USER' and not(valid_os_name(acc.uname)) then
+*
+*   and it ABORTED EVERY "CREATE.ACCOUNT GROUP" with
+*   "000000EE: Unassigned variable at line 30 of !VALID_OS_NAME".  acc.uname is
+*   assigned in the USER arm alone (line 249 of this file); on the GROUP path it
+*   has no value at all.  SD BASIC evaluates BOTH operands of "and" whatever the
+*   first one answers, so the call was made anyway and !VALID_OS_NAME aborted on
+*   its first use of the argument.
+*
+*   BCOMP CANNOT SEE IT.  Its "is not assigned a value" test is per VARIABLE,
+*   not per PATH, and acc.uname IS assigned - just not on this one.  So this
+*   compiled clean and died at run time, every time.
+*
+*   CREATE.ACCOUNT GROUP HAS THEREFORE NEVER WORKED ON THIS PORT, and nothing
+*   noticed because nothing tested it until gplbld/verify-accountrules.ps1 on
+*   21 Aug 2026.  It is not an sdb64 defect: upstream's create.group has no
+*   valid_os_name guards at all - checked in ../sdb64 - so the whole test is
+*   ours, from the 10 June phase 2 work.
+*
+*   AND IT LEFT A DIRECTORY BEHIND EACH TIME.  The abort happens after the
+*   account directory is made (line 499) and before anything else, so the name
+*   was then permanently unusable: line 500 refuses an existing directory with
+*   message 10009.  That half is NOT fixed here - a general unwind for a failed
+*   creation is a wider change than this defect - and the verb's own comment
+*   above make.account already says "we could end up with groups created and no
+*   actual account".
+if upcase(acc.type) = 'USER' then
+   if not(valid_os_name(acc.uname)) then
+      group_success = @FALSE
+      gc.why = 'invalid user name'
+      return
+   end
+end
+* --------------------
+*
+* does group already exist in /etc/group?
+*      
+   if not(is_group(group_name)) then 
+*
+* no, attempt to create it
+*
+* 14 Aug 26 Windows port - was "sudo groupadd -U root,sdsys,<user> <group>".
+*   Windows has no root or sdsys account to seed the group with, and
+*   New-LocalGroup takes no member list, so the group is created and the SD
+*   user added to it as a second step.
+      group_stat = os_group("ADD", group_name, "")
+      if group_stat = 0 and upcase(acc.type) = 'USER' then
+        group_stat = os_group("ADDMEM", group_name, acc.uname)
+      end
+      if group_stat = 0 then
+        crt sysmsg(10014,group_name)   ;* Group -  %1 created
+      end else
+        gc.why = group_stat   ;* the caller returns 10015 (Unable to create group: %1 status: %2)
+        group_success = @FALSE
+      end
+   end
+return
+
+
+end
+
+* END-CODE

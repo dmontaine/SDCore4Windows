@@ -100,10 +100,12 @@ FAIL_CLOSED = {
         "(the same conflation vb.account no longer has - see NOTES)",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
-    ("createa", "if not(is_grp_member(acc.uname,'sdusers')) then"):
+    # 02 Oct 26 - these two moved with CREATEA's body into create_account
+    # (RELEASE_1.1 116); the verb is the parser now and calls nothing here.
+    ("create_account", "if not(is_grp_member(acc.uname,'sdusers')) then"):
         "create account: a could-not-tell goes on to os_group ADDMEM, which "
         "is idempotent and reports its own failure",
-    ("createa", 'if attach or is_grp_member(acc.uname, "S-1-5-32-544") then'):
+    ("create_account", 'if attach or is_grp_member(acc.uname, "S-1-5-32-544") then'):
         "create account: asked about the well-known Administrators SID, "
         "which always resolves; a could-not-tell would add the user to "
         "sdsshonly, which os_group can undo.  RELEASE_1.1 66 put 'attach or' "

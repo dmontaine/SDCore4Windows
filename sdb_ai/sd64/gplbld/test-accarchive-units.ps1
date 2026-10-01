@@ -53,8 +53,13 @@ function Check([string]$what, [bool]$ok, [string]$detail = '') {
     if ($ok) { $script:pass++; Write-Host "  [PASS] $what" }
     else     { $script:fail++; Write-Host "  [FAIL] $what $detail" }
 }
+# $null = : the scriptblock's own output must not join the answer.  When a
+# mutant stops throwing, the function under test RETURNS its result, and
+# without this it became an array with "no exception", which crashed Check
+# (exit 2, reported NO TREE) instead of failing it - measured on a Solo
+# mutant, 2 Oct 2026.
 function Throws([scriptblock]$sb, [string]$like) {
-    try { & $sb; return "no exception" } catch {
+    try { $null = & $sb; return "no exception" } catch {
         if ($_.Exception.Message -like $like) { return '' }
         return "wrong exception: $($_.Exception.Message)"
     }

@@ -2,6 +2,24 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+02 Oct 26  ACCOUNTS CAN BE BACKED UP AND RESTORED.
+
+           Three new commands, in SDSYS:
+           * BACKUP.ACCOUNT name {name...} | ALL TO folder writes the named
+             accounts, or every account but SDSYS, to one zip file in the
+             folder, named after the computer, the accounts and the time.
+             The zip holds each account's files and what is needed to make
+             the account again: its type, routes, description, groups and
+             os.users settings, and its globally catalogued programs.
+           * RESTORE.ACCOUNT zipfile name {name...} | ALL puts accounts back.
+             An account that exists is replaced; one that does not is made
+             first, and asks for a new password, because a password is never
+             in the zip.  It asks before it changes anything.
+           * SETTINGS.REPORT {folder} writes a text report of the system's
+             settings for you to keep.  Nothing reads it back.
+           While a backup or restore runs, nobody else may be signed in to
+           SD, and new sign-ins are refused until it finishes.
+
 02 Oct 26  SD CORE FOR WINDOWS HAS SHARED MEMORY AND SEMAPHORES OF ITS OWN.
 
            The shared memory and semaphores every SD session uses had the

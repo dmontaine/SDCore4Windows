@@ -178,15 +178,21 @@ for name in sorted(set(got) & set(DECLARED)):
                                            found[name]))
 
 print("")
+# 02 Oct 26 - RELEASE_1.1 116 moved CREATEA's body, secure.account.dir with it,
+# into gpl.bp create_account; the verb is the parser now.  Both are held to the
+# 72 fix: neither may interpolate inside double quotes, and the file that HAS
+# secure.account.dir must still single-quote the pathname.
 print("=== 2. createa's two sites are gone and stay gone (the 72 fix) ===")
-ca = sites(os.path.join(BPDIR, "createa"))
-check("createa interpolates nothing inside a double-quoted string",
-      ca == [],
-      "72 rewrote secure.account.dir with single quotes; this is back: " + repr(ca))
-with open(os.path.join(BPDIR, "createa"), encoding="ISO-8859-1") as f:
+for fname in ("createa", "create_account"):
+    ca = sites(os.path.join(BPDIR, fname))
+    check("%s interpolates nothing inside a double-quoted string" % fname,
+          ca == [],
+          "72 rewrote secure.account.dir with single quotes; this is back: " + repr(ca))
+with open(os.path.join(BPDIR, "create_account"), encoding="ISO-8859-1") as f:
     catext = f.read()
-check("createa still builds the icacls path as a PowerShell LITERAL",
-      "sad.path" in catext and "char(39)" in catext,
+check("create_account (secure.account.dir's home since RELEASE_1.1 116) still "
+      "builds the icacls path as a PowerShell LITERAL",
+      "secure.account.dir:" in catext and "sad.path" in catext and "char(39)" in catext,
       "the single-quoting went away, so the pathname is unquoted or "
       "double-quoted again")
 
