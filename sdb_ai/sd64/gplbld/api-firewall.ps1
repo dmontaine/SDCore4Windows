@@ -223,11 +223,11 @@ try {
         }
         # ONLY THE OLD PORT MOVES.  A rule on any other port is not one an
         # earlier build of this product made: it is an administrator's own
-        # (the old -Port parameter allowed one), or it is another SD Core
-        # product's - the full product and Solo share this rule name and have
-        # different ports (4247, 4249), so moving whatever is there would take
-        # one product's rule away from the other.  -Show still says it admits
-        # nothing on this port.
+        # (the old -Port parameter allowed one).  -Show still says it admits
+        # nothing on this port.  (Solo shared this rule name until 1 Oct 26 and
+        # now has its own, SD-Solo-API-In-TCP; a rule an older Solo left here is
+        # moved to 4247 by this script when it finds it on 4243, and Solo's
+        # script adopts it instead only when this product is not installed.)
         if ($before -ne '4243') {
             Write-Output "api-firewall: the rule is for port $before, not the old port 4243 - leaving it alone"
             exit 0
