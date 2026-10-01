@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 02 Oct 26 Windows port - RELEASE_1.1 116: the login hold.  A new session is
+*           refused (13002) while BACKUP.ACCOUNT or RESTORE.ACCOUNT runs;
+*           !acc_hold decides.
 * 22 Sep 26 Windows port - RELEASE_1.1 106.  THE ONLY PRIVILEGED ACCOUNT IS
 *           SDSYS.  Owner's ruling: elevation must not give any account extra
 *           SD privileges.  The ordinary-account login case now clears
@@ -528,6 +531,19 @@ deffun pw_complex(pw) calling '!pw_complex'
            audit.reason = 'not a member of sdusers'
            goto terminate.connection
         end
+     end
+* 02 Oct 26 Windows port - RELEASE_1.1 116, THE LOGIN HOLD (owner, 1 Oct 2026;
+*   the same check as SD Core for Linux's LOGIN, after its sdusers gate): while
+*   BACKUP.ACCOUNT or RESTORE.ACCOUNT runs, a new session is refused with
+*   13002 until it finishes.  !acc_hold (shared, byte for byte) ignores a hold
+*   whose holder session has gone, so a run that died cannot lock everybody
+*   out.  OUTSIDE the K$INTERNAL test above, as on Linux: an internal session is
+*   held too, and no hold can exist during an install.
+     call !acc_hold('TEST', hold.info, hold.err)
+     if hold.err # '' then
+        display sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
+        audit.reason = 'a backup or restore is running'
+        goto terminate.connection
      end
   end
 
