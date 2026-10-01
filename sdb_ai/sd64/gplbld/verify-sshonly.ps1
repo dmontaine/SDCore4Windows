@@ -105,7 +105,8 @@ param(
     [string]$SshGroup = 'sdssh',
     # 22 Aug 26 - THE GROUP THE SEMAPHORE DACL NAMES.  Rung 2.  Measured, not
     # assumed: sddefs.h:189 defines SD_USERS_GROUP as "sdusers", sdsem.c:183
-    # creates Global\sd_sem_716d0302_<n> with w32sem_create(name,
+    # creates Global\sd_sem_<SD_SEM_KEY>_<n> (SD_WIN32_SEM_FMT; 716d0302 until
+    # 2 Oct 26) with w32sem_create(name,
     # SD_USERS_GROUP, ...), and win32sem.c hands that straight to
     # build_descriptor() as the semaphore's DACL.  w32sem_open asks for
     # SEMAPHORE_ALL_ACCESS, so a token without the group is refused there.

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 02 Oct 26 Windows port - SD Core's own IPC keys, 0x53435701/02, and the
+ *           object names that carry them, so the four SD Core products and
+ *           upstream SD can run side by side (owner, 2 Oct 2026, via Linux).
  * 05 Sep 26 Windows port - SD_INTERACTIVE_GID.  PRE_RELEASE_FIXES.md 167: the
  *           administrator seed now also requires a session with a desktop, so
  *           that ssh cannot reach SDSYS.  See the comment at the definition.
@@ -152,11 +155,26 @@
 
 #define MakeDirectory(path) mkdir(path, 0777)
 
-#define SD_SHM_KEY 0x716d0301
-#define SD_SEM_KEY 0x716d0302
-/* To allow the SD  and other versions based on the same code
- * base tocoexist, SD has changed the third byte from 01 to 03
+/* 02 Oct 26 Windows port - A FAMILY OF SD CORE'S OWN, one key pair per product.
+ * Owner, 2 Oct 2026 (Linux session): "choose new shared memory segments for
+ * each of the four versions so that they can run concurrently.  They should
+ * not be the same as the segment chosen upstream".  Upstream SD moved OpenQM's
+ * 0x716d01xx to 0x716d03xx to coexist with it, and ScarletDME is in the same
+ * 0x716d family; SD Core leaves that family entirely.  0x5343 is "SC"; the
+ * third byte is 0x4C "L" or 0x57 "W"; the low byte is 0x for the full product
+ * and 1x for Solo, ..1 shared memory and ..2 semaphores (agreed with Linux):
+ *    Linux 0x53434C01/02   Linux Solo 0x53434C11/12
+ *    Windows 0x53435701/02 (this)   Windows Solo 0x53435711/12
+ *
+ * ON WINDOWS THE KEYS ARE NOT WHAT KEEPS PRODUCTS APART - THE NAMES BELOW ARE.
+ * Nothing here calls shmget() or semget(); the segment and the semaphores are
+ * named objects, and each name carries its key's digits.  So the key and the
+ * names change together, and gplbld/test-ipcnames-units.py fails if they do
+ * not: changing the two defines alone would leave every product on the old
+ * names, still colliding.
  */
+#define SD_SHM_KEY 0x53435701
+#define SD_SEM_KEY 0x53435702
 
 /* System V IPC (shmget/semget) is not implemented by the MSYS2 runtime and
  * does not exist on native Windows, so this Windows port uses POSIX named
@@ -165,7 +183,7 @@
  * to the Linux build.
  */
 
-#define SD_POSIX_SHM_NAME "/sd_shm_716d0301"
+#define SD_POSIX_SHM_NAME "/sd_shm_53435701"
 #define SD_POSIX_SEM_FMT  "/sd_sem_716d0302_%d"
 
 /* 16 Aug 26 Windows port - THE SEMAPHORES ARE NATIVE Win32 OBJECTS NOW, and
@@ -189,7 +207,7 @@
  * for nothing.
  */
 
-#define SD_WIN32_SEM_FMT  "Global\\sd_sem_716d0302_%d"
+#define SD_WIN32_SEM_FMT  "Global\\sd_sem_53435702_%d"
 
 /* 14 Aug 26 Windows port - the background daemon was sdlnxd, "SD Linux
  * daemon", which is the wrong name in a Windows-only repository.  Named once
