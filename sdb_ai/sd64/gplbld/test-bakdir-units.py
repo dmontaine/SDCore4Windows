@@ -92,6 +92,27 @@ def refs_problems(name, t, have):
     return bad
 
 
+def gcat_problems(t):
+    """A Solo backup skips the global-catalogue matching - and assigns gcat.ids first.
+
+    1 Oct 2026: the owner's first Solo backup printed "...@SDSYS/global.bp.out could not be read",
+    because gcat.match walked a token-path VOC pointer.  The skip is the fix, and the assignment is
+    what keeps the skip from aborting the verb: gcat.match reads gcat.ids, and a variable nothing
+    has assigned aborts the program at run time, which no compiler warns about."""
+    c = code_only(t)
+    g = c.find("gosub gcat.load")
+    if g < 0:
+        return ["backupa no longer calls gcat.load, so this test cannot judge it"]
+    line_start = c.rfind("\n", 0, g) + 1
+    call_line = c[line_start:c.find("\n", g)]
+    if "field(product, '-', 2) # 'solo'" not in call_line:
+        return ["backupa runs the global-catalogue matching for a Solo product"]
+    assign = re.search(r"gcat\.ids\s*=\s*''", c[:line_start])
+    if not assign:
+        return ["gcat.ids is not assigned before the skip, so a Solo backup would abort reading it"]
+    return []
+
+
 def stage_problems(t):
     if not re.search(r"'sd-backupdir\.ps1'", t):
         return ["stage.py does not ship sd-backupdir.ps1"]
@@ -152,7 +173,16 @@ check("restorea asks only for a BARE archive name and refuses (never prompts) un
 check("backupa still has a syntax message for a missing name list (TO is optional, names are not)",
       "stop sysmsg(13006)" in code_only(files["backupa"]))
 
+p = gcat_problems(files["backupa"])
+check("backupa skips the global-catalogue matching for a Solo product and assigns gcat.ids first", p == [], "; ".join(p))
+
 # MUTANTS on synthetic text.
+check("MUTANT: running the matching for every product (the 1 Oct 2026 warning) is caught",
+      gcat_problems("   gcat.ids = ''\n   gosub gcat.load\n") != [])
+check("MUTANT: the skip WITHOUT the earlier assignment (it would abort at run time) is caught",
+      gcat_problems("   if field(product, '-', 2) # 'solo' then gosub gcat.load\n") != [])
+check("CONTROL: the skip with the assignment first passes",
+      gcat_problems("   gcat.ids = '' ; gcat.times = ''\n   if field(product, '-', 2) # 'solo' then gosub gcat.load\n") == [])
 check("MUTANT: a config.c without the BACKUPDIR branch is caught",
       config_problems('else if (strncmp(rec, "SDSYS=", 6) == 0) {}') != [])
 check("MUTANT: asking AFTER the hold is caught",

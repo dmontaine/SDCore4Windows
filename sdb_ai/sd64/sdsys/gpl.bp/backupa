@@ -166,7 +166,18 @@ $include accbak.h
    zip.path = dest:@ds:zip.name
 
 * ---- the manifest, with each account counted before the pack
-   gosub gcat.load
+*  A SOLO BACKUP HAS NO "gcat:" LINES (agreed with Linux: both Solos refuse CATALOG
+*  GLOBAL, so an account has no global programs of its own), so the matching is not
+*  run for one.  Run, it walks the account's VOC pointers that end in ".out"; in
+*  Solo one of them is the SYSTEM's object directory, a token path
+*  (@SDSYS/global.bp.out) that it cannot open - the owner's first Solo backup, 1 Oct
+*  2026, printed "...sduser/@SDSYS/global.bp.out could not be read" - and, opened,
+*  it would list SD's own programs as the account's.
+*  gcat.ids IS ASSIGNED HERE, NOT ONLY INSIDE gcat.load: gcat.match reads it, and
+*  reading a variable nothing has assigned aborts the program at run time (no
+*  compiler warns about it, because the assignment exists later in the source).
+   gcat.ids = '' ; gcat.times = ''
+   if field(product, '-', 2) # 'solo' then gosub gcat.load
 
    m = 'format: ':ACCBAK$FORMAT
    m<-1> = 'product: ':product
