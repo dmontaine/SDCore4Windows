@@ -3,7 +3,7 @@
 #   ... -Mode Create  -Zip <file> -ListFile <file>
 #   ... -Mode Extract -Zip <file> -Dest <dir>
 #   ... -Mode Count   -Path <dir>
-#   ... -Mode Place   -Staged <dir> -Target <dir>
+#   ... -Mode Place   -Staged <dir> -Target <dir> [-Previous <dir>]
 #   ... -Mode AkPath  -Path <hashed file> -AkPath <dir>
 #
 # Run by SD through !ps_script_out, from gpl.bp ACC_ARCHIVE, which ACC_TREE_COUNT,
@@ -42,7 +42,8 @@ param(
     [string]$Path = '',
     [string]$Staged = '',
     [string]$Target = '',
-    [string]$AkPath = ''
+    [string]$AkPath = '',
+    [string]$Previous = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -234,19 +235,21 @@ function Expand-AccountZip([string]$zipPath, [string]$dest, [bool]$protect) {
 # Replace the CONTENTS of $target with the contents of $staged.  The target
 # directory itself stays: its explicit ACL is the account's grant (CREATE.ACCOUNT
 # secure.account.dir, secure-account-dirs.ps1), and a directory moved into its
-# place would carry the staging ACL instead.  The old contents go to
-# "$staged.old" first and are removed only once the new ones are all in; any
-# failure before that puts everything back.  Returns the counts of $target after.
+# place would carry the staging ACL instead.  The old contents go to $old (a
+# directory that must not exist yet, on the same volume) before any new one
+# comes in; the CALLER decides whether $old is removed afterwards or kept (Solo
+# keeps it as .sdrestore.previous).  Any failure puts everything back.  Returns
+# the counts of $target after.
 #
 # BOTH MUST HOLD A voc - secure-account-dirs.ps1's test for "this is an account
 # directory".  A wrong path must not be able to empty some other directory.
-function Move-AccountTree([string]$staged, [string]$target) {
+function Move-AccountTree([string]$staged, [string]$target, [string]$old) {
     if (-not (Test-Path -LiteralPath $staged -PathType Container)) { throw "no staged tree: $staged" }
     if (-not (Test-Path -LiteralPath $target -PathType Container)) { throw "no target directory: $target" }
     foreach ($d in @($staged, $target)) {
         if (-not (Test-Path -LiteralPath ([System.IO.Path]::Combine($d, 'voc')))) { throw "not an account directory (no voc): $d" }
     }
-    $old = $staged.TrimEnd('\') + '.old'
+    if ($old -eq '') { throw 'no directory given for the old contents' }
     if (Test-Path -LiteralPath $old) { throw "already exists: $old" }
     [void][System.IO.Directory]::CreateDirectory($old)
 
@@ -317,7 +320,7 @@ function Protect-Dir([string]$dir) {
 
 # --- dispatch ----------------------------------------------------------------
 
-Write-Output "ACC-ARCHIVE mode=$Mode zip=$Zip list=$ListFile dest=$Dest path=$Path staged=$Staged target=$Target akpath=$AkPath"
+Write-Output "ACC-ARCHIVE mode=$Mode zip=$Zip list=$ListFile dest=$Dest path=$Path staged=$Staged target=$Target akpath=$AkPath previous=$Previous"
 try {
     switch ($Mode) {
         'Create' {
@@ -351,12 +354,24 @@ try {
         }
         'Place' {
             if ($Staged -eq '' -or $Target -eq '') { Write-Output 'ACC-ARCHIVE ERROR Place needs -Staged and -Target'; exit 2 }
-            $c = Move-AccountTree $Staged $Target
+            # -Previous KEEPS the old contents there, replacing an older copy
+            # (SD Core Solo's .sdrestore.previous, agreed with Linux 2 Oct
+            # 2026; the same text in both products); without it they go to
+            # "<staged>.old" and are removed.
+            $keep = ($Previous -ne '')
+            if ($keep) {
+                $old = $Previous
+                if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+            } else {
+                $old = $Staged.TrimEnd('\') + '.old'
+            }
+            $c = Move-AccountTree $Staged $Target $old
             try { Reset-ChildAcl $Target }
             catch { throw "the new contents ARE in place, but their permissions were not reset: $($_.Exception.Message)" }
-            $old = $Staged.TrimEnd('\') + '.old'
-            Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path -LiteralPath $old) { Write-Output "ACC-ARCHIVE WARNING the old contents could not be removed: $old" }
+            if (-not $keep) {
+                Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue
+                if (Test-Path -LiteralPath $old) { Write-Output "ACC-ARCHIVE WARNING the old contents could not be removed: $old" }
+            }
             Write-Output ("ACC-ARCHIVE PLACE OK " + (Format-Counts $c))
         }
         'AkPath' {

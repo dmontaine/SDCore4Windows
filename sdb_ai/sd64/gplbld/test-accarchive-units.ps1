@@ -191,8 +191,9 @@ try {
     $novoc = Join-Path $work 'novoc'
     [void][System.IO.Directory]::CreateDirectory($novoc)
     [System.IO.File]::WriteAllText((Join-Path $novoc 'precious.txt'), "p`n")
-    Check 'refuses a target that is not an account directory' (((Throws { Move-AccountTree $staged $novoc } '*no voc*') -eq '') -and (Test-Path -LiteralPath (Join-Path $novoc 'precious.txt')))
-    $placed = Move-AccountTree $staged $target
+    Check 'refuses a target that is not an account directory' (((Throws { Move-AccountTree $staged $novoc ($staged + '.old') } '*no voc*') -eq '') -and (Test-Path -LiteralPath (Join-Path $novoc 'precious.txt')))
+    Check 'refuses an old-contents directory that already exists' ((Throws { Move-AccountTree $staged $target $novoc } '*already exists*') -eq '')
+    $placed = Move-AccountTree $staged $target ($staged + '.old')
     Check "target holds the new tree ($(Format-Counts $placed))" ((Format-Counts $placed) -eq (Format-Counts $srcCounts))
     Check 'old contents gone from the target' (-not (Test-Path -LiteralPath (Join-Path $target 'old.txt')))
     Check 'old contents kept aside until removed' (Test-Path -LiteralPath ($staged + '.old\old.txt'))
@@ -215,7 +216,7 @@ try {
     [System.IO.File]::WriteAllText($lockPath, "z`n")
     $lock = [System.IO.File]::Open($lockPath, 'Open', 'Read', 'None')
     try {
-        $r = Throws { Move-AccountTree $s2 $t2 } '*old contents put back*'
+        $r = Throws { Move-AccountTree $s2 $t2 ($s2 + '.old') } '*old contents put back*'
     } finally { $lock.Dispose() }
     Check 'a failed move is refused' ($r -eq '') $r
     Check 'old contents back in the target' (Test-Path -LiteralPath (Join-Path $t2 'keep.txt'))
