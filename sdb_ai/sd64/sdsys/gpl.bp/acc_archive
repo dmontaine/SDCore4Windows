@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 02 Oct 26 Windows port - every path is made a Windows path first (norm.path):
+*           OS$FULLPATH gives "C:/..." or "/c/...", and check.full refused
+*           both, so every path the shared verbs pass would have failed.
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
 * END-HISTORY
 *
@@ -79,11 +82,30 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
    md     = upcase(mode)
    list.id = ''
 
+*  02 Oct 26 Windows port - EVERY PATH IS MADE A WINDOWS PATH FIRST, into local
+*  copies (the caller's variables are left as they were).  ospath(x,
+*  OS$FULLPATH) answers "C:/..." for a drive-letter input and "/c/..." for a
+*  relative one (gplsrc/op_dio2.c fullpath(), and its net_normalise note), and
+*  the shared verbs build "dest:@ds:name" from it - so without this every path
+*  BACKUP.ACCOUNT and RESTORE.ACCOUNT pass was refused by check.full.  Found
+*  reading SD Core for Linux's verbs before copying them, 2 Oct 2026.
+   np = zip.path ; gosub norm.path ; zp = np
+   ent = entries
+   if md = 'CREATE' then
+      for i = 1 to dcount(ent, @fm)
+         np = ent<i,2> ; gosub norm.path ; ent<i,2> = np
+      next i
+   end else
+      for i = 1 to dcount(ent, @fm)
+         np = ent<i> ; gosub norm.path ; ent<i> = np
+      next i
+   end
+
    begin case
       case md = 'CREATE'
-         cf.path = zip.path ; gosub check.full
+         cf.path = zp ; gosub check.full
          if not(cf.ok) then return
-         n.want = dcount(entries, @fm)
+         n.want = dcount(ent, @fm)
          if n.want = 0 then
             err = 12002 : @vm : 'no entries to archive'
             return
@@ -96,8 +118,8 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
          end
          lst = ''
          for i = 1 to n.want
-            nm  = entries<i,1>
-            src = entries<i,2>
+            nm  = ent<i,1>
+            src = ent<i,2>
             if nm = '' or src = '' or index(nm, tab, 1) or index(src, tab, 1) then
                close tmp.f
                err = 12002 : @vm : 'bad entry ' : i
@@ -111,45 +133,45 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
             err = 12002 : @vm : 'cannot write ' : list.id
             return
          end
-         args = ' -Mode Create -Zip ' : q : change(zip.path, q, q:q) : q
+         args = ' -Mode Create -Zip ' : q : change(zp, q, q:q) : q
          args := ' -ListFile ' : q : change(ps.dir : @ds : list.id, q, q:q) : q
          want.line = 'ACC-ARCHIVE CREATE OK'
          row.tag   = 'ENTRY'
 
       case md = 'EXTRACT'
-         cf.path = zip.path ; gosub check.full
+         cf.path = zp ; gosub check.full
          if not(cf.ok) then return
-         cf.path = entries<1> ; gosub check.full
+         cf.path = ent<1> ; gosub check.full
          if not(cf.ok) then return
-         args = ' -Mode Extract -Zip ' : q : change(zip.path, q, q:q) : q
-         args := ' -Dest ' : q : change(entries<1>, q, q:q) : q
+         args = ' -Mode Extract -Zip ' : q : change(zp, q, q:q) : q
+         args := ' -Dest ' : q : change(ent<1>, q, q:q) : q
          want.line = 'ACC-ARCHIVE EXTRACT OK'
          row.tag   = 'ACCOUNT'
 
       case md = 'COUNT'
-         cf.path = entries<1> ; gosub check.full
+         cf.path = ent<1> ; gosub check.full
          if not(cf.ok) then return
-         args = ' -Mode Count -Path ' : q : change(entries<1>, q, q:q) : q
+         args = ' -Mode Count -Path ' : q : change(ent<1>, q, q:q) : q
          want.line = 'ACC-ARCHIVE COUNT OK'
          row.tag   = ''
 
       case md = 'PLACE'
-         cf.path = entries<1> ; gosub check.full
+         cf.path = ent<1> ; gosub check.full
          if not(cf.ok) then return
-         cf.path = entries<2> ; gosub check.full
+         cf.path = ent<2> ; gosub check.full
          if not(cf.ok) then return
-         args = ' -Mode Place -Staged ' : q : change(entries<1>, q, q:q) : q
-         args := ' -Target ' : q : change(entries<2>, q, q:q) : q
+         args = ' -Mode Place -Staged ' : q : change(ent<1>, q, q:q) : q
+         args := ' -Target ' : q : change(ent<2>, q, q:q) : q
          want.line = 'ACC-ARCHIVE PLACE OK'
          row.tag   = ''
 
       case md = 'AKPATH'
-         cf.path = entries<1> ; gosub check.full
+         cf.path = ent<1> ; gosub check.full
          if not(cf.ok) then return
-         cf.path = entries<2> ; gosub check.full
+         cf.path = ent<2> ; gosub check.full
          if not(cf.ok) then return
-         args = ' -Mode AkPath -Path ' : q : change(entries<1>, q, q:q) : q
-         args := ' -AkPath ' : q : change(entries<2>, q, q:q) : q
+         args = ' -Mode AkPath -Path ' : q : change(ent<1>, q, q:q) : q
+         args := ' -AkPath ' : q : change(ent<2>, q, q:q) : q
          want.line = 'ACC-ARCHIVE AKPATH OK'
          row.tag   = ''
 
@@ -243,6 +265,14 @@ read.result:
 * The script runs in the elevated helper, whose working directory is not the
 * session's, so a relative path would land somewhere nobody chose.
 * ======================================================================
+
+norm.path:
+*  np in and out: a POSIX path ("/c/...") through K$WINPATH, then every "/"
+*  made the Windows separator.  '' stays ''.
+   if np = '' then return
+   if np[1, 1] = '/' then np = kernel(K$WINPATH, np)
+   np = convert('/', @ds, np)
+   return
 
 check.full:
    cf.ok = @false
