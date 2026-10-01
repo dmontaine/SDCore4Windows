@@ -86,6 +86,12 @@ READS_STATUS = {
     ("apisrvr", "acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)"):
         "vb.account: acc.told = status() on the next line; branch=4 splits "
         "group.lookup.failed from not.in.group in the audit trail",
+    ("acc_os_info", "m = is_grp_member(uname, 'sdssh')"):
+        "backup manifest route.ssh (RELEASE_1.1 116): 'if status()' on the "
+        "next line returns err 12005 - a failed lookup recorded as 'no ssh' "
+        "would restore the account with its access silently taken away",
+    ("acc_os_info", "m = is_grp_member(uname, 'sdapi')"):
+        "backup manifest route.api: same as route.ssh",
 }
 FAIL_CLOSED = {
     ("apisrvr", "if not(is_grp_member(scram.user, 'sdapi')) then"):

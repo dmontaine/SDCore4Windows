@@ -1,0 +1,50 @@
+* ACC_TREE_COUNT
+* Count the files, bytes and directories under a directory
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written for RELEASE_1.1 116.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_tree_count(path, files, bytes, dirs, err)
+*
+* A per-OS helper of BACKUP.ACCOUNT and RESTORE.ACCOUNT (see !acc_archive).
+* dirs counts the directories UNDER path, not path itself.  A reparse point
+* anywhere beneath is refused rather than followed.  err is '' or a message
+* number then its arguments, value-mark separated.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_tree_count(path, files, bytes, dirs, err)
+$catalog !acc_tree_count
+
+   files = '' ; bytes = '' ; dirs = ''
+   counts = ''
+   call !acc_archive('COUNT', '', path, counts, err)
+   if err # '' then return
+
+   files = counts<1,1>
+   bytes = counts<1,2>
+   dirs  = counts<1,3>
+   return
+end

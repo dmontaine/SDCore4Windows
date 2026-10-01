@@ -1605,6 +1605,21 @@ def main():
                    # It SHIPS, so assert-current watches it like the rest of
                    # these - do NOT add it to that script's $neverShipped list.
                    'reconcile-accounts.ps1',
+                   # 01 Oct 26 - RELEASE_1.1 116.  The zip, unzip, count and
+                   # swap behind BACKUP.ACCOUNT and RESTORE.ACCOUNT; gpl.bp
+                   # ACC_ARCHIVE, ACC_TREE_COUNT and ACC_OS_PLACE run it through
+                   # !ps_script_out.  Here and not in the data tree for
+                   # sd-elevate.ps1's reason below: it runs with full privilege
+                   # over every account's files.  It SHIPS, so assert-current
+                   # watches it - do NOT add it to that script's $neverShipped
+                   # list.  Its unit test does not ship.
+                   'sd-account-archive.ps1',
+                   # 01 Oct 26 - RELEASE_1.1 116.  The Windows sections of
+                   # SETTINGS.REPORT, run by gpl.bp SETTINGS_OS the same way.
+                   # It reads api.pem, which holds the API's private key, and
+                   # prints only the certificate's fields.  It SHIPS - do NOT
+                   # add it to assert-current's $neverShipped list.
+                   'sd-settings-os.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

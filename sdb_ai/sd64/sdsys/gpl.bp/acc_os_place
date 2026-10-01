@@ -1,0 +1,52 @@
+* ACC_OS_PLACE
+* Put a restored account's tree in place
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written for RELEASE_1.1 116.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_os_place(acc.name, staged.path, target.path, err)
+*
+* A per-OS helper of RESTORE.ACCOUNT (see !acc_archive).  target.path is the
+* account's register path, and the account already exists - RESTORE.ACCOUNT
+* has run create_account first when it had to.
+*
+* ON WINDOWS THE TARGET DIRECTORY STAYS AND ITS CONTENTS ARE SWAPPED.  Its
+* explicit ACL is the account's grant (CREATE.ACCOUNT secure.account.dir); a
+* directory moved into its place would carry the staging directory's ACL
+* instead.  The old contents are moved aside first and removed only once all of
+* the new ones are in; a failure before that puts everything back.  Then every
+* child is reset to inherit the target's ACL, because a moved file keeps the
+* one it had.  Both trees must hold a voc, so a wrong path cannot empty some
+* other directory.  The work is sd-account-archive.ps1 -Mode Place.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_os_place(acc.name, staged.path, target.path, err)
+$catalog !acc_os_place
+
+   counts = ''
+   call !acc_archive('PLACE', '', staged.path : @fm : target.path, counts, err)
+   return
+end

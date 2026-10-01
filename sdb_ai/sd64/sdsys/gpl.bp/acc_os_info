@@ -1,0 +1,141 @@
+* ACC_OS_INFO
+* The manifest keys the operating system knows about an account
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written for RELEASE_1.1 116.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_os_info(acc.name, acc.rec, info, err)
+*
+* A per-OS helper of BACKUP.ACCOUNT (see !acc_archive).  info is one manifest
+* line per field, "key: value".
+*
+* FOR AN ACCOUNT (acc.rec its ACCOUNTS record):
+*    type        USER for an sdu_ group, GROUP for sdg_, otherwise OTHER -
+*                derived from the register, as Linux does
+*    os.user     the Windows user (USER only; the group is sdu_<user>,
+*                CREATE.ACCOUNT)
+*    os.group    ACC$GROUP
+*    route.ssh   1 when the user is in sdssh, else 0 (USER only)
+*    route.api   1 when the user is in sdapi, else 0 (USER only)
+*    members     the sdg_ group's members, comma separated (GROUP only)
+*    os.sh       SDSYS os.users field 1 "yes" -> 1, else 0   } only when the
+*    os.execute  SDSYS os.users field 2 "yes" -> 1, else 0   } user HAS a record
+*
+* WITH acc.name EMPTY, the system keys: product, host, accounts.root (the
+* directory holding user_accounts, from USRDIR as CREATE.ACCOUNT reads it)
+* and sd.version.
+*
+* A QUESTION WINDOWS COULD NOT ANSWER IS AN ERROR, NOT A 0.  A backup that
+* recorded "no ssh" because the group lookup failed would restore an account
+* with its access silently taken away.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_os_info(acc.name, acc.rec, info, err)
+$catalog !acc_os_info
+
+$include keys.h
+
+deffun is_grp_member(user, group) calling '!is_grp_member'
+deffun os_group(action, group, member) calling '!os_group'
+
+   info = ''
+   err  = ''
+
+   if acc.name = '' then
+      usr.dir = config('USRDIR')
+      if usr.dir = '' then usr.dir = 'C:\ProgramData\SD\user_accounts'
+      loop while usr.dir[len(usr.dir), 1] = @ds and len(usr.dir) > 3
+         usr.dir = usr.dir[1, len(usr.dir) - 1]
+      repeat
+      n = count(usr.dir, @ds)
+      if n = 0 then
+         err = 12005 : @vm : 'USRDIR' : @vm : usr.dir
+         return
+      end
+      info<1> = 'product: windows-full'
+      info<2> = 'host: ' : downcase(field(@hostname, '.', 1))
+      info<3> = 'accounts.root: ' : usr.dir[1, index(usr.dir, @ds, n) - 1]
+      info<4> = 'sd.version: ' : system(1012)
+      return
+   end
+
+   grp = trim(acc.rec<ACC$GROUP>)
+   begin case
+      case downcase(grp[1, 4]) = 'sdu_' ; typ = 'USER'
+      case downcase(grp[1, 4]) = 'sdg_' ; typ = 'GROUP'
+      case 1                            ; typ = 'OTHER'
+   end case
+
+   uname = ''
+   if typ = 'USER' then uname = grp[5, len(grp)]
+
+   info<-1> = 'type: ' : typ
+   info<-1> = 'os.user: ' : uname
+   info<-1> = 'os.group: ' : grp
+
+   ssh = 0
+   api = 0
+   if typ = 'USER' then
+      m = is_grp_member(uname, 'sdssh')
+      if status() then
+         err = 12005 : @vm : acc.name : @vm : 'sdssh'
+         return
+      end
+      if m then ssh = 1
+      m = is_grp_member(uname, 'sdapi')
+      if status() then
+         err = 12005 : @vm : acc.name : @vm : 'sdapi'
+         return
+      end
+      if m then api = 1
+   end
+   info<-1> = 'route.ssh: ' : ssh
+   info<-1> = 'route.api: ' : api
+
+   if typ = 'GROUP' then
+      members = ''
+      rc = os_group('LISTMEM', grp, members)
+      if rc # 0 then
+         err = 12005 : @vm : acc.name : @vm : grp
+         return
+      end
+      info<-1> = 'members: ' : convert(@fm, ',', members)
+   end
+
+   if typ = 'USER' then
+      openpath @sdsys : @ds : 'os.users' to osu.f else
+         err = 12005 : @vm : acc.name : @vm : 'os.users'
+         return
+      end
+      read osu.rec from osu.f, uname then
+         if downcase(trim(osu.rec<1>)) = 'yes' then info<-1> = 'os.sh: 1' else info<-1> = 'os.sh: 0'
+         if downcase(trim(osu.rec<2>)) = 'yes' then info<-1> = 'os.execute: 1' else info<-1> = 'os.execute: 0'
+      end
+      close osu.f
+   end
+
+   return
+end

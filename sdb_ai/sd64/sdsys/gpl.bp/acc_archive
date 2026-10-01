@@ -1,0 +1,254 @@
+* ACC_ARCHIVE
+* The Windows file step behind BACKUP.ACCOUNT and RESTORE.ACCOUNT
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written for RELEASE_1.1 116.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_archive(mode, zip.path, entries, counts, err)
+*
+* One of the per-OS helpers the shared verbs call (agreed with SD Core for
+* Linux by mail, 1 Oct 2026; Linux writes the verbs, each port writes its own
+* helpers under the same names).  The work is done by gplbld
+* sd-account-archive.ps1, shipped to the program directory, through
+* !ps_script_out - so an SDSYS session runs it in its elevated helper.
+*
+*    CREATE   entries = one per field: archive name VM source path.  A FILE
+*             source is stored under exactly that name (the manifest); a
+*             DIRECTORY under name/ with everything beneath it.  zip.path must
+*             be a full path and must not exist.  counts = one per field, in
+*             entry order: files VM bytes VM dirs, of what was WRITTEN.
+*    EXTRACT  entries<1> = a directory that must not exist; the archive is
+*             unpacked into it, closed to all but SYSTEM and Administrators.
+*             counts = one per account: files VM bytes VM dirs VM name,
+*             measured on disk afterwards.
+*    COUNT    (Windows only, for !acc_tree_count) entries<1> = a directory.
+*    PLACE    (Windows only, for !acc_os_place) entries<1> = staged tree,
+*             entries<2> = the account directory whose CONTENTS it replaces.
+*    AKPATH   (Windows only, for !acc_os_akpath) entries<1> = a hashed file,
+*             entries<2> = its index directory; set with sdidx -p and
+*             confirmed with sdidx -q.
+*
+* err is '' on success, otherwise a message number then its arguments,
+* value-mark separated, for sysmsg() - the create_account form.
+*
+* SUCCESS IS THE SCRIPT'S OWN "ACC-ARCHIVE <MODE> OK" LINE, and nothing else.
+* Exit code 0 without it is a failure, and so is a count of entry lines that
+* does not match what was asked for: an archive step that did nothing must not
+* read as one that did.  CLAUDE.md, "A check must anchor on the SUCCESS
+* wording".
+*
+* THE ENTRY LIST GOES THROUGH A FILE IN SDSYS PSTMP, not the command line:
+* ALL can name every account on the system, and one path per account is the
+* kind of length a command line runs out of.  It is deleted on every path.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_archive(mode, zip.path, entries, counts, err)
+$catalog !acc_archive
+
+$include int$keys.h
+
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
+   counts = ''
+   err    = ''
+   q      = char(39)
+   tab    = char(9)
+   md     = upcase(mode)
+   list.id = ''
+
+   begin case
+      case md = 'CREATE'
+         cf.path = zip.path ; gosub check.full
+         if not(cf.ok) then return
+         n.want = dcount(entries, @fm)
+         if n.want = 0 then
+            err = 12002 : @vm : 'no entries to archive'
+            return
+         end
+
+         ps.dir = @sdsys : @ds : 'pstmp'
+         openpath ps.dir to tmp.f else
+            err = 12002 : @vm : 'cannot open ' : ps.dir
+            return
+         end
+         lst = ''
+         for i = 1 to n.want
+            nm  = entries<i,1>
+            src = entries<i,2>
+            if nm = '' or src = '' or index(nm, tab, 1) or index(src, tab, 1) then
+               close tmp.f
+               err = 12002 : @vm : 'bad entry ' : i
+               return
+            end
+            lst<i> = nm : tab : src
+         next i
+         list.id = '$ACC.LIST.' : @userno
+         write lst to tmp.f, list.id on error
+            close tmp.f
+            err = 12002 : @vm : 'cannot write ' : list.id
+            return
+         end
+         args = ' -Mode Create -Zip ' : q : change(zip.path, q, q:q) : q
+         args := ' -ListFile ' : q : change(ps.dir : @ds : list.id, q, q:q) : q
+         want.line = 'ACC-ARCHIVE CREATE OK'
+         row.tag   = 'ENTRY'
+
+      case md = 'EXTRACT'
+         cf.path = zip.path ; gosub check.full
+         if not(cf.ok) then return
+         cf.path = entries<1> ; gosub check.full
+         if not(cf.ok) then return
+         args = ' -Mode Extract -Zip ' : q : change(zip.path, q, q:q) : q
+         args := ' -Dest ' : q : change(entries<1>, q, q:q) : q
+         want.line = 'ACC-ARCHIVE EXTRACT OK'
+         row.tag   = 'ACCOUNT'
+
+      case md = 'COUNT'
+         cf.path = entries<1> ; gosub check.full
+         if not(cf.ok) then return
+         args = ' -Mode Count -Path ' : q : change(entries<1>, q, q:q) : q
+         want.line = 'ACC-ARCHIVE COUNT OK'
+         row.tag   = ''
+
+      case md = 'PLACE'
+         cf.path = entries<1> ; gosub check.full
+         if not(cf.ok) then return
+         cf.path = entries<2> ; gosub check.full
+         if not(cf.ok) then return
+         args = ' -Mode Place -Staged ' : q : change(entries<1>, q, q:q) : q
+         args := ' -Target ' : q : change(entries<2>, q, q:q) : q
+         want.line = 'ACC-ARCHIVE PLACE OK'
+         row.tag   = ''
+
+      case md = 'AKPATH'
+         cf.path = entries<1> ; gosub check.full
+         if not(cf.ok) then return
+         cf.path = entries<2> ; gosub check.full
+         if not(cf.ok) then return
+         args = ' -Mode AkPath -Path ' : q : change(entries<1>, q, q:q) : q
+         args := ' -AkPath ' : q : change(entries<2>, q, q:q) : q
+         want.line = 'ACC-ARCHIVE AKPATH OK'
+         row.tag   = ''
+
+      case 1
+         err = 12002 : @vm : 'unknown mode ' : mode
+         return
+   end case
+
+   script = '& ' : q : kernel(K$WINPATH, '/sd-account-archive.ps1') : q : args
+   script := '; exit $LASTEXITCODE'
+   both = ps_script_out(script, @true)
+
+   if list.id # '' then
+      delete tmp.f, list.id
+      close tmp.f
+   end
+
+   rc = both<1>
+   del both<1>
+   gosub read.result
+   return
+
+* ======================================================================
+* read.result - turn the script's lines into counts, or err
+*
+* "ACC-ARCHIVE <row.tag> ... FILES f BYTES b DIRS d" rows are read from the
+* END of the line, so an archive name is never mistaken for a count.  The
+* last ACC-ARCHIVE line must be want.line; an ERROR line is the reason.
+* ======================================================================
+
+read.result:
+   ok.line = ''
+   why     = ''
+   warn    = ''
+   n.lines = dcount(both, @fm)
+   for ln = 1 to n.lines
+      line = trim(both<ln>)
+      if line[1, 12] # 'ACC-ARCHIVE ' then continue
+      tag = field(line, ' ', 2)
+      begin case
+         case tag = 'ERROR'
+            why = line[19, len(line)]
+         case tag = 'WARNING'
+            warn = line[21, len(line)]
+         case line[1, len(want.line)] = want.line
+            ok.line = line
+         case row.tag # '' and tag = row.tag
+            nw = dcount(line, ' ')
+            if field(line, ' ', nw - 5) # 'FILES' or field(line, ' ', nw - 3) # 'BYTES' or field(line, ' ', nw - 1) # 'DIRS' then
+               why = 'unreadable line: ' : line
+            end else
+               row = field(line, ' ', nw - 4) : @vm : field(line, ' ', nw - 2) : @vm : field(line, ' ', nw)
+               if md = 'EXTRACT' then row := @vm : field(line, ' ', 3)
+               counts<-1> = row
+            end
+      end case
+   next ln
+
+   if why = '' and ok.line = '' then
+      why = 'exit ' : rc : ', and no result line'
+   end
+   if why = '' and rc # 0 then why = 'exit ' : rc
+
+   if why = '' then
+      begin case
+         case md = 'CREATE'
+            if dcount(counts, @fm) # n.want then why = 'wrote ' : dcount(counts, @fm) : ' of ' : n.want : ' entries'
+         case md = 'EXTRACT'
+            if dcount(counts, @fm) # field(ok.line, ' ', 5) then why = 'account count does not match'
+         case md = 'AKPATH'
+            null
+         case 1
+*           COUNT and PLACE carry their one count on the OK line itself.
+            nw = dcount(ok.line, ' ')
+            counts = field(ok.line, ' ', nw - 4) : @vm : field(ok.line, ' ', nw - 2) : @vm : field(ok.line, ' ', nw)
+      end case
+   end
+
+   if why # '' then
+      counts = ''
+      err = 12002 : @vm : why
+      return
+   end
+
+   if warn # '' then display sysmsg(12003, warn) ;* Warning: %1
+   return
+
+* ======================================================================
+* check.full - cf.path must be a full Windows path
+*
+* The script runs in the elevated helper, whose working directory is not the
+* session's, so a relative path would land somewhere nobody chose.
+* ======================================================================
+
+check.full:
+   cf.ok = @false
+   if len(cf.path) >= 3 and alpha(cf.path[1, 1]) and cf.path[2, 2] = ':' : @ds then cf.ok = @true
+   if cf.path[1, 2] = @ds : @ds then cf.ok = @true
+   if not(cf.ok) then err = 12004 : @vm : cf.path
+   return
+
+end
