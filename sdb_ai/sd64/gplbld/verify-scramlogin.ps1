@@ -48,7 +48,7 @@
     CREATE.ACCOUNT refuses a name it has seen, which is the right way round.
 
 .PARAMETER Port
-    Loopback port to use.  4243 is the number the Linux build uses.
+    Loopback port to use.  4247 is the number the Linux build uses.
 
 .PARAMETER Keep
     Leave APIPORT set and the account in place when the run finishes, for
@@ -75,7 +75,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)] [string] $Prefix,
-    [int]    $Port = 4243,
+    [int]    $Port = 4247,
     [switch] $Keep,
     [switch] $SelfTest
 )

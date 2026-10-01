@@ -18,6 +18,7 @@
 *
 * 
 * START-HISTORY:
+* 01 Oct 26 Windows port - connect() defaults to port 4247, not 4243
 * 20 Aug 26 Windows port - connect() speaks SCRAM-SHA-256 (requests 47 and 48)
 *           instead of the cleartext SrvrLogin, which APISRVR retired in the
 *           same change.  docs/SCRAM_AUTH.md phase 5.  The class is $internal
@@ -283,7 +284,9 @@ public function connect(host, (port), username, password, account)
    * --------------------
 
    * Open connection to server
-   if port < 0 then port = 4243
+* 01 Oct 26 Windows port - 4247, the full product's fixed API port (it was
+*   4243, which is OpenQM's).  The same number as SD_API_PORT in sddefs.h.
+   if port < 0 then port = 4247
 * 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: TLS 1.3.  The server takes
 *   every API connection through its TLS relay, and scram.login binds the login
 *   to this session.

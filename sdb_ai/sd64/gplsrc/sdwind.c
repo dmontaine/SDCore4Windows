@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 01 Oct 26 Windows port - the API port is the fixed SD_API_PORT, 4247, set
+ *                      by config.c; this file only comments on it
  * 17 Sep 26 Windows port - RELEASE_1.1 37: check_lost_users() starts
  *                      "sd -cleanup" with fork/execl and waits for it, not
  *                      system() - the install has no /bin/sh, so system()
@@ -367,8 +369,9 @@ void check_lost_users() {
    the transport.  section 7 step 6.
 
    21 Aug 26 Windows port - IT BINDS EVERY INTERFACE NOW, AND THAT REVERSES
-   POSTURE B.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
-   normally 4243, and the ssh tunnel is no longer part of the design.
+   POSTURE B.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT
+   (SD_API_PORT, 4247 since 01 Oct 26; it was 4243) and the ssh tunnel is no
+   longer part of the design.
 
    THE COMMENT THAT STOOD HERE ARGUED THE OPPOSITE and is worth quoting rather
    than deleting, because the argument was sound when it was made: "Posture B

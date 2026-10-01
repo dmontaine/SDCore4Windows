@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 01 Oct 26 Windows port - APIPORT is an ON/OFF switch: any value above zero
+ *           means the fixed port SD_API_PORT (owner's port ruling)
  * 14 Sep 26 Windows port - the global catalogue check names gcat/$cproc
  *           (RELEASE_1.1 5 stage 3a)
  * 31 Dec 23 SD launch - prior history suppressed
@@ -297,14 +299,20 @@ struct CONFIG* read_config(char* errmsg) {
 /* 20240219 mab mods to handle AF_UNIX sockets, security mode */
       else if (sscanf(rec, "APILOGIN=%d", &n) == 1)
         pcfg.api_login = n;
-/* 17 Aug 26 Windows port - APIPORT, the loopback port sdwind listens on for
-   API connections.  There is no default and no fallback to 4243: the struct
-   is memset to zero above, zero means no listener, and a port has to be asked
-   for.  Opening one is a decision - it is reachable by every local process on
-   the machine, which is what $CRED and the ACC$GROUP check in APISRVR are
-   there to answer (PROJECT_STATUS.md section 7 step 6).                     */
+/* 17 Aug 26 Windows port - APIPORT, whether sdwind listens for API
+   connections.  There is no default: the struct is memset to zero above, zero
+   means no listener, and the listener has to be asked for.  Opening one is a
+   decision - it is reachable by every local process on the machine, which is
+   what $CRED and the ACC$GROUP check in APISRVR are there to answer
+   (PROJECT_STATUS.md section 7 step 6).
+
+   01 Oct 26 - THE NUMBER IS NO LONGER THE PORT.  Owner's ruling: the port is
+   fixed (SD_API_PORT, sddefs.h) and not adjustable, so any value above zero
+   means ON and the listener binds SD_API_PORT whatever was written.  A file
+   from W1.1-1 or earlier that says APIPORT=4243 therefore still means ON, and
+   the port it listens on moves by itself.  A value of zero or less is OFF.  */
       else if (sscanf(rec, "APIPORT=%d", &n) == 1)
-        cfg->api_port = n;
+        cfg->api_port = (n > 0) ? SD_API_PORT : 0;
       else if (strncmp(rec, "SDSYS=", 6) == 0) {
         if (!(command_options & CMD_FLASH))
           strcpy(cfg->sysdir, rec + 6);

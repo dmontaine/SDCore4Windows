@@ -45,7 +45,7 @@ fresh server nonce.
 
 **And authentication becomes mutual**, which is the part easily overlooked. The
 server closes by returning a signature only the holder of that account's
-`ServerKey` can compute. A rogue process that takes port 4243 before SD starts
+`ServerKey` can compute. A rogue process that takes port 4247 before SD starts
 cannot harvest credentials by impersonating the server: it can collect a proof
 it cannot use, and it cannot produce the closing signature, so the client
 detects it and fails.

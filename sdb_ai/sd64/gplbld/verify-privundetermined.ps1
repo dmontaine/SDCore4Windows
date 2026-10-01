@@ -101,7 +101,7 @@
     does not exist - CREATE.ACCOUNT refuses a name it has seen.
 
 .PARAMETER Port
-    Loopback port the API listener uses.  4243 is the shipped default.
+    Loopback port the API listener uses.  4247 is the shipped default.
 
 .PARAMETER NoFixture
     22 Sep 26 - RELEASE_1.1 76's owed falsification check.  Skips planting
@@ -131,7 +131,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
-    [int] $Port = 4243,
+    [int] $Port = 4247,
     [switch] $NoFixture
 )
 

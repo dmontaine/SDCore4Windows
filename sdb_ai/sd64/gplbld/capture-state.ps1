@@ -237,7 +237,7 @@ $body = & {
     Section 'firewall rules for the two remote routes'
     try {
         $r = @(Get-NetFirewallRule -ErrorAction Stop |
-               Where-Object { $_.Name -match 'OpenSSH|sshd' -or $_.DisplayName -match 'OpenSSH|SD API|4243' })
+               Where-Object { $_.Name -match 'OpenSSH|sshd' -or $_.DisplayName -match 'OpenSSH|SD API|4243|4247' })
         Write-Output ('matching rules: ' + $r.Count)
         foreach ($x in $r) {
             $addr = '<unreadable>'

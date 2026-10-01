@@ -8,7 +8,7 @@
 # Exit 0 staged, 1 something is wrong, 2 it could not be staged.
 #
 # WHY THIS EXISTS.  Until 22 Aug 2026 every API measurement went to
-# 127.0.0.1:4243, and loopback cannot answer the question - connecting to this
+# 127.0.0.1:4247, and loopback cannot answer the question - connecting to this
 # host's OWN LAN address from this host is short-circuited by the local stack
 # and never reaches the wire either.  The client has to run on another machine.
 #
@@ -45,7 +45,7 @@ param(
     # generated password in its transcript, which is the one thing that cannot
     # be worked out from anywhere else.
     [string] $Prefix = '',
-    [int]    $Port   = 4243,
+    [int]    $Port   = 4247,
     [switch] $Remove
 )
 

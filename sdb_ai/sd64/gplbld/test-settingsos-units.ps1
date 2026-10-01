@@ -81,8 +81,8 @@ try {
 
     Write-Host ''
     Write-Host '3. sd.conf lines'
-    $conf = Select-ConfLines @('# comment', '', '  ', 'APIPORT=4243', '# APIPORT=4243', 'USRDIR=C:\ProgramData\SD\user_accounts')
-    Check "kept the two settings ($($conf.Count))" ($conf.Count -eq 2 -and $conf[0] -eq 'APIPORT=4243')
+    $conf = Select-ConfLines @('# comment', '', '  ', 'APIPORT=4247', '# APIPORT=4247', 'USRDIR=C:\ProgramData\SD\user_accounts')
+    Check "kept the two settings ($($conf.Count))" ($conf.Count -eq 2 -and $conf[0] -eq 'APIPORT=4247')
 }
 catch {
     # A crash after a check has failed is a FAILURE, not "could not set up":

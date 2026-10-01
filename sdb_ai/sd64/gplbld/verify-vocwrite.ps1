@@ -42,7 +42,7 @@
     name it has seen.
 
 .PARAMETER Port
-    API port, default 4243.
+    API port, default 4247.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File verify-vocwrite.ps1 -Prefix sdvocw1
@@ -54,7 +54,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)] [string] $Prefix,
-    [int] $Port = 4243
+    [int] $Port = 4247
 )
 
 $ErrorActionPreference = 'Stop'

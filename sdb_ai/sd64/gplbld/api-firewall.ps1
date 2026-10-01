@@ -6,11 +6,20 @@
 #   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Remove            take the rule away
 #   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Show              report, change nothing
 #   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -ScopeFile <path>  write one word and stop
-#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Open -Port 4243   a port other than the default
+#   powershell -ExecutionPolicy Bypass -File api-firewall.ps1 -Retarget          move a rule left on the old port 4243 to 4247, scope untouched
 #
 # Exit 0 applied, 1 failed, 2 refused.  ELEVATED - creating a firewall rule is
 # a machine-wide change.  -Show and -ScopeFile are the two read-only modes and
 # neither takes the elevation gate.
+#
+# 01 Oct 26 - THE PORT IS 4247 AND THERE IS NO -Port.  The owner ruled the API
+# port fixed and not adjustable (SD_API_PORT in gplsrc/sddefs.h; it was 4243,
+# which is OpenQM's).  A rule made by W1.1-1 or earlier still names 4243 and so
+# admits nothing on 4247: -Show and -ScopeFile say so rather than describing its
+# scope as if it applied, and -Retarget moves the one field, which the installer
+# runs on an upgrade, where -Open and -Restrict must not run (they would change
+# the scope on the strength of a box nobody saw).  -Open and -Restrict also
+# correct the port of an existing rule, since they update it in place.
 #
 # -ScopeFile EXISTS FOR THE INSTALLER, and ssh-firewall.ps1's -ScopeFile is the
 # precedent being copied.  PRE_RELEASE_FIXES 147: after an uninstall that kept
@@ -28,7 +37,7 @@
 # thing tried.  That script TOGGLES a rule somebody else created: installing
 # the OpenSSH capability creates OpenSSH-Server-In-TCP and enables it, so the
 # question there is only how wide it should be.  NOTHING CREATES A RULE FOR
-# 4243.  So this one owns its rule - it makes it, it names it, and -Remove
+# 4247.  So this one owns its rule - it makes it, it names it, and -Remove
 # takes it away on uninstall, which ssh-firewall must never do to Microsoft's.
 #
 # THE RULE IS OURS, AND THE NAME SAYS SO.  An administrator reading wf.msc
@@ -43,10 +52,10 @@
 # ::1 states the intent where somebody will read it.
 #
 # THE PORT IS NOT READ FROM sd.conf, deliberately.  This runs during
-# installation, before the data tree is necessarily complete, and a rule that
-# silently opened a DIFFERENT port from the one it was asked to open would be
-# worse than one that needs telling.  The caller passes -Port; the default
-# matches gplbld/stage.py's SD_CONF template.
+# installation, before the data tree is necessarily complete, and sd.conf no
+# longer holds a port at all - APIPORT is an on/off switch (gplsrc/config.c) and
+# the port is the constant below.  gplbld/test-apiport-units.py checks that it
+# is the same number as SD_API_PORT.
 #
 # IT DOES NOT CHECK WHETHER SD IS LISTENING, and that is not an oversight: the
 # rule outlives any particular run of the service, APIPORT can be commented out
@@ -55,21 +64,36 @@
 # says whether there is one.
 
 param(
-    [int]$Port = 4243,
     [switch]$Open,
     [switch]$Restrict,
     [switch]$Remove,
     [switch]$Show,
+    [switch]$Retarget,
     [string]$ScopeFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+# SD_API_PORT (gplsrc/sddefs.h).  Not a parameter, on purpose - see the header.
+$Port = 4247
 
 $ruleName    = 'SD-API-In-TCP'
 $displayName = 'SD API (SDClient)'
 
 function Get-ApiRule {
     return (Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue)
+}
+
+# THE PORT THE RULE NAMES, as text ('' when there is no rule).  A rule made by
+# an earlier build names 4243; asking it about scope as if it admitted traffic
+# to 4247 would be a query that answers wrongly (5.23).
+function Get-RulePort($rule) {
+    if ($null -eq $rule) { return '' }
+    return [string](($rule | Get-NetFirewallPortFilter).LocalPort)
+}
+
+function Test-RulePortOk($rule) {
+    return ((Get-RulePort $rule) -eq [string]$Port)
 }
 
 # ONE PLACE DECIDES OPEN OR SHUT, which is ssh-firewall.ps1's rule and its
@@ -99,11 +123,6 @@ function Write-State($rule) {
                   $filter.LocalPort, ($addr -join ', '))
 }
 
-if ($Port -lt 1 -or $Port -gt 65535) {
-    Write-Output "api-firewall: -Port is $Port, which is not a port number"
-    exit 1
-}
-
 try {
     # ANSWERED FIRST, AND BEFORE THE ELEVATION GATE BELOW, because it changes
     # nothing and because a caller that gets no answer at all is worse than one
@@ -113,9 +132,12 @@ try {
     # was produced on the way to failing.
     if ($ScopeFile -ne '') {
         $rule = Get-ApiRule
-        if ($null -eq $rule)        { $verdict = 'none' }
-        elseif (Test-RuleOpen $rule) { $verdict = 'open' }
-        else                         { $verdict = 'restricted' }
+        # A rule that names another port admits nothing on this one, so it is
+        # 'none' - the answer the installer's closing box has to give is whether
+        # anyone can reach the API, and with a stale rule nobody can.
+        if (($null -eq $rule) -or (-not (Test-RulePortOk $rule))) { $verdict = 'none' }
+        elseif (Test-RuleOpen $rule)                              { $verdict = 'open' }
+        else                                                      { $verdict = 'restricted' }
         [System.IO.File]::WriteAllText($ScopeFile, $verdict, [System.Text.Encoding]::ASCII)
         Write-Output ("api-firewall: current scope is " + $verdict)
         exit 0
@@ -135,6 +157,10 @@ try {
         # the write-back verdict use, so the three cannot disagree.
         if ($null -eq $rule) {
             Write-Output 'api-firewall: state is OFF at the firewall - no rule, so only this computer may reach the API'
+        } elseif (-not (Test-RulePortOk $rule)) {
+            Write-Output ('api-firewall: state is OFF at the firewall - the rule is for port ' +
+                          (Get-RulePort $rule) + ' and the API is on port ' + $Port +
+                          ', so only this computer may reach the API')
         } elseif (Test-RuleOpen $rule) {
             Write-Output 'api-firewall: state is ON - other computers on your network may reach the API'
         } else {
@@ -143,9 +169,9 @@ try {
         exit 0
     }
 
-    $modes = @($Open, $Restrict, $Remove) | Where-Object { $_ }
+    $modes = @($Open, $Restrict, $Remove, $Retarget) | Where-Object { $_ }
     if ($modes.Count -ne 1) {
-        Write-Output 'api-firewall: give exactly one of -Open, -Restrict, -Remove or -Show'
+        Write-Output 'api-firewall: give exactly one of -Open, -Restrict, -Remove, -Retarget or -Show'
         exit 1
     }
 
@@ -167,6 +193,56 @@ try {
         }
         Remove-NetFirewallRule -Name $ruleName
         Write-Output "api-firewall: removed $ruleName"
+        exit 0
+    }
+
+    # 01 Oct 26 - -Retarget MOVES THE PORT AND NOTHING ELSE, and that is the
+    # whole reason it is not -Open or -Restrict.  An upgrade must not choose a
+    # scope (the installer never showed the box, so any scope it chose would be
+    # a guess in one direction or the other), but it cannot leave the rule on
+    # 4243 either: the listener moves to 4247 by itself, and a rule for the old
+    # port would shut a site out of an API it had deliberately opened.  Same
+    # sources, same service, new number.  No rule is not an error - a site that
+    # never provided the API has nothing to move.
+    #
+    # THE SCOPE IS READ BEFORE AND AFTER AND THE CALL FAILS IF IT MOVED, for the
+    # reason the read-back at the bottom of this file exists: a cmdlet that
+    # reports success has not shown the rule says what was asked.
+    if ($Retarget) {
+        $rule = Get-ApiRule
+        if ($null -eq $rule) {
+            Write-Output 'api-firewall: no rule, so there is no port to move'
+            exit 0
+        }
+        $before      = Get-RulePort $rule
+        $scopeBefore = (@(($rule | Get-NetFirewallAddressFilter).RemoteAddress) | Sort-Object) -join ','
+        Write-Output "api-firewall: before - rule is for port $before, RemoteAddress $scopeBefore"
+        if ($before -eq [string]$Port) {
+            Write-Output "api-firewall: already port $Port - nothing to change"
+            exit 0
+        }
+        # ONLY THE OLD PORT MOVES.  A rule on any other port is not one an
+        # earlier build of this product made: it is an administrator's own
+        # (the old -Port parameter allowed one), or it is another SD Core
+        # product's - the full product and Solo share this rule name and have
+        # different ports (4247, 4249), so moving whatever is there would take
+        # one product's rule away from the other.  -Show still says it admits
+        # nothing on this port.
+        if ($before -ne '4243') {
+            Write-Output "api-firewall: the rule is for port $before, not the old port 4243 - leaving it alone"
+            exit 0
+        }
+        Set-NetFirewallRule -Name $ruleName -LocalPort $Port -Protocol TCP
+        $applied    = Get-ApiRule
+        $after      = Get-RulePort $applied
+        $scopeAfter = (@(($applied | Get-NetFirewallAddressFilter).RemoteAddress) | Sort-Object) -join ','
+        Write-Output "api-firewall: after  - rule is for port $after, RemoteAddress $scopeAfter"
+        if ($after -ne [string]$Port -or $scopeAfter -ne $scopeBefore) {
+            Write-Output "api-firewall: FAILED - asked to move the rule to port $Port and leave who may reach it alone"
+            Write-State $applied
+            exit 1
+        }
+        Write-Output "api-firewall: moved $ruleName from port $before to port $Port; who may reach it is unchanged"
         exit 0
     }
 
@@ -210,7 +286,7 @@ try {
     #
     #   Set-NetFirewallRule : An unspecified, multicast, broadcast, or loopback
     #   IPv6 address was specified.
-    #   api-firewall: updated SD-API-In-TCP for port 4243
+    #   api-firewall: updated SD-API-In-TCP for port 4243   (its port then)
     #   api-firewall: the SD API is reachable FROM THIS MACHINE ONLY
     #     rule: ... RemoteAddress Any
     #

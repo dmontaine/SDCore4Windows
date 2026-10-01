@@ -373,7 +373,7 @@ check-local: $(LOCALTEST)
 # combination this could usefully guess; gplbld/verify-apiport.ps1 sets the
 # whole thing up and passes them in.  Run by hand:
 #
-#   make check-remote APIHOST=127.0.0.1 APIPORT=4243 \
+#   make check-remote APIHOST=127.0.0.1 APIPORT=4247 \
 #        APIUSER=<user> APIPASS=<password> APIACCT=<ACCOUNT>
 APIHOST ?= 127.0.0.1
 APIPORT ?=

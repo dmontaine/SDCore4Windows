@@ -47,7 +47,7 @@ have broken it silently. Owner's decision, 20 Aug 2026: give it SCRAM.
 **It is NOT the removed qmnet.** That distinction is what makes the decision
 obvious rather than arguable: qmnet was `net_open()` in C, port 4245,
 `server;file` VOC references, credentials in `sd.conf` under a substitution
-cipher, removed 18 Aug (`op_dio1.c:627`). `!sdclient` opens **4243**, the API
+cipher, removed 18 Aug (`op_dio1.c:627`). `!sdclient` opens **4247** (4243 until 1 Oct 2026), the API
 port, and the 18 Aug note keeps qmclient explicitly.
 
 **THE CLASS IS `$internal` NOW, and that is a privilege on the class and not

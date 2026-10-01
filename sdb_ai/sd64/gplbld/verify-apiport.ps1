@@ -32,7 +32,7 @@
     round.
 
 .PARAMETER Port
-    Loopback port to use.  4243 is the number the Linux build uses.
+    Loopback port to use.  4247 is the number the Linux build uses.
 
 .PARAMETER Keep
     Leave APIPORT set and the account in place when the run finishes, for
@@ -55,7 +55,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
-    [int]    $Port = 4243,
+    [int]    $Port = 4247,
     [switch] $Keep
 )
 
@@ -457,7 +457,7 @@ finally {
         # stopped being true when APIPORT began shipping active.  The restore
         # above copies back the sd.conf this install came with, so what happens
         # to the port depends on what that file says - and since 21 Aug it says
-        # APIPORT=4243.  A line asserting the port is shut would be a false
+        # APIPORT=4247.  A line asserting the port is shut would be a false
         # statement about the one thing this script exists to manipulate.
         Write-Host '   SD restarted with sd.conf as this install shipped it'
     } else {

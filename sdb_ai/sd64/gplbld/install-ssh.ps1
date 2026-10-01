@@ -13,7 +13,7 @@
 # an opt-in choice again 30 Aug 2026 (sd.iss [Tasks], the three-state ssh
 # ruling); and default UNCHECKED 1 Sep 2026, because the Feature-on-Demand
 # download can take up to an hour and forcing it on every install is a
-# deal-breaker.  THE PREMISE WAS WRONG: the API is a separate port-4243 listener,
+# deal-breaker.  THE PREMISE WAS WRONG: the API is a separate port-4247 listener,
 # not carried over ssh (sd.iss:349), and an account granted API access signs in
 # over it via SCRAM without any ssh server - so ssh is the INTERACTIVE login
 # path, not the only one.  sd.iss gates this with Check: SshServerWanted, so it

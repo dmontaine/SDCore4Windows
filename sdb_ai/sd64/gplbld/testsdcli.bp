@@ -47,7 +47,7 @@
          CRT 'FAIL - account and password are both required'
          STOP
       END
-      IF PORT = '' THEN PORT = 4243
+      IF PORT = '' THEN PORT = 4247
 
 * ----------------------------------------------------------------------
 * The connection that should succeed.

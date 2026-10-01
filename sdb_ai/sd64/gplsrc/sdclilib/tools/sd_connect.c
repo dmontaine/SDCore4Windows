@@ -25,11 +25,11 @@
  * Run with a host and port for the transport half, which needs no
  * credentials:
  *
- *     sd-connect.exe 10.0.0.5 4243
+ *     sd-connect.exe 10.0.0.5 4247
  *
  * Add credentials for the whole thing:
  *
- *     sd-connect.exe 10.0.0.5 4243 user password ACCOUNT
+ *     sd-connect.exe 10.0.0.5 4247 user password ACCOUNT
  *
  * The transport half deliberately repeats what OpenSocket() in sdclilib.c
  * does - dotted quad through inet_addr, anything else through
@@ -196,8 +196,8 @@ int main(int argc, char* argv[]) {
                 "usage: %s <host> <port>\n"
                 "       %s <host> <port> <user> <password> <account>\n\n"
                 "  Two arguments test the transport only, and need no\n"
-                "  credentials.  Five test the whole login.  4243 is the\n"
-                "  SD default port.\n",
+                "  credentials.  Five test the whole login.  4247 is the\n"
+                "  SD Core port for the full product.\n",
                 argv[0], argv[0]);
         return 2;
     }

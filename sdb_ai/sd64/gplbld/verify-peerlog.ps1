@@ -47,7 +47,7 @@
     this on a machine whose SD error log matters.
 
 .PARAMETER Port
-    Loopback port the API listener uses.  4243 is the shipped default.
+    Loopback port the API listener uses.  4247 is the shipped default.
 
 .PARAMETER MaxConnections
     Give up looking for the trim after this many connections.  The default is
@@ -60,7 +60,7 @@
 
 [CmdletBinding()]
 param(
-    [int] $Port = 4243,
+    [int] $Port = 4247,
     [int] $MaxConnections = 40
 )
 

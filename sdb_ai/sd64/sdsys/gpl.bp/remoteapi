@@ -24,6 +24,8 @@
 * 03 Sep 26 report.state now reads the FIREWALL as well as the listener, so
 *           "remote.api" with no keyword says who may reach the API and not
 *           only whether a socket is open.  PRE_RELEASE_FIXES 148.
+* 01 Oct 26 the port is 4247, fixed (owner's port ruling; it was 4243).  The
+*           verb takes no port and nothing it does can move it.
 * END-HISTORY
 *
 *
@@ -33,8 +35,8 @@
 *
 *    Says whether this machine provides the SD API, and who may reach it.
 *
-*       ON     SD listens on port 4243 and other computers may connect
-*       LOCAL  SD listens on port 4243 and only this computer may connect
+*       ON     SD listens on port 4247 and other computers may connect
+*       LOCAL  SD listens on port 4247 and only this computer may connect
 *       OFF    SD opens no API socket at all
 *
 *    With no keyword it reports the current setting and changes nothing.

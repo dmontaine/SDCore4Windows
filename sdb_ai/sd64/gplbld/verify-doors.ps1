@@ -47,7 +47,7 @@ param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
     [Parameter(Mandatory = $true)] [string] $Password,
     [Parameter(Mandatory = $true)] [ValidateSet('Control', 'Refused')] [string] $Phase,
-    [int]    $Port      = 4243,
+    [int]    $Port      = 4247,
     # 04 Sep 26 - PRE_RELEASE_FIXES 161, and this one mattered MORE than
     # verify-tierapi's identical default.  That step refuses out loud when the
     # binary is missing; THIS one Skips door 3 and still exits 0, so on b116 the

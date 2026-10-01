@@ -69,7 +69,7 @@
     Lower case only: it becomes a Windows account name.
 
 .PARAMETER Port
-    Loopback port the API listener uses.  4243 is the shipped default.
+    Loopback port the API listener uses.  4247 is the shipped default.
 
 .EXAMPLE
     VerifyInstall2.ps1 -Run b124 -Only verify-apiremote
@@ -77,7 +77,7 @@
 [CmdletBinding()]
 param(
     [string]$Prefix = '',
-    [int]$Port = 4243
+    [int]$Port = 4247
 )
 
 $ErrorActionPreference = 'Stop'

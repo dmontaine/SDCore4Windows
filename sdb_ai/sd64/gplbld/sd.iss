@@ -255,7 +255,7 @@ Name: "addtopath"; Description: "Add SD Core to the system PATH"; \
 ;
 ; LEAVING IT OFF DOES NOT MAKE ACCOUNTS UNUSABLE, and the label must not imply it
 ; does.  Owner's correction, 1 Sep 2026: an account can also be reached through
-; the API - a separate port-4243 listener (its own choice below), NOT carried
+; the API - a separate port-4247 listener (its own choice below), NOT carried
 ; over ssh (sd.iss:349, "the ssh tunnel is no longer part of the design") - so
 ; creating accounts is independent of whether an ssh server exists.  What ssh
 ; provides is interactive sign-in over "ssh localhost" or remotely.  The older
@@ -404,9 +404,10 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ;  "Before you install" page as a statement; that page was deleted 20 Sep 26.)
 
 ; THE API PORT.  Owner's decision, 21 Aug 2026: the API is reached AT THE PORT,
-; normally 4243, and the ssh tunnel is no longer part of the design (8, posture
-; B reversed).  gplsrc/sdwind.c binds every interface and gplbld/stage.py ships
-; APIPORT=4243 active, so the firewall rule is what decides who may reach it.
+; at 4247 (fixed since 01 Oct 26, owner's ruling; it was 4243), and the ssh
+; tunnel is no longer part of the design (8, posture B reversed).
+; gplsrc/sdwind.c binds every interface and gplbld/stage.py ships APIPORT=4247
+; active, so the firewall rule is what decides who may reach it.
 ;
 ; ===========================================================================
 ; 25 Aug 26 - OPT-IN NOW.  Owner's decision, reversing the default this block
@@ -473,7 +474,7 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; service" is a state the reader SEES rather than a message after the fact.
 ;
 ; AND THE DEFAULT MOVES THE SAFE WAY: ticking the parent alone now leaves the
-; rule RESTRICTED to this computer.  Opening 4243 to the network is a second,
+; rule RESTRICTED to this computer.  Opening 4247 to the network is a second,
 ; deliberate click rather than a side effect of wanting the API at all.
 ; remote.api on|local|off (entry 78) changes it afterwards either way.
 ; 31 Aug 26 - THE THREE FLAGS THAT MAKE THE PAIR BEHAVE.  PRE_RELEASE_FIXES 85,
@@ -520,7 +521,7 @@ Name: "sshremoteopen"; Description: "Let other computers on your network connect
 ; on every reinstall, turning "visible but inert" into "invisible but active".
 ; That is the trap ShouldSkipPage's own comment records, arriving by a second
 ; route.  The box and its firewall action now stand or fall together.
-Name: "apiremote"; Description: "Provide the SD Core API (port 4243)"; \
+Name: "apiremote"; Description: "Provide the SD Core API (port 4247)"; \
     GroupDescription: "3)  SD Core API - Availability and Access:"; Flags: unchecked checkablealone; \
     Check: ApiConfAbsent
 Name: "apiremote\apinetwork"; Description: "Let other computers on your network reach it"; \
@@ -1826,7 +1827,7 @@ end;
    DataTreeUpgrade alone would also be true after an UNINSTALL, because the
    uninstaller keeps the data tree on purpose - and by then it has already run
    RemoveAllowGroups, RemoveApiFirewall and RemoveFromPath.  Skipping the page
-   there would hand the reader a machine whose ssh confinement, 4243 rule and
+   there would hand the reader a machine whose ssh confinement, API rule and
    PATH entry had just been removed, with nothing to put them back and no
    question asked.  So that case SHOWS the page, and the owner checked the
    consequence himself: with a server still present the reader simply gets the
@@ -1969,7 +1970,7 @@ end;
    inert tickbox with a wrong security sentence: a worse bargain.
 
    IT READS THE FILE RATHER THAN GUESSING FROM THE PATH.  stage.py ships two
-   variants and says which is which in as many words - "full (APIPORT=4243) and
+   variants and says which is which in as many words - "full (APIPORT=4247) and
    stand-alone (APIPORT unset)" - so an ACTIVE APIPORT line is the honest test,
    and a commented or valueless one is not a listener.  Where there is no
    sd.conf to read, the box is the only answer there is, and it is offered. *)
@@ -2437,10 +2438,9 @@ end;
   created by api-firewall.ps1 and removed by it on uninstall, so there is no
   pre-existing configuration to respect and nothing to refuse.
 
-  NO -Port EITHER, so the rule is for api-firewall.ps1's default, which is the
-  same 4243 that gplbld/stage.py's SD_CONF template sets.  An administrator who
-  changes APIPORT afterwards has to re-run the script with -Port; the script's
-  own header says why it does not read sd.conf to find out. }
+  NO PORT EITHER, because there is nothing to pass: 01 Oct 26 the API port is
+  fixed at 4247 (gplsrc/sddefs.h), the script has no -Port, and APIPORT in
+  sd.conf only switches the listener on.  The rule is always for 4247. }
 function ApplyApiFirewall: String;
 var
   Code: Integer;
@@ -2457,7 +2457,7 @@ begin
     "no rule to open", which has to stay true.
 
     api-firewall.ps1 -Restrict is NOT harmless-and-tidy here for that reason:
-    it would leave behind a rule naming port 4243 that the uninstaller then has
+    it would leave behind a rule naming port 4247 that the uninstaller then has
     to remove, on a system that never had the API. }
   { 30 Aug 26 - RE-KEYED FROM StandaloneChosen TO THE API BOX ITSELF, AND THE
     EXIT NOW MEANS THE SAME THING IT ALWAYS DID.  PRE_RELEASE_FIXES 75.  An
@@ -2503,7 +2503,7 @@ begin
   if Code = 0 then
   begin
     if Wanted then
-      Result := 'Other computers on your network CAN now reach the SD Core API (port 4243).' + #13#10#13#10
+      Result := 'Other computers on your network CAN now reach the SD Core API (port 4247).' + #13#10#13#10
     else
       { 30 Aug 26 - THIS ARM WAS UNREACHABLE UNTIL NOW.  PRE_RELEASE_FIXES 75:
         Wanted was ApiWanted, which is always true by the time we get here, so
@@ -2521,6 +2521,42 @@ begin
     Result := 'Setting who may reach the SD Core API FAILED. Run from an ELEVATED ' +
               'PowerShell prompt to see why:' + #13#10#13#10 +
               '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
+end;
+
+{ 01 Oct 26 - AN UPGRADE MOVES THE RULE'S PORT, AND NOTHING ELSE.  The owner
+  fixed the API port at 4247 (gplsrc/sddefs.h; it was 4243).  An upgrade keeps
+  sd.conf, whose APIPORT line still reads as ON, so the listener moves to 4247
+  by itself - and the SD-API-In-TCP rule an earlier build made still names
+  4243, so a site that had opened the API to the network would be locked out of
+  it by the upgrade.  ApplyApiFirewall cannot be the fix: it chooses a scope,
+  and on an upgrade the tasks page was never shown, so any scope it chose would
+  be a guess (the reason it does not run here at all).  api-firewall.ps1
+  -Retarget changes the one field, checks the scope did not move, and does
+  nothing where there is no rule, the rule is already right, or the rule is on
+  any port but the old 4243 (an administrator's own, or Solo's).
+
+  RETURNS '' ON SUCCESS AND ON "NOTHING TO DO", which is the common case, so the
+  closing page says nothing about it; a failure carries ELEVATED, so
+  IsFailureText sends it to the closing box.  The wording follows
+  ApplyApiFirewall's. }
+function RetargetApiFirewall: String;
+var
+  Code: Integer;
+  Ps, Args: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+          ExpandConstant('{app}\api-firewall.ps1') + '" -Retarget';
+  if not Exec(Ps, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'Moving the SD Core API rule to port 4247 FAILED: the script did not run.' + #13#10#13#10;
+    Exit;
+  end;
+  if Code <> 0 then
+    Result := 'Moving the SD Core API rule to port 4247 FAILED. Run from an ELEVATED ' +
+              'PowerShell prompt to see why:' + #13#10#13#10 +
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Retarget' + #13#10#13#10;
 end;
 
 (* ***WHO MAY REACH THE API PORT - MEASURED, NOT INFERRED.***
@@ -4135,7 +4171,10 @@ begin
       offered, the site's own rule is left exactly as it was and remote.api
       on|local|off is the way to change it. }
     if (not TrueUpgrade) and ApiConfAbsent then
-      ApiFw := ApplyApiFirewall;
+      ApiFw := ApplyApiFirewall
+    else if TrueUpgrade then
+      { 01 Oct 26 - the port only; see RetargetApiFirewall. }
+      ApiFw := RetargetApiFirewall;
 
     { 03 Sep 26 - AND THEN ASK WHO MAY ACTUALLY REACH IT.  PRE_RELEASE_FIXES 147.
 

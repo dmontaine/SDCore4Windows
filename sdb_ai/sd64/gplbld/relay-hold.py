@@ -7,7 +7,7 @@ there is exactly one live sdtlsrelay.exe on the machine to inspect - as the
 bare account, at Low, with no privilege.  No login: the relay exists from the
 handshake on, and a login would need an account this check has no use for.
 
-  python relay-hold.py [--host 127.0.0.1] [--port 4243] [--hold 20]
+  python relay-hold.py [--host 127.0.0.1] [--port 4247] [--hold 20]
 
 Prints one line per step and "HELD <binding hex>" once the ACK is in, so the
 caller can anchor on a line only a completed handshake produces.  Exit 0 when
@@ -26,7 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=4243)
+    ap.add_argument("--port", type=int, default=4247)
     ap.add_argument("--hold", type=float, default=20.0)
     a = ap.parse_args()
 

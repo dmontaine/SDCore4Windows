@@ -25,6 +25,7 @@
  *           Windows has no xinetd and no systemd socket activation, so the
  *           listener and the per-connection spawn are ours to provide.
  * 21 Aug 26 Windows port - NETDIRS added, for the containment gate
+ * 01 Oct 26 Windows port - api_port holds 0 or the fixed SD_API_PORT
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -67,10 +68,11 @@ struct CONFIG {
   int16_t portmap_base_port;       /* PORTMAP: First port number ... */
   int16_t portmap_base_user;       /*          ...First user number... */
   int16_t portmap_range;           /*          ...Number of ports/users */
-  /* 17 Aug 26 Windows port - APIPORT: loopback port for API (SDClient)
-     connections, 0 = no listener.  DEFAULTS TO OFF DELIBERATELY: enabling it
-     opens a TCP port every local process can reach, so it is an act, not a
-     side effect of installing.  The Linux convention is 4243.               */
+  /* 17 Aug 26 Windows port - APIPORT: port for API (SDClient) connections,
+     0 = no listener.  DEFAULTS TO OFF DELIBERATELY: enabling it opens a TCP
+     port every local process can reach, so it is an act, not a side effect of
+     installing.  01 Oct 26: the port is SD_API_PORT (4247, sddefs.h) and the
+     value in sd.conf only switches it on - config.c stores 0 or that number. */
   int16_t api_port;                /* APIPORT:  API listener port, 0 = off */
   char startup[80+1];              /* STARTUP: Startup command */
  };

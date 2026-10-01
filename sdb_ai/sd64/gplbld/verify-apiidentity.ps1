@@ -86,7 +86,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)] [string] $Prefix,
-    [int]    $Port = 4243,
+    [int]    $Port = 4247,
     [switch] $Keep
 )
 

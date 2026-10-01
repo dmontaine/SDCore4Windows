@@ -40,7 +40,7 @@
 #>
 
 param(
-    [int]    $Port = 4243,
+    [int]    $Port = 4247,
     [int]    $HoldSeconds = 25,
     [switch] $Keep
 )

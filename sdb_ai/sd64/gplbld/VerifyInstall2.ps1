@@ -746,7 +746,7 @@ $steps = @(
     # 22 Aug 26 - !valid_os_name on the API login path, and the audit trail.
     # SECOND of the API steps and deliberately before the three that rewrite
     # sd.conf: it is the only one that does NOT touch the file, so it measures
-    # the port in the state the install ships it (APIPORT=4243, active since
+    # the port in the state the install ships it (APIPORT=4247, active since
     # Phase 1).  It writes refusal records to the audit file on purpose.
     @{ Name = 'verify-apiname.ps1';       P = @{ Prefix = $NamePrefix } },
     # 22 Aug 26 - the two API gates answering DIFFERENTLY: a wrong password

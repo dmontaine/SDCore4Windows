@@ -49,7 +49,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Prefix,
-    [int] $Port = 4243,
+    [int] $Port = 4247,
 
     # ***THREE UAC PROMPTS BECOME ONE - OWNER'S RULING, 28 Aug 2026.***  The
     # default routes the three elevated legs through ONE resident elevated

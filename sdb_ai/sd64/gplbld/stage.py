@@ -646,8 +646,11 @@ NUMUSERS=20
 SORTMEM=4096
 ERRLOG=50
 APILOGIN=1
-# APIPORT is the port SD listens on for API (SDClient) connections.  4243 is
-# the number the Linux build uses.
+# APIPORT switches the API (SDClient) listener on.  01 Oct 26: THE PORT IS FIXED
+# AT 4247 (SD_API_PORT in gplsrc/sddefs.h; the owner ruled it not adjustable)
+# and any value above zero means ON - so this file says 4247 to be readable, a
+# file from W1.1-1 that still says 4243 means ON as well, and neither number
+# moves the port.
 #
 # 21 Aug 26 Windows port - ON BY DEFAULT, AND IT NOW FACES THE NETWORK.
 # Owner's decision, 21 Aug 2026: the API is reached AT THE PORT and the ssh
@@ -684,7 +687,7 @@ APILOGIN=1
 #
 # TO TURN IT OFF, comment the line below out.  Changing it takes effect when
 # SD is next started, not when a session begins.
-APIPORT=4243
+APIPORT=4247
 # NETDIRS says which directories OUTSIDE ITS OWN ACCOUNT a session that arrived
 # over the API may reach.  IT IS COMMENTED OUT ON PURPOSE and the empty value is
 # the strict one: with nothing here, an API session can open files in the
@@ -738,7 +741,7 @@ SH1=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInt
 # reworded, a silent no-op replace would ship a stand-alone system with the API
 # listening - the exact thing the wizard page promises it does not do.  So
 # sd_conf_standalone() refuses rather than returning something plausible.
-APIPORT_LINE = 'APIPORT=4243'
+APIPORT_LINE = 'APIPORT=4247'
 
 STANDALONE_APIPORT = """\
 # 25 Aug 26 - NOT SET, AND THAT IS WHAT MAKES THIS A STAND-ALONE SYSTEM.
@@ -749,7 +752,7 @@ STANDALONE_APIPORT = """\
 # Setting it turns the API on the next time SD starts, but nothing else here is
 # set up for it: no firewall rule was created and no account was joined to the
 # sdapi group, because a stand-alone install does neither.
-# APIPORT=4243"""
+# APIPORT=4247"""
 
 
 def _active_apiport(text):
@@ -1712,7 +1715,7 @@ def main():
     with open(sconf, 'w', encoding='latin-1', newline='\r\n') as f:
         f.write(sd_conf_standalone())
     staged.add(stage, sconf)
-    print('  sd.conf: full (APIPORT=4243) and stand-alone (APIPORT unset) staged')
+    print('  sd.conf: full (APIPORT=4247) and stand-alone (APIPORT unset) staged')
 
     for d in PROGRAM_DATA_DIRS:
         os.makedirs(os.path.join(pd, d))

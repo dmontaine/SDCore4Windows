@@ -101,7 +101,7 @@
 # sshd_config line 58 read "#AllowTcpForwarding yes" - commented, so the default
 # (yes) applied - PermitOpen was unset, and "ssh -N" opens no session channel at
 # all, so ForceCommand is never consulted on that path.  So any sdssh member
-# could have sshd open a connection to 127.0.0.1:4243 on their behalf.
+# could have sshd open a connection to 127.0.0.1:4247 on their behalf.
 #
 #   - DisableForwarding covers tcp, StreamLocal, agent, X11 and tun in one
 #     keyword rather than four that can drift apart.  It is a recognised keyword

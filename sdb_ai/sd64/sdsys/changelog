@@ -2,6 +2,24 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+01 Oct 26  THE API PORT IS 4247, AND NOTHING CAN CHANGE IT.
+
+           The SD API used port 4243, which OpenQM and ScarletDME also use,
+           so SD could not run beside either of them.  SD Core for Windows
+           now listens on port 4247.  No setting, installer option or command
+           takes a port, so every SD Core for Windows system uses the same one.
+           * APIPORT in sd.conf now only switches the API on: any number above
+             zero means on, and SD listens on 4247 whatever the number is.  An
+             sd.conf that says APIPORT=4243 keeps working, and now means 4247.
+           * A program that names port 4243 to reach SD must name 4247 instead.
+             One that names no port needs no change: the client library and
+             the BASIC !sdclient class both default to 4247.
+           * An upgrade moves SD's own firewall rule, SD-API-In-TCP, from port
+             4243 to 4247 and leaves who may reach it as it was.  A rule you
+             made yourself for 4243 is not touched, and no longer does
+             anything for SD.
+           * REMOTE.API and its help text now say 4247.
+
 02 Oct 26  ACCOUNTS CAN BE BACKED UP AND RESTORED.
 
            Three new commands, in SDSYS:

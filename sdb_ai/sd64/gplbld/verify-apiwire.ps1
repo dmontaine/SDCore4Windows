@@ -5,7 +5,7 @@
     contain the record's content, the account name or the password.
 
 .DESCRIPTION
-    Row 41's falsified-if is "a packet capture on 4243 during an API read shows
+    Row 41's falsified-if is "a packet capture on 4247 during an API read shows
     the record's content".  verify-apiport and verify-scramlogin both read the
     CLIENT's logical stream (the `wire` line is the plaintext the client handed
     TLS), so they prove SCRAM and the TLS path, not what a third party on the
@@ -43,7 +43,7 @@
     LAN address if the loopback control refuses.
 
 .PARAMETER Port
-    API port, default 4243.
+    API port, default 4247.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File verify-apiwire.ps1 -Prefix sdwire1
@@ -56,7 +56,7 @@
 param(
     [Parameter(Mandatory = $false)] [string] $Prefix,
     [string] $CaptureHost = '127.0.0.1',
-    [int]    $Port = 4243
+    [int]    $Port = 4247
 )
 
 $ErrorActionPreference = 'Stop'

@@ -10,7 +10,7 @@
     to the Linux server (RELEASE_1.1 41).  The reverse - a Linux client against
     this Windows server - needs a non-administrator account here with an API
     credential, and it needs the firewall open so the other machine can reach
-    port 4243 at all.  This does both, and -Remove takes both away again.
+    port 4247 at all.  This does both, and -Remove takes both away again.
 
     IT DOES NOT SET THE PASSWORD ITSELF, AND THAT IS DELIBERATE.  MODIFY.PASSWORD
     is run interactively (finish-install.ps1's pattern) so the person at the
@@ -51,7 +51,7 @@
     zzinterop; the trailing w keeps them distinct in a shared write-up).
 
 .PARAMETER Port
-    The API port.  4243 is the shipped default and what the listener uses.
+    The API port.  4247 is the shipped default and what the listener uses.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File C:\Users\Don\SDCoreProject\sd4windows\sdb_ai\sd64\gplbld\interop-account.ps1 -Create
@@ -66,7 +66,7 @@ param(
     [switch] $Create,
     [switch] $Remove,
     [string] $Name = 'zzinteropw',
-    [int]    $Port = 4243
+    [int]    $Port = 4247
 )
 
 $ErrorActionPreference = 'Stop'
@@ -229,7 +229,7 @@ Step "Opening the firewall for port $Port (any address)"
 # api-firewall.ps1 -Open allows any remote address, which matches the Linux
 # side's posture for this run (ufw off there).  It is a LAN test and -Remove
 # closes it again; the owner is told so below.
-& (Join-Path $Gplbld 'api-firewall.ps1') -Open -Port $Port
+& (Join-Path $Gplbld 'api-firewall.ps1') -Open
 if ($LASTEXITCODE -ne 0) { Die 'api-firewall.ps1 -Open failed - the remote box could not reach this one.' 1 }
 
 # ---------------------------------------------------------------------------

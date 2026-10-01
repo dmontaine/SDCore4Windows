@@ -19,7 +19,9 @@
  * along with this library.  If not, see <https://www.gnu.org/licenses/>.
  *
  * START-HISTORY:
- * 31 Dec 23 SD launch - prior history suppressed 
+ * 31 Dec 23 SD launch - prior history suppressed
+ * 01 Oct 26 Windows port - a port of -1 now means 4247, the full product's
+ *           fixed API port (it was 4243)
  * START-HISTORY (winSDclilib):
  * xxDec23 mab add more functions, at this build we now include:
  * SDCallx
@@ -4010,8 +4012,11 @@ Private bool OpenSocket(char* host, int16_t port) {
     char ack_buff;
     int n;
     unsigned int n1, n2, n3, n4;
+    /* 01 Oct 26 - 4247, the full product's fixed API port (owner's ruling; it
+       was 4243, which is OpenQM's).  Same number as SD_API_PORT in sddefs.h,
+       which this library cannot include - test-apiport-units.py compares. */
     if (port < 0)
-        port = 4243;
+        port = 4247;
     /* Start Winsock up */
     if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0) {
         sprintf_s(session[session_idx].sderror, sizeof(session[0].sderror),

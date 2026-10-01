@@ -57,7 +57,7 @@ param(
     # writing it to a file.  Checked against the askpass mechanism either way.
     [string] $Password = '',
 
-    [int] $Port = 4243
+    [int] $Port = 4247
 )
 
 $ErrorActionPreference = 'Stop'

@@ -34,11 +34,20 @@
 # [System.IO.File] and rejoins with an explicit CRLF.
 #
 # ***THE MATCH IS CASE-SENSITIVE ON PURPOSE, TO AGREE WITH stage.py.***
-# stage.py:538 selects the active line with Python's `l.strip() == 'APIPORT=4243'`,
-# which is case-sensitive; if this script accepted "apiport=4243" it would
+# stage.py:538 selects the active line with Python's `l.strip() == 'APIPORT=4247'`,
+# which is case-sensitive; if this script accepted "apiport=4247" it would
 # report a state stage.py's own assertion would not, and the two would disagree
 # about the same file.  PowerShell's -eq is case-INSENSITIVE by default, so the
 # -c forms are used throughout and that is not decoration.
+#
+# 01 Oct 26 - THE NUMBER IS NOT THE PORT ANY MORE, AND AN UPGRADED FILE STILL
+# SAYS 4243.  The owner ruled the API port fixed at 4247 (gplsrc/sddefs.h);
+# gplsrc/config.c reads APIPORT as an on/off switch, any value above zero
+# meaning ON.  The installer keeps an existing sd.conf, so a file from W1.1-1
+# or earlier carries `APIPORT=4243` (or `# APIPORT=4243`) and has to be read as
+# what it means: ON (or OFF), listening on 4247.  Those are the LEGACY forms.
+# -Show reads them; -On and -Off rewrite the line they touch to the 4247 form.
+# Nothing else about the file moves.
 
 param(
     [switch]$On,
@@ -52,8 +61,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$ACTIVE    = 'APIPORT=4243'
-$COMMENTED = '# APIPORT=4243'
+$ACTIVE    = 'APIPORT=4247'
+$COMMENTED = '# APIPORT=4247'
+
+# The forms an installed sd.conf from W1.1-1 or earlier carries - see the header.
+$LEGACY_ACTIVE    = 'APIPORT=4243'
+$LEGACY_COMMENTED = '# APIPORT=4243'
 
 if ($ConfPath -eq '') {
     $ConfPath = Join-Path $env:ProgramData 'SD\sd.conf'
@@ -95,10 +108,13 @@ $lines = $text -split "`r`n", 0, 'SimpleMatch'
 
 $activeIdx    = @()
 $commentedIdx = @()
+$legacyActive = 0
 for ($i = 0; $i -lt $lines.Count; $i++) {
     $t = $lines[$i].Trim()
-    if ($t -ceq $ACTIVE)    { $activeIdx    += $i }
-    if ($t -ceq $COMMENTED) { $commentedIdx += $i }
+    if ($t -ceq $ACTIVE)           { $activeIdx    += $i }
+    if ($t -ceq $LEGACY_ACTIVE)    { $activeIdx    += $i; $legacyActive++ }
+    if ($t -ceq $COMMENTED)        { $commentedIdx += $i }
+    if ($t -ceq $LEGACY_COMMENTED) { $commentedIdx += $i }
 }
 
 # 02 Sep 26 - "before" IS A LIE ON THE -Show PATH, because nothing comes after
@@ -128,12 +144,23 @@ if ($activeIdx.Count -eq 0 -and $commentedIdx.Count -eq 0) {
 if ($Show) {
     if ($activeIdx.Count -gt 0) { Say 'state  : ON - SD opens the API listener when it next starts' }
     else                        { Say 'state  : OFF - SD opens no API socket at all' }
+    # THE FILE MAY STILL SAY 4243 AND THE READER SHOULD NOT BE LEFT TO WORK OUT
+    # WHICH NUMBER WINS.  The number is ignored; the port is 4247.
+    if ($legacyActive -gt 0) {
+        Say ('port   : the line says 4243; SD ignores the number and listens on port 4247')
+    } elseif ($activeIdx.Count -gt 0) {
+        Say 'port   : 4247'
+    }
     exit 0
 }
 
 $wantOn = [bool]$On
 
-if ($wantOn -and $activeIdx.Count -gt 0) {
+# ON ALREADY, BUT IN THE LEGACY FORM: the state is right and the line is not, so
+# -On normalizes it rather than reporting "already ON" over a file that names a
+# port SD no longer listens on.  Only when no line is already in the 4247 form.
+$newActive = @($activeIdx).Count - $legacyActive
+if ($wantOn -and $activeIdx.Count -gt 0 -and ($newActive -gt 0 -or $legacyActive -eq 0)) {
     Say 'already ON - nothing to change'
     exit 0
 }
@@ -146,7 +173,8 @@ if ((-not $wantOn) -and $activeIdx.Count -eq 0) {
 # count is reported above so the caller can see it, and touching only one keeps
 # the change reversible by eye.
 if ($wantOn) {
-    $i = $commentedIdx[0]
+    if ($activeIdx.Count -gt 0) { $i = $activeIdx[0] }      # a legacy 4243 line, rewritten
+    else                        { $i = $commentedIdx[0] }
     $lines[$i] = $ACTIVE
 } else {
     $i = $activeIdx[0]
@@ -173,7 +201,7 @@ try {
     exit 1
 }
 
-$afterActive = @($after -split "`r`n", 0, 'SimpleMatch' | Where-Object { $_.Trim() -ceq $ACTIVE })
+$afterActive = @($after -split "`r`n", 0, 'SimpleMatch' | Where-Object { ($_.Trim() -ceq $ACTIVE) -or ($_.Trim() -ceq $LEGACY_ACTIVE) })
 Say ("after  : active=" + $afterActive.Count)
 
 if ($wantOn -and $afterActive.Count -ne 1) {
