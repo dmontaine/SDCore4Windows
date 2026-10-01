@@ -1,0 +1,197 @@
+* SETTINGSR
+* SETTINGS.REPORT verb (S.50).
+* Copyright (c) String Database
+*
+* START-HISTORY:
+* 01 Oct 26 dm Written for S.50 (owner, 1 Oct 2026: "I think we need a way for
+*              an admin to store a copy of the system settings, it could be as
+*              simple as a text document").  SHARED WITH SD CORE FOR WINDOWS BYTE
+*              FOR BYTE; the split is agreed by mail (2026-10-01T1210): this verb
+*              prints what SD itself holds, !settings_os what the OS holds.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    SETTINGS.REPORT               the report on the terminal
+*    SETTINGS.REPORT directory     written there as
+*                                  SD-<host>-settings-<yyyymmdd-hhmmss>.txt
+*
+*    REFERENCE TEXT ONLY.  Nothing reads it back; an administrator re-applies
+*    what it records by hand.  It is not part of a backup.  NEVER A SECRET: no
+*    password, no key, nothing from $cred.  An administrator verb.
+*
+*    [system]        product, version, host, when
+*    [accounts]      every registered account, with the manifest keys
+*    [sdsys voc]     SDSYS VOC entries that are not in the shipped voc_template
+*    [global catalogue]  entries that are not SD's own (no $catalog line in
+*                    SDSYS gpl.bp names them) - a backed-up account's own
+*                    entries are in its backup too; the rest are only here
+*    then every section !settings_os returns (sd.conf, ssh, api, ...).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $settings.report
+$catalog $SETTINGSR
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include header.h
+
+   prompt ''
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* verb
+   dest = ''
+   call @parser(PARSER$GET.TOKEN, token.type, dest, keyword)
+   if token.type = PARSER$END then dest = ''
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   if token.type # PARSER$END then stop sysmsg(13030)   ;* Syntax
+   if dest # '' then
+      if not(ospath(dest, OS$EXISTS)) then stop sysmsg(13010, dest)
+      dest = ospath(dest, OS$FULLPATH)
+      openpath dest to dest.f else stop sysmsg(13010, dest)
+   end
+
+   r = ''
+   call !acc_os_info('', '', sys.info, err)
+   if err # '' then stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   host = ''
+   r<-1> = '[system]'
+   for k = 1 to dcount(sys.info, @fm)
+      r<-1> = sys.info<k>
+      if field(sys.info<k>, ':', 1) = 'host' then host = trim(field(sys.info<k>, ':', 2, 99))
+   next k
+   d = date() ; gosub iso.date
+   r<-1> = 'created: ':iso:'T':oconv(time(), 'MTS')
+
+* [accounts]
+   r<-1> = ''
+   r<-1> = '[accounts]'
+   openpath @sdsys:@ds:'accounts' to acc.f else stop sysmsg(6000)
+   select acc.f to 11
+   ids = ''
+   loop
+      readnext id from 11 else exit
+      locate id in ids<1> by 'AL' setting p else ins id before ids<p>
+   repeat
+   for i = 1 to dcount(ids, @fm)
+      read acc.rec from acc.f, ids<i> else continue
+      r<-1> = 'account: ':ids<i>
+      r<-1> = '  path: ':parse.pathname.tokens(acc.rec<ACC$PATH>)
+      r<-1> = '  description: ':acc.rec<ACC$DESCR>
+      r<-1> = '  suspended: ':(if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' then 1 else 0)
+      if ids<i> # 'sdsys' then
+         call !acc_os_info(ids<i>, acc.rec, info, err)
+         if err # '' then
+            r<-1> = '  (':sysmsg(err<1,1>, err<1,2>, err<1,3>):')'
+         end else
+            for k = 1 to dcount(info, @fm)
+               r<-1> = '  ':info<k>
+            next k
+         end
+      end
+   next i
+
+* [sdsys voc] - SDSYS's VOC against the shipped template
+   r<-1> = ''
+   r<-1> = '[sdsys voc]'
+   openpath @sdsys:@ds:'voc_template' to tpl.f then
+      select @voc to 12
+      loop
+         readnext id from 12 else exit
+         read x from tpl.f, id then continue
+         read x from tpl.f, downcase(id) then continue
+         read vrec from @voc, id then r<-1> = id:': ':convert(@fm, ' ', vrec<1>):'  ':vrec<2>
+      repeat
+      close tpl.f
+   end
+
+* [global catalogue] - entries that no $catalog line in SDSYS gpl.bp names
+   r<-1> = ''
+   r<-1> = '[global catalogue]'
+   sys.names = ''
+   openpath @sdsys:@ds:'gpl.bp' to src.f then
+* Select lists 11 and 12 only: 13 and up are out of range (measured, 1 Oct 26).
+      select src.f to 11
+      loop
+         readnext sid from 11 else exit
+         read srec from src.f, sid else continue
+* $catalog and $catalogue both name the entry (pdebug says "$catalogue").
+         findstr '$CATALOG' in upcase(srec) setting fpos else continue
+         for l = 1 to dcount(srec, @fm)
+            line = trim(srec<l>)
+            if upcase(field(line, ' ', 1))[1,8] = '$CATALOG' then
+               sys.names<-1> = upcase(field(line, ' ', 2))
+            end
+         next l
+      repeat
+      close src.f
+   end
+   openpath @sdsys:@ds:'gcat' to gcat.f then
+      mark.mapping gcat.f, off
+      select gcat.f to 12
+      loop
+         readnext gid from 12 else exit
+         locate upcase(gid) in sys.names<1> setting x then continue
+* 02 Oct 26 - NO gpl.bp SOURCE, NO NAME LIST (the Windows port's finding D:
+*   Windows Solo deletes the source at install).  Then the prefix decides: $, !
+*   and _ are SD's own family, the names both Solos' CATALOG refuses to users.
+         if sys.names = '' and index('$!_', gid[1,1], 1) then continue
+         read obj from gcat.f, gid else continue
+         if len(obj) < object.header.size then continue      ;* not an object (README)
+* compile_time is SYSTEM(1005): SD's own day number * 86400 + seconds.
+         t = oconv(obj[hdr.compile.time, 4], 'IL')
+         d = idiv(t, 86400) ; gosub iso.date
+         r<-1> = gid:'  compiled ':iso:' ':oconv(rem(t, 86400), 'MTS')
+      repeat
+      close gcat.f
+   end
+
+* The operating system's sections
+   call !settings_os(os.lines, err)
+   if err # '' then
+      r<-1> = ''
+      r<-1> = sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   end else
+      if os.lines # '' then
+         r<-1> = ''
+         r<-1> = os.lines
+      end
+   end
+
+   if dest = '' then
+      for i = 1 to dcount(r, @fm)
+         crt r<i>
+      next i
+   end else
+      stamp = oconv(date(), 'D4Y'):fmt(oconv(date(), 'DM'), '2"0"R'):fmt(oconv(date(), 'DD'), '2"0"R')
+      t = time()
+      stamp := '-':fmt(idiv(t, 3600), '2"0"R'):fmt(idiv(rem(t, 3600), 60), '2"0"R'):fmt(rem(t, 60), '2"0"R')
+      out.name = 'SD-':host:'-settings-':stamp:'.txt'
+      write r to dest.f, out.name on error
+         stop sysmsg(13003, dest:@ds:out.name, status())
+      end
+      display sysmsg(13029, dest:@ds:out.name) ;* Settings report written to %1
+   end
+   @system.return.code = 0
+   stop
+
+* iso.date - d (an SD day number) in, iso (yyyy-mm-dd) out.
+iso.date:
+   iso = oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R')
+   return
+
+end
+
+* END-CODE

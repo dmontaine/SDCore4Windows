@@ -1,0 +1,319 @@
+* BACKUPA
+* BACKUP.ACCOUNT verb (S.50).
+* Copyright (c) String Database
+*
+* START-HISTORY:
+* 01 Oct 26 dm Written for S.50 (owner's request of 30 Sep 2026, rulings of
+*              1 Oct; part of 1.1-3 on all four products).  SHARED WITH SD CORE
+*              FOR WINDOWS BYTE FOR BYTE: everything the OS decides is behind
+*              the per-OS helpers (!acc_archive, !acc_tree_count, !acc_os_info),
+*              agreed by mail 2026-09-30T2359 to 2026-10-01T1210.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    BACKUP.ACCOUNT name [name ...] TO directory
+*    BACKUP.ACCOUNT ALL TO directory
+*
+*    Writes SD-<host>-<accounts>-<yyyymmdd-hhmmss>.zip in the directory: the
+*    manifest (accbak.h) and each account's tree.  An administrator verb.
+*
+*    OWNER'S RULINGS (1 Oct 2026): it runs only once every other session has
+*    logged out, and LOGIN refuses new sessions while it runs (!acc_hold).
+*    SDSYS is not backed up; SETTINGS.REPORT records the system's settings.
+*    No credential is carried: $cred is not in an account's tree.
+*
+*    THE INSTRUMENT.  Each account is counted BEFORE the pack and the counts go
+*    in the manifest; the archiver reports what it WROTE; any difference
+*    deletes the zip and says which account and by how much (13007).
+*
+*    GLOBALLY CATALOGUED PROGRAMS (ruling 2).  A gcat entry belongs to an
+*    account when one of the account's object files (a VOC F-pointer whose
+*    data path ends ".out") holds an object with the same compile time and the
+*    same code up to its first symbol/line table, with object_size, both table
+*    offsets and program_name masked (CATALOG rewrites those; agreed with
+*    Windows 2026-10-01T0115).  Each match becomes a "gcat:" line, which
+*    RESTORE.ACCOUNT re-catalogues.
+*
+*    WHAT IT DOES NOT DO.  It does not back up SDSYS, the configuration or any
+*    credential; it does not follow a symlink inside an account (the archiver
+*    skips and names it); an object recompiled after it was catalogued no
+*    longer matches, and its gcat entry is left out (SETTINGS.REPORT lists it).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $backup.account
+$catalog $BACKUPA
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include header.h
+$include accbak.h
+
+   prompt ''
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* verb
+
+   names = ''
+   all = @false
+   dest = ''
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case upcase(token) = 'TO'
+            call @parser(PARSER$GET.TOKEN, token.type, dest, keyword)
+            if token.type = PARSER$END then dest = ''
+         case dest # ''
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+         case upcase(token) = 'ALL'
+            all = @true
+         case 1
+            names<-1> = downcase(token)
+      end case
+   repeat
+
+   if dest = '' or (all and names # '') or (not(all) and names = '') then
+      stop sysmsg(13006) ;* Syntax
+   end
+   if not(ospath(dest, OS$EXISTS)) then stop sysmsg(13010, dest) ;* not a directory
+   dest = ospath(dest, OS$FULLPATH)
+   openpath dest to dest.f else stop sysmsg(13010, dest)
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      stop sysmsg(6000) ;* Cannot open ACCOUNTS file in SDSYS account
+   end
+
+   if all then
+      select acc.f to 11
+      loop
+         readnext id from 11 else exit
+         if id # 'sdsys' then names<-1> = id
+      repeat
+   end
+
+   n = dcount(names, @fm)
+   for i = 1 to n
+      if names<i> = 'sdsys' then stop sysmsg(13004) ;* SDSYS is not backed up
+      read rec from acc.f, names<i> else stop sysmsg(13005, names<i>) ;* not a registered account
+   next i
+   if n = 0 then stop sysmsg(13006)
+
+* Every other session must be gone, and stays gone while this runs.
+   call !acc_hold(ACCBAK$SET, others, err)
+   if err # '' then
+      gosub show.err
+      gosub show.others
+      stop
+   end
+
+   done.ok = @false
+   manifest.id = ''
+   zip.path = ''
+
+   call !acc_os_info('', '', sys.info, err)
+   if err # '' then gosub show.err ; goto finish
+   host = '' ; product = '' ; root = '' ; version = ''
+   for k = 1 to dcount(sys.info, @fm)
+      key = field(sys.info<k>, ':', 1) ; val = trim(field(sys.info<k>, ':', 2, 99))
+      begin case
+         case key = 'host'          ; host = val
+         case key = 'product'       ; product = val
+         case key = 'accounts.root' ; root = val
+         case key = 'sd.version'    ; version = val
+      end case
+   next k
+
+   begin case
+      case all   ; what = 'all'
+      case n > 3 ; what = n:'accounts'
+      case 1     ; what = convert(@fm, '-', names)
+   end case
+   stamp = oconv(date(), 'D4Y'):fmt(oconv(date(), 'DM'), '2"0"R'):fmt(oconv(date(), 'DD'), '2"0"R')
+   t = time()
+   stamp := '-':fmt(idiv(t, 3600), '2"0"R'):fmt(idiv(rem(t, 3600), 60), '2"0"R'):fmt(rem(t, 60), '2"0"R')
+   zip.name = 'SD-':host:'-':what:'-':stamp:'.zip'
+   zip.path = dest:@ds:zip.name
+
+* ---- the manifest, with each account counted before the pack
+   gosub gcat.load
+
+   m = 'format: ':ACCBAK$FORMAT
+   m<-1> = 'product: ':product
+   m<-1> = 'sd.version: ':version
+   m<-1> = 'created: ':oconv(date(), 'D4Y'):'-':fmt(oconv(date(), 'DM'), '2"0"R'):'-':fmt(oconv(date(), 'DD'), '2"0"R'):'T':oconv(time(), 'MTS')
+   m<-1> = 'host: ':host
+   m<-1> = 'source.root: ':root
+   m<-1> = 'accounts: ':n
+
+   entries = ACCBAK$MANIFEST
+   expect = ''
+   for i = 1 to n
+      acc.name = names<i>
+      read acc.rec from acc.f, acc.name else null
+      path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+      call !acc_os_info(acc.name, acc.rec, info, err)
+      if err # '' then gosub show.err ; goto finish
+      call !acc_tree_count(path, files, bytes, dirs, err)
+      if err # '' then gosub show.err ; goto finish
+      expect<i> = files:@vm:bytes:@vm:dirs
+
+      m<-1> = ''
+      m<-1> = '[account ':acc.name:']'
+      for k = 1 to dcount(info, @fm)
+         m<-1> = info<k>
+      next k
+      s = acc.rec<ACC$DESCR> ; gosub ascii.only
+      m<-1> = 'description: ':s
+      m<-1> = 'suspended: ':(if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' then 1 else 0)
+      m<-1> = 'source.path: ':path
+      m<-1> = 'files: ':files
+      m<-1> = 'bytes: ':bytes
+      m<-1> = 'dirs: ':dirs
+      gosub gcat.match
+      entries<-1> = 'accounts/':acc.name:@vm:path
+   next i
+
+   manifest.id = zip.name:'.manifest'
+   write m to dest.f, manifest.id on error
+      stop sysmsg(13003, dest:@ds:manifest.id, status())
+   end
+   entries<1,2> = dest:@ds:manifest.id
+
+* ---- the pack, then the instrument: what was written against what was counted
+   call !acc_archive('CREATE', zip.path, entries, counts, err)
+   if err # '' then gosub show.err ; goto finish
+
+   for i = 1 to n
+      got = counts<i + 1>
+      if got<1,1> # expect<i,1> or got<1,2> # expect<i,2> or got<1,3> # expect<i,3> then
+         void ospath(zip.path, OS$DELETE)
+* sysmsg() takes four arguments after the number, so each side is one value.
+         display sysmsg(13007, names<i>, got<1,1>:'/':got<1,2>:'/':got<1,3>, expect<i,1>:'/':expect<i,2>:'/':expect<i,3>)
+         goto finish
+      end
+   next i
+
+   display sysmsg(13008, n, zip.path) ;* Backed up %1 account(s) to %2
+   for i = 1 to n
+      display sysmsg(13009, names<i>, expect<i,1>, expect<i,2>, expect<i,3>)
+   next i
+   done.ok = @true
+
+finish:
+   if manifest.id # '' then delete dest.f, manifest.id
+   call !acc_hold(ACCBAK$CLEAR, x, x.err)
+   if done.ok then @system.return.code = 0 else @system.return.code = -ER$FAILED
+   stop
+
+* ======================================================================
+show.err:
+   display sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>, err<1,5>)
+   return
+
+show.others:
+   for k = 1 to dcount(others, @fm)
+      display sysmsg(13001, others<k,1>, others<k,2>, others<k,3>, others<k,4>)
+   next k
+   return
+
+* ascii.only - s: anything outside printable ASCII becomes '?' (the manifest
+*   is plain ASCII by agreement, and the archiver refuses anything else).
+ascii.only:
+   t = ''
+   for c = 1 to len(s)
+      ch = s[c,1]
+      if seq(ch) < 32 or seq(ch) > 126 then ch = '?'
+      t := ch
+   next c
+   s = t
+   return
+
+* ======================================================================
+* gcat.load - every global catalogue entry's id and compile time, once.
+gcat.load:
+   gcat.ids = '' ; gcat.times = ''
+   openpath @sdsys:@ds:'gcat' to gcat.f else return
+   mark.mapping gcat.f, off
+   select gcat.f to 12
+   loop
+      readnext gid from 12 else exit
+      read obj from gcat.f, gid then
+         if len(obj) >= object.header.size then
+            gcat.ids<-1> = gid
+            gcat.times<-1> = obj[hdr.compile.time, 4]
+         end
+      end
+   repeat
+   return
+
+* gcat.match - acc.name, path, m in; "gcat:" lines added to m for every
+*   gcat entry that came from one of this account's object files.
+gcat.match:
+   if gcat.ids = '' then return
+   openpath path:@ds:'voc' to voc.f else
+      display sysmsg(13011, path:@ds:'voc', acc.name)
+      return
+   end
+* Select lists 11 and 12 only: 13 and up are out of range (measured, 1 Oct 26).
+*   gcat.load's 12 is finished by now; the account loop holds no list.
+   select voc.f to 11
+   loop
+      readnext vid from 11 else exit
+      read vrec from voc.f, vid else continue
+      if upcase(vrec[1,1]) # 'F' then continue
+      rel = vrec<2,1>
+      if downcase(rel[len(rel) - 3, 4]) # '.out' then continue
+      if rel[1,1] = @ds then opath = rel else opath = path:@ds:rel
+      openpath opath to obj.f else
+         display sysmsg(13011, opath, acc.name)
+         continue
+      end
+      mark.mapping obj.f, off
+      select obj.f to 12
+      loop
+         readnext oid from 12 else exit
+         read src from obj.f, oid else continue
+         if len(src) < object.header.size then continue
+         if src[hdr.magic, 1] # char(hdr.magic.no.l) and src[hdr.magic, 1] # char(hdr.magic.no.b) then continue
+         locate src[hdr.compile.time, 4] in gcat.times<1> setting gpos else continue
+         full = oconv(src[hdr.object.size, 4], 'IL')
+         cut = full
+         s.off = oconv(src[hdr.sym.tab.offset, 4], 'IL')
+         l.off = oconv(src[hdr.lin.tab.offset, 4], 'IL')
+         if s.off > 0 and s.off < cut then cut = s.off
+         if l.off > 0 and l.off < cut then cut = l.off
+* Every gcat entry with that compile time is a candidate, not only the first.
+         for g = 1 to dcount(gcat.times, @fm)
+            if gcat.times<g> # src[hdr.compile.time, 4] then continue
+            read gobj from gcat.f, gcat.ids<g> else continue
+            if len(gobj) # cut and len(gobj) # full then continue
+            a = src[1, 16]:src[hdr.flags, 8]:src[object.header.size, cut - object.header.size + 1]
+            b = gobj[1, 16]:gobj[hdr.flags, 8]:gobj[object.header.size, cut - object.header.size + 1]
+            if a = b then
+               line = 'gcat: ':gcat.ids<g>:' = ':rel:' ':oid
+               if len(gobj) = cut and cut < full then line := ' noxref'
+               m<-1> = line
+            end
+         next g
+      repeat
+      close obj.f
+   repeat
+   close voc.f
+   return
+
+end
+
+* END-CODE

@@ -39,6 +39,7 @@
 * 13 Aug 26 Windows port - privilege test now uses K$ADMINISTRATOR, not system(27)
 * 14 Aug 26 Windows port - VALID_OS_NAME added to the pass 1 compile list; the
 *                      restored sdusers gate makes LOGIN reach it at first login
+* 02 Oct 26 Windows port - ACC_HOLD added to the pass 1 compile list (RELEASE_1.1 116)
 * END-HISTORY
 *
 *
@@ -248,6 +249,13 @@ src.list<-1> = 'PARSER'
 *   See PROJECT_STATUS.md section 6.
 src.list<-1> = 'VALID_OS_NAME'
 src.list<-1> = 'IS_GRP_MEMBER'
+* 02 Oct 26 Windows port - ACC_HOLD, for the same reason as VALID_OS_NAME:
+*   LOGIN calls !acc_hold (the backup/restore login hold, RELEASE_1.1 116) at
+*   EVERY entry, the bootstrap's own SECOND.COMPILE session included.  SD Core
+*   for Linux's bootstrap died at every later pass with "Unable to load
+*   '!ACC_HOLD' object code in $LOGIN" without it - and sd exited 0.  ACC_HOLD
+*   calls no catalogued routine, so the chain ends here.
+src.list<-1> = 'ACC_HOLD'
 src.list<-1> = 'TERM'
 
 src.cnt = dcount(src.list,@FM) 

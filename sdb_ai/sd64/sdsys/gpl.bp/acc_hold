@@ -1,0 +1,129 @@
+* ACC_HOLD
+* The login hold for BACKUP.ACCOUNT and RESTORE.ACCOUNT (S.50).
+* Copyright (c) String Database
+*
+* START-HISTORY:
+* 01 Oct 26 dm Written for S.50.  SHARED WITH SD CORE FOR WINDOWS BYTE FOR BYTE.
+*              The owner's rulings of 1 Oct 2026 (relayed by mail, binding on
+*              both ports): a backup or restore does not proceed until every
+*              OTHER session has logged out, and LOGIN refuses new sessions
+*              while one runs, with a message, until it finishes.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_hold(mode, info, err)
+*
+*    CHECK  info: every other session, one per field,
+*           userno VM name VM pid VM tty.  err 13000 when there is any.
+*    SET    CHECK, then write the hold; CHECK again after writing, because a
+*           session that logged in between would otherwise slip past.
+*    CLEAR  remove the hold if this session holds it.  Safe to call when there
+*           is none, so every exit path of a verb can call it.
+*    TEST   for LOGIN and the API server: err 13002 when a hold is set by a
+*           session that is still alive; info is the holder's record.
+*
+*    "OTHER" excludes this session and the phantoms it started.  A session
+*    that is logging out still counts until it has gone.
+*
+*    THE HOLD is the record ACCBAK$HOLD in SDSYS's directory, read as a
+*    directory file: <1> userno, <2> pid, <3> logname, <4> verb, <5> date,
+*    <6> time.  A hold whose holder has no user-table entry with that userno
+*    AND that pid is STALE and ignored by TEST: a session that died must not
+*    lock everybody out.  Reading it is a plain record read, so LOGIN takes no
+*    lock and needs only read access to SDSYS.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_hold(mode, info, err)
+$catalog !acc_hold
+
+$include int$keys.h
+$include accbak.h
+
+   info = ''
+   err = ''
+   mode = upcase(mode)
+
+   users = kernel(K$USERS, 0)
+   n.users = dcount(users, @fm)
+   my.pid = ''
+   for i = 1 to n.users
+      if users<i,K$USERS.UID> = @userno then my.pid = users<i,K$USERS.PID>
+   next i
+
+   openpath @sdsys to sys.f else
+      err = 13003:@vm:@sdsys:@vm:status() ;* Cannot write %1 (status %2)
+      return
+   end
+
+   begin case
+      case mode = ACCBAK$CHECK
+         gosub others
+         if info # '' then err = 13000:@vm:dcount(info, @fm)
+
+      case mode = ACCBAK$SET
+         gosub others
+         if info # '' then
+            err = 13000:@vm:dcount(info, @fm)
+         end else
+            d = date()
+            hold = @userno:@fm:my.pid:@fm:@logname:@fm:field(@sentence, ' ', 1)
+            hold<5> = oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R')
+            hold<6> = oconv(time(), 'MTS')
+            write hold to sys.f, ACCBAK$HOLD on error
+               err = 13003:@vm:@sdsys:@ds:ACCBAK$HOLD:@vm:status()
+            end
+            if err = '' then
+               gosub others
+               if info # '' then
+                  delete sys.f, ACCBAK$HOLD
+                  err = 13000:@vm:dcount(info, @fm)
+               end
+            end
+         end
+
+      case mode = ACCBAK$CLEAR
+         read hold from sys.f, ACCBAK$HOLD then
+            if hold<1> = @userno and hold<2> = my.pid then
+               delete sys.f, ACCBAK$HOLD
+            end
+         end
+
+      case mode = ACCBAK$TEST
+         read hold from sys.f, ACCBAK$HOLD then
+            for i = 1 to n.users
+               if users<i,K$USERS.UID> = hold<1> and users<i,K$USERS.PID> = hold<2> and hold<1> # @userno then
+                  info = hold
+                  err = 13002:@vm:hold<3>:@vm:hold<4> ;* not accepting new sessions while %1 runs %2
+               end
+            next i
+         end
+
+      case 1
+         err = 2018:@vm:mode   ;* Unexpected token (xx)
+   end case
+
+   close sys.f
+   return
+
+* ======================================================================
+* others - every session but this one and its phantoms, into info.
+others:
+   info = ''
+   users = kernel(K$USERS, 0)
+   n.users = dcount(users, @fm)
+   for i = 1 to n.users
+      uid = users<i,K$USERS.UID>
+      if uid = @userno then continue
+      if bitand(users<i,K$USERS.FLAGS> + 0, USR$PHANTOM) and users<i,K$USERS.PUID> = @userno then continue
+      info<-1> = uid:@vm:users<i,K$USERS.UNAME>:@vm:users<i,K$USERS.PID>:@vm:users<i,K$USERS.DEV>
+   next i
+   return
+
+end
+
+* END-CODE

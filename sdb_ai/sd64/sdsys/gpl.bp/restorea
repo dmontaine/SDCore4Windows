@@ -1,0 +1,544 @@
+* RESTOREA
+* RESTORE.ACCOUNT verb (S.50).
+* Copyright (c) String Database
+*
+* START-HISTORY:
+* 01 Oct 26 dm Written for S.50 (owner's request of 30 Sep 2026, rulings of
+*              1 Oct; part of 1.1-3 on all four products).  SHARED WITH SD CORE
+*              FOR WINDOWS BYTE FOR BYTE; the OS work is in the per-OS helpers
+*              (!acc_archive, !acc_tree_count, !acc_os_info, !acc_os_place,
+*              !acc_os_akpath) and !create_account, agreed by mail 2026-09-30T2359
+*              to 2026-10-02T1000.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}
+*    RESTORE.ACCOUNT archive ALL {NO.QUERY}
+*
+*    An administrator verb.  Every other session must have logged out, and
+*    LOGIN refuses new ones while it runs (!acc_hold; owner's ruling 1).
+*
+*    1  The archive is unpacked into <accounts.root>/.sdrestore.<@userno>,
+*       which must not exist, and checked against its manifest BEFORE anything
+*       is changed: the format, the product (full restores only to full, Solo
+*       only to Solo - ruling 3), the account count, and every account's files,
+*       bytes and directories against what was unpacked.  Any difference stops
+*       the restore with nothing changed (13013).
+*    2  It says which accounts will be REPLACED (with what they hold now) and
+*       which CREATED, and asks once (Enter is N) unless NO.QUERY is given.
+*    3  For each account, in the staged tree: VOC values that hold the old
+*       account path are rewritten to the new one; a pointer elsewhere is
+*       listed, not followed (13019); from a Windows archive a rewritten path
+*       that does not exist with that exact spelling is listed (13018).  Each
+*       hashed file whose indices were relocated inside the account is noted
+*       for its new index path; outside it, the indices are not in the archive
+*       and it says so (13020).
+*    4  A missing account is made by !create_account with the manifest's
+*       description, routes, members and suspension (a new USER account asks
+*       for a password - no credential is in a backup).  An existing account
+*       keeps its OS user, password and groups.
+*    5  The account's globally catalogued programs are re-catalogued from the
+*       staged object files; a name already in the global catalogue as a
+*       DIFFERENT program is left alone and listed (13017).
+*    6  !acc_os_place replaces the account directory with the staged tree; the
+*       register gets the description and suspension; relocated index paths
+*       are set (!acc_os_akpath); the account is counted again and reported.
+*
+*    SOLO (product *-solo): the one account is this session's own, so step 6
+*    cannot run here.  The staged tree is left in place and the start-up
+*    marker <accounts.root>/.sdrestore.pending is written; SD's start-up
+*    swaps it in before any session exists (agreed 2026-10-02T1000).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $restore.account
+$catalog $RESTOREA
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include header.h
+$include accbak.h
+$include createacc.h
+
+   prompt ''
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* verb
+   call @parser(PARSER$GET.TOKEN, token.type, zip.path, keyword)
+   if token.type = PARSER$END then stop sysmsg(13016) ;* Syntax
+
+   names = ''
+   all = @false
+   no.query = @false
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$NO.QUERY  ; no.query = @true
+         case upcase(token) = 'ALL'  ; all = @true
+         case 1                      ; names<-1> = downcase(token)
+      end case
+   repeat
+   if (all and names # '') or (not(all) and names = '') then stop sysmsg(13016)
+
+   if not(ospath(zip.path, OS$EXISTS)) then stop sysmsg(13034, zip.path) ;* does not exist
+   zip.path = ospath(zip.path, OS$FULLPATH)
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      stop sysmsg(6000) ;* Cannot open ACCOUNTS file in SDSYS account
+   end
+
+   call !acc_hold(ACCBAK$SET, others, err)
+   if err # '' then
+      gosub show.err
+      for k = 1 to dcount(others, @fm)
+         display sysmsg(13001, others<k,1>, others<k,2>, others<k,3>, others<k,4>)
+      next k
+      stop
+   end
+
+   done.ok = @false
+   stage = ''
+   remove.stage = @false
+   temp.voc = '$restore.cat.out'
+   restored = 0
+   failed = 0
+
+   call !acc_os_info('', '', sys.info, err)
+   if err # '' then gosub show.err ; goto finish
+   product = '' ; root = '' ; restart = ''
+   for k = 1 to dcount(sys.info, @fm)
+      key = field(sys.info<k>, ':', 1) ; val = trim(field(sys.info<k>, ':', 2, 99))
+      begin case
+         case key = 'product'       ; product = val
+         case key = 'accounts.root' ; root = val
+         case key = 'restart'       ; restart = val   ;* Solo only (2026-10-02T1045)
+      end case
+   next k
+   solo = field(product, '-', 2) = 'solo'
+
+* ---- 1. unpack and check, before anything is changed
+   stage = root:@ds:ACCBAK$STAGE:@userno
+   if ospath(stage, OS$EXISTS) then
+      display sysmsg(13012, stage) ;* left by an earlier restore
+      stage = ''
+      goto finish
+   end
+   remove.stage = @true
+   call !acc_archive('EXTRACT', zip.path, stage, unpacked, err)
+   if err # '' then gosub show.err ; goto finish
+
+   openpath stage to stage.f else
+      display sysmsg(13033, stage) ;* cannot read the manifest
+      goto finish
+   end
+   read mtext from stage.f, ACCBAK$MANIFEST else
+      display sysmsg(13033, stage:@ds:ACCBAK$MANIFEST)
+      goto finish
+   end
+   gosub parse.manifest
+   if bad # '' then display sysmsg(13013, bad) ; goto finish
+
+   if hdr.format # ACCBAK$FORMAT then display sysmsg(13028, zip.path, hdr.format) ; goto finish
+   if field(hdr.product, '-', 2) # field(product, '-', 2) then
+      display sysmsg(13021, hdr.product, product) ;* full only to full, Solo only to Solo
+      goto finish
+   end
+   from.windows = field(hdr.product, '-', 1) = 'windows'
+
+   if all then
+      names = sec.names
+   end else
+      for i = 1 to dcount(names, @fm)
+         locate names<i> in sec.names<1> setting x else
+            display sysmsg(13014, names<i>) ;* not in this backup
+            goto finish
+         end
+      next i
+   end
+   n = dcount(names, @fm)
+
+* ---- 2. say what will happen, and ask once
+   for i = 1 to n
+      if names<i> = 'sdsys' then display sysmsg(13004) ; goto finish
+      read acc.rec from acc.f, names<i> then
+         call !acc_tree_count(parse.pathname.tokens(acc.rec<ACC$PATH>), files, bytes, dirs, err)
+         display sysmsg(13022, names<i>, files, bytes) ;* will be REPLACED
+      end else
+         display sysmsg(13023, names<i>)                ;* will be CREATED
+      end
+   next i
+   if not(no.query) then
+      loop
+         display sysmsg(13015):' ':      ;* Restore these accounts (y/<n>)?
+         input yn
+         yn = upcase(trim(yn))
+         if yn = '' then yn = 'N'
+      until yn = 'Y' or yn = 'N'
+      repeat
+      if yn # 'Y' then display sysmsg(13024) ; goto finish
+   end
+
+* ---- 3 to 6, account by account
+   for i = 1 to n
+      acc.name = names<i>
+      locate acc.name in sec.names<1> setting s.idx else null
+      gosub restore.one
+      if one.ok then
+         restored += 1
+      end else
+         failed += 1
+         display sysmsg(13037, acc.name) ;* was not restored
+      end
+   next i
+
+   display sysmsg(13025, restored, zip.path) ;* Restored %1 account(s) from %2
+   done.ok = failed = 0
+
+finish:
+   read x from @voc, temp.voc then delete @voc, temp.voc
+   if remove.stage and stage # '' and not(solo and restored > 0) then
+      void ospath(stage, OS$DELETE)
+   end
+   call !acc_hold(ACCBAK$CLEAR, x, x.err)
+   if done.ok then @system.return.code = 0 else @system.return.code = -ER$FAILED
+   stop
+
+* ======================================================================
+* restore.one - acc.name, s.idx in; one.ok out.
+restore.one:
+   one.ok = @false
+   gosub load.section
+   s.path = m.source.path
+   staged = stage:@ds:'accounts':@ds:acc.name
+
+   read acc.rec from acc.f, acc.name then
+      target = parse.pathname.tokens(acc.rec<ACC$PATH>)
+   end else
+      if solo then
+         display sysmsg(13023, acc.name) ; return
+      end
+      settings = ''
+      settings<CA$DESC> = m.desc
+      if m.ssh # '' then settings<CA$ROUTE.SSH> = m.ssh
+      if m.api # '' then settings<CA$ROUTE.API> = m.api
+      settings<CA$MEMBERS> = convert(',', @vm, m.members)
+      if m.suspended = 1 then settings<CA$SUSPENDED> = 1
+      settings<CA$OS.SH> = m.os.sh
+      settings<CA$OS.EXECUTE> = m.os.execute
+      settings<CA$REUSE.SD.USER> = 1
+      call !create_account(m.type, acc.name, settings, err)
+      if err # '' then gosub show.err ; return
+      read acc.rec from acc.f, acc.name else
+         display sysmsg(6027) ; return
+      end
+      target = parse.pathname.tokens(acc.rec<ACC$PATH>)
+   end
+
+   gosub voc.rewrite
+   if rw.failed then return
+   gosub gcat.restore
+
+   if solo then
+      gosub write.marker
+      return
+   end
+
+   call !acc_os_place(acc.name, staged, target, err)
+   if err # '' then gosub show.err ; return
+
+   readu acc.rec from acc.f, acc.name then
+      acc.rec<ACC$DESCR> = m.desc
+      acc.rec<ACC$SUSPENDED> = if m.suspended = 1 then 'SUSPENDED' else ''
+      write acc.rec to acc.f, acc.name
+   end else
+      release acc.f, acc.name
+   end
+
+   for f = 1 to dcount(ak.fixes, @fm)
+      call !acc_os_akpath(ak.fixes<f,1>, ak.fixes<f,2>, err)
+      if err # '' then gosub show.err
+   next f
+
+   call !acc_tree_count(target, files, bytes, dirs, err)
+   if err # '' then gosub show.err ; return
+   display sysmsg(13009, acc.name, files, bytes, dirs)
+   one.ok = @true
+   return
+
+* ======================================================================
+* voc.rewrite - the staged account's VOC: values holding s.path become the
+*   target path.  Collects ak.fixes (target data path VM new index path).
+voc.rewrite:
+   rw.failed = @false
+   ak.fixes = ''
+   openpath staged:@ds:'voc' to voc.f else
+      display sysmsg(13033, staged:@ds:'voc')
+      rw.failed = @true
+      return
+   end
+   select voc.f to 11
+   loop
+      readnext vid from 11 else exit
+      readu vrec from voc.f, vid else
+         release voc.f, vid
+         continue
+      end
+      changed = @false
+      nf = dcount(vrec, @fm)
+      for f = 1 to nf
+         nv = dcount(vrec<f>, @vm)
+         for v = 1 to nv
+            val = vrec<f,v>
+            gosub map.path
+            if hit then
+               vrec<f,v> = new
+               changed = @true
+            end
+         next v
+      next f
+      if changed then write vrec to voc.f, vid else release voc.f, vid
+
+* F-pointers: list a path left pointing elsewhere; from Windows, a rewritten
+*   path whose exact spelling is not here; and relocated indices.
+      type = upcase(vrec[1,1])
+      if type = 'F' then
+         paths = vrec<2>
+         if vrec<3> # '' then paths<1,-1> = vrec<3>
+         for v = 1 to dcount(paths, @vm)
+            p = paths<1,v>
+* 02 Oct 26 - ABSOLUTE ON EITHER OS (the Windows port's finding A): C:\..., C:/...
+*   and \\... are absolute too.  The under-the-target test compares with both
+*   separators as '/', since OS$FULLPATH on Windows can give either.
+            p.abs = p[1,1] = @ds or p[1,1] = '/' or p[1,1] = '\' or p[2,1] = ':'
+            if p.abs then
+               cp = convert('\', '/', p)
+               ct = convert('\', '/', target)
+               if cp[1, len(ct) + 1] = ct:'/' then
+                  sp = staged:convert('/\', @ds:@ds, p[len(target) + 1, 99999])
+                  if from.windows and not(ospath(sp, OS$EXISTS)) then
+                     display sysmsg(13018, vid, acc.name, p)
+                  end
+               end else
+                  display sysmsg(13019, vid, acc.name, p)
+                  continue
+               end
+            end else
+               sp = staged:@ds:p
+            end
+            openpath sp to data.f then
+               akp = fileinfo(data.f, FL$AKPATH)
+               close data.f
+* A directory file answers 0, not '' (measured in the sandbox, 1 Oct 26).
+               if akp # '' and akp # '0' then
+                  val = akp
+                  gosub map.path
+                  if hit then
+                     if p.abs then tp = p else tp = target:@ds:p
+                     ak.fixes<-1> = tp:@vm:new
+                  end else
+                     display sysmsg(13020, vid, akp)
+                  end
+               end
+            end
+         next v
+      end
+   repeat
+   close voc.f
+   return
+
+* map.path - val in; hit and new out.  A value that IS s.path, or starts with
+*   s.path and a separator, becomes the target path.  From Windows the
+*   comparison ignores case and treats \ as / (agreed with Windows
+*   2026-10-01T0010); the rest of the path takes the target's own separator.
+map.path:
+   hit = @false
+   new = ''
+   if s.path = '' or val = '' then return
+   if from.windows then
+      cv = downcase(convert('\', '/', val))
+      cs = downcase(convert('\', '/', s.path))
+   end else
+      cv = val
+      cs = s.path
+   end
+   ls = len(cs)
+   if cv = cs or cv[1, ls + 1] = cs:'/' then
+      rest = val[ls + 1, 99999]
+* 02 Oct 26 - the rest takes the TARGET's separator, whichever OS wrote it (the
+*   Windows port's finding B: '/' kept on a Windows target mixed separators).
+      rest = convert('/\', @ds:@ds, rest)
+      new = target:rest
+      hit = @true
+   end
+   return
+
+* ======================================================================
+* gcat.restore - the account's "gcat:" lines, re-catalogued from the staged
+*   object files (CATALOG copies the object, so the staged path does not
+*   outlive the restore).  A different program already under the name is not
+*   replaced.
+gcat.restore:
+   lines = sec.gcat<s.idx>
+   if lines = '' then return
+   openpath @sdsys:@ds:'gcat' to gcat.f else return
+   mark.mapping gcat.f, off
+   for g = 1 to dcount(lines, @vm)
+      val = lines<1,g>
+      call.name = upcase(trim(field(val, '=', 1)))
+      rest = trim(field(val, '=', 2, 99))
+      rel = convert('\', '/', field(rest, ' ', 1))
+      rec.id = field(rest, ' ', 2)
+      noxref = field(rest, ' ', 3) = 'noxref'
+      opath = staged:@ds:rel
+      openpath opath to obj.f else
+         display sysmsg(13036, call.name, opath)
+         continue
+      end
+      mark.mapping obj.f, off
+      read src from obj.f, rec.id else
+         close obj.f
+         display sysmsg(13036, call.name, opath:@ds:rec.id)
+         continue
+      end
+      close obj.f
+      read gobj from gcat.f, call.name then
+         a = src[1, 16]:src[hdr.flags, 8]:src[object.header.size, len(gobj) - object.header.size + 1]
+         b = gobj[1, 16]:gobj[hdr.flags, 8]:gobj[object.header.size, len(gobj) - object.header.size + 1]
+         if a = b then continue           ;* already there, the same program
+         display sysmsg(13017, call.name)
+         continue
+      end
+      write 'F':@fm:opath to @voc, temp.voc
+      cmd = 'CATALOG ':temp.voc[1, len(temp.voc) - 4]:' ':call.name:' ':rec.id:' GLOBAL'
+      if noxref then cmd := ' NOXREF'
+      out = ''
+      execute cmd trapping aborts capturing out
+* 02 Oct 26 - without regard to case (the Windows port's finding C): Windows
+*   CATALOG prints the call name in lower case, Linux in upper.
+      if index(upcase(out), upcase(sysmsg(3030, call.name)), 1) then
+         display sysmsg(13032, call.name, rel, rec.id) ;* re-catalogued globally
+      end else
+         display sysmsg(13036, call.name, convert(@fm, '|', out))
+      end
+      delete @voc, temp.voc
+   next g
+   close gcat.f
+   return
+
+* ======================================================================
+* write.marker - Solo: the start-up swap's instructions (2026-10-02T1000).
+write.marker:
+   marker = root:@ds:'.sdrestore.pending'
+   openseq marker overwrite to mk.f else
+      if status() then
+         display sysmsg(13003, marker, status())
+         return
+      end
+   end
+   writeseq 'format: ':ACCBAK$FORMAT to mk.f else null
+   writeseq staged to mk.f else null
+   writeseq target to mk.f else null
+   writeseq acc.name to mk.f else null
+   d = date()
+   writeseq oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R'):' ':oconv(time(), 'MTS') to mk.f else null
+   writeseq zip.path to mk.f else null
+   closeseq mk.f
+   display sysmsg(13035, acc.name, restart) ;* restart SD to put it in place: %2
+   one.ok = @true
+   return
+
+* ======================================================================
+* parse.manifest - mtext in.  hdr.* for the header keys; sec.names, and per
+*   section sec.keys / sec.vals (value lists) and sec.gcat.  bad is set to
+*   what disagrees with the unpacked archive, '' when it all agrees.
+parse.manifest:
+   bad = ''
+   hdr.format = '' ; hdr.product = '' ; hdr.accounts = ''
+   sec.names = '' ; sec.keys = '' ; sec.vals = '' ; sec.gcat = ''
+   cur = 0
+   for l = 1 to dcount(mtext, @fm)
+      line = trim(mtext<l>)
+      if line = '' then continue
+      if line[1,9] = '[account ' and line[len(line),1] = ']' then
+         cur += 1
+         sec.names<cur> = downcase(trim(line[10, len(line) - 10]))
+         continue
+      end
+      key = trim(field(line, ':', 1))
+      val = trim(field(line, ':', 2, 99))
+      begin case
+         case cur = 0 and key = 'format'   ; hdr.format = val
+         case cur = 0 and key = 'product'  ; hdr.product = val
+         case cur = 0 and key = 'accounts' ; hdr.accounts = val
+         case cur = 0                      ; null
+         case key = 'gcat'                 ; sec.gcat<cur,-1> = val
+         case 1
+            sec.keys<cur,-1> = key
+            sec.vals<cur,-1> = val
+      end case
+   next l
+
+   if hdr.accounts # cur then bad = 'accounts: ':hdr.accounts:', sections: ':cur ; return
+   if dcount(unpacked, @fm) # cur then bad = 'accounts unpacked: ':dcount(unpacked, @fm) ; return
+   for s.idx = 1 to cur
+      gosub load.section
+      found = @false
+      for u = 1 to dcount(unpacked, @fm)
+         if unpacked<u,4> = sec.names<s.idx> then
+            found = @true
+            if unpacked<u,1> # m.files or unpacked<u,2> # m.bytes or unpacked<u,3> # m.dirs then
+               bad = sec.names<s.idx>:' (manifest ':m.files:'/':m.bytes:'/':m.dirs
+               bad := ', unpacked ':unpacked<u,1>:'/':unpacked<u,2>:'/':unpacked<u,3>:')'
+               return
+            end
+         end
+      next u
+      if not(found) then bad = sec.names<s.idx>:' (not in the archive)' ; return
+   next s.idx
+   return
+
+show.err:
+   display sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>, err<1,5>)
+   return
+
+* load.section - section s.idx's keys into m.* ('' when a key is absent; a Solo
+*   manifest has no route.*, os.group or members - agreed 2026-10-02T1000).
+load.section:
+   m.source.path = '' ; m.type = '' ; m.desc = '' ; m.ssh = '' ; m.api = ''
+   m.members = '' ; m.suspended = '' ; m.os.sh = '' ; m.os.execute = ''
+   m.files = '' ; m.bytes = '' ; m.dirs = ''
+   for kp = 1 to dcount(sec.keys<s.idx>, @vm)
+      kv = sec.vals<s.idx,kp>
+      begin case
+         case sec.keys<s.idx,kp> = 'source.path' ; m.source.path = kv
+         case sec.keys<s.idx,kp> = 'type'        ; m.type = kv
+         case sec.keys<s.idx,kp> = 'description' ; m.desc = kv
+         case sec.keys<s.idx,kp> = 'route.ssh'   ; m.ssh = kv
+         case sec.keys<s.idx,kp> = 'route.api'   ; m.api = kv
+         case sec.keys<s.idx,kp> = 'members'     ; m.members = kv
+         case sec.keys<s.idx,kp> = 'suspended'   ; m.suspended = kv
+         case sec.keys<s.idx,kp> = 'os.sh'       ; m.os.sh = kv
+         case sec.keys<s.idx,kp> = 'os.execute'  ; m.os.execute = kv
+         case sec.keys<s.idx,kp> = 'files'       ; m.files = kv
+         case sec.keys<s.idx,kp> = 'bytes'       ; m.bytes = kv
+         case sec.keys<s.idx,kp> = 'dirs'        ; m.dirs = kv
+      end case
+   next kp
+   return
+
+end
+
+* END-CODE

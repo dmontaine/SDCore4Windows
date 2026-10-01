@@ -1,0 +1,1 @@
+Syntax: RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}\n        RESTORE.ACCOUNT archive ALL {NO.QUERY}
