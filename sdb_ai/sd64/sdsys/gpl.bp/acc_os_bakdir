@@ -1,0 +1,137 @@
+* ACC_OS_BAKDIR
+* The saved backup directory, the part that is specific to the operating system
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written, with SET.BACKUP.DIRECTORY (owner's ruling,
+*           1 Oct 2026).  Messages 12010 and 13046 (shared; Linux decided that
+*           a relative path is refused).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_os_bakdir(mode, dir, err)
+*
+*    mode  GET  dir comes back as the saved directory, '' when none is saved.
+*          SET  dir goes in as the directory to save, and comes back as the full
+*               path.  It is created if necessary, proved writable, and saved.
+*    err   '' on success, else a message number, @vm, then its arguments.
+*
+*    Paths come back with @ds ("/") like every path the shared verbs build,
+*    whatever the file holds.  A relative path is refused with 13046 before
+*    anything is run: a saved setting that meant different places depending on
+*    the current directory would be a trap.
+*
+*    WINDOWS: gplbld/sd-backupdir.ps1 reads and writes the line BACKUPDIR=<path>
+*    in C:\ProgramData\SD\sd.conf.  It is run through !ps_script_out, so an SDSYS
+*    session runs it in its elevated helper - which it needs: that file is
+*    closed to everyone else, and the verbs are SDSYS-only here.  The file is
+*    read at each use, so SET.BACKUP.DIRECTORY needs no restart.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_os_bakdir(mode, dir, err)
+$catalog !acc_os_bakdir
+
+$include int$keys.h
+
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
+   err    = ''
+   q      = char(39)
+   md     = upcase(mode)
+   what   = ''
+   args   = ''
+   d      = ''
+   full   = @false
+
+   begin case
+      case md = 'GET'
+         what = 'read'
+         args = ' -Mode Get'
+
+      case md = 'SET'
+         what = 'set'
+         d = dir
+*        A full Windows path: a drive letter and a separator, or two separators (a
+*        share).  Either separator is allowed; the script normalises it.
+         if len(d) >= 3 and alpha(d[1, 1]) and d[2, 1] = ':' and (d[3, 1] = '/' or d[3, 1] = '\') then full = @true
+         if d[1, 2] = '//' or d[1, 2] = '\\' then full = @true
+         if not(full) then
+            err = 13046   ;* Give the full path of the backup directory
+            return
+         end
+         args = ' -Mode Set -Path ' : q : change(d, q, q:q) : q
+
+      case 1
+         err = 12010 : @vm : 'use' : @vm : 'unknown mode ' : mode
+         return
+   end case
+
+   script = '& ' : q : kernel(K$WINPATH, '/sd-backupdir.ps1') : q : args
+   script := '; exit $LASTEXITCODE'
+   both = ps_script_out(script, @true)
+
+   rc = both<1>
+   del both<1>
+
+*  ANCHOR ON THE SUCCESS LINE THE SCRIPT PRINTS, NOT ON ANYTHING THE FAILURE ALSO
+*  CARRIES: "SD-BACKUPDIR <GET|SET> OK <path>" or "SD-BACKUPDIR GET NONE".  An
+*  ERROR line is the reason, and wins.
+   ok.line = ''
+   why     = ''
+   n.lines = dcount(both, @fm)
+   for ln = 1 to n.lines
+      line = trim(both<ln>)
+      if line[1, 13] # 'SD-BACKUPDIR ' then continue
+      tag = field(line, ' ', 2)
+      begin case
+         case tag = 'ERROR'
+            why = line[20, len(line)]
+         case tag = upcase(md)
+            ok.line = line
+      end case
+   next ln
+
+   if why # '' then
+      err = 12010 : @vm : what : @vm : why
+      return
+   end
+   if ok.line = '' or rc # 0 then
+      err = 12010 : @vm : what : @vm : 'exit ' : rc : ', and no result line'
+      return
+   end
+
+   result = field(ok.line, ' ', 3)
+   begin case
+      case result = 'NONE' and md = 'GET'
+         dir = ''
+      case result = 'OK'
+         dir = convert('\', @ds, ok.line[21, len(ok.line)])
+      case 1
+         err = 12010 : @vm : what : @vm : 'unreadable result: ' : ok.line
+         return
+   end case
+
+   return
+end
+
+* END-CODE

@@ -1,0 +1,88 @@
+* SETBAKDIR
+* SET.BACKUP.DIRECTORY verb
+* Copyright (c) String Database
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written.  OWNER'S RULING, 1 Oct 2026, given to the Windows
+*           agent for both ports: "a new command set.backup.directory that creates
+*           (if necessary) and makes persistent the backup path through the config
+*           file, so it does not need to be typed in every backup and restore
+*           command".  PROPOSED TO SD CORE FOR LINUX as a shared file (mail
+*           2026-10-02T2000): Linux decides whether to take it as written.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    SET.BACKUP.DIRECTORY directory    creates the directory if it does not exist,
+*                                      proves it can be written to, and saves it in
+*                                      the config file (BACKUPDIR=)
+*    SET.BACKUP.DIRECTORY              shows the saved directory and changes nothing
+*
+*    BACKUP.ACCOUNT and RESTORE.ACCOUNT use the saved directory when they are not
+*    given one, and ask for it - and save the answer exactly as this does - when none
+*    is saved.  An administrator verb, like the two it serves.
+*
+*    THE WORK IS !acc_bakdir (the same for every port) over !acc_os_bakdir (which
+*    knows where the config file is and how to edit it on this operating system).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $set.backup.directory
+$catalog $SETBAKDIR
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include header.h
+
+   prompt ''
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* verb
+   dir.arg = ''
+   call @parser(PARSER$GET.TOKEN, token.type, dir.arg, keyword)
+   if token.type = PARSER$END then dir.arg = ''
+   token = ''
+   if dir.arg # '' then
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      if token.type # PARSER$END then stop sysmsg(13043)   ;* Syntax
+   end
+
+   dir = ''
+   err = ''
+
+   if dir.arg = '' then
+*     No argument: say what is saved, change nothing.
+      call !acc_bakdir('SHOW', '', dir, err)
+      if err # '' then
+         display sysmsg(err<1,1>, err<1,2>, err<1,3>)
+         @system.return.code = -ER$FAILED
+         stop
+      end
+      if dir = '' then display sysmsg(13045) else display sysmsg(13044, dir)
+      @system.return.code = 0
+      stop
+   end
+
+   call !acc_bakdir('SET', dir.arg, dir, err)
+   if err # '' then
+      display sysmsg(err<1,1>, err<1,2>, err<1,3>)
+      @system.return.code = -ER$FAILED
+      stop
+   end
+   @system.return.code = 0
+   stop
+
+end
+
+* END-CODE

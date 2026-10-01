@@ -2,6 +2,25 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+01 Oct 26  SET.BACKUP.DIRECTORY REMEMBERS THE BACKUP FOLDER.
+
+           SET.BACKUP.DIRECTORY folder makes the folder if it does not exist,
+           checks that SD can write in it, and remembers it, in sd.conf as
+           BACKUPDIR=, so BACKUP.ACCOUNT and RESTORE.ACCOUNT no longer need it
+           typed.  With no folder it shows the one that is remembered.  Like
+           the two it serves, it is a command for SDSYS.
+           * BACKUP.ACCOUNT without TO uses the remembered folder.  TO still
+             works, for that one backup only.
+           * RESTORE.ACCOUNT accepts a bare file name and looks for it in the
+             remembered folder.  A name that includes a folder is used as
+             given.
+           * If no folder is remembered, BACKUP.ACCOUNT and RESTORE.ACCOUNT ask
+             for one and remember the answer exactly as SET.BACKUP.DIRECTORY
+             would.  RESTORE.ACCOUNT with NO.QUERY has nobody to ask and
+             refuses instead.
+           * The folder must be given as a full path, such as C:\Backups.  A
+             path that depends on the current folder is refused.
+
 01 Oct 26  A SECOND NAME, sd-full, FOR THE FULL PRODUCT.
 
            SD Core for Windows and SD Core Solo for Windows can now be told

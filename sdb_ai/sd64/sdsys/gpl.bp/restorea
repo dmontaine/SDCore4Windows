@@ -9,6 +9,16 @@
 *              (!acc_archive, !acc_tree_count, !acc_os_info, !acc_os_place,
 *              !acc_os_akpath) and !create_account, agreed by mail 2026-09-30T2359
 *              to 2026-10-02T1000.
+* 02 Oct 26 Windows  A bare archive name is looked for in the backup directory
+*              saved by SET.BACKUP.DIRECTORY (!acc_bakdir), asked for and saved
+*              when there is none; a name with a directory part is used as given.
+*              Owner's ruling, 1 Oct 2026; agreed by SD Core for Linux in
+*              2026-10-02T2030, who will take this file.
+* 02 Oct 26 Windows  parse.manifest drops every CR first: a manifest written with
+*              CRLF (a Windows backup before the archiver stored LF) was REFUSED
+*              on Linux, measured there in 2026-10-02T2030 - trim() keeps the
+*              CR, so "format: 1" read as 1 plus a CR and the "[account x]"
+*              header was not found.  The line is Linux's, taken as given.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -92,6 +102,19 @@ $include createacc.h
       end case
    repeat
    if (all and names # '') or (not(all) and names = '') then stop sysmsg(13016)
+
+*  A BARE ARCHIVE NAME - no directory part, no drive - IS LOOKED FOR IN THE SAVED
+*  BACKUP DIRECTORY (owner's ruling, 1 Oct 2026), asked for and saved when there is
+*  none; NO.QUERY means nobody can answer, so it refuses instead.  A name with a
+*  directory part is used as given, and then there is nothing to ask.
+   if index(zip.path, '/', 1) = 0 and index(zip.path, '\', 1) = 0 and index(zip.path, ':', 1) = 0 then
+      call !acc_bakdir('USE', not(no.query), bak.dir, err)
+      if err # '' then
+         display sysmsg(err<1,1>, err<1,2>, err<1,3>)
+         stop
+      end
+      zip.path = bak.dir : @ds : zip.path
+   end
 
    if not(ospath(zip.path, OS$EXISTS)) then stop sysmsg(13034, zip.path) ;* does not exist
    zip.path = ospath(zip.path, OS$FULLPATH)
@@ -465,6 +488,7 @@ write.marker:
 *   section sec.keys / sec.vals (value lists) and sec.gcat.  bad is set to
 *   what disagrees with the unpacked archive, '' when it all agrees.
 parse.manifest:
+   mtext = convert(char(13), '', mtext)   ;* a CRLF manifest: see the 02 Oct 26 history line
    bad = ''
    hdr.format = '' ; hdr.product = '' ; hdr.accounts = ''
    sec.names = '' ; sec.keys = '' ; sec.vals = '' ; sec.gcat = ''

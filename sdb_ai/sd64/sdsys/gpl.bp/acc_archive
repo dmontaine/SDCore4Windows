@@ -267,11 +267,16 @@ read.result:
 * ======================================================================
 
 norm.path:
-*  np in and out: a POSIX path ("/c/...") through K$WINPATH, then every "/"
-*  made the Windows separator.  '' stays ''.
+*  np in and out: a POSIX path ("/c/...") through K$WINPATH, then every "/" AND
+*  every "\" made @ds.  '' stays ''.
+*  01 Oct 26 - @DS IS "/" IN THIS PORT (gplsrc/sddefs.h), NOT THE WINDOWS
+*  SEPARATOR THIS COMMENT USED TO CALL IT.  K$WINPATH answers C:\... with
+*  backslashes, and converting only "/" to @ds left them, so check.full (which
+*  wants a drive letter, a colon and @ds) refused every path that arrived in the
+*  POSIX form.  The script accepts either separator (measured, same day).
    if np = '' then return
    if np[1, 1] = '/' then np = kernel(K$WINPATH, np)
-   np = convert('/', @ds, np)
+   np = convert('/\', @ds : @ds, np)
    return
 
 check.full:

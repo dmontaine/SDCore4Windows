@@ -1623,6 +1623,13 @@ def main():
                    # prints only the certificate's fields.  It SHIPS - do NOT
                    # add it to assert-current's $neverShipped list.
                    'sd-settings-os.ps1',
+                   # 01 Oct 26 - the saved backup directory (SET.BACKUP.DIRECTORY,
+                   # owner's ruling): reads and writes BACKUPDIR= in
+                   # C:\ProgramData\SD\sd.conf.  gpl.bp ACC_OS_BAKDIR runs it
+                   # through !ps_script_out, so as SDSYS's elevated helper.  It
+                   # SHIPS - do NOT add it to assert-current's $neverShipped
+                   # list.  Its unit test does not.
+                   'sd-backupdir.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

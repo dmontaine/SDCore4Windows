@@ -19,6 +19,8 @@
 *
 * START-HISTORY:
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
+* 01 Oct 26 Windows port - USRDIR's backslashes are made @ds (which is "/")
+*           before the separators are counted; the count was always zero.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -67,6 +69,12 @@ deffun os_group(action, group, member) calling '!os_group'
    if acc.name = '' then
       usr.dir = config('USRDIR')
       if usr.dir = '' then usr.dir = 'C:\ProgramData\SD\user_accounts'
+*     01 Oct 26 - @DS IS "/" IN THIS PORT (gplsrc/sddefs.h, DS) AND USRDIR IS A
+*     NATIVE WINDOWS PATH WITH BACKSLASHES, as is the default above.  Counting
+*     @ds in it as it stood always answered 0 and refused with 12005 - found when
+*     the Solo copy of this routine did exactly that on its first BACKUP.ACCOUNT.
+*     Make it the same separator the rest of the verbs build with (dest:@ds:name).
+      usr.dir = convert('\', @ds, usr.dir)
       loop while usr.dir[len(usr.dir), 1] = @ds and len(usr.dir) > 3
          usr.dir = usr.dir[1, len(usr.dir) - 1]
       repeat

@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 01 Oct 26 Windows port - BACKUPDIR is accepted (and not stored), so the line
+ *           SET.BACKUP.DIRECTORY writes does not stop SD starting
  * 01 Oct 26 Windows port - APIPORT is an ON/OFF switch: any value above zero
  *           means the fixed port SD_API_PORT (owner's port ruling)
  * 14 Sep 26 Windows port - the global catalogue check names gcat/$cproc
@@ -208,6 +210,22 @@ struct CONFIG* read_config(char* errmsg) {
          Removing this branch would turn tidying-up into a failure to start. */
       else if (sscanf(rec, "CREATUSR=%d", &n) == 1) {
         /* accepted and discarded */
+      }
+      /* 01 Oct 26 Windows port - BACKUPDIR, THE DIRECTORY BACKUP.ACCOUNT AND
+         RESTORE.ACCOUNT USE WHEN THEY ARE NOT GIVEN ONE.  SET.BACKUP.DIRECTORY
+         writes this line; the CHAIN BELOW ENDS IN "Unrecognised configuration
+         parameter", which aborts read_config() and stops SD starting, so a
+         file carrying the line would not start without this branch.  It is
+         accepted and NOT stored: SD BASIC reads the file itself, through
+         !acc_os_bakdir, each time it needs the value, so a change takes
+         effect without restarting SD.  Bounded like SH= above, so an overlong
+         value is refused by name rather than silently kept.                  */
+      else if (strncmp(rec, "BACKUPDIR=", 10) == 0) {
+        if (strlen(rec + 10) > MAX_PATHNAME_LEN) {
+          sprintf(errmsg, "BACKUPDIR value is longer than %d characters.",
+                  MAX_PATHNAME_LEN);
+          goto exit_read_config;
+        }
       }
       else if (sscanf(rec, "DEADLOCK=%d", &n) == 1)
         cfg->deadlock = (n != 0);

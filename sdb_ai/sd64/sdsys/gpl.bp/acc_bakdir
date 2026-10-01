@@ -1,0 +1,106 @@
+* ACC_BAKDIR
+* The saved backup directory: show it, save it, or use it (asking for it if there is none)
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 01 Oct 26 Windows port - written, with SET.BACKUP.DIRECTORY (owner's ruling,
+*           1 Oct 2026).  PROPOSED TO SD CORE FOR LINUX as a shared file (mail
+*           2026-10-02T2000).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !acc_bakdir(mode, arg, dir, err)
+*
+*    mode  SHOW  dir comes back as the saved directory, '' when none is saved.
+*          SET   arg is the directory to save.  It is created if necessary, proved
+*                writable and saved, by !acc_os_bakdir; dir comes back as the full
+*                path, and "Backup directory is now %1" is displayed.
+*          USE   dir comes back as the directory BACKUP.ACCOUNT / RESTORE.ACCOUNT
+*                should use.  The saved one when there is one.  When there is none and
+*                arg is true the user is ASKED for it, and the answer is saved exactly
+*                as SET does (the same message too); with arg false, or an empty
+*                answer, it fails with 13041 and never asks twice.  arg is false when
+*                nobody can answer (NO.QUERY).
+*    err   '' on success, else a message number, @vm, then its arguments, for
+*          display sysmsg(err<1,1>, err<1,2>, err<1,3>).
+*
+*    The OS-specific half is !acc_os_bakdir(mode, dir, err), mode GET or SET.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine acc_bakdir(mode, arg, dir, err)
+$catalog !acc_bakdir
+
+   err = ''
+   md  = upcase(mode)
+   d   = ''
+   ans = ''
+
+   begin case
+      case md = 'SHOW'
+         call !acc_os_bakdir('GET', d, err)
+         if err # '' then return
+         dir = d
+         return
+
+      case md = 'SET'
+         d = arg
+         call !acc_os_bakdir('SET', d, err)
+         if err # '' then return
+         display sysmsg(13040, d) ;* Backup directory is now %1
+         dir = d
+         return
+
+      case md = 'USE'
+         call !acc_os_bakdir('GET', d, err)
+         if err # '' then return
+         if d = '' then
+            if not(arg) then
+               err = 13041   ;* No backup directory is set
+               return
+            end
+            display sysmsg(13042) : ' ' :   ;* Backup directory (created if it does not exist):
+            input ans
+            ans = trim(ans)
+            if ans = '' then
+               err = 13041
+               return
+            end
+*           As if SET.BACKUP.DIRECTORY had been run: created, proved writable, saved.
+            call !acc_os_bakdir('SET', ans, err)
+            if err # '' then return
+            display sysmsg(13040, ans)
+            d = ans
+         end
+         dir = d
+         return
+
+      case 1
+         dir = ''
+         err = 13041
+         return
+   end case
+
+   return
+end
+
+* END-CODE

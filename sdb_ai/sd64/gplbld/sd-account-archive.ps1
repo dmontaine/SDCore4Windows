@@ -124,7 +124,8 @@ function New-AccountZip([string]$zipPath, $entries) {
         foreach ($en in $entries) {
             $c = [pscustomobject]@{ Files = 0; Bytes = [int64]0; Dirs = 0 }
             if (Test-Path -LiteralPath $en.Source -PathType Leaf) {
-                Add-ZipFile $z $en.Source $en.Name
+                if ($en.Name -ceq 'manifest.txt') { Add-ZipManifest $z $en.Source $en.Name }
+                else { Add-ZipFile $z $en.Source $en.Name }
                 $c.Files = 1; $c.Bytes = (New-Object System.IO.FileInfo($en.Source)).Length
             } elseif (Test-Path -LiteralPath $en.Source -PathType Container) {
                 $root = (New-Object System.IO.DirectoryInfo($en.Source)).FullName.TrimEnd('\')
@@ -162,6 +163,27 @@ function Add-ZipFile($z, [string]$src, [string]$name) {
         $es = $e.Open()
         try { $fs.CopyTo($es) } finally { $es.Dispose() }
     } finally { $fs.Dispose() }
+}
+
+# 01 Oct 26 - THE MANIFEST IS STORED WITH LF, WHATEVER SD WROTE.  The format agreed
+# with SD Core for Linux is ASCII with LF line ends.  BACKUP.ACCOUNT writes the
+# manifest as a directory-file record, and on this port those get CRLF
+# (gplsrc/sddefs.h, Newline), so the file arrives here with a CR before every LF.
+# The Windows reader folds CRLF on the way in, but the shared reader on Linux only
+# trims blanks off each line, so it would see "format: 1" followed by a CR and refuse
+# a Windows-made backup.  Found by reading, not yet read by Linux (it is asked to);
+# converting here is the safe side whichever way that goes.  Bytes are kept as they
+# are (Latin-1 round trip); only CR+LF becomes LF, and a lone CR is left alone.
+function Add-ZipManifest($z, [string]$src, [string]$name) {
+    $latin1 = [System.Text.Encoding]::GetEncoding(28591)
+    $text   = $latin1.GetString([System.IO.File]::ReadAllBytes($src)).Replace("`r`n", "`n")
+    $e  = $z.CreateEntry($name, [System.IO.Compression.CompressionLevel]::Optimal)
+    $e.LastWriteTime = [System.IO.File]::GetLastWriteTime($src)
+    $es = $e.Open()
+    try {
+        $b = $latin1.GetBytes($text)
+        $es.Write($b, 0, $b.Length)
+    } finally { $es.Dispose() }
 }
 
 # Every name is checked BEFORE anything is written, including the Windows-only

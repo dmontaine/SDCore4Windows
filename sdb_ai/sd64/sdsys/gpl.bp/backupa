@@ -8,12 +8,20 @@
 *              FOR WINDOWS BYTE FOR BYTE: everything the OS decides is behind
 *              the per-OS helpers (!acc_archive, !acc_tree_count, !acc_os_info),
 *              agreed by mail 2026-09-30T2359 to 2026-10-01T1210.
+* 02 Oct 26 Windows  TO is optional: without it the directory saved by
+*              SET.BACKUP.DIRECTORY is used (!acc_bakdir), asked for and saved
+*              when there is none.  Owner's ruling, 1 Oct 2026; PROPOSED TO
+*              SD CORE FOR LINUX (mail 2026-10-02T2000), who agreed the
+*              behaviour in 2026-10-02T2030 and will take this file.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*    BACKUP.ACCOUNT name [name ...] TO directory
-*    BACKUP.ACCOUNT ALL TO directory
+*    BACKUP.ACCOUNT name [name ...] [TO directory]
+*    BACKUP.ACCOUNT ALL [TO directory]
+*
+*    TO is a one-off and changes nothing that is saved.  Without it the
+*    directory saved by SET.BACKUP.DIRECTORY is used.
 *
 *    Writes SD-<host>-<accounts>-<yyyymmdd-hhmmss>.zip in the directory: the
 *    manifest (accbak.h) and each account's tree.  An administrator verb.
@@ -85,8 +93,18 @@ $include accbak.h
       end case
    repeat
 
-   if dest = '' or (all and names # '') or (not(all) and names = '') then
+   if (all and names # '') or (not(all) and names = '') then
       stop sysmsg(13006) ;* Syntax
+   end
+*  NO "TO": THE SAVED BACKUP DIRECTORY (owner's ruling, 1 Oct 2026), ASKED FOR AND
+*  SAVED WHEN THERE IS NONE.  Before the hold below, so declining to answer leaves
+*  nothing to clear.  TO still works and is a one-off.
+   if dest = '' then
+      call !acc_bakdir('USE', @true, dest, err)
+      if err # '' then
+         display sysmsg(err<1,1>, err<1,2>, err<1,3>)
+         stop
+      end
    end
    if not(ospath(dest, OS$EXISTS)) then stop sysmsg(13010, dest) ;* not a directory
    dest = ospath(dest, OS$FULLPATH)

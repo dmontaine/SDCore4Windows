@@ -1,1 +1,1 @@
-Syntax: RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}\n        RESTORE.ACCOUNT archive ALL {NO.QUERY}
+Syntax: RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}\n        RESTORE.ACCOUNT archive ALL {NO.QUERY}\n        A bare archive name is looked for in the backup directory.

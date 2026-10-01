@@ -29,7 +29,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($subject, [ref]
 if ($errs.Count -gt 0) { Write-Host "test-accarchive-units: subject has $($errs.Count) parse error(s)."; exit 2 }
 
 $wanted = @('Test-EntryName', 'Get-TreeItems', 'Get-TreeCounts', 'Format-Counts', 'New-AccountZip',
-            'Add-ZipFile', 'Expand-AccountZip', 'Move-AccountTree', 'Move-FsItem', 'Reset-ChildAcl', 'Protect-Dir',
+            'Add-ZipFile', 'Add-ZipManifest', 'Expand-AccountZip', 'Move-AccountTree', 'Move-FsItem', 'Reset-ChildAcl', 'Protect-Dir',
             'Test-AkQuery')
 $lifted = 0
 foreach ($name in $wanted) {
@@ -140,6 +140,39 @@ try {
     Check 'no backslash in any name' (-not ($names | Where-Object { $_.Contains('\') }))
     Check 'refuses an existing zip' ((Throws { New-AccountZip $zip $entries } '*already exists*') -eq '')
     Check 'refuses a missing source, leaves no zip' (((Throws { New-AccountZip (Join-Path $work 'n.zip') @([pscustomobject]@{ Name = 'accounts/x'; Source = (Join-Path $work 'nope') }) } '*no such source*') -eq '') -and -not (Test-Path (Join-Path $work 'n.zip')))
+
+    # --- 2b. the manifest is stored with LF; an account's own files are not touched
+    # 01 Oct 26.  BACKUP.ACCOUNT writes the manifest as a directory-file record, which on
+    # this port gets CRLF (gplsrc/sddefs.h Newline); the agreed format is LF and the shared
+    # reader on Linux only trims blanks off each line.  A file with CRLF INSIDE an account is
+    # data and has to survive byte for byte.
+    Write-Host ''
+    Write-Host '2b. line ends'
+    $crlfMan = Join-Path $work 'manifest-crlf.txt'
+    [System.IO.File]::WriteAllBytes($crlfMan, [System.Text.Encoding]::ASCII.GetBytes("format: 1`r`nproduct: windows-solo`r`nlone: a`rb`r`n"))
+    $crlfSrc = Join-Path $work 'src2\Crlf'
+    [void][System.IO.Directory]::CreateDirectory((Join-Path $crlfSrc 'bp'))
+    $dataBytes = [System.Text.Encoding]::ASCII.GetBytes("LINE1`r`nLINE2`r`n")
+    [System.IO.File]::WriteAllBytes((Join-Path $crlfSrc 'bp\prog'), $dataBytes)
+    $zip2 = Join-Path $work 'c.zip'
+    $null = @(New-AccountZip $zip2 @([pscustomobject]@{ Name = 'manifest.txt'; Source = $crlfMan },
+                                     [pscustomobject]@{ Name = 'accounts/crlf'; Source = $crlfSrc }))
+    $zr = [System.IO.Compression.ZipFile]::OpenRead($zip2)
+    try {
+        $s = $zr.GetEntry('manifest.txt').Open(); $mms = New-Object System.IO.MemoryStream; $s.CopyTo($mms); $s.Dispose()
+        $s = $zr.GetEntry('accounts/crlf/bp/prog').Open(); $ams = New-Object System.IO.MemoryStream; $s.CopyTo($ams); $s.Dispose()
+    } finally { $zr.Dispose() }
+    $manText = [System.Text.Encoding]::ASCII.GetString($mms.ToArray())
+    Check 'manifest stored with LF: no CR before any LF' (-not $manText.Contains("`r`n"))
+    Check 'manifest otherwise intact: three lines, the lone CR kept' ($manText -ceq "format: 1`nproduct: windows-solo`nlone: a`rb`n")
+    Check 'an account file holding CRLF is stored byte for byte' (([System.BitConverter]::ToString($ams.ToArray())) -ceq ([System.BitConverter]::ToString($dataBytes)))
+    # CONTROL, so the checks above can fail: the same manifest copied as a plain file keeps its CRs.
+    $zip3 = Join-Path $work 'd.zip'
+    $z3 = [System.IO.Compression.ZipFile]::Open($zip3, 'Create')
+    try { Add-ZipFile $z3 $crlfMan 'manifest.txt' } finally { $z3.Dispose() }
+    $zr = [System.IO.Compression.ZipFile]::OpenRead($zip3)
+    try { $s = $zr.GetEntry('manifest.txt').Open(); $cms = New-Object System.IO.MemoryStream; $s.CopyTo($cms); $s.Dispose() } finally { $zr.Dispose() }
+    Check 'CONTROL: a plain-file copy of the same manifest keeps its CRLF (so the check can see one)' ([System.Text.Encoding]::ASCII.GetString($cms.ToArray()).Contains("`r`n"))
 
     # --- 3. extract ----------------------------------------------------------
     Write-Host ''
