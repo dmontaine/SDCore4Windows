@@ -41,7 +41,8 @@
 *              case below, as CREATE.ACCOUNT always did.
 *    settings  syscom/createacc.h.  Blank fields take CREATE.ACCOUNT's
 *              defaults: both routes on for a USER account, no os.users record.
-*              The Linux-only block (31-40, CA$REUSE.SD.USER) is ignored here.
+*              CA$REUSE.SD.USER (31) is honoured too, on the owner's ruling of
+*              2 Oct 2026 - see AN EXISTING WINDOWS USER below.
 *    err       '' when the account was made.  Otherwise the message number,
 *              then its arguments, value-mark separated - the caller shows it
 *              with sysmsg(err<1,1>, err<1,2>, ...).  Progress lines are
@@ -56,11 +57,12 @@
 * because making the Windows user means setting its password; the prompt and
 * its retry stay here, interactive, exactly as in CREATE.ACCOUNT.
 *
-* AN EXISTING WINDOWS USER IS REFUSED (10038) unless ATTACH, as before.  SD Core
-* for Linux's CA$REUSE.SD.USER (take over a user SD itself made) is not
-* implemented here: on Windows the API credential ($cred) is set together with
-* the Windows password, so a reused user could be left with ssh and no API.
-* That is an open question for the owner, not a decision.
+* AN EXISTING WINDOWS USER IS REFUSED (10038) unless ATTACH, or unless the
+* caller set CA$REUSE.SD.USER and SD itself made that user (!is_sd_user).  Owner,
+* 2 Oct 2026: such a user is used again WITH A NEW PASSWORD - on Windows the API
+* credential ($cred) is written together with the Windows password, so keeping
+* the old one could leave ssh working and the API refused.  RESTORE.ACCOUNT sets
+* CA$REUSE.SD.USER; CREATE.ACCOUNT never does.
 *
 * END-DESCRIPTION
 *
@@ -79,6 +81,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun os_group(action,group,member) calling '!os_group'
 deffun is_group(group) calling '!is_group'
 deffun is_user(uname) calling '!is_user'
+deffun is_sd_user(username) calling '!is_sd_user'
 deffun create_user(uname) calling '!create_user'
 deffun set_passwd(uname)  calling '!set_passwd'
 deffun delete_user(uname) calling '!delete_user'
@@ -110,6 +113,7 @@ deffun ps_script(script) calling '!ps_script'
    access.ssh = settings<CA$ROUTE.SSH> # '0'
    access.api = settings<CA$ROUTE.API> # '0'
    no.query = settings<CA$NO.QUERY> = 1
+   reuse.sd.user = settings<CA$REUSE.SD.USER> = 1   ;* owner, 2 Oct 2026 - see the USER arm
    os.sh   = settings<CA$OS.SH> = 1
    os.exec = settings<CA$OS.EXECUTE> = 1
 
@@ -245,12 +249,51 @@ deffun ps_script(script) calling '!ps_script'
 *   BASIC and both ports pull each other's shapes, so a future merge that
 *   brings their arm across would not fail loudly - it would simply stop
 *   folding the Windows name again and put RELEASE_1.1 67 back.
-       if attach then
-         acc.uname = downcase(acc.uname)
-       end else
-         @system.return.code = -ER$ARGS
-         err = 10038:@vm:acc.uname ; goto exit.create ;* Windows account %1 already exists
-       end
+       begin case
+         case attach
+           acc.uname = downcase(acc.uname)
+
+* 02 Oct 26 Windows port - CA$REUSE.SD.USER, OWNER'S RULING 2 Oct 2026 ("reuse it,
+*   new password"): a RESTORE that has to create an account may take over a
+*   Windows user of that name ONLY when SD itself made it (!is_sd_user reads the
+*   stamp CREATE_USER writes, the same test DELETE.ACCOUNT trusts).  It asks for
+*   a NEW password, because on Windows !set_passwd writes the Windows password
+*   and SD's API credential ($cred) together: reusing the old password would
+*   leave a user that ssh admits and the API refuses, if its $cred went with
+*   the old account.  SD Core for Linux keeps the two apart and leaves the
+*   password unchanged; that does not transfer (mail 2026-10-02T1615).
+*   NO ROLLBACK HERE, unlike the creating arm below: this user existed before,
+*   so a refused password leaves it exactly as it was, and nothing is made.
+         case reuse.sd.user and is_sd_user(downcase(acc.uname))
+           acc.uname = downcase(acc.uname)
+           crt sysmsg(12007, acc.uname) ;* SD made %1 for an earlier account; used again, with a new password
+PW.REUSE.AGAIN:
+           if not(set_passwd(acc.uname)) then
+              pw.stat = status()
+              begin case
+                 case pw.stat = 3 ; crt sysmsg(10118)          ;* The two passwords did not match
+                 case pw.stat = 1 ; crt sysmsg(10119, acc.uname) ;* Windows refused that password
+                 case pw.stat = 5 ; crt sysmsg(10120)          ;* Not elevated - retrying will not help
+                 case pw.stat = 6 ; crt sysmsg(10122, acc.uname) ;* Windows set, $cred not
+                 case pw.stat = 7 ; crt sysmsg(10920)          ;* A password needs at least 8 characters...
+                 case 1           ; crt sysmsg(10121, pw.stat) ;* Could not be set (status %1)
+              end case
+              crt sysmsg(12008): ;* No new password was set.  Try again (y/<n>)?
+              input yn
+              if upcase(yn) = 'Y' then goto PW.REUSE.AGAIN
+              @system.return.code = -ER$NOT.CREATED
+              if pw.stat = 6 then
+                 err = 10122:@vm:acc.uname ;* Windows set, $cred not - say exactly that
+              end else
+                 err = 12009:@vm:acc.uname ;* %1 was not given a new password, so the account was not made
+              end
+              goto exit.create
+           end
+
+         case 1
+           @system.return.code = -ER$ARGS
+           err = 10038:@vm:acc.uname ; goto exit.create ;* Windows account %1 already exists
+       end case
 
      case attach
 *      ATTACH names an OS account that is not there, so there is nothing to
