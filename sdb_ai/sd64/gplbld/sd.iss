@@ -27,7 +27,7 @@
   #define Stage "..\..\stage"
 #endif
 #ifndef AppVer
-  #define AppVer "W1.1-1"
+  #define AppVer "W1.1-3"
 #endif
 
 ; 29 Sep 26 - AppVer W1.1-0 -> W1.1-1 (RELEASE_1.1 112, English only), owner's

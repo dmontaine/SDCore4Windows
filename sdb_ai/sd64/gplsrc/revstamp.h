@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * rev W1.1-3 01 Oct 26 Windows port - release string W1.1-3 (owner's instruction;
+ *            the changelog's W1.1-3 section).  Segment numerics unchanged.
  * rev W1.1-0 15 Sep 26 Windows port - release string W1.1-0 (RELEASE_1.1).
  *            Segment numerics MAJOR/MINOR/BUILD left as they were, as W1.0-0
  *            itself shipped them out of step (BUILD 2); they are the segment
@@ -45,7 +47,7 @@
 #define MAJOR_REV      1
 #define MINOR_REV      0
 #define BUILD          2
-#define SD_REV_STAMP   "W1.1-1"
+#define SD_REV_STAMP   "W1.1-3"
 
 #define SD_COPYRIGHT_YEAR "2007"
 
