@@ -181,14 +181,30 @@ try {
     Note 'F1 as the windows type spells it (ESC [ [ A) prints it too'     $true `
          ($f1t -match 'no built-in help system')
 
-    # THE CONTROL IS AN ESC O PAIR NOTHING BINDS.  It must be discarded and the T
-    # typed, which is what F1 used to do with its P.  If the message appeared here
+    # THE CONTROL IS AN ESC O SEQUENCE NOTHING BINDS.  If the message appeared here
     # the two rows above would be matching something other than F1.
+    #
+    # WHAT IT DOES CHANGED WITH THE FIX, AND THE FIRST VERSION OF THIS ROW WAS
+    # WRONG ABOUT IT (measured 2 Oct 2026, 13:28 run, then the raw reply).  Before
+    # _KEYCODE bound ESC O P-S nothing began with ESC O, so SD discarded the TWO
+    # bytes and typed the third - which is how F1 put a P on the line.  Now that ESC
+    # O starts four keys SD reads the third byte too, finds ESC O T unbound, and
+    # rejects all three with the bell: nothing is typed.  The bell (char 7) is the
+    # evidence, and a plain T below is the control for it.
+    $bell = [string][char]7
     $f1c = Invoke-SD @($esc + 'OT')
-    Note 'control: an unbound ESC O pair does not print the message' $false `
+    Note 'control: an unbound ESC O sequence does not print the message' $false `
          ($f1c -match 'no built-in help system')
-    Note 'control: and the byte after it is typed instead'         $true `
+    Note 'control: it is rejected with the bell'                   $true `
+         ($f1c.Contains($bell))
+    Note 'control: and none of it is typed (no T left on the line)' $false `
          ($f1c -match 'T is not in your VOC')
+
+    $tplain = Invoke-SD @('T')
+    Note 'control: a plain T IS typed and refused by name'         $true `
+         ($tplain -match 'T is not in your VOC')
+    Note 'control: and a plain T rings no bell'                    $false `
+         ($tplain.Contains($bell))
 
     # Home: type VOC, go to the start, type COUNT.  Counted only if Home moved the
     # cursor.  The control types the same keys with no Home and must be refused.
