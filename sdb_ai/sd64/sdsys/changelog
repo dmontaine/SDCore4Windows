@@ -2,6 +2,20 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+02 Oct 26  F1 TO F5, HOME AND END WORK FROM A TERMINAL THAT SENDS THEM THE
+           XTERM WAY.
+
+           Some terminals send F1 to F4 as ESC O P, ESC O Q, ESC O R and ESC O S,
+           F5 as ESC [ 1 5 ~, Home as ESC [ H and End as ESC [ F.  SD only knew
+           the spellings the Linux console uses, so it threw the first two bytes
+           away and typed the last one: F1 typed a P, F2 a Q.  All seven are now
+           recognised, and a terminal type that names the same bytes for a
+           different key still wins.
+           * At the command prompt F1 on an empty line shows the help message, and
+             Home and End move the cursor to the start and end of the line.
+           * The Linux-console spellings, the arrow keys, Backspace and Delete are
+             as they were.
+
 02 Oct 26  F1 AT THE COMMAND PROMPT SAYS WHERE THE CHANGELOG IS.
 
            The message F1 shows ("SD has no built-in help system") now also

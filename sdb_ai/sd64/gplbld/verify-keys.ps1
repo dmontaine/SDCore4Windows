@@ -160,10 +160,61 @@ try {
     Note 'control: with no arrows at all, COUNTVOC is refused'    $true `
          ($noarrow -match 'COUNTVOC is not in your VOC')
 
+    Write-Output ''
+    Write-Output '=== 4. F1, Home and End as xterm spells them =============================='
+    Write-Output '  RELEASE_1.1 120.  MEASURED 2 Oct 2026 with probe-keys.ps1 in the owner''s'
+    Write-Output '  console: F1 is ESC O P, Home is ESC [ H, End is ESC [ F.  The windows type'
+    Write-Output '  names ESC [ [ A, ESC [ 1 ~ and ESC [ 4 ~, so SD threw the ESC pair away and'
+    Write-Output '  typed the last byte - F1 put a P on the command line.  _KEYCODE now binds'
+    Write-Output '  the xterm spellings as defaults.  F2-F5 are bound by the same lines but have'
+    Write-Output '  no action at the command prompt, so they cannot be witnessed from here.'
+    Write-Output '  F1 is read off the message it prints, whose wording appears only when F1'
+    Write-Output '  reached f1.help; it is never in anything this script types.'
+
+    $f1x = Invoke-SD @($esc + 'OP')
+    Note 'F1 as xterm sends it (ESC O P) prints the no-built-in-help message' $true `
+         ($f1x -match 'no built-in help system')
+    Note 'and F1 did not leave a P on the command line'            $false `
+         ($f1x -match 'P is not in your VOC')
+
+    $f1t = Invoke-SD @($esc + '[[A')
+    Note 'F1 as the windows type spells it (ESC [ [ A) prints it too'     $true `
+         ($f1t -match 'no built-in help system')
+
+    # THE CONTROL IS AN ESC O PAIR NOTHING BINDS.  It must be discarded and the T
+    # typed, which is what F1 used to do with its P.  If the message appeared here
+    # the two rows above would be matching something other than F1.
+    $f1c = Invoke-SD @($esc + 'OT')
+    Note 'control: an unbound ESC O pair does not print the message' $false `
+         ($f1c -match 'no built-in help system')
+    Note 'control: and the byte after it is typed instead'         $true `
+         ($f1c -match 'T is not in your VOC')
+
+    # Home: type VOC, go to the start, type COUNT.  Counted only if Home moved the
+    # cursor.  The control types the same keys with no Home and must be refused.
+    $home1 = Invoke-SD @('VOC' + $esc + '[H' + 'COUNT ')
+    Note 'Home (ESC [ H) moves the cursor to the start'            $true `
+         ($home1 -match 'record\(s\) counted')
+    $home0 = Invoke-SD @('VOC' + 'COUNT ')
+    Note 'control: with no Home, VOCCOUNT is refused'              $true `
+         ($home0 -match 'VOCCOUNT is not in your VOC')
+
+    # End: type "COUNT VO", Home, End, then C.  Counted only if End moved the cursor
+    # back to the end.  The control stops after Home, so the C lands at the start.
+    $end1 = Invoke-SD @('COUNT VO' + $esc + '[H' + $esc + '[F' + 'C')
+    Note 'End (ESC [ F) moves the cursor to the end'               $true `
+         ($end1 -match 'record\(s\) counted')
+    $end0 = Invoke-SD @('COUNT VO' + $esc + '[H' + 'C')
+    Note 'control: Home with no End leaves the C at the start'     $true `
+         ($end0 -match 'CCOUNT is not in your VOC')
+
     if (-not $Quiet) {
         Write-Output ''
         Write-Output '  --- DEL run said: ---'
         Write-Output $del
+        Write-Output ''
+        Write-Output '  --- F1 (ESC O P) run said: ---'
+        Write-Output $f1x
     }
 
     Write-Output ''

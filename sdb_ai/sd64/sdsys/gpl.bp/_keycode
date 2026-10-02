@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 02 Oct 26 Windows port - RELEASE_1.1 120.  F1-F5, Home and End as xterm spells
+*           them (ESC O P-S, ESC [ 1 5 ~, ESC [ H, ESC [ F) are bound as defaults,
+*           before the terminfo binds.  F1 typed a P.
 * 19 Aug 26 Windows port - both Ctrl-H (8) and DEL (127) are bound to
 *           K$BACKSPACE as defaults, before the terminfo binds so terminfo still
 *           overrides either.  Every Windows console host sends DEL and the
@@ -87,6 +90,33 @@ $include keycode.h
 *   forwards.  Same family, separate fix.  PROJECT_STATUS.md 6.
       code = K$BACKSPACE  ; key.string = char(8)                ; gosub bind
       code = K$BACKSPACE  ; key.string = char(127)              ; gosub bind
+
+* 02 Oct 26 Windows port - RELEASE_1.1 120.  THE XTERM SPELLINGS OF F1-F5, HOME
+*   AND END, BOUND THE SAME WAY AND FOR THE SAME REASON AS BACKSPACE ABOVE.
+*
+*   MEASURED 2 Oct 2026 with gplbld/probe-keys.ps1 in the owner's console (the
+*   window was not named): F1-F4 send ESC O P, ESC O Q, ESC O R, ESC O S, F5 sends
+*   ESC [ 1 5 ~, Home ESC [ H and End ESC [ F, while the arrows send ESC [ A-D and
+*   Delete ESC [ 3 ~.  The windows type is a copy of linux and names ESC [ [ A-E
+*   for F1-F5 and ESC [ 1 ~ / ESC [ 4 ~ for Home and End, so none of the seven
+*   matched.  An unmatched ESC pair is thrown away with a bell below ("display
+*   @sys.bell", key.string = ''), and the NEXT byte is returned as an ordinary
+*   key: F1 typed a P, F2 a Q, F3 an R, F4 an S.  F1 therefore never reached
+*   f1.help, which is how 108's message was found unreachable.
+*
+*   POSITION AGAIN IS THE POINT: bind REPLACES, so a terminfo type that claims
+*   one of these strings for a different code still wins in the block below, and
+*   one that claims it for the same code changes nothing.  What this adds is a
+*   lookup that used to find nothing and now finds something.  F6-F12 are not
+*   here because the windows type already binds the ESC [ nn ~ forms xterm sends
+*   (not measured; the probe was asked for F1-F5, Home and End only).
+      code = K$F1         ; key.string = char(27) : 'OP'        ; gosub bind
+      code = K$F2         ; key.string = char(27) : 'OQ'        ; gosub bind
+      code = K$F3         ; key.string = char(27) : 'OR'        ; gosub bind
+      code = K$F4         ; key.string = char(27) : 'OS'        ; gosub bind
+      code = K$F5         ; key.string = char(27) : '[15~'      ; gosub bind
+      code = K$HOME       ; key.string = char(27) : '[H'        ; gosub bind
+      code = K$END        ; key.string = char(27) : '[F'        ; gosub bind
 
       code = K$F1         ; key.string = tinfo<T$KEY.F1>        ; gosub bind
       code = K$F2         ; key.string = tinfo<T$KEY.F2>        ; gosub bind
