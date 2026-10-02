@@ -2,6 +2,12 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+02 Oct 26  F1 AT THE COMMAND PROMPT SAYS WHERE THE CHANGELOG IS.
+
+           The message F1 shows ("SD has no built-in help system") now also
+           gives the full path of this file, which records what each release
+           of SD changed, and why.
+
 02 Oct 26  RESTORE.ACCOUNT LATEST RESTORES THE MOST RECENT BACKUP.
 
            RESTORE.ACCOUNT LATEST name {name...} | ALL puts back the newest

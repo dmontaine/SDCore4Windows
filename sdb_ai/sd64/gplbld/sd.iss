@@ -1973,7 +1973,12 @@ end;
    variants and says which is which in as many words - "full (APIPORT=4247) and
    stand-alone (APIPORT unset)" - so an ACTIVE APIPORT line is the honest test,
    and a commented or valueless one is not a listener.  Where there is no
-   sd.conf to read, the box is the only answer there is, and it is offered. *)
+   sd.conf to read, the box is the only answer there is, and it is offered.
+
+   02 Oct 26 - RELEASE_1.1 117 item 5.  APIPORT IS AN ON/OFF SWITCH NOW, and
+   the test is config.c's: a number above zero is ON, zero is OFF.  This used
+   to call any non-empty value a listener, so "APIPORT=0" made the closing
+   report say the API was on when SD would not open a socket. *)
 function ApiConfHasListener: Boolean;
 var
   Lines: TArrayOfString;
@@ -1995,7 +2000,7 @@ begin
           Eq := Pos('=', L);
           if Eq > 0 then
           begin
-            Result := Trim(Copy(L, Eq + 1, Length(L))) <> '';
+            Result := StrToIntDef(Trim(Copy(L, Eq + 1, Length(L))), 0) > 0;
             Exit;
           end;
         end;

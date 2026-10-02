@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 02 Oct 26 Windows port - RELEASE_1.1 108.  F1 (int.help, f1.help) passes the
+*            changelog's path to message 10149, which now says where it is,
+*            as the Linux port's copy of the message does.
 * 21 Sep 26 Windows port - RELEASE_1.1 64 leftover.  elev.obtained is deleted:
 *            it was initialised false and never set true once LOGTO stopped
 *            calling elevate('START') on 18 Sep, so its two bypasses in
@@ -2622,7 +2625,7 @@ int.status:
   f1.help:
 *   if kernel(K$HELP, s) then display sysmsg(5130) ;* Unable to access the help system
 
-   crt sysmsg(10149) ;* SD has no built-in help system - list voc, and the Start Menu check
+   crt sysmsg(10149, @sdsys:@ds:'changelog') ;* SD has no built-in help system - list voc, the Start Menu check, and the changelog
 
    return
 

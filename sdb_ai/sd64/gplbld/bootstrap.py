@@ -322,8 +322,16 @@ def main():
             # dictionaries.  sd exits 0 either way; the program ends by
             # printing COMPLETE, and its failures say so.
             wid_lines = [l.strip() for l in out.splitlines()]
+            # 02 Oct 26 - RELEASE_1.1 115 item 4.  The last four are the
+            # program's own failure lines (write_install_dicts:30, 47, 96,
+            # 126), the list SD Core for Linux's installer already stops on;
+            # upgrade-dicts.ps1 stops on the same four.
             wid_bad = [w for w in ('Invalid runfile', 'ERROR OPENING',
-                                   'PROCESS ABORTED', 'READLIST EMPTY')
+                                   'PROCESS ABORTED', 'READLIST EMPTY',
+                                   'NO DIRECTORY RECORDS FOUND',
+                                   'CANNOT READ TRANSFER_FILE',
+                                   'ERROR CANNOT OPEN',
+                                   'requires administrator privileges')
                        if w.lower() in out.lower()]
             if 'COMPLETE' not in wid_lines or wid_bad:
                 die('write_install_dicts did not complete (%s) - its output is '
