@@ -354,8 +354,10 @@ function Set-SdsysPassword {
         Write-Wrapped -Text 'SDSYS already has a password.'
         Write-Wrapped -Text 'Press Enter to keep it, or type a new one.'
     } else {
-        Write-Wrapped -Text ('Type the password you want for SDSYS, or press Enter to keep the one ' +
-            'the install generated.')
+        # 02 Oct 26 - owner: the user must be told the generated password is shown once
+        # Enter is pressed (Show-GeneratedPassword, below).
+        Write-Wrapped -Text ('Type the password you want for SDSYS, or press Enter to use the one ' +
+            'the install generated.  It is shown when you press Enter.')
     }
     $prompt = 'SDSYS password'
     Write-Host ''
