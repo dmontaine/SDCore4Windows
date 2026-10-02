@@ -177,6 +177,37 @@ try {
     Note 'and F1 did not leave a P on the command line'            $false `
          ($f1x -match 'P is not in your VOC')
 
+    # THE OWNER'S HAND WITNESS OF F1, 2 Oct 2026, FOUND TWO MORE THINGS THE FIRST
+    # ROWS COULD NOT SEE.  (1) The message sent the reader to "list voc" for "the
+    # commands this account has"; it lists every record, files and pointers too
+    # (403 here).  LISTV lists the verbs.  (2) The cursor was left hanging: the
+    # message ended on a line of its own, nothing drew the prompt again.
+    Note 'F1 names LISTV for the commands this account has'        $true `
+         ($f1x -match 'type:\s+listv')
+    Note 'and no longer sends the reader to LIST VOC'              $false `
+         ($f1x -match 'list voc')
+
+    # THE PROMPT ROW COUNTS BARE ":" LINES AFTER THE MESSAGE'S LAST LINE.  MEASURED
+    # on the tree before the fix: ONE, the Enter being echoed.  The top of the same
+    # reply shows an empty prompt as a PAIR (the prompt drawn, then the Enter echoed),
+    # so a prompt drawn again after the message should make TWO.  THAT SECOND HALF IS
+    # PREDICTED, NOT MEASURED, until this runs on a cycled tree; what was counted is
+    # printed so a miss can be read.
+    $escRx   = [regex]::Escape([string]$esc) + '\[[0-9;?]*[A-Za-z]'
+    $f1lines = [regex]::Replace($f1x, $escRx, '') -split "`n"
+    $endAt   = -1
+    for ($i = 0; $i -lt $f1lines.Count; $i++) { if ($f1lines[$i] -match 'sdsys/changelog') { $endAt = $i } }
+    $barePrompts = 0
+    if ($endAt -ge 0) {
+        for ($i = $endAt + 1; $i -lt $f1lines.Count; $i++) {
+            if ($f1lines[$i] -match '^:OFF') { break }
+            if ($f1lines[$i].Trim() -eq ':') { $barePrompts++ }
+        }
+    }
+    Write-Output ("  F1 reply: {0} line(s); message ends at line {1}; bare prompt lines after it before OFF = {2}" -f $f1lines.Count, $endAt, $barePrompts)
+    Note 'the F1 message ends on a line the script could find'    $true  ($endAt -ge 0)
+    Note 'and the prompt is drawn again after it (not just the echoed Enter)' $true ($barePrompts -ge 2)
+
     $f1t = Invoke-SD @($esc + '[[A')
     Note 'F1 as the windows type spells it (ESC [ [ A) prints it too'     $true `
          ($f1t -match 'no built-in help system')

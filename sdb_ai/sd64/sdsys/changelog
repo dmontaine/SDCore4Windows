@@ -21,6 +21,11 @@ Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            The message F1 shows ("SD has no built-in help system") now also
            gives the full path of this file, which records what each release
            of SD changed, and why.
+           * It tells you to type LISTV to see the commands this account has.
+             It used to say LIST VOC, which lists every record in the VOC,
+             files and pointers as well as commands.
+           * After the message the prompt is shown again.  The cursor used to be
+             left on a blank line with no prompt.
 
 02 Oct 26  RESTORE.ACCOUNT LATEST RESTORES THE MOST RECENT BACKUP.
 
