@@ -19,12 +19,24 @@
 *              on Linux, measured there in 2026-10-02T2030 - trim() keeps the
 *              CR, so "format: 1" read as 1 plus a CR and the "[account x]"
 *              header was not found.  The line is Linux's, taken as given.
+* 02 Oct 26 Windows  LATEST in place of the archive name: the newest backup made on
+*              this computer that holds the account(s), chosen by the stamp in the file
+*              name in the saved backup directory.  Owner's request and ruling, 2 Oct
+*              2026 ("restore the most recent backup without having to enter its
+*              name", on both ports).  Messages 13047 and 13048; 13016 gains the form.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
 *    RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}
 *    RESTORE.ACCOUNT archive ALL {NO.QUERY}
+*    RESTORE.ACCOUNT LATEST name [name ...] {NO.QUERY}
+*    RESTORE.ACCOUNT LATEST ALL {NO.QUERY}
+*
+*    LATEST stands where the archive name goes and picks the newest backup in the
+*    saved backup directory that was made on this computer and holds every named
+*    account (13048 says which); with ALL, the newest made with ALL.  Nothing is
+*    found: 13047.  The chosen zip is checked like any other, below.
 *
 *    An administrator verb.  Every other session must have logged out, and
 *    LOGIN refuses new ones while it runs (!acc_hold; owner's ruling 1).
@@ -107,13 +119,78 @@ $include createacc.h
 *  BACKUP DIRECTORY (owner's ruling, 1 Oct 2026), asked for and saved when there is
 *  none; NO.QUERY means nobody can answer, so it refuses instead.  A name with a
 *  directory part is used as given, and then there is nothing to ask.
-   if index(zip.path, '/', 1) = 0 and index(zip.path, '\', 1) = 0 and index(zip.path, ':', 1) = 0 then
+   if upcase(zip.path) = 'LATEST' then
+*     LATEST NAMES THE NEWEST BACKUP MADE ON THIS COMPUTER THAT HOLDS EVERY NAMED
+*     ACCOUNT (owner's request and ruling, 2 Oct 2026), in the saved backup directory.
+*     A zip is called SD-<host>-<what>-<yyyymmdd-hhmmss>.zip (backupa), so the choice
+*     is made from the file name alone: <host> is this computer's, <what> is 'all',
+*     '<n>accounts' (the accounts are not in the name) or the account names joined by
+*     '-', and the stamp orders them.  A zip chosen on the strength of its name is
+*     still checked against its own manifest before anything is changed, so a name
+*     that overstated what the zip holds stops the restore with nothing changed.
+*     RESTORE.ACCOUNT LATEST ALL takes the newest backup that was made with ALL.
       call !acc_bakdir('USE', not(no.query), bak.dir, err)
       if err # '' then
          display sysmsg(err<1,1>, err<1,2>, err<1,3>)
          stop
       end
-      zip.path = bak.dir : @ds : zip.path
+      call !acc_os_info('', '', lat.info, err)
+      if err # '' then gosub show.err ; stop
+      lat.host = ''
+      for k = 1 to dcount(lat.info, @fm)
+         if field(lat.info<k>, ':', 1) = 'host' then lat.host = downcase(trim(field(lat.info<k>, ':', 2, 99)))
+      next k
+      openpath bak.dir to lat.f else stop sysmsg(13010, bak.dir)
+      lat.best = '' ; lat.bstamp = ''
+*     Select lists 11 and 12 are the only ones in range (measured, 1 Oct 26); the loop
+*     below uses up its list before the unpack step selects again.
+      select lat.f to 11
+      loop
+         readnext lat.id from 11 else exit
+         lat.n = downcase(lat.id)
+         if len(lat.n) < 26 then continue
+         if lat.n[1, 3] # 'sd-' or lat.n[len(lat.n) - 3, 4] # '.zip' then continue
+         lat.core = lat.n[4, len(lat.n) - 7]
+         lat.stamp = lat.core[len(lat.core) - 14, 15]
+         if lat.stamp[9, 1] # '-' or not(num(lat.stamp[1, 8])) or not(num(lat.stamp[10, 6])) then continue
+         lat.rest = lat.core[1, len(lat.core) - 16]
+         if lat.rest[1, len(lat.host) + 1] # lat.host : '-' then continue
+         lat.what = lat.rest[len(lat.host) + 2, 99]
+         if lat.what = '' then continue
+         lat.ok = @false
+         begin case
+            case all
+               lat.ok = (lat.what = 'all')
+            case lat.what = 'all'
+               lat.ok = @true
+            case len(lat.what) > 8 and lat.what[len(lat.what) - 7, 8] = 'accounts' and num(lat.what[1, len(lat.what) - 8])
+               lat.ok = @true
+            case 1
+               lat.ok = @true
+               for k = 1 to dcount(names, @fm)
+                  if index('-' : lat.what : '-', '-' : names<k> : '-', 1) = 0 then lat.ok = @false
+               next k
+         end case
+         if lat.ok and lat.stamp > lat.bstamp then
+            lat.best = lat.id
+            lat.bstamp = lat.stamp
+         end
+      repeat
+      if lat.best = '' then
+         if all then lat.req = 'ALL' else lat.req = convert(@fm, ' ', names)
+         stop sysmsg(13047, lat.req, bak.dir)  ;* no backup of %1 made on this computer
+      end
+      zip.path = bak.dir : @ds : lat.best
+      display sysmsg(13048, zip.path)         ;* The most recent backup is %1
+   end else
+      if index(zip.path, '/', 1) = 0 and index(zip.path, '\', 1) = 0 and index(zip.path, ':', 1) = 0 then
+         call !acc_bakdir('USE', not(no.query), bak.dir, err)
+         if err # '' then
+            display sysmsg(err<1,1>, err<1,2>, err<1,3>)
+            stop
+         end
+         zip.path = bak.dir : @ds : zip.path
+      end
    end
 
    if not(ospath(zip.path, OS$EXISTS)) then stop sysmsg(13034, zip.path) ;* does not exist

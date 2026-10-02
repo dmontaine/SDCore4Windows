@@ -1,1 +1,1 @@
-Syntax: RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}\n        RESTORE.ACCOUNT archive ALL {NO.QUERY}\n        A bare archive name is looked for in the backup directory.
+Syntax: RESTORE.ACCOUNT archive name [name ...] {NO.QUERY}\n        RESTORE.ACCOUNT archive ALL {NO.QUERY}\n        RESTORE.ACCOUNT LATEST name [name ...] {NO.QUERY}\n        RESTORE.ACCOUNT LATEST ALL {NO.QUERY}\n        A bare archive name is looked for in the backup directory.\n        LATEST uses the newest backup made on this computer that holds the account.

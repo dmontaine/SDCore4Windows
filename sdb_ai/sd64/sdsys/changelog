@@ -2,6 +2,19 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+02 Oct 26  RESTORE.ACCOUNT LATEST RESTORES THE MOST RECENT BACKUP.
+
+           RESTORE.ACCOUNT LATEST name {name...} | ALL puts back the newest
+           backup in the backup folder that was made on this computer and holds
+           every account you named, so you do not have to type the file name.
+           It says which file it chose before it asks.  With ALL it takes the
+           newest backup that was made with ALL.  If there is no such backup it
+           says so and changes nothing.  A file name still works as before.
+           * The choice is made from the file name, which carries the computer,
+             the accounts and the time, so a backup renamed by hand may not be
+             found.  The restore still checks the file against its own record
+             of what it holds before it changes anything.
+
 01 Oct 26  SET.BACKUP.DIRECTORY REMEMBERS THE BACKUP FOLDER.
 
            SET.BACKUP.DIRECTORY folder makes the folder if it does not exist,
