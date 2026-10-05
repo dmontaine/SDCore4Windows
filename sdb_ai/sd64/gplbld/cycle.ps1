@@ -489,8 +489,26 @@ if (Get-Service -Name $SvcName -ErrorAction SilentlyContinue) {
     & "$env:SystemRoot\System32\sc.exe" stop $SvcName | Out-Null
 }
 
+# 05 Oct 26 - THIS PRODUCT'S DAEMON AND SESSIONS ONLY.  Both products are meant to run at
+# the same time (owner, 2 Oct 2026), and this check matched on the process NAME, so SD Core
+# Solo's sdwind - a different product with its own segment and ports - read as a leftover of
+# this one and stopped the cycle at step 1 ("SD is still running after 45s: sdwind(4820)"),
+# with advice to Stop-Process it, which would have ended the owner's running Solo.  A
+# process is Solo's when sd-solo.exe sits beside its executable (the Solo install names its
+# program that way, never "sd.exe").  A process whose path cannot be read is NOT excused:
+# it counts as ours, the old behaviour.  Names is a parameter only so the unit check can
+# aim it at a process that exists.
+function Get-FullSdProcess([string[]]$Names = @('sdwind', 'sd')) {
+    foreach ($p in @(Get-Process -Name $Names -ErrorAction SilentlyContinue)) {
+        $exe = $null
+        try { $exe = $p.Path } catch { }
+        if ($exe -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $exe) 'sd-solo.exe'))) { continue }
+        $p
+    }
+}
+
 $deadline = (Get-Date).AddSeconds(45)
-while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+while ((Get-FullSdProcess) -and (Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 500
 }
 
@@ -510,7 +528,7 @@ while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Da
 # exactly the protection the comment below describes: it ends an idle daemon and
 # leaves somebody's live session alone.  Only if it declines do we fail.
 $stopSaidOk = $false
-if (Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) {
+if (Get-FullSdProcess) {
     $sdExe = Join-Path $PfTree 'usr\bin\sd.exe'
     if (Test-Path -LiteralPath $sdExe) {
         Write-Host '   service stopped but a daemon is still up - asking sd -stop'
@@ -518,14 +536,14 @@ if (Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) {
         $stopOut -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { Write-Host "     $_" }
         $stopSaidOk = ($stopOut -match 'has been shut down')
         $deadline = (Get-Date).AddSeconds(20)
-        while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+        while ((Get-FullSdProcess) -and (Get-Date) -lt $deadline) {
             Start-Sleep -Milliseconds 500
         }
     }
 }
 
-$left = Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue
-if ($left) {
+$left = @(Get-FullSdProcess)
+if ($left.Count -gt 0) {
     # Named, not killed.  A surviving sd is somebody's session, and ending it
     # from here would take their work with it.
     #
