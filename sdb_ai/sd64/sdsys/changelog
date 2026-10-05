@@ -2,6 +2,22 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+05 Oct 26  RESTORE.ACCOUNT LATEST CHOOSES THE NEWEST BACKUP THAT HOLDS THE ACCOUNT.
+
+           LATEST used to choose from the file name, so a backup of ALL accounts
+           (or of several, named by count) counted as holding every account.
+           With one present, an account that was in no backup was refused only
+           after LATEST had chosen, and an ALL backup made after an account was
+           deleted hid an older backup that still held it.  LATEST now opens each
+           candidate backup, reads its record of what it holds, and takes the
+           newest one that holds every account you named.
+           * If a newer backup made on this computer does not hold the account (or
+             cannot be read), it says so and names both files before it asks.
+           * If no backup holds the account it says so and changes nothing.
+           * LATEST ALL is unchanged: the newest backup made with ALL.
+           * Only the record of what a backup holds is read to choose; the
+             restore still checks the whole file before it changes anything.
+
 02 Oct 26  F1 TO F5, HOME AND END WORK FROM A TERMINAL THAT SENDS THEM THE
            XTERM WAY.
 

@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 05 Oct 26 Windows port - MANIFEST mode, for RESTORE.ACCOUNT LATEST choosing the newest
+*           backup that HOLDS the account (owner, 5 Oct 2026; Linux's mail T1156).
 * 02 Oct 26 Windows port - every path is made a Windows path first (norm.path):
 *           OS$FULLPATH gives "C:/..." or "/c/...", and check.full refused
 *           both, so every path the shared verbs pass would have failed.
@@ -43,6 +45,10 @@
 *             unpacked into it, closed to all but SYSTEM and Administrators.
 *             counts = one per account: files VM bytes VM dirs VM name,
 *             measured on disk afterwards.
+*    MANIFEST nothing is unpacked.  counts = the archive's manifest.txt, one line
+*             per field (agreed with SD Core for Linux, 5 Oct 2026).  Refused: not a
+*             readable zip; no manifest.txt or two; one over 1 MB; an empty one; one
+*             that is not plain ASCII.
 *    COUNT    (Windows only, for !acc_tree_count) entries<1> = a directory.
 *    PLACE    (Windows only, for !acc_os_place) entries<1> = staged tree,
 *             entries<2> = the account directory whose CONTENTS it replaces.
@@ -148,6 +154,13 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
          want.line = 'ACC-ARCHIVE EXTRACT OK'
          row.tag   = 'ACCOUNT'
 
+      case md = 'MANIFEST'
+         cf.path = zp ; gosub check.full
+         if not(cf.ok) then return
+         args = ' -Mode Manifest -Zip ' : q : change(zp, q, q:q) : q
+         want.line = 'ACC-ARCHIVE MANIFEST OK'
+         row.tag   = ''
+
       case md = 'COUNT'
          cf.path = ent<1> ; gosub check.full
          if not(cf.ok) then return
@@ -212,6 +225,12 @@ read.result:
       if line[1, 12] # 'ACC-ARCHIVE ' then continue
       tag = field(line, ' ', 2)
       begin case
+         case md = 'MANIFEST' and tag = 'MLINE'
+*           The manifest's own text, one line per row.  Taken from both<ln>, not
+*           from the trimmed copy: trim() would fold the blanks inside a line.
+            mrow = both<ln>
+            if mrow[len(mrow), 1] = char(13) then mrow = mrow[1, len(mrow) - 1]
+            counts<-1> = mrow[19, len(mrow)]
          case tag = 'ERROR'
             why = line[19, len(line)]
          case tag = 'WARNING'
@@ -243,6 +262,9 @@ read.result:
             if dcount(counts, @fm) # field(ok.line, ' ', 5) then why = 'account count does not match'
          case md = 'AKPATH'
             null
+         case md = 'MANIFEST'
+*           counts = the manifest text; the OK line says how many lines it had.
+            if counts = '' or dcount(counts, @fm) # field(ok.line, ' ', 5) then why = 'manifest lines do not match'
          case 1
 *           COUNT and PLACE carry their one count on the OK line itself.
             nw = dcount(ok.line, ' ')

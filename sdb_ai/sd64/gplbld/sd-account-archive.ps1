@@ -5,6 +5,7 @@
 #   ... -Mode Count   -Path <dir>
 #   ... -Mode Place   -Staged <dir> -Target <dir> [-Previous <dir>]
 #   ... -Mode AkPath  -Path <hashed file> -AkPath <dir>
+#   ... -Mode Manifest -Zip <file>
 #
 # Run by SD through !ps_script_out, from gpl.bp ACC_ARCHIVE, which ACC_TREE_COUNT,
 # ACC_OS_PLACE and ACC_OS_AKPATH call (RELEASE_1.1 116).  Exit 0 done, 1 refused or failed, 2 could not
@@ -35,7 +36,7 @@
 # put another directory's contents - or a loop - into the backup.
 
 param(
-    [Parameter(Mandatory = $true)] [ValidateSet('Create', 'Extract', 'Count', 'Place', 'AkPath')] [string]$Mode,
+    [Parameter(Mandatory = $true)] [ValidateSet('Create', 'Extract', 'Count', 'Place', 'AkPath', 'Manifest')] [string]$Mode,
     [string]$Zip = '',
     [string]$ListFile = '',
     [string]$Dest = '',
@@ -254,6 +255,39 @@ function Expand-AccountZip([string]$zipPath, [string]$dest, [bool]$protect) {
     }
 }
 
+# 05 Oct 26 - RESTORE.ACCOUNT LATEST (owner, 5 Oct: the last backup that CONTAINS the
+# account) reads each candidate zip's manifest.txt and nothing else; Extract still
+# vets the whole archive before anything is changed.  Same refusals as SD Core for
+# Linux's "sd-accarchive manifest": not a readable zip, no manifest.txt or two, one
+# over 1 MB, an empty one, or one that is not plain ASCII.  A CR is allowed here
+# (Linux refuses it): the reader folds CRLF, and a manifest Extract would accept must
+# not be skipped by LATEST.  Returns the manifest's text.
+function Read-ZipManifest([string]$zipPath) {
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    try { $z = [System.IO.Compression.ZipFile]::OpenRead($zipPath) }
+    catch { throw "'$zipPath' is not a readable zip: $($_.Exception.Message)" }
+    try {
+        $hits = @($z.Entries | Where-Object { $_.FullName -ceq 'manifest.txt' })
+        if ($hits.Count -eq 0) { throw 'the archive has no manifest.txt' }
+        if ($hits.Count -gt 1) { throw "entry 'manifest.txt' appears twice" }
+        $max = 1048576
+        if ($hits[0].Length -gt $max) { throw "manifest.txt is larger than $max bytes" }
+        $ms = New-Object System.IO.MemoryStream
+        $es = $hits[0].Open()
+        try { $es.CopyTo($ms) } finally { $es.Dispose() }
+        $data = $ms.ToArray()
+    } finally { $z.Dispose() }
+    if ($data.Length -gt $max) { throw "manifest.txt is larger than $max bytes" }
+    if ($data.Length -eq 0) { throw 'manifest.txt is empty' }
+    foreach ($b in $data) {
+        if (-not ($b -eq 9 -or $b -eq 10 -or $b -eq 13 -or ($b -ge 32 -and $b -le 126))) {
+            throw "manifest.txt is not plain ASCII text (byte $b)"
+        }
+    }
+    return [System.Text.Encoding]::ASCII.GetString($data)
+}
+
 # Replace the CONTENTS of $target with the contents of $staged.  The target
 # directory itself stays: its explicit ACL is the account's grant (CREATE.ACCOUNT
 # secure.account.dir, secure-account-dirs.ps1), and a directory moved into its
@@ -368,6 +402,14 @@ try {
             $counts = @(Expand-AccountZip $Zip $Dest $true)
             foreach ($c in $counts) { Write-Output ("ACC-ARCHIVE ACCOUNT {0} {1}" -f $c.Name, (Format-Counts $c)) }
             Write-Output ("ACC-ARCHIVE EXTRACT OK ACCOUNTS {0}" -f $counts.Count)
+        }
+        'Manifest' {
+            if ($Zip -eq '') { Write-Output 'ACC-ARCHIVE ERROR Manifest needs -Zip'; exit 2 }
+            $text  = Read-ZipManifest $Zip
+            $lines = @($text.Replace("`r`n", "`n").Split("`n"))
+            if ($lines.Count -gt 0 -and $lines[$lines.Count - 1] -eq '') { $lines = @($lines[0..($lines.Count - 2)]) }
+            foreach ($l in $lines) { Write-Output ("ACC-ARCHIVE MLINE " + $l) }
+            Write-Output ("ACC-ARCHIVE MANIFEST OK LINES {0}" -f $lines.Count)
         }
         'Count' {
             if ($Path -eq '') { Write-Output 'ACC-ARCHIVE ERROR Count needs -Path'; exit 2 }

@@ -30,7 +30,7 @@ if ($errs.Count -gt 0) { Write-Host "test-accarchive-units: subject has $($errs.
 
 $wanted = @('Test-EntryName', 'Get-TreeItems', 'Get-TreeCounts', 'Format-Counts', 'New-AccountZip',
             'Add-ZipFile', 'Add-ZipManifest', 'Expand-AccountZip', 'Move-AccountTree', 'Move-FsItem', 'Reset-ChildAcl', 'Protect-Dir',
-            'Test-AkQuery')
+            'Test-AkQuery', 'Read-ZipManifest')
 $lifted = 0
 foreach ($name in $wanted) {
     $fn = @($ast.FindAll({
@@ -270,6 +270,58 @@ try {
     Check 'not relocated is not' (-not (Test-AkQuery @($banner, 'Indices are not relocated') 'C:\d\ak'))
     Check 'no output is not' (-not (Test-AkQuery @() 'C:\d\ak'))
     Check 'a prefix of the path is not' (-not (Test-AkQuery @('Index directory is C:\d\ak2') 'C:\d\ak'))
+
+    # --- 7. reading a manifest alone (RESTORE.ACCOUNT LATEST, 5 Oct 2026) -----
+    Write-Host ''
+    Write-Host '7. manifest only'
+    function New-BytesZip([string]$zip, $members) {
+        $z = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
+        try {
+            foreach ($m in $members) {
+                $e = $z.CreateEntry($m.Name)
+                $s = $e.Open()
+                try { if ($m.Bytes.Length -gt 0) { $s.Write($m.Bytes, 0, $m.Bytes.Length) } } finally { $s.Dispose() }
+            }
+        } finally { $z.Dispose() }
+    }
+    $mtext = "format: 1`n[account don]`nfiles: 4`n[account sam]`nfiles: 2`n"
+    $good  = [System.Text.Encoding]::ASCII.GetBytes($mtext)
+    $zm = Join-Path $work 'm-good.zip'
+    New-BytesZip $zm @(@{ Name = 'manifest.txt'; Bytes = $good }, @{ Name = 'accounts/don/voc'; Bytes = [byte[]](1,2,3) })
+    Check 'the manifest text comes back exactly' ((Read-ZipManifest $zm) -ceq $mtext)
+    $zn = Join-Path $work 'm-none.zip'
+    New-BytesZip $zn @(@{ Name = 'accounts/don/voc'; Bytes = [byte[]](1) }, @{ Name = 'sub/manifest.txt'; Bytes = $good })
+    Check 'no manifest.txt at the root is refused (one in a subfolder is not it)' ((Throws { Read-ZipManifest $zn } '*no manifest.txt*') -eq '')
+    $zc = Join-Path $work 'm-case.zip'
+    New-BytesZip $zc @(@{ Name = 'Manifest.txt'; Bytes = $good })
+    Check 'Manifest.txt (wrong case) is not manifest.txt' ((Throws { Read-ZipManifest $zc } '*no manifest.txt*') -eq '')
+    $z2 = Join-Path $work 'm-two.zip'
+    New-BytesZip $z2 @(@{ Name = 'manifest.txt'; Bytes = $good }, @{ Name = 'manifest.txt'; Bytes = $good })
+    Check 'two manifest.txt entries are refused' ((Throws { Read-ZipManifest $z2 } '*appears twice*') -eq '')
+    $zb = Join-Path $work 'm-big.zip'
+    New-BytesZip $zb @(@{ Name = 'manifest.txt'; Bytes = ([byte[]](,[byte]97 * 1048577)) })
+    Check 'a manifest over 1 MB is refused' ((Throws { Read-ZipManifest $zb } '*larger than*') -eq '')
+    $zk = Join-Path $work 'm-ok-max.zip'
+    New-BytesZip $zk @(@{ Name = 'manifest.txt'; Bytes = ([byte[]](,[byte]97 * 1048576)) })
+    Check 'CONTROL: exactly 1 MB is accepted' ((Read-ZipManifest $zk).Length -eq 1048576)
+    $zu = Join-Path $work 'm-utf.zip'
+    New-BytesZip $zu @(@{ Name = 'manifest.txt'; Bytes = [byte[]](102,111,111,10,195,169,10) })
+    Check 'a manifest with a non-ASCII byte is refused' ((Throws { Read-ZipManifest $zu } '*not plain ASCII*') -eq '')
+    $zz = Join-Path $work 'm-ctl.zip'
+    New-BytesZip $zz @(@{ Name = 'manifest.txt'; Bytes = [byte[]](102,0,111,10) })
+    Check 'a manifest with a control byte is refused' ((Throws { Read-ZipManifest $zz } '*not plain ASCII*') -eq '')
+    $ze = Join-Path $work 'm-empty.zip'
+    New-BytesZip $ze @(@{ Name = 'manifest.txt'; Bytes = [byte[]]@() })
+    Check 'an empty manifest is refused' ((Throws { Read-ZipManifest $ze } '*is empty*') -eq '')
+    $zr = Join-Path $work 'm-crlf.zip'
+    New-BytesZip $zr @(@{ Name = 'manifest.txt'; Bytes = [System.Text.Encoding]::ASCII.GetBytes("format: 1`r`n[account don]`r`n") })
+    Check 'a CRLF manifest is read (Extract would accept it, so LATEST must)' ((Read-ZipManifest $zr).Contains("`r`n"))
+    $zx = Join-Path $work 'm-notzip.zip'
+    [System.IO.File]::WriteAllBytes($zx, [byte[]](1..64))
+    Check 'a file that is not a zip is refused' ((Throws { Read-ZipManifest $zx } '*not a readable zip*') -eq '')
+    Check 'a missing file is refused' ((Throws { Read-ZipManifest (Join-Path $work 'nope.zip') } '*not a readable zip*') -eq '')
+    # MUTANT: a reader that took any entry ending in manifest.txt would accept the subfolder one.
+    Check 'MUTANT-GUARD: the subfolder case above really has a manifest.txt inside it' ((@([System.IO.Compression.ZipFile]::OpenRead($zn).Entries | Where-Object { $_.FullName -eq 'sub/manifest.txt' })).Count -eq 1)
 }
 catch {
     # A crash after a check has failed is a FAILURE, not "could not set up":

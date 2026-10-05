@@ -24,6 +24,13 @@
 *              name in the saved backup directory.  Owner's request and ruling, 2 Oct
 *              2026 ("restore the most recent backup without having to enter its
 *              name", on both ports).  Messages 13047 and 13048; 13016 gains the form.
+* 05 Oct 26 dm LATEST NAME... is the newest backup that actually HOLDS every named account,
+*              found by reading each candidate's manifest (!acc_archive MANIFEST), not by the
+*              file's name.  An all or <n>accounts zip admitted every name, so with one present an
+*              unknown account was refused only after the choice, and an all zip made after an
+*              account was deleted hid an older zip that held it (measured, Ubuntu VM, 5 Oct).
+*              If a newer backup made on this computer does not hold the account, 13049 says so;
+*              nothing holds it, 13047.  Owner's ruling, 5 Oct 2026.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -35,8 +42,9 @@
 *
 *    LATEST stands where the archive name goes and picks the newest backup in the
 *    saved backup directory that was made on this computer and holds every named
-*    account (13048 says which); with ALL, the newest made with ALL.  Nothing is
-*    found: 13047.  The chosen zip is checked like any other, below.
+*    account, found by reading each candidate's manifest (13048 says which, or 13049
+*    when a newer backup made here does not hold them); with ALL, the newest made
+*    with ALL.  Nothing is found: 13047.  The chosen zip is checked like any other, below.
 *
 *    An administrator verb.  Every other session must have logged out, and
 *    LOGIN refuses new ones while it runs (!acc_hold; owner's ruling 1).
@@ -122,13 +130,18 @@ $include createacc.h
    if upcase(zip.path) = 'LATEST' then
 *     LATEST NAMES THE NEWEST BACKUP MADE ON THIS COMPUTER THAT HOLDS EVERY NAMED
 *     ACCOUNT (owner's request and ruling, 2 Oct 2026), in the saved backup directory.
-*     A zip is called SD-<host>-<what>-<yyyymmdd-hhmmss>.zip (backupa), so the choice
-*     is made from the file name alone: <host> is this computer's, <what> is 'all',
-*     '<n>accounts' (the accounts are not in the name) or the account names joined by
-*     '-', and the stamp orders them.  A zip chosen on the strength of its name is
-*     still checked against its own manifest before anything is changed, so a name
-*     that overstated what the zip holds stops the restore with nothing changed.
-*     RESTORE.ACCOUNT LATEST ALL takes the newest backup that was made with ALL.
+*     A zip is called SD-<host>-<what>-<yyyymmdd-hhmmss>.zip (backupa): <host> is this
+*     computer's, <what> is 'all', '<n>accounts' (the accounts are not in the name) or
+*     the account names joined by '-', and the stamp orders them.
+*     05 Oct 26 (owner): THE NAME IS ONLY A FIRST CUT.  An account name may itself hold a
+*     '-' and an all or <n>accounts zip names nothing, so each zip the name admits is
+*     OPENED (!acc_archive MANIFEST: the manifest only, nothing unpacked) and the newest
+*     whose manifest lists every named account is the one.  If a newer backup made on this
+*     computer does not hold them (or cannot be read) 13049 says so, in place of 13048;
+*     if none holds them, 13047.  The chosen zip is still checked in full, below, before
+*     anything is changed.
+*     RESTORE.ACCOUNT LATEST ALL takes the newest backup that was made with ALL, by name:
+*     nothing is asked of a manifest, and a newer one-account backup is not a reason to warn.
       call !acc_bakdir('USE', not(no.query), bak.dir, err)
       if err # '' then
          display sysmsg(err<1,1>, err<1,2>, err<1,3>)
@@ -142,6 +155,8 @@ $include createacc.h
       next k
       openpath bak.dir to lat.f else stop sysmsg(13010, bak.dir)
       lat.best = '' ; lat.bstamp = ''
+      lat.newest = '' ; lat.nstamp = ''   ;* the newest backup of ANYTHING made on this computer
+      lat.ids = '' ; lat.stamps = ''      ;* the zips the NAME admits, in no order
 *     Select lists 11 and 12 are the only ones in range (measured, 1 Oct 26); the loop
 *     below uses up its list before the unpack step selects again.
       select lat.f to 11
@@ -157,6 +172,10 @@ $include createacc.h
          if lat.rest[1, len(lat.host) + 1] # lat.host : '-' then continue
          lat.what = lat.rest[len(lat.host) + 2, 99]
          if lat.what = '' then continue
+         if lat.stamp > lat.nstamp then
+            lat.newest = lat.id
+            lat.nstamp = lat.stamp
+         end
          lat.ok = @false
          begin case
             case all
@@ -171,9 +190,49 @@ $include createacc.h
                   if index('-' : lat.what : '-', '-' : names<k> : '-', 1) = 0 then lat.ok = @false
                next k
          end case
-         if lat.ok and lat.stamp > lat.bstamp then
+         if lat.ok then
+            lat.ids<-1> = lat.id
+            lat.stamps<-1> = lat.stamp
+         end
+      repeat
+*     Newest first.  ALL: the name is the whole test.  Named accounts: each zip the name admits
+*     is opened, and the first whose manifest lists every one of them is the choice.
+      loop
+         lat.top = '' ; lat.pick = 0
+         for k = 1 to dcount(lat.stamps, @fm)
+            if lat.stamps<k> > lat.top then
+               lat.top = lat.stamps<k>
+               lat.pick = k
+            end
+         next k
+      until lat.pick = 0
+         lat.id = lat.ids<lat.pick>
+         lat.stamp = lat.stamps<lat.pick>
+         lat.stamps<lat.pick> = ''           ;* used: it cannot be the newest again
+         if all then
             lat.best = lat.id
             lat.bstamp = lat.stamp
+            exit
+         end
+         call !acc_archive('MANIFEST', bak.dir : @ds : lat.id, '', lat.mtext, lat.err)
+         if lat.err = '' then
+            lat.mtext = convert(char(13), '', lat.mtext)   ;* a CRLF manifest, as parse.manifest does
+            lat.have = ''
+            for k = 1 to dcount(lat.mtext, @fm)
+               lat.line = trim(lat.mtext<k>)
+               if lat.line[1, 9] = '[account ' and lat.line[len(lat.line), 1] = ']' then
+                  lat.have<-1> = downcase(trim(lat.line[10, len(lat.line) - 10]))
+               end
+            next k
+            lat.holds = @true
+            for k = 1 to dcount(names, @fm)
+               locate names<k> in lat.have<1> setting x else lat.holds = @false
+            next k
+            if lat.holds then
+               lat.best = lat.id
+               lat.bstamp = lat.stamp
+               exit
+            end
          end
       repeat
       if lat.best = '' then
@@ -181,7 +240,12 @@ $include createacc.h
          stop sysmsg(13047, lat.req, bak.dir)  ;* no backup of %1 made on this computer
       end
       zip.path = bak.dir : @ds : lat.best
-      display sysmsg(13048, zip.path)         ;* The most recent backup is %1
+      if not(all) and lat.best # lat.newest then
+*        A newer backup was made on this computer and does not hold the account(s).
+         display sysmsg(13049, lat.newest, convert(@fm, ' ', names), zip.path)
+      end else
+         display sysmsg(13048, zip.path)      ;* The most recent backup is %1
+      end
    end else
       if index(zip.path, '/', 1) = 0 and index(zip.path, '\', 1) = 0 and index(zip.path, ':', 1) = 0 then
          call !acc_bakdir('USE', not(no.query), bak.dir, err)
