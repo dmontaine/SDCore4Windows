@@ -5,7 +5,8 @@
 #   powershell -ExecutionPolicy Bypass -File remove-ssh.ps1           remove the capability
 #
 # Exit 0 removed (see the restart note below), 1 the removal failed, 2 the
-# question could not be answered or there was nothing to remove.
+# question could not be answered or there was nothing to remove, 3 removed AT ONCE
+# (a server that came from the OpenSSH MSI: msiexec /x, no restart - RELEASE_1.1 121).
 #
 # THE MIRROR OF install-ssh.ps1, and it uses the same capability name -
 # OpenSSH.Server~~~~0.0.1.0.  The CLIENT capability is a different one and is
@@ -115,7 +116,10 @@ if ((-not (Test-Path -LiteralPath $Sshd)) -and (Test-Path -LiteralPath $MsiSshd)
         Say 'compares sshd_config with sshd_config_default, which went with the server; Setup treats a'
         Say 'missing copy as "cannot tell" and stops. "ssh.server install" puts the server back.'
     }
-    exit 0
+    # 3, not 0: SSHSRVR prints message 10148 for a 0, and that one says the removal completes at the next
+    # restart and the server is still running until then - true of the capability, FALSE of this removal
+    # (measured 6 Oct 2026: sshd.exe, the service, port 22 and the MSI entry were all gone straight away).
+    exit 3
 }
 
 try {

@@ -19,6 +19,11 @@
 *
 * START-HISTORY:
 * 30 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 78.
+* 06 Oct 26 Windows port - RELEASE_1.1 121.  A server that came from the OpenSSH
+*           MSI is removed at once: remove-ssh.ps1 exits 3 and message 12011 says
+*           so, instead of 10148's "completes when Windows next restarts".  And
+*           INSTALL asks install-ssh.ps1 -Show where the server would come from:
+*           the download warning (10163) is only for a download.
 * END-HISTORY
 *
 *
@@ -42,9 +47,12 @@
 * RebootPending was True.  An administrator who runs this, sees ssh still
 * working and reports a bug is what not saying it produces.
 *
-* ***INSTALL IS SLOW AND SILENT.***  The capability comes from Windows Update
-* and can take several minutes with nothing on screen; install-ssh.ps1 carries
-* that warning and the installer's own status message says the same.
+* ***INSTALL IS SLOW AND SILENT - UNLESS THE INSTALLER KEPT THE MSI.***  The
+* capability comes from Windows Update and can take several minutes with nothing
+* on screen; install-ssh.ps1 carries that warning and the installer's own status
+* message says the same.  When Setup was given Microsoft's OpenSSH MSI it keeps a
+* copy in the install folder (RELEASE_1.1 121) and INSTALL uses it: seconds, no
+* network, and no download warning.
 *
 * ***THE CLIENT IS NOT TOUCHED.***  ssh.exe, scp.exe and sftp.exe are a separate
 * Windows capability.  This verb is about who can reach THIS machine.
@@ -88,6 +96,7 @@ $include err.h
    script = ''
    arg    = ''
    rc     = 0
+   dl     = @true
    yn     = ''
    report = ''
    both   = ''
@@ -133,7 +142,18 @@ $include err.h
 *  run for up to about an hour with little on screen, so it confirms the time
 *  cost and lets the administrator abort rather than be committed unawares.
 *  Both default to N; an aborted verb changes nothing (10145).
+*  06 Oct 26 - RELEASE_1.1 121, owner: use the bundled MSI.  Ask the script where the
+*  server would come from.  Exit 10 = nothing is downloaded (a server is here, or the
+*  installer kept the OpenSSH MSI), so there is no time cost to confirm; anything else,
+*  including a script that could not tell, keeps the warning.
    if action = 'INSTALL' then
+      arg = ' -Show'
+      gosub run.script
+      arg = ''
+      if rc = 10 then dl = @false
+   end
+
+   if action = 'INSTALL' and dl then
       loop
          display sysmsg(10163) :   ;* Install downloads from WU, up to ~an hour; install now (y/<n>)?
          input yn
@@ -164,6 +184,13 @@ $include err.h
    end
 
    gosub run.script
+
+*  06 Oct 26 - RELEASE_1.1 121.  Exit 3 is remove-ssh.ps1 having removed a server that came
+*  from the OpenSSH MSI: gone now, nothing staged.  10148 would say the opposite.
+   if rc = 3 and action = 'REMOVE' then
+      crt sysmsg(12011)  ;* The OpenSSH server was removed; it is gone now, no restart needed
+      stop
+   end
 
 *  ***EXIT 2 IS "NOTHING TO DO", NOT A FAILURE, AND THE TWO READ DIFFERENTLY.***
 *  remove-ssh.ps1 exits 2 when the capability is not installed, and

@@ -1,10 +1,15 @@
 # install-ssh.ps1 - install and start OpenSSH Server.  PROJECT_STATUS.md 5.9.
 #
 #   powershell -ExecutionPolicy Bypass -File install-ssh.ps1
+#   powershell -ExecutionPolicy Bypass -File install-ssh.ps1 -Show    report where the server would come from, change nothing
 #
 # Exit 0  installed and running
 #      2  installed, but a RESTART is needed before the service exists
 #      1  failed
+#
+# WITH -Show the exit code is the answer: 10 = nothing would be downloaded (a server is already here, or
+# an OpenSSH MSI is at hand), 0 = the Windows capability, a Feature-on-Demand download from Windows Update,
+# 1 = could not tell.  SSHSRVR reads it to decide whether "ssh.server install" has to warn about the download.
 #
 # IT IS THE INSTALLER'S OPT-IN TASK, AND DEFAULT OFF SINCE 1 Sep 2026.  The
 # history reversed twice, so it is worth stating plainly: an opt-in checkbox
@@ -60,9 +65,23 @@
 # script does what it always did: the Windows capability, which downloads from Windows Update.
 # The MSI puts sshd.exe in Program Files\OpenSSH, not System32\OpenSSH, so every script that looks for the
 # server looks in both (ssh-preflight, allow-ssh-groups, remove-ssh, sd.iss SshdInstalled).
+# 06 Oct 26 - RELEASE_1.1 121, owner: "ssh.server already answered use bundled MSI".  The SD installer keeps a copy of
+# the MSI it was given in <install folder>\ssh-server, whether or not the ssh box was ticked, so that the verb
+# "ssh.server install" - which runs this script with no -Msi - installs the same way, offline, after Setup is gone.
+# A -Msi that is given and exists wins; otherwise the newest kept copy beside this script is used; with neither it
+# is the Windows capability as before.
 param(
-    [string]$Msi = ''
+    [string]$Msi = '',
+    [switch]$Show
 )
+
+if (($Msi -eq '') -or (-not (Test-Path -LiteralPath $Msi))) {
+    # Newest by VERSION, not by name: "v9.5.0.0" sorts above "v10.0.0.0" as text.
+    $kept = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'ssh-server') -Filter 'OpenSSH-Win64-*.msi' -File `
+                -ErrorAction SilentlyContinue |
+              Sort-Object { try { [version]($_.BaseName -replace '^OpenSSH-Win64-v', '') } catch { [version]'0.0' } } -Descending)
+    if ($kept.Count -gt 0) { $Msi = $kept[0].FullName }
+}
 
 $LogPath = 'C:\ProgramData\SD\ssh-setup.log'
 function Append-Log {
@@ -105,6 +124,21 @@ try {
     # from the MSI, and re-adding the capability on top would download a second copy for nothing.
     $pf = $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles })
     $msiSshd = Join-Path $pf 'OpenSSH\sshd.exe'
+
+    # -Show: say where the server would come from and stop.  The branches below, in the same order and with the
+    # same tests, are what decide it for real; 10 is "no download".
+    if ($Show) {
+        if ($state -eq 'Installed' -or (Test-Path -LiteralPath $msiSshd)) {
+            Write-Output 'install-ssh: an OpenSSH server is already installed'
+            exit 10
+        }
+        if ($Msi -ne '' -and (Test-Path -LiteralPath $Msi) -and $state -ne 'UninstallPending') {
+            Write-Output ('install-ssh: the server would be installed from ' + $Msi + ' (no download)')
+            exit 10
+        }
+        Write-Output 'install-ssh: the server would be downloaded from Windows Update'
+        exit 0
+    }
 
     if ($state -eq 'Installed') {
         Write-Log "install-ssh: OpenSSH Server was already installed"

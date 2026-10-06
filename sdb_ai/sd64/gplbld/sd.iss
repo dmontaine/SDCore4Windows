@@ -577,6 +577,16 @@ Source: "{#Stage}\ProgramFiles\ssh-preflight.ps1"; Flags: dontcopy
 ; further up still the one an administrator re-runs by hand.
 Source: "{#Stage}\ProgramFiles\ssh-firewall.ps1"; Flags: dontcopy
 
+; 06 Oct 26 - RELEASE_1.1 121, owner: "ssh.server already answered use bundled MSI".  KEEP A COPY OF THE OpenSSH
+; MSI IN THE INSTALL FOLDER when one is beside the installer - whether or not the ssh box is ticked, and on an
+; upgrade too - so that the verb "ssh.server install", which can only see {app}, installs from it (seconds, no
+; network) instead of downloading from Windows Update.  install-ssh.ps1 looks for {app}\ssh-server\OpenSSH-Win64-*.msi
+; by itself.  external: the file is the one found beside the installer at run time (FindBeside), so nothing binary
+; is compiled into the installer or enters the repository.  skipifsourcedoesntexist: a release folder without
+; ssh-server installs exactly as before.  Costs about 6.5 MB under {app}; uninstall removes it with the rest.
+Source: "{code:SshMsiSource}"; DestDir: "{app}\ssh-server"; \
+    Flags: external ignoreversion skipifsourcedoesntexist; Check: SshMsiFound
+
 ; --- C:\ProgramData\SD\ ----------------------------------------------------
 ; THE DATA TREE IS INSTALLED ONCE AND NEVER TOUCHED AGAIN.
 ;
@@ -1520,6 +1530,14 @@ begin
     Result := ' -Msi "' + SshMsiPath + '"'
   else
     Result := '';
+end;
+
+(* 06 Oct 26 - RELEASE_1.1 121.  The Source of the [Files] entry that keeps a copy of the MSI in the
+   install folder: the file found beside the installer, or '' - and then that entry's Check
+   (SshMsiFound) is false and nothing is copied. *)
+function SshMsiSource(Param: String): String;
+begin
+  Result := SshMsiPath;
 end;
 
 { 06 Oct 26 - RELEASE_1.1 121, AND THE OWNER'S RULE THE SAME DAY: "if it has to be downloaded the

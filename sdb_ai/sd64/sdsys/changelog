@@ -15,6 +15,13 @@ Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              Windows' own ssh server: the installer's check for another ssh
              server, the ssh settings SD writes, and SSH.SERVER REMOVE all find
              whichever one is there.
+           * The installer keeps a copy of that OpenSSH installer in the SD
+             folder (about 6.5 MB), so SSH.SERVER INSTALL can install the
+             server later with no network and no wait.  When it would
+             download, it still asks first, as before.
+           * SSH.SERVER REMOVE removes a server from the OpenSSH installer at
+             once and says so.  The server from Windows Update is still removed
+             at the next restart, and the message says that.
 
 06 Oct 26  PHANTOM STARTS A PHANTOM, AND THE STARTUP SETTING IS REMOVED.
 
