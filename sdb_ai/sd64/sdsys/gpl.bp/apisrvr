@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 05 Oct 26 Windows port - RELEASE_1.1 122: a refused login's audit record is written BEFORE
+*           the three second failed-login delay (scram.delay, tested at exit.vb.scram.fail),
+*           as SD Core for Linux did after losing records when the client dropped inside
+*           the sleep (its S.60).  Same reply, same delay.
 * 02 Oct 26 Windows port - RELEASE_1.1 116: the login hold.  vb.scram.first and
 *           vb.local.login refuse a new API session (13002) while
 *           BACKUP.ACCOUNT or RESTORE.ACCOUNT runs; !acc_hold decides.
@@ -370,6 +374,7 @@ scram.serverkey = ''   ;* From $cred, base64
 * once at exit.vb.scram.fail.  Keeping it here with the rest of the state is
 * what makes a refusal impossible to leave unlogged - every path out of both
 * handlers goes through that one exit.
+scram.delay = @false    ;* A credential failure: sleep 3 s AFTER the audit record is written (05 Oct 26)
 scram.audit.name = ''   ;* Name as PRESENTED, sanitised - see scram.clean.name
 scram.refuse.reason = '';* Why this exchange was refused; '' = not refused
 * 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  Set by vb.scram.final on
@@ -1910,7 +1915,14 @@ scram.bad.cred:
                if scram.refuse.reason = '' then scram.refuse.reason = 'credential'
                abort.message = sysmsg(5017) ;* Invalid username or password
                server.error = SV$ON.ERROR
-               sleep 3
+               * 05 Oct 26 - THE DELAY MOVED TO exit.vb.scram.fail, AFTER THE AUDIT WRITE.
+               * It used to be here, so a client that dropped inside the three seconds
+               * could end this process before the record was written: Linux lost it 5
+               * of 5 times (its S.60); measured here it did NOT happen (10 of 10
+               * audited, probe-failaudit.ps1, installed Solo 4 Oct), so this is the
+               * same behaviour with the order that cannot lose the record.  The reply
+               * and the delay are unchanged for the caller.
+               scram.delay = @true
                goto exit.vb.scram.fail
 
 exit.vb.scram.fail:
@@ -1936,6 +1948,12 @@ exit.vb.scram.fail:
                   if scram.audit.name = '' then scram.audit.name = '(none)'
                   void kernel(K$AUDIT, 'API REFUSED user=' : scram.audit.name : ' reason=' : scram.refuse.reason)
                   scram.refuse.reason = ''
+               end
+
+               * The failed-login delay, now that the record is safely written.
+               if scram.delay then
+                  scram.delay = @false
+                  sleep 3
                end
 
                * THE CONNECTION GOES, as it does for a failed request 24.  It is
