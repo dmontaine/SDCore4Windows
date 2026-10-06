@@ -193,7 +193,7 @@ function Write-Verdict($name) {
 function Start-SD {
     $null = Start-Process -FilePath $sdExe -ArgumentList '-start' -NoNewWindow
     for ($i = 0; $i -lt 30; $i++) {
-        if ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+        if (((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }) | Measure-Object).Count -gt 0) {
             # Write-Host, NOT Write-Output (20 Sep 26): a function's Write-Output lines ARE its return
             # value, so "if (-not (Start-SD))" saw a two-element array - always true - and a server
             # that never started read as started.  See test-outputtrap-units.ps1.
@@ -420,7 +420,7 @@ try {
     if (Test-Path $workdir) { Remove-Item -Recurse -Force $workdir }
     New-Item -ItemType Directory -Path $workdir | Out-Null
 
-    if ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -eq 0) {
+    if (((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }) | Measure-Object).Count -eq 0) {
         Write-Output "  SD is not running, starting it"
         if (-not (Start-SD)) {
             Write-Output "verify-createaccount: SD would not start"

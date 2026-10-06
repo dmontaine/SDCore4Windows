@@ -37,7 +37,7 @@ while ((Get-Date) -lt $deadline) {
     try { $svc = Get-Service -Name 'SD' -ErrorAction Stop } catch { }
     $status = if ($svc) { [string]$svc.Status } else { 'NO-SERVICE' }
 
-    $procs = @(Get-Process -Name 'sdwind', 'sd', 'sdsvc' -ErrorAction SilentlyContinue)
+    $procs = @((Get-Process -Name 'sdwind', 'sd', 'sdsvc' -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
     $names = ($procs | ForEach-Object { $_.Name + '(' + $_.Id + ')' }) -join ' '
 
     $rows.Add([pscustomobject]@{

@@ -151,7 +151,7 @@ function Invoke-Sd {
     return [pscustomobject]@{ Code = $p.ExitCode; Text = "$text".Trim() }
 }
 
-function Test-SdRunning { return $null -ne (Get-Process sdwind -ErrorAction SilentlyContinue) }
+function Test-SdRunning { return $null -ne ((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) }
 
 function Wait-SdRunning {
     # "sd -start" forks and returns before sdwind appears, so looking once wins

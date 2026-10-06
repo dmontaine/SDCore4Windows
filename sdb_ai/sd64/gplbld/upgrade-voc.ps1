@@ -230,7 +230,7 @@ function Get-VocVerdict {
     return @{ Code = 0; Total = $total; Visited = $visited; Why = 'COMPLETE' }
 }
 
-function Test-SdRunning { return $null -ne (Get-Process sdwind -ErrorAction SilentlyContinue) }
+function Test-SdRunning { return $null -ne ((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) }
 
 function Wait-SdRunning {
     # "sd -start" forks and returns before sdwind appears, so looking once wins

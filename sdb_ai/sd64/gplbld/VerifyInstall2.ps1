@@ -438,7 +438,7 @@ if ($claimed.Count -gt 0) {
 # not finish or something stopped it, and both are worth knowing before
 # measuring anything.  cycle.ps1 owns starting SD; this file only measures.
 $svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
-$sdwind = @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue)
+$sdwind = @((Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
     Write-Output 'VerifyInstall2: REFUSING - SD is not running.'
     Write-Output ("  service: {0}    sdwind processes: {1}" -f

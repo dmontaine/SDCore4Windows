@@ -52,7 +52,7 @@ $SdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 function Say([string]$t) { Write-Output ("restart-sd: " + $t) }
 
 function Get-SdProcs {
-    return @(Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue)
+    return @((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 }
 
 function Report([string]$label) {

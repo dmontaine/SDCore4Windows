@@ -366,7 +366,7 @@ if (-not $vocControl) {
     Row ($named.Count -eq 0) 'SDSYS VOC names neither probe program - nothing was stored in VOC' ($named -join ', ')
 }
 
-$stray = @(Get-Process -Name 'sdwind', 'sd' -ErrorAction SilentlyContinue)
+$stray = @((Get-Process -Name 'sdwind', 'sd' -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 Write-Output ("  sd/sdwind processes now: " + $stray.Count)
 
 Write-Output ''

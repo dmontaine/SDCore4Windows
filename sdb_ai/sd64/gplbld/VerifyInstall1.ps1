@@ -382,7 +382,7 @@ if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]:
 # this runner deliberately holds an UNELEVATED token, which cannot start a
 # service.  Saying so plainly beats five identical failures.
 $svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
-$sdwind = @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue)
+$sdwind = @((Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 if ((-not $svc) -or ($svc.Status -ne 'Running') -or ($sdwind.Count -eq 0)) {
     Write-Output 'VerifyInstall1: REFUSING - SD is not running.'
     Write-Output ("  service: {0}    sdwind processes: {1}" -f

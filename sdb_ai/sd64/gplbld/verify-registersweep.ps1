@@ -262,7 +262,7 @@ for ($i = 0; $i -lt $StartWaitSeconds; $i++) {
     Start-Sleep -Seconds 1
     $svc = Get-Service -Name 'SD' -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq 'Running' -and
-        @(Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue).Count -gt 0) { $up = $true; break }
+        @((Get-Process -Name 'sdwind' -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })).Count -gt 0) { $up = $true; break }
 }
 Note $up ('SD came back up within ' + $StartWaitSeconds + 's')
 if (-not $up) { Stop-Now 'SD did not come back, so nothing below would mean anything.' }

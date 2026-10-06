@@ -148,19 +148,19 @@ function Stop-SD {
         & "$env:SystemRoot\System32\sc.exe" stop $SvcName | Out-Null
     }
     $deadline = (Get-Date).AddSeconds(45)
-    while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+    while (((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
-    return -not [bool](Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue)
+    return -not [bool]((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 }
 
 function Start-SD {
     & "$env:SystemRoot\System32\sc.exe" start $SvcName | Out-Null
     $deadline = (Get-Date).AddSeconds(45)
-    while (-not (Get-Process -Name sdwind -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+    while (-not ((Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
-    return [bool](Get-Process -Name sdwind -ErrorAction SilentlyContinue)
+    return [bool]((Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 }
 
 # 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT (sdsys-seat.ps1; verify-createaccount
@@ -238,7 +238,7 @@ try {
     # -----------------------------------------------------------------------
     Step 1 'Making an account the API can reach'
 
-    if (-not (Get-Process -Name sdwind -ErrorAction SilentlyContinue)) {
+    if (-not ((Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))) {
         Refuse 'sdwind is not running - start SD before running this.'
     }
 

@@ -271,7 +271,7 @@ function Invoke-SD([string[]]$commands) {
 # NEVER "Start-Process -Wait" for sd -start: sdwind inherits sd's handles and
 # outlives it, so anything waiting on the output streams waits for the daemon.
 # Wait for the PROCESS TO APPEAR instead.
-function Test-SdRunning { return ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) }
+function Test-SdRunning { return (((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }) | Measure-Object).Count -gt 0) }
 
 function Start-SD {
     if (Test-SdRunning) { return $true }

@@ -305,7 +305,7 @@ if ($null -ne $s -and $s.Status -eq 'Running') {
     # Judge on what it was for, not on the SCM's opinion: the service exists to
     # get sdwind up.  Reported rather than failed - the daemon can take a
     # moment longer than the service does.
-    $w = (Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count
+    $w = ((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }) | Measure-Object).Count
     Say "sdwind processes: $w"
     if ($relayMissing) { Say 'exit 1: the service runs but the relay account is missing (above)'; exit 1 }
     exit 0

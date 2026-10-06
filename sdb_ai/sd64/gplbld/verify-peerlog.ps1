@@ -113,19 +113,19 @@ function Stop-SD {
         & "$env:SystemRoot\System32\sc.exe" stop $SvcName | Out-Null
     }
     $deadline = (Get-Date).AddSeconds(45)
-    while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+    while (((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
-    return -not [bool](Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue)
+    return -not [bool]((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 }
 
 function Start-SD {
     & "$env:SystemRoot\System32\sc.exe" start $SvcName | Out-Null
     $deadline = (Get-Date).AddSeconds(45)
-    while (-not (Get-Process -Name sdwind -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+    while (-not ((Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
-    return [bool](Get-Process -Name sdwind -ErrorAction SilentlyContinue)
+    return [bool]((Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 }
 
 # EVERY SIZE READING GOES THROUGH HERE so the high-water mark is kept as we
@@ -257,7 +257,7 @@ try {
     if (-not (Start-SD)) { Fail 'SD would not start again.  Read the SD error log.' }
     Start-Sleep -Seconds 2
 
-    $sdwind    = Get-Process -Name sdwind -ErrorAction SilentlyContinue
+    $sdwind    = (Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })
     $sdwindPid = if ($sdwind) { $sdwind.Id } else { 0 }
     Write-Host "   sdwind pid $sdwindPid"
 

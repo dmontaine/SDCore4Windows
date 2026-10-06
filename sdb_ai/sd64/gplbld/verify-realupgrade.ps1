@@ -236,15 +236,15 @@ if ($Prepare) {
         Write-Output '  --- 1. stopping SD ---'
         if (Get-Service -Name SD -ErrorAction SilentlyContinue) { & "$env:SystemRoot\System32\sc.exe" stop SD | Out-Null }
         $deadline = (Get-Date).AddSeconds(45)
-        while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
-        if ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath $sdExe)) {
+        while (((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+        if (((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Test-Path -LiteralPath $sdExe)) {
             Write-Output '  a daemon is still up - asking sd -stop'
             $stopOut = (& $sdExe -stop 2>&1 | Out-String)
             $stopOut -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { Write-Output "    $_" }
             $deadline = (Get-Date).AddSeconds(20)
-            while ((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+            while (((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
         }
-        $left = @(Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue)
+        $left = @((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
         if ($left.Count -gt 0) {
             Write-Output ("  still running: " + (($left | ForEach-Object { "$($_.Name)($($_.Id))" }) -join ', ') + " - somebody's session; not killed from here.  Close it and run -Prepare again.")
             exit 2
@@ -274,7 +274,7 @@ if ($Prepare) {
             Write-Output "  $t gone"
         }
         Row 'both trees are absent (the W1.0-0 install will be a first install, pre-D2)' ((-not (Test-Path -LiteralPath $appDir)) -and (-not (Test-Path -LiteralPath $dataDir)))
-        Row 'no sdwind or sd process remains' (@(Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue).Count -eq 0)
+        Row 'no sdwind or sd process remains' (@((Get-Process -Name sdwind, sd -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })).Count -eq 0)
         $exit = $(if ($fail -gt 0) { 1 } else { 0 })
         if ($exit -eq 0) {
             Write-Output ''

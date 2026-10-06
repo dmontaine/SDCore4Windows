@@ -186,7 +186,7 @@ function Invoke-Sd {
 }
 
 function Test-SdRunning {
-    return $null -ne (Get-Process sdwind -ErrorAction SilentlyContinue)
+    return $null -ne ((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }))
 }
 
 function Wait-SdRunning {

@@ -105,7 +105,7 @@ if (-not (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Securit
 }
 if (-not (Test-Path -LiteralPath $Probe)) { Write-Host "COULD NOT RUN: no $Probe - build it (see the .c header)." -ForegroundColor Yellow; exit 2 }
 if (-not (Test-Path -LiteralPath $Sd)) { Write-Host "COULD NOT RUN: no $Sd." -ForegroundColor Yellow; exit 2 }
-$sdwind = Get-Process -Name sdwind -ErrorAction SilentlyContinue | Select-Object -First 1
+$sdwind = (Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }) | Select-Object -First 1
 if (-not $sdwind) { Write-Host 'COULD NOT RUN: sdwind is not running.' -ForegroundColor Yellow; exit 2 }
 Say "  running as : $($id.Name), elevated"
 Say "  sdwind     : winpid $($sdwind.Id)"

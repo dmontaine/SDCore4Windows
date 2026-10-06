@@ -97,7 +97,7 @@ function Invoke-Sd {
     if (-not $exited) { return [pscustomobject]@{ Code = 1; Text = "sd $SdArgs did not finish in $($TimeoutMs/1000)s" } }
     return [pscustomobject]@{ Code = $p.ExitCode; Text = "$text".Trim() }
 }
-function Test-SdRunning { return $null -ne (Get-Process sdwind -ErrorAction SilentlyContinue) }
+function Test-SdRunning { return $null -ne ((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })) }
 function Wait-SdRunning {
     param([int] $TimeoutSeconds = 20)
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)

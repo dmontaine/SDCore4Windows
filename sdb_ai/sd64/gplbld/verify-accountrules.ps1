@@ -202,7 +202,7 @@ function Invoke-SDInternal([string[]] $SdArgs) {
     return $text.Trim()
 }
 
-function Test-SdRunning { return ((Get-Process sdwind -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) }
+function Test-SdRunning { return (((Get-Process sdwind -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'sdwind' -or -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) }) | Measure-Object).Count -gt 0) }
 
 function Start-SD {
     if (Test-SdRunning) { return $true }
