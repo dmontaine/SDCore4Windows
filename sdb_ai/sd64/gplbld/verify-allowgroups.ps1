@@ -27,6 +27,11 @@ $ErrorActionPreference = 'Stop'
 
 $src      = Join-Path $PSScriptRoot 'allow-ssh-groups.ps1'
 $template = Join-Path $env:SystemRoot 'System32\OpenSSH\sshd_config_default'
+# 06 Oct 26 (RELEASE_1.1 121): the OpenSSH MSI ships the same file in Program Files\OpenSSH.
+if (-not (Test-Path -LiteralPath $template)) {
+    $pfTemplate = Join-Path $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }) 'OpenSSH\sshd_config_default'
+    if (Test-Path -LiteralPath $pfTemplate) { $template = $pfTemplate }
+}
 
 $failed = 0
 

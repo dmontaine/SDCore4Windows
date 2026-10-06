@@ -1101,10 +1101,17 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; asserting a check that was never written.  What replaces it is better than the
 ; exit code would have been: SshReport reads the MACHINE STATE afterwards, which
 ; also answers correctly when the capability was already installed.
+; 06 Oct 26 - TWO ENTRIES, ONE PER CASE, so each carries its own progress line: the MSI beside the
+; installer (offline, fast) and the Windows download (up to 30 minutes, said plainly).  Same script,
+; same gate; only -Msi and the message differ.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1""{code:SshMsiArg}"; \
+    Flags: runhidden skipifdoesntexist; Check: SshServerWanted and (not TrueUpgrade) and SshMsiFound; \
+    StatusMsg: "Installing OpenSSH Server..."
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-ssh.ps1"""; \
-    Flags: runhidden skipifdoesntexist; Check: SshServerWanted and not TrueUpgrade; \
-    StatusMsg: "Installing OpenSSH Server (this can take several minutes)..."
+    Flags: runhidden skipifdoesntexist; Check: SshServerWanted and (not TrueUpgrade) and (not SshMsiFound); \
+    StatusMsg: "Downloading and installing OpenSSH Server. This can take up to 30 minutes..."
 ; 30 Aug 26 - THE GATE IS THE BOX NOW, NOT THE MACHINE.  PRE_RELEASE_FIXES 67.
 ; It used to read "SshServerAbsent and not StandaloneChosen", which is the whole
 ; of the defect that entry recorded: the reader could leave every ssh box blank
@@ -1362,6 +1369,8 @@ var
     and after InstallPython the live answer would change. }
   PythonExePath: String;
   PythonWasFound: Boolean;
+  { 06 Oct 26 (RELEASE_1.1 121) - the OpenSSH server MSI found beside this installer, or ''. }
+  SshMsiPath: String;
 
 { 30 Aug 26 - IS THE EXISTING ssh SERVER'S FIREWALL RULE ALREADY OPEN TO THE
   NETWORK?  PRE_RELEASE_FIXES 76.  Called once from InitializeSetup, and only
@@ -1488,6 +1497,48 @@ begin
   end;
 end;
 
+(* 06 Oct 26 - RELEASE_1.1 121.  IS AN ssh SERVER'S sshd.exe ON THIS COMPUTER, FROM
+   EITHER SOURCE?  Windows' own Feature on Demand puts it in System32\OpenSSH; the
+   OpenSSH MSI that now travels beside this installer puts it in Program Files\OpenSSH.
+   Both are Microsoft's Win32-OpenSSH, and every question below - was a server here
+   before, is one here now - means "either".  Setup is a 64-bit install
+   (ArchitecturesInstallIn64BitMode), so {sys} and {commonpf64} are the real 64-bit
+   folders and not the redirected ones. *)
+function SshdInstalled: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe')) or
+            FileExists(ExpandConstant('{commonpf64}\OpenSSH\sshd.exe'));
+end;
+
+(* The extra argument install-ssh.ps1 takes when the MSI is beside the installer: ' -Msi
+   "path"', or nothing, in which case the script uses the Windows capability as before.
+   {code:} output is inserted after expansion, so the path's braces and quotes are not
+   re-read by Inno. *)
+function SshMsiArg(Param: String): String;
+begin
+  if SshMsiPath <> '' then
+    Result := ' -Msi "' + SshMsiPath + '"'
+  else
+    Result := '';
+end;
+
+{ 06 Oct 26 - RELEASE_1.1 121, AND THE OWNER'S RULE THE SAME DAY: "if it has to be downloaded the
+  installer should be given the warning that it could take up to 1/2 hr."  With the OpenSSH MSI beside
+  the installer the server installs from it, offline; without it install-ssh.ps1 falls back to the
+  Windows capability, a Feature-on-Demand download from Windows Update (measured 19 minutes on the
+  development machine, 1 Sep 2026).  The two cases are told apart here, and the second says so, both on
+  the Ready to Install page and on the step's own progress line.  Asks the wizard directly (as
+  SshServerWanted does) because this must be defined above UpdateReadyMemo. }
+function SshMsiFound: Boolean;
+begin
+  Result := SshMsiPath <> '';
+end;
+
+function SshWillDownload: Boolean;
+begin
+  Result := WizardIsTaskSelected('sshserver') and (not SshMsiFound);
+end;
+
 (* 26 Sep 26 - IS AN ALL-USERS 64-BIT PYTHON 3.13+ REGISTERED?  The same
    question python-detect.ps1 asks: HKLM PythonCore only, because SD's accounts
    and API sessions cannot reach a per-user install, and an entry whose
@@ -1605,7 +1656,10 @@ begin
      report with it, since both must do nothing to a server SD did not install.
      The question is about the machine as we found it, so it is asked once,
      here, exactly as the data tree above is. *)
-  SshWasAbsent := not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe'));
+  SshWasAbsent := not SshdInstalled;
+  SshMsiPath := FindBeside('ssh-server', 'OpenSSH-Win64-*.msi');
+  Log('OpenSSH MSI beside the installer: "' + SshMsiPath + '"; sshd.exe already on this computer=' +
+      IntToStr(Ord(not SshWasAbsent)));
 
   { 26 Sep 26 - Python: the machine as we found it, for the same reason. }
   PythonExePath := FindBeside('python', 'python-3*-amd64.exe');
@@ -1905,6 +1959,10 @@ begin
     if MemoComponentsInfo <> '' then Result := Result + MemoComponentsInfo + NewLine + NewLine;
     if MemoGroupInfo      <> '' then Result := Result + MemoGroupInfo      + NewLine + NewLine;
     if MemoTasksInfo      <> '' then Result := Result + MemoTasksInfo      + NewLine + NewLine;
+    { 06 Oct 26 - the download warning (owner), only when the server will be downloaded. }
+    if SshWillDownload then
+      Result := Result + 'The OpenSSH server will be downloaded from Windows Update.' + NewLine +
+                Space + 'This can take up to 30 minutes.' + NewLine + NewLine;
     Exit;
   end;
 
@@ -1918,6 +1976,7 @@ function SshServerAbsent: Boolean;
 begin
   Result := SshWasAbsent;
 end;
+
 
 { 30 Aug 26 - THE THREE ANSWERS THE ssh BOXES PRODUCE.  PRE_RELEASE_FIXES 67
   and 76.  They exist so that no other part of this file has to know that one
@@ -2726,7 +2785,7 @@ begin
     Exit;
   end;
 
-  if not FileExists(ExpandConstant('{sys}\OpenSSH\sshd.exe')) then
+  if not SshdInstalled then
   begin
     { 20 Sep 26 - REASONS AND CONSEQUENCES REMOVED (owner's rule), including the
       "accounts with API access can use the API meanwhile" clause that

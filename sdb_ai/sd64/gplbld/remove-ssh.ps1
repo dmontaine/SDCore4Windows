@@ -74,6 +74,50 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     exit 1
 }
 
+# 06 Oct 26 - RELEASE_1.1 121.  A SERVER THAT CAME FROM THE OpenSSH MSI IS REMOVED WITH THE MSI.  When the SD
+# installer finds Microsoft's OpenSSH MSI beside itself it installs the server from that (install-ssh.ps1 -Msi),
+# into Program Files\OpenSSH; the Windows capability then reads "not present", and the capability route below
+# would answer "nothing to remove" about a server that is plainly there.  So: no sshd.exe in System32 and one in
+# Program Files means the MSI's, and that is removed with msiexec /x on its own product code, found in the
+# Uninstall key (ProductName "OpenSSH", Manufacturer Microsoft Corporation, the key is the GUID - read from the
+# MSI's database, 6 Oct 2026).  An MSI removal needs no restart, unlike the capability's staged one.
+$MsiSshd = Join-Path $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }) 'OpenSSH\sshd.exe'
+if ((-not (Test-Path -LiteralPath $Sshd)) -and (Test-Path -LiteralPath $MsiSshd)) {
+    $Sshd = $MsiSshd
+    $code = ''
+    foreach ($root in 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+                      'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall') {
+        foreach ($k in @(Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue)) {
+            if ($k.PSChildName -notmatch '^\{[0-9A-Fa-f-]{36}\}$') { continue }
+            $prop = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
+            if ($prop -and $prop.DisplayName -ceq 'OpenSSH') { $code = $k.PSChildName; break }
+        }
+        if ($code) { break }
+    }
+    Say ("server     : installed from the OpenSSH MSI (" + $Sshd + "), product code " + $(if ($code) { $code } else { 'NOT FOUND' }))
+    Report $(if ($Show) { 'machine' } else { 'before' })
+    if ($Show) { exit 0 }
+    if (-not $code) {
+        Say 'the OpenSSH MSI is not listed among the installed programs, so it cannot be removed from here'
+        exit 2
+    }
+    $p = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\msiexec.exe') `
+            -ArgumentList @('/x', $code, '/qn', '/norestart') -Wait -PassThru
+    Say ('msiexec /x ' + $code + ' exited ' + $p.ExitCode + '  (0 done, 3010 done and a restart wanted)')
+    if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+    Report 'after'
+    if (Test-Path -LiteralPath $Sshd) { Say 'sshd.exe is STILL there after the MSI removal'; exit 1 }
+    Say 'removed, and no restart was required'
+    if (Test-Path -LiteralPath $SshDir) {
+        Say ''
+        Say ('NOTE: ' + $SshDir + ' has been left in place. It holds the host keys and')
+        Say 'sshd_config, and the MSI does not remove it. Running the SD INSTALLER on this machine again'
+        Say 'compares sshd_config with sshd_config_default, which went with the server; Setup treats a'
+        Say 'missing copy as "cannot tell" and stops. "ssh.server install" puts the server back.'
+    }
+    exit 0
+}
+
 try {
     . (Join-Path $PSScriptRoot 'dism-capability.ps1')
     $q = Invoke-Dism -DismArgs '/Get-CapabilityInfo', ('/CapabilityName:' + $CapName)

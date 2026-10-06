@@ -1515,7 +1515,9 @@ set.access:
 *  the owner ruled that provisioning first is a legitimate workflow.  Native
 *  checks only (sshd.exe on disk; sd.conf's APIPORT for the listener), so
 *  create.account gains no PowerShell probe on its hot path.
-   if access.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) then
+*  06 Oct 26 - RELEASE_1.1 121: the OpenSSH MSI the installer can run puts sshd.exe in
+*  Program Files\OpenSSH, so either place counts as "an ssh server is here".
+   if access.ssh and not(ospath('C:\WINDOWS\System32\OpenSSH\sshd.exe', OS$EXISTS)) and not(ospath('C:\Program Files\OpenSSH\sshd.exe', OS$EXISTS)) then
       crt sysmsg(10161, acc.uname)  ;* set up for ssh, but no ssh server yet
    end
    if access.api and (config('APIPORT') + 0) <= 0 then

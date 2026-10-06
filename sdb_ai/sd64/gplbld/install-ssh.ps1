@@ -54,6 +54,16 @@
 # this script failed at its first real line.  dism-capability.ps1 holds why and
 # how; State values and the exit contract (0 / 2 restart / 1) are unchanged.
 
+# 06 Oct 26 - RELEASE_1.1 121.  -Msi <path> is Microsoft's OpenSSH MSI, which the SD installer finds in
+# "ssh-server" beside itself and passes here when the ssh box is ticked, so the server installs as ONE step
+# of the SD install and works with no network.  Without it (or with a path that is not there) this
+# script does what it always did: the Windows capability, which downloads from Windows Update.
+# The MSI puts sshd.exe in Program Files\OpenSSH, not System32\OpenSSH, so every script that looks for the
+# server looks in both (ssh-preflight, allow-ssh-groups, remove-ssh, sd.iss SshdInstalled).
+param(
+    [string]$Msi = ''
+)
+
 $LogPath = 'C:\ProgramData\SD\ssh-setup.log'
 function Append-Log {
     param([string]$Message)
@@ -91,8 +101,36 @@ try {
     }
     Append-Log ('install-ssh: OpenSSH Server state is ' + $state)
 
+    # An sshd.exe from the MSI counts as installed too: the capability reads NotPresent when the server came
+    # from the MSI, and re-adding the capability on top would download a second copy for nothing.
+    $pf = $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles })
+    $msiSshd = Join-Path $pf 'OpenSSH\sshd.exe'
+
     if ($state -eq 'Installed') {
         Write-Log "install-ssh: OpenSSH Server was already installed"
+    } elseif (Test-Path -LiteralPath $msiSshd) {
+        Write-Log ("install-ssh: OpenSSH Server was already installed (" + $msiSshd + ")")
+    } elseif ($Msi -ne '' -and (Test-Path -LiteralPath $Msi) -and $state -ne 'UninstallPending') {
+        # ADDLOCAL=Server: the server programs only.  The log is msiexec's own, kept beside ours.
+        Write-Log ("install-ssh: installing OpenSSH Server from " + $Msi + " (no download)")
+        Append-Log ('install-ssh: msi sha256 ' + (Get-FileHash -LiteralPath $Msi -Algorithm SHA256).Hash)
+        $msiLog = Join-Path (Split-Path -Parent $LogPath) 'ssh-msi.log'
+        $p = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\msiexec.exe') `
+                -ArgumentList @('/i', ('"' + $Msi + '"'), '/qn', 'ADDLOCAL=Server', '/l*v', ('"' + $msiLog + '"')) `
+                -Wait -PassThru
+        Append-Log ('install-ssh: msiexec exit ' + $p.ExitCode + '  (0 done, 3010 done and a restart wanted; log ' + $msiLog + ')')
+        if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+            Write-Log ('install-ssh: FAILED - the OpenSSH MSI exited ' + $p.ExitCode)
+            exit 1
+        }
+        if (-not (Test-Path -LiteralPath $msiSshd)) {
+            Write-Log ('install-ssh: FAILED - the OpenSSH MSI reported success but left no ' + $msiSshd)
+            exit 1
+        }
+        if ($p.ExitCode -eq 3010 -and $null -eq (Get-Service -Name sshd -ErrorAction SilentlyContinue)) {
+            Write-Log "install-ssh: installed, RESTART REQUIRED before the service can start"
+            exit 2
+        }
     } else {
         # SAY WHY WE ARE DOWNLOADING WHEN THE SERVER IS PLAINLY STILL HERE.
         # PRE_RELEASE_FIXES 122.  An earlier "ssh.server remove" only STAGES the

@@ -2,6 +2,20 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+06 Oct 26  THE OPENSSH SERVER INSTALLS FROM THE INSTALLER'S OWN FOLDER.
+
+           When an ssh-server folder holding Microsoft's OpenSSH installer is
+           beside the SD Core installer, ticking "Install the OpenSSH server"
+           installs it from there as one step of the install, with no network.
+           Without that folder the installer downloads the server from Windows
+           Update as before, and now says on the Ready to Install page and on
+           the progress line that this can take up to 30 minutes.
+           * That OpenSSH is installed in C:\Program Files\OpenSSH; the one from
+             Windows Update is in C:\Windows\System32\OpenSSH.  SD treats both as
+             Windows' own ssh server: the installer's check for another ssh
+             server, the ssh settings SD writes, and SSH.SERVER REMOVE all find
+             whichever one is there.
+
 06 Oct 26  PHANTOM STARTS A PHANTOM, AND THE STARTUP SETTING IS REMOVED.
 
            PHANTOM looked for the program it starts in a folder that holds no

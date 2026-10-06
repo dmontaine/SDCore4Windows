@@ -191,6 +191,11 @@ $body = & {
     # take this capture on an install where BOTH boxes were left unchecked.
     Section 'OpenSSH server (PRE_RELEASE 67)'
     $sshd = Join-Path $env:SystemRoot 'System32\OpenSSH\sshd.exe'
+    # 06 Oct 26 (RELEASE_1.1 121): or the OpenSSH MSI's, in Program Files\OpenSSH.
+    if (-not (Test-Path -LiteralPath $sshd)) {
+        $pfSshd = Join-Path $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }) 'OpenSSH\sshd.exe'
+        if (Test-Path -LiteralPath $pfSshd) { $sshd = $pfSshd }
+    }
     if (Test-Path -LiteralPath $sshd) {
         Write-Output ('  PRESENT  ' + $sshd)
         try {

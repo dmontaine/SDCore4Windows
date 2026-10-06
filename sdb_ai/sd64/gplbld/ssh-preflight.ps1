@@ -79,7 +79,18 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
-$MsSshDir  = Join-Path $env:SystemRoot 'System32\OpenSSH'
+# 06 Oct 26 - RELEASE_1.1 121.  MICROSOFT'S ssh SERVER IS IN ONE OF TWO PLACES.  Windows' own Feature on Demand
+# installs it in System32\OpenSSH; the OpenSSH MSI the SD installer now carries beside itself (and that
+# install-ssh.ps1 runs when the ssh box is ticked) installs the same Win32-OpenSSH in Program Files\OpenSSH.
+# Both ship sshd_config_default in the folder with sshd.exe (checked in the MSI, 5 Oct 2026).  This used to
+# know only System32, so a server SD itself had installed from the MSI would have been called "NOT part of
+# Windows" and refused the next SD install.  "Ships with Windows" below means either folder; the stock
+# configuration is read from the folder of the sshd that is actually here.
+$MsSshDirSys = Join-Path $env:SystemRoot 'System32\OpenSSH'
+$MsSshDirPf  = Join-Path $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }) 'OpenSSH'
+$MsSshDirs   = @($MsSshDirSys, $MsSshDirPf)
+$MsSshDir    = $MsSshDirSys                       # the one named when neither server is here
+foreach ($d in $MsSshDirs) { if (Test-Path -LiteralPath (Join-Path $d 'sshd.exe')) { $MsSshDir = $d; break } }
 $MsSshd    = Join-Path $MsSshDir 'sshd.exe'
 $LiveCfg   = Join-Path $env:ProgramData 'ssh\sshd_config'
 $StockCfg  = Join-Path $MsSshDir 'sshd_config_default'
@@ -102,7 +113,10 @@ function Say([string]$text) { Write-Output $text }
 
 function IsMicrosoftPath([string]$p) {
     if (-not $p) { return $false }
-    return ($p -ilike ($MsSshDir + '\*')) -or ($p -ieq $MsSshDir)
+    foreach ($d in $MsSshDirs) {
+        if (($p -ilike ($d + '\*')) -or ($p -ieq $d)) { return $true }
+    }
+    return $false
 }
 
 $elevated = ([Security.Principal.WindowsPrincipal] `

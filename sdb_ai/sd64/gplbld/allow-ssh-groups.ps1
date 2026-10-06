@@ -172,6 +172,12 @@ if (-not $SdExe) { $SdExe = Join-Path $PSScriptRoot 'usr\bin\sd.exe' }
 $cfg     = Join-Path $env:ProgramData 'ssh\sshd_config'
 $backup  = Join-Path $env:ProgramData 'ssh\sshd_config.before-sd'
 $sshd    = Join-Path $env:SystemRoot  'System32\OpenSSH\sshd.exe'
+# 06 Oct 26 - RELEASE_1.1 121: the server the OpenSSH MSI installs is in Program Files\OpenSSH, not
+# System32\OpenSSH.  "sshd -T" below must run the one that is actually here.
+if (-not (Test-Path -LiteralPath $sshd)) {
+    $pfSshd = Join-Path $(if ($env:ProgramW6432) { $env:ProgramW6432 } else { $env:ProgramFiles }) 'OpenSSH\sshd.exe'
+    if (Test-Path -LiteralPath $pfSshd) { $sshd = $pfSshd }
+}
 $begin   = '# --- BEGIN SD ssh-only model - PROJECT_STATUS.md 5.6.2 ---'
 $end     = '# --- END SD ssh-only model ---'
 
