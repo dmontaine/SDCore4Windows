@@ -194,8 +194,6 @@ void op_config() {
     k_put_c_string(pcfg.sortworkdir, &result);
   else if (!strcmp(param, "SPOOLER"))
     k_put_c_string(pcfg.spooler, &result);
-  else if (!strcmp(param, "STARTUP"))
-    k_put_c_string((char*)(sysseg->startup), &result);
   else if (!strcmp(param, "TEMPDIR"))
     k_put_c_string(pcfg.tempdir, &result);
   else if (!strcmp(param, "TERMINFO"))

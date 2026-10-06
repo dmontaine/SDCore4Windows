@@ -113,7 +113,6 @@ struct SYSSEG {
    int jnlseq;                   /* Journal file sequence no. 0 = inactive.
                                     Protected by JNL_SEM */
    char jnldir[MAX_PATHNAME_LEN+1]; /* JNLDIR: Journal file directory */
-   char startup[80+1];           /* STARTUP: Startup command */
    /* Group lock counters (Protected by GROUP_LOCK_SEM) */
    u_int32_t gl_count;   /* Number of group locks obtained */
    u_int32_t gl_wait;    /* Group locks blocked on first attempt */

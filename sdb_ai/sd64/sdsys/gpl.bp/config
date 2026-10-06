@@ -137,7 +137,6 @@ report.params:
    print 'SORTMRG   '        : config('SORTMRG')
    print 'SORTWORK  '        : config('SORTWORK')
 	print 'SPOOLER   '        : config('SPOOLER')
-   print 'STARTUP   '        : config('STARTUP')
    print 'TEMPDIR   '        : config('TEMPDIR')
    print 'TERMINFO  '        : config('TERMINFO')
 * 20240219 mab create-account based on type (user / group / other)      

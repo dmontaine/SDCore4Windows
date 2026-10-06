@@ -1014,6 +1014,7 @@ void op_phantom() {
   int16_t phantom_user_index;
   int16_t phantom_uid = 0;
   char path[MAX_PATHNAME_LEN + 1];
+  char bindir[MAX_PATHNAME_LEN + 1];
   char option[15 + 1];
   int cpid;
 
@@ -1049,14 +1050,32 @@ void op_phantom() {
       close(i); /* 0401 */
 
     daemon(1, 1);
-    /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s/bin/sd", sysseg->sysdir) >= (MAX_PATHNAME_LEN + 1)) {
-      /* TODO: this should also be logged with more detail */
+
+    /* 06 Oct 26 Windows port - RELEASE_1.1 119.  THIS BUILT "<sysdir>/bin/sd", WHICH
+       HOLDS NO EXECUTABLE IN AN INSTALL (the Windows layout puts the programs in
+       the program directory, pcode and pcode.old alone stay with SDSYS - exepath.c),
+       so the exec never succeeded.  The program is found beside the running one,
+       the rule every other spawn here uses.
+
+       AND A FAILURE HERE MUST END THIS CHILD.  It used to "goto exit_op_phantom" on a
+       long path and simply fall out of the block when execl() returned, which left
+       the forked child running as a SECOND COPY of the calling session, in the
+       background (daemon() had already detached it), with the parent's own program
+       counter - and PHANTOM still answered the reserved user number as if a phantom
+       had started.  _exit(), never return, from every failure below.            */
+
+    if (!exe_directory(bindir, sizeof(bindir))) {
+      k_error("Cannot locate the SD program directory - phantom not started");
+      _exit(1);
+    }
+    if (snprintf(path, sizeof(path), "%s/sd", bindir) >= (int)sizeof(path)) {
       k_error("Overflowed path/filename length in op_phantom()!");
-      goto exit_op_phantom;
+      _exit(1);
     }
     sprintf(option, "-p%d", phantom_user_index);
     execl(path, path, option, NULL);
+    k_error("Cannot start a phantom from %s - %s", path, strerror(errno));
+    _exit(1);
   } else if (cpid == -1) { /* Error */
     *(UMap(uptr->uid)) = 0;
     uptr->uid = 0; /* Release reserved user cell */

@@ -2,6 +2,23 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+06 Oct 26  PHANTOM STARTS A PHANTOM, AND THE STARTUP SETTING IS REMOVED.
+
+           PHANTOM looked for the program it starts in a folder that holds no
+           program in an installed SD, so it could not start one.  It now finds
+           the program beside the one that is running, and a phantom that
+           cannot be started ends instead of carrying on in the background as a
+           second copy of your session.
+           * STARTUP= in sd.conf is gone.  It never ran, and what it asked for -
+             a command run as SDSYS when SD starts - is reserved to an elevated
+             Windows sign-in.  A line that still has it stops SD from starting,
+             with a message that says to remove the line.  CONFIG no longer
+             shows it.
+           * The failed-login delay for the SD API now comes after the refusal
+             is recorded, not before.  A client that hangs up during the delay
+             can no longer leave the refusal unrecorded.  Replies and the delay
+             are the same.
+
 05 Oct 26  RESTORE.ACCOUNT LATEST CHOOSES THE NEWEST BACKUP THAT HOLDS THE ACCOUNT.
 
            LATEST used to choose from the file name, so a backup of ALL accounts

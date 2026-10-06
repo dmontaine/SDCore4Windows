@@ -74,7 +74,6 @@ struct CONFIG {
      installing.  01 Oct 26: the port is SD_API_PORT (4247, sddefs.h) and the
      value in sd.conf only switches it on - config.c stores 0 or that number. */
   int16_t api_port;                /* APIPORT:  API listener port, 0 = off */
-  char startup[80+1];              /* STARTUP: Startup command */
  };
 
 

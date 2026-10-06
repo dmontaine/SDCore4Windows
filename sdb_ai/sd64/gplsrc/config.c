@@ -52,7 +52,7 @@
  *  SAFEDIR=1     Use careful update to directory files
  *  SORTMEM=n     Threshold for disk based sort (units of 1kb)
  *  SORTWORK=path Pathname of sort workfile directory
- *  STARTUP=cmd   Run command on starting Q_M
+ *  STARTUP=cmd   (REMOVED 6 Oct 2026 - refused by name if present)
  *  TEMPDIR=path  Pathname of temporary directory
  *  TERMINFO=path Pathname of terminfo directory
  *  TXCHAR=1      Enable ansi/oem character translation (default = 1)
@@ -368,8 +368,15 @@ struct CONFIG* read_config(char* errmsg) {
         strcpy(pcfg.sortworkdir, rec + 9);
       else if (strncmp(rec, "SPOOLER=", 8) == 0)
         strcpy(pcfg.spooler, rec + 8);
-      else if (strncmp(rec, "STARTUP=", 8) == 0)
-        strcpy(cfg->startup, rec + 8);
+      /* 06 Oct 26 Windows port - STARTUP was removed (RELEASE_1.1 119): it never ran
+         here and what it asked for is reserved to an elevated Windows sign-in.  A line
+         still carrying it is refused BY NAME, not as an unknown word, so whoever wrote
+         it is told what to do rather than left to guess. */
+      else if (strncmp(rec, "STARTUP=", 8) == 0) {
+        sprintf(errmsg, "STARTUP is no longer supported (it never ran on Windows). "
+                        "Remove the STARTUP line from sd.conf.");
+        goto exit_read_config;
+      }
       else if (strncmp(rec, "TEMPDIR=", 8) == 0)
         strcpy(pcfg.tempdir, rec + 8);
       else if (strncmp(rec, "TERMINFO=", 9) == 0)
