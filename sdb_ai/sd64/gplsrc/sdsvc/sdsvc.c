@@ -13,6 +13,15 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 06 Oct 26 Windows port - sdsvc-sd.log CAPTURES NOTHING, FIXED.  RELEASE_1.1 125.
+ *           open_child_log() opened the file FILE_APPEND_DATA only, and the POSIX
+ *           runtime in sd.exe could not write to a stderr handle that lacks
+ *           FILE_WRITE_DATA: a failed "sd -start" left the log at 0 bytes while the
+ *           same command by hand printed its message.  Measured in a fresh VM by
+ *           giving sd.exe the same handle three ways (0 bytes with APPEND only,
+ *           the full message with FILE_WRITE_DATA added), and the fix below tested
+ *           the same way: write access, then a seek to the end so a new start
+ *           appends instead of overwriting the last one's text.
  * 03 Sep 26 Windows port - run gplbld/reconcile-accounts.ps1 as well, so the
  *           account register and os.users lose the records whose Windows
  *           account was removed from outside SD.  PRE_RELEASE_FIXES.md 93 and
@@ -335,9 +344,18 @@ static HANDLE open_child_log(void) {
      file - without sharing, the second open fails and the log goes quiet at
      exactly the point it matters.                                           */
 
-  h = CreateFileA(path, FILE_APPEND_DATA,
+  /* 06 Oct 26 - RELEASE_1.1 125: WRITE ACCESS, NOT APPEND-ONLY.  The access was
+     FILE_APPEND_DATA alone, and the POSIX runtime in sd.exe cannot write to an
+     inherited stderr that lacks FILE_WRITE_DATA - the file stayed at 0 bytes (measured
+     6 Oct 2026, same command, same handle: 0 bytes with APPEND only, the whole message
+     with FILE_WRITE_DATA added).  Write access no longer appends by itself, so the
+     pointer is moved to the end below; without that each start overwrote the last.   */
+  h = CreateFileA(path, FILE_APPEND_DATA | FILE_WRITE_DATA,
                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa,
                   OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+  if (h != INVALID_HANDLE_VALUE)
+    SetFilePointer(h, 0, NULL, FILE_END);
 
   return h;
 }
