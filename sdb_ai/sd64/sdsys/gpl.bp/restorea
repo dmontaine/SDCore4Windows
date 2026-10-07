@@ -3,10 +3,7 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
-* 06 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3: an account restored
-*              writes 'RESTORE.ACCOUNT account=<name> archive=<zip file name>'.
-*              THIS COPY NOW DIFFERS FROM LINUX'S BY THIS HUNK UNTIL LINUX'S OWN
-*              LANDS; if the two differ, Linux's wins (it is the controlling port).
+* 06 Oct 26 dm PAL-15 (parity audit J-3): each account restored is audited.
 * 01 Oct 26 dm Written for S.50 (owner's request of 30 Sep 2026, rulings of
 *              1 Oct; part of 1.1-3 on all four products).  SHARED WITH SD CORE
 *              FOR WINDOWS BYTE FOR BYTE; the OS work is in the per-OS helpers
@@ -366,9 +363,11 @@ $include createacc.h
       gosub restore.one
       if one.ok then
          restored += 1
-* 06 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3: one audit record
-*   per account restored, naming the archive by its file name and not its
-*   directory; the words are SD Core for Linux's, agreed by mail 6 Oct.
+* 06 Oct 26 dm - PAL-15, parity audit J-3: each account restored is on the audit
+*   trail, with the archive's file name (not its directory), the same string on
+*   both ports.  The first line turns a Windows path's backslashes into @ds so the
+*   file name comes out the same on both ports (the Windows agent's form, taken
+*   so this program stays byte-identical to the Windows copy).
          zip.leaf = change(zip.path, '\', @ds)
          zip.leaf = field(zip.leaf, @ds, dcount(zip.leaf, @ds))
          void kernel(K$AUDIT, 'RESTORE.ACCOUNT account=' : acc.name : ' archive=' : zip.leaf)
