@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 06 Oct 26 Windows port - end of input at the command prompt ends the session
+*            instead of asking for ever (parity audit PAW-9, SD Core for Linux's
+*            guard; unmeasured here - see the comment at the KEYCODE() call).
 * 02 Oct 26 Windows port - RELEASE_1.1 108.  F1 (int.help, f1.help) passes the
 *            changelog's path to message 10149, which now says where it is,
 *            as the Linux port's copy of the message does.  The message names
@@ -876,6 +879,18 @@ get.command.line:
          end
 
          c = keycode()
+* 06 Oct 26 Windows port - END OF INPUT ENDS THE SESSION (parity audit PAW-9; SD Core
+*   for Linux's guard, measured THERE on 11 Sep: "printf 'WHO\n' | sd" with no OFF
+*   wrote 369207 BEL bytes in 10 s).  On a pipe keyin() returns at once at end of
+*   input and KEYCODE() gives '' with STATUS() = ER$EOF (linuxio.c:586, the same
+*   code here); this loop then asked again for ever, ringing the bell each time
+*   (what, below, answers the empty key was not traced here).  A shell exits at
+*   end of input and so does this, by OFF's own path.  A terminal never comes here (keyin() waits for a key and
+*   this call passes no timeout), and INPUT in a program still gets '' and decides.
+*   SD Core Solo has had the same rule since 28 Sep (SOLO 16, owner's ruling 28:
+*   "batch processes should always end at end of input, with or without an OFF").
+*   NOT MEASURED ON THIS PRODUCT: needs a guest.
+         if c = '' and status() = ER$EOF then goto int.quit
          n = seq(c)
 
          if first and n >= 32 and n < 128 and clear.on.data then

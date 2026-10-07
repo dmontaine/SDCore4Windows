@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+*  6 Oct 26 Windows port - REMOVE.HOME is accepted (parity audit J-1): the keyword
+*            SD Core for Linux uses to remove the OS user's home directory.  The
+*            profile is removed by default here, so it changes nothing.
 *  6 Oct 26 Windows port - RELEASE_1.1 126: the account's $cred record is deleted
 *            with it, before the register delete.  RELEASE_1.1 128 / parity audit
 *            J-3: a completed deletion writes 'DELETE.ACCOUNT account=<name>'.
@@ -128,11 +131,25 @@ deffun is_sd_user(username) calling '!is_sd_user'
 
    acc.name = upcase(acc.name)
 
-   * Check no further command arguments
+   * Check no further command arguments, other than REMOVE.HOME
+   *
+   * 6 Oct 26 Windows port - REMOVE.HOME IS ACCEPTED (parity audit J-1, agreed with the
+   *   SD Core for Linux agent).  On Linux the keyword removes the OS user's home
+   *   directory, which is otherwise KEPT; here the user's profile is removed by
+   *   default (delete_user, and the 10075/10116/10123 warnings when part of it
+   *   cannot be), so the keyword asks for what already happens.  Accepted so that
+   *   the same command line works on both ports; it changes nothing here.
 
    call @parser(parser$get.token, token.type, token, keyword)
    if token.type # PARSER$END then
-      stop sysmsg(2018, token) ;* Unexpected token (xx)
+      if upcase(token) = 'REMOVE.HOME' then
+         call @parser(parser$get.token, token.type, token, keyword)
+         if token.type # PARSER$END then
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+         end
+      end else
+         stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end
    end
 
    if acc.name = 'SDSYS' then
