@@ -182,6 +182,9 @@ $src = @(
     # list programs that prove it: a list that was never made cannot be appended
     # to or read back holding SDPY-42.
     "deffun PY_LISTCREATE(l) calling '!PY_LISTCREATE'"
+    # 07 Oct 26 - PY_LISTCRTE, the alias SD Core for Linux's name for the same function
+    # (parity audit PAL-8 / PAW-2): both names must work.
+    "deffun PY_LISTCRTE(l) calling '!PY_LISTCRTE'"
     "deffun PY_LISTAPPD(l, o) calling '!PY_LISTAPPD'"
     "deffun PY_LISTGETS(l) calling '!PY_LISTGETS'"
     ''
@@ -207,6 +210,13 @@ $src = @(
     # "Unrecognised statement" and the whole probe failed to compile (b164).
     "   lty = PY_OBJTYPE('zz_list')"
     "   crt 'PYPRB-LTYPE=':lty"
+    # 07 Oct 26 - the alias, driven exactly as PY_LISTCREATE is: create, append, read back.
+    "   lc2 = PY_LISTCRTE('zz_list2')"
+    "   crt 'PYPRB-LCRTE=':lc2"
+    "   la2 = PY_LISTAPPD('zz_list2', 'zz_probe')"
+    "   crt 'PYPRB-LCRTEAPPD=':la2"
+    "   lg2 = PY_LISTGETS('zz_list2')"
+    "   crt 'PYPRB-LCRTEGET=[':lg2:']'"
     '   fs = PY_FINALIZE()'
     "   crt 'PYPRB-FIN=':fs"
     "   crt 'PYPRB-DONE'"
@@ -290,6 +300,11 @@ Row ($run -match 'PYPRB-LGET=\[[^\]]*SDPY-42') 'PY_LISTGETS read the created lis
 Row ($run -match 'PYPRB-LTYPE=list') 'PY_OBJTYPE says the created object is a list'
 Row (($run -match 'PYPRB-NOLIST=\[') -and ($run -notmatch 'PYPRB-NOLIST=\[[^\]]*SDPY-42')) `
     'CONTROL: a list never created does not read back SDPY-42'
+# 07 Oct 26 - the alias PY_LISTCRTE.  Same decisive row as above on a list it made, and the
+# control just above covers it: a list that was never made does not read back SDPY-42.
+Row ($run -match 'PYPRB-LCRTE=0')     'PY_LISTCRTE (the alias) returned 0'
+Row ($run -match 'PYPRB-LCRTEAPPD=0') 'PY_LISTAPPD appended to the list PY_LISTCRTE made (0)'
+Row ($run -match 'PYPRB-LCRTEGET=\[[^\]]*SDPY-42') 'PY_LISTGETS read the PY_LISTCRTE list back holding SDPY-42'
 
 # --- the DOCUMENTED route in ---------------------------------------------
 # The program above declares its own deffuns, which tests the CATALOGUED

@@ -644,6 +644,13 @@ try {
     if (-not (Test-Path -LiteralPath $sdRec)) { Write-Host $out; Fail "CREATE.ACCOUNT did not register $sdAcc" }
 
     Note 'registered in ACCOUNTS'          $true (Test-Path -LiteralPath $sdRec)
+    # 07 Oct 26 - RELEASE_1.1 126 (parity audit PAW-6).  THE CONTROL FOR STEP 3's $cred ROW:
+    # CREATE.ACCOUNT writes the credential record together with the Windows password
+    # (SET_PASSWD), so it must be THERE now, or "the record is gone" after the delete would
+    # pass on a run that never had one - and on a path form that does not match the record's
+    # real file name.  $cred is a directory file, so a record is a file named by its id.
+    $credRec = Join-Path $env:ProgramData ('SD\sdsys\$cred\' + $sdAcc.ToUpper())
+    Note '$cred record written by CREATE.ACCOUNT' $true (Test-Path -LiteralPath $credRec)
     Note 'account directory made'          $true (Test-Path -LiteralPath $sdDir)
     Note 'Windows account made'            $true ([bool](Get-LocalUser -Name $sdAcc -ErrorAction SilentlyContinue))
     Note "sdu_$sdAcc group made"           $true ([bool](Get-LocalGroup -Name ('sdu_' + $sdAcc) -ErrorAction SilentlyContinue))
@@ -727,6 +734,10 @@ try {
     Note 'Windows account is gone'      $false ([bool](Get-LocalUser -Name $sdAcc -ErrorAction SilentlyContinue))
     Note 'sdu_ group is gone'           $false ([bool](Get-LocalGroup -Name ('sdu_' + $sdAcc) -ErrorAction SilentlyContinue))
     Note 'ACCOUNTS record is gone'      $false (Test-Path -LiteralPath $sdRec)
+    # 07 Oct 26 - RELEASE_1.1 126: the SD password record goes with the account.  Before this
+    # fix DELACC never touched $cred, so a later account of the same name could be entered over
+    # the API with the old password.  Its control is in step 1 (the record existed).
+    Note '$cred record is gone (RELEASE_1.1 126)' $false (Test-Path -LiteralPath $credRec)
     Note 'account directory is gone'    $false (Test-Path -LiteralPath $sdDir)
 
     # 30 Aug 26 - AND THE GRANT GOES WITH THE LOGIN.  PRE_RELEASE_FIXES.md 65.
