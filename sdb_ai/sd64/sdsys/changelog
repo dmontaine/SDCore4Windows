@@ -2,6 +2,15 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+06 Oct 26  THE APILOGIN SETTING IS RETIRED.
+
+           APILOGIN= in sd.conf did nothing any more: the API has always asked
+           for the account's password, whatever it said, and APILOGIN=0 never
+           weakened that.  It is now removed rather than left looking like a
+           switch.  An sd.conf that still has the line works and the line is
+           ignored; new installs do not write it, and CONFIG no longer prints
+           it.  Made to match SD Core for Linux.
+
 06 Oct 26  ADMINISTRATOR CHANGES ARE RECORDED, AND A DELETED ACCOUNT TAKES ITS
            PASSWORD WITH IT.
 

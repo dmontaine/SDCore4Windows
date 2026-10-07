@@ -645,7 +645,8 @@ GRPSIZE=2
 NUMUSERS=20
 SORTMEM=4096
 ERRLOG=50
-APILOGIN=1
+# 06 Oct 26 - APILOGIN=1 is no longer written: the setting is retired (parity audit
+# PAW-5), and an sd.conf that still carries it is accepted and the line ignored.
 # APIPORT switches the API (SDClient) listener on.  01 Oct 26: THE PORT IS FIXED
 # AT 4247 (SD_API_PORT in gplsrc/sddefs.h; the owner ruled it not adjustable)
 # and any value above zero means ON - so this file says 4247 to be readable, a

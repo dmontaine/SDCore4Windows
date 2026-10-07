@@ -24,6 +24,8 @@
  * 26 Aug 26 Windows port - a name longer than the 8 character buffer took the
  *           early exit, which jumped over the only initialisation of result
  *           and pushed an uninitialised descriptor.  UPSTREAM_FIXES.md 18.
+ * 06 Oct 26 Windows port - config('APILOGIN') removed: the setting is retired, so
+ *           it now takes the final else, as CREATUSR does (parity audit PAW-5).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -167,9 +169,6 @@ void op_config() {
   } 
   else if (!strcmp(param, "SDCLIENT"))
     result.data.value = pcfg.sdclient_mode;
-/* 20240219 mab mods to handle AF_UNIX sockets, security mode */
-  else if (!strcmp(param, "APILOGIN"))
-    result.data.value = pcfg.api_login;
 /* 17 Aug 26 Windows port - APIPORT.  Read only, and from the SEGMENT rather
    than from pcfg: it is a system-wide setting that sdwind acts on at startup,
    so a per-process override would report a port nothing is listening on.

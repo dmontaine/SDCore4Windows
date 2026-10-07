@@ -24,6 +24,8 @@
 *           no branch for it, so printing it would show a blank line and set
 *           status to ER_NOT_FOUND.
 * 17 Aug 26 Windows port - APIPORT reported, for the API listener.
+* 06 Oct 26 Windows port - APILOGIN is no longer reported (the setting is retired,
+*           parity audit PAW-5), as CREATUSR was not on 16 Aug.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -87,8 +89,8 @@ report.params:
 
 !!CONFIG!!
 * NOTE to dev: config names are capped at 8 char!
- * 20240219 mab mods to handle AF_UNIX sockets, security mode 
-   print 'APILOGIN  '        : config('APILOGIN')
+* 06 Oct 26 Windows port - APILOGIN is no longer reported: the setting is retired
+* (parity audit PAW-5; SD Core for Linux's S.18).
 * 17 Aug 26 Windows port - APIPORT.  Printed even when zero, unlike PORTMAP
 * below, because zero is the answer to "is the API listening?" and a line that
 * vanishes when the feature is off is the one a reader most needs to see.

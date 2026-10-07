@@ -1169,15 +1169,10 @@ void op_login() {
 /*     if config APILOGIN = 1 (require)                                                                           */
 /*       require valid username and password from api connection                                                  */
  
-  if (ok) {
-    if (pcfg.api_login){
-      strcpy((char *)(my_uptr->username), username);
-      strcpy(process.username, username);
-    }else{
-      /* APILOGIN = 0 process.username was assigned in login.user */
-      strcpy((char *)(my_uptr->username), process.username);
-    }
-  }
+/* 06 Oct 26 Windows port - the block that copied the user name after a good
+   login, and chose between two paths on pcfg.api_login, is gone with APILOGIN
+   (parity audit PAW-5).  ok is FALSE above, so it never ran; the comment above
+   about APILOGIN = 0 and 1 describes the retired setting.                    */
   (e_stack++)->data.value = ok;
 }
 

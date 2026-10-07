@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 06 Oct 26 Windows port - APILOGIN is retired: accepted and ignored, not
+ *           stored (parity audit PAW-5; Linux's S.18)
  * 01 Oct 26 Windows port - BACKUPDIR is accepted (and not stored), so the line
  *           SET.BACKUP.DIRECTORY writes does not stop SD starting
  * 01 Oct 26 Windows port - APIPORT is an ON/OFF switch: any value above zero
@@ -127,9 +129,7 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.objects = 0;               /* OBJECTS:  Max loaded objects */
   pcfg.objmem = 0;                /* OBJMEM:   Max loaded object size */
   pcfg.sdclient_mode = 0;         /* SDCLIENT: Client capabilities */
-  /* 20240219 mab mods to handle AF_UNIX sockets, security mode */
-  pcfg.api_login = 1;             /* API (sdclient) login type     */
-  pcfg.reccache = 0;              /* RECCACHE: Record cache size */
+  pcfg.reccache = 0;             /* RECCACHE: Record cache size */
   pcfg.ringwait = TRUE;           /* RINGWAIT: Wait if ring buffer full */
   pcfg.safedir = FALSE;       /* SAFE_DIR: User careful update to dir files */
   pcfg.sh[0] = '\0';          /* SH:       Command to run interactive shell */
@@ -314,9 +314,17 @@ struct CONFIG* read_config(char* errmsg) {
       } 
       else if (sscanf(rec, "SDCLIENT=%d", &n) == 1)
         pcfg.sdclient_mode |= n;
-/* 20240219 mab mods to handle AF_UNIX sockets, security mode */
-      else if (sscanf(rec, "APILOGIN=%d", &n) == 1)
-        pcfg.api_login = n;
+/* 06 Oct 26 Windows port - APILOGIN IS RETIRED (parity audit PAW-5; SD Core for
+   Linux retired it on 14 Sep, S.18).  It chose between two paths of login_user(),
+   which is gone, and LOGIN() now fails closed; the API logs in by SCRAM only
+   and APISRVR takes the proven name unconditionally.  Nothing read the value
+   but a dead block in op_login.  The line is still ACCEPTED and ignored, not
+   stored, for the reason CREATUSR is: an unrecognised parameter is fatal just
+   below, and an sd.conf kept across an upgrade, or copied from an older
+   install, can carry it.  CONFIG() no longer reports it. */
+      else if (sscanf(rec, "APILOGIN=%d", &n) == 1) {
+        /* accepted and ignored */
+      }
 /* 17 Aug 26 Windows port - APIPORT, whether sdwind listens for API
    connections.  There is no default: the struct is memset to zero above, zero
    means no listener, and the listener has to be asked for.  Opening one is a
