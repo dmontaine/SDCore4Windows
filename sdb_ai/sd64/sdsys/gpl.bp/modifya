@@ -868,7 +868,13 @@ tier.set:
 *  SUSPENDED ONLY.  Unsuspending obviously lifts access; there is nothing to
 *  explain.
    if want.tier = 'SUSPENDED' then
-      crt sysmsg(10159, acc.name)
+*     6 Oct 26 Windows port - 10159 IS SEVERAL LINES, and the newlines in a message
+*     file become field marks (messages.c), so it is shown a line at a time, the
+*     idiom SD Core for Linux uses for its multi-line messages (mail T0230).
+      susp.msg = sysmsg(10159, acc.name)
+      for susp.i = 1 to dcount(susp.msg, @FM)
+         crt susp.msg<susp.i>
+      next susp.i
       * what suspending took, what it left alone, and what lifts it
    end
 

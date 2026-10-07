@@ -19,6 +19,9 @@
 *
 *
 * START-HISTORY:
+* 07 Oct 26 Windows port - the six ACCOUNT REFUSED audit lines (branch 1 to 4) name the
+*           account refused, ' account=<name>', as SD Core for Linux's do (its
+*           PAL-17, mail T0155); the trail could not say which account was refused.
 * 05 Oct 26 Windows port - RELEASE_1.1 122: a refused login's audit record is written BEFORE
 *           the three second failed-login delay (scram.delay, tested at exit.vb.scram.fail),
 *           as SD Core for Linux did after losing records when the client dropped inside
@@ -641,7 +644,7 @@ openpath @sdsys:@ds:'accounts' to acc.f then
 end
 
 if account.path = '' then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=1 no.path.in.register')
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=1 no.path.in.register account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -665,7 +668,7 @@ end
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
 *   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
 if upcase(trim(acc.suspended, ' ', 'B')) = 'SUSPENDED' then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=2 suspended')
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=2 suspended account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -752,7 +755,7 @@ end
 *   the program; vb.scram.final needs it too now.  See the note beside it.
 
 if acc.group = '' then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=3 no.group.in.register')
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=3 no.group.in.register account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -824,7 +827,7 @@ if new.account = 'SDSYS' then
    acc.member = local.session and (acc.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
    acc.told = 0
    if not(acc.member) then
-      void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 sdsys.not.local.elevated user=' : acc.who : ' local=' : local.session)
+      void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 sdsys.not.local.elevated user=' : acc.who : ' local=' : local.session : ' account=' : new.account)
    end
 end else
    acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
@@ -832,14 +835,14 @@ end else
 end
 
 if acc.told # 0 then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group)
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
 end
 
 if not(acc.member) then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group)
+   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account

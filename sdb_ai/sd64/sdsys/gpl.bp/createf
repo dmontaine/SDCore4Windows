@@ -205,7 +205,16 @@ $define default.split.load 80
          *   (CONFIGURE.FILE) can only be witnessed on a case-sensitive file
          *   holding twins, and sd -internal is the only way to build one.
          case keyword = KW$CASE
-            if not(kernel(K$INTERNAL, -1)) then stop sysmsg(10176)
+*           6 Oct 26 Windows port - 10176 IS SEVERAL LINES: its newlines are field
+*           marks (messages.c), so it is shown a line at a time, as SD Core for
+*           Linux found it must be (its cproc 10190/10195; mail T0230).
+            if not(kernel(K$INTERNAL, -1)) then
+               case.msg = sysmsg(10176)
+               for case.i = 1 to dcount(case.msg, @FM)
+                  crt case.msg<case.i>
+               next case.i
+               stop
+            end
             keep.case = @true
 
          * ---------- NO.QUERY

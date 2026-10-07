@@ -2,6 +2,21 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+07 Oct 26  A FEW MULTI-LINE MESSAGES, THE API AUDIT RECORDS AND SDSYS'S VOC.
+
+           * The messages for CREATE.FILE ... CASE, CONFIGURE.FILE ... CASE, a
+             CONFIGURE.FILE refused because two ids differ only by case, and
+             MODIFY.ACCOUNT SUSPENDED each run over several lines.  They are
+             now printed a line at a time; a line break could show as a stray
+             character.
+           * The audit trail's lines for an API login refused at the account
+             (no such account, suspended, not allowed, SDSYS from a remote
+             session) now say which account: ACCOUNT REFUSED branch=2
+             suspended account=ANN.  Before, they named the user but not the
+             account.
+           * SDSYS's own VOC now has the keyword that tests a soundex code (~),
+             as every other account's has.
+
 06 Oct 26  A SESSION FED FROM A FILE OR A PIPE ENDS AT THE END OF THE INPUT.
 
            When the commands come from a file or a pipe, the session now ends
