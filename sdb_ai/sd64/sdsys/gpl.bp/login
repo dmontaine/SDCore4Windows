@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 06 Oct 26 Windows port - a terminal session granted SDSYS prints one line, 12012,
+*           "SD administration granted: ...", as SD Core for Linux's does (its 10916;
+*           parity audit).  Not compiled: login cannot be compiled under bbcmp.
 * 02 Oct 26 Windows port - RELEASE_1.1 116: the login hold.  A new session is
 *           refused (13002) while BACKUP.ACCOUNT or RESTORE.ACCOUNT runs;
 *           !acc_hold decides.
@@ -970,6 +973,15 @@ deffun pw_complex(pw) calling '!pw_complex'
 *     happened ... and after the administrator flag is set, so the record and
 *     the rights it describes cannot disagree."  PRE_RELEASE_FIXES.md 98.
       void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
+
+*     6 Oct 26 Windows port - A ONE-LINE BANNER SAYS SO (parity audit; SD Core for
+*     Linux shows one when sdsys is granted, its 10916, and asked for the same here).
+*     Quiet-aware like the internal-session notice below, and ONLY ON A TERMINAL
+*     (the test require.credential uses): a scripted SDSYS session, such as the
+*     verifiers' seat, gets no extra line to trip an anchor.
+      if kernel(K$TTY, 0) # '' and not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
+         display sysmsg(12012) ;* SD administration granted: this session is the SDSYS Windows account, elevated
+      end
    end
    close acc.f
 

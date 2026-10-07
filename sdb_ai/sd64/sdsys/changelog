@@ -43,6 +43,8 @@ Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              name without a new password (the account the installer makes for
              the person installing, for one) could be entered over the API
              with the old password.
+           * Signing in to SDSYS at a terminal now prints one line saying that
+             administration was granted and to which Windows account.
            * DELETE.ACCOUNT accepts REMOVE.HOME, so one command line works on
              SD Core for Linux and here.  There it removes the user's home
              folder, which is otherwise kept; here the Windows profile is
