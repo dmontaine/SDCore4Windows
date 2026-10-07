@@ -29,6 +29,9 @@
 * pair, and the lookup fold serves it).
 *
 * START-HISTORY:
+* 07 Oct 26 Windows port - parity audit, Linux T1215.  A path is judged once per
+*           account, so "Converted N of M" counts distinct files: the account's own
+*           voc was visited twice (its own record, then the last step).
 * 07 Oct 26 Windows port - parity audit.  Both opens (a VOC-named file, the account's
 *           VOC) are ON ERROR: an unopenable DH file is reported with message 12013
 *           and counted in 10183, and the walk goes on, instead of aborting with
@@ -147,6 +150,7 @@ do.account:
 *   this.is.sdsys says whether its VOC is the live one.
 do.account.at:
    file.list = ''
+   seen.list = ''                  ;* paths already visited in THIS account (see convert.one)
 * 07 Oct 26 - ON ERROR (parity audit, from Linux's first install run).  A failed open
 *   of a DH file's primary subfile gives a NEGATIVE status, and without ON ERROR that
 *   is a runtime abort (op_dio1.c exit_op_open), not the ELSE branch: one unopenable
@@ -271,6 +275,19 @@ convert.one:
       close old.fu
       return
    end
+* 07 Oct 26 - ONE VISIT PER FILE PER ACCOUNT (Linux's ruling, T1215: "Converted N of M"
+*   must count distinct files on both ports).  An account's own 'voc' is named by its
+*   own newvoc/voc record and was then converted again as the last step, so M ran one
+*   high per account.  The list is reset in do.account.at, per account on purpose: a
+*   file named by account B but belonging to A must still be converted when A's own
+*   walk reaches it.  The key is the opened file's path, separators folded and upper
+*   cased, because NTFS folds case.
+   seen.key = upcase(chk.path)
+   locate seen.key in seen.list<1> setting seen.at then
+      close old.fu
+      return
+   end
+   seen.list<-1> = seen.key
    scanned += 1
 
    if bitand(fileinfo(old.fu, FL$FLAGS), FL$FLAGS.NOCASE) then
