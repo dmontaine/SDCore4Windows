@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 06 Oct 26 Windows port - the closing line no longer says "copied and deleted"
+*            when the guard (10187) left a record copied onto itself in place:
+*            shared message 13050, taken from SD Core for Linux (parity audit
+*            PAL-2; Linux allocated the number and measured it).
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
 *            (RELEASE_1.1_FIXES.md 33, owner's ruling).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -231,6 +235,7 @@ retry.target.file.open:
    end
 
    records.copied = 0
+   records.kept = 0         ;* copied onto themselves, so not deleted (PAL-2)
 
    if copy.all then    ;* Copy all records
       select src.file to 11
@@ -280,8 +285,15 @@ retry.target.file.open:
 
    @system.return.code = records.copied
 
-   if deleting then display sysmsg(6190, records.copied)   
-   else display sysmsg(6189, records.copied)   
+   if deleting and records.kept then
+      * 06 Oct 26 Windows port - "copied and deleted" would tell the user the
+      *   opposite of what happened to a record the guard left alone (shared
+      *   message 13050, from SD Core for Linux).
+      display sysmsg(13050, records.copied, records.copied - records.kept, records.kept)
+   end else
+      if deleting then display sysmsg(6190, records.copied)
+      else display sysmsg(6189, records.copied)
+   end
 
    return
 
@@ -359,6 +371,7 @@ copy.record:
             end
 
             if same.record then
+               records.kept += 1
                display sysmsg(10187, src.record.name) ;* Record 'xx' was copied onto itself, so it was not deleted.
             end else
                recordlocku src.file, src.record.name

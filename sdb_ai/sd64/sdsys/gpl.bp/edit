@@ -15,6 +15,10 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 06 Oct 26 Windows port - RELEASE_1.1 127.  The working-copy path, the editor's
+*           path and micro's configuration home are put into the PowerShell
+*           command with every single quote doubled; a record id or a profile
+*           name containing one used to end the string.
 * 03 Sep 26 Windows port - PRE_RELEASE_FIXES 66.  find.editor now tries the
 *           bundled editor beside sd.exe (fixed at C:\Program Files\SD\usr\bin)
 *           before the PATH lookup, so the verb runs the version SD ships.
@@ -927,11 +931,23 @@ process.record:
    crt @(-1) : 'Editing ' : trim(dict.text : ' ' : in.file.name) : ' ' :
    crt in.record.name
 
+*  6 Oct 26 Windows port - RELEASE_1.1 127 (parity audit PAW-7).  A SINGLE QUOTE IN
+*  ANY OF THESE ENDS THE POWERSHELL STRING AND WHAT FOLLOWS RUNS.  os.file carries
+*  the record id (temp.record.name = id : '.editing') and the account path, both
+*  chosen by someone other than this verb's caller; editor.cfg is the user's
+*  profile, and Windows allows an apostrophe in a user name.  A PowerShell
+*  single-quoted string is LITERAL and a doubled quote is the one way to carry
+*  a quote in it (create_account does the same around sad.path), so each is
+*  doubled instead of refusing the name as SD Core for Linux's shell line must.
+   os.file.q = change(os.file, q, q : q)
+   editor.path.q = change(editor.path, q, q : q)
+   editor.cfg.q = change(editor.cfg, q, q : q)
+
    cmd = ''
    if editor.cfg # '' then
-      cmd := '$env:MICRO_CONFIG_HOME = ' : q : editor.cfg : q : '; '
+      cmd := '$env:MICRO_CONFIG_HOME = ' : q : editor.cfg.q : q : '; '
    end
-   cmd := '& ' : q : editor.path : q : ' ' : q : os.file : q
+   cmd := '& ' : q : editor.path.q : q : ' ' : q : os.file.q : q
    cmd := '; exit $LASTEXITCODE'
    os.execute cmd
    rc = os.error()

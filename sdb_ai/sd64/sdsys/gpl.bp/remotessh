@@ -18,6 +18,10 @@
 *
 *
 * START-HISTORY:
+* 06 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  A completed
+*           change writes an audit record, 'remote.ssh on|off', as SD Core for
+*           Linux's does, and a refusal or failure sets @SYSTEM.RETURN.CODE
+*           (-ER$ARGS, -ER$FAILED; 0 on success) so a BASIC caller can tell.
 * 30 Aug 26 Windows port - written.  PRE_RELEASE_FIXES 78.
 * END-HISTORY
 *
@@ -99,6 +103,7 @@ $include err.h
          case action = 'OFF'
             want = '-Installed -Restrict'
          case @true
+            @system.return.code = -ER$ARGS
             stop sysmsg(10137)  ;* remote.ssh on | off
       end case
    end
@@ -135,6 +140,7 @@ $include err.h
          next r.i
       end
       if rc # 0 then
+         @system.return.code = -ER$FAILED
          crt sysmsg(10139, 'SHOW', rc)  ;* Could not read who may reach ssh
       end
       stop
@@ -146,12 +152,19 @@ $include err.h
 *  write, and the administrator's next step is SSH.SERVER INSTALL rather than
 *  a retry.
    if rc = 2 then
+      @system.return.code = -ER$FAILED
       stop sysmsg(10140)  ;* There is no ssh server on this machine
    end
 
    if rc # 0 then
+      @system.return.code = -ER$FAILED
       stop sysmsg(10139, action, rc)  ;* Could not change who may reach ssh
    end
+
+*  6 Oct 26 Windows port - RELEASE_1.1 128: the change took effect, so it is
+*  audited, in the words SD Core for Linux uses.
+   void kernel(K$AUDIT, 'remote.ssh ' : downcase(action))
+   @system.return.code = 0
 
    crt sysmsg(10138, action)  ;* Remote ssh access is now %1
 

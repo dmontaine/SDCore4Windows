@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+*  6 Oct 26 Windows port - RELEASE_1.1 126: the account's $cred record is deleted
+*            with it, before the register delete.  RELEASE_1.1 128 / parity audit
+*            J-3: a completed deletion writes 'DELETE.ACCOUNT account=<name>'.
 * 19 Sep 26 Windows port - RELEASE_1.1 73: the account directory's deletion is
 *           checked and 10919 is displayed when it survives.  OS$DELETE's
 *           result was assigned to "yn" and never read.  Reported by the Linux
@@ -531,7 +534,26 @@ deffun is_sd_user(username) calling '!is_sd_user'
    * account registered and this verb able to be run again - see the note
    * where this used to be.
 
+*  6 Oct 26 Windows port - RELEASE_1.1 126 (parity audit PAW-6).  THE SD PASSWORD
+*  GOES WITH THE ACCOUNT.  $cred holds the account's SCRAM keys and nothing else
+*  removed them: left behind, they let a later account of the same name be
+*  entered over the API with the old password, and MODIFY.PASSWORD would ask its
+*  new owner for the old one.  CREATE.ACCOUNT overwrites the record, so the
+*  accounts at risk were those made WITHOUT a password step (the installer's
+*  ATTACH).  SD Core for Linux's DELACC has done this since 14 Sep and said ours
+*  had the same gap.  BEFORE the register delete below, which stays last, so a
+*  failure here leaves the account registered and the verb re-runnable.
+   openpath @sdsys:@ds:'$cred' to cred.f then
+      delete cred.f, acc.name
+      close cred.f
+   end
+
    delete acc.f, acc.name
+
+*  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3.  Audited AFTER the
+*  register delete, so only a deletion that completed is recorded; the words are
+*  SD Core for Linux's, agreed by mail 6 Oct.
+   void kernel(K$AUDIT, 'DELETE.ACCOUNT account=' : acc.name)
 
    @system.return.code = 0
    return

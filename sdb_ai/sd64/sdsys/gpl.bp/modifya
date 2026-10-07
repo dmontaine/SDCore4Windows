@@ -19,6 +19,11 @@
 * 
 *
 * START-HISTORY:
+*  6 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  SUSPENDED,
+*   UNSUSPENDED, a route change and an os.users change now write an audit record,
+*   as SD Core for Linux's do ('modify.account suspend|unsuspended account=',
+*   'modify.account route <ssh|api|both|none> account='); the success arms set
+*   @SYSTEM.RETURN.CODE to 0.  Only the group ADD and DELETE arms were audited.
 * 21 Sep 26 Windows port - RELEASE_1.1 64 leftover: route.apply's header still
 *   said tier.set needed it and that route.set refuses administrators (10083);
 *   both were deleted on 18 Sep.  Comment only, no code.
@@ -568,6 +573,16 @@ route.set:
       return
    end
 
+*  6 Oct 26 Windows port - RELEASE_1.1 128.  THE ROUTE CHANGE IS AUDITED, with the
+*  same words SD Core for Linux uses.  Only a change that took effect gets here
+*  (a failure and "already had that access" returned above).
+   route.said = 'none'
+   if want.ssh and want.api then route.said = 'both'
+   if want.ssh and not(want.api) then route.said = 'ssh'
+   if want.api and not(want.ssh) then route.said = 'api'
+   void kernel(K$AUDIT, 'modify.account route ' : route.said : ' account=' : acc.name)
+   @system.return.code = 0
+
    gosub say.access
    return
 
@@ -752,6 +767,11 @@ os.set:
       return
    end
 
+*  6 Oct 26 Windows port - RELEASE_1.1 128: an os.users change is audited.  Linux
+*  has no os.users list, so these words are this port's own.
+   void kernel(K$AUDIT, 'modify.account os.users account=' : acc.name : ' sh=' : osu.sh : ' os.execute=' : osu.ex)
+   @system.return.code = 0
+
    crt sysmsg(10102, acc.user, osu.sh, osu.ex) ;* os.users: %1 has SH %2, OS.EXECUTE %3
    return
 
@@ -815,6 +835,15 @@ tier.set:
       @system.return.code = -ER$FAILED
       crt sysmsg(10114, acc.name) ;* Unable to change the state of %1
       return
+   end
+
+*  6 Oct 26 Windows port - RELEASE_1.1 128: the state change is audited, with the
+*  same words SD Core for Linux uses ('suspend' for the verb SUSPENDED).
+   @system.return.code = 0
+   if want.tier = 'SUSPENDED' then
+      void kernel(K$AUDIT, 'modify.account suspend account=' : acc.name)
+   end else
+      void kernel(K$AUDIT, 'modify.account unsuspended account=' : acc.name)
    end
 
    crt sysmsg(10109, acc.name, want.tier) ;* Account %1 is now %2

@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 06 Oct 26 Windows port - Enter at "Delete all records in xx?" (3220) means N,
+*            and so does end of input, which re-asked for ever (the class of
+*            RELEASE_1.1 34, found at a prompt it never listed by SD Core for
+*            Linux, parity audit PAL-13; measured there, not here).
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
 *            (RELEASE_1.1_FIXES.md 33, owner's ruling).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -149,6 +153,7 @@ $include int$keys.h
                      * Delete all records in xx?
                prompt ""
                input reply
+               if reply = '' then reply = 'N' ;* 06 Oct 26 - Enter is N; '' at end of input re-asked for ever
                if upcase(reply[1,1]) = "N" then stop
 
             until upcase(reply[1,1]) = "Y"

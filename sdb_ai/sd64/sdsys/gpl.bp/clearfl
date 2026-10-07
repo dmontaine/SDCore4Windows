@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 06 Oct 26 Windows port - Enter at "Use file 'xx'?" (2051) means N, and so does
+*            end of input, which re-asked for ever (the class of RELEASE_1.1 34,
+*            found at a prompt it never listed by SD Core for Linux, parity
+*            audit PAL-13; measured there, not here).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -76,6 +80,7 @@ $include syscom keys.h
          display sysmsg(2051, file.name) :  ;* Use file 'xx'?
          input response
          response = upcase(response)
+         if response = '' then response = 'N' ;* 06 Oct 26 - Enter is N; '' at end of input re-asked for ever
       until response = 'Y'
          if response = 'N' then stop
       repeat

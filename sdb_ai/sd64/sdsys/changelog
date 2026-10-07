@@ -2,6 +2,39 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+06 Oct 26  ADMINISTRATOR CHANGES ARE RECORDED, AND A DELETED ACCOUNT TAKES ITS
+           PASSWORD WITH IT.
+
+           Made to match SD Core for Linux.
+           * The audit trail now records CREATE.ACCOUNT, DELETE.ACCOUNT and
+             RESTORE.ACCOUNT, MODIFY.ACCOUNT when it suspends, unsuspends, or
+             changes an account's ssh and API routes or its os.users entry,
+             and REMOTE.API and REMOTE.SSH when they change.  Only a change
+             that happened is recorded.  Before, only adding an account to a
+             group and removing it were.
+           * REMOTE.API and REMOTE.SSH now set @SYSTEM.RETURN.CODE (0 when the
+             change was made, negative when it was refused or failed), as the
+             account commands already did.
+           * DELETE.ACCOUNT now removes the account's SD password record.
+             Before, it stayed behind, so an account later made under the same
+             name without a new password (the account the installer makes for
+             the person installing, for one) could be entered over the API
+             with the old password.
+           * EDIT and MICRO no longer break when a record name, an account
+             folder or a Windows user name contains an apostrophe.
+           * CREATE.ACCOUNT with no arguments lists the OTHER form it has
+             always accepted.
+
+06 Oct 26  A COPY THAT LEFT RECORDS IN PLACE NO LONGER SAYS IT DELETED THEM.
+
+           COPY ... DELETING copied a record onto itself and kept it, and then
+           said "copied and deleted".  When that happens it now says how many
+           records were copied, how many were deleted, and how many were left
+           in place.  Pressing Enter at "Delete all records in ...?" and at
+           "Use file ...?" (CLEAR.FILE) now means No, as at SD's other yes/no
+           prompts, and those two prompts and "Update VOC to new release?"
+           show (y/<n>).
+
 06 Oct 26  WHEN SD CANNOT START AS A SERVICE, THE REASON IS NOW KEPT.
 
            If the SD service could not start SD (a line in sd.conf that SD

@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+*  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3: an account made
+*            writes 'CREATE.ACCOUNT account=<name> type=<USER|GROUP|OTHER>'
+*            (SD Core for Linux's words), and the syntax help lists the OTHER
+*            form, which the verb has always accepted.
 * 02 Oct 26 Windows port - RELEASE_1.1 116.  THE VERB IS NOW THE PARSER: what
 *            it parses goes into settings (syscom/createacc.h, shared with SD
 *            Core for Linux) and !create_account (gpl.bp create_account) does
@@ -554,6 +558,7 @@ deffun ps_script(script) calling '!ps_script'
     crt '                  {NO.QUERY}'
     crt '                  Omit the route and the account gets both ssh and the API.'
     crt '                CREATE.ACCOUNT GROUP <group name> {NO.QUERY}'
+    crt '                CREATE.ACCOUNT OTHER <account name> <pathname> {NO.QUERY}'
     @system.return.code = -ER$ARGS
     stop
    end case
@@ -572,6 +577,12 @@ deffun ps_script(script) calling '!ps_script'
    err = ''
    call !create_account(upcase(acc.type), acc.name, settings, err)
    if err # '' then stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+
+*  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3.  Audited only after
+*  !create_account reported no error, so only an account that was made is
+*  recorded; the words are SD Core for Linux's, agreed by mail 6 Oct.
+   void kernel(K$AUDIT, 'CREATE.ACCOUNT account=' : upcase(acc.name) : ' type=' : upcase(acc.type))
+
    @system.return.code = 0
    stop
 
