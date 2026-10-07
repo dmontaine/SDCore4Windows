@@ -154,11 +154,13 @@ p = config_problems(cfg)
 check("config.c accepts and bounds BACKUPDIR", p == [], "; ".join(p))
 for layer in VOC_LAYERS:
     t = read(os.path.join(SDSYS, layer, "set.backup.directory"))
-    check("%s/set.backup.directory points at the catalogued verb" % layer, t is not None and t.strip().split("\n")[-1].strip() == "$SETBAKDIR")
+    # 7 Oct 26 - the VOC record's catalogue name is lower case now (the standard, and what the
+    # catalogue holds since RELEASE_1.1 5 stage 3a), so the comparison ignores case.
+    check("%s/set.backup.directory points at the catalogued verb" % layer, t is not None and t.strip().split("\n")[-1].strip().lower() == "$setbakdir")
 if "newvoc" not in VOC_LAYERS:
     check("the verb is NOT in newvoc (that is every account's VOC; this is an administrator verb here)",
           not os.path.isfile(os.path.join(SDSYS, "newvoc", "set.backup.directory")))
-check("the verb's catalogue name matches its VOC record", "$catalog $SETBAKDIR" in files["setbakdir"])
+check("the verb's catalogue name matches its VOC record", "$catalog $setbakdir" in files["setbakdir"].lower())
 check("the shared helper is catalogued as !acc_bakdir and the per-OS one as !acc_os_bakdir",
       "$catalog !acc_bakdir" in files["acc_bakdir"] and "$catalog !acc_os_bakdir" in files["acc_os_bakdir"])
 check("the per-OS helper refuses a relative path with the shared message 13046", "err = 13046" in code_only(files["acc_os_bakdir"]))
