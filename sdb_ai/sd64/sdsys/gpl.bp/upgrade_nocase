@@ -29,6 +29,11 @@
 * pair, and the lookup fold serves it).
 *
 * START-HISTORY:
+* 07 Oct 26 Windows port - parity audit.  Both opens (a VOC-named file, the account's
+*           VOC) are ON ERROR: an unopenable DH file is reported with message 12013
+*           and counted in 10183, and the walk goes on, instead of aborting with
+*           1402/3001 and leaving the rest unconverted.  Linux met this on a real
+*           install (its 11037); the port's cause would be a damaged or locked file.
 * 16 Sep 26 Windows port - RELEASE_1.1 51.  $ipc is skipped like the live VOC.
 *           The service is started before this walk runs, holds $ipc open, and
 *           the walk therefore reported "1 file(s) could not be read or
@@ -142,27 +147,33 @@ do.account:
 *   this.is.sdsys says whether its VOC is the live one.
 do.account.at:
    file.list = ''
-   openpath this.acct:@ds:'voc' to acct.voc then
+* 07 Oct 26 - ON ERROR (parity audit, from Linux's first install run).  A failed open
+*   of a DH file's primary subfile gives a NEGATIVE status, and without ON ERROR that
+*   is a runtime abort (op_dio1.c exit_op_open), not the ELSE branch: one unopenable
+*   VOC stopped the whole walk and left every later account unconverted.  Now it is
+*   reported (12013) and counted, and the walk goes on to the next account.
+   openpath this.acct:@ds:'voc' to acct.voc on error
+      crt sysmsg(12013, this.acct:@ds:'voc', status())   ;* Cannot open %1 (error %2). It was left as it is.
+      err.count += 1
+      return
+   end else return                 ;* no VOC at this path; nothing to do
 * 14 Sep 26 - LIST 11, NOT 13.  Select lists run 0 to 12 (HIGH_SELECT,
 *   gplsrc/sd.h:43), and 11-12 only in an $internal program; 13, 14 and 15
 *   stopped the walk with 1118 "Select list number out of range" on its first
 *   file (verify-nocaseupgrade, its first measuring run).  The register walk
 *   holds 12 for its whole loop, so every inner list here is 11, used one after
 *   another: this one is exhausted before any file is converted.
-      select acct.voc to 11
-      loop
-         readnext vid from 11 else exit
-         read vrec from acct.voc, vid then
-            if upcase(vrec[1,1]) = 'F' then
-               gosub add.file
-               if vrec<3> # '' and vrec<3> # vrec<2> then gosub add.file.dict
-            end
+   select acct.voc to 11
+   loop
+      readnext vid from 11 else exit
+      read vrec from acct.voc, vid then
+         if upcase(vrec[1,1]) = 'F' then
+            gosub add.file
+            if vrec<3> # '' and vrec<3> # vrec<2> then gosub add.file.dict
          end
-      repeat
-      close acct.voc
-   end else
-      return                       ;* no VOC at this path; nothing to do
-   end
+      end
+   repeat
+   close acct.voc
 
    nf = dcount(file.list, @fm)
    for fi = 1 to nf
@@ -213,7 +224,12 @@ convert.one:
 *   path carry backslashes and @ds is '/', so the report printed
 *   "C:\ProgramData\SD\sdsys/zznutwin" (verify-nocaseupgrade, 31/0 run).
    one.path = convert('\', '/', one.path)
-   openpath one.path to old.fu else return    ;* not a file we can open; skip
+* 07 Oct 26 - ON ERROR, for the same reason as the VOC open in do.account.at.
+   openpath one.path to old.fu on error
+      crt sysmsg(12013, one.path, status())   ;* Cannot open %1 (error %2). It was left as it is.
+      err.count += 1
+      return
+   end else return    ;* not a file we can open; skip
    ftype = fileinfo(old.fu, FL$TYPE)
    if ftype # FL$TYPE.DH then
       close old.fu
