@@ -2961,7 +2961,9 @@ int.logto:
 *   rights it describes cannot disagree.  @logname is NOT used: it is reassigned
 *   further down when CPROC drops to sdsys (5.6), and audit_message() takes the
 *   identity from the user table instead.
-   void kernel(K$AUDIT, 'LOGTO account=' : new.account)
+*   7 Oct 26 - the command word is lower case (owner's rule 7 Oct; Linux T1730).  The 'LOGTO REFUSED'
+*   event labels are NOT changed: whether an event label counts is the owner's open question.
+   void kernel(K$AUDIT, 'logto account=' : new.account)
 
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
