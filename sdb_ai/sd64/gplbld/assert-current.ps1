@@ -607,6 +607,62 @@ function Find-InstalledDeletions {
     }
 }
 
+# --- B3b. CONTENT, NOT ONLY NAMES AND TIMES.  8 Oct 2026.
+#
+# THE GAP, PAID FOR ONCE.  Every source check above compares a file's mtime with the install time, and
+# B3 compares names.  A file edited AFTER a cycle staged its tree but BEFORE the install finished is
+# older than the install, so it is not "newer", and its name is present, so it is not "deleted": the
+# guard printed "the installed tree matches source" over 23 Solo message files whose installed bytes
+# were the old ones (8 Oct 2026, Solo cycle 14:41, caught by byte-comparing).  The directories B3
+# walks are copied VERBATIM, so the honest test is the bytes, and it has no false positive: measured
+# the same day, a fresh install of both products differed from source in 0 of 2,500 files per product
+# in every mirrored directory.
+#
+# MISSING FILES COUNT TOO: a file added to source between staging and install is neither newer than
+# the install nor deleted from it.  The null case is refused the same way B3 refuses it.
+function Find-InstalledContentDiffs {
+    param(
+        [Parameter(Mandatory = $true)] [string]   $SourceSys,
+        [Parameter(Mandatory = $true)] [string]   $InstallSys,
+        [Parameter(Mandatory = $true)] [string[]] $Mirrors
+    )
+
+    $differ  = @()
+    $missing = @()
+    $checked = 0
+
+    foreach ($m in $Mirrors) {
+        $src = Join-Path $SourceSys  $m
+        $ins = Join-Path $InstallSys $m
+        # A directory missing on either side is B3's finding, not this one's.
+        if (-not (Test-Path $src) -or -not (Test-Path $ins)) { continue }
+
+        Get-ChildItem $src -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $rel = $_.FullName.Substring($src.Length + 1)
+                $checked++
+                $ip = Join-Path $ins $rel
+                if (-not (Test-Path -LiteralPath $ip)) {
+                    $missing += ("{0}\{1}" -f $m, $rel)
+                    return
+                }
+                $a = [System.IO.File]::ReadAllBytes($_.FullName)
+                $b = [System.IO.File]::ReadAllBytes($ip)
+                # Windows PowerShell 5.1 has no generic-call syntax, and a byte loop is slow; the base64
+                # text of the two arrays is equal exactly when the arrays are.
+                if (($a.Length -ne $b.Length) -or ([Convert]::ToBase64String($a) -cne [Convert]::ToBase64String($b))) {
+                    $differ += ("{0}\{1}" -f $m, $rel)
+                }
+            }
+    }
+
+    return [pscustomobject]@{
+        Differ  = @($differ)
+        Missing = @($missing)
+        Checked = $checked
+    }
+}
+
 $mirrors   = @()
 $mirrorRaw = ''
 $mirrorErr = ''
@@ -665,6 +721,27 @@ if ($mirrorErr -ne '') {
     } else {
         Note ("  no installed file has been deleted from source ({0} files across {1} mirrored directories: {2})" -f
               $del.Checked, $mirrors.Count, ($mirrors -join ' '))
+    }
+
+    # B3b: the bytes, for the same directories (see Find-InstalledContentDiffs for why).
+    $cd = Find-InstalledContentDiffs -SourceSys $srcSys -InstallSys $instSys -Mirrors $mirrors
+    if ($cd.Checked -eq 0) {
+        Bad ("the content check opened {0} director(ies) and found no files at all - it measured nothing" -f
+             $mirrors.Count)
+        $stale = $true
+    } elseif (($cd.Differ.Count + $cd.Missing.Count) -gt 0) {
+        Bad ("{0} mirrored file(s) differ from source and {1} are missing from the install:" -f
+             $cd.Differ.Count, $cd.Missing.Count)
+        @($cd.Differ + $cd.Missing) | Select-Object -First 10 | ForEach-Object { Write-Output ("       sdsys\" + $_) }
+        if (($cd.Differ.Count + $cd.Missing.Count) -gt 10) {
+            Write-Output ("       ... and {0} more" -f (($cd.Differ.Count + $cd.Missing.Count) - 10))
+        }
+        Write-Output '       (an edit made after the cycle staged its tree but before the install finished is older than the install,'
+        Write-Output '        so the time checks above cannot see it - run another cycle)'
+        $stale = $true
+    } else {
+        Note ("  every mirrored file is byte-identical to source ({0} files across {1} directories)" -f
+              $cd.Checked, $mirrors.Count)
     }
 }
 
