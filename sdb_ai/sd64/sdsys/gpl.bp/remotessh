@@ -141,7 +141,7 @@ $include err.h
       end
       if rc # 0 then
          @system.return.code = -ER$FAILED
-         crt sysmsg(10139, 'SHOW', rc)  ;* Could not read who may reach ssh
+         crt sysmsg(10139, 'show', rc)  ;* Could not read who may reach ssh
       end
       stop
    end
@@ -158,7 +158,7 @@ $include err.h
 
    if rc # 0 then
       @system.return.code = -ER$FAILED
-      stop sysmsg(10139, action, rc)  ;* Could not change who may reach ssh
+      stop sysmsg(10139, downcase(action), rc)  ;* Could not change who may reach ssh
    end
 
 *  6 Oct 26 Windows port - RELEASE_1.1 128: the change took effect, so it is

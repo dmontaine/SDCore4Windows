@@ -2,6 +2,18 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+08 Oct 26  SD'S OWN COMMANDS ARE LOWER CASE WHEN A MESSAGE QUOTES THEM.
+
+           The messages and usage lines that name one of SD's own commands or
+           the words it takes now write them in lower case: "restore.account
+           latest name", "backup.account all [to directory]", "create.account
+           user <user name> {ssh | api | both | none}", "modify.account
+           <account> suspended | unsuspended", "update.accounts all",
+           "set.backup.directory".  Nothing about what the commands accept
+           has changed; they never cared about case.  Messages that name a
+           language keyword (an IF without its END, say) are not part of this
+           change.  Made to match SD Core for Linux.
+
 08 Oct 26  DELETE.ACCOUNT TAKES A KEPT WINDOWS USER OUT OF SD'S GROUPS.
 
            When the Windows user behind an account was not made by SD (the

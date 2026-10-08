@@ -1,1 +1,1 @@
-%1 already exists, left by an earlier restore that did not finish. Remove it, then run RESTORE.ACCOUNT again.
+%1 already exists, left by an earlier restore that did not finish. Remove it, then run restore.account again.

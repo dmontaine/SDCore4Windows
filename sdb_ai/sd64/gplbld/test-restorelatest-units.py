@@ -279,7 +279,7 @@ check("ALL takes only zips made with all", "lat.ok = (lat.what = 'all')" in bloc
 check("it says which zip it chose (13048) and refuses when none (13047)",
       "sysmsg(13048" in block and "sysmsg(13047" in block)
 check("the unpack still checks the manifest (nothing changed by the name alone)", "13013" in src)
-check("message 13016 shows both LATEST forms", "RESTORE.ACCOUNT LATEST name" in m16 and "RESTORE.ACCOUNT LATEST ALL" in m16)
+check("message 13016 shows both LATEST forms", "restore.account latest name" in m16 and "restore.account latest all" in m16)
 check("message 13047 and 13048 exist with their placeholders", "%1" in m47 and "%2" in m47 and "%1" in m48)
 check("the bare-name branch is kept for everything but LATEST", "end else" in src and "if index(zip.path, '/', 1) = 0" in src)
 

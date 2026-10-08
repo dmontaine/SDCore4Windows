@@ -235,11 +235,11 @@ deffun ps_script(script) calling '!ps_script'
    * Get next token, account name
    call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
    if token.type = PARSER$END then
-      crt 'Command Syntax:  MODIFY.ACCOUNT <account> ADD | DELETE <username>'
-      crt '                  MODIFY.ACCOUNT <account> SSH | API | BOTH | NONE'
-      crt '                  MODIFY.ACCOUNT <account> SH-ON | SH-OFF'
-      crt '                  MODIFY.ACCOUNT <account> OS-ON | OS-OFF'
-      crt '                  MODIFY.ACCOUNT <account> SUSPENDED | UNSUSPENDED'
+      crt 'Command Syntax:  modify.account <account> add | delete <username>'
+      crt '                  modify.account <account> ssh | api | both | none'
+      crt '                  modify.account <account> sh-on | sh-off'
+      crt '                  modify.account <account> os-on | os-off'
+      crt '                  modify.account <account> suspended | unsuspended'
       stop
    end
    *
@@ -473,8 +473,8 @@ deffun ps_script(script) calling '!ps_script'
          
          
       end else
-         crt 'MODIFY.ACCOUNT Action Must Be ADD, DELETE, SSH, API, BOTH, NONE,'
-         crt '   SH-ON, SH-OFF, OS-ON, OS-OFF, SUSPENDED or UNSUSPENDED'
+         crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
+         crt '   sh-on, sh-off, os-on, os-off, suspended or unsuspended'
       end
       end       ;* not(route.done)
 

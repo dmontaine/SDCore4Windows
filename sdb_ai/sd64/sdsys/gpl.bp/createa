@@ -554,11 +554,11 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: CREATE.ACCOUNT USER <user name> {SSH | API | BOTH | NONE}'
-    crt '                  {NO.QUERY}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none}'
+    crt '                  {no.query}'
     crt '                  Omit the route and the account gets both ssh and the API.'
-    crt '                CREATE.ACCOUNT GROUP <group name> {NO.QUERY}'
-    crt '                CREATE.ACCOUNT OTHER <account name> <pathname> {NO.QUERY}'
+    crt '                create.account group <group name> {no.query}'
+    crt '                create.account other <account name> <pathname> {no.query}'
     @system.return.code = -ER$ARGS
     stop
    end case

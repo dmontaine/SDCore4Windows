@@ -1,1 +1,1 @@
-Syntax: BACKUP.ACCOUNT name [name ...] [TO directory]\n        BACKUP.ACCOUNT ALL [TO directory]\n        Without TO, the directory saved by SET.BACKUP.DIRECTORY is used.
+Syntax: backup.account name [name ...] [to directory]\n        backup.account all [to directory]\n        Without to, the directory saved by set.backup.directory is used.

@@ -1584,7 +1584,7 @@ vb.scram.first:
                * run MODIFY.PASSWORD again.  !CRED_VERIFY refuses it the same way.
                if scram.cred<CRED$VERSION> # SCRAM$CRED.VERSION then
                   scram.cred = ''
-                  scram.refuse.reason = 'credential is version 1 - run MODIFY.PASSWORD'
+                  scram.refuse.reason = 'credential is version 1 - run modify.password'
                   goto scram.bad.cred
                end
 

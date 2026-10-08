@@ -1,1 +1,1 @@
-The indices of %1 were at %2, outside the account, so they are not in the backup. Rebuild them with BUILD.INDEX.
+The indices of %1 were at %2, outside the account, so they are not in the backup. Rebuild them with build.index.

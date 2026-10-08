@@ -159,7 +159,7 @@ $include err.h
    gosub run.listener
    if rc # 0 then
       @system.return.code = -ER$FAILED
-      stop sysmsg(10133, action, rc)  ;* Could not change the API listener
+      stop sysmsg(10133, downcase(action), rc)  ;* Could not change the API listener
    end
 
 *  ---------------------------------------------------------------------------
@@ -239,7 +239,7 @@ report.state:
    gosub print.report
    if rc # 0 then
       @system.return.code = -ER$FAILED
-      crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API listener setting
+      crt sysmsg(10133, 'show', rc)  ;* Could not read the API listener setting
    end
 
 *  03 Sep 26 - AND WHO MAY REACH IT, PRE_RELEASE_FIXES 148.  The listener above
@@ -256,7 +256,7 @@ report.state:
    gosub print.report
    if rc # 0 then
       @system.return.code = -ER$FAILED
-      crt sysmsg(10133, 'SHOW', rc)  ;* Could not read the API firewall setting
+      crt sysmsg(10133, 'show', rc)  ;* Could not read the API firewall setting
    end
    return
 

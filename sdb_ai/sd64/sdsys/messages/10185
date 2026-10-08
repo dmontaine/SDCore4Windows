@@ -1,1 +1,1 @@
-File has indices, so convert it by hand with CONFIGURE.FILE NO.CASE: %1
+File has indices, so convert it by hand with configure.file no.case: %1
