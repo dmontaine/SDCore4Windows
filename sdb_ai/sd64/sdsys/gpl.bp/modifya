@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+*  7 Oct 26 Windows port - the route word of the ROUTE audit record is upper case
+*   (NONE|BOTH|SSH|API), as Linux's is; Linux, mail T1700, read from both audit files.
 *  6 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  SUSPENDED,
 *   UNSUSPENDED, a route change and an os.users change now write an audit record,
 *   as SD Core for Linux's do ('MODIFY.ACCOUNT SUSPEND|UNSUSPENDED account=',
@@ -577,10 +579,13 @@ route.set:
 *  6 Oct 26 Windows port - RELEASE_1.1 128.  THE ROUTE CHANGE IS AUDITED, with the
 *  same words SD Core for Linux uses.  Only a change that took effect gets here
 *  (a failure and "already had that access" returned above).
-   route.said = 'none'
-   if want.ssh and want.api then route.said = 'both'
-   if want.ssh and not(want.api) then route.said = 'ssh'
-   if want.api and not(want.ssh) then route.said = 'api'
+*  7 Oct 26 - UPPER CASE (Linux T1700, measured in both audit files): the same statement on both
+*  ports wrote NONE/BOTH/SSH/API there and none/both/ssh/api here.  route.said is used only by
+*  this audit record.
+   route.said = 'NONE'
+   if want.ssh and want.api then route.said = 'BOTH'
+   if want.ssh and not(want.api) then route.said = 'SSH'
+   if want.api and not(want.ssh) then route.said = 'API'
    void kernel(K$AUDIT, 'MODIFY.ACCOUNT ROUTE ' : route.said : ' account=' : acc.name)
    @system.return.code = 0
 
