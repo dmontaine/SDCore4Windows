@@ -201,9 +201,11 @@ else {
         try { $auditText = Get-Content -LiteralPath $audit -Raw } catch {
             Refuse "could not read $audit even elevated: $($_.Exception.Message)"
         }
-        $refusals = @([regex]::Matches($auditText, 'LOGTO REFUSED account=SDSYS[^\r\n]*'))
+        # 7 Oct 26 - THE AUDIT WORDS ARE LOWER CASE NOW ("logto refused ..."; owner's ruling, Linux T1830).  [regex]::Matches is
+        # case SENSITIVE, unlike -match, so (?i) accepts both spellings: a long-lived audit file holds old upper-case lines too.
+        $refusals = @([regex]::Matches($auditText, '(?i)LOGTO REFUSED account=SDSYS[^\r\n]*'))
         if ($refusals.Count -eq 0) {
-            Skip 'audit reason' 'no "LOGTO REFUSED account=SDSYS" line - unexpected, Step 1 just wrote one'
+            Skip 'audit reason' 'no "logto refused account=SDSYS" line - unexpected, Step 1 just wrote one'
         } else {
             $last = $refusals[$refusals.Count - 1].Value
             Write-Host ('   last SDSYS refusal in the audit: ' + $last)

@@ -432,12 +432,12 @@ void op_kernel() {
 
         result.data.value = -1;
         if (k_get_c_string(descr, both, sizeof(both) - 1) <= 0) {
-          audit_message("GROUP.MEMBER could not tell: no user and group given");
+          audit_message("group.member could not tell: no user and group given");
           break;
         }
         sep = strchr(both, FIELD_MARK);
         if (sep == NULL) {
-          audit_message("GROUP.MEMBER could not tell: no group given");
+          audit_message("group.member could not tell: no group given");
           break;
         }
         *sep = '\0';
@@ -447,7 +447,7 @@ void op_kernel() {
         } else {
           char note[640];
 
-          snprintf(note, sizeof(note), "GROUP.MEMBER could not tell: %s", why);
+          snprintf(note, sizeof(note), "group.member could not tell: %s", why);
           audit_message(note);
         }
       }

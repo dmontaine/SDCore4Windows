@@ -2808,7 +2808,7 @@ int.logto:
 *   sd.c and never reaches int.logto at all, so it is unaffected by this
 *   refusal.  Binding IT to the Windows SDSYS identity is the other half of 64.
       display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-      void kernel(K$AUDIT, 'LOGTO REFUSED account=SDSYS reason=SDSYS is not reachable by LOGTO')
+      void kernel(K$AUDIT, 'logto refused account=SDSYS reason=SDSYS is not reachable by LOGTO')
       unwinding = 2
       return
    end
@@ -2864,7 +2864,7 @@ int.logto:
 *   does not say whether the account exists, so that the register cannot be
 *   probed - but the TRAIL may say, and should: somebody working through account
 *   names is the pattern this exists to make visible.
-      void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not in the register')
+      void kernel(K$AUDIT, 'logto refused account=' : upcase(new.account) : ' reason=not in the register')
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2881,7 +2881,7 @@ int.logto:
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The account exists and
 *   the caller is not in its ACC$GROUP - a refused grant, which is the other
 *   half of "who used the access" and the one an investigation starts from.
-      void kernel(K$AUDIT, 'LOGTO REFUSED account=' : upcase(new.account) : ' reason=not granted')
+      void kernel(K$AUDIT, 'logto refused account=' : upcase(new.account) : ' reason=not granted')
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2951,7 +2951,7 @@ int.logto:
 
       if was.admin then
          void elevate('STOP', '')
-         void kernel(K$AUDIT, 'ELEVATION RELEASED account=' : new.account)
+         void kernel(K$AUDIT, 'elevation released account=' : new.account)
       end
    end
 
@@ -2961,7 +2961,9 @@ int.logto:
 *   rights it describes cannot disagree.  @logname is NOT used: it is reassigned
 *   further down when CPROC drops to sdsys (5.6), and audit_message() takes the
 *   identity from the user table instead.
-   void kernel(K$AUDIT, 'LOGTO account=' : new.account)
+*   7 Oct 26 - EVERY AUDIT WORD IS LOWER CASE here ('logto', 'logto refused', 'elevation released'):
+*   the owner's ruling of 7 Oct, "All lower case", event names included (Linux T1830).
+   void kernel(K$AUDIT, 'logto account=' : new.account)
 
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 

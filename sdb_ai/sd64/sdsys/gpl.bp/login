@@ -972,7 +972,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *     CPROC:2868 already says out loud: "written after the move has actually
 *     happened ... and after the administrator flag is set, so the record and
 *     the rights it describes cannot disagree."  PRE_RELEASE_FIXES.md 98.
-      void kernel(K$AUDIT, 'ELEVATION GRANTED account=SDSYS')
+      void kernel(K$AUDIT, 'elevation granted account=SDSYS')
 
 *     6 Oct 26 Windows port - A ONE-LINE BANNER SAYS SO (parity audit; SD Core for
 *     Linux shows one when sdsys is granted, its 10916, and asked for the same here).
@@ -1220,9 +1220,9 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   "LOGIN account=x" alone cannot distinguish a person signing in from a job
 *   that ran something.  It is empty for every interactive session.
    if batch.command = '' then
-      void kernel(K$AUDIT, 'LOGIN account=' : audit.account)
+      void kernel(K$AUDIT, 'login account=' : audit.account)
    end else
-      void kernel(K$AUDIT, 'LOGIN account=' : audit.account : ' command=' : batch.command)
+      void kernel(K$AUDIT, 'login account=' : audit.account : ' command=' : batch.command)
    end
 
    ok = @true
@@ -1232,7 +1232,7 @@ terminate.connection:
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  EVERY refused login
 *   leaves through here, so one record covers all of them and a refusal added
 *   later is recorded whether or not whoever adds it thinks about the trail.
-   void kernel(K$AUDIT, 'LOGIN REFUSED account=' : audit.account : ' reason=' : audit.reason)
+   void kernel(K$AUDIT, 'login refused account=' : audit.account : ' reason=' : audit.reason)
 
    display sysmsg(5024) ;* Connection terminated
    sleep 2
@@ -1376,7 +1376,7 @@ internal.gate:
 
    audit.account = initial.account
    if gate.ok then
-      void kernel(K$AUDIT, 'INTERNAL SESSION ADMITTED account=' : initial.account : ' writer=' : gate.writer : ' age=' : gate.age)
+      void kernel(K$AUDIT, 'internal session admitted account=' : initial.account : ' writer=' : gate.writer : ' age=' : gate.age)
 *     AND SAID ON THE SCREEN, so it lands in every transcript and installer log that captures this
 *     session (RELEASE_1.1 82 R4: a bypass must announce itself).  12000 is the FIRST message in the
 *     Windows block of the shared message space (12000-12999, agreed with the Linux agent 20 Sep

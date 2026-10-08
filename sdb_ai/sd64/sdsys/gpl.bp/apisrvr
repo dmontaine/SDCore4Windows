@@ -497,7 +497,7 @@ return.status.set: ;* Return to here if ST already set
    if scram.handoff then
       handoff.ready = kernel(K$HANDOFF, scram.user : @FM : 'P')
       if not(handoff.ready) then
-         void kernel(K$AUDIT, 'API HANDOVER FAILED user=' : scram.user : ' - the relay would not stand up the handover pipe; see syslog')
+         void kernel(K$AUDIT, 'api handover failed user=' : scram.user : ' - the relay would not stand up the handover pipe; see syslog')
       end
    end
 
@@ -526,7 +526,7 @@ return.status.set: ;* Return to here if ST already set
       if handoff.ready then
          handoff.ok = kernel(K$HANDOFF, scram.user)
          if not(handoff.ok) then
-            void kernel(K$AUDIT, 'API HANDOVER FAILED user=' : scram.user : ' - see syslog; the connection is closed')
+            void kernel(K$AUDIT, 'api handover failed user=' : scram.user : ' - see syslog; the connection is closed')
          end
       end
       done = @true
@@ -644,7 +644,7 @@ openpath @sdsys:@ds:'accounts' to acc.f then
 end
 
 if account.path = '' then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=1 no.path.in.register account=' : new.account)
+   void kernel(K$AUDIT, 'account refused branch=1 no.path.in.register account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -668,7 +668,7 @@ end
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
 *   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
 if upcase(trim(acc.suspended, ' ', 'B')) = 'SUSPENDED' then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=2 suspended account=' : new.account)
+   void kernel(K$AUDIT, 'account refused branch=2 suspended account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -755,7 +755,7 @@ end
 *   the program; vb.scram.final needs it too now.  See the note beside it.
 
 if acc.group = '' then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=3 no.group.in.register account=' : new.account)
+   void kernel(K$AUDIT, 'account refused branch=3 no.group.in.register account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -827,7 +827,7 @@ if new.account = 'SDSYS' then
    acc.member = local.session and (acc.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
    acc.told = 0
    if not(acc.member) then
-      void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 sdsys.not.local.elevated user=' : acc.who : ' local=' : local.session : ' account=' : new.account)
+      void kernel(K$AUDIT, 'account refused branch=4 sdsys.not.local.elevated user=' : acc.who : ' local=' : local.session : ' account=' : new.account)
    end
 end else
    acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
@@ -835,14 +835,14 @@ end else
 end
 
 if acc.told # 0 then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
+   void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
 end
 
 if not(acc.member) then
-   void kernel(K$AUDIT, 'ACCOUNT REFUSED branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
+   void kernel(K$AUDIT, 'account refused branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    goto revert.to.old.account
@@ -1431,7 +1431,7 @@ vb.local.login:
                call !acc_hold('TEST', hold.info, hold.err)
                if hold.err # '' then
                      server.error = SV$ON.ERROR
-                     void kernel(K$AUDIT, 'API REFUSED user=' : username : ' reason=a backup or restore is running (local login)')
+                     void kernel(K$AUDIT, 'api refused user=' : username : ' reason=a backup or restore is running (local login)')
                      abort.message = sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
                      goto exit.vb.local.login
                end
@@ -1949,7 +1949,7 @@ exit.vb.scram.fail:
                   * A client-final with no client-first never reached the name,
                   * so there is nothing to report rather than an empty field.
                   if scram.audit.name = '' then scram.audit.name = '(none)'
-                  void kernel(K$AUDIT, 'API REFUSED user=' : scram.audit.name : ' reason=' : scram.refuse.reason)
+                  void kernel(K$AUDIT, 'api refused user=' : scram.audit.name : ' reason=' : scram.refuse.reason)
                   scram.refuse.reason = ''
                end
 

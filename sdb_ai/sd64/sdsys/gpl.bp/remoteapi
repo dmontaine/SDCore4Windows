@@ -174,7 +174,7 @@ $include err.h
 
 *  6 Oct 26 Windows port - RELEASE_1.1 128.  BOTH HALVES TOOK EFFECT, so the change
 *  is audited, in the words SD Core for Linux uses.
-   void kernel(K$AUDIT, 'REMOTE.API ' : action)   ;* ON, LOCAL or OFF, upper case, as on Linux (mail T2358)
+   void kernel(K$AUDIT, 'remote.api ' : downcase(action))   ;* on, local or off, lower case (owner's rule 7 Oct; Linux T1730)
    @system.return.code = 0
 
    crt sysmsg(10132, action)  ;* The SD API is now %1

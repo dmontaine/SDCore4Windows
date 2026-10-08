@@ -2,6 +2,23 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+07 Oct 26  THE AUDIT TRAIL'S WORDS ARE LOWER CASE.
+
+           Every word the audit trail writes before the first "=" is now lower
+           case, the command and the event name alike: "login account=ann",
+           "login refused account=ann reason=...", "logto refused ...",
+           "create.account account=ANN type=user", "delete.account ...",
+           "modify.account suspend ...", "remote.api on", "api refused ...",
+           "account refused branch=2 ...", "elevation granted ...",
+           "internal session admitted ...".  What follows an "=" is not
+           changed: an account name keeps its case, and so do the text of a
+           reason and the command a person typed.  Made to match SD Core for
+           Linux.
+
+           Lines already in an audit file are not rewritten, so a file that
+           was started before this change holds both spellings.  Search it
+           without regard to case.
+
 07 Oct 26  A FEW MULTI-LINE MESSAGES, THE API AUDIT RECORDS AND SDSYS'S VOC.
 
            * The messages for CREATE.FILE ... CASE, CONFIGURE.FILE ... CASE, a
@@ -11,7 +28,7 @@ Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              character.
            * The audit trail's lines for an API login refused at the account
              (no such account, suspended, not allowed, SDSYS from a remote
-             session) now say which account: ACCOUNT REFUSED branch=2
+             session) now say which account: account refused branch=2
              suspended account=ANN.  Before, they named the user but not the
              account.
            * SDSYS's own VOC now has the keyword that tests a soundex code (~),

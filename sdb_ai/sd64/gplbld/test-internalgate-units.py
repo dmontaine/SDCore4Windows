@@ -141,7 +141,7 @@ def gate_problems(login_text):
     for reason in ("no internal marker", "the internal marker had expired"):
         if ("audit.reason = '" + reason + "'") not in body:
             p.append("no audit reason: " + reason)
-    if "'INTERNAL SESSION ADMITTED account='" not in body:
+    if "'internal session admitted account='" not in body:
         p.append("an admission is not written to the audit trail")
     if "gate.writer[1, 80]" not in body:
         p.append("the writer text is not capped (the file is writable by more than the installer)")
@@ -336,7 +336,7 @@ row("encoding='ascii'" in bootstrap and "pid=%d" in bootstrap, "the Python write
 row("pid={1}" in marker_ps1, "the PowerShell writer writes 'pid='")
 row(("messages" + chr(92) + "12000") in witness and "ANNOUNCED" in witness,
     "the witness reads message 12000 from the install and scores the announcement (R4)")
-for phrase in ("no internal marker", "the internal marker had expired", "INTERNAL SESSION ADMITTED account=SDSYS"):
+for phrase in ("no internal marker", "the internal marker had expired", "internal session admitted account=SDSYS"):
     row(phrase in witness, "the witness (verify-internalgate.ps1) asserts the exact audit wording: " + phrase)
 code_only = "\n".join(ln for ln in witness.splitlines() if not ln.lstrip().startswith("#"))
 row(("messages" + chr(92) + "5024") in code_only and "$termText" in code_only and "Connection terminated" not in code_only,

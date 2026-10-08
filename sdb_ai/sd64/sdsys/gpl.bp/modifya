@@ -19,8 +19,11 @@
 * 
 *
 * START-HISTORY:
-*  7 Oct 26 Windows port - the route word of the ROUTE audit record is upper case
-*   (NONE|BOTH|SSH|API), as Linux's is; Linux, mail T1700, read from both audit files.
+*  7 Oct 26 Windows port - COMMAND WORDS LOWER CASE in every audit record this program
+*   writes ('modify.account add|delete|suspend|unsuspended|route|os.users ...'), on the owner's
+*   rule of 7 Oct ("all command words ought to be lower case"; Linux, mail T1730).  This
+*   supersedes the upper-case verb words of the 6 Oct entry below.  Data is unchanged: the
+*   account name keeps this port's case.
 *  6 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  SUSPENDED,
 *   UNSUSPENDED, a route change and an os.users change now write an audit record,
 *   as SD Core for Linux's do ('MODIFY.ACCOUNT SUSPEND|UNSUSPENDED account=',
@@ -430,7 +433,7 @@ deffun ps_script(script) calling '!ps_script'
 * the text because the two routes are otherwise indistinguishable in the audit
 * file.  The identity is stamped by audit_message() in k_error.c and is not
 * passed from here, so a caller cannot forge it.  PRE_RELEASE_FIXES.md 27.
-                     void kernel(K$AUDIT, 'MODIFY.ACCOUNT ADD account=' : acc.name : ' to=' : user.name)
+                     void kernel(K$AUDIT, 'modify.account add account=' : acc.name : ' to=' : user.name)
                      crt sysmsg(10018,user.name,group.name)  ;* %1 added to group %2
                   end else
                      crt sysmsg(10019,user.name,group.name,stat) ;* Unable to add user %1 to group %s status: %2
@@ -456,7 +459,7 @@ deffun ps_script(script) calling '!ps_script'
                   if stat = 0 then
 * 28 Aug 26 Windows port - and the DELETE arm, for the reason given at the ADD
 * one above.  GRANTA:233 is the model.  PRE_RELEASE_FIXES.md 27.
-                     void kernel(K$AUDIT, 'MODIFY.ACCOUNT DELETE account=' : acc.name : ' from=' : user.name)
+                     void kernel(K$AUDIT, 'modify.account delete account=' : acc.name : ' from=' : user.name)
                      crt sysmsg(10021,user.name,group.name) ;*  %1 removed from group %2
                   end else
                      crt sysmsg(10022,user.name,group.name,stat) ;* Unable to remove user %1 from group %s status: %2
@@ -579,14 +582,11 @@ route.set:
 *  6 Oct 26 Windows port - RELEASE_1.1 128.  THE ROUTE CHANGE IS AUDITED, with the
 *  same words SD Core for Linux uses.  Only a change that took effect gets here
 *  (a failure and "already had that access" returned above).
-*  7 Oct 26 - UPPER CASE (Linux T1700, measured in both audit files): the same statement on both
-*  ports wrote NONE/BOTH/SSH/API there and none/both/ssh/api here.  route.said is used only by
-*  this audit record.
-   route.said = 'NONE'
-   if want.ssh and want.api then route.said = 'BOTH'
-   if want.ssh and not(want.api) then route.said = 'SSH'
-   if want.api and not(want.ssh) then route.said = 'API'
-   void kernel(K$AUDIT, 'MODIFY.ACCOUNT ROUTE ' : route.said : ' account=' : acc.name)
+   route.said = 'none'
+   if want.ssh and want.api then route.said = 'both'
+   if want.ssh and not(want.api) then route.said = 'ssh'
+   if want.api and not(want.ssh) then route.said = 'api'
+   void kernel(K$AUDIT, 'modify.account route ' : route.said : ' account=' : acc.name)
    @system.return.code = 0
 
    gosub say.access
@@ -775,7 +775,7 @@ os.set:
 
 *  6 Oct 26 Windows port - RELEASE_1.1 128: an os.users change is audited.  Linux
 *  has no os.users list, so these words are this port's own.
-   void kernel(K$AUDIT, 'MODIFY.ACCOUNT OS.USERS account=' : acc.name : ' sh=' : osu.sh : ' os.execute=' : osu.ex)
+   void kernel(K$AUDIT, 'modify.account os.users account=' : acc.name : ' sh=' : osu.sh : ' os.execute=' : osu.ex)
    @system.return.code = 0
 
    crt sysmsg(10102, acc.user, osu.sh, osu.ex) ;* os.users: %1 has SH %2, OS.EXECUTE %3
@@ -847,9 +847,9 @@ tier.set:
 *  same words SD Core for Linux uses ('suspend' for the verb SUSPENDED).
    @system.return.code = 0
    if want.tier = 'SUSPENDED' then
-      void kernel(K$AUDIT, 'MODIFY.ACCOUNT SUSPEND account=' : acc.name)
+      void kernel(K$AUDIT, 'modify.account suspend account=' : acc.name)
    end else
-      void kernel(K$AUDIT, 'MODIFY.ACCOUNT UNSUSPENDED account=' : acc.name)
+      void kernel(K$AUDIT, 'modify.account unsuspended account=' : acc.name)
    end
 
    crt sysmsg(10109, acc.name, want.tier) ;* Account %1 is now %2

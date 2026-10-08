@@ -175,8 +175,8 @@ try {
     Row 'A: the session finished (a refusal is not a hang)' $a.Done
     Row 'A: WHO was NOT answered - no session was opened' ($a.Text -notmatch $whoRx) $a.Text
     Row ("A: the refusal text SD prints was shown ('" + $termText + "')") ($a.Text -match [regex]::Escape($termText)) $a.Text
-    Row 'A: the audit trail names the reason: no internal marker' (($null -ne $ad) -and ($ad -match 'LOGIN REFUSED account=SDSYS reason=no internal marker')) "delta: $ad"
-    Row 'A: and no admission was recorded' (($null -ne $ad) -and ($ad -notmatch 'INTERNAL SESSION ADMITTED')) "delta: $ad"
+    Row 'A: the audit trail names the reason: no internal marker' (($null -ne $ad) -and ($ad -match 'login refused account=SDSYS reason=no internal marker')) "delta: $ad"
+    Row 'A: and no admission was recorded' (($null -ne $ad) -and ($ad -notmatch 'internal session admitted')) "delta: $ad"
     Row 'A: and the admission announcement (message 12000) was NOT shown' ($a.Text -notmatch $annRx) $a.Text
 
     # ---- B. a fresh marker: the CONTROL -------------------------------------
@@ -193,7 +193,7 @@ try {
     # R4 - THE ANNOUNCEMENT, anchored on the success wording: the message's own text, then THIS writer's name.
     Row 'B: the admission was ANNOUNCED on the screen (message 12000, then the writer)' ($b.Text -match ($annRx + '\s*verify-internalgate')) $b.Text
     Row 'B: the marker was CONSUMED (LOGIN deletes it on admission)' (-not (Test-Path -LiteralPath $marker))
-    Row 'B: the audit says who wrote it and how old it was' (($null -ne $ad) -and ($ad -match 'INTERNAL SESSION ADMITTED account=SDSYS writer=verify-internalgate pid=\d+ .* age=-?\d+')) "delta: $ad"
+    Row 'B: the audit says who wrote it and how old it was' (($null -ne $ad) -and ($ad -match 'internal session admitted account=SDSYS writer=verify-internalgate pid=\d+ .* age=-?\d+')) "delta: $ad"
 
     # ---- C. single use -------------------------------------------------------
     Write-Output ''
