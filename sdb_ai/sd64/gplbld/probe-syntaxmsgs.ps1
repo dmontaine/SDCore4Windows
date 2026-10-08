@@ -10,7 +10,11 @@
 #   RESTORE.ACCOUNT                -> message 13016 (no archive given)
 #   CREATE.ACCOUNT                 -> createa's "Command Syntax:" block
 #   MODIFY.ACCOUNT                 -> modifya's "Command Syntax:" block (no account named)
-#   MODIFY.ACCOUNT SDSYS ZZBADWORD -> modifya's "Action Must Be ..." line (SDSYS is named, nothing is changed)
+#   MODIFY.ACCOUNT <you> ZZBADWORD -> modifya's "Action Must Be ..." line.  <you> is the account of whoever runs
+#                                     this (the installer made one for the administrator who installed SD); an
+#                                     unknown action word changes nothing.  NOT SDSYS: modifya refuses SDSYS
+#                                     before it parses the action (RELEASE_1.1 101, message 12001) - the first
+#                                     run of this probe, 8 Oct 15:23, named SDSYS and saw exactly that.
 #
 # THE JUDGEMENT is CASE-SENSITIVE on purpose: each expected line must exist in lower case, and no printed
 # line may still show the old capitals.  The echo of what was typed starts with ':' and is not judged.
@@ -73,7 +77,7 @@ try {
     Step 'restore' 'RESTORE.ACCOUNT'
     Step 'create' 'CREATE.ACCOUNT'
     Step 'modify' 'MODIFY.ACCOUNT'
-    Step 'modifybad' 'MODIFY.ACCOUNT SDSYS ZZBADWORD'
+    Step 'modifybad' ('MODIFY.ACCOUNT ' + $env:USERNAME + ' ZZBADWORD')
 
     Write-Output ''
     Write-Output '=== judging (case-sensitive; echoed commands start with ":" and are skipped)'
