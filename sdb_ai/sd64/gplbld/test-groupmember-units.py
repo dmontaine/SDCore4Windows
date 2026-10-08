@@ -92,6 +92,11 @@ READS_STATUS = {
         "would restore the account with its access silently taken away",
     ("acc_os_info", "m = is_grp_member(uname, 'sdapi')"):
         "backup manifest route.api: same as route.ssh",
+    # 08 Oct 26 - RELEASE_1.1 130 (Linux T1420 item 1): DELETE.ACCOUNT's strip of a KEPT Windows user.
+    ("delacc", "strip.member = is_grp_member(strip.user, strip.group)"):
+        "kept-user strip (sdssh, sdapi, sdusers): strip.told = status() on the next line; a "
+        "could-not-tell is REPORTED with 10022 rather than skipped, because a skipped strip "
+        "leaves a remote route in place without a word",
 }
 FAIL_CLOSED = {
     ("apisrvr", "if not(is_grp_member(scram.user, 'sdapi')) then"):

@@ -2,6 +2,17 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+08 Oct 26  DELETE.ACCOUNT TAKES A KEPT WINDOWS USER OUT OF SD'S GROUPS.
+
+           When the Windows user behind an account was not made by SD (the
+           person who installed SD, or any user an SD account was named
+           after), DELETE.ACCOUNT leaves that user in place and says so.  It
+           now also removes the user from sdssh, sdapi and sdusers, so a user
+           whose SD account is gone no longer keeps a way in over ssh or the
+           API, and a later SD account of the same name does not inherit one.
+           Each removal prints "<user> removed from group <group>".  Made to
+           match SD Core for Linux.
+
 07 Oct 26  THE AUDIT TRAIL'S WORDS ARE LOWER CASE.
 
            Every word the audit trail writes before the first "=" is now lower

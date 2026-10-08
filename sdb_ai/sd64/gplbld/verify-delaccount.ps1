@@ -441,6 +441,15 @@ function Get-Description($name) {
     return '<no such account>'
 }
 
+# 8 Oct 26 - RELEASE_1.1 130.  Is this Windows user a member of this local group?  Returns a
+# boolean and prints nothing (a function that prints AND returns folds its lines into the
+# return value).  Names come back as MACHINE\name, so the match is on the tail.
+function Test-InGroup([string]$group, [string]$name) {
+    $m = @(Get-LocalGroupMember -Group $group -ErrorAction SilentlyContinue |
+           Where-Object { $_.Name -like ('*\' + $name) })
+    return ($m.Count -gt 0)
+}
+
 # 30 Aug 26 - the os.users record for a person, or $null.  PRE_RELEASE_FIXES.md
 # 65.
 #
@@ -872,6 +881,13 @@ try {
     Set-LocalUser -Name $borrowAcc -Description 'made by hand, not by SD' -ErrorAction Stop
     Note 'now marked as an account SD did not make' $false ((Get-Description $borrowAcc) -ceq 'SD account')
 
+    # 8 Oct 26 - RELEASE_1.1 130 (Linux T1420 item 1).  THE NULL CASE FOR THE STRIP BELOW: the
+    # three memberships must EXIST before the delete, or "gone after" proves nothing.
+    # CREATE.ACCOUNT ... BOTH puts a user in sdssh and sdapi, and every user it makes in sdusers.
+    foreach ($g in 'sdssh', 'sdapi', 'sdusers') {
+        Note ("CONTROL: before the delete the borrowed account IS in $g") $true (Test-InGroup $g $borrowAcc)
+    }
+
     # ENABLED, WITH A KNOWN PASSWORD, and now for free: SET_PASSWD calls
     # Enable-LocalUser, so both subjects reach the profile step in the SAME STATE
     # and a CreateProfile failure cannot be the account being disabled.
@@ -906,6 +922,15 @@ try {
     # THE DECISIVE ONE.
     Note 'the borrowed Windows account is STILL THERE' $true  ([bool](Get-LocalUser -Name $borrowAcc -ErrorAction SilentlyContinue))
     Note 'its description is untouched'                $true  ((Get-Description $borrowAcc) -ceq 'made by hand, not by SD')
+
+    # 8 Oct 26 - RELEASE_1.1 130.  THE USER STAYS; ITS SD MEMBERSHIPS DO NOT (Linux's strip, T1420
+    # item 1).  Anchored on the success wording of 10021 ("<user> removed from group <group>") and
+    # disqualified by 10022's wording; the group tests read the machine, not the message.
+    foreach ($g in 'sdssh', 'sdapi', 'sdusers') {
+        Note ("130: the borrowed account is NO LONGER in $g")       $false (Test-InGroup $g $borrowAcc)
+        Note ("130: message 10021 shown for $g (removed from group)") $true  (Shown $out 10021 @($borrowAcc, $g))
+    }
+    Note '130: message 10022 NOT shown (a removal failed)' $false ([bool]($out -match 'Unable to remove user'))
 
     if ($bProf -eq '') {
         Skip 'the borrowed profile survived'  'no profile was made - see step 4'

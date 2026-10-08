@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+*  8 Oct 26 Windows port - RELEASE_1.1 130 (Linux T1420 item 1, owner's parity ruling
+*            8 Oct: Linux is the template): a Windows user SD did not create is KEPT, as
+*            before, but loses sdssh, sdapi and sdusers - Linux's PRE_RELEASE 28 / S.29.
 *  6 Oct 26 Windows port - REMOVE.HOME is accepted (parity audit J-1): the keyword
 *            SD Core for Linux uses to remove the OS user's home directory.  The
 *            profile is removed by default here, so it changes nothing.
@@ -100,6 +103,7 @@ deffun is_group(group) calling '!is_group'
 deffun os_group(action,group,member) calling '!os_group'
 deffun delete_user(username) calling '!delete_user'
 deffun valid_os_name(name) calling '!valid_os_name'
+deffun is_grp_member(user,group) calling '!is_grp_member'
 * 14 Aug 26 Windows port - did SD create the OS account behind this account?
 deffun is_sd_user(username) calling '!is_sd_user'
    prompt ''
@@ -542,6 +546,21 @@ deffun is_sd_user(username) calling '!is_sd_user'
                * did not promise to remove it either: del.user is empty in
                * exactly this case, so the shorter wording was used.
                crt sysmsg(10036,os.user) ;* %1 was not created by SD
+* 8 Oct 26 Windows port - RELEASE_1.1 130.  THE USER STAYS; ITS SD MEMBERSHIPS DO NOT.
+*   Linux T1420 item 1, and the owner's ruling of 8 Oct that Linux is the template
+*   unless an OS reason says otherwise.  Linux's PRE_RELEASE 28 / S.29: only this branch
+*   needs it - a user SD created is deleted whole and its groups go with it, and
+*   lookup.stat # 0 has no user.  sdssh is sshd's AllowGroups and sdapi is tested by
+*   APISRVR, so what a kept user used to be left with was a route that outlived the SD
+*   account, and CREATE.ACCOUNT only ever ADDS to those groups, so a later account of
+*   the same name would have inherited it.  sdsshonly needs nothing: an attached or
+*   administrator account is never put in it (create_account, the "attach or is_grp_member ... S-1-5-32-544" test above its sdsshonly ADDMEM).
+*   THE ORDER IS LINUX'S: sdssh and sdapi are routes, so an interrupted strip must
+*   leave the kept user with fewer ways in, never more; sdusers LAST.
+               strip.user = os.user
+               strip.group = 'sdssh'   ; gosub strip.membership
+               strip.group = 'sdapi'   ; gosub strip.membership
+               strip.group = 'sdusers' ; gosub strip.membership
          end case
       end
       * --------------------
@@ -602,6 +621,35 @@ drop.os.access:
    openpath @sdsys : @ds : 'os.users' to osu.f then
       delete osu.f, os.user on error null
       close osu.f
+   end
+   return
+
+* ======================================================================
+* strip.membership - remove strip.user from strip.group, if it is a member.
+* 8 Oct 26 - RELEASE_1.1 130.  The same shape as MODIFYA's group DELETE arm and Linux's
+* strip.membership: a guard on is_grp_member so a non-member is a no-op and not an
+* error, then os_group DELMEM, reported with 10021 on success and 10022 on failure.
+
+strip.membership:
+   if strip.user = '' then return
+*  is_grp_member answers THREE ways (RELEASE_1.1 55): it returns @false for a real "no" AND for
+*  "could not tell", and sets status() 1 only for the second.  A strip that skipped on the
+*  second would leave a route in place without a word, so it is read and reported.
+   strip.member = is_grp_member(strip.user, strip.group)
+   strip.told = status()
+   if not(strip.member) then
+      if strip.told # 0 then crt sysmsg(10022, strip.user, strip.group, strip.told) ;* could not tell: it may still be a member
+      return
+   end
+   if not(valid_os_name(strip.user)) then
+      crt sysmsg(10022, strip.user, strip.group, 2) ;* Unable to remove user %1 from group %s status: %2
+      return
+   end
+   stat = os_group('DELMEM', strip.group, strip.user)
+   if stat = 0 then
+      crt sysmsg(10021, strip.user, strip.group) ;* %1 removed from group %2
+   end else
+      crt sysmsg(10022, strip.user, strip.group, stat)
    end
    return
 
