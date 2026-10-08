@@ -370,7 +370,7 @@ $include createacc.h
 *   so this program stays byte-identical to the Windows copy).
          zip.leaf = change(zip.path, '\', @ds)
          zip.leaf = field(zip.leaf, @ds, dcount(zip.leaf, @ds))
-         void kernel(K$AUDIT, 'restore.account account=' : acc.name : ' archive=' : zip.leaf)
+         void kernel(K$AUDIT, 'RESTORE.ACCOUNT account=' : acc.name : ' archive=' : zip.leaf)
       end else
          failed += 1
          display sysmsg(13037, acc.name) ;* was not restored

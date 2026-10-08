@@ -163,7 +163,7 @@ $include err.h
 
 *  6 Oct 26 Windows port - RELEASE_1.1 128: the change took effect, so it is
 *  audited, in the words SD Core for Linux uses.
-   void kernel(K$AUDIT, 'remote.ssh ' : downcase(action))   ;* on or off, lower case (owner's rule 7 Oct; Linux T1730)
+   void kernel(K$AUDIT, 'REMOTE.SSH ' : action)   ;* ON or OFF, upper case, as on Linux (mail T2358)
    @system.return.code = 0
 
    crt sysmsg(10138, action)  ;* Remote ssh access is now %1

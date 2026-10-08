@@ -581,9 +581,7 @@ deffun ps_script(script) calling '!ps_script'
 *  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3.  Audited only after
 *  !create_account reported no error, so only an account that was made is
 *  recorded; the words are SD Core for Linux's, agreed by mail 6 Oct.
-*  7 Oct 26 - COMMAND WORDS LOWER CASE (owner's rule 7 Oct, "all command words ought to be lower
-*  case"; Linux T1730): the verb and the type word; the account name keeps this port's own case.
-   void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type))
+   void kernel(K$AUDIT, 'CREATE.ACCOUNT account=' : upcase(acc.name) : ' type=' : upcase(acc.type))
 
    @system.return.code = 0
    stop

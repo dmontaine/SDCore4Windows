@@ -570,8 +570,7 @@ deffun is_sd_user(username) calling '!is_sd_user'
 *  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3.  Audited AFTER the
 *  register delete, so only a deletion that completed is recorded; the words are
 *  SD Core for Linux's, agreed by mail 6 Oct.
-*  7 Oct 26 - the verb is lower case (owner's rule 7 Oct; Linux T1730).
-   void kernel(K$AUDIT, 'delete.account account=' : acc.name)
+   void kernel(K$AUDIT, 'DELETE.ACCOUNT account=' : acc.name)
 
    @system.return.code = 0
    return
