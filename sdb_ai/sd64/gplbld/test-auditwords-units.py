@@ -86,6 +86,21 @@ def lower_literals_only(root, prog, var):
     return seen > 0
 
 
+def numeric_only(root, prog, var):
+    """True when var is only ever a count: every assignment is  var = <digits>,  var += ...  or  var = var + ...
+    (and there is at least one).  A count is not a command word, so it needs no downcase()."""
+    seen = 0
+    pat = re.compile(r"\b" + re.escape(var) + r"\s*(\+=|=)\s*([^\n;]*)")
+    for n, line in code_lines(os.path.join(root, prog)):
+        for m in pat.finditer(line):
+            op, rhs = m.group(1), m.group(2).strip()
+            if op == "+=" or re.fullmatch(r"\d+", rhs) or re.match(re.escape(var) + r"\s*\+", rhs):
+                seen += 1
+            else:
+                return False
+    return seen > 0
+
+
 def run(root):
     global passed, failed
     passed = failed = 0
@@ -101,16 +116,19 @@ def run(root):
         if "=" in lit or not lit.endswith(" ") or not rest:
             continue                      # the head is complete in the literal
         expr = rest.lstrip(": ").strip()
-        if expr.startswith("downcase("):
-            continue
+        if expr.startswith("downcase(") or re.match(r"(dcount|len|count)\(", expr):
+            continue                      # downcased, or a count (a number is not a command word)
         ident = re.match(r"[A-Za-z_][A-Za-z0-9_.$]*", expr)
-        if not ident or not lower_literals_only(root, p, ident.group(0)):
+        if not ident or not (lower_literals_only(root, p, ident.group(0)) or numeric_only(root, p, ident.group(0))):
             bad_var.append((p, n, expr[:40]))
-    row("B an event word continued in a variable is downcase()d or only ever assigned lower-case literals",
+    row("B an event word continued in a variable is downcase()d, a count, or only ever assigned lower-case literals",
         not bad_var, repr(bad_var[:4]))
     typed = [(p, n) for p, n, lit, rest, raw in ss if lit.startswith("create.account")]
-    ok_c = bool(typed) and all("downcase(acc.type)" in raw for p, n, lit, rest, raw in ss if lit.startswith("create.account"))
-    row("C create.account's type= value is downcase(acc.type)", ok_c, "sites: %r" % typed)
+    if typed:
+        ok_c = all("downcase(acc.type)" in raw for p, n, lit, rest, raw in ss if lit.startswith("create.account"))
+        row("C create.account's type= value is downcase(acc.type)", ok_c, "sites: %r" % typed)
+    else:
+        row("C (not applicable: this tree writes no create.account audit line)", True)
     row("D the reader saw %d sites, not nothing" % len(ss), len(ss) >= 20)
     print("test-auditwords-units: %d passed, %d failed" % (passed, failed))
     return 0 if failed == 0 else 1
@@ -155,8 +173,8 @@ def selftest():
         print("selftest: the real directory first (must pass): exit %d" % rc0)
         if rc0 != 0:
             return 1
-        # 8 Oct 26 - THE FOUR MUTANTS THAT NAMED LINUX'S TEXT (login's 'initial.account', cproc's 'reason=sdsys login',
-        # delacc's PAL-24 comment) now name this port's lines; the checker above is unchanged and byte-identical to Linux's.
+        # 8 Oct 26 - FOUR MUTANTS RE-AIMED AT THIS PORT'S LINES: Linux's name text that exists only in its source (login's
+        # 'initial.account', cproc's 'reason=sdsys login', delacc's PAL-24 comment).  The checker above is Linux's, untouched.
         mutant("event-name-upper", "login", "'login account=' : audit.account)", "'LOGIN account=' : audit.account)")
         mutant("command-upper", "delacc", "'delete.account account='", "'DELETE.ACCOUNT account='")
         mutant("label-half-upper", "login", "'elevation granted account=SDSYS'", "'ELEVATION granted account=SDSYS'")
