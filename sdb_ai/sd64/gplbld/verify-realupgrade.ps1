@@ -208,7 +208,12 @@ function Get-Probe {
     }
 }
 function Remove-Fixture {
-    $null = Invoke-Bounded @("DELETE.FILE $fixture FORCE") $false
+    # INTERNAL, like the plant and the probe: the fixture is in SDSYS, and an ordinary session is the running
+    # user's own account, which cannot see it (9 Oct 2026: the first -Compare in a VM left zzruclean behind
+    # and said nothing about why, because the output was discarded).  The output is printed now.
+    $del = Invoke-Bounded @("DELETE.FILE $fixture FORCE") $true
+    Write-Output '    DELETE.FILE said:'
+    foreach ($l in ($del -split "`r?`n")) { if ($l.Trim()) { Write-Output ('    | ' + $l) } }
     foreach ($f in @($probeSrc, $probeObj)) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
 }
 
@@ -219,7 +224,13 @@ Write-Output ("  snapshot : " + $snapFile)
 
 # ---------------------------------------------------------------------------
 if ($Prepare) {
-    $shipped = 'C:\Users\Don\SDCoreProject\SD-Untracked\realupgrade\sd-setup-W1.0-0-SHIPPED.exe'
+    # Where the shipped installer may be: the old host path, then the VM clones' w100 share (9 Oct 2026: the
+    # guest has no C:\Users\Don\SDCoreProject, so the first run stopped here).  The SHA-256 prefix below is
+    # what proves it is the right file wherever it was found.
+    $shippedCandidates = @('C:\Users\Don\SDCoreProject\SD-Untracked\realupgrade\sd-setup-W1.0-0-SHIPPED.exe',
+                           '\\vboxsvr\w100\sd-setup-W1.0-0.exe')
+    $shipped = @($shippedCandidates | Where-Object { Test-Path -LiteralPath $_ })[0]
+    if (-not $shipped) { $shipped = $shippedCandidates[0] }
     $shippedShaPrefix = 'B7D37FB6'      # PROJECT_STATUS.md handoff 73: byte-identical to SDCore-W1.0-0.zip's installer
     $exit = 2
     try {
