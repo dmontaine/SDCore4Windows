@@ -27,16 +27,18 @@
 #   refused again once it is removed          and nothing else was admitting it
 #   refused WITH AN ARGUMENT though listed    section 8's no-arguments rule
 #   refused when the VOC record is not PA/S   the type test
-#   RUNS ELEVATED IN SDSYS with no entry      elevation still passes on its own
-#
-# 29 Aug 26 - THE LAST ROW IS ASKED OF SDSYS, NOT OF THE ACCOUNT, and the change
-# is the owner's ruling on PRE_RELEASE 59.  It used to Push-Location into the
-# account and run sd elevated; b65 measured that FAILING, because under the
-# ruled access model an elevated session cannot stand in an ordinary account at
-# all - it lands in SDSYS, and a LOGTO out of SDSYS gives up the flag.  The
-# state that row measured stopped existing; the rule it protects did not.  The
-# elevated half's own comment carries the full reasoning.
 #   an ordinary token cannot write the list   the ACL, which is the control
+#
+# 8 Oct 26 - RELEASE_1.1 129.  THE ROW "RUNS ELEVATED IN SDSYS WITH NO ENTRY" IS GONE FROM THIS FILE.
+# On 29 Aug it was re-aimed at SDSYS (PRE_RELEASE 59: an elevated session cannot stand in an ordinary
+# account, it lands in SDSYS).  On 18 Sep RELEASE_1.1 64 made the elevated helper land in the
+# INSTALLING USER's account instead, so the planter's "BASIC bp ZZBATCHS" answered "Cannot read source
+# record" and every full run since printed "the SDSYS row COULD NOT BE MEASURED" - SDSYS's batch door had
+# no witness for three weeks.  The only caller LOGIN's bypass (login:1208, K$ADMINISTRATOR) is true for
+# is the OS SDSYS account itself, so that door is now measured by verify-sdsysbatch.ps1, an
+# elevated-half step that runs "sd.exe <word>" AS SDSYS through the seat (sdsys-seat.ps1, -CommandWord).
+# This file keeps the account's half: the default refuses, the list admits, an argument and a wrong
+# type are refused, the ACL holds, and the record is gone again afterwards.
 #
 # THE PARAGRAPH RUNS "COUNT VOC", chosen because its output - "N record(s)
 # counted" - cannot be confused with a login banner, a refusal or an empty
@@ -73,11 +75,7 @@ $listDir = Join-Path $sdsys 'batch.jobs'
 
 $paName = 'zzbatchpa'      # a paragraph: allowed once listed
 $fpName = 'zzbatchfp'      # a file pointer: listed, but the wrong VOC type
-# 29 Aug 26 - the same paragraph again, in SDSYS's own VOC, for the elevated
-# row.  It needs a name of its own: the account probes are in the ACCOUNT's VOC
-# and an elevated session never sees them, which is the whole reason that row
-# was re-aimed.  PRE_RELEASE 59.
-$sysPa  = 'zzbatchsyspa'   # the same paragraph, in SDSYS, for the elevated row
+# (The SDSYS paragraph that used to be named here moved to verify-sdsysbatch.ps1, RELEASE_1.1 129.)
 
 # ---------------------------------------------------------------- elevated half
 #
@@ -101,135 +99,14 @@ if ($Phase -ne '') {
             }
             'cleanup' {
                 if (Test-Path -LiteralPath $rec) { Remove-Item -LiteralPath $rec -Force }
-
-                # WHILE STILL ELEVATED, and this is a measurement the ordinary
-                # half CANNOT make: with the record now gone, an elevated
-                # session must still run the command.  That is the owner's
-                # decision of 22 Aug - elevation passes on its own - and it is
-                # the row that proves this change did not tighten the
-                # administrator path while loosening the other.
-                # 23 Aug 26 - "$null |" IS LOAD-BEARING, NOT TIDINESS.
-                #
-                # This child was launched by Start-Process -Verb RunAs, so it HAS
-                # A CONSOLE, and a bare "& $sdExe" hands that console straight to
-                # the child as stdin.  LOGIN:639 then sees kernel(K$TTY,0) # ''
-                # - ttyname(fileno(stdin)), kernel.c:250 - decides somebody is
-                # there to type, and asks an account with no credential to set a
-                # password.  Nobody is there, so it BLOCKS FOR EVER and the whole
-                # suite stops on this line.
-                #
-                # That is not hypothetical: it is the fault the forty-fourth
-                # session handed over as "elevated sd hangs during start-up", and
-                # it costs an elevation to clear because an ordinary token cannot
-                # kill an SD console session.  A -Silent install leaves every
-                # account without a credential (sd.iss:1276), so this is the
-                # NORMAL state after a cycle, not an unlucky one.
-                #
-                # MEASURED in a real elevated console, 23 Aug 2026: bare call
-                # gives the child a TTY, "$null |" gives NOTTY, and this command
-                # then returns in 0.3s with "ZZNOSUCHVERB is not in your VOC"
-                # instead of a password prompt.  Start-Job would do it too - that
-                # is why Invoke-SdCommand above never hit this - but a pipe keeps
-                # the measurement in this process, where the elevated token is.
-                #
-                # IT DOES NOT WEAKEN THE ROW.  What is being measured is whether
-                # an elevated session may still RUN the command; the credential
-                # prompt is a different subject and does not belong in the way.
-                #
-                # ------------------------------------------------------------
-                # 29 Aug 26 - RE-AIMED AT SDSYS.  Owner's ruling, PRE_RELEASE 59.
-                #
-                # THIS ROW USED TO Push-Location INTO THE ACCOUNT and run sd
-                # elevated, expecting to stand in that account with the gate
-                # bypassed.  b65 measured it FAILING, and the cause is not a
-                # product defect: UNDER THE RULED MODEL AN ELEVATED SESSION
-                # CANNOT STAND IN AN ORDINARY ACCOUNT AT ALL.  An elevated login
-                # goes to SDSYS (LOGIN's "case kernel(K$ADMINISTRATOR,-1) and
-                # kernel(K$OS.ADMINISTRATOR,0)"), and a LOGTO out of SDSYS gives
-                # up the flag (CPROC, "administrator rights belong to SDSYS").
-                # The state this row measured no longer exists, so it is asked
-                # where an elevated session actually is.
-                #
-                # THE CLAIM IS UNCHANGED - "elevation passes on its own", the
-                # owner's decision of 22 Aug 2026.  Only the place it is asked
-                # has moved.
-                #
-                # AND IT IS STILL DECISIVE.  LOGIN:901 bypasses the WHOLE of
-                # batch.permitted on K$ADMINISTRATOR - the no-arguments check,
-                # the batch.jobs listing check AND the PA/S type check.  So a
-                # command that runs here with NO batch.jobs record for SDSYS
-                # cannot have passed the listing check, and the bypass is the
-                # only thing left that explains it.
-                #
-                # THE "NO ENTRY" PRECONDITION IS ASSERTED, NOT ASSUMED - and a
-                # record found here is NOT deleted, because this script did not
-                # write it.  Without the assertion the row could pass because
-                # SDSYS happened to be listed rather than because elevation
-                # bypassed the gate: a pass for the wrong reason, which is what
-                # section 8 exists to stop.
-                $sysRec = Join-Path $listDir 'SDSYS'
-                if (Test-Path -LiteralPath $sysRec) {
-                    Set-Content -LiteralPath $ResultFile -Encoding utf8 -Value @(
-                        'SDSYS-ENTRY-PRESENT'
-                        "batch.jobs already carries a record for SDSYS: $sysRec"
-                        'This row measures a session with NO entry, so it cannot be'
-                        'measured while that record stands - and this will not delete'
-                        'a record it did not write.  Remove it by hand if it is stale.'
-                    )
-                    exit 0
-                }
-
-                # PLANTED IN SDSYS's OWN VOC, THROUGH SD, for the reason the
-                # account-side planter gives: a VOC is a dynamic file and a
-                # record cannot be dropped into it from the file system.  This
-                # process is elevated, so a piped sd lands in SDSYS and OPEN
-                # 'voc' opens SDSYS's own.
-                $sysBp   = Join-Path $sdsys 'bp'
-                $sysProg = 'ZZBATCHS'
-                $sysSrc  = Join-Path $sysBp $sysProg
-                $sysObj  = Join-Path (Join-Path $sdsys 'bp.out') $sysProg
-
-                $planter = @(
-                    "* $sysProg - written by gplbld/verify-batchjob.ps1.  Safe to delete."
-                    "      OPEN 'voc' TO F ELSE STOP 'cannot open VOC'"
-                    "      R = 'PA' : @FM : 'COUNT VOC'"
-                    "      WRITE R ON F, '$sysPa'"
-                    "      CRT '$sysProg-DONE'"
-                ) -join "`n"
-                [System.IO.File]::WriteAllText($sysSrc, $planter + "`n",
-                                               [System.Text.Encoding]::GetEncoding('iso-8859-1'))
-
-                try {
-                    # PIPED, never on the command line: "sd BASIC bp X" is the
-                    # very thing this script exists to see refused.
-                    $plant = (("`nBASIC bp $sysProg`nRUN bp $sysProg`nOFF`n") |
-                              & $sdExe 2>&1 | Out-String)
-                    if (-not $plant.Contains("$sysProg-DONE")) {
-                        Set-Content -LiteralPath $ResultFile -Encoding utf8 -Value @(
-                            'SDSYS-PLANT-FAILED'
-                            $plant
-                        )
-                    } else {
-                        # THE MEASUREMENT.  "$null |" is load-bearing - see the
-                        # long note above; it is what keeps this NOTTY.
-                        $out = ($null | & $sdExe $sysPa 2>&1 | Out-String)
-                        Set-Content -LiteralPath $ResultFile -Value $out -Encoding utf8
-                    }
-                }
-                finally {
-                    # UNCONDITIONAL, AND "DELETE VOC" RATHER THAN "DELETE.FILE" -
-                    # PRE_RELEASE 60 and 61.  A VOC record outliving what it
-                    # names IS the defect those entries are about, so this runs
-                    # on every path out, including both failures above.  Its
-                    # wording is not read: sysmsg 3221 prints "%1 record(s)
-                    # deleted" on the failure path too, so it is no anchor.
-                    $null = (("`nDELETE VOC $sysPa`nOFF`n") | & $sdExe 2>&1)
-                    foreach ($f in @($sysSrc, $sysObj)) {
-                        if (Test-Path -LiteralPath $f) {
-                            try { Remove-Item -LiteralPath $f -Force } catch { }
-                        }
-                    }
-                }
+                # 8 Oct 26 - RELEASE_1.1 129.  THIS PHASE USED TO CARRY THE "ELEVATED IN SDSYS, NO ENTRY"
+                # MEASUREMENT (a planter, a piped sd and a command-line run, about 130 lines).  Since
+                # RELEASE_1.1 64 an elevated child lands in the INSTALLING USER's account, not SDSYS, so it
+                # never measured SDSYS: the planter failed with "Cannot read source record" and the row read
+                # "COULD NOT BE MEASURED" on every full run from 18 Sep.  That door is verify-sdsysbatch.ps1
+                # now, which runs sd.exe AS the OS SDSYS account through the seat.  This phase only takes the
+                # record out, and says so: the parent checks the record is really gone.
+                Set-Content -LiteralPath $ResultFile -Value 'ok' -Encoding utf8
             }
         }
         exit 0
@@ -463,38 +340,26 @@ Note 'listed + argument: did NOT run'     $true (-not (SawRan $withArg)) $true
 $wrongType = Invoke-SdCommand @($fpName)
 Note 'listed but not PA/S: refused on TYPE' $true (SawType $wrongType) $true
 
-# ------------------------------------- 7. remove it, and check elevation too
+# ------------------------------------------------------- 7. remove the record
 if ($HelperPipe -ne '') {
-    Write-Output '  No prompt: the removal goes through the same helper, and still tests the elevated path.'
+    Write-Output '  No prompt: the removal goes through the same helper.'
 } else {
-    Write-Output '  A SECOND UAC PROMPT IS COMING - it removes the record and tests the elevated path.'
+    Write-Output '  A SECOND UAC PROMPT IS COMING - it removes the record.'
 }
 if (Test-Path -LiteralPath $resultFile) { Remove-Item -LiteralPath $resultFile -Force }
 $cleanOk = Invoke-BatchJobPhase 'cleanup'
 
-if ($cleanOk -and (Test-Path -LiteralPath $resultFile)) {
-    $elevOut = (Get-Content -Raw -LiteralPath $resultFile)
-
-    # 29 Aug 26 - "COULD NOT BE MEASURED" IS NOT "FAILED", and scoring it as one
-    # would be a claim about the product that this run did not make.  Both
-    # markers mean the elevated child never reached the question: SDSYS was
-    # already listed in batch.jobs, or the probe would not plant.  The row is
-    # recorded NON-DECISIVE so it cannot turn the script red, and the child's
-    # own text is printed so the reason is on the transcript rather than
-    # inferred from a bare FAIL.
-    if ($elevOut.Contains('SDSYS-ENTRY-PRESENT') -or $elevOut.Contains('SDSYS-PLANT-FAILED')) {
-        Write-Output 'verify-batchjob: the SDSYS row COULD NOT BE MEASURED - this is not a failure.'
-        Write-Output $elevOut
-        Note 'ELEVATED in SDSYS, no entry: still runs' $true $false $false
-    } else {
-        Note 'ELEVATED in SDSYS, no entry: still runs' $true (SawRan $elevOut) $true
-    }
-    Remove-Item -LiteralPath $resultFile -Force
-} else {
-    Write-Output 'verify-batchjob: WARNING - the record may still be in batch.jobs.'
+if (-not $cleanOk) {
+    Write-Output 'verify-batchjob: WARNING - the cleanup phase did not report success; the record may still be in batch.jobs.'
     Write-Output ("  Remove by hand: " + (Join-Path $listDir $account))
-    Note 'ELEVATED in SDSYS, no entry: still runs' $true $false $true
 }
+if (Test-Path -LiteralPath $resultFile) { Remove-Item -LiteralPath $resultFile -Force }
+# 8 Oct 26 - RELEASE_1.1 129.  The row that stood here measured an ELEVATED session in SDSYS and had been
+# unmeasured since 18 Sep (see the header); verify-sdsysbatch.ps1 owns that door now.  What THIS phase
+# did is checked instead, from here, by LOOKING: the probe record this run wrote is not in batch.jobs.
+# The next row ("entry removed: refused again") is the behavioural half of the same fact.
+Note 'cleanup: the probe record is gone from batch.jobs' $false `
+     (Test-Path -LiteralPath (Join-Path $listDir $account)) $true
 
 # ------------------------------------------------- 8. and refused once more
 $after = Invoke-SdCommand @($paName)
@@ -522,5 +387,5 @@ if ($fatal) {
     exit 1
 }
 
-Write-Output 'verify-batchjob: PASSED - the list admits, the absence of it refuses, and elevation still passes.'
+Write-Output 'verify-batchjob: PASSED - the list admits and the absence of it refuses (SDSYS''s own door is verify-sdsysbatch.ps1).'
 exit 0

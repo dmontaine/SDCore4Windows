@@ -412,35 +412,35 @@ Write-Output ''
 # half of every door is trustworthy: the suspension is checked BEFORE the
 # token-dependent chdir, so the Refused leg cannot be fooled by 44.
 #
-# 31 Aug 26 - ***THE PHASE SPLIT IS GONE: BOTH PHASES NOW BEHAVE THE SAME FOR
-# THIS CALLER, AND PRE_RELEASE 91 IS WHY.***  91 put a test on the PERSON in
-# logto.authorised ABOVE the SUSPENDED block, so an administrator as themselves
-# is admitted there exactly as an elevated session always was.  DON therefore
-# never reaches the suspension in either phase and is stopped by the
-# token-dependent chdir in both.  Measured on -Run b84 and again on b85: WHO
-# answered "107 DON" and the leg saw 5161, not 10107.  PRE_RELEASE_FIXES 92.
+# 8 Oct 26 - ***THE PHASE SPLIT IS BACK, AND RELEASE_1.1 64 IS WHY (entry 129).***
+# A 31 Aug note stood here saying PRE_RELEASE 91 admitted an administrator as
+# themselves above the SUSPENDED block, so DON was stopped by the chdir (5161)
+# in BOTH phases and the Refused phase carried a row for the bypass.  64
+# deleted that bypass on 18 Sep (:229-230), and it was measured afterwards, on
+# -Run b240 (7 Oct) and b242 (8 Oct, VerifyInstall1-20261008-162614 lines
+# 5234-5267): in the Refused phase this session's own LOGTO prints "Account
+# <acct> is suspended" and WHO answers "210 DON" (it did not enter); in the
+# Control phase it still reports 5161.  Two rows printed [FAIL] in every run
+# since 18 Sep, because they asserted the old Refused-phase behaviour.
 #
-# ***THE ORDERING CLAIM IS NOT LOST, AND THAT IS WHAT MAKES THIS SAFE TO
-# RETIRE HERE.***  It is still made at the decisive row above - "logto: it was
-# NOT 5161 instead of the suspension" - on the HELPER, which is a caller the
-# suspension does apply to.  This row was the SECOND witness to it, on a caller
-# that can no longer reach the test at all.
-#
-# ***AND THIS IS NOT ENTRY 64's FORBIDDEN FLIP.***  That is changing $true to
-# $false on the SAME observation, which leaves a row passing without measuring
-# anything.  The SUBJECT changed here: DON is an administrator who now
-# legitimately gets past the suspension, so the row measures what he actually
-# does - and gains the disqualifier below, which nothing had before.
-Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
-     (Test-Say $local 'Unable to change to new directory') $false
-
-# ***THE CONTROL, AND IT IS THE HALF THAT EARNS ITS PLACE.***  If 10107 ever
-# appears here, 91's administrator bypass has regressed and DON is being
-# refused by the suspension again - which is the one way this row could go back
-# to reading FAIL for a reason that matters.  Non-decisive like its neighbours,
-# because this session is the witness and the helper is the measurement.
-Note ('PRE_RELEASE 92: and NOT by the suspension - 91''s bypass admitted it') $false `
-     (Test-Say $local 'is suspended') $false
+# ***THIS IS NOT A FLIP OF $true TO $false ON THE SAME OBSERVATION.***  The
+# Control phase keeps its 5161 row as it was; the Refused phase now measures
+# the refusal 64 made reachable for this caller, with the old 5161 claim as its
+# disqualifier (a 5161 there would mean the token stopped it before the
+# suspension did, the false pass the decisive row above rules out on the
+# helper).  Non-decisive like their neighbours: this session is the witness and
+# the helper is the measurement.
+if ($Phase -eq 'Control') {
+    Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `
+         (Test-Say $local 'Unable to change to new directory') $false
+    Note ('RELEASE_1.1 64: and is not refused by a suspension that has not happened') $false `
+         (Test-Say $local 'is suspended') $false
+} else {
+    Note ('RELEASE_1.1 64: this session''s own LOGTO is refused by the suspension') $true `
+         (Test-Say $local 'is suspended') $false
+    Note ('RELEASE_1.1 64: and is not stopped by 5161 instead of the suspension') $false `
+         (Test-Say $local 'Unable to change to new directory') $false
+}
 # THIS ONE HOLDS IN BOTH PHASES: whatever stopped it, this session never got in.
 Note ('PRE_RELEASE 44: this session''s own LOGTO did NOT enter') $false $localEntered $false
 

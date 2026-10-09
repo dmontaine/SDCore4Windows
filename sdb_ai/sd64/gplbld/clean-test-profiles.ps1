@@ -255,6 +255,10 @@ $stems = @('sdtiert', 'sdapiid', 'sdscram', 'sdacct', 'sdapia', 'sdapin',
            'sdcatg', 'sdtapi', 'sdacl', 'sddel', 'sdssh', 'sdapi',
            'sdrt', 'sdar', 'sddr', 'sdgate', 'sdtu', 'sdprof', 'sdsw',
            'sdtc', 'sdpw', 'sdsadm', 'sdapir', 'sdpyg',
+           # 8 Oct 26 - verify-acctmsgs.ps1's family, now a VerifyInstall2 step, RELEASE_1.1 129.
+           # Four accounts per run, the stem then the run token then a, b, c or u.  NO PARENTHESES
+           # IN THIS LIST: test-stemcoverage-units reads it with a regex that stops at the first one.
+           'sdms',
            # 16 Sep 26 - verify-uninstallchoices.ps1 -Make, RELEASE_1.1 50.
            # It is not composed by a runner, so test-stemcoverage-units would
            # never have asked for this stem; the account is a REAL Windows
@@ -371,6 +375,9 @@ if ($SelfTest) {
         # account per run, no suffix; this is what VerifyInstall2 -Run b141
         # composes.  Added in the commit that created the verifier.
         'sdpygb141',
+        # 8 Oct 26 - verify-acctmsgs's family, what VerifyInstall2 -Run b244 composes: four
+        # accounts per run, suffixes a, b, c and u.  Added in the commit that wired the step.
+        'sdmsb244a', 'sdmsb244b', 'sdmsb244c', 'sdmsb244u',
         # the bare literals
         'sdsshprobe', 'sdnotyet',
         # and the .<COMPUTERNAME> form Windows creates when a stale
@@ -381,7 +388,7 @@ if ($SelfTest) {
         # REAL SD GROUPS - the old pattern matched the first two.
         'sdapi', 'sdssh', 'sdusers', 'sdadmins', 'sdsshonly', 'sdu_don',
         # a bare stem is not litter on its own
-        'sdacct', 'sdrt', 'sdtapi', 'sdpyg',
+        'sdacct', 'sdrt', 'sdtapi', 'sdpyg', 'sdms',
         # real things on this machine.  THE DEVELOPER'S OWN HOME DIRECTORY IS
         # READ, NOT TYPED - it was 'dmont', which stops guarding anything the
         # moment this runs on a machine whose profile folder is named something

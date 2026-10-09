@@ -553,8 +553,11 @@ if (Test-Say $a22b 'Windows refused that password') {
          (Test-Say $a22b 'The two passwords did not match') $true
     Note '22B: it did NOT claim SD is unelevated' $false `
          (Test-Say $a22b 'SD is not running elevated') $true
+    # 8 Oct 26 - 10008 reads "Retry (y/<n>)?" since the Y/N sweep (ab112da3, PRE_RELEASE 79);
+    # this row still said (Y/N), written 28 Aug, and would have failed on a host that refuses the
+    # password.  RELEASE_1.1 129.
     Note '22B: the retry is still offered for this case' $true `
-         (Test-Say $a22b 'Retry \(Y/N\)') $true
+         (Test-Say $a22b 'Retry \(y/<n>\)') $true
     Note '22B: answering N unwound the creation' $true `
          (Test-Say $a22b 'An account must have a password\. Nothing was created\.') $true
 } else {
@@ -602,9 +605,15 @@ $a37 = $lastSD
 Note '37 null case: the account really was created' $true `
      (Test-Path -LiteralPath (Join-Path $accts $acctReal.ToUpper())) $true
 
-# 10034 - the WINDOWS gate.  New wording: "reach this computer".
-Note '37: the Windows gate speaks of reaching the computer (10034)' $true `
-     (Test-Say $a37 ([regex]::Escape($acctReal) + ' may reach this computer only over ssh')) $true
+# 10034 - the WINDOWS gate.  8 Oct 26: THE WORDING MOVED ON AFTER 28 AUG.  f54e35dc (PRE_RELEASE
+# 54) replaced "%1 may reach this computer only over ssh - the console and Remote Desktop are
+# denied to it." with "%1 is denied sign-in at the console and over Remote Desktop. The next line
+# says which ways in it has.", so this row, which still asked for the 28 Aug text, would have
+# failed on a correct install.  The point of entry 37 is unchanged: the two lines name DIFFERENT
+# things (what Windows denies, then what SD routes), so the first no longer claims a route.
+# RELEASE_1.1 129.
+Note '37: the Windows gate names what is denied (10034)' $true `
+     (Test-Say $a37 ([regex]::Escape($acctReal) + ' is denied sign-in at the console and over Remote Desktop')) $true
 # 10078 - the SD gate.  New wording: "SD routes for x".
 Note '37: the SD gate speaks of SD routes (10078)' $true `
      (Test-Say $a37 ('SD routes for ' + [regex]::Escape($acctReal) + ': ssh and the API\.')) $true
@@ -616,6 +625,8 @@ Note '37: the old "may sign in over ssh only" is gone' $false `
      (Test-Say $a37 'may sign in over ssh only') $true
 Note '37: the old "may sign in over ssh and use the API" is gone' $false `
      (Test-Say $a37 'may sign in over ssh and use the API') $true
+Note '37: the 28 Aug "may reach this computer only over ssh" is gone too (10034 was reworded)' $false `
+     (Test-Say $a37 'may reach this computer only over ssh') $true
 
 if (-not (Test-Path -LiteralPath (Join-Path $accts $acctReal.ToUpper()))) {
     Write-Output ''
@@ -681,11 +692,17 @@ Note '27 null case: the audit trail grew' $true ($tail.Length -gt 0) $true
 
 # MODIFYA upper-cases acc.name (:223) and leaves user.name as typed, so the
 # record's shape is asserted, not just the presence of the words.
+# 8 Oct 26 - THE COMMAND WORDS ARE LOWER CASE NOW (owner's "all lower case",
+# 7 Oct; modifya:436 and :462 write 'modify.account add|delete account=').  The
+# patterns still said MODIFY\.ACCOUNT ADD|DELETE, and Test-Say is case
+# SENSITIVE, so both decisive rows would have scored FAIL.  Only the words moved:
+# the account name stays upper case and the user stays as typed, which is the
+# shape this row exists to pin.  RELEASE_1.1 129.
 Note '27: the ADD is in the audit trail' $true `
-     (Test-Say $tail ('MODIFY\.ACCOUNT ADD account=' + [regex]::Escape($acctReal.ToUpper()) +
+     (Test-Say $tail ('modify\.account add account=' + [regex]::Escape($acctReal.ToUpper()) +
                       ' to=' + [regex]::Escape($acctUser))) $true
 Note '27: the DELETE is in the audit trail' $true `
-     (Test-Say $tail ('MODIFY\.ACCOUNT DELETE account=' + [regex]::Escape($acctReal.ToUpper()) +
+     (Test-Say $tail ('modify\.account delete account=' + [regex]::Escape($acctReal.ToUpper()) +
                       ' from=' + [regex]::Escape($acctUser))) $true
 
 # -------------------------------------------------------------- clean up

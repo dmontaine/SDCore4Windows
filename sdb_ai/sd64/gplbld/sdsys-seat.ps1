@@ -143,7 +143,7 @@ function New-SeatScript {
     # built by string replacement, and an arbitrary argument string would be an
     # injection point into a script that runs elevated as SDSYS.  See
     # Invoke-SdViaSeat for why a verifier needs it.
-    param([string]$SdExe, [string]$InFile, [string]$OutFile, [bool]$Internal = $false)
+    param([string]$SdExe, [string]$InFile, [string]$OutFile, [bool]$Internal = $false, [string]$CommandWord = '')
     $t = @'
 $sd   = '@@SD@@'
 $inF  = '@@IN@@'
@@ -166,6 +166,12 @@ Move-Item -LiteralPath ($outF + '.tmp') -Destination $outF -Force
 Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
 '@
     $sdArgs = $(if ($Internal) { "'-internal' " } else { '' })
+    # 8 Oct 26 - ONE command word, for a verifier that must run "sd.exe <word>" (the command-LINE
+    # form LOGIN's batch gate judges) as SDSYS.  The CALLER has already passed it through
+    # Test-SeatCommandWord (a plain token: no quote, space, semicolon or any other character a
+    # PowerShell string could be left through); it is wrapped in single quotes here and nothing else
+    # about the argument list is open.
+    if ($CommandWord -ne '') { $sdArgs += ("'" + $CommandWord + "' ") }
     return $t.Replace('@@SD@@', $SdExe).Replace('@@IN@@', $InFile).Replace('@@OUT@@', $OutFile).Replace('@@ARGS@@', $sdArgs)
 }
 
@@ -219,6 +225,14 @@ function Initialize-SeatWorkDir {
     Set-Acl -LiteralPath $Dir -AclObject $acl
 }
 
+# A command word the seat will put after sd.exe: one plain token, 1 to 64 characters, starting with a
+# letter or digit, then letters, digits, dot, underscore or dash.  Case-SENSITIVE class on purpose
+# (-cmatch).  No quote, space, semicolon, dollar, backtick, parenthesis or path separator can pass, so
+# the single-quoted string New-SeatScript builds cannot be left.  A pure function: it prints nothing.
+function Test-SeatCommandWord([string]$Word) {
+    return ($Word -cmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') #MUT-COMMANDWORD
+}
+
 # THE ENTRY POINT.  Runs the commands in sd.exe as the account and returns
 # @{ Ok; Text; Why; Detail; Session }.  Ok is false - with Why saying which
 # precondition or which validation failed - and Text empty in every refusal, so
@@ -250,11 +264,25 @@ function Invoke-SdViaSeat {
         # is K$INTERNAL, which is the first admission case.  ***THIS IS THE DEVELOPMENT
         # DOOR - RELEASE_1.1 82 RULES IT DEVELOPMENT-ONLY - AND ONLY A DEVELOPMENT TOOL
         # SHOULD ASK FOR IT.***  Off by default: nothing that ran without it changes.
-        [switch] $Internal
+        [switch] $Internal,
+        # 8 Oct 26 - RELEASE_1.1 129.  ***WHY A VERIFIER WOULD ASK FOR THIS: THE COMMAND-LINE FORM.***
+        # LOGIN's batch gate (login:1208, batch.permitted) judges "sd.exe <word>" - a command given
+        # as the program's ARGUMENT - and never a line typed into an interactive session, so a
+        # verifier that must measure it AS SDSYS (the only account K$ADMINISTRATOR is true for since
+        # RELEASE_1.1 64) cannot do it through the piped commands.  ONE token, validated by
+        # Test-SeatCommandWord; the piped Commands still go in on stdin and a command-line command
+        # ignores them (pass @('OFF')).  It cannot be combined with -Internal.
+        [string] $CommandWord = ''
     )
     $cmds = @($Commands | Where-Object { $_ -ne $null })
     if ($cmds.Count -eq 0 -or -not (@($cmds | Where-Object { $_ -match '\S' }).Count)) {
         return (New-SeatResult $false '' 'no commands were given - there is nothing to run' '' $null)
+    }
+    if ($CommandWord -ne '' -and -not (Test-SeatCommandWord $CommandWord)) {
+        return (New-SeatResult $false '' ('the command word is not a plain token (letters, digits, dot, underscore, dash; 1 to 64): ' + $CommandWord) '' $null)
+    }
+    if ($CommandWord -ne '' -and $Internal) {
+        return (New-SeatResult $false '' 'a command word and -Internal are two different doors and cannot be combined' '' $null)
     }
     if (-not (Test-SeatCallerElevated)) {
         return (New-SeatResult $false '' 'the caller is not elevated - registering a task for another account needs an elevated PowerShell' '' $null)
@@ -300,7 +328,7 @@ function Invoke-SdViaSeat {
     try {
         $body = "`n" + ((@($cmds) + @('OFF')) -join "`n") + "`n"
         [IO.File]::WriteAllText($inF, $body, (New-Object Text.UTF8Encoding($false)))
-        Set-Content -LiteralPath $ps1 -Value (New-SeatScript -SdExe $sdExe -InFile $inF -OutFile $outF -Internal ([bool]$Internal)) -Encoding UTF8
+        Set-Content -LiteralPath $ps1 -Value (New-SeatScript -SdExe $sdExe -InFile $inF -OutFile $outF -Internal ([bool]$Internal) -CommandWord $CommandWord) -Encoding UTF8
 
         $run = if ($hkRun.Has) { & $hkRun.Value $ps1 $outF $TimeoutSec $Account }
                else { Invoke-SeatTask -Ps1 $ps1 -OutFile $outF -Seconds $TimeoutSec -Account $Account }
@@ -411,12 +439,14 @@ function Invoke-SdSeatText {
         [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [AllowNull()] [AllowEmptyString()] [string[]] $Commands,
         [int]    $TimeoutSec = 90,
         [string] $WorkDir    = '',
-        [switch] $Internal
+        [switch] $Internal,
+        # 8 Oct 26 - see Invoke-SdViaSeat.  Pass @('OFF') as the Commands for a command-line run.
+        [string] $CommandWord = ''
     )
     if (@($Commands | Where-Object { $_ -match '\S' }).Count -eq 0) {
         throw 'the SDSYS seat was given no commands - there is nothing to run'
     }
-    $r = Invoke-SdViaSeat -Commands @(Expand-SeatCommands $Commands) -TimeoutSec $TimeoutSec -WorkDir $WorkDir -Internal:$Internal
+    $r = Invoke-SdViaSeat -Commands @(Expand-SeatCommands $Commands) -TimeoutSec $TimeoutSec -WorkDir $WorkDir -Internal:$Internal -CommandWord $CommandWord
     if (-not $r.Ok) { throw ('the SDSYS seat did not run: ' + $r.Why + '  [' + $r.Detail + ']') }
     return $r.Text
 }

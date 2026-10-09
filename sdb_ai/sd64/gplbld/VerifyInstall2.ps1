@@ -200,6 +200,10 @@ param(
     # see the derivation block's comment for what replaced them and why one
     # new file covers only part of what the two of them did.
     [string]$AccountModelPrefix = '',  # verify-accountmodel.ps1 - one account
+    # 8 Oct 26 - verify-acctmsgs.ps1's, the first time it is a step (RELEASE_1.1 129).  It makes
+    # FOUR accounts, <prefix>a, b, c and u, and takes -Prefix at 2 to 9 characters, lower case:
+    # the stem is "sdms" so a four-character -Run still fits (sdms + b244 = 8).
+    [string]$AcctMsgsPrefix = '',      # verify-acctmsgs.ps1 - four accounts
 
     # 22 Aug 26 - Send each step's FULL output to its own file and show only a
     # progress line per step, plus every failing check, on the screen.  The file
@@ -300,6 +304,10 @@ if ($Run) {
     # it in this block carries: a fixed name passes once and collides on the
     # Windows account on every later run.
     if (-not $AccountModelPrefix) { $AccountModelPrefix = "sdam$Run" }
+    # 8 Oct 26 - verify-acctmsgs.ps1's: four Windows accounts from one prefix, so a fixed name
+    # collides on every run after the first.  Stem "sdms" is in clean-test-profiles.ps1, added in
+    # the same commit (test-stemcoverage-units reads this literal).
+    if (-not $AcctMsgsPrefix) { $AcctMsgsPrefix = "sdms$Run" }
 }
 
 # WITHOUT -Run THE SIX NEW ONES HAVE NO DEFAULT, and that is deliberate: the
@@ -314,7 +322,8 @@ foreach ($p in @(@{ N = 'CatPrefix'; V = $CatPrefix }, @{ N = 'SshPrefix'; V = $
                  # why a prefix empty at this point is worth refusing by name.
                  # Both went with their steps, RELEASE_1.1 64; the reason is in
                  # the comment above for the prefixes that remain.
-                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix }
+                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix },
+                 @{ N = 'AcctMsgsPrefix'; V = $AcctMsgsPrefix }
                  )) {
     if (-not $p.V) {
         Write-Output ("VerifyInstall2: -{0} was not given and -Run was not either." -f $p.N)
@@ -361,7 +370,9 @@ foreach ($p in @(@{ N = 'RoutePrefix'; V = $RoutePrefix }, @{ N = 'RulesPrefix';
                  @{ N = 'ScramPrefix'; V = $ScramPrefix },
                  # 20 Sep 26 - verify-accountmodel.ps1's, same rule: it derives a
                  # Windows account name (<prefix>a) from this.
-                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix })) {
+                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix },
+                 # 8 Oct 26 - verify-acctmsgs.ps1's: it also refuses anything over 9 characters.
+                 @{ N = 'AcctMsgsPrefix'; V = $AcctMsgsPrefix })) {
     if ($p.V -notmatch '^[a-z][a-z0-9_]*$') {
         Write-Output ("VerifyInstall2: -{0} is '{1}'." -f $p.N, $p.V)
         Write-Output '  Lower case letters, digits and underscore only, starting with a letter.'
@@ -390,7 +401,9 @@ foreach ($p in @(@{ N = 'Account';     V = $Account },
                  @{ N = 'SshPrefix';  V = $SshPrefix },  @{ N = 'NamePrefix';  V = $NamePrefix },
                  @{ N = 'PortPrefix'; V = $PortPrefix }, @{ N = 'ScramPrefix'; V = $ScramPrefix },
                  # 20 Sep 26 - verify-accountmodel.ps1's one account, <prefix>a.
-                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix })) {
+                 @{ N = 'AccountModelPrefix'; V = $AccountModelPrefix },
+                 # 8 Oct 26 - verify-acctmsgs.ps1's four accounts, <prefix>a, b, c and u.
+                 @{ N = 'AcctMsgsPrefix'; V = $AcctMsgsPrefix })) {
     # -Name "<p>*" catches the derived forms too: verify-routes makes <p>s and
     # <p>a, verify-delaccount <p>s, <p>b and <p>h.  (verify-tiers <p>1..3 was
     # here too, and went with the file, RELEASE_1.1 64.)
@@ -953,7 +966,40 @@ $steps = @(
     # DIRECTLY AFTER verify-pyapi, deliberately: the two are the plumbing and
     # the gate, and if the plumbing is dead this one's permitted leg fails
     # for a reason the step above already named.
-    @{ Name = 'verify-pygate.ps1'; P = @{ Prefix = $PyGatePrefix } }
+    @{ Name = 'verify-pygate.ps1'; P = @{ Prefix = $PyGatePrefix } },
+
+    # 8 Oct 26 - RELEASE_1.1 122's witness for the full product, which was made once (6 Oct) and
+    # never again in a suite.  probe-failaudit.ps1 kills an API client K seconds into the server's
+    # three-second failed-login delay and counts "api refused user=<name>" lines in the audit file;
+    # the control must add exactly one line and five early drops must add five.  This step supplies
+    # the full product's port and audit file, and turns "the API was not ticked at install" into a
+    # visible SKIP.  It adds a handful of refusals to the audit file, so it sits BEFORE
+    # verify-auditwords, which reads them too.  No prefix and no account.
+    @{ Name = 'verify-failaudit.ps1'; P = @{} },
+
+    # 8 Oct 26 - RELEASE_1.1 129.  SDSYS's own door through LOGIN's batch gate: "sd.exe <word>" run AS
+    # the OS SDSYS account through the seat (-CommandWord) with no batch.jobs record.  It replaces the
+    # last row of verify-batchjob.ps1 (an elevated child, which since RELEASE_1.1 64 lands in the
+    # installing user's account and so measured nothing from 18 Sep).  No prefix, no account: it plants
+    # one paragraph in SDSYS's VOC through the seat and takes it out again in a finally.
+    @{ Name = 'verify-sdsysbatch.ps1'; P = @{} },
+
+    # 8 Oct 26 - RELEASE_1.1 129.  verify-acctmsgs.ps1 (PRE_RELEASE 22, 27, 37: CREATE.ACCOUNT's
+    # reasons and access lines, MODIFY.ACCOUNT ADD/DELETE's audit record) was a hand-run script that
+    # passed 31 of 31 on 28 Aug and had not been run since, through RELEASE_1.1 64, 75, the seat
+    # conversion of 20 Sep (converted, never witnessed) and the lower-case audit words of 8 Oct.
+    # Nothing in either runner reached it, which is how its two audit rows went stale unseen.  It
+    # takes four accounts' worth of one prefix and works through the SDSYS seat, so it is an
+    # ELEVATED-half step like verify-createaccount.
+    @{ Name = 'verify-acctmsgs.ps1'; P = @{ Prefix = $AcctMsgsPrefix } },
+
+    # 8 Oct 26 - LAST, deliberately: it reads the audit file for every line this run (and the
+    # install before it) wrote, and fails on any upper-case word before a first "=".  Whatever an
+    # earlier step wrote - login refused, api refused, account refused, remote.api - is read here, so
+    # a capital put back by a later edit is found by the next full run instead of by a hand read.
+    # No prefix, no account, changes nothing.  Run alone it still reads the file; its table says
+    # "NOT SEEN" for the events a partial run did not make, and that is information, not a failure.
+    @{ Name = 'verify-auditwords.ps1'; P = @{} }
 )
 
 # 30 Aug 26 - -Only.  Shared filter, see suite-only.ps1.  It runs AFTER the

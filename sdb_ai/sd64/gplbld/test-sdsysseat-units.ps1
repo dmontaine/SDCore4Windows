@@ -366,6 +366,31 @@ Check 'the -Internal run REALLY handed "-internal" to the program (observed, not
 # perfectly clean run - a check that could not pass.  Same-line whitespace only.
 Check 'and it is the only argument (no smuggled extras)' (-not ($raw2 -match '(?m)^ARGS=-internal[ \t]+\S')) $raw2
 
+# --- 8 Oct 26, RELEASE_1.1 129: THE COMMAND WORD (the command-LINE form LOGIN's batch gate judges) ---
+$r3 = Invoke-SdViaSeat -Commands @('OFF') -Account $me -WorkDir $wd2 -TimeoutSec 60 -CommandWord 'zzbatchsyspa'
+$raw3 = [string]$script:afterRun.Raw
+Check 'the command-word run REALLY handed the word to the program as its only argument (observed, not read)' ($raw3 -match '(?m)^ARGS=zzbatchsyspa\s*$') $raw3
+Check 'and it did not also pass -internal' (-not ($raw3 -match '(?m)^ARGS=.*-internal')) $raw3
+$goodWords = @('zzbatchsyspa', 'a.b-c_d', 'A1', ('a' * 64))
+foreach ($w in $goodWords) { Check ('Test-SeatCommandWord accepts "' + $(if ($w.Length -gt 20) { $w.Substring(0, 8) + '...(' + $w.Length + ')' } else { $w }) + '"') (Test-SeatCommandWord $w) 'a plain token was refused' }
+$badWords = @('x; calc', "a'b", 'a b', 'a$(calc)', '..\x', '-internal', '/x', ('a' * 65), 'ab|cd', 'a&b', "a`nb", 'a"b', 'a`b', '.hidden', '_x')
+foreach ($w in $badWords) {
+    $show = ($w -replace "`n", '\n'); if ($show.Length -gt 24) { $show = $show.Substring(0, 8) + '...(' + $w.Length + ')' }
+    Check ('Test-SeatCommandWord refuses "' + $show + '"') (-not (Test-SeatCommandWord $w)) 'an unsafe word was accepted'
+    $wdBad = Join-Path $tmp ('workbad-' + [Guid]::NewGuid().ToString('N').Substring(0, 6))
+    $rb = Invoke-SdViaSeat -Commands @('OFF') -Account $me -WorkDir $wdBad -TimeoutSec 5 -CommandWord $w
+    Check ('Invoke-SdViaSeat refuses "' + $show + '" before it reaches the runner (no work directory made)') ((-not $rb.Ok) -and $rb.Why -match 'not a plain token' -and -not (Test-Path -LiteralPath $wdBad)) ("Ok=$($rb.Ok) Why=$($rb.Why)")
+}
+$wdBoth = Join-Path $tmp 'workboth'
+$rBoth = Invoke-SdViaSeat -Commands @('OFF') -Account $me -WorkDir $wdBoth -TimeoutSec 5 -CommandWord 'zzbatchsyspa' -Internal
+Check 'a command word together with -Internal is refused (two different doors)' ((-not $rBoth.Ok) -and $rBoth.Why -match 'cannot be combined' -and -not (Test-Path -LiteralPath $wdBoth)) ("Ok=$($rBoth.Ok) Why=$($rBoth.Why)")
+$tScript = New-SeatScript -SdExe 'C:/fake/sd.exe' -InFile 'C:/fake/a.in' -OutFile 'C:/fake/a.out' -CommandWord 'zzbatchsyspa'
+$perrW = $null
+$null = [System.Management.Automation.Language.Parser]::ParseInput($tScript, [ref]$null, [ref]$perrW)
+Check 'the script generated for a command word PARSES (0 errors)' (@($perrW).Count -eq 0) (($perrW | ForEach-Object Message) -join '; ')
+Check 'and carries the word as ONE single-quoted argument after sd' ($tScript.Contains("`$in | & `$sd 'zzbatchsyspa' 2>&1")) $tScript
+Check 'and without a word the script has no argument (unchanged for every existing caller)' ((New-SeatScript -SdExe 'C:/fake/sd.exe' -InFile 'C:/fake/a.in' -OutFile 'C:/fake/a.out').Contains("`$in | & `$sd 2>&1")) 'the default script changed'
+
 # --- A HANG STILL SAYS WHERE IT STOPPED ---------------------------------------
 # 20 Sep 2026: verify-accountrules sat at a password prompt for 180 s and the seat threw with
 # NO text, so the cause had to be found by reading createa.  The generated script now appends
@@ -466,6 +491,24 @@ if ($tagged.Count -eq 1) {
     $mutN = & { . $sb; @(Expand-SeatCommands @('LOGTO ZZ', 'CT A')).Count }
     Check 'LIVE re-issues TERM after the LOGTO (4 lines)' ($liveN -eq 4) "live=$liveN"
     Check 'the MUTANT does not (3 lines) - the fixture can tell them apart' ($mutN -eq 3) "mutant=$mutN"
+}
+# A sixth mutant: the command-word validator.  Its one line is REPLACED by "return $true" (a removal
+# would leave the function returning nothing, which every caller reads as a refusal - the opposite
+# direction).  With the validation gone the injection words must now be ACCEPTED; live refuses them.
+$tag = 'MUT-COMMANDWORD'
+$tagged = @([regex]::Matches($modText, '(?m)^.*#' + [regex]::Escape($tag) + '\s*$'))
+Check ("{0} appears on exactly one line of the live module" -f $tag) ($tagged.Count -eq 1) ("found $($tagged.Count)")
+if ($tagged.Count -eq 1) {
+    $mutText = $modText.Replace($tagged[0].Value, '    return $true')
+    Check 'the mutant really differs from the live file (the command-word check replaced by "return $true")' ($mutText -ne $modText) 'the mutation changed nothing'
+    $sb = [scriptblock]::Create($mutText)
+    foreach ($w in @('x; calc', "a'b", '-internal')) {
+        $liveV = Test-SeatCommandWord $w
+        $mutV = & { . $sb; Test-SeatCommandWord $w }
+        Check ('LIVE refuses "' + $w + '"') (-not $liveV) 'the live validator accepted it'
+        Check ('the MUTANT (no validation) ACCEPTS "' + $w + '" - the fixture can tell them apart') ([bool]$mutV) 'the mutant refused too: this fixture proves nothing'
+    }
+    Check 'and the mutant still accepts a plain word (it is not just broken)' ([bool](& { . $sb; Test-SeatCommandWord 'zzbatchsyspa' })) 'the mutant refuses everything'
 }
 $after = (Get-FileHash -LiteralPath $modPath -Algorithm SHA256).Hash
 Check 'the live module is byte-identical after the mutants (SHA-256)' ($after -eq $liveHash) "before=$liveHash after=$after"
