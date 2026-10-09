@@ -73,6 +73,23 @@ $evSince = @(Get-AuditEvents $good $sinceT)
 Row '-Since keeps only lines at or after it (3 of 8)' $evSince.Count 3
 Row '-Since drops an old upper-case line' (@(Get-UpperHeadLines (Get-AuditEvents ('2026-10-01 09:00:00 user=D uid=1 pid=1 LOGIN account=OLD' + "`n" + $good) $sinceT))).Count 0
 
+# The When property the older/judged partition uses, and the install stamp (Linux T0010: the audit file
+# outlives an upgrade, so the default scope must be the INSTALL, not the whole file).
+Row 'When carries the parsed stamp' ($ev[0].When.ToString('yyyy-MM-dd HH:mm:ss')) '2026-10-08 18:46:50'
+$tree = [datetime]'2026-10-08 16:24:48'
+Row 'Get-InstallStamp, fresh install: the tree creation wins over (earliest step log - 2 min)' ((Get-InstallStamp $tree @([datetime]'2026-10-08 16:25:18', [datetime]'2026-10-08 16:25:02')).ToString('yyyy-MM-dd HH:mm:ss')) '2026-10-08 16:24:48'
+$oldTree = [datetime]'2026-09-01 09:00:00'
+Row 'Get-InstallStamp, upgrade over a kept tree: 2 minutes before the earliest step log' ((Get-InstallStamp $oldTree @([datetime]'2026-10-08 16:25:18', [datetime]'2026-10-08 16:25:02')).ToString('yyyy-MM-dd HH:mm:ss')) '2026-10-08 16:23:02'
+Row 'Get-InstallStamp with no step logs falls back to the tree creation' ((Get-InstallStamp $oldTree @()).ToString('yyyy-MM-dd HH:mm:ss')) '2026-09-01 09:00:00'
+Row 'Get-InstallStamp ignores null entries' ((Get-InstallStamp $oldTree @($null, [datetime]'2026-10-08 16:25:02')).ToString('yyyy-MM-dd HH:mm:ss')) '2026-10-08 16:23:02'
+# older vs judged on one file spanning an upgrade: an upper-case line from the OLD build must be older, not judged
+$span = ('2026-10-01 09:00:00 user=D uid=1 pid=1 LOGIN account=OLD' + "`n" + '2026-10-08 18:00:00 user=D uid=1 pid=2 login account=NEW' + "`n" + '2026-10-08 18:05:00 user=D uid=1 pid=3 API REFUSED user=zz')
+$evS = @(Get-AuditEvents $span $since0)
+$stampS = [datetime]'2026-10-08 17:00:00'
+Row 'spanning file: one record is older than the install stamp' (@($evS | Where-Object { $_.Parsed -and $_.When -lt $stampS })).Count 1
+Row 'spanning file: the old build''s capital is among the OLDER records, not the judged ones' (@(Get-UpperHeadLines @($evS | Where-Object { $_.Parsed -and $_.When -lt $stampS }))).Count 1
+Row 'spanning file: a capital written AFTER the install is still judged (and found)' (@(Get-UpperHeadLines @($evS | Where-Object { $_.Parsed -and $_.When -ge $stampS }))).Count 1
+
 # Unparsed and null cases
 $evOdd = @(Get-AuditEvents ($good + "`n" + 'this line has no audit prefix') $since0)
 Row 'a line with no audit prefix is returned unparsed, not dropped' (@($evOdd | Where-Object { -not $_.Parsed }).Count) 1

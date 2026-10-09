@@ -25,12 +25,21 @@
 # printed with a count each and "NOT SEEN" where nothing in this run wrote one; that is information,
 # not a failure, because a partial run (-Only) does not make every line.
 #
-# -Since defaults to the creation time of C:\ProgramData\SD, which assert-current.ps1 also treats as
-# the install moment.  After a true UPGRADE the data tree is older than the install and still holds
-# the previous build's lines, so pass -Since with the upgrade time.  The default is printed.
+# THE SCOPE, AND WHY IT IS NOT "THE WHOLE FILE" (Linux T0010, 9 Oct 2026: their twin's first run FAILED
+# 258 records stamped before the change, because the audit file survives a reinstall that keeps accounts and
+# the first version judged all of it - "the instrument was wrong, not the product").  Here the file is new
+# on a fresh install (a cycle deletes the data tree) but NOT after an UPGRADE, which keeps the tree and with
+# it the previous build's records, upper case included.  So by default only records stamped at or after the
+# INSTALL are judged: Get-InstallStamp takes the later of the data tree's creation time (a fresh install)
+# and two minutes before the EARLIEST of the installer's own step logs (install-service, install-sdsys,
+# attach-account, install-editors, install-summary: rewritten by every install, upgrades included).
+# -Since overrides it; -All judges everything.  AND THE OLDER RECORDS ARE PRINTED, never silently dropped:
+# how many, how many hold a capital before a first "=", and the newest such with its time, so a capital
+# that is NOT history cannot hide behind the scope.  A scope that leaves nothing to judge is exit 2.
 
 param(
-    [string] $Since = ''
+    [string] $Since = '',
+    [switch] $All
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,12 +69,24 @@ function Get-AuditEvents([string] $Text, [datetime] $SinceTime) {
             $tok = @($head.Trim() -split '\s+' | Where-Object { $_ -ne '' })
             # the word before the "=" is a KEY (account, user, request ...), not part of the event name
             $word = $(if ($eq -ge 0 -and $tok.Count -gt 1) { ($tok[0..($tok.Count - 2)] -join ' ') } else { ($tok -join ' ') })
-            $null = $out.Add([pscustomobject]@{ Line = $n; Stamp = $stamp; Text = $ev; Head = $head.Trim(); Word = $word; Parsed = $true })
+            $null = $out.Add([pscustomobject]@{ Line = $n; Stamp = $stamp; When = $(if ($okTime) { $when } else { [datetime]::MinValue }); Text = $ev; Head = $head.Trim(); Word = $word; Parsed = $true })
         } else {
-            $null = $out.Add([pscustomobject]@{ Line = $n; Stamp = ''; Text = $raw.Trim(); Head = ''; Word = ''; Parsed = $false })
+            $null = $out.Add([pscustomobject]@{ Line = $n; Stamp = ''; When = [datetime]::MinValue; Text = $raw.Trim(); Head = ''; Word = ''; Parsed = $false })
         }
     }
     return @($out)
+}
+
+# The install moment, for the default scope.  $TreeCreated is the data tree's creation time; $StepLogTimes are the
+# last-write times of the installer's step logs that exist.  The LATER of the tree's creation and two minutes
+# before the earliest step log: a fresh install gives the tree's creation (the logs are written seconds after
+# it), an upgrade over a kept tree gives about when the installer started.  No step logs: the tree's creation.
+function Get-InstallStamp([datetime] $TreeCreated, $StepLogTimes) {
+    $t = @($StepLogTimes | Where-Object { $null -ne $_ })
+    if ($t.Count -eq 0) { return $TreeCreated }
+    $earliest = ($t | Measure-Object -Minimum).Minimum
+    $est = ([datetime]$earliest).AddMinutes(-2)
+    if ($est -gt $TreeCreated) { return $est } else { return $TreeCreated }
 }
 
 # The lines whose event text has an upper-case letter before its first "=" - CASE-SENSITIVE.
@@ -154,9 +175,19 @@ if ($Since -ne '') {
         exit 2
     }
     $sinceWhy = 'given on the command line'
+} elseif ($All) {
+    $sinceWhy = '-All: every record in the file is judged, older builds included'
 } else {
-    $sinceTime = (Get-Item -LiteralPath $dataDir).CreationTime
-    $sinceWhy = 'the creation time of ' + $dataDir + ' (the install moment, as assert-current.ps1 reads it)'
+    $treeCreated = (Get-Item -LiteralPath $dataDir).CreationTime
+    $stepLogs = @('install-service.log', 'install-sdsys.log', 'attach-account.log', 'install-editors.log', 'install-summary.log')
+    $stepTimes = @($stepLogs | ForEach-Object {
+        $p = Join-Path $dataDir $_
+        if (Test-Path -LiteralPath $p) { (Get-Item -LiteralPath $p).LastWriteTime }
+    })
+    $sinceTime = Get-InstallStamp $treeCreated $stepTimes
+    $sinceWhy = ('the install moment: the later of the data tree''s creation ({0}) and 2 minutes before the earliest of {1} installer step log(s) ({2})' -f
+                 $treeCreated.ToString('yyyy-MM-dd HH:mm:ss'), $stepTimes.Count,
+                 $(if ($stepTimes.Count) { ($stepTimes | Measure-Object -Minimum).Minimum.ToString('yyyy-MM-dd HH:mm:ss') } else { 'none found' }))
 }
 
 # Read with a shared handle: the kernel appends to this file while SD runs.
@@ -174,10 +205,21 @@ Write-Output ('audit file : {0}' -f $audit)
 Write-Output ('size       : {0} bytes, last write {1}' -f $info.Length, $info.LastWriteTime)
 Write-Output ('since      : {0}   ({1})' -f $sinceTime.ToString('yyyy-MM-dd HH:mm:ss'), $sinceWhy)
 
-$events   = @(Get-AuditEvents $text $sinceTime)
-$parsed   = @($events | Where-Object { $_.Parsed })
+$events   = @(Get-AuditEvents $text ([datetime]::MinValue))
+$parsedAll = @($events | Where-Object { $_.Parsed })
+$parsed   = @($parsedAll | Where-Object { $_.When -ge $sinceTime })
+$older    = @($parsedAll | Where-Object { $_.When -lt $sinceTime })
 $unparsed = @($events | Where-Object { -not $_.Parsed })
-Write-Output ('lines      : {0} parsed at or after -Since, {1} that did not parse' -f $parsed.Count, $unparsed.Count)
+Write-Output ('lines      : {0} judged (at or after the scope), {1} older, {2} that did not parse' -f $parsed.Count, $older.Count, $unparsed.Count)
+# THE OLDER RECORDS ARE REPORTED, NOT DROPPED (Linux T0010): a capital that is not history must not hide
+# behind the scope.  Informational - they are outside the scope on purpose - but always printed.
+$olderUpper = @(Get-UpperHeadLines $older)
+Write-Output ('older      : {0} record(s) before the scope, {1} of them with a capital before a first "="{2}' -f
+              $older.Count, $olderUpper.Count,
+              $(if ($olderUpper.Count) { '; the NEWEST such: ' + $olderUpper[-1].Stamp + '  ' + $olderUpper[-1].Text.Substring(0, [Math]::Min(100, $olderUpper[-1].Text.Length)) } else { '' }))
+if ($olderUpper.Count) {
+    Write-Output '             (older-build records - expected after an upgrade that kept the data tree; if that newest stamp is AFTER the install, the scope is wrong: pass -Since or -All)'
+}
 foreach ($u in ($unparsed | Select-Object -First 3)) { Write-Output ('    unparsed line ' + $u.Line + ': ' + $u.Text.Substring(0, [Math]::Min(120, $u.Text.Length))) }
 if ($parsed.Count -eq 0) {
     Write-Output 'verify-auditwords: REFUSED - no audit line since -Since parsed, so a count over nothing would mean nothing.'
