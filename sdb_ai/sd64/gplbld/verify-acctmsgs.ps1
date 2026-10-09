@@ -613,10 +613,10 @@ Note '37 null case: the account really was created' $true `
 # things (what Windows denies, then what SD routes), so the first no longer claims a route.
 # RELEASE_1.1 129.
 Note '37: the Windows gate names what is denied (10034)' $true `
-     (Test-Say $a37 ([regex]::Escape($acctReal) + ' is denied sign-in at the console and over Remote Desktop')) $true
+     (Test-Say $a37 ([regex]::Escape($acctReal.ToUpper()) + ' is denied sign-in at the console and over Remote Desktop')) $true
 # 10078 - the SD gate.  New wording: "SD routes for x".
 Note '37: the SD gate speaks of SD routes (10078)' $true `
-     (Test-Say $a37 ('SD routes for ' + [regex]::Escape($acctReal) + ': ssh and the API\.')) $true
+     (Test-Say $a37 ('SD routes for ' + [regex]::Escape($acctReal.ToUpper()) + ': ssh and the API\.')) $true
 
 # THE DISQUALIFIERS ARE THE OLD WORDING.  Both lines contained "ssh", so any
 # check anchored on that would have passed on the defect; these two strings
@@ -650,8 +650,8 @@ Show-SD 'entry 27 fixture: a second SD user to add' @(
 $a27f = $lastSD
 
 Note '27 fixture: the user joined sdusers' $true `
-     (Test-Say $a27f ([regex]::Escape($acctUser) + ' added to sdusers')) $true
-if (-not (Test-Say $a27f ([regex]::Escape($acctUser) + ' added to sdusers'))) {
+     (Test-Say $a27f ([regex]::Escape($acctUser.ToUpper()) + ' added to sdusers')) $true
+if (-not (Test-Say $a27f ([regex]::Escape($acctUser.ToUpper()) + ' added to sdusers'))) {
     Write-Output '  MODIFY.ACCOUNT ADD refuses a user who is not in sdusers (10020), so the'
     Write-Output '  edit below would never happen and the missing audit record would prove'
     Write-Output '  nothing.  That is "could not be run".'
