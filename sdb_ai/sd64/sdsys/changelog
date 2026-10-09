@@ -2,6 +2,15 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+09 Oct 26  AN UPGRADE NOW OFFERS THE PYTHON INSTALL.
+
+           Python is installed from a box in the installer, and an upgrade
+           shows no tasks page, so a computer upgraded from a release that had
+           no Python support was never asked.  An upgrade now shows one page
+           with that single box, unticked, when the Python installer is beside
+           the SD installer and no all-users Python 3.13 or later is already
+           installed.  Nothing else about an upgrade is asked or changed.
+
 08 Oct 26  SD'S OWN COMMANDS ARE LOWER CASE WHEN A MESSAGE QUOTES THEM.
 
            The messages and usage lines that name one of SD's own commands or

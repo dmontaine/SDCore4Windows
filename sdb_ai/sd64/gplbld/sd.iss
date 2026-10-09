@@ -1379,6 +1379,8 @@ var
     and after InstallPython the live answer would change. }
   PythonExePath: String;
   PythonWasFound: Boolean;
+  { 09 Oct 26 (RELEASE_1.1 131) - the one-question page an UPGRADE shows in place of the skipped tasks page. }
+  PythonPage: TInputOptionWizardPage;
   { 06 Oct 26 (RELEASE_1.1 121) - the OpenSSH server MSI found beside this installer, or ''. }
   SshMsiPath: String;
 
@@ -1936,6 +1938,21 @@ end;
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := (PageID = wpSelectTasks) and TrueUpgrade;
+  { 09 Oct 26 - RELEASE_1.1 131.  An upgrade from a build with no Python support was never asked, because
+    the Python box lives on the tasks page this skips.  The one question has a page of its own, shown
+    only on a true upgrade, only when python.org's installer is beside this one and no all-users Python
+    3.13+ is registered (PythonExeOffered).  Default: not ticked.  Everything else on the tasks page
+    stays unasked and unchanged, as the ruling above says. }
+  if PageID = PythonPage.ID then
+    Result := not (TrueUpgrade and PythonExeOffered);
+end;
+
+{ 09 Oct 26 - RELEASE_1.1 131.  Is Python to be installed?  The tasks-page box (a first install, or
+  /TASKS=installpython on a silent run) or, on a true upgrade, the box on PythonPage.  The page cannot
+  be ticked unless PythonExeOffered, so the answer cannot say yes for an installer that is not there. }
+function PythonChosen: Boolean;
+begin
+  Result := WizardIsTaskSelected('installpython') or (TrueUpgrade and PythonPage.Values[0]);
 end;
 
 (* 31 Aug 26 - AND THE READY PAGE HAD TO GO WITH IT.  PRE_RELEASE_FIXES 88.
@@ -1988,6 +2005,9 @@ begin
     'Upgrading the SD Core already installed on this computer.' + NewLine + NewLine +
     Space + 'The program files are replaced.' + NewLine +
     Space + 'Your database, accounts and settings are kept.';
+  { 09 Oct 26 - RELEASE_1.1 131: only when the box on PythonPage was ticked. }
+  if PythonChosen then
+    Result := Result + NewLine + NewLine + Space + 'Python is installed for all users.';
 end;
 
 function SshServerAbsent: Boolean;
@@ -2197,6 +2217,12 @@ begin
     and nudged with ScaleY so it is right at any DPI, and set ONCE here rather
     than in CurPageChanged so revisiting the page does not keep adding to it. }
   WizardForm.TasksList.MinItemHeight := WizardForm.TasksList.MinItemHeight + ScaleY(6);
+
+  { 09 Oct 26 - RELEASE_1.1 131: the upgrade's one question.  Created always, skipped by ShouldSkipPage
+    unless this is a true upgrade with python.org's installer beside it.  Not ticked by default. }
+  PythonPage := CreateInputOptionPage(wpSelectTasks, 'Python', '', '', False, False);
+  PythonPage.Add('Install Python for all users');
+  PythonPage.Values[0] := False;
 end;
 
 { ---------------------------------------------------------------------------
@@ -4064,7 +4090,7 @@ var
   Registered: Boolean;
 begin
   Result := '';
-  if not (PythonExeOffered and WizardIsTaskSelected('installpython')) then
+  if not (PythonExeOffered and PythonChosen) then
     Exit;
   SayStep('Installing Python...');
   LogPath := ExpandConstant('{#DataDir}\python-install.log');
