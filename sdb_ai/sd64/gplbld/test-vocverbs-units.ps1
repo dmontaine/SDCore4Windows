@@ -85,7 +85,7 @@ T 'e13 null case not falsely caught' $false (Test-Say $fix13 '(^|[ \t])0 record\
 # ---- entry 14 ------------------------------------------------------------
 $fix14 = @('001  F', '002  @SDSYS/messages',
   'WARNING: The data part of this file is in the system account',
-  'NO.QUERY was given and the data part of this file is in the system account, so the VOC reference is deleted and the file itself is left where it is.',
+  'no.query was given and the data part of this file is in the system account, so the VOC reference is deleted and the file itself is left where it is.',
   'DICT part of file does not exist', "VOC entry 'ZZPRFF' deleted",
   "'ZZPRFF' not found in VOC") -join "`n"
 $bad14 = @('001  F', '002  @SDSYS/messages',
@@ -94,8 +94,8 @@ $bad14 = @('001  F', '002  @SDSYS/messages',
   'DICT part of file does not exist', "VOC entry 'ZZPRFF' deleted",
   "'ZZPRFF' not found in VOC") -join "`n"
 T 'e14 pointer anchor'               $true  (Test-Say $fix14 '^[ \t]*002[ \t]+@SDSYS/messages[ \t]*\r?$')
-T 'e14 10117: fixed'                 $true  (Test-Say $fix14 'NO\.QUERY was given and the data part of this file is in the system account')
-T 'e14 10117: defect'                $false (Test-Say $bad14 'NO\.QUERY was given and the data part of this file is in the system account')
+T 'e14 10117: fixed'                 $true  (Test-Say $fix14 'no\.query was given and the data part of this file is in the system account')
+T 'e14 10117: defect'                $false (Test-Say $bad14 'no\.query was given and the data part of this file is in the system account')
 T 'e14 6146 absent: fixed'           $false (Test-Say $fix14 'Delete the file from the system account')
 T 'e14 6146 absent: defect'          $true  (Test-Say $bad14 'Delete the file from the system account')
 T 'e14 voc deleted'                  $true  (Test-Say $fix14 ("VOC entry '" + [regex]::Escape($sysPtr) + "' deleted"))

@@ -452,8 +452,11 @@ $e14 = $lastSD
 Note 'entry 14 fixture: the copied pointer names an @SDSYS path' $true `
      (Test-Say $e14 '^[ \t]*002[ \t]+@SDSYS/messages[ \t]*\r?$') $true
 
-Note 'entry 14: NO.QUERY said what it did instead of asking' $true `
-     (Test-Say $e14 'NO\.QUERY was given and the data part of this file is in the system account') $true
+# 8 Oct 26 - PAL-24 stage 2 lowered the command word in message 10117 ("no.query was given ..."), and
+# Test-Say is a CASE-SENSITIVE [regex]::IsMatch, so the capitalised pattern that stood here failed the 8 Oct
+# full run (b242) on a build that said exactly the right thing.  The anchor is the printed wording, lower case.
+Note 'entry 14: no.query said what it did instead of asking' $true `
+     (Test-Say $e14 'no\.query was given and the data part of this file is in the system account') $true
 
 # THE DISQUALIFIER IS THE WHOLE CHECK.  Answering 6146 with N reaches the same
 # skip.part the fix does, so 10117 alone does not separate them - only the
