@@ -21,9 +21,10 @@
 # WHAT IS DECISIVE: (1) the file parsed to at least one audit line since -Since (the null case is
 # refused, exit 2, never a pass), (2) the control - at least one "login" event - is present, so a
 # reader that recognises nothing cannot pass, (3) ZERO lines carry an upper-case letter before the
-# first "=" (checked CASE-SENSITIVELY: Regex -cmatch).  The table of events this release writes is
-# printed with a count each and "NOT SEEN" where nothing in this run wrote one; that is information,
-# not a failure, because a partial run (-Only) does not make every line.
+# first "=" (checked CASE-SENSITIVELY: Regex -cmatch), and (4) NO line failed to parse (Linux T1140: an
+# unparsed line means reader and writer disagree).  The table of events is READ FROM gpl.bp's
+# kernel(K$AUDIT, ...) literals, printed with a count each and "NOT SEEN" where nothing in this run wrote
+# one; that is information, not a failure, because a partial run (-Only) does not make every line.
 #
 # THE SCOPE, AND WHY IT IS NOT "THE WHOLE FILE" (Linux T0010, 9 Oct 2026: their twin's first run FAILED
 # 258 records stamped before the change, because the audit file survives a reinstall that keeps accounts and
@@ -99,30 +100,40 @@ function Measure-EventWord($Events, [string] $HeadPattern) {
     return @(@($Events) | Where-Object { $_.Parsed -and ($_.Head -cmatch $HeadPattern) }).Count
 }
 
-# The events this release writes, as head patterns (lower case).  Source: the K$AUDIT / audit.text
-# literals in gpl.bp, op_kernel.c's "group.member could not tell", and the 8 Oct probe.
-$script:ExpectedEvents = @(
-    @{ Label = 'login';                         Rx = '^login account$' },
-    @{ Label = 'login refused';                 Rx = '^login refused' },
-    @{ Label = 'logto refused';                 Rx = '^logto refused' },
-    @{ Label = 'elevation granted';             Rx = '^elevation granted' },
-    @{ Label = 'elevation released';            Rx = '^elevation released' },
-    @{ Label = 'internal session admitted';     Rx = '^internal session admitted' },
-    @{ Label = 'api refused';                   Rx = '^api refused' },
-    @{ Label = 'api handover failed';           Rx = '^api handover failed' },
-    @{ Label = 'account refused (branch=N)';    Rx = '^account refused' },
-    @{ Label = 'create.account';                Rx = '^create\.account' },
-    @{ Label = 'delete.account';                Rx = '^delete\.account' },
-    @{ Label = 'restore.account';               Rx = '^restore\.account' },
-    @{ Label = 'modify.account add|delete';     Rx = '^modify\.account (add|delete)' },
-    @{ Label = 'modify.account suspend';        Rx = '^modify\.account suspend' },
-    @{ Label = 'modify.account unsuspended';    Rx = '^modify\.account unsuspended' },
-    @{ Label = 'modify.account route';          Rx = '^modify\.account route' },
-    @{ Label = 'modify.account os.users';       Rx = '^modify\.account os\.users' },
-    @{ Label = 'remote.api';                    Rx = '^remote\.api' },
-    @{ Label = 'remote.ssh';                    Rx = '^remote\.ssh' },
-    @{ Label = 'group.member could not tell';   Rx = '^group\.member' }
-)
+# The events this release writes are READ FROM gpl.bp, not typed (Linux T1140 item 2: a typed list goes stale
+# the first time an event is added).  Every  kernel(K$AUDIT, '<literal>' ...)  in the directory gives one
+# event head: the words of the literal before the first token that holds an "=" (the same cut as
+# test-auditwords-units.py's head_of).  Distinct heads only; a program that writes its text from a variable
+# has no literal and so no row.
+function Get-AuditEventHeads([string] $GplBpDir) {
+    $heads = New-Object System.Collections.Generic.SortedSet[string]([StringComparer]::Ordinal)
+    foreach ($f in (Get-ChildItem -LiteralPath $GplBpDir -File -ErrorAction Stop)) {
+        foreach ($line in [IO.File]::ReadAllLines($f.FullName)) {
+            $s = $line.Trim()
+            if ($s.StartsWith('*') -or $s.StartsWith('!') -or $line.Contains('$define')) { continue }
+            $m = [regex]::Match($line, 'kernel\(\s*K\$AUDIT\s*,\s*''([^'']*)''')
+            if (-not $m.Success) { continue }
+            $words = @()
+            foreach ($t in $m.Groups[1].Value.Split(' ')) {
+                if ($t -eq '' -or $t.Contains('=')) { break }
+                $words += $t
+            }
+            if ($words.Count -gt 0) { $null = $heads.Add(($words -join ' ')) }
+        }
+    }
+    return @($heads)
+}
+
+# How many parsed events carry this head: the event's own head (text before its first "=", which still
+# holds the KEY word) is the literal head, or the literal head followed by more words.  Case-sensitive.
+function Measure-EventHead($Events, [string] $LiteralHead) {
+    return @(@($Events) | Where-Object {
+        $_.Parsed -and (($_.Head -ceq $LiteralHead) -or $_.Head.StartsWith($LiteralHead + ' ', [StringComparison]::Ordinal))
+    }).Count
+}
+
+# Events written by C, not gpl.bp (op_kernel.c's "group.member could not tell"), as literal heads.
+$script:CEvents = @('group.member')
 
 # --------------------------------------------------------------------------- the run
 # Dot-sourced for its functions by the unit test: stop here when told to.
@@ -220,7 +231,7 @@ Write-Output ('older      : {0} record(s) before the scope, {1} of them with a c
 if ($olderUpper.Count) {
     Write-Output '             (older-build records - expected after an upgrade that kept the data tree; if that newest stamp is AFTER the install, the scope is wrong: pass -Since or -All)'
 }
-foreach ($u in ($unparsed | Select-Object -First 3)) { Write-Output ('    unparsed line ' + $u.Line + ': ' + $u.Text.Substring(0, [Math]::Min(120, $u.Text.Length))) }
+foreach ($u in ($unparsed | Select-Object -First 10)) { Write-Output ('    unparsed line ' + $u.Line + ': ' + $u.Text.Substring(0, [Math]::Min(120, $u.Text.Length))) }
 if ($parsed.Count -eq 0) {
     Write-Output 'verify-auditwords: REFUSED - no audit line since -Since parsed, so a count over nothing would mean nothing.'
     try { Stop-Transcript | Out-Null } catch { }
@@ -229,9 +240,13 @@ if ($parsed.Count -eq 0) {
 
 Write-Output ''
 Write-Output '=== events this release writes, and how many of them this run produced =============='
-foreach ($e in $script:ExpectedEvents) {
-    $c = Measure-EventWord $parsed $e.Rx
-    Write-Output ('  {0,-34} {1}' -f $e.Label, $(if ($c -eq 0) { 'NOT SEEN (nothing in this run wrote it)' } else { [string]$c + ' line(s)' }))
+$gplDir = Join-Path (Join-Path $dataDir 'sdsys') 'gpl.bp'
+$heads = @()
+try { $heads = @(Get-AuditEventHeads $gplDir) + @($script:CEvents) } catch { Write-Output ('verify-auditwords: cannot read ' + $gplDir + ': ' + $_.Exception.Message) }
+Write-Output ('  {0} event head(s) read from the kernel(K$AUDIT, ...) literals in {1} (+ {2} written by C)' -f ($heads.Count - @($script:CEvents).Count), $gplDir, @($script:CEvents).Count)
+foreach ($h in $heads) {
+    $c = Measure-EventHead $parsed $h
+    Write-Output ('  {0,-40} {1}' -f $h, $(if ($c -eq 0) { 'NOT SEEN (nothing in this run wrote it)' } else { [string]$c + ' line(s)' }))
 }
 Write-Output ''
 Write-Output '=== every distinct first word, with its count =========================================='
@@ -243,6 +258,9 @@ Write-Output ''
 Write-Output '=== decisive checks ====================================================================='
 $login = Measure-EventWord $parsed '^login'
 Note 'CONTROL: the reader recognises this file (at least one "login" event)' $true ($login -gt 0)
+Note 'the table was read from gpl.bp (at least one event head found)' $true ($heads.Count -gt @($script:CEvents).Count)
+# Linux T1140 item 1: a line the reader cannot parse means reader and writer disagree, so it is a failure.
+Note 'every line of the file parsed (no unparsed line)' 0 $unparsed.Count
 $upper = @(Get-UpperHeadLines $parsed)
 Note 'no audit line carries an upper-case letter before its first "="' 0 $upper.Count
 foreach ($u in ($upper | Select-Object -First 10)) {
@@ -254,7 +272,7 @@ Write-Output '=== Summary ======================================================
 $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Output
 $passed = ($results | Where-Object { $_.Result -eq 'PASS' }).Count
 Write-Output ('  {0} of {1} checks passed' -f $passed, $results.Count)
-Write-Output $(if ($failed) { 'VERDICT: FAIL - an audit line carries an upper-case word before its first "="' }
+Write-Output $(if ($failed) { 'VERDICT: FAIL - see the FAIL rows above (a capital before the first "=", a line that did not parse, or a null case)' }
                else { 'VERDICT: PASS - every audit line since the install is lower case before its first "="' })
 
 try { Stop-Transcript | Out-Null } catch { }

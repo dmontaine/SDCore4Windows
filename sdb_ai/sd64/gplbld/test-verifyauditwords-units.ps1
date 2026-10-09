@@ -97,6 +97,31 @@ Row 'empty text yields nothing' (@(Get-AuditEvents '' $since0)).Count 0
 Row 'null text yields nothing' (@(Get-AuditEvents $null $since0)).Count 0
 Row 'Get-UpperHeadLines of nothing is nothing' (@(Get-UpperHeadLines @())).Count 0
 
+# The event table is READ from gpl.bp (Linux T1140 item 2): a scratch directory with three audit literals.
+Row 'Get-AuditEventHeads is defined after loading' ([bool](Get-Command Get-AuditEventHeads -ErrorAction SilentlyContinue)) $true
+$gdir = Join-Path $env:TEMP ('vaw-gpl-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+$null = New-Item -ItemType Directory -Path $gdir
+try {
+    [IO.File]::WriteAllText((Join-Path $gdir 'prog1'), (@(
+        '* kernel(K$AUDIT, ''commented out x=1'')',
+        '   void kernel(K$AUDIT, ''api refused user='' : u : '' reason=x'')',
+        '   void kernel(K$AUDIT, ''modify.account suspend account='' : a)',
+        '   void kernel(K$AUDIT, ''api refused user='' : u)') -join "`n"))
+    [IO.File]::WriteAllText((Join-Path $gdir 'prog2'), '  void kernel(K$AUDIT, ''sync.global.catalog '' : n : '' catalogued'')')
+    $hd = @(Get-AuditEventHeads $gdir)
+    Row 'heads read: 3 distinct, comment skipped, duplicate merged' $hd.Count 3
+    Row 'heads read: the cut is the words before the first token holding "="' (($hd -join '|')) 'api refused|modify.account suspend|sync.global.catalog'
+    $evH = @(Get-AuditEvents ("2026-10-09 10:00:00 user=D uid=1 pid=1 api refused user=zz reason=x`n2026-10-09 10:00:01 user=D uid=1 pid=2 sync.global.catalog 1 catalogued 0 removed") $since0)
+    Row 'Measure-EventHead counts a head with its key word (api refused user=)' (Measure-EventHead $evH 'api refused') 1
+    Row 'Measure-EventHead counts a head with no "=" in the line' (Measure-EventHead $evH 'sync.global.catalog') 1
+    Row 'Measure-EventHead is 0 for an event the run did not write' (Measure-EventHead $evH 'modify.account suspend') 0
+    Row 'Measure-EventHead is not a prefix match on a part of a word' (Measure-EventHead $evH 'api ref') 0
+} finally {
+    Remove-Item -LiteralPath $gdir -Recurse -Force -ErrorAction SilentlyContinue
+}
+$real = Join-Path $PSScriptRoot '..\sdsys\gpl.bp'
+if (Test-Path -LiteralPath $real) { Row 'the real gpl.bp yields at least 20 event heads' ((@(Get-AuditEventHeads $real)).Count -ge 20) $true }
+
 # MUTANT: make the capital test insensitive; the same fixture must now be MISSED.  A scratch copy under
 # $env:TEMP, removed afterwards; the live file is hashed before and after and must not change.
 $hashBefore = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
