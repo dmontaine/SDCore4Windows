@@ -97,6 +97,12 @@ READS_STATUS = {
         "kept-user strip (sdssh, sdapi, sdusers): strip.told = status() on the next line; a "
         "could-not-tell is REPORTED with 10022 rather than skipped, because a skipped strip "
         "leaves a remote route in place without a word",
+    # 09 Oct 26 - RELEASE_1.1 130: a reused SD user's route not asked for is removed on RESTORE.
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdssh')"):
+        "reused-user route removal: rm.told = status() on the next line; a could-not-tell stops "
+        "the verb with 10081 rather than leaving the old route in place without a word",
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdapi')"):
+        "reused-user route removal: same as sdssh",
 }
 FAIL_CLOSED = {
     ("apisrvr", "if not(is_grp_member(scram.user, 'sdapi')) then"):

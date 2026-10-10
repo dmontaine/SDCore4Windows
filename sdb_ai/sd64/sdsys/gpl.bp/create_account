@@ -1472,6 +1472,36 @@ set.access:
       end
    end
 
+*  9 Oct 26 Windows port - RELEASE_1.1 130.  A REUSED SD USER (restore, CA$REUSE.SD.USER) may already
+*   sit in sdssh / sdapi from its earlier account, and the adds above never remove: a restore that
+*   asks for a narrower route left the old membership standing while the line below said "no remote
+*   access at all".  So on the reuse path a route not asked for is taken away, with MODIFY.ACCOUNT's
+*   own test and call (modifya:620-646).  A new user is in no such group, so nothing to remove there.
+*   A lookup that could not tell (status() 1) stops the verb like a failed DELMEM: skipping it would
+*   leave the route in place without a word (test-groupmember-units, READS_STATUS).
+   if reuse.sd.user then
+      if not(access.ssh) then
+         rm.member = is_grp_member(acc.uname, 'sdssh')
+         rm.told = status()
+         stat = rm.told
+         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdssh", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+      if not(access.api) then
+         rm.member = is_grp_member(acc.uname, 'sdapi')
+         rm.told = status()
+         stat = rm.told
+         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdapi", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+   end
+
 *  Says the whole resulting state, in the same four messages MODIFY.ACCOUNT
 *  uses, so an account's access reads identically whether it was just made or
 *  just changed.

@@ -2,6 +2,14 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+09 Oct 26  A RESTORED ACCOUNT NOW GETS EXACTLY THE REMOTE ACCESS ITS BACKUP SAYS.
+
+           When a restore re-used the Windows user SD had made for an earlier
+           account, it only added ssh or API access and never took any away,
+           so an account restored with narrower access kept the old access
+           while the closing line said it had none.  The restore now removes
+           access the backup does not give.
+
 09 Oct 26  THREE INSTALLED SCRIPTS NOW WORK WHEN TYPED INTO A POWERSHELL 7 WINDOW.
 
            install-sdsys.ps1 (the recovery the installer names when it cannot
