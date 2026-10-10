@@ -45,6 +45,12 @@ param(
     [string] $AppDir = ''
 )
 
+# 09 Oct 26 - RELEASE_1.1 111, the wider exposure.  The docs tell a person to run this script by hand, and a
+# PowerShell 7 window passes its module folders on to the 5.1 this starts, where ConvertTo-SecureString (in
+# Install-RelayAccount) fails to load, outside any try, and the service install is refused with a message that does
+# not name the cause.  Set to Windows PowerShell's own folders, as gpl.bp/ps_scripto does; SET, not removed.
+$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot\system32\WindowsPowerShell\v1.0\Modules"
+
 $ErrorActionPreference = 'Continue'
 
 $SvcName    = 'SD'

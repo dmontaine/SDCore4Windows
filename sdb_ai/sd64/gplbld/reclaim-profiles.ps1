@@ -85,6 +85,12 @@ param(
     [switch] $List
 )
 
+# 09 Oct 26 - RELEASE_1.1 111, the wider exposure.  Get-OwnerSid's Get-Acl is a Security-module cmdlet; started by hand
+# from a PowerShell 7 window this script would get PowerShell 7's module folders, Get-Acl would fail inside its
+# try/catch, every owner would read as unknown and nothing would be swept (safe, but wrong).  Set to Windows
+# PowerShell's own folders, as gpl.bp/ps_scripto does; SET, not removed.
+$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot\system32\WindowsPowerShell\v1.0\Modules"
+
 # Continue, not Stop.  A native executable writing to stderr under Stop
 # terminates the script where it stands, and icacls does exactly that when it
 # has anything to say - so the cmdlets that must be caught carry

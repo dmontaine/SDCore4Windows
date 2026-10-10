@@ -2,6 +2,15 @@ W1.1-3 - in progress
 -------------
 Changes since W1.1-1.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+09 Oct 26  THREE INSTALLED SCRIPTS NOW WORK WHEN TYPED INTO A POWERSHELL 7 WINDOW.
+
+           install-sdsys.ps1 (the recovery the installer names when it cannot
+           create the SDSYS account), install-service.ps1 and
+           reclaim-profiles.ps1 each ask Windows PowerShell for its own
+           modules before they do anything else.  Typed into a PowerShell 7
+           window they used to inherit its module folders, and install-sdsys.ps1
+           stopped at ConvertTo-SecureString with the SDSYS account not set up.
+
 09 Oct 26  AN UPGRADE NOW OFFERS THE PYTHON INSTALL.
 
            Python is installed from a box in the installer, and an upgrade

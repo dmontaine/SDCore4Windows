@@ -83,6 +83,14 @@ param(
     [string] $DataDir = 'C:\ProgramData\SD'
 )
 
+# 09 Oct 26 - RELEASE_1.1 111, the wider exposure.  sd.iss's failure screen tells a person to type this script
+# into a prompt, and a PowerShell 7 window passes PowerShell 7's module folders on to the 5.1 this starts, where
+# ConvertTo-SecureString (below) then fails to load - the very failure (110) the recovery is for.  Measured 9 Oct:
+# with a stand-in Security module first in PSModulePath this script died at that line with SDSYS not set up.  Set to
+# Windows PowerShell's own folders, as gpl.bp/ps_scripto does for SD's scripts; SET, not removed, because an absent
+# value is rebuilt from the machine and user settings.  Before any cmdlet, so early enough.
+$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot\system32\WindowsPowerShell\v1.0\Modules"
+
 $ErrorActionPreference = 'Stop'
 
 # THE NAME, IN ONE PLACE.  login:747 tests this name; CREATEA writes the register
