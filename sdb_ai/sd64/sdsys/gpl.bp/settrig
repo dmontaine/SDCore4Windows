@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 11 Oct 26 Windows port - RELEASE_1.1 137.  The name is checked in upper case:
+*           stage 3a made it lower case but left the checked sets upper, so
+*           every name starting with a letter was refused (3002).  Found on
+*           Linux; the stored name is unchanged.
 * 14 Sep 26 Windows port - the trigger name is lower case (RELEASE_1.1 5
 *           stage 3a); the kernel stores and loads it lower too.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
@@ -150,10 +154,11 @@ $include err.h
 
 validate.call.name:
 !!CALLNAME!!
+   up.name = upcase(trigger.name)    ;* the character sets are upper case; the stored name stays lower
    if len(trigger.name) > MAX.TRIGGER.NAME.LEN ~
-    or index(prefix.chars:leading.chars, trigger.name[1,1], 1) = 0 ~
-    or convert(following.chars, '', trigger.name[2,99]) # '' ~
-    or (index(prefix.chars, trigger.name[1,1], 1) and len(trigger.name) = 1) then
+    or index(prefix.chars:leading.chars, up.name[1,1], 1) = 0 ~
+    or convert(following.chars, '', up.name[2,99]) # '' ~
+    or (index(prefix.chars, up.name[1,1], 1) and len(trigger.name) = 1) then
       stop sysmsg(3002) ;* Illegal trigger function name
    end
 
