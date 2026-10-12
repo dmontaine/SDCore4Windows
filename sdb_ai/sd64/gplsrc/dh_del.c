@@ -18,6 +18,10 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 11 Oct 26 Windows port - RELEASE_1.1 138, from Linux ba885ac.  The index
+ *           routine is given the id of the record as STORED, not an upper case
+ *           copy of the id the caller used (see dh_write.c): a delete of r3
+ *           left r3 in every index.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -71,7 +75,8 @@ bool dh_delete(DH_FILE* dh_file, /* File descriptor */
   int32_t prev_grp = 0;
   int16_t prev_subfile;
   int32_t fwd;
-  char u_id[MAX_ID_LEN];
+  char stored_id[MAX_ID_LEN]; /* Id as the record is stored */
+  char* store_id = id;        /* Id to give the index */
 
   dh_err = 0;
   process.os_error = 0;
@@ -131,6 +136,13 @@ bool dh_delete(DH_FILE* dh_file, /* File descriptor */
       }
 
       if (found) {
+        /* On a NOCASE file the id we were given may differ in case from the
+           one stored; the index holds the stored one.  Copy it before the
+           record is removed from the buffer.                                */
+
+        memcpy(stored_id, rec_ptr->id, id_len);
+        store_id = stored_id;
+
         if (rec_ptr->flags & DH_BIG_REC) {
           big_rec_head = GetFwdLink(dh_file, rec_ptr->data.big_rec);
         } else {
@@ -286,12 +298,7 @@ exit_dh_delete_ok:
     (e_stack++)->data.ahdr_addr = dh_file->ak_data;
     (dh_file->ak_data->ref_ct)++;
 
-    if (fptr->flags & DHF_NOCASE) {
-      memucpy(u_id, id, id_len);
-      k_put_string(u_id, id_len, e_stack++); /* Record id */
-    } else {
-      k_put_string(id, id_len, e_stack++); /* Record id */
-    }
+    k_put_string(store_id, id_len, e_stack++); /* Record id, as stored */
 
     InitDescr(e_stack, STRING); /* Old record */
     (e_stack++)->data.str.saddr = old_data;

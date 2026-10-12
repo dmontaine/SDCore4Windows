@@ -18,6 +18,14 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 11 Oct 26 Windows port - RELEASE_1.1 138, from Linux ba885ac.  The index
+ *           routine is given the record id as STORED, not an upper case copy
+ *           of the id as written.  Every hashed file is NOCASE (D2), and
+ *           BUILD.INDEX stores the stored spelling, so the upper-cased id
+ *           indexed a new record as R4 and, on a change, took out of nothing
+ *           and put in under a second spelling.  A record added again after a
+ *           size change also keeps its stored spelling now, instead of taking
+ *           the writer's.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -78,7 +86,8 @@ bool dh_write(DH_FILE* dh_file,       /* File descriptor */
   int16_t ak_mode = AK_ADD;
   STRING_CHUNK* old_data = NULL;
   STRING_CHUNK* rec; /* Data as written to file (possibly encrypted) */
-  char u_id[MAX_ID_LEN];
+  char stored_id[MAX_ID_LEN]; /* Id as an existing record is stored */
+  char* store_id = id;        /* Id to store and to give the index */
   bool found = FALSE;
 
   dh_err = 0;
@@ -192,6 +201,14 @@ bool dh_write(DH_FILE* dh_file,       /* File descriptor */
 
       if (found) {
         ak_mode = AK_MOD;
+
+        /* The spelling already stored wins.  On a NOCASE file the id we were
+           given may differ from it in case; take a copy now because the record
+           is overwritten below if it has to be added again.                  */
+
+        memcpy(stored_id, rec_ptr->id, id_len);
+        store_id = stored_id;
+
         data_ptr = rec_ptr->id + id_len; /* (Meaningless for big record) */
 
         if (rec_ptr->flags & DH_BIG_REC) /* Old record is big */
@@ -367,7 +384,7 @@ add_record:
   rec_ptr->next = (int16_t)base_size;
   rec_ptr->flags = 0;
   rec_ptr->id_len = (u_char)id_len;
-  memcpy(rec_ptr->id, id, id_len);
+  memcpy(rec_ptr->id, store_id, id_len);
   if (big_rec) {
     rec_ptr->flags |= DH_BIG_REC;
     rec_ptr->data.big_rec = SetFwdLink(dh_file, new_big_rec_head);
@@ -416,12 +433,7 @@ record_replaced:
     (e_stack++)->data.ahdr_addr = dh_file->ak_data;
     (dh_file->ak_data->ref_ct)++;
 
-    if (fptr->flags & DHF_NOCASE) {
-      memucpy(u_id, id, id_len);
-      k_put_string(u_id, id_len, e_stack++); /* Record id */
-    } else {
-      k_put_string(id, id_len, e_stack++); /* Record id */
-    }
+    k_put_string(store_id, id_len, e_stack++); /* Record id, as stored */
 
     InitDescr(e_stack, STRING); /* Old record */
     (e_stack++)->data.str.saddr = old_data;
