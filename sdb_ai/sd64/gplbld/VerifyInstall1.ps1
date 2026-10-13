@@ -54,6 +54,11 @@
 # it.  If these three numbers are edited again, re-derive them from the
 # directory rather than adjusting them by one.
 #
+# 13 Oct 26 - AND ON ADDING verify-trigak.ps1 here, RE-DERIVED FROM THE DIRECTORY
+# (every figure below this line is older and stale): 73 verify-*.ps1, 24 named
+# here, 39 in VerifyInstall2, one in both (verify-elevdoor, by design: its two
+# halves), 11 in neither.
+#
 # 14 Sep 26 - AND verify-deadlock.ps1 (RELEASE_1.1 7) IS IN NEITHER TABLE, ON
 # PURPOSE: it kills an SD session and can leave the install forcing every new
 # session out, so it is a hand-run staged fault followed by a cycle, never a
@@ -828,6 +833,17 @@ $steps = @(
     # green, after its own stored-id matcher was fixed (it had counted 3029's
     # message line as a VOC row).
     @{ Name = 'verify-callcase.ps1'; P = @{} },
+    # 13 Oct 26 - RELEASE_1.1 137 AND 138, both reported by the Linux agent and
+    # both a lower-case name meeting code that still assumed upper case: the
+    # SET.TRIGGER command refused every name starting with a letter (settrig's
+    # character sets), and the index routine was given the record id upper-cased
+    # (dh_write.c, dh_del.c).  One step, because the neighbourhood is the same
+    # as verify-callcase's - own account, unelevated, no token, bounded per
+    # session - and -Only verify-trigak covers both.  Measured RED before it was
+    # wired in, by a scratch copy without the assert gate on the 7 Oct install:
+    # 17 rows failed on the two faults and the controls (S0, fixtures, cleanup)
+    # stayed green.  The green half is owed to the first cycle after the fix.
+    @{ Name = 'verify-trigak.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer

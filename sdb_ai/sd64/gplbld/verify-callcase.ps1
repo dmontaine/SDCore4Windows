@@ -35,9 +35,9 @@
     ***RED ON THE b158 INSTALL, MEASURED BEFORE THE CYCLE*** by a scratch copy
     without the assert gate - see RELEASE_1.1 5 for the rows it failed.
 
-    NOT COVERED: SET.TRIGGER's stored name (it needs a dynamic file and a
-    catalogued trigger), and the kernel literals $debug/$pdbg and $proc, which
-    only a debugger session or a PROC reaches.
+    NOT COVERED: the kernel literals $debug/$pdbg and $proc, which only a
+    debugger session or a PROC reaches.  (SET.TRIGGER's stored name was listed
+    here until 13 Oct 2026; verify-trigak.ps1 covers it, RELEASE_1.1 137.)
 
     BOUNDED: every session is a job, killed after -TimeoutSeconds, any sd.exe
     left killed BY PID DIFF, never by name.
