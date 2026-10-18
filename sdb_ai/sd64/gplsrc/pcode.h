@@ -43,6 +43,7 @@ Pcode(formlst)   /* FORMLIST(SRC, LIST.NO) */
 Pcode(getlist)   /* DELLIST(NAME, LIST.NO) */
 Pcode(getmsg)    /* GETMSG() */
 Pcode(hf)        /* HF(PU, PGNO, HF.IN) */
+Pcode(holdlog)   /* HOLDLOG(UNIT, OPENING, PATHNAME) */
 Pcode(iconv)     /* ICONV(SRC, CONV) */
 Pcode(in)        /* IN(TIMEOUT) */
 Pcode(indices)   /* INDICES(MAT AK.DATA, AKNO) */

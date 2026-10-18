@@ -85,8 +85,9 @@ struct PRINT_UNIT {
 #define PU_SPOOL_HOLD    0x00010000  /* Spooling hold file in mode 6 (Windows) */
 #define PU_INFORM        0x00020000  /* INFORM SETPTR option: say the output file's name at the start (12 Oct 26) */
 #define PU_EJECT         0x00040000  /* EJECT SETPTR option: end the job with a form feed (12 Oct 26) */
-#define PU_USER_SETABLE  0x0006E07E  /* Mask for values that can be set via PSET opcode */
-#define PU_TEMPLATE_MASK 0x0006E07E  /* Mask for values to copy from template */
+#define PU_FF_ONLY       0x00080000  /* FORM.FEED FF SETPTR option: a bare form feed, not CR FF (12 Oct 26) */
+#define PU_USER_SETABLE  0x000EE07E  /* Mask for values that can be set via PSET opcode */
+#define PU_TEMPLATE_MASK 0x000EE07E  /* Mask for values to copy from template */
 
 /* SETPTR settings */
                    int16_t width;          /* Page width */
@@ -111,6 +112,7 @@ struct PRINT_UNIT {
                    int16_t weight;         /* WEIGHT */
                    char symbol_set[7+1];     /* SYMBOL.SET */
                    char newline[2+1];        /* CR/LF/CRLF */
+                   char seqno[9+1];          /* Sequence number of the last NEXT hold file (12 Oct 26) */
                    char * printer_name;
                    char * file_name;
                    char * banner;
@@ -161,6 +163,7 @@ Public struct TIO
 
 Public int autologout init(0);      /* Autologout interval */
 
+Public char last_seqno[9+1] init(""); /* @SEQNO: the last NEXT hold file number this process made */
 Public char onewline[10+1] init("\r\n");
 Public char inewline init(13);
 

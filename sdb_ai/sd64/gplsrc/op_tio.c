@@ -1783,6 +1783,10 @@ void op_getpu() {
         k_put_c_string(pu->newline, &result);
         break;
 
+      case PU_SEQNO: /* 12 Oct 26: number of the last NEXT hold file, as in its name; null if none */
+        k_put_c_string(pu->seqno, &result);
+        break;
+
       case PU_LINENO:
         n = (int16_t)(pu->line + 1);
         if (n > pu->data_lines_per_page)
@@ -3413,6 +3417,7 @@ PRINT_UNIT *tio_set_printer(int16_t unit, int16_t mode, int16_t lines_per_page, 
     p->weight = 0;               /* Medium */
     strcpy(p->symbol_set, "8U"); /* Roman-8 */
     strcpy(p->newline, "\n");
+    p->seqno[0] = '\0';
     p->printer_name = NULL;
     p->file_name = NULL;
     p->banner = NULL;

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): 1.2-0 openQM 466: prt.cols and prt.lines set the default printer's
+*               size; the depth check read MAX.WIDTH where it meant MAX.DEPTH.
 * 27 Aug 26 Windows port - TERM DEFAULT now sets DEFAULT.WIDTH / DEFAULT.DEPTH
 *           (120 x 36), not MIN.WIDTH and a hard-coded depth 24.  The verb is
 *           named DEFAULT; INT$KEYS.H puts DEFAULT.WIDTH six lines from
@@ -33,9 +35,10 @@
 * START-DESCRIPTION:
 *
 *    TERM                            Display settings
-*    TERM {width} {, lines} { type}  Set to given values
+*    TERM {width} {, lines} {, prt.cols} {, prt.lines} { type}
+*                                    Set to given values
 *    TERM COLOUR {bgc}{,fgc}         Set display colour
-*    TERM DEFAULT                    Set to defaults
+*    TERM DEFAULT                    Set to defaults (120 x 36; the printer is not touched)
 *    TERM DISPLAY                    Display terminfo bindings
 *
 * @SYSTEM.RETURN.CODE
@@ -62,6 +65,8 @@ $include syscom terminfo.h
    width = @crtwide
    depth = @crthigh
    term.type = ''
+   prt.cols = ''             ;* Default printer size, null if the command leaves it alone
+   prt.lines = ''
 
    @system.return.code = -1                 ;* Preset for argument errors
 
@@ -74,6 +79,8 @@ $include syscom terminfo.h
       case token.type = PARSER$END          ;* TERM
          display sysmsg(6844, width)        ;* Page width xx
          display sysmsg(6845, depth)        ;* Page depth xx
+         display sysmsg(12108, getpu(PU$WIDTH, 0))   ;* Printer width xx
+         display sysmsg(12109, getpu(PU$LENGTH, 0))  ;* Printer depth xx
          display sysmsg(6846, @term.type)   ;* Term type xx
 
       case keyword = KW$COLOUR              ;* TERM COLOUR
@@ -179,25 +186,40 @@ $include syscom terminfo.h
          gosub set.terminal
 
       case 1                                     ;* TERM xxx
-         if token matches '1N0N' then
-            if (token < MIN.WIDTH) or (token > MAX.WIDTH) then
-               stop sysmsg(6850, MIN.WIDTH, MAX.WIDTH) ;* Width must be in range %1 to %2
-            end
-            width = token + 0
-            call @parser(parser$get.token, token.type, token, keyword)
-         end
-
-         if token.type = PARSER$COMMA then
-            call @parser(parser$get.token, token.type, token, keyword)  ;* Depth
-
+         * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): - openQM 466: up to four numbers, the screen width and
+         * depth then the default printer's, each of which may be left out
+         * provided its comma is not (TERM ,,120,66).  One left out stays as it is.
+         nums = ''
+         for fld = 1 to 4
             if token matches '1N0N' then
-               if token < MIN.DEPTH or token > MAX.WIDTH then
-                  stop sysmsg(6851, MIN.DEPTH, MAX.DEPTH) ;* Depth must be in range %1 to %2
-               end
-               depth = token + 0
+               nums<fld> = token + 0
                call @parser(parser$get.token, token.type, token, keyword)
             end
-         end
+            if fld < 4 and token.type = PARSER$COMMA then
+               call @parser(parser$get.token, token.type, token, keyword)
+            end else
+               exit
+            end
+         next fld
+
+         for fld = 1 to 4
+            if nums<fld> # '' then
+               if fld = 1 or fld = 3 then
+                  if nums<fld> < MIN.WIDTH or nums<fld> > MAX.WIDTH then
+                     stop sysmsg(6850, MIN.WIDTH, MAX.WIDTH) ;* Width must be in range %1 to %2
+                  end
+               end else
+                  if nums<fld> < MIN.DEPTH or nums<fld> > MAX.DEPTH then
+                     stop sysmsg(6851, MIN.DEPTH, MAX.DEPTH) ;* Depth must be in range %1 to %2
+                  end
+               end
+            end
+         next fld
+
+         if nums<1> # '' then width = nums<1>
+         if nums<2> # '' then depth = nums<2>
+         prt.cols = nums<3>
+         prt.lines = nums<4>
 
          if token.type = PARSER$TOKEN then   ;* Terminal type present
             if len(token) > 32 then stop sysmsg(6852) ;* Invalid terminal name
@@ -249,6 +271,10 @@ show:
 set.terminal:
    printer setting on -1 LPTR$WIDTH, width
    printer setting on -1 LPTR$LINES, depth
+
+   * The default printer, if the command gave a size for it
+   if prt.cols # '' then printer setting on 0 LPTR$WIDTH, prt.cols
+   if prt.lines # '' then printer setting on 0 LPTR$LINES, prt.lines
 
    if term.type # '' then
       term.type = downcase(term.type)

@@ -2,6 +2,108 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  HOLD.FILE.LOGGER, $SETPTR.DEFAULTS AND @SEQNO.
+
+           HOLD.FILE.LOGGER.  When a print unit in mode 3 (hold file) or
+           mode 6 (hold file and printer) opens its file, and again when
+           it closes it, SD calls a catalogued subroutine named
+           HOLD.FILE.LOGGER if there is one:
+
+             SUBROUTINE HOLD.FILE.LOGGER(UNIT, OPENING, PATHNAME)
+
+           UNIT is the print unit, OPENING is 1 for an open and 0 for a
+           close, and PATHNAME is the name of the file as SD holds it,
+           such as $hold/P0 or the pathname given to AS PATHNAME.  It can
+           keep a log of print jobs or act once a job has been closed.
+           Nothing happens if there is no such subroutine, and a plain
+           printer job (mode 1) never calls it.
+
+           $SETPTR.DEFAULTS.  An X-type record of that name in the VOC of
+           the account, or if there is none in the system's VOC, gives
+           options that SETPTR takes as if they had been written straight
+           after the mode.  Field 2 is for mode 1, field 4 for mode 3,
+           field 6 for mode 5, and so on: field mode + 1.  A record
+           reading
+
+             X
+             NEWLINE CRLF, EJECT
+
+           makes every SETPTR into mode 1 behave as if NEWLINE CRLF and
+           EJECT had been written.  Options in the command itself come
+           after them and so win.  It applies to a SETPTR with no options
+           at all (SETPTR 0,,,,,3) as well.
+
+           @SEQNO, GETPU(PU$SEQNO, unit).  The number the last AS NEXT
+           hold file was given, as it appears in the file name (0012, not
+           12).  @SEQNO is the last one this process made, whichever unit;
+           GETPU is the unit's own.  Both are null until a NEXT job has
+           started.
+
+18 Oct 26  SETPTR FORM.FEED, AND THE DIGITS OF THE NEXT NUMBER.
+
+             SETPTR unit, ... , FORM.FEED FF
+             SETPTR unit, ... , FORM.FEED CRFF
+
+           Chooses the sequence sent between pages of print data and wherever
+           the data holds a form feed: FF is the form feed alone, CRFF a
+           carriage return then the form feed.  CRFF is the default, and what
+           SD has always sent.  SETPTR unit,DISPLAY now ends its list with
+           the setting, FORM.FEED FF or FORM.FEED CRFF, as it does for
+           NEWLINE, so a captured setting restores it.
+
+           The AS NEXT option of SETPTR numbers successive hold file items
+           from a counter in the $NEXT record of the dictionary of $HOLD.
+           Field 2 of that record is the next number.  Field 3 may now say
+           how many digits the number has, from 3 to 9; without it, or with
+           anything else, it has four.  The numbers run from 1 up to the
+           highest the digits hold (9999 for four) and then start again.
+
+           Correction: the numbers used to start again after 1000, not
+           9999, in the four digits they were written in.  A site that
+           depended on that gets the longer run now; set field 3 to 3 for a
+           run of 1 to 999.
+
+           (The ENCODING option the same manual lists is not here; see the
+           next entry for the rest of what the manual describes.)
+
+18 Oct 26  SP.VIEW CAN DELETE THE ITEM IT IS SHOWING.
+
+           While SP.VIEW shows a record, X now deletes it.  It asks first
+           ("Delete item from file (Y/N)?") and only Y or y deletes; any
+           other key leaves the item as it was.  A record that another user
+           holds locked is reported and left alone.  Opened from the pick
+           list of a file, the item is taken off the list when it goes and
+           the cursor stays near where it was; opened by name, the viewer
+           ends, since there is nothing left to show.  The prompt line
+           now lists X-delete among the keys.
+
+           It works on whatever file SP.VIEW has open, not only $hold, and
+           with the access of the user who runs it, like DELETE.
+
+18 Oct 26  TERM SETS THE DEFAULT PRINTER'S PAGE SIZE.
+
+             TERM {columns} {, lines} {, prt.cols} {, prt.lines} {type}
+
+           TERM already set the width and depth of the display.  It now
+           takes two more numbers for the default printer, print unit 0:
+
+             TERM 120,32               the screen 120 x 32
+             TERM ,,132,66             the printer 132 x 66, the screen
+                                       as it was
+             TERM ,,,50                the printer's depth alone
+
+           A number may be left out if its comma is not, and a number left
+           out stays as it is.  The widths must be 20 to 32767 and the
+           depths 10 to 32767, for the printer as for the screen.  With no
+           arguments TERM now shows the printer's width and depth after the
+           screen's.  TERM DEFAULT is unchanged: it sets the screen to 120
+           x 36, which is what a session starts with (the openQM manual
+           says 80 x 24; SD does not), and leaves the printer alone.
+
+           Also corrected: a screen depth was checked against the largest
+           width instead of the largest depth; both are 32767, so nothing
+           that worked before stops working.
+
 18 Oct 26  SELECTINDEX COMMAND.
 
              SELECTINDEX {DICT} filename indexname {value} {TO n}

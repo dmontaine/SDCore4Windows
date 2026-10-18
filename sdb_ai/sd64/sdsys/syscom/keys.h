@@ -201,6 +201,7 @@
       $define PU$FLG.DUPLEX.SHORT   0x00008000   ;* Duplex, short edge binding
       $define PU$FLG.INFORM         0x00020000   ;* Say the output file's name at the start of a job (modes 3, 6)
       $define PU$FLG.EJECT          0x00040000   ;* End the job with a form feed
+      $define PU$FLG.FF.ONLY        0x00080000   ;* FORM.FEED FF: a bare form feed between pages, not CR FF
       $define PU$FORM                  9
       $define PU$BANNER               10
       $define PU$LOCATION             11
@@ -223,6 +224,7 @@
       $define PU$NEWLINE            1016
       $define PU$PRINTER.NAME       1017
       $define PU$FILE.NAME          1018
+      $define PU$SEQNO              1019
       $define PU$LINENO             2000
       
       * SETNLS key values
@@ -468,4 +470,5 @@
       $define SYS$EXCEPTION   9012  ;*   @EXCEPTION: name of the exception last thrown
       $define SYS$EXC_DATA    9013  ;*   @EXCEPTION.DATA
       $define SYS$EXC_ORIGIN  9014  ;*   @EXCEPTION.ORIGIN: program name, field mark, line
-      $define SYS$EXC_STACK   9015  ;*   @EXCEPTION.STACK: call stack when SAVING.STACK         
+      $define SYS$EXC_STACK   9015  ;*   @EXCEPTION.STACK: call stack when SAVING.STACK
+      $define SYS$SEQNO       9016  ;*   @SEQNO: number of the last SETPTR AS NEXT hold file         

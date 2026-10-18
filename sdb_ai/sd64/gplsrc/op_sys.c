@@ -529,6 +529,10 @@ void op_system() {
       descr->data.value = MAX_STRING_SIZE;
       break;
 
+    case 9016: /* @SEQNO: number of the last NEXT hold file this process made, null if none */
+      k_put_c_string(last_seqno, descr);
+      break;
+
     case 9012: /* @EXCEPTION */
     case 9013: /* @EXCEPTION.DATA */
     case 9014: /* @EXCEPTION.ORIGIN */

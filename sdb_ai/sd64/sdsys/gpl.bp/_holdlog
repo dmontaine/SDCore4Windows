@@ -1,0 +1,49 @@
+* _HOLDLOG
+* Interlude to the user written HOLD.FILE.LOGGER subroutine
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): 1.2-0 bundle A-6 (openQM ref 56).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+* Called by the kernel (to_file.c) when a print unit in mode 3 or 6 opens its
+* file and again when it closes it.  If a subroutine named hold.file.logger is
+* catalogued it is called with the print unit number, 1 for an open or 0 for a
+* close, and the name of the file being made.  Nothing happens if there is none.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+$recursive
+
+subroutine holdlog(unit, opening, pathname)
+
+   logger = 'hold.file.logger'
+   if catalogued(logger) then call @logger(unit, opening, pathname)
+
+   return
+end
+
+* END-CODE

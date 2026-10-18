@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): X deletes the item being shown, after asking; one taken from the
+*               pick list is taken off it (openQM 450).
 * 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -145,7 +147,19 @@ $include keyin.h
                     file.name,
                     pick.pos)
       until item.name = ''
+         item.deleted = @false
          gosub show.item
+
+         if item.deleted then
+            * Take it off the list, and keep the cursor about where it was
+            locate item.name in item.list<1> setting i then del item.list<i>
+            if item.list = '' then exit
+            sel = field(pick.pos, '.', 2) + 0
+            if sel > dcount(item.list, @fm) then sel = dcount(item.list, @fm)
+            if sel < 1 then sel = 1
+            per.page = @crthigh - 3
+            pick.pos = (sel - 1 - rem(sel - 1, per.page)) : '.' : sel
+         end
       repeat
    end else
       gosub show.item
@@ -188,7 +202,7 @@ show.item:
       if data.offset > 0 then data.prompt := 'Previous/'
       if pan > 1 then data.prompt := 'Left/'
       if more.right then data.prompt := 'Right/'
-      data.prompt := 'Top/Bottom/Spool/Quit: '
+      data.prompt := 'Top/Bottom/Spool/X-delete/Quit: '
 
       display @(0, info.line) : @(-13) : fmt(info.text, info.fmt) :
       display @(0,prompt.line) : fmt(data.prompt, info.fmt) : @(-14) :
@@ -233,10 +247,49 @@ show.item:
             gosub spool.item
             gosub show.data.page
 
+         case c = 'X'
+            gosub delete.item
+            if item.deleted then exit
+            gosub show.data.page
+
          case 1
             display @sys.bell :
       end case
    repeat
+
+   return
+
+* ======================================================================
+* delete.item  -  Delete the item being shown, after asking (12 Oct 26 dm,
+* openQM 450: hold file items can be deleted). Sets item.deleted.
+
+delete.item:
+   item.deleted = @false
+
+   prompt.text = sysmsg(12110, item.name, file.name) ;* Delete xx from xx (Y/N)?
+   display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+   display @(len(prompt.text), prompt.line) :
+   if upcase(keycode()) # 'Y' then return
+
+   readvu dummy from data.f, item.name, 0 locked
+      prompt.text = sysmsg(12078, item.name) ;* Record 'xx' is locked by another user and was not deleted
+      display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+      c = keycode()
+      return
+   end then
+      delete data.f, item.name
+      on error
+         prompt.text = sysmsg(3222, status(), item.name) ;* Error xx deleting record xx
+         display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+         release data.f, item.name
+         c = keycode()
+         return
+      end
+      item.deleted = @true
+   end else
+      release data.f, item.name
+      item.deleted = @true     ;* It has gone already
+   end
 
    return
 

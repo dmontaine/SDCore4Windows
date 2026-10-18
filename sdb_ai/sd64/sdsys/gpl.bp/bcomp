@@ -279,6 +279,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                                                  ;* the bootstrap programs use neither)
    at.constants := @fm:"EXCEPTION":@fm:"EXCEPTION.DATA":@fm:"EXCEPTION.ORIGIN":@fm:"EXCEPTION.STACK"
                                                  ;* 12 Oct 26 dm - openQM 355, read through SYSTEM(9012-9015)
+   at.constants := @fm:"SEQNO"                   ;* 12 Oct 26 dm - openQM 70, SYSTEM(9016)
 
    * The AT.SYSCOM.VARS list contains @ variables which correspond to data
    * in the SYSCOM common block. The offset of the common variable is in
@@ -5017,9 +5018,10 @@ emit.at.var.load:
            at.exception,
            at.exception.data,
            at.exception.origin,
-           at.exception.stack
+           at.exception.stack,
+           at.seqno
 
-at.mark:                                  ;* FM, VM, SM, TM, IM, AM, SVM
+at.mark:                                ;* FM, VM, SM, TM, IM, AM, SVM
       opcode.string = mark.chars[i,1] ; gosub emit.string.load
       return
 
@@ -5148,6 +5150,9 @@ at.exception.data:                          ;* @EXCEPTION.DATA  -  SYSTEM(9013)
 
 at.exception.origin:                        ;* @EXCEPTION.ORIGIN  -  SYSTEM(9014)
       n = 9014 ; goto at.exception.common
+
+at.seqno:                                   ;* @SEQNO  -  SYSTEM(9016)
+      n = 9016 ; goto at.exception.common
 
 at.exception.stack:                         ;* @EXCEPTION.STACK  -  SYSTEM(9015)
       n = 9015

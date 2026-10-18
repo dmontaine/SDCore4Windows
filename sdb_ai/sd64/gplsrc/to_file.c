@@ -152,12 +152,32 @@ void to_file(PRINT_UNIT* pu, char* str, int16_t bytes) {
 }
 
 /* ======================================================================
+   hold_log()  -  Tell HOLD.FILE.LOGGER, if there is one, that a hold file
+   has been opened (opening 1) or closed (0). Modes 3 and 6 only. Not while
+   the process is being taken down, when there is no program to call it from.
+   (12 Oct 26, openQM item 56)                                            */
+
+Private void hold_log(PRINT_UNIT* pu, int opening) {
+  if ((pu->mode != PRINT_TO_FILE) && (pu->mode != PRINT_AND_HOLD))
+    return;
+  if ((pu->file.pathname == NULL) || (process.call_depth == 0) || (k_exit_cause != 0))
+    return;
+
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = pu->unit;
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = opening;
+  k_put_c_string(pu->file.pathname, e_stack++);
+  k_recurse(pcode_holdlog, 3); /* HOLDLOG(UNIT, OPENING, PATHNAME) */
+}
+
+/* ======================================================================
    start_file()  -  Open print file                                       */
 
 Private void start_file(PRINT_UNIT* pu) {
   char fn[MAX_PATHNAME_LEN + 1];
   DESCRIPTOR* descr;
-  char seqno[4 + 1];
+  char seqno[9 + 1]; /* 12 Oct 26 (openQM item 70): up to nine digits, was four */
 
   if (!ValidFileHandle(pu->file.fu)) /* First reference - create hold file */
   {
@@ -214,9 +234,13 @@ Private void start_file(PRINT_UNIT* pu) {
     {
       k_recurse(pcode_nextptr, 0); /* Execute recursive code */
       descr = e_stack - 1;
-      k_get_c_string(descr, seqno, 4);
+      k_get_c_string(descr, seqno, 9);
       strcat(fn, "_");
       strcat(fn, seqno);
+      /* 12 Oct 26 (openQM item 70): GETPU(PU$SEQNO, unit) and @SEQNO */
+      strncpy(pu->seqno, seqno, sizeof(pu->seqno) - 1);
+      pu->seqno[sizeof(pu->seqno) - 1] = '\0';
+      strcpy(last_seqno, pu->seqno);
     }
 
   open_file:
@@ -230,6 +254,7 @@ Private void start_file(PRINT_UNIT* pu) {
         ((pu->mode == PRINT_TO_FILE) || (pu->mode == PRINT_AND_HOLD))) {
       tio_printf("Print output is going to %s\n", fn);
     }
+    hold_log(pu, 1); /* 12 Oct 26 (openQM item 56): HOLD.FILE.LOGGER, opened */
   }
 
   /* Allocate buffer */
@@ -319,6 +344,7 @@ void end_file(PRINT_UNIT* pu) {
   CloseFile(pu->file.fu);
   pu->file.fu = INVALID_FILE_HANDLE;
   pu->flags &= ~(PU_ACTIVE | PU_OUTPUT);
+  hold_log(pu, 0); /* 12 Oct 26 (openQM item 56): HOLD.FILE.LOGGER, closed */
 
   if (pu->mode == PRINT_TO_PRINTER) /* 0527 Never happens on Windows */
   {
@@ -367,7 +393,12 @@ Private void print_header(PRINT_UNIT* pu) {
 
   if (pu->flags & PU_OUTPUT) /* 0382 */
   {
-    emit(pu, "\r\f", 2);
+    /* 12 Oct 26 (openQM item 139): SETPTR ... FORM.FEED FF sends a bare form feed;
+       the default is a carriage return then the form feed. */
+    if (pu->flags & PU_FF_ONLY)
+      emit(pu, "\f", 1);
+    else
+      emit(pu, "\r\f", 2);
   }
 
   if (pu->overlay != NULL) {

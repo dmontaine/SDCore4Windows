@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): openQM 70: field 3 of $NEXT is the number of digits (3 to 9); the
+*               numbers cycle 1 to 9999 (for four digits), not 1 to 1000.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the $NEXT counter is found
 *           as $NEXT or $next and written back under the id it was found as.
 * 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
@@ -52,9 +54,17 @@ subroutine nextptr()
             readu rec from dict.f, next.id else null
          end
       end
-      if not(rec<2> matches '1-4N') then rec = 'X':@fm:1
-      seqno = fmt(rec<2>, "4'0'R")
-      rec<2> = rem(seqno, 1000) + 1
+      if not(rec<2> matches '1-9N') then rec = 'X':@fm:1
+*     18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): - openQM 70: field 3 of the record gives the number of digits, 3 to 9;
+*     anything else is the default of 4. The numbers run 1 to the highest the digits hold
+*     (9999 for four); this cycled 1 to 1000 before, in the same four digits.
+      digits = 4
+      if rec<3> matches '1N' and rec<3> >= 3 then digits = rec<3> + 0
+      high = 10 ^ digits - 1
+      n = rec<2> + 0
+      if n > high then n = 1
+      seqno = fmt(n, digits : "'0'R")
+      rec<2> = rem(n, high) + 1
       write rec to dict.f, next.id
    end
 

@@ -49,7 +49,10 @@
 *   CPI n                Y         Y   Characters per inch (float, max 2 dp)
 *   DUPLEX               Y         Y   Duplex print, long edge binding
 *   DUPLEX SHORT         Y         Y   Duplex print, short edge binding
+*   (an X-type VOC record $SETPTR.DEFAULTS gives options to be taken as written after the mode:
+*    field 2 for mode 1, field 4 for mode 3 ... field mode + 1; the command's own options override)
 *   FORM x               Y    Y    Y   Form type
+*   FORM.FEED FF/CRFF    Y    Y    Y   Form feed sequence between pages (default CRFF)
 *   GDI                                Use Windows GDI mode API calls
 *   KEEP.OPEN            Y    Y    Y   Keep print unit open
 *   INFORM                         Y   Y   Say the output file's name when the job starts (modes 3 and 6)
@@ -105,6 +108,10 @@ $define TEMPLATE.PRINT.UNIT -3
 
    parser = "!PARSER"
 
+   defaults.done = @false   ;* 12 Oct 26 dm - openQM 56: $SETPTR.DEFAULTS has been looked for
+   override = ''            ;* ...and the sentence with its options put in after the mode
+
+restart:
    lptr = -1
 
    * Set defaults
@@ -148,7 +155,9 @@ $define TEMPLATE.PRINT.UNIT -3
 
    @system.return.code = -1                 ;* Preset for argument errors
 
-   call @parser(PARSER$RESET, 0, @sentence, 0)
+   sentence.text = @sentence
+   if override # '' then sentence.text = override
+   call @parser(PARSER$RESET, 0, sentence.text, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
 
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Print unit
@@ -296,6 +305,32 @@ $define TEMPLATE.PRINT.UNIT -3
          end
       end
 
+      * ---------- $SETPTR.DEFAULTS ----------
+      * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): - openQM 56: an X-type VOC record (this account's, else the
+      * system's) whose field mode + 1 holds options to be treated as written
+      * just after the mode. The options given in the command come after them
+      * and so override them. The simplest way to say "just after the mode" to
+      * a parser that reads tokens is to put them into the sentence and read
+      * the sentence again from the start; defaults.done stops it doing so twice.
+
+      if not(defaults.done) then
+         defaults.done = @true
+         gosub get.setptr.defaults
+         if def.opts # '' then
+            s = @sentence
+            c6 = index(s, ',', 6)            ;* The comma after the mode, if options follow it
+            if c6 then
+               head = s[1, c6 - 1] ; tail = s[c6, 99999]
+            end else
+               head = s ; tail = ''
+               n = count(s, ',')
+               if n < 5 then head := str(',', 5 - n)   ;* Reach the mode's place
+            end
+            override = head : ',' : def.opts : tail
+            goto restart
+         end
+      end
+
       * ---------- Options ----------
 
       loop
@@ -417,6 +452,20 @@ reparse:
             case upcase(token) = 'EJECT'                             ;* 12 Oct 26 dm - openQM 59
                old.flags = bitor(old.flags, PU$FLG.EJECT)
                flags = bitor(flags, PU$FLG.EJECT)
+
+            case upcase(token) = 'FORM.FEED'                         ;* 12 Oct 26 dm - openQM 139
+               call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+               token = upcase(token)
+               begin case
+                  case token = 'FF'
+                     old.flags = bitor(old.flags, PU$FLG.FF.ONLY)
+                     flags = bitor(flags, PU$FLG.FF.ONLY)
+                  case token = 'CRFF'
+                     old.flags = bitand(old.flags, bitnot(PU$FLG.FF.ONLY))
+                     flags = bitand(flags, bitnot(PU$FLG.FF.ONLY))
+                  case 1
+                     stop sysmsg(12111) ;* FF or CRFF required after FORM.FEED
+               end case
 
             case keyword = KW$LANDSCAPE
                old.flags = bitor(old.flags, PU$FLG.LAND)
@@ -702,6 +751,35 @@ report.settings:
 
 * ======================================================================
 * Decode options.
+* ======================================================================
+* get.setptr.defaults  -  the options $SETPTR.DEFAULTS gives for this mode
+* (12 Oct 26 dm, openQM 56). The record is looked for in this account's VOC
+* and then in the system's. Field 1 must begin X; the options for mode 1 are
+* field 2, for mode 3 field 4, and so on: field mode + 1. Sets def.opts.
+
+get.setptr.defaults:
+   def.opts = ''
+   if mode < 1 then return
+
+   rec = ''
+   def.id = '$setptr.defaults'
+   read rec from @voc, def.id else
+      read rec from @voc, upcase(def.id) else rec = ''
+   end
+
+   if rec = '' then
+      openpath @sdsys:@ds:'voc' to sys.voc.f then
+         read rec from sys.voc.f, def.id else
+            read rec from sys.voc.f, upcase(def.id) else rec = ''
+         end
+         close sys.voc.f
+      end
+   end
+
+   if upcase(rec[1, 1]) = 'X' then def.opts = trim(rec<mode + 1>)
+
+   return
+
 * Needs: BANNER, MODE, COPIES, FLAGS, FORM, LEFT.MARGIN, OPTIONS,
 *        OVERLAY, PREFIX, SPOOLER
 
@@ -724,6 +802,7 @@ decode.options:
    if bitand(flags, PU$FLG.KEEP.OPEN)   then s<-1> = 'KEEP.OPEN'
    if bitand(flags, PU$FLG.INFORM)      then s<-1> = 'INFORM'
    if bitand(flags, PU$FLG.EJECT)       then s<-1> = 'EJECT'
+   if bitand(flags, PU$FLG.FF.ONLY)     then s<-1> = 'FORM.FEED FF' else s<-1> = 'FORM.FEED CRFF'
 
    if bitand(flags, PU$FLG.LAND)   then s<-1> = 'LANDSCAPE'
 

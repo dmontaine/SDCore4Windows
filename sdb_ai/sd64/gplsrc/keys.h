@@ -469,6 +469,7 @@
 #define PU_NEWLINE            1016
 #define PU_PRINTER_NAME       1017
 #define PU_FILE_NAME          1018
+#define PU_SEQNO              1019
 #define PU_LINENO             2000
 
 /* SETNLS key values */
