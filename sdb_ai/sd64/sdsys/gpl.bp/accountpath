@@ -52,7 +52,7 @@ $include int$keys.h
       end
    end
 
-   * 18 Oct 26 Windows port - Linux asks kernel(K$PATH.OK, path), the S.63 OS-access gate, which is held here (no such key).  What
+   * 18 Oct 26 Windows port - Linux asks the kernel's path test, the S.63 OS-access gate, which is held here (no such key).  What
    * stands in for it is the rule an account WITHOUT the gate gets on Linux: the path of the session's own account is told, and any
    * other only to an administrator session (SDSYS), which can read it anyway.  The deviation is told to Linux.
    if path # '' then

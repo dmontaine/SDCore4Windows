@@ -65,6 +65,15 @@
 *   change the process
 * NOT.TESTED: CHGPHANT CONFIG UMASK CATALOGUED DIR
 * NOT.TESTED: GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT
+*   18 Oct 26 - carried from Linux (areas 2 to 5 of the Dev carry).  Each is exercised, with Linux's expected values, by the carry's
+*   own verify steps (gplbld/verify-carry*.py: the func-q1, stmt-q3, epoch, q4, oq2, sortwide and coll suites), where it
+*   runs beside the file, collection and select-list state it needs.  A second set of cases here would only restate those.
+* NOT.TESTED: ARG.PRESENT BOOL CEIL FLOOR ROUNDUP ROUNDDOWN LAST LASTS LEFT RIGHT NS NV
+* NOT.TESTED: IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.NULL IS.SPACE
+* NOT.TESTED: MATCHESS MATCHFIELDS NUMERIC REUSING RMVD SIGNAL SWAPMARKS TERMINFO.EX TRIMWS
+* NOT.TESTED: DIGEST SELECT.SOCKET
+* NOT.TESTED: EPOCH MVDATE MVDATE.TIME MVEPOCH MVTIME
+* NOT.TESTED: SORT SORTDATA SORTNEXT
 *
 * TWO NAMES CAME OFF THAT LIST ON 12 Sep 26 AND NEITHER BELONGED ON IT:
 *   DELETE  was declared untested AND tested, by DELETE.fn below.  That is the

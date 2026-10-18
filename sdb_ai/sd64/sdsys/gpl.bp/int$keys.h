@@ -92,6 +92,7 @@
       $define K$USERS.UNAME   6       ;* User login name
       $define K$USERS.DEV     7       ;* TTY name
       $define K$USERS.LOGIN   8       ;* Login time
+      $define K$USERS.ACCOUNT 9       ;* Account the session is in (14 Oct 26, sheet 24 and 29; empty until it enters one)
       $define K$CONFIG.DATA     16       ;* Configuration data
       $define K$LICENCE         17       ;* Validate licence data
       $define K$INIPATH         18       ;* Get ini file pathname
@@ -221,6 +222,7 @@
       $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
       $define K$PROFILER        116      ;* n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
       $define K$PROFILER.USER   117      ;* user * 4096 + 2048 + n start it in another process, user * 4096 alone stop it and have it write F<user> to $ipc; administrator only
+      $define K$IS.SDAPISRVR     25      ;* Is this process an API server?  (kernel.h K_IS_SDAPISRVR; named here 16 Oct 26)
       $define K$RESET.ALL       119      ;* LOGTO ... RESET ALL: with a command, keep it and return to the bottom command processor, which takes it back with a null argument; 1 accepted, 0 refused (an API session) (16 Oct 26, Fixes item 30)
       $define K$CLASS.MAIN      120      ;* 1: the next call may run a class module through its MAIN subroutine (CPROC, before it calls a catalogued command) (16 Oct 26, Fixes item 484)
 

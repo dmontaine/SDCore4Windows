@@ -239,8 +239,8 @@ Private const SYS_EXC sys_exc_table[] = {
     {12130, SE_DATATYPE "INVALID"},
     {12132, SE_FILESYS "INVALID_FILE_TYPE"},
     {12167, SE_LOCKS "LIMIT"},
-    {12353, SE_FILESYS "INVALID_FILE_TYPE"},
-    {12360, SE_PROGRAM "INVALID_KEY"},
+    /* 18 Oct 26 Windows port: Linux's 11348 (CREATING.SEQKEY needs a hashed file; the QMClient sitting) and 11355 (the public
+       FCONTROL's unknown action) are not carried, so neither has a row here: 12353 and 12360 are left unused. */
     {12403, SE_DATATYPE "NOT_SORT"},
     {12404, SE_SORT "INVALID_OPERATION"},
 };

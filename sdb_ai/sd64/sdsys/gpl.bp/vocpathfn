@@ -77,7 +77,7 @@ $include keys.h
    close f
 
    * Only a path the account could open is told.
-   * 18 Oct 26 Windows port - Linux asks kernel(K$PATH.OK, p), the S.63 OS-access gate, which is held here (no such key).  What stands in
+   * 18 Oct 26 Windows port - Linux asks the kernel's path test, the S.63 OS-access gate, which is held here (no such key).  What stands in
    * for it is the rule an account WITHOUT the gate gets on Linux: a path inside the session's own account directory is told, any other
    * only to an administrator session (SDSYS), which can read it anyway.  The deviation is told to Linux.
    ok = kernel(K$ADMINISTRATOR, -1)

@@ -61,6 +61,8 @@ NOT_KEYS_BASIC = {
     "USERS_UNAME": "field position inside K$USERS's result, not a key",
     "USERS_DEV":   "field position inside K$USERS's result, not a key",
     "USERS_LOGIN": "field position inside K$USERS's result, not a key",
+    "USERS_ACCOUNT": "field position inside K$USERS's result, not a key (carried from Linux 0b6a207, 18 Oct 26)",
+    "RESET_ALL_CODE": "an @ABORT.CODE value, a different key space (carried from Linux, 18 Oct 26)",
     "LOGOUT":      "a phantom action code, a different key space",
     "EXIT_ABORT":  "an exit-status code, a different key space",
 }
@@ -166,12 +168,14 @@ def main():
     check(not dup, "no number is defined twice in C (%s)" % (dup or "none"))
 
     # Same for BASIC, ignoring the declared non-keys, which legitimately reuse
-    # small numbers in their own key spaces.
+    # small numbers in their own key spaces.  A declared alias is the same key
+    # under two spellings (K$IS.SDVBSRVR and, since 18 Oct 26, Linux's
+    # K$IS.SDAPISRVR), so the two spellings count once.
     bynum = {}
     for name, num in b.items():
         if name in NOT_KEYS_BASIC:
             continue
-        bynum.setdefault(num, []).append(name)
+        bynum.setdefault(num, set()).add(ALIASES.get(name, name))
     dup = {n: sorted(v) for n, v in bynum.items() if len(v) > 1}
     check(not dup, "no number is defined twice in BASIC (%s)" % (dup or "none"))
 
