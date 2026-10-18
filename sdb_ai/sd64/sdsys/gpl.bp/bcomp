@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1c94d00 (10 Oct 26), RELEASE_1.1 143: $MODE
+*           names may be a comma separated list (ref 105), $BASIC.OPTIONS MODE
+*           may turn a mode off with a leading minus (406), new mode
+*           IMPLIED.STOP (81), and the @LINE and @BUILD.TIME tokens (211, 506).
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 3a: PROGRAM, SUBROUTINE,
 *           FUNCTION, CLASS, CALL, ENTER, DEFFUN CALLING and $CATALOG names
 *           are LOWER case, the runtime's canonical case now.  COMMON and
@@ -159,6 +163,8 @@ $define M.HEADING.NO.EJECT     18
 $define M.NO.ECHO.DATA         19
 $define M.NO.CASE.INVERT       20
 $define M.OPTIONAL.THEN.ELSE   21; *rdm
+$define M.IMPLIED.STOP         22  ;* 10 Oct 26 dm
+$define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -187,6 +193,8 @@ mode.names := @VM:"HEADING.NO.EJECT"
 mode.names := @VM:"NO.ECHO.DATA"
 mode.names := @VM:"NO.CASE.INVERT"
 mode.names := @VM:"OPTIONAL.THEN.ELSE"
+mode.names := @VM:"IMPLIED.STOP"
+mode.names := @VM:"STRICT.EQUATE"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -263,6 +271,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.constants := @fm:"LEVEL":@fm:"TERM.TYPE":@fm:"TRANSACTION.ID"
    at.constants := @fm:"TRANSACTION.LEVEL":@fm:"IP.ADDR":@fm:"HOSTNAME"
    at.constants := @fm:"GID":@fm:"UID":@fm:"SDSYS"
+   at.constants := @fm:"LINE":@fm:"BUILD.TIME"   ;* 10 Oct 26 dm  (not in bbcmp.py:
+                                                 ;* the bootstrap programs use neither)
 
    * The AT.SYSCOM.VARS list contains @ variables which correspond to data
    * in the SYSCOM common block. The offset of the common variable is in
@@ -739,11 +749,13 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
          begin case
             case s = "CATALOGUE" or s = "CATALOG"
                catalogue.name = '~'
-               s = upcase(field(voc.rec<1>, ' ', 2))
-               begin case
-                  case s = 'LOCAL'  ; catalogue.mode = 'LOCAL'
-                  case s = 'GLOBAL' ; catalogue.mode = 'GLOBAL'
-               end case
+               * LOCAL or GLOBAL, and NO.QUERY (ref 191), in either order
+               for mk = 2 to 3
+                  cat.word = upcase(field(voc.rec<1>, ' ', mk))
+                  if cat.word = 'LOCAL' or cat.word = 'GLOBAL' or cat.word = 'NO.QUERY' then
+                     gosub set.cat.mode
+                  end
+               next mk
 
             case s = 'DEFINE'
                define.token = field(voc.rec<1>, ' ', 2)
@@ -776,13 +788,21 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                listing.option = @true
 
             case s = "MODE"
-               s = upcase(field(voc.rec<1>, ' ', 2))
-               if s # '' then
-                  locate s in mode.names<1,1> setting i then
-                     mode = bitset(mode, i - 1)
-                     gosub set.kernel.modes
+               * One or more mode names, comma separated, each optionally
+               * preceded by a minus to turn it off (refs 105 and 406).
+               s = convert(' ', '', upcase(field(voc.rec<1>, ' ', 2, 99)))
+               for mk = 1 to dcount(s, ',')
+                  mnm = field(s, ',', mk)
+                  mneg = (mnm[1,1] = '-')
+                  if mneg then mnm = mnm[2,99]
+                  if mnm # '' then
+                     locate mnm in mode.names<1,1> setting i then
+                        if mneg then mode = bitreset(mode, i - 1)
+                        else mode = bitset(mode, i - 1)
+                        gosub set.kernel.modes
+                     end
                   end
-               end
+               next mk
 
             case s = "NO.CATALOGUE" or s = "NO.CATALOG"
                catalogue.name = ''
@@ -1008,7 +1028,9 @@ $define J.TXN                  7  ;* TRANSACTION
    * If we are in a local subroutine, we do a stop as this really is a bug.
    * In other cases, SD has always emitted a return.
 
-   opcode.byte = if lsub.var.no >= 0 then OP.STOP else OP.RETURN
+   * The IMPLIED.STOP mode makes it a STOP in every case (ref 81).
+
+   opcode.byte = if lsub.var.no >= 0 or bittest(mode, M.IMPLIED.STOP) then OP.STOP else OP.RETURN
    gosub emit.simple
 
    * Check that final END was found
@@ -1746,11 +1768,8 @@ get.line:
                ss = upcase(ss[2,99999])
                begin case
                   case ss ='IFDEF'
-                     token.name = field(trim(src), ' ', 2)
-                     if not(bittest(mode, M.CASE.SENSITIVE)) then token.name = upcase(token.name)
-                     ss = find(defined.tokens, token.name)
-
-                     n = (status() # 0)
+                     gosub ifdef.test          ;* 10 Oct 26 dm  AND and OR (ref 219)
+                     n = not(ifdef.result)
                      * Set field 1 of the skip stack to show what we are doing.
                      * Value 1 = action : 0 = processing first statement group
                      *               or : 1 = skipping first statement group
@@ -1761,10 +1780,8 @@ get.line:
                      exit    ;* From continuation line loop
 
                   case ss ='IFNDEF'
-                     token.name = field(trim(src), ' ', 2)
-                     if not(bittest(mode, M.CASE.SENSITIVE)) then token.name = upcase(token.name)
-                     ss = find(defined.tokens, token.name)
-                     n = (status() = 0)
+                     gosub ifdef.test          ;* 10 Oct 26 dm  AND and OR (ref 219)
+                     n = ifdef.result
    
                      * Set field 1 of the skip stack to show what we are doing.
                      * Value 1 = action : 0 = processing first statement group
@@ -2693,24 +2710,30 @@ proc.directive:
                catalogue.name = '~'
          end case
 
-         begin case
-            case look.ahead.token = TKN.END
-*              14 Sep 26 - get.call.name answers lower case now (stage 3a),
-*              so the keyword test compares upper to upper.
-               if upcase(catalogue.name) = 'LOCAL' or upcase(catalogue.name) = 'GLOBAL' then
-                  * Not really a catalogue name at all
-                  catalogue.mode = upcase(catalogue.name)
-                  catalogue.name = '~'
-               end
-            case u.look.ahead.token.string = 'LOCAL'
-               catalogue.mode = u.look.ahead.token.string
-            case u.look.ahead.token.string = 'GLOBAL'
-               catalogue.mode = u.look.ahead.token.string
-            case 1
+*        14 Sep 26 - get.call.name answers lower case now (stage 3a),
+*        so the keyword test compares upper to upper.
+*        10 Oct 26 - NO.QUERY (ref 191), and the keywords in any order:
+*        the "name" may itself be the first keyword, then LOCAL, GLOBAL
+*        and NO.QUERY may follow.
+         cat.word = upcase(catalogue.name)
+         if cat.word = 'LOCAL' or cat.word = 'GLOBAL' or cat.word = 'NO.QUERY' then
+            * Not really a catalogue name at all
+            gosub set.cat.mode
+            catalogue.name = '~'
+         end
+
+         loop
+         until look.ahead.token = TKN.END
+            cat.word = u.look.ahead.token.string
+            if cat.word = 'LOCAL' or cat.word = 'GLOBAL' or cat.word = 'NO.QUERY' then
+               gosub set.cat.mode
+               gosub get.token
+            end else
                err.msg = sysmsg(2835, directive.name) ;* Misformed $xx
                gosub error
                goto exit.proc.directive
-         end case
+            end
+         repeat
 
          * Validate the name
 
@@ -2751,6 +2774,7 @@ proc.directive:
 
          gosub get.token         ;* Get token name
          define.token = token.string
+         gosub strict.equate.check
 
          begin case
          case look.ahead.token = TKN.END
@@ -2927,17 +2951,34 @@ proc.directive:
                err.msg = sysmsg(2841) ;* Mode name required after $MODE
                gosub error
             end else
-               gosub get.token
-               locate u.token.string in mode.names<1,1> setting i then
-                  if reset.mode then
-                     mode = bitreset(mode, i - 1)
+               * One or more names, separated by commas.  Each may be preceded
+               * by a minus to turn it off (ref 105).
+
+               loop
+                  gosub get.token
+                  locate u.token.string in mode.names<1,1> setting i then
+                     if reset.mode then
+                        mode = bitreset(mode, i - 1)
+                     end else
+                        mode = bitset(mode, i - 1)
+                     end
                   end else
-                     mode = bitset(mode, i - 1)
+                     err.msg = sysmsg(2842) ;* Unrecognised mode name
+                     gosub error
                   end
-               end else
-                  err.msg = sysmsg(2842) ;* Unrecognised mode name
-                  gosub error
-               end
+               while look.ahead.token = TKN.COMMA
+                  gosub get.token         ;* Skip the comma
+                  reset.mode = @false
+                  if look.ahead.token = TKN.MINUS then
+                     reset.mode = @true
+                     gosub get.token
+                  end
+                  if look.ahead.token = TKN.END then
+                     err.msg = sysmsg(2841) ;* Mode name required after $MODE
+                     gosub error
+                     exit
+                  end
+               repeat
             end
          end
 
@@ -4848,8 +4889,10 @@ emit.at.var.load:
            at.hostname,
            at.gid,
            at.uid,
-           at.sdsys
-               
+           at.sdsys,
+           at.line,
+           at.build.time
+
 at.mark:                                    ;* FM, VM, SM, TM, IM, AM, SVM
       opcode.string = mark.chars[i,1] ; gosub emit.string.load
       return
@@ -4958,6 +5001,17 @@ at.gid:
 at.uid:
       n = 27 ; gosub emit.numeric.load
       opcode.byte = OP.SYSTEM ; gosub emit.simple
+      return
+
+at.line:                                    ;* @LINE  -  source line number
+      n = line.no(1) ; gosub emit.numeric.load
+      return
+
+at.build.time:                              ;* @BUILD.TIME  -  compile time
+      * Seconds since 1 Jan 1970 (internal date 732), in the compiler's local
+      * time, as MVEPOCH() gives it.
+      n = ((date() - 732) * 86400) + int(time())
+      gosub emit.numeric.load
       return
    end
 
@@ -7245,6 +7299,7 @@ st.equate:
 
       gosub get.token
       define.token = token.string
+      gosub strict.equate.check
 
       if u.look.ahead.token.string # "TO" then goto err.to
       gosub get.token
@@ -12795,6 +12850,92 @@ emit.listing:
    end
    return
 
+
+* ======================================================================
+* SET.CAT.MODE  -  Record a catalogue keyword (ref 191)
+*
+* In:  CAT.WORD = LOCAL, GLOBAL or NO.QUERY (upper case)
+* The mode passed back to BASIC is "[LOCAL|GLOBAL][ NO.QUERY]", which BASIC
+* hands on as the tail of its CATALOGUE command.
+
+set.cat.mode:
+   cat.had.nq = (index(catalogue.mode, 'NO.QUERY', 1) # 0)
+   if cat.word = 'NO.QUERY' then
+      cat.had.nq = @true
+      cat.new = field(catalogue.mode, ' ', 1)
+      if cat.new = 'NO.QUERY' then cat.new = ''
+   end else
+      cat.new = cat.word
+   end
+   catalogue.mode = trim(cat.new : (if cat.had.nq then ' NO.QUERY' else ''))
+   return
+
+* ======================================================================
+* STRICT.EQUATE.CHECK  -  With $MODE STRICT.EQUATE, warn that the name
+* being defined by EQUATE or $DEFINE (in DEFINE.TOKEN) is also a statement
+* or function name (ref 582).  The operator names (AND, OR, EQ ...) never
+* reach here: the tokenizer returns them as operators, not names.
+
+strict.equate.check:
+   if bittest(mode, M.STRICT.EQUATE) then
+      strict.name = upcase(define.token)
+      locate strict.name in statements<1> setting strict.pos then
+         err.msg = sysmsg(12043, define.token)
+         gosub warning
+      end else
+         locate strict.name in intrinsics<1> setting strict.pos then
+            err.msg = sysmsg(12043, define.token)
+            gosub warning
+         end
+      end
+   end
+   return
+
+* ======================================================================
+* IFDEF.TEST  -  Evaluate the test on a $IFDEF or $IFNDEF line (ref 219)
+*
+* The line holds one token name, or token names joined by AND and OR.  AND
+* binds tighter than OR; there is no NOT and no brackets.  Text after a
+* name that is neither AND nor OR is ignored, as it always was.
+* In:  SRC = the directive line
+* Out: IFDEF.RESULT = @true if the test is true.  $IFNDEF skips when it is true,
+*      so "$IFNDEF a OR b" is the negation of "$IFDEF a OR b".
+
+ifdef.test:
+   ifdef.line = trim(src)
+   ifdef.result = @false      ;* OR of the terms already complete
+   ifdef.term = @false        ;* AND of the names in the current term
+   ifdef.first = @true        ;* No name yet in the current term
+   ifdef.name.next = @true
+   for ifdef.i = 2 to dcount(ifdef.line, ' ')
+      ifdef.word = field(ifdef.line, ' ', ifdef.i)
+      if ifdef.name.next then
+         token.name = ifdef.word
+         if not(bittest(mode, M.CASE.SENSITIVE)) then token.name = upcase(token.name)
+         ss = find(defined.tokens, token.name)
+         if ifdef.first then
+            ifdef.term = (status() = 0)
+            ifdef.first = @false
+         end else
+            ifdef.term = ifdef.term and (status() = 0)
+         end
+         ifdef.name.next = @false
+      end else
+         begin case
+            case upcase(ifdef.word) = 'AND'
+               null
+            case upcase(ifdef.word) = 'OR'
+               ifdef.result = ifdef.result or ifdef.term
+               ifdef.term = @false
+               ifdef.first = @true
+            case 1
+               exit           ;* Not ours: ignore the rest
+         end case
+         ifdef.name.next = @true
+      end
+   next ifdef.i
+   ifdef.result = ifdef.result or ifdef.term
+   return
 
 * ======================================================================
 * Reassess kernel modes after $MODE or equivalent

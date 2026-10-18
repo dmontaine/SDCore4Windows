@@ -18,6 +18,10 @@
 * 
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1c94d00 (10 Oct 26), RELEASE_1.1 143: the
+*           NO.QUERY option (openQM ref 27), passed to CATALOGUE; BCOMP also
+*           hands it back from $CATALOGUE and $BASIC.OPTIONS in the catalogue
+*           mode (ref 191).
 * 19 Aug 26 Windows port - the object file is named from the VOC record that
 *           answered the open, not from the token, and the suffix follows its
 *           case: BASIC bp X now makes bp.out, not the mixed-case bp.OUT that
@@ -65,6 +69,7 @@ $define max.levels   10
    program.name.list = ''
 
    compiler.flags = 0
+   no.query = @false
 
    source.file.name = ""
    record.name = ""
@@ -82,6 +87,9 @@ $define max.levels   10
 
          case keyword = KW$LISTING
             compiler.flags = bitor(compiler.flags, BCOMP.LISTING)
+
+         case keyword = KW$NO.QUERY
+            no.query = @true      ;* 10 Oct 26 dm  (ref 27)
 
          case keyword = KW$NOXREF
             compiler.flags = bitor(compiler.flags, BCOMP.NO.XREF.TABLES)
@@ -352,7 +360,11 @@ compile:
       write object.code to out.f, record.name
 
       if catalogue.name # '' then
-         execute 'CATALOGUE ' : source.file.name : ' ' : catalogue.name : ' ' : record.name : ' ' : catalogue.mode
+         cat.cmd = 'CATALOGUE ' : source.file.name : ' ' : catalogue.name : ' ' : record.name : ' ' : catalogue.mode
+         * NO.QUERY on the BASIC command, or on the $CATALOGUE directive or
+         * the CATALOGUE entry of $BASIC.OPTIONS (it is then in catalogue.mode)
+         if no.query and not(index(upcase(catalogue.mode), 'NO.QUERY', 1)) then cat.cmd := ' NO.QUERY'
+         execute cat.cmd
       end
    end
 
