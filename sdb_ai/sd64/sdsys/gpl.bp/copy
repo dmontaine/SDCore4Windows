@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is copied to a file that is not
+*               one as its JSON text (the copy stopped with "Data cannot be
+*               converted to a string").
 * 06 Oct 26 Windows port - the closing line no longer says "copied and deleted"
 *            when the guard (10187) left a record copied onto itself in place:
 *            shared message 13050, taken from SD Core for Linux (parity audit
@@ -332,6 +335,14 @@ copy.record:
                release tgt.file, tgt.record.name
                return
             end
+         end
+
+         * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): - a record of a data collection file is a collection when it is read.  Into a file
+         * that is not one it goes as its JSON text; into one that is, the collection is written as it is.
+         * (It stopped with "Data cannot be converted to a string".)
+         jt = jtype(rec)
+         if (jt = 'collection' or jt = 'array') and not(fileinfo(tgt.file, FL$COLLECTION)) then
+            rec = jbuild(rec)
          end
 
          write rec to tgt.file, tgt.record.name on error

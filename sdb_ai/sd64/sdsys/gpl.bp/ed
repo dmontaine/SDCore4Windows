@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is edited as its JSON text, one
+*               element to a line (JB$PRETTY); filed or unloaded into a data
+*               collection file the lines go back as text, which the file parses
+*               and refuses if it is not a JSON object or array.  The editor died
+*               with "Data cannot be converted to a string" on such a record.
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
 *            (RELEASE_1.1_FIXES.md 33, owner's ruling).
 * 21 Aug 26 Windows port - the command-error preset was ER$ARGS, not -ER$ARGS,
@@ -349,6 +354,10 @@ edit:
       display sysmsg(1433, record.name, status()) ;* Record 'xx' is locked by user xx
       return
    end then
+      * A record of a data collection file is a collection: take its JSON text, a line to an element
+      jt = jtype(rec)
+      if jt = 'collection' or jt = 'array' then rec = convert(char(10), @fm, jbuild(rec, JB$PRETTY))
+
       s = rec[1,1]
       if len(dict.flag) and listindex('A,C,I,S', ',', s) then
          rec = trim(field(rec, @fm, 1, DICT.SYS.INFO - 1), @fm, 'T')
@@ -1785,6 +1794,9 @@ l:
 
          close n.file
 
+         jt = jtype(s)   ;* A record of a data collection file: its JSON text, a line to an element
+         if jt = 'collection' or jt = 'array' then s = convert(char(10), @fm, jbuild(s, JB$PRETTY))
+
          n.lines = dcount(s, @fm)
 
          loop
@@ -2613,7 +2625,13 @@ u:
             end
          end
 
-         write s to n.file, new.record
+         * A data collection file takes the lines as JSON text, and refuses text that is not
+         if fileinfo(n.file, FL$COLLECTION) then s = convert(@fm, char(10), s)
+         write s to n.file, new.record on error
+            message = sysmsg(6598, status(), os.error()) ;* Write error %1 - Data not saved
+            gosub error
+            goto abort.unload
+         end
          display sysmsg(6586, n.lines, new.file, new.record)
          * %1 lines unloaded to %2 %3
 
@@ -3472,7 +3490,10 @@ save.record:
 
    if write.allowed then
       saved.ok = @true
-      writeu rec to n.file,new.record
+      out.rec = rec
+      * A data collection file takes the lines as JSON text
+      if fileinfo(n.file, FL$COLLECTION) then out.rec = convert(@fm, char(10), rec)
+      writeu out.rec to n.file,new.record
       on error
          saved.ok = @false
          if status() = ER$TRIGGER then

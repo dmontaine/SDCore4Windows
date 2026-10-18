@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): Data collection files: text written to one is made into its collection before
+ *               the pre-write trigger, so a trigger is always given a collection, and the
+ *               post-write trigger is given the collection (call_trigger passed it as a string
+ *               and the trigger stopped the process: Fault type 11).
  *  4 Sep 26 Windows port - dir_read() added, the read half the directory code
  *           never had: dir_write() has always been callable but the only
  *           reader was read_record(), which takes its arguments off the VM's
@@ -810,6 +814,19 @@ void op_write() {
     case DYNAMIC_FILE:
       dh_file = fvar->access.dh.dh_file;
 
+      /* 11 Oct 26 dm - A data collection file: text is made into its collection BEFORE any trigger
+         sees it, so a trigger is always given a collection whatever the program wrote (it was given
+         the text when the program wrote text).  Text that is not a JSON object or array is refused
+         here, with the same status as before, but ahead of the trigger.  The file then holds the
+         compact JSON of the collection. */
+
+      if (coll_file && (src_descr->type != COLL)) {
+        if (!coll_record_in(src_descr)) {
+          process.status = -ER_PARSE_ERROR;
+          goto exit_op_write;
+        }
+      }
+
       /* Call pre-write trigger function if required */
 
       if (dh_file->trigger_modes & TRG_PRE_WRITE) {
@@ -851,6 +868,10 @@ void op_write() {
         InitDescr(src_descr, COLL);
         src_descr->data.coll = coll_keep;
         coll_keep = NULL;
+      } else if (coll_file && (dh_file->trigger_modes & TRG_POST_WRITE)) {
+        /* A pre-write trigger put text in the place of the collection: the post-write trigger is given
+           the collection made from it (the text was accepted above, so this succeeds) */
+        (void)coll_record_in(src_descr);
       }
 
       /* Call post-write trigger function if required */
@@ -1885,6 +1906,13 @@ bool call_trigger(DESCRIPTOR *fvar_descr, int16_t mode, DESCRIPTOR *id_descr, DE
   if (updatable) {
     InitDescr(e_stack, ADDR);
     (e_stack++)->data.d_addr = data_descr;
+  } else if ((data_descr != NULL) && (data_descr->type == COLL)) {
+    /* 11 Oct 26 dm - The post-write trigger of a data collection file is given the collection.  It was
+       given the descriptor read as a string, a pointer that was not a string, and stopped the process. */
+    InitDescr(e_stack, COLL);
+    e_stack->data.coll = data_descr->data.coll;
+    (data_descr->data.coll->ref_ct)++;
+    e_stack++;
   } else {
     InitDescr(e_stack, STRING);
     str = (data_descr == NULL) ? NULL : (data_descr->data.str.saddr);

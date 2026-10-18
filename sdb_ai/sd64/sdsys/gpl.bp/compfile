@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is compared as its JSON text.
 * 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): 1.2-0 openQM ref 534.  The syntax is SD's own.
 * END-HISTORY
 *
@@ -98,6 +99,12 @@ $include parser.h
       read rec.1 from f(1), id else rec.1 = ''
       locate id in ids.2<0> setting pos then
          read rec.2 from f(2), id else rec.2 = ''
+         * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): - a record of a data collection file is compared as its JSON text (names are kept
+         * in order, so two equal collections give the same text); the comparison died on a collection
+         jt = jtype(rec.1)
+         if jt = 'collection' or jt = 'array' then rec.1 = jbuild(rec.1)
+         jt = jtype(rec.2)
+         if jt = 'collection' or jt = 'array' then rec.2 = jbuild(rec.2)
          if rec.1 = rec.2 then same += 1 else differ<-1> = id
          seen<-1> = id
       end else

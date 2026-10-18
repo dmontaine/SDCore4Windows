@@ -2,6 +2,56 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  ED, COPY, COMPARE.FILES AND TRIGGERS WORK ON A DATA COLLECTION FILE.
+
+             ED file id                  edit a record's JSON, a line to an element
+             COPY FROM coll TO other ids   the JSON text goes into a file that is
+                                           not a collection file
+             COMPARE.FILES one two       records compared as their JSON text
+
+           All three stopped with "Data cannot be converted to a string" when
+           they met a record of a data collection file, because a program that
+           reads such a record is given a collection, not text.  ED (and EDIT)
+           now shows the record as CT does, one element to a line, and files the
+           lines back as JSON text; the file makes a collection of it again and
+           refuses it, with "Write error 1020 - Data not saved", if it is not a
+           JSON object or array, leaving the stored record as it was.  The same
+           holds for UNLOAD into a collection file, and LOAD of lines from a
+           collection record gives the lines of its JSON.  COPY from a
+           collection file to a file that is not one writes the JSON text, in
+           the compact form the file itself holds; to another collection file
+           it copies the collection, as before.  Text that is not JSON copied
+           into a collection file is refused, "Error 1020 writing record", and
+           stops the copy, as any write error does.  COMPARE.FILES compares
+           collection records by their JSON text, in which the names are always
+           in order, so two equal collections are the same.
+
+           Triggers on a collection file now behave as the records do.  A
+           pre-write trigger was given a collection when the program wrote one
+           but the text when it wrote text, and the post-write trigger was given
+           something that was not a string or a collection: a trigger that used
+           the record there stopped the whole process with "Fault type 11".
+           Both triggers, and the read trigger, are now always given the
+           collection.  Text written to a collection file is made into its
+           collection before the trigger runs, so text that is not a JSON object
+           or array is refused (error 1020) without the trigger seeing it, and
+           what a pre-write trigger changes is what is stored.  The file holds
+           the compact JSON of the collection, whatever layout the text had;
+           a program reading the record gets the same collection as before.
+           A trigger that refuses a write (a non-zero @TRIGGER.RETURN.CODE)
+           stops it as usual, and the post-write trigger does not run.
+
+           The API server now sends a client the JSON text of a record it reads
+           from a collection file; it would have failed to send the collection.
+           This one has been compiled but not yet run against a live API server.
+
+           The other file commands already worked on these files and still do:
+           CONFIGURE.FILE, CLEAR.FILE, DELETE, COUNT, LIST.ITEM, SORT.ITEM,
+           DUMP and CT.  Not changed: MICRO and NANO, which need a terminal and
+           were not tried on a collection record, READV by field number on a
+           collection file (a collection has no fields), and ANALYSE.FILE, which
+           does not say that a file holds collections.
+
 18 Oct 26  THE DEBUGGER SHOWS A DATA COLLECTION.
 
              /c                      the collection c: kind, elements, JSON
