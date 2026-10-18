@@ -49,6 +49,7 @@ Public bool is_sdApiSrvr init(FALSE); /* Process is a sdApiSrvr */
    (linuxio.c) and must NOT run the SCRAM handshake (APISRVR) - it is already
    logged in as the user it runs as.  Set by sd.c's -H, alongside is_sdApiSrvr. */
 Public bool api_preauth init(FALSE); /* Pre-authenticated API session (-H) */
+Public bool class_main_ok init(FALSE); /* Set by op_run() and op_chain() for the one k_call() they make: a class module may run its MAIN (16 Oct 26, Fixes item 484) */
 Public bool is_nt init(FALSE);       /* Windows NT/2000/XP? */
 
 Public int phantom_user_index init(0); /* User table index for phantom */
@@ -185,6 +186,7 @@ struct PROCESS {
 #define P_NON_TXN 0x0040  /* OPEN / OPENPATH ... NON.TRANSACTIONAL (openQM item 64) */
 #define P_TRAIL 0x0080    /* SUBSTRA is a trailing substring assignment, var[n] = expr (openQM item 41) */
 #define P_OPEN_ZERO 0x0100 /* OPEN / OPENPATH under $MODE OPEN.FAIL.ZERO.FVAR: a failed open sets the file variable to 0 (item 514) */
+#define P_SYNC 0x0200      /* OPEN / OPENPATH ... SYNC: forced writes (QM4 Fixes item 102).  The bit READNEXT uses for P_PICK_RDNX; never both */
 #define P_PICK_RDNX 0x0200 /* READNEXT under $MODE PICK.READNEXT: the id variable is left alone when the ELSE clause is taken (item 418) */
 #define P_THEN_ELSE 0x0400 /* WRITE / DELETE has a THEN / ELSE clause under $MODE WRITE.DELETE.THEN.ELSE: a trigger failure takes ELSE (openQM items 368, 496) */
 /* 0x0800 is Linux's P_TEMPFILE (OPENTEMP, held: it rests on the S.63 OS-access gate); left free so the values agree */
@@ -216,6 +218,7 @@ Public int16_t k_exit_cause; /* Kernel dispatch loop exit cause */
 #define K_EXIT_RECURSIVE 0x0005 /* RETURN from recursive code */
 #define K_LOGOUT 0x0006         /* Logout process on final return */
 #define K_TOGGLE_TRACER 0x0007  /* Enter or leave trace mode */
+#define K_RESET_ALL_EXIT 0x0008 /* LOGTO ... RESET ALL: unwind to the bottom command processor (16 Oct 26) */
 #define K_CHAIN_PROC 0x0010     /* Chain to a PROC */
 /* Special causes */
 #define K_QUIT 0x0020      /* Ctrl-C */

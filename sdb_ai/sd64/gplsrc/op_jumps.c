@@ -444,6 +444,7 @@ void op_enter() {
     k_return();
   }
 
+  class_main_ok = TRUE; /* a class module is run through its MAIN subroutine (Fixes item 484) */
   k_call(call_name, 0, NULL, 0);
 
   return;
@@ -918,6 +919,7 @@ void op_run() {
   }
   k_dismiss();
 
+  class_main_ok = TRUE; /* a class module is run through its MAIN subroutine (Fixes item 484) */
   k_call(runfile_name, 0, NULL, 0);
 
   return;

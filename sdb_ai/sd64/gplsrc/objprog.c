@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): A name map of 32 entries or more is looked up through a hash index (QM4 Fixes item 13): next_named_entry().
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): RESTRICTED names (QM4 gaps): find_name_map_entry() skips one the running object is not in the inheritance tree of.
  * 14 Sep 26 Windows port - op_object() lowers the class catalogue name, as
  *           op_call() does.  The property name in op_objref() stays upper:
@@ -57,6 +58,124 @@ Private bool find_undefined_name_handler(int16_t mode,
 Private DESCRIPTOR* resolve_index(DESCRIPTOR* array_descr,
                                   DESCRIPTOR* indx_descr,
                                   int16_t dims);
+Private OBJECT_NAME_MAP* next_named_entry(OBJDATA* o,
+                                          const char* name,
+                                          int32_t* cursor);
+Private void free_name_index(OBJDATA* o);
+
+/* ======================================================================
+   The name map index (QM4 Fixes item 13, 16 Oct 26)
+
+   An object's name map is a packed list in its object code, searched for
+   every property or method reference.  A map of NAME_INDEX_MIN entries or
+   more gets a hash index the first time a name is sought in it; a smaller
+   one is still scanned.  next_named_entry() returns the entries called
+   `name` one at a time in map order, as the scan did, so a RESTRICTED entry
+   the caller may not see is skipped for the next entry of that name.
+   *cursor is 0 for the first call and is left for the next.              */
+
+Private u_int32_t name_hash(const char* s) {
+  u_int32_t h = 2166136261u;
+
+  while (*s)
+    h = (h ^ (u_char)(*s++)) * 16777619u;
+  return h;
+}
+
+Private void free_name_index(OBJDATA* o) {
+  NAME_INDEX* ix = o->name_index;
+
+  if (ix != NULL) {
+    k_free(ix->bucket);
+    k_free(ix->next);
+    k_free(ix->entry);
+    k_free(ix);
+    o->name_index = NULL;
+  }
+  o->name_count = -1;
+}
+
+Private void build_name_index(OBJDATA* o) {
+  OBJECT_NAME_MAP* p;
+  NAME_INDEX* ix;
+  int32_t n = 0;
+  int32_t i;
+  int32_t b;
+  int32_t* tail;
+
+  for (p = o->name_map; p != NULL; p = NextNameMapEntry(p))
+    n++;
+  o->name_count = n;
+  o->name_index = NULL;
+  if (n < NAME_INDEX_MIN)
+    return;
+
+  ix = (NAME_INDEX*)k_alloc(126, sizeof(NAME_INDEX));
+  if (ix == NULL)
+    return; /* No memory: the map is scanned, as before */
+  ix->nbuckets = n * 2 + 1;
+  ix->bucket = (int32_t*)k_alloc(127, sizeof(int32_t) * ix->nbuckets);
+  ix->next = (int32_t*)k_alloc(128, sizeof(int32_t) * n);
+  ix->entry = (OBJECT_NAME_MAP**)k_alloc(129, sizeof(OBJECT_NAME_MAP*) * n);
+  tail = (int32_t*)k_alloc(129, sizeof(int32_t) * ix->nbuckets);
+  if (ix->bucket == NULL || ix->next == NULL || ix->entry == NULL || tail == NULL) {
+    k_free(ix->bucket);
+    k_free(ix->next);
+    k_free(ix->entry);
+    k_free(tail);
+    k_free(ix);
+    return;
+  }
+  for (b = 0; b < ix->nbuckets; b++)
+    ix->bucket[b] = tail[b] = -1;
+
+  /* Chain each hash value's entries in map order: append at the tail */
+  for (i = 0, p = o->name_map; p != NULL; p = NextNameMapEntry(p), i++) {
+    b = (int32_t)(name_hash(p->name) % (u_int32_t)ix->nbuckets);
+    ix->entry[i] = p;
+    ix->next[i] = -1;
+    if (tail[b] < 0)
+      ix->bucket[b] = i;
+    else
+      ix->next[tail[b]] = i;
+    tail[b] = i;
+  }
+  k_free(tail);
+  o->name_index = ix;
+}
+
+Private OBJECT_NAME_MAP* next_named_entry(OBJDATA* o,
+                                          const char* name,
+                                          int32_t* cursor) {
+  OBJECT_NAME_MAP* p;
+  NAME_INDEX* ix;
+  int32_t i;
+
+  if (o->name_map == NULL)
+    return NULL;
+  if (o->name_count < 0)
+    build_name_index(o);
+
+  if ((ix = o->name_index) == NULL) { /* Small map: scan, from entry number *cursor */
+    for (i = 0, p = o->name_map; p != NULL; p = NextNameMapEntry(p), i++) {
+      if (i >= *cursor && !strcmp(p->name, name)) {
+        *cursor = i + 1;
+        return p;
+      }
+    }
+    return NULL;
+  }
+
+  /* *cursor is the number of the last entry returned plus one */
+  i = (*cursor == 0) ? ix->bucket[name_hash(name) % (u_int32_t)ix->nbuckets] : ix->next[*cursor - 1];
+  for (; i >= 0; i = ix->next[i]) {
+    if (!strcmp(ix->entry[i]->name, name)) {
+      *cursor = i + 1;
+      return ix->entry[i];
+    }
+  }
+  return NULL;
+}
 
 /* ======================================================================
    restricted_visible()  -  RESTRICTED names (16 Oct 26)
@@ -191,7 +310,8 @@ void op_object() {
 
   DESCRIPTOR* descr;
   int16_t num_args;
-  char call_name[MAX_PROGRAM_NAME_LEN + 1];
+  char call_name[MAX_PATHNAME_LEN + 1];
+  bool is_path;
   OBJDATA* objdata;
   u_char* object_code;
 
@@ -201,13 +321,19 @@ void op_object() {
   while (descr->type == ADDR)
     descr = descr->data.d_addr;
 
-  if (k_get_c_string(descr, call_name, MAX_PROGRAM_NAME_LEN) <= 0) {
+  if (k_get_c_string(descr, call_name, MAX_PATHNAME_LEN) <= 0) {
     k_illegal_call_name();
   }
-  LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
 
-  if (!valid_call_name(call_name))
-    k_illegal_call_name();
+  /* An internal program ($classmain) may name the class by the pathname of its runfile, as RUN does (16 Oct 26, Fixes item 484).
+     A path is used as it is; a catalogue name is lower case and must be a valid call name, as before.                          */
+  is_path = (process.program.flags & HDR_INTERNAL) && (strchr(call_name, DS) != NULL);
+  if (!is_path) {
+    LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
+
+    if (!valid_call_name(call_name))
+      k_illegal_call_name();
+  }
 
   object_code = (u_char*)load_object(call_name, FALSE);
   if (object_code == NULL)
@@ -307,6 +433,7 @@ void op_objmap() {
   name_map_len = *pc | (((u_int16_t)*(pc + 1)) << 8);
   pc += 2;
 
+  free_name_index(objdata); /* Whatever map it had before */
   objdata->name_map = (name_map_len != 0) ? ((OBJECT_NAME_MAP*)pc) : NULL;
   pc += name_map_len;
 }
@@ -380,6 +507,8 @@ OBJDATA* create_objdata(u_char* obj) {
   objdata->ref_ct = 1;
   objdata->objprog = obj;
   objdata->name_map = NULL;
+  objdata->name_count = -1;
+  objdata->name_index = NULL;
   objdata->obj_vars = NULL;
   objdata->inherits = NULL;
   objdata->next_inherited = NULL;
@@ -401,59 +530,59 @@ Private bool find_name_map_entry(int16_t mode,
   int16_t key;
   u_char arg_ct;
   DESCRIPTOR* var_descr;
+  int32_t cursor;
 
   scanobj = objdata;
   nextobj = objdata->inherits;
 
   do {
-    for (p = scanobj->name_map; p != NULL; p = NextNameMapEntry(p)) {
-      if (!strcmp(p->name, name)) /* Found it */
+    cursor = 0;
+    while ((p = next_named_entry(scanobj, name, &cursor)) != NULL) /* Found it */
+    {
+      /* RESTRICTED (16 Oct 26): a name the class declared RESTRICTED is not there for an object outside its inheritance tree */
+      if (IsRestricted(p) && !restricted_visible(scanobj))
+        continue;
+
+      var = PublicVar(p);
+
+      if (mode == 0) /* PUT / Method subroutine */
       {
-        /* RESTRICTED (16 Oct 26): a name the class declared RESTRICTED is not there for an object outside its inheritance tree */
-        if (IsRestricted(p) && !restricted_visible(scanobj))
-          continue;
-
-        var = PublicVar(p);
-
-        if (mode == 0) /* PUT / Method subroutine */
-        {
-          key = SetKey(p);
-          arg_ct = p->set_arg_ct;
-        } else /* GET / Method function */
-        {
-          key = GetKey(p);
-          arg_ct = p->get_arg_ct;
-        }
-
-        if (key == 0) /* Bind to public variable */
-        {
-          if (var == 0)
-            k_error("Illegal reference to property (%s).", name);
-
-          if (var < 0) {
-            if (mode == 0)
-              return FALSE; /* Hide read-only if PUT */
-            var = -var;
-          }
-
-          var_descr = Element(scanobj->obj_vars, var);
-          if (dismiss_obj)
-            k_dismiss();
-          InitDescr(e_stack, ADDR);
-          (e_stack++)->data.d_addr = var_descr;
-        } else /* Create OBJCODE reference */
-        {
-          if (dismiss_obj)
-            k_dismiss();
-          InitDescr(e_stack, OBJCD);
-          e_stack->data.objcode.objdata = scanobj;
-          e_stack->data.objcode.key = key;
-          e_stack->data.objcode.arg_ct = arg_ct;
-          e_stack++;
-        }
-
-        return TRUE;
+        key = SetKey(p);
+        arg_ct = p->set_arg_ct;
+      } else /* GET / Method function */
+      {
+        key = GetKey(p);
+        arg_ct = p->get_arg_ct;
       }
+
+      if (key == 0) /* Bind to public variable */
+      {
+        if (var == 0)
+          k_error("Illegal reference to property (%s).", name);
+
+        if (var < 0) {
+          if (mode == 0)
+            return FALSE; /* Hide read-only if PUT */
+          var = -var;
+        }
+
+        var_descr = Element(scanobj->obj_vars, var);
+        if (dismiss_obj)
+          k_dismiss();
+        InitDescr(e_stack, ADDR);
+        (e_stack++)->data.d_addr = var_descr;
+      } else /* Create OBJCODE reference */
+      {
+        if (dismiss_obj)
+          k_dismiss();
+        InitDescr(e_stack, OBJCD);
+        e_stack->data.objcode.objdata = scanobj;
+        e_stack->data.objcode.key = key;
+        e_stack->data.objcode.arg_ct = arg_ct;
+        e_stack++;
+      }
+
+      return TRUE;
     }
 
     /* If this object has an inheritance chain, scan that before going
@@ -483,35 +612,35 @@ Private bool find_undefined_name_handler(int16_t mode,
   OBJDATA* nextobj;
   OBJECT_NAME_MAP* p;
   int16_t key;
+  int32_t cursor;
   /* u_char arg_ct; variable set but not used */
 
   scanobj = objdata;
   nextobj = objdata->inherits;
 
   do {
-    for (p = scanobj->name_map; p != NULL; p = NextNameMapEntry(p)) {
-      if (!strcmp(p->name, "UNDEFINED")) /* Found it */
-      {
-        if (mode == 0) {/* PUT / Method subroutine */
-          key = SetKey(p);
-          /* arg_ct = p->set_arg_ct; varable set but never used */
-        } else {/* GET / Method function */
-          key = GetKey(p);
-          /* arg_ct = p->get_arg_ct; variable set but never used */
-        }
+    cursor = 0;
+    while ((p = next_named_entry(scanobj, "UNDEFINED", &cursor)) != NULL) /* Found it */
+    {
+      if (mode == 0) {/* PUT / Method subroutine */
+        key = SetKey(p);
+        /* arg_ct = p->set_arg_ct; varable set but never used */
+      } else {/* GET / Method function */
+        key = GetKey(p);
+        /* arg_ct = p->get_arg_ct; variable set but never used */
+      }
 
-        if (key != 0) { /* Create OBJCODE reference */
-          if (dismiss_obj)
-            k_dismiss();
-          InitDescr(e_stack, OBJCDX);
-          e_stack->n1 = key;
-          e_stack->data.objundef.objdata = scanobj;
-          e_stack->data.objundef.undefined_name =
-              (char*)k_alloc(113, strlen(name) + 1);
-          strcpy(e_stack->data.objundef.undefined_name, name);
-          e_stack++;
-          return TRUE;
-        }
+      if (key != 0) { /* Create OBJCODE reference */
+        if (dismiss_obj)
+          k_dismiss();
+        InitDescr(e_stack, OBJCDX);
+        e_stack->n1 = key;
+        e_stack->data.objundef.objdata = scanobj;
+        e_stack->data.objundef.undefined_name =
+            (char*)k_alloc(113, strlen(name) + 1);
+        strcpy(e_stack->data.objundef.undefined_name, name);
+        e_stack++;
+        return TRUE;
       }
     }
 
@@ -789,20 +918,19 @@ void free_object(OBJDATA* objdata) {
     /* Scan the name map looking for a DESTROY.OBJECT item */
 
     if (!(objdata->destructor_run)) {
-      for (p = objdata->name_map; p != NULL; p = NextNameMapEntry(p)) {
-        if (!strcmp(p->name, "DESTROY.OBJECT")) /* Found it */
-        {
-          /* Mark the object destructor routine as having been run so that
-             an abort in the destructor does not cause us to run it again. */
+      int32_t cursor = 0;
 
-          objdata->destructor_run = TRUE;
+      if ((p = next_named_entry(objdata, "DESTROY.OBJECT", &cursor)) != NULL) /* Found it */
+      {
+        /* Mark the object destructor routine as having been run so that
+           an abort in the destructor does not cause us to run it again. */
 
-          key = SetKey(p);
-          if ((key != 0) && (PublicVar(p) == 0) && (p->set_arg_ct == 0)) {
-            object_key = key;
-            k_recurse_object((u_char*)(objdata->objprog), 0, objdata);
-          }
-          break;
+        objdata->destructor_run = TRUE;
+
+        key = SetKey(p);
+        if ((key != 0) && (PublicVar(p) == 0) && (p->set_arg_ct == 0)) {
+          object_key = key;
+          k_recurse_object((u_char*)(objdata->objprog), 0, objdata);
         }
       }
     }
@@ -813,6 +941,7 @@ void free_object(OBJDATA* objdata) {
     if (--(ahdr->ref_ct) == 0)
       free_array(ahdr);
 
+    free_name_index(objdata);
     k_free(objdata);
   } else
     (objdata->ref_ct)--;

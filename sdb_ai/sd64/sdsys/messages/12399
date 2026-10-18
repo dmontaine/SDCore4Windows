@@ -1,0 +1,1 @@
+An initialisation value must be a numeric or string constant, CHAR() of a numeric constant, or a constant @-variable (@FM, @VM, @SM, @TM, @IM, @AM, @SVM, @TRUE, @FALSE)

@@ -357,6 +357,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    header.flags = HDR.ITYPE         ;* Option flags
    greatest.call.arg.count = 0
+   mode2 = 0                        ;* 16 Oct 26 (Fixes item 489): the string overlap modes in force, as bcomp's mode2 bits 0 to 2
+   str.ovl.used = @false            ;* ...and whether any of them has been named: then CHANGE, COUNT, INDEX and the like are preceded by OP.STROVL
+   time.ms = @false                 ;* $MODE TIME.MS: TIME() to the millisecond
 
    * Expression processing
 
@@ -403,6 +406,54 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    end
 
    if print.code then print source
+
+   * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 489.  The expression may start with compiler modes: $MODE name{,name...} ; (one or more such
+   * settings).  They take the same effect as in a program.  Six are allowed; the I-type compiler does not read $BASIC.OPTIONS,
+   * and an I-type that is called from another cannot set modes.
+   loop
+      s = trimf(source)
+   until upcase(s[1,6]) # '$MODE '
+      i = index(s, ';', 1)
+      if i = 0 then exit            ;* Modes and nothing to evaluate: the expression is faulty, left to the tokenizer to say so
+      if depth > 1 then              ;* QPROC compiles the I-types it is asked for at depth 1; TRANS() of an I-type goes one deeper
+         err.msg = sysmsg(12401) ;* An I-type used by another I-type cannot set modes
+         goto error
+      end
+      mode.names = convert(' ', '', upcase(s[7, i - 7]))
+      mode.rest = s[i + 1, 999999]
+      for mk = 1 to dcount(mode.names, ',')
+         mnm = field(mode.names, ',', mk)
+         mneg = (mnm[1,1] = '-')
+         if mneg then mnm = mnm[2,99]
+         begin case
+            case mnm = ''
+               null
+            case mnm = 'CHANGE.NO.OVERLAP'
+               mode2 = if mneg then bitand(mode2, 6) else bitor(mode2, 1)
+               str.ovl.used = @true
+            case mnm = 'COUNT.OVERLAP'
+               mode2 = if mneg then bitand(mode2, 5) else bitor(mode2, 2)
+               str.ovl.used = @true
+            case mnm = 'INDEX.OVERLAP'
+               mode2 = if mneg then bitand(mode2, 3) else bitor(mode2, 4)
+               str.ovl.used = @true
+            case mnm = 'NOCASE.STRINGS'
+               if mneg then
+                  if bitand(header.flags, HDR.NOCASE) then header.flags -= HDR.NOCASE
+               end else
+                  header.flags = bitor(header.flags, HDR.NOCASE)
+               end
+            case mnm = 'TIME.MS'
+               time.ms = not(mneg)
+            case mnm = 'COMPATIBLE.APPEND'
+               null                 ;* About appending to a dynamic array in an assignment: an I-type has none
+            case 1
+               err.msg = sysmsg(12400, mnm) ;* %1 is not a mode an I-type can use
+               goto error
+         end case
+      next mk
+      source = mode.rest
+   repeat
 
    * Emit skeleton object header
 
@@ -2126,6 +2177,23 @@ in.trim:
 
 in.none:
 intrinsic.common:
+         * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 489.  As in a program (bcomp, intrinsic.common): once an overlap mode has been named in this
+         * I-type, each call of the functions it touches is preceded by the modes then in force, a mask for OP.STROVL; and with
+         * $MODE TIME.MS, TIME() is SYSTEM(1020) / 1000.
+         if str.ovl.used then
+            i = intrinsic.stack<1>
+            if i = op.change or i = op.count or i = op.counts or i = op.index or i = op.indexs then
+               n = bitand(mode2, 7) ; gosub emit.numeric.load
+               opcode.byte = op.strovl ; gosub emit.simple
+            end
+         end
+         if time.ms and intrinsic.stack<1> = op.time then
+            n = 1020 ; gosub emit.numeric.load
+            opcode.byte = op.system ; gosub emit.simple
+            n = 1000 ; gosub emit.numeric.load
+            opcode.byte = op.div ; gosub emit.simple
+            goto intrinsic.end
+         end
          opcode.byte = intrinsic.stack<1> ;gosub emit.simple
 
 intrinsic.end:

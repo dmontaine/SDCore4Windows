@@ -107,6 +107,7 @@ bool dh_delete(DH_FILE* dh_file, char id[], int16_t id_len);
 
 /* DH_FILE.C */
 void dh_fsync(DH_FILE* dh_file, int16_t subfile);
+void dh_forced_write(DH_FILE* dh_file);
 bool dh_init(void);
 void dh_close_file(OSFILE fu);
 void dh_close_subfile(DH_FILE* dh_file, int16_t subfile);

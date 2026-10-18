@@ -271,6 +271,7 @@ deffun elevate(action,arg) calling '!elevate'
 $define max.elements 500
 
    logto.reset = @false      ;* 0555
+   logto.reset.all = @false  ;* 16 Oct 26, Fixes item 30: LOGTO name RESET ALL
 
 restart.cproc:
    * Save the Proc common variables
@@ -531,6 +532,23 @@ restart.cproc:
          mat proc.fvar = 0     ;* Ensure all PROC files are closed
 
          begin case
+            case abort.code = K$RESET.ALL.CODE   ;* LOGTO ... RESET ALL (16 Oct 26, Fixes item 30)
+               * The kernel cast off every level above this one and called this bottom command processor again.  Delete the
+               * unnamed common each stacked level had, so a level started later does not find the old one's variables, and run
+               * the LOGIN of the account that was entered.  It is not an abort: no ON.ABORT, and a phantom does not die.
+               s = kernel(K$RESET.ALL, '')
+               for i = 2 to s<1>
+                  delete.common '$':i
+               next i
+               abort.code = 0
+               if s<2> # '' then
+                  at.command = ""
+                  new.sentence = s<2>
+                  break off
+                  gosub proc.sentence
+                  break on
+               end
+
             case abort.code = K$LOGOUT   ;* LOGOUT
                logmsg sysmsg(5062) ;* Forced logout
 
@@ -598,7 +616,7 @@ restart.cproc:
                goto abort.cproc
          end case
 
-         if is.phantom then    ;* Phantom dies after abort
+         if is.phantom and abort.code then    ;* Phantom dies after abort (not after LOGTO RESET ALL: abort.code is 0 then)
             message = sysmsg(5012, @userno) ;* Phantom nn : Abnormal termination.
             goto terminate.phantom
          end
@@ -1779,6 +1797,7 @@ reparse:
 *   the database under the invoking user's own token, and an administrator's
 *   rights come from K$ADMINISTRATOR, seeded in kernel.c before any BASIC runs.
 *   PROJECT_STATUS.md 5.5, 5.7; PRE_RELEASE_FIXES 168.
+                  void kernel(K$CLASS.MAIN, 1)   ;* a class module named by a catalogued command is run through its MAIN (16 Oct 26, Fixes item 484)
                   call @s
                   s = ''   ;* Allow unload of object code
 
@@ -1793,6 +1812,7 @@ reparse:
                   if voc.via.k and index(voc.rec<3>, '/', 1) then verb = field(voc.rec<3>, '/', dcount(voc.rec<3>, '/'))
                   voc.via.k = @false
 
+                  void kernel(K$CLASS.MAIN, 1)   ;* a class module named by a catalogued command is run through its MAIN (16 Oct 26, Fixes item 484)
                   call @verb
                   verb = ''       ;* 0541 Ensure link lost
 
@@ -2959,16 +2979,29 @@ int.logto:
       return
    end
 
-   * Look for options
+   * Look for options.  A LOGTO that was refused part way used to leave RESET set for the next one; both start false here (16 Oct 26)
 
+   logto.reset = @false ; logto.reset.all = @false
    loop
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    until token.type = PARSER$END
       begin case
          case keyword = KW$RESET
             logto.reset = @true
+         case keyword = KW$ALL and logto.reset
+            logto.reset.all = @true
       end case
    repeat
+
+* 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - QM4 Fixes item 30.  RESET ALL discards the programs, menus and paragraphs at EVERY command level and returns to
+*   the bottom command processor, which an API session has not got (the API server is its bottom level).  Refused before anything
+*   is changed.  At the bottom level it is only RESET.
+   if logto.reset.all and kernel(K$IS.SDAPISRVR, 0) then
+      display sysmsg(12397) ;* LOGTO RESET ALL is not available in a client session
+      logto.reset = @false ; logto.reset.all = @false
+      unwinding = 2
+      return
+   end
 
    * Execute ON.LOGTO paragraph, if present
 
@@ -3131,6 +3164,18 @@ logto.unwind:
    read voc.rec from voc, login.voc.id else
       login.voc.id = downcase(login.voc.id)
       read voc.rec from voc, login.voc.id else login.voc.id = ""
+   end
+
+* 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - QM4 Fixes item 30: RESET ALL.  The account has been entered and ON.LOGTO has run; what is left is the LOGIN of the
+*   new account and the start of the command prompt.  Every stacked command processor is cast off first (the kernel does it at
+*   the end of this opcode and calls the bottom one again), and the bottom one runs LOGIN, so a menu LOGIN starts is not itself
+*   discarded.  The kernel() key keeps "level : LOGIN" for it.  At the bottom level there is nothing to cast off: it is RESET.
+   if logto.reset.all then
+      logto.reset.all = @false
+      reset.level = kernel(K$CPROC.LEVEL, 0)
+      if reset.level > 1 then
+         if kernel(K$RESET.ALL, reset.level : @fm : login.voc.id) then return
+      end
    end
 
    if login.voc.id # "" then

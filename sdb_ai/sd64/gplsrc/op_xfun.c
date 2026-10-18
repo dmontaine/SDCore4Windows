@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): XF_GET, the GET statement (QM4 Fixes item 583); XF_OSPATH 31 (OSPATH for
+ *               any program, behind the S.63 gate) and XF_FCONTROL 29 (400500c) are NOT carried.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): XF_DIGEST for QM4 gaps bundle Q-13 (DIGEST()).
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1: CEIL FLOOR ROUNDUP ROUNDDOWN IS.* LEFT RIGHT LAST NV NS TRIMWS MATCHESS
  *               MATCHFIELDS.  One opcode (0xBB, a single byte, so that the multivalue wrappers MVDS, MVDSS and MVDSSS can
@@ -90,6 +92,11 @@
 #define XF_DIGEST 26  /* DIGEST(string, is.file, mode), QM4 gaps Q-13 */
 #define XF_SELSOCKET 27 /* SELECT.SOCKET(socket matrix, timeout): the compiler loads the matrix itself (in.select.socket), QM4 gaps Q-5 */
 #define XF_SWAPMARKS 28 /* SWAPMARKS(string): the string as it is - SD has no ECS mode, where the marks would be exchanged; sheet 238 */
+/* 29 is Linux's XF_FCONTROL (the public FCONTROL, commit 400500c, which belongs to the held QMClient chain) and 31 its XF_OSPATH
+   (OSPATH for any program, behind the S.63 OS-access gate): neither is carried, and the numbers stay free. */
+#define XF_GET 30       /* GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout}: op_get_device() in op_seqio.c (QM4 Fixes item 583) */
+
+void op_get_device(void);
 
 void op_dcount(void);
 void op_field(void);
@@ -232,6 +239,9 @@ void op_xfun() {
     case XF_SWAPMARKS:
       /* openQM's SWAPMARKS exchanges the mark characters with accented letters on an ECS system and, since release 3.0-2,
          returns the data unchanged on any other.  SD has no ECS mode, so the argument is the result */
+      break;
+    case XF_GET:
+      op_get_device();
       break;
     default:
       k_error("Illegal XFUN function number %d", (int)fn); /* the compiler cannot have made this */

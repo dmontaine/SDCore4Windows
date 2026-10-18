@@ -1,0 +1,50 @@
+* CLASSMAIN
+* Run a class module as a main program
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): New (QM4 Fixes item 484).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* RUN of a class module, or a catalogue reference to one, as a command.  kernel.c k_call() finds that what it has been asked
+* to run is a CLASS and, when the request came from RUN or a command (op_run, op_chain), runs this subroutine instead with the
+* name it was given: a catalogue name, or the pathname of a runfile.  OBJECT() makes the object, which runs the CREATE.OBJECT
+* subroutine if the class has one; the MAIN subroutine is the class's main program; when this subroutine returns the object is
+* let go and its DESTROY.OBJECT subroutine runs.  A class with no MAIN gets the run time's usual message for a name an object
+* does not have: 'Unrecognised property/method name (MAIN)'.  A CALL of a class is still refused (message 3450).
+*
+* An internal program may name a runfile by its pathname in OBJECT() (objprog.c, op_object).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+
+subroutine $classmain(class.name)
+$catalog $CLASSMAIN
+
+   o = object(class.name)
+   o->main
+   return
+end
+
+* END-CODE

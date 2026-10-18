@@ -438,9 +438,13 @@ void op_fileinfo() {
       case FL_NOMAP: /* 1025  Id translation off?  There is no NO.MAP option yet */
       case FL_ECS: /* 1026  Created in ECS mode? */
       case FL_LAST_PART: /* 1029  Distributed files: SD has none */
-      case FL_SYNC: /* 1033  Opened with SYNC?  There is no such open option */
       case FL_TEMP: /* 1037  Temporary file?  SD has no temporary files */
       case FL_CONSTRAINTS: /* 1040  Data integrity constraints: none */
+        break;
+
+      case FL_SYNC: /* 1033  Opened with SYNC (hashed files only)?  16 Oct 26: also set by FCONTROL(FC$SYNC) and the S flag of the VOC entry */
+        if (dynamic)
+          n = ((fvar->access.dh.dh_file->flags & DHF_SYNC) != 0);
         break;
 
       case FL_INDEX_SCAN: /* 1030  Index scanning (SETLEFT, SELECTRIGHT, ...) supported? */

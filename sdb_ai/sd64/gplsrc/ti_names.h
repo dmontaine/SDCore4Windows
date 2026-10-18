@@ -490,7 +490,14 @@ char * strnames[] = {
 "ku7",             /* User key 7 */
 "ku8",             /* User key 8 */
 "ku9",             /* User key 9 */
-"colourmap"};      /* Colour translation map */
+"colourmap",       /* Colour translation map */
+/* 16 Oct 26 dm - QM4 Fixes item 47: capabilities that end ONE attribute, where sgr0 ends them all.  They are appended after
+   everything else so that a terminfo entry compiled before they existed (a shorter string table) still reads. */
+"eblink",          /* End blink mode */
+"eprot",           /* End protected mode */
+"edim",            /* End half brightness mode */
+"erev",            /* End reverse video mode */
+"ebold"};          /* End bold mode */
 
 #define NumStrNames (sizeof(strnames) / sizeof(char *))
 

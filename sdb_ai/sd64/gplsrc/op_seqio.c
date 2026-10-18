@@ -1989,6 +1989,243 @@ Private OSFILE create_seq_record(FILE_VAR* fvar) {
 /* ======================================================================
    close_seq()  -  Close sequential file                                  */
 
+/* ======================================================================
+   The GET statement  (16 Oct 26 dm, QM4 Fixes item 583)
+
+   GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout} {THEN...} {ELSE...}
+
+   Reads data from a sequential file variable opened by OPENSEQ: a serial port, a FIFO, a character device or an ordinary file.
+   bcomp compiles it to XFUN function XF_GET with the seven values below on the stack (top first):
+
+       timeout   seconds to wait for the next character, -1 for ever
+       last      ADDR of the variable for RETURNING, or unassigned
+       term      the characters that end the read (null for none)
+       dev       the file variable
+       count     ADDR of the variable for SETTING, or unassigned
+       length    the most characters to read; -1 when none was given (1 character, or any number when UNTIL is given)
+       target    ADDR of the variable that receives the data
+
+   It leaves 0 when the read was done (THEN) and 1 when it was not (ELSE).  It is done when length characters have been read or
+   a character of term has: that character is part of the data and is what RETURNING gives.  It is not done when the wait ran
+   out (STATUS() 0) or when there was an error or the end of the data (STATUS() the error).  What was read before it stopped
+   is in the target and counted either way.  The wait is for each character, not for the whole read.                         */
+
+#define GET_MAX_UNBOUNDED 1048576 /* UNTIL with no length: stop here, rather than fill memory from a device that never ends the line */
+
+/* Wait for data on fd.  1 data, 0 timed out, -1 error or the process is to stop.  *seconds counts down; -1 waits for ever. */
+
+Private int get_wait(OSFILE fu, int* seconds) {
+  int poll_status;
+
+  for (;;) {
+    poll_status = sdpoll(fu, (*seconds == 0) ? 0 : 1000);
+    if (poll_status)
+      return (poll_status < 0) ? -1 : 1;
+
+    if (my_uptr->events)
+      process_events();
+    if (((k_exit_cause == K_QUIT) && !tio_handle_break()) || (k_exit_cause == K_TERMINATE))
+      return -1;
+
+    if (*seconds < 0)
+      continue;
+    if (*seconds == 0)
+      return 0;
+    (*seconds)--;
+  }
+}
+
+/* One character from a sequential file variable: 1 got it, 0 timed out, -1 error, -2 end of the data.  The buffer of a port or
+   a FIFO is the one READBLK uses (posn is the offset into it); a character device is read a byte at a time; a file by blocks. */
+
+Private int get_byte(FILE_VAR* fvar, SQ_FILE* sq_file, int timeout, u_char* c) {
+  OSFILE fu = sq_file->fu;
+  u_int16_t flags = sq_file->flags;
+  int seconds = timeout;
+  int r;
+  int n;
+  int64 block;
+  int offset;
+
+  if (flags & SQ_CHDEV) {
+    if ((r = get_wait(fu, &seconds)) <= 0)
+      return r;
+    n = read(fu, c, 1);
+    return (n < 0) ? -1 : (n == 0) ? -2 : 1;
+  }
+
+  if (flags & (SQ_PORT | SQ_FIFO)) {
+    if (sq_file->posn >= sq_file->bytes) {
+      if ((r = get_wait(fu, &seconds)) <= 0)
+        return r;
+      n = (flags & SQ_PORT) ? readport(fu, sq_file->buff, SEQ_BUFFER_SIZE) : (int)read(fu, sq_file->buff, SEQ_BUFFER_SIZE);
+      if (n < 0)
+        return -1;
+      if (n == 0)
+        return -2;
+      sq_file->bytes = n;
+      sq_file->posn = 0;
+    }
+    *c = (u_char)sq_file->buff[sq_file->posn++];
+    return 1;
+  }
+
+  /* An ordinary file or a block device, read as READBLK reads it */
+
+  block = sq_file->posn & ~SEQ_BUFFER_MASK;
+  if (block != sq_file->base) {
+    if (flush_seq(fvar, FALSE))
+      return -1;
+    Seek(fu, block, SEEK_SET);
+    if ((sq_file->bytes = (int16_t)Read(fu, sq_file->buff, SEQ_BUFFER_SIZE)) <= 0) {
+      sq_file->bytes = 0;
+      return -2;
+    }
+    sq_file->base = block;
+  }
+  offset = (int)(sq_file->posn & SEQ_BUFFER_MASK);
+  if (sq_file->bytes - offset <= 0)
+    return -2;
+  *c = (u_char)sq_file->buff[offset];
+  sq_file->posn++;
+  return 1;
+}
+
+void op_get_device() {
+  DESCRIPTOR* descr;
+  DESCRIPTOR* target;
+  DESCRIPTOR* var;
+  FILE_VAR* fvar = NULL;
+  SQ_FILE* sq_file = NULL;
+  int timeout;
+  int32_t length;
+  char term[257];
+  int term_len;
+  char* data = NULL;
+  int32_t cap = 0;
+  int32_t got = 0;
+  int32_t limit;
+  u_char c;
+  u_char last_c = 0;
+  int r = 1;
+  int result = 0;
+
+  process.status = 0;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+  timeout = descr->data.value;
+
+  descr = e_stack - 3;
+  term_len = k_get_c_string(descr, term, 256);
+  if (term_len < 0)
+    term_len = 0;
+
+  descr = e_stack - 4;
+  k_get_file(descr);
+  fvar = descr->data.fvar;
+
+  descr = e_stack - 6;
+  GetInt(descr);
+  length = descr->data.value;
+
+  target = e_stack - 7;
+  while (target->type == ADDR)
+    target = target->data.d_addr;
+
+  if (fvar->type != SEQ_FILE) {
+    process.status = ER_NSEQ;
+    result = 1;
+    goto get_done;
+  }
+  sq_file = fvar->access.seq.sq_file;
+  if (!ValidFileHandle(sq_file->fu)) { /* opened for creation, nothing written yet */
+    process.status = ER_SQRD;
+    result = 1;
+    goto get_done;
+  }
+
+  limit = (length >= 0) ? length : (term_len > 0) ? GET_MAX_UNBOUNDED : 1;
+  if (limit > GET_MAX_UNBOUNDED)
+    limit = GET_MAX_UNBOUNDED;
+
+  while (got < limit) {
+    r = get_byte(fvar, sq_file, timeout, &c);
+    if (r != 1)
+      break;
+    if (got >= cap) {
+      char* bigger;
+
+      cap = (cap == 0) ? 256 : cap * 2;
+      bigger = (char*)realloc(data, cap);
+      if (bigger == NULL) {
+        r = -1;
+        process.status = ER_MEM;
+        break;
+      }
+      data = bigger;
+    }
+    data[got++] = (char)c;
+    last_c = c;
+    if ((term_len > 0) && (memchr(term, c, term_len) != NULL))
+      break;
+  }
+
+  if (r == 1) {
+    result = 0; /* limit reached or a terminator came */
+  } else {
+    result = 1;
+    if (r == 0)
+      process.status = 0; /* the wait ran out */
+    else if (process.status == 0)
+      process.status = (r == -2) ? ER_EOF : ER_IOE;
+  }
+
+get_done:
+  /* the target gets what was read, even when the read was cut short */
+  k_release(target);
+  InitDescr(target, STRING);
+  target->data.str.saddr = NULL;
+  if (got > 0) {
+    ts_init(&(target->data.str.saddr), got);
+    ts_copy(data, got);
+    ts_terminate();
+  }
+
+  descr = e_stack - 5; /* SETTING count */
+  if (descr->type == ADDR) {
+    var = descr;
+    while (var->type == ADDR)
+      var = var->data.d_addr;
+    k_release(var);
+    InitDescr(var, INTEGER);
+    var->data.value = got;
+  }
+
+  descr = e_stack - 2; /* RETURNING last */
+  if (descr->type == ADDR) {
+    var = descr;
+    while (var->type == ADDR)
+      var = var->data.d_addr;
+    k_release(var);
+    InitDescr(var, STRING);
+    var->data.str.saddr = NULL;
+    if (got > 0) {
+      ts_init(&(var->data.str.saddr), 1);
+      ts_copy((char*)&last_c, 1);
+      ts_terminate();
+    }
+  }
+
+  if (data != NULL)
+    free(data);
+
+  for (r = 0; r < 7; r++) /* release the file variable and the term string along with the rest */
+    k_dismiss();
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = result;
+}
+
 void close_seq(FILE_VAR* fvar) {
   FILE_ENTRY* fptr;
   SQ_FILE* sq_file;

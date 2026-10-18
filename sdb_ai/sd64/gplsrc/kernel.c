@@ -605,6 +605,27 @@ void kernel() {
         process.k_abort_code = 3; /* Set @ABORT.CODE */
         break;
 
+      case K_RESET_ALL_EXIT: /* LOGTO ... RESET ALL (16 Oct 26, QM4 Fixes item 30) */
+        /* Everything is discarded and the bottom command processor, which is
+           called again below, runs the LOGTO again: the programs and menus at
+           every level, a transaction, the select lists and a capture in
+           progress (as for an abort), and the command level goes back to 1.
+           The abort code is 4; the command processor tells it from an abort
+           by that and runs the command the kernel() key kept for it.         */
+        if (my_uptr->lockwait_index)
+          clear_lockwait();
+        collation = primary_collation;
+        txn_abort();
+        clear_select(0);
+        aborting = TRUE;
+        while (process.call_depth > 1) {
+          if (process.program.flags & HDR_IS_CPROC)
+            cproc_level--;
+          k_return();
+        }
+        process.k_abort_code = 4; /* Set @ABORT.CODE */
+        break;
+
       case K_LOGOUT: /* Immediate termination of process */
         txn_abort();
         kill_process();
@@ -785,6 +806,7 @@ void k_run_program() /* Returns FALSE if aborts */
       case K_ABORT:
       case K_LOGOUT:
       case K_TERMINATE:
+      case K_RESET_ALL_EXIT:
         if (my_uptr->lockwait_index)
           clear_lockwait();
         Element(process.syscom, SYSCOM_ITYPE_MODE)->data.value = 0;
@@ -965,6 +987,9 @@ void k_call(char* name, int num_args, u_char* code_ptr, int16_t stack_adj) {
   DESCRIPTOR* new_stack;
   struct PROGRAM* prg;
   int new_stack_depth;
+  bool class_ok = class_main_ok; /* RUN or a catalogue reference may run a class module's MAIN: see below */
+
+  class_main_ok = FALSE;         /* ...for this call only, whatever becomes of it */
 
   if (process.call_depth == pcfg.maxcall)
     k_error(sysmsg(1140)); /* CALLs nested too deeply */
@@ -980,6 +1005,17 @@ void k_call(char* name, int num_args, u_char* code_ptr, int16_t stack_adj) {
     hdr->ext_hdr.prog.refs++;
 
     if (hdr->flags & HDR_IS_CLASS) {
+      if (class_ok && (name != NULL)) {
+        /* RUN or a catalogue reference of a class module (16 Oct 26, QM4 Fixes item 484): the class is run as a main program, by
+           $classmain, which makes an object of it (so CREATE.OBJECT runs) and runs its MAIN subroutine.  The name goes to it as
+           its one argument; a CALL of a class is still refused.  Whatever the class has not got is reported by the object
+           reference to MAIN.                                                                                                */
+        hdr->ext_hdr.prog.refs--;
+        k_put_c_string(name, e_stack);
+        e_stack++;
+        k_call("$classmain", 1, NULL, 0);
+        return;
+      }
       k_error(sysmsg(3450)); /* A CLASS routine may not be used in this way */
     }
   } else { /* In-line object, recursive or call via SUBR */

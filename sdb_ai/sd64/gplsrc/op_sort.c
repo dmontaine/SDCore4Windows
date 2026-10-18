@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * rev 0.9.0 Jan 25 mab catch null key id in op_sortdata()
+ * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): Disk record lengths are 32 bits (item 455), fields padded to 4.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -58,13 +59,19 @@
  *
  * A disk based sort record is structured as:
  *
- *    int16_t bytes        : Total record length including this count
- *      int16_t bytes  }   : Count of data bytes followed by
+ *    int32_t bytes        : Total record length including this count
+ *      int32_t bytes  }   : Count of data bytes followed by
  *      char[bytes]      }   : data itself.
  *
  * The data bytes and data area appears first for the record data and then
- * for each sort key in turn.  The length values are aligned on an even
- * byte boundary. The key strings are null terminated.
+ * for each sort key in turn.  Every length value and every data or key area
+ * is aligned on a four byte boundary, so a length is never split across the
+ * DISK_BUFFER_SIZE buffers, which are a multiple of four. The key strings
+ * are null terminated.
+ *
+ * 16 Oct 26 - the lengths were int16_t, which wrapped for an item or key
+ * of 32 kb or more (QM4 Fixes item 455).  The sizes below go through
+ * pad4(), put32() and get32().
  *
  * START-CODE
  */
@@ -89,11 +96,29 @@ Private BTREE_ELEMENT* sort_ptr;          /* Pointer to next element */
 Private bool sorting = FALSE;             /* True while collecting data */
 Private int16_t sortwork = 0;           /* Sort work subfile counter */
 
-/* Buffer and associated items for disk based SORTNEXT */
+/* Buffer and associated items for disk based SORTNEXT.  The offset can run
+   past the end of the buffer while a long key is skipped, so it is 32 bits. */
 Private char* sort_buff = NULL;     /* Buffer */
-Private int16_t sort_buff_bytes;  /* Bytes in buffer */
-Private int16_t sort_buff_offset; /* Offset of next byte to extract */
+Private int32_t sort_buff_bytes;  /* Bytes in buffer */
+Private int32_t sort_buff_offset; /* Offset of next byte to extract */
 Private OSFILE sort_fu = INVALID_FILE_HANDLE; /* File unit for sort file */
+
+/* Disk record fields.  Lengths are int32_t and every area is padded to a
+   multiple of four bytes (see the header comment).  The lengths are read and
+   written through memcpy so that no alignment is assumed.                  */
+
+#define pad4(n) (((n) + 3) & ~3)
+#define LEN_BYTES 4 /* Size of a length value on disk */
+
+Private int32_t get32(const char* p) {
+  int32_t v;
+  memcpy(&v, p, sizeof(v));
+  return v;
+}
+
+Private void put32(char* p, int32_t v) {
+  memcpy(p, &v, sizeof(v));
+}
 
 void op_sortclr(void);
 Private bool sortmerge(void);
@@ -101,13 +126,13 @@ Private bool flush_sort_tree(void);
 Private bool merge_sort_files(void);
 Private char* read_merge_record(OSFILE fu,
                                 char* buff,
-                                int16_t* buff_bytes,
-                                int16_t* buff_offset,
+                                int32_t* buff_bytes,
+                                int32_t* buff_offset,
                                 bool* temp);
 Private bool write_merge_record(char* rec,
                                 OSFILE fu,
                                 char* buff,
-                                int16_t* buff_bytes,
+                                int32_t* buff_bytes,
                                 bool temp);
 
 /* ======================================================================
@@ -203,7 +228,7 @@ void op_sortadd() {
   bool numeric_compare[MAX_SORT_KEYS];
   double new_value[MAX_SORT_KEYS]; /* Value being inserted */
   double key_value;                /* Value being compared from tree */
-  int32_t size = 4;               /* Equivalent disk record size */
+  int32_t size = 2 * LEN_BYTES;   /* Equivalent disk record size */
   STRING_CHUNK* str;
   char* p;
 
@@ -237,7 +262,7 @@ void op_sortadd() {
       p = (char*)k_alloc(115, bytes);
       k_get_c_string(descr, p, str->string_len);
       new_bte->key[index] = p;
-      size += (bytes + 3) & ~1;
+      size += LEN_BYTES + pad4(bytes);
       if (sort_flags[index] & BT_RIGHT_ALIGNED) {
         numeric_compare[index] = strdbl(p, &new_value[index]);
       }
@@ -245,7 +270,7 @@ void op_sortadd() {
     {
       numeric_compare[index] = TRUE;
       new_value[index] = 0.0; /* 0520 */
-      size += 2;              /* Allow for length field in disk image */
+      size += LEN_BYTES;      /* Allow for length field in disk image */
     }
   }
 
@@ -260,7 +285,7 @@ void op_sortadd() {
       p = (char*)k_alloc(116, bytes);
       k_get_c_string(descr, p, str->string_len);
       new_bte->data = p;
-      size += (bytes + 1) & ~1;
+      size += pad4(bytes);
     }
   }
 
@@ -474,10 +499,10 @@ void op_sortdata() {
   BTREE_ELEMENT* bte;
   BTREE_ELEMENT* old_bte;
   STRING_CHUNK* head = NULL;
-  int16_t skip_bytes;
-  int16_t data_bytes;
-  int16_t bytes_remaining;
-  int16_t n;
+  int32_t skip_bytes = 0;
+  int32_t data_bytes = 0;
+  int32_t bytes_remaining;
+  int32_t n;
   int16_t phase;
 
   process.status = 0;
@@ -498,34 +523,35 @@ void op_sortdata() {
       while (sort_buff_offset >= sort_buff_bytes) /* Read a new buffer */
       {
         sort_buff_offset -= sort_buff_bytes;
-        sort_buff_bytes = (int16_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
+        sort_buff_bytes = (int32_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
         if (sort_buff_bytes <= 0)
           goto exit_op_sortdata; /* End of data */
       }
 
       switch (phase) {
         case 1: /* Extracting record length to form skip_bytes */
-          skip_bytes = *((int16_t*)(sort_buff + sort_buff_offset)) - 2;
-          sort_buff_offset += 2;
+          skip_bytes = get32(sort_buff + sort_buff_offset) - LEN_BYTES;
+          sort_buff_offset += LEN_BYTES;
           if (head != NULL)
             ts_copy_byte(FIELD_MARK);
           if (!sort_has_data) {
             /* This tree has no data element so skip it. The code below
                  will then return the first key value as the "data".      */
-            sort_buff_offset += 2;
-            skip_bytes -= 2;
+            sort_buff_offset += LEN_BYTES;
+            skip_bytes -= LEN_BYTES;
           }
           phase = 2;
           break;
 
         case 2: /* Extracting data length */
-          data_bytes = *((int16_t*)(sort_buff + sort_buff_offset));
+          data_bytes = get32(sort_buff + sort_buff_offset);
           /* If we are extracting the first key as the data, decrement
-               the length to exclude the null terminator.                */
-          if (!sort_has_data)
+               the length to exclude the null terminator.  A null key
+               has no length to decrement.                              */
+          if (!sort_has_data && data_bytes > 0)
             data_bytes--;
-          sort_buff_offset += 2;
-          skip_bytes -= 2;
+          sort_buff_offset += LEN_BYTES;
+          skip_bytes -= LEN_BYTES;
           phase = 3;
           break;
 
@@ -534,15 +560,20 @@ void op_sortdata() {
           n = min(bytes_remaining, data_bytes);
           ts_copy(sort_buff + sort_buff_offset, n);
           data_bytes -= n;
-          n = (n + 1) & ~1;
+          n = pad4(n);
           sort_buff_offset += n;
           skip_bytes -= n;
-          if (data_bytes == 0)
+          if (data_bytes == 0) {
+            /* Count the item here, not when its keys have been skipped: with
+               no data element the last record can end exactly at the end of
+               the file, and the loop above then leaves before phase 4 (the
+               count was one short).                                         */
+            process.status++;
             phase = 4;
+          }
           break;
 
         case 4: /* Skipping keys */
-          process.status++;
           sort_buff_offset += skip_bytes;
           phase = 1;
           break;
@@ -616,8 +647,8 @@ void op_sortnext() {
   BTREE_ELEMENT* old_bte;
   int16_t index;
   char* buff = NULL;
-  int16_t bytes;
-  int16_t n;
+  int32_t bytes;
+  int32_t n;
   char* q;
 
   process.status = 1;
@@ -665,7 +696,7 @@ void op_sortnext() {
   {
     if (sort_buff_offset >= sort_buff_bytes) /* Read a new buffer */
     {
-      sort_buff_bytes = (int16_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
+      sort_buff_bytes = (int32_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
       if (sort_buff_bytes <= 0)
         goto exit_op_sortnext; /* End of data */
       sort_buff_offset = 0;
@@ -673,7 +704,7 @@ void op_sortnext() {
 
     /* Fetch the record length */
 
-    bytes = *((int16_t*)(sort_buff + sort_buff_offset));
+    bytes = get32(sort_buff + sort_buff_offset);
 
     /* If the entire record lies in the current buffer, work directly from
       the buffer.  If it extends beyond the current buffer, allocate a
@@ -681,8 +712,8 @@ void op_sortnext() {
 
     if (sort_buff_offset + bytes <= sort_buff_bytes) /* It's all in memory */
     {
-      q = sort_buff + sort_buff_offset + 2; /* Point to data byte count */
-      sort_buff_offset += (bytes + 1) & ~1;
+      q = sort_buff + sort_buff_offset + LEN_BYTES; /* Point to data byte count */
+      sort_buff_offset += pad4(bytes);
     } else /* Must use a temporary buffer */
     {
       buff = (char*)k_alloc(65, bytes);
@@ -694,7 +725,7 @@ void op_sortnext() {
         n = sort_buff_bytes - sort_buff_offset;
         if (n == 0) {
           sort_buff_bytes =
-              (int16_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
+              (int32_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
           if (sort_buff_bytes <= 0)
             goto exit_op_sortnext;
           sort_buff_offset = 0;
@@ -707,18 +738,18 @@ void op_sortnext() {
         sort_buff_offset += n;
       }
 
-      q = buff + 2; /* Point to data byte count */
+      q = buff + LEN_BYTES; /* Point to data byte count */
     }
 
     /* Extract the data */
 
-    bytes = *((int16_t*)q);
-    q += 2;
+    bytes = get32(q);
+    q += LEN_BYTES;
     if (bytes) {
       ts_init(&(data_descr->data.str.saddr), bytes);
       ts_copy(q, bytes);
       ts_terminate();
-      q += (bytes + 1) & ~1;
+      q += pad4(bytes);
     }
 
     /* Extract the keys */
@@ -726,8 +757,8 @@ void op_sortnext() {
     for (index = 1; index <= sort_keys; index++) {
       descr = Element(a_hdr, index);
       k_release(descr);
-      bytes = *((int16_t*)q);
-      q += 2;
+      bytes = get32(q);
+      q += LEN_BYTES;
       InitDescr(descr, STRING);
       descr->data.str.saddr = NULL;
       if (bytes) {
@@ -737,7 +768,7 @@ void op_sortnext() {
         ts_init(&(descr->data.str.saddr), bytes - 1);
         ts_copy(q, bytes - 1);
         ts_terminate();
-        q += (bytes + 1) & ~1;
+        q += pad4(bytes);
       }
     }
   } else /* Memory based sort */
@@ -839,10 +870,10 @@ Private bool flush_sort_tree() {
   int assembly_buffer_size = 0;
   char* assembly_buffer = NULL;
   char* disk_buffer = NULL; /* Disk output buffer and... */
-  int16_t used_bytes;     /* ...used byte count */
-  int16_t space;
+  int32_t used_bytes;     /* ...used byte count */
+  int32_t space;
   int16_t i;
-  int16_t n;
+  int32_t n;
   char* p;
   char* q;
 
@@ -873,15 +904,15 @@ Private bool flush_sort_tree() {
   while (bte != NULL) {
     /* Count bytes required for this entry */
 
-    bytes = 4; /* Record length + data length */
+    bytes = 2 * LEN_BYTES; /* Record length + data length */
     if (bte->data != NULL)
-      bytes += (strlen(bte->data) + 1) & ~1;
+      bytes += pad4(strlen(bte->data));
 
     for (i = 0; i < sort_keys; i++) /* Keys - Written with trailing \0 */
     {
-      bytes += 2; /* Key length */
+      bytes += LEN_BYTES; /* Key length */
       if (bte->key[i] != NULL)
-        bytes += (strlen(bte->key[i]) + 2) & ~1;
+        bytes += pad4(strlen(bte->key[i]) + 1);
     }
 
     if (assembly_buffer_size <
@@ -901,36 +932,36 @@ Private bool flush_sort_tree() {
       k_error("Insufficient memory for sort assembly buffer");
     /* -------------------- */
     q = assembly_buffer;
-    *((int16_t*)q) = bytes; /* Record header: total byte count */
-    q += 2;
+    put32(q, bytes); /* Record header: total byte count */
+    q += LEN_BYTES;
 
     if (bte->data != NULL) /* Data item with preceding byte count */
     {
       n = strlen(bte->data);
-      *((int16_t*)q) = n;
-      q += 2;
+      put32(q, n);
+      q += LEN_BYTES;
       memcpy(q, bte->data, n);
       q += n;
-      if (n & 1)
+      while (n++ & 3)
         *(q++) = '\0';
     } else {
-      *((int16_t*)q) = 0;
-      q += 2;
+      put32(q, 0);
+      q += LEN_BYTES;
     }
 
     for (i = 0; i < sort_keys; i++) /* Each key item */
     {
       if (bte->key[i] != NULL) {
         n = strlen(bte->key[i]) + 1;
-        *((int16_t*)q) = n;
-        q += 2;
+        put32(q, n);
+        q += LEN_BYTES;
         memcpy(q, bte->key[i], n);
         q += n;
-        if (n & 1)
+        while (n++ & 3)
           *(q++) = '\0';
       } else {
-        *((int16_t*)q) = 0;
-        q += 2;
+        put32(q, 0);
+        q += LEN_BYTES;
       }
     }
 
@@ -1035,16 +1066,16 @@ Private bool merge_sort_files() {
   /* char* buff[MAX_SORTMRG]; / * ...disk buffer... * / */
   char* buff[MAX_SORTMRG] = {NULL};
   /* -------------------- */
-  int16_t buff_bytes[MAX_SORTMRG];  /* ...byte count... */
-  int16_t buff_offset[MAX_SORTMRG]; /* ...and current offset */
+  int32_t buff_bytes[MAX_SORTMRG];  /* ...byte count... */
+  int32_t buff_offset[MAX_SORTMRG]; /* ...and current offset */
   char* rec[MAX_SORTMRG];             /* Record pointer and... */
   bool temp[MAX_SORTMRG];             /* Temporary buffer flag */
   char* p1;                           /* Rolling pointer to extracted keys */
-  int16_t n1;                       /* Bytes in element to be extracted */
+  int32_t n1;                       /* Bytes in element to be extracted */
   char* k1;                           /* Key data pointer */
   double v1;                          /* Extracted numeric data */
   char* p2;                           /* Rolling pointer to extracted keys */
-  int16_t n2;                       /* Bytes in element to be extracted */
+  int32_t n2;                       /* Bytes in element to be extracted */
   char* k2;                           /* Key data pointer */
   double v2;                          /* Extracted numeric data */
   int16_t best;
@@ -1052,12 +1083,12 @@ Private bool merge_sort_files() {
 
   OSFILE outfu = INVALID_FILE_HANDLE; /* File unit for target file... */
   char* outbuff = NULL;               /* ...disk buffer... */
-  int16_t outbuff_bytes;            /* ...byte count */
+  int32_t outbuff_bytes;            /* ...byte count */
 
   char pathname[MAX_PATHNAME_LEN + 1];
   int16_t index;
   int16_t i;
-  int16_t n;
+  int32_t n;
   int16_t d;
 
   /* At this time, sortwork contains the number of sort work files
@@ -1158,20 +1189,20 @@ Private bool merge_sort_files() {
         if (rec[i] == NULL)
           continue; /* This stream is exhausted */
 
-        p1 = rec[best] + 2;                 /* Skip overall byte count */
-        p1 += (*((int16_t*)p1) + 3) & ~1; /* Skip data segment */
+        p1 = rec[best] + LEN_BYTES;                 /* Skip overall byte count */
+        p1 += LEN_BYTES + pad4(get32(p1)); /* Skip data segment */
 
-        p2 = rec[i] + 2;                    /* Skip overall byte count */
-        p2 += (*((int16_t*)p2) + 3) & ~1; /* Skip data segment */
+        p2 = rec[i] + LEN_BYTES;                    /* Skip overall byte count */
+        p2 += LEN_BYTES + pad4(get32(p2)); /* Skip data segment */
 
         for (index = 0; index < sort_keys; index++) {
-          n1 = *((int16_t*)p1);
-          k1 = (n1 == 0) ? "" : (p1 + 2);
-          p1 += (n1 + 3) & ~1;
+          n1 = get32(p1);
+          k1 = (n1 == 0) ? "" : (p1 + LEN_BYTES);
+          p1 += LEN_BYTES + pad4(n1);
 
-          n2 = *((int16_t*)p2);
-          k2 = (n2 == 0) ? "" : (p2 + 2);
-          p2 += (n2 + 3) & ~1;
+          n2 = get32(p2);
+          k2 = (n2 == 0) ? "" : (p2 + LEN_BYTES);
+          p2 += LEN_BYTES + pad4(n2);
 
           d = 0; /* 0269 */
 
@@ -1326,22 +1357,22 @@ exit_merge_sort_files:
 Private char* read_merge_record(
     OSFILE fu,              /* File unit */
     char* buff,             /* Buffer base address */
-    int16_t* buff_bytes,  /* Bytes in buffer (may be updated) */
-    int16_t* buff_offset, /* Offset of next byte to extract (updated) */
+    int32_t* buff_bytes,  /* Bytes in buffer (may be updated) */
+    int32_t* buff_offset, /* Offset of next byte to extract (updated) */
     bool* temp)             /* Temporary buffer? (set on exit) */
 {
   char* rec = NULL;
   /* Modified by Composer AI - 2026/06/10. Init for early-exit paths. */
   /* int16_t buff_len; */
-  int16_t buff_len = 0;
+  int32_t buff_len = 0;
   /* -------------------- */
   /* Modified by Composer AI - 2026/06/10. Init for early-exit paths. */
   /* int16_t offset; */
-  int16_t offset = 0;
+  int32_t offset = 0;
   /* -------------------- */
-  int16_t bytes;
+  int32_t bytes;
   char* q;
-  int16_t n;
+  int32_t n;
 
   *temp = FALSE;
 
@@ -1355,7 +1386,7 @@ Private char* read_merge_record(
 
   if (offset >= buff_len) /* Read a new buffer */
   {
-    buff_len = (int16_t)Read(fu, buff, DISK_BUFFER_SIZE);
+    buff_len = (int32_t)Read(fu, buff, DISK_BUFFER_SIZE);
     if (buff_len <= 0)
       goto exit_read_merge_record; /* End of data */
     offset = 0;
@@ -1363,7 +1394,7 @@ Private char* read_merge_record(
 
   /* Fetch the record length */
 
-  bytes = *((int16_t*)(buff + offset));
+  bytes = get32(buff + offset);
 
   /* If the entire record lies in the current buffer, work directly from
     the buffer.  If it extends beyond the current buffer, allocate a
@@ -1385,7 +1416,7 @@ Private char* read_merge_record(
     while (bytes) {
       n = buff_len - offset;
       if (n == 0) {
-        buff_len = (int16_t)Read(fu, buff, DISK_BUFFER_SIZE);
+        buff_len = (int32_t)Read(fu, buff, DISK_BUFFER_SIZE);
         if (buff_len <= 0) {
           /* Modified by Composer AI - 2026/06/10. Free partial temp record. */
           if (*temp && (rec != NULL)) {
@@ -1421,19 +1452,19 @@ Private bool write_merge_record(
     char* rec,             /* Record to write */
     OSFILE fu,             /* File unit of target file */
     char* buff,            /* Target buffer */
-    int16_t* buff_bytes, /* Used space in buffer (updated) */
+    int32_t* buff_bytes, /* Used space in buffer (updated) */
     bool temp)             /* Delete temporary record buffer? */
 {
   bool status = FALSE;
-  int16_t bytes;
-  int16_t space;
-  int16_t used_bytes;
-  int16_t n;
+  int32_t bytes;
+  int32_t space;
+  int32_t used_bytes;
+  int32_t n;
   char* q;
 
   used_bytes = *buff_bytes;
 
-  bytes = *((int16_t*)rec); /* Record length */
+  bytes = get32(rec); /* Record length */
 
   q = rec;
   do {

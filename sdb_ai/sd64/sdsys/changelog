@@ -2,6 +2,69 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  CLASSES, GET, SYNC FILES, LOGTO RESET ALL, WIDE SORTS AND MORE (QM4 FIXES TAB, BATCH 4).
+
+             Classes  PUBLIC / PRIVATE var = value
+                        A class variable, or a matrix, may be given a starting value: a
+                        number, a string, CHAR(n) or one of @FM @VM @SM @TM @IM @AM @SVM
+                        @TRUE @FALSE.  It is set when the object is made, before
+                        CREATE.OBJECT runs.  It is a constant, not an expression.
+                       CLASS c INHERITS other(values)  and  INHERITS other AS name(values)
+                        pass constants to the inherited class's CREATE.OBJECT (at most 32).
+                       RUN of a class module, or of its catalogue name, makes the object,
+                        runs its MAIN and lets the object go.  CALL of a class is still
+                        refused.  A class with no MAIN gets the usual object message.
+                       A class with 32 names or more is searched through an index built
+                        the first time it is needed; a program with a class of hundreds
+                        of members ran many times faster.  Behaviour is the same.
+             GET var {, n} {SETTING c} FROM device {UNTIL t} {RETURNING last} {WAITING s}
+                        {THEN | ELSE}
+                        Reads from a FIFO, port, character device or a file opened with
+                        OPENSEQ, a character at a time, with a timeout for each wait.  The
+                        terminator is kept in the data.  A timeout takes the ELSE and
+                        leaves STATUS() at 0.  (GET inside a class still declares a public
+                        function, as before.)
+             OPEN / OPENPATH ... SYNC, the S flag in field 6 of a file's VOC entry,
+                        FILEINFO(f, FL$SYNC)
+                        Write a file's data to disk after every write and delete, for a
+                        file that must survive a power failure.  Slower, by design;
+                        a file without the flag behaves as it did.  (openQM's FCONTROL
+                        function can switch it on and off too; SD's FCONTROL for programs
+                        is not there yet.)
+             LOGTO name RESET ALL
+                        From a stacked command level, casts off every level and runs the
+                        new account's LOGIN at level 1.  At level 1 it is the same as
+                        RESET.  Refused in an API session (message 12397).
+             I-types  $MODE name{,name} ;
+                        An I-type may begin with $MODE for CHANGE.NO.OVERLAP,
+                        COUNT.OVERLAP, INDEX.OVERLAP, NOCASE.STRINGS, TIME.MS (and
+                        COMPATIBLE.APPEND, which is accepted).  Not allowed in an I-type
+                        that another one uses; any other mode is refused.
+             ED        External commands: a line typed in ED that starts with an
+                        external command name (EXTERNAL in $ED.OPTIONS) runs a program
+                        on the record being edited.  See the ED page.
+             Sorts     The disk sort handles records of any length SD can hold; the
+                        lengths in the sort file are 32 bits where they were 16, so a sort
+                        of long records is no longer cut off.  The count of a sort that
+                        returns no data was one short when the last record ended the file.
+             Hashed files  A split that finds the disk nearly full now stops before
+                        the file's size is changed, with an entry in the log, instead of
+                        leaving a part-split file.  It cannot undo a split that fails
+                        after the new group has started to be used; that still needs a
+                        file check.
+             @(-6) @(-12) @(-14) @(-59)
+                        Use the terminfo capabilities eblink, eprot, edim, erev and ebold
+                        when the terminal's entry has them (add them in terminfo.mods),
+                        and the plain attribute reset when it does not.  No entry that
+                        ships with SD has them, so nothing changes until you add them.
+
+             What these do NOT do: a class variable's value cannot be an expression; a
+             timeout of GET is for each character, not for the whole read; the sync flag
+             does not make a power failure safe for anything else on the machine; RESET ALL
+             was not run in an API session (a test cannot host one); the ED external
+             commands were written and compiled but their test suite had not finished
+             running at the end of the sitting, so treat them as untested.
+
 18 Oct 26  THE DEBUGGER, ED, LIST MERGES AND ANALYSE.FILE (QM4 FIXES TAB, NEXT BATCH).
 
              Debugger  A program compiled for the debugger stops before each CASE

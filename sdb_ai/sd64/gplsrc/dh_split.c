@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): QM4 Fixes item 329, resilience to a full disk: dh_split() now
+ *               checks the room for the new group before it advances the
+ *               modulus (dh_split_room()), and flushes the header and logs
+ *               when a split fails after that point.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -30,6 +34,57 @@
 
 #include "sd.h"
 #include "dh_int.h"
+#include <stdint.h>
+#include <sys/statvfs.h>
+
+/* A split is not started when the file system holding the file has less than
+   this much room (or 16 groups, if that is more).  The split itself needs one
+   new group and may need overflow blocks for the records it moves, and there
+   is no way back once the modulus has been advanced.                        */
+
+#define DH_SPLIT_RESERVE (1024L * 1024L)
+
+/* ======================================================================
+   dh_split_room()  -  Is there room to split?  Called with the file table
+   lock held and BEFORE the modulus is advanced, so that a refusal leaves
+   the file exactly as it was.  The new group is written empty here: that
+   extends the primary subfile now, where a failure (a full disk, a file size
+   limit) is harmless, and is what the split would write for an empty group.
+   dh_err and the OS error are left as they were: a split that is declined
+   is not an error in the write that asked for it.                         */
+
+Private bool dh_split_room(DH_FILE* dh_file,
+                           FILE_ENTRY* fptr,
+                           int16_t group_bytes,
+                           int32_t new_group) {
+  struct statvfs sv;
+  DH_BLOCK* blk;
+  bool ok;
+  int16_t saved_err = dh_err;
+  int saved_os_error = process.os_error;
+  uint64_t reserve = DH_SPLIT_RESERVE;
+
+  if (reserve < (uint64_t)group_bytes * 16)
+    reserve = (uint64_t)group_bytes * 16;
+
+  if (statvfs((const char*)fptr->pathname, &sv) == 0) {
+    if ((uint64_t)sv.f_bavail * sv.f_frsize < reserve)
+      return FALSE;
+  }
+
+  if ((blk = (DH_BLOCK*)k_alloc(12, group_bytes)) == NULL)
+    return FALSE;
+  memset(blk, '\0', group_bytes);
+  blk->used_bytes = BLOCK_HEADER_SIZE;
+  blk->block_type = DHT_DATA;
+  ok = dh_write_group(dh_file, PRIMARY_SUBFILE, new_group, (char*)blk,
+                      group_bytes);
+  k_free(blk);
+
+  dh_err = saved_err;
+  process.os_error = saved_os_error;
+  return ok;
+}
 
 /* ====================================================================== */
 
@@ -65,6 +120,7 @@ void dh_split(DH_FILE* dh_file) {
   int16_t space;
   u_int32_t file_size;
   int32_t next_tgt_group;
+  bool split_done = FALSE;
 
   fptr = FPtr(dh_file->file_id);
   group_bytes = (int16_t)(dh_file->group_size);
@@ -96,6 +152,14 @@ void dh_split(DH_FILE* dh_file) {
       EndExclusive(FILE_TABLE_LOCK);
       return;
     }
+  }
+
+  /* Make sure there is room for the new group while the file is still as it
+     was: after the modulus has been advanced a split cannot be undone.     */
+
+  if (!dh_split_room(dh_file, fptr, group_bytes, fptr->params.modulus + 1)) {
+    EndExclusive(FILE_TABLE_LOCK);
+    return;
   }
 
   /* Calculate group to split */
@@ -238,8 +302,21 @@ void dh_split(DH_FILE* dh_file) {
 
   dh_file->flags |= FILE_UPDATED;
   dh_flush_header(dh_file);
+  split_done = TRUE;
 
 exit_dh_split:
+  if (!split_done) {
+    /* The modulus was advanced and cannot be put back (a reader may already
+       be waiting on the new group), so the header is written as it stands
+       and the failure is logged.  Records the split had not yet written
+       need the file to be repaired or resized.                            */
+
+    log_printf("DH_SPLIT: split of group %d failed in file %s (error %d, OS error %d)\n",
+               (int)group, fptr->pathname, (int)dh_err, process.os_error);
+    dh_file->flags |= FILE_UPDATED;
+    dh_flush_header(dh_file);
+  }
+
   if (src_group_lock != 0)
     FreeGroupWriteLock(src_group_lock);
   if (new_group_lock != 0)

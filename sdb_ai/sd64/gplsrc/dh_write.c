@@ -506,6 +506,9 @@ exit_dh_write:
     }
   }
 
+  if (dh_err == 0)
+    dh_forced_write(dh_file); /* a file in forced write mode (Fixes item 102) */
+
   return (dh_err == 0);
 }
 

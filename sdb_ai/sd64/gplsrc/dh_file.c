@@ -85,6 +85,21 @@ void dh_fsync(DH_FILE* dh_file, int16_t subfile) {
   fsync(dh_file->sf[subfile].fu);
 }
 
+/* ======================================================================
+   dh_forced_write()  -  Flush a file's updates to disk if it is in forced write mode
+
+   Called when a write or a delete has been done.  Forced write mode is a file opened with SYNC, set with FCONTROL(FC$SYNC), or
+   named in a VOC entry with the S flag (DHF_SYNC in this process's DH_FILE), or every file when the FSYNC configuration
+   parameter has the bit 4 (QM4 Fixes item 102).  The primary and overflow subfiles are flushed; the header is flushed as
+   before, when it changes (FSYNC bit 1).                                                                              */
+
+void dh_forced_write(DH_FILE* dh_file) {
+  if ((dh_file->flags & DHF_SYNC) || (pcfg.fsync & 0x0004)) {
+    dh_fsync(dh_file, PRIMARY_SUBFILE);
+    dh_fsync(dh_file, OVERFLOW_SUBFILE);
+  }
+}
+
 /* ====================================================================== */
 
 bool dh_init() {

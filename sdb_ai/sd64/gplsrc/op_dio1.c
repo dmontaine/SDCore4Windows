@@ -955,14 +955,17 @@ opened_via_txn_cache:
 
   /* 12 Oct 26 dm  Mode letters in field 6 of the F-type VOC entry that named the
      file: N opens it non-transactionally (openQM item 380), R read-only (item
-     197).  They apply to this open only, as the OPEN statement's own options
-     do, and to a file reached through a Q-pointer as well.  The other letters
-     the manual lists (B C L M S X) are not acted on.                          */
+     197), S in forced write mode (QM4 Fixes item 102, hashed files).  They
+     apply to this open only, as the OPEN statement's own options do, and to a
+     file reached through a Q-pointer as well.  The other letters the manual
+     lists (B C L M X) are not acted on.                                       */
 
   if (strchr(vflags, 'R') != NULL)
     fvar->flags |= FV_RDONLY;
   if ((strchr(vflags, 'N') != NULL) || (op_flags & P_NON_TXN)) /* P_NON_TXN: the NON.TRANSACTIONAL option of OPEN */
     fvar->flags |= FV_NON_TXN;
+  if (((strchr(vflags, 'S') != NULL) || (op_flags & P_SYNC)) && (fvar->type == DYNAMIC_FILE))
+    fvar->access.dh.dh_file->flags |= DHF_SYNC; /* every write and delete of this file is flushed to disk from now on */
 
   /* Set file variable */
 

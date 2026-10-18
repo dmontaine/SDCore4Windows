@@ -1028,6 +1028,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    object.arg.names = ''    ;* Names of arguments to current object routine
    inherited.classes = ''
    inherited.vars = ''    ;* Object variable name for each inherited class
+   inherited.args = ''    ;* The initialisation values given for each inherited class, kind and value (hex) pairs in a value mark list (16 Oct 26, Fixes item 356)
+   class.inits = ''       ;* PRIVATE and PUBLIC variables given an initial value: name, dimension, kind, value (16 Oct 26, Fixes item 565)
+   init.kind = ''         ;* Set by get.class.init.constant: 'N' number, 'S' string, 'A' constant @-variable
+   init.value = ''
 
    skip.depth = 0         ;* Number of nested $ifdefs for which we are skipping
    skip.stack = ''
@@ -1540,6 +1544,10 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
       n = len(name.map)
       code.image[pc+1, n] = name.map
       pc += n
+
+      * PRIVATE and PUBLIC variables that were given an initial value (16 Oct 26, Fixes item 565): set before CREATE.OBJECT runs
+
+      if class.inits # '' then gosub emit.class.inits
 
       * If there is a CREATE.OBJECT method defined, emit code to alter
       * the key value to link to that method. Otherwise, emit a RETURN.
@@ -4155,6 +4163,10 @@ end
             if bittest(mode, M.CASE.SENSITIVE) then x.symbol.name = upcase(symbol.name)
             else x.symbol.name = symbol.name
 
+            * 18 Oct 26 Windows port - Linux 7aba47d (QM4 Fixes item 233) compiles OSPATH(path, key {, qualifier}) in a program that is
+            * not internal as the openQM function XF_OSPATH, behind its S.63 OS-access gate.  That gate is held and not carried, so an
+            * ordinary program does not get OSPATH here; the internal programs keep the internal OSPATH as before.
+
             locate x.symbol.name in intrinsics<1> by 'AL' setting i else
                * Try restricted functions if in internal mode
                if internal then
@@ -5531,6 +5543,118 @@ gnc.again:
          gosub error
          gnc.err = @true
    end case
+
+   return
+
+*****************************************************************************
+* GET.CLASS.INIT.CONSTANT  -  Read an initialisation value for a class  (16 Oct 26 dm, QM4 Fixes items 356 and 565)
+*
+* PUBLIC x = 5, PRIVATE s = "text", CLASS c INHERITS other("RATE", 25): the value is a numeric constant (signed), a string,
+* CHAR() of a numeric constant, or one of the constant @-variables (@FM @VM @SM @TM @IM @AM @SVM @TRUE @FALSE).  It is NOT an
+* expression: it is applied when the object is created, before anything else of the object has run.
+*
+* Sets init.kind ('N' number, 'S' string, 'A' @-variable) and init.value; a string is kept as its hex image, so that a mark
+* character in it cannot upset the lists it is kept in.  If it is none of these the error has been reported and err is set.
+
+get.class.init.constant:
+   init.kind = '' ; init.value = ''
+   init.neg = @false
+   if look.ahead.token = TKN.MINUS then
+      init.neg = @true
+      gosub get.token
+   end else
+      if look.ahead.token = TKN.PLUS then gosub get.token
+   end
+
+   begin case
+      case look.ahead.token = TKN.NUM or look.ahead.token = TKN.FLOAT
+         gosub get.token
+         init.kind = 'N'
+         init.value = token.string + 0
+         if init.neg then init.value = -init.value
+
+      case look.ahead.token = TKN.HEXNUM
+         gosub get.token
+         init.kind = 'N'
+         init.value = xtd(token.string)
+         if init.neg then init.value = -init.value
+
+      case look.ahead.token = TKN.STRING and not(init.neg)
+         gosub get.token
+         init.kind = 'S'
+         init.value = oconv(token.string, 'MX0C')
+
+      case look.ahead.token = TKN.NAME.LBR and u.look.ahead.token.string = 'CHAR' and not(init.neg)
+         gosub get.token                         ;* CHAR
+         gosub get.token                         ;* The left bracket
+         gosub get.numeric.constant
+         if gnc.err then return
+         if look.ahead.token # TKN.RBR then goto err.rbr
+         gosub get.token
+         init.kind = 'S'
+         init.value = oconv(char(n), 'MX0C')
+
+      case look.ahead.token = TKN.AT.NAME and not(init.neg)
+         gosub get.token                         ;* The @
+         gosub get.token                         ;* The name
+         locate u.token.string in at.constants<1> setting i then
+            if i <= 9 then                       ;* The first nine are constants: the seven marks, FALSE and TRUE
+               init.kind = 'A'
+               init.value = u.token.string
+            end
+         end
+         if init.kind = '' then
+            err.msg = sysmsg(12399) ;* An initialisation value must be a constant
+            gosub error
+         end
+
+      case 1
+         err.msg = sysmsg(12399) ;* An initialisation value must be a constant
+         gosub error
+   end case
+
+   return
+
+*****************************************************************************
+* EMIT.CLASS.INIT.VALUE  -  Emit the load of a value read by GET.CLASS.INIT.CONSTANT (init.kind and init.value)
+
+emit.class.init.value:
+   begin case
+      case init.kind = 'N'
+         n = init.value + 0 ; gosub emit.numeric.load      ;* + 0: kept as text in class.inits, a float is not one until it is a number
+      case init.kind = 'S'
+         opcode.string = iconv(init.value, 'MX0C') ; gosub emit.string.load
+      case 1                                     ;* 'A': a constant @-variable
+         u.token.string = init.value ; gosub emit.at.var.load
+   end case
+
+   return
+
+*****************************************************************************
+* EMIT.CLASS.INITS  -  At object creation, set the PRIVATE and PUBLIC variables that were given an initial value
+*
+* class.inits holds one field for each: name, dimension (0 a scalar, 1 or 2 a matrix), kind and value.  This runs after the name
+* map has been set up and before CREATE.OBJECT, so that routine sees the values.  A matrix is filled as MAT m = value is.
+
+emit.class.inits:
+   for ci.i = 1 to dcount(class.inits, @fm)
+      ci.name = class.inits<ci.i,1>
+      ci.dim = class.inits<ci.i,2>
+      init.kind = class.inits<ci.i,3>
+      init.value = class.inits<ci.i,4>
+      if ci.dim = 0 then
+         token.string = ci.name ; gosub emit.lvar.reference
+         gosub emit.class.init.value
+         opcode.byte = OP.STOR ; gosub emit.simple
+      end else
+         symbol.name = ci.name
+         symbol.mode = SYM.SET
+         gosub find.var
+         gosub emit.var.load
+         gosub emit.class.init.value
+         opcode.byte = OP.MATFILL ; gosub emit.simple
+      end
+   next ci.i
 
    return
 
@@ -6990,7 +7114,7 @@ st.class:
          inh.var.name = s
          if look.ahead.token = TKN.NAME and u.look.ahead.token.string = 'AS' then
             gosub get.token
-            if look.ahead.token # TKN.NAME then
+            if look.ahead.token # TKN.NAME and look.ahead.token # TKN.NAME.LBR then   ;* NAME.LBR: AS name(initial values)  (Fixes item 356)
                err.msg = sysmsg(2957) ;* Variable name not found where expected
                goto error
             end
@@ -7002,6 +7126,28 @@ st.class:
             end
          end
          inherited.vars<-1> = inh.var.name
+
+         * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 356.  Initialisation values after the object variable name, passed to CREATE.OBJECT of the
+         * inherited class: CLASS c INHERITS other("RATE", 25) is other = OBJECT("other", "RATE", 25) and INHERIT other.  The values
+         * are numeric or string constants.
+         inh.arg.list = ''
+         if look.ahead.token = TKN.LBR then
+            gosub get.token                      ;* Skip the left bracket
+            loop
+               gosub get.class.init.constant
+               if err then return
+               inh.arg.list<1,-1> = init.kind : init.value
+            while look.ahead.token = TKN.COMMA
+               gosub get.token
+            repeat
+            if look.ahead.token # TKN.RBR then goto err.rbr
+            gosub get.token                      ;* Skip the right bracket
+            if dcount(inh.arg.list, @vm) > 32 then
+               err.msg = sysmsg(12398) ;* At most 32 initialisation values may be given for an inherited class
+               goto error
+            end
+         end
+         inherited.args<-1> = inh.arg.list
          symbol.name = inh.var.name
 
          locate '*VARS' in commons<1,1> setting common.index else
@@ -11432,13 +11578,13 @@ st.inputnull:
 * ST.OPEN  -  OPEN and OPENPATH statements
 
 st.openpath:
-   reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL"   ;* 12 Oct 26 dm - openQM 64
+   reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL":@VM:"SYNC"   ;* 12 Oct 26 dm - openQM 64; SYNC 16 Oct 26 (Fixes item 102)
    opcode = OP.OPENPATH
    gosub exprf               ;* Emit file name expression
    goto open.common
 
 st.open:
-   reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL"   ;* 12 Oct 26 dm - openQM 64
+   reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL":@VM:"SYNC"   ;* 12 Oct 26 dm - openQM 64; SYNC 16 Oct 26 (Fixes item 102)
    opcode = OP.OPEN
 
    * Emit first expresssion (file or dict flag)
@@ -11471,6 +11617,10 @@ open.common:
             gosub get.token
             opcode.byte = OP.SETFLAGS  ; gosub emit.simple
             code.value = 0x40 ; code.bytes = 2 ; gosub emit.multibyte.value
+         case u.look.ahead.token.string = 'SYNC'   ;* 16 Oct 26, Fixes item 102: forced writes (P_SYNC); Linux's "and opcode # OP.OPENTEMP" is not needed, OPENTEMP is not carried
+            gosub get.token
+            opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+            code.value = 0x200 ; code.bytes = 2 ; gosub emit.multibyte.value
          case 1
             exit
       end case
@@ -11780,10 +11930,74 @@ st.printer:
    return
 
 *****************************************************************************
+* ST.GET.DEVICE  -  GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout}
+*                   {THEN statements} {ELSE statements}                              (16 Oct 26 dm, QM4 Fixes item 583)
+*
+* The seven values go to XFUN function XF_GET (op_get_device() in op_seqio.c) in the order they are written; a clause that is
+* absent is a constant that says so: length -1, count and last unassigned, term null, timeout -1 (for ever).  THEN and ELSE are
+* both optional.
+
+st.get.device:
+   * The clause words end an expression (as READONLY does in OPEN), or UNTIL char(10) RETURNING l would be one expression
+   reserved.names<2> = "SETTING":@VM:"FROM":@VM:"UNTIL":@VM:"RETURNING":@VM:"WAITING"
+   gosub simple.lvar.reference                       ;* The variable that receives the data (ADDR)
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub exprf                                    ;* The most characters to read
+   end else
+      n = -1 ; gosub emit.numeric.load
+   end
+   if u.look.ahead.token.string = 'SETTING' then
+      gosub get.token
+      gosub simple.lvar.reference                    ;* The variable for the number of characters read (ADDR)
+   end else
+      opcode.byte = OP.LDUNASS ; gosub emit.simple
+   end
+   if u.look.ahead.token.string # 'FROM' then goto err.from
+   gosub get.token                                   ;* Skip FROM
+   gosub simple.var.reference ; if err then return   ;* The file variable
+   if u.look.ahead.token.string = 'UNTIL' then
+      gosub get.token
+      gosub exprf                                    ;* The characters that end the read
+   end else
+      opcode.string = '' ; gosub emit.string.load
+   end
+   if u.look.ahead.token.string = 'RETURNING' then
+      gosub get.token
+      gosub simple.lvar.reference                    ;* The variable for the last character read (ADDR)
+   end else
+      opcode.byte = OP.LDUNASS ; gosub emit.simple
+   end
+   if u.look.ahead.token.string = 'WAITING' then
+      gosub get.token
+      gosub exprf                                    ;* Seconds to wait for each character
+   end else
+      n = -1 ; gosub emit.numeric.load
+   end
+   del reserved.names<2>
+   n = 30 ; gosub emit.numeric.load      ;* XF_GET
+   opcode = OP.XFUN
+   ins '0' before onerror.stack<1>       ;* No ON ERROR clause
+   ins '0' before testlock.stack<1>      ;* No LOCKED clause
+   ins '2' before thenelse.stack<1>      ;* THEN and ELSE both optional
+   goto back.end
+
+*****************************************************************************
 * ST.PRIVATE
 * ST.PUBLIC
 
 st.get:
+   * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 583.  GET var ... FROM dev reads a device opened by OPENSEQ; in a class module GET name(args) declares
+   * a public function.  The device form has FROM in it, before the end of the statement.
+   get.dev = @false
+   get.k = token.index
+   loop
+   until tokens(get.k) = TKN.END or tokens(get.k) = TKN.SEMICOLON or get.dev
+      if tokens(get.k) = TKN.NAME and upcase(token.strings(get.k)) = 'FROM' then get.dev = @true
+      get.k += 1
+   repeat
+   if get.dev then goto st.get.device
+
    is.public = @true
    is.restricted = @false
    is.public.function = @true
@@ -11979,6 +12193,17 @@ st.private.common:
          if read.only then gosub get.token
       end
 
+      * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 565.  An initialisation value: PUBLIC var {READONLY} {= value}, PRIVATE var {= value}, and a matrix
+      * may be given one (it fills every element, as MAT m = value does).  The values are set when the object is created, before
+      * CREATE.OBJECT runs (emit.class.inits).
+      init.given = @false
+      if look.ahead.token = TKN.EQ then
+         gosub get.token                       ;* Skip the equals sign
+         gosub get.class.init.constant
+         if err then return
+         init.given = @true
+      end
+
       * Make new symbol table entry, checking for duplicate definitions
 
       locate symbol.name in symbols<1> by 'AL' setting sympos then
@@ -11994,6 +12219,8 @@ st.private.common:
       commons<4,common.index,symbol.common.offset> = symbol.name
       commons<5,common.index,symbol.common.offset> = rows
       commons<6,common.index,symbol.common.offset> = cols
+
+      if init.given then class.inits<-1> = symbol.name : @vm : symbol.dim : @vm : init.kind : @vm : init.value
 
       if is.public then   ;* Make object name map entry
          object.name.map<1,-1> = symbol.name
@@ -15906,8 +16133,17 @@ emit.inheritance:
       inherited.var = inherited.vars<inh.i>
       token.string = inherited.var ; gosub emit.lvar.reference
       opcode.string = inherited.class ; gosub emit.string.load
+      * The initialisation values given on the CLASS statement (Fixes item 356) follow the class name as OBJECT()'s own arguments
+      inh.arg.list = inherited.args<inh.i>
+      inh.arg.count = dcount(inh.arg.list, @vm)
+      for inh.j = 1 to inh.arg.count
+         init.kind = inh.arg.list<1,inh.j>[1,1]
+         init.value = inh.arg.list<1,inh.j>[2,999999]
+         if init.kind = 'N' then init.value += 0
+         gosub emit.class.init.value
+      next inh.j
       opcode.byte = OP.OBJECT ; gosub emit.simple
-      opcode.byte = 0 ; gosub emit.simple
+      opcode.byte = inh.arg.count ; gosub emit.simple
       opcode.byte = OP.STOR ; gosub emit.simple
       token.string = inherited.var ; gosub emit.var.reference
       opcode.byte = OP.INHERIT ; gosub emit.simple

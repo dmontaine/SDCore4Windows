@@ -217,10 +217,12 @@
       $define K$GROUP.PHANTOM   110      ;* Mark the phantom with this user number as grouped with this process: 1 if marked (15 Oct 26, Q-8, PHANTOM GROUP)
       $define K$FORM.QUEUE      111      ;* unit * 1000 + queue: SP.ASSIGN gave form queue 'queue' to print unit 'unit' (15 Oct 26, Q-9)
       $define K$USER.STATS      112      ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
-*  113 and 115 are Linux's K$NON.DURABLE.TXN (QMClient, held) and K$LOCK.TRACE (LOCK.TRACER, not carried): left unused.
+*  113, 115 and 118 are Linux's K$NON.DURABLE.TXN (QMClient, held), K$LOCK.TRACE (LOCK.TRACER, not carried) and K$SD.ACCOUNTS (a gate of the held S.63 family): left unused.
       $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
       $define K$PROFILER        116      ;* n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
       $define K$PROFILER.USER   117      ;* user * 4096 + 2048 + n start it in another process, user * 4096 alone stop it and have it write F<user> to $ipc; administrator only
+      $define K$RESET.ALL       119      ;* LOGTO ... RESET ALL: with a command, keep it and return to the bottom command processor, which takes it back with a null argument; 1 accepted, 0 refused (an API session) (16 Oct 26, Fixes item 30)
+      $define K$CLASS.MAIN      120      ;* 1: the next call may run a class module through its MAIN subroutine (CPROC, before it calls a catalogued command) (16 Oct 26, Fixes item 484)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?
@@ -260,6 +262,7 @@
 
       * @ABORT.CODE
       $define K$LOGOUT           3               ;* LOGOUT of phantom process
+      $define K$RESET.ALL.CODE   4               ;* LOGTO ... RESET ALL: every level was cast off and the bottom command processor called again
 
       * Kernel k_exit_cause values (from csrc kernel.h)
       $define K$EXIT.ABORT       3

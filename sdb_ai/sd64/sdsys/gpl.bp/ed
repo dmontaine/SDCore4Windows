@@ -129,6 +129,14 @@ $define COMMAND.STACK.DEPTH 99
    match.case = @true
    show.ev.position = @true        ;* In edit values mode the higher level positions are put before the line number
 
+* 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes items 305 and 331: external commands.  $ED.OPTIONS names catalogued subroutines and the commands they
+*   handle (EXTERNAL name pattern {pattern...}); ext.names holds the subroutines and ext.patterns, for each, its patterns
+*   (value marks).  INFO is the array the subroutine is given (see external.command).
+   ext.names = ''
+   ext.patterns = ''
+   ext.count = 0
+   dim info(8)
+
    command.stack = ""
    help.text = ""
 
@@ -153,6 +161,8 @@ $define COMMAND.STACK.DEPTH 99
                   allow.non.printing = (s2 = 'ON')
                case s = 'NO.EV.POSITION'       ;* 16 Oct 26 (QM4 Fixes 375): no field and value numbers before a line number in EV
                   show.ev.position = @false
+               case s = 'EXTERNAL'             ;* 16 Oct 26 (QM4 Fixes 305, 331): EXTERNAL name pattern {pattern ...}
+                  gosub parse.external.option
             end case
          next i
       end
@@ -795,6 +805,13 @@ parse.command:
          if prestore.position = 0 then
             del command.stack<COMMAND.STACK.DEPTH>
             ins raw.command before command.stack<1>
+         end
+
+         * An external command (Fixes items 305 and 331) takes the line before the standard commands do, and can replace one
+
+         if ext.count then
+            gosub external.command
+            if ext.done then continue
          end
 
          begin case
@@ -3654,6 +3671,111 @@ save.oops.rec:
       oops.rec := @fm : chunk(ch)
       ch = chunk.next(ch)
    repeat
+
+   return
+
+* ======================================================================
+* PARSE.EXTERNAL.OPTION  -  EXTERNAL name pattern {pattern ...}  in $ED.OPTIONS  (16 Oct 26, QM4 Fixes items 305 and 331)
+*
+* rec<i> is the line.  The patterns follow the subroutine name, separated by spaces; one with a space in it is in double quotes.
+* Several can be given without quotes, one after another.  A pattern is a MATCHES template or a plain constant: the command
+* line has to match it, whatever the case.  A line with no name or no pattern is ignored, as an unrecognised option is.
+
+parse.external.option:
+   ext.line = trim(rec<i>)
+   ext.nm = downcase(field(ext.line, ' ', 2))
+   ext.rest = trimf(field(ext.line, ' ', 3, 99999))
+   ext.pats = ''
+   loop
+   while ext.rest # ''
+      if ext.rest[1,1] = '"' then
+         ext.j = index(ext.rest, '"', 2)
+         if ext.j = 0 then ext.j = len(ext.rest) + 1
+         ext.pats<1,-1> = ext.rest[2, ext.j - 2]
+      end else
+         ext.j = index(ext.rest, ' ', 1)
+         if ext.j = 0 then ext.j = len(ext.rest) + 1
+         ext.pats<1,-1> = ext.rest[1, ext.j - 1]
+      end
+      ext.rest = trimf(ext.rest[ext.j + 1, 99999])
+   repeat
+   if ext.nm # '' and ext.pats # '' then
+      ext.names<-1> = ext.nm
+      ext.patterns<-1> = ext.pats
+      ext.count += 1
+   end
+
+   return
+
+* ======================================================================
+* EXTERNAL.COMMAND  -  Is the command one of the external commands?  If so, run its subroutine  (16 Oct 26 dm, items 305 and 331)
+*
+* Sets ext.done when the command was an external one, whatever came of it.  The subroutine is called with two arguments, INFO and
+* ERROR (the openQM contract):
+*    INFO(1) file name including DICT   INFO(2) record id   INFO(3) the data being edited (the record, or the level being
+*    edited in EV)   INFO(4) current line, 0 at the top   INFO(5) and (6) block start and end, 0 if not set   INFO(7) the command
+*    as it was typed   INFO(8) edit values depth (0 normal, 1 values, 2 subvalues; 3, the elements of a compound I-type, counts as 2)
+* If ERROR is set true it has failed and the editor changes nothing; otherwise the editor takes INFO(3) as the data and
+* INFO(4) to (6) as the positions, which are kept inside the record.  OOPS undoes what the subroutine did.
+
+external.command:
+   ext.done = @false
+   u.cmd = upcase(command)
+   ext.found = 0
+   for ext.i = 1 to ext.count
+      for ext.j = 1 to dcount(ext.patterns<ext.i>, @vm)
+         ext.p = upcase(ext.patterns<ext.i,ext.j>)
+         if u.cmd = ext.p or u.cmd matches ext.p then ext.found = ext.i
+      next ext.j
+   until ext.found
+   next ext.i
+   if not(ext.found) then return
+
+   ext.done = @true
+   ext.sub = ext.names<ext.found>
+
+   gosub save.oops.rec                     ;* So that OOPS can undo it
+   gosub assemble.record                   ;* rec is the record as it is now
+   info(1) = full.file.name
+   info(2) = record.name
+   info(3) = rec
+   info(4) = posn
+   info(5) = block.top
+   info(6) = block.bottom
+   info(7) = raw.command
+   info(8) = if ev.depth = 3 then 2 else ev.depth
+   ext.err = @false
+
+   call @ext.sub(mat info, ext.err)
+
+   if ext.err then
+      rec = ''
+      message = sysmsg(12402, ext.sub) ;* External command %1 failed
+      gosub error
+      oops.command = ''
+      return
+   end
+
+   if info(3) # rec then
+      rec = info(3)
+      hd = head
+      gosub release.chunks
+      lines = if rec = '' then 0 else dcount(rec, @fm)
+      gosub split.into.chunks
+      record.updated = @true
+   end
+   rec = ''
+
+   posn = info(4) + 0
+   if posn < 0 then posn = 0
+   if posn > lines then posn = lines
+   block.top = info(5) + 0
+   if block.top < 0 then block.top = 0
+   if block.top > lines then block.top = lines
+   block.bottom = info(6) + 0
+   if block.bottom < 0 then block.bottom = 0
+   if block.bottom > lines then block.bottom = lines
+   if posn then gosub get.current
 
    return
 

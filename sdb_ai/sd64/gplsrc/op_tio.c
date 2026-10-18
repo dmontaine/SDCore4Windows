@@ -17,7 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
- * 15 Jun 24 mab remove or disable op_ttyset and op_ttyget 
+ * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): end_attribute(): @(-6), @(-12), @(-14) and @(-59) use eblink, edim, erev and ebold when the terminfo entry has them
+ * 15 Jun 24 mab remove or disable op_ttyset and op_ttyget
  * 31 Dec 23 SD launch - prior history suppressed
  * 28 Jul 24 mab remove  op_ttyset and op_ttyget TTYGET/TTYSET not supported
  * END-HISTORY
@@ -129,6 +130,7 @@ void op_getprompt(void);
 
 /* Internal functions */
 Private int colour_map(int user_colour);
+Private char *end_attribute(char *cap);
 Private void keyedit_trap_exit(int mode);
 Private void capture(char *s, int16_t n);
 Private void emitn(char *tgt, char *src, int rpt);
@@ -263,7 +265,7 @@ void op_at() {
         break;
 
       case IT_EBLINK: /* @(-6)  -  End flashing text */
-        p = sdtgetstr("sgr0");
+        p = end_attribute("eblink");
         break;
 
       case IT_CUB: /* @(-9,n)  -  Cursor backspace */
@@ -289,7 +291,7 @@ void op_at() {
         break;
 
       case IT_EHALF: /* @(-12)  -  End half intensity mode */
-        p = sdtgetstr("sgr0");
+        p = end_attribute("edim");
         break;
 
       case IT_SREV: /* @(-13)  -  Start reverse video */
@@ -297,7 +299,7 @@ void op_at() {
         break;
 
       case IT_EREV: /* @(-14)  -  End reverse video */
-        p = sdtgetstr("sgr0");
+        p = end_attribute("erev");
         break;
 
       case IT_SUL: /* @(-15)  -  Start underline */
@@ -398,7 +400,7 @@ void op_at() {
         break;
 
       case IT_EBOLD: /* @(-59)  -  End bold mode */
-        p = sdtgetstr("sgr0");
+        p = end_attribute("ebold");
         break;
 
       case IT_SCREEN: /* @(-256, n)  -  Set screen shape */
@@ -450,6 +452,18 @@ Private void emitn(char *tgt, char *src, int rpt) {
     tgt += n;
   }
   *tgt = '\0';
+}
+
+/* ------------------------------------ */
+/* End one attribute with the terminal's own capability for it (eblink, edim, erev, ebold: QM4 Fixes item 47), or, when the
+   terminal does not define it, with sgr0, which ends every attribute and every colour.  A stock entry defines none of them,
+   so what a terminal does is unchanged until its entry (terminfo.mods) says otherwise.                                      */
+Private char *end_attribute(char *cap) {
+  char *p = sdtgetstr(cap);
+
+  if ((p == NULL) || (*p == '\0'))
+    p = sdtgetstr("sgr0");
+  return p;
 }
 
 /* ------------------------------------ */

@@ -551,11 +551,27 @@ struct OBJUNDEF /* An undefined object handler reference */
            -----   -----
 */
 
+/* 16 Oct 26 dm - QM4 Fixes item 13: a name map of NAME_INDEX_MIN entries or more is looked up through a hash index built the
+   first time a name is sought in it, instead of by scanning the map for every reference.  The index holds the entries in map
+   order (a name can appear more than once: a RESTRICTED entry the caller cannot see is skipped for the next of its name) and
+   chains the entries of one hash value in that order.  Every k_alloc of an OBJDATA must set name_count to -1 and name_index to
+   NULL (k_alloc does not zero): create_objdata() does. */
+#define NAME_INDEX_MIN 32
+typedef struct NAME_INDEX NAME_INDEX;
+struct NAME_INDEX {
+  int32_t nbuckets;
+  int32_t* bucket;            /* First entry (a position in entry[]) of each hash value, or -1 */
+  int32_t* next;              /* The next entry of the same hash value, or -1 */
+  OBJECT_NAME_MAP** entry;    /* The name map entries, in map order */
+};
+
 struct OBJDATA /* The object itself */
 {
   int ref_ct;                /* Reference count */
   void* objprog;             /* Object program pointer */
   OBJECT_NAME_MAP* name_map; /* Start of name map */
+  int32_t name_count;        /* Entries in the name map, or -1 until the first lookup counts them */
+  NAME_INDEX* name_index;    /* The hash index, or NULL (map too small to need one, or not yet built) */
   ARRAY_HEADER* obj_vars;    /* PUBLIC and GLOBAL data array */
   OBJDATA* inherits;         /* Head of inherited objects list */
   OBJDATA* next_inherited;   /* Links further items in inheritance chain */

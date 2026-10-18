@@ -137,6 +137,8 @@ struct DH_FILE {
 #define FILE_UPDATED 0x00080000 /* Written since opened */
 
 #define DHF_FSYNC 0x01000000 /* fsync pending - see txn.c */
+#define DHF_SYNC 0x02000000  /* Forced writes: every write and delete is flushed to disk (OPEN ... SYNC, FCONTROL FC$SYNC, the S flag
+                                of the VOC entry; QM4 Fixes item 102).  Internal, in this process's DH_FILE only. */
                              /* File information */
   int16_t open_count;
   int16_t no_of_subfiles;

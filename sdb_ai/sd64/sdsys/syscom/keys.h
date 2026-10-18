@@ -562,6 +562,8 @@
 *     SD's OS$ names are in the internal program header int$keys.h and keep the older numbering).
       $define OS$FULLPATHX    4     ;*   Full path name keeping the case: the same as OS$FULLPATH, which keeps it on Linux
       $define OS$INFO         20    ;*   Information in the form of the STATUS statement's array
+*     (Linux 7aba47d also names OS$PARENT, OS$UID, OS$GID, OS$MODES, OS$IS.FILE and OS$IS.DIR here for OSPATH() in a program that is
+*     not internal; that function is behind the S.63 gate, which is held, so those names are not carried.)
 
 *     15 Oct 26 - SYSTEM() keys of the openQM 4 manual (QM4 gaps bundle Q-18), named here by what they return.
       $define SYS$TYPEAHEAD   14    ;*   Characters waiting to be read (a snapshot for piped input)
@@ -588,3 +590,5 @@
       $define ML$UNION        16    ;*   MERGELIST: the items in either list, once each
       $define ML$DIFF         24    ;*   MERGELIST: the items in the first list and not the second
       $define ML$UNSORTED     32    ;*   MERGELIST: the lists are not in order, so put them in order first
+* The FC$ tokens of the public FCONTROL() (Linux 400500c, held with the QMClient chain) and the OS$ tokens of OSPATH() for any
+* program (behind the S.63 gate) are NOT here.
