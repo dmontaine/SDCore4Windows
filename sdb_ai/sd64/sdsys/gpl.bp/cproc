@@ -1655,6 +1655,7 @@ execute.command:
       * raised and so never clears anything, which is the safe way to fail.
       cs.depth += 1
       if cs.depth = 1 then cs.was.active = selectinfo(0, 1)
+      voc.via.k = @false      ;* Set by a K entry that hands over to the V entry in its fields 3 onwards (openQM 263)
 
 reparse:
       voc.entry.type = upcase(voc.rec<1>)
@@ -1755,6 +1756,15 @@ reparse:
 
                case dispatch.mode = "CS"  ;* Catalogued subroutine
                   if option(OPT.RUN.NO.PAGE) then s = @(0,0)    ;* 0185 Inhibit pagination
+
+                  * 14 Oct 26 (openQM 263): a locally catalogued subroutine is found by the name of its VOC entry, which is the
+                  * name that was typed - but when the V entry was reached through a K entry (fields 3 onwards of the K), the
+                  * name typed is the K entry's, and the object is not found.  Its field 3 is the pathname of the object code
+                  * (a pathname is not a legal call name, so it cannot be called as it stands); the last part of it is the
+                  * name the program was catalogued under, which is also the name of its own VOC entry.
+                  if voc.via.k and index(voc.rec<3>, '/', 1) then verb = field(voc.rec<3>, '/', dcount(voc.rec<3>, '/'))
+                  voc.via.k = @false
+
                   call @verb
                   verb = ''       ;* 0541 Ensure link lost
 
@@ -1914,6 +1924,7 @@ reparse:
 
          case voc.entry.type[1,1] = "K" and len(trim(voc.rec<3>))
             voc.rec = field(voc.rec, @fm, 3, 99999)
+            voc.via.k = @true      ;* 14 Oct 26 (openQM 263): the V entry below was reached through a K entry
             goto reparse
 
          case 1

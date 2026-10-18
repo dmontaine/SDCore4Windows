@@ -2,6 +2,18 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  A K ENTRY OVER A LOCALLY CATALOGUED PROGRAM.
+
+             A VOC entry of type K whose fields 3 onwards hold another entry
+             hands the command over to that entry.  When that entry was the V
+             CS entry of a locally catalogued subroutine, the command stopped
+             with "Unable to load" and the K entry's own name, because the
+             object is looked up by the name of its own VOC entry, not the
+             name typed.  It now runs.  The name used is the last part of the
+             object's pathname, which is the name it was catalogued under;
+             a program catalogued under a call name different from its program
+             name is not covered.
+
 14 Oct 26  !SORT CAN SORT A SELECT LIST VARIABLE.
 
              CALL !SORT(list, result, mode)  When list is a select list
