@@ -101,7 +101,8 @@ def checks(d):
                 "lists differ at %s" % next((("name %s, handler comment %s" % (a, b[1])) for a, b in zip(names, h) if b[1] != legacy.get(a, a)),
                                             "the end (%d names, %d handlers)" % (len(names), len(h)))))
     # ARG.PRESENT is given OP.XFUN too, but reads a variable name and so has a handler of its own
-    own = {"ARG.PRESENT": "in.arg.present", "REUSING": "in.reusing", "SELECT.SOCKET": "in.select.socket"}
+    own = {"ARG.PRESENT": "in.arg.present", "REUSING": "in.reusing", "SELECT.SOCKET": "in.select.socket",
+           "SORT": "in.sort", "SORTDATA": "in.sortdata", "SORTNEXT": "in.sortnext"}
     xnames = {n for n in names if d["opcodes"][n] == "OP.XFUN" and n not in own}
     hx = {n for hh, n in h if hh == "in.xfun"}
     res.append(("3. the names given OP.XFUN are the names with the handler in.xfun (ARG.PRESENT has in.arg.present)",
@@ -114,7 +115,8 @@ def checks(d):
     res.append(("4b. every row writes one to three arguments", not bad and len(rows) > 0, "rows: %s" % bad))
     sels = {sel for sel, _a, _o, _m in rows.values()}
     # XF_CASING (a statement) and XF_ARGPRESENT (ARG.PRESENT's own handler) are loaded by code of their own, not by a row
-    own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24, "XF_SELSOCKET": 27, "XF_GET": 30}   # XF_GET: 16 Oct 26 (Linux's XF_OSPATH 31 is not carried)
+    own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24, "XF_SELSOCKET": 27, "XF_GET": 30,
+             "XF_SORT": 32, "XF_SORTADD": 33, "XF_SORTCLEAR": 34, "XF_SORTDATA": 35, "XF_SORTNEXT": 36}   # 16 Oct 26 (Linux's XF_OSPATH 31 is not carried)
     defs = {v for k, v in d["xf_defs"].items() if k not in own_c}
     res.append(("5. every function number of xfun.rows is an XF_ constant of op_xfun.c and the reverse", sels == defs and len(defs) > 0,
                 "only one side: %s" % sorted(sels ^ defs)))

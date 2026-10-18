@@ -2,6 +2,49 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  NEWVOC.MODS, PHANTOM DEBUGGER @VARIABLES, QUERY IN / NOT.IN AND USER SORT SYSTEM (QM4 FIXES TAB, BATCH A).
+
+             NEWVOC.MODS  The optional @SDSYS/newvoc.mods file (already applied to new accounts
+                        and by UPDATE.ACCOUNTS) is now also applied to SDSYS's own VOC when SD
+                        is installed.  The installer does not ship the file; whether an
+                        upgrade leaves it where it is has not been checked.
+             PDEBUG     Evaluating an @variable (/@var) in the phantom debugger now returns the
+                        value from the debugged phantom process rather than from the local
+                        PDEBUG client session.  More @variables are known to it.
+             IN, NOT.IN Query processor selection clause operators:
+                          field IN {NO.CASE} listname
+                          field IN {NO.CASE} "filename id"
+                        and NOT.IN test whether a field value is present in a saved select list
+                        in $SAVEDLISTS or in the fields of a named file record, with
+                        support for NO.CASE, EVERY and WHEN clauses.  What it does not do: the
+                        values in the list are compared as they are stored, with no input
+                        conversion (a date field needs a list of day numbers), and an alternate
+                        key index is never used.  IN and NOT.IN are now keywords.  After an
+                        = sign an unquoted IN is still an ordinary value, but after OR or AND,
+                        where the field and operator are repeated for you, an unquoted IN or
+                        NOT.IN is the operator, so quote the value there.  A dictionary item
+                        called IN wins over the keyword.  An empty list name ("") says so
+                        (message 12405) instead of printing "To:".
+             SORT(), SORTADD, SORTCLEAR, SORTDATA(), SORTNEXT()
+                        Public BASIC sorting system supporting concurrent sort sessions via
+                        sort variables (VARTYPE VT$SORT = 20; up to 255 open in one process, and
+                        a sort is freed when its variable is overwritten or goes out of scope),
+                        up to 32 keys with per-key SRT$ flags in syscom/keys.h (SRT$LEFT,
+                        SRT$RIGHT, SRT$COMPOUND, SRT$RIGHT.FLOAT, SRT$STRICT, plus
+                        SRT$DESCENDING, SRT$UNIQUE, SRT$NOCASE and SRT$DATA), and optional
+                        key retrieval via SORTNEXT(sortvar, {MAT} keys) or item count limit via
+                        SORTDATA(sortvar, max.items).  A BTREE statement given a sort variable
+                        is refused.  A variable that is not a sort says "Not a sort variable"
+                        (12403) and the 256th open sort says "Too many sorts are open at once"
+                        (12404).  What it does not do: keys that compare as equal come out in
+                        no promised order once a sort is large enough to spill to a work file
+                        (newest first while it stays in memory), a mode above 4 is taken as 0,
+                        and only the low byte of the flags is used.
+             SORT      The sort that SORT, SSELECT and the query processor use was reorganised to
+                        share its code with the new one.  Its results are unchanged, with one
+                        correction: a unique sort that spilled to work files now drops a
+                        duplicate that lay in two different files, which the old merge kept.
+
 18 Oct 26  CLASSES, GET, SYNC FILES, LOGTO RESET ALL, WIDE SORTS AND MORE (QM4 FIXES TAB, BATCH 4).
 
              Classes  PUBLIC / PRIVATE var = value

@@ -577,18 +577,43 @@
       $define SYS$GROUP.SIZE  1067  ;*   The default group size of a dynamic file, in bytes
       $define SYS$CASING      1086  ;*   Is case sensitivity of string comparisons on in this program?
 
-*     15 Oct 26 - the sort rules of SORT.COMPARE() and MERGELIST() (QM4 gaps bundles Q-1 and Q-2).  The SRT$ values are the
-*     openQM 4 manual's.  The ML$ values are SD's own: the manual names the tokens and says they are added to the SRT$ ones.
+*     15 Oct 26 - the sort rules of SORT.COMPARE(), MERGELIST() and SORT() (QM4 gaps bundles Q-1, Q-2 and Fixes item 371).
+*     The SRT$ values are the openQM 4 manual's.  The ML$ values are SD's own: the manual names the tokens and says they are added to the SRT$ ones.
       $define SRT$LEFT        0     ;*   Left justified: character by character from the start
       $define SRT$RIGHT       1     ;*   Right justified: integers as numbers
       $define SRT$COMPOUND    2     ;*   Alternating numeric and text elements
       $define SRT$RIGHT.FLOAT 3     ;*   As SRT$RIGHT, any number as a number
       $define SRT$STRICT      4     ;*   As SRT$COMPOUND, but 28 and 028 differ
       $define SRT$DESCENDING  16    ;*   The result of a comparison is reversed
+      $define SRT$UNIQUE      32    ;*   SORT(): duplicate key values are ignored
       $define SRT$NOCASE      64    ;*   Case is ignored
+      $define SRT$DATA        128   ;*   SORT(): sort has an associated data element
       $define ML$INTER        8     ;*   MERGELIST: the items in both lists
       $define ML$UNION        16    ;*   MERGELIST: the items in either list, once each
       $define ML$DIFF         24    ;*   MERGELIST: the items in the first list and not the second
       $define ML$UNSORTED     32    ;*   MERGELIST: the lists are not in order, so put them in order first
 * The FC$ tokens of the public FCONTROL() (Linux 400500c, held with the QMClient chain) and the OS$ tokens of OSPATH() for any
 * program (behind the S.63 gate) are NOT here.
+
+* 16 Oct 26 - VARTYPE() values
+      $define VT$UNASSIGNED   0
+      $define VT$INTEGER      2
+      $define VT$FLOATNUM     3
+      $define VT$SUBR         4
+      $define VT$STRING       5
+      $define VT$FILE.REF     6
+      $define VT$ARRAY        7
+      $define VT$COMMON       8
+      $define VT$IMAGE        9
+      $define VT$BTREE        10
+      $define VT$SELLIST      11
+      $define VT$PMATRIX      12
+      $define VT$SOCK         13
+      $define VT$LOCALVARS    14
+      $define VT$OBJ          15
+      $define VT$OBJCD        16
+      $define VT$OBJCDX       17
+      $define VT$PERSISTENT   18
+      $define VT$COLLECTION   19
+      $define VT$SORT         20
+

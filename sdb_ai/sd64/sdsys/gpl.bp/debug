@@ -50,6 +50,7 @@ $include int$keys.h
 $include header.h
 
 deffun atvar(name) calling "!atvar"
+deffun dbg.atvar(name) local
 deffun dbg.info(mode, qualifier) local
 
 $define SOURCE.AREA            1
@@ -1235,7 +1236,7 @@ display.variable:
    if var.name[1,1] = '@' then
       message = var.name : ' = '
       var.name = upcase(var.name)
-      s = atvar(var.name)
+      s = dbg.atvar(var.name)
       if status() then message = sysmsg(6717) ;* Unrecognised @-variable
       else message := s
       gosub emit.msg
@@ -1845,6 +1846,19 @@ local subroutine dbg.watch(var, index)
       watch var, index
    end
    return
+end
+
+local function dbg.atvar(name)
+   * 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): - QM4 gap 251: evaluate @variables in the debugged phantom
+   * process rather than the local PDEBUG client process.
+   if phantom then
+      out.msg = 'ATVAR'
+      out.msg<2> = name
+      gosub send.message
+      return field(in.msg, @fm, 3, 99999)
+   end else
+      return atvar(name)
+   end
 end
 
 local function dbg.info(mode, qualifier)

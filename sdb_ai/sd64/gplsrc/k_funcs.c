@@ -1290,6 +1290,10 @@ void k_release(DESCRIPTOR* p) {
     case BTREE:
       btree = p->data.btree;
       if (--(btree->ref_ct) == 0) {
+        if (btree->pad != 0) {
+          void free_sort_session(int16_t id);
+          free_sort_session(btree->pad);
+        }
         if (btree->head != NULL)
           free_btree_element(btree->head, btree->keys);
         k_free(btree);

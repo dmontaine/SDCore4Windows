@@ -17,6 +17,12 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): Expose user-callable SORT(), SORTADD, SORTCLEAR, SORTDATA(),
+ *               SORTNEXT() with multiple active sort sessions and all SRT$
+ *               modes (QM4 Fixes item 371).
+ * 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): Audit of that change: sess_sortdata() starts its target string before the merge again (a merge that
+ *               failed reached ts_terminate() with no ts_init() behind it); messages 12403 (not a sort variable) and
+ *               12404 (all 255 sorts open) in the place of 1487 and 1482, which named the wrong thing.
  * rev 0.9.0 Jan 25 mab catch null key id in op_sortdata()
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): Disk record lengths are 32 bits (item 455), fields padded to 4.
  * 31 Dec 23 SD launch - prior history suppressed
@@ -31,47 +37,14 @@
  *    op_sortnext  SORTNEXT    Retrieve next item from sort data
  *    op_sortadd   SORTADD     Add an entry to a sort tree
  *
+ * XFUN handlers (QM4 Fixes item 371):
+ *    x_sort       SORT(key.count, {MAT} flags)
+ *    x_sortadd    SORTADD sortvar, {MAT} keys {, data}
+ *    x_sortclear  SORTCLEAR sortvar
+ *    x_sortdata   SORTDATA(sortvar {, max.items})
+ *    x_sortnext   SORTNEXT(sortvar {, {MAT} keys})
+ *
  * END-DESCRIPTION
- *
- * Data starts out in a tree similar to the BTREE data item.  When the
- * total size reaches a limit set by the SORTMEM configuration parameter,
- * the data is written to disk into a temporary file as a series of
- * records.
- *
- * If the number of sort files reaches the SORTMRG configuration parameter
- * value, the files are merged to keep the number of files within this
- * range.
- *
- * When the end of the data to be inserted into the sort is reached, if any
- * files have been created, the final burst of data is flushed from memory
- * to disk.
- *
- * When data is retrieved from the sort, if it was all in memory we follow
- * the same procedures as for extracting data from a BTREE data item.  If
- * we have gone to disk, the subfiles are merged as items are read from the
- * list.
- *
- * Only one sort can be in progress for any process at a time.  The subfiles
- * are stored in the directory pointed to by the SORTWORK parameter. Sort
- * files are named ~SDSu.s where u is the process number and s is the subfile
- * number.
- *
- *
- * A disk based sort record is structured as:
- *
- *    int32_t bytes        : Total record length including this count
- *      int32_t bytes  }   : Count of data bytes followed by
- *      char[bytes]      }   : data itself.
- *
- * The data bytes and data area appears first for the record data and then
- * for each sort key in turn.  Every length value and every data or key area
- * is aligned on a four byte boundary, so a length is never split across the
- * DISK_BUFFER_SIZE buffers, which are a multiple of four. The key strings
- * are null terminated.
- *
- * 16 Oct 26 - the lengths were int16_t, which wrapped for an item or key
- * of 32 kb or more (QM4 Fixes item 455).  The sizes below go through
- * pad4(), put32() and get32().
  *
  * START-CODE
  */
@@ -87,25 +60,48 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 
 #define DISK_BUFFER_SIZE 4096
 
-Private BTREE_ELEMENT* sort_tree = NULL;  /* Head of sort tree */
-Private int16_t sort_keys;              /* Number of keys... */
-Private u_char sort_flags[MAX_SORT_KEYS]; /* ...and their details */
-Private bool sort_has_data;               /* BT_DATA set in flags[0]? */
-Private int32_t sort_size;               /* Memory data size (bytes) */
-Private BTREE_ELEMENT* sort_ptr;          /* Pointer to next element */
-Private bool sorting = FALSE;             /* True while collecting data */
-Private int16_t sortwork = 0;           /* Sort work subfile counter */
+/* SRT$ flag definitions matching sdsys/syscom/keys.h */
+#define SRT_LEFT        0
+#define SRT_RIGHT       1
+#define SRT_COMPOUND    2
+#define SRT_RIGHT_FLOAT 3
+#define SRT_STRICT      4
+#define SRT_MODE_MASK   0x0F
+#define SRT_DESCENDING  0x10 /* 16 */
+#define SRT_UNIQUE      0x20 /* 32 */
+#define SRT_NOCASE      0x40 /* 64 */
+#define SRT_DATA        0x80 /* 128 */
 
-/* Buffer and associated items for disk based SORTNEXT.  The offset can run
-   past the end of the buffer while a long key is skipped, so it is 32 bits. */
-Private char* sort_buff = NULL;     /* Buffer */
-Private int32_t sort_buff_bytes;  /* Bytes in buffer */
-Private int32_t sort_buff_offset; /* Offset of next byte to extract */
-Private OSFILE sort_fu = INVALID_FILE_HANDLE; /* File unit for sort file */
+typedef struct SORT_SESSION {
+  bool in_use;
+  int16_t session_id;                /* 0 = legacy internal sort, >= 1 = user SORT() */
+  bool legacy_bt;                    /* TRUE for session 0 (SORTINIT) */
+  BTREE_ELEMENT* sort_tree;          /* Head of sort tree */
+  int16_t sort_keys;                 /* Number of keys */
+  u_char sort_flags[MAX_SORT_KEYS];  /* SRT$ flags per key */
+  bool sort_has_data;                /* SRT_DATA set in flags[0]? */
+  int32_t sort_size;                 /* Memory data size (bytes) */
+  BTREE_ELEMENT* sort_ptr;           /* Pointer to next element */
+  bool sorting;                      /* True while collecting data */
+  int16_t sortwork;                  /* Sort work subfile counter */
+  char* sort_buff;                   /* Disk read buffer */
+  int32_t sort_buff_bytes;           /* Bytes in buffer */
+  int32_t sort_buff_offset;          /* Offset of next byte to extract */
+  OSFILE sort_fu;                    /* File unit for sort file */
+} SORT_SESSION;
+
+#define MAX_USER_SORTS 256
+
+Private SORT_SESSION legacy_session = {
+  FALSE, 0, TRUE, NULL, 0, {0}, FALSE, 0, NULL, FALSE, 0,
+  NULL, 0, 0, INVALID_FILE_HANDLE
+};
+
+Private SORT_SESSION* user_sorts[MAX_USER_SORTS] = {NULL};
 
 /* Disk record fields.  Lengths are int32_t and every area is padded to a
-   multiple of four bytes (see the header comment).  The lengths are read and
-   written through memcpy so that no alignment is assumed.                  */
+   multiple of four bytes.  The lengths are read and written through memcpy
+   so that no alignment is assumed.                                         */
 
 #define pad4(n) (((n) + 3) & ~3)
 #define LEN_BYTES 4 /* Size of a length value on disk */
@@ -121,9 +117,23 @@ Private void put32(char* p, int32_t v) {
 }
 
 void op_sortclr(void);
-Private bool sortmerge(void);
-Private bool flush_sort_tree(void);
-Private bool merge_sort_files(void);
+void free_sort_session(int16_t id);
+void x_sort(void);
+void x_sortadd(void);
+void x_sortclear(void);
+void x_sortdata(void);
+void x_sortnext(void);
+
+Private void clear_sort_session(SORT_SESSION* sess);
+Private SORT_SESSION* alloc_sort_session(void);
+Private SORT_SESSION* get_sort_session(DESCRIPTOR* d);
+Private int sort_compare_keys(const char* k1, const char* k2, u_char flags, bool legacy_bt);
+Private void sess_insert_bte(SORT_SESSION* sess, BTREE_ELEMENT* new_bte, int32_t size);
+Private void sess_sortdata(SORT_SESSION* sess, int32_t max_items, bool require_sorting);
+Private bool sortmerge(SORT_SESSION* sess);
+Private bool flush_sort_tree(SORT_SESSION* sess);
+Private bool merge_sort_files(SORT_SESSION* sess);
+Private void make_workfile_path(SORT_SESSION* sess, int subfile, char* pathname, const char* caller);
 Private char* read_merge_record(OSFILE fu,
                                 char* buff,
                                 int32_t* buff_bytes,
@@ -136,103 +146,496 @@ Private bool write_merge_record(char* rec,
                                 bool temp);
 
 /* ======================================================================
-   op_sortclr()  -  Tidy up after completion of a sort                    */
+   make_workfile_path()  -  Format sort workfile path for a session       */
 
-void op_sortclr() {
+Private void make_workfile_path(SORT_SESSION* sess,
+                                int subfile,
+                                char* pathname,
+                                const char* caller) {
+  int n;
+  if (sess->session_id == 0) {
+    n = snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d.%d",
+                 pcfg.sortworkdir, DS, (int)process.user_no, subfile);
+  } else {
+    n = snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d_%d.%d",
+                 pcfg.sortworkdir, DS, (int)process.user_no,
+                 (int)sess->session_id, subfile);
+  }
+  if (n >= (MAX_PATHNAME_LEN + 1)) {
+    k_error("Overflowed path/filename max length in %s!", caller);
+  }
+}
+
+/* ======================================================================
+   clear_sort_session()  -  Free tree, buffer, and disk work files        */
+
+Private void clear_sort_session(SORT_SESSION* sess) {
   char pathname[MAX_PATHNAME_LEN + 1];
-  char prefix[12 + 1];
+  char prefix[32];
   int16_t prefix_len;
   DIR* dfu;
   struct dirent* dp;
 
+  if (sess == NULL)
+    return;
+
   /* Cast off all sort tree elements */
 
-  if (sort_tree != NULL) {
-    free_btree_element(sort_tree, sort_keys);
-    sort_tree = NULL;
+  if (sess->sort_tree != NULL) {
+    free_btree_element(sess->sort_tree, sess->sort_keys);
+    sess->sort_tree = NULL;
   }
 
   /* Free the disk based sort read buffer */
 
-  if (sort_buff != NULL) {
-    k_free(sort_buff);
-    sort_buff = NULL;
+  if (sess->sort_buff != NULL) {
+    k_free(sess->sort_buff);
+    sess->sort_buff = NULL;
   }
 
   /* Close the file for a disk based sort */
 
-  if (ValidFileHandle(sort_fu)) {
-    CloseFile(sort_fu);
-    sort_fu = INVALID_FILE_HANDLE;
+  if (ValidFileHandle(sess->sort_fu)) {
+    CloseFile(sess->sort_fu);
+    sess->sort_fu = INVALID_FILE_HANDLE;
   }
 
   /* Delete any sort work files (only if we have done a disk based sort) */
 
-  if (sortwork) {
+  if (sess->sortwork) {
     if ((dfu = opendir(pcfg.sortworkdir)) == NULL) {
       k_error(sysmsg(1480), pcfg.sortworkdir, errno);
     }
 
-    prefix_len = sprintf(prefix, "~SDS%d.", (int)process.user_no);
+    if (sess->session_id == 0) {
+      prefix_len = (int16_t)sprintf(prefix, "~SDS%d.", (int)process.user_no);
+    } else {
+      prefix_len = (int16_t)sprintf(prefix, "~SDS%d_%d.",
+                                    (int)process.user_no,
+                                    (int)sess->session_id);
+    }
 
     while ((dp = readdir(dfu)) != NULL) {
       if (memcmp(dp->d_name, prefix, prefix_len) == 0) {
-        /* convert to snprintf() -gwb 22Feb20 */
         if (snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c%s", pcfg.sortworkdir,
                      DS, dp->d_name) >= (MAX_PATHNAME_LEN + 1)) {
-          /* TODO: should write more detailed error to the log. */
-          k_error("Overflowed path/filename max length in merge_sort_files()!");
-          /* TODO: a sane exit path should be triggered here. */
-
-        } else
+          closedir(dfu);
+          k_error("Overflowed path/filename max length in clear_sort_session()!");
+        } else {
           remove(pathname);
+        }
       }
     }
 
     closedir(dfu);
-
-    sortwork = 0;
+    sess->sortwork = 0;
   }
 
+  sess->sort_size = 0;
+  sess->sort_ptr = NULL;
+  sess->sorting = FALSE;
+  sess->sort_buff_bytes = 0;
+  sess->sort_buff_offset = 0;
+}
+
+/* ======================================================================
+   alloc_sort_session()  -  Allocate a user SORT_SESSION slot             */
+
+Private SORT_SESSION* alloc_sort_session() {
+  int16_t id;
+  SORT_SESSION* sess;
+
+  for (id = 1; id < MAX_USER_SORTS; id++) {
+    if (user_sorts[id] == NULL) {
+      sess = (SORT_SESSION*)k_alloc(61, sizeof(SORT_SESSION));
+      if (sess == NULL)
+        k_error(sysmsg(1482));
+      memset(sess, 0, sizeof(SORT_SESSION));
+      sess->in_use = TRUE;
+      sess->session_id = id;
+      sess->sort_fu = INVALID_FILE_HANDLE;
+      user_sorts[id] = sess;
+      return sess;
+    }
+  }
+
+  k_error(sysmsg(12404)); /* all 255 slots are taken (was 1482, "Insufficient memory for sort element") */
+}
+
+/* ======================================================================
+   free_sort_session()  -  Release a user SORT_SESSION when sortvar freed */
+
+void free_sort_session(int16_t id) {
+  if ((id >= 1) && (id < MAX_USER_SORTS) && (user_sorts[id] != NULL)) {
+    clear_sort_session(user_sorts[id]);
+    k_free(user_sorts[id]);
+    user_sorts[id] = NULL;
+  }
+}
+
+/* ======================================================================
+   get_sort_session()  -  Resolve a sortvar descriptor to SORT_SESSION*   */
+
+Private SORT_SESSION* get_sort_session(DESCRIPTOR* d) {
+  int16_t id;
+
+  while (d->type == ADDR)
+    d = d->data.d_addr;
+  /* 12403 "Not a sort variable" (was 1487, "SORTDATA executed when not sorting", which named the wrong statement) */
+  if ((d->type != BTREE) || (d->data.btree == NULL))
+    k_error(sysmsg(12403));
+  id = d->data.btree->pad;
+  if ((id < 1) || (id >= MAX_USER_SORTS) || (user_sorts[id] == NULL))
+    k_error(sysmsg(12403));
+  return user_sorts[id];
+}
+
+/* ======================================================================
+   Key comparison helpers for SRT$ modes                                  */
+
+Private int cmp_char(u_char c1, u_char c2, bool nocase) {
+  if (nocase)
+    return (int)UpperCase(c1) - (int)UpperCase(c2);
+  return (int)c1 - (int)c2;
+}
+
+/* Is p a non-empty integer string (optional + or - followed by >= 1 digits)? */
+Private bool is_int_key(const char* p, double* val) {
+  bool neg = FALSE;
+  double v = 0.0;
+  int digits = 0;
+
+  if ((p == NULL) || (*p == '\0'))
+    return FALSE;
+  if (*p == '-') {
+    neg = TRUE;
+    p++;
+  } else if (*p == '+') {
+    p++;
+  }
+  if (!IsDigit(*p))
+    return FALSE;
+  while (IsDigit(*p)) {
+    if (++digits > 15)
+      return FALSE;
+    v = (v * 10.0) + (double)(*p - '0');
+    p++;
+  }
+  if (*p != '\0')
+    return FALSE;
+  *val = neg ? -v : v;
+  return TRUE;
+}
+
+/* Is p a non-empty floating point number string (optional spaces, + or -, digits/decimal)? */
+Private bool is_float_key(const char* p, double* val) {
+  bool neg = FALSE;
+  int digits = 0;
+  int frac_digits = 0;
+  double v = 0.0;
+  double dplace;
+
+  if (p == NULL)
+    return FALSE;
+  while (*p == ' ')
+    p++;
+  if (*p == '\0')
+    return FALSE;
+  if (*p == '-') {
+    neg = TRUE;
+    p++;
+  } else if (*p == '+') {
+    p++;
+  }
+  while (IsDigit(*p)) {
+    if (++digits > 15)
+      return FALSE;
+    v = (v * 10.0) + (double)(*p - '0');
+    p++;
+  }
+  if (*p == '.') {
+    p++;
+    dplace = 0.1;
+    while (IsDigit(*p)) {
+      frac_digits++;
+      v += (double)(*p - '0') * dplace;
+      dplace /= 10.0;
+      p++;
+    }
+  }
+  while (*p == ' ')
+    p++;
+  if ((*p != '\0') || ((digits == 0) && (frac_digits == 0)))
+    return FALSE;
+  *val = neg ? -v : v;
+  return TRUE;
+}
+
+Private double parse_compound_num(const char* s, size_t len) {
+  bool neg = FALSE;
+  size_t i = 0;
+  double val = 0.0;
+
+  if ((len > 0) && ((s[0] == '-') || (s[0] == '+'))) {
+    neg = (s[0] == '-');
+    i = 1;
+  }
+  for (; i < len; i++) {
+    val = (val * 10.0) + (double)(s[i] - '0');
+  }
+  return neg ? -val : val;
+}
+
+Private void next_compound_elem(const char** pp,
+                                bool at_start,
+                                const char** start_out,
+                                size_t* len_out,
+                                bool* is_num_out) {
+  const char* p = *pp;
+  bool is_num = IsDigit(*p) ||
+                (at_start && ((*p == '-') || (*p == '+')) && IsDigit(*(p + 1)));
+  *start_out = p;
+  *is_num_out = is_num;
+  if (is_num) {
+    if ((*p == '-') || (*p == '+'))
+      p++;
+    while (IsDigit(*p))
+      p++;
+  } else {
+    p++;
+    while ((*p != '\0') && !IsDigit(*p))
+      p++;
+  }
+  *len_out = (size_t)(p - *start_out);
+  *pp = p;
+}
+
+Private int sort_compare_keys(const char* k1,
+                              const char* k2,
+                              u_char flags,
+                              bool legacy_bt) {
+  u_char mode = flags & SRT_MODE_MASK;
+  bool desc = (flags & SRT_DESCENDING) != 0;
+  bool nocase = (flags & SRT_NOCASE) != 0;
+  int d = 0;
+  double v1, v2;
+  int32_t n;
+
+  if (k1 == NULL)
+    k1 = "";
+  if (k2 == NULL)
+    k2 = "";
+
+  switch (mode) {
+    case SRT_RIGHT:
+      if (is_int_key(k1, &v1) && is_int_key(k2, &v2)) {
+        d = (v1 > v2) ? 1 : (v1 < v2) ? -1 : 0;
+        break;
+      }
+      goto right_text;
+
+    case SRT_RIGHT_FLOAT:
+      if (legacy_bt ? (strdbl((char*)k1, &v1) && strdbl((char*)k2, &v2))
+                    : (is_float_key(k1, &v1) && is_float_key(k2, &v2))) {
+        d = (v1 > v2) ? 1 : (v1 < v2) ? -1 : 0;
+        break;
+      }
+    right_text:
+      n = (int32_t)strlen(k1) - (int32_t)strlen(k2);
+      if (n > 0) {
+        while (n--) {
+          if ((d = cmp_char((u_char)*k1++, ' ', nocase)) != 0)
+            goto done;
+        }
+      } else if (n < 0) {
+        while (n++) {
+          if ((d = cmp_char(' ', (u_char)*k2++, nocase)) != 0)
+            goto done;
+        }
+      }
+      while (*k1 && *k2) {
+        if ((d = cmp_char((u_char)*k1++, (u_char)*k2++, nocase)) != 0)
+          goto done;
+      }
+      if (*k1)
+        d = 1;
+      else if (*k2)
+        d = -1;
+      break;
+
+    case SRT_COMPOUND:
+    case SRT_STRICT: {
+      const char* p1 = k1;
+      const char* p2 = k2;
+      bool first = TRUE;
+      while ((*p1 != '\0') && (*p2 != '\0')) {
+        const char* s1;
+        const char* s2;
+        size_t l1, l2;
+        bool num1, num2;
+        next_compound_elem(&p1, first, &s1, &l1, &num1);
+        next_compound_elem(&p2, first, &s2, &l2, &num2);
+        first = FALSE;
+        if (num1 && !num2) {
+          d = -1;
+          break;
+        }
+        if (!num1 && num2) {
+          d = 1;
+          break;
+        }
+        if (num1) {
+          v1 = parse_compound_num(s1, l1);
+          v2 = parse_compound_num(s2, l2);
+          if (v1 < v2) {
+            d = -1;
+            break;
+          }
+          if (v1 > v2) {
+            d = 1;
+            break;
+          }
+          if (mode == SRT_STRICT) {
+            if (l1 != l2) {
+              d = (l1 < l2) ? -1 : 1;
+              break;
+            }
+            for (size_t k = 0; k < l1; k++) {
+              if ((d = (int)(u_char)s1[k] - (int)(u_char)s2[k]) != 0)
+                break;
+            }
+            if (d != 0)
+              break;
+          }
+        } else {
+          size_t min_l = (l1 < l2) ? l1 : l2;
+          for (size_t k = 0; k < min_l; k++) {
+            if ((d = cmp_char((u_char)s1[k], (u_char)s2[k], nocase)) != 0)
+              break;
+          }
+          if ((d == 0) && (l1 != l2))
+            d = (l1 < l2) ? -1 : 1;
+          if (d != 0)
+            break;
+        }
+      }
+      if (d == 0) {
+        if (*p1 != '\0')
+          d = 1;
+        else if (*p2 != '\0')
+          d = -1;
+      }
+      break;
+    }
+
+    default: /* SRT_LEFT */
+      while (*k1 && *k2) {
+        if ((d = cmp_char((u_char)*k1++, (u_char)*k2++, nocase)) != 0)
+          goto done;
+      }
+      if (*k1)
+        d = 1;
+      else if (*k2)
+        d = -1;
+      break;
+  }
+
+done:
+  if (desc)
+    d = -d;
+  return (d < 0) ? -1 : (d > 0) ? 1 : 0;
+}
+
+/* ======================================================================
+   sess_insert_bte()  -  Insert a new BTREE_ELEMENT into a sort session   */
+
+Private void sess_insert_bte(SORT_SESSION* sess,
+                             BTREE_ELEMENT* new_bte,
+                             int32_t size) {
+  BTREE_ELEMENT* bte;
+  int16_t index;
+  int d;
+
+  /* Flush the tree if this would take us past the SORTMEM limit */
+
+  sess->sort_size += size;
+  if (sess->sort_size > pcfg.sortmem) {
+    if (!flush_sort_tree(sess))
+      k_error(sysmsg(1485), process.os_error);
+    sess->sort_size = size;
+  }
+
+  /* Walk tree to insertion point */
+
+  bte = sess->sort_tree;
+  if (bte == NULL) {
+    sess->sort_tree = new_bte;
+    new_bte->parent = NULL;
+  } else {
+    index = 0;
+    do {
+      d = sort_compare_keys(new_bte->key[index], bte->key[index],
+                            sess->sort_flags[index], sess->legacy_bt);
+
+      if (d < 0) {
+        if (bte->left == NULL) {
+          bte->left = new_bte;
+          new_bte->parent = bte;
+          return;
+        }
+        bte = bte->left;
+        index = 0;
+      } else if (d > 0) {
+        if (bte->right == NULL) {
+          bte->right = new_bte;
+          new_bte->parent = bte;
+          return;
+        }
+        bte = bte->right;
+        index = 0;
+      } else {
+        if (sess->sort_flags[index] & SRT_UNIQUE) {
+          free_btree_element(new_bte, sess->sort_keys);
+          sess->sort_size -= size;
+          process.status = 1;
+          return;
+        }
+
+        if (++index == sess->sort_keys) {
+          /* Complete duplicate at all key levels.  Insert to left. */
+          if (bte->left == NULL) {
+            bte->left = new_bte;
+            new_bte->parent = bte;
+            return;
+          }
+          bte = bte->left;
+          index = 0;
+        }
+      }
+    } while (1);
+  }
+}
+
+/* ======================================================================
+   op_sortclr()  -  Tidy up after completion of a legacy sort             */
+
+void op_sortclr() {
+  clear_sort_session(&legacy_session);
   process.program.flags &= ~SORT_ACTIVE;
 }
 
 /* ======================================================================
-   op_sortadd()  -  Add entry to the sort tree                            */
+   op_sortadd()  -  Add entry to the legacy sort tree                     */
 
 void op_sortadd() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  Data (or Unassigned)       |                             |
-     |-----------------------------|-----------------------------| 
-     |  ADDR to keys array         |                             |
-     |=============================|=============================|
- */
-
   DESCRIPTOR* descr;
   ARRAY_HEADER* a_hdr;
-  BTREE_ELEMENT* bte;
   BTREE_ELEMENT* new_bte;
   int16_t index;
-  int16_t d;
-  char* key;
-  char* key_str;
-  char* bte_str;
-  bool right_justified;
-  bool descending;
-  int16_t n;
   int bytes;
-  bool numeric_compare[MAX_SORT_KEYS];
-  double new_value[MAX_SORT_KEYS]; /* Value being inserted */
-  double key_value;                /* Value being compared from tree */
-  int32_t size = 2 * LEN_BYTES;   /* Equivalent disk record size */
+  int32_t size = 2 * LEN_BYTES;
   STRING_CHUNK* str;
   char* p;
-
-  /* Find the keys array */
 
   descr = e_stack - 2;
   while (descr->type == ADDR)
@@ -241,19 +644,18 @@ void op_sortadd() {
     k_not_array_error(descr);
 
   a_hdr = descr->data.ahdr_addr;
-  if ((a_hdr->rows != sort_keys) || (a_hdr->cols != 0)) {
+  if ((a_hdr->rows != legacy_session.sort_keys) || (a_hdr->cols != 0)) {
     k_error(sysmsg(1481));
   }
 
-  /* Make a new BTree element */
-
-  bytes = sizeof(struct BTREE_ELEMENT) + ((sort_keys - 1) * sizeof(char*));
+  bytes = sizeof(struct BTREE_ELEMENT) +
+          ((legacy_session.sort_keys - 1) * sizeof(char*));
   new_bte = (BTREE_ELEMENT*)k_alloc(61, bytes);
   if (new_bte == NULL)
     k_error(sysmsg(1482));
   memset(new_bte, 0, bytes);
 
-  for (index = 0; index < sort_keys; index++) {
+  for (index = 0; index < legacy_session.sort_keys; index++) {
     descr = Element(a_hdr, index + 1);
     GetString(descr);
     str = descr->data.str.saddr;
@@ -263,20 +665,12 @@ void op_sortadd() {
       k_get_c_string(descr, p, str->string_len);
       new_bte->key[index] = p;
       size += LEN_BYTES + pad4(bytes);
-      if (sort_flags[index] & BT_RIGHT_ALIGNED) {
-        numeric_compare[index] = strdbl(p, &new_value[index]);
-      }
-    } else /* Null key value */
-    {
-      numeric_compare[index] = TRUE;
-      new_value[index] = 0.0; /* 0520 */
-      size += LEN_BYTES;      /* Allow for length field in disk image */
+    } else {
+      size += LEN_BYTES;
     }
   }
 
-  /* Find the data */
-
-  if (sort_has_data) {
+  if (legacy_session.sort_has_data) {
     descr = e_stack - 1;
     GetString(descr);
     str = descr->data.str.saddr;
@@ -289,166 +683,22 @@ void op_sortadd() {
     }
   }
 
-  /* Flush the tree if this would take us past the SORTMEM limit */
+  sess_insert_bte(&legacy_session, new_bte, size);
 
-  sort_size += size;
-  if (sort_size > pcfg.sortmem) {
-    if (!flush_sort_tree())
-      k_error(sysmsg(1485), process.os_error);
-    sort_size = size;
-  }
-
-  /* Walk tree to insertion point */
-
-  bte = sort_tree;
-  if (bte == NULL) /* Inserting first element */
-  {
-    sort_tree = new_bte;
-    new_bte->parent = NULL;
-  } else {
-    index = 0;
-
-    do {
-      key = new_bte->key[index];
-      if (key == NULL)
-        key = null_string;
-
-      n = sort_flags[index];
-      right_justified = n & BT_RIGHT_ALIGNED;
-      descending = (n & BT_DESCENDING) != 0;
-
-      /* Compare strings */
-
-      key_str = key;
-      bte_str = bte->key[index];
-      if (bte_str == NULL)
-        bte_str = null_string;
-
-      d = 0; /* 0269 */
-
-      if (right_justified) {
-        if (numeric_compare[index]) {
-          if (strdbl(bte_str, &key_value)) {
-            if (new_value[index] > key_value)
-              d = 1;
-            else if (new_value[index] == key_value)
-              d = 0;
-            else
-              d = -1;
-            goto mismatch;
-          }
-        }
-
-        n = strlen(key_str) - strlen(bte_str);
-        if (n) {
-          /* Compare leading characters of longer string against spaces */
-
-          if (n > 0) /* New key longer than BTree element key */
-          {
-            while (n--) {
-              if ((d = (((int16_t)*((u_char*)key_str++)) - ' ')) != 0)
-                goto mismatch;
-            }
-          } else /* New key shorter than BTree element key */
-          {
-            while (n++) {
-              if ((d = (' ' - ((int16_t)*((u_char*)bte_str++)))) != 0)
-                goto mismatch;
-            }
-          }
-        }
-      }
-
-      /* Compare to end of shorter string */
-
-      while (*bte_str && *key_str) {
-        if ((d = (((int16_t)(*((u_char*)key_str++))) -
-                  *((u_char*)bte_str++))) != 0)
-          goto mismatch;
-      }
-
-      /* If either string still has unprocessed characters, it is the greater
-          string (d must be zero when we arrive here).                        */
-
-      if (*key_str)
-        d = 1;
-      else if (*bte_str)
-        d = -1;
-
-    mismatch:
-      if (descending)
-        d = -d;
-
-      if (d < 0) {
-        if (bte->left == NULL) /* Add as new left entry */
-        {
-          bte->left = new_bte;
-          new_bte->parent = bte;
-          goto exit_op_sortadd;
-        }
-        bte = bte->left;
-        index = 0;
-      } else if (d > 0) {
-        if (bte->right == NULL) /* Add as new right entry */
-        {
-          bte->right = new_bte;
-          new_bte->parent = bte;
-          goto exit_op_sortadd;
-        }
-        bte = bte->right;
-        index = 0;
-      } else /* Matching key value */
-      {
-        if (sort_flags[index] & BT_UNIQUE) {
-          free_btree_element(new_bte, sort_keys);
-          sort_size -= size;
-          process.status = 1;
-          goto exit_op_sortadd;
-        }
-
-        /* Move down to lower level index if there is one */
-
-        if (++index == sort_keys) {
-          /* Complete duplicate at all key levels.  Insert to left. */
-          if (bte->left == NULL) /* Add as new left entry */
-          {
-            bte->left = new_bte;
-            new_bte->parent = bte;
-            goto exit_op_sortadd;
-          }
-          bte = bte->left;
-          index = 0;
-        }
-      }
-    } while (1);
-  }
-
-exit_op_sortadd:
   k_dismiss(); /* Data */
   k_pop(1);    /* ADDR to keys array */
 }
 
 /* ======================================================================
-   op_sortinit()  -  Initialise a sort                                    */
+   op_sortinit()  -  Initialise a legacy sort                             */
 
 void op_sortinit() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  ADDR to flags array        |                             |
-     |-----------------------------|-----------------------------| 
-     |  Number of keys             |                             |
-     |=============================|=============================|
- */
-
   DESCRIPTOR* descr;
   int keys;
   ARRAY_HEADER* a_hdr;
-  int i;  /* was int16_t, which makes it dumb to compare against an int. */
+  int i;
 
-  op_sortclr(); /* Discard any existing sort tree and files */
+  op_sortclr();
 
   descr = e_stack - 2;
   GetInt(descr);
@@ -465,37 +715,40 @@ void op_sortinit() {
   if ((keys > a_hdr->rows) || (a_hdr->cols != 0))
     k_index_error(descr);
 
-  sort_keys = keys;
+  legacy_session.in_use = TRUE;
+  legacy_session.session_id = 0;
+  legacy_session.legacy_bt = TRUE;
+  legacy_session.sort_keys = (int16_t)keys;
   for (i = 1; i <= keys; i++) {
+    u_char bt, sf;
     descr = Element(a_hdr, i);
-    GetInt(descr); /* Side effect - may convert array element type */
-    sort_flags[i - 1] = (u_char)(descr->data.value);
+    GetInt(descr);
+    bt = (u_char)(descr->data.value);
+    sf = (bt & BT_RIGHT_ALIGNED) ? SRT_RIGHT_FLOAT : SRT_LEFT;
+    if (bt & BT_DESCENDING)
+      sf |= SRT_DESCENDING;
+    if (bt & BT_UNIQUE)
+      sf |= SRT_UNIQUE;
+    if (bt & BT_DATA)
+      sf |= SRT_DATA;
+    legacy_session.sort_flags[i - 1] = sf;
   }
 
-  sort_has_data = (sort_flags[0] & BT_DATA) != 0;
+  legacy_session.sort_has_data = (legacy_session.sort_flags[0] & SRT_DATA) != 0;
 
   k_pop(2);
 
-  sort_size = 0;
-  sorting = TRUE;
+  legacy_session.sort_size = 0;
+  legacy_session.sorting = TRUE;
   process.program.flags |= SORT_ACTIVE;
 }
 
 /* ======================================================================
-   op_sortdata()  -  Retrieve all data from sort                          */
+   sess_sortdata()  -  Retrieve data from a sort session                  */
 
-void op_sortdata() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |                             | Data from item              |
-     |=============================|=============================|
-
-    Returns STATUS() as the number of items found
- */
-
+Private void sess_sortdata(SORT_SESSION* sess,
+                           int32_t max_items,
+                           bool require_sorting) {
   BTREE_ELEMENT* bte;
   BTREE_ELEMENT* old_bte;
   STRING_CHUNK* head = NULL;
@@ -507,105 +760,109 @@ void op_sortdata() {
 
   process.status = 0;
 
-  if (!sorting)
+  if (require_sorting && !sess->sorting)
     k_error(sysmsg(1487));
-  sorting = FALSE;
 
+  /* The target string is started BEFORE the merge, as it was before the 16 Oct 26 rewrite: a merge that cannot open its
+     last file takes the exit below, and ts_terminate() there needs a ts_init() behind it (16 Oct 26 audit). */
   ts_init(&head, 1024);
 
-  if (sortwork) /* Disk based sort */
+  if (sess->sorting) {
+    if (sess->sortwork) {
+      if (!sortmerge(sess))
+        goto exit_sess_sortdata;
+    } else {
+      bte = sess->sort_tree;
+      if (bte != NULL)
+        while (bte->left != NULL)
+          bte = bte->left;
+      sess->sort_ptr = bte;
+    }
+    sess->sorting = FALSE;
+  }
+
+  if (sess->sortwork) /* Disk based sort */
   {
-    if (!sortmerge())
-      goto exit_op_sortdata;
+    if (!ValidFileHandle(sess->sort_fu))
+      goto exit_sess_sortdata;
 
     phase = 1;
     do {
-      while (sort_buff_offset >= sort_buff_bytes) /* Read a new buffer */
-      {
-        sort_buff_offset -= sort_buff_bytes;
-        sort_buff_bytes = (int32_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
-        if (sort_buff_bytes <= 0)
-          goto exit_op_sortdata; /* End of data */
+      while (sess->sort_buff_offset >= sess->sort_buff_bytes) {
+        sess->sort_buff_offset -= sess->sort_buff_bytes;
+        sess->sort_buff_bytes =
+            (int32_t)Read(sess->sort_fu, sess->sort_buff, DISK_BUFFER_SIZE);
+        if (sess->sort_buff_bytes <= 0)
+          goto exit_sess_sortdata;
       }
 
       switch (phase) {
-        case 1: /* Extracting record length to form skip_bytes */
-          skip_bytes = get32(sort_buff + sort_buff_offset) - LEN_BYTES;
-          sort_buff_offset += LEN_BYTES;
+        case 1:
+          skip_bytes = get32(sess->sort_buff + sess->sort_buff_offset) - LEN_BYTES;
+          sess->sort_buff_offset += LEN_BYTES;
           if (head != NULL)
             ts_copy_byte(FIELD_MARK);
-          if (!sort_has_data) {
-            /* This tree has no data element so skip it. The code below
-                 will then return the first key value as the "data".      */
-            sort_buff_offset += LEN_BYTES;
+          if (!sess->sort_has_data) {
+            sess->sort_buff_offset += LEN_BYTES;
             skip_bytes -= LEN_BYTES;
           }
           phase = 2;
           break;
 
-        case 2: /* Extracting data length */
-          data_bytes = get32(sort_buff + sort_buff_offset);
-          /* If we are extracting the first key as the data, decrement
-               the length to exclude the null terminator.  A null key
-               has no length to decrement.                              */
-          if (!sort_has_data && data_bytes > 0)
+        case 2:
+          data_bytes = get32(sess->sort_buff + sess->sort_buff_offset);
+          if (!sess->sort_has_data && data_bytes > 0)
             data_bytes--;
-          sort_buff_offset += LEN_BYTES;
+          sess->sort_buff_offset += LEN_BYTES;
           skip_bytes -= LEN_BYTES;
           phase = 3;
           break;
 
-        case 3: /* Extracting data */
-          bytes_remaining = sort_buff_bytes - sort_buff_offset;
+        case 3:
+          bytes_remaining = sess->sort_buff_bytes - sess->sort_buff_offset;
           n = min(bytes_remaining, data_bytes);
-          ts_copy(sort_buff + sort_buff_offset, n);
+          ts_copy(sess->sort_buff + sess->sort_buff_offset, n);
           data_bytes -= n;
           n = pad4(n);
-          sort_buff_offset += n;
+          sess->sort_buff_offset += n;
           skip_bytes -= n;
           if (data_bytes == 0) {
-            /* Count the item here, not when its keys have been skipped: with
-               no data element the last record can end exactly at the end of
-               the file, and the loop above then leaves before phase 4 (the
-               count was one short).                                         */
             process.status++;
             phase = 4;
           }
           break;
 
-        case 4: /* Skipping keys */
-          sort_buff_offset += skip_bytes;
+        case 4:
+          sess->sort_buff_offset += skip_bytes;
           phase = 1;
+          if ((max_items > 0) && (process.status >= max_items))
+            goto exit_sess_sortdata;
           break;
       }
     } while (1);
   } else /* Memory based sort */
   {
-    bte = sort_tree;
-    if (bte != NULL)
-      while (bte->left != NULL)
-        bte = bte->left;
+    bte = sess->sort_ptr;
 
     while (bte != NULL) {
       if (head != NULL)
         ts_copy_byte(FIELD_MARK);
-      if (sort_has_data)
-        ts_copy(bte->data, strlen(bte->data));
-      else
-/* rev 0.9.0 watch for NULL id */      
+      if (sess->sort_has_data) {
+        if (bte->data != NULL)
+          ts_copy(bte->data, strlen(bte->data));
+      } else {
         if (bte->key[0] != NULL)
           ts_copy(bte->key[0], strlen(bte->key[0]));
+      }
       process.status += 1;
 
       /* Locate next item */
 
-      if (bte->right != NULL) /* Descend one step right then all the way left */
-      {
+      if (bte->right != NULL) {
         bte = bte->right;
         while (bte->left != NULL)
           bte = bte->left;
-      } else /* Ascend to parent, repeating so long as we are */
-      {      /* coming up a right limb */
+      } else {
         do {
           old_bte = bte;
           bte = bte->parent;
@@ -613,10 +870,14 @@ void op_sortdata() {
             break;
         } while (old_bte == bte->right);
       }
+
+      sess->sort_ptr = bte;
+      if ((max_items > 0) && (process.status >= max_items))
+        break;
     }
   }
 
-exit_op_sortdata:
+exit_sess_sortdata:
   ts_terminate();
 
   InitDescr(e_stack, STRING);
@@ -624,25 +885,21 @@ exit_op_sortdata:
 }
 
 /* ======================================================================
-   op_sortnext()  -  Retrieve next item from sort data                    */
+   op_sortdata()  -  Retrieve all data from legacy sort                   */
 
-void op_sortnext() {
-  /* Stack:
+void op_sortdata() {
+  sess_sortdata(&legacy_session, 0, TRUE);
+}
 
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  ADDR to keys array         | Data from item              |
-     |=============================|=============================|
+/* ======================================================================
+   sess_sortnext()  -  Retrieve next item from a sort session             */
 
-    Keys array is set to all keys of item found.
-
-    Returns STATUS() non-zero if no item found
- */
-
+Private void sess_sortnext(SORT_SESSION* sess,
+                           ARRAY_HEADER* a_hdr,
+                           DESCRIPTOR* scalar_key,
+                           bool has_keys_arg) {
   DESCRIPTOR* data_descr;
   DESCRIPTOR* descr;
-  ARRAY_HEADER* a_hdr;
   BTREE_ELEMENT* bte;
   BTREE_ELEMENT* old_bte;
   int16_t index;
@@ -653,92 +910,66 @@ void op_sortnext() {
 
   process.status = 1;
 
-  /* Find the keys array */
-
-  descr = e_stack - 1;
-  while (descr->type == ADDR)
-    descr = descr->data.d_addr;
-  if (descr->type != ARRAY)
-    k_not_array_error(descr);
-
-  a_hdr = descr->data.ahdr_addr;
-  if ((a_hdr->rows != sort_keys) || (a_hdr->cols != 0)) {
-    k_error(sysmsg(1488));
-  }
-  k_pop(1);
-
-  /* Set up a null result for error paths (including normal exit when we
-    reach the end ofthe sort data.                                       */
-
   data_descr = e_stack++;
   InitDescr(data_descr, STRING);
   data_descr->data.str.saddr = NULL;
 
-  if (sorting) /* First call - Set pointers */
-  {
-    if (sortwork) /* Disk based sort */
-    {
-      if (!sortmerge())
-        goto exit_op_sortnext;
-    } else /* Memory based sort */
-    {
-      bte = sort_tree;
+  if (sess->sorting) {
+    if (sess->sortwork) {
+      if (!sortmerge(sess))
+        goto exit_sess_sortnext;
+    } else {
+      bte = sess->sort_tree;
       if (bte != NULL)
         while (bte->left != NULL)
           bte = bte->left;
-      sort_ptr = bte;
+      sess->sort_ptr = bte;
     }
-
-    sorting = FALSE;
+    sess->sorting = FALSE;
   }
 
-  if (sortwork) /* Disk based sort */
+  if (sess->sortwork) /* Disk based sort */
   {
-    if (sort_buff_offset >= sort_buff_bytes) /* Read a new buffer */
-    {
-      sort_buff_bytes = (int32_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
-      if (sort_buff_bytes <= 0)
-        goto exit_op_sortnext; /* End of data */
-      sort_buff_offset = 0;
+    if (!ValidFileHandle(sess->sort_fu))
+      goto exit_sess_sortnext;
+
+    while (sess->sort_buff_offset >= sess->sort_buff_bytes) {
+      sess->sort_buff_offset -= sess->sort_buff_bytes;
+      sess->sort_buff_bytes =
+          (int32_t)Read(sess->sort_fu, sess->sort_buff, DISK_BUFFER_SIZE);
+      if (sess->sort_buff_bytes <= 0)
+        goto exit_sess_sortnext;
     }
 
-    /* Fetch the record length */
+    bytes = get32(sess->sort_buff + sess->sort_buff_offset);
 
-    bytes = get32(sort_buff + sort_buff_offset);
-
-    /* If the entire record lies in the current buffer, work directly from
-      the buffer.  If it extends beyond the current buffer, allocate a
-      temporary buffer to hold the record.                                */
-
-    if (sort_buff_offset + bytes <= sort_buff_bytes) /* It's all in memory */
-    {
-      q = sort_buff + sort_buff_offset + LEN_BYTES; /* Point to data byte count */
-      sort_buff_offset += pad4(bytes);
-    } else /* Must use a temporary buffer */
-    {
+    if (sess->sort_buff_offset + bytes <= sess->sort_buff_bytes) {
+      q = sess->sort_buff + sess->sort_buff_offset + LEN_BYTES;
+      sess->sort_buff_offset += pad4(bytes);
+    } else {
       buff = (char*)k_alloc(65, bytes);
       if (buff == NULL)
         k_error("Insufficient memory for sort record buffer");
       q = buff;
 
       while (bytes) {
-        n = sort_buff_bytes - sort_buff_offset;
+        n = sess->sort_buff_bytes - sess->sort_buff_offset;
         if (n == 0) {
-          sort_buff_bytes =
-              (int32_t)Read(sort_fu, sort_buff, DISK_BUFFER_SIZE);
-          if (sort_buff_bytes <= 0)
-            goto exit_op_sortnext;
-          sort_buff_offset = 0;
-          n = sort_buff_bytes;
+          sess->sort_buff_bytes =
+              (int32_t)Read(sess->sort_fu, sess->sort_buff, DISK_BUFFER_SIZE);
+          if (sess->sort_buff_bytes <= 0)
+            goto exit_sess_sortnext;
+          sess->sort_buff_offset = 0;
+          n = sess->sort_buff_bytes;
         }
         n = min(bytes, n);
-        memcpy(q, sort_buff + sort_buff_offset, n);
+        memcpy(q, sess->sort_buff + sess->sort_buff_offset, n);
         q += n;
         bytes -= n;
-        sort_buff_offset += n;
+        sess->sort_buff_offset += n;
       }
 
-      q = buff + LEN_BYTES; /* Point to data byte count */
+      q = buff + LEN_BYTES;
     }
 
     /* Extract the data */
@@ -754,49 +985,68 @@ void op_sortnext() {
 
     /* Extract the keys */
 
-    for (index = 1; index <= sort_keys; index++) {
-      descr = Element(a_hdr, index);
-      k_release(descr);
+    for (index = 1; index <= sess->sort_keys; index++) {
       bytes = get32(q);
       q += LEN_BYTES;
-      InitDescr(descr, STRING);
-      descr->data.str.saddr = NULL;
-      if (bytes) {
-        /* The keys are stored in the sort files with a trailing \0 character.
-          This should not be included in the copied key data.                */
-
-        ts_init(&(descr->data.str.saddr), bytes - 1);
-        ts_copy(q, bytes - 1);
-        ts_terminate();
-        q += pad4(bytes);
+      if ((index == 1) && !sess->sort_has_data && !has_keys_arg) {
+        if (bytes > 1) {
+          ts_init(&(data_descr->data.str.saddr), bytes - 1);
+          ts_copy(q, bytes - 1);
+          ts_terminate();
+        }
       }
+      if (a_hdr != NULL) {
+        descr = Element(a_hdr, index);
+        k_release(descr);
+        InitDescr(descr, STRING);
+        descr->data.str.saddr = NULL;
+        if (bytes > 1) {
+          ts_init(&(descr->data.str.saddr), bytes - 1);
+          ts_copy(q, bytes - 1);
+          ts_terminate();
+        }
+      } else if ((scalar_key != NULL) && (index == 1)) {
+        k_release(scalar_key);
+        InitDescr(scalar_key, STRING);
+        scalar_key->data.str.saddr = NULL;
+        if (bytes > 1) {
+          ts_init(&(scalar_key->data.str.saddr), bytes - 1);
+          ts_copy(q, bytes - 1);
+          ts_terminate();
+        }
+      }
+      if (bytes)
+        q += pad4(bytes);
     }
   } else /* Memory based sort */
   {
-    /* Return data from current item */
+    if ((bte = sess->sort_ptr) == NULL)
+      goto exit_sess_sortnext;
 
-    if ((bte = sort_ptr) == NULL)
-      goto exit_op_sortnext; /* No more data */
+    if (sess->sort_has_data) {
+      k_put_c_string(bte->data, data_descr);
+    } else if (!has_keys_arg) {
+      k_put_c_string(bte->key[0], data_descr);
+    }
 
-    k_put_c_string(bte->data, data_descr);
-
-    /* Copy keys to array */
-
-    for (index = 1; index <= sort_keys; index++) {
-      descr = Element(a_hdr, index);
-      k_release(descr);
-      k_put_c_string(bte->key[index - 1], descr);
+    if (a_hdr != NULL) {
+      for (index = 1; index <= sess->sort_keys; index++) {
+        descr = Element(a_hdr, index);
+        k_release(descr);
+        k_put_c_string(bte->key[index - 1], descr);
+      }
+    } else if (scalar_key != NULL) {
+      k_release(scalar_key);
+      k_put_c_string(bte->key[0], scalar_key);
     }
 
     /* Locate next item */
 
-    if (bte->right != NULL) /* Descend one step right then all the way left */
-    {
+    if (bte->right != NULL) {
       bte = bte->right;
       while (bte->left != NULL)
         bte = bte->left;
-    } else /* Ascend to parent, repeating so long as we are */
-    {      /* coming up a right limb */
+    } else {
       do {
         old_bte = bte;
         bte = bte->parent;
@@ -805,49 +1055,285 @@ void op_sortnext() {
       } while (old_bte == bte->right);
     }
 
-    sort_ptr = bte;
+    sess->sort_ptr = bte;
   }
 
   process.status = 0;
 
-exit_op_sortnext:
+exit_sess_sortnext:
   if (buff != NULL)
     k_free(buff);
+}
 
-  return;
+/* ======================================================================
+   op_sortnext()  -  Retrieve next item from legacy sort data             */
+
+void op_sortnext() {
+  DESCRIPTOR* descr;
+  ARRAY_HEADER* a_hdr;
+
+  descr = e_stack - 1;
+  while (descr->type == ADDR)
+    descr = descr->data.d_addr;
+  if (descr->type != ARRAY)
+    k_not_array_error(descr);
+
+  a_hdr = descr->data.ahdr_addr;
+  if ((a_hdr->rows != legacy_session.sort_keys) || (a_hdr->cols != 0)) {
+    k_error(sysmsg(1488));
+  }
+  k_pop(1);
+
+  sess_sortnext(&legacy_session, a_hdr, NULL, TRUE);
+}
+
+/* ======================================================================
+   x_sort()  -  SORT(key.count, {MAT} flags)                              */
+
+void x_sort() {
+  DESCRIPTOR* descr;
+  int keys;
+  ARRAY_HEADER* a_hdr;
+  SORT_SESSION* sess;
+  BTREE_HEADER* bth;
+  int i;
+
+  descr = e_stack - 2;
+  GetInt(descr);
+  keys = descr->data.value;
+  if ((keys < 1) || (keys > MAX_SORT_KEYS))
+    k_error(sysmsg(1486));
+
+  sess = alloc_sort_session();
+  sess->legacy_bt = FALSE;
+  sess->sort_keys = (int16_t)keys;
+
+  descr = e_stack - 1;
+  while (descr->type == ADDR)
+    descr = descr->data.d_addr;
+  if (descr->type == ARRAY) {
+    a_hdr = descr->data.ahdr_addr;
+    if ((keys > a_hdr->rows) || (a_hdr->cols != 0)) {
+      free_sort_session(sess->session_id);
+      k_index_error(descr);
+    }
+    for (i = 1; i <= keys; i++) {
+      descr = Element(a_hdr, i);
+      GetInt(descr);
+      sess->sort_flags[i - 1] = (u_char)(descr->data.value);
+    }
+  } else if (keys == 1) {
+    descr = e_stack - 1;
+    GetInt(descr);
+    sess->sort_flags[0] = (u_char)(descr->data.value);
+  } else {
+    free_sort_session(sess->session_id);
+    k_not_array_error(descr);
+  }
+
+  sess->sort_has_data = (sess->sort_flags[0] & SRT_DATA) != 0;
+  sess->sort_size = 0;
+  sess->sorting = TRUE;
+
+  k_dismiss();
+  k_dismiss();
+
+  bth = (BTREE_HEADER*)k_alloc(28, sizeof(struct BTREE_HEADER));
+  if (bth == NULL)
+    k_error("Insufficient memory for BTree header");
+  bth->ref_ct = 1;
+  bth->pad = sess->session_id;
+  bth->head = NULL;
+  bth->current = NULL;
+  bth->keys = 0;
+  bth->flags[0] = 0;
+
+  InitDescr(e_stack, BTREE);
+  (e_stack++)->data.btree = bth;
+}
+
+/* ======================================================================
+   x_sortadd()  -  SORTADD sortvar, {MAT} keys {, data}                   */
+
+void x_sortadd() {
+  SORT_SESSION* sess;
+  DESCRIPTOR* descr;
+  ARRAY_HEADER* a_hdr;
+  BTREE_ELEMENT* new_bte;
+  int16_t index;
+  int bytes;
+  int32_t size = 2 * LEN_BYTES;
+  STRING_CHUNK* str;
+  char* p;
+
+  process.status = 0;
+  sess = get_sort_session(e_stack - 3);
+  if (!sess->sorting && (sess->sort_tree == NULL) && (sess->sortwork == 0))
+    sess->sorting = TRUE;
+
+  bytes = sizeof(struct BTREE_ELEMENT) + ((sess->sort_keys - 1) * sizeof(char*));
+  new_bte = (BTREE_ELEMENT*)k_alloc(61, bytes);
+  if (new_bte == NULL)
+    k_error(sysmsg(1482));
+  memset(new_bte, 0, bytes);
+
+  descr = e_stack - 2;
+  while (descr->type == ADDR)
+    descr = descr->data.d_addr;
+  if (descr->type == ARRAY) {
+    a_hdr = descr->data.ahdr_addr;
+    if ((a_hdr->rows < sess->sort_keys) || (a_hdr->cols != 0))
+      k_error(sysmsg(1481));
+    for (index = 0; index < sess->sort_keys; index++) {
+      descr = Element(a_hdr, index + 1);
+      GetString(descr);
+      str = descr->data.str.saddr;
+      if (str != NULL) {
+        bytes = str->string_len + 1;
+        p = (char*)k_alloc(115, bytes);
+        k_get_c_string(descr, p, str->string_len);
+        new_bte->key[index] = p;
+        size += LEN_BYTES + pad4(bytes);
+      } else {
+        size += LEN_BYTES;
+      }
+    }
+  } else if (sess->sort_keys == 1) {
+    descr = e_stack - 2;
+    GetString(descr);
+    str = descr->data.str.saddr;
+    if (str != NULL) {
+      bytes = str->string_len + 1;
+      p = (char*)k_alloc(115, bytes);
+      k_get_c_string(descr, p, str->string_len);
+      new_bte->key[0] = p;
+      size += LEN_BYTES + pad4(bytes);
+    } else {
+      size += LEN_BYTES;
+    }
+  } else {
+    free_btree_element(new_bte, sess->sort_keys);
+    k_not_array_error(descr);
+  }
+
+  if (sess->sort_has_data) {
+    descr = e_stack - 1;
+    while (descr->type == ADDR)
+      descr = descr->data.d_addr;
+    if (descr->type != UNASSIGNED) {
+      descr = e_stack - 1;
+      GetString(descr);
+      str = descr->data.str.saddr;
+      if (str != NULL) {
+        bytes = str->string_len + 1;
+        p = (char*)k_alloc(116, bytes);
+        k_get_c_string(descr, p, str->string_len);
+        new_bte->data = p;
+        size += pad4(bytes);
+      }
+    }
+  }
+
+  sess_insert_bte(sess, new_bte, size);
+
+  k_dismiss(); /* data */
+  k_dismiss(); /* keys */
+  k_dismiss(); /* sortvar */
+}
+
+/* ======================================================================
+   x_sortclear()  -  SORTCLEAR sortvar                                    */
+
+void x_sortclear() {
+  DESCRIPTOR* d = e_stack - 1;
+
+  while (d->type == ADDR)
+    d = d->data.d_addr;
+  if ((d->type == BTREE) && (d->data.btree != NULL)) {
+    int16_t id = d->data.btree->pad;
+    if ((id >= 1) && (id < MAX_USER_SORTS) && (user_sorts[id] != NULL)) {
+      clear_sort_session(user_sorts[id]);
+    }
+  }
+  k_dismiss();
+}
+
+/* ======================================================================
+   x_sortdata()  -  SORTDATA(sortvar {, max.items})                       */
+
+void x_sortdata() {
+  DESCRIPTOR* max_d = e_stack - 1;
+  int32_t max_items;
+  SORT_SESSION* sess;
+
+  GetInt(max_d);
+  max_items = max_d->data.value;
+  sess = get_sort_session(e_stack - 2);
+
+  k_dismiss(); /* max.items */
+  k_dismiss(); /* sortvar */
+
+  sess_sortdata(sess, max_items, FALSE);
+}
+
+/* ======================================================================
+   x_sortnext()  -  SORTNEXT(sortvar {, {MAT} keys})                      */
+
+void x_sortnext() {
+  SORT_SESSION* sess;
+  DESCRIPTOR* keys_d;
+  ARRAY_HEADER* a_hdr = NULL;
+  DESCRIPTOR* scalar_key = NULL;
+  bool has_keys_arg = FALSE;
+
+  sess = get_sort_session(e_stack - 2);
+  keys_d = e_stack - 1;
+  if (keys_d->type != UNASSIGNED) {
+    has_keys_arg = TRUE;
+    while (keys_d->type == ADDR)
+      keys_d = keys_d->data.d_addr;
+    if (keys_d->type == ARRAY) {
+      a_hdr = keys_d->data.ahdr_addr;
+      if ((a_hdr->rows < sess->sort_keys) || (a_hdr->cols != 0))
+        k_error(sysmsg(1488));
+    } else if (sess->sort_keys == 1) {
+      scalar_key = keys_d;
+    } else {
+      k_not_array_error(keys_d);
+    }
+  }
+
+  k_dismiss(); /* keys */
+  k_dismiss(); /* sortvar */
+
+  sess_sortnext(sess, a_hdr, scalar_key, has_keys_arg);
 }
 
 /* ======================================================================
    sortmerge()  -  Perform merge phase of disk sort                       */
 
-Private bool sortmerge() {
+Private bool sortmerge(SORT_SESSION* sess) {
   bool status = FALSE;
   char pathname[MAX_PATHNAME_LEN + 1];
 
   /* Flush final part to disk */
 
-  if (!flush_sort_tree())
+  if (!flush_sort_tree(sess))
     k_error(sysmsg(1489), process.os_error);
 
   /* Initialise scan pointer to start of sort data */
 
-  if (!merge_sort_files())
-    k_error(sysmsg(1490)); /* 1.5-9 */
-  /* convert to snprintf() -gwb 22Feb20 */
-  if (snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d.%d",
-               pcfg.sortworkdir, DS, (int)process.user_no,
-               (int)sortwork) >= (MAX_PATHNAME_LEN + 1)) {
-    /* TODO: should write more detailed error to the log. */
-    k_error("Overflowed path/filename max length in sortmerge()!");
-    goto exit_sortmerge;
-  }
-  sort_fu = dio_open(pathname, DIO_READ);
-  if (!ValidFileHandle(sort_fu))
+  if (!merge_sort_files(sess))
+    k_error(sysmsg(1490));
+
+  make_workfile_path(sess, (int)sess->sortwork, pathname, "sortmerge()");
+  sess->sort_fu = dio_open(pathname, DIO_READ);
+  if (!ValidFileHandle(sess->sort_fu))
     goto exit_sortmerge;
 
-  sort_buff = (char*)k_alloc(64, DISK_BUFFER_SIZE);
-  sort_buff_bytes = 0;
-  sort_buff_offset = 0;
+  sess->sort_buff = (char*)k_alloc(64, DISK_BUFFER_SIZE);
+  sess->sort_buff_bytes = 0;
+  sess->sort_buff_offset = 0;
 
   status = TRUE;
 
@@ -858,9 +1344,7 @@ exit_sortmerge:
 /* ======================================================================
    flush_sort_tree()  - Write sort tree to disk                           */
 
-/* process.os_error will be set for error returns */
-
-Private bool flush_sort_tree() {
+Private bool flush_sort_tree(SORT_SESSION* sess) {
   bool status = FALSE;
   char pathname[MAX_PATHNAME_LEN + 1];
   OSFILE fu = INVALID_FILE_HANDLE;
@@ -869,25 +1353,16 @@ Private bool flush_sort_tree() {
   int bytes;
   int assembly_buffer_size = 0;
   char* assembly_buffer = NULL;
-  char* disk_buffer = NULL; /* Disk output buffer and... */
-  int32_t used_bytes;     /* ...used byte count */
+  char* disk_buffer = NULL;
+  int32_t used_bytes;
   int32_t space;
   int16_t i;
   int32_t n;
   char* p;
   char* q;
 
-  /* Flush the memory tree to disk */
-
   process.os_error = 0;
-  /* convert to snprintf() -gwb 22Feb20 */
-  if (snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d.%d",
-               pcfg.sortworkdir, DS, (int)process.user_no,
-               (int)sortwork) >= (MAX_PATHNAME_LEN + 1)) {
-    /* TODO: should write more detailed error to the log. */
-    k_error("Overflowed path/filename max length in flush_sort_tree()!");
-    goto exit_flush_sort_tree;
-  }
+  make_workfile_path(sess, (int)sess->sortwork, pathname, "flush_sort_tree()");
   fu = dio_open(pathname, DIO_REPLACE);
   if (!ValidFileHandle(fu))
     k_error(sysmsg(1491), pathname, OSError);
@@ -897,26 +1372,22 @@ Private bool flush_sort_tree() {
     k_error("Insufficient memory for sort disk buffer");
   used_bytes = 0;
 
-  bte = sort_tree;
+  bte = sess->sort_tree;
   if (bte != NULL)
     while (bte->left != NULL)
       bte = bte->left;
   while (bte != NULL) {
-    /* Count bytes required for this entry */
-
-    bytes = 2 * LEN_BYTES; /* Record length + data length */
+    bytes = 2 * LEN_BYTES;
     if (bte->data != NULL)
       bytes += pad4(strlen(bte->data));
 
-    for (i = 0; i < sort_keys; i++) /* Keys - Written with trailing \0 */
-    {
-      bytes += LEN_BYTES; /* Key length */
+    for (i = 0; i < sess->sort_keys; i++) {
+      bytes += LEN_BYTES;
       if (bte->key[i] != NULL)
         bytes += pad4(strlen(bte->key[i]) + 1);
     }
 
-    if (assembly_buffer_size <
-        bytes) { /* Need to increase assembly buffer size */
+    if (assembly_buffer_size < bytes) {
       if (assembly_buffer != NULL)
         k_free(assembly_buffer);
       assembly_buffer_size = (bytes + 1023) & ~1023;
@@ -925,18 +1396,13 @@ Private bool flush_sort_tree() {
         k_error("Insufficient memory for sort assembly buffer");
     }
 
-    /* Assemble record */
-
-    /* Modified by Composer AI - 2026/06/10. Guard before dereference. */
     if (assembly_buffer == NULL)
       k_error("Insufficient memory for sort assembly buffer");
-    /* -------------------- */
     q = assembly_buffer;
-    put32(q, bytes); /* Record header: total byte count */
+    put32(q, bytes);
     q += LEN_BYTES;
 
-    if (bte->data != NULL) /* Data item with preceding byte count */
-    {
+    if (bte->data != NULL) {
       n = strlen(bte->data);
       put32(q, n);
       q += LEN_BYTES;
@@ -949,8 +1415,7 @@ Private bool flush_sort_tree() {
       q += LEN_BYTES;
     }
 
-    for (i = 0; i < sort_keys; i++) /* Each key item */
-    {
+    for (i = 0; i < sess->sort_keys; i++) {
       if (bte->key[i] != NULL) {
         n = strlen(bte->key[i]) + 1;
         put32(q, n);
@@ -964,8 +1429,6 @@ Private bool flush_sort_tree() {
         q += LEN_BYTES;
       }
     }
-
-    /* Copy to disk buffer */
 
     p = assembly_buffer;
     do {
@@ -987,16 +1450,11 @@ Private bool flush_sort_tree() {
       bytes -= n;
     } while (bytes);
 
-    /* Locate next item */
-
-    if (bte->right != NULL) /* Descend one step right then all the way left */
-    {
+    if (bte->right != NULL) {
       bte = bte->right;
       while (bte->left != NULL)
         bte = bte->left;
-    } else /* Ascend to parent, repeating so long as we are
-                              coming up a right limb */
-    {
+    } else {
       do {
         old_bte = bte;
         bte = bte->parent;
@@ -1006,8 +1464,6 @@ Private bool flush_sort_tree() {
     }
   }
 
-  /* Flush final buffer */
-
   if (used_bytes != 0) {
     if (Write(fu, disk_buffer, used_bytes) != used_bytes) {
       process.os_error = OSError;
@@ -1015,14 +1471,12 @@ Private bool flush_sort_tree() {
     }
   }
 
-  sortwork++;
+  sess->sortwork++;
 
-  /* Cast off all tree elements */
-
-  if (sort_tree != NULL)
-    free_btree_element(sort_tree, sort_keys);
-  sort_tree = NULL;
-  sort_size = 0;
+  if (sess->sort_tree != NULL)
+    free_btree_element(sess->sort_tree, sess->sort_keys);
+  sess->sort_tree = NULL;
+  sess->sort_size = 0;
 
   status = TRUE;
 
@@ -1055,114 +1509,76 @@ Private void free_sort_merge_buffs(char* buff[], int16_t count) {
 /* ======================================================================
    merge_sort_files()  -  Merge individual disk based sort files          */
 
-Private bool merge_sort_files() {
+Private bool merge_sort_files(SORT_SESSION* sess) {
   bool status = FALSE;
-  int16_t num_files; /* Number of files to process */
-  int16_t lo_file;   /* Lowest existing file index */
+  int16_t num_files;
+  int16_t lo_file;
   int16_t nstream;
 
-  OSFILE infu[MAX_SORTMRG];           /* File unit for first file... */
-  /* Modified by Composer AI - 2026/06/10. Zero-init merge buffer pointers. */
-  /* char* buff[MAX_SORTMRG]; / * ...disk buffer... * / */
+  OSFILE infu[MAX_SORTMRG];
   char* buff[MAX_SORTMRG] = {NULL};
-  /* -------------------- */
-  int32_t buff_bytes[MAX_SORTMRG];  /* ...byte count... */
-  int32_t buff_offset[MAX_SORTMRG]; /* ...and current offset */
-  char* rec[MAX_SORTMRG];             /* Record pointer and... */
-  bool temp[MAX_SORTMRG];             /* Temporary buffer flag */
-  char* p1;                           /* Rolling pointer to extracted keys */
-  int32_t n1;                       /* Bytes in element to be extracted */
-  char* k1;                           /* Key data pointer */
-  double v1;                          /* Extracted numeric data */
-  char* p2;                           /* Rolling pointer to extracted keys */
-  int32_t n2;                       /* Bytes in element to be extracted */
-  char* k2;                           /* Key data pointer */
-  double v2;                          /* Extracted numeric data */
+  int32_t buff_bytes[MAX_SORTMRG];
+  int32_t buff_offset[MAX_SORTMRG];
+  char* rec[MAX_SORTMRG];
+  bool temp[MAX_SORTMRG];
+  char* p1;
+  int32_t n1;
+  char* k1;
+  char* p2;
+  int32_t n2;
+  char* k2;
   int16_t best;
-  int16_t ndata; /* Number of streams not exhausted */
+  int16_t ndata;
 
-  OSFILE outfu = INVALID_FILE_HANDLE; /* File unit for target file... */
-  char* outbuff = NULL;               /* ...disk buffer... */
-  int32_t outbuff_bytes;            /* ...byte count */
+  OSFILE outfu = INVALID_FILE_HANDLE;
+  char* outbuff = NULL;
+  int32_t outbuff_bytes;
 
   char pathname[MAX_PATHNAME_LEN + 1];
   int16_t index;
   int16_t i;
-  int32_t n;
-  int16_t d;
+  int d;
 
-  /* At this time, sortwork contains the number of sort work files
-    (i.e. the highest sort work file index plus 1 because they start
-    at zero.
-    We merge sets of files repeatedly until we have just one file
-    left.  The sortwork variable is left addressing this subfile.     */
-
-  num_files = sortwork--;
+  num_files = sess->sortwork--;
   lo_file = 0;
 
-  /* Modified by Composer AI - 2026/06/10. Zero merge arrays for analyzer. */
   memset(buff, 0, sizeof(buff));
   memset(rec, 0, sizeof(rec));
   memset(temp, 0, sizeof(temp));
-  /* -------------------- */
 
   for (i = 0; i < pcfg.sortmrg; i++) {
     infu[i] = INVALID_FILE_HANDLE;
-    /* Modified by Composer AI - 2026/06/10. Init buff slots and check alloc. */
-    buff[i] = NULL;
     buff[i] = (char*)k_alloc(66, DISK_BUFFER_SIZE);
     if (buff[i] == NULL)
       k_error("Insufficient memory for sort merge buffer");
-    /* -------------------- */
   }
 
   while (num_files > 1) {
     nstream = min(pcfg.sortmrg, num_files);
-    /* Open files */
 
     for (i = 0; i < nstream; i++) {
-      /* convert to snprintf() -gwb 22Feb20 */
-      if (snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d.%d",
-                   pcfg.sortworkdir, DS, (int)process.user_no,
-                   (int)lo_file + i) >= (MAX_PATHNAME_LEN + 1)) {
-        /* TODO: should write more detailed error to the log. */
-        k_error("Overflowed path/filename max length in merge_sort_files()!");
-        goto exit_merge_sort_files;
-      }
+      make_workfile_path(sess, (int)lo_file + i, pathname, "merge_sort_files()");
       infu[i] = dio_open(pathname, DIO_READ);
       if (!ValidFileHandle(infu[i])) {
-        /* Modified by Composer AI - 2026/06/10. Free merge buffers on open fail. */
         status = FALSE;
         free_sort_merge_buffs(buff, pcfg.sortmrg);
-        /* -------------------- */
         goto exit_merge_sort_files;
       }
       buff_bytes[i] = 0;
       buff_offset[i] = 0;
-      /* Modified by Composer AI - 2026/06/10. Init rec; skip if buffer missing. */
       rec[i] = NULL;
       if (buff[i] == NULL)
         goto exit_merge_sort_files;
-      /* -------------------- */
       rec[i] = read_merge_record(infu[i], buff[i], &(buff_bytes[i]),
                                  &(buff_offset[i]), &(temp[i]));
     }
 
-    sortwork++;
-    /* convert to snprintf() -gwb 22Feb20 */
-    if (snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d.%d",
-                 pcfg.sortworkdir, DS, (int)process.user_no,
-                 (int)sortwork) >= (MAX_PATHNAME_LEN + 1)) {
-      /* TODO: should write more detailed error to the log. */
-      k_error("Overflowed path/filename max length in merge_sort_files()!");
-      goto exit_merge_sort_files;
-    }
+    sess->sortwork++;
+    make_workfile_path(sess, (int)sess->sortwork, pathname, "merge_sort_files()");
     outfu = dio_open(pathname, DIO_REPLACE);
     if (!ValidFileHandle(outfu)) {
-      /* Modified by Composer AI - 2026/06/10. Free merge buffers on open fail. */
       status = FALSE;
       free_sort_merge_buffs(buff, pcfg.sortmrg);
-      /* -------------------- */
       goto exit_merge_sort_files;
     }
 
@@ -1173,29 +1589,24 @@ Private bool merge_sort_files() {
 
     ndata = nstream;
     do {
-      /* Compare records. We compare each of the parallel streams in turn,
-          keeping track of the "best" one to use.                            */
-
-      /* Modified by Composer AI - 2026/06/10. Bound scan for first non-NULL rec. */
-      /* for (best = 0; rec[best] == NULL; best++) { */
-      /* } / * Find first stream * / */
       for (best = 0; (best < nstream) && (rec[best] == NULL); best++) {
-      } /* Find first stream */
+      }
       if (best >= nstream)
         break;
-      /* -------------------- */
 
       for (i = best + 1; i < nstream; i++) {
         if (rec[i] == NULL)
-          continue; /* This stream is exhausted */
+          continue;
 
-        p1 = rec[best] + LEN_BYTES;                 /* Skip overall byte count */
-        p1 += LEN_BYTES + pad4(get32(p1)); /* Skip data segment */
+        p1 = rec[best] + LEN_BYTES;
+        p1 += LEN_BYTES + pad4(get32(p1));
 
-        p2 = rec[i] + LEN_BYTES;                    /* Skip overall byte count */
-        p2 += LEN_BYTES + pad4(get32(p2)); /* Skip data segment */
+        p2 = rec[i] + LEN_BYTES;
+        p2 += LEN_BYTES + pad4(get32(p2));
 
-        for (index = 0; index < sort_keys; index++) {
+        bool dup_unique = FALSE;
+        d = 0;
+        for (index = 0; index < sess->sort_keys; index++) {
           n1 = get32(p1);
           k1 = (n1 == 0) ? "" : (p1 + LEN_BYTES);
           p1 += LEN_BYTES + pad4(n1);
@@ -1204,84 +1615,41 @@ Private bool merge_sort_files() {
           k2 = (n2 == 0) ? "" : (p2 + LEN_BYTES);
           p2 += LEN_BYTES + pad4(n2);
 
-          d = 0; /* 0269 */
-
-          if (sort_flags[index] & BT_RIGHT_ALIGNED) {
-            if (strdbl(k1, &v1) && strdbl(k2, &v2)) /* Both are numbers */
-            {
-              if (v1 > v2)
-                d = 1;
-              else if (v1 == v2)
-                d = 0;
-              else
-                d = -1;
-              goto mismatch;
-            }
-
-            n = n1 - n2;
-            if (n) {
-              /* Compare leading characters of longer string against spaces */
-
-              if (n > 0) /* Key 1 longer than key 2 */
-              {
-                while (n--) {
-                  if ((d = (((int16_t)*((u_char*)k1++)) - ' ')) != 0)
-                    goto mismatch;
-                }
-              } else /* Key 1 shorter than key 2 */
-              {
-                while (n++) {
-                  if ((d = (' ' - ((int16_t)*((u_char*)k2++)))) != 0)
-                    goto mismatch;
-                }
-              }
-            }
-          }
-
-          /* Compare to end of shorter string */
-
-          while (*k1 && *k2) {
-            if ((d = (((int16_t)(*((u_char*)k1++))) - *((u_char*)k2++))) != 0)
-              goto mismatch;
-          }
-
-          /* If either string still has unprocessed characters, it is the greater
-              string (d must be zero when we arrive here).                        */
-
-          if (*k1)
-            d = 1;
-          else if (*k2)
-            d = -1;
-
-        mismatch:
-          if (sort_flags[index] & BT_DESCENDING)
-            d = -d;
-
-          if (d)
+          d = sort_compare_keys(k1, k2, sess->sort_flags[index], sess->legacy_bt);
+          if (d != 0)
             break;
+          if (sess->sort_flags[index] & SRT_UNIQUE) {
+            dup_unique = TRUE;
+            break;
+          }
         }
 
-        /* We have either found a difference or all the keys are equal */
+        if (dup_unique) {
+          if (temp[i] && (rec[i] != NULL))
+            k_free(rec[i]);
+          rec[i] = read_merge_record(infu[i], buff[i], &(buff_bytes[i]),
+                                     &(buff_offset[i]), &(temp[i]));
+          if (rec[i] == NULL)
+            ndata--;
+          else
+            i--;
+          continue;
+        }
 
         if (d >= 0)
           best = i;
       }
 
-      /* The best item has now been identified. Copy it to the output stream */
       if (!write_merge_record(rec[best], outfu, outbuff, &outbuff_bytes,
                               temp[best])) {
         goto exit_merge_sort_files;
       }
-      /* Fetch the next record from this stream */
 
       rec[best] = read_merge_record(infu[best], buff[best], &(buff_bytes[best]),
                                     &(buff_offset[best]), &(temp[best]));
       if (rec[best] == NULL)
         ndata--;
     } while (ndata > 1);
-
-    /* There is only one file left active. Copy the data from it to the
-      output file.                                                     */
 
     for (i = 0; i < nstream; i++) {
       if (rec[i] != NULL) {
@@ -1297,31 +1665,21 @@ Private bool merge_sort_files() {
       }
     }
 
-    /* Flush final buffer */
-
     if (outbuff_bytes) {
-      if (Write(outfu, outbuff, outbuff_bytes) != outbuff_bytes) /* 0241 */
-      {
-        goto exit_merge_sort_files; /* 0239 */
+      if (Write(outfu, outbuff, outbuff_bytes) != outbuff_bytes) {
+        goto exit_merge_sort_files;
       }
     }
 
     CloseFile(outfu);
     outfu = INVALID_FILE_HANDLE;
-
-    /* Close and delete input files */
+    k_free(outbuff);
+    outbuff = NULL;
 
     for (i = 0; i < nstream; i++) {
       CloseFile(infu[i]);
       infu[i] = INVALID_FILE_HANDLE;
-      /* convert snprintf() -gwb 22Feb20 */
-      if (snprintf(pathname, MAX_PATHNAME_LEN + 1, "%s%c~SDS%d.%d",
-                   pcfg.sortworkdir, DS, (int)process.user_no,
-                   (int)lo_file + i) >= (MAX_PATHNAME_LEN + 1)) {
-        /* TODO: should write more detailed error to the log. */
-        k_error("Overflowed path/filename max length in merge_sort_files()!");
-        goto exit_merge_sort_files;
-      }
+      make_workfile_path(sess, (int)lo_file + i, pathname, "merge_sort_files()");
       remove(pathname);
     }
 
@@ -1333,20 +1691,14 @@ Private bool merge_sort_files() {
 
 exit_merge_sort_files:
   for (i = 0; i < pcfg.sortmrg; i++) {
-    /* Modified by Composer AI - 2026/06/10. Free unread temp merge records. */
     if (temp[i] && (rec[i] != NULL))
       k_free(rec[i]);
-    /* -------------------- */
     if (ValidFileHandle(infu[i]))
       CloseFile(infu[i]);
   }
-  /* Modified by Composer AI - 2026/06/10. Release all merge work buffers. */
   free_sort_merge_buffs(buff, pcfg.sortmrg);
-  /* -------------------- */
-  /* Modified by Composer AI - 2026/06/10. Free merge output buffer on error. */
   if (outbuff != NULL)
     k_free(outbuff);
-  /* -------------------- */
 
   return status;
 }
@@ -1355,57 +1707,40 @@ exit_merge_sort_files:
    read_merge_record()  -  Read a record for a sort file merge            */
 
 Private char* read_merge_record(
-    OSFILE fu,              /* File unit */
-    char* buff,             /* Buffer base address */
-    int32_t* buff_bytes,  /* Bytes in buffer (may be updated) */
-    int32_t* buff_offset, /* Offset of next byte to extract (updated) */
-    bool* temp)             /* Temporary buffer? (set on exit) */
+    OSFILE fu,
+    char* buff,
+    int32_t* buff_bytes,
+    int32_t* buff_offset,
+    bool* temp)
 {
   char* rec = NULL;
-  /* Modified by Composer AI - 2026/06/10. Init for early-exit paths. */
-  /* int16_t buff_len; */
   int32_t buff_len = 0;
-  /* -------------------- */
-  /* Modified by Composer AI - 2026/06/10. Init for early-exit paths. */
-  /* int16_t offset; */
   int32_t offset = 0;
-  /* -------------------- */
   int32_t bytes;
   char* q;
   int32_t n;
 
   *temp = FALSE;
 
-  /* Modified by Composer AI - 2026/06/10. Caller must supply merge buffer. */
   if (buff == NULL)
     goto exit_read_merge_record;
-  /* -------------------- */
 
   buff_len = *buff_bytes;
   offset = *buff_offset;
 
-  if (offset >= buff_len) /* Read a new buffer */
-  {
+  if (offset >= buff_len) {
     buff_len = (int32_t)Read(fu, buff, DISK_BUFFER_SIZE);
     if (buff_len <= 0)
-      goto exit_read_merge_record; /* End of data */
+      goto exit_read_merge_record;
     offset = 0;
   }
 
-  /* Fetch the record length */
-
   bytes = get32(buff + offset);
 
-  /* If the entire record lies in the current buffer, work directly from
-    the buffer.  If it extends beyond the current buffer, allocate a
-    temporary buffer to hold the record.                                */
-
-  if (offset + bytes <= buff_len) /* It's all in the buffer */
-  {
+  if (offset + bytes <= buff_len) {
     rec = buff + offset;
     offset += bytes;
-  } else /* Must use a temporary buffer */
-  {
+  } else {
     rec = (char*)k_alloc(67, bytes);
     if (rec == NULL)
       k_error("Insufficient memory for sort merge record");
@@ -1418,13 +1753,11 @@ Private char* read_merge_record(
       if (n == 0) {
         buff_len = (int32_t)Read(fu, buff, DISK_BUFFER_SIZE);
         if (buff_len <= 0) {
-          /* Modified by Composer AI - 2026/06/10. Free partial temp record. */
           if (*temp && (rec != NULL)) {
             k_free(rec);
             rec = NULL;
             *temp = FALSE;
           }
-          /* -------------------- */
           goto exit_read_merge_record;
         }
         offset = 0;
@@ -1449,11 +1782,11 @@ exit_read_merge_record:
    write_merge_record()  -  Write to merge target file buffer             */
 
 Private bool write_merge_record(
-    char* rec,             /* Record to write */
-    OSFILE fu,             /* File unit of target file */
-    char* buff,            /* Target buffer */
-    int32_t* buff_bytes, /* Used space in buffer (updated) */
-    bool temp)             /* Delete temporary record buffer? */
+    char* rec,
+    OSFILE fu,
+    char* buff,
+    int32_t* buff_bytes,
+    bool temp)
 {
   bool status = FALSE;
   int32_t bytes;
@@ -1464,7 +1797,7 @@ Private bool write_merge_record(
 
   used_bytes = *buff_bytes;
 
-  bytes = get32(rec); /* Record length */
+  bytes = get32(rec);
 
   q = rec;
   do {

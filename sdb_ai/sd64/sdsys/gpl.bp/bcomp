@@ -472,6 +472,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"SELECTINDEXV"                                           ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
    statements := @fm:"BSCAN":@fm:"KEY":@fm:"ROOT"                             ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
    statements := @fm:"SELECTLEFTV":@fm:"SELECTRIGHTV"                         ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291 (same)
+   statements := @fm:"SORTADD":@fm:"SORTCLEAR"                                ;* 16 Oct 26 dm - QM4 Fixes item 371
 
    * Statements which do not generate DEBUG calls when debugging
 
@@ -497,7 +498,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    restricted.statements := @fm:"RESET.MODES":@fm:"REWIND":@fm:"RUN"
    restricted.statements := @fm:"SET.MODES":@fm:"SET.STATUS":@fm:"SET.TRIGGER"
    restricted.statements := @fm:"SET.UNASSIGNED"
-   restricted.statements := @fm:"SORTADD":@fm:"SORTCLEAR":@fm:"SORTINIT"
+   restricted.statements := @fm:"SORTINIT"
    restricted.statements := @fm:"UNLOAD.OBJECT"
    restricted.statements := @fm:"VARSET"
    restricted.statements := @fm:"WATCH":@fm:"WRITEPKT"
@@ -727,6 +728,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SIN"             ; intrinsic.opcodes<-1> = OP.SIN
    intrinsics<-1> = "SMUL"            ; intrinsic.opcodes<-1> = OP.SMUL
    intrinsics<-1> = "SOCKET.INFO"     ; intrinsic.opcodes<-1> = OP.SKTINFO
+   intrinsics<-1> = "SORT"            ; intrinsic.opcodes<-1> = OP.XFUN      ;* 16 Oct 26 dm - QM4 Fixes item 371
+   intrinsics<-1> = "SORTDATA"        ; intrinsic.opcodes<-1> = OP.XFUN      ;* 16 Oct 26 dm - QM4 Fixes item 371
+   intrinsics<-1> = "SORTNEXT"        ; intrinsic.opcodes<-1> = OP.XFUN      ;* 16 Oct 26 dm - QM4 Fixes item 371
    intrinsics<-1> = "SOUNDEX"         ; intrinsic.opcodes<-1> = OP.SOUNDEX
    intrinsics<-1> = "SOUNDEXS"        ; intrinsic.opcodes<-1> = OP.SOUNDEXS
    intrinsics<-1> = "SPACE"           ; intrinsic.opcodes<-1> = OP.SPACE
@@ -819,8 +823,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    *   and restoring one without the other misroutes every intrinsic after it
    *   - a fault that compiles cleanly and produces wrong code.
    int.intrinsics<-1> = "SDPYOBJ"         ; int.intrinsic.opcodes<-1> = OP.SDPYOBJ
-   int.intrinsics<-1> = "SORTDATA"        ; int.intrinsic.opcodes<-1> = OP.SORTDATA
-   int.intrinsics<-1> = "SORTNEXT"        ; int.intrinsic.opcodes<-1> = OP.SORTNEXT
    int.intrinsics<-1> = "TESTLOCK"        ; int.intrinsic.opcodes<-1> = OP.TESTLOCK
 
 
@@ -2453,7 +2455,9 @@ is.statement:
                  st.key,                       ;* 15 Oct 26 dm - QM4 gaps Q-2
                  st.root,                      ;* 15 Oct 26 dm - QM4 gaps Q-2
                  st.selectleftv,               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
-                 st.selectrightv               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
+                 st.selectrightv,              ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
+                 st.sortadd,                   ;* 16 Oct 26 dm - QM4 Fixes item 371
+                 st.sortclear                  ;* 16 Oct 26 dm - QM4 Fixes item 371
          end else
             locate u.token.string in non.debug.statements<1> setting i then
                on i gosub st.class,      ;* CLASS
@@ -2505,8 +2509,6 @@ is.statement:
                           st.set.status,
                           st.set.trigger,
                           st.set.unassigned,
-                          st.sortadd,
-                          st.sortclear,
                           st.sortinit,
                           st.unload.object,
                           st.varset,
@@ -4212,8 +4214,6 @@ end
                                in.scan,       ;* SCAN
                                in.three,      ;* SDEXT
                                in.four,       ;* SDPYOBJ
-                               in.none,       ;* SORTDATA
-                               in.sortnext,   ;* SORTNEXT
                                in.one         ;* TESTLOCK
                   end
                end
@@ -4419,6 +4419,9 @@ end
                       in.one,         ;* SIN
                       in.two,         ;* SMUL
                       in.two,         ;* SOCKETINFO
+                      in.sort,        ;* SORT
+                      in.sortdata,    ;* SORTDATA
+                      in.sortnext,    ;* SORTNEXT
                       in.one,         ;* SOUNDEX
                       in.one,         ;* SOUNDEXS
                       in.one,         ;* SPACE
@@ -5137,23 +5140,122 @@ in.sentence:
             n = syscom.sentence ; gosub emit.ldsysv
             goto intrinsic.end
 
-*** SORTNEXT()
+*** SORT(key.count, {MAT} flags)   16 Oct 26 dm - QM4 Fixes item 371
+in.sort:
+            gosub exprf
+            gosub check.comma
+            if (look.ahead.token = TKN.NAME) and (u.look.ahead.token.string = 'MAT') then
+               gosub get.token
+               if look.ahead.token # TKN.NAME then
+                  gosub err.var
+                  return
+               end
+               gosub get.token
+               symbol.name = token.string
+               gosub find.var
+               if (symbol.var.no < 0) or (symbol.dim # 1) then
+                  err.msg = sysmsg(2858) ;* One dimensional matrix name required
+                  goto error
+               end
+               gosub emit.var.load
+            end else
+               if look.ahead.token = TKN.NAME then
+                  symbol.name = look.ahead.token.string
+                  symbol.mode = SYM.CHK
+                  gosub find.var
+                  if (symbol.var.no >= 0) and (symbol.dim = 1) then
+                     gosub get.token
+                     symbol.name = token.string
+                     gosub find.var
+                     gosub emit.var.load
+                  end else
+                     gosub exprf
+                  end
+               end else
+                  gosub exprf
+               end
+            end
+            n = 32 ; gosub emit.numeric.load      ;* XF_SORT
+            intrinsic.stack<1> = OP.XFUN
+            goto intrinsic.common
+
+*** SORTDATA(sortvar {, max.items}) or internal SORTDATA()   16 Oct 26 dm - QM4 Fixes item 371
+in.sortdata:
+            if internal and (look.ahead.token = TKN.RBR) then
+               intrinsic.stack<1> = OP.SORTDATA
+               goto intrinsic.common
+            end
+            gosub exprf
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+            end else
+               n = 0 ; gosub emit.numeric.load
+            end
+            n = 35 ; gosub emit.numeric.load      ;* XF_SORTDATA
+            intrinsic.stack<1> = OP.XFUN
+            goto intrinsic.common
+
+*** SORTNEXT(sortvar {, {MAT} keys}) or internal SORTNEXT(matrix)   16 Oct 26 dm - QM4 Fixes item 371
 in.sortnext:
-            if look.ahead.token # TKN.NAME then
-               gosub err.var
-               return
+            if internal and (look.ahead.token = TKN.NAME) and (tokens(token.index + 1) = TKN.RBR) then
+               symbol.name = look.ahead.token.string
+               symbol.mode = SYM.CHK
+               gosub find.var
+               if (symbol.var.no >= 0) and (symbol.dim = 1) then
+                  gosub get.token
+                  symbol.name = token.string
+                  symbol.mode = SYM.SET
+                  gosub find.var
+                  gosub emit.var.load
+                  opcode.byte = OP.SORTNEXT ; gosub emit.simple
+                  goto intrinsic.end
+               end
             end
-            gosub get.token
-            symbol.name = token.string
-            symbol.mode = SYM.SET
-            gosub find.var
-            if (symbol.var.no < 0) or (symbol.dim # 1) then
-               err.msg = sysmsg(2858) ;* One dimensional matrix name required
-               goto error
+            gosub exprf
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               if (look.ahead.token = TKN.NAME) and (u.look.ahead.token.string = 'MAT') then
+                  gosub get.token
+                  if look.ahead.token # TKN.NAME then
+                     gosub err.var
+                     return
+                  end
+                  gosub get.token
+                  symbol.name = token.string
+                  symbol.mode = SYM.SET
+                  gosub find.var
+                  if (symbol.var.no < 0) or (symbol.dim # 1) then
+                     err.msg = sysmsg(2858) ;* One dimensional matrix name required
+                     goto error
+                  end
+                  gosub emit.var.load
+               end else
+                  if look.ahead.token = TKN.NAME then
+                     symbol.name = look.ahead.token.string
+                     symbol.mode = SYM.CHK
+                     gosub find.var
+                     if (symbol.var.no >= 0) and (symbol.dim = 1) then
+                        gosub get.token
+                        symbol.name = token.string
+                        symbol.mode = SYM.SET
+                        gosub find.var
+                        gosub emit.var.load
+                     end else
+                        gosub simple.lvar.reference
+                        if err then return
+                     end
+                  end else
+                     gosub simple.lvar.reference
+                     if err then return
+                  end
+               end
+            end else
+               opcode.byte = OP.LDUNASS ; gosub emit.simple
             end
-            gosub emit.var.load
-            opcode.byte = OP.SORTNEXT ; gosub emit.simple
-            goto intrinsic.end
+            n = 36 ; gosub emit.numeric.load      ;* XF_SORTNEXT
+            intrinsic.stack<1> = OP.XFUN
+            goto intrinsic.common
 
 *** SUBR(name [, arg1 [,arg2...]])
 in.subr:
@@ -6197,8 +6299,17 @@ st.akrelease:
    goto no.arg.common
 
 st.sortclear:
-   opcode = OP.SORTCLR
-   goto no.arg.common
+   if internal then
+      find u.look.ahead.token.string in reserved.names setting i else i = 0
+      if i or look.ahead.token = TKN.END or look.ahead.token = TKN.SEMICOLON then
+         opcode = OP.SORTCLR
+         goto no.arg.common
+      end
+   end
+   gosub exprf
+   n = 34 ; gosub emit.numeric.load      ;* XF_SORTCLEAR
+   opcode.byte = OP.XFUN ; gosub emit.simple
+   return
 
 no.arg.common:
    opcode.byte = opcode ; gosub emit.simple
@@ -13399,25 +13510,67 @@ st.sleep:
    return
 
 *****************************************************************************
-* ST.SORTADD  -  SORTADD statement (Restricted)
+* ST.SORTADD  -  SORTADD sortvar, {MAT} keys {, data} or internal SORTADD keys {, data}
 
 st.sortadd:
-   if look.ahead.token # TKN.NAME then goto err.var
-   gosub get.token
-   symbol.name = token.string
-   gosub find.var
-   if (symbol.var.no < 0) or (symbol.dim # 1) then
-      err.msg = sysmsg(2858) ;* One dimensional matrix name required
-      goto error
+   if internal and (look.ahead.token = TKN.NAME) then
+      symbol.name = look.ahead.token.string
+      symbol.mode = SYM.CHK
+      gosub find.var
+      if (symbol.var.no >= 0) and (symbol.dim = 1) then
+         gosub get.token
+         symbol.name = token.string
+         gosub find.var
+         gosub emit.var.load    ;* Emit key array
+         if look.ahead.token = TKN.COMMA then
+            gosub get.token
+            gosub exprf            ;* Emit data
+         end else
+            opcode.byte = OP.LDUNASS ; gosub emit.simple
+         end
+         opcode.byte = OP.SORTADD ; gosub emit.simple
+         return
+      end
    end
-   gosub emit.var.load    ;* Emit key array
+
+   gosub exprf            ;* Emit sort variable
+   gosub check.comma
+   if (look.ahead.token = TKN.NAME) and (u.look.ahead.token.string = 'MAT') then
+      gosub get.token
+      if look.ahead.token # TKN.NAME then goto err.var
+      gosub get.token
+      symbol.name = token.string
+      gosub find.var
+      if (symbol.var.no < 0) or (symbol.dim # 1) then
+         err.msg = sysmsg(2858) ;* One dimensional matrix name required
+         goto error
+      end
+      gosub emit.var.load
+   end else
+      if look.ahead.token = TKN.NAME then
+         symbol.name = look.ahead.token.string
+         symbol.mode = SYM.CHK
+         gosub find.var
+         if (symbol.var.no >= 0) and (symbol.dim = 1) then
+            gosub get.token
+            symbol.name = token.string
+            gosub find.var
+            gosub emit.var.load
+         end else
+            gosub exprf
+         end
+      end else
+         gosub exprf
+      end
+   end
    if look.ahead.token = TKN.COMMA then
       gosub get.token
-      gosub exprf            ;* Emit data
+      gosub exprf
    end else
       opcode.byte = OP.LDUNASS ; gosub emit.simple
    end
-   opcode.byte = OP.SORTADD ; gosub emit.simple
+   n = 33 ; gosub emit.numeric.load      ;* XF_SORTADD
+   opcode.byte = OP.XFUN ; gosub emit.simple
    return
 
 *****************************************************************************

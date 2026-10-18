@@ -1769,6 +1769,10 @@ void op_vartype() {
   while (descr->type == ADDR)
     descr = descr->data.d_addr;
   type = descr->type;
+  if ((type == BTREE) && (descr->data.btree != NULL) &&
+      (descr->data.btree->pad != 0)) {
+    type = 20; /* VT$SORT */
+  }
   k_dismiss();
 
   InitDescr(e_stack, INTEGER);

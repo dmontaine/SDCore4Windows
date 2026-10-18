@@ -194,6 +194,21 @@ readnext id from 2 then
   end
   goto voc_nxt
 end
+
+* 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): - QM4 gap 501: if newvoc.mods is present in @sdsys, copy its
+* records into SDSYS's own VOC as well (CREATE.ACCOUNT and UPDATE.ACCOUNTS
+* already do the same for other accounts).
+openpath @sdsys:@ds:'newvoc.mods' to voc_m.f then
+  select voc_m.f to 2
+voc_mod_nxt:
+  readnext id from 2 then
+    read voc_item from voc_m.f, id then
+      write voc_item on voc, id
+    end
+    goto voc_mod_nxt
+  end
+  close voc_m.f
+end
    
 *  note all files must be opend via openpath, open depends on pcode!
 

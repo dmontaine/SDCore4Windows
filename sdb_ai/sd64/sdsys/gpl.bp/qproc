@@ -259,7 +259,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    non.ak.selection.index = 1    ;* Start here for selection elements that
                                  ;* cannot be handled via an AK
 !!OPCODES!!
-   * The EQ/NE, LIKE/UNLIKE and PEQ/PNE operator pairs must always be
+   * The EQ/NE, LIKE/UNLIKE, IN/NOT.IN and PEQ/PNE operator pairs must always be
    * adjacent number ranges as the translation between these relies on this.
    * OP.FIRST.MV must be a multiple of 4.
    equ OP.WITH        to  1     ;* Clause is WITH (default for first clause)
@@ -276,23 +276,25 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    equ OP.LIKE        to 28     ;* LIKE      } field.
    equ OP.UNLIKE      to 32     ;* UNLIKE    } (EVERY keyword)
    equ OP.SAID        to 36     ;* SAID      }
-   equ OP.LAST.RELOP  to 39
-   equ OP.NOT.NULL    to 40     ;* not null  }
-   equ OP.BETWEEN     to 44     ;* BETWEEN   }
-   equ OP.LAST.MV     to 47
-   equ OP.OR          to 48     ;* OR
-   equ OP.AND         to 49     ;* AND
-   equ OP.GELE        to 50     ;* } Special operators for AKs only. The
-   equ OP.GELT        to 51     ;* } actual value does not matter as these are
-   equ OP.GTLE        to 52     ;* } not used in ON GOTO statements.
-   equ OP.GTLT        to 53     ;* }
+   equ OP.IN          to 40     ;* IN        } (16 Oct 26 dm, QM4 gap 94)
+   equ OP.NOT.IN      to 44     ;* NOT.IN    }
+   equ OP.LAST.RELOP  to 47
+   equ OP.NOT.NULL    to 48     ;* not null  }
+   equ OP.BETWEEN     to 52     ;* BETWEEN   }
+   equ OP.LAST.MV     to 55
+   equ OP.OR          to 56     ;* OR
+   equ OP.AND         to 57     ;* AND
+   equ OP.GELE        to 58     ;* } Special operators for AKs only. The
+   equ OP.GELT        to 59     ;* } actual value does not matter as these are
+   equ OP.GTLE        to 60     ;* } not used in ON GOTO statements.
+   equ OP.GTLT        to 61     ;* }
 
 * Pseudo operators for Pick style wildcards, substituted during parsing.
 * These use the same EVERY and NO.CASE additives as the main operator set.
-   equ OP.PEQ         to 54     ;* 
-   equ OP.PNE         to 58     ;* 
+   equ OP.PEQ         to 62     ;* 
+   equ OP.PNE         to 66     ;* 
 
-   equ opcode.names to 'WITH,WHEN,NO,EQ,E.EQ,EQNC,E.EQNE,NE,E.NE,NENC,E.NENC,LT,E.LT,LTNC,E.LTNC,LE,E.LE,LENC,E.LENC,GE,E.GE,GENC,E.GENC,GT,E.GT,GTNC,E.GTNC,LIKE,E.LIKE,LIKENC,E.LIKENC,UNLIKE,E.UNLIKE,UNLIKENC,E.UNLIKENC,SAID,E.SAID,SAIDNC,E.SAIDNC,NNULL,E.NNULL,NNULLNC,E.NNULLNC,BETWEEN,E.BETWEEN,BETWEENNC,E.BETWEENNC,OR,AND,GELE,GELT,GTLE,GTLT,PEQ,E.PEQ,PEQNC,E.PEQNC,PNE,E.PNE,PNENC,E.PNE.NC'
+   equ opcode.names to 'WITH,WHEN,NO,EQ,E.EQ,EQNC,E.EQNE,NE,E.NE,NENC,E.NENC,LT,E.LT,LTNC,E.LTNC,LE,E.LE,LENC,E.LENC,GE,E.GE,GENC,E.GENC,GT,E.GT,GTNC,E.GTNC,LIKE,E.LIKE,LIKENC,E.LIKENC,UNLIKE,E.UNLIKE,UNLIKENC,E.UNLIKENC,SAID,E.SAID,SAIDNC,E.SAIDNC,IN,E.IN,INNC,E.INNC,NOT.IN,E.NOT.IN,NOT.INNC,E.NOT.INNC,NNULL,E.NNULL,NNULLNC,E.NNULLNC,BETWEEN,E.BETWEEN,BETWEENNC,E.BETWEENNC,OR,AND,GELE,GELT,GTLE,GTLT,PEQ,E.PEQ,PEQNC,E.PEQNC,PNE,E.PNE,PNENC,E.PNE.NC'
 
    * Sort control
 
@@ -2621,8 +2623,8 @@ parse.command.options:
             gosub add.qualified.display.item
             continue    ;* Already read next token
 
-* --- BETWEEN
-         case keyword = KW$BETWEEN
+* --- BETWEEN, IN, NOT.IN
+         case keyword = KW$BETWEEN or keyword = KW$IN or keyword = KW$NOT.IN
             gosub implicit.selection.clause
             continue           ;* Already read next token
 
@@ -3645,6 +3647,8 @@ process.selection.clause:
             case keyword = KW$LIKE
             case keyword = KW$UNLIKE
             case keyword = KW$SAID
+            case keyword = KW$IN
+            case keyword = KW$NOT.IN
             case keyword = KW$BETWEEN
             case token.type = PARSER$STRING
 
@@ -3722,6 +3726,8 @@ process.operator:
          case keyword = KW$LIKE   ; op = OP.LIKE
          case keyword = KW$UNLIKE ; op = OP.UNLIKE
          case keyword = KW$SAID   ; op = OP.SAID
+         case keyword = KW$IN     ; op = OP.IN
+         case keyword = KW$NOT.IN ; op = OP.NOT.IN
          case keyword = KW$BETWEEN; op = OP.BETWEEN   ; between = 1
          case 1                   ; op = OP.NOT.NULL
       end case
@@ -3750,80 +3756,133 @@ process.operator:
 implied.equals:
 between.op2:
 using.last.op:
-         literal.allowed = @true
-         gosub add.field
+         if op >= OP.IN and op <= OP.NOT.IN + 3 then
+            if token.type = parser$end then
+               display sysmsg(12405) ;* List name missing after in / not.in (3520 was COPYP's "To:" prompt: 16 Oct 26 audit)
+               goto exit.qproc
+            end
+            if quote.char # '' and index(trim(token), ' ', 1) > 0 then
+               in.fname = field(trim(token), ' ', 1)
+               in.recid = field(trim(token), ' ', 2, 99999)
+            end else
+               in.fname = '$savedlists'
+               in.recid = token
+            end
+            if in.recid = '' then       ;* in "" : a bare IN at the end of the sentence is stopped earlier, by the clause reader
+               display sysmsg(12405)
+               goto exit.qproc
+            end
+            open in.fname to in.f else
+               open downcase(in.fname) to in.f else
+                  open upcase(in.fname) to in.f else
+                     display sysmsg(2019) ;* File not found
+                     goto exit.qproc
+                  end
+               end
+            end
+            read in.list from in.f, in.recid else
+               read in.list from in.f, downcase(in.recid) else
+                  read in.list from in.f, upcase(in.recid) else
+                     close in.f
+                     display sysmsg(3521, in.recid) ;* Record "xx" not found
+                     goto exit.qproc
+                  end
+               end
+            end
+            close in.f
+            if no.items = max.items then gosub extend.item.tables
+            no.items += 1
+            item.index = no.items
+            item.name(item.index) = ""
+            item.display.name(item.index) = ""
+            item.type(item.index) = LITERAL.ITEM
+            item.detail(item.index) = in.list
+            item.fmt(item.index) = "10L"
+            gosub get.width.and.justification
+            item.conv(item.index) = ""
+            item.assoc(item.index) = 0
+            item.multivalued(item.index) = @false
+            item.totals(item.index) = 0
+            item.breakpoint(item.index) = 0
+            item.flags(item.index) = 0
+            selection(hi.sel,SEL.ARG2) = item.index
+            gosub get.token
+         end else
+            literal.allowed = @true
+            gosub add.field
 
-         selection(hi.sel,SEL.ARG2) = item.index
+            selection(hi.sel,SEL.ARG2) = item.index
 
-         * Comparison with literal values requires special actions...
+            * Comparison with literal values requires special actions...
 
-         if item.type(item.index) = LITERAL.ITEM then
-            begin case
-               case op >= OP.SAID and op <= OP.SAID + 3
-                  * The SAID operator requires that the literal value is
-                  * converted to its soundex code.
-                  item.detail(item.index) = soundex(item.detail(item.index))
+            if item.type(item.index) = LITERAL.ITEM then
+               begin case
+                  case op >= OP.SAID and op <= OP.SAID + 3
+                     * The SAID operator requires that the literal value is
+                     * converted to its soundex code.
+                     item.detail(item.index) = soundex(item.detail(item.index))
 
-               case op >= OP.LIKE and op <= OP.UNLIKE + 3
-                   * The comparison uses external form data.
-                  null
+                  case op >= OP.LIKE and op <= OP.UNLIKE + 3
+                      * The comparison uses external form data.
+                     null
 
-               case 1
-                  if option(OPT.PICK.WILDCARD) then
-                     * 0106 Allow for Pick wildcard in implicit OR. The
-                     * operator will have been changed to OP.PEQ or OP.PNE.
-                     * These need to be preserved into the later conditions
-                     * synonyms for OP.LIKE and OP.UNLIKE
+                  case 1
+                     if option(OPT.PICK.WILDCARD) then
+                        * 0106 Allow for Pick wildcard in implicit OR. The
+                        * operator will have been changed to OP.PEQ or OP.PNE.
+                        * These need to be preserved into the later conditions
+                        * synonyms for OP.LIKE and OP.UNLIKE
 
-                     if (op >= OP.EQ and op <= op.NE + 3) or (op >= OP.PEQ and op <= OP.PNE + 3) then 
-                        s = item.detail(item.index)
-                        if s[1,1] = '[' or index(s, '^', 1) or s[1] = ']' then
-                           * It's a Pick wildcard. Convert to a LIKE/UNLIKE.
-                           begin case
-                              case index(s, '"', 1) = 0 ; c = '"'
-                              case index(s, "'", 1) = 0 ; c = "'"
-                              case 1
-                                 display 'Pick wildcard cannot be converted to LIKE/UNLIKE'
-                                 goto exit.qproc
-                           end case
+                        if (op >= OP.EQ and op <= op.NE + 3) or (op >= OP.PEQ and op <= OP.PNE + 3) then 
+                           s = item.detail(item.index)
+                           if s[1,1] = '[' or index(s, '^', 1) or s[1] = ']' then
+                              * It's a Pick wildcard. Convert to a LIKE/UNLIKE.
+                              begin case
+                                 case index(s, '"', 1) = 0 ; c = '"'
+                                 case index(s, "'", 1) = 0 ; c = "'"
+                                 case 1
+                                    display 'Pick wildcard cannot be converted to LIKE/UNLIKE'
+                                    goto exit.qproc
+                              end case
 
-                           if s[1,1] = '[' then
-                              x = '...' : c
-                              s = s[2,9999]
-                           end else
-                              x = c
+                              if s[1,1] = '[' then
+                                 x = '...' : c
+                                 s = s[2,9999]
+                              end else
+                                 x = c
+                              end
+
+                              if s[1] = ']' then
+                                 x := s[1,len(s)-1] : c : '...'
+                              end else
+                                 x := s : c
+                              end
+
+                              item.detail(item.index) = change(x, '^', c:'1X':c)
+
+                              if op < OP.PEQ then   ;* Must be EQ or NE variants
+                                 op += OP.PEQ - OP.EQ
+                              end
+                              selection(hi.sel,SEL.OP) = op
+                              last.op = op
                            end
-
-                           if s[1] = ']' then
-                              x := s[1,len(s)-1] : c : '...'
-                           end else
-                              x := s : c
-                           end
-
-                           item.detail(item.index) = change(x, '^', c:'1X':c)
-
-                           if op < OP.PEQ then   ;* Must be EQ or NE variants
-                              op += OP.PEQ - OP.EQ
-                           end
-                           selection(hi.sel,SEL.OP) = op
-                           last.op = op
                         end
                      end
-                  end
 
-                  * A conversion code on the selection field requires that we
-                  * convert the literal value to the internal form of the data.
+                     * A conversion code on the selection field requires that we
+                     * convert the literal value to the internal form of the data.
 
-                  s = item.conv(selection.field)
-                  if s # '' then
-                     item.detail(item.index) = iconv(item.detail(item.index), s)
-                  end
-            end case
-         end else      ;* Comparing with another field
-            null
+                     s = item.conv(selection.field)
+                     if s # '' then
+                        item.detail(item.index) = iconv(item.detail(item.index), s)
+                     end
+               end case
+            end else      ;* Comparing with another field
+               null
+            end
+
+            gosub get.token
          end
-
-         gosub get.token
       end
 
       if between = 1 then      ;* Processed first BETWEEN argument
@@ -4045,6 +4104,8 @@ add.display.item:
          case keyword = KW$LIKE
          case keyword = KW$UNLIKE
          case keyword = KW$SAID
+         case keyword = KW$IN
+         case keyword = KW$NOT.IN
          case 1                   ; goto not.qualified
       end case
 
@@ -4420,6 +4481,21 @@ get.token:
       return
    end
 
+   if quote.char = '' then
+      if upcase(token) = 'IN' then
+         from.voc = @true
+         type = 'K'
+         keyword = KW$IN
+         return
+      end
+      if upcase(token) = 'NOT.IN' then
+         from.voc = @true
+         type = 'K'
+         keyword = KW$NOT.IN
+         return
+      end
+   end
+
    * Not a field name
 
    type = ''
@@ -4663,6 +4739,14 @@ check.selection:
                  every.said,    ;* OP.SAID with EVERY
                  test.said.nc,  ;* OP.SAID with NO.CASE
                  every.said.nc, ;* OP.SAID with EVERY and NO.CASE
+                 test.in,       ;* OP.IN
+                 every.in,      ;* OP.IN with EVERY
+                 test.in.nc,    ;* OP.IN with NO.CASE
+                 every.in.nc,   ;* OP.IN with EVERY and NO.CASE
+                 test.not.in,   ;* OP.NOT.IN
+                 every.not.in,  ;* OP.NOT.IN with EVERY
+                 test.not.in.nc,;* OP.NOT.IN with NO.CASE
+                 every.not.in.nc, ;* OP.NOT.IN with EVERY and NO.CASE
                  test.not.null, ;* OP.NOT.NULL
                  every.not.null,;* OP.NOT.NULL with EVERY
                  test.not.null, ;* OP.NOT.NULL with NO.CASE
@@ -4894,6 +4978,70 @@ every.said:
       while truth
       while value.delimiter
       repeat
+      goto next.clause
+
+test.in.nc:
+      item1 = upcase(item1)
+      item2 = upcase(item2)
+test.in:
+      if item2 = '' then
+         truth = @false
+      end else if item1.mv then
+         loop
+            locate remove(item1, value.delimiter) in item2<1> setting z then truth = @true else truth = @false
+         until truth
+         while value.delimiter
+         repeat
+      end else
+         locate item1 in item2<1> setting z then truth = @true else truth = @false
+      end
+      goto next.clause
+
+every.in.nc:
+      item1 = upcase(item1)
+      item2 = upcase(item2)
+every.in:
+      if item2 = '' then
+         truth = @false
+      end else
+         loop
+            locate remove(item1, value.delimiter) in item2<1> setting z then truth = @true else truth = @false
+         while truth
+         while value.delimiter
+         repeat
+      end
+      goto next.clause
+
+test.not.in.nc:
+      item1 = upcase(item1)
+      item2 = upcase(item2)
+test.not.in:
+      if item2 = '' then
+         truth = @true
+      end else if item1.mv then
+         loop
+            locate remove(item1, value.delimiter) in item2<1> setting z then truth = @false else truth = @true
+         until truth
+         while value.delimiter
+         repeat
+      end else
+         locate item1 in item2<1> setting z then truth = @false else truth = @true
+      end
+      goto next.clause
+
+every.not.in.nc:
+      item1 = upcase(item1)
+      item2 = upcase(item2)
+every.not.in:
+      if item2 = '' then
+         truth = @true
+      end else
+         loop
+            locate remove(item1, value.delimiter) in item2<1> setting z then truth = @false else truth = @true
+         while truth
+         while value.delimiter
+         repeat
+      end
       goto next.clause
 
 test.not.null:
@@ -5192,6 +5340,8 @@ case op = OP.WHEN ; null
          case ak.operator = OP.GT     ; ak.operator = OP.LE
          case ak.operator = OP.LIKE   ; ak.operator = OP.UNLIKE
          case ak.operator = OP.UNLIKE ; ak.operator = OP.LIKE
+         case ak.operator = OP.IN     ; ak.operator = OP.NOT.IN
+         case ak.operator = OP.NOT.IN ; ak.operator = OP.IN
       end case
    end
 
@@ -5199,7 +5349,7 @@ case op = OP.WHEN ; null
       case ak.operator >= OP.FIRST.MV and ak.operator <= OP.LAST.MV and bitand(ak.operator,1) # bitand(OP.EQ,1)
          ak.usable = @false
 
-      case ak.operator = OP.NE or ak.operator = OP.UNLIKE
+      case ak.operator = OP.NE or ak.operator = OP.UNLIKE or ak.operator = OP.IN or ak.operator = OP.NOT.IN
          ak.usable = @false
 
       case ak.operator = OP.BETWEEN    ;* 0544
@@ -8439,6 +8589,14 @@ apply.when.filter:
                     op.error,      ;* OP.SAID with EVERY
                     when.said.nc,  ;* OP.SAID with NO.CASE
                     op.error,      ;* OP.SAID with EVERY and NO.CASE
+                    when.in,       ;* OP.IN
+                    op.error,      ;* OP.IN with EVERY
+                    when.in.nc,    ;* OP.IN with NO.CASE
+                    op.error,      ;* OP.IN with EVERY and NO.CASE
+                    when.not.in,   ;* OP.NOT.IN
+                    op.error,      ;* OP.NOT.IN with EVERY
+                    when.not.in.nc,;* OP.NOT.IN with NO.CASE
+                    op.error,      ;* OP.NOT.IN with EVERY and NO.CASE
                     when.not.null, ;* OP.NOT.NULL
                     op.error,      ;* OP.NOT.NULL with EVERY
                     when.not.null, ;* OP.NOT.NULL with NO.CASE
@@ -8516,6 +8674,26 @@ when.said.nc:
          item2 = upcase(item2)
 when.said:
          truth = eqs(soundexs(item1), reuse(item2))
+         goto next.filter
+
+when.in.nc:
+when.not.in.nc:
+         item1 = upcase(item1)
+         item2 = upcase(item2)
+when.in:
+when.not.in:
+         truth = ''
+         loop
+            s = remove(item1, match.delim)
+            if item2 = '' then
+               truth := @false
+            end else
+               locate s in item2<1> setting z then truth := @true else truth := @false
+            end
+         while match.delim
+            truth := char(256 - match.delim)
+         repeat
+         if op >= OP.NOT.IN and op <= OP.NOT.IN + 3 then truth = nots(truth)
          goto next.filter
 
 when.not.null:

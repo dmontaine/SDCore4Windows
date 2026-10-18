@@ -41,6 +41,8 @@ $include syscom.h
 
 $include int$keys.h
 
+deffun atvar(name) calling "!atvar"
+
    if not(debug.initialised) then
       * There should (hopefully) be a user sitting in PDEBUG waiting to
       * pick up this connection. If so, there will be a DR.xxx record
@@ -94,6 +96,12 @@ $include int$keys.h
 
       msg.type = in.msg<1>
       begin case
+         case msg.type = 'ATVAR'
+            s = atvar(in.msg<2>)
+            out.msg = 'ATVAR'
+            out.msg<2> = status()
+            out.msg<3> = s
+
          case msg.type = 'BRK'
             breakpoint in.msg<2>, in.msg<3>
             out.msg = 'BRK'

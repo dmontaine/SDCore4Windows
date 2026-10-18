@@ -247,6 +247,8 @@ $define KW$WITH.SCHEMA    231   ;* 16 Oct 26  ... the schema before the data
 $define KW$SCHEMA.ONLY    232   ;* 16 Oct 26  ... the schema and no data
 $define KW$MODE           233   ;* 16 Oct 26  QM4 gap 231 (report the most frequent value of a field)
 $define KW$RANGE          234   ;* 16 Oct 26  QM4 gap 231 (report the difference between the largest and the smallest value)
+$define KW$IN             235   ;* 16 Oct 26  QM4 gap 94 (selection clause operator: field IN {NO.CASE} listname | "filename id")
+$define KW$NOT.IN         236   ;* 16 Oct 26  QM4 gap 94 (selection clause operator: field NOT.IN {NO.CASE} listname | "filename id")
 
 * ----------------------------------------------------------------------
 * !PARSER action key values

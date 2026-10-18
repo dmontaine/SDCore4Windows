@@ -104,7 +104,7 @@ void op_btadd() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
 
   bth = descr->data.btree;
@@ -308,7 +308,7 @@ void op_btadda() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
   bth = descr->data.btree;
   keys = bth->keys; /* Number of keys */
@@ -540,7 +540,7 @@ void op_btfind() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
   bth = descr->data.btree;
   if (bth->keys != 1)
@@ -691,6 +691,7 @@ void op_btinit() {
     k_error("Insufficient memory for BTree header");
 
   bth->ref_ct = 1;
+  bth->pad = 0;
   bth->head = NULL;
   bth->current = NULL;
   bth->keys = keys;
@@ -732,7 +733,7 @@ void op_btmodify() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
   bth = descr->data.btree;
   bte = bth->current;
@@ -775,7 +776,7 @@ void op_btreset() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
   bth = descr->data.btree;
   bte = bth->head;
@@ -815,7 +816,7 @@ void op_btscan() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
   bth = descr->data.btree;
   bte = bth->current;
@@ -896,7 +897,7 @@ void op_btscana() {
   do {
     descr = descr->data.d_addr;
   } while (descr->type == ADDR);
-  if (descr->type != BTREE)
+  if ((descr->type != BTREE) || (descr->data.btree->pad != 0)) /* pad != 0: a SORT() variable (QM4 item 371) */
     bt_not_a_btree();
   bth = descr->data.btree;
   bte = bth->current;
