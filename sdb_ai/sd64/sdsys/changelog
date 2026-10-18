@@ -2,6 +2,72 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  THE DEBUGGER, ED, LIST MERGES AND ANALYSE.FILE (QM4 FIXES TAB, NEXT BATCH).
+
+             Debugger  A program compiled for the debugger stops before each CASE
+                        condition, so stepping shows the one being tried.
+             ED       In edit values mode a line number carries the positions above it:
+                        2.0001 is value 1 of field 2, 2.3.0001 subvalue 1 of value 3.
+                        NO.EV.POSITION in $ED.OPTIONS turns it off.
+             LIST.UNION, LIST.INTER, LIST.DIFF, MERGE.LIST
+                        Find a key of one list in the other without scanning it: two lists
+                        of 15000 keys merge in seconds, where the time grew with the
+                        product of their lengths.  The results are the same.
+             ANALYSE.FILE file STATISTICS
+                        Also shows a histogram of group utilisation: how many groups use up
+                        to 10%, 20% ... 100% of their size, and how many are over 100%
+                        (have overflow blocks).
+             Correlatives  A;NOCASE;expression makes the string operations of that one
+                        correlative case insensitive.
+
+             What these do NOT do: the debugger commands /* (every variable), ^ (control
+             characters as ^nnn), WINDOW n and a token as the value of SET are not here:
+             they are written for the debugger on the screen library, which this
+             debugger is not.  The group histogram counts a group with its
+             overflow blocks together.  Not done in this sitting: IN and NOT.IN in the query
+             processor (SD has neither at all, so their saved-list-file form waits for
+             them), the I-type $MODE prefix, class variable initialisers, RUN of a class,
+             sort items over 32 KB.
+
+18 Oct 26  SMALL FIXES AND OPTIONS (QM4 FIXES TAB, BATCHES 1 AND 2).
+
+             NUMLOCKS      Range checked, 1 to 32767.  The lock table's cells are 16 bits,
+                        so a larger value used to wrap; SD now refuses to start with it.
+             PHANTOM       A phantom started while SD is suspended gives back its place in
+                        the user table.  It used to stay there, looking like a process
+                        that was running and could not be logged out.
+             SELECT of a directory file
+                        At the operating system's limit of open files the select now closes
+                        the oldest cached file and tries again, where it used to answer with
+                        an empty list and say nothing.
+             SET.FILE      The target may be a Q-pointer, which makes a chain of pointers.
+                        Not recommended, but it opens; every link is followed with the
+                        account test it always had.
+             CATALOG bp -name
+                        A hyphen is a global catalogue prefix, like * ! _ and $.
+                        DELETE.CATALOG -name removes it.
+             CONFIGURE.FILE file DIRECTORY REPORTING
+                        Shows how many records have been converted, every thousand and at
+                        the end; IMMEDIATE shows the groups moved.  Nothing else changes.
+             sdfix -Z      Clears the dead space at the end of each group (the bytes after
+                        the used part of a block).  It reports how many blocks it cleared,
+                        a second run clears none, and no record changes.
+             dir_dict      Three items for a directory file's dictionary: DAYS (days since the
+                        record was modified), DTM (date and time of the last modification)
+                        and OWNER (the user name that owns it).
+             OSPATH key 15  The owner's user name, for internal programs (DIR_DICT's OWNER).
+
+             Looked at and found right already: a hangup at the break key prompt ends the
+             process; the U format wraps in a report as T and L do; an inherited public
+             variable is found beside a function of the same name.
+
+             What these do NOT do: NUMLOCKS cannot be raised past 32767, so a file cannot
+             hold more than that many locks at once (openQM's 65535 limit is not matched).
+             sdfix -Z is for a file nobody has open.  dir_dict's items answer for a
+             directory file only.  Not done in this sitting: LOGTO RESET ALL, and the five
+             terminfo codes that end an attribute (eblink and the others), which need
+             the extended part of a compiled terminfo entry to be read.
+
 18 Oct 26  MODE AND RANGE IN A QUERY.
 
              LIST file MODE field         the value that comes most often

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 32: the target may be a Q-pointer (a chain).
 * 14 Sep 26 Windows port - RELEASE_1.1 5.  The pointer name is found in any
 *           case, and a new pointer is written lower case.  The target file
 *           name gains the downcase tier of the fold.
@@ -114,7 +115,10 @@ $include int$keys.h
          end
       end
 
-      if upcase(voc.rec[1,1]) = 'F' then exit
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - QM4 Fixes 32 (openQM): the target may itself be a Q-pointer, which makes a chain.  Not recommended, but it works:
+*   voc_ref follows a chain hop by hop and puts each hop through the same account test, so a chain cannot reach where its
+*   links alone could not.
+      if upcase(voc.rec[1,1]) = 'F' or upcase(voc.rec[1,1]) = 'Q' then exit
 
       display sysmsg(6873) ;* Target VOC entry is not a file
       if not(prompting) then goto exit.set.file

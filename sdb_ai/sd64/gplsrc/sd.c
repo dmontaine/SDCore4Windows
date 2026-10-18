@@ -37,6 +37,7 @@
  * 15 Jun 24 add bootstrap build option install option -I
  * 02 Jul 24 -i  typeo will hit bootstrap option
  * 08 Aug 24 mab add code to embedded python if EMBED_PYTHON defined 
+ * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): A phantom that finds SD suspended gives back its user table cell (QM4 Fixes 280).
  * rev 0.9.1 Mar 25 return to single rev track 
  * END-HISTORY
  *
@@ -189,6 +190,16 @@ int main(int argc, char *argv[]) {
 
   if (sysseg->flags & SSF_SUSPEND) {
     fprintf(stderr, "SD is suspended\n");
+    /* 16 Oct 26 (openQM 280): a phantom that stops here has a user table cell reserved for it by PHANTOM; given back, it
+       would otherwise stay as a process that appears to run and cannot be logged out. */
+    if (is_phantom && (phantom_user_index >= 1) && (phantom_user_index <= sysseg->max_users)) {
+      USER_ENTRY *puptr = UPtr(phantom_user_index);
+      if (puptr->uid != 0) {
+        *(UMap(puptr->uid)) = 0;
+        puptr->uid = 0;
+        puptr->puid = 0;
+      }
+    }
     clean_stop();
     return status; /* TODO: add a custom return value for this failure. */
   }

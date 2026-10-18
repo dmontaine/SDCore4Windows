@@ -23,6 +23,7 @@
 * 18 Oct 26 Windows port - from Linux 5218c47 (13 Oct 26): openQM 210: GLOBAL may be followed by a prefix character (one of * ! _ $), which is put in front
 *               of every call name that has no prefix of its own - so a select list can be catalogued globally
 *               with a prefix.  A hyphen, which openQM also lists as a prefix, is not accepted.
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): openQM 217: the hyphen is accepted as a global prefix (CATALOG bp -name, GLOBAL -).
 * 14 Sep 26 Windows port - RELEASE_1.1 5 D2: the upper-case rename below runs
 *           only on a case-sensitive VOC.  On a NOCASE one it deleted the entry
 *           it had just written, so a second CATALOG ... LOCAL left none.
@@ -95,7 +96,7 @@ $define CAT_PCODE  3
    no.xref = @false              ;* Not seen NOXREF option
    catalogue.all = @false        ;* Not using * tolen
    using.list = @false           ;* Not using a select list
-   prefix.chars = "*!_$"
+   prefix.chars = "*!_$-"          ;* 16 Oct 26 dm - QM4 Fixes 217: the hyphen is a global prefix too
    leading.chars = "abcdefghijklmnopqrstuvwxyz0123456789"         ;* 14 Sep 26 stage 3a: call names are lower
    following.chars = "abcdefghijklmnopqrstuvwxyz0123456789.%$-_"
 

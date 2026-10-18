@@ -127,6 +127,7 @@ $define COMMAND.STACK.DEPTH 99
    expand.non.printing = @false    ;* Replace by ^nnn?
    query.block.actions = @true
    match.case = @true
+   show.ev.position = @true        ;* In edit values mode the higher level positions are put before the line number
 
    command.stack = ""
    help.text = ""
@@ -150,6 +151,8 @@ $define COMMAND.STACK.DEPTH 99
                   match.case = (s2 # 'OFF')
                case s = 'NPRINT'
                   allow.non.printing = (s2 = 'ON')
+               case s = 'NO.EV.POSITION'       ;* 16 Oct 26 (QM4 Fixes 375): no field and value numbers before a line number in EV
+                  show.ev.position = @false
             end case
          next i
       end
@@ -3137,7 +3140,9 @@ find.line:
 
 show.lines:
    gosub find.line
+   gosub ev.prefix
    loop
+      display ev.pfx :
       if lines > 9999 then display fmt(n, len(lines) : "'0'R") :
       else display fmt(n, "4'0'R") :
       begin case
@@ -3166,11 +3171,30 @@ show.lines:
    return
 
 *****************************************************************************
+* EV.PREFIX  -  In edit values mode, the numbers of the field (and value) being edited, put before a line number: 3.0004 is
+*               line 4 of the value list of field 3, 3.2.0004 line 4 of the subvalues of value 2 of field 3.  Nothing outside EV,
+*               or with the NO.EV.POSITION option of $ED.OPTIONS.  (16 Oct 26, QM4 Fixes 375)
+
+ev.prefix:
+   ev.pfx = ''
+   if show.ev.position then
+      begin case
+         case ev.depth = 1
+            ev.pfx = ev.posn(1) : '.'
+         case ev.depth = 2
+            ev.pfx = ev.posn(1) : '.' : ev.posn(2) : '.'
+      end case
+   end
+   return
+
+*****************************************************************************
 * SHOW.CURRENT  -  Show current line
 
 show.current:
    if posn = 0 then return
 
+   gosub ev.prefix
+   display ev.pfx :
    if lines > 9999 then display fmt(posn, len(lines) : "'0'R") :
    else display fmt(posn, "4'0'R") :
    begin case

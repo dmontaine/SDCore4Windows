@@ -251,6 +251,7 @@
       $define OS$DIR            12       ;* Return content of directory
       $define OS$MKDIR          13       ;* Create a directory
       $define OS$MKPATH         14       ;* Create a directory path
+      $define OS$OWNER          15       ;* Name of the user who owns the path (16 Oct 26)
       * 20240225 mab add chown to OSPATH function
       $define OS$CHOWN        100       ;* Chown on file / directory
 

@@ -19,6 +19,7 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - -Z clears the dead space at the end of each group (QM4 Fixes 33): the bytes after used_bytes of every block are zeroed.
  *           process_file was commented out??, sdfix didn't do anything.          
  * END-HISTORY
  *
@@ -36,6 +37,7 @@
  *      -Q      Fix errors after querying
  *      -R      Recover disk space (primary and overflow)
  *      -V      Verbose (not documented but not restricted)
+ *      -Z      Clear the dead space at the end of each group (implies -C)
  *
  *
  * The action of the dump and rebuild operation on finding that a mis-hashed
@@ -102,6 +104,8 @@ static bool logging = FALSE;      /* -L */
 static int16_t fix_level = 0;     /* 1 = -Q, 2 = -F */
 static bool recover = FALSE;      /* -R */
 static bool verbose = FALSE;      /* -V */
+static bool zero_dead = FALSE;    /* -Z: clear the dead space at the end of each group (16 Oct 26, openQM 33) */
+static int32_t dead_cleared = 0;  /* ... and how many blocks it was cleared in */
 
 static FILE *log = NULL;
 
@@ -272,6 +276,10 @@ char *argv[];
           recover = TRUE;
           break;
 
+        case 'Z': /* Clear the dead space at the end of each group */
+          zero_dead = TRUE;
+          break;
+
         case 'V':
           verbose = TRUE;
           break;
@@ -286,6 +294,9 @@ char *argv[];
 
   if (!(check || fix_level || interactive || recover))
     check = TRUE;
+
+  if (zero_dead)
+    check = TRUE; /* the dead space is cleared while the groups are walked */
 
   if (fix_level && !(interactive || recover))
     check = TRUE;
@@ -317,6 +328,7 @@ usage:
   printf("   -Lxxx   Log output to named file\n");
   printf("   -Q      Fix errors after querying\n");
   printf("   -R      Recover disk space\n");
+  printf("   -Z      Clear the dead space at the end of each group\n");
 
   return status;
 }
@@ -914,6 +926,28 @@ bool check_and_fix() {
 }
 
 /* ======================================================================
+   clear_dead_space()  -  -Z: zero what follows the used part of a block
+   (16 Oct 26, openQM 33).  The block was read from subfile SF at OFFSET and is
+   in BLK; one that is already clear, or whose used_bytes is not sane, is left.   */
+
+static void clear_dead_space(int16_t sf, int64 offset, DH_BLOCK *blk) {
+  int32_t used = blk->used_bytes;
+  int32_t i;
+  char *p = (char *)blk;
+
+  if (!zero_dead || (used < BLOCK_HEADER_SIZE) || (used >= (int32_t)group_bytes))
+    return;
+  for (i = used; i < (int32_t)group_bytes; i++)
+    if (p[i])
+      break;
+  if (i == (int32_t)group_bytes)
+    return;
+  memset(p + used, 0, group_bytes - used);
+  if (write_block(sf, offset, group_bytes, p))
+    dead_cleared++;
+}
+
+/* ======================================================================
    check_file()  -  Perform automatic checks                              */
 
 bool check_file() {
@@ -1094,6 +1128,7 @@ bool check_file() {
         released_group = grp;
     } else /* Looks like an active group */
     {
+      clear_dead_space(sf, offset, buff);
       if (released_group != 0) {
         emit("Active group %d found after released group(s)!\n", grp);
         if (fix()) {
@@ -1228,12 +1263,15 @@ bool check_file() {
         used_bytes = buff->used_bytes;
         if (used_bytes == 0)
           break; /* Looks like a released primary group */
+        clear_dead_space(sf, offset, buff);
       } while (1);
     }
 
     grp++;
   }
   progress_bar(-1);
+  if (zero_dead)
+    emit("Dead space cleared in %d block(s)\n", (int)dead_cleared);
 
   /* Check modulus */
 

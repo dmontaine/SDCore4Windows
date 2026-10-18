@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 172: REPORTING shows how far a type conversion and an IMMEDIATE resize have got (messages 12391, 12392).
 * 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  The rebuild refuses a file that
 *           holds two ids differing only by case (10177) instead of silently
 *           dropping one; CASE refused outside internal mode (10176).
@@ -82,6 +83,8 @@ $include err.h
    immediate = @false
    no.resize = -1
    binary = @false
+   reporting = @false                ;* REPORTING: a progress line every REPORT.EVERY records, and the total (16 Oct 26)
+   report.every = 1000
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
@@ -229,7 +232,10 @@ $include err.h
 
          case keyword = KW$BINARY
             binary = @true
-   
+
+         case keyword = KW$REPORTING            ;* 16 Oct 26 dm - QM4 Fixes 172: show progress
+            reporting = @true
+
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
       end case
@@ -284,9 +290,13 @@ $include err.h
       if immediate then  ;* Perform rehashing for IMMEDIATE option
          if fcontrol(old.fu, FC$SPLIT.MERGE, 0) then
             display sysmsg(6203, trimf(dict.flag : ' ' : file.name)) ;* Resizing %1
+            steps = 0
             loop
             while fcontrol(old.fu, FC$SPLIT.MERGE, 0)
+               steps += 1
+               if reporting and mod(steps, report.every) = 0 then display sysmsg(12392, steps) ;* %1 group moves so far
             repeat
+            if reporting then display sysmsg(12392, steps)
          end
       end
    end
@@ -374,6 +384,7 @@ convert.file:
    *   record on that path, about 2 us each (Handoff 61).
    twin.check = case.insensitive and not(old.case.insensitive)
 
+   rec.ct = 0
    select old.fu
    loop
       readnext id else exit
@@ -406,6 +417,8 @@ convert.file:
             end
          end
          write rec to new.fu, id
+         rec.ct += 1
+         if reporting and mod(rec.ct, report.every) = 0 then display sysmsg(12391, rec.ct) ;* %1 records converted so far
       end else
           display sysmsg(6171) ;* Error reading record from old file
 
@@ -421,6 +434,7 @@ convert.file:
       end
    repeat
 
+   if reporting then display sysmsg(12391, rec.ct)      ;* the total
    ak.list = ''
    if old.type = FL$TYPE.DH and new.type = FL$TYPE.DH then
       * Transfer trigger subroutine

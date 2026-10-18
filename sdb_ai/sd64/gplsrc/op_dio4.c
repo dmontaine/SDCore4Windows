@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): dir_select() closes the oldest cached file and tries again when opendir() fails at the open-file limit (QM4 Fixes 279).
  * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV default select list variable (openQM item 85): readnext() takes P_DEF_SELLIST, an unassigned
  *               default variable being an empty list
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE PICK.SELECT (QM4 gaps Q-16): op_selectv() moves an active list 0 to its target;
@@ -1215,12 +1216,23 @@ Private bool dir_select(FILE_VAR* fvar, int16_t list_no) {
   DIR* dfu;
   struct dirent* dp;
   struct stat statbuf;
+  int retries;
 
   fptr = FPtr(fvar->file_id);
   strcpy(pathname, (char*)(fptr->pathname));
   path_len = strlen(pathname);
 
-  if ((dfu = opendir(pathname)) != NULL) {
+  /* 16 Oct 26 (openQM 279): at the operating system's limit of open files opendir() fails and the list was left empty
+     with nothing said.  dio_open() closes the oldest file the FDS system holds and tries again; so does this. */
+  dfu = opendir(pathname);
+  for (retries = 0; (dfu == NULL) && ((errno == EMFILE) || (errno == ENFILE)) && (retries < 8); retries++) {
+    FDS_close();
+    dfu = opendir(pathname);
+  }
+  if ((dfu == NULL) && ((errno == EMFILE) || (errno == ENFILE)))
+    k_error("Cannot read the directory %s: too many files are open", pathname);
+
+  if (dfu != NULL) {
     if (pathname[path_len - 1] == DS)
       pathname[path_len - 1] = '\0';
 

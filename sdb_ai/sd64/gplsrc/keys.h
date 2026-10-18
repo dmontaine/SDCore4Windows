@@ -479,6 +479,7 @@
 #define OS_DIR         12  /* Return content of directory */
 #define OS_MKDIR       13  /* Create a directory */
 #define OS_MKPATH      14  /* Create a directory path */
+#define OS_OWNER       15  /* Name of the user who owns the path (16 Oct 26, DIR_DICT's OWNER item); the number if the user has no name */
 /* 12 Oct 26 dm - the openQM 4 manual's key 20.  SD's other OS_ numbers are the older
    scheme (the manual's OS$OPEN is 6, SD's is 11), so only numbers that clash with none
    of them are taken from the manual.  OS$FULLPATHX (9 in the manual, where SD's is

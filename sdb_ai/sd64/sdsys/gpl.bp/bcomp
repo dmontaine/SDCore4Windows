@@ -3021,7 +3021,7 @@ proc.directive:
 
          if catalogue.name # '~' then
 !!CALLNAME!!
-            if len(catalogue.name) > 1 and index("*!_$", catalogue.name[1,1], 1) then n = 2
+            if len(catalogue.name) > 1 and index("*!_$-", catalogue.name[1,1], 1) then n = 2       ;* 16 Oct 26: the hyphen too (QM4 Fixes 217)
             else n = 1
 
             * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM item 241: the lower of 128 and MAXIDLEN (63 unless raised), as in catalog and op_jumps.c
@@ -6448,6 +6448,10 @@ st.begin:
             end
 
             gosub get.token
+
+            * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - QM4 Fixes 97: a debug stop before each CASE condition, so that the debugger shows the condition
+            * being tried and not only the statements of the case that was chosen
+            if debug then gosub generate.debug
 
             gosub exprf            ;*  Process the conditional expression
 

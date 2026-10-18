@@ -1,0 +1,54 @@
+* DIRINFO
+* What the operating system knows of a record of a directory file: SUBR("!dirinfo", what, @FILENAME, @ID)
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): New.  QM4 Fixes 181: the DAYS, DTM and OWNER items of DIR_DICT.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   x = !dirinfo(what, file, id)
+*
+*     what    DAYS   the number of days since the record was modified
+*             DTM    the date and time of its last modification, as in 16-10-2026 13:45:02 (D4- and MTS)
+*             OWNER  the user name that owns the record
+*     file    the name of the directory file, as @FILENAME has it in a dictionary item
+*     id      the record id
+*
+*   Null when the file is not a directory file the caller can open, or the record is not there.  The pathname comes
+*   from the open file, never from the caller, so this reaches only records of a file the caller already has open.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function dirinfo(what, fname, id)
+$catalog !dirinfo
+
+$include keys.h
+$include int$keys.h
+
+   open fname to f else return ('')
+   if fileinfo(f, FL$TYPE) # FL$TYPE.DIR then return ('')
+
+   path = fileinfo(f, FL$PATH) : @ds : ospath(id, OS$MAPPED.NAME)
+   if not(ospath(path, OS$EXISTS)) then return ('')
+
+   begin case
+      case upcase(what) = 'DAYS'
+         e = ospath(path, OS$DTM)
+         return (date() - mvdate(e))
+      case upcase(what) = 'DTM'
+         e = ospath(path, OS$DTM)
+         return (oconv(mvdate(e), 'D4-') : ' ' : oconv(mvtime(e), 'MTS'))
+      case upcase(what) = 'OWNER'
+         return (ospath(path, OS$OWNER))
+   end case
+
+   return ('')
+end
+
+* END-CODE

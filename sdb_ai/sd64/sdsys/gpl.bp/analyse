@@ -18,6 +18,7 @@
 * 
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 360: STATISTICS also shows a histogram of group utilisation (fields 32 to 42 of ANALYSE()).
 * 19 Jan 24 0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -119,6 +120,7 @@
 *   29  Records up to 8k bytes
 *   30  Records over 8k bytes
 *   31  Number of records with non-numeric ids
+*   32-42  Groups by the percentage of the group size they use, with their overflow blocks: up to 10%, 20% ... 100%, over 100%
 *
 * END-DESCRIPTION
 *
@@ -299,6 +301,25 @@ $include int$keys.h
             for i = 1 to 11
                print fmt(h.bar<1,i>, '9L') : '| ' :
                print str('>', idiv(h.data<i> * h.cols + h.max - 1, h.max))
+            next i
+
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - QM4 Fixes 360: a histogram of group utilisation, the bytes a group and its overflow blocks hold as a percentage of the
+*   size of the group (a group over 100% has overflow blocks)
+
+            page
+
+            print 'Histogram of group utilisation'
+            print
+            g.data = field(info, @fm, 32, 11)
+            g.max = maximum(g.data)
+            if g.max = 0 then g.max = 1
+            g.limit = g.max * 100 / info<1>
+            print fmt(g.limit, '78R1') : '%'
+            print '    Groups --------------------------------------------------------------------'
+            g.cols = 60
+            for i = 1 to 11
+               print fmt(if i = 11 then 'over 100%' else 'up to ':(i * 10):'%', '10L') : fmt(g.data<i>, '7R') : '| ' :
+               print str('>', idiv(g.data<i> * g.cols + g.max - 1, g.max))
             next i
          end
 

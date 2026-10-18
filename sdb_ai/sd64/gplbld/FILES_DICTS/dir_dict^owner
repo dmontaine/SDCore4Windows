@@ -1,0 +1,10 @@
+I User name that owns the record
+SUBR("!dirinfo","owner",@FILENAME,@ID)
+
+Owner
+12L
+S
+
+
+
+

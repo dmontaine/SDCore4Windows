@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): op_chkcat(): a name beginning with a hyphen is global, like the other prefixes (QM4 Fixes 217).
  * 29 Sep 26 RELEASE_1.1 114 - op_run() takes a runfile path up to
  *           MAX_PATHNAME_LEN, not MAX_PROGRAM_NAME_LEN (from Solo's SOLO 12)
  * 14 Sep 26 Windows port - call names are canonical LOWER case: the five
@@ -323,7 +324,7 @@ void op_chkcat() {
     LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
     (void)map_t1_id(call_name, strlen(call_name), mapped_name);
 
-    if (strchr("*$_!", call_name[0]) == NULL) { /* No prefix */
+    if (strchr("*$_!-", call_name[0]) == NULL) { /* No prefix (16 Oct 26: the hyphen is one, QM4 Fixes 217) */
       /* Try local catalogue (mode 1) */
 
       /* Push arguments onto e-stack */

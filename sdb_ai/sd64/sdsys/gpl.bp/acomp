@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 103: an A or F correlative may begin NOCASE; (A;NOCASE;N(CODE) = 'AX'), which sets the object's case
+*               insensitive flag for that correlative alone, as OPTION CORRELATIVE.NOCASE does for all of them.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a {field} name folds.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -158,12 +160,14 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
          * Remove A{;} from front of source
          if source[2,1] = ';' then source = source[3,999999]
          else source = source[2,999999]
+         gosub nocase.prefix
          gosub a.correlative
 
       case type = 'F'
          * Remove F{;} from front of source
          if source[2,1] = ';' then source = source[3,999999]
          else source = source[2,999999]
+         gosub nocase.prefix
          gosub f.correlative
 
       case upcase(source[1,2]) = 'IF' and (source[3,1] = ' ' or source[3,1] = '(')
@@ -281,6 +285,14 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    return
 
 * ======================================================================
+
+* NOCASE.PREFIX  -  A;NOCASE;expression makes the string operations of this correlative case insensitive (QM4 Fixes 103)
+nocase.prefix:
+   if upcase(source[1,7]) = 'NOCASE;' then
+      source = source[8,999999]
+      header.flags = bitor(header.flags, HDR.NOCASE)
+   end
+   return
 
 a.correlative:
    gosub get.token    ;* Get first token into look-ahead area

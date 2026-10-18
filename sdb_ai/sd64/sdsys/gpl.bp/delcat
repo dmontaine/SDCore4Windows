@@ -48,7 +48,7 @@ $include int$keys.h
 
    global = @false
    local = @false
-   prefix.chars = "*!_$"
+   prefix.chars = "*!_$-"          ;* 16 Oct 26 dm - the hyphen is a global prefix too (QM4 Fixes 217)
    using.select.list = @false
 
    * Check for alternative private catalogue location

@@ -16,7 +16,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
- * START-HISTORY: 
+ * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 360: fields 32 to 42 of the result are a histogram of group utilisation, the bytes a group and its overflow
+ *               blocks use as a percentage of the group size (up to 10% ... up to 100%, then over 100%, i.e. overflowed).
+ *               The result buffer is 512 characters, as 42 figures need more than 256.  The used bytes of a group (figures 5 and 6)
+ *               now count its overflow blocks: the sum was started again for each block, so only the last block's bytes were counted.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -41,7 +45,7 @@ Private bool dir_analyse(FILE_VAR* fvar, char* result);
 void op_analyse() {
   DESCRIPTOR* descr;
   FILE_VAR* fvar;
-  char result[256];
+  char result[512];
 
   descr = e_stack - 1;
   k_get_file(descr);
@@ -118,6 +122,8 @@ Private bool dh_analyse(DH_FILE* dh_file, /* File descriptor */
 
   /* Record length statistics */
   int32_t histogram[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  int32_t util_histogram[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; /* Groups by percentage of the group size used (QM4 Fixes 360) */
+  int32_t util_pct;
   /* 16 bytes - 8k bytes, over 8k */
 
   int16_t i;
@@ -160,10 +166,10 @@ Private bool dh_analyse(DH_FILE* dh_file, /* File descriptor */
 
     recs_in_group = 0;
     blocks_in_group = 0;
+    used_bytes_in_group = 0; /* 16 Oct 26: for the whole group, its overflow blocks too; it was zeroed again for each block */
 
     do {
       blocks_in_group++;
-      used_bytes_in_group = 0;
 
       /* Read group */
 
@@ -264,6 +270,9 @@ Private bool dh_analyse(DH_FILE* dh_file, /* File descriptor */
     if (blocks_in_group < smallest_group)
       smallest_group = blocks_in_group;
 
+    util_pct = (int32_t)(((int64)used_bytes_in_group * 100) / group_bytes);
+    util_histogram[(util_pct > 100) ? 10 : ((util_pct < 1) ? 0 : ((util_pct - 1) / 10))] += 1;
+
     if (used_bytes_in_group > max_bytes_per_group)
       max_bytes_per_group = used_bytes_in_group;
     if (used_bytes_in_group < min_bytes_per_group)
@@ -300,9 +309,10 @@ exit_dh_analyse:
   /*                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
    * 16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31*/
    
-  sprintf(result,
+  snprintf(result, 512,
           "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%ld,%d,"
-          "%d,%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+          "%d,%ld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,"
+          "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
           fptr->params.modulus,    /*  1 Modulus */
           empty_groups,            /*  2 Empty groups */
           overflowed_groups,       /*  3 Single overflow groups */
@@ -333,7 +343,18 @@ exit_dh_analyse:
           histogram[8],            /* 28 Records up to 4k bytes */
           histogram[9],            /* 29 Records up to 8k bytes */
           histogram[10],           /* 30 Records over 8k bytes */
-          non_numeric_ids);        /* 31 Records with non-numeric ids */
+          non_numeric_ids,         /* 31 Records with non-numeric ids */
+          util_histogram[0],       /* 32 Groups using up to 10% of the group size (an empty group is here) */
+          util_histogram[1],       /* 33 up to 20% */
+          util_histogram[2],       /* 34 up to 30% */
+          util_histogram[3],       /* 35 up to 40% */
+          util_histogram[4],       /* 36 up to 50% */
+          util_histogram[5],       /* 37 up to 60% */
+          util_histogram[6],       /* 38 up to 70% */
+          util_histogram[7],       /* 39 up to 80% */
+          util_histogram[8],       /* 40 up to 90% */
+          util_histogram[9],       /* 41 up to 100% */
+          util_histogram[10]);     /* 42 over 100%: the group has overflow blocks */
   return status;
 }
 

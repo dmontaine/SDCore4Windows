@@ -120,39 +120,12 @@ $include parser.h
 
    * Do the merge
 
-   begin case
-      case @option = 'UNION'
-         if len(list2) then
-            loop
-               key = removef(list2)
-            until status()
-               locate key in list1<1> setting i else list1<-1> = key
-            repeat
-         end
-
-      case @option = 'INTERSECTION'
-         if len(list1) and len(list2) then
-            new.list = ""
-            loop
-               key = removef(list2)
-            until status()
-               locate key in list1<1> setting i then new.list<-1> = key
-            repeat
-            list1 = new.list
-         end
-
-      case @option = 'DIFFERENCE'
-         if len(list2) then
-            loop
-               key = removef(list2)
-            until status()
-               locate key in list1<1> setting i then del list1<i>
-            repeat
-         end
-
-      case 1
-         stop sysmsg(3265) ;* Invalid merge mode in VOC entry
-   end case
+   * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - QM4 Fixes 414: the merge is $mergekeys, which finds a key in the other list without a scan of it
+   if @option = 'UNION' or @option = 'INTERSECTION' or @option = 'DIFFERENCE' then
+      call $mergekeys(@option, list1, list2)
+   end else
+      stop sysmsg(3265) ;* Invalid merge mode in VOC entry
+   end
    
 
    * Save the merged list

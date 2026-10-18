@@ -1,0 +1,90 @@
+* MERGEKEYS
+* The merge of two select lists, for LIST.UNION, LIST.INTER, LIST.DIFF and MERGE.LIST
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): New.  QM4 Fixes 414: the four commands located each key of one list in the other with LOCATE, a scan of the whole
+*               list for every key, so a merge of two big lists took time in proportion to the product of their lengths.  The
+*               keys of the list that is looked in are put in a collection, where a key is found in a time that hardly grows
+*               with the list (the hexadecimal form of the key is the element name, so that no key can be taken for a path).
+*               What the merge gives is what it gave: the same keys in the same order, a repeated key in the second list
+*               of a union still added once, of an intersection still once for each time it is in the second list, and in a
+*               difference each key of the second list takes away one occurrence in the first.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $mergekeys(op, list1, list2)
+*
+*     op      UNION, INTERSECTION or DIFFERENCE
+*     list1   the first list (a dynamic array of keys, one to a field); it is replaced by the result
+*     list2   the second list (it is left empty: its keys are removed as they are read, as the old code did)
+*
+*   The first list is left alone when the operation has nothing to do (an empty second list, and for an intersection an empty
+*   first one), as before.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine mergekeys(op, list1, list2)
+$catalog $mergekeys
+
+   if not(len(list2)) then return
+   if op = 'INTERSECTION' and not(len(list1)) then return
+
+   seen = collection()
+   begin case
+      case op = 'UNION'
+         * the keys of the first list are the ones to be found; each new key of the second is added to it and to the set
+         for each key in list1 delimiter @fm
+            seen{'k' : oconv(key, 'MX0C')} = 1
+         next key
+         loop
+            key = removef(list2)
+         until status()
+            hex = 'k' : oconv(key, 'MX0C')
+            if seen{hex} = '' then
+               seen{hex} = 1
+               list1<-1> = key
+            end
+         repeat
+
+      case op = 'INTERSECTION'
+         for each key in list1 delimiter @fm
+            seen{'k' : oconv(key, 'MX0C')} = 1
+         next key
+         new.list = ''
+         loop
+            key = removef(list2)
+         until status()
+            if seen{'k' : oconv(key, 'MX0C')} # '' then new.list<-1> = key
+         repeat
+         list1 = new.list
+
+      case op = 'DIFFERENCE'
+         * each key of the second list takes away one occurrence of it from the first
+         loop
+            key = removef(list2)
+         until status()
+            hex = 'k' : oconv(key, 'MX0C')
+            seen{hex} = seen{hex} + 1
+         repeat
+         new.list = ''
+         for each key in list1 delimiter @fm
+            hex = 'k' : oconv(key, 'MX0C')
+            if seen{hex} # '' and seen{hex} > 0 then
+               seen{hex} = seen{hex} - 1
+            end else
+               new.list<-1> = key
+            end
+         next key
+         list1 = new.list
+   end case
+
+   return
+end
+
+* END-CODE

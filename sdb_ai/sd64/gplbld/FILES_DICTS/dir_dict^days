@@ -1,0 +1,10 @@
+I Days since the record was modified
+SUBR("!dirinfo","days",@FILENAME,@ID)
+
+Days
+6R
+S
+
+
+
+

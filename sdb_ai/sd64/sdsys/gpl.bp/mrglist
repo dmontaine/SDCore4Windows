@@ -123,35 +123,14 @@ $include parser.h
 
 * ---------------  Step 3 -  Form the merged list
 
+   * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - QM4 Fixes 414: the merge is $mergekeys, which finds a key in the other list without a scan of it
    begin case
       case rel.op = KW$UNION
-         if len(list2) then
-            loop
-               key = removef(list2)
-            until status()
-               locate key in list1<1> setting i else list1<-1> = key
-            repeat
-         end
-
+         call $mergekeys('UNION', list1, list2)
       case rel.op = KW$INTERSECTION
-         if len(list1) and len(list2) then
-            new.list = ""
-            loop
-               key = removef(list2)
-            until status()
-               locate key in list1<1> setting i then new.list<-1> = key
-            repeat
-            list1 = new.list
-         end
-
+         call $mergekeys('INTERSECTION', list1, list2)
       case rel.op = KW$DIFFERENCE
-         if len(list2) then
-            loop
-               key = removef(list2)
-            until status()
-               locate key in list1<1> setting i then del list1<i>
-            repeat
-         end
+         call $mergekeys('DIFFERENCE', list1, list2)
    end case
    
 

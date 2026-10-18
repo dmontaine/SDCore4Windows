@@ -1,0 +1,10 @@
+I Date and time of the last modification of the record
+SUBR("!dirinfo","dtm",@FILENAME,@ID)
+
+Modified
+20L
+S
+
+
+
+
