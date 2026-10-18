@@ -61,9 +61,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              What these do NOT do: a class variable's value cannot be an expression; a
              timeout of GET is for each character, not for the whole read; the sync flag
              does not make a power failure safe for anything else on the machine; RESET ALL
-             was not run in an API session (a test cannot host one); the ED external
-             commands were written and compiled but their test suite had not finished
-             running at the end of the sitting, so treat them as untested.
+             was not run in an API session (a test cannot host one).
 
 18 Oct 26  THE DEBUGGER, ED, LIST MERGES AND ANALYSE.FILE (QM4 FIXES TAB, NEXT BATCH).
 
