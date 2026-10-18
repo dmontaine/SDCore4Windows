@@ -2,6 +2,19 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  INPUTIF.
+
+             INPUTIF var {, length} THEN / ELSE  and  INPUTIF @(x, y) : var, length
+                        Reads a line only if one is already there, from the
+                        DATA queue or typed ahead on the keyboard; otherwise
+                        it takes the ELSE clause at once, writes no prompt and
+                        leaves the variable as it was.  The options of INPUT
+                        and INPUT @ (HIDDEN, NO.ECHO, UPCASE and so on) work
+                        with it.  When SD's input is a pipe or a file rather
+                        than a terminal there is always something to read (the
+                        end of the file counts), so INPUTIF behaves as INPUT
+                        there.
+
 18 Oct 26  EXECUTE ... STACKLIST.
 
              EXECUTE command STACKLIST  Keeps the default select list as it

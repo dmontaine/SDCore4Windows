@@ -391,7 +391,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"IF":@fm:"IN":@fm:"INCLUDE":@fm:"INHERIT"
    statements := @fm:"INPUT":@fm:"INPUTCLEAR"
    statements := @fm:"INPUTCSV"
-   statements := @fm:"INPUTERR":@fm:"INPUTFIELD":@fm:"INS"
+   statements := @fm:"INPUTERR":@fm:"INPUTFIELD":@fm:"INPUTIF":@fm:"INS"   ;* INPUTIF: 14 Oct 26 dm - openQM 584
    statements := @fm:"KEYEDIT":@fm:"KEYEXIT":@fm:"KEYTRAP"
    statements := @fm:"LOCAL":@fm:"LOCATE":@fm:"LOCK":@fm:"LOGMSG":@fm:"LOOP"
    statements := @fm:"MARK.MAPPING":@fm:"MAT":@fm:"MATBUILD":@fm:"MATPARSE"
@@ -2199,6 +2199,7 @@ is.statement:
                  st.inputcsv,
                  st.printerr,                  ;* INPUTERR
                  st.inputfield,
+                 st.inputif,
                  st.ins,
                  st.keyedit,
                  st.keyexit,
@@ -9097,6 +9098,10 @@ st.input:
 
 st.inputfield:
    input.flags = IN$FIELD.MODE
+   goto st.input.common
+
+st.inputif:      ;* 14 Oct 26 dm - openQM 584: takes input only if the type-ahead or the DATA queue holds some, else the ELSE clause
+   input.flags = IN$IF
    goto st.input.common
 
 st.keyboard.input:

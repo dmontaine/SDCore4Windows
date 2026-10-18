@@ -65,6 +65,15 @@ $include err.h
    set.status 0
    then.else.flag = 1
 
+   * 18 Oct 26 Windows port - from Linux fdde3cc (14 Oct 26): - openQM 584, INPUTIF @: nothing in the DATA queue and nothing typed ahead means nothing is read
+   * and the screen is not touched; the caller takes its ELSE clause
+   if bitand(flags, IN$IF) then
+      if not(len(data.queue)) and not(keyready()) then
+         if bitand(flags, IN$THENELSE) then return value 0
+         return
+      end
+   end
+
    field.mode = bitand(flags, IN$FIELD.MODE)
    password = bitand(flags, IN$PASSWORD)
    * 18 Oct 26 Windows port - from Linux bddbb79 (14 Oct 26): - openQM 168, NO.ECHO: the field is masked like a password's, with blanks, so nothing typed shows.

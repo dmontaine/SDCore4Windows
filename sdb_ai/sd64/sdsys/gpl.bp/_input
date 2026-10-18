@@ -138,10 +138,20 @@
 
       * Display prompt character if required
 
-      if len(prompt()) then display prompt() :
+      * 18 Oct 26 Windows port - from Linux fdde3cc (14 Oct 26): - openQM 584, INPUTIF: with nothing in the DATA queue and nothing typed ahead there is nothing to
+      * read, and no prompt either: the caller takes its ELSE clause
+      nothing.waiting = 0
+      if bitand(flags, IN$IF) then
+         if not(len(data.queue) and use.data.queue) and not(keyready()) then nothing.waiting = 1
+      end
+
+      if len(prompt()) and not(nothing.waiting) then display prompt() :
 
       * Process input
 
+      if nothing.waiting then
+         then.else.flag = 0
+      end else
       if len(data.queue) and use.data.queue then       ;* Get text from DATA queue
          string = field(data.queue, @im, 1, 1)[1,max.input]
          if uppercase then string = upcase(string)
@@ -233,6 +243,7 @@
             end
          repeat
       end
+      end                          ;* of: if nothing.waiting ... else
 
       * Reset line number if pagination was active when we entered
 
