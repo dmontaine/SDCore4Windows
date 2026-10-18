@@ -91,6 +91,10 @@
    file open, as printable text.  READ-ONLY, so it belongs in the 1000 block
    with the other queries and not with the 10000 actions.                    */
 #define FL_HOLDERS      1021
+/* 13 Oct 26 dm - data collections: is this a data collection file?  Boolean.
+   Mirrored in sdsys/syscom/keys.h.  1022 is SD's own; the Windows port may use
+   the same number. */
+#define FL_COLLECTION   1022
 
 /* Values over 10000 are restricted */
 #define FL_EXCLUSIVE   10000
@@ -513,6 +517,7 @@
 #define JB_NOQUOTE_NAME          16   /* Names with no quotes */
 #define JB_SQUOTE_VALUE          32   /* String values in single quotes */
 #define JB_NOQUOTE_VALUE         64   /* String values with no quotes */
+#define JB_PRETTY                128  /* SD's own: one element to a line, indented (used by CT) */
 
 /* OBJINFO() keys */
 #define OI_ISOBJ      0  /* Is descriptor an object */

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): COLLECTION makes a data collection file (the DHF_COLLECTION header bit):
+*               READ gives a collection and WRITE takes one.
 * 14 Sep 26 Windows port - the default dictionary record is @id, not @ID, as
 *            the shipped dictionaries are.  RELEASE_1.1_FIXES.md 5, stage 2b.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
@@ -49,6 +51,8 @@
 *    CASE                   case sensitive ids - internal mode only, for the
 *                           upgrade witness; refused otherwise (10176)
 *    NO.RESIZE              disable file resizing
+*    COLLECTION             a data collection file: its records are data
+*                           collections (JSON text on disk)
 *
 * END-DESCRIPTION
 *
@@ -80,6 +84,7 @@ $define default.split.load 80
    create.data = @true
    file.type = FL$TYPE.DH
    no.case = @false
+   collection.file = @false
    keep.case = @false
    dir.name = ""
    dir.name.with.delimiter = ""
@@ -298,6 +303,10 @@ $define default.split.load 80
             end
             version.value = value + 0
 
+         * ---------- COLLECTION  (13 Oct 26 dm, data collections: records are collections, read and written as such)
+         case keyword = KW$COLLECTION and file.type # FL$TYPE.DIR
+            collection.file = @true
+
          case upcase(token) = 'COMMENT'       ;* 12 Oct 26 dm - openQM 383: COMMENT text  (quote it if it has spaces)
             call @parser(PARSER$GET.TOKEN, token.type, voc.comment, keyword)
             if token.type = PARSER$END or voc.comment = '' then stop sysmsg(12083) ;* Comment text required after COMMENT
@@ -510,6 +519,7 @@ $define default.split.load 80
 
       file.flags = case.flags
       if no.resize then file.flags = bitor(file.flags, FL$FLAGS.NORESIZE)
+      if collection.file then file.flags = bitor(file.flags, FL$FLAGS.COLLECTION)
 
       begin case
          case file.type = FL$TYPE.DH

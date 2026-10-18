@@ -278,6 +278,7 @@
       $define FL$FLAGS.NORESIZE   0x00000008   ;* No splits/merges
       $define FL$FLAGS.NOCASE     0x00000010   ;* Case insensitive ids
       $define FL$FLAGS.TRUSTED    0x00000020   ;* Access requires trusted program
+      $define FL$FLAGS.COLLECTION 0x00000100   ;* Data collection file: records are collections (13 Oct 26)
 * 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  Every hashed file is created
 *     NOCASE by the kernel (gplsrc/op_dio1.c), whatever flags it is given.
 *     KEEPCASE is a creation REQUEST, never a header bit (dh.h DHF_KEEPCASE,

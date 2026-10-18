@@ -2,6 +2,46 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  DATA COLLECTION FILES.
+
+             CREATE.FILE name COLLECTION       a file whose records are collections
+             READ c FROM f, id                 c is a collection
+             WRITE c ON f, id                  c is written as JSON text
+             FILEINFO(f, FL$COLLECTION)        1 for such a file
+             LIST file NAME CITY               E-type dictionary items
+             CT file id                        shows the record as JSON
+             OCONV/ICONV 'HU'                  see the entry below
+
+           A collection file is an ordinary hashed file whose records are held
+           as JSON text, so locking, transactions, the file size controls and
+           everything else underneath work as they do for any file.  READ,
+           READU and READL give the record as a collection and WRITE and
+           WRITEU take one; WRITE also accepts text, provided it is a JSON
+           object or array, and refuses anything else.  A collection holding a
+           value with no JSON form cannot be written.  A read or write trigger
+           is called with the collection.  MATREAD is refused, and READV or
+           WRITEV of a field number gives the usual error since there are no
+           fields.  The dictionary of the file is an ordinary one.
+
+           A new kind of dictionary item, E, is a D-type item whose field 2 is
+           an element path instead of a field number: E, path, conversion,
+           heading, format, S or M, association.  The path may have up to two
+           asterisks, which make the item multivalued.  The query commands (LIST,
+           SORT, SELECT, COUNT, SEARCH and the rest) use E-type items as they
+           use D-type ones, in headings, WITH clauses, BY clauses and
+           conversions.  A D-type item with a field number above 0 is refused
+           on a collection file with a message that says to use an E-type item,
+           and an E-type item is refused on any other file; @ID works as
+           always.  SEARCH looks at the JSON text of the record.
+
+           CT on a collection file shows the record as JSON, one element to a
+           line.  JBUILD() has a mode for the same layout, JB$PRETTY (128), an
+           addition of SD's.
+
+           Not yet: TRANS() and I-type items that use an E-type item, indices on
+           E-type items, linked collections (EXPAND), the collection editor
+           and XPARSE().
+
 18 Oct 26  COLLECTIONS: BOOLEANS AND NULLS, OPERATORS ON AN ELEMENT, THE HU
            CONVERSION.
 

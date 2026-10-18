@@ -532,6 +532,11 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    end
 
    is.dir = (fileinfo(data.f, FL$TYPE) = FL$TYPE.DIR)
+   * 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): - a data collection file gives each record as a collection.  The E-type items a query uses are
+   * picked out of it into a dynamic array, one field for each, so the rest of the processor works as it does for
+   * any file (see make.coll.view).
+   coll.file = (fileinfo(data.f, FL$COLLECTION) # 0)
+   coll.paths = ''
    is.case.insensitive = (bitand(fileinfo(data.f, FL$FLAGS), FL$FLAGS.NOCASE) # 0)
 
    * A DIRECTORY FILE IS ALWAYS CASE-INSENSITIVE HERE.  Upstream writes this
@@ -2278,6 +2283,7 @@ skip.record:
             end
 
             read qproc.record from data.f, id then
+               if coll.file then qproc.record = jbuild(qproc.record)   ;* 13 Oct 26: the JSON text, as one field
                num.fields = dcount(qproc.record, @fm)
 
                if no.split then
@@ -4074,7 +4080,7 @@ get.token:
    if dict.open then
       read dict.rec from dict.file, token then
          type = upcase(dict.rec[1,1])
-         if listindex('A,C,D,I,S', ',', type) then
+         if listindex('A,C,D,E,I,S', ',', type) then
             keyword = -1
             return
          end
@@ -4107,7 +4113,7 @@ get.token:
    if voc.fold.found then
       from.voc = @true    ;* 0316
       type = upcase(dict.rec[1,1])
-      if listindex('A,C,D,I,S', ',', type) then return
+      if listindex('A,C,D,E,I,S', ',', type) then return
 
       if type = 'K' then
          if dict.rec<2> = 0 then goto get.token   ;* Throw away token
@@ -4124,7 +4130,7 @@ get.token:
       read dict.rec from dict.file, downcase(token) then
          from.voc = @false    ;* 0316
          type = upcase(dict.rec[1,1])
-         if listindex('A,C,D,I,S', ',', type) then
+         if listindex('A,C,D,E,I,S', ',', type) then
             keyword = -1
             token = downcase(token)
             return
@@ -4138,7 +4144,7 @@ get.token:
       read dict.rec from dict.file, upcase(token) then
          from.voc = @false    ;* 0316
          type = upcase(dict.rec[1,1])
-         if listindex('A,C,D,I,S', ',', type) then
+         if listindex('A,C,D,E,I,S', ',', type) then
             keyword = -1
             token = upcase(token)
             return
@@ -4151,7 +4157,7 @@ get.token:
    read dict.rec from @voc, upcase(token) then
       from.voc = @true    ;* 0316
       type = upcase(dict.rec[1,1])
-      if listindex('A,C,D,I,S', ',', type) then
+      if listindex('A,C,D,E,I,S', ',', type) then
          token = upcase(token)
          return
       end
@@ -4248,9 +4254,26 @@ read.record:
          record.found = @false
       end
    end
+   if record.found and coll.file then gosub make.coll.view
    qproc.id = id
    new.record = @false
 
+   return
+
+* ======================================================================
+* MAKE.COLL.VIEW  -  A collection record as the fields of the E-type items in use
+*
+* qproc.record holds the collection just read.  It is kept as qproc.coll and
+* qproc.record becomes a dynamic array with field j holding the element at
+* coll.paths<j>, which add.field set up when it met the E-type item.  An
+* asterisk path gives a multivalued field.
+
+make.coll.view:
+   qproc.coll = qproc.record
+   qproc.record = ''
+   for coll.j = 1 to dcount(coll.paths, @fm)
+      qproc.record<coll.j> = qproc.coll{coll.paths<coll.j>}
+   next coll.j
    return
 
 * ======================================================================
@@ -4749,6 +4772,7 @@ want.record:
          if new.record then gosub read.record
          if record.found then
             s = qproc.record
+            if coll.file then s = jbuild(qproc.coll)   ;* 13 Oct 26: a collection is searched as its JSON text
             if search.ids then s = id : @fm : s     ;* ALL: the id is searched too
             if no.case then s = upcase(s)
             begin case
@@ -4788,8 +4812,10 @@ want.record:
 
 show.search.lines:
    print id
-   for sl.n = 1 to dcount(qproc.record, @fm)
-      sl.line = qproc.record<sl.n>
+   sl.rec = qproc.record
+   if coll.file then sl.rec = jbuild(qproc.coll)   ;* 13 Oct 26: a collection is shown as its JSON text
+   for sl.n = 1 to dcount(sl.rec, @fm)
+      sl.line = sl.rec<sl.n>
       sl.t = sl.line
       if no.case then sl.t = upcase(sl.t)
       sl.hit = @false
@@ -5380,9 +5406,50 @@ add.field:
                   item.type(item.index) = FIELD.ITEM
             end case
 
+         case type = "E"
+            * 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): - an element of a data collection.  Field 2 is the path (up to two asterisks give a
+            * multivalued list).  It becomes a field of the view make.coll.view builds.
+            if not(coll.file) then
+               display sysmsg(12134, token) ;* E-type dictionary item xx can only be used with a data collection file
+               goto exit.qproc
+            end
+            if dict.rec<dict.loc> = '' then
+               display sysmsg(12135, token) ;* E-type dictionary item xx has no element path
+               goto exit.qproc
+            end
+
+            no.items += 1
+            item.index = no.items
+            item.name(item.index) = token
+
+            s = dict.rec<dict.display.name> ; gosub set.col.hdg
+            locate dict.rec<dict.loc> in coll.paths<1> setting coll.j else
+               coll.paths<-1> = dict.rec<dict.loc>
+               coll.j = dcount(coll.paths, @fm)
+            end
+            item.detail(item.index) = coll.j
+            item.fmt(item.index) = dict.rec<dict.format>
+            gosub get.width.and.justification
+            item.conv(item.index) = dict.rec<dict.conv>
+            s = dict.rec<dict.assoc> ; gosub add.item.association
+            item.multivalued(item.index) = dict.rec<dict.s.m>[1,1] = "M" or index(dict.rec<dict.loc>, '*', 1) # 0
+            item.totals(item.index) = 0
+            item.breakpoint(item.index) = 0
+            item.flags(item.index) = 0
+            if option(OPT.ASSOC.UNASSOC.MV) then
+               if item.multivalued(item.index) and not(item.assoc(item.index)) then
+                  s = '__QPROC.ASSOC__' ; gosub add.item.association
+               end
+            end
+            item.type(item.index) = FIELD.ITEM
+
          case type = "D"
             if not(num(dict.rec<dict.loc>)) then
                display sysmsg(7269, token) ;* Dictionary entry for xx has non-numeric field location
+               goto exit.qproc
+            end
+            if coll.file and dict.rec<dict.loc> + 0 > 0 and dict.rec<dict.loc> + 0 < 9998 then
+               display sysmsg(12133, token) ;* xx refers to a field number, which a data collection file does not have
                goto exit.qproc
             end
 

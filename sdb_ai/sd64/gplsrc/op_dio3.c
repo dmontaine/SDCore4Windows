@@ -746,6 +746,8 @@ void op_write() {
   u_int16_t op_flags;
   bool keep_lock;
   u_int32_t txn_id;
+  bool coll_file;                 /* A data collection file */
+  COLL_HEADER *coll_keep = NULL;  /* The collection being written, while src_descr holds its text */
 
   op_flags = process.op_flags;
   process.op_flags = 0;
@@ -769,10 +771,15 @@ void op_write() {
   if ((sysseg->flags & SSF_SUSPEND) && (txn_id == 0))
     suspend_updates();
 
-  /* Get string descr */
+  /* Get string descr.  A data collection file takes a collection as it is and
+     turns it to JSON text just before the write (13 Oct 26). */
 
   src_descr = e_stack - 3;
-  k_get_string(src_descr);
+  coll_file = (fvar->type == DYNAMIC_FILE) && (fvar->access.dh.dh_file->flags & DHF_COLLECTION);
+  if (src_descr->type == ADDR)
+    k_get_value(src_descr);
+  if (!(coll_file && src_descr->type == COLL))
+    k_get_string(src_descr);
 
   if (!valid_id(id, id_len)) {
     process.status = -ER_IID;
@@ -812,6 +819,22 @@ void op_write() {
         }
       }
 
+      if (coll_file) {
+        if (src_descr->type == COLL) {
+          /* Hold the collection for the post-write trigger while the descriptor
+             carries its JSON text for the write */
+          coll_keep = src_descr->data.coll;
+          coll_keep->ref_ct++;
+          if (!coll_record_text(src_descr)) {
+            process.status = -ER_BUILD_ERROR;
+            goto exit_op_write;
+          }
+        } else if (!coll_record_text(src_descr)) {
+          process.status = -ER_PARSE_ERROR; /* Text that is not a JSON object or array */
+          goto exit_op_write;
+        }
+      }
+
       str = src_descr->data.str.saddr;
       if (txn_id != 0) {
         if (!txn_write(fvar, id, id_len, str))
@@ -821,6 +844,13 @@ void op_write() {
           process.status = -dh_err;
           goto exit_op_write;
         }
+      }
+
+      if (coll_keep != NULL) {
+        k_release(src_descr);
+        InitDescr(src_descr, COLL);
+        src_descr->data.coll = coll_keep;
+        coll_keep = NULL;
       }
 
       /* Call post-write trigger function if required */
@@ -855,6 +885,9 @@ void op_write() {
   }
 
 exit_op_write:
+
+  if (coll_keep != NULL)
+    coll_deref(coll_keep);
 
   k_dismiss();
   k_dismiss();
@@ -1104,6 +1137,14 @@ Private void read_record(bool matread) {
           str_descr->data.str.saddr = str;
           if (str != NULL)
             str->ref_ct++;
+
+          /* A data collection file gives the record as a collection (13 Oct 26) */
+          if (fvar->type == DYNAMIC_FILE && (fvar->access.dh.dh_file->flags & DHF_COLLECTION)) {
+            if (matread)
+              k_error(sysmsg(12132));
+            if (!coll_record_in(str_descr))
+              status = (int16_t)(-(process.status = ER_PARSE_ERROR));
+          }
           goto exit_op_read;
 
         case TXC_DELETED: /* Reference found as deleted record */
@@ -1117,6 +1158,8 @@ Private void read_record(bool matread) {
   {
     case DYNAMIC_FILE:
       dh_file = fvar->access.dh.dh_file;
+      if (matread && (dh_file->flags & DHF_COLLECTION))
+        k_error(sysmsg(12132)); /* MATREAD makes no sense for a data collection */
       str = dh_read(dh_file, id, id_len, actual_id);
       switch (dh_err) {
         case 0:
@@ -1125,6 +1168,13 @@ Private void read_record(bool matread) {
             InitDescr(str_descr, STRING);
           }
           str_descr->data.str.saddr = str;
+
+          /* A data collection file gives the record as a collection (13 Oct 26),
+             and so does its read trigger. */
+          if ((dh_file->flags & DHF_COLLECTION) && !coll_record_in(str_descr)) {
+            status = (int16_t)(-(process.status = ER_PARSE_ERROR));
+            goto exit_op_read;
+          }
 
           /* Call read trigger function if required */
 

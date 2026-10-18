@@ -230,6 +230,17 @@ display.record:
       print on lptr file.name : ' ' : record.name
    end
 
+   * 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): (openQM 304) A record of a data collection file is shown as JSON, one element to a line.
+   rec.type = jtype(rec)
+   if rec.type = 'collection' or rec.type = 'array' then
+      json = jbuild(rec, JB$PRETTY)
+      convert char(10) to @fm in json
+      for json.i = 1 to dcount(json, @fm)
+         print on lptr json<json.i>
+      next json.i
+      return
+   end
+
    * A compiled dictionary item carries its object code from field 16 on
    * (DICT.ITYPE.OBJECT).  The default display leaves it out; HEX and BINARY
    * show the record as it is (11 Oct 26 dm, openQM ref 373).

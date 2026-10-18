@@ -73,6 +73,7 @@
 #define JB_NOQUOTE_NAME_BIT JB_NOQUOTE_NAME
 #define JB_SQUOTE_VALUE_BIT JB_SQUOTE_VALUE
 #define JB_NOQUOTE_VALUE_BIT JB_NOQUOTE_VALUE
+#define JB_PRETTY_BIT JB_PRETTY
 
 #define CF_NEW 1
 #define CF_COPY 2
@@ -1514,6 +1515,7 @@ Private bool jb_value(COLL_BUF* b, COLL_ENTRY* e, int mode, int depth) {
   bool is_int;
   int vq;
   int nq;
+  int n;
   COLL_HEADER* h;
   DESCRIPTOR d;
 
@@ -1567,12 +1569,22 @@ Private bool jb_value(COLL_BUF* b, COLL_ENTRY* e, int mode, int depth) {
       for (i = 0; i < h->count; i++) {
         if (i)
           buf_add(b, ",", 1);
+        if (mode & JB_PRETTY_BIT) { /* One element to a line, two spaces for each level */
+          buf_add(b, "\n", 1);
+          for (n = 0; n <= depth; n++)
+            buf_add(b, "  ", 2);
+        }
         if (!h->is_array) {
           jb_str(b, (unsigned char*)h->e[i].name, h->e[i].name_len, nq);
-          buf_add(b, ":", 1);
+          buf_add(b, (mode & JB_PRETTY_BIT) ? ": " : ":", (mode & JB_PRETTY_BIT) ? 2 : 1);
         }
         if (!jb_value(b, &h->e[i], mode, depth + 1))
           return FALSE;
+      }
+      if ((mode & JB_PRETTY_BIT) && h->count) {
+        buf_add(b, "\n", 1);
+        for (n = 0; n < depth; n++)
+          buf_add(b, "  ", 2);
       }
       buf_add(b, h->is_array ? "]" : "}", 1);
       return TRUE;
@@ -1614,6 +1626,64 @@ Private DESCRIPTOR json_build(COLL_HEADER* root, int mode) {
   result = str_descr(cb.b, cb.len);
   k_free(cb.b);
   return result;
+}
+
+/* ======================================================================
+   Records of a data collection file
+
+   The file is an ordinary hashed file whose records are JSON text.  READ
+   turns the text into a collection and WRITE the collection into text.
+
+   coll_record_in()   STRING -> COLL, in place.  False if the text is not a
+                      JSON object or array, d unchanged.
+   coll_record_text() COLL -> STRING of JSON text, in place (False and d
+                      unchanged if the collection cannot be built).  A STRING
+                      is checked to be JSON an object or array and left as it
+                      is; False if it is not.                              */
+
+bool coll_record_in(DESCRIPTOR* d) {
+  DESCRIPTOR r;
+  char* b;
+  int32_t len;
+  int32_t saved_inmat = process.inmat;
+
+  if (d->type != STRING)
+    return FALSE;
+  b = chunks_to_buffer(d->data.str.saddr, &len);
+  r = json_parse(b, len, 0);
+  k_free(b);
+  process.inmat = saved_inmat;
+  if (r.type != COLL)
+    return FALSE;
+  k_release(d);
+  *d = r;
+  return TRUE;
+}
+
+bool coll_record_text(DESCRIPTOR* d) {
+  DESCRIPTOR r;
+  char* b;
+  int32_t len;
+  int32_t saved_inmat = process.inmat;
+
+  if (d->type == COLL) {
+    r = json_build(d->data.coll, 0);
+    if (process.status == ER_BUILD_ERROR)
+      return FALSE;
+    k_release(d);
+    *d = r;
+    return TRUE;
+  }
+  if (d->type != STRING)
+    return FALSE;
+  b = chunks_to_buffer(d->data.str.saddr, &len);
+  r = json_parse(b, len, 0);
+  k_free(b);
+  process.inmat = saved_inmat;
+  if (r.type != COLL)
+    return FALSE;
+  k_release(&r);
+  return TRUE;
 }
 
 /* ======================================================================
