@@ -2271,6 +2271,56 @@ Private void sarith(int which) { /* 0 add, 1 sub, 2 mul, 3 div, 4 cmp */
   free(out);
 }
 
+/* EREPLACE(string, old, new {, occurrence {, start}})  (12 Oct 26, openQM item 472, the description the owner supplied).
+   With a non-null OLD it is CHANGE() exactly, except that an occurrence count below 1 means all; with a null OLD the
+   result is NEW put in front of STRING.  Stack as for op_change(), whose body does the work.                       */
+void op_change(void);
+
+void op_ereplace() {
+  DESCRIPTOR* d;
+  int old_len;
+  char* src;
+  char* nw;
+  char* buf;
+  int sl = 0;
+  int nl = 0;
+
+  d = e_stack - 4;
+  k_get_string(d);
+  old_len = (d->data.str.saddr == NULL) ? 0 : (int)d->data.str.saddr->string_len;
+
+  if (old_len > 0) {
+    d = e_stack - 2;
+    GetInt(d);
+    if (d->data.value < 1)
+      d->data.value = -1;
+    op_change();
+    return;
+  }
+
+  src = top_string_copy(e_stack - 5, &sl);
+  nw = top_string_copy(e_stack - 3, &nl);
+  if (src == NULL || nw == NULL) {
+    free(src);
+    free(nw);
+    k_error("Insufficient memory for EREPLACE()");
+    return;
+  }
+  buf = (char*)malloc((size_t)(sl + nl) + 1);
+  memcpy(buf, nw, (size_t)nl);
+  memcpy(buf + nl, src, (size_t)sl);
+  free(src);
+  free(nw);
+  k_dismiss();
+  k_dismiss();
+  k_dismiss();
+  k_dismiss();
+  k_dismiss();
+  k_put_string(buf, sl + nl, e_stack);
+  e_stack++;
+  free(buf);
+}
+
 void op_sadd() { sarith(0); }
 void op_ssub() { sarith(1); }
 void op_smul() { sarith(2); }

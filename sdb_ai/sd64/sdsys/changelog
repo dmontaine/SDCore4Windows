@@ -2,6 +2,16 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  EREPLACE().
+
+             EREPLACE(string, old, new {, occurrence {, start}})
+                          The same as CHANGE() when old is not null: every
+                          occurrence of old is replaced by new, or
+                          "occurrence" of them (less than 1 means all)
+                          starting at the "start"th.  When old is null, new
+                          is put in front of the string.  A null new
+                          deletes.
+
 18 Oct 26  SETPTR INFORM, EJECT AND AS ... IN.  Syntax is SD's own where openQM's is not
            given.  SETPTR options are separated by commas.
 

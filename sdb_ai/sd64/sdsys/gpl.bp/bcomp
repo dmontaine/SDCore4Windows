@@ -508,6 +508,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "EBCDIC"          ; intrinsic.opcodes<-1> = OP.EBCDIC
    intrinsics<-1> = "ENV"             ; intrinsic.opcodes<-1> = OP.ENV
    intrinsics<-1> = "EQS"             ; intrinsic.opcodes<-1> = OP.EQS
+   intrinsics<-1> = "EREPLACE"        ; intrinsic.opcodes<-1> = OP.EREPLACE   ;* 12 Oct 26 dm - openQM 472
    intrinsics<-1> = "EXP"             ; intrinsic.opcodes<-1> = OP.EXP
    intrinsics<-1> = "EXTRACT"         ; intrinsic.opcodes<-1> = OP.EXTRACT
    intrinsics<-1> = "FIELD"           ; intrinsic.opcodes<-1> = OP.FIELD
@@ -3991,6 +3992,7 @@ end
                       in.one,         ;* EBCDIC
                       in.one,         ;* ENV
                       in.two,         ;* EQS
+                      in.change,      ;* EREPLACE
                       in.one,         ;* EXP
                       in.extract,     ;* EXTRACT
                       in.field,       ;* FIELD

@@ -621,7 +621,7 @@ _opc_(0xCFF7, OP_SMUL,     "SMUL",       op_smul,      OPCODE_BYTE,        -1)
 _opc_(0xCFF8, OP_SDIV,     "SDIV",       op_sdiv,      OPCODE_BYTE,        -1)
 _opc_(0xCFF9, OP_SCMP,     "SCMP",       op_scmp,      OPCODE_BYTE,        -1)
 _opc_(0xCFFA, OP_REGEX,    "REGEX",      op_regex,     OPCODE_BYTE,        -1)
-_opc_(0xCFFB, OP_CFFB,     "OPCFFB",     op_illegal2,  OPCODE_BYTE,         0)
+_opc_(0xCFFB, OP_EREPLACE, "EREPLACE",   op_ereplace,  OPCODE_BYTE,        -4)
 _opc_(0xCFFC, OP_CFFC,     "OPCFFC",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFFD, OP_CFFD,     "OPCFFD",     op_illegal2,  OPCODE_BYTE,         0)
 /* 13 Aug 26 Windows port - was OP_SDPYOBJ / op_sdpyobj, the embedded Python
