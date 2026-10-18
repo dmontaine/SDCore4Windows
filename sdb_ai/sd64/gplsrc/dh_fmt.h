@@ -175,6 +175,7 @@ struct DH_AK_HEADER {
 #define AK_LSORT 0x0010   /* Keys are sorted left aligned or... */
 #define AK_RSORT 0x0020   /* ... sorted left aligned (or unsorted) */
 #define AK_NOCASE 0x0040  /* Case insensitive AK */
+#define AK_COLL 0x0080    /* Index on a data collection file (13 Oct 26) */
   int16_t fno;            /* Field number, -1 if I-type index */
   int16_t spare;
   int32_t free_chain; /* Pointer to head of free chain */

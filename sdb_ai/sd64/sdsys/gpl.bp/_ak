@@ -69,6 +69,8 @@ $include int$keys.h
             fno = ak.data(ak, AKD$FNO)
             if fno < 0 then   ;* I-type
                @record = new.rec
+               * 18 Oct 26 Windows port - from Linux d99019c (13 Oct 26): - a data collection file's record arrives as JSON text; the item reads a collection
+               if bitand(flags, AK$COLL) then @record = jparse(new.rec)
                @itype.mode = 2
                new.data = itype(ak.data(ak, AKD$OBJ))
             end else
@@ -115,6 +117,7 @@ $include int$keys.h
             fno = ak.data(ak, AKD$FNO)
             if fno < 0 then   ;* I-type
                @record = old.rec
+               if bitand(flags, AK$COLL) then @record = jparse(old.rec)
                @itype.mode = 1
                old.data = itype(ak.data(ak, AKD$OBJ))
             end else
@@ -162,9 +165,11 @@ $include int$keys.h
             if fno < 0 then   ;* I-type
                object.code = ak.data(ak, AKD$OBJ)
                @record = old.rec
+               if bitand(flags, AK$COLL) then @record = jparse(old.rec)
                @itype.mode = 1
                old.data = itype(object.code)
                @record = new.rec
+               if bitand(flags, AK$COLL) then @record = jparse(new.rec)
                @itype.mode = 2
                new.data = itype(object.code)
             end else

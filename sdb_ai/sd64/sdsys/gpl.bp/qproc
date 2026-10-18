@@ -4924,8 +4924,14 @@ case op = OP.WHEN ; null
             if ak.justification # index.data<5> then continue  ;* Wrong justification
 
          case ak.type = 'I' or ak.type = 'C'
-            if item.type(ak.field) # ITYPE.ITEM then continue
-            if item.expression(ak.field) # index.data<dict.itype.source> then continue  ;* Wrong expression
+            if coll.file and item.type(ak.field) = FIELD.ITEM then
+               * 18 Oct 26 Windows port - from Linux d99019c (13 Oct 26): - an E-type item of a data collection file.  Its index is an I-type index whose
+               * expression is the name of the item (mkindx), so it is the item of that name that this serves.
+               if upcase(item.name(ak.field)) # upcase(index.data<dict.itype.source>) then continue
+            end else
+               if item.type(ak.field) # ITYPE.ITEM then continue
+               if item.expression(ak.field) # index.data<dict.itype.source> then continue  ;* Wrong expression
+            end
             if item.multivalued(ak.field) # (index.data<6> = 'M') then continue  ;* Wrong S/M
             if ak.justification # index.data<5> then continue  ;* Wrong justification
 

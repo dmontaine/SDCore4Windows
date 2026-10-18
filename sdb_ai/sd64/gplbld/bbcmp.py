@@ -6411,6 +6411,14 @@ def in_insert():
     in_ins_rep()
     return
     
+def in_jparse():
+    """JPARSE(text): JSON text into a data collection (function 13 of OP_COLL, no mode).  _ak uses it."""
+    exprf()
+    emit_numeric_load(0)
+    emit_numeric_load(13)
+    intrinsic_common()
+    return
+
 def in_jbuild():
     """JBUILD(c): a collection as JSON text (function 14 of OP_COLL, no mode)"""
     exprf()
@@ -6873,6 +6881,7 @@ intrinsics = {
    "INT"             : [OP_INT        ,in_one],         # INT
    "ITYPE"           : [OP_ITYPE      ,in_itype],       # ITYPE
    "JBUILD"          : [OP_COLL       ,in_jbuild],      # JBUILD  13 Oct 26: for _trans, which reads data collections
+   "JPARSE"          : [OP_COLL       ,in_jparse],      # JPARSE  13 Oct 26: for _ak, which indexes data collections
    "JTYPE"           : [OP_COLL       ,in_jtype],       # JTYPE
    "KEYCODE"         : [OP_KEYCODE    ,in_keyin],       # KEYCODE
    "KEYIN"           : [OP_KEYIN      ,in_keyin],       # KEYIN

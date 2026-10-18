@@ -2,6 +2,19 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  INDICES ON E-TYPE ITEMS.
+
+             CREATE.INDEX file ITEM            ITEM may be an E-type item
+             BUILD.INDEX file ITEM
+             SELECTINDEX ITEM, value           as for any index
+
+           An E-type item of a data collection file can be indexed as a D-type
+           item can, including one whose path has an asterisk (every element
+           becomes a key).  The index is kept up to date as records are written
+           and deleted, and a query with a WITH clause on the item uses it.  A
+           D-type item with a field number is refused on a collection file, and
+           an E-type item on any other file.
+
 18 Oct 26  LINKED COLLECTIONS AND TRANS().
 
              ok = EXPAND(c{'path'})            join the record a link names

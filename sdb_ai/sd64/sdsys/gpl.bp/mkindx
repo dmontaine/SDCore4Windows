@@ -196,6 +196,52 @@ create.index:
 
       type = upcase(dict.rec[1,1])
       dict.rec<1> = type   ;* Ensure AK gets created with uppercase type code
+      coll.index = @false
+
+      * 18 Oct 26 Windows port - from Linux d99019c (13 Oct 26): - an index on an E-type item of a data collection file is kept as an I-type index whose
+      * expression is the name of the item, so the same compiler and the same key extraction serve it.  It carries
+      * AK$COLL, which makes the extraction parse the record text into a collection first.  The dictionary item
+      * itself is not rewritten.
+      if type = 'E' then
+         if not(fileinfo(data.f, FL$COLLECTION)) then
+            display sysmsg(12134, new.index.name) ;* E-type dictionary item %1 can only be used with a data collection file
+            err = ER$BAD.DICT
+            return
+         end
+         e.rec = dict.rec
+         dict.rec = ''
+         dict.rec<1> = 'I'
+         dict.rec<DICT.ITYPE.SOURCE> = new.index.name
+         dict.rec<DICT.FORMAT> = e.rec<DICT.FORMAT>
+         dict.rec<DICT.S.M> = if index(e.rec<DICT.LOC>, '*', 1) then 'M' else e.rec<DICT.S.M>
+         call $dcomp(dict.f,          ;* File var to source file
+                     new.index.name,  ;* Record name
+                     dict.rec,        ;* Record to compile
+                     z,               ;* I-type format
+                     z,               ;* I-type conversion
+                     z,               ;* I-type S/M
+                     z,               ;* I-type association
+                     z,               ;* I-type constant
+                     1)               ;* Compiler recursion depth
+         if dict.rec<DICT.ITYPE.OBJECT> = '' then
+            display sysmsg(2612, new.index.name)
+            err = ER$ICOMP
+            return
+         end
+         type = 'I'
+         coll.index = @true
+         fno = -1
+         expr = new.index.name
+         goto have.index.type
+      end
+
+      if type = 'D' and fileinfo(data.f, FL$COLLECTION) then
+         if trimb(dict.rec<DICT.LOC>) + 0 > 0 then
+            display sysmsg(12133, new.index.name) ;* %1 refers to a field number, which a data collection file does not have
+            err = ER$BAD.DICT
+            return
+         end
+      end
 
       begin case
          case (type = 'A' or type = 'S') and dict.rec<DICT.A.CORRELATIVE> = ''
@@ -253,9 +299,11 @@ create.index:
             display sysmsg(2613, new.index.name) ;* %1 is not a A, C, D, I or S-type dictionary item 
       end case
 
+have.index.type:
       * AK flags
 
       ak.flags = 0
+      if coll.index then ak.flags = bitor(ak.flags, AK$COLL)
 
       id.found = @true   ;* 14 Sep 26 - RELEASE_1.1 5: @ID or @id
       read id.rec from dict.f, '@ID' else
