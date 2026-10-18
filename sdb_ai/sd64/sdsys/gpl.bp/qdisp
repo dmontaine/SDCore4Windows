@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 770050a (14 Oct 26): OPTION QUERY.FOOTER.PAUSE: pause at the end of a report with a footer.
 * 13 Sep 26 Windows port - "Suppress pagination" at the page prompt now does
 *            what NO.PAGE does: the rest of the report runs on without clearing
 *            the screen or repeating the page heading at every page boundary
@@ -770,9 +771,25 @@ emit.footer:
    end
 
    if qd.paginate then
-      if qd.scrolling or qd.pan.index or mode # QD$END then gosub page.prompt
+      if qd.scrolling or qd.pan.index or mode # QD$END then
+         gosub page.prompt
+      end else if qd.footer # '' and option(OPT.QUERY.FOOTER.PAUSE) then
+         gosub footer.pause
+      end
    end
 
+   return
+
+* ======================================================================
+* FOOTER.PAUSE  -  QUERY.FOOTER.PAUSE: wait for the user after the footer
+* of the last page.  Not reached for NO.PAGE (qd.paginate is false) or for
+* a printer.  Any key continues.
+
+footer.pause:
+   if not(qd.live) then return
+   display @(0, @crthigh-1) : @(-4) : 'Press RETURN to continue' :
+   void keycode()
+   display @(0, @crthigh-1) : @(-4) :
    return
 
 * ======================================================================

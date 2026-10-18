@@ -2,6 +2,43 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  A BATCH OF SMALLER ADDITIONS (SD BASIC, THE QUERY PROCESSOR AND
+           OPTION), EACH OFF UNLESS ASKED FOR.
+
+             $MODE STDFIL  The default file variable: with it, OPEN, READ,
+                        MATREAD, WRITE, MATWRITE, DELETE, CLOSE, CLEARFILE,
+                        FILELOCK, FILEUNLOCK, RELEASE and SELECT may be written
+                        without a file variable and use one the program does
+                        not name, as in some other multivalue systems.
+             $MODE WRITE.DELETE.THEN.ELSE  WRITE, WRITEU, MATWRITE, MATWRITEU,
+                        DELETE and DELETEU take THEN and ELSE clauses; a trigger
+                        that refuses the write or delete takes ELSE, and the
+                        trigger is told it is being called with an error trap
+                        set.  A statement with neither clause is as it was.
+             CLASS ... INHERITS name AS variable  The object variable of an
+                        inherited class can be given a name of its own.
+             Method references  An empty pair of brackets is accepted after a
+                        method name in a statement (obj->method()), as it
+                        already was in an expression.
+             Query X breakpoint control  The X option on a break field makes
+                        the previous value of the field available in @BPV for
+                        the I-types of that line.
+             OPTION PAGINATE.ON.HEADING  With RUN ... NO.PAGE, a heading or a
+                        footing still turns pagination on.
+             OPTION QUERY.FOOTER.PAUSE  A report with a page footer waits for
+                        RETURN after its last footer.
+             OPTION FORCE.RELOAD  An unload event (compiling or cataloguing a
+                        program) also refreshes the subroutine links that a
+                        running program holds, so the next CALL loads the
+                        current object code.
+             OPTION NUMERIC.EXPONENT  Numbers in exponent form, such as
+                        123.45E-2, are numeric.
+             OPTION INHERIT.MFILE.PATH  CREATE.FILE puts a new subfile of a
+                        multifile in the directory of the default subfile.
+
+           None of them changes anything for a program or an account that
+           does not ask for it.
+
 18 Oct 26  NEW $MODE SETTING: PARTIAL.EXPRESSIONS.
 
            A program compiled with $MODE PARTIAL.EXPRESSIONS stops

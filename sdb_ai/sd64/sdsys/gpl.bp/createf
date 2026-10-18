@@ -457,6 +457,24 @@ $define default.split.load 80
       * default directory under which to create the file.
 
       if component # '' then
+* 18 Oct 26 Windows port - from Linux 770050a (14 Oct 26): - openQM ref 461: with OPTION INHERIT.MFILE.PATH, and no PATHNAME, a new subfile goes in the directory
+*   that holds the file's default (first) subfile, not in a directory named for the file.  A file that has no subfile
+*   yet, or a default subfile whose path has no directory part, keeps the ordinary default.
+         if dir.name = '' and option(OPT.INHERIT.MFILE.PATH) and voc.rec<4> # '' then
+            old.path = voc.rec<2,1>
+            n = count(old.path, @ds)
+            if n then
+               i = index(old.path, @ds, n)
+               if i > 1 then
+                  dir.name = old.path[1, i - 1]
+               end else
+                  dir.name = @ds
+               end
+               dir.name.with.delimiter = dir.name
+               if dir.name.with.delimiter[1] # @ds then dir.name.with.delimiter := @ds
+            end
+         end
+
          if dir.name = '' then
             dir.name = file.name
             dir.name.with.delimiter = dir.name

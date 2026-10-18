@@ -195,6 +195,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    qproc.nv = 0
    qproc.ns = 0
    qproc.lpv = 0
+   qproc.bpv = ''
    qproc.break.level = 0
 
    * Record selection
@@ -6672,6 +6673,14 @@ show.breakpoint:
 
    qproc.break.level = no.of.breakpoints - breakpoint.index + 1
 
+   * The X control code saves the value of the breakpoint field, as it was
+   * on the record before the break, in @BPV for the I-types of this line.
+   if index(bp.ctrl, 'X', 1) then
+      qproc.bpv = bp.rec<breakpoint.list.index(breakpoint.index)>
+   end else
+      qproc.bpv = ''
+   end
+
    for list.index = 1 to no.of.list.items
       disp.rec<list.index> = ""
 
@@ -6841,6 +6850,7 @@ omit.breakpoint.line:
    gosub reset.breakpoint.counters
 
    qproc.break.level = 0
+   qproc.bpv = ''
 
    data.rec = saved.data.rec
    disp.rec = saved.disp.rec

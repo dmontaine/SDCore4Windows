@@ -64,6 +64,7 @@
 #include "syscom.h"
 #include "tio.h"
 #include "locks.h"
+#include "options.h"
 
 #include <time.h>
 #include <strings.h>
@@ -82,6 +83,29 @@ extern time_t clock_time;
 Private void computed_jump(bool save_link, bool pick_style);
 
 /* ======================================================================
+   refresh_link()  -  FORCE.RELOAD: replace a superseded object in a link
+
+   depth is the position of the call name / link variable below the top of
+   the e-stack. The load may use the e-stack, so the descriptor is found
+   again before it is changed.                                            */
+
+Private void refresh_link(int depth) {
+  DESCRIPTOR* d;
+  void* obj;
+
+  d = e_stack - depth;
+  while (d->type == ADDR)
+    d = d->data.d_addr;
+  if (d->type == SUBR && object_is_stale(d->data.subr.object)) {
+    obj = refresh_subr_object(d->data.subr.object);
+    d = e_stack - depth;
+    while (d->type == ADDR)
+      d = d->data.d_addr;
+    d->data.subr.object = obj;
+  }
+}
+
+/* ======================================================================
    op_call()  -  Call catalogued routine                                  */
 
 void op_call() {
@@ -90,6 +114,9 @@ void op_call() {
   char call_name[MAX_PROGRAM_NAME_LEN + 1];
 
   num_args = *(pc++);
+
+  if (Option(OptForceReload))
+    refresh_link(num_args + 1);
 
   descr = e_stack - (num_args + 1);
   while (descr->type == ADDR)
@@ -170,6 +197,9 @@ void op_callv() {
   char call_name[MAX_PROGRAM_NAME_LEN + 1];
   ARRAY_HEADER* ahdr;
   int16_t i;
+
+  if (Option(OptForceReload))
+    refresh_link(3);
 
   /* Get array header address for argument matrix */
 

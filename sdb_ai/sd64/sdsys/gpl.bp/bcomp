@@ -175,6 +175,8 @@ $define M.OPEN.FAIL.ZERO.FVAR  26  ;* 14 Oct 26 dm - openQM 514: a failed OPEN s
 $define M.PICK.READNEXT        27  ;* 14 Oct 26 dm - openQM 418: READNEXT leaves the id variable alone when it takes ELSE
 $define M.EXECUTE.CLEARLIST    28  ;* 14 Oct 26 dm - openQM 521: EXECUTE clears list 0 first, unless PASSLIST is given
 $define M.PARTIAL.EXPRESSIONS  29  ;* 14 Oct 26 dm - openQM 417: AND and OR stop evaluating when the result is known
+$define M.WRITE.DELETE.THEN.ELSE 30  ;* openQM 368 / 496: WRITE, WRITEU, MATWRITE, MATWRITEU and DELETE take THEN / ELSE; ELSE is a trigger failure
+$define M.STDFIL               31  ;* 14 Oct 26 dm - openQM 17: the default file variable (per program; see stdfil.var.load)
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -211,6 +213,10 @@ mode.names := @VM:"OPEN.FAIL.ZERO.FVAR"
 mode.names := @VM:"PICK.READNEXT"
 mode.names := @VM:"EXECUTE.CLEARLIST"
 mode.names := @VM:"PARTIAL.EXPRESSIONS"
+mode.names := @VM:"WRITE.DELETE.THEN.ELSE"
+* STDFIL is bit 31 and is set by index: any name for bits 22 to 30 must be
+* appended ABOVE this line, never after it.
+mode.names<1,32> = "STDFIL"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -307,6 +313,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.vars<-1> = "ABORT.CODE"         ; at.syscom.offsets<-1> = SYSCOM.ABORT.CODE
    at.syscom.vars<-1> = "ABORT.MESSAGE"      ; at.syscom.offsets<-1> = SYSCOM.ABORT.MESSAGE
    at.syscom.vars<-1> = "ANS"                ; at.syscom.offsets<-1> = SYSCOM.AT.ANS
+   at.syscom.vars<-1> = "BPV"                ; at.syscom.offsets<-1> = SYSCOM.QPROC.BPV
    at.syscom.vars<-1> = "COMMAND"            ; at.syscom.offsets<-1> = SYSCOM.COMMAND
    at.syscom.vars<-1> = "COMMAND.STACK"      ; at.syscom.offsets<-1> = SYSCOM.COMMAND.STACK
    at.syscom.vars<-1> = "CONV"               ; at.syscom.offsets<-1> = SYSCOM.CONV
@@ -925,6 +932,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                         * 6 = In public subroutine
    object.arg.names = ''    ;* Names of arguments to current object routine
    inherited.classes = ''
+   inherited.vars = ''    ;* Object variable name for each inherited class
 
    skip.depth = 0         ;* Number of nested $ifdefs for which we are skipping
    skip.stack = ''
@@ -1070,6 +1078,8 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
    onerror.stack = ""
    testlock.stack = ""
    thenelse.stack = ""
+   flagpatch.stack = ""      ;* Address of the SETFLAGS value to patch when a WRITE / DELETE has THEN / ELSE
+   then.else.trig = @false   ;* Set by a statement whose THEN / ELSE is a trigger-failure clause
    arg.count.stack = ""
    collection.count.stack = ""      ;* 13 Oct 26 dm - data collections
    json.stack = ""
@@ -2502,12 +2512,14 @@ is.assignment:
          object.arg.ct = 0
          if look.ahead.token = TKN.LBR then  ;* Arguments present
             gosub get.token
-            loop
-               gosub expr ; if err then goto exit.proc.statement
-               object.arg.ct += 1
-            while look.ahead.token = TKN.COMMA
-               gosub get.token
-            repeat
+            if look.ahead.token # TKN.RBR then  ;* An empty pair of brackets is no arguments
+               loop
+                  gosub expr ; if err then goto exit.proc.statement
+                  object.arg.ct += 1
+               while look.ahead.token = TKN.COMMA
+                  gosub get.token
+               repeat
+            end
 
             if look.ahead.token # TKN.RBR then goto err.rbr
             gosub get.token
@@ -5215,6 +5227,8 @@ emit.var.load:
 * EMIT.AT.VAR.LOAD  -  Emit code to load an @variable
 
 emit.at.var.load:
+   if u.token.string = "STDFIL" and bittest(mode, M.STDFIL) then goto stdfil.var.load  ;* @STDFIL
+
    locate u.token.string in at.constants<1> setting i then
       on i goto at.mark,at.mark,at.mark,at.mark,at.mark,at.mark,at.mark,
            at.false,
@@ -6556,11 +6570,25 @@ st.class:
          gosub get.call.name.upper           ;* Read name token - upper: also a variable (stage 3a)
          inherited.classes<-1> = s
 
-         * Create a PRIVATE variable of the same name as the class
-         symbol.name = s
-         if not(alpha(s[1,1])) then
-            s = s[2,999] ;* Remove global catalogue prefix character
+         * Create a PRIVATE variable of the same name as the class, with
+         * any global catalogue prefix character removed, or of the name
+         * given by an AS qualifier (sheet 374).
+         inh.var.name = s
+         if look.ahead.token = TKN.NAME and u.look.ahead.token.string = 'AS' then
+            gosub get.token
+            if look.ahead.token # TKN.NAME then
+               err.msg = sysmsg(2957) ;* Variable name not found where expected
+               goto error
+            end
+            gosub get.token
+            inh.var.name = u.token.string
+         end else
+            if not(alpha(inh.var.name[1,1])) then
+               inh.var.name = inh.var.name[2,999] ;* Remove global catalogue prefix character
+            end
          end
+         inherited.vars<-1> = inh.var.name
+         symbol.name = inh.var.name
 
          locate '*VARS' in commons<1,1> setting common.index else
             stop 'Internal error - *VARS not found'
@@ -6640,8 +6668,13 @@ st.cleardata:
 * ST.CLEARFILE  -  CLEARFILE statement
 
 st.clearfile:
-   gosub convert.pick.file.reference
-   gosub simple.var.reference      ;* Emit file variable
+   gosub stdfil.no.operand
+   if stdfil.use then
+      gosub stdfil.var.load        ;* $MODE STDFIL: the default file variable
+   end else
+      gosub convert.pick.file.reference
+      gosub simple.var.reference   ;* Emit file variable
+   end
 
    opcode = OP.CLRFILE
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
@@ -6683,10 +6716,15 @@ st.clearselect:
 *
 
 st.close:
-   if look.ahead.token # TKN.NAME and look.ahead.token # TKN.NAME.LBR then goto err.var
-   gosub convert.pick.file.reference
-   gosub get.token
-   gosub emit.var.reference             ;* Emit file variable
+   gosub stdfil.no.operand
+   if stdfil.use then
+      gosub stdfil.var.load             ;* $MODE STDFIL: the default file variable
+   end else
+      if look.ahead.token # TKN.NAME and look.ahead.token # TKN.NAME.LBR then goto err.var
+      gosub convert.pick.file.reference
+      gosub get.token
+      gosub emit.var.reference          ;* Emit file variable
+   end
 
    opcode = OP.CLOSE
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
@@ -7282,16 +7320,26 @@ st.delete:
 
    * Emit file var
 
-   gosub convert.pick.file.reference
-   gosub exprf
-   gosub check.comma
+   gosub stdfil.fvar.test
+   if stdfil.fvar then
+      gosub convert.pick.file.reference
+      gosub exprf
+      gosub check.comma
+   end else
+      gosub stdfil.var.load             ;* $MODE STDFIL: DELETE id
+   end
    gosub exprf           ;* Emit record id expresssion
 
    * Perform common back-end processing
 
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
    ins '0' before testlock.stack<1>     ;* No LOCKED clause
-   ins '0' before thenelse.stack<1>     ;* No THEN or ELSE clause
+   if bittest(mode, M.WRITE.DELETE.THEN.ELSE) then
+      ins '2' before thenelse.stack<1>  ;* Optional THEN / ELSE (trigger failure)
+      then.else.trig = @true
+   end else
+      ins '0' before thenelse.stack<1>  ;* No THEN or ELSE clause
+   end
    goto back.end
 
 *****************************************************************************
@@ -8074,9 +8122,14 @@ st.fileunlock:
    opcode = OP.FLUNLOCK
 
 st.filelock.common:
-   gosub convert.pick.file.reference
-   gosub simple.var.reference   ;* Emit file variable
-   if err then return
+   gosub stdfil.no.operand
+   if stdfil.use then
+      gosub stdfil.var.load     ;* $MODE STDFIL: the default file variable
+   end else
+      gosub convert.pick.file.reference
+      gosub simple.var.reference   ;* Emit file variable
+      if err then return
+   end
 
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
    ins '1' before testlock.stack<1>     ;* Optional LOCKED clause
@@ -10055,8 +10108,13 @@ st.matread:
 
    * Emit file variable
 
-   gosub simple.var.reference ; if err then return
-   gosub check.comma
+   gosub stdfil.fvar.test
+   if stdfil.fvar then
+      gosub simple.var.reference ; if err then return
+      gosub check.comma
+   end else
+      gosub stdfil.var.load             ;* $MODE STDFIL: MATREAD mat FROM id
+   end
 
    * Emit record key expression
    gosub exprf
@@ -10149,8 +10207,13 @@ st.matwrite:
 
    * Emit file variable
 
-   gosub simple.var.reference ; if err then return
-   gosub check.comma
+   gosub stdfil.fvar.test
+   if stdfil.fvar then
+      gosub simple.var.reference ; if err then return
+      gosub check.comma
+   end else
+      gosub stdfil.var.load             ;* $MODE STDFIL: MATWRITE mat TO id
+   end
 
    * Emit record key expression
 
@@ -10159,7 +10222,12 @@ st.matwrite:
    opcode = OP.WRITE
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
    ins '0' before testlock.stack<1>     ;* No LOCKED clause allowed
-   ins '0' before thenelse.stack<1>     ;* No THEN / ELSE required
+   if bittest(mode, M.WRITE.DELETE.THEN.ELSE) then
+      ins '2' before thenelse.stack<1>  ;* Optional THEN / ELSE (trigger failure)
+      then.else.trig = @true
+   end else
+      ins '0' before thenelse.stack<1>  ;* No THEN / ELSE required
+   end
    goto back.end
 
 *****************************************************************************
@@ -10389,7 +10457,14 @@ open.common:
       code.value = 0x100 ; code.bytes = 2 ; gosub emit.multibyte.value
    end
 
-   if u.look.ahead.token.string # "TO" then goto err.to
+   if u.look.ahead.token.string # "TO" then
+      if bittest(mode, M.STDFIL) then
+         * $MODE STDFIL: OPEN name {READONLY} opens the default file variable
+         gosub stdfil.var.load
+         goto open.common.end
+      end
+      goto err.to
+   end
    gosub get.token      ;* Skip "TO"
    if (look.ahead.token # TKN.NAME) and (look.ahead.token # TKN.NAME.LBR) then
       goto err.fvar
@@ -10398,6 +10473,7 @@ open.common:
    gosub get.token
    gosub emit.lvar.reference
 
+open.common.end:
    * Perform common back-end processing
 
    ins '1' before onerror.stack<1>       ;* Optional ON ERROR clause
@@ -11025,8 +11101,14 @@ st.read.common:
 
       * Emit file variable
 
-      gosub simple.var.reference ; if err then return
-      gosub check.comma
+      stdfil.fvar = @true
+      if opcode = OP.READ then gosub stdfil.fvar.test   ;* READ id: default file
+      if stdfil.fvar then
+         gosub simple.var.reference ; if err then return
+         gosub check.comma
+      end else
+         gosub stdfil.var.load
+      end
    end
 
    * Emit record key expression (block size for readblk)
@@ -11212,6 +11294,14 @@ st.record.lock.common:
 * ST.RELEASE  -  RELEASE statement
 
 st.release:
+   if bittest(mode, M.STDFIL) and look.ahead.token = TKN.COMMA then
+      * $MODE STDFIL: RELEASE , id  -  the file is the default file variable
+      gosub get.token
+      gosub stdfil.var.load
+      gosub exprf
+      opcode = OP.RELEASE
+      goto st.release.back
+   end
    gosub convert.pick.file.reference
    find u.look.ahead.token.string in reserved.names setting i else i = 0 ;* 0303
 
@@ -11230,6 +11320,7 @@ st.release:
    end
    else opcode = OP.RLSALL
 
+st.release.back:
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
    ins '0' before testlock.stack<1>     ;* No LOCKED clause
    ins '0' before thenelse.stack<1>     ;* No THEN or ELSE clause
@@ -11523,8 +11614,18 @@ st.select:
 st.select.common:
    * Emit file variable / dynamic array reference
 
-   gosub convert.pick.file.reference
-   gosub expr    ;* 0208
+   stdfil.use = @false
+   if bittest(mode, M.STDFIL) and opcode # OP.SSELECT then
+      * $MODE STDFIL: SELECT {TO list} names no file, so it is the default file variable
+      if look.ahead.token = TKN.END or look.ahead.token = TKN.SEMICOLON then stdfil.use = @true
+      if u.look.ahead.token.string = "TO" or u.look.ahead.token.string = "ON" then stdfil.use = @true
+   end
+   if stdfil.use then
+      gosub stdfil.var.load
+   end else
+      gosub convert.pick.file.reference
+      gosub expr    ;* 0208
+   end
 
    sselect.mode = 0
    if opcode = OP.SSELECT then gosub sselect.clauses    ;* the clauses may come before TO...
@@ -12461,8 +12562,14 @@ st.write.common:
 
       * Emit file variable
 
-      gosub simple.var.reference ; if err then return
-      gosub check.comma
+      stdfil.fvar = @true
+      if opcode = OP.WRITE then gosub stdfil.fvar.test   ;* WRITE rec TO id: default file
+      if stdfil.fvar then
+         gosub simple.var.reference ; if err then return
+         gosub check.comma
+      end else
+         gosub stdfil.var.load
+      end
    end
 
    gosub exprf           ;* Get record id
@@ -12474,7 +12581,12 @@ st.write.common:
 
    ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
    ins '0' before testlock.stack<1>     ;* No LOCKED clause allowed
-   ins '0' before thenelse.stack<1>     ;* No THEN / ELSE required
+   if bittest(mode, M.WRITE.DELETE.THEN.ELSE) and opcode = OP.WRITE then
+      ins '2' before thenelse.stack<1>  ;* Optional THEN / ELSE (trigger failure); not WRITEV
+      then.else.trig = @true
+   end else
+      ins '0' before thenelse.stack<1>  ;* No THEN / ELSE required
+   end
    goto back.end
 
 *****************************************************************************
@@ -12557,6 +12669,21 @@ back.end:
    ins j.back.end:@vm:jump.no before jump.stack<1>
 
    jump.no += 1
+
+   * openQM 368 / 496: under $MODE WRITE.DELETE.THEN.ELSE a WRITE, MATWRITE or
+   * DELETE may take THEN / ELSE, and then a trigger failure takes ELSE.  Whether
+   * the clause is there is not known until after any ON ERROR clause has been
+   * compiled, so emit SETFLAGS with a zero value and patch it to P_THEN_ELSE
+   * (0x400) if the clause turns up.  With no clause the flag stays 0 and the
+   * statement behaves exactly as it did.
+
+   ins 0 before flagpatch.stack<1>
+   if then.else.trig then
+      then.else.trig = @false
+      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+      code.value = 0 ; code.bytes = 2 ; gosub emit.multibyte.value
+      flagpatch.stack<1> = pc - 2     ;* Address before the first value byte
+   end
 
    * Emit lock opcode if required
 
@@ -12727,6 +12854,12 @@ back.end:
          if (u.look.ahead.token.string # "THEN") and (u.look.ahead.token.string # "ELSE") then
             goto no.then.or.else.clause
          end
+
+         * A THEN / ELSE clause is there: tell the opcode (see top of back.end)
+         if flagpatch.stack<1> then
+            update.addr = flagpatch.stack<1>
+            code.value = 0x400 ; code.bytes = 2 ; gosub update.code
+         end
       end
 
       if u.look.ahead.token.string = "ELSE" then   ;* ELSE without THEN
@@ -12852,6 +12985,7 @@ exit.back.end:
    del onerror.stack<1>
    del testlock.stack<1>
    del thenelse.stack<1>
+   del flagpatch.stack<1>
 
    return
 
@@ -14131,6 +14265,77 @@ convert.pick.file.reference:
    return
 
 * ======================================================================
+* $MODE STDFIL  -  the default file variable (openQM 4, sheet item 17)
+*
+* The statements that take a file variable may leave it out; the file is then
+* a hidden variable of the program, __STDFIL, which OPEN name (no TO) sets.
+* It is per program (QM's STDFIL, not STDFIL.SHARED) and @STDFIL names it.
+* A statement that names a file variable is compiled exactly as before.
+
+* STDFIL.VAR.LOAD  -  Emit a load of the default file variable
+stdfil.var.load:
+   symbol.name = '__STDFIL'
+   symbol.mode = SYM.SET
+   gosub find.var
+   if symbol.var.no < 0 then
+      symbol.dim = 0
+      symbol.common.offset = -1
+      symbol.mode = SYM.SET
+      gosub make.var
+   end
+   gosub emit.var.load
+   return
+
+* STDFIL.NO.OPERAND  -  For CLEARFILE, CLOSE, FILELOCK, FILEUNLOCK.
+* STDFIL.USE is true when the mode is on and the next token is not a file
+* variable (the statement ends, or an ON ERROR / LOCKED clause starts).
+stdfil.no.operand:
+   stdfil.use = @false
+   if bittest(mode, M.STDFIL) then
+      if look.ahead.token # TKN.NAME and look.ahead.token # TKN.NAME.LBR then
+         stdfil.use = @true
+      end else
+         stdfil.s = u.look.ahead.token.string
+         if stdfil.s = "ON" or stdfil.s = "LOCKED" then stdfil.use = @true
+      end
+   end
+   return
+
+* STDFIL.FVAR.TEST  -  For the statements with a record id after the file.
+* STDFIL.FVAR is false only when the mode is on and the rest of the statement
+* has no comma outside brackets, subscripts and clauses: then there is no
+* file variable and the first expression is the record id.  Called with the
+* look-ahead token at the start of that file-or-id expression.
+stdfil.fvar.test:
+   stdfil.fvar = @true
+   if not(bittest(mode, M.STDFIL)) then return
+
+   stdfil.depth = 0
+   stdfil.i = token.index
+   loop
+      stdfil.t = tokens(stdfil.i)
+   until stdfil.t = TKN.END or stdfil.t = TKN.SEMICOLON
+      begin case
+         case stdfil.t = TKN.LBR or stdfil.t = TKN.NAME.LBR or stdfil.t = TKN.LT
+            stdfil.depth += 1
+         case stdfil.t = TKN.RBR or stdfil.t = TKN.GT
+            if stdfil.depth > 0 then stdfil.depth -= 1
+         case stdfil.depth = 0 and stdfil.t = TKN.COMMA
+            return
+         case stdfil.depth = 0 and stdfil.t = TKN.NAME
+            stdfil.s = upcase(token.strings(stdfil.i))
+            if stdfil.s = "THEN" or stdfil.s = "ELSE" or stdfil.s = "ON" or stdfil.s = "LOCKED" then
+               stdfil.fvar = @false
+               return
+            end
+      end case
+      stdfil.i += 1
+   repeat
+
+   stdfil.fvar = @false
+   return
+
+* ======================================================================
 
 process.int.sub.args:
    err = @false
@@ -14317,18 +14522,17 @@ get.arg.mat.dimensions:
 * Emit inheritance code for inherited objects
 
 emit.inheritance:
-   setrem 0 on inherited.classes
-   loop
-      inherited.class = remove(inherited.classes, more.inheritance)
-      token.string = inherited.class ; gosub emit.lvar.reference
+   for inh.i = 1 to dcount(inherited.classes, @fm)
+      inherited.class = inherited.classes<inh.i>
+      inherited.var = inherited.vars<inh.i>
+      token.string = inherited.var ; gosub emit.lvar.reference
       opcode.string = inherited.class ; gosub emit.string.load
       opcode.byte = OP.OBJECT ; gosub emit.simple
       opcode.byte = 0 ; gosub emit.simple
       opcode.byte = OP.STOR ; gosub emit.simple
-      token.string = inherited.class ; gosub emit.var.reference
+      token.string = inherited.var ; gosub emit.var.reference
       opcode.byte = OP.INHERIT ; gosub emit.simple
-   while more.inheritance
-   repeat
+   next inh.i
 
    return
 

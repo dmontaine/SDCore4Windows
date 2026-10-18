@@ -729,6 +729,9 @@ bool k_is_num(DESCRIPTOR* p) {
   bool dp = FALSE;      /* Decimal point seen */
   char* q;
   bool digit_seen = FALSE;
+  int16_t exp_state = 0; /* NUMERIC.EXPONENT: 0 none, 1 after E, 2 digits seen */
+  bool exp_sign = FALSE;
+  int16_t exp_val = 0;
 
   str_hdr = p->data.str.saddr;
   if (str_hdr == NULL)
@@ -737,6 +740,20 @@ bool k_is_num(DESCRIPTOR* p) {
   do {
     for (i = str_hdr->bytes, q = str_hdr->data; i > 0; i--) {
       c = *(q++);
+
+      if (exp_state) { /* In the exponent: [+|-] digits and nothing else */
+        if ((c >= '0') && (c <= '9')) {
+          exp_val = (exp_val * 10) + (c - '0');
+          if (exp_val > 308)
+            goto non_numeric;
+          exp_state = 2;
+        } else if (exp_state == 1 && !exp_sign && (c == '+' || c == '-')) {
+          exp_sign = TRUE;
+        } else {
+          goto non_numeric;
+        }
+        continue;
+      }
 
       if ((c >= '0') && (c <= '9')) {
         digit_seen = TRUE;
@@ -760,6 +777,15 @@ bool k_is_num(DESCRIPTOR* p) {
             digits++; /* Assume a zero before the decimal point */
             break;
 
+          case 'E':
+          case 'e':
+            /* 123.45E-2 - only with OPTION NUMERIC.EXPONENT, and only
+               after at least one digit                               */
+            if (!Option(OptNumericExponent) || !digit_seen)
+              goto non_numeric;
+            exp_state = 1;
+            break;
+
           default:
             goto non_numeric;
         }
@@ -767,7 +793,7 @@ bool k_is_num(DESCRIPTOR* p) {
     }
   } while ((str_hdr = str_hdr->next) != NULL);
 
-  if (!digit_seen)
+  if (!digit_seen || exp_state == 1)
     goto non_numeric;
 
 is_numeric:
@@ -1332,6 +1358,10 @@ bool k_str_to_num(DESCRIPTOR* p) /* Returns FALSE if cannot convert */
   bool num_array;
   register int32_t temp;
   bool trailing_space;
+  int16_t exp_state = 0; /* NUMERIC.EXPONENT: 0 none, 1 after E, 2 digits seen */
+  bool exp_sign = FALSE;
+  bool exp_neg = FALSE;
+  int16_t exp_val = 0;
 
   num_array = FALSE;
   dp = 0;
@@ -1349,6 +1379,34 @@ bool k_str_to_num(DESCRIPTOR* p) /* Returns FALSE if cannot convert */
     do {
       for (i = str_chnk->bytes, q = str_chnk->data; i > 0; i--) {
         c = *(q++);
+
+        if (exp_state) {
+          /* In the exponent of 123.45E-2: [+|-] digits, then only
+             trailing spaces (or an array mark when arrays are allowed) */
+          if ((c >= '0') && (c <= '9')) {
+            if (trailing_space)
+              goto non_numeric;
+            exp_val = (exp_val * 10) + (c - '0');
+            if (exp_val > 308)
+              goto non_numeric;
+            exp_state = 2;
+            continue;
+          } else if (exp_state == 1 && !exp_sign && !trailing_space &&
+                     (c == '+' || c == '-')) {
+            exp_sign = TRUE;
+            exp_neg = (c == '-');
+            continue;
+          } else if (exp_state == 2 && c == ' ') {
+            trailing_space = TRUE;
+            continue;
+          } else if (!(IsMark(c) && process.numeric_array_allowed)) {
+            goto non_numeric;
+          }
+          /* A mark: fall through to start the next array element */
+          exp_state = 0;
+          exp_sign = exp_neg = FALSE;
+          exp_val = 0;
+        }
 
         if ((c >= '0') && (c <= '9')) {
           if (trailing_space)
@@ -1428,6 +1486,15 @@ bool k_str_to_num(DESCRIPTOR* p) /* Returns FALSE if cannot convert */
               dplace = 0.1;
               break;
 
+            case 'E':
+            case 'e':
+              /* 123.45E-2 - only with OPTION NUMERIC.EXPONENT, and only
+                 after at least one digit of the mantissa              */
+              if (!Option(OptNumericExponent) || digits == 0)
+                goto non_numeric;
+              exp_state = 1;
+              break;
+
             default:
               goto non_numeric;
           }
@@ -1437,6 +1504,9 @@ bool k_str_to_num(DESCRIPTOR* p) /* Returns FALSE if cannot convert */
       str_chnk = str_chnk->next;
     } while (str_chnk != NULL);
 
+    if (exp_state == 1) /* E with no exponent digits */
+      goto non_numeric;
+
     if (num_array) /* We have found a numeric array */
     {
       p->flags |= reuse_flag;
@@ -1445,6 +1515,15 @@ bool k_str_to_num(DESCRIPTOR* p) /* Returns FALSE if cannot convert */
 
     if ((digits | dp) == 0)
       goto non_numeric;
+
+    if (exp_state == 2) {
+      /* Apply the exponent: the result is always a floating point number */
+      if (!floating) {
+        floating = TRUE;
+        float_value = (double)value;
+      }
+      float_value *= pow(10.0, (double)(exp_neg ? -exp_val : exp_val));
+    }
 
     /* Release string chunks */
 

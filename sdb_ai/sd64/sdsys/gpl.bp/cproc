@@ -2364,6 +2364,7 @@ int.run:
 
 int.run.common:
    run.file.name = "bp"
+   run.no.page = @false
 
    * Get first name (file or record)
 
@@ -2388,6 +2389,7 @@ int.run.common:
 
          case keyword = kw$no.page
             s = @(0,0)                 ;* Inhibit pagination
+            run.no.page = @true        ;* and a heading may not turn it back on
 
          case 1
             if not(run.record.name.seen) then
@@ -2481,7 +2483,12 @@ int.run.common:
    run.pathname = fileinfo(run.file, fl$path) : @ds : run.record.name
    close run.file
 
+   * PAGINATE.ON.HEADING: RUN ... NO.PAGE stops a heading enabling pagination.
+   if run.no.page then i = kernel(K$PAGINATE, 2)
+
    run run.pathname
+
+   i = kernel(K$PAGINATE, 3)
 
    return
 

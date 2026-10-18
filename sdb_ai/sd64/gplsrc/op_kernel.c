@@ -196,6 +196,11 @@ void op_kernel() {
     case K_PAGINATE:
       if ((n = descr->data.value) < 0) { /* Enquiry */
         result.data.value = (tio.dsp.flags & PU_PAGINATE) != 0;
+      } else if (n == 2) { /* RUN NO.PAGE: headings never paginate */
+        tio.dsp.flags |= PU_HF_NO_PAGE;
+        tio.dsp.flags &= ~PU_PAGINATE;
+      } else if (n == 3) { /* Lift the above */
+        tio.dsp.flags &= ~PU_HF_NO_PAGE;
       } else { /* Set pagination state */
         if (n) {
           tio.dsp.flags |= PU_PAGINATE;

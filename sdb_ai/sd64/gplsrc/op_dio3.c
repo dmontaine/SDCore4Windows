@@ -370,7 +370,7 @@ void op_delete() {
       /* Call pre-delete trigger function if required */
 
       if (dh_file->trigger_modes & TRG_PRE_DELETE) {
-        if (!call_trigger(fvar_descr, TRG_PRE_DELETE, rid_descr, NULL, op_flags & P_ON_ERROR, FALSE)) {
+        if (!call_trigger(fvar_descr, TRG_PRE_DELETE, rid_descr, NULL, (op_flags & (P_ON_ERROR | P_THEN_ELSE)) != 0, FALSE)) {
           process.status = -ER_TRIGGER;
           goto exit_op_delete;
         }
@@ -387,7 +387,7 @@ void op_delete() {
       /* Call post-delete trigger function if required */
 
       if (dh_file->trigger_modes & TRG_POST_DELETE) {
-        if (!call_trigger(fvar_descr, TRG_POST_DELETE, rid_descr, NULL, op_flags & P_ON_ERROR, FALSE)) {
+        if (!call_trigger(fvar_descr, TRG_POST_DELETE, rid_descr, NULL, (op_flags & (P_ON_ERROR | P_THEN_ELSE)) != 0, FALSE)) {
           process.status = -ER_TRIGGER;
           goto exit_op_delete;
         }
@@ -451,14 +451,20 @@ exit_op_delete:
   /* Set status code on stack */
 
   InitDescr(e_stack, INTEGER);
-  (e_stack++)->data.value = process.status;
+  /* $MODE WRITE.DELETE.THEN.ELSE: a trigger failure under a THEN / ELSE
+     clause goes to ELSE, so it is returned as a positive status, which the
+     ON ERROR test passes by.  Anything else follows the old rules. */
+  if ((process.status == -ER_TRIGGER) && (op_flags & P_THEN_ELSE))
+    (e_stack++)->data.value = ER_TRIGGER;
+  else
+    (e_stack++)->data.value = process.status;
 
   if (process.status >= 0) {
     /* Release record lock if non-transactional DELETE */
     if (!keep_lock && (txn_id == 0) && (id_len != 0)) {
       unlock_record(fvar, id, id_len);
     }
-  } else if (!(op_flags & P_ON_ERROR))
+  } else if (!(op_flags & P_ON_ERROR) && !((process.status == -ER_TRIGGER) && (op_flags & P_THEN_ELSE)))
     k_error(sysmsg(1405), process.status);
 }
 
@@ -841,7 +847,7 @@ void op_write() {
       /* Call pre-write trigger function if required */
 
       if (dh_file->trigger_modes & TRG_PRE_WRITE) {
-        if (!call_trigger(fvar_descr, TRG_PRE_WRITE, rid_descr, src_descr, (op_flags & P_ON_ERROR), TRUE)) {
+        if (!call_trigger(fvar_descr, TRG_PRE_WRITE, rid_descr, src_descr, (op_flags & (P_ON_ERROR | P_THEN_ELSE)) != 0, TRUE)) {
           process.status = -ER_TRIGGER;
           goto exit_op_write;
         }
@@ -888,7 +894,7 @@ void op_write() {
       /* Call post-write trigger function if required */
 
       if (dh_file->trigger_modes & TRG_POST_WRITE) {
-        if (!call_trigger(fvar_descr, TRG_POST_WRITE, rid_descr, src_descr, (op_flags & P_ON_ERROR), FALSE)) {
+        if (!call_trigger(fvar_descr, TRG_POST_WRITE, rid_descr, src_descr, (op_flags & (P_ON_ERROR | P_THEN_ELSE)) != 0, FALSE)) {
           process.status = -ER_TRIGGER;
           goto exit_op_write;
         }
@@ -928,7 +934,12 @@ exit_op_write:
   /* Set status code on stack */
 
   InitDescr(e_stack, INTEGER);
-  (e_stack++)->data.value = process.status;
+  /* $MODE WRITE.DELETE.THEN.ELSE: as for DELETE, a trigger failure under a
+     THEN / ELSE clause is a positive status and takes ELSE. */
+  if ((process.status == -ER_TRIGGER) && (op_flags & P_THEN_ELSE))
+    (e_stack++)->data.value = ER_TRIGGER;
+  else
+    (e_stack++)->data.value = process.status;
 
   if (process.status >= 0) {
     /* Release record lock if non-transactional WRITE */
@@ -936,7 +947,7 @@ exit_op_write:
     if (!keep_lock && (txn_id == 0)) {
       unlock_record(fvar, lock_id, id_len);
     }
-  } else if (!(op_flags & P_ON_ERROR)) {
+  } else if (!(op_flags & P_ON_ERROR) && !((process.status == -ER_TRIGGER) && (op_flags & P_THEN_ELSE))) {
 /* 31 Aug 26 Windows port - ER_NOLOCK GETS ITS OWN MESSAGE.  PRE_RELEASE_FIXES
    12 / UPSTREAM_FIXES 20.  1407 ends "(Possible full disk?)", and every failure
    arriving here rendered through it - so a WRITE refused at :776 because the

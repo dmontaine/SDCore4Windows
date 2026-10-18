@@ -1,0 +1,1 @@
+A program compiled or catalogued also resets every subroutine link variable, so the next CALL loads the current object code

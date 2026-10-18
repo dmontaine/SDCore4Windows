@@ -88,6 +88,7 @@ struct PRINT_UNIT {
 #define PU_FF_ONLY       0x00080000  /* FORM.FEED FF SETPTR option: a bare form feed, not CR FF (12 Oct 26) */
 #define PU_USER_SETABLE  0x000EE07E  /* Mask for values that can be set via PSET opcode */
 #define PU_TEMPLATE_MASK 0x000EE07E  /* Mask for values to copy from template */
+#define PU_HF_NO_PAGE    0x00100000  /* RUN NO.PAGE: a heading or footing never turns pagination on (display unit only; not user settable) */
 
 /* SETPTR settings */
                    int16_t width;          /* Page width */

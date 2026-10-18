@@ -168,6 +168,7 @@ struct PROCESS {
 #define P_TRAIL 0x0080    /* SUBSTRA is a trailing substring assignment, var[n] = expr (openQM item 41) */
 #define P_OPEN_ZERO 0x0100 /* OPEN / OPENPATH under $MODE OPEN.FAIL.ZERO.FVAR: a failed open sets the file variable to 0 (item 514) */
 #define P_PICK_RDNX 0x0200 /* READNEXT under $MODE PICK.READNEXT: the id variable is left alone when the ELSE clause is taken (item 418) */
+#define P_THEN_ELSE 0x0400 /* WRITE / DELETE has a THEN / ELSE clause under $MODE WRITE.DELETE.THEN.ELSE: a trigger failure takes ELSE (openQM items 368, 496) */
 #define P_MATCMP 0x1000   /* MATSTR makes a comparison key for IF MAT a = MAT b (openQM item 111) */
 #define P_REC_LOCKS (P_LLOCK | P_ULOCK) /* Either LLOCK or ULOCK */
   bool numeric_array_allowed;           /* Opcode allows numeric arrays? */

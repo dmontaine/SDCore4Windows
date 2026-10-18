@@ -128,7 +128,8 @@ common /$syscom/ itype.mode,       ;*  1  I-type mode
        default.style.rec,          ;* 77  Default STYLE for query processor
        trans.files,                ;* 78  Files open to TRANS()...
        trans.fvars(TRANS.FILE.CACHE.SIZE), ;* 79  ...and their file variables
-       command.stack.depth         ;* 80
+       command.stack.depth,        ;* 80
+       qproc.bpv                   ;* 81  @BPV  Previous value of an X breakpoint field
 
 $define syscom.itype.mode              1
 $define syscom.command                 2
@@ -180,6 +181,7 @@ $define syscom.proc.obuf              68
 $define syscom.proc.acti              73
 $define syscom.proc.acto              74
 $define syscom.at.ans                 75
+$define syscom.qproc.bpv              81
 $define syscom.sys0                   76
 
 * Values of trap.aborts (Used to decide what to do about an abort)

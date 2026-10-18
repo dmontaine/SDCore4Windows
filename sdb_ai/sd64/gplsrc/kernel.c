@@ -1198,6 +1198,8 @@ void process_events() {
 
   if (events & EVT_UNLOAD) /* Unload inactive cached object code */
   {
+    if (Option(OptForceReload)) /* openQM FORCE.RELOAD: links are reset too */
+      stale_objects();
     unload_all();
   }
 

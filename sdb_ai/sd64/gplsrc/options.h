@@ -76,7 +76,12 @@
 #define OptDirSelOmitHidden  41   /*            delcat); DIR.SEL.OMIT.HIDDEN by dir_select() in op_dio4.c.       */
 #define OptPickMLConvMask    42   /* 14 Oct 26  openQM ref 49: read by masked_decimal_conversion() in op_oconv.c */
 #define OptChainedSelect     43   /* 14 Oct 26  openQM refs 79, 314: read by BASIC only (gpl.bp/cproc) */
-#define NumOptions           44
+#define OptPaginateOnHeading 44   /* openQM ref 154: read by hf_paginate() in op_tio.c */
+#define OptForceReload       45   /* 14 Oct 26  openQM ref 37: read by process_events() in kernel.c; the CALL ops refresh a stale link */
+#define OptNumericExponent   46   /* 14 Oct 26  openQM ref 404: read by k_str_to_num() and k_is_num() in k_funcs.c */
+#define OptQueryFooterPause  47   /* 14 Oct 26  openQM ref 429: read by BASIC only (gpl.bp/qdisp) */
+#define OptInheritMFilePath  48   /* 14 Oct 26  openQM ref 461: read by BASIC only (gpl.bp/createf) */
+#define NumOptions           49
 
 Public char option_flags[NumOptions];
 

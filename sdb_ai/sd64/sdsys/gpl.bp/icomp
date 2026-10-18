@@ -165,6 +165,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.vars = "ABORT.CODE"              ; at.offsets = SYSCOM.ABORT.CODE
    at.vars<-1> = "ABORT.MESSAGE"       ; at.offsets<-1> = SYSCOM.ABORT.MESSAGE
    at.vars<-1> = "ANS"                 ; at.offsets<-1> = SYSCOM.AT.ANS
+   at.vars<-1> = "BPV"                 ; at.offsets<-1> = SYSCOM.QPROC.BPV
    at.vars<-1> = "COMMAND"             ; at.offsets<-1> = SYSCOM.COMMAND
    at.vars<-1> = "COMMAND.STACK"       ; at.offsets<-1> = SYSCOM.COMMAND.STACK
    at.vars<-1> = "CONV"                ; at.offsets<-1> = SYSCOM.CONV

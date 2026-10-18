@@ -102,6 +102,12 @@ $include int$keys.h
    opt<-1> = 'PICK.ML.CONV.MASK||12240'
    * openQM refs 79 and 314.
    opt<-1> = 'CHAINED.SELECT||12241'
+   * 14 Oct 26  1.2-0, bundle A-4: the position in this list is the index in options.h (44 to 49), in this order
+   opt<-1> = 'PAGINATE.ON.HEADING||12256'        ;* 44, openQM ref 154
+   opt<-1> = 'FORCE.RELOAD||12257'               ;* 45, openQM ref 37
+   opt<-1> = 'NUMERIC.EXPONENT||12258'           ;* 46, openQM ref 404
+   opt<-1> = 'QUERY.FOOTER.PAUSE||12259'         ;* 47, openQM ref 429
+   opt<-1> = 'INHERIT.MFILE.PATH||12260'         ;* 48, openQM ref 461
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 
    * Shortcuts

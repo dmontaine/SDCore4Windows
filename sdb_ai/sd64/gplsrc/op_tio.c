@@ -652,6 +652,24 @@ void op_expandhf() {
 /* ======================================================================
    op_footing()  -  FOOTING opcode                                        */
 
+/* hf_paginate()  -  set or clear pagination after a heading / footing change.
+   On the display unit, with RUN.NO.PAGE and without PAGINATE.ON.HEADING, a
+   heading or footing does not turn pagination on; and RUN ... NO.PAGE
+   (PU_HF_NO_PAGE) stops it whatever the options.                        */
+
+Private void hf_paginate(PRINT_UNIT *pu) {
+  if ((pu->heading != NULL) || (pu->footing != NULL)) {
+    if (pu == &tio.dsp) {
+      if (pu->flags & PU_HF_NO_PAGE)
+        return;
+      if (Option(OptRunNoPage) && !Option(OptPaginateOnHeading))
+        return;
+    }
+    pu->flags |= PU_PAGINATE;
+  } else
+    pu->flags &= ~PU_PAGINATE;
+}
+
 void op_footing() {
   /* Stack:
 
@@ -682,10 +700,7 @@ void op_footing() {
 
   /* We paginate if either the heading or the footing is not null */
 
-  if ((pu->heading != NULL) || (pu->footing != NULL))
-    pu->flags |= PU_PAGINATE;
-  else
-    pu->flags &= ~PU_PAGINATE;
+  hf_paginate(pu);
 
   set_data_lines(pu);
 }
@@ -755,10 +770,7 @@ Private void heading(bool eject) {
 
   /* We paginate if either the heading or the footing is not null */
 
-  if ((pu->heading != NULL) || (pu->footing != NULL))
-    pu->flags |= PU_PAGINATE;
-  else
-    pu->flags &= ~PU_PAGINATE;
+  hf_paginate(pu);
 
   if (eject) /* 0203 */
   {

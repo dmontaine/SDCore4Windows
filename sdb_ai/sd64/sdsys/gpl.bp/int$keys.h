@@ -447,6 +447,10 @@
       $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
       $define OPT.PICK.ML.CONV.MASK   42 ;* ML and MR: ( starts a parenthesised format mask, not round bracket negatives (kernel)
       $define OPT.CHAINED.SELECT      43 ;* A select that finds something executes the first command in the data queue (cproc)
+      $define OPT.PAGINATE.ON.HEADING 44 ;* With RUN.NO.PAGE, a heading or footing enables pagination (kernel)
+      $define OPT.QUERY.FOOTER.PAUSE  47 ;* Pause for RETURN at end of a report with a page footer
+      $define OPT.FORCE.RELOAD        45 ;* An unload event also resets subroutine link variables (kernel)
+      $define OPT.INHERIT.MFILE.PATH  48 ;* CREATE.FILE puts a new subfile in the directory of the default subfile (createf)
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices
