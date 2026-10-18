@@ -1,0 +1,142 @@
+* LISTTRG
+* LIST.TRIGGERS command
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 8d65796 (11 Oct 26): 1.2-0 bundle A-8 (openQM refs 74 and 187).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   LIST.TRIGGERS {file.name ...} {LPTR {n}}
+*
+* Reports the files in the account that have a trigger function, with its
+* name and the modes it is enabled for.  The data portion and the dictionary
+* of every F-type VOC entry are looked at; with names on the command line
+* only those files are.  The report is the sort of thing SET.TRIGGER with no
+* option says about one file, for all of them.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $list.triggers
+$catalog $listtrg
+
+$include err.h
+$include keys.h
+$include int$keys.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+   lptr = -1
+   names = ''
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   loop
+      call @parser(PARSER$MFILE, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$LPTR
+            lptr = 0
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+            if token matches "1N0N" then
+               lptr = token + 0
+               if lptr > LPTR$HIGH.PRINT.UNIT then stop sysmsg(2053) ;* Invalid print unit number
+            end else
+               continue
+            end
+
+         case keyword = KW$NO.PAGE
+            null
+
+         case 1
+            names<-1> = token
+      end case
+   repeat
+
+   @system.return.code = 0
+
+   if lptr = 0 then printer on
+
+   print fmt(sysmsg(12057), '20L') : ' ' : fmt(sysmsg(12058), '20L') : ' ' : sysmsg(12059)
+   print fmt(str('-', 19), '20L') : ' ' : fmt(str('-', 19), '20L') : ' ' : str('-', 30)
+
+   mode.names = sysmsg(3000)       ;* Comma separated, in bit order
+   count = 0
+
+   if names = '' then
+      * Every F-type entry in the VOC
+
+      select @voc to 11
+      loop
+         readnext id from 11 else exit
+         read voc.rec from @voc, id then
+            if upcase(voc.rec[1,1]) = 'F' then
+               names<-1> = id
+            end
+         end
+      repeat
+   end
+
+   for n = 1 to dcount(names, @fm)
+      fname = names<n>
+      for part = 1 to 2
+         flag = if part = 1 then '' else 'DICT'
+         open flag, fname to f then
+            if fileinfo(f, FL$TYPE) = FL$TYPE.DH then
+               trg = fileinfo(f, FL$TRIGGER)
+               if trg # '' then
+                  modes = fileinfo(f, FL$TRG.MODES)
+                  if modes = 0 then modes = FL$TRG.PRE.WRITE + FL$TRG.PRE.DELETE
+                  list = ''
+                  bits = modes
+                  for i = 1 to 8
+                     if bitand(bits, 1) then
+                        if list # '' then list := ', '
+                        list := field(mode.names, ',', i)
+                     end
+                     bits = shift(bits, 1)
+                  next i
+                  shown = if part = 1 then fname else ('DICT ' : fname)
+                  print fmt(shown, '20L') : ' ' : fmt(trg, '20L') : ' ' : list
+                  count += 1
+               end
+            end
+            close f
+         end
+      next part
+   next n
+
+   print
+   print sysmsg(12060, count) ;* %1 file(s) with a trigger function
+
+   if lptr = 0 then printer off
+
+   @system.return.code = count
+
+   return
+end
+
+* END-CODE

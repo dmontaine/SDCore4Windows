@@ -2,6 +2,34 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SET.TRIGGER WORKS AGAIN, AND GAINS ALL; LIST.TRIGGERS; FSTAT'S
+           COLUMNS ARE WIDER (1.2-0, eighth of the openQM compatibility
+           bundles).
+
+           SET.TRIGGER refused every function name.  Since the call-name
+           change of 14 September it lower-cased the name and then checked it
+           against upper-case letters, so a file could not be given a trigger
+           with the command at all ("Illegal trigger function name").  It
+           checks the upper-case form now.  A trigger set from a BASIC
+           program or an older release was not affected.
+
+             SET.TRIGGER file name ALL   Every trigger mode (pre- and
+                             post-write, pre- and post-delete, read, pre-
+                             and post-clear).
+             LIST.TRIGGERS {file ...}    A new command: every file of the
+                             account that has a trigger function, with the
+                             function and its modes; with names, only those
+                             files.  Dictionaries are looked at as well.
+             FSTAT           The columns of the statistics are twelve wide,
+                             not ten, so the counts of a fast disk fit.
+
+           What this does not do.  FILE.STAT, LISTDICT, the LISTF WITH
+           clause, CONFIGURE.FILE REPORTING and NO.MAP, a comment on
+           CREATE.FILE, its MULTIFILE option, relative PATHNAME, the ANALYSE.FILE
+           histogram and SET.FILE with chained Q-pointers are not built: the
+           release notes give no syntax for them, or the command does not exist
+           here to extend.
+
 18 Oct 26  SAVED SELECT LISTS: KEEP, DELETING, COUNT.SUP, A DEFAULT NAME,
            SORT.LIST AND SELECT.DIR (1.2-0, seventh of the openQM
            compatibility bundles; the sixth is the one line below it).

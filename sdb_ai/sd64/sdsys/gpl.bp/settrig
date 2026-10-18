@@ -134,6 +134,15 @@ $include err.h
                   case keyword = KW$READ        ; modes = bitor(modes, FL$TRG.READ)
                   case keyword = KW$PRE.CLEAR   ; modes = bitor(modes, FL$TRG.PRE.CLEAR)
                   case keyword = KW$POST.CLEAR  ; modes = bitor(modes, FL$TRG.POST.CLEAR)
+*                 18 Oct 26 Windows port - from Linux 8d65796 (11 Oct 26): (openQM ref 388): ALL is every mode
+                  case keyword = KW$ALL
+                     modes = bitor(modes, FL$TRG.PRE.WRITE)
+                     modes = bitor(modes, FL$TRG.PRE.DELETE)
+                     modes = bitor(modes, FL$TRG.POST.WRITE)
+                     modes = bitor(modes, FL$TRG.POST.DELETE)
+                     modes = bitor(modes, FL$TRG.READ)
+                     modes = bitor(modes, FL$TRG.PRE.CLEAR)
+                     modes = bitor(modes, FL$TRG.POST.CLEAR)
                   case 1
                      stop sysmsg(2018, token)  ;* Unexpected token (xx)
                end case

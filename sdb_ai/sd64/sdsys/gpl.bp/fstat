@@ -192,25 +192,27 @@ check.filename:
 * ======================================================================
 
 show.stats:
-   print 'Opens      ' : fmt(fdata<FL$STATS.OPENS>, '10R')
-   print 'Reads      ' : fmt(fdata<FL$STATS.READS>, '10R')
-   print 'Writes     ' : fmt(fdata<FL$STATS.WRITES>, '10R')
-   print 'Deletes    ' : fmt(fdata<FL$STATS.DELETES>, '10R')
-   print 'Clears     ' : fmt(fdata<FL$STATS.CLEARS>, '10R')
-   print 'Selects    ' : fmt(fdata<FL$STATS.SELECTS>, '10R')
-   print 'Splits     ' : fmt(fdata<FL$STATS.SPLITS>, '10R')
-   print 'Merges     ' : fmt(fdata<FL$STATS.MERGES>, '10R')
-   print 'AK Reads   ' : fmt(fdata<FL$STATS.AKREADS>, '10R')
-   print 'AK Writes  ' : fmt(fdata<FL$STATS.AKWRITES>, '10R')
-   print 'AK Deletes ' : fmt(fdata<FL$STATS.AKDELETES>, '10R')
+   print 'Opens      ' : fmt(fdata<FL$STATS.OPENS>, '12R')
+   print 'Reads      ' : fmt(fdata<FL$STATS.READS>, '12R')
+   print 'Writes     ' : fmt(fdata<FL$STATS.WRITES>, '12R')
+   print 'Deletes    ' : fmt(fdata<FL$STATS.DELETES>, '12R')
+   print 'Clears     ' : fmt(fdata<FL$STATS.CLEARS>, '12R')
+   print 'Selects    ' : fmt(fdata<FL$STATS.SELECTS>, '12R')
+   print 'Splits     ' : fmt(fdata<FL$STATS.SPLITS>, '12R')
+   print 'Merges     ' : fmt(fdata<FL$STATS.MERGES>, '12R')
+   print 'AK Reads   ' : fmt(fdata<FL$STATS.AKREADS>, '12R')
+   print 'AK Writes  ' : fmt(fdata<FL$STATS.AKWRITES>, '12R')
+   print 'AK Deletes ' : fmt(fdata<FL$STATS.AKDELETES>, '12R')
    return
 
 * ======================================================================
 
 periodic:
    display @(-1) : @(29,0): 'GLOBAL FILE STATISTICS'
-   display @(0,2) : '           ....System  .....Total  ..........  ...Average'
-   display @(0,3) : '           .....Total  ..this run  ...Per sec  ...per sec'
+*  18 Oct 26 Windows port - from Linux 8d65796 (11 Oct 26): Columns are 12 wide, not 10, for the counts of a fast disk
+*  (openQM ref 55).
+   display @(0,2) : '           ......System  .......Total  ............  .....Average'
+   display @(0,3) : '           .......Total  ....this run  .....Per sec  .....per sec'
 
    reset.time = -1      ;* Force restart
    fdata = kernel(K$FILESTATS,0)
@@ -260,10 +262,10 @@ periodic:
 
 show:
    display fmt(title, '11L') :
-   display fmt(fdata<f>, '10R') : '  ' :
-   display fmt(base.diff<f>, '10R') : '  ' :
-   display fmt(period.diff<f>, '10R') : '  ' :
-   if tm then display fmt(base.diff<f>/tm, '10R1') :
+   display fmt(fdata<f>, '12R') : '  ' :
+   display fmt(base.diff<f>, '12R') : '  ' :
+   display fmt(period.diff<f>, '12R') : '  ' :
+   if tm then display fmt(base.diff<f>/tm, '12R1') :
    display @(-4)
    return
 
