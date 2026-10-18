@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux dda6e65 (13 Oct 26): 1.2-0 (openQM FOR / NEXT, sheet 84 and 300): FOR var = value1, value2,
+*               ... and FOR EACH var IN string {DELIMITER delim}, compiled as a FOR over
+*               a hidden counter with the existing opcodes (st.for.list, st.for.each).
 * 18 Oct 26 Windows port - from Linux 1c94d00 (10 Oct 26), RELEASE_1.1 143: $MODE
 *           names may be a comma separated list (ref 105), $BASIC.OPTIONS MODE
 *           may turn a mode off with a leading minus (406), new mode
@@ -8133,6 +8136,17 @@ st.for:
    ins j.for:@vm:jump.no before jump.stack<1>
    jump.no += 1
 
+   * 18 Oct 26 Windows port - from Linux dda6e65 (13 Oct 26): - FOR EACH var IN string {DELIMITER delim}: the words EACH, a simple
+   * name and IN, in that order.  Anything else, FOR EACH = 1 TO 5 included, is the
+   * classic statement.  (The tokens are looked at one at a time because the table
+   * holds nothing meaningful past the end marker.)
+
+   if look.ahead.token = TKN.NAME and u.look.ahead.token.string = "EACH" then
+      if tokens(token.index + 1) = TKN.NAME then
+         if upcase(token.strings(token.index + 2)) = "IN" then goto st.for.each
+      end
+   end
+
    * Read and hold on to loop control variable name
 
    if look.ahead.token # TKN.NAME and look.ahead.token # TKN.NAME.LBR then
@@ -8170,6 +8184,12 @@ st.for:
       goto error
    end
    gosub get.token            ;* Skip "="
+
+   * 18 Oct 26 Windows port - from Linux dda6e65 (13 Oct 26): - FOR var = value1, value2, ...: no TO anywhere in the statement
+
+   gosub for.find.to
+   if not(for.has.to) then goto st.for.list
+
    gosub expr                 ;* Emit initial value
 
    * Emit FORINIT opcode
@@ -8241,7 +8261,237 @@ st.for:
             goto err.syntax
       end case
    end
-   
+
+   return
+
+*****************************************************************************
+* ST.FOR.EACH  -  FOR EACH var IN string {DELIMITER delim}      (13 Oct 26 dm)
+*
+* Reached from ST.FOR with the jump stack entry made and EACH the look-ahead.
+* Compiled as a FOR over a hidden counter (a limit that is never reached), so
+* WHILE, UNTIL, CONTINUE, EXIT and NEXT are the classic ones.  Only opcodes that
+* already exist are used.  The hidden variables are named for the loop's number
+* N on the jump stack:
+*     _FOREACHnS   a private copy of the string (the manual: changing the
+*                  original in the loop has no effect)
+*     _FOREACHnD   the delimiter, with DELIMITER only
+*     _FOREACHnI   the counter
+*     _FOREACHnC   with DELIMITER the number of values, DCOUNT(string, delim);
+*                  without it the status of the last REMOVE, started at the
+*                  length of the string so that a null string makes no pass
+* The head of the body fetches a value into var: FIELD(S, D, I) with DELIMITER,
+* otherwise REMOVE (any mark is a delimiter) after leaving the loop if the last
+* REMOVE reached the end.  A null string therefore makes no pass, and one with a
+* trailing mark ends in a null value, as REMOVE would give.
+
+st.for.each:
+   fe.n = jump.stack<1,2>
+   gosub get.token                          ;* Skip EACH
+
+   * The control variable's name is kept as the classic statement keeps it: NEXT
+   * checks it and the head of the body re-reads it to store into it.
+
+   ins look.ahead.token.string:@vm:token.index:@vm:token.index before for.var<1>
+   gosub get.token                          ;* Skip the control variable
+   gosub get.token                          ;* Skip IN
+
+   * S = the string
+
+   symbol.name = "_FOREACH":fe.n:"S" ; gosub hidden.var.load
+   reserved.names<2> = "DELIMITER":@VM:"WHILE":@VM:"UNTIL"
+   gosub expr
+   del reserved.names<2>
+   opcode.byte = OP.STOR ; gosub emit.simple
+
+   fe.delim = (look.ahead.token = TKN.NAME and u.look.ahead.token.string = "DELIMITER")
+   if fe.delim then
+      gosub get.token                       ;* Skip DELIMITER
+      symbol.name = "_FOREACH":fe.n:"D" ; gosub hidden.var.load
+      reserved.names<2> = "WHILE":@VM:"UNTIL"
+      gosub expr
+      del reserved.names<2>
+      opcode.byte = OP.STOR ; gosub emit.simple
+
+      * C = DCOUNT(S, D)
+
+      symbol.name = "_FOREACH":fe.n:"C" ; gosub hidden.var.load
+      symbol.name = "_FOREACH":fe.n:"S" ; gosub hidden.var.load
+      symbol.name = "_FOREACH":fe.n:"D" ; gosub hidden.var.load
+      opcode.byte = OP.DCOUNT ; gosub emit.simple
+      opcode.byte = OP.STOR ; gosub emit.simple
+   end else
+      * C = LEN(S)
+
+      symbol.name = "_FOREACH":fe.n:"C" ; gosub hidden.var.load
+      symbol.name = "_FOREACH":fe.n:"S" ; gosub hidden.var.load
+      opcode.byte = OP.LEN ; gosub emit.simple
+      opcode.byte = OP.STOR ; gosub emit.simple
+   end
+
+   * The head of the loop, as the classic statement makes it: initial value,
+   * FORINIT, the repeat label, the counter, the limit, FOR1 and the exit label.
+
+   n = 1 ; gosub emit.numeric.load
+   opcode.byte = OP.FORINIT ; gosub emit.simple
+   label.name = "_":fe.n:"R" ; gosub set.label
+   symbol.name = "_FOREACH":fe.n:"I" ; gosub hidden.var.load
+   if fe.delim then
+      symbol.name = "_FOREACH":fe.n:"C" ; gosub hidden.var.load
+   end else
+      n = 999999999 ; gosub emit.numeric.load
+   end
+   if bittest(mode, M.FOR.STORE.BEFORE.TEST) then opcode.byte = OP.FOR1S
+   else opcode.byte = OP.FOR1
+   gosub emit.simple
+   label.name = "_":fe.n:"X" ; gosub emit.addr
+
+   * The head of the body: the next value into the control variable
+
+   if fe.delim then
+      gosub emit.for.control.lvar
+      symbol.name = "_FOREACH":fe.n:"S" ; gosub hidden.var.load
+      symbol.name = "_FOREACH":fe.n:"D" ; gosub hidden.var.load
+      symbol.name = "_FOREACH":fe.n:"I" ; gosub hidden.var.load
+      n = 1 ; gosub emit.numeric.load
+      opcode.byte = OP.FIELD ; gosub emit.simple
+      opcode.byte = OP.STOR ; gosub emit.simple
+   end else
+      symbol.name = "_FOREACH":fe.n:"C" ; gosub hidden.var.load
+      label.name = "_":fe.n:"X"
+      opcode.byte = OP.JFALSE ; gosub emit.jump
+      gosub emit.for.control.lvar
+      symbol.name = "_FOREACH":fe.n:"S" ; gosub hidden.var.load
+      symbol.name = "_FOREACH":fe.n:"C" ; gosub hidden.var.load
+      opcode.byte = OP.REMOVE ; gosub emit.simple
+      opcode.byte = OP.STOR ; gosub emit.simple
+   end
+
+   goto for.header.end
+
+*****************************************************************************
+* ST.FOR.LIST  -  FOR var = value1, value2, ...                 (13 Oct 26 dm)
+*
+* Reached from ST.FOR when the "=" has been read and no TO follows.  A hidden
+* counter _FORLISTnI (1, 2, 3, ..., n being the loop's number on the jump stack)
+* runs to a limit that is never reached, and the head of the body is a chain: on
+* pass k the k-th value is stored in var, and when the chain runs out the loop
+* is left.  Each value expression is compiled once, behind a test of the
+* counter, so it is evaluated only on its own pass.
+
+st.for.list:
+   fl.n = jump.stack<1,2>
+
+   n = 1 ; gosub emit.numeric.load
+   opcode.byte = OP.FORINIT ; gosub emit.simple
+   label.name = "_":fl.n:"R" ; gosub set.label
+   symbol.name = "_FORLIST":fl.n:"I" ; gosub hidden.var.load
+   n = 999999999 ; gosub emit.numeric.load
+   if bittest(mode, M.FOR.STORE.BEFORE.TEST) then opcode.byte = OP.FOR1S
+   else opcode.byte = OP.FOR1
+   gosub emit.simple
+   label.name = "_":fl.n:"X" ; gosub emit.addr
+
+   fl.k = 0
+   loop
+      fl.k += 1
+
+      * IF counter = k THEN var = value(k) ; GOTO done
+
+      symbol.name = "_FORLIST":fl.n:"I" ; gosub hidden.var.load
+      n = fl.k ; gosub emit.numeric.load
+      opcode.byte = OP.EQ ; gosub emit.simple
+      label.name = "_":fl.n:"V":fl.k
+      opcode.byte = OP.JFALSE ; gosub emit.jump
+
+      gosub emit.for.control.lvar
+      reserved.names<2> = "WHILE":@VM:"UNTIL"
+      gosub expr
+      del reserved.names<2>
+      opcode.byte = OP.STOR ; gosub emit.simple
+
+      label.name = "_":fl.n:"D"
+      opcode.byte = OP.JMP ; gosub emit.jump
+      label.name = "_":fl.n:"V":fl.k ; gosub set.label
+   while look.ahead.token = TKN.COMMA
+      gosub get.token                       ;* Skip the comma
+   repeat
+
+   * Past the last value: leave the loop
+
+   label.name = "_":fl.n:"X"
+   opcode.byte = OP.JMP ; gosub emit.jump
+   label.name = "_":fl.n:"D" ; gosub set.label
+
+for.header.end:
+   if look.ahead.token = TKN.NAME then
+      begin case
+         case u.look.ahead.token.string = 'WHILE'
+         case u.look.ahead.token.string = 'UNTIL'
+         case 1
+            goto err.syntax
+      end case
+   end
+
+   return
+
+*****************************************************************************
+* EMIT.FOR.CONTROL.LVAR  -  Reference to the control variable of the FOR
+* statement being compiled, from its tokens (for.var<1,2> is the index of the
+* first, for.var<1,3> that of the last), which are read again as the classic
+* statement does.  The look-ahead is put back as it was.
+
+emit.for.control.lvar:
+   for.pos = token.index
+   token.index = for.var<1,2>
+   tokens(for.var<1,3> + 1) = TKN.END     ;* What followed the name, an end marker
+   look.ahead.token = tokens(token.index)
+   look.ahead.token.string = token.strings(token.index)
+   u.look.ahead.token.string = upcase(look.ahead.token.string)
+   gosub get.token
+
+   gosub emit.lvar.reference
+
+   token.index = for.pos
+   look.ahead.token = tokens(token.index)
+   look.ahead.token.string = token.strings(token.index)
+   u.look.ahead.token.string = upcase(look.ahead.token.string)
+   return
+
+*****************************************************************************
+* HIDDEN.VAR.LOAD  -  Emit the load of the local variable named in SYMBOL.NAME,
+* making it first if the program has not met it.  The compiler's own variables
+* start with an underscore, as _FUNCRET does.
+
+hidden.var.load:
+   symbol.mode = SYM.SET
+   gosub find.var
+   if symbol.var.no < 0 then
+      symbol.common.offset = -1
+      symbol.dim = 0
+      symbol.mode = SYM.SET
+      gosub make.var
+   end
+   gosub emit.var.load
+   return
+
+*****************************************************************************
+* FOR.FIND.TO  -  Is there a TO between here and the end of the statement?
+* The look-ahead token is the first after the "=".  Sets FOR.HAS.TO.
+
+for.find.to:
+   for.has.to = @false
+   ft.i = token.index
+   loop
+      ft.t = tokens(ft.i)
+   until ft.t = TKN.END or ft.t = TKN.SEMICOLON
+      if ft.t = TKN.NAME then
+         if upcase(token.strings(ft.i)) = "TO" then
+            for.has.to = @true
+            exit
+         end
+      end
+      ft.i += 1
+   repeat
    return
 
 *****************************************************************************

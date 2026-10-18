@@ -2,6 +2,40 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  TWO NEW FORMS OF FOR / NEXT.
+
+             FOR i = 5, 7, 22                    the loop runs once for each
+                ...                              value, in turn
+             NEXT i
+
+             FOR EACH v IN string {DELIMITER d}  the loop runs once for each
+                ...                              value in a list
+             NEXT v
+
+           The first form takes constants or expressions: FOR i = a, a * 2,
+           max(b, 3).  Each expression is worked out only when its turn
+           comes.  A FOR with no TO that used to be a syntax error is now a
+           list of values, so FOR i = 4 is a loop that runs once.
+
+           FOR EACH walks the values of a list.  Without DELIMITER every mark
+           (field, value, subvalue and so on) separates two values, as it does
+           for REMOVE, which is what it uses; with DELIMITER only that
+           character does, and any marks inside a value are part of it.  The
+           list is copied when the loop starts, so changing the original in
+           the loop has no effect.  A null string makes no pass at all; a null
+           value inside the list, or after a final delimiter, is a pass with a
+           null value.  This was a choice: the openQM manual does not say what
+           a null string does.  The control variable must be a simple
+           variable name (not an array element) in FOR EACH; the list form
+           takes an array element as the classic FOR does.
+
+           In both forms WHILE, UNTIL, CONTINUE, EXIT and NEXT work as in the
+           classic loop, a variable called EACH is still an ordinary control
+           variable (FOR EACH = 1 TO 5 is unchanged), and the control
+           variable keeps the last value it was given on leaving the loop.
+           $MODE FOR.STORE.BEFORE.TEST is honoured.  Programs already
+           compiled are not affected.
+
 18 Oct 26  A COLLECTION THAT HOLDS A FILE VARIABLE CAN BE WRITTEN TO A
            COLLECTION FILE.
 
