@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 5218c47 (13 Oct 26): openQM 210: GLOBAL may be followed by a prefix character (one of * ! _ $), which is put in front
+*               of every call name that has no prefix of its own - so a select list can be catalogued globally
+*               with a prefix.  A hyphen, which openQM also lists as a prefix, is not accepted.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 D2: the upper-case rename below runs
 *           only on a case-sensitive VOC.  On a NOCASE one it deleted the entry
 *           it had just written, so a second CATALOG ... LOCAL left none.
@@ -107,11 +110,19 @@ $define CAT_PCODE  3
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
 
+   global.prefix = ''            ;* 13 Oct 26 dm - openQM 210: GLOBAL c
+   after.global = @false
    loop
       call @parser(PARSER$MFILE, token.type, token, keyword)
 
    while token.type = parser$token
+      was.global = after.global
+      after.global = @false
       begin case
+         case was.global and len(token) = 1 and index(prefix.chars, token, 1)
+            global.prefix = token           ;* The prefix for names that carry none of their own
+            option.seen = @true
+
          case keyword = KW$LOCAL
             if mode and mode # CAT_LOCAL then stop sysmsg(3021) ;* Incompatible cataloguing modes specified
             option.seen = @true
@@ -121,6 +132,7 @@ $define CAT_PCODE  3
             if mode and mode # CAT_GLOBAL then stop sysmsg(3021) ;* Incompatible cataloguing modes specified
             option.seen = @true
             mode = CAT_GLOBAL
+            after.global = @true
             * rev 0.9.0 must be admin for Global
             * 13 Aug 26 Windows port - was system(27) # 0.  There is no uid zero
             *   on Windows, so CATALOG GLOBAL was always refused.
@@ -293,6 +305,11 @@ $define CAT_PCODE  3
 * ======================================================================
 
 catalogue.program:
+   * 18 Oct 26 Windows port - from Linux 5218c47 (13 Oct 26): - openQM 210: GLOBAL c gives a prefix to every name that has none, so a select list can be
+   * catalogued with one.  The program is still read under its own name; only the call name changes.
+   if global.prefix # '' and mode = CAT_GLOBAL and not(index(prefix.chars, call.name[1,1], 1)) then
+      call.name = global.prefix : call.name
+   end
    gosub validate.call.name
 
    * Read object code image
