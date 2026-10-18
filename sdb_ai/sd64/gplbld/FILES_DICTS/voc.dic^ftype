@@ -2,8 +2,8 @@ I
 IF data.name # '' THEN SUBR("!FTYPE",data.name) ELSE ''
 
 FType
-8L
-S
+10L
+M
 
 
 
@@ -12,5 +12,5 @@ S
 
 
 
-   2059806019
+
 

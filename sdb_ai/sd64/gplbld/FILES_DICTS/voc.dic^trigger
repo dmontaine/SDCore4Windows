@@ -1,0 +1,14 @@
+I Test if a file has a trigger function (LISTF WITH TRIGGER)
+IF data.name # '' THEN (IF INDEX(SUBR("!FTYPE",data.name),'T',1) THEN 1 ELSE '') ELSE ''
+
+Trigger
+1L
+S
+
+
+
+
+
+
+
+

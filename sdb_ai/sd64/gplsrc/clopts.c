@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): show_status(): the buffer for the start time was one byte short for its "not recorded" text (gcc warned on every
+ *               build); 64 bytes now.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): pid_is_alive(): process_exists() for kernel(K_PID_ALIVE) (QM4 gaps Q-8, INHIBIT.LOGIN).
  * 18 Sep 26 Windows port - RELEASE_1.1 60: the two username copies out of the
  *                      shared segment are bounded.  The segment is writable by
@@ -148,7 +150,7 @@ void show_status() {
   int api = 0;
   USER_ENTRY* uptr;
   time_t started;
-  char when[40];
+  char when[64]; /* 15 Oct 26: was 40, and the "not recorded" text below is 40 characters and its NUL (gcc -Wstringop-overflow) */
 
   if (!attach_shared_memory()) {
     printf("SD (%s) is not active.\n", SD_REV_STAMP);

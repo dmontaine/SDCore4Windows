@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV (openQM item 85): the list variable of SELECT / SELECTV / SSELECTV and the FROM list of READNEXT is
+*               optional, a hidden __SELLIST of the program (sellist.default.load); it and stdfil.var.load use the hidden.var.load of FOR EACH.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): A catalogue name in $CATALOG may be as long as the lower of 128 and MAXIDLEN (openQM item 241).
 * 18 Oct 26 Windows port - from Linux dda6e65 (13 Oct 26): 1.2-0 (openQM FOR / NEXT, sheet 84 and 300): FOR var = value1, value2,
 *               ... and FOR EACH var IN string {DELIMITER delim}, compiled as a FOR over
@@ -12226,11 +12228,22 @@ st.readnext:
       opcode = if bittest(mode, M.COMPOSITE.READNEXT) then OP.RDNXPOS else OP.READNEXT
    end
 
+   default.sellist = @false
    if u.look.ahead.token.string = "FROM" then
       gosub get.token       ;* Skip FROM
       gosub exprf            ;* Emit list number expression
+   end else if bittest(mode, M.SELECTV) then
+      * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): - openQM 85: under $MODE SELECTV the list is optional, and is the program's default select list variable
+      * (the one a SELECT with no TO fills), not list 0; a variable no SELECT has filled is an empty list (P_DEF_SELLIST)
+      gosub sellist.default.load
+      default.sellist = @true
    end else     ;* Use default select list
       n = 0 ; gosub emit.numeric.load
+   end
+
+   if default.sellist then
+      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+      code.value = 0x8000 ; code.bytes = 2 ; gosub emit.multibyte.value
    end
 
    * 18 Oct 26 Windows port - from Linux 0eac1f0 (14 Oct 26): - openQM 418: $MODE PICK.READNEXT, for the READNEXT forms that return an id only
@@ -12658,8 +12671,13 @@ st.select.common:
          gosub exprf            ;* Emit list number expression
       end
    end else     ;* Use default select list
-      if to.variable then goto err.to
-      n = 0 ; gosub emit.numeric.load
+      if to.variable then
+         * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): - openQM 85: under $MODE SELECTV the list variable is optional, and is the program's default one
+         if not(bittest(mode, M.SELECTV)) then goto err.to
+         gosub sellist.default.load
+      end else
+         n = 0 ; gosub emit.numeric.load
+      end
    end
 
    * 18 Oct 26 Windows port - from Linux 9d13815 (11 Oct 26): - openQM 243 and 367: SSELECT [TO n] [RIGHT.ALIGNED] [DESCENDING], the two in either order.
@@ -15521,16 +15539,16 @@ convert.pick.file.reference:
 * STDFIL.VAR.LOAD  -  Emit a load of the default file variable
 stdfil.var.load:
    symbol.name = '__STDFIL'
-   symbol.mode = SYM.SET
-   gosub find.var
-   if symbol.var.no < 0 then
-      symbol.dim = 0
-      symbol.common.offset = -1
-      symbol.mode = SYM.SET
-      gosub make.var
-   end
-   gosub emit.var.load
-   return
+   goto hidden.var.load     ;* the routine FOR EACH uses for its counters (15 Oct 26 dm: this was a copy of it)
+
+* SELLIST.DEFAULT.LOAD  -  Emit a load of the default select list variable  (15 Oct 26 dm, openQM item 85)
+*
+* $MODE SELECTV makes the list variable of SELECT / SELECTV / SSELECTV and the FROM list of READNEXT optional. Left out, it
+* is a hidden variable of the program, __SELLIST: per program like __STDFIL, so a called subroutine has a default list
+* of its own, and a CALL gets a fresh (unassigned) one.  Made on first use, as __STDFIL is.
+sellist.default.load:
+   symbol.name = '__SELLIST'
+   goto hidden.var.load
 
 * STDFIL.NO.OPERAND  -  For CLEARFILE, CLOSE, FILELOCK, FILEUNLOCK.
 * STDFIL.USE is true when the mode is on and the next token is not a file

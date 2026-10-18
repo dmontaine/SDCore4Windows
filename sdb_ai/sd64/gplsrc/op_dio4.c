@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV default select list variable (openQM item 85): readnext() takes P_DEF_SELLIST, an unassigned
+ *               default variable being an empty list
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE PICK.SELECT (QM4 gaps Q-16): op_selectv() moves an active list 0 to its target;
  *               transfer_list0() is the body of op_selecte(), which both now call
  * 02 Sep 26 Windows port - dir_select tests the escape character before
@@ -406,6 +408,15 @@ Private void readnext(int16_t mode)
   descr = e_stack - 1;
   for (d = descr; d->type == ADDR; d = d->data.d_addr) {
   }
+
+  /* 15 Oct 26 dm - $MODE SELECTV (openQM item 85): the list is the program's default select list variable. Until a
+     SELECT has given it a list there is no list, which is a list that is not active: take the ELSE clause. */
+  if ((op_flags & P_DEF_SELLIST) && d->type == UNASSIGNED) {
+    k_pop(1); /* The unassigned variable */
+    status = 1;
+    goto exit_readnext_null;
+  }
+
   if (d->type == SELLIST) {
     saved_status = process.status;
 

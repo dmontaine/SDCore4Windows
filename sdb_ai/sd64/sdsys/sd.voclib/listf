@@ -1,7 +1,7 @@
 Sentence to list files
 LIST VOC @ID FMT "18L" COL.HDG "File name"_
-FTYPE FMT "6L"_
-DESC FMT "37L"_
+FTYPE FMT "12L"_
+DESC FMT "31L"_
 DATA.NAME FMT "23L"_
 DICT.NAME FMT "23L"_
 WITH TYPE = "F"_

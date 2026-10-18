@@ -2,6 +2,49 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SD -STATUS ON A SERVER THAT RECORDED NO START TIME.
+
+             The text sd -status prints when the running SD has no start
+             time ("not recorded (started by an older build)") was one byte
+             longer than the buffer it was copied into.  The compiler warned
+             about it on every build.  The buffer is larger now, so the
+             overrun cannot happen.  Nothing else changes in the output.
+
+18 Oct 26  $MODE SELECTV: THE SELECT LIST VARIABLE IS OPTIONAL.
+
+             A program that begins $MODE SELECTV (SELECT then builds a select
+             list variable, as SELECTV does) no longer has to name the
+             variable.  SELECT f, SELECTV f and SSELECTV f with no TO put the
+             list in the program's own default select list variable, and
+             READNEXT with no FROM reads that variable.  A READNEXT before any
+             SELECT takes its ELSE clause.  Together with $MODE PICK.SELECT,
+             EXECUTE 'SELECT ...' followed by SELECT f leaves the executed
+             list in the default variable.
+
+             What it does NOT do: without the mode SELECTV and SSELECTV with
+             no TO are still a compile error and READNEXT still reads list 0;
+             CLEARSELECT with no list number still clears list 0 (it cannot
+             name the default variable); a list made by EXECUTE is in list 0,
+             which a bare READNEXT does not read in this mode (READNEXT id
+             FROM 0 does).  The default variable belongs to the program: a
+             LOCAL SUBROUTINE shares it, a subroutine you CALL has its own.
+
+18 Oct 26  LISTF, LISTFL AND LISTFR: MULTIFILES AND WITH / WITHOUT.
+
+             A multifile is now listed with a line for each subfile: the type
+             column has a value for each subfile, so that each type is on the
+             line of that subfile's pathname, and the first begins with Mult
+             (Mult DH, then Dir, for a multifile of a hashed and a directory
+             subfile).  The type column is wider (12 characters) and the
+             description narrower to make room.  The three verbs also take
+             WITH or WITHOUT TRIGGER, ENCRYPTION and REPLICATION, as LISTF
+             WITH TRIGGER for the files that have a trigger function.
+
+             What it does NOT do: SD has no encryption and no replication, so
+             WITH ENCRYPTION and WITH REPLICATION select nothing and WITHOUT
+             selects every file.  Directory files cannot have a trigger in
+             SD, so none shows a T.
+
 18 Oct 26  RESTRICTED IN A CLASS MODULE.
 
              RESTRICTED var {READONLY}, var ...

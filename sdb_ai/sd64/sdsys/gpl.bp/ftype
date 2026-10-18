@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): openQM item 3: a multifile gives one value per subfile (see below); file.type() is the single-file code, which
+*               the multifile loop calls for each subfile, and suffix.flags() takes the file variable as an argument.
 * 25 Aug 26 Windows port - dropped the VFS: pathname case.  Nothing in the
 *           C open path has ever recognised a VFS: pathname, so this
 *           reported a file type that could not then be opened.
@@ -26,7 +28,7 @@
 *
 * START-DESCRIPTION:
 *
-* Mult   Multi-file
+* Mult   Multi-file: a value for each subfile, "Mult " and the type of the first, then the type of each other subfile
 * Err    Error
 * Dir    Directory file
 * DH     Dynamic hashed file
@@ -44,32 +46,49 @@ $catalog !FTYPE
 
 $include keys.h
 
-   deffun suffix.flags() local
+   deffun file.type(path) local
+   deffun suffix.flags(fu) local
 
 
-   if dcount(path, @vm) > 1 then return ('Mult')
-
-   if upcase(path[1,6]) = '@SDSYS' then path = @sdsys:path[7,9999]
-
-   openpath path to fu on error return ("Err " : status())
-   then
-      type = fileinfo(fu,FL$TYPE)
-      begin case
-         case type = FL$TYPE.DH
-            return trimb("DH " : suffix.flags())
-
-         case type = FL$TYPE.DIR
-            return ("Dir")
-
-         case 1
-            return (type)
-      end case
+   * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): - openQM item 3: a multifile is "Mult" and then a line for each subfile.  The value for subfile n is that
+   * subfile's own type, so that LISTF, which shows the pathnames one to a line, has each type on the line of its pathname;
+   * the first value begins with "Mult" (the manual's Mult entry and the line for its first subfile are one line here).
+   n.sub = dcount(path, @vm)
+   if n.sub > 1 then
+      result = ''
+      for i = 1 to n.sub
+         result<1,i> = if i = 1 then 'Mult ' : file.type(path<1,i>) else file.type(path<1,i>)
+      next i
+      return (result)
    end
-   else return ("Err " : status())
+
+   return (file.type(path))
 
 * ======================================================================
 
-   local function suffix.flags
+   local function file.type(path)
+      if upcase(path[1,6]) = '@SDSYS' then path = @sdsys:path[7,9999]
+
+      openpath path to fu on error return ("Err " : status())
+      then
+         type = fileinfo(fu,FL$TYPE)
+         begin case
+            case type = FL$TYPE.DH
+               return trimb("DH " : suffix.flags(fu))
+
+            case type = FL$TYPE.DIR
+               return ("Dir")
+
+            case 1
+               return (type)
+         end case
+      end
+      else return ("Err " : status())
+   end
+
+* ======================================================================
+
+   local function suffix.flags(fu)
       sfx = ''
       if fileinfo(fu, FL$AK) then sfx := 'I'
       if fileinfo(fu, FL$STATS.QUERY) then sfx := 'S'
