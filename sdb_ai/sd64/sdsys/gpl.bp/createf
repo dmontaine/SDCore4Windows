@@ -94,6 +94,7 @@ $define default.split.load 80
    merge.load.value = default.merge.load
    version.value = -1
    file.flags = 0
+   voc.comment = ''
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
@@ -241,7 +242,10 @@ $define default.split.load 80
    
             * Get full pathname
    
-            dir.name = ospath(dir.name, OS$FULLPATH)   ;* 0339 removed UPCASE()
+            * 18 Oct 26 Windows port - from Linux 000ce5f (12 Oct 26): - openQM 278: a relative path is kept relative (to the account), so the account can move
+            * Linux tests only for a leading @ds; a Windows path is also absolute when it starts with a drive
+            * letter (C:\x), or with / which this port accepts, so those three are all made full paths as before.
+            if dir.name[1,1] = @ds or dir.name[1,1] = '/' or dir.name[2,1] = ':' then dir.name = ospath(dir.name, OS$FULLPATH)   ;* 0339 removed UPCASE()
             dir.name.with.delimiter = dir.name
             if dir.name.with.delimiter[1] # @ds then dir.name.with.delimiter := @ds
    
@@ -293,7 +297,14 @@ $define default.split.load 80
                stop sysmsg(6117) ;* Invalid file version
             end
             version.value = value + 0
-   
+
+         case upcase(token) = 'COMMENT'       ;* 12 Oct 26 dm - openQM 383: COMMENT text  (quote it if it has spaces)
+            call @parser(PARSER$GET.TOKEN, token.type, voc.comment, keyword)
+            if token.type = PARSER$END or voc.comment = '' then stop sysmsg(12083) ;* Comment text required after COMMENT
+
+         case upcase(token) = 'MULTIFILE'     ;* 12 Oct 26 dm - openQM 522: the data portion is a multifile named for the file
+            if component = '' then component = file.name
+
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
       end case
@@ -394,6 +405,7 @@ $define default.split.load 80
       if not(create.dict or create.data) then stop
    end else
       voc.rec = "F"        ;* Create skeletal VOC record
+      if voc.comment # '' then voc.rec = "F " : voc.comment      ;* openQM 383: the description follows the type code
    end
 
 

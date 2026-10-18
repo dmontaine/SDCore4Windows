@@ -395,7 +395,8 @@ catalogue.program:
          * the account (and its programs) can be moved; an object file elsewhere keeps its full path.
          if relative then
             home = @path : @ds
-            if program.path[1, len(home)] = home then program.path = program.path[len(home) + 1, 99999]
+            * Windows paths are case blind, and the two spellings come from different places
+            if upcase(program.path[1, len(home)]) = upcase(home) then program.path = program.path[len(home) + 1, 99999]
          end
          voc.rec = "V" : @fm : "CS" : @fm : program.path
          write voc.rec to @voc, call.name

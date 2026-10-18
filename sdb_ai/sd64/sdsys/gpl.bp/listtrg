@@ -105,6 +105,8 @@ $include parser.h
       for part = 1 to 2
          flag = if part = 1 then '' else 'DICT'
          open flag, fname to f then
+            * (openQM 321, triggers on directory files: SD's SET.TRIGGER refuses a file that is not dynamic, and
+            * FILEINFO(FL$TRIGGER) of a directory file is a meaningless 0, so only dynamic files are listed)
             if fileinfo(f, FL$TYPE) = FL$TYPE.DH then
                trg = fileinfo(f, FL$TRIGGER)
                if trg # '' then
