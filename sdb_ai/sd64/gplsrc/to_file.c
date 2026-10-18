@@ -165,7 +165,12 @@ Private void hold_log(PRINT_UNIT* pu, int opening) {
     return;
   if ((opening == 2) && (pu->mode != PRINT_TO_FILE)) /* The lock (item 53) is for mode 3 */
     return;
-  if ((pu->file.pathname == NULL) || (process.call_depth == 0) || (k_exit_cause != 0))
+  /* A recursive call that has just returned leaves k_exit_cause at K_TOGGLE_TRACER
+     (k_recurse(), kernel.c) until the dispatch loop next runs, so the second call of
+     the opening = 2 then 1 pair would find it set and be skipped.  It is not a cause
+     for abandoning the call, as the back-to-back k_recurse() calls elsewhere show.   */
+  if ((pu->file.pathname == NULL) || (process.call_depth == 0) ||
+      ((k_exit_cause != 0) && (k_exit_cause != K_TOGGLE_TRACER)))
     return;
 
   InitDescr(e_stack, INTEGER);

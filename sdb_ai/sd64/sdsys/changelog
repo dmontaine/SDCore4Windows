@@ -2,6 +2,46 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FILE HANDLING: READ-ONLY AND NON-TRANSACTIONAL OPENS FROM THE VOC,
+           A LOCK ON A HELD PRINT FILE, AND BLOCK DEVICES.
+
+           Field 6 of a file's VOC entry (the F-type entry) can now hold mode
+           letters.  R opens the file read-only whenever it is opened through
+           that entry, so a write to it fails as it would on a file opened
+           with the READONLY option; N opens it non-transactionally, so a write
+           to it stays when a transaction that wrote it is rolled back.  The letters may be given
+           together (NR) and in either case, and they apply to a file reached
+           through a Q-pointer as well.  They affect that open only, as the
+           OPEN statement's own options do.  The other letters the openQM
+           manual lists for field 6 (B, C, L, M, S and X) are not acted on, as
+           before.
+
+           A print unit in mode 3 (SETPTR ... 3), whose output goes to a record
+           of the $HOLD file under the default name or one given with AS name,
+           now holds an update lock on that record from the moment the file is
+           made until the unit is closed.  Another process that reads the
+           record with a lock, or writes it, waits until the output is complete.
+           A unit printing to AS PATHNAME is outside any SD file and is not
+           locked; nor is a unit above 255.  A process that asks for the lock
+           while another holds it waits, which stops its print job until the
+           holder lets go.
+
+           OPENSEQ can open a block device, a floppy disk drive among them, as
+           it opens an ordinary file; FILEINFO(FL$SEQTYPE) says 4 for it.  Who
+           may open one is decided by the operating system's permissions, and
+           an ordinary user cannot read most of them: this has been tried only
+           as far as the open being no longer refused as "not a sequential
+           file".
+
+           A command that needs exclusive access to a file (CNAME, CONFIGURE.FILE,
+           DELETE.INDEX and the like) already stopped when another session had the
+           file open and named the users holding it; that is now tested.
+
+           Not done: the sheet's change to the characters allowed in the ids of
+           records in a directory file would admit characters above 126, which
+           belong to other alphabets, and SD is English only; it waits for the
+           owner's say.
+
 18 Oct 26  LOCK AND DUMP DIAGNOSTICS: WHEN A LOCK WAS TAKEN, DEADLOCK=2,
            SYSTEM(1083) AND OBJECTS IN A PROCESS DUMP.
 
