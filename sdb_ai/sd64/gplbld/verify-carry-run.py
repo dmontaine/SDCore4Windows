@@ -23,6 +23,10 @@ WHAT IT CHANGES, AND NOTHING ELSE:
   4. open() in a text WRITE mode defaults to newline="\\n": the suites write BASIC source and directory-file
      records, and a CR LF written by Windows text mode would reach BCOMP as part of every line.
 
+Environment (all optional): SD_EXE the sd executable (default the multi-user install's sd.exe);
+SD_CARRY_PW the account password to send first (SD Core Solo); SD_CARRY_SPARE_OFF extra OFF lines;
+SD_CARRY_TIMEOUT seconds a session may run (default 600).
+
 Exit status is the suite's own: 0 every row passed, 1 a row failed, 2 it could not run.
 """
 import builtins
@@ -69,10 +73,30 @@ def emulate(rest, kw):
         out = ""
     elif step == "sess":
         cmds = rest[3:]
-        body = "\nTERM 200,9999\n" + "".join(c + "\n" for c in cmds) + "OFF\n"
-        p = real_run([SD_EXE], input=body.encode("utf-8", "replace"), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                     timeout=kw.get("timeout") or 600)
-        text = p.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
+        # SD_CARRY_PW: the account password, first line of input (SD Core Solo asks for it at every
+        # session).  SD_CARRY_SPARE_OFF: extra OFF lines at the end (Solo needs two - SOLO 16: at the end
+        # of piped input the command editor otherwise rings the bell in a loop).
+        pw = os.environ.get("SD_CARRY_PW")
+        spare = int(os.environ.get("SD_CARRY_SPARE_OFF") or "0")
+        body = ("\n" if pw is None else pw + "\n") + "TERM 200,9999\n" + "".join(c + "\n" for c in cmds) + "OFF\n" + "OFF\n" * spare
+        # Output goes to a FILE, never a pipe: a service helper that inherits a pipe holds it open for ever.
+        import tempfile
+        fd, tmp = tempfile.mkstemp(prefix="carry-sess-", suffix=".txt")
+        os.close(fd)
+        try:
+            with real_open(tmp, "wb") as fh:
+                p = real_run([SD_EXE], input=body.encode("ascii" if pw is not None else "utf-8", "replace"), stdout=fh,
+                             stderr=subprocess.STDOUT, timeout=kw.get("timeout") or int(os.environ.get("SD_CARRY_TIMEOUT") or "600"))
+            with real_open(tmp, "rb") as fh:
+                raw = fh.read()
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        text = raw.decode("utf-8", "replace").replace("\r\n", "\n")
+        if pw:
+            text = text.replace(pw, "********")
         out = ANSI.sub("", text) + "\nexit %d\n" % p.returncode
         rc = 0
     else:
