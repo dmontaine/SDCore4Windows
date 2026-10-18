@@ -1,0 +1,105 @@
+* PARSEPATTERN
+* !PARSEPATTERN() function, the BASIC function PARSE(string, pattern, delimiter)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1 (PARSE), as a function in BASIC that bcomp knows by name.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* PARSE(string, pattern, delimiter)
+*
+* Matches STRING against PATTERN and returns STRING with the delimiter between the part that matched each element of the pattern,
+* or a null string if it does not match.  The delimiter is a field mark if it is null, and only its first character is used.
+* A pattern may be several templates, separated by value marks: the first that matches is used.
+*
+* The matching is MATCHES and the parts are those of MATCHFIELD(), so the elements are as the string matching documentation has
+* them: n, n-m, 0 with A, N and X, a quoted string, and a tilde in front of an element for its opposite.  The three dots of the
+* openQM manual are the same as 0X.  An element of the pattern that is not one of these stands for itself, one character at a
+* time, as the manual says of text that is not in quotes.
+*
+* INMAT() is not set by PARSE here: it is a program's own state and this function is another program.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+function !parsepattern(s, pattern, delim)
+$catalog !parsepattern
+
+   d = if delim = '' then @fm else delim[1,1]
+
+   for alt.no = 1 to dcount(pattern, @vm)
+      alt = pattern<1,alt.no>
+      gosub split.pattern
+      if s matches pat then
+         out = ''
+         for k = 1 to ntok
+            if k > 1 then out := d
+            out := matchfield(s, pat, k)
+         next k
+         return out
+      end
+   next alt.no
+
+   return ''
+
+* The template ALT cut into its elements: PAT is the template with the three dots written as 0X, NTOK the number of elements
+split.pattern:
+   pat = ''
+   ntok = 0
+   p = 1
+   plen = len(alt)
+   loop
+   while p <= plen
+      start = p
+      if alt[p,1] = '~' then p += 1
+      c = alt[p,1]
+      begin case
+         case c = '"' or c = "'"
+            e = index(alt[p + 1, plen], c, 1)       ;* the closing quote, or the end of the template if there is none
+            if e = 0 then p = plen + 1 else p = p + 1 + e
+            tok = alt[start, p - start]
+         case alt[p,3] = '...'
+            tok = '0X'
+            p += 3
+         case c matches '1N'
+            loop
+            while alt[p,1] matches '1N'
+               p += 1
+            repeat
+            if alt[p,1] = '-' then
+               p += 1
+               loop
+               while alt[p,1] matches '1N'
+                  p += 1
+               repeat
+            end
+            p += 1                                  ;* the A, N or X
+            tok = alt[start, p - start]
+         case 1
+            p += 1
+            tok = alt[start, p - start]
+      end case
+      pat := tok
+      ntok += 1
+   repeat
+   return
+end
+
+* END-CODE

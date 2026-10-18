@@ -194,6 +194,7 @@ Public bool case_inversion init(FALSE);
 Public bool mark_input init(FALSE);    /* PTERM MARK: typed ctrl-\ ctrl-] ctrl-^ become SM VM FM (12 Oct 26) */
 Public int16_t erase_key init(0);      /* PTERM ERASE: 0 default, 1-255 a character, 256 none (12 Oct 26) */
 Public char ctrl_filter[64];           /* PTERM CTRL.FILTER, indexed by command processor level (12 Oct 26) */
+Public char maxmin_pos[64];            /* The position MAXIMUM() or MINIMUM() found, for SYSTEM(1088) (15 Oct 26, Q-18) */
 Public bool trap_break_char; /* Treat break_char as a break request? */
 
 /* OP_TIO.C */

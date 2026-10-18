@@ -1,0 +1,62 @@
+* OSREAD
+* !OSREAD() function, behind the OSREAD statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (OSREAD).  The compiler (bcomp, st.osread) calls it for OSREAD var FROM path.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* flag = !OSREAD(data, path)
+*
+* Reads the whole of the operating system file PATH into DATA with no change to a byte (no newline is turned into a field mark),
+* and gives 1; gives 0 and leaves DATA null if the file cannot be opened or read.  A file larger than a gigabyte is not read.
+*
+* THIS IS AN ORDINARY PROGRAM, NOT AN INTERNAL ONE, ON PURPOSE: it is made of OPENSEQ, which asks the OS-access gate of the account
+* it runs in (S.63), so an account without the gate reaches only its own directory by OSREAD, as it does by OPENSEQ, and one
+* with it reaches what the user can.  Making it internal would exempt it from the gate.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+function !osread(data, path)
+$catalog !osread
+
+   data = ''
+   if path = '' then return 0
+
+   openseq path readonly to f then null else return 0
+
+   total = 0
+   loop
+      readblk block from f, 32768 else exit
+      total += len(block)
+      if total > 1073741824 then
+         closeseq f
+         data = ''
+         return 0
+      end
+      data := block
+   repeat
+
+   closeseq f
+   return 1
+end
+
+* END-CODE

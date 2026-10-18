@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): op_strovl and op_roll3 for the $MODE options of QM4 gaps bundle Q-16
  * 14 Sep 26 Windows port - op_procread looks for $proc, lower case
  *           (RELEASE_1.1 5 stage 3a)
  * rev 1.0-1 mab add op_procread back in per user request
@@ -53,7 +54,9 @@
  *    op_csvmode        CSV.MODE
  *    op_csvdelim       Push the CSV delimiter
  *    op_epochcv        MVDATE() MVTIME() MVDATE.TIME() MVEPOCH()
- *    op_precision      PRECISION
+ *    op_strovl         STROVL         $MODE CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP
+ *    op_roll3          ROLL3          Third item of the stack to the top ($MODE PICK.CONVERT)
+ *    op_precision     PRECISION
  *    op_procread()     PROCREAD
  *    op_rtrans()       RTRANS()
  *    op_saveaddr                       Save address descriptor
@@ -1223,6 +1226,40 @@ void op_csvdelim() {
   s[0] = process.program.csv_delim;
   s[1] = '\0';
   k_put_c_string(s, e_stack++);
+}
+
+/* ======================================================================
+   op_strovl()  -  STROVL  -  $MODE CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP   (15 Oct 26, QM4 gaps Q-16)
+
+   Stack:  mask  ->  (nothing).  The compiler pushes the SO_ bits that are in force at the call it is about to emit and
+   follows them with this opcode, so the argument list of CHANGE, SWAP, EREPLACE, COUNT, COUNTS, INDEX or INDEXS is
+   untouched under the mask.  The bits live in the program's own frame (init_program() clears them for a called program
+   and the caller's copy comes back with its frame), so a subroutine compiled without the modes is not affected by its
+   caller's. */
+
+void op_strovl() {
+  DESCRIPTOR* descr;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+  process.program.str_ovl = (u_char)descr->data.value;
+  k_pop(1);
+}
+
+/* ======================================================================
+   op_roll3()  -  ROLL3  -  Move the third item of the stack to the top   (15 Oct 26, QM4 gaps Q-16)
+
+   Stack:  a, b, c  ->  b, c, a   (c is on top before, a after).  The descriptors are moved, not copied, so no reference
+   count changes.  $MODE PICK.CONVERT evaluates CONVERT(source, from, to) and rolls the source to where the function
+   expects it, after the two character lists. */
+
+void op_roll3() {
+  DESCRIPTOR a;
+
+  a = *(e_stack - 3);
+  *(e_stack - 3) = *(e_stack - 2);
+  *(e_stack - 2) = *(e_stack - 1);
+  *(e_stack - 1) = a;
 }
 
 /* ======================================================================

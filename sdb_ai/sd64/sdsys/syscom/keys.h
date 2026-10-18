@@ -554,3 +554,29 @@
 *     SD's OS$ names are in the internal program header int$keys.h and keep the older numbering).
       $define OS$FULLPATHX    4     ;*   Full path name keeping the case: the same as OS$FULLPATH, which keeps it on Linux
       $define OS$INFO         20    ;*   Information in the form of the STATUS statement's array
+
+*     15 Oct 26 - SYSTEM() keys of the openQM 4 manual (QM4 gaps bundle Q-18), named here by what they return.
+      $define SYS$TYPEAHEAD   14    ;*   Characters waiting to be read (a snapshot for piped input)
+      $define SYS$UNIQUE.TIME 19    ;*   A unique value from the date and time: two five digit numbers, a letter on a repeat
+      $define SYS$UNIQUE.DATE 21    ;*   A unique value from the date and a sequence number that starts again each day
+      $define SYS$PROGRAM     45    ;*   The name of the running program: its pathname if it was run from a source file
+      $define SYS$SEQUENCE    1048  ;*   A sequence number unique across all sessions until SD restarts
+      $define SYS$HUSH        1049  ;*   Is HUSH in effect?
+      $define SYS$SIGNAMMED   1062  ;*   Has SIGNAL() been raised for this process?  Reading it clears it
+      $define SYS$MAXMINPOS   1088  ;*   Position (field, value, subvalue, value mark delimited) of the element MAXIMUM() or MINIMUM() returned
+      $define SYS$GROUP.SIZE  1067  ;*   The default group size of a dynamic file, in bytes
+      $define SYS$CASING      1086  ;*   Is case sensitivity of string comparisons on in this program?
+
+*     15 Oct 26 - the sort rules of SORT.COMPARE() and MERGELIST() (QM4 gaps bundles Q-1 and Q-2).  The SRT$ values are the
+*     openQM 4 manual's.  The ML$ values are SD's own: the manual names the tokens and says they are added to the SRT$ ones.
+      $define SRT$LEFT        0     ;*   Left justified: character by character from the start
+      $define SRT$RIGHT       1     ;*   Right justified: integers as numbers
+      $define SRT$COMPOUND    2     ;*   Alternating numeric and text elements
+      $define SRT$RIGHT.FLOAT 3     ;*   As SRT$RIGHT, any number as a number
+      $define SRT$STRICT      4     ;*   As SRT$COMPOUND, but 28 and 028 differ
+      $define SRT$DESCENDING  16    ;*   The result of a comparison is reversed
+      $define SRT$NOCASE      64    ;*   Case is ignored
+      $define ML$INTER        8     ;*   MERGELIST: the items in both lists
+      $define ML$UNION        16    ;*   MERGELIST: the items in either list, once each
+      $define ML$DIFF         24    ;*   MERGELIST: the items in the first list and not the second
+      $define ML$UNSORTED     32    ;*   MERGELIST: the lists are not in order, so put them in order first

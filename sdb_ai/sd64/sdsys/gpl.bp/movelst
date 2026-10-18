@@ -1,0 +1,77 @@
+* MOVELST
+* MOVE.LIST verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-8 (MOVE.LIST).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    MOVE.LIST src.list TO tgt.list {KEEP}
+*
+*    src.list, tgt.list  = select list numbers, 0 to 10
+*    KEEP                = leave the source list as it was (copy the list)
+*
+* The command form of the MOVELIST statement, which it calls through !movelist.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $move.list
+$catalog $movelst
+
+$include err.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   call @parser(parser$reset, 0, @sentence, 0)
+   call @parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   * Source list number
+   call @parser(parser$get.token, token.type, src, keyword)
+   if token.type = PARSER$END or not(src matches '1N0N') or src > 10 then stop sysmsg(3271) ;* Select list number missing or invalid
+
+   * TO
+   call @parser(parser$get.token, token.type, token, keyword)
+   if token.type = PARSER$END or upcase(token) # 'TO' then stop sysmsg(2018, token) ;* Unexpected token (xx)
+
+   * Target list number
+   call @parser(parser$get.token, token.type, tgt, keyword)
+   if token.type = PARSER$END or not(tgt matches '1N0N') or tgt > 10 then stop sysmsg(3271) ;* Select list number missing or invalid
+
+   * KEEP, and nothing after it
+   keep = 0
+   call @parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END and upcase(token) = 'KEEP' then
+      keep = 1
+      call @parser(parser$get.token, token.type, token, keyword)
+   end
+   if token.type # PARSER$END then stop sysmsg(2018, token) ;* Unexpected token (xx)
+
+   call !movelist(src + 0, tgt + 0, keep, 0)
+
+   @system.return.code = 0
+   return
+end
+
+* END-CODE

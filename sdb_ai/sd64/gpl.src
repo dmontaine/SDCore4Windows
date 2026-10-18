@@ -68,6 +68,7 @@ op_str2
 op_str3
 op_str4
 op_str5
+op_xfun
 op_sys
 op_tio
 pdump

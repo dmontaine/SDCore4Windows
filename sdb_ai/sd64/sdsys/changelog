@@ -2,6 +2,169 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SD BASIC FUNCTIONS AND STATEMENTS THAT OPENQM 4 HAS.
+
+             Names and results follow the openQM 4 manual.  Only what SD does
+             differently, or does not do, is written here.
+             CEIL(v)  FLOOR(v)  ROUNDUP(v, step)  ROUNDDOWN(v, step)
+                        Whole numbers above and below; the last two round
+                        away from zero and towards it in steps of step.  A
+                        dynamic array gives a dynamic array.
+             IS.ALNUM  IS.ALPHA  IS.DIGIT  IS.GRAPH  IS.MARK  IS.SPACE
+                        True if the first character of the argument is of
+                        that kind; a null string is false.
+             LEFT(s, n)  RIGHT(s, n)  Same as s[1,n] and s[n]; a count under
+                        1 is taken as 1 for LEFT and 0 for RIGHT.
+             LAST(s, d)  LASTS(array, d)  The final element of a delimited
+                        string.
+             NV(s)  NS(s)  The value or subvalue position numbers in place
+                        of the values or subvalues.
+             TRIMWS  MATCHESS  MATCHFIELDS  TRIMW, MATCHES and MATCHFIELD
+                        over a dynamic array.
+             BOOL(v)    A Boolean: false for a null string and for any
+                        number that is zero (0, 0.0, 00), true for the rest,
+                        the text false included.
+             IS.NULL(v) True for the SQL null (JNULL()), not for a null
+                        string.
+             NUMERIC(v) The value as a number, as v + 0.
+             ARG.PRESENT(name)  Whether the caller passed that argument.
+             REUSING(name)      Whether that argument was passed with
+                        REUSE().
+             SORT.COMPARE(a, b, mode {, no.case})  -1, 0 or 1 by the rule in
+                        mode: 0 SRT$LEFT, 1 SRT$RIGHT, 2 SRT$COMPOUND, 3
+                        SRT$RIGHT.FLOAT, 4 SRT$STRICT, to which 16
+                        (SRT$DESCENDING) and 64 (SRT$NOCASE) may be added.
+             COMPARES(a, b {, justification})  COMPARE() over two dynamic
+                        arrays, with an answer of the same shape.  The SRT$
+                        and ML$ names are in SYSCOM KEYS.H.
+             MERGELIST(list1, list2, modes)  The manual does not give the
+                        values of ML$INTER, ML$UNION, ML$DIFF and ML$UNSORTED,
+                        so SD has chosen 8, 16, 24 and 32.  The older
+                        CALL !MERGELIST subroutine, with its own words for
+                        the modes, is unchanged.
+             CHILD(userno)  True if that user number is a phantom this
+                        process started and which is still running.
+             SIGNAL(userno)  Raises the signal in another process; the
+                        other process reads and clears it with SYSTEM(1062).
+                        It is true if that process was signalled.  SD signals
+                        only a process of the same login user, or any
+                        process when the caller is the administrator; the
+                        manual has no such rule.
+             PARSE(s, pattern, delimiter)  Matches as MATCHES does and
+                        returns the string with the delimiter put between the
+                        parts that matched each element of the pattern.  The
+                        three dots are the same as 0X.  INMAT() is not set by
+                        it.
+             RMVD(array, code)  REMOVE() that stops only at field, value and
+                        subvalue marks: a text mark or an item mark is part
+                        of the data.
+             TERMINFO.EX(name)  What TERMINFO(name) gives.  openQM lets a
+                        capability have several strings; SD's terminal
+                        database has one, so there is one value.
+             TTYGET()  TTYSET settings  The terminal modes that PTERM sets,
+                        as an array of eleven fields that TTYSET puts back.
+                        Fields 1 to 5 are the manual's; 6 to 11 (mark input,
+                        erase key, control character filter, binary in and
+                        out, Telnet) are SD's, so that saving and restoring
+                        leaves nothing changed.
+             REVREMOVE item FROM array SETTING code  REMOVE going backwards.
+                        SETREM n ON array puts the pointer at the nth
+                        character first.  The code is the mark that comes
+                        before the item, and 0 for the first.
+             GROUPSTORE new IN s USING i, n {, delimiter}  The statement for
+                        s = FIELDSTORE(s, delimiter, i, n, new).
+             SEND s {:} TO file THEN / ELSE  WRITESEQ, or with the colon
+                        WRITEBLK, to a file opened with OPENSEQ.
+             ACCOUNT.PATH(account)  VOCPATH(file {, dict.flag})
+                        The pathname of an account, and of a file named in
+                        the VOC (the dictionary part with DICT in front or a
+                        true second argument).  A path is told only where
+                        the account could open it: its own directory and the
+                        files in it always, anything else only to an account
+                        that has the OS access gate; otherwise a null string,
+                        which for ACCOUNT.PATH is also the answer for an
+                        account that does not exist.
+             OSREAD var FROM path THEN / ELSE  OSWRITE data TO path
+             OSDELETE path
+                        A whole operating system file read, written and
+                        deleted by name, byte for byte.  They are made of
+                        OPENSEQ and DELETESEQ, so an account that has no
+                        OS access reaches only its own directory by them,
+                        and one that has reaches what the user can.  OSWRITE
+                        replaces the file and cuts it to the length of the
+                        data; OSDELETE removes a file and not, as openQM's
+                        statement does, a directory.  The ON ERROR clause is
+                        not supported: STATUS() says what happened.
+             CASING ON / OFF  Case sensitivity of string comparisons for the
+                        rest of the program, as $NOCASE.STRINGS does for all
+                        of it; SYSTEM(1086) tells which.
+
+18 Oct 26  SELECT LIST VARIABLES AND NUMBERED LISTS: FIVE STATEMENTS AND A VERB.
+
+             FORMLISTV array TO var       Makes a select list variable.
+             GETLISTV name TO var {SETTING count} THEN / ELSE
+                        A saved list into a select list variable.
+             WRITELIST array TO name      A saved list written from an array
+                        (ON works as well as TO).
+             MOVELIST n TO m {KEEP}  MOVELISTV n TO var {KEEP}
+                        Move a numbered list, or one in a variable, to
+                        another; the ids already read are not moved.
+             MOVE.LIST n TO m {KEEP}      The same as a command.
+             EXECUTE.LIST command {; command ...}   Runs the commands for
+                        each id of list 0 in turn, a pair of empty round
+                        brackets standing for the id.  All the ids are taken
+                        out of the list first.
+             LIST.PHANTOMS {USER name}    The phantoms and no one else.  The
+                        pool word of openQM is refused: SD has no pools of
+                        phantoms.
+
+18 Oct 26  NINE NEW $MODE WORDS AND DEFAULT VALUES FOR ARGUMENTS.
+
+             $MODE  CHANGE.NO.OVERLAP  COUNT.OVERLAP  INDEX.OVERLAP
+                        Whether CHANGE, EREPLACE, SWAP, COUNT, COUNTS, INDEX
+                        and INDEXS see occurrences that overlap.
+             PICK.CONVERT       CONVERT(string, from, to).
+             PICK.SELECT        SELECTV moves a default list to its target.
+             TRAP.UNUSED.MAIN   TRAP.UNUSED for the program's own variables.
+             EXPLICIT           A variable has to be named in a DIM statement
+                        before it is used.
+             CONDITIONAL.STATEMENTS  Accepted; it changes nothing, since SD
+                        always allows READ, WRITESEQ, LOCATE, SEEK and the
+                        rest of the openQM list as the condition of WHILE
+                        and UNTIL.
+             DEFAULT.UNASS.ARGS  An argument passed unassigned takes its
+                        default.
+             SUBROUTINE name(a, b = 7)  A default value (a number, a string,
+                        @TRUE or @FALSE) for an argument that the caller
+                        leaves out; the program needs VAR.ARGS, or the mode
+                        above.
+
+18 Oct 26  SYSTEM() KEYS 14, 19, 21, 45, 1048, 1049, 1062, 1067, 1086, 1088.
+
+             14 characters waiting at the terminal (a snapshot for piped
+             input), 19 and 21 unique values from the date and time, 45 the
+             name of the running program, 1048 a sequence number unique across
+             all sessions until SD restarts, 1049 whether HUSH is on, 1062 the
+             SIGNAL flag (reading it clears it), 1067 the default group size,
+             1086 whether string comparisons are case sensitive, 1088 where
+             MAXIMUM() or MINIMUM() found its element.  The names are
+             SYS$... in SYSCOM KEYS.H.
+             MAXIMUM() and MINIMUM() give the same answers as before.
+
+18 Oct 26  QUERY PROCESSOR: MEDIAN AND RPT.  OPTIONS CORRELATIVE.NOCASE AND
+           CORRELATIVE.REUSE.
+
+             MEDIAN     Beside TOTAL and AVERAGE: the middle value (the mean
+                        of the two in the middle when there is an even
+                        number).
+             RPT        Repeats a single valued field on each line of a
+                        report on a multivalued one.
+             OPTION CORRELATIVE.NOCASE  String operations in an I-type or
+                        correlative ignore case.
+             OPTION CORRELATIVE.REUSE   Its array operators act as if REUSE()
+                        had been applied to each operand.  Both are read when
+                        the correlative runs, not when it was compiled.
+
 18 Oct 26  SIX NEW OPTIONS: GIT, DIR.DTM, KEEP.OLD.OBJECT, NO.PHANTOM.NOTIFY,
            SPOOL.COMMAND AND ASSOC.ALL.
 

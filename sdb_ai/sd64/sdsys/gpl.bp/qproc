@@ -136,6 +136,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
       $define IFLG.COL.HDG          1     ;*   COL.HDG used
       $define IFLG.RIGHT.COL.HDG    2     ;*   Right aligned column heading
       $define IFLG.DOTLESS.COL.HDG  4     ;*   No ... fillers in headings
+      $define IFLG.RPT              8     ;*   RPT used: repeat the value on every line of a multivalued report (15 Oct 26 dm, QM4 gaps Q-20)
 
    synonyms = ""                     ;* Names of AS clause synonyms and...
    synonym.refs = ""                 ;* ...their item index values
@@ -162,6 +163,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
       equ REPORT.CALC       to  7    ;* CALC keyword
       equ REPORT.BREAK.SUP  to  8    ;* BREAK.SUP keyword
       equ REPORT.CUMULATIVE to  9    ;* CUMULATIVE keyword
+      equ REPORT.MEDIAN     to 10    ;* MEDIAN keyword (15 Oct 26 dm, QM4 gaps Q-20)
 
       equ REPORT.MODE.MASK  to 15
       equ REPORT.NO.NULLS   to 16    ;* Additive for NO.NULLS option
@@ -231,6 +233,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    min.list = 0
    max.list = 0
    repeating = @false
+   any.rpt = @false                  ;* an item was given RPT (15 Oct 26 dm, QM4 gaps Q-20)
 
    * Field test selections
 
@@ -2499,6 +2502,12 @@ parse.command.options:
             gosub add.qualified.display.item
             continue    ;* Already read next token
 
+* --- MEDIAN (15 Oct 26 dm, QM4 gaps Q-20): the middle of the values, the mean of the two in the middle for an even count
+         case keyword = KW$MEDIAN and (report.command or reformat.command)
+            item.report.mode = REPORT.MEDIAN
+            gosub add.qualified.display.item
+            continue    ;* Already read next token
+
 * --- BETWEEN
          case keyword = KW$BETWEEN
             gosub implicit.selection.clause
@@ -4023,8 +4032,16 @@ check.field.modifiers:
                item.to.list = list.item(no.of.list.items, ITEM.NO)
                item.multivalued(item.to.list) = @true
 
-            case keyword = KW$NO.NULLS and (item.report.mode = REPORT.AVERAGE or item.report.mode = REPORT.MIN)
+            case keyword = KW$NO.NULLS and (item.report.mode = REPORT.AVERAGE or item.report.mode = REPORT.MIN or item.report.mode = REPORT.MEDIAN)
                list.item(no.of.list.items, ITEM.MODE) = bitor(list.item(no.of.list.items, ITEM.MODE), REPORT.NO.NULLS)
+
+            * 15 Oct 26 dm, QM4 gaps Q-20: field RPT repeats a single valued item on every line of a multivalued report.  An
+            * item the dictionary calls multivalued is treated as single valued, as the manual says RPT does.
+            case keyword = KW$RPT
+               item.to.list = list.item(no.of.list.items, ITEM.NO)
+               item.flags(item.to.list) = bitor(item.flags(item.to.list), IFLG.RPT)
+               item.multivalued(item.to.list) = @false
+               any.rpt = @true
 
             case keyword = KW$SINGLE.VALUE
                item.to.list = list.item(no.of.list.items, ITEM.NO)
@@ -6116,7 +6133,8 @@ list.bytes:
                                      accumulate.percent,
                                      accumulate.calc,
                                      accumulate.continue,   ;* BREAK.SUP
-                                     accumulate.cumulative
+                                     accumulate.cumulative,
+                                     accumulate.median
 
 accumulate.total:
 accumulate.average:
@@ -6205,6 +6223,24 @@ accumulate.cumulative:
             else z = list.item(list.index, ITEM.ACCUM.VALUE)
             if accumulate.delim then cumulative.data := z : char(256 - accumulate.delim)
             else cumulative.data := z
+            goto accumulate.continue
+
+accumulate.median:
+            * 15 Oct 26 dm, QM4 gaps Q-20.  The values are kept in numeric order, every one, since the report began and since
+            * each breakpoint, as a list of values led by the letter L (a list that has not been started, or has been cleared
+            * at a breakpoint, is the 0 the item was given, which is not an L).  A null counts as zero.  MEDIAN.OF.LIST reads
+            * the middle of it at the end.
+            if num(z) then
+               zv = z + 0
+               m = list.item(list.index, ITEM.ACCUM.VALUE)
+               gosub median.insert
+               list.item(list.index, ITEM.ACCUM.VALUE) = m
+               for bp = 1 to no.of.breakpoints
+                  m = list.item(list.index, ITEM.LOCAL.VALUE)<bp>
+                  gosub median.insert
+                  list.item(list.index, ITEM.LOCAL.VALUE)<bp> = m
+               next bp
+            end
             goto accumulate.continue
 
 accumulate.number:
@@ -6309,12 +6345,14 @@ report.record: ;* Enter here from SHOW.ACCUMULATIONS
 
    * If we are using REPEATING, duplicate signle valued items
 
-   if repeating then
+   * (RPT, 15 Oct 26 dm, QM4 gaps Q-20, asks for this for one item and is checked for each below)
+
+   if repeating or any.rpt then
       if max.v > 1 then
          for list.index = 1 to no.of.list.items
             if list.item(list.index, ITEM.MODE) # REPORT.BREAK.SUP then
                item.to.list = list.item(list.index, ITEM.NO)
-               if not(item.multivalued(item.to.list)) then
+               if not(item.multivalued(item.to.list)) and (repeating or bitand(item.flags(item.to.list), IFLG.RPT)) then
                   disp.rec<list.index> := str(@vm:disp.rec<list.index>, max.v - 1)
                end
             end
@@ -6573,6 +6611,50 @@ show.tabular:
    return
 
 * ======================================================================
+* MEDIAN.INSERT  -  Put the number ZV in its place in a list ACCUMULATE.MEDIAN keeps.
+*
+* On entry:  m = the item's list (the letter L, then the values in numeric order, value mark delimited), or anything that
+*                is not a list yet (the 0 an item starts with, and is given back at a breakpoint), which is an empty one
+* On exit:   m = the list with zv added
+*
+* The place is found by halving the list and comparing numerically, so negative and decimal values fall where they should
+* (LOCATE ... BY 'AR' compares right justified as text, which they do not).
+
+median.insert:
+   m.body = if m[1,1] = 'L' then m[2, len(m)] else ''
+   m.lo = 1
+   m.hi = dcount(m.body, @vm)
+   loop
+   while m.lo <= m.hi
+      m.mid = int((m.lo + m.hi) / 2)
+      if m.body<1,m.mid> < zv then m.lo = m.mid + 1 else m.hi = m.mid - 1
+   repeat
+   ins zv before m.body<1,m.lo>
+   m = 'L' : m.body
+   return
+
+* ======================================================================
+* MEDIAN.OF.LIST  -  The median of the list ACCUMULATE.MEDIAN made.
+*
+* On entry:  m = the item's list: the letter L and the values in numeric order, value mark delimited
+* On exit:   s = the middle value, or the mean of the two in the middle when there is an even number; null if there is none
+
+median.of.list:
+   s = ''
+   if m[1,1] = 'L' then
+      m.body = m[2, len(m)]
+      m.n = dcount(m.body, @vm)
+      if m.n then
+         if rem(m.n, 2) then
+            s = m.body<1, (m.n + 1) / 2>
+         end else
+            s = (m.body<1, m.n / 2> + m.body<1, m.n / 2 + 1>) / 2
+         end
+      end
+   end
+   return
+
+* ======================================================================
 * SHOW.ACCUMULATIONS  -  Show totals, averages, etc at end of report
 
 show.accumulations:
@@ -6591,7 +6673,8 @@ show.accumulations:
                                      show.percent,
                                      show.calc,
                                      show.continue,  ;* BREAK.SUP
-                                     show.cumulative
+                                     show.cumulative,
+                                     show.median
 show.total:
 show.max:
 show.min:
@@ -6602,6 +6685,11 @@ show.cumulative:
 show.average:
             n = list.item(list.index, ITEM.COUNT)
             if n then s = list.item(list.index, ITEM.ACCUM.VALUE) / n
+            goto show.continue
+
+show.median:
+            m = list.item(list.index, ITEM.ACCUM.VALUE)
+            gosub median.of.list
             goto show.continue
 
 show.number:
@@ -6699,7 +6787,8 @@ show.breakpoint:
                                   break.percent,
                                   break.calc,
                                   break.continue,     ;* BREAK.SUP
-                                  break.cumulative
+                                  break.cumulative,
+                                  break.median
 break.total:
 break.max:
 break.min:
@@ -6710,6 +6799,11 @@ break.cumulative:
 break.average:
          n = list.item(list.index, ITEM.LOCAL.COUNT)<breakpoint.index>
          if n then s = list.item(list.index, ITEM.LOCAL.VALUE)<breakpoint.index> / n
+         goto break.continue
+
+break.median:
+         m = list.item(list.index, ITEM.LOCAL.VALUE)<breakpoint.index>
+         gosub median.of.list
          goto break.continue
 
 break.number:

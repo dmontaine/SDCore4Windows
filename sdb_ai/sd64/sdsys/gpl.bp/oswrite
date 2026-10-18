@@ -1,0 +1,54 @@
+* OSWRITE
+* !OSWRITE() subroutine, behind the OSWRITE statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (OSWRITE).  The compiler (bcomp, st.oswrite) calls it for OSWRITE data TO path.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !OSWRITE(data, path)
+*
+* Writes DATA to the operating system file PATH with no change to a byte (no field mark is turned into a newline), replacing what
+* the file held, which is cut to the length of DATA.  The file is made if it is not there.  STATUS() is 0 if it was written.
+* The openQM ON ERROR clause is not supported: a failure is the STATUS() and not an abort.
+*
+* An ordinary program, not an internal one, as !OSREAD is: the OPENSEQ in it asks the OS-access gate of the account.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+subroutine !oswrite(data, path)
+$catalog !oswrite
+
+   if path = '' then return
+
+   * The ELSE of OPENSEQ is a file that was not there as well as a failure; the STATUS() says which (0 for a file that is made).
+   * A failure leaves the STATUS() it made: this is not an internal program and cannot SET.STATUS, so nothing is done after the
+   * failing statement that could change it (the file is left open until the program ends).
+   openseq path overwrite to f then null else
+      if status() # 0 then return
+   end
+   weofseq f
+   writeblk data to f else return
+   closeseq f
+   return
+end
+
+* END-CODE

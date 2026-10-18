@@ -1,0 +1,56 @@
+* WRITELIST
+* !WRITELIST() subroutine, behind the WRITELIST statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-2 (WRITELIST).  The compiler (bcomp, st.writelist) calls it for
+*               WRITELIST ids TO list.name.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !WRITELIST(ids, list.name)
+*
+* Writes the field mark delimited dynamic array ids to the saved lists file, $savedlists, as the item list.name, replacing any
+* that was there, as the manual says: "equivalent to opening the $SAVEDLISTS file and writing the ids variable to a record
+* named list.name" in non-transactional mode, so that the write does not wait for a COMMIT.  If the file cannot be opened the
+* program is aborted.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+subroutine !writelist(ids, list.name)
+$catalog !writelist
+
+$include err.h
+
+   open '$savedlists' non.transactional to sl.f else
+      * The file is made the first time, as SAVE.LIST makes it ($svlists on the disk, $savedlists the VOC entry for it)
+      if status() # ER$NVR then abort sysmsg(2019)    ;* File not found
+      create.file '$svlists' dynamic on error
+         abort sysmsg(3249, status())                ;* Error xx creating $savedlists
+      end
+      recordlocku @voc, '$savedlists'
+      write 'F' : @fm : '$svlists' to @voc, '$savedlists'
+      open '$savedlists' non.transactional to sl.f else abort sysmsg(3248, status())   ;* Error xx opening $savedlists
+   end
+   write ids to sl.f, list.name
+   return
+end
+
+* END-CODE

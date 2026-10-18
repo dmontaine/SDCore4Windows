@@ -418,6 +418,7 @@ Private void init_program() {
   process.program.itrap_n = 0;
   process.program.itrap_stub = 0;
   process.program.itrap_hit = 0;
+  process.program.str_ovl = 0; /* the overlap modes belong to the program that set them: the caller's copy keeps its own (Q-16) */
   process.program.has_stacked = FALSE; /* the caller's copy, saved before this call, keeps the stacked list (openQM 61) */
   process.program.gosub_depth = 0;
   process.program.break_handler = NULL;
@@ -1067,6 +1068,11 @@ void k_call(char* name, int num_args, u_char* code_ptr, int16_t stack_adj) {
   /* Set flags */
 
   process.program.flags |= hdr->flags;
+
+  /* 15 Oct 26 QM4 gaps Q-17, OPTION CORRELATIVE.NOCASE: a correlative or I-type that is started now is case blind, whenever it was
+    compiled.                                                                                                                  */
+  if ((hdr->flags & HDR_ITYPE) && Option(OptCorrelativeNoCase))
+    process.program.flags |= HDR_NOCASE;
 }
 
 /* ======================================================================

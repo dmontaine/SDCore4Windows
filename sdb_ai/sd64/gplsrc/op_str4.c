@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE COUNT.OVERLAP and INDEX.OVERLAP: count() and op_index() find overlapping occurrences (QM4 gaps Q-16)
  * 18 Oct 26 Windows port - from Linux e91ed09 (12 Oct 26): MATCHES and MATCHFIELD set INMAT() to the number of the template that matched (1.2-0, 315)
  * END-HISTORY
  *
@@ -249,10 +250,15 @@ void op_index() {
           goto exit_op_index;
         }
 
-        src_bytes_remaining = isrc_bytes_remaining;
-        offset += ioffset;
-        src = isrc;
-        src_str = isrc_str;
+        /* $MODE INDEX.OVERLAP: the next occurrence may start inside this one, so the search goes on from the byte after
+           the start of the match, which is where the outer loop already points */
+
+        if (!(process.program.str_ovl & SO_INDEX_OVERLAP)) {
+          src_bytes_remaining = isrc_bytes_remaining;
+          offset += ioffset;
+          src = isrc;
+          src_str = isrc_str;
+        }
       no_match:;
       } else /* Matching single character substring */
       {
@@ -1619,9 +1625,14 @@ Private void count(bool dcount) /* Doing DCOUNT? */
 
         ct++;
 
-        src_bytes_remaining = isrc_bytes_remaining;
-        src = isrc;
-        src_str = isrc_str;
+        /* $MODE COUNT.OVERLAP (COUNT only, never DCOUNT): the next occurrence may start inside this one, so the search
+           goes on from the byte after the start of the match, where the outer loop already points */
+
+        if (dcount || !(process.program.str_ovl & SO_COUNT_OVERLAP)) {
+          src_bytes_remaining = isrc_bytes_remaining;
+          src = isrc;
+          src_str = isrc_str;
+        }
 
       no_match:;
       } else /* Matching single character substring */

@@ -1,0 +1,190 @@
+* SORTCOMPARE
+* !SORTCOMPARE() function, the BASIC function SORT.COMPARE()
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1 (SORT.COMPARE), as a function in BASIC that bcomp knows by name (the table
+*               in bcomp, builtin.functions.load) so that no opcode is needed for it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* SORT.COMPARE(string1, string2, mode {, no.case})  =  -1 if string1 sorts before string2, 0 if they are equal, 1 after.
+*
+* mode (the SRT$ values of syscom keys.h, the openQM 4 numbers):
+*    0  SRT$LEFT         Characters compared one by one from the start; of two strings that match as far as the shorter
+*                        goes, the longer is the greater.
+*    1  SRT$RIGHT        The shorter is padded with spaces on the left; if both are integers, with an optional sign, they
+*                        are compared as numbers.
+*    2  SRT$COMPOUND     Each string is a series of alternating numeric and non-numeric elements.  Numeric elements are
+*                        compared as numbers, non-numeric ones in collating order; a numeric element comes before a
+*                        non-numeric one.  A sign counts only on the first element, and only if a digit follows it.
+*    3  SRT$RIGHT.FLOAT  As mode 1 but any number, not only an integer, is compared as a number.
+*    4  SRT$STRICT       As mode 2, but elements that are numerically equal and written differently ("28" and "028")
+*                        are different, the one with fewer characters first.
+*  + 16  SRT$DESCENDING  The result is reversed.
+*  + 64  SRT$NOCASE      Case is ignored.
+* no.case, when true, is the same as adding SRT$NOCASE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+function !sortcompare(s1, s2, mode, no.case) var.args
+$catalog !sortcompare
+
+   md = mode + 0
+   desc = bitand(md, 16) # 0
+   nc = bitand(md, 64) # 0
+   if arg.present(no.case) then
+      if no.case then nc = @true
+   end
+
+   a = s1
+   b = s2
+   if nc then
+      a = upcase(a)
+      b = upcase(b)
+   end
+
+   base = bitand(md, 15)
+   r = 0
+   begin case
+      case base = 1
+         gosub right.compare
+      case base = 3
+         gosub float.compare
+      case base = 2 or base = 4
+         gosub compound.compare
+      case 1
+         r = compare(a, b, 'L')
+   end case
+
+   if desc then r = -r
+   return r
+
+* SRT$RIGHT: integers (an optional sign and digits) compare as numbers, anything else right justified as text
+right.compare:
+   t = a ; gosub is.integer ; a.int = is.int
+   t = b ; gosub is.integer ; b.int = is.int
+   if a.int and b.int then
+      gosub numeric.compare
+   end else
+      r = compare(a, b, 'R')
+   end
+   return
+
+* SRT$RIGHT.FLOAT: any numbers compare as numbers
+float.compare:
+   if a # '' and b # '' and num(a) and num(b) then
+      gosub numeric.compare
+   end else
+      r = compare(a, b, 'R')
+   end
+   return
+
+numeric.compare:
+   an = a + 0
+   bn = b + 0
+   begin case
+      case an < bn ; r = -1
+      case an > bn ; r = 1
+      case 1 ; r = 0
+   end case
+   return
+
+* Is the text T an integer: digits, with a sign in front of them if it likes?  The null string is not one.
+is.integer:
+   is.int = @false
+   if t[1,1] = '-' or t[1,1] = '+' then t = t[2, len(t)]
+   if t matches '1N0N' then is.int = @true
+   return
+
+compound.compare:
+   s = a ; gosub split.elements ; ea = els
+   s = b ; gosub split.elements ; eb = els
+   na = dcount(ea, @fm) ; nb = dcount(eb, @fm)
+   n = min(na, nb)
+   r = 0
+   for k = 1 to n
+      xa = ea<k> ; xb = eb<k>
+      ta = xa[1,1] ; tb = xb[1,1]
+      ta.text = xa[2, len(xa)] ; tb.text = xb[2, len(xb)]
+      begin case
+         case ta = 'N' and tb = 'T'
+            r = -1
+         case ta = 'T' and tb = 'N'
+            r = 1
+         case ta = 'N'
+            an = ta.text + 0
+            bn = tb.text + 0
+            begin case
+               case an < bn ; r = -1
+               case an > bn ; r = 1
+               case base = 4 and len(ta.text) # len(tb.text)
+                  * numerically equal and written differently: the shorter first
+                  r = if len(ta.text) < len(tb.text) then -1 else 1
+               case base = 4
+                  r = compare(ta.text, tb.text, 'L')
+            end case
+         case 1
+            r = compare(ta.text, tb.text, 'L')
+      end case
+      if r # 0 then exit
+   next k
+   if r = 0 then
+      begin case
+         case na < nb ; r = -1
+         case na > nb ; r = 1
+      end case
+   end
+   return
+
+* The string S as a list of elements, a field mark apart: N and the digits, or T and the other characters.  A sign is part of
+* the first element if a digit follows it.
+split.elements:
+   els = ''
+   n = len(s)
+   i = 1
+   loop
+   while i <= n
+      c = s[i,1]
+      sign = (i = 1 and (c = '-' or c = '+') and s[2,1] matches '1N')
+      if sign or (c matches '1N') then
+         j = if sign then i + 1 else i
+         loop
+         while j <= n
+            if not(s[j,1] matches '1N') then exit
+            j += 1
+         repeat
+         els<-1> = 'N' : s[i, j - i]
+         i = j
+      end else
+         j = i + 1
+         loop
+         while j <= n
+            if s[j,1] matches '1N' then exit
+            j += 1
+         repeat
+         els<-1> = 'T' : s[i, j - i]
+         i = j
+      end
+   repeat
+   return
+end
+
+* END-CODE

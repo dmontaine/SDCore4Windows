@@ -1,0 +1,94 @@
+* LISTPHAN
+* LIST.PHANTOMS verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-8 (LIST.PHANTOMS).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LIST.PHANTOMS {USER username}
+*
+* A subset of LISTU: only the phantom processes, with their user number, process id, user name, login time and account.  As in
+* LISTU the account is shown for the administrator and for the caller's own phantoms, and left blank for anyone else's.  USER
+* shows the phantoms of one user name (the name is case sensitive).  The openQM POOL qualifier is refused: SD has no pools of
+* phantoms.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program list.phantoms
+$catalog $listphan
+
+$include parser.h
+$include err.h
+$include int$keys.h
+$include keys.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+   only.user = ''
+
+   call !parser(parser$reset, 0, @sentence, 0)
+   call !parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   loop
+      call !parser(parser$get.token, token.type, token, keyword)
+   while token.type # PARSER$END
+      begin case
+         case upcase(token) = 'USER'
+            call !parser(parser$get.token, token.type, only.user, keyword)
+            if token.type = PARSER$END or only.user = '' then stop sysmsg(12281) ;* User name required after USER
+         case upcase(token) = 'POOL'
+            stop sysmsg(12282) ;* SD has no pools of phantom processes
+         case 1
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end case
+   repeat
+
+   @system.return.code = 0
+
+   users = kernel(K$USERS, 0)
+   * uid VM pid VM ip_addr VM flags VM puid VM username FM...
+
+   see.all = kernel(K$ADMINISTRATOR, -1)
+   me = kernel(K$USERNAME, 0)
+
+   print '  User  Pid          Username                          Login time    Account'
+   for i = 1 to dcount(users, @fm)
+      udata = raise(users<i>)
+      flg = udata<K$USERS.FLAGS> + 0
+      if not(bitand(flg, USR$PHANTOM)) then continue
+      username = udata<K$USERS.UNAME>
+      if only.user # '' and username # only.user then continue
+      acct = udata<K$USERS.ACCOUNT>
+      if not(see.all) and username # me then acct = ''
+      login.time = udata<K$USERS.LOGIN>
+      print fmt(udata<K$USERS.UID>, '6R') : '  ' :
+      print fmt(udata<K$USERS.PID>, '11L') : '  ' :
+      print fmt(username, '32L') : '  ' :
+      print oconv(idiv(login.time, 86400), 'DDML[,A3]') : ' ' :
+      print oconv(rem(login.time, 86400), 'MT') : '  ' :
+      print acct
+   next i
+
+   return
+end
+
+* END-CODE

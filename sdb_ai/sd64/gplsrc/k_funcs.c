@@ -960,12 +960,12 @@ void k_num_array2(
   /* Ensure that both arguments are strings */
 
   arg2 = e_stack - 1;
-  reuse2 = arg2->flags & DF_REUSE;
+  reuse2 = ReuseFlag(arg2);
   k_get_string(arg2);
   src2_str = arg2->data.str.saddr;
 
   arg1 = e_stack - 2;
-  reuse1 = arg1->flags & DF_REUSE;
+  reuse1 = ReuseFlag(arg1);
   k_get_string(arg1);
   src1_str = arg1->data.str.saddr;
 

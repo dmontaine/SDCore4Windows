@@ -1,0 +1,67 @@
+* TTYGET
+* !TTYGET() function, the BASIC function TTYGET()
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-7 (TTYGET).  The compiler (bcomp, builtin.functions.load) knows it by name.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* TTYGET()
+*
+* The terminal modes PTERM sets, as a field mark delimited array that TTYSET puts back.  Fields 1 to 5 are the manual's:
+*
+*     1  Is Ctrl-C treated as the break key?  (PTERM BREAK ON or OFF)            1 or 0
+*     2  Is case inversion on?  (PTERM CASE INVERT or NOINVERT)                   1 or 0
+*     3  The break character, as a number: 3 for Ctrl-C  (PTERM BREAK n)
+*     4  The output newline sequence  (PTERM NEWLINE)                              the characters
+*     5  The input return key  (PTERM RETURN)                                      its character code
+*
+* The manual says more fields may be added.  SD adds the other modes PTERM sets, so that a program that saves the settings and
+* puts them back leaves nothing changed:
+*
+*     6  PTERM MARK ON or OFF        7  PTERM ERASE (0 as at the start, 1-255 a character, 256 none)
+*     8  PTERM CTRL.FILTER ON or OFF 9  PTERM BINARY IN (Telnet)    10  PTERM BINARY OUT (Telnet)    11  PTERM TELNET
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function ttyget()
+$catalog !ttyget
+
+$include int$keys.h
+
+   t = ''
+   t<1> = (pterm(PT$BREAK, -1) # 0)
+   t<2> = (pterm(PT$INVERT, -1) # 0)
+   t<3> = pterm(PT$BRKCH, 0)
+   t<4> = pterm(PT$ONEWLINE, '')
+   s = pterm(PT$INEWLINE, '')
+   t<5> = if s = '' then '' else seq(s)
+   t<6> = (pterm(PT$MARK, -1) # 0)
+   t<7> = pterm(PT$ERASE, -1)
+   t<8> = (pterm(PT$CTRL.FILTER, -1) # 0)
+   t<9> = (pterm(PT$BINARY.IN, -1) # 0)
+   t<10> = (pterm(PT$BINARY.OUT, -1) # 0)
+   t<11> = (pterm(PT$TELNET, -1) # 0)
+   return t
+end
+
+* END-CODE

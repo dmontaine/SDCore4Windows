@@ -38,6 +38,7 @@
 
 #include "sd.h"
 #include "header.h"
+#include "options.h"
 
 extern void (*dispatch[])(void);
 
@@ -98,17 +99,17 @@ void op_ifs() {
   /* Ensure that all three arguments are strings */
 
   arg3 = e_stack - 1;
-  reuse3 = arg3->flags & DF_REUSE;
+  reuse3 = ReuseFlag(arg3);
   k_get_string(arg3);
   src3_str = arg3->data.str.saddr;
 
   arg2 = e_stack - 2;
-  reuse2 = arg2->flags & DF_REUSE;
+  reuse2 = ReuseFlag(arg2);
   k_get_string(arg2);
   src2_str = arg2->data.str.saddr;
 
   arg1 = e_stack - 3;
-  reuse1 = arg1->flags & DF_REUSE;
+  reuse1 = ReuseFlag(arg1);
   k_get_string(arg1);
   src1_str = arg1->data.str.saddr;
 
@@ -446,12 +447,12 @@ void op_mvdd() {
   /* Ensure that both arguments are strings */
 
   arg2 = e_stack - 1;
-  reuse2 = arg2->flags & DF_REUSE;
+  reuse2 = ReuseFlag(arg2);
   k_get_string(arg2);
   src2_str = arg2->data.str.saddr;
 
   arg1 = e_stack - 2;
-  reuse1 = arg1->flags & DF_REUSE;
+  reuse1 = ReuseFlag(arg1);
   k_get_string(arg1);
   src1_str = arg1->data.str.saddr;
 
@@ -1068,12 +1069,12 @@ void op_splice() {
   /* Ensure that both arrays are strings */
 
   array2 = e_stack - 1;
-  reuse2 = array2->flags & DF_REUSE;
+  reuse2 = ReuseFlag(array2);
   k_get_string(array2);
   src2_str = array2->data.str.saddr;
 
   array1 = e_stack - 3;
-  reuse1 = array1->flags & DF_REUSE;
+  reuse1 = ReuseFlag(array1);
   k_get_string(array1);
   src1_str = array1->data.str.saddr;
 

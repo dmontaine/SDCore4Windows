@@ -1,0 +1,84 @@
+* MOVELIST
+* !MOVELIST() subroutine, behind the MOVELIST and MOVELISTV statements
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-2 (MOVELIST and MOVELISTV).  The compiler (bcomp, st.movelist) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !MOVELIST(src, tgt, keep, to.var)
+*
+* MOVELIST src TO tgt {KEEP}   and   MOVELISTV src TO var {KEEP}
+*
+* src is a select list variable or the number (0 to 10) of a numbered select list.  The items of it that have not been read
+* yet are moved to tgt: with to.var false (MOVELIST) tgt is the number of a numbered list, whose old items are replaced; with
+* to.var true (MOVELISTV) tgt is a variable and becomes a select list variable.  Unless keep is true the source is cleared;
+* with keep it is left as it was, which for a source that is a select list variable means that its own read pointer does
+* not move.  Moving a list to itself does nothing.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+
+subroutine !movelist(src, tgt, keep, to.var)
+$catalog !movelist
+
+$include syscom.h
+$include int$keys.h
+
+   * The items to move
+   src.is.var = (vartype(src) = V$SELLIST)
+   src.no = -1
+   if src.is.var then
+      work = src                  ;* the copy has its own read pointer: the caller's variable is not read away
+      items = ''
+      loop
+         readnext id from work else exit
+         items<-1> = id
+      repeat
+   end else
+      src.no = src + 0
+      if src.no < 0 or src.no > 10 then abort sysmsg(1118)     ;* Select list number out of range
+      items = select.list(src.no)[getrem(select.list(src.no)) + 1, 99999999]
+   end
+
+   * The target
+   if to.var then
+      selectv items to tgt        ;* a select list variable made from the array
+   end else
+      tgt.no = tgt + 0
+      if tgt.no < 0 or tgt.no > 10 then abort sysmsg(1118)     ;* Select list number out of range
+      if tgt.no = src.no then return
+      select.list(tgt.no) = items
+      select.count(tgt.no) = if items = '' then 0 else dcount(items, @fm)
+   end
+
+   * The source, unless it is to stay
+   if not(keep) and not(src.is.var) then
+      select.list(src.no) = ''
+      select.count(src.no) = 0
+   end
+   return
+end
+
+* END-CODE

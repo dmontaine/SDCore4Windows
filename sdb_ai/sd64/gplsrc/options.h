@@ -87,11 +87,18 @@
 #define OptNoPhantomNotify   52   /*            a phantom does not send its parent the message when it ends (BASIC, cproc) */
 #define OptSpoolCommand      53   /*            show the operating system command that prints (kernel, the print start) */
 #define OptAssocAll          54   /*            the query processor treats all fields as one association (BASIC, qproc) */
-#define NumOptions           55
+#define OptCorrelativeNoCase 55   /*            string operations in a correlative or I-type are case blind: HDR_NOCASE is set when its object is started (kernel.c) */
+#define OptCorrelativeReuse  56   /*            every operand of an array operation in a correlative or I-type is read as if it had REUSE() (ReuseFlag below) */
+#define NumOptions           57
 
 Public char option_flags[NumOptions];
 
 #define Option(opt) (option_flags[(opt)])
 #define SetOption(opt, val) option_flags[(opt)] = (val);
+
+/* The REUSE flag of an operand of an array operation (DF_REUSE, or 0): the descriptor's own, or, in a correlative or I-type with
+   CORRELATIVE.REUSE on, always.  The option is read when the correlative runs, not when it was compiled. */
+#define ReuseFlag(d) \
+  (((d)->flags & DF_REUSE) | ((((process.program.flags & HDR_ITYPE) != 0) && Option(OptCorrelativeReuse)) ? DF_REUSE : 0))
 
 /* END-CODE */

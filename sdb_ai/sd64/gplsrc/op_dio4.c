@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE PICK.SELECT (QM4 gaps Q-16): op_selectv() moves an active list 0 to its target;
+ *               transfer_list0() is the body of op_selecte(), which both now call
  * 02 Sep 26 Windows port - dir_select tests the escape character before
  *                      consuming it (PRE_RELEASE_FIXES.md 128, UPSTREAM 35)
  * rev 0.9-3 mab in dir_select if we end up with an empty name, don't add to list
@@ -62,6 +64,7 @@ void op_dcount(void);
 
 Private void readnext(int16_t mode);
 Private bool dir_select(FILE_VAR* fvar, int16_t list_no);
+Private void transfer_list0(DESCRIPTOR* tgt_descr);
 
 /* ====================================================================== */
 
@@ -755,16 +758,10 @@ void op_selecte() {
      |=============================|=============================|
  top |  Select list variable       |                             |
      |=============================|=============================|
-                    
+
  */
 
-  DESCRIPTOR* src_descr;
   DESCRIPTOR* tgt_descr;
-  STRING_CHUNK* src_hdr;
-  STRING_CHUNK* src_str;
-  STRING_CHUNK* tgt_str;
-  int16_t offset; /* Offset into current source chunk */
-  int16_t bytes_remaining;
 
   /* Get target address */
 
@@ -773,6 +770,23 @@ void op_selecte() {
     tgt_descr = tgt_descr->data.d_addr;
   k_release(tgt_descr);
   k_pop(1);
+
+  transfer_list0(tgt_descr);
+}
+
+/* ======================================================================
+   transfer_list0()  -  Move the unprocessed items of list 0 to a select list variable
+
+   The target has been released.  Used by SELECTE and, under $MODE PICK.SELECT, by SELECTV when list 0 is active
+   (15 Oct 26, QM4 gaps Q-16, which also moved this out of op_selecte()).  */
+
+Private void transfer_list0(DESCRIPTOR* tgt_descr) {
+  DESCRIPTOR* src_descr;
+  STRING_CHUNK* src_hdr;
+  STRING_CHUNK* src_str;
+  STRING_CHUNK* tgt_str;
+  int16_t offset; /* Offset into current source chunk */
+  int16_t bytes_remaining;
 
   /* Transfer unprocessed items in select list 0 to the target variable */
 
@@ -866,6 +880,14 @@ void op_selectv() {
     tgt_descr = tgt_descr->data.d_addr;
   k_release(tgt_descr);
 
+  /* $MODE PICK.SELECT: with the default list active, SELECTV moves it to the target and looks at nothing else, the file
+     variable included (15 Oct 26, QM4 gaps Q-16) */
+
+  if ((op_flags & P_PICK_SEL) && SelectList(0)->data.str.saddr != NULL) {
+    transfer_list0(tgt_descr);
+    goto selectv_status;
+  }
+
   /* Get file variable / dynamic array */
 
   descr = e_stack - 2;
@@ -935,6 +957,7 @@ void op_selectv() {
     descr->data.value = record_count;
   }
 
+selectv_status:
   k_pop(1); /* 0293 Moved to be in both processing paths */
   k_dismiss();
 

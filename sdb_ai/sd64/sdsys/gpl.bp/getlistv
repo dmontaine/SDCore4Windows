@@ -1,0 +1,51 @@
+* GETLISTV
+* !GETLISTV() function, behind the GETLISTV statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-2 (GETLISTV).  The compiler (bcomp, st.getlistv) calls it, as a function, for
+*               GETLISTV name TO list.var {SETTING count.var} THEN / ELSE.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* !GETLISTV(name, list.var, count)
+*
+* The saved list called name in $savedlists becomes the select list variable list.var, and count is set to the number of
+* items it holds.  The result is 1 if the list was there (the THEN clause is taken) and 0 if it was not, or $savedlists could
+* not be opened (the ELSE clause is taken).  The saved copy is left where it is.  GETLIST does the same into a numbered list
+* (_getlist).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+function !getlistv(name, list.var, count)
+$catalog !getlistv
+
+   count = 0
+   open '$savedlists' to sl.f else return 0
+   read saved.list from sl.f, name else return 0
+
+   * SELECTV of a dynamic array in place of a file makes a select list variable from the array
+   selectv saved.list to list.var
+   count = dcount(saved.list, @fm)
+   @selected = count
+   return 1
+end
+
+* END-CODE

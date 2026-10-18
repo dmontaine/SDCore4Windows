@@ -179,6 +179,19 @@ $define M.WRITE.DELETE.THEN.ELSE 30  ;* openQM 368 / 496: WRITE, WRITEU, MATWRIT
 $define M.STDFIL               31  ;* 14 Oct 26 dm - openQM 17: the default file variable (per program; see stdfil.var.load)
 ** End New Modes
 
+* The mode word is full (bit 31 is STDFIL), so modes added after it are bits of a second word, mode2.  A name's
+* position in mode.names says which word: positions 1 to 32 are bits 0 to 31 of mode, 33 and up are bits 0 up of mode2.
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps bundle Q-16
+$define M2.CHANGE.NO.OVERLAP    0  ;* CHANGE, EREPLACE and SWAP do not overlap occurrences (OP.STROVL, op_chnge.c)
+$define M2.COUNT.OVERLAP        1  ;* COUNT and COUNTS find overlapping occurrences
+$define M2.INDEX.OVERLAP        2  ;* INDEX and INDEXS find overlapping occurrences
+$define M2.PICK.CONVERT         3  ;* CONVERT(source, from, to): the Pick order of arguments (OP.ROLL3 puts them where the function wants them)
+$define M2.CONDITIONAL.STATEMENTS 4 ;* accepted and does nothing: SD always allows the statements of cond.statements as WHILE / UNTIL conditions
+$define M2.TRAP.UNUSED.MAIN     5  ;* TRAP.UNUSED, for variables assigned in the program itself and not in an include record
+$define M2.PICK.SELECT          6  ;* SELECTV moves an active default list to its target (P_PICK_SEL, op_selectv)
+$define M2.EXPLICIT             7  ;* a scalar must be named in a DIM statement before it is used (explicit.check, dim.declare.scalar)
+$define M2.DEFAULT.UNASS.ARGS   8  ;* an argument with a default value takes it when the caller passed it unassigned (arg.defaults.emit)
+
 * Corresponding names, value delimited, first name is bit 0 of mode flags
 * NJS remove hard coded fd hex, use @VM
 mode.names = "UV.LOCATE"
@@ -217,6 +230,16 @@ mode.names := @VM:"WRITE.DELETE.THEN.ELSE"
 * STDFIL is bit 31 and is set by index: any name for bits 22 to 30 must be
 * appended ABOVE this line, never after it.
 mode.names<1,32> = "STDFIL"
+* Names for the bits of mode2, in the order of the M2. constants above (position 33 is bit 0)
+mode.names<1,33> = "CHANGE.NO.OVERLAP"
+mode.names<1,34> = "COUNT.OVERLAP"
+mode.names<1,35> = "INDEX.OVERLAP"
+mode.names<1,36> = "PICK.CONVERT"
+mode.names<1,37> = "CONDITIONAL.STATEMENTS"
+mode.names<1,38> = "TRAP.UNUSED.MAIN"
+mode.names<1,39> = "PICK.SELECT"
+mode.names<1,40> = "EXPLICIT"
+mode.names<1,41> = "DEFAULT.UNASS.ARGS"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -287,6 +310,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    cond.mode = @false         ;* 12 Oct 26 dm - openQM 206: a THEN/ELSE statement is being compiled as a WHILE / UNTIL condition
    cond.statements = "READ":@fm:"READU":@fm:"READL":@fm:"READV":@fm:"READVU":@fm:"READVL":@fm:"READNEXT"
    cond.statements := @fm:"READSEQ":@fm:"READBLK":@fm:"READLIST":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ"
+   * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps Q-16: the rest of the openQM list for $MODE CONDITIONAL.STATEMENTS (the mode name is accepted and
+   * changes nothing: these are allowed whether or not it is given).  OSREAD is not a statement in SD.
+   cond.statements := @fm:"MATREAD":@fm:"MATREADL":@fm:"MATREADU":@fm:"READCSV":@fm:"WRITEBLK":@fm:"WRITECSV":@fm:"WRITESEQ"
+   cond.statements := @fm:"SEEK":@fm:"FILELOCK":@fm:"FILEUNLOCK":@fm:"FLUSH":@fm:"GETLIST":@fm:"LOCATE":@fm:"FIND":@fm:"FINDSTR":@fm:"SEND":@fm:"OSREAD"
    redim.stmt = @false
 
    * The AT.CONSTANTS list holds @ variables which are either constants or
@@ -372,7 +399,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * Statement names.  All these statements generate DEBUG calls if debugging
    statements = "ABORT"
    statements := @fm:"BEGIN":@fm:"BREAK"
-   statements := @fm:"CALL":@fm:"CASE":@fm:"CATCH":@fm:"CHAIN"
+   statements := @fm:"CALL":@fm:"CASE":@fm:"CASING":@fm:"CATCH":@fm:"CHAIN"   ;* CASING: 15 Oct 26 dm - QM4 gaps Q-1
    statements := @fm:"CLEAR":@fm:"CLEARCOMMON"
    statements := @fm:"CLEARDATA":@fm:"CLEARFILE":@fm:"CLEARINPUT"
    statements := @fm:"CLEARSELECT":@fm:"CLOSE":@fm:"CLOSESEQ":@fm:"CLOSE.SOCKET"
@@ -386,8 +413,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"EXECUTE":@fm:"EXIT"
    statements := @fm:"FILE":@fm:"FILELOCK":@fm:"FILEUNLOCK":@fm:"FIND"
    statements := @fm:"FINDSTR":@fm:"FLUSH":@fm:"FLUSH.DH.CACHE":@fm:"FOOTING":@fm:"FOR"   ;* FLUSH.DH.CACHE: 14 Oct 26 dm - openQM 83, 123
-   statements := @fm:"FORMLIST"
-   statements := @fm:"GETLIST":@fm:"GO":@fm:"GOSUB":@fm:"GOTO"
+   statements := @fm:"FORMLIST":@fm:"FORMLISTV"     ;* FORMLISTV: 15 Oct 26 dm - QM4 gaps Q-2
+   statements := @fm:"GETLIST":@fm:"GETLISTV":@fm:"GO":@fm:"GOSUB":@fm:"GOTO"   ;* GETLISTV: 15 Oct 26 dm - QM4 gaps Q-2
    statements := @fm:"HEADING":@fm:"HUSH"
    statements := @fm:"IF":@fm:"IN":@fm:"INCLUDE":@fm:"INHERIT"
    statements := @fm:"INPUT":@fm:"INPUTCLEAR"
@@ -428,6 +455,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"WRITECSV"
    statements := @fm:"WRITESEQ":@fm:"WRITESEQF":@fm:"WRITEU":@fm:"WRITEV"
    statements := @fm:"WRITEVU"
+   statements := @fm:"WRITELIST":@fm:"MOVELIST":@fm:"MOVELISTV"   ;* 15 Oct 26 dm - QM4 gaps Q-2 (at the end, so that no other entry moves)
+   statements := @fm:"REVREMOVE":@fm:"GROUPSTORE":@fm:"TTYSET":@fm:"SEND"    ;* 15 Oct 26 dm - QM4 gaps Q-1, Q-5, Q-7 (same)
+   statements := @fm:"OSREAD":@fm:"OSWRITE":@fm:"OSDELETE"                    ;* 15 Oct 26 dm - QM4 gaps Q-4 (same)
 
    * Statements which do not generate DEBUG calls when debugging
 
@@ -497,6 +527,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "ANDS"            ; intrinsic.opcodes<-1> = OP.ANDS
    intrinsics<-1> = "ARG"             ; intrinsic.opcodes<-1> = OP.ARG
    intrinsics<-1> = "ARG.COUNT"       ; intrinsic.opcodes<-1> = OP.ARGCT
+   intrinsics<-1> = "ARG.PRESENT"     ; intrinsic.opcodes<-1> = OP.XFUN     ;* 15 Oct 26 dm - QM4 gaps Q-7
    intrinsics<-1> = "ASCII"           ; intrinsic.opcodes<-1> = OP.ASCII
    intrinsics<-1> = "ASIN"            ; intrinsic.opcodes<-1> = OP.ASIN
    intrinsics<-1> = "ASSIGNED"        ; intrinsic.opcodes<-1> = OP.ASS
@@ -509,10 +540,12 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "BITSET"          ; intrinsic.opcodes<-1> = OP.BITSET
    intrinsics<-1> = "BITTEST"         ; intrinsic.opcodes<-1> = OP.BITTEST
    intrinsics<-1> = "BITXOR"          ; intrinsic.opcodes<-1> = OP.BITXOR
+   intrinsics<-1> = "BOOL"            ; intrinsic.opcodes<-1> = OP.XFUN     ;* 15 Oct 26 dm - QM4 gaps Q-6
    intrinsics<-1> = "CATALOGUED"      ; intrinsic.opcodes<-1> = OP.CHKCAT
    intrinsics<-1> = "CATS"            ; intrinsic.opcodes<-1> = OP.CATS
    intrinsics<-1> = "CAUGHT"          ; intrinsic.opcodes<-1> = OP.EXC   ;* 12 Oct 26 dm - openQM 355
    intrinsics<-1> = "CCALL"           ; intrinsic.opcodes<-1> = OP.CCALL
+   intrinsics<-1> = "CEIL"            ; intrinsic.opcodes<-1> = OP.XFUN     ;* 15 Oct 26 dm - QM4 gaps Q-1: the OP.XFUN family, see in.xfun
    intrinsics<-1> = "CHANGE"          ; intrinsic.opcodes<-1> = OP.CHANGE
    intrinsics<-1> = "CHAR"            ; intrinsic.opcodes<-1> = OP.CHAR
    intrinsics<-1> = "CHECKSUM"        ; intrinsic.opcodes<-1> = OP.CHECKSUM
@@ -554,6 +587,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "FIELDSTORE"      ; intrinsic.opcodes<-1> = OP.FLDSTORF
    intrinsics<-1> = "FILEINFO"        ; intrinsic.opcodes<-1> = OP.FILEINFO
    intrinsics<-1> = "FIX"             ; intrinsic.opcodes<-1> = OP.FIX   ;* 12 Oct 26 dm - openQM 472
+   intrinsics<-1> = "FLOOR"           ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "FMT"             ; intrinsic.opcodes<-1> = OP.FMT
    intrinsics<-1> = "FMTS"            ; intrinsic.opcodes<-1> = OP.FMTS
    intrinsics<-1> = "FOLD"            ; intrinsic.opcodes<-1> = OP.FOLD
@@ -576,6 +610,13 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "INPUTBLK"        ; intrinsic.opcodes<-1> = OP.INPUTBLK
    intrinsics<-1> = "INSERT"          ; intrinsic.opcodes<-1> = OP.INSERT
    intrinsics<-1> = "INT"             ; intrinsic.opcodes<-1> = OP.INT
+   intrinsics<-1> = "IS.ALNUM"        ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "IS.ALPHA"        ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "IS.DIGIT"        ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "IS.GRAPH"        ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "IS.MARK"         ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "IS.NULL"         ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "IS.SPACE"        ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "ITYPE"           ; intrinsic.opcodes<-1> = OP.ITYPE
    intrinsics<-1> = "JBOOLEAN"        ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - JSON
    intrinsics<-1> = "JBUILD"          ; intrinsic.opcodes<-1> = OP.COLL
@@ -587,6 +628,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "KEYINC"          ; intrinsic.opcodes<-1> = OP.KEYINC
    intrinsics<-1> = "KEYINR"          ; intrinsic.opcodes<-1> = OP.KEYINR
    intrinsics<-1> = "KEYREADY"        ; intrinsic.opcodes<-1> = OP.KEYRDY
+   intrinsics<-1> = "LAST"            ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "LASTS"           ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "LEFT"            ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "LEN"             ; intrinsic.opcodes<-1> = OP.LEN
    intrinsics<-1> = "LENS"            ; intrinsic.opcodes<-1> = OP.LENS
    intrinsics<-1> = "LES"             ; intrinsic.opcodes<-1> = OP.LES
@@ -596,7 +640,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "LOWER"           ; intrinsic.opcodes<-1> = OP.LOWER
    intrinsics<-1> = "LTS"             ; intrinsic.opcodes<-1> = OP.LTS
    intrinsics<-1> = "MAT"             ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - arrays in data collections
+   intrinsics<-1> = "MATCHESS"        ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "MATCHFIELD"      ; intrinsic.opcodes<-1> = OP.MATCHFLD
+   intrinsics<-1> = "MATCHFIELDS"     ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "MATSTR"          ; intrinsic.opcodes<-1> = OP.MATSTR   ;* 12 Oct 26 dm - openQM 509
    intrinsics<-1> = "MAX"             ; intrinsic.opcodes<-1> = OP.MAX
    intrinsics<-1> = "MAXIMUM"         ; intrinsic.opcodes<-1> = OP.MAXIMUM
@@ -615,8 +661,11 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "NES"             ; intrinsic.opcodes<-1> = OP.NES
    intrinsics<-1> = "NOT"             ; intrinsic.opcodes<-1> = OP.NOT
    intrinsics<-1> = "NOTS"            ; intrinsic.opcodes<-1> = OP.NOTS
+   intrinsics<-1> = "NS"              ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "NUM"             ; intrinsic.opcodes<-1> = OP.NUM
+   intrinsics<-1> = "NUMERIC"         ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "NUMS"            ; intrinsic.opcodes<-1> = OP.NUMS
+   intrinsics<-1> = "NV"              ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "OBJECT"          ; intrinsic.opcodes<-1> = OP.OBJECT
    intrinsics<-1> = "OBJINFO"         ; intrinsic.opcodes<-1> = OP.OBJINFO
    intrinsics<-1> = "OCONV"           ; intrinsic.opcodes<-1> = OP.OCONV
@@ -638,7 +687,12 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "REMOVE"          ; intrinsic.opcodes<-1> = OP.REMOVE
    intrinsics<-1> = "REPLACE"         ; intrinsic.opcodes<-1> = OP.REPLACE
    intrinsics<-1> = "REUSE"           ; intrinsic.opcodes<-1> = OP.REUSE
+   intrinsics<-1> = "REUSING"         ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "RIGHT"           ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "RMVD"            ; intrinsic.opcodes<-1> = OP.RMVD    ;* 15 Oct 26 dm - QM4 gaps Q-1
    intrinsics<-1> = "RND"             ; intrinsic.opcodes<-1> = OP.RND
+   intrinsics<-1> = "ROUNDDOWN"       ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "ROUNDUP"         ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "RTRANS"          ; intrinsic.opcodes<-1> = OP.RTRANS
    intrinsics<-1> = "SADD"            ; intrinsic.opcodes<-1> = OP.SADD    ;* 12 Oct 26 dm - openQM 391, 468
    intrinsics<-1> = "SAVE.SCREEN"     ; intrinsic.opcodes<-1> = OP.SAVESCRN
@@ -653,6 +707,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SET.PORT.PARAMS" ; intrinsic.opcodes<-1> = OP.SETPORT
    intrinsics<-1> = "SET.SOCKET.MODE" ; intrinsic.opcodes<-1> = OP.SETSKT
    intrinsics<-1> = "SHIFT"           ; intrinsic.opcodes<-1> = OP.SHIFT
+   intrinsics<-1> = "SIGNAL"          ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - QM4 gaps Q-5
    intrinsics<-1> = "SIN"             ; intrinsic.opcodes<-1> = OP.SIN
    intrinsics<-1> = "SMUL"            ; intrinsic.opcodes<-1> = OP.SMUL
    intrinsics<-1> = "SOCKET.INFO"     ; intrinsic.opcodes<-1> = OP.SKTINFO
@@ -679,6 +734,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SYSTEM"          ; intrinsic.opcodes<-1> = OP.SYSTEM
    intrinsics<-1> = "TAN"             ; intrinsic.opcodes<-1> = OP.TAN
    intrinsics<-1> = "TERMINFO"        ; intrinsic.opcodes<-1> = OP.TERMINFO
+   intrinsics<-1> = "TERMINFO.EX"     ; intrinsic.opcodes<-1> = OP.TERMINFO   ;* 15 Oct 26 dm - QM4 gaps Q-7: SD holds one string per capability
    intrinsics<-1> = "TIME"            ; intrinsic.opcodes<-1> = OP.TIME
    intrinsics<-1> = "TIMEDATE"        ; intrinsic.opcodes<-1> = OP.TIMEDATE
    intrinsics<-1> = "TRANS"           ; intrinsic.opcodes<-1> = OP.TRANS
@@ -689,6 +745,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "TRIMFS"          ; intrinsic.opcodes<-1> = OP.TRIMFS
    intrinsics<-1> = "TRIMS"           ; intrinsic.opcodes<-1> = OP.TRIMS
    intrinsics<-1> = "TRIMW"           ; intrinsic.opcodes<-1> = OP.TRIMW   ;* 11 Oct 26 dm
+   intrinsics<-1> = "TRIMWS"          ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "UMASK"           ; intrinsic.opcodes<-1> = OP.UMASK
    intrinsics<-1> = "UNASSIGNED"      ; intrinsic.opcodes<-1> = OP.UNASS
    intrinsics<-1> = "UPCASE"          ; intrinsic.opcodes<-1> = OP.UPCASE
@@ -770,6 +827,13 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    catalogue.name = ''     ;* Set to '~' to take default name
    catalogue.mode = ''
    mode = 0
+   mode2 = 0                         ;* The modes of position 33 up, see the M2. constants
+   arg.defaults = ''                 ;* name, position, value of each "name = value" in the SUBROUTINE or FUNCTION statement
+   inject.lines = ''                 ;* lines the compiler writes itself, read by GET.LINE ahead of the source
+   formlistv.stmt = @false           ;* a FORMLISTV statement is being compiled as SELECTV (st.formlistv)
+   xfun.names = ''                   ;* the table of the OP.XFUN functions, filled when the first is met (xfun.table.load)
+   xfun.sel = '' ; xfun.argc = '' ; xfun.opt = '' ; xfun.mv = '' ; xfun.stack = ''
+   str.ovl.used = @false             ;* Set when one of the three overlap modes has been on in this program
    warnings.as.errors = @false
 
    * Release 2.1-10 introduced the STORSYS opcode so that CLEAR did not
@@ -870,8 +934,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                   if mneg then mnm = mnm[2,99]
                   if mnm # '' then
                      locate mnm in mode.names<1,1> setting i then
-                        if mneg then mode = bitreset(mode, i - 1)
-                        else mode = bitset(mode, i - 1)
+                        mode.off = mneg ; gosub set.mode.bit
                         gosub set.kernel.modes
                      end
                   end
@@ -983,6 +1046,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
       $define SYM.USE 2 ;* V2 : Line used
       $define SYM.ARG 3 ;* V3 : Line used as subroutine argument
       $define SYM.DIM 4 ;* V4 : Line dimensioned
+      $define SYM.MAIN 5 ;* V5 : Set by the program itself and not by an include record (for TRAP.UNUSED.MAIN); not a line number, never listed
    symbol.mode = SYM.USE
 
    * Unless we are doing XREF, we have no need to track every line number
@@ -1021,7 +1085,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                                     * F3 = arg types (S or M, scalar/matrix)
                                     * F4 = function key
                                     * F5 = var args?
+                                    * F6 = built in (a function in BASIC that the compiler knows by name: see
+                                    *      builtin.functions.load), so that a program's own DEFFUN of the name replaces it
    func.stack = ''                 ;* V1 = index to functions, V2 = arg no
+   gosub builtin.functions.load
 
    * Object name map
 
@@ -1636,7 +1703,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
             gosub warning
          end
       end else if symbol.refs<i,SYM.USE> = '' then
-         if internal or bittest(mode, M.TRAP.UNUSED) then
+         if internal or bittest(mode, M.TRAP.UNUSED) or (bittest(mode2, M2.TRAP.UNUSED.MAIN) and symbol.refs<i,SYM.MAIN> # '') then
               err.msg = sysmsg(2826, s) ;* %1 is assigned a value but never used
               gosub warning
          end
@@ -1801,8 +1868,17 @@ get.line:
    loop        ;* Until we have a non-blank line to process
       num.tokens = 0
       loop     ;* Until no further continuation lines
-         src = trimb(removef(include.record(level), 1))
-         eof = status() # 0
+         if inject.lines # '' then
+            * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - a line the compiler made up (ARG.DEFAULTS.EMIT) comes before the next line of the source.  It
+            * takes the line number of the statement it follows and leaves the count where it was.
+            src = inject.lines<1>
+            del inject.lines<1>
+            eof = @false
+            line.no(level) -= 1
+         end else
+            src = trimb(removef(include.record(level), 1))
+            eof = status() # 0
+         end
 
          * Remove trailing CR for cross-platform compatibility.
 
@@ -2142,6 +2218,7 @@ is.statement:
                  st.break,
                  st.call,
                  st.case,
+                 st.casing,                    ;* CASING: 15 Oct 26 dm - QM4 gaps Q-1
                  st.misplaced,                 ;* CATCH: 12 Oct 26 dm - openQM 355 (a TRY takes its own)
                  st.chain,
                  st.clear,
@@ -2190,7 +2267,9 @@ is.statement:
                  st.footing,
                  st.for,
                  st.formlist,
+                 st.formlistv,                 ;* FORMLISTV: 15 Oct 26 dm - QM4 gaps Q-2
                  st.getlist,
+                 st.getlistv,                  ;* 15 Oct 26 dm - QM4 gaps Q-2
                  st.go,
                  st.gosub,
                  st.goto,
@@ -2318,7 +2397,17 @@ is.statement:
                  st.writeseqf,
                  st.writeu,
                  st.writev,
-                 st.writevu
+                 st.writevu,
+                 st.writelist,                 ;* 15 Oct 26 dm - QM4 gaps Q-2
+                 st.movelist,
+                 st.movelistv,
+                 st.revremove,                 ;* 15 Oct 26 dm - QM4 gaps Q-1, Q-5, Q-7
+                 st.groupstore,
+                 st.ttyset,
+                 st.send,
+                 st.osread,                    ;* 15 Oct 26 dm - QM4 gaps Q-4
+                 st.oswrite,
+                 st.osdelete
          end else
             locate u.token.string in non.debug.statements<1> setting i then
                on i gosub st.class,      ;* CLASS
@@ -3093,6 +3182,7 @@ proc.directive:
       case u.token.string = "MODE"
          if upcase(look.ahead.token.string) = "DEFAULT" then
             mode = 0
+            mode2 = 0
          end else
             if look.ahead.token = TKN.MINUS then
                reset.mode = @true
@@ -3111,11 +3201,7 @@ proc.directive:
                loop
                   gosub get.token
                   locate u.token.string in mode.names<1,1> setting i then
-                     if reset.mode then
-                        mode = bitreset(mode, i - 1)
-                     end else
-                        mode = bitset(mode, i - 1)
-                     end
+                     mode.off = reset.mode ; gosub set.mode.bit
                   end else
                      err.msg = sysmsg(2842) ;* Unrecognised mode name
                      gosub error
@@ -3591,6 +3677,16 @@ emit.function.result.load:
 *                                      -1 if array but dimensions not yet known)
 *    SYMBOL.COMMON.INDEX   Index into COMMONS for common variable
 
+* NOTE.SYMBOL.REF  -  Record the line at which the symbol at SYMPOS was set, used, passed as an argument or dimensioned
+* (as SYMBOL.MODE says; none for SYM.CHK), and whether a setting came from the program itself rather than from an include
+* record, which is all $MODE TRAP.UNUSED.MAIN needs to know.
+note.symbol.ref:
+   if symbol.mode then
+      symbol.refs<sympos,symbol.mode,symsv> = line.no(1)
+      if symbol.mode = SYM.SET and level = 1 then symbol.refs<sympos,SYM.MAIN> = 1
+   end
+   return
+
 find.var:
    if lsub.var.no >= 0 then ;* Try local symbols first
       locate lsub.name:symbol.name in symbols<1> setting sympos then
@@ -3599,7 +3695,7 @@ find.var:
          symbol.common.offset = remove(var.data, k) + 0
          symbol.dim = remove(var.data, k) + 0
          symbol.common.index = remove(var.data, k) + 0
-         if symbol.mode then symbol.refs<sympos,symbol.mode,symsv> = line.no(1)
+         gosub note.symbol.ref
          return
       end
    end
@@ -3620,7 +3716,7 @@ find.var:
       symbol.common.offset = remove(var.data, k) + 0
       symbol.dim = remove(var.data, k) + 0
       symbol.common.index = remove(var.data, k) + 0
-      if symbol.mode then symbol.refs<sympos,symbol.mode,symsv> = line.no(1)
+      gosub note.symbol.ref
    end else
       symbol.dim = 0
       symbol.var.no = -1
@@ -3653,7 +3749,7 @@ make.var:
       ins var.data before symbol.info<sympos>
       ins '' before symbol.refs<sympos>
       symbol.table<-1> = symbol.name
-      if symbol.mode then symbol.refs<sympos,symbol.mode,symsv> = line.no(1)
+      gosub note.symbol.ref
    end
 
    symbol.mode = SYM.USE
@@ -4068,6 +4164,7 @@ end
                       in.two,         ;* ANDS
                       in.one,         ;* ARG
                       in.none,        ;* ARGCT
+                      in.arg.present, ;* ARG.PRESENT
                       in.one,         ;* ASCII
                       in.one,         ;* ASIN
                       in.one,         ;* ASSIGNED
@@ -4080,10 +4177,12 @@ end
                       in.two,         ;* BITSET
                       in.two,         ;* BITTEST
                       in.two,         ;* BITXOR
+                      in.xfun,        ;* BOOL
                       in.one,         ;* CATALOGUED
                       in.two,         ;* CATS
                       in.caught,      ;* CAUGHT
                       in.two,         ;* CCALL
+                      in.xfun,        ;* CEIL
                       in.change,      ;* CHANGE
                       in.one,         ;* CHAR
                       in.one,         ;* CHECKSUM
@@ -4093,7 +4192,7 @@ end
                       in.collection,  ;* COLLECTION
                       in.compare,     ;* COMPARE
                       in.one,         ;* CONFIG
-                      in.three,       ;* CONVERT
+                      in.convert,     ;* CONVERT
                       in.one,         ;* COS
                       in.two,         ;* COUNT
                       in.two,         ;* COUNTS
@@ -4125,6 +4224,7 @@ end
                       in.five,        ;* FIELDSTORE
                       in.fvar.two,    ;* FILEINFO
                       in.fix,         ;* FIX
+                      in.xfun,        ;* FLOOR
                       in.two,         ;* FMT
                       in.two,         ;* FMTS
                       in.fold,        ;* FOLD
@@ -4147,6 +4247,13 @@ end
                       in.one,         ;* INPUTBLK
                       in.insert,      ;* INSERT
                       in.one,         ;* INT
+                      in.xfun,        ;* IS.ALNUM
+                      in.xfun,        ;* IS.ALPHA
+                      in.xfun,        ;* IS.DIGIT
+                      in.xfun,        ;* IS.GRAPH
+                      in.xfun,        ;* IS.MARK
+                      in.xfun,        ;* IS.NULL
+                      in.xfun,        ;* IS.SPACE
                       in.itype,       ;* ITYPE
                       in.jboolean,    ;* JBOOLEAN
                       in.jbuild,      ;* JBUILD
@@ -4158,6 +4265,9 @@ end
                       in.keyin,       ;* KEYINC
                       in.keyin,       ;* KEYINR
                       in.none,        ;* KEYREADY
+                      in.xfun,        ;* LAST
+                      in.xfun,        ;* LASTS
+                      in.xfun,        ;* LEFT
                       in.one,         ;* LEN
                       in.one,         ;* LENS
                       in.two,         ;* LES
@@ -4167,7 +4277,9 @@ end
                       in.one,         ;* LOWER
                       in.two,         ;* LTS
                       in.mat,         ;* MAT
+                      in.xfun,        ;* MATCHESS
                       in.three,       ;* MATCHFIELD
+                      in.xfun,        ;* MATCHFIELDS
                       in.matstr,      ;* MATSTR
                       in.two,         ;* MAX
                       in.one,         ;* MAXIMUM
@@ -4186,8 +4298,11 @@ end
                       in.two,         ;* NES
                       in.one,         ;* NOT
                       in.one,         ;* NOTS
+                      in.xfun,        ;* NS
                       in.one,         ;* NUM
+                      in.xfun,        ;* NUMERIC
                       in.one,         ;* NUMS
+                      in.xfun,        ;* NV
                       in.object,      ;* OBJECT
                       in.two,         ;* OBJINFO
                       in.two,         ;* OCONV
@@ -4209,7 +4324,12 @@ end
                       in.remove,      ;* REMOVE
                       in.replace,     ;* REPLACE
                       in.one,         ;* REUSE
+                      in.reusing,     ;* REUSING
+                      in.xfun,        ;* RIGHT
+                      in.remove,      ;* RMVD
                       in.one,         ;* RND
+                      in.xfun,        ;* ROUNDDOWN
+                      in.xfun,        ;* ROUNDUP
                       in.trans,       ;* RTRANS
                       in.two,         ;* SADD
                       in.four,        ;* SAVE.SCREEN
@@ -4224,6 +4344,7 @@ end
                       in.two,         ;* SET.PORT.PARAMS
                       in.three,       ;* SET.SOCKET.MODE
                       in.two,         ;* SHIFT
+                      in.xfun,        ;* SIGNAL
                       in.one,         ;* SIN
                       in.two,         ;* SMUL
                       in.two,         ;* SOCKETINFO
@@ -4250,6 +4371,7 @@ end
                       in.one,         ;* SYSTEM
                       in.one,         ;* TAN
                       in.terminfo,    ;* TERMINFO
+                      in.terminfo,    ;* TERMINFO.EX
                       in.time,        ;* TIME
                       in.none,        ;* TIMEDATE
                       in.trans,       ;* TRANS
@@ -4260,6 +4382,7 @@ end
                       in.one,         ;* TRIMFS
                       in.trim,        ;* TRIMS
                       in.one,         ;* TRIMW
+                      in.xfun,        ;* TRIMWS
                       in.one,         ;* UMASK
                       in.one,         ;* UNASSIGNED
                       in.one,         ;* UPCASE
@@ -4279,6 +4402,102 @@ in.two:
 
 in.three:
             arg.count = 3 ; gosub get.args
+            goto intrinsic.common
+
+*** The OP.XFUN functions (CEIL FLOOR ROUNDUP ROUNDDOWN IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.SPACE LEFT RIGHT LAST
+*** LASTS NV NS TRIMWS MATCHESS MATCHFIELDS): one opcode, OP.XFUN, with the function number loaded after the arguments
+*** (op_xfun.c).  XFUN.ROWS gives for each name: its function number, the number of arguments the program must write, the
+*** value of one optional last argument that may be left out (blank for none), and whether it is a multivalued function, in
+*** which case the opcode is the wrapper for that many arguments (OP.XFUNM1 MVDS, OP.XFUNM2 MVDSS, OP.XFUNM3 MVDSSS) with XFUN
+*** as the opcode it runs on every element.  test-xfun-units.py keeps this table and the XF_ numbers in step.
+*** (15 Oct 26 dm, QM4 gaps Q-1)
+in.xfun:
+            if xfun.names = '' then gosub xfun.table.load
+            locate x.symbol.name in xfun.names<1> setting xf.i else goto err.syntax
+            * An argument can be a call of one of these functions, which changes XF.I, so the row is kept on a stack
+            * while the arguments are read
+            ins xf.i before xfun.stack<1>
+            arg.count = xfun.argc<xf.i> ; gosub get.args
+            xf.i = xfun.stack<1>
+            if xfun.opt<xf.i> # '' then          ;* an optional last argument
+               if look.ahead.token = TKN.COMMA then
+                  gosub get.token
+                  gosub exprf
+                  xf.i = xfun.stack<1>
+               end else
+                  n = xfun.opt<xf.i> ; gosub emit.numeric.load
+               end
+            end
+            del xfun.stack<1>
+            n = xfun.sel<xf.i> ; gosub emit.numeric.load
+            if xfun.mv<xf.i> then
+               begin case
+                  case xfun.argc<xf.i> = 1 ; intrinsic.stack<1> = OP.XFUNM1
+                  case xfun.argc<xf.i> = 2 ; intrinsic.stack<1> = OP.XFUNM2
+                  case 1 ; intrinsic.stack<1> = OP.XFUNM3
+               end case
+            end
+            goto intrinsic.common
+
+xfun.table.load:
+            * name, function number, arguments written, optional last argument's default, multivalued (1) or not (0)
+            xfun.rows = "CEIL,1,1,,0":@fm:"FLOOR,2,1,,0":@fm:"ROUNDUP,3,2,,0":@fm:"ROUNDDOWN,4,2,,0"
+            xfun.rows := @fm:"IS.ALNUM,5,1,,0":@fm:"IS.ALPHA,6,1,,0":@fm:"IS.DIGIT,7,1,,0":@fm:"IS.GRAPH,8,1,,0"
+            xfun.rows := @fm:"IS.MARK,9,1,,0":@fm:"IS.SPACE,10,1,,0":@fm:"LEFT,11,2,,0":@fm:"RIGHT,12,2,,0"
+            xfun.rows := @fm:"LAST,13,2,,0":@fm:"LASTS,13,2,,1":@fm:"NV,14,1,0,0":@fm:"NS,15,1,,0"
+            xfun.rows := @fm:"TRIMWS,16,1,,1":@fm:"MATCHESS,17,2,,1":@fm:"MATCHFIELDS,18,3,,1"
+            xfun.rows := @fm:"BOOL,21,1,,0":@fm:"IS.NULL,22,1,,0":@fm:"NUMERIC,23,1,,0":@fm:"SIGNAL,25,1,,0"
+            for xf.j = 1 to dcount(xfun.rows, @fm)
+               xf.row = xfun.rows<xf.j>
+               xfun.names<xf.j> = field(xf.row, ',', 1)
+               xfun.sel<xf.j> = field(xf.row, ',', 2)
+               xfun.argc<xf.j> = field(xf.row, ',', 3)
+               xfun.opt<xf.j> = field(xf.row, ',', 4)
+               xfun.mv<xf.j> = field(xf.row, ',', 5)
+            next xf.j
+            return
+
+*** ARG.PRESENT(name): did the caller pass the argument called name?  The variable number of an argument is its place in
+*** the list, from 0 (1 for the first written argument of a FUNCTION, whose hidden return value is 0), and the number of
+*** arguments passed is known to the kernel, so the test is: the argument's number is below that count.  Default values do
+*** not change the answer, as the manual says.  (15 Oct 26 dm, QM4 gaps Q-7; the function number is XF_ARGPRESENT)
+in.arg.present:
+            if look.ahead.token # TKN.NAME then goto err.var
+            gosub get.token
+            symbol.name = token.string
+            symbol.mode = SYM.CHK
+            gosub find.var
+            if symbol.var.no < 0 or symbol.var.no >= subr.arg.count or symbol.common.offset >= 0 or symbol.dim # 0 then
+               err.msg = sysmsg(12280, token.string)  ;* %1 is not an argument of this subroutine or function
+               goto error
+            end
+            n = symbol.var.no ; gosub emit.numeric.load
+            n = 20 ; gosub emit.numeric.load      ;* XF_ARGPRESENT
+            intrinsic.stack<1> = OP.XFUN
+            goto intrinsic.common
+
+*** REUSING(name): is the REUSE flag set on the variable called name?  The variable itself is loaded, by reference, and the
+*** test does not clear the flag (15 Oct 26 dm, QM4 gaps Q-6; the function number is XF_REUSING)
+in.reusing:
+            if look.ahead.token # TKN.NAME then goto err.var
+            gosub get.token
+            symbol.name = token.string
+            symbol.mode = SYM.CHK
+            gosub find.var
+            if symbol.var.no < 0 or symbol.dim # 0 then goto err.var
+            gosub emit.var.load
+            n = 24 ; gosub emit.numeric.load      ;* XF_REUSING
+            intrinsic.stack<1> = OP.XFUN
+            goto intrinsic.common
+
+*** CONVERT(from, to, string).  With $MODE PICK.CONVERT the arguments are written as CONVERT(string, from, to), the order
+*** the Pick products use; they are evaluated as written and the string is rolled to the top where the opcode takes it
+*** (15 Oct 26 dm, QM4 gaps Q-16).
+in.convert:
+            arg.count = 3 ; gosub get.args
+            if bittest(mode2, M2.PICK.CONVERT) then
+               opcode.byte = OP.ROLL3 ; gosub emit.simple
+            end
             goto intrinsic.common
 
 in.four:
@@ -5032,6 +5251,17 @@ in.mvepoch:                     ;* MVEPOCH(date_time) or MVEPOCH(date, time)
 
 in.none:
 intrinsic.common:
+            * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps Q-16.  Once $MODE CHANGE.NO.OVERLAP, COUNT.OVERLAP or INDEX.OVERLAP has been on in this
+            * program, every call of the seven functions they touch is preceded by the modes then in force, as a mask for
+            * OP.STROVL (op_strovl), so that $MODE -name and $MODE DEFAULT work from the line they appear on.  A program that
+            * never uses them gets the same object code as before.
+            if str.ovl.used then
+               i = intrinsic.stack<1>
+               if i = OP.CHANGE or i = OP.EREPLACE or i = OP.COUNT or i = OP.COUNTS or i = OP.INDEX or i = OP.INDEXS then
+                  n = bitand(mode2, 7) ; gosub emit.numeric.load
+                  opcode.byte = OP.STROVL ; gosub emit.simple
+               end
+            end
             opcode.byte = intrinsic.stack<1>
             gosub emit.simple
 
@@ -5100,6 +5330,7 @@ not.an.intrinsic:
       symbol.common.offset = -1
       symbol.dim = 0
       if lvar then symbol.mode = SYM.SET
+      gosub explicit.check
       gosub make.var
    end
 
@@ -5797,6 +6028,28 @@ st.inherit:
    if not(object.state) then goto err.class
    opcode = OP.INHERIT ; goto common.path
 
+* ST.CASING  -  CASING ON, CASING OFF or CASING expr (15 Oct 26 dm, QM4 gaps Q-1).  Case sensitivity of the string comparisons and
+* searches of this program, switched at run time: the value goes to OP.XFUN, function XF_CASING, which sets or clears the
+* program's own NOCASE flag (the one $NOCASE.STRINGS sets at compile time).  A called program has its own.
+
+st.casing:
+   begin case
+      case u.look.ahead.token.string = 'ON'
+         gosub get.token
+         n = 1 ; gosub emit.numeric.load
+      case u.look.ahead.token.string = 'OFF'
+         gosub get.token
+         n = 0 ; gosub emit.numeric.load
+      case look.ahead.token = TKN.END or look.ahead.token = TKN.SEMICOLON
+         goto err.syntax
+      case 1
+         gosub exprf
+   end case
+   n = 19 ; gosub emit.numeric.load      ;* XF_CASING
+   opcode.byte = OP.XFUN ; gosub emit.simple
+   return
+
+* ======================================================================
 * ST.CSV.MODE  -  CSV.MODE mode {, delim} (14 Oct 26 dm, openQM 173 and 200).  The delimiter is a null string when
 * absent, which the kernel takes as a comma.
 st.csv.mode:
@@ -6405,6 +6658,7 @@ st.call:
          symbol.mode = SYM.USE
          symbol.common.offset = -1
          symbol.dim = 0
+         gosub explicit.check
          gosub make.var
          gosub emit.var.load
       end
@@ -7231,8 +7485,18 @@ st.deffun:
 
    function.name = token.string
    locate function.name in functions<1,1> by 'AL' setting func.index then
-      err.msg = sysmsg(2894) ;* Duplicate function name 'xx'
-      goto error
+      if functions<6,func.index> then
+         * A built in function (builtin.functions.load): the program's own DEFFUN of the name takes its place
+         del functions<1,func.index>
+         del functions<2,func.index>
+         del functions<3,func.index>
+         del functions<4,func.index>
+         del functions<5,func.index>
+         del functions<6,func.index>
+      end else
+         err.msg = sysmsg(2894) ;* Duplicate function name 'xx'
+         goto error
+      end
    end
 
    function.call.name = function.name
@@ -7469,6 +7733,13 @@ st.dim.body:
 !   end
 
    loop
+      * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps Q-16: DIM name, name ...  declares scalar variables (the declarations $MODE EXPLICIT asks for)
+      if look.ahead.token = TKN.NAME then
+         gosub get.token
+         gosub dim.declare.scalar
+         goto st.dim.more
+      end
+
       * Get name of array variable
 
       gosub get.token
@@ -7551,10 +7822,127 @@ st.dim.body:
          gosub emit.simple
       end
 
+st.dim.more:
    while look.ahead.token = TKN.COMMA
       gosub get.token     ;* 0084
    repeat
 
+   return
+
+* BUILTIN.FUNCTIONS.LOAD  -  Fill the table of user functions with the functions that SD writes in BASIC and the compiler
+* knows by name (15 Oct 26 dm, QM4 gaps): a program calls them without a DEFFUN, as it calls an intrinsic, and the call goes to
+* the catalogued program of the call name given here.  A program that DEFFUNs the same name has its own used instead (st.deffun).
+* Each row is: name, call name, argument types (S for each), 1 if arguments may be left out at the end.  Names in ascending order
+* are not needed: each is put in its place.
+builtin.functions.load:
+   bf.rows = "COMPARES,!compares,SSS,1"
+   bf.rows := @fm:"MERGELIST,!mergelistfn,SSS,0"
+   bf.rows := @fm:"SORT.COMPARE,!sortcompare,SSSS,1"
+   bf.rows := @fm:"CHILD,!child,S,0"
+   bf.rows := @fm:"ACCOUNT.PATH,!accountpath,S,0"
+   bf.rows := @fm:"VOCPATH,!vocpathfn,SS,1"
+   bf.rows := @fm:"PARSE,!parsepattern,SSS,0"
+   bf.rows := @fm:"TTYGET,!ttyget,,0"
+   for bf.i = 1 to dcount(bf.rows, @fm)
+      bf.r = bf.rows<bf.i>
+      bf.name = field(bf.r, ',', 1)
+      locate bf.name in functions<1,1> by 'AL' setting func.index else null
+      ins bf.name before functions<1,func.index>
+      ins field(bf.r, ',', 2) before functions<2,func.index>
+      ins field(bf.r, ',', 3) before functions<3,func.index>
+      ins '' before functions<4,func.index>
+      ins field(bf.r, ',', 4) before functions<5,func.index>
+      ins 1 before functions<6,func.index>
+   next bf.i
+   return
+
+* DIM.DECLARE.SCALAR  -  DIM name: the scalar variable named by TOKEN.STRING is made, unless it is already known.
+dim.declare.scalar:
+   symbol.name = token.string
+   symbol.mode = SYM.DIM
+   gosub find.var
+   if symbol.var.no < 0 then
+      symbol.dim = 0
+      symbol.common.offset = -1
+      symbol.mode = SYM.DIM
+      gosub make.var
+   end
+   return
+
+* GET.ARG.DEFAULT  -  The argument just made (SYMBOL.NAME) is followed by "= value" in a SUBROUTINE or FUNCTION statement
+* (QM4 gaps Q-16 and sheet 324).  The value is a number, possibly negative, a string, @TRUE or @FALSE.  It is kept as source
+* text with the argument's position among the arguments the caller writes (the hidden return value of a FUNCTION is not
+* one), and ARG.DEFAULTS.EMIT turns it into a line of program once the whole statement has been read.
+get.arg.default:
+   gosub get.token                          ;* Skip the =
+   dflt.sign = ''
+   if look.ahead.token = TKN.MINUS then
+      dflt.sign = '-'
+      gosub get.token
+   end
+   gosub get.token                          ;* The value
+   dflt.text = ''
+   begin case
+      case token = TKN.NUM or token = TKN.FLOAT or token = TKN.HEXNUM
+         dflt.text = dflt.sign : token.string
+      case token = TKN.STRING and dflt.sign = ''
+         begin case
+            case index(token.string, '"', 1) = 0 ; dflt.text = '"' : token.string : '"'
+            case index(token.string, "'", 1) = 0 ; dflt.text = "'" : token.string : "'"
+         end case
+      case (token = TKN.AT.NAME or token = TKN.AT) and dflt.sign = ''     ;* the @ is a token of its own, the name follows
+         gosub get.token
+         if u.token.string = 'TRUE' or u.token.string = 'FALSE' then dflt.text = '@' : u.token.string
+   end case
+   if dflt.text = '' then
+      err.msg = sysmsg(12278)  ;* A default argument value must be a number, a string, @TRUE or @FALSE
+      goto error
+   end
+   dflt.pos = subr.arg.count + (bitand(header.flags, hdr.is.function) = 0)
+   arg.defaults<-1> = symbol.name : @vm : dflt.pos : @vm : dflt.text
+   return
+
+* ARG.DEFAULTS.EMIT  -  At the end of a SUBROUTINE or FUNCTION statement: each default value read by GET.ARG.DEFAULT becomes
+* a line of source, IF ARG.COUNT() < n THEN name = value, queued in INJECT.LINES for GET.LINE to read ahead of the next line
+* of the program, so that the compiler reads it as if it had been written there.  With $MODE DEFAULT.UNASS.ARGS an argument
+* the caller passed unassigned gets its default as well.  A default needs one of the two: VAR.ARGS lets the caller leave the
+* argument out, the mode lets it pass nothing.  (The record of source lines cannot be added to: REMOVEF leaves the text alone
+* and moves a pointer, so assigning to it starts the reading again from the top.)
+arg.defaults.emit:
+   if arg.defaults # '' then
+      dflt.lines = ''
+      for dflt.i = 1 to dcount(arg.defaults, @fm)
+         dflt.name = arg.defaults<dflt.i,1>
+         dflt.pos = arg.defaults<dflt.i,2>
+         dflt.text = arg.defaults<dflt.i,3>
+         if bitand(header.flags, HDR.VAR.ARGS) # 0 then
+            dflt.cond = 'ARG.COUNT() < ' : dflt.pos
+            if bittest(mode2, M2.DEFAULT.UNASS.ARGS) then dflt.cond := ' OR UNASSIGNED(' : dflt.name : ')'
+         end else if bittest(mode2, M2.DEFAULT.UNASS.ARGS) then
+            dflt.cond = 'UNASSIGNED(' : dflt.name : ')'
+         end else
+            err.msg = sysmsg(12279)  ;* Default argument values need the VAR.ARGS option or $MODE DEFAULT.UNASS.ARGS
+            gosub error
+            exit
+         end
+         dflt.lines<-1> = 'IF ' : dflt.cond : ' THEN ' : dflt.name : ' = ' : dflt.text
+      next dflt.i
+      if dflt.lines # '' then inject.lines = dflt.lines    ;* GET.LINE reads them before the next line of the source
+      arg.defaults = ''
+   end
+   return
+
+* EXPLICIT.CHECK  -  $MODE EXPLICIT: a scalar variable has to be named in a DIM statement before its first use.  Called where
+* the name SYMBOL.NAME, not yet in the symbol table, is about to become one; DIM name makes the variable itself and does not
+* come this way.  The compiler's own names (a leading underscore, tilde or asterisk) are not the program's to declare.
+explicit.check:
+   if bittest(mode2, M2.EXPLICIT) then
+      explicit.c = symbol.name[1,1]
+      if explicit.c # '_' and explicit.c # '~' and explicit.c # '*' then
+         err.msg = sysmsg(12277, symbol.name)  ;* Variable %1 has not been declared
+         gosub error
+      end
+   end
    return
 
 *****************************************************************************
@@ -8734,6 +9122,18 @@ st.formlist:
    return
 
 *****************************************************************************
+* ST.FORMLISTV  -  FORMLISTV dyn.array TO var   (15 Oct 26 dm, QM4 gaps Q-2)
+*
+* A select list variable made from a dynamic array.  SELECTV already does that when it is given an array in place of a file
+* (op_selectv's second path), so this is that statement: the same opcode and the same clauses, under the other name.  The
+* $MODE PICK.SELECT rule, which is about a file and an active list 0, does not apply to it.
+
+st.formlistv:
+   formlistv.stmt = @true
+   opcode = OP.SELECTV
+   goto st.select.common
+
+*****************************************************************************
 * ST.FUNCTION  -  FUNCTION statement
 
 st.function:
@@ -8818,6 +9218,7 @@ st.function:
             symbol.mode = SYM.ARG
             gosub make.var
             if symbol.dim < 0 then arg.mats<-1> = symbol.name   ;* openQM 44 and 519: a MAT argument with no dimensions given
+            if look.ahead.token = TKN.EQ then gosub get.arg.default   ;* name = value (QM4 gaps Q-16, sheet 324)
 
             if deref.argument then
                if look.ahead.token # TKN.RBR then goto err.rbr
@@ -8848,6 +9249,8 @@ st.function:
       gosub get.token
       header.flags = bitor(header.flags, HDR.VAR.ARGS)
    end
+
+   gosub arg.defaults.emit
 
    return
 
@@ -8913,6 +9316,211 @@ st.getlist:
    goto st.if.back.end           ;* Join IF statement for THEN / ELSE
 
 *****************************************************************************
+* ST.GETLISTV  -  GETLISTV name TO list.var {SETTING count.var} THEN / ELSE    (15 Oct 26 dm, QM4 gaps Q-2)
+*
+* The saved list becomes a select list variable.  The work is done by the catalogued function !getlistv, which the compiler
+* calls as it would a user function (its reference, a return argument, the arguments, the call), and the 1 or 0 it gives is
+* what the THEN / ELSE of IF would test.  Without SETTING the count goes to a variable of the compiler's own.
+
+st.getlistv:
+   s = '!getlistv'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub exprf                          ;* The name of the saved list
+   if u.look.ahead.token.string # 'TO' then goto err.to
+   gosub get.token
+   gosub simple.lvar.reference          ;* The select list variable
+   if err then return
+   if u.look.ahead.token.string = 'SETTING' then
+      gosub get.token
+      gosub simple.lvar.reference       ;* The variable for the count
+      if err then return
+   end else
+      n = 3 ; gosub emit.temp.ref       ;* one the compiler keeps for the purpose
+   end
+   sys.call.n = 4                       ;* the return argument and three
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end                  ;* Join IF statement for THEN / ELSE
+
+*****************************************************************************
+* ST.WRITELIST  -  WRITELIST ids TO list.name   (15 Oct 26 dm, QM4 gaps Q-2; ON may be used for TO)
+*
+* A call of the catalogued subroutine !writelist, which writes the array to the saved lists file.
+
+st.writelist:
+   s = '!writelist'
+   gosub emit.direct.call.reference
+   gosub exprf                          ;* The array
+   if u.look.ahead.token.string # 'TO' and u.look.ahead.token.string # 'ON' then goto err.to
+   gosub get.token
+   gosub exprf                          ;* The name
+   sys.call.n = 2
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.MOVELIST   -  MOVELIST src TO list.no {KEEP}
+* ST.MOVELISTV  -  MOVELISTV src TO var {KEEP}     (15 Oct 26 dm, QM4 gaps Q-2)
+*
+* Moves a select list, to a numbered list or to a select list variable.  A call of the catalogued subroutine !movelist with the
+* source, the target, whether KEEP was given and whether the target is a variable.
+
+st.movelist:
+   movelist.var = @false
+   goto st.movelist.common
+
+st.movelistv:
+   movelist.var = @true
+
+st.movelist.common:
+   s = '!movelist'
+   gosub emit.direct.call.reference
+   gosub exprf                          ;* The source: a list number or a select list variable
+   if u.look.ahead.token.string # 'TO' then goto err.to
+   gosub get.token
+   if movelist.var then
+      gosub simple.lvar.reference       ;* The variable that is to hold the list
+      if err then return
+   end else
+      gosub expr                        ;* The number of the list (not EXPRF: a name after it would be taken for a format, and KEEP is one)
+   end
+   if u.look.ahead.token.string = 'KEEP' then
+      gosub get.token
+      n = 1
+   end else
+      n = 0
+   end
+   gosub emit.numeric.load
+   n = if movelist.var then 1 else 0
+   gosub emit.numeric.load
+   sys.call.n = 4
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.SEND  -  SEND string {:} TO dev THEN / ELSE     (15 Oct 26 dm, QM4 gaps Q-5)
+*
+* WRITESEQ, the line with its newline, and with the colon WRITEBLK, which writes the string as it stands.  The expression
+* parser leaves a colon alone when a reserved word follows it, and TO is one, so the colon is the statement's.
+
+st.send:
+   gosub exprf                          ;* The data
+   opcode = OP.WRITESEQ
+   if look.ahead.token = TKN.COLON then
+      gosub get.token
+      opcode = OP.WRITEBLK
+   end
+   if u.look.ahead.token.string # "TO" then goto err.to
+   goto st.write.seq.common2
+
+*****************************************************************************
+* ST.OSREAD  -  OSREAD var FROM path THEN / ELSE     (15 Oct 26 dm, QM4 gaps Q-4)
+* ST.OSWRITE -  OSWRITE expression TO path
+* ST.OSDELETE - OSDELETE path
+*
+* Calls of the catalogued programs !osread, !oswrite and !osdelete, which are ordinary programs and not internal ones, so that
+* the OPENSEQ and DELETESEQ they are made of ask the OS-access gate of the ACCOUNT the program runs in: an account without it
+* reaches only its own directory by these statements, as it does by OPENSEQ.  OSREAD is a function whose 1 or 0 the THEN / ELSE
+* tests, as GETLISTV is.  The ON ERROR clause of openQM is not supported.
+
+st.osread:
+   s = '!osread'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub simple.lvar.reference          ;* The variable that gets the contents
+   if err then return
+   if u.look.ahead.token.string # 'FROM' then goto err.from
+   gosub get.token
+   gosub exprf                          ;* The pathname
+   sys.call.n = 3                       ;* the return argument and two
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end                  ;* Join IF statement for THEN / ELSE
+
+st.oswrite:
+   s = '!oswrite'
+   gosub emit.direct.call.reference
+   gosub expr                           ;* The data
+   if u.look.ahead.token.string # 'TO' then goto err.to
+   gosub get.token
+   gosub expr                           ;* The pathname
+   sys.call.n = 2
+   gosub emit.sys.call.end
+   return
+
+st.osdelete:
+   s = '!osdelete'
+   gosub emit.direct.call.reference
+   gosub expr                           ;* The pathname
+   sys.call.n = 1
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.REVREMOVE  -  REVREMOVE string FROM dyn.array SETTING code     (15 Oct 26 dm, QM4 gaps Q-1)
+*
+* As REMOVE, with an opcode of its own: the substring that ends at the remove pointer, working backwards.
+
+st.revremove:
+   opcode = OP.REVREMOVE
+   goto st.remove.common
+
+*****************************************************************************
+* ST.GROUPSTORE  -  GROUPSTORE new IN string USING i, n {, delimiter}     (15 Oct 26 dm, QM4 gaps Q-1)
+*
+* Delimited substring assignment as a statement: what STRING = FIELDSTORE(STRING, delimiter, i, n, new) does.  A call of the
+* catalogued subroutine !groupstore, which is given the string by reference; the delimiter is a field mark if it is left out.
+
+st.groupstore:
+   s = '!groupstore'
+   gosub emit.direct.call.reference
+   gosub expr                           ;* The new data (EXPR, not EXPRF: IN is not a format)
+   if u.look.ahead.token.string # 'IN' then goto err.in
+   gosub get.token
+   gosub simple.lvar.reference          ;* The string that is changed
+   if err then return
+   if u.look.ahead.token.string # 'USING' then goto err.syntax
+   gosub get.token
+   gosub expr                           ;* i, the first substring
+   gosub check.comma
+   gosub expr                           ;* n, how many
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub expr                        ;* The delimiter
+   end else
+      opcode.string = @fm ; gosub emit.string.load
+   end
+   sys.call.n = 5
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.TTYSET  -  TTYSET settings     (15 Oct 26 dm, QM4 gaps Q-7)
+*
+* A call of the catalogued subroutine !ttyset with the array that TTYGET() gave.
+
+st.ttyset:
+   s = '!ttyset'
+   gosub emit.direct.call.reference
+   gosub expr
+   sys.call.n = 1
+   gosub emit.sys.call.end
+   return
+
+* EMIT.SYS.CALL.END  -  The call of a catalogued program of SD's own that the compiler is making: SYS.CALL.N arguments (the
+* return argument of a function counts) have been emitted after the reference to the program.
+emit.sys.call.end:
+   if sys.call.n > greatest.call.arg.count then greatest.call.arg.count = sys.call.n
+   if print.code then
+      s = "CALL     (" : sys.call.n : " arguments)"
+      gosub show.code
+   end
+   opcode.byte = OP.CALL ; gosub emit
+   opcode.byte = sys.call.n ; gosub emit
+   return
+
+*****************************************************************************
 * ST.HUSH  -  HUSH statement
 
 st.hush:
@@ -8954,6 +9562,13 @@ st.if:
    gosub exprf      ;* Process conditional expression
 
 st.if.back.end:
+
+   * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps Q-16 ($MODE CONDITIONAL.STATEMENTS): as a WHILE or UNTIL condition, FIND, FINDSTR, GETLIST and
+   * LOCATE have already left their truth value on the stack, which is all the jump after them needs (st.while.until.common)
+   if cond.mode then
+      cond.mode = @false
+      return
+   end
 
    * Add new entry to jump stack
    ins j.if:@vm:jump.no before jump.stack<1>
@@ -11875,6 +12490,7 @@ st.select:
 
 st.select.common:
    * 14 Oct 26: the two questions this routine kept asking of OPCODE, once each in several places, are asked once here
+   is.formlistv = formlistv.stmt ; formlistv.stmt = @false           ;* FORMLISTV is SELECTV of an array (st.formlistv)
    sorted.select = (opcode = OP.SSELECT or opcode = OP.SSELECTV)    ;* SSELECT clauses: RIGHT.ALIGNED, DESCENDING
    to.variable = (opcode = OP.SELECTV or opcode = OP.SSELECTV)      ;* TO names a select list VARIABLE, not a list number
 
@@ -11889,7 +12505,9 @@ st.select.common:
    if stdfil.use then
       gosub stdfil.var.load
    end else
-      gosub convert.pick.file.reference
+      * A FORMLISTV array is not a file, so a single literal in it is not a file name (convert.pick.file.reference reads it
+      * as one: FORMLISTV '' TO sl made a list with the item __ in it)
+      if not(is.formlistv) then gosub convert.pick.file.reference
       gosub expr    ;* 0208
    end
 
@@ -11920,6 +12538,13 @@ st.select.common:
          n = sselect.mode ; gosub emit.numeric.load
          opcode = OP.SSELECTM
       end
+   end
+
+   * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps Q-16, $MODE PICK.SELECT: SELECTV (and SELECT, when $MODE SELECTV makes it one) moves an active
+   * default list to the target and ignores the file, which op_selectv does when it is given P_PICK_SEL
+   if opcode = OP.SELECTV and bittest(mode2, M2.PICK.SELECT) and not(is.formlistv) then
+      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+      code.value = 0x2000 ; code.bytes = 2 ; gosub emit.multibyte.value
    end
 
    * Perform common back-end processing
@@ -12344,6 +12969,7 @@ st.subroutine:
             symbol.mode = SYM.ARG
             gosub make.var
             if symbol.dim < 0 then arg.mats<-1> = symbol.name   ;* openQM 44 and 519: a MAT argument with no dimensions given
+            if look.ahead.token = TKN.EQ then gosub get.arg.default   ;* name = value (QM4 gaps Q-16, sheet 324)
 
             if deref.argument then
                if look.ahead.token # TKN.RBR then goto err.rbr
@@ -12375,6 +13001,8 @@ st.subroutine.varset.continue:
       gosub get.token
       header.flags = bitor(header.flags, HDR.VAR.ARGS)
    end
+
+   gosub arg.defaults.emit
 
    return
 
@@ -14454,6 +15082,31 @@ set.kernel.modes:
    if i then header.flags = bitor(header.flags, hdr.case.sensitive)
    j = kernel(k$case.sensitive, i)
 
+   * The overlap modes reach the run time through OP.STROVL at the call (see intrinsic.common)
+   if bitand(mode2, 7) # 0 then str.ovl.used = @true
+
+   return
+
+* ======================================================================
+* Turn on or off the mode that position i of mode.names stands for.  Positions 1 to 32 are bits 0 to 31 of mode; 33 and
+* up are bits 0 up of mode2.
+*
+* In: i = position in mode.names, mode.off = @true to turn it off
+
+set.mode.bit:
+   if i <= 32 then
+      if mode.off then
+         mode = bitreset(mode, i - 1)
+      end else
+         mode = bitset(mode, i - 1)
+      end
+   end else
+      if mode.off then
+         mode2 = bitreset(mode2, i - 33)
+      end else
+         mode2 = bitset(mode2, i - 33)
+      end
+   end
    return
 
 * ======================================================================

@@ -209,6 +209,7 @@
       $define K$INPUT.NULL.GET  102      ;* INPUTNULL: the character now
       $define K$INPUT.TRAP.TEST 103      ;* _INPUTAT: is this typed character trapped by the caller's INPUTTRAP?
       $define K$INPUT.TRAP.HIT  104      ;* the stub of INPUTTRAP: which label, and forget it
+      $define K$MAXMIN.POS.SET  105      ;* _MAXIMUM and _MINIMUM leave the position they found, for SYSTEM(1088) (15 Oct 26, Q-18)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?
@@ -473,6 +474,8 @@
       $define OPT.NO.PHANTOM.NOTIFY   52 ;* A phantom does not tell its parent when it ends (cproc)
       $define OPT.SPOOL.COMMAND       53 ;* Show the operating system command that prints (kernel)
       $define OPT.ASSOC.ALL           54 ;* The query processor treats all fields as one association (qproc)
+      $define OPT.CORRELATIVE.NOCASE  55 ;* String operations in a correlative or I-type are case blind (kernel)
+      $define OPT.CORRELATIVE.REUSE   56 ;* Every operand of an array operation in a correlative or I-type is read as if REUSE() was applied (kernel)
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices

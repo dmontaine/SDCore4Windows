@@ -564,6 +564,26 @@ bool keyready() {
   return TRUE;
 }
 
+/* ======================================================================
+   type_ahead_count()  -  Characters waiting to be read (SYSTEM(14), 15 Oct 26, QM4 gaps Q-18)
+
+   The one the kernel has taken from the terminal ahead of time, the ring buffer the input signal handler fills, and what
+   the operating system still holds for stdin.  For piped input the third is whatever is in the pipe now, so the figure
+   is a snapshot (the manual calls it unreliable for piped input, and so it is here).                                    */
+
+int32_t type_ahead_count() {
+  int32_t n;
+  int waiting = 0;
+
+  input_handler_enabled = FALSE;
+  n = (type_ahead >= 0) ? 1 : 0;
+  n += (ring_in - ring_out + RING_SIZE) % RING_SIZE;
+  if (ioctl(0, FIONREAD, &waiting) == 0 && waiting > 0)
+    n += waiting;
+  input_handler_enabled = TRUE;
+  return n;
+}
+
 int16_t keyin(timeout) int timeout; /* Milliseconds */
 {
   char c;

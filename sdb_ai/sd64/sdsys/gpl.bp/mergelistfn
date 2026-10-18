@@ -1,0 +1,133 @@
+* MERGELISTFN
+* !MERGELISTFN() function, the BASIC function MERGELIST(list1, list2, modes)
+* (the older subroutine CALL !MERGELIST(result, list1, list2, mode), in _mergelist, is a different program with its own syntax)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-2 (MERGELIST), as a function in BASIC that bcomp knows by name.  Its call name is
+*               !mergelistfn: it was first called !mergelist, which is also the catalogue name of the subroutine in _mergelist, and
+*               which program a catalogue held depended on the order the directory was read in.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* MERGELIST(list1, list2, modes)
+*
+* Combines two field mark delimited lists, which are each in sorted order unless ML$UNSORTED is given, and returns the
+* intersection, the union or the difference as a field mark delimited list.  Either list may be a select list variable, whose
+* ids are used.
+*
+* modes is the sum of one operation and, if wanted, a sort rule and ML$UNSORTED.  The tokens are in syscom keys.h:
+*     ML$INTER    8    the items in both lists
+*     ML$UNION    16   the items in either, once each
+*     ML$DIFF     24   the items in list1 that are not in list2
+*     ML$UNSORTED 32   the lists are not in order: they are put in order first, by the rule below
+*     SRT$LEFT 0, SRT$RIGHT 1, SRT$COMPOUND 2, SRT$RIGHT.FLOAT 3: how the lists are ordered, as for SORT.COMPARE() (the default is left)
+*
+* The numbers of the ML$ tokens are SD's own (the openQM manual names the tokens but not their values).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$include int$keys.h
+
+function !mergelistfn(list1, list2, modes)
+$catalog !mergelistfn
+
+   deffun sort.compare(a, b, mode) calling '!sortcompare'
+
+   md = modes + 0
+   op = bitand(md, 24)
+   unsorted = bitand(md, 32) # 0
+   srt = bitand(md, 7)
+
+   l1 = list1
+   if vartype(list1) = V$SELLIST then
+      l1 = ''
+      loop
+         readnext id from list1 else exit
+         l1<-1> = id
+      repeat
+   end
+   l2 = list2
+   if vartype(list2) = V$SELLIST then
+      l2 = ''
+      loop
+         readnext id from list2 else exit
+         l2<-1> = id
+      repeat
+   end
+
+   if unsorted then
+      ord.in = l1 ; gosub order.list ; l1 = ord.out
+      ord.in = l2 ; gosub order.list ; l2 = ord.out
+   end
+
+   * Walk the two lists together
+   out = ''
+   n1 = dcount(l1, @fm)
+   n2 = dcount(l2, @fm)
+   i = 1
+   j = 1
+   loop
+   while i <= n1 or j <= n2
+      begin case
+         case i > n1
+            if op = 16 then out<-1> = l2<j>
+            j += 1
+         case j > n2
+            if op # 8 then out<-1> = l1<i>
+            i += 1
+         case 1
+            c = sort.compare(l1<i>, l2<j>, srt)
+            begin case
+               case c < 0        ;* only in list 1
+                  if op # 8 then out<-1> = l1<i>
+                  i += 1
+               case c > 0        ;* only in list 2
+                  if op = 16 then out<-1> = l2<j>
+                  j += 1
+               case 1            ;* in both (a repeat in one list is passed over the next time round)
+                  if op # 24 then out<-1> = l1<i>
+                  i += 1
+                  j += 1
+            end case
+      end case
+   repeat
+
+   return out
+
+* The list ORD.IN put in order by the rule SRT, into ORD.OUT: each item goes in by halving the part of the list already ordered
+order.list:
+   ord.out = ''
+   cnt = dcount(ord.in, @fm)
+   for k = 1 to cnt
+      item = ord.in<k>
+      lo = 1
+      hi = k - 1
+      loop
+      while lo <= hi
+         mid = int((lo + hi) / 2)
+         if sort.compare(ord.out<mid>, item, srt) < 0 then lo = mid + 1 else hi = mid - 1
+      repeat
+      ins item before ord.out<lo>
+   next k
+   return
+end
+
+* END-CODE

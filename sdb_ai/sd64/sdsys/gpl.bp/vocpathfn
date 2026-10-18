@@ -1,0 +1,96 @@
+* VOCPATHFN
+* !VOCPATHFN() function, the BASIC function VOCPATH(filename {, dict.flag})
+* (the subroutine CALL !VOCPATH(name, path, status), in _vocpath, is a different program with its own syntax and no gate)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (VOCPATH), as a function in BASIC that bcomp knows by name.  It is called
+*               !vocpathfn because !VOCPATH is the catalogue name of the older subroutine in _vocpath (two programs under one
+*               name: the one the catalogue holds is the last compiled, which depends on the order of the directory).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* VOCPATH(filename {, dict.flag})
+*
+* The operating system pathname of a file named through the VOC: the data part, or the dictionary part if DICT is written in front of
+* the name or the second argument is true.  The file is opened as OPEN opens it, so a Q-pointer, a multifile name and the other
+* forms OPEN takes are resolved as OPEN resolves them, and the pathname is that of the file opened.  STATUS() is 0 if it was found
+* and the error of the open if not, in which case the value is a null string.
+*
+* A PATHNAME IS GIVEN ONLY WHERE THE ACCOUNT COULD OPEN IT.  The program is internal so that it can ask the account's OS gate
+* (K$PATH.OK) about the path it found; a file inside the account is always told, and one outside it only to an account that has the
+* OS access gate.  An account without it gets a null string and STATUS() 3035, as OPENSEQ of that path would have given it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function vocpathfn(filename, dict.flag) var.args
+$catalog !vocpathfn
+
+$include err.h
+$include int$keys.h
+$include keys.h
+
+   set.status 0
+   name = filename
+   want.dict = @false
+   if arg.present(dict.flag) then want.dict = (dict.flag # 0 and dict.flag # '')
+   if upcase(name[1,5]) = 'DICT ' then
+      want.dict = @true
+      name = trim(name[6,9999])
+   end
+   if name = '' then
+      set.status ER$NVR
+      return ''
+   end
+
+   opened = @false
+   if want.dict then
+      open 'DICT', name to f then opened = @true
+   end else
+      open name to f then opened = @true
+   end
+   if not(opened) then
+      st = status()
+      if st = 0 then st = ER$NVR
+      set.status st
+      return ''
+   end
+   p = fileinfo(f, FL$PATH)
+   close f
+
+   * Only a path the account could open is told.
+   * 18 Oct 26 Windows port - Linux asks kernel(K$PATH.OK, p), the S.63 OS-access gate, which is held here (no such key).  What stands in
+   * for it is the rule an account WITHOUT the gate gets on Linux: a path inside the session's own account directory is told, any other
+   * only to an administrator session (SDSYS), which can read it anyway.  The deviation is told to Linux.
+   ok = kernel(K$ADMINISTRATOR, -1)
+   if not(ok) then
+      own = upcase(convert(char(92), '/', @path)) : '/'
+      here = upcase(convert(char(92), '/', p)) : '/'
+      ok = (here[1, len(own)] = own)
+   end
+   if not(ok) then
+      set.status ER$PERM
+      return ''
+   end
+   return p
+end
+
+* END-CODE

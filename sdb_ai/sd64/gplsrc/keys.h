@@ -392,6 +392,10 @@
 #define K_INPUT_NULL_GET     102
 #define K_INPUT_TRAP_TEST    103
 #define K_INPUT_TRAP_HIT     104
+/* 15 Oct 26 dm - QM4 gaps Q-18, SYSTEM(1088).
+     K_MAXMIN_POS_SET  _MAXIMUM and _MINIMUM leave the position of the element they found: field, value and subvalue numbers
+                       joined by value marks, a null string if there was none.  SYSTEM(1088) gives it back.  The process's own. */
+#define K_MAXMIN_POS_SET     105
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

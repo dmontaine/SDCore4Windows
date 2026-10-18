@@ -1,0 +1,43 @@
+* GROUPSTORE
+* !GROUPSTORE() subroutine, behind the GROUPSTORE statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1 (GROUPSTORE).  The compiler (bcomp, st.groupstore) calls it for
+*               GROUPSTORE new IN string USING i, n {, delimiter}.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !GROUPSTORE(rep, s, i, n, d)
+*
+* Replaces, inserts or deletes the delimited substrings of S, which is changed in place: it does what
+* S = FIELDSTORE(S, d, i, n, rep) does, as the manual says GROUPSTORE does.  The statement supplies a field mark when no
+* delimiter was written.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+subroutine !groupstore(rep, s, i, n, d)
+$catalog !groupstore
+
+   s = fieldstore(s, d, i, n, rep)
+   return
+end
+
+* END-CODE

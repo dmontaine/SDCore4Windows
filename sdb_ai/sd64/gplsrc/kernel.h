@@ -125,6 +125,10 @@ struct PROGRAM {
   int16_t itrap_n;      /* ... how many labels the statement named (a character past the last label takes the last one) */
   int32_t itrap_stub;   /* ... the offset in the object code of the stub that jumps to the label; 0 for none */
   int16_t itrap_hit;    /* ... set by _INPUTAT to the label number when a trapped character was typed, 0 for none */
+  u_char str_ovl;    /* $MODE CHANGE.NO.OVERLAP / COUNT.OVERLAP / INDEX.OVERLAP (15 Oct 26, QM4 gaps Q-16): SO_* bits set by OP_STROVL before the call */
+#define SO_CHANGE_NO_OVERLAP 0x01 /* CHANGE, EREPLACE and SWAP skip a matched occurrence whole instead of one byte on */
+#define SO_COUNT_OVERLAP 0x02     /* COUNT and COUNTS find overlapping occurrences */
+#define SO_INDEX_OVERLAP 0x04     /* INDEX and INDEXS find overlapping occurrences */
   bool has_stacked;  /* EXECUTE ... STACKLIST: list 0 as it was is held here until the command returns (openQM 61) */
   DESCRIPTOR stacked_list;
   int32_t stacked_count;
@@ -179,7 +183,9 @@ struct PROCESS {
 #define P_OPEN_ZERO 0x0100 /* OPEN / OPENPATH under $MODE OPEN.FAIL.ZERO.FVAR: a failed open sets the file variable to 0 (item 514) */
 #define P_PICK_RDNX 0x0200 /* READNEXT under $MODE PICK.READNEXT: the id variable is left alone when the ELSE clause is taken (item 418) */
 #define P_THEN_ELSE 0x0400 /* WRITE / DELETE has a THEN / ELSE clause under $MODE WRITE.DELETE.THEN.ELSE: a trigger failure takes ELSE (openQM items 368, 496) */
+/* 0x0800 is Linux's P_TEMPFILE (OPENTEMP, held: it rests on the S.63 OS-access gate); left free so the values agree */
 #define P_MATCMP 0x1000   /* MATSTR makes a comparison key for IF MAT a = MAT b (openQM item 111) */
+#define P_PICK_SEL 0x2000 /* SELECTV under $MODE PICK.SELECT: an active list 0 is moved to the target variable (QM4 gaps Q-16) */
 #define P_REC_LOCKS (P_LLOCK | P_ULOCK) /* Either LLOCK or ULOCK */
   bool numeric_array_allowed;           /* Opcode allows numeric arrays? */
   int32_t status;                       /* Value from STATUS() function */

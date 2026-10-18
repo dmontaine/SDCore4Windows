@@ -1,0 +1,54 @@
+* TTYSET
+* !TTYSET() subroutine, behind the TTYSET statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-7 (TTYSET).  The compiler (bcomp, st.ttyset) calls it for TTYSET settings.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !TTYSET(settings)
+*
+* Puts back the terminal modes that TTYGET() returned: the array's fields are those described in the TTYGET program.  A field
+* that is null is left as it is, so an array from an older release that holds fewer fields sets fewer modes.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine ttyset(settings)
+$catalog !ttyset
+
+$include int$keys.h
+
+   v = settings<1> ; if v # '' then i = pterm(PT$BREAK, (v # 0))
+   v = settings<2> ; if v # '' then i = pterm(PT$INVERT, (v # 0))
+   v = settings<3> ; if v # '' and v # 0 then i = pterm(PT$BRKCH, v)
+   v = settings<4> ; if v # '' then i = pterm(PT$ONEWLINE, v)
+   v = settings<5> ; if v # '' then i = pterm(PT$INEWLINE, char(v))
+   v = settings<6> ; if v # '' then i = pterm(PT$MARK, (v # 0))
+   v = settings<7> ; if v # '' then i = pterm(PT$ERASE, v)
+   v = settings<8> ; if v # '' then i = pterm(PT$CTRL.FILTER, (v # 0))
+   v = settings<9> ; if v # '' then i = pterm(PT$BINARY.IN, (v # 0))
+   v = settings<10> ; if v # '' then i = pterm(PT$BINARY.OUT, (v # 0))
+   v = settings<11> ; if v # '' then i = pterm(PT$TELNET, (v # 0))
+   return
+end
+
+* END-CODE

@@ -1,0 +1,78 @@
+* EXECLST
+* EXECUTE.LIST verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-8 (EXECUTE.LIST).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    EXECUTE.LIST command1 {; command2 {; command3 ...}}
+*
+* Runs the commands for each id of the default select list (list 0), in order.  A pair of empty round brackets in a command is
+* replaced by the id.  The ids are all taken out of the list first, so a command that uses list 0 does not take ids from the
+* loop.  Commands are separated by semicolons.  With no active list nothing is run.
+*
+*    SELECT VOC WITH TYPE = 'F'
+*    EXECUTE.LIST ANALYSE.FILE () ; PAUSE
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $execute.list
+$catalog $execlst
+
+$include err.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   * What follows the verb: the sentence without its first word
+   text = trim(@sentence)
+   p = index(text, ' ', 1)
+   if p = 0 then stop sysmsg(12285)  ;* A command is needed after EXECUTE.LIST
+   text = trimf(text[p + 1, 99999])
+
+   cmds = ''
+   n = dcount(text, ';')
+   for i = 1 to n
+      c = trim(field(text, ';', i))
+      if c # '' then cmds<-1> = c
+   next i
+   if cmds = '' then stop sysmsg(12285)
+
+   * Take every id out of list 0 before the first command runs
+   ids = ''
+   loop
+      readnext id else exit
+      ids<-1> = id
+   repeat
+
+   @system.return.code = 0
+   for k = 1 to dcount(ids, @fm)
+      id = ids<k>
+      for i = 1 to dcount(cmds, @fm)
+         execute change(cmds<i>, '()', id)
+      next i
+   next k
+
+   return
+end
+
+* END-CODE

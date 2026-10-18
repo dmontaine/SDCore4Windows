@@ -1,0 +1,58 @@
+* COMPARES
+* !COMPARES() function, the BASIC function COMPARES()
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1 (COMPARES), as a function in BASIC that bcomp knows by name.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* COMPARES(array1, array2 {, justification})
+*
+* The multivalued form of COMPARE(): every element of array1 is compared with the element of array2 in the same place and the
+* result, -1, 0 or 1, is put in the same place in the answer.  An array that has no element at a place gives a null string
+* there.  The justification is as for COMPARE(): L (the default) or R, and an I after it makes the comparison case blind.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+function !compares(array1, array2, just) var.args
+$catalog !compares
+
+   jst = 'L'
+   if arg.present(just) then
+      if just # '' then jst = just
+   end
+
+   result = ''
+   nf = max(dcount(array1, @fm), dcount(array2, @fm))
+   for f = 1 to nf
+      nv = max(dcount(array1<f>, @vm), dcount(array2<f>, @vm))
+      for v = 1 to nv
+         ns = max(dcount(array1<f,v>, @svm), dcount(array2<f,v>, @svm))
+         for s = 1 to ns
+            result<f,v,s> = compare(array1<f,v,s>, array2<f,v,s>, jst)
+         next s
+      next v
+   next f
+
+   return result
+end
+
+* END-CODE

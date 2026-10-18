@@ -1,0 +1,43 @@
+* OSDELETE
+* !OSDELETE() subroutine, behind the OSDELETE statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (OSDELETE).  The compiler (bcomp, st.osdelete) calls it for OSDELETE path.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !OSDELETE(path)
+*
+* Deletes the operating system file PATH.  No error is reported if that fails, as the manual says; STATUS() tells.  openQM's
+* statement deletes a directory too: this one deletes a file only, so that a program cannot take a directory and what is in it by
+* mistake.  An ordinary program, not an internal one, as !OSREAD is: the DELETESEQ in it asks the OS-access gate of the account.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+subroutine !osdelete(path)
+$catalog !osdelete
+
+   if path = '' then return
+   deleteseq path else return
+   return
+end
+
+* END-CODE

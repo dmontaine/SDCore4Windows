@@ -838,6 +838,95 @@ void op_system() {
       exc_value(key - 9012, descr);
       break;
 
+    /* ---- 15 Oct 26 dm: QM4 gaps bundle Q-18, more of the openQM 4 SYSTEM() keys, by the manual's numbers ---- */
+
+    case 14: /* Characters waiting to be read from the terminal; a snapshot for piped input, as the manual says */
+      descr->data.value = type_ahead_count();
+      break;
+
+    case 19: /* A value from the internal date and time as two five digit numbers.  A second one in the same second, from any
+                process, gets a letter on the end (a, b ... z, aa ...).  The time is the process's local time, so the value
+                can repeat between users in different time zones, which the manual warns of as well. */
+      {
+        int32_t it = (int32_t)sdtime();
+        u_int32_t dup;
+        char rev[8];
+        int k = 0;
+        int j;
+
+        StartExclusive(SHORT_CODE, 211);
+        if (it == sysseg->uniq19_secs) {
+          dup = ++(sysseg->uniq19_n);
+        } else {
+          sysseg->uniq19_secs = it;
+          sysseg->uniq19_n = 0;
+          dup = 0;
+        }
+        EndExclusive(SHORT_CODE);
+
+        snprintf(s, sizeof(s), "%05d%05d", (int)(it / 86400), (int)(it % 86400));
+        while (dup > 0 && k < (int)sizeof(rev)) { /* bijective base 26: 1 is a, 26 is z, 27 is aa */
+          rev[k++] = (char)('a' + ((dup - 1) % 26));
+          dup = (dup - 1) / 26;
+        }
+        p = s + strlen(s);
+        for (j = k - 1; j >= 0; j--)
+          *(p++) = rev[j];
+        *p = '\0';
+        k_put_c_string(s, descr);
+      }
+      break;
+
+    case 21: /* A value from the internal date and a sequence number that starts again at 1 each day, as two five digit numbers */
+      {
+        int32_t today = (int32_t)(sdtime() / 86400);
+        u_int32_t seq;
+
+        StartExclusive(SHORT_CODE, 212);
+        if (today != sysseg->uniq_date) {
+          sysseg->uniq_date = today;
+          sysseg->uniq_seq = 0;
+        }
+        seq = ++(sysseg->uniq_seq);
+        EndExclusive(SHORT_CODE);
+        snprintf(s, sizeof(s), "%05d%05u", (int)today, (unsigned)seq);
+        k_put_c_string(s, descr);
+      }
+      break;
+
+    case 45: /* The name of the running program, from its object code: its catalogue name when it was catalogued under the
+                name it was compiled with, which is how SD names them */
+      k_put_c_string((char*)ProgramName(c_base), descr);
+      break;
+
+    case 1048: /* A sequence number that is unique across all sessions until SD is restarted, then 1 again */
+      StartExclusive(SHORT_CODE, 213);
+      descr->data.value = (int32_t)(++(sysseg->rolling_seq));
+      EndExclusive(SHORT_CODE);
+      break;
+
+    case 1049: /* Is HUSH in effect? */
+      descr->data.value = (tio.hush != 0);
+      break;
+
+    case 1062: /* SYS$SIGNAMMED: has SIGNAL() been raised for this process?  Reading it clears it */
+      /* One atomic step, as another process may be setting this or another bit of flags at the moment */
+      descr->data.value = ((__atomic_fetch_and(&my_uptr->flags, (int16_t)~USR_SIGNAL, __ATOMIC_SEQ_CST) & USR_SIGNAL) != 0);
+      break;
+
+    case 1067: /* The default group size of a dynamic file, in bytes */
+      descr->data.value = DEFAULT_GROUP_SIZE * DH_GROUP_MULTIPLIER;
+      break;
+
+    case 1088: /* SYS$MAXMINPOS: the position of the element MAXIMUM() or MINIMUM() last returned, as field, value and subvalue numbers
+                  joined by value marks; a null string when it had no element */
+      k_put_c_string(maxmin_pos, descr);
+      break;
+
+    case 1086: /* Is case sensitivity of string comparisons on in this program?  Off is $NOCASE.STRINGS or CASING OFF */
+      descr->data.value = ((process.program.flags & HDR_NOCASE) == 0);
+      break;
+
     default:
       k_recurse(pcode_system, 1); /* Execute recursive code */
       break;

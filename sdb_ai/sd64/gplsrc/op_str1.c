@@ -18,7 +18,9 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
- * 02 Jul 24 mab max string size test in op_str, op_cat, op_append 
+ * 02 Jul 24 mab max string size test in op_str, op_cat, op_append
+ * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): op_rmvd (RMVD(): only the field, value and subvalue marks end an item) and op_revremove (REVREMOVE), QM4 gaps
+ *               bundle Q-1; op_remove is now the same code as op_rmvd, told which marks to stop at.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -30,6 +32,8 @@
  *    op_fold        FOLD
  *    op_len         LEN
  *    op_remove      REMOVE
+ *    op_rmvd        RMVD
+ *    op_revremove   REVREMOVE
  *    op_rmvf        RMVF
  *    op_seq         SEQ
  *    op_space       SPACE
@@ -414,9 +418,17 @@ void op_len() {
 }
 
 /* ======================================================================
-   op_remove()  -  Remove delimited substring from source                 */
+   remove_common()  -  Remove delimited substring from source
 
-void op_remove() {
+   REMOVE stops at any mark. RMVD() is the same with only the field, value
+   and subvalue marks as delimiters, the other marks being part of the data
+   (rmvd is TRUE).                                                        */
+
+Private bool is_rmvd_mark(char c) {
+  return ((c == FIELD_MARK) || (c == VALUE_MARK) || (c == SUBVALUE_MARK));
+}
+
+Private void remove_common(bool rmvd) {
   /* Stack:
 
      |=============================|=============================|
@@ -513,7 +525,7 @@ void op_remove() {
       p = src->data + offset;
 
       for (q = p; bytes_remaining-- > 0; q++) {
-        if (IsMark(*q)) {
+        if (rmvd ? is_rmvd_mark(*q) : IsMark(*q)) {
           delim_descr->data.value = 256 - (u_char)*q;
           len = q - p;
           offset += len + 1;
@@ -572,6 +584,168 @@ update_remove_table:
   src_descr->data.str.rmv_saddr = src;
 
 exit_remove:
+  e_stack++;
+}
+
+/* ======================================================================
+   op_remove()  -  REMOVE: remove delimited substring from source         */
+
+void op_remove() {
+  remove_common(FALSE);
+}
+
+/* ======================================================================
+   op_rmvd()  -  RMVD(): as REMOVE, but only a field, value or subvalue
+                 mark ends the substring                                  */
+
+void op_rmvd() {
+  remove_common(TRUE);
+}
+
+/* ======================================================================
+   op_revremove()  -  REVREMOVE: remove the delimited substring that ends
+                      at the remove pointer, working backwards
+
+   The characters in front of the remove pointer are the ones left to take: the
+   ones a forward REMOVE has already passed or, after SETREM n, the first n.
+   The substring that ends there is returned, and the code of the mark that
+   comes before it (0 for the first substring of the string), as REMOVE gives
+   the mark that follows a substring. The remove pointer is put at that mark, so
+   that the next REVREMOVE takes the substring in front of it. A pointer at the
+   start of the string leaves a null substring and 0, which also ends the loop
+   that reads a string whose first substring is null.
+
+   Stack: as op_remove.                                                   */
+
+void op_revremove() {
+  DESCRIPTOR* delim_descr; /* Descriptor to receive delimiter code */
+  DESCRIPTOR* src_descr;   /* The source string's descriptor */
+  STRING_CHUNK* head;
+  STRING_CHUNK* end_chunk; /* The chunk the remove pointer is in... */
+  int16_t end_off;         /* ...and the offset in it: the substring ends before that byte */
+  STRING_CHUNK* c;
+  STRING_CHUNK* prev;
+  int16_t i;
+  bool found;
+  STRING_CHUNK* start_chunk; /* Where the substring starts, and the new remove pointer */
+  int16_t start_off;
+  STRING_CHUNK* new_ptr_chunk;
+  int16_t new_ptr_off;
+  STRING_CHUNK* tgt = NULL;
+  STRING_CHUNK* new_tgt;
+  int16_t len;
+  int16_t actual_len;
+  int32_t bytes = 0;
+
+  /* Follow the ADDR chains as op_remove does */
+
+  delim_descr = e_stack - 1;
+  do {
+    delim_descr = delim_descr->data.d_addr;
+  } while (delim_descr->type == ADDR);
+  k_pop(1);
+
+  k_release(delim_descr);
+  InitDescr(delim_descr, INTEGER);
+  delim_descr->data.value = 0;
+
+  src_descr = e_stack - 1;
+  while (src_descr->type == ADDR)
+    src_descr = src_descr->data.d_addr;
+  k_pop(1);
+  if (src_descr->type != STRING)
+    k_get_string(src_descr);
+
+  InitDescr(e_stack, STRING);
+  e_stack->data.str.saddr = NULL;
+
+  head = src_descr->data.str.saddr;
+  if (head == NULL) /* Null source */
+  {
+    goto exit_revremove;
+  }
+
+  if (src_descr->flags & DF_REMOVE) {
+    end_chunk = src_descr->data.str.rmv_saddr;
+    end_off = src_descr->n1;
+    if (end_off > end_chunk->bytes)
+      end_off = end_chunk->bytes; /* Pointer was left beyond the end */
+  } else {
+    end_chunk = head; /* No pointer: nothing in front of it */
+    end_off = 0;
+    src_descr->flags |= DF_REMOVE;
+  }
+
+  /* Look back from the pointer for a mark, into the earlier chunks if need be.
+    The chunks are only linked forwards, so the one before c is found from the
+    head, which happens only for a substring that crosses a chunk boundary.   */
+
+  c = end_chunk;
+  i = end_off;
+  found = FALSE;
+  for (;;) {
+    while (i > 0) {
+      if (IsMark(c->data[i - 1])) {
+        found = TRUE;
+        break;
+      }
+      i--;
+    }
+    if (found || (c == head))
+      break;
+    for (prev = head; prev->next != c; prev = prev->next) {
+    }
+    c = prev;
+    i = c->bytes;
+  }
+
+  if (found) {
+    delim_descr->data.value = 256 - (u_char)c->data[i - 1];
+    start_chunk = c;
+    start_off = i; /* The byte after the mark */
+    new_ptr_chunk = c;
+    new_ptr_off = i - 1; /* The pointer goes to the mark */
+  } else {
+    start_chunk = head;
+    start_off = 0;
+    new_ptr_chunk = head;
+    new_ptr_off = 0;
+  }
+
+  /* Copy from the start to the pointer, as op_remove copies by chunks */
+
+  c = start_chunk;
+  i = start_off;
+  for (;;) {
+    len = ((c == end_chunk) ? end_off : c->bytes) - i;
+    if (len > 0) {
+      new_tgt = s_alloc((int32_t)len, &actual_len);
+      if (bytes == 0) {
+        e_stack->data.str.saddr = new_tgt;
+      } else {
+        tgt->next = new_tgt;
+      }
+      tgt = new_tgt;
+      tgt->bytes = len;
+      memcpy(tgt->data, c->data + i, len);
+      bytes += len;
+    }
+    if (c == end_chunk)
+      break;
+    c = c->next;
+    i = 0;
+  }
+
+  if (bytes > 0) {
+    tgt = e_stack->data.str.saddr;
+    tgt->string_len = bytes;
+    tgt->ref_ct = 1;
+  }
+
+  src_descr->n1 = new_ptr_off;
+  src_descr->data.str.rmv_saddr = new_ptr_chunk;
+
+exit_revremove:
   e_stack++;
 }
 

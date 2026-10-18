@@ -72,8 +72,7 @@ void set_date(int32_t);
 
 #define INPUT_FILL_MAX 3
 Private char input_fill[INPUT_FILL_MAX + 1] = ""; /* K_INPUT_FILL_SET / _GET (sheet item 389) */
-Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */
-Private bool run_exe(char *exe_name, char *cmd_line);
+Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */Private bool run_exe(char *exe_name, char *cmd_line);
 
 /* ======================================================================
    op_kernel()  -  KERNEL()  -  Miscellaneous kernel functions            */
@@ -739,6 +738,11 @@ void op_kernel() {
     case K_INPUT_TRAP_HIT:
       result.data.value = process.program.itrap_hit;
       process.program.itrap_hit = 0;
+      break;
+
+    case K_MAXMIN_POS_SET:
+      if (k_get_c_string(descr, maxmin_pos, (int)sizeof(maxmin_pos) - 1) < 0)
+        maxmin_pos[0] = '\0';
       break;
 
     /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  HOW DID THIS SESSION

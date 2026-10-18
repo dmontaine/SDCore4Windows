@@ -144,6 +144,13 @@ struct SYSSEG {
    /* 14 Oct 26 dm - 1.2-0 sheet item 38 (LISTU DETAIL).  The most user table cells in use at once since SD started,
       counted at each login under SHORT_CODE; kernel(K$USERS.PEAK, 0).  Last, so no offset moves.                 */
    u_int32_t users_peak;
+   /* 15 Oct 26 dm - QM4 gaps Q-18: the counters behind SYSTEM(1048), SYSTEM(21) and SYSTEM(19), under SHORT_CODE.  Last, so
+      no offset moves. */
+   u_int32_t rolling_seq;       /* SYSTEM(1048): 1 for the first call since SD started, one more for each after it */
+   int32_t uniq_date;           /* SYSTEM(21): the internal date of the last value given ... */
+   u_int32_t uniq_seq;          /* ... and how many have been given on that date */
+   int32_t uniq19_secs;         /* SYSTEM(19): the last second a value was given in (date * 86400 + time) ... */
+   u_int32_t uniq19_n;          /* ... and how many have been given in that second */
 };
 
 Public SYSSEG * sysseg init(NULL);   /* 0234 */
@@ -209,6 +216,10 @@ struct USER_ENTRY
      #define USR_CHGPHANT    0x0020 /* "Chargeable" phantom; counts as licensed user */
      #define USR_MSG_OFF     0x0040 /* Message reception disabled */
      #define USR_WAKE        0x0080 /* Set by op_wake, cleared by op_pause */
+     /* 0x0100 and 0x0200 are Linux's USR_SH and USR_OS_EXEC (the S.63 OS-access gates, held); left free so the values agree */
+     /* 15 Oct 26 QM4 gaps Q-5: the application signal.  SIGNAL(user) sets it in a process of the same login user (or in
+        any process, from an administrator); SYSTEM(1062) in that process reads it and clears it.                */
+     #define USR_SIGNAL      0x0400 /* SIGNAL() has been raised for this process */
   u_int16_t events;        /* Any bit set causes processing interrupt */
      #define EVT_LOGOUT      0x0001 /* Forced logout - immediate termination */
      #define EVT_STATUS      0x0002 /* Return status dump */
