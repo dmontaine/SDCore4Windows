@@ -199,6 +199,8 @@
       $define PU$FLG.PCL            0x00002000   ;* PCL printer
       $define PU$FLG.DUPLEX.LONG    0x00004000   ;* Duplex, long edge binding
       $define PU$FLG.DUPLEX.SHORT   0x00008000   ;* Duplex, short edge binding
+      $define PU$FLG.INFORM         0x00020000   ;* Say the output file's name at the start of a job (modes 3, 6)
+      $define PU$FLG.EJECT          0x00040000   ;* End the job with a form feed
       $define PU$FORM                  9
       $define PU$BANNER               10
       $define PU$LOCATION             11

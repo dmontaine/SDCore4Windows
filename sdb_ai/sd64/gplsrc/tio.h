@@ -83,8 +83,10 @@ struct PRINT_UNIT {
 #define PU_DUPLEX_LONG   0x00004000  /* Duplex, long edge binding */
 #define PU_DUPLEX_SHORT  0x00008000  /* Duplex, short edge binding */
 #define PU_SPOOL_HOLD    0x00010000  /* Spooling hold file in mode 6 (Windows) */
-#define PU_USER_SETABLE  0x0000E07E  /* Mask for values that can be set via PSET opcode */
-#define PU_TEMPLATE_MASK 0x0000E07E  /* Mask for values to copy from template */
+#define PU_INFORM        0x00020000  /* INFORM SETPTR option: say the output file's name at the start (12 Oct 26) */
+#define PU_EJECT         0x00040000  /* EJECT SETPTR option: end the job with a form feed (12 Oct 26) */
+#define PU_USER_SETABLE  0x0006E07E  /* Mask for values that can be set via PSET opcode */
+#define PU_TEMPLATE_MASK 0x0006E07E  /* Mask for values to copy from template */
 
 /* SETPTR settings */
                    int16_t width;          /* Page width */

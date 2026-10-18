@@ -2,8 +2,21 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
-18 Oct 26  FIVE NEW SUBROUTINES AND A SIZE FROM DIR(). is kernel code, so it
-           needs a rebuild).  Where openQM has a function, SD's own
+18 Oct 26  SETPTR INFORM, EJECT AND AS ... IN.  Syntax is SD's own where openQM's is not
+           given.  SETPTR options are separated by commas.
+
+             SETPTR 0,80,60,0,0,3,AS job,INFORM
+                          Says "Print output is going to $hold/job" when the
+                          job starts (modes 3 and 6).
+             SETPTR ...,EJECT
+                          Ends the job with a form feed, if anything was
+                          printed.
+             SETPTR ...,AS job IN dirfile
+                          The job is held in the directory file named
+                          instead of $HOLD.
+
+18 Oct 26  FIVE NEW SUBROUTINES AND A SIZE FROM DIR().  DIR() is kernel code, so
+           it needs a rebuild.  Where openQM has a function, SD's own
            programs have the same thing as a function only inside SD, so
            these are subroutines an application can CALL.
 

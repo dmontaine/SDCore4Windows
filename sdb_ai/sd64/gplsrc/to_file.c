@@ -225,6 +225,11 @@ Private void start_file(PRINT_UNIT* pu) {
     if (!ValidFileHandle(pu->file.fu)) {
       k_error(sysmsg(1716), pu->unit, fn, process.os_error);
     }
+    /* 12 Oct 26 (openQM item 51): SETPTR ... INFORM says where the output is going */
+    if ((pu->flags & PU_INFORM) &&
+        ((pu->mode == PRINT_TO_FILE) || (pu->mode == PRINT_AND_HOLD))) {
+      tio_printf("Print output is going to %s\n", fn);
+    }
   }
 
   /* Allocate buffer */
@@ -276,6 +281,10 @@ void end_file(PRINT_UNIT* pu) {
 
   if (pu->buff != NULL) {
     print_footer(pu);
+
+    /* 12 Oct 26 (openQM item 59): SETPTR ... EJECT ends the job with a form feed */
+    if ((pu->flags & PU_EJECT) && (pu->flags & PU_OUTPUT))
+      emit(pu, "\f", 1);
 
     if ((pu->flags & PU_PCL) &&
         (pu->flags & (PU_DUPLEX_LONG | PU_DUPLEX_LONG))) {
