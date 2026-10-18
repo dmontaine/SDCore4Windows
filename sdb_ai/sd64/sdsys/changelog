@@ -2,7 +2,7 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
-18 Oct 26  EREPLACE().
+18 Oct 26  EREPLACE(), FIX() AND MATSTR().
 
              EREPLACE(string, old, new {, occurrence {, start}})
                           The same as CHANGE() when old is not null: every
@@ -11,6 +11,29 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                           starting at the "start"th.  When old is null, new
                           is put in front of the string.  A null new
                           deletes.
+
+             FIX(number {, precision {, mode}})
+                          The number as a string with exactly "precision"
+                          decimal places, trailing zeros kept: rounded to the
+                          nearest (halves away from zero) when mode is 0 or
+                          left out, cut off when mode is not 0.  Without a
+                          precision the program's PRECISION is used.
+                          FIX(37.73629273, 2) is 37.74 and with mode 1 it is
+                          37.73.
+
+             MATSTR(matrix)
+                          A dynamic array from a whole dimensioned matrix:
+                          for a two dimensional matrix a field for each row
+                          and a value for each column; for a one
+                          dimensional one a field for each element, as
+                          MATBUILD gives (trailing nulls left off).  The
+                          zero element is not used and marks already in the
+                          data are not escaped.  It also works on a matrix
+                          passed into a subroutine.
+
+           FIX works to 14 decimal places and to numbers of about 18 digits;
+           beyond that it uses the plain C formatting.  For exact decimal
+           arithmetic use SADD and the other S functions.
 
 18 Oct 26  SETPTR INFORM, EJECT AND AS ... IN.  Syntax is SD's own where openQM's is not
            given.  SETPTR options are separated by commas.

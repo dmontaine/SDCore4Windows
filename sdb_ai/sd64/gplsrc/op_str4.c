@@ -467,6 +467,107 @@ void op_matbuild() {
 }
 
 /* ======================================================================
+   op_matstr()  -  MATSTR() function   (12 Oct 26, openQM item 509, the description the owner supplied)
+
+   A dynamic array from a whole matrix.  A two dimensional matrix gives a
+   field for each row and a value for each column.  A one dimensional one
+   gives a field for each element, as MATBUILD does (trailing null elements
+   left off).  The zero element is not used.  Marks already in the data are
+   not escaped.
+
+     Stack:   top  matrix (an ADDR)                       -> the string     */
+
+Private void matstr_element(ARRAY_HEADER* a_hdr, int32_t indx) {
+  ARRAY_CHUNK* a_chunk;
+  DESCRIPTOR src_descr;
+  STRING_CHUNK* src_str;
+
+  a_chunk = a_hdr->chunk[indx / MAX_ARRAY_CHUNK_SIZE];
+  InitDescr(&src_descr, ADDR);
+  src_descr.data.d_addr = &(a_chunk->descr[indx % MAX_ARRAY_CHUNK_SIZE]);
+  (void)k_dereference(&src_descr);
+  if (src_descr.type != UNASSIGNED) {
+    k_get_string(&src_descr);
+    for (src_str = src_descr.data.str.saddr; src_str != NULL; src_str = src_str->next)
+      ts_copy(src_str->data, src_str->bytes);
+    k_release(&src_descr);
+  }
+}
+
+void op_matstr() {
+  DESCRIPTOR* mat_descr;
+  DESCRIPTOR* descr;
+  PMATRIX_HEADER* pm_hdr;
+  ARRAY_HEADER* a_hdr;
+  ARRAY_CHUNK* a_chunk;
+  DESCRIPTOR tgt_descr;
+  int32_t rows;
+  int32_t cols;
+  int32_t base = 0;
+  int32_t r;
+  int32_t c;
+  int32_t last;
+
+  mat_descr = e_stack - 1;
+  while (mat_descr->type == ADDR)
+    mat_descr = mat_descr->data.d_addr;
+
+  switch (mat_descr->type) {
+    case ARRAY:
+      a_hdr = mat_descr->data.ahdr_addr;
+      rows = a_hdr->rows;
+      cols = a_hdr->cols;
+      break;
+
+    case PMATRIX:
+      pm_hdr = mat_descr->data.pmatrix;
+      a_hdr = pm_hdr->com_descr->data.ahdr_addr;
+      rows = pm_hdr->rows;
+      cols = pm_hdr->cols;
+      base = pm_hdr->base_offset - 1;
+      break;
+
+    default:
+      k_error(sysmsg(1236));
+      return;
+  }
+
+  InitDescr(&tgt_descr, STRING);
+  tgt_descr.data.str.saddr = NULL;
+  ts_init(&tgt_descr.data.str.saddr, 64);
+
+  if (cols == 0) { /* One dimensional: as MATBUILD with an FM */
+    last = rows;
+    while (last >= 1) {
+      a_chunk = a_hdr->chunk[(last + base) / MAX_ARRAY_CHUNK_SIZE];
+      descr = &(a_chunk->descr[(last + base) % MAX_ARRAY_CHUNK_SIZE]);
+      if ((descr->type != STRING) || (descr->data.str.saddr != NULL))
+        break;
+      last--;
+    }
+    for (r = 1; r <= last; r++) {
+      if (r > 1)
+        ts_copy_byte(FIELD_MARK);
+      matstr_element(a_hdr, r + base);
+    }
+  } else { /* Two dimensional: a field for each row, a value for each column */
+    for (r = 1; r <= rows; r++) {
+      if (r > 1)
+        ts_copy_byte(FIELD_MARK);
+      for (c = 1; c <= cols; c++) {
+        if (c > 1)
+          ts_copy_byte(VALUE_MARK);
+        matstr_element(a_hdr, (r - 1) * cols + c + base);
+      }
+    }
+  }
+
+  ts_terminate();
+  k_dismiss(); /* The matrix address */
+  *(e_stack++) = tgt_descr;
+}
+
+/* ======================================================================
    op_matches()  -  Match string against template                         */
 
 void op_matches() {
@@ -2319,6 +2420,75 @@ void op_ereplace() {
   k_put_string(buf, sl + nl, e_stack);
   e_stack++;
   free(buf);
+}
+
+/* FIX(number {, precision {, mode}})  (12 Oct 26, openQM item 472, the description the owner supplied)
+   The number as a string with PRECISION decimal places (default: the program's PRECISION), rounded to the nearest
+   when MODE is 0 or left out, cut off when MODE is not 0.  Stack: top mode, then precision (-1 = default), number. */
+void op_fix() {
+  DESCRIPTOR* d;
+  int mode;
+  int prec;
+  double x;
+  long double scaled;
+  long double p10 = 1.0L;
+  int i;
+  int neg;
+  char buf[96];
+  unsigned long long whole;
+  unsigned long long ip;
+  unsigned long long fp;
+
+  d = e_stack - 1;
+  GetInt(d);
+  mode = (int)d->data.value;
+  d = e_stack - 2;
+  GetInt(d);
+  prec = (int)d->data.value;
+  if (prec < 0)
+    prec = process.program.precision;
+  if (prec > 14)
+    prec = 14;
+  d = e_stack - 3;
+  GetNum(d);
+  x = (d->type == INTEGER) ? (double)d->data.value : d->data.float_value;
+
+  neg = (x < 0);
+  if (neg)
+    x = -x;
+  for (i = 0; i < prec; i++)
+    p10 *= 10.0L;
+  scaled = (long double)x * p10;
+  if (scaled > 1.8e18L) { /* beyond what 64 bits can hold: leave it to the default format */
+    snprintf(buf, sizeof(buf), "%.*f", prec, neg ? -x : x);
+  } else {
+    /* the small epsilon stops 2.675 (really 2.67499999...) rounding the wrong way */
+    whole = (unsigned long long)(mode == 0 ? (scaled + 0.5L + 1e-9L * (scaled > 1 ? scaled : 1)) : (scaled + 1e-9L * (scaled > 1 ? scaled : 1)));
+    ip = whole;
+    fp = 0;
+    if (prec > 0) {
+      unsigned long long div = 1;
+      for (i = 0; i < prec; i++)
+        div *= 10ULL;
+      ip = whole / div;
+      fp = whole % div;
+      if (neg && whole != 0)
+        snprintf(buf, sizeof(buf), "-%llu.%0*llu", ip, prec, fp);
+      else
+        snprintf(buf, sizeof(buf), "%llu.%0*llu", ip, prec, fp);
+    } else {
+      if (neg && whole != 0)
+        snprintf(buf, sizeof(buf), "-%llu", ip);
+      else
+        snprintf(buf, sizeof(buf), "%llu", ip);
+    }
+  }
+
+  k_dismiss();
+  k_dismiss();
+  k_dismiss();
+  k_put_c_string(buf, e_stack);
+  e_stack++;
 }
 
 void op_sadd() { sarith(0); }

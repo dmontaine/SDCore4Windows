@@ -515,6 +515,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "FIELDS"          ; intrinsic.opcodes<-1> = OP.FIELDS
    intrinsics<-1> = "FIELDSTORE"      ; intrinsic.opcodes<-1> = OP.FLDSTORF
    intrinsics<-1> = "FILEINFO"        ; intrinsic.opcodes<-1> = OP.FILEINFO
+   intrinsics<-1> = "FIX"             ; intrinsic.opcodes<-1> = OP.FIX   ;* 12 Oct 26 dm - openQM 472
    intrinsics<-1> = "FMT"             ; intrinsic.opcodes<-1> = OP.FMT
    intrinsics<-1> = "FMTS"            ; intrinsic.opcodes<-1> = OP.FMTS
    intrinsics<-1> = "FOLD"            ; intrinsic.opcodes<-1> = OP.FOLD
@@ -552,6 +553,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "LOWER"           ; intrinsic.opcodes<-1> = OP.LOWER
    intrinsics<-1> = "LTS"             ; intrinsic.opcodes<-1> = OP.LTS
    intrinsics<-1> = "MATCHFIELD"      ; intrinsic.opcodes<-1> = OP.MATCHFLD
+   intrinsics<-1> = "MATSTR"          ; intrinsic.opcodes<-1> = OP.MATSTR   ;* 12 Oct 26 dm - openQM 509
    intrinsics<-1> = "MAX"             ; intrinsic.opcodes<-1> = OP.MAX
    intrinsics<-1> = "MAXIMUM"         ; intrinsic.opcodes<-1> = OP.MAXIMUM
    intrinsics<-1> = "MD5"             ; intrinsic.opcodes<-1> = OP.MD5   ;* 12 Oct 26 dm - openQM 63
@@ -3999,6 +4001,7 @@ end
                       in.field,       ;* FIELDS
                       in.five,        ;* FIELDSTORE
                       in.fvar.two,    ;* FILEINFO
+                      in.fix,         ;* FIX
                       in.two,         ;* FMT
                       in.two,         ;* FMTS
                       in.fold,        ;* FOLD
@@ -4036,6 +4039,7 @@ end
                       in.one,         ;* LOWER
                       in.two,         ;* LTS
                       in.three,       ;* MATCHFIELD
+                      in.matstr,      ;* MATSTR
                       in.two,         ;* MAX
                       in.one,         ;* MAXIMUM
                       in.one,         ;* MD5
@@ -4194,6 +4198,37 @@ in.change:
                gosub exprf
             end else
                n = 1 ; gosub emit.numeric.load
+            end
+            goto intrinsic.common
+
+*** MATSTR(matrix)   12 Oct 26 dm - openQM 509: the argument is a dimensioned matrix, loaded as MATBUILD loads one
+in.matstr:
+            gosub get.token                 ;* The matrix name
+            symbol.name = token.string
+            gosub find.var
+            if (symbol.var.no < 0) or (symbol.dim = 0) then   ;* Not a matrix
+               err.msg = sysmsg(2931) ;* Dimensioned matrix required
+               goto error
+            end
+            gosub emit.var.load             ;* LDLCL or LDCOM for the matrix
+            goto intrinsic.common
+
+*** FIX(number {, precision {, mode}})   12 Oct 26 dm - absent precision is -1 (the program's PRECISION), absent mode 0
+in.fix:
+            arg.count = 1 ; gosub get.args
+
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+            end else
+               n = -1 ; gosub emit.numeric.load
+            end
+
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+            end else
+               n = 0 ; gosub emit.numeric.load
             end
             goto intrinsic.common
 
