@@ -2,6 +2,58 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  THE QUERY PROCESSOR: TWELVE ADDITIONS FROM OTHER MULTIVALUE SYSTEMS
+           (openQM compatibility).
+
+           LIST, SORT, SELECT, COUNT, REFORMAT and SEARCH.  None of this
+           changes a query that does not use it, except where it says so.
+
+           New keywords (they are VOC records, so an account made before this
+           release gets them from the usual account update):
+             ABSENT.IGNORE   In LIST, COUNT and REFORMAT, do not print the
+                             "'xx' not found" list for ids that are not in
+                             the file.
+             SORTED.SAMPLE n Like SAMPLE, but the n records are counted after
+                             the sort, so BY num SORTED.SAMPLE 2 is the two
+                             records with the lowest num.  SAMPLE 2 BY num
+                             sorts the first two it meets.
+             COL.HDR.SPACE   A blank line under the column headings of a
+                             tabular report.
+             FOR             SEARCH file FOR "text" "text" gives the strings
+                             on the command line instead of asking for them.
+             REPORTING       On COUNT and SELECT: a line "n record(s)
+                             examined" for every thousand records examined.
+
+           Existing keywords that now do more:
+             FROM NONE       Ignores an active select list 0 and goes to the
+                             file.  (REQUIRE.SELECT with FROM NONE is
+                             refused, because no list is being used.)
+             NO.PAGE         May now be given on any query command; it was
+                             accepted only on LIST and its relatives.
+             CSV 3           Every item is quoted, numbers too.  CSV 1 and
+                             CSV 2 are as they were.
+             BREAK.ON "'N'"  Starts a new page and numbers it 1 again, which
+                             "'P'" does not.
+             BREAK.ON "'LU'" The L (suppress the break line) is ignored when
+                             the U (underline) is also given.
+             SEARCH ... ALL  Also searches the record id.
+             SELECT file field  A field name that no clause uses is now
+                             SAVING MULTIVALUED field, so the list holds the
+                             values of the field and not the record ids.
+                             THIS CHANGES an old SELECT that named a field it
+                             did not otherwise use; add no field name, or use
+                             SAVING, to say what you mean.
+             REFORMAT ... @RECORD  Appends the whole of the source record, as
+                             it is, to the new record.
+
+           What this does not do.  SEARCH with strings from a file, the
+           DISPLAY option and the SCAN command, VERTICALLY FMT, the X
+           breakpoint code and @BPV, $VLIST, the longer $QUERY.DEFAULTS and
+           the unbroken-line marker in vertical reports are not built: the
+           release notes give the name but not the syntax, and the exact
+           spelling matters for compatibility.  The query bug fixes in the
+           release notes could not be reproduced here.
+
 18 Oct 26  DICTIONARY EXPRESSIONS: SIX THINGS THEY COULD NOT DO BEFORE.
 
            These are in I-types and in the compiled forms of A, S and C items.

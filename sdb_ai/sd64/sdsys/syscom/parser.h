@@ -227,6 +227,10 @@ $define KW$ENCRYPT        211
 $define KW$GROUP          212
 $define KW$TELNET         213
 $define KW$INTERNAL       214
+$define KW$ABSENT.IGNORE  215   ;* 10 Oct 26  1.2-0 (openQM ref 25)
+$define KW$SORTED.SAMPLE  216   ;* 10 Oct 26  1.2-0 (openQM ref 438)
+$define KW$COL.HDR.SPACE  217   ;* 10 Oct 26  1.2-0 (openQM ref 467)
+$define KW$FOR            218   ;* 10 Oct 26  1.2-0 (openQM ref 190)
 
 * ----------------------------------------------------------------------
 * !PARSER action key values
