@@ -2,11 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
-18 Oct 26  ED, COPY, COMPARE.FILES AND TRIGGERS WORK ON A DATA COLLECTION FILE.
+18 Oct 26  ED, COPY, COPYP, COMPARE.FILES AND TRIGGERS WORK ON A DATA
+           COLLECTION FILE.
 
              ED file id                  edit a record's JSON, a line to an element
              COPY FROM coll TO other ids   the JSON text goes into a file that is
-                                           not a collection file
+                                           not a collection file, and the JSON
+                                           text of a record goes into a
+                                           collection file
+             COPYP file ids              the same, with the destination asked
+                                           at the To: prompt (T shows a
+                                           collection record as JSON)
              COMPARE.FILES one two       records compared as their JSON text
 
            All three stopped with "Data cannot be converted to a string" when
@@ -22,7 +28,14 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            the compact form the file itself holds; to another collection file
            it copies the collection, as before.  Text that is not JSON copied
            into a collection file is refused, "Error 1020 writing record", and
-           stops the copy, as any write error does.  COMPARE.FILES compares
+           stops the copy, as any write error does (with the D option of COPYP
+           the source record that was not copied is not deleted).  COPYP and
+           COPY.LISTP do all of this too; they stopped with the same message.
+           The openQM manual says a copy must be between two collection files
+           or two files that are not; SD also copies between the two kinds, as
+           a deliberate addition, so that a collection file can be exported to
+           (or loaded from) text files, which a directory file holds as files
+           on disk.  COMPARE.FILES compares
            collection records by their JSON text, in which the names are always
            in order, so two equal collections are the same.
 

@@ -18,6 +18,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 4750d16 (12 Oct 26): A record of a data collection file is shown as its JSON, and copied to a file that is not
+*               one as its JSON text; text copied into a collection file must be JSON (as COPY does).
 * 18 Oct 26 Windows port - from Linux 871bc87 (12 Oct 26): COPY.LISTP: the same program, source file defaulting to $savedlists (openQM 72).
 * 20240710 Prior history suppressed
 * END-HISTORY
@@ -324,6 +326,11 @@ disp.help:
 
 display.item:
    read item from f.file, id then
+      * 18 Oct 26 Windows port - from Linux 4750d16 (12 Oct 26): - a record of a data collection file is shown as its JSON, a line to an element (as CT
+      * and ED show it); it stopped with "Data cannot be converted to a string"
+      jt = jtype(item)
+      if jt = 'collection' or jt = 'array' then item = convert(char(10), @fm, jbuild(item, JB$PRETTY))
+
       print
       if not(iflag) then print sysmsg(3522, id) ;* Item %1
 
@@ -369,7 +376,22 @@ copy.item:
       end
    end
 
-   write item on t.file, to.id
+   * 18 Oct 26 Windows port - from Linux 4750d16 (12 Oct 26): - a record of a data collection file is a collection when it is read.  Into a file that
+   * is not one it goes as its JSON text; text going into one that is must be a JSON object or array, and
+   * the copy stops at one that is not (as COPY does).  An SD extension: the openQM manual says both
+   * files must be collection files or neither.
+
+   jt = jtype(item)
+   if (jt = 'collection' or jt = 'array') and not(fileinfo(t.file, FL$COLLECTION)) then
+      item = jbuild(item)
+   end
+
+   write item on t.file, to.id on error
+      print sysmsg(6164, status(), to.id) ;* Error %1 writing record '%2'
+      release f.file, id
+      @system.return.code = -status()
+      stop
+   end
    records.copied += 1
 
    if dflag then
