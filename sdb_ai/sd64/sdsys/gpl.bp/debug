@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): NO.SOURCE.WARNING in the VOC record $DEBUG.OPTIONS stops the "unable to find source" message (openQM 203).
 * 18 Oct 26 Windows port - from Linux 8da7e5d (11 Oct 26): A data collection variable is shown (kind, element count and its
 *               JSON text), and /name{path} and DUMP name{path} show the
 *               element the path names (sheet item 530).
@@ -869,8 +870,14 @@ allocate.new.program:
       close program.file
    end
 
-   message = sysmsg(6711, source.path) ;* Unable to find source record xx
-   gosub emit.err.msg
+   * 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): - openQM 203: the keyword NO.SOURCE.WARNING in the VOC record $DEBUG.OPTIONS (one keyword to a
+   * line) leaves the message out.  The debugger is left just the same.
+   read debug.options from @voc, '$debug.options' then debug.options = upcase(debug.options) else debug.options = ''
+   locate 'NO.SOURCE.WARNING' in debug.options<1> setting n else n = 0
+   if not(n) then
+      message = sysmsg(6711, source.path) ;* Unable to find source record xx
+      gosub emit.err.msg
+   end
    debug.off
    return to exit.debug
 

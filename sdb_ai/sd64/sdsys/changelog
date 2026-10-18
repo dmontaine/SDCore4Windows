@@ -2,6 +2,33 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FOUR SMALL FIXES.
+
+           CLEAR.FILE on a file that has NO.RESIZE set (CONFIGURE.FILE ...
+           NO.RESIZE) empties it but keeps the size it had; it used to send the
+           file back to its minimum size, as if the flag were not there.
+
+           LIST.ITEM and SORT.ITEM number the lines of an item with more than
+           999 fields with as many digits as the last number needs (0001 to
+           1200, say); they used to cut the number to three digits.  An item of
+           999 fields or fewer is numbered as before.
+
+           The debugger tells you when it cannot find the source of the
+           program it was asked to debug, and then lets the program run on.
+           A record named $DEBUG.OPTIONS in your VOC containing the line
+           NO.SOURCE.WARNING (one keyword to a line) leaves that message out.
+           No other keyword is looked for.
+
+           The terminfo entries for the ADDS 4000 terminal, adds4000 and
+           adds4000-at, now say that the terminal leaves a character cell for
+           a highlight marker (xmc#1), as the other terminals of its kind do.
+
+           Two things in the same group of openQM changes were found to be
+           already so and are now tested: CT opens a file whose name is in
+           lower case, and SOCKET.INFO(var, SKT$INFO.OPEN) answers 0 for a
+           variable that is not a socket, whether it holds a number, a string
+           or nothing, instead of stopping the program.
+
 18 Oct 26  SIX SMALL BASIC ADDITIONS.
 
            OPEN and OPENPATH take NON.TRANSACTIONAL, alone or with READONLY and

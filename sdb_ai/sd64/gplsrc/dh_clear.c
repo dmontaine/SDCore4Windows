@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): A file with the NO.RESIZE flag keeps its modulus when it is cleared (openQM item 590).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -63,7 +64,9 @@ bool dh_clear(DH_FILE* dh_file) {
   }
   ak_map = ((DH_HEADER*)dh_buffer)->ak_map;
 
-  new_modulus = fptr->params.min_modulus;
+  /* 12 Oct 26 dm  openQM item 590: a file with NO.RESIZE set keeps the modulus it has; it is not taken back
+     to the minimum.  The groups are all emptied either way.                                              */
+  new_modulus = (fptr->flags & DHF_NO_RESIZE) ? fptr->params.modulus : fptr->params.min_modulus;
   group_size_bytes = dh_file->group_size;
 
   fptr->params.modulus = new_modulus;
