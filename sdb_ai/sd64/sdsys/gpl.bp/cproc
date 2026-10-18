@@ -1937,6 +1937,22 @@ reparse:
             exit
       end case
 
+   * CHAINED.SELECT (14 Oct 26 dm, openQM refs 79 and 314): a GET.LIST, QSELECT, SEARCH, SELECT, SSELECT or SELECTINDEX
+   * that has made an active list executes the first command in the data queue, as the next command (it is chained
+   * in the way CHAIN chains); one that made no list leaves the queue empty.  Only when no CHAIN is already pending.
+   if option(OPT.CHAINED.SELECT) and xeq.command = '' and not(unwinding) then
+      if index(' GET.LIST QSELECT SEARCH SELECT SSELECT SELECTINDEX ', ' ' : upcase(verb) : ' ', 1) then
+         if selectinfo(0, SL$ACTIVE) then
+            if @data.pending then
+               input chained.cmd
+               xeq.command = chained.cmd
+            end
+         end else
+            cleardata
+         end
+      end
+   end
+
 exit.command:
    while len(xeq.command)
 

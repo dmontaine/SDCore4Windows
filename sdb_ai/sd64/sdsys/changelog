@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  NEW OPTION: CHAINED.SELECT.
+
+           With OPTION CHAINED.SELECT in effect, a GET.LIST, QSELECT,
+           SEARCH, SELECT, SSELECT or SELECTINDEX that leaves an active
+           select list takes the first line of the data queue and runs it
+           as the next command, the way a CHAIN would: DATA 'LIST STOCK'
+           followed by EXECUTE 'SELECT SALES' lists the selected records.
+           When the select finds nothing the queue is cleared, so the
+           commands that were waiting for a list do not run on nothing.
+           Without the option the data queue is left alone, as it was.
+
 18 Oct 26  NEW OPTION: PICK.ML.CONV.MASK.
 
            With OPTION PICK.ML.CONV.MASK in effect, a left bracket in an ML

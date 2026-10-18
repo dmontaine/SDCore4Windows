@@ -446,6 +446,7 @@
       $define OPT.CATALOGUE.LOCAL     40 ;* CATALOG and DELETE.CATALOG default to the local catalogue
       $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
       $define OPT.PICK.ML.CONV.MASK   42 ;* ML and MR: ( starts a parenthesised format mask, not round bracket negatives (kernel)
+      $define OPT.CHAINED.SELECT      43 ;* A select that finds something executes the first command in the data queue (cproc)
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices

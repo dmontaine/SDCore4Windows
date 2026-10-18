@@ -100,6 +100,8 @@ $include int$keys.h
    opt<-1> = 'DIR.SEL.OMIT.HIDDEN||12081'
    * 14 Oct 26  1.2-0, openQM ref 49.
    opt<-1> = 'PICK.ML.CONV.MASK||12240'
+   * openQM refs 79 and 314.
+   opt<-1> = 'CHAINED.SELECT||12241'
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 
    * Shortcuts
