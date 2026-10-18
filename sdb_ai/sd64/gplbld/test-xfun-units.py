@@ -101,7 +101,7 @@ def checks(d):
                 "lists differ at %s" % next((("name %s, handler comment %s" % (a, b[1])) for a, b in zip(names, h) if b[1] != legacy.get(a, a)),
                                             "the end (%d names, %d handlers)" % (len(names), len(h)))))
     # ARG.PRESENT is given OP.XFUN too, but reads a variable name and so has a handler of its own
-    own = {"ARG.PRESENT": "in.arg.present", "REUSING": "in.reusing"}
+    own = {"ARG.PRESENT": "in.arg.present", "REUSING": "in.reusing", "SELECT.SOCKET": "in.select.socket"}
     xnames = {n for n in names if d["opcodes"][n] == "OP.XFUN" and n not in own}
     hx = {n for hh, n in h if hh == "in.xfun"}
     res.append(("3. the names given OP.XFUN are the names with the handler in.xfun (ARG.PRESENT has in.arg.present)",
@@ -114,11 +114,11 @@ def checks(d):
     res.append(("4b. every row writes one to three arguments", not bad and len(rows) > 0, "rows: %s" % bad))
     sels = {sel for sel, _a, _o, _m in rows.values()}
     # XF_CASING (a statement) and XF_ARGPRESENT (ARG.PRESENT's own handler) are loaded by code of their own, not by a row
-    own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24}
+    own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24, "XF_SELSOCKET": 27}
     defs = {v for k, v in d["xf_defs"].items() if k not in own_c}
     res.append(("5. every function number of xfun.rows is an XF_ constant of op_xfun.c and the reverse", sels == defs and len(defs) > 0,
                 "only one side: %s" % sorted(sels ^ defs)))
-    res.append(("5a. CASING, ARG.PRESENT and REUSING load the numbers op_xfun.c gives XF_CASING, XF_ARGPRESENT and XF_REUSING",
+    res.append(("5a. CASING, ARG.PRESENT, REUSING and SELECT.SOCKET load the numbers op_xfun.c gives XF_CASING, XF_ARGPRESENT, XF_REUSING and XF_SELSOCKET",
                 all(d["xf_defs"].get(k) == v and d["own_loads"].get(k) == v for k, v in own_c.items()),
                 "op_xfun.c says %s, bcomp loads %s" % ({k: d["xf_defs"].get(k) for k in own_c}, d["own_loads"])))
     res.append(("5b. every XF_ constant has a case in op_xfun()", set(d["xf_defs"]) <= d["xf_cases"] | {"XF_IS_ALNUM", "XF_IS_ALPHA", "XF_IS_DIGIT", "XF_IS_GRAPH", "XF_IS_MARK", "XF_IS_SPACE"} and d["xf_cases"] <= set(d["xf_defs"]),

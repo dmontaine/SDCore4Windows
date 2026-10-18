@@ -305,7 +305,12 @@
       *   binding); "" otherwise.
       $define SKT$INFO.TLS.CBIND       8    ;* SCRAM c= for this TLS session
       $define SKT$INFO.FAMILY.IPV4     1    ;* Socket address family IPV4
-      $define SKT$INFO.FAMILY.IPV6     2    ;* Socket address family IPV6     
+      $define SKT$INFO.FAMILY.IPV6     2    ;* Socket address family IPV6
+      * 18 Oct 26 Windows port - from Linux cc03bed (15 Oct 26): - QM4 gaps Q-5, SELECT.SOCKET().  SKT$INFO.EVENTS is SD's own number; the events are openQM's.
+      $define SKT$INFO.EVENTS          9    ;* SET.SOCKET.MODE: events to watch.  SOCKET.INFO: the letters last found
+      $define SKT$READ.EVENT           1    ;* Data to read, a connection waiting on a server socket, or the peer closed
+      $define SKT$WRITE.EVENT          2    ;* Data can be sent
+      $define SKT$EXCEPTION.EVENT      4    ;* An exception condition
       
       * JPARSE() and JBUILD() modes (13 Oct 26, data collections), mirrored from gplsrc/keys.h
       $define JP$NULL                  1    ;* A JSON null is read as a null string

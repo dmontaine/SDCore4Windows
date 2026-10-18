@@ -459,6 +459,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"REVREMOVE":@fm:"GROUPSTORE":@fm:"TTYSET":@fm:"SEND"    ;* 15 Oct 26 dm - QM4 gaps Q-1, Q-5, Q-7 (same)
    statements := @fm:"OSREAD":@fm:"OSWRITE":@fm:"OSDELETE"                    ;* 15 Oct 26 dm - QM4 gaps Q-4 (same)
    statements := @fm:"SET.TIMEZONE":@fm:"KEEP.SELECT":@fm:"MATWRITECSV"       ;* 15 Oct 26 dm - QM4 gaps Q-3, Q-16, Q-4 (same)
+   statements := @fm:"SELECTINDEXV"                                           ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
 
    * Statements which do not generate DEBUG calls when debugging
 
@@ -702,6 +703,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SDDECRYPT"       ; intrinsic.opcodes<-1> = OP.DECRYPT
    intrinsics<-1> = "SDENCRYPT"       ; intrinsic.opcodes<-1> = OP.ENCRYPT
    intrinsics<-1> = "SDIV"            ; intrinsic.opcodes<-1> = OP.SDIV
+   intrinsics<-1> = "SELECT.SOCKET"   ; intrinsic.opcodes<-1> = OP.XFUN      ;* 15 Oct 26 dm - QM4 gaps Q-5
    intrinsics<-1> = "SELECTINFO"      ; intrinsic.opcodes<-1> = OP.SLCTINFO
    intrinsics<-1> = "SENTENCE"        ; intrinsic.opcodes<-1> = OP.NULL
    intrinsics<-1> = "SEQ"             ; intrinsic.opcodes<-1> = OP.SEQ
@@ -2412,7 +2414,8 @@ is.statement:
                  st.osdelete,
                  st.settimezone,               ;* 15 Oct 26 dm - QM4 gaps Q-3
                  st.keepselect,                ;* 15 Oct 26 dm - QM4 gaps Q-16
-                 st.matwritecsv                ;* 15 Oct 26 dm - QM4 gaps Q-4
+                 st.matwritecsv,               ;* 15 Oct 26 dm - QM4 gaps Q-4
+                 st.selectindexv               ;* 15 Oct 26 dm - QM4 gaps Q-2
          end else
             locate u.token.string in non.debug.statements<1> setting i then
                on i gosub st.class,      ;* CLASS
@@ -4343,6 +4346,7 @@ end
                       in.three,       ;* SDDECRYPT
                       in.three,       ;* SDENCRYPT
                       in.two,         ;* SDIV
+                      in.select.socket, ;* SELECT.SOCKET
                       in.two,         ;* SELECTINFO
                       in.sentence,    ;* SENTENCE
                       in.one,         ;* SEQ
@@ -4480,6 +4484,29 @@ in.arg.present:
             end
             n = symbol.var.no ; gosub emit.numeric.load
             n = 20 ; gosub emit.numeric.load      ;* XF_ARGPRESENT
+            intrinsic.stack<1> = OP.XFUN
+            goto intrinsic.common
+
+*** SELECT.SOCKET(matrix, timeout): wait for events on the sockets in the elements of a dimensioned matrix.  The matrix is loaded
+*** by reference, as INMAT(matrix) loads it; the timeout is in milliseconds.  (15 Oct 26 dm, QM4 gaps Q-5; the function number
+*** is XF_SELSOCKET)
+in.select.socket:
+            if look.ahead.token # TKN.NAME then
+               err.msg = sysmsg(2860) ;* Matrix name required
+               goto error
+            end
+            gosub get.token
+            symbol.name = token.string
+            gosub find.var
+            if symbol.var.no < 0 or symbol.dim = 0 then
+               err.msg = sysmsg(2860) ;* Matrix name required
+               goto error
+            end
+            gosub emit.var.load
+            if look.ahead.token # TKN.COMMA then goto err.syntax
+            gosub get.token
+            gosub expr                            ;* the timeout, in milliseconds
+            n = 27 ; gosub emit.numeric.load      ;* XF_SELSOCKET
             intrinsic.stack<1> = OP.XFUN
             goto intrinsic.common
 
@@ -12675,6 +12702,45 @@ st.selectindex:
    end
 
    opcode.byte = opcode ; gosub emit.simple
+   return
+
+*****************************************************************************
+* ST.SELECTINDEXV  -  SELECTINDEXV index {, value} FROM file.var TO list.var     (15 Oct 26 dm, QM4 gaps Q-2)
+*
+* SELECTINDEX into a select list VARIABLE: the indexed values of the index, or the ids of the records that have the value.
+* Made of what exists: the SELECTINDEX goes to numbered list 10, and !movelist (MOVELISTV) moves that list into the variable,
+* which leaves list 10 empty.  So list 10 is used as scratch, and what it held is lost; a program that keeps something in
+* list 10 should keep it somewhere else.  STATUS() is the SELECTINDEX's (1 for an unknown index).
+
+st.selectindexv:
+   * A call of the catalogued subroutine !selidxv(index, value, has.value, file.var, list.var): the SELECTINDEX is done inside
+   * it, so that STATUS() is the SELECTINDEX's when it returns (a call made after it would have set STATUS() to zero).
+   s = '!selidxv'
+   gosub emit.direct.call.reference
+   gosub expr                  ;* Index name
+
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token          ;* Skip comma
+      gosub expr               ;* Indexed value
+      has.value = 1
+   end else
+      opcode.byte = OP.LDNULL ; gosub emit.simple
+      has.value = 0
+   end
+   n = has.value ; gosub emit.numeric.load
+
+   if u.look.ahead.token.string # 'FROM' then goto err.from
+   gosub get.token
+
+   gosub convert.pick.file.reference
+   gosub simple.var.reference  ;* The file variable
+
+   if u.look.ahead.token.string # 'TO' then goto err.to
+   gosub get.token             ;* Skip TO
+   gosub simple.lvar.reference ;* The variable that is to hold the list
+   if err then return
+   sys.call.n = 5
+   gosub emit.sys.call.end
    return
 
 *****************************************************************************

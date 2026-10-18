@@ -1,0 +1,53 @@
+* SELIDXV
+* SELECTINDEXV statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux cc03bed (15 Oct 26): Written for QM4 gaps bundle Q-2 (SELECTINDEXV).  The compiler (bcomp, st.selectindexv) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !SELIDXV(index, value, has.value, file, list)
+*
+* SELECTINDEX into a select list variable.  The SELECTINDEX goes to numbered list 10 and !MOVELIST (MOVELISTV) moves that
+* list into LIST, which leaves list 10 empty: list 10 is this statement's scratch list, and what it held is lost.  With
+* HAS.VALUE the ids of the records that have VALUE are selected, otherwise the indexed values.  An index the file does not
+* have leaves STATUS() at 1, as SELECTINDEX does, and LIST holds an empty list.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+subroutine selidxv(index, value, has.value, file, list)
+$catalog !selidxv
+
+   if has.value then
+      selectindex index, value from file to 10
+   end else
+      selectindex index from file to 10
+   end
+   if status() then
+      * an index the file does not have: an empty list, and nothing run after the SELECTINDEX that could change STATUS()
+      list = ''
+      return
+   end
+   call !movelist(10, list, 0, 1)
+   return
+end
+
+* END-CODE

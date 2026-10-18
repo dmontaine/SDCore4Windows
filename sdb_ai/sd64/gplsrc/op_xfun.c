@@ -45,6 +45,7 @@
  *    XF_CASING      CASING ON / OFF / expr    the CASING statement (SYSTEM(1086) reads the state back)
  *    XF_SIGNAL      SIGNAL(user.no)           raise the application signal in a process; SYSTEM(1062) reads and clears it
  *    XF_DIGEST      DIGEST(string, is.file, mode)   MD5 SHA1 SHA256 SHA384 SHA512 of a string or of an OS file, as hex
+ *    XF_SELSOCKET   SELECT.SOCKET(skt.array, timeout)  wait for events on the sockets of a matrix; R, W and E letters per element
  *
  * END-DESCRIPTION
  *
@@ -52,10 +53,13 @@
  */
 
 #include <math.h>
+#include <poll.h>
+#include <time.h>
 #include <unistd.h>
 #include <openssl/evp.h>   /* before sd.h: descr.h defines OBJ, which turns OpenSSL's OBJ_dup into 15_dup */
 #include "sd.h"
 #include "header.h"
+#include "keys.h"
 
 /* The function numbers.  Keep in step with xfun.info in sdsys/gpl.bp/bcomp (test-xfun-units.py checks it). */
 #define XF_CEIL 1
@@ -84,6 +88,7 @@
 #define XF_REUSING 24 /* REUSING(name): the compiler loads the variable itself, which has its own handler (in.reusing) */
 #define XF_SIGNAL 25  /* SIGNAL(user.no), QM4 gaps Q-5 */
 #define XF_DIGEST 26  /* DIGEST(string, is.file, mode), QM4 gaps Q-13 */
+#define XF_SELSOCKET 27 /* SELECT.SOCKET(socket matrix, timeout): the compiler loads the matrix itself (in.select.socket), QM4 gaps Q-5 */
 
 void op_dcount(void);
 void op_field(void);
@@ -105,6 +110,7 @@ Private void x_last(void);
 Private void x_nv(bool ns);
 Private int32_t x_signal(int32_t uid);
 Private void x_digest(void);
+Private void x_select_socket(void);
 Private void push_int(int32_t n);
 
 /* ======================================================================
@@ -218,6 +224,9 @@ void op_xfun() {
       break;
     case XF_DIGEST:
       x_digest();
+      break;
+    case XF_SELSOCKET:
+      x_select_socket();
       break;
     default:
       k_error("Illegal XFUN function number %d", (int)fn); /* the compiler cannot have made this */
@@ -371,6 +380,166 @@ Private void x_digest() {
   k_dismiss();                      /* the string */
   k_put_c_string(hex, e_stack);
   e_stack++;
+}
+
+/* ======================================================================
+   x_select_socket()  -  SELECT.SOCKET(skt.array, timeout)
+
+   poll()s the sockets in the elements of a dimensioned matrix for the events each was given with SET.SOCKET.MODE(skt,
+   SKT$INFO.EVENTS, ...): SKT$READ.EVENT (data, or a connection waiting on a server socket, or the peer closing),
+   SKT$WRITE.EVENT, SKT$EXCEPTION.EVENT.  An element that is not an open socket, or has no events set, is not watched.
+   timeout is in milliseconds: 0 asks and returns, negative waits until something happens.
+
+   The result is a field mark delimited array with a field for each element of the matrix: the letters R, W and E of the
+   events found (only those asked for), null where there were none.  When nothing happens in the time the result is the
+   null string and STATUS() is ER_TIMEOUT; any other failure is a null string with ER_FAILED.  What each socket found is
+   also what SOCKET.INFO(skt, SKT$INFO.EVENTS) says until the next call.
+
+   Only the TCP connection is watched: bytes a TLS session has already taken off it are not seen as "readable".      */
+
+Private void x_select_socket() {
+  DESCRIPTOR* mat_descr;
+  DESCRIPTOR* to_descr;
+  DESCRIPTOR* com_descr;
+  DESCRIPTOR* d;
+  ARRAY_HEADER* a_hdr = NULL;
+  PMATRIX_HEADER* pm_hdr;
+  int32_t num_elements;
+  int32_t first;
+  int32_t i;
+  int32_t timeout;
+  SOCKVAR* sv;
+  struct pollfd* pfd = NULL;
+  SOCKVAR** svs = NULL;
+  int32_t npoll = 0;
+  char* result = NULL;
+  int32_t res_len = 0;
+  int rc = 0;
+  int ms;
+  time_t deadline = 0;
+
+  process.status = 0;
+
+  to_descr = e_stack - 1;
+  GetInt(to_descr);
+  timeout = to_descr->data.value;
+
+  mat_descr = e_stack - 2;
+  while (mat_descr->type == ADDR)
+    mat_descr = mat_descr->data.d_addr;
+
+  switch (mat_descr->type) {
+    case ARRAY:
+      a_hdr = mat_descr->data.ahdr_addr;
+      num_elements = ((a_hdr->cols == 0) ? 1 : a_hdr->cols) * a_hdr->rows;
+      first = 1;
+      break;
+    case PMATRIX:
+      pm_hdr = mat_descr->data.pmatrix;
+      com_descr = pm_hdr->com_descr;
+      num_elements = (pm_hdr->cols == 0) ? pm_hdr->rows : pm_hdr->cols * pm_hdr->rows;
+      a_hdr = com_descr->data.ahdr_addr;
+      first = pm_hdr->base_offset;
+      break;
+    default:
+      k_error(sysmsg(1236)); /* Matrix required */
+      return;
+  }
+
+  pfd = (struct pollfd*)malloc(sizeof(struct pollfd) * (size_t)(num_elements + 1));
+  svs = (SOCKVAR**)malloc(sizeof(SOCKVAR*) * (size_t)(num_elements + 1));
+  result = (char*)malloc((size_t)num_elements * 4 + 2);
+  if ((pfd == NULL) || (svs == NULL) || (result == NULL)) {
+    process.status = ER_FAILED;
+    goto done;
+  }
+
+  for (i = 0; i < num_elements; i++) {
+    d = Element(a_hdr, first + i);
+    while (d->type == ADDR)
+      d = d->data.d_addr;
+    if ((d->type != SOCK) || (d->data.sock == NULL))
+      continue;
+    sv = d->data.sock;
+    sv->found = 0;
+    if (sv->events == 0)
+      continue;
+    pfd[npoll].fd = sv->socket_handle;
+    pfd[npoll].events = 0;
+    if (sv->events & SKT_READ_EVENT)
+      pfd[npoll].events |= POLLIN;
+    if (sv->events & SKT_WRITE_EVENT)
+      pfd[npoll].events |= POLLOUT;
+    if (sv->events & SKT_EXCEPTION_EVENT)
+      pfd[npoll].events |= POLLPRI;
+    pfd[npoll].revents = 0;
+    svs[npoll] = sv;
+    npoll++;
+  }
+
+  if (timeout > 0)
+    deadline = time(NULL) + (time_t)((timeout + 999) / 1000) + 1;
+
+  for (;;) {
+    ms = timeout;
+    if (timeout > 0) {
+      time_t left = deadline - time(NULL);
+
+      ms = (left > 0) ? (int)(left * 1000) : 0;
+      if (ms > timeout)
+        ms = timeout;
+    }
+    rc = poll(pfd, (nfds_t)npoll, ms);
+    if ((rc < 0) && (errno == EINTR) && ((timeout < 0) || (time(NULL) < deadline)))
+      continue;
+    break;
+  }
+
+  if (rc < 0) {
+    process.status = ER_FAILED;
+  } else if (rc == 0) {
+    process.status = ER_TIMEOUT;
+  } else {
+    for (i = 0; i < npoll; i++) {
+      short r = pfd[i].revents;
+
+      if ((svs[i]->events & SKT_READ_EVENT) && (r & (POLLIN | POLLHUP)))
+        svs[i]->found |= SKT_READ_EVENT;
+      if ((svs[i]->events & SKT_WRITE_EVENT) && (r & POLLOUT))
+        svs[i]->found |= SKT_WRITE_EVENT;
+      if ((svs[i]->events & SKT_EXCEPTION_EVENT) && (r & (POLLPRI | POLLERR | POLLNVAL)))
+        svs[i]->found |= SKT_EXCEPTION_EVENT;
+    }
+
+    /* One field for each element of the matrix, in its order */
+    for (i = 0; i < num_elements; i++) {
+      d = Element(a_hdr, first + i);
+      while (d->type == ADDR)
+        d = d->data.d_addr;
+      if (i > 0)
+        result[res_len++] = FIELD_MARK;
+      if ((d->type == SOCK) && (d->data.sock != NULL)) {
+        sv = d->data.sock;
+        if (sv->found & SKT_READ_EVENT)
+          result[res_len++] = 'R';
+        if (sv->found & SKT_WRITE_EVENT)
+          result[res_len++] = 'W';
+        if (sv->found & SKT_EXCEPTION_EVENT)
+          result[res_len++] = 'E';
+      }
+    }
+  }
+
+done:
+  if (result != NULL)
+    result[res_len] = '\0';
+  k_pop(1);    /* the timeout */
+  k_dismiss(); /* the matrix reference */
+  k_put_c_string((process.status == 0 && result != NULL) ? result : "", e_stack);
+  e_stack++;
+  free(pfd);
+  free(svs);
+  free(result);
 }
 
 /* ======================================================================

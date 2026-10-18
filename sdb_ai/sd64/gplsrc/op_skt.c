@@ -223,6 +223,8 @@ void op_accptskt() {
   sock->socket_handle = (int)skt;
   sock->flags = SKT_INCOMING;
   sock->tls = NULL; /* 15 Sep 26 Windows port - S.19: k_alloc does not zero */
+  sock->events = 0;
+  sock->found = 0;
   sock->family = sockvar->family;
 
   switch (sock->family) {
@@ -469,6 +471,8 @@ void op_openskt() {
     sock->family = res->ai_family;
     sock->flags = flags & SKT_USER_MASK;
     sock->tls = NULL; /* 15 Sep 26 Windows port - S.19 */
+    sock->events = 0;
+    sock->found = 0;
     struct sockaddr_in const* sin;
     struct sockaddr_in6 const* sin6;
     switch (res->ai_family) {
@@ -724,6 +728,18 @@ void op_setskt() {
                  sizeof(int));
       break;
 
+    /* 15 Oct 26 dm - QM4 gaps Q-5: the events SELECT.SOCKET() is to watch on this socket, a sum of SKT$READ.EVENT 1,
+       SKT$WRITE.EVENT 2 and SKT$EXCEPTION.EVENT 4.  Zero stops watching it. */
+    case SKT_INFO_EVENTS:
+      GetInt(descr);
+      if ((descr->data.value < 0) || (descr->data.value > 7)) {
+        process.status = ER_ARGS;
+      } else {
+        sockvar->events = (int16_t)(descr->data.value);
+        sockvar->found = 0;
+      }
+      break;
+
     default:
       process.status = ER_BAD_KEY;
       break;
@@ -845,6 +861,23 @@ void op_sktinfo() {
           result_descr.data.value = SKT_INFO_FAMILY_IPV6;
           break;
       }
+      break;
+
+    /* 15 Oct 26 dm - QM4 gaps Q-5: what the last SELECT.SOCKET() found on this socket, as the letters R, W and E for
+       a read, write and exception event (a null string when none), the string SELECT.SOCKET() itself gives. */
+    case SKT_INFO_EVENTS: {
+      char ev[4];
+      int ei = 0;
+
+      if (sockvar->found & SKT_READ_EVENT)
+        ev[ei++] = 'R';
+      if (sockvar->found & SKT_WRITE_EVENT)
+        ev[ei++] = 'W';
+      if (sockvar->found & SKT_EXCEPTION_EVENT)
+        ev[ei++] = 'E';
+      ev[ei] = '\0';
+      k_put_c_string(ev, &result_descr);
+    } break;
   }
 
   k_pop(1);
@@ -1096,6 +1129,8 @@ void op_srvrskt() {
       sock->family = res->ai_family;
       sock->flags = SKT_SERVER;
       sock->tls = NULL; /* 15 Sep 26 Windows port - S.19: k_alloc does not zero */
+      sock->events = 0;
+      sock->found = 0;
 
       struct sockaddr_in const* sin;
       struct sockaddr_in6 const* sin6;

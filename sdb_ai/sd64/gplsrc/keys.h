@@ -598,6 +598,12 @@
    ("" without TLS).  Mirrored in sdsys/syscom/KEYS.H. */
 #define SKT_TLS            0x01000000
 #define SKT_INFO_TLS_CBIND       8    /* SCRAM c= for this TLS session */
+/* 15 Oct 26 dm - QM4 gaps Q-5, SELECT.SOCKET().  The key (SD's own number: openQM's list does not give one) and the events
+   a program can watch for.  Mirrored in sdsys/syscom/keys.h. */
+#define SKT_INFO_EVENTS          9    /* Events to watch (SET.SOCKET.MODE) / events last found (SOCKET.INFO) */
+#define SKT_READ_EVENT           1    /* Data can be read, or a connection is waiting on a server socket, or it was closed */
+#define SKT_WRITE_EVENT          2    /* Data can be sent */
+#define SKT_EXCEPTION_EVENT      4    /* An exception condition */
 
 /* JPARSE() and JBUILD() modes (13 Oct 26, data collections).  Mirrored in
    sdsys/syscom/keys.h; the values are SD's own - openQM names them only. */

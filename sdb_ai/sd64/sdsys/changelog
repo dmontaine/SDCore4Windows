@@ -2,6 +2,24 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SELECT.SOCKET() AND SELECTINDEXV.
+
+             SELECT.SOCKET(matrix, milliseconds)
+                        Waits on the sockets held in the elements of a
+                        dimensioned matrix.  What to watch is set with
+                        SET.SOCKET.MODE(skt, SKT$INFO.EVENTS, events), the
+                        events being SKT$READ.EVENT 1 (data, a connection
+                        waiting on a server socket, or the peer closing),
+                        SKT$WRITE.EVENT 2 and SKT$EXCEPTION.EVENT 4.  The
+                        result has a field for each element: the letters R, W
+                        and E found there.  A time-out is a null string with
+                        STATUS() 1011.  SKT$INFO.EVENTS is 9: openQM's manual
+                        gives no number, so it is SD's own.  A TLS socket is
+                        watched at the TCP connection.
+             SELECTINDEXV index {, value} FROM file.var TO list.var
+                        SELECTINDEX into a select list variable.  Numbered
+                        list 10 is its scratch list and is empty afterwards.
+
 18 Oct 26  INHIBIT.LOGIN, AND A KILLED BACKUP NO LONGER LOCKS EVERYBODY OUT.
 
              INHIBIT.LOGIN ON / OFF     (administrator only)
