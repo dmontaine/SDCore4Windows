@@ -384,7 +384,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"ECHO":@fm:"ELSE":@fm:"END":@fm:"ENTER"      ;* :@fm:"ERRMSG"
    statements := @fm:"EXECUTE":@fm:"EXIT"
    statements := @fm:"FILE":@fm:"FILELOCK":@fm:"FILEUNLOCK":@fm:"FIND"
-   statements := @fm:"FINDSTR":@fm:"FLUSH":@fm:"FOOTING":@fm:"FOR"
+   statements := @fm:"FINDSTR":@fm:"FLUSH":@fm:"FLUSH.DH.CACHE":@fm:"FOOTING":@fm:"FOR"   ;* FLUSH.DH.CACHE: 14 Oct 26 dm - openQM 83, 123
    statements := @fm:"FORMLIST"
    statements := @fm:"GETLIST":@fm:"GO":@fm:"GOSUB":@fm:"GOTO"
    statements := @fm:"HEADING":@fm:"HUSH"
@@ -2180,6 +2180,7 @@ is.statement:
                  st.find,
                  st.findstr,
                  st.flush,
+                 st.flush.dh.cache,
                  st.footing,
                  st.for,
                  st.formlist,
@@ -8227,6 +8228,24 @@ st.flush:
    ins '0' before testlock.stack<1>       ;* No LOCKED clause allowed
    ins '1' before thenelse.stack<1>       ;* THEN / ELSE clause required
    goto back.end
+
+*****************************************************************************
+* ST.FLUSH.DH.CACHE  -  FLUSH.DH.CACHE {LOCAL | NO.WAIT}   (14 Oct 26 dm, openQM 83 and 123)
+* The kernel is given 0 (every process, and wait for them), 1 (LOCAL) or 2 (NO.WAIT).
+
+st.flush.dh.cache:
+   n = 0
+   begin case
+      case u.look.ahead.token.string = 'LOCAL'
+         gosub get.token
+         n = 1
+      case u.look.ahead.token.string = 'NO.WAIT'
+         gosub get.token
+         n = 2
+   end case
+   gosub emit.numeric.load
+   opcode.byte = OP.FLUSHDH ; gosub emit.simple
+   return
 
 *****************************************************************************
 * ST.FOOTING  -  FOOTING statement

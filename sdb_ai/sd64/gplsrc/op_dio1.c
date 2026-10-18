@@ -1031,4 +1031,51 @@ void flush_dh_cache() {
   }
 }
 
+/* ======================================================================
+   op_flushdh()  -  FLUSH.DH.CACHE {LOCAL | NO.WAIT}   (14 Oct 26, openQM 83 and 123)
+
+   Stack: 0 every process and wait for them, 1 LOCAL (this process only), 2 NO.WAIT (ask every process and carry on).
+   Every other process takes the request when it next looks at its events, so the wait is for each of them to have
+   cleared its EVT_FLUSH_CACHE bit, and is given up after four seconds (the manual's figure).                  */
+
+void op_flushdh() {
+  DESCRIPTOR* descr;
+  int32_t option;
+  int16_t u;
+  int16_t waits;
+  bool pending;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+  option = descr->data.value;
+  k_pop(1);
+
+  flush_dh_cache(); /* This process, at once */
+
+  if (option == 1)
+    return;
+
+  raise_event(EVT_FLUSH_CACHE, -1);
+
+  StartExclusive(SHORT_CODE, 24);
+  my_uptr->events &= ~EVT_FLUSH_CACHE; /* We have done ours */
+  EndExclusive(SHORT_CODE);
+
+  if (option == 2)
+    return;
+
+  for (waits = 0; waits < 40; waits++) {
+    pending = FALSE;
+    for (u = 1; u <= sysseg->max_users; u++) {
+      if (UPtr(u) != my_uptr && UPtr(u)->uid && (UPtr(u)->events & EVT_FLUSH_CACHE)) {
+        pending = TRUE;
+        break;
+      }
+    }
+    if (!pending)
+      break;
+    Sleep(100);
+  }
+}
+
 /* END-CODE */

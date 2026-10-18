@@ -596,7 +596,7 @@ _opc_(0xCFE4, OP_COLL,     "COLL",       op_coll,      OPCODE_BYTE,         0)
 _opc_(0xCFE5, OP_EQNC,     "EQNC",       op_eqnc,      OPCODE_BYTE,        -1)  /* 14 Oct 26: ~= (openQM item 430) */
 _opc_(0xCFE6, OP_CSVMODE,  "CSVMODE",    op_csvmode,   OPCODE_BYTE,        -2)  /* 14 Oct 26: CSV.MODE (openQM item 173, 200) */
 _opc_(0xCFE7, OP_CSVDELIM, "CSVDELIM",   op_csvdelim,  OPCODE_BYTE,         1)  /* 14 Oct 26: the CSV delimiter as a string */
-_opc_(0xCFE8, OP_CFE8,     "OPCFE8",     op_illegal2,  OPCODE_BYTE,         0)
+_opc_(0xCFE8, OP_FLUSHDH,  "FLUSHDH",    op_flushdh,   OPCODE_BYTE,        -1)  /* 14 Oct 26: FLUSH.DH.CACHE (openQM 83, 123) */
 _opc_(0xCFE9, OP_CFE9,     "OPCFE9",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFEA, OP_CFEA,     "OPCFEA",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFEB, OP_CFEB,     "OPCFEB",     op_illegal2,  OPCODE_BYTE,         0)
