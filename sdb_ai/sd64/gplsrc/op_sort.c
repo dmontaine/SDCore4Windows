@@ -20,6 +20,8 @@
  * 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): Expose user-callable SORT(), SORTADD, SORTCLEAR, SORTDATA(),
  *               SORTNEXT() with multiple active sort sessions and all SRT$
  *               modes (QM4 Fixes item 371).
+ * 18 Oct 26 Windows port - from Linux 8ff2bdc (16 Oct 26): The key being inserted is read as a number ONCE per level (KEY_NUM, key_as_number()) and not at every
+ *               comparison: the rewrite had made numeric sorts of 120,000 keys 28-35% slower to load than ac509e4.
  * 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): Audit of that change: sess_sortdata() starts its target string before the merge again (a merge that
  *               failed reached ts_terminate() with no ts_init() behind it); messages 12403 (not a sort variable) and
  *               12404 (all 255 sorts open) in the place of 1487 and 1482, which named the wrong thing.
@@ -71,6 +73,12 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 #define SRT_UNIQUE      0x20 /* 32 */
 #define SRT_NOCASE      0x40 /* 64 */
 #define SRT_DATA        0x80 /* 128 */
+
+/* A key read as a number once, for a comparison that is made again and again against the same key (sess_insert_bte) */
+typedef struct KEY_NUM {
+  bool is_num; /* the key reads as a number in the mode it is sorted in */
+  double val;  /* ...and this is the number */
+} KEY_NUM;
 
 typedef struct SORT_SESSION {
   bool in_use;
@@ -127,7 +135,7 @@ void x_sortnext(void);
 Private void clear_sort_session(SORT_SESSION* sess);
 Private SORT_SESSION* alloc_sort_session(void);
 Private SORT_SESSION* get_sort_session(DESCRIPTOR* d);
-Private int sort_compare_keys(const char* k1, const char* k2, u_char flags, bool legacy_bt);
+Private int sort_compare_keys(const char* k1, const char* k2, u_char flags, bool legacy_bt, const KEY_NUM* k1num);
 Private void sess_insert_bte(SORT_SESSION* sess, BTREE_ELEMENT* new_bte, int32_t size);
 Private void sess_sortdata(SORT_SESSION* sess, int32_t max_items, bool require_sorting);
 Private bool sortmerge(SORT_SESSION* sess);
@@ -410,15 +418,32 @@ Private void next_compound_elem(const char** pp,
   *pp = p;
 }
 
+/* Does k read as a number in this mode?  Only the right justified modes ask: SRT_RIGHT takes integers, SRT_RIGHT_FLOAT any
+   number (the internal sort, legacy_bt, reads them with strdbl() as it always did).  A null key reads as 0 for the internal
+   sort and as text for the others. */
+Private bool key_as_number(const char* k, u_char mode, bool legacy_bt, double* val) {
+  if (mode == SRT_RIGHT)
+    return is_int_key(k, val);
+  if (mode == SRT_RIGHT_FLOAT)
+    return legacy_bt ? strdbl((char*)(k ? k : ""), val) : is_float_key(k, val);
+  return FALSE;
+}
+
+/* A key that is compared again and again against the keys of a tree (the one being inserted) is read as a number ONCE and the
+   answer passed in: the first version of this function read it afresh at every comparison, which made numeric sorts of
+   120,000 keys 28-35% slower to load than before the rewrite (16 Oct 26 audit).  k1num may be NULL, as in the merge, where
+   both keys come off the disk and are read each time. */
 Private int sort_compare_keys(const char* k1,
                               const char* k2,
                               u_char flags,
-                              bool legacy_bt) {
+                              bool legacy_bt,
+                              const KEY_NUM* k1num) {
   u_char mode = flags & SRT_MODE_MASK;
   bool desc = (flags & SRT_DESCENDING) != 0;
   bool nocase = (flags & SRT_NOCASE) != 0;
   int d = 0;
   double v1, v2;
+  bool num1;
   int32_t n;
 
   if (k1 == NULL)
@@ -428,19 +453,18 @@ Private int sort_compare_keys(const char* k1,
 
   switch (mode) {
     case SRT_RIGHT:
-      if (is_int_key(k1, &v1) && is_int_key(k2, &v2)) {
-        d = (v1 > v2) ? 1 : (v1 < v2) ? -1 : 0;
-        break;
-      }
-      goto right_text;
-
     case SRT_RIGHT_FLOAT:
-      if (legacy_bt ? (strdbl((char*)k1, &v1) && strdbl((char*)k2, &v2))
-                    : (is_float_key(k1, &v1) && is_float_key(k2, &v2))) {
+      if (k1num != NULL) {
+        num1 = k1num->is_num;
+        v1 = k1num->val;
+      } else {
+        num1 = key_as_number(k1, mode, legacy_bt, &v1);
+      }
+      if (num1 && key_as_number(k2, mode, legacy_bt, &v2)) {
         d = (v1 > v2) ? 1 : (v1 < v2) ? -1 : 0;
         break;
       }
-    right_text:
+      /* not both numbers: the shorter key is padded on the left with spaces */
       n = (int32_t)strlen(k1) - (int32_t)strlen(k2);
       if (n > 0) {
         while (n--) {
@@ -555,6 +579,8 @@ Private void sess_insert_bte(SORT_SESSION* sess,
   BTREE_ELEMENT* bte;
   int16_t index;
   int d;
+  KEY_NUM new_num[MAX_SORT_KEYS]; /* the new key at each level, read as a number the first time that level is compared... */
+  u_int32_t num_done = 0;         /* ...bit n set once new_num[n] holds it (only a right justified key is ever read) */
 
   /* Flush the tree if this would take us past the SORTMEM limit */
 
@@ -574,8 +600,13 @@ Private void sess_insert_bte(SORT_SESSION* sess,
   } else {
     index = 0;
     do {
+      if (!(num_done & ((u_int32_t)1 << index))) {
+        num_done |= (u_int32_t)1 << index;
+        new_num[index].is_num = key_as_number(new_bte->key[index], sess->sort_flags[index] & SRT_MODE_MASK,
+                                              sess->legacy_bt, &(new_num[index].val));
+      }
       d = sort_compare_keys(new_bte->key[index], bte->key[index],
-                            sess->sort_flags[index], sess->legacy_bt);
+                            sess->sort_flags[index], sess->legacy_bt, &(new_num[index]));
 
       if (d < 0) {
         if (bte->left == NULL) {
@@ -1615,7 +1646,7 @@ Private bool merge_sort_files(SORT_SESSION* sess) {
           k2 = (n2 == 0) ? "" : (p2 + LEN_BYTES);
           p2 += LEN_BYTES + pad4(n2);
 
-          d = sort_compare_keys(k1, k2, sess->sort_flags[index], sess->legacy_bt);
+          d = sort_compare_keys(k1, k2, sess->sort_flags[index], sess->legacy_bt, NULL);
           if (d != 0)
             break;
           if (sess->sort_flags[index] & SRT_UNIQUE) {
