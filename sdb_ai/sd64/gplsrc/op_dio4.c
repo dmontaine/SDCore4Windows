@@ -557,11 +557,24 @@ Private void readnext(int16_t mode)
     }
   }
 
+  /* 14 Oct 26 dm - $MODE PICK.READNEXT (openQM item 418): a list variable that has no more items takes the ELSE
+     clause and the id variable is left as it was */
+  if ((op_flags & P_PICK_RDNX) && status) {
+    k_pop(2); /* The (empty) string and the address of the target */
+    goto exit_readnext;
+  }
+
   op_stor(); /* Store the id string */
 
   goto exit_readnext;
 
 exit_readnext_null:
+
+  /* 14 Oct 26 dm - $MODE PICK.READNEXT (openQM item 418): the id variable is left as it was */
+  if (op_flags & P_PICK_RDNX) {
+    k_pop(1);
+    goto exit_readnext;
+  }
 
   /* Set target as null string */
 

@@ -172,6 +172,7 @@ $define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
 $define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns seconds to the millisecond (a float)
 $define M.EXCEPTION.SAVE.STACK 25  ;* 12 Oct 26 dm - openQM 355: every CATCH behaves as if SAVING.STACK were given
 $define M.OPEN.FAIL.ZERO.FVAR  26  ;* 14 Oct 26 dm - openQM 514: a failed OPEN sets the file variable to 0, not unassigned
+$define M.PICK.READNEXT        27  ;* 14 Oct 26 dm - openQM 418: READNEXT leaves the id variable alone when it takes ELSE
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -205,6 +206,7 @@ mode.names := @VM:"STRICT.EQUATE"
 mode.names := @VM:"TIME.MS"
 mode.names := @VM:"EXCEPTION.SAVE.STACK"
 mode.names := @VM:"OPEN.FAIL.ZERO.FVAR"
+mode.names := @VM:"PICK.READNEXT"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -11124,6 +11126,12 @@ st.readnext:
       gosub exprf            ;* Emit list number expression
    end else     ;* Use default select list
       n = 0 ; gosub emit.numeric.load
+   end
+
+   * 18 Oct 26 Windows port - from Linux 0eac1f0 (14 Oct 26): - openQM 418: $MODE PICK.READNEXT, for the READNEXT forms that return an id only
+   if bittest(mode, M.PICK.READNEXT) and (opcode = OP.READNEXT or opcode = OP.RDNXPOS) then
+      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+      code.value = 0x200 ; code.bytes = 2 ; gosub emit.multibyte.value
    end
 
    * Perform common back-end processing

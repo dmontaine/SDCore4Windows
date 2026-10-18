@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  NEW $MODE SETTING: PICK.READNEXT.
+
+           A program compiled with $MODE PICK.READNEXT keeps the value of
+           the id variable when a READNEXT takes its ELSE clause (the list
+           is exhausted, or no list is active).  Without the setting the
+           variable is set to the null string, as it always was.  Programs
+           written for other multivalue systems often read the last id
+           after the loop that read the list.  It applies to the plain
+           forms of READNEXT; the forms that return value and subvalue
+           positions are unchanged.
+
 18 Oct 26  NEW $MODE SETTING: OPEN.FAIL.ZERO.FVAR.
 
            A program compiled with $MODE OPEN.FAIL.ZERO.FVAR gets the
