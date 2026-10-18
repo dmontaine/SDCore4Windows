@@ -121,6 +121,10 @@ struct PROGRAM {
   int16_t precision;
   int16_t csv_mode;  /* CSV.MODE 1 - 3 (14 Oct 26, openQM 173): copied to a called program, so it persists through calls */
   char csv_delim;    /* ... and its delimiter, a comma by default (openQM 200) */
+  char itrap_chars[17]; /* INPUTTRAP (14 Oct 26, openQM 408): the characters trapped when typed alone for INPUT @ or INPUTFIELD, "" for none */
+  int16_t itrap_n;      /* ... how many labels the statement named (a character past the last label takes the last one) */
+  int32_t itrap_stub;   /* ... the offset in the object code of the stub that jumps to the label; 0 for none */
+  int16_t itrap_hit;    /* ... set by _INPUTAT to the label number when a trapped character was typed, 0 for none */
   bool has_stacked;  /* EXECUTE ... STACKLIST: list 0 as it was is held here until the command returns (openQM 61) */
   DESCRIPTOR stacked_list;
   int32_t stacked_count;

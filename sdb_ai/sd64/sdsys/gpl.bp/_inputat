@@ -64,6 +64,7 @@ $include err.h
 
    set.status 0
    then.else.flag = 1
+   by.return = @false
 
    * 18 Oct 26 Windows port - from Linux fdde3cc (14 Oct 26): - openQM 584, INPUTIF @: nothing in the DATA queue and nothing typed ahead means nothing is read
    * and the screen is not touched; the caller takes its ELSE clause
@@ -301,6 +302,18 @@ $include err.h
       repeat
    end
 
+   * 18 Oct 26 Windows port - from Linux c3dd48b (14 Oct 26): - openQM 408, INPUTNULL and INPUTTRAP: a single character typed as the whole answer.  INPUTNULL wins when both name it.
+   * What was echoed stays as typed; the variable is made null, and a trapped character also leaves a note for the program that asked
+   * (the kernel sets its itrap_hit) so that the ITRAPCHK after the INPUT @ jumps to the INPUTTRAP's label.
+   if by.return and len(string) = 1 and then.else.flag then
+      null.char = kernel(K$INPUT.NULL.GET, '')
+      if null.char # '' and string = null.char then
+         string = ''
+      end else
+         if kernel(K$INPUT.TRAP.TEST, string) then string = ''
+      end
+   end
+
    * Re-enable line counting if pagination was active when we entered
 
    n = kernel(K$PAGINATE, pagination)
@@ -390,6 +403,7 @@ backspace:
 * ======================================================================
 
 return.key:
+   by.return = @true            ;* the answer was ended by the Return key (or a full field): INPUTNULL / INPUTTRAP may apply
    if echo.input then
       if bitand(flags, IN$MASK) then
          * Redisplay data with mask applied

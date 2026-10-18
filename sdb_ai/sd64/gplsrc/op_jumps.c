@@ -798,6 +798,60 @@ void op_ongotop() {
 }
 
 /* ======================================================================
+   op_inputtrap()  -  INPUTTRAP  (14 Oct 26, openQM 408)
+
+   Stack: the characters to trap (deepest), the mode (0 GOTO, 1 GOSUB; the stub the compiler planted does the jumping, so the
+   kernel does not need it) and the number of labels.  The offset of the stub follows the opcode.  A null string of characters
+   cancels the trap.  The trap belongs to this program (struct PROGRAM): a subroutine it calls starts without one.        */
+
+void op_inputtrap() {
+  DESCRIPTOR* descr;
+  int32_t stub;
+  int32_t count;
+  char chars[sizeof(process.program.itrap_chars)];
+
+  stub = *pc | (((int32_t) * (pc + 1)) << 8) | (((int32_t) * (pc + 2)) << 16);
+  pc += 3;
+
+  descr = e_stack - 1; /* Label count */
+  GetInt(descr);
+  count = descr->data.value;
+  k_pop(1);
+
+  descr = e_stack - 1; /* Mode (not needed here) */
+  k_pop(1);
+
+  descr = e_stack - 1; /* Characters */
+  chars[0] = '\0';
+  if (k_get_c_string(descr, chars, (int)sizeof(chars) - 1) < 0)
+    chars[sizeof(chars) - 1] = '\0'; /* More than 16: the first 16 are used */
+  k_pop(1);
+
+  strcpy(process.program.itrap_chars, chars);
+  process.program.itrap_n = (int16_t)count;
+  process.program.itrap_stub = (chars[0] != '\0') ? stub : 0;
+  process.program.itrap_hit = 0;
+}
+
+/* ======================================================================
+   op_itrapchk()  -  after INPUT @ / INPUTFIELD: take INPUTTRAP's jump if _INPUTAT found a trapped character.  The byte after
+   the opcode is 1 when the statement had a THEN / ELSE clause, whose status is on the stack and is dropped when the jump is taken. */
+
+void op_itrapchk() {
+  u_char has_status;
+
+  has_status = *(pc++);
+
+  if (process.program.itrap_hit != 0 && process.program.itrap_stub != 0) {
+    if (has_status)
+      k_pop(1);
+    pc = c_base + process.program.itrap_stub; /* itrap_hit is cleared by the stub, K_INPUT_TRAP_HIT */
+  } else {
+    process.program.itrap_hit = 0;
+  }
+}
+
+/* ======================================================================
    op_return()  -  Return from CALL or GOSUB                              */
 
 void op_return() {

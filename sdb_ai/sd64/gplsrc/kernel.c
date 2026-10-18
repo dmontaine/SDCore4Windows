@@ -414,6 +414,10 @@ Private void init_program() {
   process.program.col2 = 0;
   process.program.saved_capture_head = NULL;
   process.program.precision = 4;
+  process.program.itrap_chars[0] = '\0'; /* INPUTTRAP belongs to the program that set it: the caller's copy, saved before this call, keeps it */
+  process.program.itrap_n = 0;
+  process.program.itrap_stub = 0;
+  process.program.itrap_hit = 0;
   process.program.has_stacked = FALSE; /* the caller's copy, saved before this call, keeps the stacked list (openQM 61) */
   process.program.gosub_depth = 0;
   process.program.break_handler = NULL;

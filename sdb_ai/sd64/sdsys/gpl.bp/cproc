@@ -817,6 +817,7 @@ reset.environment:
 
    inline.prompts = ""     ;* Cast off inline prompts...
    inline.responses = ""   ;* ...and responses
+   void kernel(K$INPUT.NULL.SET, '')   ;* 14 Oct 26: INPUTNULL ends on return to the command prompt (openQM 408)
 
 para.reset.environment:
    i = ospath("", os$flush.cache)

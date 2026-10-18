@@ -205,6 +205,10 @@
       $define K$USER.PEAK       98       ;* Peak number of users since SD started
       $define K$INPUT.FILL.SET  99       ;* The fill string for the next INPUT / INPUT @ (14 Oct 26, openQM 389)
       $define K$INPUT.FILL.GET  100      ;* ...and its pick-up by _INPUT / _INPUTAT, which forgets it
+      $define K$INPUT.NULL.SET  101      ;* INPUTNULL: set the character, old one returned (14 Oct 26, openQM 408)
+      $define K$INPUT.NULL.GET  102      ;* INPUTNULL: the character now
+      $define K$INPUT.TRAP.TEST 103      ;* _INPUTAT: is this typed character trapped by the caller's INPUTTRAP?
+      $define K$INPUT.TRAP.HIT  104      ;* the stub of INPUTTRAP: which label, and forget it
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

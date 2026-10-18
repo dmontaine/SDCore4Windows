@@ -283,6 +283,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    mark.chars = @fm:@vm:@sm:@tm:@im:@fm:@sm ;* See EMIT.AT.VAR.LOAD for use
 
+   itrap.n = 0                ;* 14 Oct 26 dm - openQM 408: INPUTTRAP statements so far, for their generated labels
    cond.mode = @false         ;* 12 Oct 26 dm - openQM 206: a THEN/ELSE statement is being compiled as a WHILE / UNTIL condition
    cond.statements = "READ":@fm:"READU":@fm:"READL":@fm:"READV":@fm:"READVU":@fm:"READVL":@fm:"READNEXT"
    cond.statements := @fm:"READSEQ":@fm:"READBLK":@fm:"READLIST":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ"
@@ -391,7 +392,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"IF":@fm:"IN":@fm:"INCLUDE":@fm:"INHERIT"
    statements := @fm:"INPUT":@fm:"INPUTCLEAR"
    statements := @fm:"INPUTCSV"
-   statements := @fm:"INPUTERR":@fm:"INPUTFIELD":@fm:"INPUTIF":@fm:"INS"   ;* INPUTIF: 14 Oct 26 dm - openQM 584
+   statements := @fm:"INPUTERR":@fm:"INPUTFIELD":@fm:"INPUTIF":@fm:"INPUTNULL":@fm:"INPUTTRAP":@fm:"INS"   ;* INPUTIF: 14 Oct 26 dm - openQM 584; INPUTNULL, INPUTTRAP: openQM 408
    statements := @fm:"KEYEDIT":@fm:"KEYEXIT":@fm:"KEYTRAP"
    statements := @fm:"LOCAL":@fm:"LOCATE":@fm:"LOCK":@fm:"LOGMSG":@fm:"LOOP"
    statements := @fm:"MARK.MAPPING":@fm:"MAT":@fm:"MATBUILD":@fm:"MATPARSE"
@@ -2200,6 +2201,8 @@ is.statement:
                  st.printerr,                  ;* INPUTERR
                  st.inputfield,
                  st.inputif,
+                 st.inputnull,
+                 st.inputtrap,
                  st.ins,
                  st.keyedit,
                  st.keyexit,
@@ -9342,7 +9345,14 @@ st.input.common:
 
    n = input.flags ; gosub emit.numeric.load
    opcode.byte = opcode ; gosub emit.simple
-   
+
+   * 18 Oct 26 Windows port - from Linux c3dd48b (14 Oct 26): - openQM 408: an INPUT @ / INPUTFIELD that was answered with a trapped character (INPUTTRAP) goes to the trap's stub.
+   * The byte after the opcode says whether a THEN / ELSE status is on the stack, to be dropped if the jump is taken.
+   if opcode = OP.INPUTAT then
+      opcode.byte = OP.ITRAPCHK ; gosub emit.simple
+      opcode.byte = if bitand(input.flags, IN$THENELSE) then 1 else 0 ; gosub emit
+   end
+
    if input.flags = bitor(input.flags, IN$THENELSE) then goto st.if.back.end
 
    return
@@ -10469,9 +10479,17 @@ st.on:
 
    gosub emit.simple
 
+   gosub get.jump.list ; if err then return
+   gosub emit.jump.table
 
-   * Emit jump list
+   return
 
+*****************************************************************************
+* GET.JUMP.LIST  -  the comma separated labels of ON ... GOTO / GOSUB and of INPUTTRAP (14 Oct 26: shared, was inline in ST.ON)
+* In: is.on.gosub (the labels will be GOSUBed to: they are noted as internal subroutines).  Out: jump.list, a field mark list of the
+* labels (with the local subroutine prefix when inside one), or err.
+
+get.jump.list:
    jump.list = ''
    loop
       gosub get.label.name
@@ -10500,6 +10518,13 @@ st.on:
       end
    repeat
 
+   return
+
+*****************************************************************************
+* EMIT.JUMP.TABLE  -  the label count and the addresses of jump.list, as ONGOTO / ONGOSUB expect them after the opcode
+
+emit.jump.table:
+
    * Now that we have the list of labels, we can work out whether we need
    * an extended label count.
 
@@ -10519,6 +10544,77 @@ st.on:
    while more
    repeat
 
+   return
+
+*****************************************************************************
+* ST.INPUTTRAP  -  INPUTTRAP expr GOTO / GOSUB label{,label...}   (14 Oct 26 dm, openQM 408)
+*
+* The characters of expr, typed alone as the answer to INPUT @ or INPUTFIELD, send the program to the label of their position in the
+* list (the last label for a character past the end).  Compiled as
+*
+*      expr, mode (0 GOTO, 1 GOSUB), label count      INPUTTRAP stub      sets the trap of this program, null expr cancels it
+*      JMP over
+*   stub:    kernel(K$INPUT.TRAP.HIT)  ON ... GOTO / GOSUB  l1, l2...
+*   over:
+*
+* and every INPUT @ / INPUTFIELD is followed by ITRAPCHK, which jumps to the stub when _INPUTAT found a trapped character.  Both
+* forms leave the program, after the stub, at OVER: for GOSUB that is where the subroutine's RETURN comes back to, which is what the
+* manual says (the statement after the INPUTTRAP, not the one after the INPUT).
+
+st.inputtrap:
+   * NJS use @vm
+   reserved.names<2> = "GOSUB":@VM:"GOTO":@VM:"GO"
+   gosub exprf
+   del reserved.names<2>
+
+   begin case
+      case u.look.ahead.token.string = "GOSUB"
+         gosub get.token
+         is.on.gosub = @true
+      case u.look.ahead.token.string = "GOTO"
+         gosub get.token
+         is.on.gosub = @false
+      case u.look.ahead.token.string = "GO"
+         gosub get.token
+         if u.look.ahead.token.string = "TO" then gosub get.token
+         is.on.gosub = @false
+      case 1
+         err.msg = sysmsg(2935) ;* Expected GOSUB, GOTO or GO
+         goto error
+   end case
+
+   gosub get.jump.list ; if err then return
+
+   itrap.n += 1
+   itrap.stub = '_ITRAP':itrap.n
+   itrap.over = '_ITRAPO':itrap.n
+
+   n = if is.on.gosub then 1 else 0 ; gosub emit.numeric.load
+   n = dcount(jump.list, @fm) ; gosub emit.numeric.load
+   opcode.byte = OP.INPUTTRAP ; gosub emit.simple         ;* an extended opcode: EMIT.JUMP would emit one byte of it
+   label.name = itrap.stub ; gosub emit.jump.addr
+   opcode.byte = OP.JMP ; label.name = itrap.over ; gosub emit.jump
+
+   label.name = itrap.stub ; gosub set.label
+   n = K$INPUT.TRAP.HIT ; gosub emit.numeric.load
+   n = 0 ; gosub emit.numeric.load
+   opcode.byte = OP.KERNEL ; gosub emit.simple
+   opcode.byte = if is.on.gosub then OP.ONGOSUB else OP.ONGOTO ; gosub emit.simple
+   gosub emit.jump.table
+
+   label.name = itrap.over ; gosub set.label
+
+   return
+
+*****************************************************************************
+* ST.INPUTNULL  -  INPUTNULL expr   (14 Oct 26 dm, openQM 408)
+
+st.inputnull:
+   n = K$INPUT.NULL.SET ; gosub emit.numeric.load
+   gosub exprf
+   if err then return
+   opcode.byte = OP.KERNEL ; gosub emit.simple
+   opcode.byte = OP.POP ; gosub emit.simple
    return
 
 *****************************************************************************

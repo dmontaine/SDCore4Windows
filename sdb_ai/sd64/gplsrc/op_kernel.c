@@ -72,6 +72,7 @@ void set_date(int32_t);
 
 #define INPUT_FILL_MAX 3
 Private char input_fill[INPUT_FILL_MAX + 1] = ""; /* K_INPUT_FILL_SET / _GET (sheet item 389) */
+Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */
 Private bool run_exe(char *exe_name, char *cmd_line);
 
 /* ======================================================================
@@ -692,6 +693,52 @@ void op_kernel() {
     case K_INPUT_FILL_GET:
       k_put_c_string(input_fill, &result);
       input_fill[0] = '\0';
+      break;
+
+    /* 14 Oct 26 dm - sheet item 408: INPUTNULL and INPUTTRAP (see keys.h) */
+    case K_INPUT_NULL_SET:
+      {
+        char nullbuf[8];
+        char old[2];
+
+        old[0] = input_null_char;
+        old[1] = '\0';
+        if (k_get_c_string(descr, nullbuf, 7) >= 0)
+          input_null_char = nullbuf[0]; /* the first character; a null string cancels */
+        k_put_c_string(old, &result);
+      }
+      break;
+
+    case K_INPUT_NULL_GET:
+      {
+        char cur[2];
+
+        cur[0] = input_null_char;
+        cur[1] = '\0';
+        k_put_c_string(cur, &result);
+      }
+      break;
+
+    case K_INPUT_TRAP_TEST:
+      {
+        char typed[8];
+        struct PROGRAM *caller = process.program.prev; /* the program that executed the INPUT @ (we are in _INPUTAT) */
+        char *p;
+
+        result.data.value = 0;
+        if ((caller != NULL) && (caller->itrap_chars[0] != '\0') && (k_get_c_string(descr, typed, 7) == 1) &&
+            ((p = strchr(caller->itrap_chars, typed[0])) != NULL)) {
+          int pos = (int)(p - caller->itrap_chars) + 1;
+
+          caller->itrap_hit = (int16_t)((pos > caller->itrap_n) ? caller->itrap_n : pos);
+          result.data.value = 1;
+        }
+      }
+      break;
+
+    case K_INPUT_TRAP_HIT:
+      result.data.value = process.program.itrap_hit;
+      process.program.itrap_hit = 0;
       break;
 
     /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  HOW DID THIS SESSION

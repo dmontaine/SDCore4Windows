@@ -380,6 +380,18 @@
      K_INPUT_FILL_GET  returns the fill string and forgets it, so that no later INPUT can see it.                            */
 #define K_INPUT_FILL_SET     99
 #define K_INPUT_FILL_GET     100
+/* 14 Oct 26 dm - 1.2-0 sheet item 408 (INPUTNULL and INPUTTRAP).
+     K_INPUT_NULL_SET  the INPUTNULL character: set it (the first character of the argument; null cancels), the old one returned.
+                       It belongs to the process and CPROC cancels it at the command prompt, as the manual says.
+     K_INPUT_NULL_GET  the INPUTNULL character now ("" for none).
+     K_INPUT_TRAP_TEST called by _INPUTAT with the single character that was typed: if the program that executed the INPUT @ (the
+                       caller of _INPUTAT) has an INPUTTRAP that names it, that program's itrap_hit is set to the number of the label
+                       (the last one if there are more characters than labels) and 1 is returned, else 0.
+     K_INPUT_TRAP_HIT  called by the stub that the INPUTTRAP statement compiles: the label number of the trap just taken, and forgets it. */
+#define K_INPUT_NULL_SET     101
+#define K_INPUT_NULL_GET     102
+#define K_INPUT_TRAP_TEST    103
+#define K_INPUT_TRAP_HIT     104
 
 /* PTERM() function action keys */
 #define PT_BREAK              1
