@@ -2,6 +2,63 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  LOCK AND DUMP DIAGNOSTICS: WHEN A LOCK WAS TAKEN, DEADLOCK=2,
+           SYSTEM(1083) AND OBJECTS IN A PROCESS DUMP.
+
+           The kernel now notes the time at which each record lock and file
+           lock was taken and each wait began.  LIST.READU DETAIL shows it under
+           the lock - "Locked 13 Oct 26 01:56:40" - and, with WAIT, under each
+           waiting process - "Wait since 13 Oct 26 01:56:42" - in the time zone
+           of the user who gave the command.  Without DETAIL nothing changes.
+           A shared lock that is raised to an update lock keeps the time it was
+           first taken.  The zone's offset is the one in force when the command
+           is given, so a lock taken before a daylight saving change is shown an
+           hour out after it, as other times SD reports are.
+
+           DEADLOCK=2 is new.  DEADLOCK=1, as before, stops a process that
+           would wait for a record lock held by a process that is itself
+           waiting for it, and shows the locks involved.  DEADLOCK=2 does that
+           and also writes every lock in the system to a file, deadlock.n,
+           where n is the number of the process that was stopped.  It goes
+           where a process dump goes: DUMPDIR, or the SDSYS directory, and only
+           its owner can read it.  Each lock takes four lines, with a blank line
+           between locks: the user number and name; the file number and its
+           pathname; the lock type (RU, RL, FX or SX) and, for a record lock,
+           the record id; and when it was taken.  The process is told where the
+           file is.  DEADLOCK now takes 0, 1 or 2 and refuses other values when
+           SD starts; any value but 0 used to be taken as 1.  The default is
+           still 0, which lets a deadlock happen.
+
+           SYSTEM(1083) returns the last deadlock the process was in, for a
+           program that wants to report it after the abort: a field for each
+           process in it, of three values - its user number, the pathname of the
+           file and the record id of the lock it was waiting for, the id left
+           out for a file lock.  It is null until there has been one.  A record
+           id is as the lock table holds it, in capitals in a file that does not
+           tell the cases apart.  It is the process that was stopped that can
+           ask; the process that was left waiting did not see the deadlock.
+
+           A process dump now shows what an object variable holds: under
+           "OBJ: Object" come the object's public and private variables, with
+           their names, one to a line like any other variable.  The names are
+           found from the class module by the size of its group of variables, so
+           a class that also has a COMMON block of exactly the same number of
+           variables could show the wrong names (never the wrong values).  An
+           object that holds an object is followed four levels down.
+
+           A process that is waiting because the lock table is full still
+           answers a request to log it out.  That was already so and is now
+           tested.  What is worth knowing is that with the table completely
+           full no other session can give a command at all, each command taking
+           a lock for an instant to look itself up, so the LOGOUT command cannot
+           be given; from the operating system, "sd -k n" logs user n out
+           without needing a lock.  NUMLOCKS is the table's size.
+
+           Not done: the openQM 4.0.9 dump of the other process in a deadlock
+           (it is waiting, and SD has no way to make it dump itself while
+           waiting), and the exception openQM can raise for a deadlock, which
+           waits for system events to become exceptions.
+
 18 Oct 26  FIVE NEW sd.conf PARAMETERS AND A LONGER CALL NAME.
 
            Each parameter below is optional.  With none of them in sd.conf

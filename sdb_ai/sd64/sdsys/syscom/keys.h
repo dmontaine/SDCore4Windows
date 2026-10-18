@@ -545,6 +545,7 @@
       $define SYS$FROM_PROC   1080  ;*   Started from a Proc? (never in SD)
       $define SYS$EPOCH_MS    1081  ;*   Epoch time in milliseconds
       $define SYS$TIME_MS_LCL 1082  ;*   Time of day in milliseconds, local time
+      $define SYS$DEADLOCK    1083  ;*   The last deadlock this process was in: a field for each process, user number, file, record id
 
 *     12 Oct 26 - OSPATH() keys from the openQM 4 manual that do not clash with SD's own numbers (the rest of
 *     SD's OS$ names are in the internal program header int$keys.h and keep the older numbering).

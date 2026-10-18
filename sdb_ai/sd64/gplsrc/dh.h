@@ -55,6 +55,8 @@ struct FILE_ENTRY {
   u_int32_t ak_upd;      /* Updated on AK write */
   u_int32_t txn_id;      /* Transaction id for file lock (0 if outside
                                  transaction). Applies to owner. */
+  int32_t file_lock_time; /* time() when file_lock was set (item 487).
+                                 Protected by REC_LOCK_SEM, as file_lock. */
   u_int32_t device;
   u_int32_t inode;
   char pathname[MAX_PATHNAME_LEN + 1]; /* Null terminated */

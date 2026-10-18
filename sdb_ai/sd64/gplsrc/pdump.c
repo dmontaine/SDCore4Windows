@@ -18,6 +18,9 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): An object variable is followed by the object's persistent
+ *               variables, with their names where the class module's symbol
+ *               table gives them (openQM item 125).
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * END-HISTORY
  *
@@ -60,6 +63,7 @@ Private void dump_variable(DESCRIPTOR* descr,
                            int16_t indent);
 Private void print_string(STRING_CHUNK* str);
 Private void dump_syscom_var(char* tag, int16_t offset);
+Private void dump_object(OBJDATA* objdata, int16_t indent);
 
 /* ====================================================================== */
 
@@ -680,6 +684,7 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
 
     case OBJ:
       fprintf(fu, "%s: Object\n", s);
+      dump_object(descr->data.objdata, indent + 2); /* openQM item 125 */
       break;
 
     case PERSISTENT:
@@ -720,6 +725,77 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
                       com_var_name, indent + 2);
       }
       break;
+  }
+}
+
+/* ======================================================================
+   dump_object()  -  The persistent data of an object variable
+
+   12 Oct 26 dm  openQM item 125.  The values an object holds between calls to
+   its methods - its public and private variables - live in obj_vars, an array
+   that does not say what the variables are called.  The names are in the
+   symbol table of the class module, in a block of names for each group of
+   variables, and the block is not numbered in the object.  The group that has
+   as many names as the array has rows is taken; if no group does, the
+   variables are shown by number.  A class module has the one group of
+   persistent variables (a COMMON block of the same size would be mistaken for
+   it, and the names then wrong, not the values).  An object that holds an
+   object is followed four levels down and no further (the indent, kept under
+   12 so that a name still fits dump_variable's 80 character line), so one
+   that holds itself cannot loop.                                           */
+
+Private void dump_object(OBJDATA* objdata, int16_t indent) {
+  ARRAY_HEADER* ahdr;
+  char* p;
+  char* q;
+  char* block;
+  char name[40 + 1];
+  int rows;
+  int n_names;
+  int i;
+
+  if ((objdata == NULL) || (objdata->obj_vars == NULL) || (indent > 12))
+    return;
+
+  ahdr = objdata->obj_vars;
+  rows = (int)(ahdr->rows);
+  if (rows <= 0)
+    return;
+
+  /* Find the block of names that is the right size */
+
+  block = NULL;
+  if (objdata->objprog != NULL) {
+    p = (char*)(objdata->objprog) + ((OBJECT_HEADER*)(objdata->objprog))->sym_tab_offset;
+    while ((p = strchr(p, FIELD_MARK)) != NULL) {
+      p++; /* Skip field mark */
+      while (IsDigit(*p))
+        p++; /* ...and the block number */
+      n_names = 0; /* a value mark before the first name, subvalue marks between the rest */
+      for (q = p; (*q != '\0') && (*q != FIELD_MARK); q++) {
+        if ((*q == VALUE_MARK) || (*q == SUBVALUE_MARK))
+          n_names++;
+      }
+      if (n_names == rows) {
+        block = p;
+        break;
+      }
+    }
+  }
+
+  for (i = 1, p = block; i <= rows; i++) {
+    if (p != NULL) {
+      p++; /* Skip the mark before the name */
+      q = name;
+      while ((!IsMark(*p)) && (*p != '\0') && ((q - name) < 40))
+        *(q++) = *(p++);
+      *q = '\0';
+      while ((!IsMark(*p)) && (*p != '\0'))
+        p++; /* A name longer than we show */
+    } else {
+      sprintf(name, "%d", i);
+    }
+    dump_variable(Element(ahdr, i), 0, name, indent);
   }
 }
 

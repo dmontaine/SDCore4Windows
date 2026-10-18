@@ -367,6 +367,7 @@ bool check_lock(FILE_VAR * fvar, char * id, int16_t id_len);
 int16_t lock_record(FILE_VAR *, char * id, int16_t id_len, bool update,
                       u_int32_t txn_id, bool no_wait);
 bool unlock_record(FILE_VAR *, char * id, int16_t id_len);
+char * deadlock_info_string(int * len);
 void unlock_txn(u_int32_t txn);
 void clear_lock_wait(void);
 void rebuild_llt(void);

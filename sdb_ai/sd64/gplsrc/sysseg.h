@@ -58,7 +58,7 @@ struct SYSSEG {
    int sdwind_pid;               /* PID of sdwind daemon */
    char sysdir[MAX_PATHNAME_LEN+1];
    int16_t cmdstack;           /* CMDSTACK: Command stack depth */
-   bool deadlock;                /* DEADLOCK: Trap deadlocks? */
+   bool deadlock;                /* DEADLOCK: 0 allow, 1 trap, 2 trap and save the locks (deadlock.n) */
    int errlog;                   /* ERRLOG: Max size of errlog in bytes */
    int16_t fds_limit;
    int32_t fds_rotate;
@@ -221,6 +221,8 @@ struct USER_ENTRY
    int16_t lockwait_index;       /* 0 = not waiting,
                                       +ve = rec lock table index (record lock),
                                       -ve = file table index (file lock) */
+   int32_t lockwait_time;        /* time() when lockwait_index became non-zero
+                                      (openQM item 487) */
    u_int16_t file_map[1];          /* Count of opens by file.
                                                Protected by FILE_TABLE_LOCK */
  };

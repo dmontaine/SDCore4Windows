@@ -744,6 +744,21 @@ void op_system() {
       descr->data.value = ((local_time() % 86400L) * 1000) + (tv.tv_usec / 1000);
       break;
 
+    case 1083: /* The last deadlock this process was in (openQM item 587): a field
+                  for each process, user number VM file pathname VM record id,
+                  the id left out for a file lock.  Null if there has been none. */
+      {
+        int dl_len;
+        char* dl = deadlock_info_string(&dl_len);
+
+        if (dl_len == 0) {
+          k_put_c_string("", descr);
+        } else {
+          k_put_c_string(dl, descr);
+        }
+      }
+      break;
+
     case 1032: /* Test and clear break pending flag */
       descr->data.value = break_pending;
       break_pending = FALSE;

@@ -46,7 +46,7 @@ struct CONFIG {
   int16_t max_users;               /* User limit */
   char sysdir[MAX_PATHNAME_LEN+1];
   int16_t cmdstack;                /* CMDSTACK: Command stack depth */
-  bool deadlock;                   /* DEADLOCK: Trap deadlocks */
+  bool deadlock;                   /* DEADLOCK: 0 allow, 1 trap deadlocks, 2 trap and save the locks */
   u_int16_t debug;                 /* DEBUG:    Controls debug features */
   int errlog;                      /* ERRLOG:   Max errlog size in bytes, 0 if disabled */
   int16_t fds_limit;               /* FDS */

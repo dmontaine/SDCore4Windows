@@ -236,7 +236,7 @@ struct CONFIG* read_config(char* errmsg) {
         }
       }
       else if (sscanf(rec, "DEADLOCK=%d", &n) == 1)
-        cfg->deadlock = (n != 0);
+        cfg->deadlock = n; /* 0, 1 or 2: rangecheck below (openQM item 500) */
       else if (sscanf(rec, "DEBUG=%d", &n) == 1)
         cfg->debug |= n;
       else if (sscanf(rec, "DHCACHE=%d", &n) == 1)
@@ -494,7 +494,8 @@ struct CONFIG* read_config(char* errmsg) {
   if ((cfg->errlog != 0) && (cfg->errlog < 10240))
     cfg->errlog = 10240;
 
-  if (!rangecheck("DHCACHE", pcfg.dhcache, 0, MAX_DH_CACHE_SIZE, errmsg) ||
+  if (!rangecheck("DEADLOCK", cfg->deadlock, 0, 2, errmsg) ||
+      !rangecheck("DHCACHE", pcfg.dhcache, 0, MAX_DH_CACHE_SIZE, errmsg) ||
       !rangecheck("LGNWAIT", cfg->lgnwait, 0, 32767, errmsg) ||
       !rangecheck("MAXRLOCK", pcfg.maxrlock, 0, 100000, errmsg) ||
       !rangecheck("PWDELAY", pcfg.pwdelay, 0, 3600, errmsg) ||

@@ -25,6 +25,11 @@
  *           file were already guarded in June 2026 and these two sites were
  *           missed.  Now goes through lock_owner_name().
  * 31 Dec 23 SD launch - prior history suppressed
+ * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): openQM items 487, 500 and 587: the time each record lock, file
+ *               lock and lock wait began is kept and GETLOCKS() returns it as
+ *               a seventh value; DEADLOCK=2 saves the state of the locks as
+ *               deadlock.n; SYSTEM(1083) returns the processes of the last
+ *               deadlock.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -61,6 +66,9 @@
 #include "tio.h"
 
 #include <time.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 Private bool unlock_id(int16_t file_id, char* raw_id, int16_t id_len);
 Private char* lock_owner_name(int16_t user_no);
@@ -119,6 +127,7 @@ void op_filelock() {
     if (fptr->lock_count == 0) /* No locks in this file */
     {
       fptr->file_lock = process.user_no;
+      fptr->file_lock_time = (int32_t)time(NULL);
       fptr->fvar_index = fvar->index;
       fptr->txn_id = process.txn_id;
       goto locked_it;
@@ -138,6 +147,7 @@ void op_filelock() {
     }
 
     fptr->file_lock = process.user_no;
+    fptr->file_lock_time = (int32_t)time(NULL);
     fptr->fvar_index = fvar->index;
     fptr->txn_id = process.txn_id;
     goto locked_it;
@@ -146,8 +156,11 @@ void op_filelock() {
 
   wait_lock:
     if (!(op_flags & P_LOCKED)) {
-      /* Set up lock wait information */
+      /* Set up lock wait information.  The time is when the wait began, so it
+        is set only on the first of the retries. */
 
+      if (my_uptr->lockwait_index == 0)
+        my_uptr->lockwait_time = (int32_t)time(NULL);
       my_uptr->lockwait_index = -(fvar->file_id);
       EndExclusive(REC_LOCK_SEM);
       if (my_uptr->events)
@@ -265,7 +278,9 @@ void op_getlocks() {
  The first field of the result contains record lock statistics:
      numlocks VM current count VM peak locks
  The remainder of the result list is a string formatted as:
-     file_id VM file path VM userno VM type VM id VM username FM file path....
+     file_id VM file path VM userno VM type VM id VM username VM time FM file path....
+     Time is time() (seconds since 1 Jan 1970 UTC) when the lock was acquired,
+     or, for type WAIT, when the wait began (openQM item 487).
      Type = RU, RL, FX or SX
      Id is absent for file lock
      Multiple locks for a single file are not merged
@@ -325,9 +340,9 @@ void op_getlocks() {
       if (((file_id < 0) || (i == file_id)) &&
           ((user == 0) || (user == abs(lock_owner)))) {
         ts_copy_byte(FIELD_MARK);
-        ts_printf("%d\xfd%s\xfd%d\xfd%s\xfd\xfd%s", (int)i, fptr->pathname,
+        ts_printf("%d\xfd%s\xfd%d\xfd%s\xfd\xfd%s\xfd%d", (int)i, fptr->pathname,
                   (int)abs(lock_owner), (lock_owner < 0) ? "SX" : "FX",
-                  lock_owner_name(abs(lock_owner)));
+                  lock_owner_name(abs(lock_owner)), (int)(fptr->file_lock_time));
       }
     }
   }
@@ -344,10 +359,11 @@ void op_getlocks() {
         if (str_head != NULL)
           ts_copy_byte(FIELD_MARK);
 
-        ts_printf("%d\xfd%s\xfd%d\xfd%s\xfd%.*s\xfd%s", (int)(rlptr->file_id),
+        ts_printf("%d\xfd%s\xfd%d\xfd%s\xfd%.*s\xfd%s\xfd%d", (int)(rlptr->file_id),
                   fptr->pathname, (int)lock_owner,
                   (rlptr->lock_type == L_UPDATE) ? "RU" : "RL", rlptr->id_len,
-                  rlptr->id, lock_owner_name(abs(lock_owner)));
+                  rlptr->id, lock_owner_name(abs(lock_owner)),
+                  (int)(rlptr->lock_time));
       }
     }
   }
@@ -375,8 +391,9 @@ void op_getlocks() {
           if (str_head != NULL)
             ts_copy_byte(FIELD_MARK);
 
-          ts_printf("%d\xfd%s\xfd%d\xfdWAIT\xfd%.*s\xfd", (int)(rlptr->file_id),
-                    fptr->pathname, (int)(uptr->uid), rlptr->id_len, rlptr->id);
+          ts_printf("%d\xfd%s\xfd%d\xfdWAIT\xfd%.*s\xfd\xfd%d", (int)(rlptr->file_id),
+                    fptr->pathname, (int)(uptr->uid), rlptr->id_len, rlptr->id,
+                    (int)(uptr->lockwait_time));
         }
       } else /* Waiting for file lock */
       {
@@ -385,8 +402,8 @@ void op_getlocks() {
           if (str_head != NULL)
             ts_copy_byte(FIELD_MARK);
 
-          ts_printf("%d\xfd%s\xfd%d\xfdWAIT\xfd\xfd", (int)(-j), fptr->pathname,
-                    (int)(uptr->uid));
+          ts_printf("%d\xfd%s\xfd%d\xfdWAIT\xfd\xfd\xfd%d", (int)(-j), fptr->pathname,
+                    (int)(uptr->uid), (int)(uptr->lockwait_time));
         }
       }
     }
@@ -1079,6 +1096,137 @@ bool check_lock(FILE_VAR* fvar,
 }
 
 /* ======================================================================
+   Deadlock diagnostics  (12 Oct 26 dm, openQM items 587 and 500)
+
+   deadlock_info_add() is called by lock_record() as it walks the chain of
+   waiting processes that makes a deadlock.  It builds what SYSTEM(1083)
+   returns: a field for each process in the deadlock, of three values - its
+   user number, the pathname of the file and the record id of the lock it is
+   waiting for, the id left out for a file lock.  The list belongs to this
+   process and lasts until its next deadlock, so a program that follows the
+   abort can still ask for it.  A deadlock of so many processes that the
+   buffer fills is reported without the later ones.  Record ids are as the
+   lock table holds them (upper case in a file that folds case).             */
+
+#define DEADLOCK_INFO_SIZE 8192
+Private char deadlock_info[DEADLOCK_INFO_SIZE];
+Private int deadlock_info_len = 0;
+
+Private void deadlock_info_add(bool first, int16_t user, char* path, char* id,
+                               int16_t id_len) {
+  int n;
+
+  if (first)
+    deadlock_info_len = 0;
+
+  n = (int)strlen(path) + ((id != NULL && id_len > 0) ? id_len : 0) + 16;
+  if (deadlock_info_len + n >= DEADLOCK_INFO_SIZE)
+    return;
+
+  if (deadlock_info_len > 0)
+    deadlock_info[deadlock_info_len++] = FIELD_MARK;
+  deadlock_info_len += sprintf(deadlock_info + deadlock_info_len, "%d%c%s",
+                               (int)user, VALUE_MARK, path);
+  if (id != NULL && id_len > 0) {
+    deadlock_info[deadlock_info_len++] = VALUE_MARK;
+    memcpy(deadlock_info + deadlock_info_len, id, id_len);
+    deadlock_info_len += id_len;
+    deadlock_info[deadlock_info_len] = '\0';
+  }
+}
+
+/* deadlock_info_string()  -  The list above, for SYSTEM(1083) */
+
+char* deadlock_info_string(int* len) {
+  *len = deadlock_info_len;
+  return deadlock_info;
+}
+
+/* ----------------------------------------------------------------------
+   deadlock_save()  -  DEADLOCK=2: write every lock to deadlock.n
+
+   n is this user number and the file goes where a process dump does,
+   DUMPDIR or else the SDSYS directory.  Four lines for each lock and a
+   blank line between locks: the user number and name, the file number and
+   pathname, the lock type and, for a record lock, the record id, and the
+   date and time the lock was acquired in the server's time zone.  The text
+   is built under the lock semaphores and written after they are released.
+   It is created 0600 and not through a link, for the reasons given in
+   pdump.c: the directory is writable by every SD user.                    */
+
+Private void deadlock_save() {
+  char path[MAX_PATHNAME_LEN + 1];
+  char* buf = NULL;
+  size_t size = 0;
+  FILE* ms;
+  int fd;
+  int16_t i;
+  int16_t lock_owner;
+  FILE_ENTRY* fptr;
+  RLOCK_ENTRY* rlptr;
+  time_t t;
+  struct tm tmv;
+  char stamp[32];
+  char* p;
+  ssize_t w;
+
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cdeadlock.%d",
+               (pcfg.dumpdir[0] != '\0') ? pcfg.dumpdir : (sysseg->sysdir), DS,
+               process.user_no) >= (MAX_PATHNAME_LEN + 1))
+    return;
+
+  if ((ms = open_memstream(&buf, &size)) == NULL)
+    return;
+
+  StartExclusive(FILE_TABLE_LOCK, 81);
+  StartExclusive(REC_LOCK_SEM, 82);
+
+  for (i = 1, fptr = FPtr(1); i <= sysseg->used_files; i++, fptr++) {
+    if (fptr->file_lock != 0) {
+      lock_owner = abs(fptr->file_lock);
+      t = (time_t)(fptr->file_lock_time);
+      localtime_r(&t, &tmv);
+      strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tmv);
+      fprintf(ms, "%d %s\n%d %s\n%s\n%s\n\n", (int)lock_owner,
+              lock_owner_name(lock_owner), (int)i, fptr->pathname,
+              (fptr->file_lock < 0) ? "SX" : "FX", stamp);
+    }
+  }
+
+  for (i = 1; i <= sysseg->numlocks; i++) {
+    rlptr = RLPtr(i);
+    if (rlptr->hash != 0) {
+      t = (time_t)(rlptr->lock_time);
+      localtime_r(&t, &tmv);
+      strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tmv);
+      fprintf(ms, "%d %s\n%d %s\n%s %.*s\n%s\n\n", (int)(rlptr->owner),
+              lock_owner_name(rlptr->owner), (int)(rlptr->file_id),
+              FPtr(rlptr->file_id)->pathname,
+              (rlptr->lock_type == L_UPDATE) ? "RU" : "RL", rlptr->id_len,
+              rlptr->id, stamp);
+    }
+  }
+
+  EndExclusive(REC_LOCK_SEM);
+  EndExclusive(FILE_TABLE_LOCK);
+  fclose(ms);
+
+  fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+  if (fd < 0) {
+    tio_printf(sysmsg(12169), path, strerror(errno));
+    tio_printf("\n");
+  } else {
+    (void)fchmod(fd, 0600);
+    for (p = buf; size > 0 && (w = write(fd, p, size)) > 0; p += w, size -= w) {
+    }
+    close(fd);
+    tio_printf(sysmsg(12168), path);
+    tio_printf("\n");
+  }
+  free(buf);
+}
+
+/* ======================================================================
    lock_record()  -  Set a read or update lock on a record.
    Note that a record can be locked if the file lock is held by the user
    locking the record.                                                    */
@@ -1218,6 +1366,7 @@ int16_t lock_record(
                   u = lptr->owner;
                   tio_printf("\n");
                   tio_printf(sysmsg(1450), u, file_id, id_len, id);
+                  deadlock_info_add(TRUE, process.user_no, (char*)(fptr->pathname), id, id_len);
                   /* Modified by Composer AI - 2026/06/10.
                      UserPtr() returns NULL if the user is no longer
                      logged in; check before dereferencing. A NULL
@@ -1232,11 +1381,14 @@ int16_t lock_record(
                       d_lptr = RLPtr(lwi);
                       tio_printf(sysmsg(1451), d_lptr->file_id, d_lptr->id_len,
                                  d_lptr->id, d_lptr->owner);
+                      deadlock_info_add(FALSE, u, (char*)(FPtr(d_lptr->file_id)->pathname),
+                                        d_lptr->id, d_lptr->id_len);
                       u = RLPtr(lwi)->owner;
                     } else /* Waiting for file lock */
                     {
                       d_fptr = FPtr(-lwi);
                       tio_printf(sysmsg(1452), -lwi, abs(d_fptr->file_lock));
+                      deadlock_info_add(FALSE, u, (char*)(d_fptr->pathname), NULL, 0);
                       u = abs(FPtr(-lwi)->file_lock);
                     }
 
@@ -1320,6 +1472,7 @@ int16_t lock_record(
   lptr->id_hash = hash_value;
   lptr->fvar_index = fvar->index;
   lptr->txn_id = txn_id;
+  lptr->lock_time = (int32_t)time(NULL);
   lptr->id_len = id_len;
   memcpy(lptr->id, id, id_len);
   RLPtr(idx)->count += 1;
@@ -1375,6 +1528,7 @@ exit_lock_record:
           if ((blocking_idx >= 0) && (lptr != NULL))
             lptr->waiters++; /* 0193 */
           /* -------------------- */
+          my_uptr->lockwait_time = (int32_t)time(NULL); /* item 487 */
           my_uptr->lockwait_index = blocking_idx;
         }
       }
@@ -1388,6 +1542,11 @@ exit_lock_record:
 
   if (table_full)
     log_message("Lock table full");
+
+  /* DEADLOCK=2: keep the state of every lock for whoever analyses this */
+
+  if ((status == -2) && (sysseg->deadlock >= 2))
+    deadlock_save();
 
   return status;
 }

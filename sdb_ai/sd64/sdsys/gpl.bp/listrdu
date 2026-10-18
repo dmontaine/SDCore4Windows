@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): DETAIL shows when each lock was acquired and when each waiter began to wait (openQM item 487).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -148,6 +149,15 @@ $include keys.h
          line[48,32] = remove(id, more.id)
          print on lptr line
       repeat
+
+      * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): openQM item 487: with DETAIL, when the lock was acquired or the wait began, in the time zone of
+      * the user running the command.  The kernel keeps seconds since 1 Jan 1970 UTC.
+      if detail and s<1,7> > 0 then
+         loc = s<1,7> + system(1019)
+         d = int(loc / 86400) + 732
+         stamp = oconv(d, 'DD'):' ':oconv(oconv(d, 'DMA'), 'MCT')[1,3]:' ':oconv(d, 'DY')[3,2]:' ':oconv(rem(loc, 86400), 'MTS')
+         print on lptr space(8) : sysmsg(if type = 'WAIT' then 12171 else 12170, stamp)
+      end
    next i
 
    if not(lock.reported) then
