@@ -258,6 +258,8 @@ void k_release(DESCRIPTOR * p);
 void k_deref_image(SCREEN_IMAGE * image);
 void k_deref_string(STRING_CHUNK * str);
 void coll_deref(COLL_HEADER * h);
+int32_t url_encode_top(void);
+int32_t url_decode_top(void);
 int k_get_c_string(DESCRIPTOR * descr, char * s, int max_bytes);
 void k_incr_refct(DESCRIPTOR * p);
 void k_put_c_string(char * s, DESCRIPTOR * descr);

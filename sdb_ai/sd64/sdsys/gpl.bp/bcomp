@@ -549,8 +549,11 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "INSERT"          ; intrinsic.opcodes<-1> = OP.INSERT
    intrinsics<-1> = "INT"             ; intrinsic.opcodes<-1> = OP.INT
    intrinsics<-1> = "ITYPE"           ; intrinsic.opcodes<-1> = OP.ITYPE
-   intrinsics<-1> = "JBUILD"          ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - JSON
+   intrinsics<-1> = "JBOOLEAN"        ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - JSON
+   intrinsics<-1> = "JBUILD"          ; intrinsic.opcodes<-1> = OP.COLL
+   intrinsics<-1> = "JNULL"           ; intrinsic.opcodes<-1> = OP.COLL
    intrinsics<-1> = "JPARSE"          ; intrinsic.opcodes<-1> = OP.COLL
+   intrinsics<-1> = "JTYPE"           ; intrinsic.opcodes<-1> = OP.COLL
    intrinsics<-1> = "KEYCODE"         ; intrinsic.opcodes<-1> = OP.KEYCODE
    intrinsics<-1> = "KEYIN"           ; intrinsic.opcodes<-1> = OP.KEYIN
    intrinsics<-1> = "KEYINC"          ; intrinsic.opcodes<-1> = OP.KEYINC
@@ -2653,14 +2656,27 @@ process.operator:
    case look.ahead.token = TKN.LCBR   ;* Data collection element assignment: c{a, b} = value  13 Oct 26 dm
       gosub emit.collection.path
       if err then goto exit.proc.statement
-      if look.ahead.token # TKN.EQ then
-         err.msg = sysmsg(2833)  ;* Improperly formed field assignment
-         gosub error
-         goto exit.proc.statement
-      end
+      * = sets; += -= *= /= := work the new value out from the old with the ordinary operator
+      begin case
+         case look.ahead.token = TKN.EQ     ; setop = 0
+         case look.ahead.token = TKN.ADDEQ  ; setop = 1
+         case look.ahead.token = TKN.SUBEQ  ; setop = 2
+         case look.ahead.token = TKN.MULTEQ ; setop = 3
+         case look.ahead.token = TKN.DIVEQ  ; setop = 4
+         case look.ahead.token = TKN.CATEQ  ; setop = 5
+         case 1
+            err.msg = sysmsg(2833)  ;* Improperly formed field assignment
+            gosub error
+            goto exit.proc.statement
+      end case
       gosub get.token
       gosub exprf            ;* The value
-      n = 4 ; gosub emit.numeric.load       ;* Function: set
+      if setop then
+         n = setop ; gosub emit.numeric.load      ;* Which operator
+         n = 18 ; gosub emit.numeric.load         ;* Function: set from the old value
+      end else
+         n = 4 ; gosub emit.numeric.load          ;* Function: set
+      end
       opcode.byte = OP.COLL ; gosub emit.simple
 
    case look.ahead.token = TKN.LT     ;* Field assignment
@@ -4062,8 +4078,11 @@ end
                       in.insert,      ;* INSERT
                       in.one,         ;* INT
                       in.itype,       ;* ITYPE
+                      in.jboolean,    ;* JBOOLEAN
                       in.jbuild,      ;* JBUILD
+                      in.jnull,       ;* JNULL
                       in.jparse,      ;* JPARSE
+                      in.jtype,       ;* JTYPE
                       in.keyin,       ;* KEYCODE
                       in.keyin,       ;* KEYIN
                       in.keyin,       ;* KEYINC
@@ -4317,6 +4336,21 @@ in.json:
             n = json.stack<1>
             del json.stack<1>
             gosub emit.numeric.load
+            goto intrinsic.common
+
+*** JBOOLEAN(x)  JNULL()  JTYPE(x)  - JSON true / false and null, and what kind of value something is (15, 16, 17)
+in.jboolean:
+            gosub exprf
+            n = 15 ; gosub emit.numeric.load
+            goto intrinsic.common
+
+in.jnull:
+            n = 16 ; gosub emit.numeric.load
+            goto intrinsic.common
+
+in.jtype:
+            gosub exprf
+            n = 17 ; gosub emit.numeric.load
             goto intrinsic.common
 
 *** ENUMERATE(c)

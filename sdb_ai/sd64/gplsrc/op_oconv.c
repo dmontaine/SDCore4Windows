@@ -675,6 +675,13 @@ void op_oconv() {
         process.status = group_conversion(p);
         break;
 
+      case 'H': /* HU: percent encoding, for a URL held in a data collection name */
+        if (UpperCase(*p) == 'U' && p[1] == '\0')
+          process.status = url_encode_top();
+        else
+          goto bad_conv_string;
+        break;
+
       case 'L': /* Length constraints */
         process.status = length_conversion(p);
         break;

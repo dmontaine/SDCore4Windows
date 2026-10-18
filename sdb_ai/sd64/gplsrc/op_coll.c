@@ -33,6 +33,16 @@
  *    CF_INS      INS value AS c{path}           [value, ADDR, p1..pn, n, fn]
  *    CF_JPARSE   JPARSE(string, mode)           [string, mode, fn] -> coll
  *    CF_JBUILD   JBUILD(coll, mode)             [coll, mode, fn]   -> string
+ *    CF_JBOOLEAN JBOOLEAN(x)                    [x, fn]            -> boolean
+ *    CF_JNULL    JNULL()                        [fn]               -> null
+ *    CF_JTYPE    JTYPE(x)                       [x, fn]            -> text
+ *    CF_SETOP    c{path} += value (and -= *= /= :=)
+ *                                               [ADDR, p1..pn, n, value, op, fn]
+ *
+ *    A boolean or a JSON null is an ordinary integer 0 or 1, or null string,
+ *    that carries the DF_JSON flag.  An element of a collection that is
+ *    set from one is kept as a boolean or a null, and reads back with the
+ *    flag, so JBUILD() writes true, false or null.
  *
  *    A path component that is a string may hold several names separated by
  *    slashes; an integer (or a string of digits met in an array) selects an
@@ -78,6 +88,10 @@
 #define CF_INS 12
 #define CF_JPARSE 13
 #define CF_JBUILD 14
+#define CF_JBOOLEAN 15
+#define CF_JNULL 16
+#define CF_JTYPE 17
+#define CF_SETOP 18
 
 #define COLL_ALLOC_TAG 160
 #define JSON_MAX_DEPTH 500
@@ -118,6 +132,14 @@ Private void buf_value(COLL_BUF* b, COLL_ENTRY* e);
 Private void star_get(COLL_BUF* b, COLL_HEADER* cur, COLL_SEG* seg, int nseg, int i, int star);
 Private DESCRIPTOR json_parse(char* text, int32_t len, int mode);
 Private DESCRIPTOR json_build(COLL_HEADER* root, int mode);
+Private void fill_entry(COLL_ENTRY* ent, DESCRIPTOR* v);
+Private DESCRIPTOR str_descr(char* s, int32_t len);
+
+void op_add(void);
+void op_sub(void);
+void op_mul(void);
+void op_div(void);
+void op_cat(void);
 
 /* ======================================================================
    coll_deref()  -  Drop a reference, freeing the collection at zero      */
@@ -155,6 +177,7 @@ void op_coll() {
   int32_t i;
   int32_t pos;
   int32_t max;
+  int32_t setop = 0;
   int32_t first;
   int32_t count;
   ARRAY_HEADER* ahdr;
@@ -243,13 +266,11 @@ void op_coll() {
         coll_insert(root, i);
         ent = &root->e[i];
         descr = Element(ahdr, first + i);
-        if (descr->type == UNASSIGNED || descr->type == ADDR) {
+        if (descr->type == ADDR) {
           InitDescr(&ent->d, STRING);
           ent->d.data.str.saddr = NULL;
         } else {
-          ent->d = *descr;
-          ent->d.flags = 0;
-          IncrRefCt(&ent->d);
+          fill_entry(ent, descr);
         }
       }
       k_pop(2); /* The matrix is an ADDR and the maximum an integer */
@@ -272,6 +293,72 @@ void op_coll() {
       }
       k_dismiss();
       k_pop(1); /* The matrix, an ADDR */
+      break;
+
+    case CF_JNULL:
+      InitDescr(&result, STRING);
+      result.data.str.saddr = NULL;
+      result.flags = DF_JSON;
+      *(e_stack++) = result;
+      break;
+
+    case CF_JBOOLEAN:
+      descr = e_stack - 1;
+      if (descr->type == ADDR)
+        k_get_value(descr);
+      switch (descr->type) {
+        case INTEGER:
+          n = (descr->data.value != 0);
+          break;
+        case FLOATNUM:
+          n = (descr->data.float_value != 0.0);
+          break;
+        case STRING:
+          /* Null, 0 and false (in any case) are false; any other text is true */
+          if (descr->data.str.saddr == NULL) {
+            n = 0;
+          } else {
+            char* jb = chunks_to_buffer(descr->data.str.saddr, &count);
+            n = !(strcmp(jb, "0") == 0 || strcasecmp(jb, "false") == 0);
+            k_free(jb);
+          }
+          break;
+        default:
+          n = 1;
+      }
+      k_dismiss();
+      InitDescr(&result, INTEGER);
+      result.data.value = n;
+      result.flags = DF_JSON;
+      *(e_stack++) = result;
+      break;
+
+    case CF_JTYPE:
+      descr = e_stack - 1;
+      if (descr->type == ADDR)
+        k_get_value(descr);
+      {
+        const char* tn;
+        switch (descr->type) {
+          case INTEGER:
+            tn = ((descr->flags & DF_JSON) && (descr->data.value == 0 || descr->data.value == 1)) ? "boolean" : "number";
+            break;
+          case FLOATNUM:
+            tn = "number";
+            break;
+          case STRING:
+            tn = ((descr->flags & DF_JSON) && descr->data.str.saddr == NULL) ? "null" : "string";
+            break;
+          case COLL:
+            tn = descr->data.coll->is_array ? "array" : "collection";
+            break;
+          default:
+            tn = "other";
+        }
+        result = str_descr((char*)tn, (int32_t)strlen(tn));
+      }
+      k_dismiss();
+      *(e_stack++) = result;
       break;
 
     case CF_JPARSE:
@@ -306,11 +393,18 @@ void op_coll() {
     case CF_EXISTS:
     case CF_DEL:
     case CF_SET:
+    case CF_SETOP:
     case CF_INS:
       /* Find the pieces on the stack, whichever way round this function has them */
       drop = 0;
       value = NULL;
-      if (func == CF_SET) {
+      if (func == CF_SETOP) {
+        descr = e_stack - 1;
+        GetInt(descr);
+        setop = descr->data.value; /* 1 add, 2 subtract, 3 multiply, 4 divide, 5 concatenate */
+        k_pop(1);
+      }
+      if (func == CF_SET || func == CF_SETOP) {
         value = e_stack - 1;
         if (value->type == ADDR)
           k_get_value(value);
@@ -382,7 +476,7 @@ void op_coll() {
         break;
       }
 
-      rc = walk(root, segs, nseg, (func == CF_SET || func == CF_INS), &parent, &pos, &exists);
+      rc = walk(root, segs, nseg, (func == CF_SET || func == CF_SETOP || func == CF_INS), &parent, &pos, &exists);
       if (rc < 0) {
         char shown[64];
         int32_t m = (segs[0].len < 60) ? segs[0].len : 60;
@@ -429,6 +523,44 @@ void op_coll() {
           k_pop(1); /* The ADDR */
           break;
 
+        case CF_SETOP:
+          /* Work the new value out from the old one with the ordinary operator, then store it */
+          if (!exists) {
+            coll_insert(parent, pos);
+            ent = &parent->e[pos];
+            if (!parent->is_array)
+              set_entry_name(ent, &segs[nseg - 1]);
+          } else {
+            ent = &parent->e[pos];
+          }
+          {
+            DESCRIPTOR cur = value_of(ent);
+            DESCRIPTOR val = *value;
+            DESCRIPTOR res;
+
+            IncrRefCt(&val);
+            cur.flags = 0;
+            val.flags = 0;
+            *(e_stack++) = cur;
+            *(e_stack++) = val;
+            switch (setop) {
+              case 1: op_add(); break;
+              case 2: op_sub(); break;
+              case 3: op_mul(); break;
+              case 4: op_div(); break;
+              default: op_cat(); break;
+            }
+            res = *(--e_stack);
+            k_release(&ent->d);
+            fill_entry(ent, &res);
+            k_release(&res);
+          }
+          k_dismiss(); /* The value */
+          for (i = 0; i < n + 1; i++)
+            k_dismiss();
+          k_pop(1); /* The ADDR */
+          break;
+
         case CF_SET:
         case CF_INS:
           if (!exists || (func == CF_INS && parent->is_array)) {
@@ -441,15 +573,7 @@ void op_coll() {
             ent = &parent->e[pos];
             k_release(&ent->d);
           }
-          if (value->type == UNASSIGNED) {
-            InitDescr(&ent->d, STRING);
-            ent->d.data.str.saddr = NULL;
-          } else {
-            ent->d = *value;
-            ent->d.flags = 0;
-            IncrRefCt(&ent->d);
-          }
-          ent->tag = CT_PLAIN;
+          fill_entry(ent, value);
           if (func == CF_SET) {
             k_dismiss(); /* The value */
             for (i = 0; i < n + 1; i++)
@@ -845,12 +969,34 @@ Private DESCRIPTOR value_of(COLL_ENTRY* e) {
   if (e->tag == CT_NULL) {
     InitDescr(&r, STRING);
     r.data.str.saddr = NULL;
+    r.flags = DF_JSON;
   } else {
     r = e->d;
-    r.flags = 0;
+    r.flags = (e->tag == CT_BOOL) ? DF_JSON : 0;
     IncrRefCt(&r);
   }
   return r;
+}
+
+/* Put a value into an entry as a new reference.  A JSON boolean or null (see
+   DF_JSON) is kept as one; an unassigned variable is a null string.       */
+
+Private void fill_entry(COLL_ENTRY* ent, DESCRIPTOR* v) {
+  ent->tag = CT_PLAIN;
+  if (v->type == UNASSIGNED) {
+    InitDescr(&ent->d, STRING);
+    ent->d.data.str.saddr = NULL;
+    return;
+  }
+  if (v->flags & DF_JSON) {
+    if (v->type == INTEGER && (v->data.value == 0 || v->data.value == 1))
+      ent->tag = CT_BOOL;
+    else if (v->type == STRING && v->data.str.saddr == NULL)
+      ent->tag = CT_NULL;
+  }
+  ent->d = *v;
+  ent->d.flags = 0;
+  IncrRefCt(&ent->d);
 }
 
 /* ======================================================================
@@ -1468,6 +1614,83 @@ Private DESCRIPTOR json_build(COLL_HEADER* root, int mode) {
   result = str_descr(cb.b, cb.len);
   k_free(cb.b);
   return result;
+}
+
+/* ======================================================================
+   OCONV(s, 'HU') and ICONV(s, 'HU')  -  percent encoding
+
+   Everything but letters, digits and - . _ ~ is written as %xx with
+   lower case hex digits, so a URL can be a name in a collection without its
+   slashes being taken for a path.  ICONV undoes it; a % not followed by two
+   hex digits, and a +, are left as they are.                              */
+
+int32_t url_encode_top() {
+  DESCRIPTOR* d = e_stack - 1;
+  DESCRIPTOR result;
+  COLL_BUF cb;
+  char* s;
+  int32_t len;
+  int32_t i;
+  unsigned char c;
+  char t[4];
+
+  k_get_string(d);
+  if (d->data.str.saddr == NULL)
+    return 0;
+  s = chunks_to_buffer(d->data.str.saddr, &len);
+  cb.b = (char*)k_alloc(COLL_ALLOC_TAG, len * 3 + 8);
+  cb.len = 0;
+  cb.cap = len * 3 + 8;
+  for (i = 0; i < len; i++) {
+    c = (unsigned char)s[i];
+    if (isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~') {
+      cb.b[cb.len++] = (char)c;
+    } else {
+      sprintf(t, "%%%02x", c);
+      memcpy(cb.b + cb.len, t, 3);
+      cb.len += 3;
+    }
+  }
+  result = str_descr(cb.b, cb.len);
+  k_free(cb.b);
+  k_free(s);
+  k_dismiss();
+  *(e_stack++) = result;
+  return 0;
+}
+
+int32_t url_decode_top() {
+  DESCRIPTOR* d = e_stack - 1;
+  DESCRIPTOR result;
+  char* s;
+  char* o;
+  int32_t len;
+  int32_t i;
+  int32_t n = 0;
+
+  k_get_string(d);
+  if (d->data.str.saddr == NULL)
+    return 0;
+  s = chunks_to_buffer(d->data.str.saddr, &len);
+  o = (char*)k_alloc(COLL_ALLOC_TAG, len + 1);
+  for (i = 0; i < len; i++) {
+    if (s[i] == '%' && i + 2 < len && isxdigit((unsigned char)s[i + 1]) && isxdigit((unsigned char)s[i + 2])) {
+      char hx[3];
+      hx[0] = s[i + 1];
+      hx[1] = s[i + 2];
+      hx[2] = '\0';
+      o[n++] = (char)strtol(hx, NULL, 16);
+      i += 2;
+    } else {
+      o[n++] = s[i];
+    }
+  }
+  result = str_descr(o, n);
+  k_free(o);
+  k_free(s);
+  k_dismiss();
+  *(e_stack++) = result;
+  return 0;
 }
 
 /* END-CODE */

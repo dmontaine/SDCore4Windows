@@ -262,6 +262,9 @@ struct DESCRIPTOR {
 #define DF_SYSTEM 0x20 /* Set on system variables (STORSYS opcode) */
 #define DF_MOVE 0x40   /* Move descr in object function/subr call */
 #define DF_CHANGE (DF_WATCH | DF_ARGSET) /* Flags to clear on change */
+#define DF_JSON 0x80 /* INTEGER 0 or 1: a JSON boolean; null STRING: a JSON null.
+                        Made by JBOOLEAN() and JNULL() and by reading such an element
+                        of a data collection; any new result is a plain value. */
 
 /* ====================================================================== */
 

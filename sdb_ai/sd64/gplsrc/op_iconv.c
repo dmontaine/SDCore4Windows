@@ -181,6 +181,13 @@ void op_iconv() {
         process.status = group_conversion(p);
         break;
 
+      case 'H': /* HU: undo percent encoding */
+        if (UpperCase(*p) == 'U' && p[1] == '\0')
+          process.status = url_decode_top();
+        else
+          goto bad_conv_string;
+        break;
+
       case 'I':
         switch (UpperCase(*(p++))) {
           case 'F': /* Float conversion */

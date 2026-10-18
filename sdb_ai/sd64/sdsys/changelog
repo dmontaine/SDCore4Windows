@@ -2,6 +2,37 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  COLLECTIONS: BOOLEANS AND NULLS, OPERATORS ON AN ELEMENT, THE HU
+           CONVERSION.
+
+             c{'on'} = JBOOLEAN(1)             store true (JBOOLEAN(0): false)
+             c{'none'} = JNULL()               store a JSON null
+             JTYPE(value)                      "boolean", "null", "number",
+                                               "string", "collection",
+                                               "array" or "other"
+             c{'n'} += 5     -= *= /= :=       change an element in place
+             OCONV(name, 'HU')  ICONV(name, 'HU')   escape and unescape
+
+           SD has no boolean or null variable type, so these are ordinary
+           values that carry a mark: JBOOLEAN(x) is 1 or 0 (false for 0,
+           a null string and the text 0 or false in any case, true for
+           anything else), JNULL() is a null string.  A collection element
+           stored from one keeps its kind, JBUILD() writes true, false or
+           null for it, and reading it back gives the mark again, so JTYPE()
+           can tell.  The mark is lost the moment you do anything to the
+           value: JBOOLEAN(1) + 1 is just 2.
+
+           c{'n'} += 5 and the others read the element, apply the operator
+           and store the result.  An element that is not there is a null
+           string to start from, so += starts at 0 and := at nothing, and
+           the levels of the path are made as for any assignment.
+
+           OCONV(s, 'HU') writes everything but letters, digits and - . _ ~
+           as %xx with lower case hex digits, so a URL can be a name in a
+           collection without its slashes being taken for a path; ICONV
+           undoes it and leaves a % that is not followed by two hex digits,
+           and a +, as they are.
+
 18 Oct 26  JSON: JPARSE() AND JBUILD().
 
              c = JPARSE(text)                  JSON text into a collection
