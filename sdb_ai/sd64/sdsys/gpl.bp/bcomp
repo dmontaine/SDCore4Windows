@@ -165,6 +165,7 @@ $define M.NO.CASE.INVERT       20
 $define M.OPTIONAL.THEN.ELSE   21; *rdm
 $define M.IMPLIED.STOP         22  ;* 10 Oct 26 dm
 $define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
+$define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns seconds to the millisecond (a float)
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -195,6 +196,7 @@ mode.names := @VM:"NO.CASE.INVERT"
 mode.names := @VM:"OPTIONAL.THEN.ELSE"
 mode.names := @VM:"IMPLIED.STOP"
 mode.names := @VM:"STRICT.EQUATE"
+mode.names := @VM:"TIME.MS"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -4095,7 +4097,7 @@ end
                       in.one,         ;* SYSTEM
                       in.one,         ;* TAN
                       in.terminfo,    ;* TERMINFO
-                      in.none,        ;* TIME
+                      in.time,        ;* TIME
                       in.none,        ;* TIMEDATE
                       in.trans,       ;* TRANS
                       in.trim,        ;* TRIM
@@ -4650,6 +4652,17 @@ in.trim:
             end
 
             goto intrinsic.common
+
+in.time:
+            * 18 Oct 26 Windows port - from Linux a39719d (12 Oct 26): - openQM 581.  With $MODE TIME.MS, TIME() is SYSTEM(1020) / 1000: seconds since midnight
+            * to the millisecond, as a floating point number.  Otherwise it is the plain TIME() opcode.
+            if bittest(mode, M.TIME.MS) then
+               n = 1020 ; gosub emit.numeric.load
+               opcode.byte = OP.SYSTEM ; gosub emit.simple
+               n = 1000 ; gosub emit.numeric.load
+               opcode.byte = OP.DIV ; gosub emit.simple
+               goto intrinsic.end
+            end
 
 in.none:
 intrinsic.common:
@@ -6267,7 +6280,14 @@ st.clear:
    return
 
 st.clearcommon:
-   opcode.byte = OP.CLRCOM ; gosub emit.simple
+   * 18 Oct 26 Windows port - from Linux a39719d (12 Oct 26): - openQM 52:  CLEARCOMMON name  clears that named block (SD's own syntax); alone, the unnamed one
+   if look.ahead.token = TKN.NAME then
+      gosub get.name
+      opcode.string = upcase(s) ; gosub emit.string.load
+      opcode.byte = OP.CLRCOMN ; gosub emit.simple
+   end else
+      opcode.byte = OP.CLRCOM ; gosub emit.simple
+   end
 
    return
 
@@ -9729,7 +9749,7 @@ st.openseq:
    opcode = OP.OPENSEQ
 
 * NJS use @vm
-   reserved.names<2> = "APPEND":@VM:"OVERWRITE":@VM:"READONLY"
+   reserved.names<2> = "APPEND":@VM:"OVERWRITE":@VM:"READONLY":@VM:"CREATING":@VM:"SHARED"
 
    * Emit file expresssion
    gosub exprf
@@ -9757,6 +9777,16 @@ st.openseq:
       case u.look.ahead.token.string = 'READONLY'
          gosub get.token
          opcode.byte = OP.READONLY  ; gosub emit.simple
+
+      case u.look.ahead.token.string = 'CREATING'     ;* 12 Oct 26 dm - openQM 485: make the file now if it is not there
+         gosub get.token
+         opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+         code.value = 0x400 ; code.bytes = 2 ; gosub emit.multibyte.value
+
+      case u.look.ahead.token.string = 'SHARED'       ;* 12 Oct 26 dm - openQM 397: append, for several processes at once
+         gosub get.token
+         opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+         code.value = 0xD00 ; code.bytes = 2 ; gosub emit.multibyte.value
    end case
          
    if u.look.ahead.token.string # "TO" then goto err.to

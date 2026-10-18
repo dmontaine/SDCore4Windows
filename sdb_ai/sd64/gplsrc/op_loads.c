@@ -196,6 +196,41 @@ void op_clrcom() {
 }
 
 /* ======================================================================
+   op_clrcomn()  -  CLEARCOMMON name : Set a named common block's variables
+                    to zero.  12 Oct 26, openQM item 52.
+
+     Stack:   top   name of the block (the compiler upper-cases it)         */
+
+void op_clrcomn() {
+  DESCRIPTOR descr;
+  DESCRIPTOR* p;
+  ARRAY_HEADER* a_hdr;
+  ARRAY_CHUNK* a_chunk;
+  STRING_CHUNK* str_hdr;
+  char block_name[MAX_PROGRAM_NAME_LEN + 1];
+  int n;
+
+  n = k_get_c_string(e_stack - 1, block_name, MAX_PROGRAM_NAME_LEN);
+  k_dismiss();
+  if (n < 0)
+    return;
+
+  for (a_hdr = process.named_common; a_hdr != NULL;
+       a_hdr = a_hdr->next_common) {
+    a_chunk = a_hdr->chunk[0];
+
+    str_hdr = a_chunk->descr[0].data.str.saddr;
+    if (strcmp(str_hdr->data, block_name) == 0) {
+      p = &descr;
+      InitDescr(p, COMMON);
+      descr.data.c_addr = a_hdr;
+      set_descr(p, INTEGER);
+      break;
+    }
+  }
+}
+
+/* ======================================================================
    op_deref()  -  DEREF opcode. Resolve item as actual value.             */
 
 void op_deref() {

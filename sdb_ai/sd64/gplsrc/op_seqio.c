@@ -642,6 +642,14 @@ Private void openseq(bool map_name) {
         process.status = ER_FNF;
         goto exit_op_openseq;
       }
+    } else if (op_flags & 0x400) /* CREATING (and SHARED, which includes it): make the file now */
+    {
+      /* 12 Oct 26, openQM items 485 and 397 */
+      fu = dio_open(fullpathname, DIO_OVERWRITE);
+      if (!ValidFileHandle(fu)) {
+        process.status = ER_FNF;
+        goto exit_op_openseq;
+      }
     } else /* Does not exist, take ELSE clause, STATUS() = 0 */
     {
       fu = INVALID_FILE_HANDLE; /* Remember not opened yet */
@@ -795,6 +803,13 @@ Private void openseq(bool map_name) {
       if (ValidFileHandle(fu)) {
         sq_file->posn = filelength64(fu);
         Seek(fu, sq_file->posn, SEEK_SET);
+        /* SHARED (0x800): every write goes to the end of the file whoever else has added to it meanwhile */
+        if (op_flags & 0x800) {
+          fcntl(fu, F_SETFL, fcntl(fu, F_GETFL) | O_APPEND);
+          /* and unbuffered, so each WRITESEQ is one write() of a whole line: with a buffer two processes
+             would interleave their blocks in the middle of lines */
+          sq_file->flags |= SQ_NOBUF;
+        }
       }
     } else if (op_flags & 0x200) /* Overwrite */
     {

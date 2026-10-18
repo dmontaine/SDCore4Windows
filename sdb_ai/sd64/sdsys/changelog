@@ -2,6 +2,29 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FOUR BASIC ADDITIONS.  Syntax is SD's
+           own where the openQM notes give none.
+
+             CLEARCOMMON name        Sets the variables of the named common
+                                     block to zero.  CLEARCOMMON alone still
+                                     clears the unnamed block.
+             $MODE TIME.MS           TIME() then returns the seconds since
+                                     midnight to the millisecond, as a
+                                     number with a fraction (it is
+                                     SYSTEM(1020) / 1000).
+             OPENSEQ file,id CREATING TO f
+                                     Makes the file at once if it is not
+                                     there, and takes the THEN clause.
+             OPENSEQ file,id SHARED TO f
+                                     Opens for appending (and makes it if
+                                     needed) so that several processes can
+                                     add to the same file, an audit log for
+                                     example: each WRITESEQ is one whole
+                                     line at the end of the file, and no
+                                     process overwrites another's.  It is
+                                     not buffered, so it is slower than a
+                                     plain APPEND.
+
 18 Oct 26  CREATE.FILE COMMENT, MULTIFILE AND RELATIVE PATHNAME.  Syntax is SD's
            own.
 
