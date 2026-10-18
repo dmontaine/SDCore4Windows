@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  An API session is refused (12286) while the administrator has logins
+*           inhibited, after the backup login hold and before any credential is looked at.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): Call names: the lower of 128 and MAXIDLEN (openQM item 241), 63 at the default.  Refused logins
 *           wait PWDELAY seconds (item 106), 3 by default.
 * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is a collection when it is read, which
@@ -1452,6 +1454,15 @@ vb.local.login:
                      goto exit.vb.local.login
                end
 
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): - INHIBIT.LOGIN (QM4 gaps Q-8): no API session while the administrator has logins inhibited.
+               call !login_inhibit('TEST', hold.info, hold.err)
+               if hold.err # '' then
+                     server.error = SV$ON.ERROR
+                     void kernel(K$AUDIT, 'api refused user=' : username : ' reason=logins are inhibited (inhibit.login) (local login)')
+                     abort.message = sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
+                     goto exit.vb.local.login
+               end
+
                * dsm 20240612 lgn.rec<LGN$DATE> = date()
                * dsm 20240612 lgn.rec<LGN$TIME> = time()
                * dsm 20240612 recordlocku lgn.f, username
@@ -1524,6 +1535,15 @@ vb.scram.first:
                call !acc_hold('TEST', hold.info, hold.err)
                if hold.err # '' then
                   scram.refuse.reason = 'a backup or restore is running'
+                  abort.message = sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
+
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): - INHIBIT.LOGIN (QM4 gaps Q-8), the same refusal, in the same place.
+               call !login_inhibit('TEST', hold.info, hold.err)
+               if hold.err # '' then
+                  scram.refuse.reason = 'logins are inhibited (inhibit.login)'
                   abort.message = sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail

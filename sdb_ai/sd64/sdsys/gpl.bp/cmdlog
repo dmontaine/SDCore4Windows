@@ -1,0 +1,89 @@
+* CMDLOG
+* COMMAND.LOGGING verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-8 (COMMAND.LOGGING), the per-process form only (owner, 15 Oct 2026: no
+*               global CMDLOG parameter and no !CLOG hook - a log of every command of every session is a decision for
+*               a design of its own).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   COMMAND.LOGGING {ON | OFF}
+*
+* ON starts a log of every command this session runs, with where each came from, in a file named clog.<user number>.log
+* in the account directory.  (openQM puts it in TEMPDIR; SD does not, because TEMPDIR is /tmp unless sd.conf says
+* otherwise and another user could make the file first.)  The file belongs to the user and is readable by nobody else
+* (mode 0600); it is added to, never emptied.  A line is tab separated: the time as an
+* epoch value, the user number, the login name, the origin and the command.  The origin is User (typed at the prompt), Cmd
+* (the command line sd was started with), PA (a line of a paragraph) or Exec (EXECUTE, CHAIN or a menu).  OFF stops it.
+* With neither word the state is shown, and the pathname if it is on.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program command.logging
+$catalog $cmdlog
+
+$include parser.h
+$include err.h
+$include int$keys.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   call !parser(parser$reset, 0, @sentence, 0)
+   call !parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   action = ''
+   call !parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END then
+      begin case
+         case upcase(token) = 'ON'  ; action = 'ON'
+         case upcase(token) = 'OFF' ; action = 'OFF'
+         case 1
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end case
+      call !parser(parser$get.token, token.type, token, keyword)
+      if token.type # PARSER$END then stop sysmsg(2018, token)
+   end
+
+   begin case
+      case action = 'ON'
+         path = kernel(K$CMDLOG, 1)
+         if path = '' then
+            @system.return.code = ER$FAILED
+            stop sysmsg(12309) ;* The command log could not be started
+         end
+      case action = 'OFF'
+         path = kernel(K$CMDLOG, 0)
+      case 1
+         path = kernel(K$CMDLOG, -1)
+   end case
+
+   @system.return.code = 0
+   if path = '' then
+      display sysmsg(12308) ;* Command logging is off
+   end else
+      display sysmsg(12310, path) ;* Command logging is on: %1
+   end
+
+end
+
+* END-CODE

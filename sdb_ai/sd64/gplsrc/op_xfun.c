@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): XF_DIGEST for QM4 gaps bundle Q-13 (DIGEST()).
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1: CEIL FLOOR ROUNDUP ROUNDDOWN IS.* LEFT RIGHT LAST NV NS TRIMWS MATCHESS
  *               MATCHFIELDS.  One opcode (0xBB, a single byte, so that the multivalue wrappers MVDS, MVDSS and MVDSSS can
  *               take it as their base) with the function number pushed last, as OP_EPOCHCV does.
@@ -43,6 +44,7 @@
  *    XF_MATCHFIELD  MATCHFIELDS(array, template, component)   MATCHFIELD under the MVDSSS wrapper
  *    XF_CASING      CASING ON / OFF / expr    the CASING statement (SYSTEM(1086) reads the state back)
  *    XF_SIGNAL      SIGNAL(user.no)           raise the application signal in a process; SYSTEM(1062) reads and clears it
+ *    XF_DIGEST      DIGEST(string, is.file, mode)   MD5 SHA1 SHA256 SHA384 SHA512 of a string or of an OS file, as hex
  *
  * END-DESCRIPTION
  *
@@ -50,6 +52,8 @@
  */
 
 #include <math.h>
+#include <unistd.h>
+#include <openssl/evp.h>   /* before sd.h: descr.h defines OBJ, which turns OpenSSL's OBJ_dup into 15_dup */
 #include "sd.h"
 #include "header.h"
 
@@ -79,6 +83,7 @@
 #define XF_NUMERIC 23
 #define XF_REUSING 24 /* REUSING(name): the compiler loads the variable itself, which has its own handler (in.reusing) */
 #define XF_SIGNAL 25  /* SIGNAL(user.no), QM4 gaps Q-5 */
+#define XF_DIGEST 26  /* DIGEST(string, is.file, mode), QM4 gaps Q-13 */
 
 void op_dcount(void);
 void op_field(void);
@@ -99,6 +104,7 @@ Private void x_right(void);
 Private void x_last(void);
 Private void x_nv(bool ns);
 Private int32_t x_signal(int32_t uid);
+Private void x_digest(void);
 Private void push_int(int32_t n);
 
 /* ======================================================================
@@ -210,6 +216,9 @@ void op_xfun() {
       InitDescr(descr, INTEGER);
       descr->data.value = n;
       break;
+    case XF_DIGEST:
+      x_digest();
+      break;
     default:
       k_error("Illegal XFUN function number %d", (int)fn); /* the compiler cannot have made this */
       break;
@@ -236,6 +245,132 @@ Private int32_t x_signal(int32_t uid) {
     return 0;
   __atomic_fetch_or(&uptr->flags, (int16_t)USR_SIGNAL, __ATOMIC_SEQ_CST);
   return 1;
+}
+
+/* ======================================================================
+   x_digest()  -  DIGEST(string, is.file, mode)
+
+   The message digest of a string, or of the file whose pathname the string is, as lower case hexadecimal characters
+   (the same form as MD5()).  mode is MD5, SHA1, SHA256, SHA384 or SHA512, in either case.  STATUS() is 0 on success and
+   the result is a null string, with STATUS() saying why, when:
+     ER_ARGS     the mode is not one of those (MD4 is the openQM mode that is not here: broken, and not in OpenSSL 3's
+                 default provider either)
+     ER_PERM     the file is outside what the session may reach (the OPENSEQ rule: a network session is held to its
+                 containment, a local one is limited by Windows; an $internal program is exempt, as it is for OPENSEQ)
+     ER_FNF      there is no such file
+     ER_FAILED   it is not a regular file, or could not be read                                                     */
+
+/* 18 Oct 26 Windows port - Linux asks os_path_open_ok() here, the S.63 OS-access gate, which is held and not carried.  OPENSEQ
+   on this port is contained only for a network session (net_path_permitted() in op_dio2.c; a local session is limited by
+   Windows itself), so DIGEST of a file asks the same and nothing more.  An $internal program is exempt, as for OPENSEQ.  */
+
+Private bool digest_path_ok(char* name) {
+  char resolved[MAX_PATHNAME_LEN + 1];
+
+  if (process.program.flags & HDR_INTERNAL)
+    return TRUE;
+  if (connection_type != CN_SOCKET)
+    return TRUE;
+  if (!fullpath(resolved, name))
+    return FALSE;
+  return net_path_permitted(resolved, FALSE);
+}
+
+Private void x_digest() {
+  DESCRIPTOR* mode_d = e_stack - 1;
+  DESCRIPTOR* file_d = e_stack - 2;
+  DESCRIPTOR* str_d = e_stack - 3;
+  char mode[24];
+  char path[MAX_PATHNAME_LEN + 1];
+  char hex[2 * EVP_MAX_MD_SIZE + 1];
+  unsigned char digest[EVP_MAX_MD_SIZE];
+  unsigned char buff[65536];
+  unsigned int digest_len = 0;
+  unsigned int i;
+  const EVP_MD* md = NULL;
+  EVP_MD_CTX* ctx = NULL;
+  STRING_CHUNK* chunk;
+  bool is_file;
+  bool ok = FALSE;
+  int fd;
+  ssize_t got;
+  struct stat st;
+
+  hex[0] = '\0';
+  process.status = 0;
+
+  if (k_get_c_string(mode_d, mode, (int)sizeof(mode) - 1) < 0)
+    mode[0] = '\0';
+  for (i = 0; mode[i] != '\0'; i++) {
+    if ((mode[i] >= 'a') && (mode[i] <= 'z'))
+      mode[i] = (char)(mode[i] - 'a' + 'A');
+  }
+
+  if (strcmp(mode, "MD5") == 0)
+    md = EVP_md5();
+  else if (strcmp(mode, "SHA1") == 0)
+    md = EVP_sha1();
+  else if (strcmp(mode, "SHA256") == 0)
+    md = EVP_sha256();
+  else if (strcmp(mode, "SHA384") == 0)
+    md = EVP_sha384();
+  else if (strcmp(mode, "SHA512") == 0)
+    md = EVP_sha512();
+
+  GetBool(file_d);
+  is_file = (file_d->data.value != 0);
+
+  if (md == NULL) {
+    process.status = ER_ARGS;
+  } else if ((ctx = EVP_MD_CTX_new()) == NULL || EVP_DigestInit_ex(ctx, md, NULL) != 1) {
+    process.status = ER_FAILED;
+  } else if (is_file) {
+    if (k_get_c_string(str_d, path, MAX_PATHNAME_LEN) < 1) {
+      process.status = ER_FNF;
+    } else if (!digest_path_ok(path)) {
+      process.status = ER_PERM;
+    } else if ((fd = open(path, O_RDONLY | O_CLOEXEC)) < 0) {
+      process.status = (errno == EACCES) ? ER_PERM : ((errno == ENOENT || errno == ENOTDIR) ? ER_FNF : ER_FAILED);
+    } else {
+      if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        process.status = ER_FAILED;
+      } else {
+        ok = TRUE;
+        while ((got = read(fd, buff, sizeof(buff))) != 0) {
+          if (got < 0) {
+            if (errno == EINTR)
+              continue;
+            ok = FALSE;
+            process.status = ER_FAILED;
+            break;
+          }
+          EVP_DigestUpdate(ctx, buff, (size_t)got);
+        }
+      }
+      close(fd);
+    }
+  } else {
+    k_get_string(str_d);
+    for (chunk = str_d->data.str.saddr; chunk != NULL; chunk = chunk->next) {
+      if (chunk->bytes > 0)
+        EVP_DigestUpdate(ctx, chunk->data, (size_t)chunk->bytes);
+    }
+    ok = TRUE;
+  }
+
+  if (ok) {
+    EVP_DigestFinal_ex(ctx, digest, &digest_len);
+    for (i = 0; i < digest_len; i++)
+      sprintf(hex + 2 * i, "%02x", digest[i]);
+    hex[2 * digest_len] = '\0';
+  }
+  if (ctx != NULL)
+    EVP_MD_CTX_free(ctx);
+
+  k_pop(2);                         /* the mode and the Boolean */
+  k_dismiss();                      /* the string */
+  k_put_c_string(hex, e_stack);
+  e_stack++;
 }
 
 /* ======================================================================

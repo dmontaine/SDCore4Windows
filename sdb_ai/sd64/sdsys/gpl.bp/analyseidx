@@ -1,0 +1,213 @@
+* ANALYSEIDX
+* ANALYSE.INDEX verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-8 (ANALYSE.INDEX).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   ANALYSE.INDEX file {index.name {STATISTICS} {DETAIL}} {LPTR {n}} {NO.PAGE}
+*
+* How well the indices of a file are working.  With the file name alone, every index of the file with its number of
+* indexed values and the most records any one value points at.  With an index name, STATISTICS (the default) adds the
+* totals and how the values spread over the number of records they point at; DETAIL lists every indexed value with its
+* number of records.  Both may be given.  LPTR sends the report to a print unit, NO.PAGE shows it without paging.
+*
+* openQM's STATISTICS also shows the index's node settings and the distribution of node sizes.  SD's indices are not
+* read at that level from BASIC, so the distribution shown here is the one that is visible - records per value - and the
+* node sizes are not shown.  LIST.INDEX DETAIL / STATISTICS remains, and shows the same figures with each index's definition.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program analyse.index
+$catalog $analyseidx
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+
+   @system.return.code = -ER$ARGS     ;* Preset for argument errors
+
+   call !parser(PARSER$RESET, 0, @sentence, 0)
+   call !parser(PARSER$GET.TOKEN, token.type, token, keyword)  ;* Verb
+
+   call !parser(PARSER$MFILE, token.type, filename, keyword)
+   if token.type = PARSER$END then stop sysmsg(2102)  ;* File name required
+
+   open '', filename to data.f else
+      open '', downcase(filename) to data.f else
+         stop sysmsg(2019)  ;* File not found
+      end
+   end
+   if fileinfo(data.f, FL$TYPE) # FL$TYPE.DH then stop sysmsg(2020)  ;* Dynamic file required
+
+   index.name = ''
+   stats = @false
+   detail = @false
+   lptr = -1
+   nopage = @false
+   loop
+      call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$DETAIL
+            detail = @true
+         case keyword = KW$STATISTICS
+            stats = @true
+         case keyword = KW$NO.PAGE
+            nopage = @true
+         case keyword = KW$LPTR
+            lptr = 0
+            call !parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+            if s matches '1N0N' then
+               call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+               lptr = token + 0
+               if lptr > LPTR$HIGH.PRINT.UNIT then stop sysmsg(2053) ;* Invalid print unit number
+            end
+         case index.name = ''
+            index.name = token
+         case 1
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end case
+   repeat
+
+   * With only the file name, the summary of every index; STATISTICS is what a named index shows if no mode is given.
+   if index.name # '' and not(stats) and not(detail) then stats = @true
+
+   ak.names = indices(data.f)
+   num.aks = dcount(ak.names, @fm)
+   if num.aks = 0 then
+      print on lptr sysmsg(2603)  ;* File has no indices
+      @system.return.code = 0
+      stop
+   end
+
+   if index.name # '' then
+      locate index.name in ak.names<1> setting pos else
+         s = downcase(index.name)
+         locate s in ak.names<1> setting pos else
+            s = upcase(index.name)
+            locate s in ak.names<1> setting pos else
+               stop sysmsg(2604, index.name)  ;* Unrecognised index name (xx)
+            end
+         end
+         index.name = ak.names<pos>
+      end
+   end
+
+   if lptr >= 0 then
+      if lptr = 0 then printer on
+   end
+   if nopage then page.state = kernel(K$PAGINATE, @false)
+
+   @system.return.code = 0
+
+   if index.name = '' then
+      print on lptr sysmsg(12311, filename)  ;* Analysis of the indices of file %1
+      print on lptr ''
+      print on lptr sysmsg(12312)            ;* Index name...... Indexed values  Most records for a value
+      for i = 1 to num.aks
+         name = ak.names<i>
+         gosub scan.index
+         if len(name) > 16 then
+            print on lptr name
+            print on lptr space(18) : fmt(key.count, '14R') : fmt(max.targets, '22R')
+         end else
+            print on lptr fmt(name, '18L') : fmt(key.count, '14R') : fmt(max.targets, '22R')
+         end
+      next i
+   end else
+      name = index.name
+      print on lptr sysmsg(12313, name, filename)  ;* Index %1 of file %2
+      print on lptr ''
+      gosub scan.index
+      if detail then
+         print on lptr sysmsg(2625)  ;* Records...  Key value......................................................
+         for i = 1 to dcount(detail.lines, @fm)
+            print on lptr detail.lines<i>
+         next i
+         print on lptr ''
+      end
+      if stats then
+         if min.targets > max.targets then min.targets = 0
+         avg = if key.count = 0 then 0 else target.count / key.count
+         print on lptr sysmsg(2626)  ;* Index entries      Key values     Min Recs       Avg Recs       Max Recs
+         line = fmt(target.count, '13R') : '   ' : fmt(key.count, '13R') : '   ' : fmt(min.targets, '10R') : '   '
+         line := fmt(avg, '12R') : '   ' : fmt(max.targets, '12R')
+         print on lptr line
+         print on lptr ''
+         print on lptr sysmsg(12314)  ;* Records for a value   Values
+         for i = 1 to dcount(bucket.lines, @fm)
+            print on lptr bucket.lines<i>
+         next i
+      end
+   end
+
+   if nopage then page.state = kernel(K$PAGINATE, page.state)
+   if lptr >= 0 then printer close on lptr
+   stop
+
+* ======================================================================
+* scan.index - the indexed values of NAME and how many records each points at.  Sets key.count, target.count,
+* min.targets, max.targets, detail.lines (one per value, when DETAIL was asked for) and buckets (the histogram lines).
+scan.index:
+   key.count = 0
+   target.count = 0
+   min.targets = 2147483647
+   max.targets = 0
+   detail.lines = ''
+   dist = ''                 ;* number of values holding 1, 2-3, 4-7, ... records
+   selectindex name from data.f to 10
+   loop
+      readnext key from 10 else exit
+      selectindex name, key from data.f to 11
+      n = @selected
+      key.count += 1
+      target.count += n
+      if n < min.targets then min.targets = n
+      if n > max.targets then max.targets = n
+      if detail then detail.lines<-1> = fmt(n, '10R') : '  ' : key
+      b = 1
+      lim = 1
+      loop
+      while n > lim * 2 - 1
+         lim = lim * 2
+         b += 1
+      repeat
+      dist<b> = dist<b> + 1
+   repeat
+   clearselect 10
+   clearselect 11
+   bucket.lines = ''
+   lim = 1
+   for b = 1 to dcount(dist, @fm)
+      hi = lim * 2 - 1
+      if lim = hi then range = lim else range = lim : ' to ' : hi
+      if dist<b> + 0 > 0 then bucket.lines<-1> = fmt(range, '14R') : fmt(dist<b> + 0, '10R')
+      lim = lim * 2
+   next b
+   return
+
+end
+
+* END-CODE

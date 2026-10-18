@@ -458,6 +458,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"WRITELIST":@fm:"MOVELIST":@fm:"MOVELISTV"   ;* 15 Oct 26 dm - QM4 gaps Q-2 (at the end, so that no other entry moves)
    statements := @fm:"REVREMOVE":@fm:"GROUPSTORE":@fm:"TTYSET":@fm:"SEND"    ;* 15 Oct 26 dm - QM4 gaps Q-1, Q-5, Q-7 (same)
    statements := @fm:"OSREAD":@fm:"OSWRITE":@fm:"OSDELETE"                    ;* 15 Oct 26 dm - QM4 gaps Q-4 (same)
+   statements := @fm:"SET.TIMEZONE":@fm:"KEEP.SELECT":@fm:"MATWRITECSV"       ;* 15 Oct 26 dm - QM4 gaps Q-3, Q-16, Q-4 (same)
 
    * Statements which do not generate DEBUG calls when debugging
 
@@ -565,6 +566,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "DATE"            ; intrinsic.opcodes<-1> = OP.DATE
    intrinsics<-1> = "DCOUNT"          ; intrinsic.opcodes<-1> = OP.DCOUNT
    intrinsics<-1> = "DELETE"          ; intrinsic.opcodes<-1> = OP.DEL
+   intrinsics<-1> = "DIGEST"          ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - QM4 gaps Q-13
    intrinsics<-1> = "DIR"             ; intrinsic.opcodes<-1> = OP.DIR
    intrinsics<-1> = "DIV"             ; intrinsic.opcodes<-1> = OP.QUOTIENT
    intrinsics<-1> = "DIVS"            ; intrinsic.opcodes<-1> = OP.DIVS   ;* 11 Oct 26 dm - openQM 207
@@ -2407,7 +2409,10 @@ is.statement:
                  st.send,
                  st.osread,                    ;* 15 Oct 26 dm - QM4 gaps Q-4
                  st.oswrite,
-                 st.osdelete
+                 st.osdelete,
+                 st.settimezone,               ;* 15 Oct 26 dm - QM4 gaps Q-3
+                 st.keepselect,                ;* 15 Oct 26 dm - QM4 gaps Q-16
+                 st.matwritecsv                ;* 15 Oct 26 dm - QM4 gaps Q-4
          end else
             locate u.token.string in non.debug.statements<1> setting i then
                on i gosub st.class,      ;* CLASS
@@ -4202,6 +4207,7 @@ end
                       in.none,        ;* DATE
                       in.two,         ;* DCOUNT
                       in.delete,      ;* DELETE
+                      in.xfun,        ;* DIGEST
                       in.one,         ;* DIR
                       in.two,         ;* DIV
                       in.two,         ;* DIVS
@@ -4447,6 +4453,7 @@ xfun.table.load:
             xfun.rows := @fm:"LAST,13,2,,0":@fm:"LASTS,13,2,,1":@fm:"NV,14,1,0,0":@fm:"NS,15,1,,0"
             xfun.rows := @fm:"TRIMWS,16,1,,1":@fm:"MATCHESS,17,2,,1":@fm:"MATCHFIELDS,18,3,,1"
             xfun.rows := @fm:"BOOL,21,1,,0":@fm:"IS.NULL,22,1,,0":@fm:"NUMERIC,23,1,,0":@fm:"SIGNAL,25,1,,0"
+            xfun.rows := @fm:"DIGEST,26,3,,0"   ;* 15 Oct 26 dm - QM4 gaps Q-13
             for xf.j = 1 to dcount(xfun.rows, @fm)
                xf.row = xfun.rows<xf.j>
                xfun.names<xf.j> = field(xf.row, ',', 1)
@@ -9456,6 +9463,69 @@ st.osdelete:
    sys.call.n = 1
    gosub emit.sys.call.end
    return
+
+*****************************************************************************
+* ST.SETTIMEZONE  -  SET.TIMEZONE zone     (15 Oct 26 dm, QM4 gaps Q-3)
+*
+* A call of the catalogued subroutine !settz, which sets the private configuration parameter TIMEZONE: the zone the epoch
+* functions MVDATE, MVTIME, MVDATE.TIME and MVEPOCH convert in.  STATUS() says 2 when the zone is not one this machine has.
+
+st.settimezone:
+   s = '!settz'
+   gosub emit.direct.call.reference
+   gosub expr                           ;* The zone name
+   sys.call.n = 1
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.KEEPSELECT  -  KEEP.SELECT     (15 Oct 26 dm, QM4 gaps Q-16)
+*
+* A call of the catalogued subroutine !keepselect, which tells the command processor that the list this program leaves in
+* list 0 is meant to be left: with OPTION CLEAR.SELECT the processor then does not clear it when the command ends.
+
+st.keepselect:
+   s = '!keepselect'
+   gosub emit.direct.call.reference
+   sys.call.n = 0
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.MATWRITECSV  -  MATWRITECSV mat TO file.var THEN / ELSE     (15 Oct 26 dm, QM4 gaps Q-4)
+*
+* One CSV line of the matrix's elements, written with WRITESEQ to a file opened with OPENSEQ.  The elements are built onto
+* the stack as MATWRITE does, the file variable and the delimiter CSV.MODE has set are given to the catalogued function
+* !matwritecsv, which puts each element through FORMCSV, joins them and writes the line; its 1 or 0 is what THEN and ELSE
+* test.  Because the file was opened by OPENSEQ, the OS-access gate was asked there.  The ENCODING clause and ON ERROR are
+* not supported: SD has no character encodings of files, and a failed write takes ELSE.
+
+st.matwritecsv:
+   s = '!matwritecsv'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub get.token                      ;* The matrix
+   symbol.name = token.string
+   gosub find.var
+   if (symbol.var.no < 0) or (symbol.dim = 0) then
+      err.msg = sysmsg(2931) ;* Dimensioned matrix required
+      goto error
+   end
+   gosub emit.var.load
+   n = 0                     ; gosub emit.numeric.load
+   n = 0                     ; gosub emit.numeric.load
+   opcode.string = @fm       ; gosub emit.string.load
+   opcode.byte = OP.MATBUILD ; gosub emit.simple
+   gosub emit.var.load                           ;* the matrix again, for its size: MATBUILD leaves off the trailing null elements
+   opcode.byte = OP.INMATA ; gosub emit.simple   ;* rows, or rows and columns joined by a value mark
+   if u.look.ahead.token.string # "TO" and u.look.ahead.token.string # "ON" then goto err.to.on
+   gosub get.token                      ;* TO / ON
+   gosub expr                           ;* The file variable
+   opcode.byte = OP.CSVDELIM ; gosub emit.simple
+   sys.call.n = 5                       ;* the return argument, the elements, their number, the file and the delimiter
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end
 
 *****************************************************************************
 * ST.REVREMOVE  -  REVREMOVE string FROM dyn.array SETTING code     (15 Oct 26 dm, QM4 gaps Q-1)

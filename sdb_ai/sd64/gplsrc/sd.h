@@ -182,7 +182,7 @@ OSFILE dio_open(char * fn, int mode);
 bool GetConfigPath(char * inipath);
 
 /* KERNEL.C */
-int16_t assign_user_no(int16_t user_table_index);
+int16_t assign_user_no(int16_t user_table_index, bool interactive);
 bool init_kernel(void);
 int16_t in_group(char * name);
 char * account(void);

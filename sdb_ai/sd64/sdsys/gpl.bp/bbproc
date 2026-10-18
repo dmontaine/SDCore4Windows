@@ -25,6 +25,7 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): login_inhibit joins the bootstrap list: LOGIN calls it (QM4 gaps Q-8, INHIBIT.LOGIN).
 * 19 Aug 26 Windows port - $include gpl.bp, the VOC id having moved.  5.12 (b).
 * 19 Aug 26 Windows port - the bootstrap now CREATES the SDSYS files in lower
 *           case - voc, accounts.dic, $hold.dic, $map, $map.dic, $ipc, dict.dic,
@@ -256,6 +257,10 @@ src.list<-1> = 'IS_GRP_MEMBER'
 *   '!ACC_HOLD' object code in $LOGIN" without it - and sd exited 0.  ACC_HOLD
 *   calls no catalogued routine, so the chain ends here.
 src.list<-1> = 'ACC_HOLD'
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): INHIBIT.LOGIN: LOGIN calls !login_inhibit on every entry, for the
+*   same reason as !acc_hold (the bootstrap's own SECOND.COMPILE session included).  LOGIN_INHIBIT calls no catalogued
+*   routine, so the chain ends here.
+src.list<-1> = 'LOGIN_INHIBIT'
 src.list<-1> = 'TERM'
 
 src.cnt = dcount(src.list,@FM) 

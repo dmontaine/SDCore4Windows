@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): op_epochcv converts in the TIMEZONE of the process when one was set (QM4 gaps Q-3, SET.TIMEZONE).
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): op_strovl and op_roll3 for the $MODE options of QM4 gaps bundle Q-16
  * 14 Sep 26 Windows port - op_procread looks for $proc, lower case
  *           (RELEASE_1.1 5 stage 3a)
@@ -1284,6 +1285,9 @@ void op_epochcv() {
   time_t t;
   struct tm tmv;
   char result[32];
+  char saved_tz[80];  /* the TZ the process had, while TIMEZONE is in force */
+  bool had_tz = FALSE;
+  bool zoned = FALSE;
 
   mode_descr = e_stack - 1;
   arg2_descr = e_stack - 2;
@@ -1292,6 +1296,22 @@ void op_epochcv() {
   GetInt(mode_descr);
   mode = mode_descr->data.value;
   result[0] = '\0';
+
+  /* 15 Oct 26 dm - QM4 gaps Q-3, SET.TIMEZONE / CONFIG TIMEZONE: convert in that zone, then put the process's own back.
+     Only these functions are affected; DATE(), TIME() and the clock keep the zone the process runs in.  The name was
+     checked when it was set (timezone_name_ok in op_config.c).                                                      */
+  if (pcfg.timezone[0] != '\0') {
+    const char* old_tz = getenv("TZ");
+
+    if (old_tz != NULL) {
+      strncpy(saved_tz, old_tz, sizeof(saved_tz) - 1);
+      saved_tz[sizeof(saved_tz) - 1] = '\0';
+      had_tz = TRUE;
+    }
+    setenv("TZ", pcfg.timezone, 1);
+    tzset();
+    zoned = TRUE;
+  }
 
   if (mode <= 3) { /* From an epoch value */
     char text[32];
@@ -1354,6 +1374,14 @@ void op_epochcv() {
           sprintf(result, "%lld", (long long)t);
       }
     }
+  }
+
+  if (zoned) {
+    if (had_tz)
+      setenv("TZ", saved_tz, 1);
+    else
+      unsetenv("TZ");
+    tzset();
   }
 
   k_pop(3);

@@ -1,0 +1,56 @@
+* MATWRITECSV
+* MATWRITECSV statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-4 (MATWRITECSV).  The compiler (bcomp, st.matwritecsv) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* ok = !MATWRITECSV(data, count, f, delim)
+*
+* DATA is the elements of the matrix, field mark delimited, as MATBUILD makes them, and COUNT the matrix's size as INMAT(matrix)
+* gives it (MATBUILD leaves trailing null elements off the string).  Each element goes through FORMCSV (so a
+* value with the delimiter, a double quote or a line break is quoted), the elements are joined with DELIM (what CSV.MODE gave,
+* a comma as a rule) and the line is written with WRITESEQ to F.  Gives 1 if it was written and 0 if the write failed.  $INTERNAL
+* only because FORMCSV is; the file was opened by OPENSEQ in the caller, where the OS-access gate was asked.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function matwritecsv(data, count, f, delim)
+$catalog !matwritecsv
+
+   * MATBUILD leaves the trailing null elements off, so the number of elements comes from the matrix's size (COUNT, what
+   * INMAT(matrix) gives: the rows, or the rows and the columns joined by a value mark), not from the string
+   rows = field(count, @vm, 1) + 0
+   cols = field(count, @vm, 2) + 0
+   if cols < 1 then cols = 1
+   n = rows * cols
+   if n < 1 then n = 1                   ;* a matrix of one element that is null
+   line = ''
+   for i = 1 to n
+      if i > 1 then line := delim
+      line := formcsv(data<i>)
+   next i
+   writeseq line to f then return 1 else return 0
+end
+
+* END-CODE

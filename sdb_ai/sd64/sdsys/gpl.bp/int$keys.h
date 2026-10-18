@@ -210,6 +210,10 @@
       $define K$INPUT.TRAP.TEST 103      ;* _INPUTAT: is this typed character trapped by the caller's INPUTTRAP?
       $define K$INPUT.TRAP.HIT  104      ;* the stub of INPUTTRAP: which label, and forget it
       $define K$MAXMIN.POS.SET  105      ;* _MAXIMUM and _MINIMUM leave the position they found, for SYSTEM(1088) (15 Oct 26, Q-18)
+      $define K$PID.ALIVE       106      ;* 1 if the process with this id exists, 0 if not (15 Oct 26, Q-8, !login_inhibit)
+      $define K$KEEP.SELECT     107      ;* KEEP.SELECT flag of the running command: 1 set, 0 clear, -1 ask; the old value returns (15 Oct 26, Q-16)
+      $define K$CMDLOG          108      ;* COMMAND.LOGGING: 1 on, 0 off, -1 ask; the log's pathname when it is on, else null (15 Oct 26, Q-8)
+      $define K$CMDLOG.WRITE    109      ;* "origin<FM>command": one line in the command log if it is on (15 Oct 26, Q-8)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?
@@ -490,6 +494,7 @@
       $define FC$NON.TXN               4 ;* Set open file as non-transactional
       $define FC$SPLIT.MERGE           5 ;* Force split/merge
       $define FC$NO.RESIZE             6 ;* Set DHF_NO_RESIZE flag
+      $define FC$SET.MODE              7 ;* Set the permission bits of a record of a directory file: "id<FM>ooo" (15 Oct 26, Q-8)
 
 
 

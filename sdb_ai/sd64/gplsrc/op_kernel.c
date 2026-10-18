@@ -34,6 +34,8 @@
  * START-CODE
  */
 
+#include <time.h>
+#include <unistd.h>
 #include "sd.h"
 #include "revstamp.h"
 #include "header.h"
@@ -68,11 +70,13 @@ Public bool case_sensitive;
    signature change for PRE_RELEASE_FIXES.md 96 and three private copies of a
    prototype are three places for one to be missed.                         */
 bool recover_users(void);
+bool pid_is_alive(int pid);
 void set_date(int32_t);
 
 #define INPUT_FILL_MAX 3
 Private char input_fill[INPUT_FILL_MAX + 1] = ""; /* K_INPUT_FILL_SET / _GET (sheet item 389) */
-Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */Private bool run_exe(char *exe_name, char *cmd_line);
+Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */
+Private bool run_exe(char *exe_name, char *cmd_line);
 
 /* ======================================================================
    op_kernel()  -  KERNEL()  -  Miscellaneous kernel functions            */
@@ -852,6 +856,103 @@ void op_kernel() {
       result.data.value = recover_users();
       break;
 
+    /* 15 Oct 26 dm - QM4 gaps Q-8.  Is the process with this id still there?  (The user table keeps a killed session's
+       slot until "sd -cleanup", so INHIBIT.LOGIN's setter is judged by the process, not by the table.)  1 or 0.        */
+    case K_PID_ALIVE:
+      GetInt(descr);
+      result.data.value = pid_is_alive((int)(descr->data.value));
+      break;
+
+    /* 15 Oct 26 dm - QM4 gaps Q-8, COMMAND.LOGGING.  See keys.h.  The file is the user's own (mode 0600), and is opened
+       with O_NOFOLLOW so that a link left in its place is not written through. */
+    case K_CMDLOG: {
+      char* cl_dir;
+      char cl_name[MAX_PATHNAME_LEN + 1];
+      char cl_cwd[MAX_PATHNAME_LEN + 1];
+      int cl_fd;
+
+      GetInt(descr);
+      n = descr->data.value;
+      if (n == 0) {
+        cmdlog_path[0] = '\0';
+      } else if ((n > 0) && (cmdlog_path[0] == '\0')) {
+        /* The account directory, never TEMPDIR: that is /tmp unless sd.conf says otherwise (config.c fills it in), a
+           directory every user can write to, where another user could make the file first and be handed the log. */
+        if (getcwd(cl_cwd, sizeof(cl_cwd)) == NULL)
+          cl_cwd[0] = '\0';
+        cl_dir = cl_cwd;
+        if ((cl_dir[0] != '\0') &&
+            (snprintf(cl_name, sizeof(cl_name), "%s%cclog.%d.log", cl_dir, DS, (int)process.user_no) < (int)sizeof(cl_name))) {
+          cl_fd = open(cl_name, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_CLOEXEC, 0600);
+          if (cl_fd >= 0) {
+            close(cl_fd);
+            strcpy(cmdlog_path, cl_name);
+          }
+        }
+      }
+      k_put_c_string(cmdlog_path, &result);
+    } break;
+
+    case K_CMDLOG_WRITE: {
+      char cw_line[4200];
+      char cw_cmd[4096 + 1];
+      int cw_n;
+      int cw_fd;
+      char* cw_p;
+      char* cw_origin;
+      char* cw_command;
+
+      result.data.value = 0;
+      if (cmdlog_path[0] != '\0') {
+        if (k_get_c_string(descr, cw_cmd, (int)sizeof(cw_cmd) - 1) < 0)
+          cw_cmd[0] = '\0';
+        cw_p = strchr(cw_cmd, FIELD_MARK); /* origin, then the command */
+        if (cw_p != NULL) {
+          *cw_p++ = '\0';
+          cw_origin = cw_cmd;
+          cw_command = cw_p;
+        } else {
+          cw_origin = "";
+          cw_command = cw_cmd;
+        }
+        {
+          char* q;
+
+          for (q = cw_command; *q != '\0'; q++) { /* one line per command: control characters become spaces */
+            if (((u_char)*q < 32) || ((u_char)*q == 127))
+              *q = ' ';
+          }
+          for (q = cw_origin; *q != '\0'; q++) {
+            if (((u_char)*q < 32) || ((u_char)*q == 127))
+              *q = ' ';
+          }
+        }
+        cw_n = snprintf(cw_line, sizeof(cw_line), "%ld\t%d\t%s\t%s\t%s\n", (long)time(NULL), (int)process.user_no,
+                        (char*)(my_uptr->username), cw_origin, cw_command);
+        if (cw_n > 0) {
+          if (cw_n > (int)sizeof(cw_line) - 1) {
+            cw_n = (int)sizeof(cw_line) - 1;
+            cw_line[cw_n - 1] = '\n';
+          }
+          cw_fd = open(cmdlog_path, O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC);
+          if (cw_fd >= 0) {
+            if (write(cw_fd, cw_line, (size_t)cw_n) == (ssize_t)cw_n)
+              result.data.value = 1;
+            close(cw_fd);
+          }
+        }
+      }
+    } break;
+
+    /* 15 Oct 26 dm - QM4 gaps Q-16.  The KEEP.SELECT flag: set by the statement (!keepselect), cleared and read by CPROC. */
+    case K_KEEP_SELECT:
+      GetInt(descr);
+      n = descr->data.value;
+      result.data.value = keep_select ? 1 : 0;
+      if (n >= 0)
+        keep_select = (n != 0);
+      break;
+
     case K_OBJKEY:
       result.data.value = object_key;
       break;
@@ -1125,7 +1226,7 @@ void op_phantom() {
     uptr = UPtr(i);
     if (uptr->uid == 0) /* Spare cell */
     {
-      phantom_uid = assign_user_no(i);
+      phantom_uid = assign_user_no(i, FALSE);
       uptr->uid = phantom_uid;
       uptr->puid = process.user_no;
       strcpy((char *)(uptr->username), (char *)(my_uptr->username));

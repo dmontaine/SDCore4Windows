@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): pid_is_alive(): process_exists() for kernel(K_PID_ALIVE) (QM4 gaps Q-8, INHIBIT.LOGIN).
  * 18 Sep 26 Windows port - RELEASE_1.1 60: the two username copies out of the
  *                      shared segment are bounded.  The segment is writable by
  *                      every SD user by design and nothing terminates that
@@ -436,6 +437,13 @@ void suspend_resume(bool suspend) {
 
 Private bool process_exists(int pid) {
   return (!kill(pid, 0) || (errno == EPERM));
+}
+
+/* 15 Oct 26 dm - QM4 gaps Q-8, K_PID_ALIVE: the same liveness test as cleanup(), for a BASIC program that holds a session's
+   process id (!login_inhibit).  A session that was killed leaves its user table slot behind until "sd -cleanup" or LOGOUT
+   reaps it, so "the table has an entry with that number and process id" is not enough to call the session alive.        */
+bool pid_is_alive(int pid) {
+  return (pid > 0) && process_exists(pid);
 }
 
 /* ====================================================================== */

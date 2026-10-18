@@ -1,0 +1,104 @@
+* FINDFILE
+* FIND.FILE verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-8 (FIND.FILE).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   FIND.FILE {DICT} filename
+*
+* Opens the file and reports what it is: its type (a dynamic hashed file with its group size and modulus, or a directory
+* file), its pathname, and the things that matter when a file does not behave as expected - record ids that ignore case,
+* indices, triggers, read only.  If the file cannot be opened the reason is shown.  It opens the file the way any
+* program would, so what an account may reach is what its own VOC and the OS-access gate allow.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program find.file
+$catalog $findfile
+
+$include parser.h
+$include err.h
+$include int$keys.h
+$include keys.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   call !parser(parser$reset, 0, @sentence, 0)
+   call !parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   name = ''
+   dict = @false
+   loop
+      call !parser(parser$get.token, token.type, token, keyword)
+   while token.type # PARSER$END
+      begin case
+         case upcase(token) = 'DICT' and name = '' and not(dict)
+            dict = @true
+         case name = ''
+            name = token
+         case 1
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end case
+   repeat
+   if name = '' then stop sysmsg(2013) ;* Invalid file name
+
+   read vrec from @voc, name else
+      @system.return.code = ER$NOT.FOUND
+      stop sysmsg(2014, name) ;* %1 is not defined in your VOC
+   end
+
+   if dict then
+      open 'DICT', name to f else
+         @system.return.code = status()
+         stop sysmsg(2012) ;* Cannot open dictionary
+      end
+   end else
+      open name to f else
+         @system.return.code = status()
+         stop sysmsg(2017, status()) ;* Error %d opening file
+      end
+   end
+
+   @system.return.code = 0
+   type = fileinfo(f, FL$TYPE)
+   begin case
+      case type = FL$TYPE.DH
+         display sysmsg(12299, fileinfo(f, FL$GRPSIZE), fileinfo(f, FL$MODULUS)) ;* Dynamic hashed file, group size %1, modulus %2
+      case type = FL$TYPE.DIR
+         display sysmsg(12300) ;* Directory file
+      case 1
+         display sysmsg(12306, type) ;* File of type %1
+   end case
+   display sysmsg(12301, fileinfo(f, FL$PATH)) ;* Pathname: %1
+
+   if fileinfo(f, FL$NOCASE) then display sysmsg(12302) ;* File uses case insensitive record ids
+   if fileinfo(f, FL$AK) then display sysmsg(12303) ;* File has indices
+   trg = fileinfo(f, FL$TRIGGER)
+   if trg # '' then display sysmsg(12304, trg) ;* File has trigger %1
+   if fileinfo(f, FL$READONLY) then display sysmsg(12305) ;* File is read only
+   close f
+
+end
+
+* END-CODE

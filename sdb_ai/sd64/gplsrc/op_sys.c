@@ -877,6 +877,11 @@ void op_system() {
       }
       break;
 
+    case 20: /* The number of print jobs passed to the operating system spooler since SD started, all sessions: the last job's
+                reference as a count.  (The spooler's own job id is not read back: a site's spooler is whatever it names.) */
+      descr->data.value = (int32_t)__atomic_load_n(&sysseg->print_jobs, __ATOMIC_SEQ_CST);
+      break;
+
     case 21: /* A value from the internal date and a sequence number that starts again at 1 each day, as two five digit numbers */
       {
         int32_t today = (int32_t)(sdtime() / 86400);

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab add CREATUSR allow create.account to create os user
  * 16 Aug 26 Windows port - CREATUSR removed.  config('CREATUSR') now takes
@@ -37,6 +38,39 @@
 
 #include "sd.h"
 #include "config.h"
+
+#define ZONEINFO_DIR "/usr/share/zoneinfo/"
+
+/* ======================================================================
+   timezone_name_ok()  -  may this be the TIMEZONE of the epoch functions?
+
+   A null string (back to the process's own TZ), GMT, UTC, or a name for which the machine has a zoneinfo file.  Only
+   letters, digits and the characters of zone names are allowed, there is no ".." and no leading "/" or "-", so the name
+   cannot reach a file outside the zoneinfo directory, and a POSIX rule string is not taken at all (it would be passed to
+   the C library as TZ, which reads a file if the value begins with a colon).                                         */
+
+Private bool timezone_name_ok(const char* zone) {
+  char path[sizeof(ZONEINFO_DIR) + 64 + 1];
+  struct stat st;
+  const char* p;
+
+  if (zone[0] == '\0')
+    return TRUE;
+  if (strlen(zone) > sizeof(pcfg.timezone) - 1)
+    return FALSE;
+  if (zone[0] == '/' || zone[0] == '-' || zone[0] == '.' || strstr(zone, "..") != NULL)
+    return FALSE;
+  for (p = zone; *p != '\0'; p++) {
+    if (!(((*p >= 'A') && (*p <= 'Z')) || ((*p >= 'a') && (*p <= 'z')) || ((*p >= '0') && (*p <= '9')) || (*p == '_') ||
+          (*p == '+') || (*p == '-') || (*p == '/')))
+      return FALSE;
+  }
+  if (!strcmp(zone, "GMT") || !strcmp(zone, "UTC"))
+    return TRUE;
+  strcpy(path, ZONEINFO_DIR);
+  strcat(path, zone);
+  return (stat(path, &st) == 0) && S_ISREG(st.st_mode);
+}
 
 /* ======================================================================
    op_config()  -  Retrieve a configuration parameter                     */
@@ -207,8 +241,17 @@ void op_config() {
     k_put_c_string(pcfg.tempdir, &result);
   else if (!strcmp(param, "TERMINFO"))
     k_put_c_string(pcfg.terminfodir, &result);
+  else if (!strcmp(param, "TIMEZONE")) {
+    /* 15 Oct 26 dm - QM4 gaps Q-3.  The zone the epoch functions convert in: the one SET.TIMEZONE or CONFIG TIMEZONE gave,
+       otherwise the process's own TZ environment variable (null when neither is set: the system's local time).      */
+    char* tz = (pcfg.timezone[0] != '\0') ? pcfg.timezone : getenv("TZ");
+
+    k_put_c_string((tz != NULL) ? tz : "", &result);
+  }
   else if (!strcmp(param, "USERPOOL"))
     result.data.value = sysseg->userpool;
+  else if (!strcmp(param, "USPLIT"))
+    result.data.value = sysseg->usplit; /* 15 Oct 26, QM4 gaps Q-19 */
  /* 20240219 mab create-account based on type (user / group / other) */
   else if (!strcmp(param, "USRDIR"))
     k_put_c_string(pcfg.usrdir, &result);
@@ -438,6 +481,17 @@ void op_pconfig() {
     if (str->string_len > MAX_PATHNAME_LEN)
       goto exit_op_pconfig;
     k_get_c_string(descr, pcfg.terminfodir, MAX_PATHNAME_LEN);
+  } else if (!strcmp(param, "TIMEZONE")) {
+    /* 15 Oct 26 dm - QM4 gaps Q-3.  Unlike openQM, which does no validation, the name must be a zone this machine has
+       (a file under the zoneinfo directory, or GMT / UTC), so that a mistyped zone is an error and not a quiet UTC.  A
+       null string goes back to the process's own TZ.                                                              */
+    char zone[sizeof(pcfg.timezone)];
+
+    if (k_get_c_string(descr, zone, (int)sizeof(zone) - 1) < 0)
+      goto exit_op_pconfig;
+    if (!timezone_name_ok(zone))
+      goto exit_op_pconfig;
+    strcpy(pcfg.timezone, zone);
   } else if (!strcmp(param, "YEARBASE")) {
     GetInt(descr);
     n = descr->data.value;

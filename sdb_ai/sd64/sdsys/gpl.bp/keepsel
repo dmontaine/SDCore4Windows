@@ -1,0 +1,46 @@
+* KEEPSEL
+* KEEP.SELECT statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-16 (KEEP.SELECT).  The compiler (bcomp, st.keepselect) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !KEEPSELECT
+*
+* Sets the KEEP.SELECT flag of the command now running.  With OPTION CLEAR.SELECT the command processor clears list 0 at
+* the end of a command that found the list active (CPROC); a program that means to leave what is left of it says so with
+* KEEP.SELECT and the list stays.  Without CLEAR.SELECT the statement does nothing, as the manual says.  The flag is
+* cleared as each outermost command starts.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine keepsel
+$catalog !keepselect
+
+$include int$keys.h
+
+   void kernel(K$KEEP.SELECT, 1)
+   return
+end
+
+* END-CODE

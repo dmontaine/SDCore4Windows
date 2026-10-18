@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  A new session is refused (12286) while the administrator has logins
+*           inhibited, unless it is the administrator, the setter or the setter's phantom; !login_inhibit decides.
 * 06 Oct 26 Windows port - a terminal session granted SDSYS prints one line, 12012,
 *           "SD administration granted: ...", as SD Core for Linux's does (its 10916;
 *           parity audit).  Not compiled: login cannot be compiled under bbcmp.
@@ -546,6 +548,14 @@ deffun pw_complex(pw) calling '!pw_complex'
      if hold.err # '' then
         display sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
         audit.reason = 'a backup or restore is running'
+        goto terminate.connection
+     end
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): - INHIBIT.LOGIN (QM4 gaps Q-8): the administrator's switch.  Refused unless this is the administrator,
+*   the session that set it or a phantom it started; a setter that has gone is ignored.  !login_inhibit decides.
+     call !login_inhibit('TEST', inhibit.info, inhibit.err)
+     if inhibit.err # '' then
+        display sysmsg(inhibit.err<1,1>, inhibit.err<1,2>, inhibit.err<1,3>)
+        audit.reason = 'logins are inhibited (inhibit.login)'
         goto terminate.connection
      end
   end

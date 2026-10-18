@@ -1,0 +1,44 @@
+* SETTZ
+* SET.TIMEZONE statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-3 (SET.TIMEZONE).  The compiler (bcomp, st.settimezone) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !SETTZ(zone)
+*
+* Sets the private configuration parameter TIMEZONE of this process, the zone the epoch functions MVDATE(), MVTIME(),
+* MVDATE.TIME() and MVEPOCH() use.  Equivalent to CONFIG TIMEZONE zone.  A null string goes back to the process's own TZ.
+* A zone this machine does not have is refused and leaves the setting as it was: STATUS() is 2, as for a refused CONFIG.
+* ($internal because PCONFIG is: a user program reaches it only through the SET.TIMEZONE statement.)
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine settz(zone)
+$catalog !settz
+
+   if pconfig('TIMEZONE', zone) then null
+   return
+end
+
+* END-CODE

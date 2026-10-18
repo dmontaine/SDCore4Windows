@@ -1,0 +1,154 @@
+* LOGIN_INHIBIT
+* The login inhibit of INHIBIT.LOGIN (openQM 4, QM4 gaps bundle Q-8).
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-8 (INHIBIT.LOGIN).  A SEPARATE RECORD FROM THE BACKUP LOGIN HOLD
+*               (!acc_hold, which is shared with the Windows port byte for byte): the two are different things - a
+*               backup holds the door for every session including the administrator's, this one is the
+*               administrator's switch and leaves the administrator able to switch it off.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !login_inhibit(mode, info, err)
+*
+*    TEST   for LOGIN and the API server.  err 12286 (with the setter's name) when a live inhibit is set and this
+*           session is not allowed past it: not the setter, not a phantom the setter started, not the administrator.
+*    SET    administrator only (err 2001 otherwise).  err 12287 when a LIVE inhibit is held by another session.
+*    CLEAR  administrator only.  Any administrator session may clear it, the setter's or not (the owner's yes of
+*           15 Oct 2026: SDSYS must be able to switch it off from a new session if the first terminal is lost).
+*    STATE  info is the hold record when a live inhibit is set, null otherwise.
+*
+*    THE HOLD is the record login.inhibit in SDSYS's directory: <1> userno <2> pid <3> logname <4> date <5> time.
+*    A hold whose holder has no user-table entry with that userno AND that pid, or whose process is not there, is STALE
+*    and ignored (and replaced by the next SET), so a session that died, or was killed, cannot lock everybody out.  The
+*    process test (K$PID.ALIVE) matters: a killed session keeps its user-table row until "sd -cleanup" reaps it.
+*    Reading it is a plain record read: LOGIN takes no lock and needs only read access to SDSYS.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine login_inhibit(mode, info, err)
+$catalog !login_inhibit
+
+$include int$keys.h
+
+$define INHIBIT.ID 'login.inhibit'       ;* in @sdsys
+
+   info = ''
+   err = ''
+   mode = upcase(mode)
+
+   * This session's own row in the user table: its process id, its parent (a phantom's starter) and its flags.
+   users = kernel(K$USERS, 0)
+   n.users = dcount(users, @fm)
+   my.pid = ''
+   my.puid = ''
+   my.flags = 0
+   for i = 1 to n.users
+      if users<i,K$USERS.UID> = @userno then
+         my.pid = users<i,K$USERS.PID>
+         my.puid = users<i,K$USERS.PUID>
+         my.flags = users<i,K$USERS.FLAGS> + 0
+      end
+   next i
+
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+
+   openpath @sdsys to sys.f else
+      err = 13003:@vm:@sdsys:@vm:status() ;* Cannot write %1 (status %2)
+      return
+   end
+
+   begin case
+      case mode = 'TEST'
+         read hold from sys.f, INHIBIT.ID then
+            gosub hold.is.live
+            if alive and hold<1> # @userno then
+               allowed = is.admin
+               if not(allowed) and bitand(my.flags, USR$PHANTOM) and my.puid = hold<1> then allowed = @true
+               if not(allowed) then
+                  info = hold
+                  err = 12286:@vm:hold<3> ;* not accepting new sessions: logins inhibited by %1
+               end
+            end
+         end
+
+      case mode = 'SET'
+         if not(is.admin) then
+            err = 2001 ;* Command requires administrator privileges
+         end else
+            read hold from sys.f, INHIBIT.ID then
+               gosub hold.is.live
+               if alive and hold<1> # @userno then
+                  info = hold
+                  err = 12287:@vm:hold<3> ;* logins are already inhibited by %1
+               end
+            end
+            if err = '' then
+               d = date()
+               hold = @userno:@fm:my.pid:@fm:@logname
+               hold<4> = oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R')
+               hold<5> = oconv(time(), 'MTS')
+               write hold to sys.f, INHIBIT.ID on error
+                  err = 13003:@vm:@sdsys:@ds:INHIBIT.ID:@vm:status()
+               end
+               if err = '' then info = hold
+            end
+         end
+
+      case mode = 'CLEAR'
+         if not(is.admin) then
+            err = 2001
+         end else
+            delete sys.f, INHIBIT.ID on error
+               err = 13003:@vm:@sdsys:@ds:INHIBIT.ID:@vm:status()
+            end
+         end
+
+      case mode = 'STATE'
+         read hold from sys.f, INHIBIT.ID then
+            gosub hold.is.live
+            if alive then info = hold
+         end
+
+      case 1
+         err = 2018:@vm:mode   ;* Unexpected token (xx)
+   end case
+
+   close sys.f
+   return
+
+* ======================================================================
+* hold.is.live - is the session that wrote hold still here?  Sets alive.  The user table has a row with its number and
+* process id AND the process exists: a session that was killed keeps its row until "sd -cleanup" reaps it, which is no
+* reason to keep everybody out.
+hold.is.live:
+   alive = @false
+   for i = 1 to n.users
+      if users<i,K$USERS.UID> = hold<1> and users<i,K$USERS.PID> = hold<2> then
+         if kernel(K$PID.ALIVE, hold<2>) then alive = @true
+      end
+   next i
+   return
+
+end
+
+* END-CODE

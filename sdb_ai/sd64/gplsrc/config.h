@@ -56,6 +56,7 @@ struct CONFIG {
   char jnldir[MAX_PATHNAME_LEN+1]; /* JNLDIR:   Journal file directory */
   int16_t lgnwait;                 /* LGNWAIT:  Tenths of a second a login waits for a spare user number */
   int16_t userpool;                /* USERPOOL: Highest user number to allocate; 0 = lowest free number first */
+  int16_t usplit;                  /* USPLIT:   1 = interactive users take the lowest free user number, all other processes the highest (15 Oct 26) */
   int16_t maxidlen;                /* MAXIDLEN: Maximum record id length */
   /* 21 Aug 26 Windows port - NETDIRS: directories outside its own account
      that a network session may reach.  Semicolon separated, because a
@@ -130,6 +131,7 @@ struct PCFG  {
   char spooler[MAX_PATHNAME_LEN+1];     /* SPOOLER: Non-default spooler */
   char tempdir[MAX_PATHNAME_LEN+1];     /* TEMPDIR */
   char terminfodir[MAX_PATHNAME_LEN+1]; /* TERMINFO */
+  char timezone[64+1];                  /* TIMEZONE: the zone the epoch functions use, null = the process's own TZ (15 Oct 26) */
   bool txchar;                          /* TXCHAR */
 /* 20240219 mab create-account based on type (user / group / other) */  
   char usrdir[MAX_PATHNAME_LEN+1];      /* USRDIR:   Parent Directory for user accounts */

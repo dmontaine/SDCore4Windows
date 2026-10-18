@@ -248,6 +248,7 @@ bool bind_sysseg(bool create, char* errmsg) {
   sysseg->api_port = cfg->api_port;                   /* APIPORT */
   strcpy((char*)(sysseg->sysdir), cfg->sysdir);       /* SDSYS */
   sysseg->userpool = cfg->userpool;                   /* USERPOOL */
+  sysseg->usplit = cfg->usplit;                       /* USPLIT */
   sysseg->lgnwait = cfg->lgnwait;                     /* LGNWAIT */
 
   /* Create dynamically sized parts of segment */

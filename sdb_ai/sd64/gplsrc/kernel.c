@@ -157,7 +157,7 @@ retry_login:
     for (i = 1; i <= sysseg->max_users; i++) {
       uptr = UPtr(i);
       if (uptr->uid == 0) {
-        uptr->uid = assign_user_no(i);
+        uptr->uid = assign_user_no(i, !is_sdApiSrvr);
         if (uptr->uid == 0) {
           msg_no = 1023; /* Port is already in use */
           goto abort_login;
@@ -429,7 +429,7 @@ Private void init_program() {
    NOTE: The caller must own the SHORT_CODE semaphore.
    Returns the user number, or zero if clash of fixed port/user           */
 
-int16_t assign_user_no(int16_t user_table_index) {
+int16_t assign_user_no(int16_t user_table_index, bool interactive) {
   int16_t i;
   int16_t hi;
   int16_t portmap_lo_user = 9999;
@@ -438,6 +438,29 @@ int16_t assign_user_no(int16_t user_table_index) {
   int16_t portmap_range;
   int16_t fixusers_lo_user = 9999;
   int16_t fixusers_hi_user;
+
+  /* 15 Oct 26 dm - QM4 gaps Q-19, USPLIT.  Interactive users take the lowest free user number and every other process (a
+     phantom, an API session) the highest free one in the range 1 to NUMUSERS, so the two kinds never meet.  FIXUSERS,
+     PORTMAP and USERPOOL are ignored, as the manual says.  There is always a free number: the caller holds a free
+     user table cell and the table and the number range are the same size.                                           */
+  if (sysseg->usplit) {
+    if (interactive) {
+      for (i = 1; i <= sysseg->max_users; i++) {
+        if (!*(UMap(i)))
+          break;
+      }
+    } else {
+      for (i = sysseg->max_users; i >= 1; i--) {
+        if (!*(UMap(i)))
+          break;
+      }
+    }
+    if ((i >= 1) && (i <= sysseg->max_users)) {
+      *(UMap(i)) = user_table_index;
+      return i;
+    }
+    return 0;
+  }
 
   /* Copy FIXUSERS and PORTMAP related parameters from shared memory
     for best performance                                             */

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-16: KEEP.SELECT.  CLEAR.SELECT does not clear list 0 at the end of a command in which a
+*           program ran KEEP.SELECT (K$KEEP.SELECT, set by !keepselect, cleared as each outermost command starts).
 * 06 Oct 26 Windows port - end of input at the command prompt ends the session
 *            instead of asking for ever (parity audit PAW-9, SD Core for Linux's
 *            guard; unmeasured here - see the comment at the KEYCODE() call).
@@ -1655,8 +1657,24 @@ execute.command:
       * that does not return through the end of this routine leaves the depth
       * raised and so never clears anything, which is the safe way to fail.
       cs.depth += 1
-      if cs.depth = 1 then cs.was.active = selectinfo(0, 1)
+      if cs.depth = 1 then
+         cs.was.active = selectinfo(0, 1)
+         void kernel(K$KEEP.SELECT, 0)    ;* KEEP.SELECT belongs to this command (15 Oct 26, QM4 gaps Q-16)
+      end
       voc.via.k = @false      ;* Set by a K entry that hands over to the V entry in its fields 3 onwards (openQM 263)
+
+      * COMMAND.LOGGING (15 Oct 26 dm, QM4 gaps Q-8): when this session has it on, the command and where it came from go to
+      * the session's own log.  User: typed at the prompt; Cmd: the command line sd was started with; PA: a line of a
+      * paragraph; Exec: any other command run from inside one (EXECUTE, CHAIN, a menu).  Nothing happens when it is off.
+      * (An EXECUTE is run as a paragraph with no name, which is how it is told from a paragraph of the VOC.)
+      begin case
+         case in.paragraph and pa.name = '' ; cmd.origin = 'Exec'
+         case in.paragraph         ; cmd.origin = 'PA'
+         case cs.depth > 1         ; cmd.origin = 'Exec'
+         case system(1026) # ''    ; cmd.origin = 'Cmd'
+         case 1                    ; cmd.origin = 'User'
+      end case
+      void kernel(K$CMDLOG.WRITE, cmd.origin : @fm : new.sentence)
 
 reparse:
       voc.entry.type = upcase(voc.rec<1>)
@@ -2009,7 +2027,9 @@ exit.command:
    cs.depth -= 1
    if cs.depth <= 0 then
       cs.depth = 0
-      if cs.was.active and option(OPT.CLEAR.SELECT) then clearselect 0
+      * KEEP.SELECT (15 Oct 26 dm, QM4 gaps Q-16): a program that meant to leave the list says so, and it is left
+      if cs.was.active and option(OPT.CLEAR.SELECT) and not(kernel(K$KEEP.SELECT, -1)) then clearselect 0
+      void kernel(K$KEEP.SELECT, 0)
       cs.was.active = @false
    end
 

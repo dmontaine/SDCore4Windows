@@ -207,6 +207,9 @@ void spool_print_job(PRINT_UNIT* pu) {
     tio_printf("Print job sent, but its outcome could not be read (errno %d)\n", errno);
     return;
   }
+  /* 15 Oct 26 dm - QM4 gaps Q-18: SYSTEM(20), the count of jobs passed to the spooler, for all sessions.
+     18 Oct 26 Windows port: counted when PowerShell has run, as Linux counts after system(cmd), whatever the outcome. */
+  __atomic_fetch_add(&sysseg->print_jobs, 1, __ATOMIC_SEQ_CST);
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
     if (WIFEXITED(status) && WEXITSTATUS(status) == 127)
       tio_printf("Print job not sent: PowerShell did not start (%s)\n", psh);

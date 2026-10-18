@@ -1,0 +1,159 @@
+* FINDPROG
+* FIND.PROGRAM verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-8 (FIND.PROGRAM).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   FIND.PROGRAM name {DETAIL}
+*
+* Reports where the catalogued program NAME is, in the order a program is loaded: the local catalogue (a VOC entry
+* that points at the object file), the private catalogue (the account's cat directory, or the directory named by
+* $PRIVATE.CATALOGUE) and the global catalogue (gcat in SDSYS).  For each one found: the catalogue, the date and time
+* it was compiled and its kind - program, subroutine or function with its number of arguments, or class module.  It is
+* for the case where the system seems to run the wrong version of a program because it is catalogued in two places.
+* DETAIL adds the object code size and the flags of the object (internal, debug, recursive, trusted, case sensitive,
+* may be called by SDCALL).  SD's objects carry no compiler version or source pathname, so those two are not shown.
+*
+* The object files are read as directory-file records, which is what they are, so an account without the OS gate sees
+* only what its own VOC and the shared global catalogue let it open.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program find.program
+$catalog $findprog
+
+$include parser.h
+$include err.h
+$include int$keys.h
+$include header.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   call !parser(parser$reset, 0, @sentence, 0)
+   call !parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   name = ''
+   detail = @false
+   loop
+      call !parser(parser$get.token, token.type, token, keyword)
+   while token.type # PARSER$END
+      begin case
+         case upcase(token) = 'DETAIL' and name # ''
+            detail = @true
+         case name = ''
+            name = token
+         case 1
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end case
+   repeat
+   if name = '' then stop sysmsg(2018, '')
+
+   @system.return.code = 0
+   found = 0
+
+   * The three catalogue areas, in the order a program is loaded
+   read vrec from @voc, name then
+      if upcase(vrec<1>[1,1]) = 'V' and upcase(vrec<2>) = 'CS' then
+         opath = vrec<3>
+         if opath[1,1] # @ds then opath = @path : @ds : opath
+         p = len(opath)
+         loop while p > 1 and opath[p,1] # @ds ; p -= 1 ; repeat
+         dir = opath[1, p - 1]
+         obj = opath[p + 1, 99999]
+         where = 'local'
+         gosub report
+      end
+   end
+
+   private.catalogue = 'cat'
+   read prec from @voc, '$PRIVATE.CATALOGUE' else
+      read prec from @voc, '$PRIVATE.CATALOG' else prec = ''
+   end
+   if upcase(prec[1,1]) = 'X' then private.catalogue = prec<2>
+   dir = private.catalogue
+   obj = downcase(name)
+   where = 'private'
+   gosub report
+
+   dir = @sdsys : @ds : 'gcat'
+   obj = downcase(name)
+   where = 'global'
+   gosub report
+
+   if found = 0 then
+      display sysmsg(12298, name) ;* %1 is not catalogued
+      @system.return.code = ER$NOT.FOUND
+   end
+   stop
+
+* ======================================================================
+* report - the object OBJ of directory DIR, if there is one, as catalogue WHERE
+report:
+   openpath dir to cat.f else return
+   mark.mapping cat.f, off
+   read obj.rec from cat.f, obj else
+      close cat.f
+      return
+   end
+   close cat.f
+   if obj.rec[1,1] # char(100) and obj.rec[1,1] # char(101) then return   ;* not an object: hdr.magic.no.l / .b
+
+   found += 1
+   display sysmsg(12290, where) ;* Program is in the %1 catalogue
+
+   ctime = oconv(obj.rec[HDR.COMPILE.TIME, 4], 'IL')
+   display sysmsg(12291, oconv(div(ctime, 86400), 'D2/'), oconv(rem(ctime, 86400), 'MTS')) ;* Compiled %1 %2
+
+   * the two-byte header fields, little endian (the object header is written in the machine's own order and read as such)
+   flags = seq(obj.rec[HDR.FLAGS, 1]) + 256 * seq(obj.rec[HDR.FLAGS + 1, 1])
+   nargs = seq(obj.rec[HDR.ARGS, 1]) + 256 * seq(obj.rec[HDR.ARGS + 1, 1])
+   begin case
+      case bitand(flags, HDR.IS.CLASS)
+         display sysmsg(12295)               ;* Class module
+      case bitand(flags, HDR.IS.FUNCTION)
+         * the object counts the function's hidden return variable as an argument: the program wrote one fewer
+         display sysmsg(12294, max(nargs - 1, 0)) ;* Function with %1 arguments
+      case nargs > 0
+         display sysmsg(12293, nargs)        ;* Subroutine with %1 arguments
+      case 1
+         display sysmsg(12292)               ;* Program
+   end case
+
+   if detail then
+      display sysmsg(12296, oconv(obj.rec[HDR.OBJECT.SIZE, 4], 'IL')) ;* Object code %1 bytes
+      fl = ''
+      if bitand(flags, HDR.INTERNAL) then fl<-1> = 'internal'
+      if bitand(flags, HDR.DEBUG) then fl<-1> = 'debug'
+      if bitand(flags, HDR.RECURSIVE) then fl<-1> = 'recursive'
+      if bitand(flags, HDR.IS.TRUSTED) then fl<-1> = 'trusted'
+      if bitand(flags, HDR.CASE.SENSITIVE) then fl<-1> = 'case sensitive'
+      if bitand(flags, HDR.SDCALL.ALLOWED) then fl<-1> = 'sdcall'
+      if bitand(flags, HDR.NOCASE) then fl<-1> = 'nocase strings'
+      if fl # '' then display sysmsg(12297, change(fl, @fm, ', ')) ;* Flags: %1
+   end
+   return
+
+end
+
+* END-CODE

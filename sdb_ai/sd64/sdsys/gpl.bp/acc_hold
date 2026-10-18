@@ -3,6 +3,10 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TEST also asks whether the holder's process exists (K$PID.ALIVE).  A killed session keeps its user table
+*              row until "sd -cleanup", so "has a row" kept every new login out of a system whose backup had been killed.
+*              LINUX ONLY FOR NOW (sequential development: Windows takes it after Linux is stable); the Windows port's
+*              equivalent is its own call to make - the row test alone is what it has.
 * 01 Oct 26 dm Written for S.50.  SHARED WITH SD CORE FOR WINDOWS BYTE FOR BYTE.
 *              The owner's rulings of 1 Oct 2026 (relayed by mail, binding on
 *              both ports): a backup or restore does not proceed until every
@@ -97,8 +101,12 @@ $include accbak.h
          read hold from sys.f, ACCBAK$HOLD then
             for i = 1 to n.users
                if users<i,K$USERS.UID> = hold<1> and users<i,K$USERS.PID> = hold<2> and hold<1> # @userno then
-                  info = hold
-                  err = 13002:@vm:hold<3>:@vm:hold<4> ;* not accepting new sessions while %1 runs %2
+                  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): - and the process is still there: a session that was killed keeps its user table row until
+                  * "sd -cleanup" or LOGOUT reaps it, and its hold must not keep everybody out until then (K$PID.ALIVE).
+                  if kernel(K$PID.ALIVE, hold<2>) then
+                     info = hold
+                     err = 13002:@vm:hold<3>:@vm:hold<4> ;* not accepting new sessions while %1 runs %2
+                  end
                end
             next i
          end

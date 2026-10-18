@@ -87,6 +87,8 @@ Public DESCRIPTOR* watch_descr init(NULL);
 
 Public int16_t cproc_level init(0);
 Public int32_t login_delay init(0); /* Tenths of a second this login waited for a user entry, LGNWAIT; SYSTEM(1036) */Public bool rtnlist init(FALSE);
+Public bool keep_select init(FALSE); /* KEEP.SELECT ran in this command: the command processor does not clear list 0 on return (15 Oct 26, Q-16) */
+Public char cmdlog_path[MAX_PATHNAME_LEN + 1] init(""); /* COMMAND.LOGGING ON: the pathname of this process's command log, null when off (15 Oct 26, Q-8) */
 
 Public bool map_dir_ids init(TRUE); /* Map illegal characters in names */
 

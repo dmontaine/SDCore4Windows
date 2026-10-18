@@ -2,6 +2,100 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  INHIBIT.LOGIN, AND A KILLED BACKUP NO LONGER LOCKS EVERYBODY OUT.
+
+             INHIBIT.LOGIN ON / OFF     (administrator only)
+                        Stops new sessions - the command prompt and the API
+                        alike - while maintenance is done: they are told who
+                        has logins inhibited and to try again later.  Sessions
+                        already running are not touched, and nor are the
+                        phantoms the administrator starts.  With neither word
+                        it shows the state.  @SYSTEM.RETURN.CODE is the user
+                        number of the session that set it, or zero.
+                        Not as openQM has it: the administrator can always
+                        sign in, from a new session, and any administrator
+                        session can switch it off - openQM keeps out
+                        everybody, the administrator's own second session
+                        included, and a lost terminal would mean restarting
+                        SD.  If the session that set it is killed the
+                        inhibit lapses by itself.
+             A killed BACKUP.ACCOUNT or RESTORE.ACCOUNT: the hold that keeps
+                        new sessions out while one runs was kept for as long
+                        as the killed session's row stayed in the user table,
+                        which is until "sd -cleanup".  It now asks whether
+                        the process is still there.
+
+18 Oct 26  DIGEST(), SET.TIMEZONE, KEEP.SELECT, MATWRITECSV, ANALYSE.INDEX,
+           FIND.FILE, FIND.PROGRAM, COMMAND.LOGGING, USPLIT AND SYSTEM(20).
+
+             MATWRITECSV matrix TO file.var THEN / ELSE
+                        One CSV line of every element of the matrix, each
+                        quoted as WRITECSV quotes, joined with the CSV.MODE
+                        separator, written to a file opened with OPENSEQ.  A
+                        failed write takes ELSE.  openQM's ENCODING clause
+                        and ON ERROR are not supported.
+
+             DIGEST(string, is.file, mode)
+                        The digest as lower case hexadecimal, for the modes
+                        MD5, SHA1, SHA256, SHA384 and SHA512.  With is.file
+                        true the string is the pathname of a file, read in
+                        blocks; a network session is held to its containment
+                        as it is for OPENSEQ, a local one by Windows.  MD4 is
+                        not there: it is broken, and OpenSSL no longer ships
+                        it by default.  A null string comes back with STATUS()
+                        saying why (1 the mode, 3003 no such file, 3035 not
+                        permitted, 1008 not a file).
+             SET.TIMEZONE zone      and      CONFIG TIMEZONE zone
+                        The zone MVDATE(), MVTIME(), MVDATE.TIME() and
+                        MVEPOCH() convert in, for this session only; CONFIG()
+                        gives it back.  DATE(), TIME() and the clock are not
+                        moved.  The zone has to be a name this machine has
+                        (a file under /usr/share/zoneinfo of SD's runtime,
+                        GMT or UTC): openQM takes any name and gives UTC for
+                        a mistyped one, so a refused name is STATUS() 2 here.
+                        The installer does not put a zoneinfo directory on the
+                        machine, so GMT and UTC are the names that work until
+                        one is provided.  A null string goes back to the
+                        process's own TZ.
+             KEEP.SELECT            With OPTION CLEAR.SELECT the command
+                        processor clears list 0 when a command that found
+                        it active ends; a program that means to leave what
+                        is left of it says KEEP.SELECT and it stays.
+             ANALYSE.INDEX file {index {STATISTICS} {DETAIL}} {LPTR {n}}
+                        With the file name alone, every index with its
+                        number of indexed values and the most records any
+                        one value has.  With an index name, the totals and
+                        how the values spread over the number of records
+                        they point at; DETAIL lists every value.  The
+                        index's node sizes, which openQM shows with
+                        STATISTICS, are not read: LIST.INDEX shows the same
+                        figures with each index's definition.
+             FIND.FILE {DICT} file  What the file is, its pathname, and
+                        whether its record ids ignore case, it has indices,
+                        triggers, is read only.
+             FIND.PROGRAM name {DETAIL}
+                        The local, private and global catalogue entries of a
+                        program, in the order they are loaded, with when each
+                        was compiled and what it is.  DETAIL adds the object
+                        size and flags; SD's objects carry no compiler
+                        version or source name, so those are not shown.
+             COMMAND.LOGGING ON / OFF
+                        A log of every command this session runs, with where
+                        it came from (User, Cmd, PA, Exec): a tab separated
+                        file clog.<user number>.log in the account directory,
+                        readable by its owner only, added to and never
+                        emptied.  openQM puts it in TEMPDIR; SD does not, so
+                        that another user cannot make the file first.  There
+                        is no global CMDLOG parameter and no !CLOG hook.
+             USPLIT=1 (sd.conf)     Interactive users take the lowest free
+                        user number and phantoms and API sessions the
+                        highest, so that the two never meet.  FIXUSERS,
+                        PORTMAP and USERPOOL are ignored while it is on.
+             SYSTEM(20)             How many print jobs have been passed to
+                        the operating system's spooler since SD started, all
+                        sessions together.  (openQM gives a job reference;
+                        the spooler's own job number is not read back.)
+
 18 Oct 26  SD BASIC FUNCTIONS AND STATEMENTS THAT OPENQM 4 HAS.
 
              Names and results follow the openQM 4 manual.  Only what SD does

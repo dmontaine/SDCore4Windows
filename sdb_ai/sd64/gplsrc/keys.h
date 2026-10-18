@@ -396,6 +396,23 @@
      K_MAXMIN_POS_SET  _MAXIMUM and _MINIMUM leave the position of the element they found: field, value and subvalue numbers
                        joined by value marks, a null string if there was none.  SYSTEM(1088) gives it back.  The process's own. */
 #define K_MAXMIN_POS_SET     105
+/* 15 Oct 26 dm - QM4 gaps Q-8.
+     K_PID_ALIVE       1 if the process with this id exists (a process of another user counts), 0 if it does not. */
+#define K_PID_ALIVE          106
+/* 15 Oct 26 dm - QM4 gaps Q-16, KEEP.SELECT.
+     K_KEEP_SELECT     the KEEP.SELECT flag of the command now running: 1 sets it, 0 clears it, -1 only asks.  The previous value
+                       comes back.  CPROC clears it as each outermost command starts and tests it when the command has finished. */
+#define K_KEEP_SELECT        107
+/* 15 Oct 26 dm - QM4 gaps Q-8, COMMAND.LOGGING (the per-process form).
+     K_CMDLOG          1 starts logging this process's commands, 0 stops, -1 only asks.  The pathname of the log comes back
+                       when logging is on after the call, a null string when it is off or could not be started (the file
+                       is made mode 0600, owned by the caller, and a symbolic link in its place refuses it).  The log is
+                       clog.<user number>.log in the account directory; TEMPDIR is not used (it is /tmp unless sd.conf
+                       says otherwise, a directory anyone can write to).
+     K_CMDLOG_WRITE    "origin<field mark>command": one line is added to the log if logging is on, and nothing otherwise.
+                       The line is tab separated: epoch value, user number, login name, origin, command.                  */
+#define K_CMDLOG             108
+#define K_CMDLOG_WRITE       109
 
 /* PTERM() function action keys */
 #define PT_BREAK              1
@@ -606,6 +623,8 @@
 #define FC_NON_TXN               4    /* Set open file as non-transactional */
 #define FC_SPLIT_MERGE           5    /* Force split/merge */
 #define FC_NO_RESIZE             6    /* Set DHF_NO_RESIZE flag */
+/* 7 is Linux's FC_SET_MODE (SET.MODE: the permission bits of a record of a directory file).  Not carried here: POSIX permission
+   bits mean nothing on NTFS, and the verb hangs on the S.63 OS-access gate.  The number is left unused.                      */
 
 /* SD_ENCRYPT_SODIUM encryption decryption  */
 #define SD_EncodeHX     201  /* encode passed string as Hex String */

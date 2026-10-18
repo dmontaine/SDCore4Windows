@@ -151,6 +151,9 @@ struct SYSSEG {
    u_int32_t uniq_seq;          /* ... and how many have been given on that date */
    int32_t uniq19_secs;         /* SYSTEM(19): the last second a value was given in (date * 86400 + time) ... */
    u_int32_t uniq19_n;          /* ... and how many have been given in that second */
+   /* 15 Oct 26 dm - QM4 gaps Q-19 and Q-18.  Last, so no offset moves. */
+   int16_t usplit;              /* USPLIT: 1 = interactive users take the lowest user number, others the highest */
+   u_int32_t print_jobs;        /* SYSTEM(20): print jobs passed to the operating system spooler since SD started (atomic) */
 };
 
 Public SYSSEG * sysseg init(NULL);   /* 0234 */
