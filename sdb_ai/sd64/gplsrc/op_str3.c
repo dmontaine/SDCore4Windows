@@ -235,7 +235,7 @@ Private u_char token_table[96] = {
     TKN_LCBR | COPY_CHAR | DONE_AFTER,       /* { */
     TKN_UNKNOWN | 0 | DONE_AFTER,            /* | */
     TKN_RCBR | COPY_CHAR | DONE_AFTER,       /* } */
-    TKN_UNKNOWN | 0 | DONE_AFTER,            /* ~ */
+    TKN_UNKNOWN | COPY_CHAR | 0,             /* ~  (14 Oct 26: ~= is a case insensitive EQ, see below) */
     TKN_UNKNOWN | 0 | DONE_AFTER             /* Del */
 };
 
@@ -523,6 +523,17 @@ void op_rmvtkn() {
                 default:
                   done = TRUE;
               }
+              break;
+
+            case TKN_UNKNOWN:
+              /* 14 Oct 26 (openQM item 430): ~= is the case insensitive form of =.  It is a TKN_EQ whose text is "~=",
+                 which the compiler tells from the plain operator.  A ~ with anything else after it is an unrecognised
+                 token as it was before (its text is now the ~ itself).                                            */
+              if ((c == '=') && (bytes == 1) && (tgt_str->data[0] == '~')) {
+                token_type = TKN_EQ;
+                done_after = TRUE;
+              } else
+                done = TRUE;
               break;
 
             case TKN_EQ:

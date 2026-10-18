@@ -5754,6 +5754,14 @@ st.nap:
    opcode = OP.NAP ; goto common.path
 
 st.precision:
+   * 18 Oct 26 Windows port - from Linux 5ed890e (14 Oct 26): openQM item 201: PRECISION INHERIT takes the precision of the program that called this one.  The
+   * word is passed to the kernel as the string INHERIT (a number is the precision as before).
+   if u.look.ahead.token.string = "INHERIT" then
+      gosub get.token
+      opcode.string = "INHERIT" ; gosub emit.string.load
+      opcode.byte = OP.PRECISION ; gosub emit.simple
+      return
+   end
    opcode = OP.PRECISION ; goto common.path
 
 st.printerr:
@@ -13093,6 +13101,8 @@ insert.pseudo.operator:
 
       op.stack.depth += 1
       operator.stack(op.stack.depth) =  op(token) ;* Opcode
+      * 18 Oct 26 Windows port - from Linux 5ed890e (14 Oct 26): openQM item 430: ~= is an = that ignores case; the tokeniser gives it as TKN.EQ with the text ~=
+      if token = TKN.EQ and token.string = '~=' then operator.stack(op.stack.depth) = OP.EQNC
       sc.labels<op.stack.depth> = ''
       if look.ahead.token = TKN.PWR then
          * The ** operator associates right to left. Save a slightly higher

@@ -54,6 +54,7 @@
 #include <math.h>
 
 Private bool compare_values(int16_t mode, bool dismiss);
+Private bool nocase_request; /* set by op_eqnc, taken by compare_values */
 #define TEST_EQ 0
 #define TEST_GT 1
 #define TEST_GE 2
@@ -202,6 +203,23 @@ void op_bitxor() {
 void op_eq() {
   bool result;
 
+  result = compare_values(TEST_EQ, TRUE);
+
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = (int32_t)result;
+}
+
+/* ======================================================================
+   op_eqnc()  -  Test equals, ignoring case: the ~= operator
+   (14 Oct 26, openQM item 430).  EQ with the case insensitive string rule
+   forced for this one comparison; two numbers are still compared as
+   numbers.  compare_values() takes the request and clears it at once, so
+   an error inside it cannot leave the request set.                       */
+
+void op_eqnc() {
+  bool result;
+
+  nocase_request = TRUE;
   result = compare_values(TEST_EQ, TRUE);
 
   InitDescr(e_stack, INTEGER);
@@ -428,6 +446,9 @@ Private bool compare_values(int16_t mode, bool dismiss) {
   register int32_t v1;
   register int32_t v2;
   bool nocase;
+  bool force_nocase = nocase_request; /* ~= asks for this comparison to ignore case */
+
+  nocase_request = FALSE;
 
   arg2 = e_stack - 1;
   k_get_value(arg2);
@@ -611,7 +632,7 @@ recompare:
             bytes2 = str2->bytes;
             p2 = str2->data;
 
-            nocase = (process.program.flags & HDR_NOCASE) != 0;
+            nocase = force_nocase || ((process.program.flags & HDR_NOCASE) != 0);
             do {
               n = min(bytes1, bytes2);
               diff = SortCompare(p1, p2, n, nocase);

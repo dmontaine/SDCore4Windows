@@ -319,6 +319,7 @@ void op_matbuild() {
 
   int32_t start_index;
   int32_t end_index;
+  bool zero_added;
 
   DESCRIPTOR tgt_descr;
 
@@ -426,6 +427,7 @@ void op_matbuild() {
     }
   }
 
+  zero_added = FALSE;
   if ((mat_descr->type == ARRAY) && !(a_hdr->flags & AH_PICK_STYLE)) {
     /* Now add the zero element, if it is not null */
 
@@ -437,6 +439,7 @@ void op_matbuild() {
       k_get_string(&src_descr);
 
       if (src_descr.data.str.saddr != NULL) {
+        zero_added = TRUE;
         if (tgt_descr.data.str.saddr != NULL) {
           /* Copy delimiter to target string */
 
@@ -457,6 +460,16 @@ void op_matbuild() {
   }
 
   ts_terminate();
+
+  /* 14 Oct 26 (openQM item 454): INMAT() after MATBUILD, and so after MATWRITE (a MATBUILD and a WRITE), is the index of
+     the final element included, as the matrix is indexed by the program; 0 if the zero element of a default style matrix
+     was not null and so was added.                                                                                    */
+  if (zero_added)
+    process.inmat = 0;
+  else if (mat_descr->type == PMATRIX)
+    process.inmat = end_index - (pm_hdr->base_offset - 1);
+  else
+    process.inmat = end_index;
 
   k_dismiss(); /* Delimiter string */
   k_pop(2);    /* Ending and starting index */

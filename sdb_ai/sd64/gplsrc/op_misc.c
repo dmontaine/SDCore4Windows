@@ -1188,8 +1188,20 @@ exit_op_pause:
 void op_precision() {
   DESCRIPTOR* descr;
   int32_t precision;
+  char word[8 + 1];
 
   descr = e_stack - 1;
+
+  /* 14 Oct 26 (openQM item 201): PRECISION INHERIT.  The compiler passes the word as a string; the program takes the
+     precision of the one that called it (the saved caller is process.program.prev; a program that was not called keeps
+     its own).  Any other string is a number, as ever.                                                            */
+  if ((descr->type == STRING) && (k_get_c_string(descr, word, 8) > 0) && !strcasecmp(word, "INHERIT")) {
+    if (process.program.prev != NULL)
+      process.program.precision = process.program.prev->precision;
+    k_pop(1);
+    return;
+  }
+
   GetInt(descr);
   precision = descr->data.value;
 

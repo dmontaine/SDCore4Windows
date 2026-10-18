@@ -2,6 +2,24 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FOUR SMALL ADDITIONS TO SD BASIC.
+
+             ~= operator  Compares two values and ignores case: 'ABC' ~= 'abc'
+                        is true.  The plain = is as it was.  Two values that are
+                        both numbers are compared as numbers, as with =.
+             COMPARE( a, b, justification )  The justification may now have an I
+                        after its L or R (as in 'LI') to compare ignoring case.
+                        Without the I, nothing changes.
+             PRECISION INHERIT  The program takes the precision of the program
+                        that called it.  A number after PRECISION works as before.
+             INMAT() after MATBUILD and MATWRITE  Returns the index of the last
+                        element that went into the string or record, or 0 when
+                        the zero element of the matrix was added at the end.
+
+             The kernel's list of operations gained one entry for ~= (the
+             extended opcode CFE5), so programs compiled before this build and
+             after it are not interchangeable if they use it; none did.
+
 18 Oct 26  THE USER TABLE, THE HOT SPOT MONITOR AND PSTAT.
 
              LISTU and !LISTU show the account  Each user's line now ends with

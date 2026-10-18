@@ -122,8 +122,9 @@ void op_compare() {
  */
 
   DESCRIPTOR* descr;
-  char justification[1 + 1];
+  char justification[2 + 1];
   bool right_justified = FALSE;
+  bool nocase = FALSE; /* 14 Oct 26 (openQM item 307): an I as the second character of the justification */
 
   STRING_CHUNK* str1_hdr;
   int32_t str1_len;
@@ -144,10 +145,16 @@ void op_compare() {
   int16_t d = 0;
   int32_t n;
 
+  /* The justification is "L" or "R", and may have an "I" after it for a case insensitive comparison (ASCII letters only).
+     Anything else is left justified and case sensitive, as before; a longer string is read as far as its second
+     character (k_get_c_string answers -1 for a string that does not fit, and the buffer is cleared first).     */
   descr = e_stack - 1;
-  k_get_c_string(descr, justification, 1);
+  justification[0] = justification[1] = justification[2] = '\0';
+  (void)k_get_c_string(descr, justification, 2);
   if (justification[0] == 'R')
     right_justified = TRUE;
+  if ((justification[1] == 'I') || (justification[1] == 'i'))
+    nocase = TRUE;
   k_dismiss();
 
   descr = e_stack - 1;
@@ -230,7 +237,17 @@ void op_compare() {
     if ((str1 == NULL) || (str2 == NULL))
       break;
     /* -------------------- */
-    if ((d = (((int16_t)(*((u_char*)str1++))) - *((u_char*)str2++))) != 0)
+    if (nocase) {
+      int16_t c1 = (int16_t)(*((u_char*)str1++));
+      int16_t c2 = (int16_t)(*((u_char*)str2++));
+
+      if ((c1 >= 'a') && (c1 <= 'z'))
+        c1 -= 'a' - 'A';
+      if ((c2 >= 'a') && (c2 <= 'z'))
+        c2 -= 'a' - 'A';
+      if ((d = c1 - c2) != 0)
+        goto mismatch;
+    } else if ((d = (((int16_t)(*((u_char*)str1++))) - *((u_char*)str2++))) != 0)
       goto mismatch;
 
     str1_len--;
