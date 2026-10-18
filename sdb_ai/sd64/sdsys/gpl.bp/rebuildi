@@ -1,0 +1,97 @@
+* REBUILDI
+* REBUILD.ALL.INDICES command
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 341151d (12 Oct 26): 1.2-0 openQM ref 58.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   REBUILD.ALL.INDICES {NO.QUERY}
+*
+* Rebuilds the alternate key indices of every file that an F-type VOC
+* record of this account points at and that has indices (BUILD.INDEX file
+* ALL, file by file).  A file that cannot be opened, is not a dynamic file
+* or has no indices is passed over.  Asks "Rebuild the indices of all files
+* (y/<n>)?" unless NO.QUERY is given.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $rebuild.all.indices
+$catalog $rebuildi
+
+$include err.h
+$include keys.h
+$include int$keys.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   no.query = @false
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      if keyword = KW$NO.QUERY then no.query = @true else stop sysmsg(2018, token) ;* Unexpected token (xx)
+   repeat
+
+   if not(no.query) then
+      loop
+         display sysmsg(12085) :     ;* Rebuild the indices of all files (y/<n>)?
+         input yn
+         yn = upcase(yn)
+         if yn = '' then yn = 'N'
+      until yn = 'Y' or yn = 'N'
+      repeat
+      if yn = 'N' then stop
+   end
+
+   done = 0
+   select @voc to 11
+   loop
+      readnext id from 11 else exit
+      read voc.rec from @voc, id then
+         if upcase(voc.rec[1,1]) = 'F' and voc.rec<2> # '' then
+            open id to f then
+               if fileinfo(f, FL$TYPE) = FL$TYPE.DH then
+                  have = indices(f)
+                  close f
+                  if have # '' then
+                     junk = ''
+                     execute 'BUILD.INDEX ' : id : ' ALL' capturing junk
+                     display sysmsg(12086, id) ;* Indices of xx rebuilt
+                     done += 1
+                  end
+               end else close f
+            end
+         end
+      end
+   repeat
+
+   display sysmsg(12087, done) ;* xx file(s) had their indices rebuilt
+   @system.return.code = 0
+
+   return
+end
+
+* END-CODE

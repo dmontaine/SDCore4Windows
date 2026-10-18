@@ -371,7 +371,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"ON":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ"
    statements := @fm:"OS.EXECUTE"
    statements := @fm:"PAGE":@fm:"PAUSE":@fm:"PDUMP"
-   statements := @fm:"PERFORM":@fm:"PRECISION":@fm:"PRINT"
+   statements := @fm:"PERFORM":@fm:"PHANTOM":@fm:"PRECISION":@fm:"PRINT"
    statements := @fm:"PRINTER":@fm:"PRINTCSV":@fm:"PRINTERR"
    * rev 1.0-1
    statements := @fm:"PROCREAD":@fm:"PROCWRITE":@fm:"PROMPT"
@@ -2172,6 +2172,7 @@ is.statement:
                  st.pause,
                  st.pdump,                     ;* 12 Oct 26 dm - openQM 439
                  st.execute,                   ;* PERFORM
+                 st.phantom,                   ;* 12 Oct 26 dm - openQM 390
                  st.precision,
                  st.print,
                  st.printer,
@@ -7509,6 +7510,19 @@ st.equate:
 *             {SETTING | RETURNING var}
 *             {CURRENT.LEVEL}            (restricted)
 
+* ST.PHANTOM  -  PHANTOM statement (12 Oct 26 dm, openQM 390): starts a phantom with the PHANTOM command, without
+* the EXECUTE of the verb written out: PHANTOM expr is EXECUTE "PHANTOM ":expr, with the same optional clauses.
+
+st.phantom:
+   n = syscom.xeq.command
+   gosub emit.ldsys
+   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
+   opcode.string = 'PHANTOM ' ; gosub emit.string.load
+   gosub exprf
+   opcode.byte = OP.CAT ; gosub emit.simple
+   opcode.byte = OP.STOR ; gosub emit.simple
+   goto st.execute.options
+
 st.execute:
    n = syscom.xeq.command
    gosub emit.ldsys
@@ -7520,6 +7534,7 @@ st.execute:
    gosub exprf
    opcode.byte = OP.STOR ; gosub emit.simple
 
+st.execute.options:
    execute.flags = 0
 
    * Look for options

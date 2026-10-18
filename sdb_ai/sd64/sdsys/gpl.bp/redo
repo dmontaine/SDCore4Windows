@@ -1,0 +1,83 @@
+* REDO
+* REDO command
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 341151d (12 Oct 26): 1.2-0 openQM ref 188.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   REDO {TIMES n} {EVERY s} command
+*
+* Runs the command again and again.  TIMES gives how many runs in all (the
+* default is until the break key is pressed); EVERY gives the number of
+* seconds from the start of one run to the start of the next (default 1; a
+* run that takes longer is followed at once by the next).  The command is
+* the rest of the line, as typed.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $redo
+$catalog $redo
+
+$include err.h
+$include keys.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   times = 0           ;* 0 = until broken
+   every = 1
+   cmd = trimb(field(@sentence, ' ', 2, 999999))
+
+   loop
+      w = upcase(field(cmd, ' ', 1))
+      begin case
+         case w = 'TIMES'
+            cmd = trimf(cmd[6, 999999])
+            v = field(cmd, ' ', 1)
+            if not(v matches '1N0N') or v + 0 < 1 then stop sysmsg(12088) ;* TIMES needs a whole number of 1 or more
+            times = v + 0
+            cmd = trimf(cmd[len(v) + 1, 999999])
+         case w = 'EVERY'
+            cmd = trimf(cmd[6, 999999])
+            v = field(cmd, ' ', 1)
+            if not(v matches '1N0N') then stop sysmsg(12089) ;* EVERY needs a number of seconds
+            every = v + 0
+            cmd = trimf(cmd[len(v) + 1, 999999])
+         case 1
+            exit
+      end case
+   repeat
+
+   if cmd = '' then stop sysmsg(12090) ;* Command required
+
+   @system.return.code = 0
+   n = 0
+   loop
+      started = system(1020)           ;* milliseconds since midnight
+      execute cmd
+      n += 1
+   until times and n >= times
+      wait.ms = every * 1000 - mod(system(1020) - started + 86400000, 86400000)
+      if wait.ms > 0 then sleep idiv(wait.ms + 999, 1000)    ;* SLEEP takes whole seconds
+   repeat
+
+   return
+end
+
+* END-CODE

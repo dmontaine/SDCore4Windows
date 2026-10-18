@@ -2,6 +2,22 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  REBUILD.ALL.INDICES, REDO AND A PHANTOM STATEMENT.  Syntax is SD's own.
+
+             REBUILD.ALL.INDICES {NO.QUERY}
+                          Rebuilds the indices of every file in the account
+                          that has any (BUILD.INDEX file ALL for each).  It
+                          asks first unless NO.QUERY is given.
+             REDO {TIMES n} {EVERY s} command
+                          Runs the command again and again: n times in all
+                          (default: until the break key), a run starting
+                          every s seconds (default 1; whole seconds).
+             PHANTOM "command" in a program
+                          A statement that starts a phantom, the same as
+                          EXECUTE "PHANTOM command" and with the same
+                          CAPTURING, RETURNING and similar clauses.  The
+                          user number is in @SYSTEM.RETURN.CODE.
+
 18 Oct 26  STRING ARITHMETIC, REGEX() AND A PRIVATE VOCABULARY.
 
              SADD(a, b)   Add, subtract, multiply and divide numbers held as
