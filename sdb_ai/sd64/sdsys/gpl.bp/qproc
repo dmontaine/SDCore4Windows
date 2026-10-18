@@ -55,6 +55,7 @@
 *             12    SHOW
 *             13    REFORMAT
 *             14    SREFORMAT
+*             15    SCAN       (12 Oct 26: SEARCH ... DISPLAY, openQM ref 447)
 *
 *
 *    @SYSTEM.RETURN.CODE = record count, -ve if error
@@ -84,7 +85,7 @@ equ NUL to char(0)
 
 *=============================================================================
 
-$define MAX.STRINGS     20          ;* For SEARCH command
+$define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS could name a whole record of them, 12 Oct 26)
 
    prompt ""
 
@@ -201,6 +202,7 @@ $define MAX.STRINGS     20          ;* For SEARCH command
    progress.examined = 0         ;* ...records examined so far
    for.strings = ''              ;* SEARCH ... FOR "a" "b": the strings
    search.ids = @false           ;* SEARCH ... ALL: search the record id too
+   search.display = @false       ;* SEARCH ... DISPLAY: show the lines that hold a string
    absent.ignore = @false        ;* ABSENT.IGNORE
    col.hdr.space = @false        ;* COL.HDR.SPACE
    sorted.sample = @false        ;* SORTED.SAMPLE n: after the sort...
@@ -423,6 +425,11 @@ $define MAX.STRINGS     20          ;* For SEARCH command
       case @option = 6        ;* SEARCH
          select.command = @true
          search.command = @true
+
+      case @option = 15       ;* SCAN: SEARCH that shows the lines (12 Oct 26 dm, openQM ref 447)
+         select.command = @true
+         search.command = @true
+         search.display = @true
 
       case @option = 7        ;* LIST.LABEL
          list.command = @true
@@ -2407,6 +2414,10 @@ parse.command.options:
          case keyword = KW$ALL.MATCH and search.command
             all.match = @true
 
+* --- DISPLAY (12 Oct 26 dm, openQM ref 437): SEARCH shows each line of a selected record that holds a string
+         case keyword = KW$DISPLAY and search.command
+            search.display = @true
+
 * --- FOR (10 Oct 26 dm, openQM ref 190): SEARCH file FOR "text" "text" ...
          case keyword = KW$FOR and search.command
             gosub get.token
@@ -2419,6 +2430,48 @@ parse.command.options:
                display sysmsg(7216) ;* No search strings
                goto exit.qproc
             end
+            continue                 ;* Next token already read
+
+* --- STRINGS file record (12 Oct 26 dm, openQM refs 141, 447): the search strings are the fields of a record
+         case keyword = KW$STRINGS and search.command
+            gosub get.token
+            * (get.token turns a word that is not a field of the file being searched into a STRING)
+            if token.type # PARSER$TOKEN and token.type # PARSER$STRING then
+               display sysmsg(2102) ;* File name required
+               goto exit.qproc
+            end
+            strf.name = token
+            gosub get.token
+            if token.type # PARSER$TOKEN and token.type # PARSER$STRING then
+               display sysmsg(12112) ;* Record id required after STRINGS file name
+               goto exit.qproc
+            end
+            strf.id = token
+            open strf.name to strf.f else
+               open downcase(strf.name) to strf.f else
+                  open upcase(strf.name) to strf.f else
+                     display sysmsg(2019) ;* File not found
+                     goto exit.qproc
+                  end
+               end
+            end
+            read strf.rec from strf.f, strf.id else
+               read strf.rec from strf.f, downcase(strf.id) else
+                  read strf.rec from strf.f, upcase(strf.id) else
+                     display sysmsg(3521, strf.id) ;* Record "xx" not found
+                     goto exit.qproc
+                  end
+               end
+            end
+            close strf.f
+            for strf.i = 1 to dcount(strf.rec, @fm)
+               if strf.rec<strf.i> # '' then for.strings<-1> = strf.rec<strf.i>
+            next strf.i
+            if for.strings = '' then
+               display sysmsg(7216) ;* No search strings
+               goto exit.qproc
+            end
+            gosub get.token
             continue                 ;* Next token already read
 
 * --- AVERAGE
@@ -4708,11 +4761,38 @@ want.record:
                   until record.wanted
                   next i
             end case
+
+            if record.wanted and search.display and not(no.match) then gosub show.search.lines
          end
       end
    end else
       record.wanted = @false
    end
+
+   return
+
+* ======================================================================
+* SHOW.SEARCH.LINES  -  SEARCH ... DISPLAY (12 Oct 26 dm, openQM ref 437)
+* The id of the selected record, then each line (field) of it that holds
+* any of the strings, with its line number. The marks in a line are shown
+* as ] (value), \ (subvalue) and [ (text mark) as LIST shows them.
+
+show.search.lines:
+   print id
+   for sl.n = 1 to dcount(qproc.record, @fm)
+      sl.line = qproc.record<sl.n>
+      sl.t = sl.line
+      if no.case then sl.t = upcase(sl.t)
+      sl.hit = @false
+      for sl.i = 1 to no.of.strings
+         if index(sl.t, strings(sl.i), 1) then sl.hit = @true
+      until sl.hit
+      next sl.i
+      if sl.hit then
+         sl.line = change(change(change(sl.line, @vm, ']'), @sm, '\'), @tm, '[')
+         print fmt(sl.n, 'R%4') : ': ' : sl.line
+      end
+   next sl.n
 
    return
 

@@ -2,6 +2,41 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SCAN, SEARCH ... DISPLAY AND STRINGS.
+
+             SCAN {DICT} file {selection} {ids} {ALL} {NO.CASE}
+                  {ALL.MATCH} {FOR "text" ...} {STRINGS file record}
+             SEARCH file ... DISPLAY
+
+           SEARCH selects the records that hold a text string.  Now it can
+           also show where: with DISPLAY, for each record it selects it
+           prints the record id, then each line of the record that holds
+           any of the strings, with the line number:
+
+             SEARCH BP FOR "!SORT" DISPLAY
+             SCAN BP FOR "!SORT"          (the same thing)
+
+             prog1
+             0012: call !sort(list, 'AL')
+             0040: if x then call !sort(other, 'DR')
+
+           A line is a field of the record; the value, subvalue and text
+           marks in it are shown as ], \ and [.  The records are still
+           selected as select list 0, and the usual count follows.  SCAN is
+           SEARCH with DISPLAY and takes the same words: a selection
+           clause, record ids, FROM, ALL (search the id too), NO.CASE,
+           ALL.MATCH and FOR.  As before, with no FOR it asks for strings
+           until a blank answer.
+
+           New for both, and so for SEARCH without DISPLAY too:
+
+             STRINGS file record
+
+           takes the search strings from a record: each field is one
+           string, and a null field is ignored.  It adds to any given with
+           FOR.  A file or record that is not there is reported and nothing
+           is searched.
+
 18 Oct 26  HOLD.FILE.LOGGER, $SETPTR.DEFAULTS AND @SEQNO.
 
            HOLD.FILE.LOGGER.  When a print unit in mode 3 (hold file) or
