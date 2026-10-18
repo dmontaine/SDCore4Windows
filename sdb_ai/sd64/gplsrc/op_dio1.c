@@ -50,6 +50,7 @@
 #include "header.h"
 #include "locks.h"
 #include "syscom.h"
+#include "config.h" /* pcfg.dhcache, MAX_DH_CACHE_SIZE */
 
 /* Modified by Composer AI - 2026/06/10.
    k_error() longjmps back to the kernel command loop and never returns,
@@ -59,7 +60,8 @@
 void k_error(char msg[], ...) __attribute__((noreturn));
 /* -------------------- */
 
-#define MAX_DH_CACHE_SIZE 10
+/* 12 Oct 26 dm - the size is the DHCACHE configuration parameter (openQM item 90), 10 unless it says
+   otherwise; MAX_DH_CACHE_SIZE (config.h) is the most it may ask for and the size of the array. */
 struct DH_CACHE {
   char* pathname;
   DH_FILE* dh_file;
@@ -833,19 +835,21 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
     fvar->type = DYNAMIC_FILE;
     fvar->access.dh.dh_file = dh_file;
 
-    if (map_name) {
-      /* Add file to DH cache */
+    if (map_name && (pcfg.dhcache > 0)) {
+      /* Add file to DH cache.  DHCACHE may have been lowered since the cache
+         filled (CONFIG changes it for one session), so drop the oldest entries
+         until there is room for this one. */
 
-      if (dh_cache_size == MAX_DH_CACHE_SIZE) {
+      while (dh_cache_size >= pcfg.dhcache) {
         /* Replace oldest entry */
 
         i = dh_cache_size - 1;
         dh_close(dh_cache[i].dh_file);
         k_free(dh_cache[i].pathname);
-      } else /* Add new entry to end of cache */
-      {
-        i = dh_cache_size++;
+        dh_cache_size--;
       }
+
+      i = dh_cache_size++; /* Add new entry to end of cache */
 
       if ((dh_cache[i].pathname = (char*)k_alloc(31, strlen(pathname) + 1)) ==
           NULL) {

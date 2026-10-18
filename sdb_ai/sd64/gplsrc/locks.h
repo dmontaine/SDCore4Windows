@@ -79,6 +79,7 @@ struct LLT_ENTRY {
   char id[1];         /* The record id */
 };
 Public LLT_ENTRY* llt_head init(NULL);
+Public int32_t llt_count init(0); /* Entries on the chain above: the record locks this process holds (MAXRLOCK) */
 
 /* ==================== GROUP LOCKS ==================== */
 

@@ -24,6 +24,8 @@
  *           valid_call_name() accepts lower case only.  RELEASE_1.1_FIXES.md 5,
  *           stage 3a.
  * 31 Dec 23 SD launch - prior history suppressed
+ * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): valid_call_name(): the limit is the lower of 128 and MAXIDLEN
+ *           (openQM item 241), 63 at the default.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -882,6 +884,7 @@ Private void computed_jump(
 
 bool valid_call_name(char* p) {
   char c;
+  int limit;
   /* 14 Sep 26 Windows port - LOWER CASE ONLY, RELEASE_1.1 5 stage 3a.  Every
      caller converts the name with LowerCaseString() immediately before this
      test, so an upper-case letter here means a caller that missed the flip -
@@ -892,7 +895,18 @@ bool valid_call_name(char* p) {
 
   /* !!CALLNAME!! */
 
-  if (strlen(p) > MAX_CALL_NAME_LEN)
+  /* 12 Oct 26 dm  openQM item 241: the longest call name is the lower of
+     MAX_PROGRAM_NAME_LEN (128) and MAXIDLEN, which is 63 unless the
+     administrator raised it, so nothing changes until then.  The same limit
+     is written in catalog, bcomp and apisrvr (BASIC).  sdclilib.c keeps the
+     fixed MAX_CALL_NAME_LEN: a client cannot read the server's MAXIDLEN.     */
+  limit = sysseg->maxidlen;
+  if (limit > MAX_PROGRAM_NAME_LEN)
+    limit = MAX_PROGRAM_NAME_LEN;
+  if (limit < MAX_CALL_NAME_LEN)
+    limit = MAX_CALL_NAME_LEN;
+
+  if (strlen(p) > limit)
     return FALSE;
 
   c = *(p++);

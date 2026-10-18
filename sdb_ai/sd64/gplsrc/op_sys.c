@@ -625,8 +625,37 @@ void op_system() {
       }
       break;
 
-    case 1053: /* Highest user number that can be assigned */
-      descr->data.value = sysseg->max_users;
+    case 1053: /* Highest user number that can be assigned: the greater of USERPOOL and the licence's users */
+      descr->data.value = sysseg->hi_user_no;
+      break;
+
+    case 1036: /* How long this login waited for a spare user entry, in tenths of a second (LGNWAIT) */
+      descr->data.value = login_delay;
+      break;
+
+    case 1055: /* LGNWAIT statistics: logins delayed, delayed ones that got in, waiting now, peak waiting, given up */
+      {
+        unsigned lg[5];
+
+        StartExclusive(SHORT_CODE, 80);
+        lg[0] = sysseg->lgn_delayed;
+        lg[1] = sysseg->lgn_success;
+        lg[2] = sysseg->lgn_waiting;
+        lg[3] = sysseg->lgn_peak;
+        lg[4] = sysseg->lgn_failed;
+        EndExclusive(SHORT_CODE);
+
+        str = NULL;
+        ts_init(&str, 64);
+        ts_printf("%u%c%u%c%u%c%u%c%u", lg[0], FIELD_MARK, lg[1], FIELD_MARK, lg[2], FIELD_MARK, lg[3], FIELD_MARK, lg[4]);
+        ts_terminate();
+      }
+      InitDescr(descr, STRING);
+      descr->data.str.saddr = str;
+      break;
+
+    case 1072: /* The IP address SD listens on: sdwind.c's API listener binds INADDR_ANY, so null (all addresses) */
+      k_put_c_string("", descr);
       break;
 
     case 1054: /* Active packages: SD has none */

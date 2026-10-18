@@ -150,6 +150,9 @@ $define ER$ENCRYPTED   3041    ;* Access denied to encrypted file
 * case-sensitive file it is asked to rebuild holds two ids that differ only
 * by case, so the rebuild (which would keep only one) is refused.
 $define ER$TWIN        3042    ;* Two record ids differ only by case
+* 12 Oct 26 dm - openQM 4 manual's number (ER$MAXRLOCK).  Raised when a process holds MAXRLOCK record
+* locks and asks for another; the statement's ON ERROR clause is taken, or it aborts.
+$define ER$MAXRLOCK    3060    ;* MAXRLOCK record lock limit reached
 
 * 4000 - 4999   SDClient errors
 $define ER$SRVRMEM     4000    ;* Insufficient memory for packet buffer

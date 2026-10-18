@@ -98,6 +98,7 @@ bool init_kernel() {
   USER_ENTRY* uptr;
   u_int32_t m;
   int16_t msg_no = 1000; /* User limit reached */
+  int32_t lgn_waited = 0; /* Tenths of a second waited for a user entry (LGNWAIT) */
   char* p;
   PRIV_WHY why; /* 03 Sep 26 - PRE_RELEASE_FIXES.md 96 */
   PRIV_WHY why_desktop = PRIV_ANSWERED; /* 05 Sep 26 - PRE_RELEASE_FIXES.md 167.
@@ -145,6 +146,7 @@ bool init_kernel() {
     uid field.  For a phantom user, the user table index is in
     phantom_user_index.                                                    */
 
+retry_login:
   StartExclusive(SHORT_CODE, 23);
 
   if (is_phantom) {
@@ -326,11 +328,45 @@ bool init_kernel() {
         strncpy((char*)(my_uptr->ttyname), p, MAX_TTYNAME_LEN);
         my_uptr->ttyname[MAX_TTYNAME_LEN] = '\0';
       }
+
+      /* 18 Oct 26 Windows port - Linux 1298f82 sets @TTY to "startup" here for the process the STARTUP
+         parameter starts (openQM item 91, a SD_STARTUP variable that sysseg.c sets).  There is no such
+         process here (RELEASE_1.1 119: STARTUP is refused in config.c), so the hunk is not carried. */
     }
   }
 
 abort_login:
   EndExclusive(SHORT_CODE);
+
+  /* LGNWAIT (openQM item 46): when the user limit is the reason, wait a tenth of
+    a second and try again, for up to LGNWAIT tenths.  Web server style loads
+    can hit the limit briefly.  A phantom already has its entry reserved, and a
+    port that is in use will not become free, so neither waits.  The counters are
+    SYSTEM(1055); how long this login waited is SYSTEM(1036).                   */
+
+  if ((my_uptr == NULL) && (msg_no == 1000) && !is_phantom && (lgn_waited < sysseg->lgnwait)) {
+    if (lgn_waited == 0) {
+      StartExclusive(SHORT_CODE, 79);
+      sysseg->lgn_delayed++;
+      if (++(sysseg->lgn_waiting) > sysseg->lgn_peak)
+        sysseg->lgn_peak = sysseg->lgn_waiting;
+      EndExclusive(SHORT_CODE);
+    }
+    usleep(100000);
+    lgn_waited++;
+    goto retry_login;
+  }
+
+  if (lgn_waited > 0) {
+    StartExclusive(SHORT_CODE, 79);
+    sysseg->lgn_waiting--;
+    if (my_uptr != NULL)
+      sysseg->lgn_success++;
+    else
+      sysseg->lgn_failed++;
+    EndExclusive(SHORT_CODE);
+    login_delay = lgn_waited;
+  }
 
   if (my_uptr == NULL) /* Failed to login - Message key is in msg_no */
   {
@@ -417,9 +453,11 @@ int16_t assign_user_no(int16_t user_table_index) {
   }
 
   /* Starting at the next user number in cyclic order, find the first
-    available user number (there must be one).                        */
+    available user number (there must be one).  USERPOOL=0 (openQM item
+    551) starts again from 1 every time, which takes the lowest free number
+    rather than rotating through them.                                    */
 
-  i = sysseg->last_user;
+  i = (sysseg->userpool == 0) ? 0 : sysseg->last_user;
   hi = sysseg->hi_user_no;
   do {
     i = (i % hi) + 1;

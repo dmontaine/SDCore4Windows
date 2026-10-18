@@ -738,6 +738,14 @@ Private void openseq(bool map_name) {
         k_free(fvar); /* Give away file variable */
         fvar = NULL;  /* 0361 */
 
+        /* MAXRLOCK (openQM item 313): at this process's own limit.  An error, not a lock held by
+           someone else that will be released. */
+
+        if (blocking_user == -3) {
+          process.status = -ER_MAXRLOCK;
+          goto exit_op_openseq;
+        }
+
         /* Record is locked by another user */
 
         if (op_flags & P_LOCKED) /* LOCKED clause present */

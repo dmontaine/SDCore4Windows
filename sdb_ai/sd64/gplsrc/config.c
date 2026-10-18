@@ -93,6 +93,7 @@ struct CONFIG* read_config(char* errmsg) {
   bool status = FALSE;
   int n2;
   int n3;
+  int hi_user;
   struct stat statbuf;
 
   cfg = (struct CONFIG*)k_alloc(1, sizeof(struct CONFIG));
@@ -107,6 +108,7 @@ struct CONFIG* read_config(char* errmsg) {
   /* !!CONFIG!! */
 
   pcfg.codepage = 0;      /* CODEPAGE: Console code page */
+  pcfg.dhcache = 10;      /* DHCACHE:  Closed dynamic files kept open: the fixed 10 until 1.2-0 (openQM item 90) */
   pcfg.dumpdir[0] = '\0'; /* DUMPDIR:  Directory for process dump files */
   pcfg.exclrem = 0;       /* EXCLREM:  Exclude remote files in ACCOUNT.SAVE? */
   pcfg.filerule = 0;      /* FILERULE: File name rules (special forms) */
@@ -127,9 +129,11 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.lptrhigh = 66;             /* LPTRHIGH: Default printer lines */
   pcfg.lptrwide = 80;             /* LPTRWIDE: Default printer width */
   pcfg.maxcall = 10000;           /* MAXCALL:  Maximum call depth */
+  pcfg.maxrlock = 0;              /* MAXRLOCK: Record locks per process, 0 = no limit (openQM item 313) */
   pcfg.must_lock = FALSE;         /* MUSTLOCK: Enforce locking rules */
   pcfg.objects = 0;               /* OBJECTS:  Max loaded objects */
   pcfg.objmem = 0;                /* OBJMEM:   Max loaded object size */
+  pcfg.pwdelay = 3;               /* PWDELAY:  Seconds after a failed network login.  SD's own 3 (openQM's is 5) */
   pcfg.sdclient_mode = 0;         /* SDCLIENT: Client capabilities */
   pcfg.reccache = 0;             /* RECCACHE: Record cache size */
   pcfg.ringwait = TRUE;           /* RINGWAIT: Wait if ring buffer full */
@@ -154,6 +158,8 @@ struct CONFIG* read_config(char* errmsg) {
   cfg->numfiles = 80;
   cfg->numlocks = 100;
   cfg->maxidlen = 63;
+  cfg->lgnwait = 0;                /* LGNWAIT:  No wait when the user limit is reached (openQM item 46) */
+  cfg->userpool = MIN_HI_USER_NO;  /* USERPOOL: Highest user number to allocate (openQM item 551) */
   cfg->fds_limit = SHRT_MAX;
   cfg->max_users = 1;
 
@@ -233,6 +239,8 @@ struct CONFIG* read_config(char* errmsg) {
         cfg->deadlock = (n != 0);
       else if (sscanf(rec, "DEBUG=%d", &n) == 1)
         cfg->debug |= n;
+      else if (sscanf(rec, "DHCACHE=%d", &n) == 1)
+        pcfg.dhcache = n;
       else if (strncmp(rec, "DUMPDIR=", 8) == 0)
         strcpy(pcfg.dumpdir, rec + 8);
       else if (sscanf(rec, "ERRLOG=%d", &n) == 1)
@@ -265,6 +273,8 @@ struct CONFIG* read_config(char* errmsg) {
         strcpy(cfg->jnldir, rec + 7);
       else if (sscanf(rec, "JNLMODE=%d", &n) == 1)
         cfg->jnlmode = n;
+      else if (sscanf(rec, "LGNWAIT=%d", &n) == 1)
+        cfg->lgnwait = n;
       else if (sscanf(rec, "LPTRHIGH=%d", &n) == 1)
         pcfg.lptrhigh = n;
       else if (sscanf(rec, "LPTRWIDE=%d", &n) == 1)
@@ -273,6 +283,8 @@ struct CONFIG* read_config(char* errmsg) {
         pcfg.maxcall = n;
       else if (sscanf(rec, "MAXIDLEN=%d", &n) == 1)
         cfg->maxidlen = n;
+      else if (sscanf(rec, "MAXRLOCK=%d", &n) == 1)
+        pcfg.maxrlock = n;
       else if (sscanf(rec, "MUSTLOCK=%d", &n) == 1)
         pcfg.must_lock = n != 0;
 /* 21 Aug 26 Windows port - NETDIRS, the escape hatch for the containment gate
@@ -316,6 +328,8 @@ struct CONFIG* read_config(char* errmsg) {
         cfg->portmap_base_user = n2;
         cfg->portmap_range = n3;
       } 
+      else if (sscanf(rec, "PWDELAY=%d", &n) == 1)
+        pcfg.pwdelay = n;
       else if (sscanf(rec, "SDCLIENT=%d", &n) == 1)
         pcfg.sdclient_mode |= n;
 /* 06 Oct 26 Windows port - APILOGIN IS RETIRED (parity audit PAW-5; SD Core for
@@ -395,7 +409,9 @@ struct CONFIG* read_config(char* errmsg) {
         strcpy(pcfg.terminfodir, rec + 9);
       else if (sscanf(rec, "TXCHAR=%d", &n) == 1)
         pcfg.txchar = (n != 0);
- /* 20240219 mab create-account based on type (user / group / other) */          
+      else if (sscanf(rec, "USERPOOL=%d", &n) == 1)
+        cfg->userpool = n;
+ /* 20240219 mab create-account based on type (user / group / other) */
       else if (strncmp(rec, "USRDIR=", 7) == 0)
         strncpy(pcfg.usrdir, rec + 7,MAX_PATHNAME_LEN+1);        
       else if (sscanf(rec, "YEARBASE=%d", &n) == 1)
@@ -442,15 +458,20 @@ struct CONFIG* read_config(char* errmsg) {
     goto exit_read_config;
   }
 
+  /* The highest user number is the greater of USERPOOL and the licence's user count
+    (sysseg.c), 1023 unless USERPOOL says otherwise. */
+
+  hi_user = max(cfg->max_users, cfg->userpool);
+
   if ((cfg->portmap_range) &&
-      (cfg->portmap_base_user + cfg->portmap_range - 1 > MIN_HI_USER_NO)) {
-    sprintf(errmsg, "PORTMAP user numbers extend beyond %d.", MIN_HI_USER_NO);
+      (cfg->portmap_base_user + cfg->portmap_range - 1 > hi_user)) {
+    sprintf(errmsg, "PORTMAP user numbers extend beyond %d.", hi_user);
     goto exit_read_config;
   }
 
   if (cfg->fixusers_base) {
-    if (cfg->fixusers_base + cfg->fixusers_range - 1 > MIN_HI_USER_NO) {
-      sprintf(errmsg, "FIXUSERS user numbers extend beyond %d.", MIN_HI_USER_NO);
+    if (cfg->fixusers_base + cfg->fixusers_range - 1 > hi_user) {
+      sprintf(errmsg, "FIXUSERS user numbers extend beyond %d.", hi_user);
       goto exit_read_config;
     }
 
@@ -473,7 +494,12 @@ struct CONFIG* read_config(char* errmsg) {
   if ((cfg->errlog != 0) && (cfg->errlog < 10240))
     cfg->errlog = 10240;
 
-  if (!rangecheck("GRPSIZE", pcfg.grpsize, 1, MAX_GROUP_SIZE, errmsg) ||
+  if (!rangecheck("DHCACHE", pcfg.dhcache, 0, MAX_DH_CACHE_SIZE, errmsg) ||
+      !rangecheck("LGNWAIT", cfg->lgnwait, 0, 32767, errmsg) ||
+      !rangecheck("MAXRLOCK", pcfg.maxrlock, 0, 100000, errmsg) ||
+      !rangecheck("PWDELAY", pcfg.pwdelay, 0, 3600, errmsg) ||
+      !rangecheck("USERPOOL", cfg->userpool, 0, 16383, errmsg) ||
+      !rangecheck("GRPSIZE", pcfg.grpsize, 1, MAX_GROUP_SIZE, errmsg) ||
       !rangecheck("INTPREC", pcfg.intprec, 0, 14, errmsg) ||
       !rangecheck("LPTRHIGH", pcfg.lptrhigh, 10, 32767, errmsg) ||
       !rangecheck("LPTRWIDE", pcfg.lptrwide, 10, 1000, errmsg) ||

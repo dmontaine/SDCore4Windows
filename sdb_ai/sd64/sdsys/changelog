@@ -2,6 +2,82 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FIVE NEW sd.conf PARAMETERS AND A LONGER CALL NAME.
+
+           Each parameter below is optional.  With none of them in sd.conf
+           SD behaves exactly as before, because every default is the number
+           that used to be fixed.  A value outside the range given makes SD
+           refuse to start and name the parameter, as it does for the others.
+           CONFIG lists them; CONFIG() reads them in a program.
+
+             MAXRLOCK=n   The most record locks one process may hold, 0..100000.
+                          0, the default, is no limit.  A process that asks
+                          for one lock more stops with "Record lock limit
+                          (MAXRLOCK) reached", or, with an ON ERROR clause,
+                          gets STATUS() 3060 and carries on.  It covers READU,
+                          READL, READVU, RECORDLOCKU and OPENSEQ.  Asking again
+                          for a lock the process already has is not a new lock,
+                          and a release gives the place back.  There is no
+                          way to except one account or one user, and no limit
+                          on file locks.  openQM can instead raise a
+                          SYS.LOCKS.LIMIT exception for TRY / CATCH; SD's
+                          exceptions are only the ones a program THROWs, so
+                          here the process stops or gets 3060 (the system
+                          events as exceptions item is still to do).  CONFIG
+                          MAXRLOCK n changes it for the process that gives
+                          the command.
+
+             DHCACHE=n    How many closed dynamic files SD keeps open ready for
+                          the next OPEN, 0..1024.  The default is 10, which is
+                          what it always was.  0 keeps none.  CONFIG DHCACHE n
+                          changes it for that process; note that EXECUTE empties
+                          the cache, so set it before the OPENs that matter.
+
+             LGNWAIT=n    When every user place is taken, wait up to n tenths
+                          of a second for one to be freed instead of refusing
+                          the login at once, 0..32767.  The default 0 refuses at
+                          once, as before.  A login that gives up is refused
+                          with "User limit reached" as it always was.  SYSTEM(1036)
+                          is how long this process waited, in tenths, and
+                          SYSTEM(1055) counts since SD started, as fields:
+                          logins that had to wait, that then got in, waiting
+                          now, the most waiting at once, and those that gave
+                          up.  It waits in tenth-second steps, so it is not a
+                          queue: whoever looks first after a place is freed
+                          gets it.
+
+             PWDELAY=n    Seconds the API server waits after a refused login
+                          before it answers, 0..3600.  The default is 3 (the
+                          openQM default is 5, and SD already had 3 fixed).  A
+                          longer delay slows anyone guessing passwords; 0
+                          removes the slowing and is the administrator's
+                          choice to make.
+
+             USERPOOL=n   The highest user number SD hands out, 0..16383, or
+                          NUMUSERS if that is larger.  The default 1023 is what
+                          it always was.  0 means the lowest free number is
+                          used again each time instead of cycling through the
+                          pool: a user number is reused as soon as it is free.
+                          SYSTEM(1053) returns this highest number (before
+                          this change it returned NUMUSERS, which was never the
+                          highest number SD handed out).
+
+           The longest name a subroutine can be catalogued and CALLed by is the
+           lower of 128 and MAXIDLEN.  MAXIDLEN is 63 unless you raise it, so
+           nothing changes until you do; CATALOG, $CATALOG, CALL and the API
+           server all use the same limit.  A program name also has to leave room
+           for ".LIS" inside MAXIDLEN, because BASIC writes a listing record under
+           it: at the default a program whose name is 60 or more characters could
+           not be compiled before and still cannot.  The client libraries keep
+           63, because a client cannot know the server's MAXIDLEN.
+
+           Not done: IPADDR, to listen on one address only (the API listener
+           binds every address; APIPORT switches it on); the @TTY name
+           "startup" for a STARTUP process (SD has no STARTUP command: the
+           parameter is refused); and switching FSYNC off while an index is
+           built - an index build makes only four fsync calls in all, so there
+           is nothing to save.
+
 18 Oct 26  MORE FILEINFO() AND SYSTEM() KEYS, NUMBERED AS THE OPENQM MANUAL
            NUMBERS THEM.
 

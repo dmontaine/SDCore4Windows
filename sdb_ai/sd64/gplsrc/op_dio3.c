@@ -579,6 +579,10 @@ void op_readv() {
             case 0: /* Got the lock */
               break;
 
+            case -3: /* This process is at its MAXRLOCK limit: an error to take or abort on, not a lock to wait for */
+              status = process.status = -ER_MAXRLOCK;
+              goto exit_op_readv;
+
             case -2: /* Deadlock detected */
               if (sysseg->deadlock)
                 k_deadlock();
@@ -669,6 +673,8 @@ void op_readv() {
   (e_stack++)->data.value = status;
 
   if ((status < 0) && !(op_flags & P_ON_ERROR)) {
+    if (process.status == -ER_MAXRLOCK)
+      k_error(sysmsg(12167));
     k_error(sysmsg(1406), -process.status, process.os_error);
   }
 }
@@ -1112,6 +1118,10 @@ Private void read_record(bool matread) {
         case 0: /* Got the lock */
           break;
 
+        case -3: /* This process is at its MAXRLOCK limit: an error to take or abort on, not a lock to wait for */
+          status = process.status = -ER_MAXRLOCK;
+          goto exit_op_read;
+
         case -2: /* Deadlock detected */
           if (sysseg->deadlock)
             k_deadlock();
@@ -1358,6 +1368,8 @@ exit_op_read:
   }
 
   if ((status < 0) && !(op_flags & P_ON_ERROR)) {
+    if (process.status == -ER_MAXRLOCK)
+      k_error(sysmsg(12167));
     k_error(sysmsg(1406), process.status, process.os_error);
   }
 }

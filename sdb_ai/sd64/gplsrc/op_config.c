@@ -96,6 +96,8 @@ void op_config() {
     result.data.value = sysseg->deadlock;
   else if (!strcmp(param, "DEBUG"))
     result.data.value = sysseg->flags >> 16;
+  else if (!strcmp(param, "DHCACHE"))
+    result.data.value = pcfg.dhcache;
   else if (!strcmp(param, "DUMPDIR"))
     k_put_c_string(pcfg.dumpdir, &result);
   else if (!strcmp(param, "ERRLOG"))
@@ -131,6 +133,8 @@ void op_config() {
     result.data.value = sysseg->jnlmode;
   else if (!strcmp(param, "JNLDIR"))
     k_put_c_string((char*)(sysseg->jnldir), &result);
+  else if (!strcmp(param, "LGNWAIT"))
+    result.data.value = sysseg->lgnwait;
   else if (!strcmp(param, "LPTRHIGH"))
     result.data.value = pcfg.lptrhigh;
   else if (!strcmp(param, "LPTRWIDE"))
@@ -139,6 +143,8 @@ void op_config() {
     result.data.value = pcfg.maxcall;
   else if (!strcmp(param, "MAXIDLEN"))
     result.data.value = sysseg->maxidlen;
+  else if (!strcmp(param, "MAXRLOCK"))
+    result.data.value = pcfg.maxrlock;
   else if (!strcmp(param, "MUSTLOCK"))
     result.data.value = pcfg.must_lock;
 /* 21 Aug 26 Windows port - NETDIRS.  Read only, and from the SEGMENT rather
@@ -169,6 +175,8 @@ void op_config() {
     }
     k_put_c_string(s, &result);
   } 
+  else if (!strcmp(param, "PWDELAY"))
+    result.data.value = pcfg.pwdelay;
   else if (!strcmp(param, "SDCLIENT"))
     result.data.value = pcfg.sdclient_mode;
 /* 17 Aug 26 Windows port - APIPORT.  Read only, and from the SEGMENT rather
@@ -199,9 +207,11 @@ void op_config() {
     k_put_c_string(pcfg.tempdir, &result);
   else if (!strcmp(param, "TERMINFO"))
     k_put_c_string(pcfg.terminfodir, &result);
- /* 20240219 mab create-account based on type (user / group / other) */      
+  else if (!strcmp(param, "USERPOOL"))
+    result.data.value = sysseg->userpool;
+ /* 20240219 mab create-account based on type (user / group / other) */
   else if (!strcmp(param, "USRDIR"))
-    k_put_c_string(pcfg.usrdir, &result);  
+    k_put_c_string(pcfg.usrdir, &result);
   else if (!strcmp(param, "YEARBASE"))
     result.data.value = pcfg.yearbase;
   else {
@@ -264,6 +274,11 @@ void op_pconfig() {
     if (str->string_len > MAX_PATHNAME_LEN)
       goto exit_op_pconfig;
     k_get_c_string(descr, pcfg.dumpdir, MAX_PATHNAME_LEN);
+  } else if (!strcmp(param, "DHCACHE")) {
+    GetInt(descr);
+    if ((descr->data.value < 0) || (descr->data.value > MAX_DH_CACHE_SIZE))
+      goto exit_op_pconfig;
+    pcfg.dhcache = (int16_t)(descr->data.value);
   } else if (!strcmp(param, "EXCLREM")) {
     GetInt(descr);
     if ((descr->data.value < 0) || (descr->data.value > 1))
@@ -317,6 +332,11 @@ void op_pconfig() {
     if ((descr->data.value < 10) || (descr->data.value > 1000000))
       goto exit_op_pconfig;
     pcfg.maxcall = descr->data.value;
+  } else if (!strcmp(param, "MAXRLOCK")) {
+    GetInt(descr);
+    if ((descr->data.value < 0) || (descr->data.value > 100000))
+      goto exit_op_pconfig;
+    pcfg.maxrlock = descr->data.value;
   } else if (!strcmp(param, "MUSTLOCK")) {
     GetInt(descr);
     if ((descr->data.value < 0) || (descr->data.value > 1))
@@ -332,6 +352,11 @@ void op_pconfig() {
     if (descr->data.value < 0)
       goto exit_op_pconfig;
     pcfg.objmem = descr->data.value * 1024L;
+  } else if (!strcmp(param, "PWDELAY")) {
+    GetInt(descr);
+    if ((descr->data.value < 0) || (descr->data.value > 3600))
+      goto exit_op_pconfig;
+    pcfg.pwdelay = (int16_t)(descr->data.value);
   } else if (!strcmp(param, "SDCLIENT")) {
     GetInt(descr);
     if ((descr->data.value < pcfg.sdclient_mode) || (descr->data.value > 2))

@@ -133,6 +133,14 @@ struct SYSSEG {
    int32_t pcfg_offset;         /* Offset to template pcfg structure */
    int pcode_len;
    int64_t start_time;          /* Unix time at which SD was started (SYSTEM(1045)). Last, so no offset moves. */
+   int16_t userpool;            /* USERPOOL: 0 = allocate the lowest free user number, else cycle (12 Oct 26) */
+   int16_t lgnwait;             /* LGNWAIT: tenths of a second a login waits for a spare user entry (12 Oct 26) */
+   /* LGNWAIT statistics, SYSTEM(1055).  Protected by SHORT_CODE. */
+   u_int32_t lgn_delayed;       /* Logins that had to wait */
+   u_int32_t lgn_success;       /* ...of which got in */
+   u_int32_t lgn_waiting;       /* Waiting now */
+   u_int32_t lgn_peak;          /* Peak number waiting at once */
+   u_int32_t lgn_failed;        /* ...of which gave up and were refused */
 };
 
 Public SYSSEG * sysseg init(NULL);   /* 0234 */

@@ -180,7 +180,11 @@ bool bind_sysseg(bool create, char* errmsg) {
     limit has a minimum value of MIN_HI_USER_NO but must be expanded if
     the licence results in more than this number of simultaneous processes. */
 
-  hi_user_no = max(max_users, MIN_HI_USER_NO);
+  /* USERPOOL (openQM item 551): the highest user number is the greater of it and the
+    number of processes the licence allows; the default MIN_HI_USER_NO is 1023.  Zero
+    makes the bound the licence count and, in assign_user_no(), takes the lowest free
+    number each time instead of cycling.                                              */
+  hi_user_no = max(max_users, cfg->userpool);
   user_map_size = (hi_user_no + 1) * sizeof(int16_t);
   sharedMemSize += user_map_size;
 
@@ -243,6 +247,8 @@ bool bind_sysseg(bool create, char* errmsg) {
   sysseg->portmap_range = cfg->portmap_range;         /* PORTMAP */
   sysseg->api_port = cfg->api_port;                   /* APIPORT */
   strcpy((char*)(sysseg->sysdir), cfg->sysdir);       /* SDSYS */
+  sysseg->userpool = cfg->userpool;                   /* USERPOOL */
+  sysseg->lgnwait = cfg->lgnwait;                     /* LGNWAIT */
 
   /* Create dynamically sized parts of segment */
 

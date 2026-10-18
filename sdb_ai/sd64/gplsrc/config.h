@@ -54,6 +54,8 @@ struct CONFIG {
   int16_t fixusers_range;          /*          ...Number of users */
   int16_t jnlmode;                 /* JNLMODE:  Journalling mode */
   char jnldir[MAX_PATHNAME_LEN+1]; /* JNLDIR:   Journal file directory */
+  int16_t lgnwait;                 /* LGNWAIT:  Tenths of a second a login waits for a spare user number */
+  int16_t userpool;                /* USERPOOL: Highest user number to allocate; 0 = lowest free number first */
   int16_t maxidlen;                /* MAXIDLEN: Maximum record id length */
   /* 21 Aug 26 Windows port - NETDIRS: directories outside its own account
      that a network session may reach.  Semicolon separated, because a
@@ -78,6 +80,9 @@ struct CONFIG {
  };
 
 
+/* The most closed dynamic files DHCACHE may ask to be kept open (the cache is in op_dio1.c) */
+#define MAX_DH_CACHE_SIZE 1024
+
 /* Config parameters loaded per process to allow local changes */
 
 /* 14 Aug 26 Windows port - was 80, which is too short for the shell now that
@@ -93,6 +98,7 @@ struct PCFG  {
 /* 06 Oct 26 Windows port - api_login (APILOGIN) removed: the setting is retired
    and nothing reads it (parity audit PAW-5; Linux's S.18).  config.c ignores the key. */
   unsigned int codepage;               /* CODEPAGE: Set console codepage */
+  int16_t dhcache;                      /* DHCACHE:  Closed dynamic files kept open for quick reopening */
   char dumpdir[MAX_PATHNAME_LEN+1];     /* DUMPDIR:  Directory for process dump files */
   bool exclrem;                         /* EXCLREM:  Exclude remote files from ACCOUNT.SAVE? */
   int16_t filerule;                     /* FILERULE: Rules for special filename formats */
@@ -107,9 +113,11 @@ struct PCFG  {
   int16_t lptrhigh;                     /* LPTRHIGH: Default printer lines */
   int16_t lptrwide;                     /* LPTRWIDE: Default printer width */
   int maxcall;                          /* MAXCALL:  Maximum call depth */
+  int32_t maxrlock;                     /* MAXRLOCK: Record locks one process may hold, 0 = no limit */
   bool must_lock;                       /* MUSTLOCK: Enforce locking rules */
   int16_t objects;                      /* OBJECTS:  Max loaded objects */
   int32_t objmem;                       /* OBJMEM:   Object size limit, zero = none */
+  int16_t pwdelay;                      /* PWDELAY:  Seconds paused after a failed network login */
   int16_t sdclient_mode;                /* SDCLIENT: 0 = any, 1 = no open/exec, 2 = restricted call */
   int16_t reccache;                     /* RECCACHE: Record cache size */
   bool ringwait;                        /* RINGWAIT: Wait if ring buffer full */

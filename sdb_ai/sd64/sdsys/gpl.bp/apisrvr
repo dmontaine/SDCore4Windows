@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): Call names: the lower of 128 and MAXIDLEN (openQM item 241), 63 at the default.  Refused logins
+*           wait PWDELAY seconds (item 106), 3 by default.
 * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is a collection when it is read, which
 *           the response cannot hold: it goes to the client as its JSON text.
 *           COMPILED ONLY - the API server was not run against a collection file.
@@ -26,7 +28,7 @@
 *           account refused, ' account=<name>', as SD Core for Linux's do (its
 *           PAL-17, mail T0155); the trail could not say which account was refused.
 * 05 Oct 26 Windows port - RELEASE_1.1 122: a refused login's audit record is written BEFORE
-*           the three second failed-login delay (scram.delay, tested at exit.vb.scram.fail),
+*           the three second failed-login delay (scram.fail.delay, tested at exit.vb.scram.fail),
 *           as SD Core for Linux did after losing records when the client dropped inside
 *           the sleep (its S.60).  Same reply, same delay.
 * 02 Oct 26 Windows port - RELEASE_1.1 116: the login hold.  vb.scram.first and
@@ -380,7 +382,7 @@ scram.serverkey = ''   ;* From $cred, base64
 * once at exit.vb.scram.fail.  Keeping it here with the rest of the state is
 * what makes a refusal impossible to leave unlogged - every path out of both
 * handlers goes through that one exit.
-scram.delay = @false    ;* A credential failure: sleep 3 s AFTER the audit record is written (05 Oct 26)
+scram.fail.delay = 0    ;* A credential failure: sleep PWDELAY s (3 by default) AFTER the audit record is written (05 Oct 26; named as Linux's)
 scram.audit.name = ''   ;* Name as PRESENTED, sanitised - see scram.clean.name
 scram.refuse.reason = '';* Why this exchange was refused; '' = not refused
 * 17 Sep 26 Windows port - RELEASE_1.1 55 slice 6.  Set by vb.scram.final on
@@ -1299,7 +1301,12 @@ vb.deleteu:
 
 vb.call:
                name.len = oconv(cmnd[1,2], 'ISL')
-               if name.len < 1 or name.len > MAX.CALL.NAME.LEN then
+               * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM item 241: the lower of 128 and MAXIDLEN (63 unless raised), as in op_jumps.c.  A client
+               * (sdclilib.c, sdclient) cannot read MAXIDLEN and keeps 63.
+               max.call.len = config('MAXIDLEN')
+               if max.call.len > 128 then max.call.len = 128
+               if max.call.len < MAX.CALL.NAME.LEN then max.call.len = MAX.CALL.NAME.LEN
+               if name.len < 1 or name.len > max.call.len then
                   abort.message = sysmsg(5263) ;* Invalid call name
                   server.error = SV$ON.ERROR
                   return
@@ -1933,7 +1940,12 @@ scram.bad.cred:
                * audited, probe-failaudit.ps1, installed Solo 4 Oct), so this is the
                * same behaviour with the order that cannot lose the record.  The reply
                * and the delay are unchanged for the caller.
-               scram.delay = @true
+               * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): the length of the
+               * wait is the PWDELAY configuration parameter (openQM item 106), seconds, 3
+               * unless sd.conf says otherwise (openQM's own default is 5); 0 means no wait.
+               * The variable (scram.fail.delay, was the flag scram.delay here) holds the
+               * seconds, 0 = none, and is tested at the exit label as Linux's apisrvr does.
+               scram.fail.delay = config('PWDELAY')
                goto exit.vb.scram.fail
 
 exit.vb.scram.fail:
@@ -1962,9 +1974,9 @@ exit.vb.scram.fail:
                end
 
                * The failed-login delay, now that the record is safely written.
-               if scram.delay then
-                  scram.delay = @false
-                  sleep 3
+               if scram.fail.delay > 0 then
+                  sleep scram.fail.delay
+                  scram.fail.delay = 0
                end
 
                * THE CONNECTION GOES, as it does for a failed request 24.  It is

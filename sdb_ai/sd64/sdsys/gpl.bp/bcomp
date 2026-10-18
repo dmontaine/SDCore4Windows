@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): A catalogue name in $CATALOG may be as long as the lower of 128 and MAXIDLEN (openQM item 241).
 * 18 Oct 26 Windows port - from Linux dda6e65 (13 Oct 26): 1.2-0 (openQM FOR / NEXT, sheet 84 and 300): FOR var = value1, value2,
 *               ... and FOR EACH var IN string {DELIMITER delim}, compiled as a FOR over
 *               a hidden counter with the existing opcodes (st.for.list, st.for.each).
@@ -2832,7 +2833,12 @@ proc.directive:
             if len(catalogue.name) > 1 and index("*!_$", catalogue.name[1,1], 1) then n = 2
             else n = 1
 
-            if len(catalogue.name) > MAX.CALL.NAME.LEN or convert("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.%$_-", "", catalogue.name[n,99]) # '' then
+            * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM item 241: the lower of 128 and MAXIDLEN (63 unless raised), as in catalog and op_jumps.c
+            max.call.len = config('MAXIDLEN')
+            if max.call.len > 128 then max.call.len = 128
+            if max.call.len < MAX.CALL.NAME.LEN then max.call.len = MAX.CALL.NAME.LEN
+
+            if len(catalogue.name) > max.call.len or convert("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.%$_-", "", catalogue.name[n,999]) # '' then
                err.msg = sysmsg(2836) ;* Illegal catalogue name
                gosub error
                goto exit.proc.directive

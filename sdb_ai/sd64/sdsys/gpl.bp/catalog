@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
+*               administrator raised it), as op_jumps.c valid_call_name() has it.
 * 18 Oct 26 Windows port - from Linux 5218c47 (13 Oct 26): openQM 210: GLOBAL may be followed by a prefix character (one of * ! _ $), which is put in front
 *               of every call name that has no prefix of its own - so a select list can be catalogued globally
 *               with a prefix.  A hyphen, which openQM also lists as a prefix, is not accepted.
@@ -507,9 +509,14 @@ catalogue.program:
 
 validate.call.name:
 !!CALLNAME!!
-   if len(call.name) > MAX.CALL.NAME.LEN ~
+*  18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM item 241: the longest call name is the lower of 128 and
+*  MAXIDLEN (63 unless raised).  The same limit is in op_jumps.c, bcomp and apisrvr.
+   max.call.len = config('MAXIDLEN')
+   if max.call.len > 128 then max.call.len = 128
+   if max.call.len < MAX.CALL.NAME.LEN then max.call.len = MAX.CALL.NAME.LEN
+   if len(call.name) > max.call.len ~
     or index(prefix.chars:leading.chars, call.name[1,1], 1) = 0 ~
-    or convert(following.chars, '', call.name[2,99]) # '' ~
+    or convert(following.chars, '', call.name[2,999]) # '' ~
     or (index(prefix.chars, call.name[1,1], 1) and len(call.name) = 1) then
       stop sysmsg(3032, call.name)  ;* Illegal call name (%1)
    end

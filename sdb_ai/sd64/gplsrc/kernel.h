@@ -86,7 +86,7 @@ Public char* primary_collation init(NULL); /* Points to above map if active,
 Public DESCRIPTOR* watch_descr init(NULL);
 
 Public int16_t cproc_level init(0);
-Public bool rtnlist init(FALSE);
+Public int32_t login_delay init(0); /* Tenths of a second this login waited for a user entry, LGNWAIT; SYSTEM(1036) */Public bool rtnlist init(FALSE);
 
 Public bool map_dir_ids init(TRUE); /* Map illegal characters in names */
 
