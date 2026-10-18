@@ -2,6 +2,21 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  EXECUTE ... STACKLIST.
+
+             EXECUTE command STACKLIST  Keeps the default select list as it
+                        was, the place READNEXT had reached included, and puts
+                        it back when the command returns.  The command is
+                        given the list as usual and may read it, change it or
+                        replace it; the program has its own again afterwards.
+                        Without STACKLIST whatever the command leaves in the
+                        default list is what the program finds, as before.
+                        It cannot be combined with PASSLIST or
+                        RTNLIST (those give or take a list), which is refused
+                        when the program is compiled.  With the
+                        EXECUTE.CLEARLIST mode the command starts with the
+                        list empty and the program still gets its own back.
+
 18 Oct 26  FLUSH.DH.CACHE.
 
              FLUSH.DH.CACHE {LOCAL | NO.WAIT}  Makes every process close the

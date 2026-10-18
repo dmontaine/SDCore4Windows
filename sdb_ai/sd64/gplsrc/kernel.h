@@ -121,6 +121,10 @@ struct PROGRAM {
   int16_t precision;
   int16_t csv_mode;  /* CSV.MODE 1 - 3 (14 Oct 26, openQM 173): copied to a called program, so it persists through calls */
   char csv_delim;    /* ... and its delimiter, a comma by default (openQM 200) */
+  bool has_stacked;  /* EXECUTE ... STACKLIST: list 0 as it was is held here until the command returns (openQM 61) */
+  DESCRIPTOR stacked_list;
+  int32_t stacked_count;
+  int32_t stacked_ptr; /* where READNEXT had got to in it: bytes from the start of the list string, -1 for not started */
   u_char* saved_c_base;
   int32_t saved_pc_offset;
   char saved_prompt_char;

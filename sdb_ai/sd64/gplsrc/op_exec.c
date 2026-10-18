@@ -185,6 +185,43 @@ void op_execute() {
 
   flags = *(pc++);
 
+  if (flags & 0x40) /* STACKLIST (14 Oct 26, openQM 61): keep a copy of list 0 and its remove pointer, restored by op_stklst */
+  {
+    DESCRIPTOR* list0 = SelectList(0);
+    STRING_CHUNK* head = (list0->type == STRING) ? list0->data.str.saddr : NULL;
+
+    if (process.program.has_stacked)
+      k_release(&process.program.stacked_list); /* An earlier one nobody restored */
+    InitDescr(&process.program.stacked_list, STRING);
+    process.program.stacked_list.data.str.saddr = NULL;
+    process.program.stacked_count = 0;
+    process.program.stacked_ptr = -1;
+    if (head != NULL) {
+      /* READNEXT takes ids off list 0 with a remove pointer held in the descriptor (DF_REMOVE, the chunk and the
+         offset in it).  Turn it into a distance from the start so that the copy, which may be cut into chunks
+         differently, can have it put back. */
+      if (list0->flags & DF_REMOVE) {
+        STRING_CHUNK* c;
+        int32_t dist = 0;
+        for (c = head; c != NULL && c != list0->data.str.rmv_saddr; c = c->next)
+          dist += c->bytes;
+        if (c != NULL)
+          process.program.stacked_ptr = dist + list0->n1;
+      }
+      process.program.stacked_list.data.str.saddr = k_copy_string(head);
+      process.program.stacked_count = SelectCount(0)->data.value;
+    }
+    process.program.has_stacked = TRUE;
+
+    if (flags & 0x80) /* $MODE EXECUTE.CLEARLIST as well: the command starts with an empty list 0 */
+    {
+      k_release(list0);
+      InitDescr(list0, STRING);
+      list0->data.str.saddr = NULL;
+      SelectCount(0)->data.value = 0;
+    }
+  }
+
   if (flags & 0x02) /* CAPTURING */
   {
     if (capturing) /* This is a nested EXECUTE...CAPTURING structure */
@@ -229,6 +266,39 @@ void op_execute() {
   }
 
   return;
+}
+
+/* ======================================================================
+   op_stklst()  -  Put back list 0 as EXECUTE ... STACKLIST found it      */
+
+void op_stklst() {
+  DESCRIPTOR* list0;
+  DESCRIPTOR* count0;
+
+  if (!process.program.has_stacked)
+    return;
+
+  list0 = SelectList(0);
+  k_release(list0);
+  *list0 = process.program.stacked_list;
+  list0->type = STRING;
+  list0->flags &= ~DF_REMOVE;
+  if (process.program.stacked_ptr >= 0 && list0->data.str.saddr != NULL) {
+    STRING_CHUNK* c = list0->data.str.saddr;
+    int32_t left = process.program.stacked_ptr;
+    while (c->next != NULL && left >= c->bytes) {
+      left -= c->bytes;
+      c = c->next;
+    }
+    list0->flags |= DF_REMOVE;
+    list0->n1 = (int16_t)left;
+    list0->data.str.rmv_saddr = c;
+  }
+  count0 = SelectCount(0);
+  count0->data.value = process.program.stacked_count;
+
+  InitDescr(&process.program.stacked_list, UNASSIGNED);
+  process.program.has_stacked = FALSE;
 }
 
 /* ======================================================================

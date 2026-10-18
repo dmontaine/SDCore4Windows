@@ -7920,7 +7920,7 @@ st.equate:
 st.phantom:
    n = syscom.xeq.command
    gosub emit.ldsys
-   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
+   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"STACKLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
    opcode.string = 'PHANTOM ' ; gosub emit.string.load
    gosub exprf
    opcode.byte = OP.CAT ; gosub emit.simple
@@ -7933,7 +7933,7 @@ st.execute:
 
    * 0265 Add local reserved names
    * NJS use @VM
-   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
+   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"STACKLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
 
    gosub exprf
    opcode.byte = OP.STOR ; gosub emit.simple
@@ -8034,6 +8034,10 @@ st.execute.options:
             opcode.byte = OP.STOR ; gosub emit.simple
             execute.flags = bitor(execute.flags, 4)
 
+         case u.look.ahead.token.string = "STACKLIST"      ;* 14 Oct 26 dm - openQM 61
+            gosub get.token
+            execute.flags = bitor(execute.flags, 0x40)
+
          case 1
             exit
       end case
@@ -8041,20 +8045,36 @@ st.execute.options:
 
    del reserved.names<2>
 
+   * STACKLIST keeps list 0 as it was and puts it back afterwards, which PASSLIST (a list given) or RTNLIST (a list
+   * taken) contradict
+   if bitand(execute.flags, 0x40) and (bitand(execute.flags, 4) or passlist.any) then
+      err.msg = sysmsg(12268) ;* STACKLIST cannot be used with PASSLIST or RTNLIST
+      goto error
+   end
+
    if print.code then
       s = "EXECUTE  " : execute.flags
       gosub show.code
     end
 
    * 18 Oct 26 Windows port - from Linux 745ea42 (14 Oct 26): - openQM 521: $MODE EXECUTE.CLEARLIST clears the default select list before the command runs,
-   * unless a PASSLIST clause was given (the stack is as it was after the two instructions)
+   * unless a PASSLIST clause was given (the stack is as it was after the two instructions).  With STACKLIST the
+   * kernel clears it after keeping its copy (flag 0x80), or the copy would be of an empty list.
    if bittest(mode, M.EXECUTE.CLEARLIST) and not(passlist.any) then
-      n = 0 ; gosub emit.numeric.load
-      opcode.byte = OP.CLEARSEL ; gosub emit.simple
+      if bitand(execute.flags, 0x40) then
+         execute.flags = bitor(execute.flags, 0x80)
+      end else
+         n = 0 ; gosub emit.numeric.load
+         opcode.byte = OP.CLEARSEL ; gosub emit.simple
+      end
    end
 
    opcode.byte = OP.EXECUTE ; gosub emit
    opcode.byte = execute.flags ; gosub emit
+
+   if bitand(execute.flags, 0x40) then  ;* Put list 0 back as it was
+      opcode.byte = OP.STKLST ; gosub emit.simple
+   end
 
    if bitand(execute.flags, 4) then  ;* Transfer select list 0 to var
       opcode.byte = OP.RTNLIST ; gosub emit.simple
